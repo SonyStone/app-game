@@ -1,43 +1,25 @@
-import type { AbrCoverageSnapshot } from '@app-game/abr-paint/gpu/coverage';
-import { capturePaintBounds, clipPaintBounds, type PaintBounds } from './paintBounds';
-import { expandToRasterGrid } from '@app-game/abr-paint/gpu/brushBatchSize';
-import { visibleTileKeys } from './visibleTileKeys';
-import {
-  d,
-  tgpu,
-  type RenderFlag,
-  type TgpuBindGroup,
-  type TgpuBuffer,
-  type TgpuRoot,
-  type TgpuTexture,
-  type UniformFlag
-} from 'typegpu';
-import { attempt, unwrapResult, type Result } from '../asyncResult';
-import { TILE_SIZE, dabIntersectsTile, dabTiles, type Brush, type Dab } from '../brush';
-import { screenToWorld, type Camera, type Point, type ViewSize } from '../camera';
-import type { BrushResource } from '@app-game/abr-paint/resources';
-import type { Layer, TileChange } from '../document';
-import { isEmptyPackedTile, tileHasAlpha, unpackTile, type TileData } from '../tilePixels';
-import { viewLod, type OverviewStorage } from '../virtualPages';
-import { createAbrStamps, type AbrRasterSettings, type AbrTile } from '@app-game/abr-paint/gpu/abrStamps';
-import { createCanvasPickup, type PickupRegion } from '@app-game/abr-paint/gpu/canvasPickup';
-import { commandBatch } from '@app-game/abr-paint/gpu/commandBatch';
-import { commandSlots } from '@app-game/abr-paint/gpu/commandSlots';
-import { createDisplayCache } from './displayCache';
-import { createLassoOverlay } from './lassoOverlay';
-import { createReadbackQueue } from './readbackQueue';
-import * as shader from './shaders';
-import { createSmudgeDepositBatch, planSmudgeDeposits } from '@app-game/abr-paint/gpu/smudgeDepositBatch';
-import { directStampBounds, stampBounds } from '@app-game/abr-paint/gpu/stampBounds';
-import { createTexturedStamps } from './texturedStamps';
-import { createTileMipmaps } from './tileMipmaps';
+import type { AbrRasterSettings } from '@app-game/abr-paint/gpu/abrStamps';
 import { createAbrRetouch } from '@app-game/abr-paint/gpu/retouch';
-import { createViewDamage } from './viewDamage';
-import { createViewFallback } from './viewFallback';
-import { createVirtualTexture } from './virtualTexture';
-import { evictionVictims } from './evictionVictims';
+import type { BrushResource } from '@app-game/abr-paint/resources';
 import { gpuError, type GpuError } from '@app-game/solid-gpu/errors';
 import { makeGpuResources, type KeepGpuResource } from '@app-game/solid-gpu/gpu/resources';
+import { tgpu } from 'typegpu';
+import { TILE_SIZE, dabTiles, type Brush, type Dab } from '../brush';
+import type { Camera, Point, ViewSize } from '../camera';
+import type { Layer, TileChange } from '../document';
+import { unpackTile, type TileData } from '../tilePixels';
+import { viewLod, type OverviewStorage } from '../virtualPages';
+import { createDisplayCache } from './displayCache';
+import { createFrameComposer, renderScale } from './frameComposer';
+import { createLassoOverlay } from './lassoOverlay';
+import { capturePaintBounds, clipPaintBounds, type PaintBounds } from './paintBounds';
+import { createStrokeRaster } from './strokeRaster';
+import { createStrokeData, createStrokeState } from './strokeState';
+import { createTargetViews } from './targetView';
+import { createTileMipmaps } from './tileMipmaps';
+import { createTileResidency } from './tileResidency';
+import { createMipmapEnsurer, tileCoordinates } from './tileTextures';
+import { createVirtualTexture } from './virtualTexture';
 
 /** Creates one WebGPU device/cache owner with a default canvas. Additional targets share its raster resources.
  * Committed CPU tiles remain valid after cache eviction or device loss. Render/paint/detach calls must be serialized.
@@ -73,6 +55,7 @@ export type PaintRendererOptions = {
   batchPickupUploads?: boolean;
   /** Build only view-required mip levels by default; false retains full chains for GPU comparisons. */
   adaptiveMipmaps?: boolean;
+  /** Draw nonresident committed tiles from the bounded display cache; false loads them as resident tiles. */
   displayCache?: boolean;
   /** Batch small sampled-brush masks on GPU; false retains per-stamp passes for pixel/performance comparisons. */
   batchSampledMasks?: boolean;
@@ -90,14 +73,19 @@ export type PaintRendererOptions = {
   batchSmudgePasses?: boolean;
   /** Share one submission across up to eight small-footprint Smudge dabs; false submits every dab for verification. */
   batchSmudgeDabs?: boolean;
+  /** Persists derived overview pages between sessions. */
   overviewStorage?: OverviewStorage;
+  /** Resolves stored tile references; required when layers contain references. */
   readTile?: (pixels: TileData) => Promise<Uint8Array>;
+  /** Streams committed pixels through a sparse virtual texture instead of drawing every visible tile. */
   virtualTexture?: boolean;
+  /** Called when streamed pages become resident and a redraw would refine the view. */
   onRefine?: () => void;
   /** Awaited between complete sampling dabs, after their GPU writes are submitted.
    * May render/present progress. Must not paint, finish, cancel, reset or replace this renderer.
    */
   onPaintProgress?: () => Promise<void>;
+  /** Reports background failures (page streaming, eviction readback) that do not reject a call. */
   onError?: (error: unknown) => void;
 };
 
@@ -109,683 +97,109 @@ async function assemblePaintRenderer(
   resources: ReturnType<typeof makeGpuResources>
 ) {
   let disposed = false;
-  resources.keep({ destroy: () => { disposed = true; } });
+  resources.keep({
+    destroy: () => {
+      disposed = true;
+    }
+  });
   const paintBounds = capturePaintBounds(options.bounds);
-  const allowsTile = (key: string) => !paintBounds || !!clipPaintBounds(paintBounds, ...coordinates(key));
+  const allowsTile = (key: string) => !paintBounds || !!clipPaintBounds(paintBounds, ...tileCoordinates(key));
   const device = await openDevice(options.device, resources.keep);
   const root = resources.keep(tgpu.initFromDevice({ device }));
-  let context = canvas.getContext('webgpu');
-  if (!context) {
+  const format = navigator.gpu.getPreferredCanvasFormat();
+  const primaryContext = canvas.getContext('webgpu');
+  if (!primaryContext) {
     throw rendererError(gpuError('canvas', 'The canvas could not start WebGPU.'));
   }
 
-  const format = navigator.gpu.getPreferredCanvasFormat();
-  context.configure({ device, format, alphaMode: 'opaque' });
-  const primaryContext = context;
+  primaryContext.configure({ device, format, alphaMode: 'opaque' });
   resources.keep({ destroy: () => primaryContext.unconfigure() });
-  let failed = false;
-  const fail = (error: GpuError) => {
-    if (disposed || failed) {
-      return;
-    }
+  watchDeviceFailures(device, () => disposed, onLost, resources.keep);
 
-    failed = true;
-    onLost(error.message, error);
-  };
-  void device.lost.then((info) => fail(gpuError('lost', info.message || 'The graphics device was disconnected.', info)));
-  const uncapturedError = (event: GPUUncapturedErrorEvent) => fail(uncapturedGpuError(event.error));
-  device.addEventListener('uncapturederror', uncapturedError);
-  resources.keep({ destroy: () => device.removeEventListener('uncapturederror', uncapturedError) });
-  const pipelines = createPipelines(root, format);
   const lasso = resources.keep(createLassoOverlay(root, format));
-  let texturedStamps: ReturnType<typeof createTexturedStamps> | undefined;
-  let texturedPipeline: ReturnType<ReturnType<typeof createTexturedStamps>['prepare']> | undefined;
-  let abrStamps: ReturnType<typeof createAbrStamps> | undefined;
-  let abrActive = false;
-  // Sampling tools replace coverage at every stamp; only dual-brush coverage persists.
-  let transientCoverage = false;
-  let smudgeActive = false;
-  let historySource: Layer | undefined;
-  // Immutable history-source tiles are uploaded once per stroke, not once per paint batch.
-  const historyTiles = new Map<string, ReturnType<typeof historyTarget>>();
-  const spareHistoryTiles: ReturnType<typeof historyTarget>[] = [];
-  const retouch = resources.keep(createAbrRetouch<Layer>(root, {
-    capture: captureRegion,
-    deposit: paintStamps,
-    tileKeys: dab => dabTiles(dab).filter(allowsTile)
-  }, options));
-  let pickup: ReturnType<typeof createCanvasPickup<Layer>> | undefined;
-  resources.keep({
-    destroy() {
-      abrStamps?.destroy();
-      for (const texture of [...historyTiles.values(), ...spareHistoryTiles]) texture.destroy();
-      pickup?.destroy();
-      texturedStamps?.destroy();
-      texturedPipeline = undefined;
-    }
-  });
   let animateSelection = true;
+  const virtual = options.virtualTexture
+    ? resources.keep(
+        createVirtualTexture(
+          root,
+          async (pixels) => (pixels instanceof Uint8Array ? pixels : options.readTile!(pixels)),
+          () => {
+            targets.invalidate();
+            options.onRefine?.();
+          },
+          (error) => options.onError?.(error),
+          options.overviewStorage
+        )
+      )
+    : undefined;
+  const targets = resources.keep(
+    createTargetViews(root, format, {
+      virtual,
+      lasso,
+      contextError: () => rendererError(gpuError('canvas', 'The canvas target could not start WebGPU.'))
+    })
+  );
+  targets.attach(canvas, primaryContext);
+  let lastTarget = canvas;
+
   // Match virtual pages so touching a magnified tile does not change existing artwork's filtering.
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
-  const mipmaps = createTileMipmaps(root);
-  const generateMipmaps = options.batchedMipmaps === false ? undefined : mipmaps;
-  const ensureMipmaps = (tile: { texture: TgpuTexture & RenderFlag; mipLevelReady: number }, requested: number, encoder?: GPUCommandEncoder) => {
-    const last = Math.max(0, Math.min((tile.texture.props.mipLevelCount ?? 1) - 1, requested));
-    if (last <= tile.mipLevelReady) return;
-    if (generateMipmaps) generateMipmaps(tile.texture, tile.mipLevelReady, last, encoder);
-    else tile.texture.generateMipmaps(tile.mipLevelReady, last - tile.mipLevelReady + 1);
-    tile.mipLevelReady = last;
-  };
+  const generateMipmaps = options.batchedMipmaps === false ? undefined : createTileMipmaps(root);
+  const ensureMipmaps = createMipmapEnsurer(generateMipmaps);
   const displayCache = resources.keep(createDisplayCache(root, sampler, generateMipmaps));
-  const cache = new Map<string, ReturnType<typeof createTile>>();
-  const samplingScratch: ReturnType<typeof createStrokeScratch>[] = [];
-  let smudgeDeposits: ReturnType<typeof createSmudgeDepositBatch> | undefined;
-  let sharedScratch = false;
-  let residentLimit = Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES);
-  const scratchLimit = Math.min(32, residentLimit);
-  const reserveSamplingScratch = commandSlots(scratchLimit);
-  const spareTiles: ReturnType<typeof createTile>[] = [];
-  const tailTiles = new Map<string, Dab[]>();
-  // A small reusable pool, independent of committed scratch and its eviction/readback lifecycle.
-  const tailPool: ReturnType<typeof createTile>[] = [];
-  resources.keep({
-    destroy() {
-      smudgeDeposits?.destroy();
-      for (const tile of [...tailPool, ...cache.values(), ...spareTiles]) destroyTile(tile);
-      for (const scratch of samplingScratch) destroyStrokeScratch(scratch);
-      tailPool.length = spareTiles.length = samplingScratch.length = 0;
-      tailTiles.clear();
-      cache.clear();
-    }
+  const stroke = createStrokeData();
+  const residency = resources.keep(createTileResidency(root, sampler, stroke, options));
+  const raster = resources.keep(
+    createStrokeRaster(
+      root,
+      { stroke, residency, displayCache, targets, sampler, ensureMipmaps, paintBounds, allowsTile },
+      options
+    )
+  );
+  const retouch = resources.keep(
+    createAbrRetouch<Layer>(
+      root,
+      {
+        capture: raster.captureRegion,
+        deposit: raster.paintStamps,
+        tileKeys: (dab) => dabTiles(dab).filter(allowsTile)
+      },
+      options
+    )
+  );
+  const strokes = createStrokeState(stroke, {
+    residency,
+    raster,
+    retouch,
+    targets,
+    displayCache,
+    invalidateOverview: () => virtual?.invalidate(),
+    streaming: !!virtual,
+    allowsTile,
+    sharedScratch: options.sharedScratch
   });
-  const strokeTiles = new Map<
-    string,
-    {
-      before: TileData | undefined;
-      mask?: Uint8Array;
-      coverage?: AbrCoverageSnapshot;
-      output?: Uint8Array;
-      pending?: Promise<Result<void>>;
-    }
-  >();
-  const evictionSize = Math.min(16, Math.max(1, Math.floor((options.cacheTiles ?? MAX_RESIDENT_TILES) / 8)));
-  const readbackBatch = evictionSize * 4;
-  const readbacks = resources.keep(createReadbackQueue(device, readbackBatch));
-  let stroke: { layer: Layer; brush: Brush } | undefined;
-  let view: ReturnType<typeof createView> | undefined;
-  let presentedCamera = '';
-  let holdPresentation = '';
-  const virtual = options.virtualTexture
-    ? resources.keep(createVirtualTexture(
-        root,
-        async (pixels) => (pixels instanceof Uint8Array ? pixels : options.readTile!(pixels)),
-        () => {
-          invalidateViews();
-          options.onRefine?.();
-        },
-        (error) => options.onError?.(error),
-        options.overviewStorage
-      ))
-    : undefined;
-  let viewFallback = virtual ? createViewFallback(root) : undefined;
-  let completeView: { camera: Camera; size: ViewSize } | undefined;
-  const primaryCanvas = canvas;
-  type TargetState = {
-    context: GPUCanvasContext;
-    view: typeof view;
-    fallback: typeof viewFallback;
-    complete: typeof completeView;
-    presented: string;
-    hold: string;
-    damage: ReturnType<typeof createViewDamage>;
-    pages: ReturnType<NonNullable<typeof virtual>['view']> | undefined;
-    lasso: ReturnType<typeof lasso.target>;
-  };
-  const targets = new Map<typeof canvas, TargetState>();
-  targets.set(canvas, {
-    context,
-    view,
-    fallback: viewFallback,
-    complete: undefined,
-    presented: '',
-    hold: '',
-    damage: createViewDamage(),
-    pages: virtual?.view(),
-    lasso: lasso.target()
-  });
-  resources.keep({
-    destroy() {
-      for (const [targetCanvas, target] of targets) {
-        if (targetCanvas === canvas) {
-          view?.destroy();
-          viewFallback?.destroy();
-        } else {
-          target.view?.destroy();
-          target.fallback?.destroy();
-        }
-        if (target.context !== primaryContext) {
-          target.context.unconfigure();
-        }
-      }
-      targets.clear();
-    }
-  });
-  // Drawing is serialized by the document runtime. Targets share tile caches, pipelines and device;
-  // only their composed viewport/fallback survives between presentations.
-  const selectTarget = (next: typeof canvas) => {
-    if (next === canvas && targets.has(next)) return;
-    let target = targets.get(next);
-    if (!target) {
-      const nextContext = next.getContext('webgpu');
-      if (!nextContext) throw new Error('The canvas target could not start WebGPU.');
-      nextContext.configure({ device, format, alphaMode: 'opaque' });
-      target = {
-        context: nextContext,
-        view: undefined,
-        fallback: virtual ? createViewFallback(root) : undefined,
-        complete: undefined,
-        presented: '',
-        hold: '',
-        damage: createViewDamage(),
-        pages: virtual?.view(),
-        lasso: lasso.target()
-      };
-      targets.set(next, target);
-    }
-    const current = targets.get(canvas);
-    if (current)
-      Object.assign(current, {
-        view,
-        fallback: viewFallback,
-        complete: completeView,
-        presented: presentedCamera,
-        hold: holdPresentation
-      });
-    canvas = next;
-    context = target.context;
-    view = target.view;
-    viewFallback = target.fallback;
-    completeView = target.complete;
-    presentedCamera = target.presented;
-    holdPresentation = target.hold;
-  };
-  const invalidateOtherTargets = () => {
-    for (const [targetCanvas, target] of targets)
-      if (targetCanvas !== canvas) {
-        target.complete = undefined;
-        target.hold = '';
-        target.fallback?.clear();
-      }
-  };
-  const markTile = (key: string) => {
-    for (const target of targets.values()) target.damage.mark(key);
-  };
-  function invalidateViews() {
-    for (const target of targets.values()) target.damage.invalidate();
-  }
-  const setTail = (dabs: readonly Dab[]) => {
-    for (const key of tailTiles.keys()) markTile(key);
-    tailTiles.clear();
-    for (const dab of dabs)
-      for (const key of dabTiles(dab)) {
-        if (!allowsTile(key)) continue;
-        const list = tailTiles.get(key) ?? [];
-        list.push(dab);
-        tailTiles.set(key, list);
-        markTile(key);
-      }
-  };
-  let frame = 0;
-  let viewportUpdate = { full: false, pixels: 0 };
-  let previewTileDraws = 0,
-    sourceTileDraws = 0;
-  // writeBuffer copies at call time, so one staging array serves every round-brush stamp upload.
-  const stampData = new Float32Array(STAMP_CAPACITY * 4);
-  /** Uploads tile-local round-brush instances (x, y, radius, flow) for one tile. */
-  const writeStamps = (buffer: GPUBuffer, stamps: readonly Dab[], tx: number, ty: number) => {
-    for (let index = 0; index < stamps.length; index++) {
-      const dab = stamps[index]!;
-      stampData[index * 4] = dab.x - tx * TILE_SIZE;
-      stampData[index * 4 + 1] = dab.y - ty * TILE_SIZE;
-      stampData[index * 4 + 2] = dab.radius;
-      stampData[index * 4 + 3] = dab.flow;
-    }
-    device.queue.writeBuffer(buffer, 0, stampData, 0, stamps.length * 4);
-  };
-  const brushBuffer = resources.keep(root.createBuffer(shader.brushLayout.entries.settings.uniform).$usage('uniform'));
-  const brushGroup = root.createBindGroup(shader.brushLayout, { settings: brushBuffer });
-  const readTile = async (pixels: TileData | undefined) =>
-    pixels === undefined
-      ? undefined
-      : pixels instanceof Uint8Array
-        ? pixels
-        : options.readTile
-          ? options.readTile(pixels)
-          : Promise.reject(new Error('Missing tile storage reader.'));
-  const keyFor = (layer: Layer, key: string) => `${layer.id}/${key}`;
-
-  /** Evicts least-recently-used tiles. Active mask readback occurs only when the cache is full.
-   * `pinned` ids are loaded members of an undrawn render batch; they are never evicted to make room.
-   */
-  const ensure = async (
-    layer: Layer,
-    key: string,
-    batch?: ReturnType<typeof commandBatch>,
-    pinned?: ReadonlySet<string>
-  ) => {
-    const id = keyFor(layer, key);
-    let tile = cache.get(id);
-    if (tile) {
-      tile.used = ++frame;
-      return tile;
-    }
-    if (cache.size >= residentLimit) {
-      // Submit every command referencing victims before readback or recycling their resources.
-      batch?.flush();
-      // Amortize readback synchronization over a small LRU batch as the stroke grows.
-      const count = evictionSize;
-      const victims = evictionVictims(cache, count, pinned);
-      // A tile loaded only for pickup still matches its saved snapshot. Reading it
-      // back again makes large smudge footprints thrash the CPU/GPU boundary.
-      const active = victims.filter(([id, tile]) => strokeTiles.has(id) && tile.strokeDirty);
-      if (active.length) {
-        const coverage = abrActive ? abrStamps!.coveragePlan(transientCoverage) : undefined;
-        const roundMask = !abrActive && !transientCoverage;
-        const channels = 1 + (coverage?.count ?? Number(roundMask));
-        const snapshots = active.map(([id]) => ({ id, snapshot: strokeTiles.get(id)! }));
-        const job = await readbacks.capture(active.flatMap(([, tile]) => [
-          root.unwrap(tile.texture),
-          ...(coverage?.count ? coverage.sources(tile.scratch!.abr!.coverage) : roundMask ? [root.unwrap(tile.scratch!.mask)] : [])
-        ]));
-        const pending = attempt(async () => {
-          const result = await job.ready;
-          // Cancellation removes the snapshot; late outcomes belong to that discarded stroke.
-          if (disposed || !snapshots.some(({ id, snapshot }) => strokeTiles.get(id) === snapshot)) return;
-          if (!result.ok) {
-            options.onError?.(result.error);
-            throw result.error;
-          }
-          const pixels = result.value;
-          snapshots.forEach(({ id, snapshot }, index) => {
-            if (strokeTiles.get(id) !== snapshot || snapshot.pending !== pending) return;
-            const at = index * channels;
-            snapshot.output = pixels[at]!;
-            snapshot.mask = roundMask ? pixels[at + 1] : undefined;
-            snapshot.coverage = coverage?.snapshot(pixels, at + 1);
-            snapshot.pending = undefined;
-          });
-        });
-        // Failed results stay attached until finish/revisit explicitly observes them.
-        for (const { snapshot } of snapshots) snapshot.pending = pending;
-      }
-      for (const [id, tile] of victims) {
-        spareTiles.push(tile);
-        cache.delete(id);
-      }
-    }
-    const active = strokeTiles.get(id);
-    if (active?.pending) unwrapResult(await active.pending);
-    const pixels = await readTile(active?.output ?? layer.tiles.get(key));
-    tile = spareTiles.pop();
-    if (tile) {
-      replacePixels(device, root.unwrap(tile.texture), pixels, batch);
-      tile.mipLevelReady = 0;
-    } else tile = createTile(root, pixels, sampler);
-    tile.strokeDirty = false;
-    try {
-      tile.used = ++frame;
-      if (active && !sharedScratch) {
-        const scratch = prepareStroke(root, tile);
-        if (!transientCoverage) {
-          replacePixels(device, root.unwrap(scratch.base), await readTile(active.before), batch);
-          if (!abrActive) replacePixels(device, root.unwrap(scratch.mask), active.mask, batch);
-        }
-        if (abrActive) {
-          scratch.abr ??= abrStamps!.createTile(scratch.base, scratch.mask, STAMP_CAPACITY);
-          if (!transientCoverage) scratch.abr.coverage.restore(active.coverage, unpackTile, batch);
-        }
-      }
-      cache.set(id, tile);
-      return tile;
-    } catch (error) {
-      // A failed source read must not orphan an allocated slot outside the bounded pool.
-      // Paint's finally block still submits any queued clears before the next command can reuse it.
-      spareTiles.push(tile);
-      throw error;
-    }
-  };
-
-  /** Builds display-only output with the same accumulated mask and opacity as the real stroke. */
-  const prepareTail = (
-    original: ReturnType<typeof createTile>,
-    active: boolean,
-    tail: readonly Dab[],
-    slot: number,
-    x: number,
-    y: number
-  ) => {
-    const temporary: ReturnType<typeof createTile> =
-      tailPool[slot] ?? (tailPool[slot] = createTile(root, undefined, sampler));
-    const scratch = prepareStroke(root, temporary);
-    const commands = commandBatch(device);
-    commands
-      .encoder()
-      .copyTextureToTexture(
-        { texture: root.unwrap(active ? original.scratch!.base : original.texture) },
-        { texture: root.unwrap(scratch.base) },
-        [TILE_SIZE, TILE_SIZE]
-      );
-    if (abrActive) {
-      scratch.abr ??= abrStamps!.createTile(scratch.base, scratch.mask, STAMP_CAPACITY);
-      scratch.abr.coverage.copyFrom(active ? original.scratch!.abr!.coverage : undefined, commands);
-    } else if (active)
-      commands.encoder().copyTextureToTexture(
-        { texture: root.unwrap(original.scratch!.mask) }, { texture: root.unwrap(scratch.mask) }, [TILE_SIZE, TILE_SIZE]
-      );
-    else clearAttachment(commands.encoder(), scratch.maskRender);
-    for (let offset = 0; offset < tail.length; offset += STAMP_CAPACITY) {
-      if (offset) commands.flush();
-      const stamps = tail.slice(offset, offset + STAMP_CAPACITY);
-      if (abrActive) {
-        abrStamps!.draw(scratch.abr!, commands, stamps, x, y);
-        continue;
-      }
-      writeStamps(root.unwrap(scratch.stamps), stamps, x, y);
-      const pass = commands.encoder().beginRenderPass({
-        colorAttachments: [{ view: scratch.maskRender, loadOp: 'load', storeOp: 'store' }]
-      });
-      if (texturedPipeline) texturedPipeline.with(pass).with(shader.stampLayout, scratch.stamps).draw(6, stamps.length);
-      else pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, scratch.stamps).draw(6, stamps.length);
-      pass.end();
-    }
-    const pass = commands
-      .encoder()
-      .beginRenderPass({ colorAttachments: [{ view: temporary.render, loadOp: 'clear', storeOp: 'store' }] });
-    const clip = clipPaintBounds(paintBounds, x, y)!;
-    pass.setScissorRect(clip.x, clip.y, clip.width, clip.height);
-    if (abrActive) abrStamps!.composite(scratch.abr!, pass);
-    else pipelines.stroke.with(pass).with(brushGroup).with(scratch.strokeGroup).draw(3);
-    pass.end();
-    commands.flush();
-    temporary.mipLevelReady = 0;
-    return temporary;
-  };
-
-  /** Rasterizes one ordered operation; sampling tools reset their coverage for each transport step. */
-  async function paintStamps(
-    dabs: readonly Dab[],
-    sampled?: NonNullable<Parameters<ReturnType<typeof createAbrStamps>['composite']>[2]>,
-    onlyTile?: string,
-    batch?: ReturnType<typeof commandBatch>
-  ) {
-    if (!stroke || !dabs.length) return;
-    const direct =
-      !!sampled && smudgeActive && options.directSmudge !== false && abrStamps!.canDrawDirect() &&
-      dabs.length === 1 && !dabs[0]!.abr?.secondary;
-    const groups = new Map<string, Dab[]>();
-    if (onlyTile !== undefined) {
-      const [x, y] = coordinates(onlyTile);
-      const touching = dabs.filter((dab) => dabIntersectsTile(dab, x, y));
-      if (touching.length && allowsTile(onlyTile)) groups.set(onlyTile, touching);
-    } else
-      for (const dab of dabs)
-        for (const key of dabTiles(dab)) {
-        if (!allowsTile(key)) continue;
-          let group = groups.get(key);
-          if (!group) {
-            group = [];
-            groups.set(key, group);
-          }
-          group.push(dab);
-        }
-    const commands = batch ?? commandBatch(device);
-    if (!paintBounds && direct && sharedScratch && options.batchSmudgeTiles !== false && groups.size >= 8 &&
-        residentLimit >= 8 && !historySource && abrStamps!.canBatchDirect()) {
-      const dab = dabs[0]!;
-      // Batch eviction can retire several LRU tiles together. Leave that many spare slots
-      // so every newly acquired destination stays resident until its copy-back is encoded.
-      const capacity = Math.min(32, residentLimit - evictionSize + 1);
-      smudgeDeposits ??= createSmudgeDepositBatch(root, abrStamps!);
-      try {
-        for (const chunk of planSmudgeDeposits(dab, groups.keys(), capacity)) {
-          const tiles: Awaited<ReturnType<typeof ensure>>[] = [];
-          for (const { key } of chunk.tiles) tiles.push(await ensure(stroke.layer, key, commands));
-          for (const { key } of chunk.tiles) {
-            const id = keyFor(stroke.layer, key);
-            if (!strokeTiles.has(id)) strokeTiles.set(id, { before: stroke.layer.tiles.get(key) });
-          }
-          smudgeDeposits.draw(commands, dab, sampled!, chunk, tiles.map(tile => root.unwrap(tile.texture)));
-          chunk.tiles.forEach(({ key }, index) => {
-            tiles[index]!.mipLevelReady = 0;
-            tiles[index]!.strokeDirty = true;
-            displayCache.remove(keyFor(stroke!.layer, key), batch?.flush);
-            markTile(key);
-          });
-        }
-      } finally {
-        if (!batch) commands.flush();
-      }
-      return;
-    }
-    const directStamp = direct ? abrStamps!.prepareDirect(dabs[0]!) : undefined;
-    let pendingTiles = 0;
-    try {
-      for (const [key, dabs] of groups) {
-        const [tx, ty] = coordinates(key);
-        const stampRegion = expandToRasterGrid(
-          direct ? directStampBounds(dabs[0]!, tx, ty) : stampBounds(dabs, tx, ty),
-          abrActive ? abrStamps!.rasterScale() : 1
-        );
-        const bounds = stampRegion && clipPaintBounds(paintBounds, tx, ty, stampRegion);
-        if (!bounds) continue;
-        let historyPickup: typeof sampled;
-        if (historySource) {
-          const historyTexture = await historyTile(historySource, key, commands);
-          const [x, y] = coordinates(key);
-          historyPickup = {
-            patch: {
-              texture: historyTexture,
-              width: TILE_SIZE,
-              height: TILE_SIZE,
-              region: { x: x * TILE_SIZE, y: y * TILE_SIZE, width: TILE_SIZE, height: TILE_SIZE }
-            },
-            x: x * TILE_SIZE,
-            y: y * TILE_SIZE,
-            width: TILE_SIZE,
-            height: TILE_SIZE,
-            strength: 1,
-            fingerPainting: false,
-            history: true
-          };
-        }
-        const id = keyFor(stroke.layer, key);
-        const tile = await ensure(stroke.layer, key, commands);
-        const scratch = sharedScratch
-          ? (samplingScratch[reserveSamplingScratch(commands)] ??= createStrokeScratch(root))
-          : prepareStroke(root, tile);
-        if (abrActive) scratch.abr ??= abrStamps!.createTile(scratch.base, scratch.mask, STAMP_CAPACITY);
-        const firstTouch = !strokeTiles.has(id);
-        if (firstTouch || sharedScratch) {
-          if (firstTouch) strokeTiles.set(id, { before: stroke.layer.tiles.get(key) });
-          const region = sharedScratch && bounds ? bounds : { x: 0, y: 0, width: TILE_SIZE, height: TILE_SIZE };
-          const origin = { x: region.x, y: region.y };
-          commands
-            .encoder()
-            .copyTextureToTexture(
-              { texture: root.unwrap(tile.texture), origin },
-              { texture: root.unwrap(scratch.base), origin },
-              [region.width, region.height]
-            );
-          if (!direct) {
-            if (abrActive) scratch.abr!.coverage.clear(commands);
-            else clearAttachment(commands.encoder(), scratch.maskRender);
-          }
-        }
-        if (sampled && !firstTouch && !sharedScratch && bounds) {
-          // Smudge composites each step over the previous step. Immutable history remains in strokeTiles.before.
-          // The composite reads base only inside its scissor; refresh that rectangle instead of the whole tile.
-          // Sampling tools do not use disposable tails, which would need a complete pre-stroke base.
-          const origin = { x: bounds.x, y: bounds.y };
-          commands
-            .encoder()
-            .copyTextureToTexture(
-              { texture: root.unwrap(tile.texture), origin },
-              { texture: root.unwrap(scratch.base), origin },
-              [bounds.width, bounds.height]
-            );
-          if (!direct) {
-            scratch.abr!.coverage.clear(commands, false);
-          }
-        }
-        for (let offset = 0; !direct && offset < dabs.length; offset += STAMP_CAPACITY) {
-          // The same instance buffer must not be overwritten before its previous draw is submitted.
-          if (offset) commands.flush();
-          const stamps = dabs.slice(offset, offset + STAMP_CAPACITY);
-          if (abrActive) {
-            abrStamps!.draw(scratch.abr!, commands, stamps, tx, ty);
-            continue;
-          }
-          writeStamps(root.unwrap(scratch.stamps), stamps, tx, ty);
-          const pass = commands.encoder().beginRenderPass({
-            colorAttachments: [{ view: scratch.maskRender, loadOp: 'load', storeOp: 'store' }]
-          });
-          if (texturedPipeline)
-            texturedPipeline.with(pass).with(shader.stampLayout, scratch.stamps).draw(6, stamps.length);
-          else
-            pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, scratch.stamps).draw(6, stamps.length);
-          pass.end();
-        }
-        // Output depends on the final accumulated mask, so composite once per touched region.
-        // Keep previous output outside this region, including ink from earlier input batches.
-        if (bounds) {
-          if (direct) abrStamps!.prepareTile(scratch.abr!, commands, tx, ty);
-          const pass = commands.encoder().beginRenderPass({
-            colorAttachments: [{ view: tile.render, loadOp: 'load', storeOp: 'store' }]
-          });
-          pass.setScissorRect(bounds.x, bounds.y, bounds.width, bounds.height);
-          if (abrActive) {
-            const captured = historyPickup ?? sampled;
-            const pickup = captured
-              ? {
-                  ...captured,
-                  x: tx * TILE_SIZE - captured.x,
-                  y: ty * TILE_SIZE - captured.y
-                }
-              : undefined;
-            if (direct) abrStamps!.draw(scratch.abr!, commands, dabs, tx, ty, { pass, pickup: pickup!, stamps: directStamp });
-            else abrStamps!.composite(scratch.abr!, pass, pickup);
-          } else pipelines.stroke.with(pass).with(brushGroup).with(scratch.strokeGroup).draw(3);
-          pass.end();
-        }
-        tile.mipLevelReady = 0;
-        tile.strokeDirty = true;
-        displayCache.remove(id, batch?.flush);
-        markTile(key);
-        if (++pendingTiles === (sharedScratch ? scratchLimit : 32)) {
-          commands.flush();
-          pendingTiles = 0;
-        }
-      }
-    } finally {
-      // An I/O failure must not discard commands for previously processed tiles in this batch.
-      if (!batch) commands.flush();
-    }
-  }
-
-  /** Returns the stroke's resident copy of a history-source tile, uploading it on first use. At most HISTORY_TILES
-   * stay resident; recycling the least recently used one first submits every encoded reader of it.
-   */
-  async function historyTile(source: Layer, key: string, commands: ReturnType<typeof commandBatch>) {
-    const cached = historyTiles.get(key);
-    if (cached) {
-      historyTiles.delete(key);
-      historyTiles.set(key, cached);
-      return cached;
-    }
-
-    let texture = spareHistoryTiles.pop();
-    if (!texture && historyTiles.size >= HISTORY_TILES) {
-      const [oldest, recycled] = historyTiles.entries().next().value!;
-      commands.flush();
-      historyTiles.delete(oldest);
-      texture = recycled;
-    }
-    texture ??= historyTarget(root);
-    try {
-      replacePixels(device, root.unwrap(texture), await readTile(source.tiles.get(key)), commands);
-    } catch (error) {
-      spareHistoryTiles.push(texture);
-      throw error;
-    }
-    historyTiles.set(key, texture);
-    return texture;
-  }
-
-  /** Stroke end: history tiles belong to that stroke's source; keep their textures for the next one. */
-  function releaseHistoryTiles() {
-    spareHistoryTiles.push(...historyTiles.values());
-    historyTiles.clear();
-  }
-
-  async function captureRegion(
-    region: PickupRegion,
-    layers: readonly Layer[],
-    allLayers = false,
-    exact = false,
-    linear = false,
-    commands?: ReturnType<typeof commandBatch>,
-    maxDimension?: number
-  ) {
-    pickup ??= createCanvasPickup<Layer>(root, async (layer, key, minify, flush, requiredMip) => {
-      const id = keyFor(layer, key);
-      const snapshot = strokeTiles.get(id);
-      if (!layer.tiles.has(key) && !snapshot) return undefined;
-      let tile;
-      if (cache.has(id)) tile = await ensure(layer, key);
-      else if (options.displayCache === false) {
-        flush();
-        tile = await ensure(layer, key);
-      } else {
-        // Pickup is read-only. Restoring brush scratch here evicts destination
-        // tiles for every large footprint, causing repeated GPU readback/reupload.
-        // Reuse the bounded immutable cache, always at full document resolution.
-        if (snapshot?.pending) unwrapResult(await snapshot.pending);
-        const source = snapshot?.output ?? layer.tiles.get(key);
-        // Only immutable nonresident snapshots may prove emptiness. Resident GPU
-        // ink can already be newer than the last packed snapshot.
-        if (!source || isEmptyPackedTile(source)) return undefined;
-        const beforeInvalidate = options.batchPickupUploads === false ? () => flush() : flush;
-        tile = displayCache.find(id, source, 1, beforeInvalidate);
-        if (!tile) {
-          // Only destruction of an encoded source requires submission; fresh uploads can stay in the batch.
-          if (options.batchPickupUploads === false) flush();
-          const pixels = (await readTile(source))!;
-          if (isEmptyPackedTile(pixels)) return undefined;
-          tile = displayCache.get(id, pixels, 1, source, beforeInvalidate);
-        }
-      }
-      if (minify) {
-        const last = options.adaptivePickupMipmaps === false ? 8 : requiredMip;
-        if (last > tile.mipLevelReady) {
-          // Earlier dabs may still be encoded. Mipmap generation submits independently.
-          flush();
-          ensureMipmaps(tile, last);
-        }
-      }
-      return tile.texture;
-    });
-    return pickup.capture(region, layers, { allLayers, exact, linear, commands, maxDimension });
-  }
+  const composer = createFrameComposer(
+    root,
+    format,
+    { stroke, residency, raster, displayCache, ensureMipmaps, virtual, animateSelection: () => animateSelection },
+    options
+  );
 
   return {
     /** Captures transient tool paint for a planned renderer replacement, never for document autosave. */
     async snapshotTools() {
-      if (stroke) throw new Error('Finish or cancel the stroke before replacing the renderer.');
+      if (stroke.current) {
+        throw new Error('Finish or cancel the stroke before replacing the renderer.');
+      }
+
       return retouch.snapshot();
     },
     /** Validates the complete payload before mutating any device resources. Empty state clears prior tools. */
     restoreTools(input: unknown) {
-      if (stroke) throw new Error('Finish or cancel the stroke before restoring tool paint.');
+      if (stroke.current) {
+        throw new Error('Finish or cancel the stroke before restoring tool paint.');
+      }
+
       retouch.restore(input);
     },
     /** Changes idle Mixer wells without starting a stroke or touching document/history state. */
@@ -793,34 +207,20 @@ async function assemblePaintRenderer(
       retouch.mixerCommand(...args);
     },
     /** Loads a single document pixel or a brush-sized color patch; presentation/background pixels are excluded. */
-    async loadMixerFromCanvas(options: Parameters<typeof retouch.loadMixerFromCanvas>[0]) {
-      if (stroke) throw new Error('Finish or cancel the stroke before loading canvas paint.');
-      await retouch.loadMixerFromCanvas(options);
+    async loadMixerFromCanvas(load: Parameters<typeof retouch.loadMixerFromCanvas>[0]) {
+      if (stroke.current) {
+        throw new Error('Finish or cancel the stroke before loading canvas paint.');
+      }
+
+      await retouch.loadMixerFromCanvas(load);
     },
     /** Detaches a target after any in-flight render. The caller owns its canvas element. */
     releaseTarget(targetCanvas: OffscreenCanvas | HTMLCanvasElement) {
-      const target = targets.get(targetCanvas);
-      if (!target) return;
-      if (targetCanvas === canvas) {
-        view?.destroy();
-        viewFallback?.destroy();
-        view = undefined;
-        viewFallback = undefined;
-        completeView = undefined;
-        holdPresentation = '';
-        presentedCamera = '';
-      } else {
-        target.view?.destroy();
-        target.fallback?.destroy();
-      }
-      target.pages?.release();
-      target.lasso.destroy();
-      target.context.unconfigure();
-      targets.delete(targetCanvas);
+      targets.release(targetCanvas);
     },
     /** Replaces display-only stamps; these never enter readback, history or saved tiles. */
     preview(dabs: readonly Dab[]) {
-      setTail(stroke ? dabs : []);
+      strokes.preview(dabs);
     },
     /** Keeps transient selection geometry on this device, outside committed artwork and exports. */
     setSelection(points: readonly Point[], animate = true) {
@@ -834,119 +234,66 @@ async function assemblePaintRenderer(
     /** Resident texture budget is bounded; the count also includes active-stroke resources. */
     stats() {
       const virtualStats = virtual?.stats();
-      const readbackStats = readbacks.stats();
+      const tiles = residency.stats();
+      const brush = raster.stats();
+      const frame = composer.stats();
       return {
-        residentTiles: cache.size + spareTiles.length,
-        samplingScratchTiles: samplingScratch.length,
-        readback: readbackStats,
-        previewTileDraws,
-        viewportUpdate,
-        sourceTileDraws,
+        residentTiles: tiles.residentTiles,
+        samplingScratchTiles: tiles.samplingScratchTiles,
+        readback: tiles.readback,
+        previewTileDraws: frame.previewTileDraws,
+        viewportUpdate: frame.viewportUpdate,
+        sourceTileDraws: frame.sourceTileDraws,
         virtual: virtualStats,
         displayTiles: displayCache.stats().tiles,
-        brushTextures: abrActive ? abrStamps?.stats() : texturedStamps?.stats(),
+        brushTextures: brush.brushTextures,
         gpuBytes:
-          (texturedStamps?.stats().bytes ?? 0) +
-          (abrStamps?.stats().bytes ?? 0) +
+          brush.bytes +
+          tiles.bytes +
           lasso.bytes() +
-          readbackStats.bytes +
           (virtualStats?.gpuBytes ?? 0) +
-          (viewFallback?.bytes() ?? 0) +
-          (view ? view.width * view.height * 16 : 0) +
-          [...targets].reduce(
-            (sum, [targetCanvas, target]) =>
-              sum +
-              (targetCanvas === canvas
-                ? 0
-                : (target.fallback?.bytes() ?? 0) + (target.view ? target.view.width * target.view.height * 16 : 0)),
-            0
-          ) +
+          targets.bytes() +
           displayCache.stats().bytes +
-          (pickup?.bytes() ?? 0) +
-          retouch.bytes() +
-          (historyTiles.size + spareHistoryTiles.length) * TILE_SIZE * TILE_SIZE * 4 +
-          (smudgeDeposits?.bytes() ?? 0) +
-          samplingScratch.reduce((sum, scratch) => sum + scratchBytes(scratch), 0) +
-          [...cache.values(), ...spareTiles, ...tailPool].reduce(
-            (sum, tile) => sum + (TILE_SIZE * TILE_SIZE * 4 * 4) / 3 + (tile.scratch ? scratchBytes(tile.scratch) : 0),
-            0
-          )
+          retouch.bytes()
       };
     },
-    debugPages: () => targets.get(canvas)?.pages?.debug() ?? [],
+    /** Virtual-texture pages selected by the most recently rendered target. */
+    debugPages: () => targets.get(lastTarget)?.pages()?.debug() ?? [],
     /** Occupied visible-layer tiles, including the active stroke, for the optional wireframe overlay. */
     debugTiles(layers: Layer[]) {
       const keys = new Set<string>();
       for (const layer of layers) {
-        if (!layer.visible || layer.opacity <= 0) continue;
-        for (const key of layer.tiles.keys()) keys.add(key);
-        if (stroke?.layer.id === layer.id) for (const id of strokeTiles.keys()) keys.add(id.slice(layer.id.length + 1));
+        if (!layer.visible || layer.opacity <= 0) {
+          continue;
+        }
+
+        for (const key of layer.tiles.keys()) {
+          keys.add(key);
+        }
+
+        for (const key of strokes.activeKeys(layer)) {
+          keys.add(key);
+        }
       }
+
       return [...keys];
     },
     /** Captures brush settings and the target layer until commit/cancel. Optional native coverage replaces hardness.
      * Textured dabs must carry the tip's circumscribed radius; use texturedBrush to map brush size correctly.
      */
-    begin(layer: Layer, brush: Brush, tip?: { resource: BrushResource; angle: number }, abr?: AbrRasterSettings<Layer>) {
-      if (stroke) throw new Error('Finish the current stroke before beginning another.');
-      if (abr) (abrStamps ??= createAbrStamps(root, options.batchSampledMasks)).prepare(abr);
-      abrActive = !!abr;
-      smudgeActive = !!abr?.smudge;
-      transientCoverage = !!(abr?.smudge || abr?.filter || abr?.mixer) && !(abr?.values.useDualBrush && abr.dual);
-      const nextShared = transientCoverage && options.sharedScratch !== false;
-      if (nextShared !== sharedScratch) {
-        // Keep the previous texture budget: each freed four-texture scratch set buys three mipmapped tiles.
-        residentLimit = Math.max(
-          1,
-          options.cacheTiles ?? (nextShared ? MAX_RESIDENT_TILES * 4 - scratchLimit * 3 : MAX_RESIDENT_TILES)
-        );
-        for (const tile of spareTiles) destroyTile(tile);
-        spareTiles.length = 0;
-        if (nextShared) {
-          for (const tile of cache.values()) {
-            if (tile.scratch) destroyStrokeScratch(tile.scratch);
-            tile.scratch = undefined;
-          }
-        } else {
-          for (const scratch of samplingScratch) destroyStrokeScratch(scratch);
-          samplingScratch.length = 0;
-          const victims = [...cache].sort((a, b) => a[1].used - b[1].used);
-          for (const [id, tile] of victims.slice(0, Math.max(0, cache.size - residentLimit))) {
-            destroyTile(tile);
-            cache.delete(id);
-          }
-        }
-        sharedScratch = nextShared;
-      }
-      historySource = abr?.historySource;
-      texturedPipeline = tip
-        ? (texturedStamps ??= createTexturedStamps(root)).prepare(tip.resource, tip.angle)
-        : undefined;
-      setTail([]);
-      if (virtual)
-        for (const [targetCanvas, target] of targets)
-          if (!(targetCanvas === canvas ? completeView : target.complete)) target.damage.invalidate();
-      invalidateOtherTargets();
-      completeView = undefined;
-      viewFallback?.clear();
-      stroke = { layer, brush: { ...brush } };
-      const rgb = hexColor(brush.color);
-      brushBuffer.write({
-        color: d.vec4f(...rgb, 1),
-        params: d.vec4f(
-          brush.hardness,
-          brush.opacity,
-          brush.tool === 'eraser' ? 1 : 0,
-          brush.mixing === 'linear' ? 1 : 0
-        )
-      });
-      retouch.begin(abr, brush.color, sharedScratch);
+    begin(
+      layer: Layer,
+      brush: Brush,
+      tip?: { resource: BrushResource; angle: number },
+      abr?: AbrRasterSettings<Layer>
+    ) {
+      strokes.begin(layer, brush, tip, abr);
     },
     /** Samples current pixels for canvas-dependent tools, excluding disposable previews.
      * The borrowed GPU patch remains valid until the next capture or renderer disposal.
      * Call only between submitted paint operations; all renderer operations are serialized by the runtime.
      */
-    captureRegion,
+    captureRegion: raster.captureRegion,
     /** Reads one committed active-layer pixel, excluding display/background and uncommitted stroke pixels.
      * Resolves cold tile references through storage; does not introduce a GPU readback.
      */
@@ -955,392 +302,87 @@ async function assemblePaintRenderer(
         y = Math.floor(point.y);
       const tx = Math.floor(x / TILE_SIZE),
         ty = Math.floor(y / TILE_SIZE);
-      const pixels = await readTile(layer.tiles.get(`${tx},${ty}`));
+      const pixels = await residency.readTile(layer.tiles.get(`${tx},${ty}`));
       const offset = ((y - ty * TILE_SIZE) * TILE_SIZE + x - tx * TILE_SIZE) * 4;
       return pixels ? unpackTile(pixels).slice(offset, offset + 4) : new Uint8Array(4);
     },
     /** Paint accumulates by tile; canvas-sampling tools transport pixels in stamp order. */
     async paint(dabs: readonly Dab[]) {
-      if (!retouch.active) {
-        if (!abrActive || !options.onPaintProgress) return paintStamps(dabs);
-        // Small sampled tips can share more upload/submission work without a large GPU workload.
-        // Larger stamps retain the smaller progress batches.
-        const batchSize = abrStamps!.paintBatchSize(dabs);
-        for (let offset = 0; offset < dabs.length; offset += batchSize) {
-          await paintStamps(dabs.slice(offset, offset + batchSize));
-          await options.onPaintProgress();
-        }
+      if (retouch.active) {
+        await retouch.paint(dabs);
         return;
       }
-      await retouch.paint(dabs);
+
+      if (!stroke.abr || !options.onPaintProgress) {
+        return raster.paintStamps(dabs);
+      }
+
+      // Small sampled tips can share more upload/submission work without a large GPU workload.
+      // Larger stamps retain the smaller progress batches.
+      const batchSize = stroke.abr.paintBatchSize(dabs);
+      for (let offset = 0; offset < dabs.length; offset += batchSize) {
+        await raster.paintStamps(dabs.slice(offset, offset + batchSize));
+        await options.onPaintProgress();
+      }
     },
     /** Commits touched pixels in bounded readback chunks; retains reusable GPU resources for subsequent strokes. */
-    async finish(): Promise<TileChange[]> {
-      if (!stroke) return [];
-      setTail([]);
-      for (const result of await Promise.all([...strokeTiles.values()].map((snapshot) => snapshot.pending)))
-        if (result) unwrapResult(result);
-      const changes: TileChange[] = [];
-      const resident = [...strokeTiles.keys()].filter((id) => cache.has(id));
-      // Commit readback reuses the bounded eviction staging buffers, two batches in flight. Alpha is checked on
-      // the raw mapped pixels; the queue packs each tile once and document.commit recognizes the packed arrays.
-      const outputs = new Map<string, { pixels: Uint8Array; alpha: boolean }>();
-      const reads: Promise<void>[] = [];
-      for (let offset = 0; offset < resident.length; offset += readbackBatch) {
-        const ids = resident.slice(offset, offset + readbackBatch);
-        const alpha: boolean[] = [];
-        const job = await readbacks.capture(
-          ids.map((id) => root.unwrap(cache.get(id)!.texture)),
-          (raw, index) => (alpha[index] = tileHasAlpha(raw))
-        );
-        reads.push(
-          job.ready.then((result) => {
-            const pixels = unwrapResult(result);
-            ids.forEach((id, index) => outputs.set(id, { pixels: pixels[index]!, alpha: alpha[index]! }));
-          })
-        );
-      }
-      await Promise.all(reads);
-      for (const [id, data] of strokeTiles) {
-        const read = outputs.get(id);
-        const after = read?.pixels ?? data.output;
-        const key = id.slice(stroke.layer.id.length + 1);
-        if (after)
-          changes.push({
-            layerId: stroke.layer.id,
-            key,
-            before: data.before,
-            after: (read ? read.alpha : tileHasAlpha(after)) ? after : undefined
-          });
-      }
-      strokeTiles.clear();
-      retouch.finish();
-      stroke = undefined;
-      historySource = undefined;
-      releaseHistoryTiles();
-      virtual?.invalidate();
-      holdPresentation = presentedCamera;
-      for (const [targetCanvas, target] of targets) {
-        if (targetCanvas !== canvas) target.hold = target.presented;
-        // VT can change representation at commit. Other targets must retain their preview until ready too.
-        if (virtual) target.damage.invalidate();
-      }
-      for (const change of changes) markTile(change.key);
-      return changes;
+    finish(): Promise<TileChange[]> {
+      return strokes.finish();
     },
     /** Discards preview pixels and restores the committed document on the next render. */
     cancel() {
-      retouch.cancel();
-      invalidateOtherTargets();
-      setTail([]);
-      if (strokeTiles.size) {
-        completeView = undefined;
-        viewFallback?.clear();
-      }
-      holdPresentation = '';
-      for (const id of strokeTiles.keys()) markTile(id.slice(stroke!.layer.id.length + 1));
-      for (const id of strokeTiles.keys()) {
-        displayCache.remove(id);
-        const tile = cache.get(id);
-        if (tile) destroyTile(tile);
-        cache.delete(id);
-      }
-      strokeTiles.clear();
-      readbacks.clear();
-      stroke = undefined;
-      historySource = undefined;
-      releaseHistoryTiles();
+      strokes.cancel();
     },
-    /** Invalidates cached pixels after undo, redo, import, or layer deletion. */
+    /** Invalidates cached pixels after undo, redo or import. */
     reset() {
-      retouch.cancel();
-      invalidateOtherTargets();
-      setTail([]);
-      completeView = undefined;
-      viewFallback?.clear();
-      holdPresentation = '';
-      virtual?.invalidate();
-      displayCache.clear();
-      invalidateViews();
-      for (const tile of [...cache.values(), ...spareTiles]) destroyTile(tile);
-      cache.clear();
-      spareTiles.length = 0;
-      for (const scratch of samplingScratch) destroyStrokeScratch(scratch);
-      samplingScratch.length = 0;
-      strokeTiles.clear();
-      readbacks.clear();
-      stroke = undefined;
-      historySource = undefined;
-      releaseHistoryTiles();
+      strokes.reset();
     },
     /** Rebuilds the viewport without evicting tile resources. Also permits comparison with a full redraw. */
     invalidateView() {
-      invalidateViews();
+      targets.invalidate();
     },
     /** Layer order, visibility, opacity or blend changed, or a layer was added or removed. Recomposites every
      * target and recomputes virtual-texture coverage; committed tile caches stay resident.
      */
     recomposite() {
-      invalidateOtherTargets();
-      completeView = undefined;
-      viewFallback?.clear();
-      holdPresentation = '';
+      for (const target of targets.all()) {
+        target.dropFallback();
+      }
+
       virtual?.invalidate();
-      invalidateViews();
+      targets.invalidate();
     },
     /** Returns a deleted layer's resident tiles to the spare pool and drops its display textures.
      * Call only between strokes; undo that restores the layer re-reads its committed tiles.
      */
     releaseLayer(layerId: string) {
-      if (stroke?.layer.id === layerId) throw new Error('Finish or cancel the stroke before deleting its layer.');
+      if (stroke.current?.layer.id === layerId) {
+        throw new Error('Finish or cancel the stroke before deleting its layer.');
+      }
+
       // Tile keys never contain '/', so the last separator ends the layer id even if the id contains one.
       const owned = (id: string) => id.slice(0, id.lastIndexOf('/')) === layerId;
-      for (const [id, tile] of cache) {
-        if (owned(id)) {
-          spareTiles.push(tile);
-          cache.delete(id);
-        }
-      }
+      residency.releaseWhere(owned);
       displayCache.removeWhere(owned);
     },
     /** Captures the target LOD used for drawing this layer, including viewport and sparse-page budgets. */
     brushLod(layers: Layer[], layer: Layer, camera: Camera, size: ViewSize, dpr: number) {
       const scale = renderScale(size, dpr, device.limits.maxTextureDimension2D);
-      return virtual && layers.filter(l => l.visible && l.opacity > 0).length <= 24
-        ? virtual.brushLod(layers, layer, camera, size, scale) : viewLod(camera.zoom, scale);
+      return virtual && layers.filter((l) => l.visible && l.opacity > 0).length <= 24
+        ? virtual.brushLod(layers, layer, camera, size, scale)
+        : viewLod(camera.zoom, scale);
     },
-    /** Rebuilds changed screen regions; camera/layer changes rebuild the full view. Cached output survives tile eviction. */
-    async render(layers: Layer[], camera: Camera, size: ViewSize, dpr: number, exact = false, target = primaryCanvas) {
-      if (disposed) throw new Error('The renderer is disposed.');
-      selectTarget(target);
-      const scale = renderScale(size, dpr, device.limits.maxTextureDimension2D);
-      const width = Math.max(1, Math.round(size.width * scale)),
-        height = Math.max(1, Math.round(size.height * scale));
-      if (!view || view.width !== width || view.height !== height) {
-        if (view && completeView)
-          viewFallback?.capture(root.unwrap(view.composed), completeView.camera, completeView.size);
-        completeView = undefined;
-        view?.destroy();
-        canvas.width = width;
-        canvas.height = height;
-        view = createView(root, width, height);
-        presentedCamera = '';
-        holdPresentation = '';
+    /** Rebuilds changed screen regions of `target` (the construction canvas by default), attaching it on first
+     * use; camera/layer changes rebuild the full view. Cached output survives tile eviction.
+     */
+    async render(layers: Layer[], camera: Camera, size: ViewSize, dpr: number, exact = false, target = canvas) {
+      if (disposed) {
+        throw new Error('The renderer is disposed.');
       }
-      const cameraSignature = viewSignature(camera, size, width, height);
-      const signature = `${exact}|${virtual?.uploadedBytes() ?? ''}|${cameraSignature}|${compositionSignature(layers)}`;
-      const targetState = targets.get(canvas)!;
-      const { damage, pages } = targetState;
-      const plan = damage.plan(signature, camera, size, { width, height });
-      const region = plan.region;
-      previewTileDraws = 0;
-      sourceTileDraws = 0;
-      viewportUpdate = { full: plan.full, pixels: region ? region.width * region.height : 0 };
-      // One encoder holds the frame. It is submitted early only before resources referenced by encoded passes are
-      // recycled (tile eviction, display-cache replacement, tail scratch reuse, instance-range wrap) and before
-      // helpers that submit their own work which must follow encoded passes (fallback reprojection).
-      const frame = commandBatch(device);
-      try {
-        const present = () => {
-          // Both passes target the same swapchain texture. The cached artwork never contains the outline.
-          const swapchain = context!.getCurrentTexture().createView();
-          const encoder = frame.encoder();
-          const pass = encoder.beginRenderPass({
-            colorAttachments: [{ view: swapchain, loadOp: 'clear', storeOp: 'store' }]
-          });
-          pipelines.present.with(pass).with(view!.present).draw(3);
-          pass.end();
-          if (!exact)
-            targetState.lasso.render(
-              swapchain, camera, size, width, height, animateSelection ? performance.now() / 1000 : 0, encoder
-            );
-        };
-        if (!region) {
-          present();
-          frame.flush();
-          damage.presented(plan);
-          return;
-        }
-        const left = (region.x * size.width) / width,
-          top = (region.y * size.height) / height;
-        const right = ((region.x + region.width) * size.width) / width,
-          bottom = ((region.y + region.height) * size.height) / height;
-        const corners = [
-          screenToWorld({ x: left, y: top }, camera, size),
-          screenToWorld({ x: right, y: top }, camera, size),
-          screenToWorld({ x: left, y: bottom }, camera, size),
-          screenToWorld({ x: right, y: bottom }, camera, size)
-        ];
-        const minX = Math.min(...corners.map((p) => p.x)),
-          maxX = Math.max(...corners.map((p) => p.x));
-        const minY = Math.min(...corners.map((p) => p.y)),
-          maxY = Math.max(...corners.map((p) => p.y));
-        // The first composite reads this base only inside the damage region.
-        if (plan.full) clearAttachment(frame.encoder(), view.aRender);
-        else {
-          const pass = frame.encoder().beginRenderPass({
-            colorAttachments: [{ view: view.aRender, loadOp: 'load', storeOp: 'store' }]
-          });
-          pass.setScissorRect(region.x, region.y, region.width, region.height);
-          pipelines.clear.with(pass).draw(3);
-          pass.end();
-        }
-        const stream = virtual && layers.filter((layer) => layer.visible && layer.opacity > 0).length <= 24;
-        pages?.begin(layers);
-        let read = view.a,
-          write = view.b;
-        let slot = 0;
-        for (const layer of layers) {
-          if (!layer.visible || layer.opacity <= 0) continue;
-          const active = stroke?.layer.id === layer.id;
-          let streamed = false;
-          if (stream && !exact) {
-            const planned = pages!.plan(layer, camera, size, scale, frame.flush);
-            const pass = frame.encoder().beginRenderPass({
-              colorAttachments: [{ view: view.layerRender, loadOp: 'clear', storeOp: 'store' }]
-            });
-            pass.setScissorRect(region.x, region.y, region.width, region.height);
-            planned.draw(pass);
-            // A cold layer keeps the original complete-tile path until background coverage is ready.
-            streamed = !active || planned.covered;
-            pass.end();
-          }
-          if (!streamed || active) {
-            // Committed pixels already come from the pyramid. Only the active stroke's output
-            // replaces those pixels; scanning/loading every document tile here defeats virtual texturing.
-            const visible = visibleTileKeys(layer, active ? strokeTiles : undefined,
-              active && !exact ? tailTiles : undefined, streamed, { minX, maxX, minY, maxY });
-            if (!visible.length && !streamed) continue;
-            const batchSize = Math.min(
-              tailTiles.size && !exact ? 8 : 64,
-              Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES)
-            );
-            for (let offset = 0; offset < visible.length; offset += batchSize) {
-              const batch = [];
-              // Loaded but undrawn members; loading the rest of the batch must not evict them.
-              const pinned = new Set<string>();
-              let tailSlot = 0;
-              for (const key of visible.slice(offset, offset + batchSize)) {
-                const [x, y] = coordinates(key);
-                const id = keyFor(layer, key);
-                // Display evicted active output without restoring its full-size brush mask/base.
-                // Only actual painting may bring that scratch state back into the working set.
-                const snapshot = strokeTiles.get(id);
-                // An evicted tile owns a pending snapshot, not an empty/committed replacement.
-                if (!cache.has(id) && snapshot?.pending) unwrapResult(await snapshot.pending);
-                const source = snapshot?.output ?? layer.tiles.get(key)!;
-                const tail = active && !exact ? tailTiles.get(key) : undefined;
-                let tile =
-                  tail || cache.has(id) || options.displayCache === false
-                    ? await ensure(layer, key, frame, pinned)
-                    : (displayCache.find(id, source, camera.zoom * scale, frame.flush) ??
-                      displayCache.get(id, (await readTile(source))!, camera.zoom * scale, source, frame.flush));
-                pinned.add(id);
-                if (tail) {
-                  // prepareTail submits its own copies: encoded source clears must run first, and earlier
-                  // batches may still sample the pooled tail tiles it rewrites.
-                  frame.flush();
-                  tile = prepareTail(cache.get(id)!, !!snapshot, tail, tailSlot++, x, y);
-                }
-                tile.camera.write({
-                  size: d.vec2f(size.width, size.height),
-                  zoom: camera.zoom,
-                  angle: camera.angle,
-                  mirror: camera.mirrored ? -1 : 1,
-                  padding: 0,
-                  offset: d.vec2f(x * TILE_SIZE - camera.x, y * TILE_SIZE - camera.y)
-                });
-                batch.push(tile);
-              }
-              // Load the entire bounded tile batch before encoding mipmaps. Loading can
-              // evict textures or submit tail updates; no unsubmitted mip writes may span it.
-              // The mip passes and their display reads then share the frame's submission.
-              for (const tile of batch) {
-                // Magnified tiles sample level zero. Build the mip chain only when a view needs it.
-                const mipScale = camera.zoom * Math.min(width / size.width, height / size.height);
-                if (mipScale < 1) {
-                  // Keep one level beyond the ideal LOD for trilinear filtering and viewport rounding.
-                  // Coarse cache entries already represent fewer texels across the same document tile.
-                  const required =
-                    options.adaptiveMipmaps === false
-                      ? 8
-                      : Math.ceil(Math.log2(tile.texture.props.size[0] / (TILE_SIZE * mipScale))) + 1;
-                  ensureMipmaps(tile, required, options.batchViewMipmaps === false ? undefined : frame.encoder());
-                }
-              }
-              const pass = frame.encoder().beginRenderPass({
-                colorAttachments: [
-                  { view: view.layerRender, loadOp: offset === 0 && !streamed ? 'clear' : 'load', storeOp: 'store' }
-                ]
-              });
-              pass.setScissorRect(region.x, region.y, region.width, region.height);
-              // No blending: output includes the pre-stroke base and may be completely transparent
-              // after erasing. Replace the layer pixels before applying its opacity/blend exactly once.
-              for (const tile of batch) pipelines.tile.with(pass).with(tile.viewGroup).draw(6);
-              for (const key of visible.slice(offset, offset + batchSize)) {
-                if (active && strokeTiles.has(keyFor(layer, key))) previewTileDraws++;
-                else sourceTileDraws++;
-              }
-              pass.end();
-            }
-          }
-          // Each composited layer owns a settings slot, so every composite pass can share the frame encoder.
-          const composite = view.composite(slot++);
-          composite.settings.write(
-            d.vec4f(layer.opacity, ['normal', 'multiply', 'screen', 'overlay', 'linear'].indexOf(layer.blend), 0, 0)
-          );
-          const pass = frame.encoder().beginRenderPass({
-            colorAttachments: [
-              { view: write === view.a ? view.aRender : view.bRender, loadOp: 'clear', storeOp: 'store' }
-            ]
-          });
-          pass.setScissorRect(region.x, region.y, region.width, region.height);
-          pipelines.composite
-            .with(pass)
-            .with(read === view.a ? composite.fromA : composite.fromB)
-            .draw(3);
-          pass.end();
-          [read, write] = [write, read];
-        }
-        pages?.end();
-        // Keep the last brush preview until its updated overview is resident; navigation remains immediate.
-        if (
-          !exact &&
-          !stroke &&
-          holdPresentation === cameraSignature &&
-          pages?.debug().some((page) => !page.resident || page.fallback)
-        )
-          return;
-        const refining = !exact && pages?.debug().some((page) => !page.resident || page.fallback);
-        if (refining && !stroke && completeView) {
-          // Captures the previous composed image, which the copy below has not replaced yet.
-          viewFallback?.capture(root.unwrap(view.composed), completeView.camera, completeView.size);
-          completeView = undefined;
-        }
-        holdPresentation = '';
-        presentedCamera = cameraSignature;
-        const origin = { x: region.x, y: region.y };
-        frame.encoder().copyTextureToTexture(
-          { texture: root.unwrap(read), origin },
-          { texture: root.unwrap(view.composed), origin },
-          [region.width, region.height]
-        );
-        if (refining && !stroke) {
-          // Reprojection submits its own pass, which must draw over the copied region.
-          frame.flush();
-          viewFallback?.draw(root.unwrap(view.composed), camera, size);
-        }
-        if (!refining) {
-          completeView = { camera: { ...camera }, size: { ...size } };
-          viewFallback?.clear();
-        }
-        present();
-        frame.flush();
-        damage.presented(plan);
-      } finally {
-        // Encoded mip passes already advanced tile state; submit them even when the frame stops early or fails.
-        frame.flush();
-      }
+
+      const view = targets.attach(target);
+      lastTarget = target;
+      await composer.render(view, layers, camera, size, dpr, exact);
     },
     /** Applies GPU backpressure to the worker frame scheduler, without blocking incoming messages. */
     async submitted() {
@@ -1348,7 +390,7 @@ async function assemblePaintRenderer(
     },
     /** Releases this device and all resources. Does not modify committed document snapshots. */
     destroy() {
-      strokeTiles.clear();
+      stroke.tiles.clear();
       resources.destroy();
     }
   };
@@ -1361,7 +403,9 @@ async function openDevice(borrowed: GPUDevice | undefined, keep: KeepGpuResource
   }
 
   if (!navigator.gpu) {
-    throw rendererError(gpuError('unavailable', 'WebGPU is unavailable. Open this page in a browser with WebGPU support.'));
+    throw rendererError(
+      gpuError('unavailable', 'WebGPU is unavailable. Open this page in a browser with WebGPU support.')
+    );
   }
 
   const adapter = await navigator.gpu.requestAdapter();
@@ -1378,6 +422,33 @@ async function openDevice(borrowed: GPUDevice | undefined, keep: KeepGpuResource
   }
 }
 
+/** Reports the first device loss or uncaptured error once, never after disposal. The listener is released with
+ * the renderer.
+ */
+function watchDeviceFailures(
+  device: GPUDevice,
+  disposed: () => boolean,
+  onLost: (message: string, error: GpuError) => void,
+  keep: KeepGpuResource
+) {
+  let failed = false;
+  const fail = (error: GpuError) => {
+    if (disposed() || failed) {
+      return;
+    }
+
+    failed = true;
+    onLost(error.message, error);
+  };
+
+  void device.lost.then((info) =>
+    fail(gpuError('lost', info.message || 'The graphics device was disconnected.', info))
+  );
+  const uncapturedError = (event: GPUUncapturedErrorEvent) => fail(uncapturedGpuError(event.error));
+  device.addEventListener('uncapturederror', uncapturedError);
+  keep({ destroy: () => device.removeEventListener('uncapturederror', uncapturedError) });
+}
+
 /** Wraps a typed failure in an Error so ordered runtime queues keep its message; `cause` carries the code. */
 function rendererError(error: GpuError) {
   return new Error(error.message, { cause: error });
@@ -1387,213 +458,4 @@ function rendererError(error: GpuError) {
 function uncapturedGpuError(error: GPUError): GpuError {
   const validation = typeof GPUValidationError !== 'undefined' && error instanceof GPUValidationError;
   return gpuError(validation ? 'validation' : 'device', error.message, error);
-}
-
-function createPipelines(root: TgpuRoot, format: GPUTextureFormat) {
-  return {
-    stamp: root.createRenderPipeline({
-      attribs: { stamp: shader.stampLayout.attrib },
-      vertex: shader.stampVertex,
-      fragment: shader.stampFragment,
-      targets: {
-        format: 'rgba8unorm',
-        blend: {
-          color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }
-        }
-      }
-    }),
-    stroke: root.createRenderPipeline({
-      vertex: shader.fullscreenVertex,
-      fragment: shader.strokeFragment,
-      targets: { format: 'rgba8unorm' }
-    }),
-    tile: root.createRenderPipeline({
-      vertex: shader.tileVertex,
-      fragment: shader.tileFragment,
-      targets: { format: 'rgba8unorm' }
-    }),
-    composite: root.createRenderPipeline({
-      vertex: shader.fullscreenVertex,
-      fragment: shader.compositeFragment,
-      targets: { format: 'rgba8unorm' }
-    }),
-    present: root.createRenderPipeline({
-      vertex: shader.fullscreenVertex,
-      fragment: shader.presentFragment,
-      targets: { format }
-    }),
-    clear: root.createRenderPipeline({
-      vertex: shader.fullscreenVertex,
-      fragment: shader.clearFragment,
-      targets: { format: 'rgba8unorm' }
-    })
-  };
-}
-
-function makeTexture(root: TgpuRoot, mipmaps = false) {
-  return root
-    .createTexture({ size: [TILE_SIZE, TILE_SIZE], format: 'rgba8unorm', mipLevelCount: mipmaps ? 9 : 1 })
-    .$usage('sampled', 'render');
-}
-function createTile(root: TgpuRoot, pixels: Uint8Array | undefined, sampler: ReturnType<TgpuRoot['createSampler']>) {
-  const texture = makeTexture(root, true);
-  writePixels(root.device, root.unwrap(texture), pixels);
-  const camera = root.createBuffer(shader.viewLayout.entries.view.uniform).$usage('uniform');
-  return {
-    texture,
-    render: root.unwrap(texture).createView({ baseMipLevel: 0, mipLevelCount: 1 }),
-    mipLevelReady: 0,
-    camera,
-    viewGroup: root.createBindGroup(shader.viewLayout, { view: camera, image: texture, sampler }),
-    strokeDirty: false,
-    scratch: undefined as ReturnType<typeof createStrokeScratch> | undefined,
-    used: 0
-  };
-}
-
-/** Persistent coverage belongs to a pixel tile; sampling tools borrow a separate submitted batch slot. */
-function prepareStroke(root: TgpuRoot, tile: ReturnType<typeof createTile>) {
-  return (tile.scratch ??= createStrokeScratch(root));
-}
-
-function createStrokeScratch(root: TgpuRoot) {
-  const base = makeTexture(root);
-  const mask = makeTexture(root);
-  return {
-    base,
-    mask,
-    maskRender: root.unwrap(mask).createView(),
-    strokeGroup: root.createBindGroup(shader.strokeLayout, { base, mask }),
-    stamps: root.createBuffer(d.arrayOf(d.vec4f, STAMP_CAPACITY)).$usage('vertex'),
-    abr: undefined as AbrTile | undefined
-  };
-}
-
-/** Texture and instance-buffer footprint; small uniforms/bindings are excluded from this estimate. */
-function scratchBytes(scratch: ReturnType<typeof createStrokeScratch>) {
-  return TILE_SIZE * TILE_SIZE * 4 * 2 + STAMP_CAPACITY * 16 + (scratch.abr?.bytes() ?? 0);
-}
-
-function destroyStrokeScratch(scratch: ReturnType<typeof createStrokeScratch>) {
-  scratch.abr?.destroy();
-  scratch.mask.destroy();
-  scratch.base.destroy();
-  scratch.stamps.destroy();
-}
-
-function destroyTile(tile: ReturnType<typeof createTile>) {
-  if (tile.scratch) destroyStrokeScratch(tile.scratch);
-  tile.texture.destroy();
-  tile.camera.destroy();
-}
-
-function createView(root: TgpuRoot, width: number, height: number) {
-  const texture = () => root.createTexture({ size: [width, height], format: 'rgba8unorm' }).$usage('sampled', 'render');
-  const a = texture(),
-    b = texture(),
-    layer = texture(),
-    composed = texture();
-  const slots: { settings: TgpuBuffer<d.Vec4f> & UniformFlag; fromA: TgpuBindGroup; fromB: TgpuBindGroup }[] = [];
-  return {
-    width,
-    height,
-    a,
-    b,
-    layer,
-    composed,
-    aRender: root.unwrap(a).createView(),
-    bRender: root.unwrap(b).createView(),
-    layerRender: root.unwrap(layer).createView(),
-    /** Composite bindings for the frame's `slot`-th visible layer. Distinct settings buffers let one encoder
-     * hold every layer's composite pass; slots are created on first use and reused by later frames.
-     */
-    composite(slot: number) {
-      const existing = slots[slot];
-      if (existing) {
-        return existing;
-      }
-
-      const settings = root.createBuffer(d.vec4f).$usage('uniform');
-      const created = {
-        settings,
-        fromA: root.createBindGroup(shader.compositeLayout, { base: a, layer, settings }),
-        fromB: root.createBindGroup(shader.compositeLayout, { base: b, layer, settings })
-      };
-      slots[slot] = created;
-      return created;
-    },
-    present: root.createBindGroup(shader.presentLayout, { image: composed }),
-    destroy() {
-      a.destroy();
-      b.destroy();
-      layer.destroy();
-      composed.destroy();
-      for (const slot of slots) slot.settings.destroy();
-    }
-  };
-}
-
-/** Attachment clears avoid allocating/uploading a viewport-sized CPU array of zeros. */
-function clearAttachment(encoder: GPUCommandEncoder, view: GPUTextureView) {
-  encoder.beginRenderPass({ colorAttachments: [{ view, loadOp: 'clear', storeOp: 'store' }] }).end();
-}
-
-/** Assigns every level-zero pixel when recycling a slot, including transparent source/base/mask. */
-function replacePixels(
-  device: GPUDevice,
-  texture: GPUTexture,
-  pixels?: Uint8Array,
-  batch?: ReturnType<typeof commandBatch>
-) {
-  if (pixels) {
-    writePixels(device, texture, pixels);
-    return;
-  }
-  const commands = batch ?? commandBatch(device);
-  clearAttachment(commands.encoder(), texture.createView({ baseMipLevel: 0, mipLevelCount: 1 }));
-  if (!batch) commands.flush();
-}
-
-function writePixels(device: GPUDevice, texture: GPUTexture, pixels?: Uint8Array) {
-  if (pixels)
-    device.queue.writeTexture({ texture }, unpackTile(pixels), { bytesPerRow: TILE_SIZE * 4 }, [TILE_SIZE, TILE_SIZE]);
-}
-function coordinates(key: string): [number, number] {
-  const [x, y] = key.split(',').map(Number);
-  return [x!, y!];
-}
-function hexColor(hex: string): [number, number, number] {
-  return [
-    parseInt(hex.slice(1, 3), 16) / 255,
-    parseInt(hex.slice(3, 5), 16) / 255,
-    parseInt(hex.slice(5, 7), 16) / 255
-  ];
-}
-const STAMP_CAPACITY = 1024;
-/** Resident history-source tiles per stroke (4 MiB); larger brushes recycle the least recently used. */
-const HISTORY_TILES = 16;
-const MAX_RESIDENT_TILES = 128;
-
-/** One reusable full-resolution history tile, independent of destination tile-cache eviction. */
-function historyTarget(root: TgpuRoot) {
-  return root.createTexture({ size: [TILE_SIZE, TILE_SIZE], format: 'rgba8unorm' }).$usage('sampled', 'render');
-}
-
-/** Identifies a presented camera and backing size without JSON-encoding objects every frame. */
-function viewSignature(camera: Camera, size: ViewSize, width: number, height: number) {
-  return `${camera.x},${camera.y},${camera.zoom},${camera.angle},${camera.mirrored},${size.width},${size.height},${width},${height}`;
-}
-
-/** Layer order and composite settings; length-prefixed ids cannot collide with separators. */
-function compositionSignature(layers: readonly Layer[]) {
-  let signature = '';
-  for (const { id, visible, opacity, blend } of layers) signature += `${id.length}:${id},${visible},${opacity},${blend};`;
-  return signature;
-}
-
-/** Shared target pixel budget for presentation and contact-time LOD selection. */
-function renderScale(size: ViewSize, dpr: number, maxDimension: number) {
-  return Math.min(dpr, 2, maxDimension / Math.max(size.width, size.height),
-    Math.sqrt(8_388_608 / Math.max(1, size.width * size.height)));
 }

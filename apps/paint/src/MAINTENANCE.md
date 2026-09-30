@@ -5,7 +5,7 @@
 | Задача                                   | Основной модуль                                              | Проверка                                                    |
 | ---------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------- |
 | JSX-сборка, зависимости и сменные движки | `composition/StudioApplication.tsx`, `composition/README.md` | `PaintApplication.test.tsx`, Check execution modes          |
-| Canvas-цели и их lifecycle               | `composition/CanvasTarget.tsx`, `gpu/renderer.ts`            | Check canvas targets                                        |
+| Canvas-цели и их lifecycle               | `composition/CanvasTarget.tsx`, `gpu/targetView.ts`          | Check canvas targets                                        |
 | Импорт и выбор ABR-наконечника | `brushLibrary/` | decoder/controller/import lifecycle tests; import → draw → main/worker switch |
 | Панели, клавиатура, состояние интерфейса | `PaintStudio.tsx`, `createPaintSession.ts`                   | `test:studio-ui`                                            |
 | Полный экран                             | `FullscreenButton.tsx`                                       | вход/выход, внешний Escape, отказ, двойное нажатие, unmount |
@@ -14,7 +14,7 @@
 | Порядок команд, commit и автосохранение  | `paintRuntime.ts`                                            | `workerRecovery.test.ts`, Run worker checks                 |
 | Тайлы, undo/redo, версия документа       | `document.ts`                                                | `core.test.ts`, экспорт/восстановление                      |
 | Транзакции IndexedDB и сборка мусора     | `tileStore.ts`                                               | Run streaming checks, Run worker checks                     |
-| Растеризация и вытеснение GPU-тайлов     | `gpu/renderer.ts`, `gpu/readbackQueue.ts`                    | Check readback queue, Check brush batching                  |
+| Растеризация и вытеснение GPU-тайлов     | `gpu/strokeRaster.ts`, `gpu/tileResidency.ts`                | Check readback queue, Check brush batching                  |
 | Обзоры, LOD, отмена устаревших загрузок  | `virtualPages.ts`, `pageWork.ts`, `gpu/virtualTexture.ts`    | node-тесты страниц, Check saved low-res, Check cold zoom    |
 
 Изменённые области каждого canvas учитываются в `gpu/viewDamage.ts`. Кадр подтверждает только свою версию изменений после успешного отображения. Проверка **Check canvas targets** сравнивает частичные обновления с полной перерисовкой, включая preview, cancel и commit с VT и без него.
@@ -29,7 +29,7 @@ The reusable stroke engine, preset conversion, resource cache, and brush GPU ope
 
 `packages/abr-paint/src/gpu/smudgePickup.ts` хранит краску в двух GPU-банках между отпечатками: fresh canvas в текущей позиции смешивается с предыдущим pickup по Strength. Первый контакт только набирает краску; Finger Painting инициализирует её foreground. Размеры пиксельной активной области и allocation различаются: allocation растёт и переиспользуется, viewport и UV ограничены активной областью. При изменении диаметра сохраняются физические координаты краски; новый край сначала захватывается и наносится со следующего отпечатка. Begin/finish/cancel/reset сбрасывают историю pickup. Не переносить её между мазками. `smudgePickupVerification.ts` проверяет recurrence, alpha и изменение размеров на GPU.
 
-Каждый отпечаток Smudge читает результат предыдущего. Исходные тайлы одного захвата можно рисовать пакетами, но их команды должны быть отправлены до вытеснения или перезаписи текстур. В `renderer.paintStamps` повторное копирование base ограничено областью composite scissor. Persistent scratch при первом касании тайла получает полную инициализацию, shared sampling scratch — только scissor; sampling-инструменты не используют disposable tail preview. Не объединять зависимые отпечатки без сохранения этого порядка.
+Каждый отпечаток Smudge читает результат предыдущего. Исходные тайлы одного захвата можно рисовать пакетами, но их команды должны быть отправлены до вытеснения или перезаписи текстур. В `strokeRaster.paintStamps` повторное копирование base ограничено областью composite scissor. Persistent scratch при первом касании тайла получает полную инициализацию, shared sampling scratch — только scissor; sampling-инструменты не используют disposable tail preview. Не объединять зависимые отпечатки без сохранения этого порядка.
 
 На `/paint-studio-qa.html` кнопка **Measure dense smudge** чередует reference с полными mip chains и текущий путь: по одному холодному и шести тёплым изолированным проходам, размер 50, spacing 3%, pressure/scattering/count как у Wet Blender, синтетический sampled tip, фиксированные координаты и seed. Выводятся время до GPU completion (без finish), число stamps, submissions (включая finish), хеш пикселей, отдельное время finish и медианы шести тёплых проходов обоих вариантов. Хеши всех проходов, включая reference, должны совпадать. Reference не входит в медиану текущего пути. Это проверка нагрузки движка, не измерение задержки стилуса или FPS большого документа.
 
@@ -61,7 +61,7 @@ Bindings и mask views ABR-кэша переиспользуются. `prepare` 
 
 ### Один проход для Smudge без накопленной coverage
 
-`abrStamps.canDrawDirect` разрешает прямое смешивание Smudge без Wet Edges и активного Dual Brush. `renderer.paintStamps` использует его только для одного primary dab: вместо очистки mask/paint, записи MRT и отдельного composite выполняется один проход по геометрии отпечатка. Копирование изменённой области в base остаётся обязательным. Зависимые отпечатки по-прежнему исполняются последовательно. Остальные кисти используют прежнее накопление coverage.
+`abrStamps.canDrawDirect` разрешает прямое смешивание Smudge без Wet Edges и активного Dual Brush. `strokeRaster.paintStamps` использует его только для одного primary dab: вместо очистки mask/paint, записи MRT и отдельного composite выполняется один проход по геометрии отпечатка. Копирование изменённой области в base остаётся обязательным. Зависимые отпечатки по-прежнему исполняются последовательно. Остальные кисти используют прежнее накопление coverage.
 
 `shadeStamp` и `compositePixel` общие для обоих путей. Между ними direct shader вызывает `unpack4x8unorm(pack4x8unorm(...))` для paint и mask: это сохраняет промежуточное округление rgba8unorm. Обычный `round(x * 255) / 255` дал расхождения на один уровень цвета и не подходит для точного сравнения. Scratch textures остаются в существующем ограниченном кэше, но direct path их не читает и не записывает.
 
