@@ -19,6 +19,12 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      # Adobe brush packs are downloaded once (scripts/adobe-brush-fixture.mjs verifies each SHA-256); the key changes
+      # only when the pinned list does. Derived preset snapshots are keyed by the same digests.
+      - uses: actions/cache@v4
+        with:
+          path: .tmp/adobe-brushes
+          key: adobe-brushes-${{ hashFiles('scripts/adobe-brush-fixtures.json') }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @app-game/abr-brush typecheck
       - run: pnpm --filter @app-game/abr-brush test

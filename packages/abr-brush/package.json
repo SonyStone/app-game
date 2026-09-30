@@ -29,7 +29,8 @@
     "./patternRaster": "./src/patternRaster.ts",
     "./patternRasterGpu": "./src/patternRasterGpu.ts",
     "./library": "./src/library.ts",
-    "./testing/abrFixture": "./tests/abrFixture.ts"
+    "./testing/abrFixture": "./tests/abrFixture.ts",
+    "./testing/adobeBrushes": "./tests/adobeBrushes.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

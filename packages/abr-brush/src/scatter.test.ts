@@ -1,12 +1,9 @@
-import { readAdobeBrushFixture } from '../../../scripts/adobe-brush-fixture.mjs';
+import { readAdobeBrushPresets } from '../tests/adobeBrushes';
 import { brushToFormValues } from './form';
-import { loadBrushLibrary } from './library';
 import { createAbrStrokeSampler, dualPreviewInput, stampStride, type PreviewPoint } from './stroke';
-import { initAbr } from '@app-game/abr-parser';
-import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 
-const adobeFixtures = Object.fromEntries(await Promise.all(['megapack.abr'].map(async (name) => [name, await readAdobeBrushFixture(name)])));
+const [wetBlenderPreset] = await readAdobeBrushPresets('megapack.abr', ["Kyle's Paintbox - Wet Blender"]);
 
 // Wet Blender's 36×25 tip has a rounded minor diameter of 35 at size 50.
 // Count/scatter probes use 35px events at 100% spacing to isolate one group per sample.
@@ -69,10 +66,6 @@ it.each([false, true])('scatter respects count and the stroke axes (both axes: %
   if (bothAxes) expect(largestAlong).toBeGreaterThan(24);
   else expect(largestAlong).toBeLessThan(0.0001);
 });
-
-await initAbr(
-  readFileSync(new URL('../../abr-parser/wasm/pkg/photoshop_abr_wasm_bg.wasm', import.meta.url))
-);
 
 it('Wet Blender scatter stays deterministic across input batches and disposable previews', () => {
   const { values, tip } = wetBlender();
@@ -327,12 +320,8 @@ it.each(['PbTl', 'PcTl', 'SmTl', 'BlTl', 'ShTl'] as const)(
 );
 
 function wetBlender() {
-  const file = loadBrushLibrary(
-    adobeFixtures['megapack.abr']!
-  );
-  const brush = file.brushes.find((brush) => brush.name === "Kyle's Paintbox - Wet Blender");
-  if (!brush?.tipImage) throw new Error('The bundled Wet Blender preset or its sampled tip is missing.');
-  return { values: brushToFormValues(brush), tip: brush.tipImage };
+  if (!wetBlenderPreset?.tipImage) throw new Error('The Megapack Wet Blender preset or its sampled tip is missing.');
+  return { values: brushToFormValues(wetBlenderPreset), tip: wetBlenderPreset.tipImage };
 }
 
 function point(x: number, y: number, pressure = 1): PreviewPoint {

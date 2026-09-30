@@ -1,28 +1,23 @@
-import { readAdobeBrushFixture } from '../../../scripts/adobe-brush-fixture.mjs';
-import { loadBrushLibrary } from '@app-game/abr-brush/library';
 import { createAbrStrokeSampler } from '@app-game/abr-brush/stroke';
-import { prepareAbrBrush } from './preset';
-import { initAbr } from '@app-game/abr-parser';
-import { readFileSync } from 'node:fs';
+import { readAdobeBrushPresets } from '@app-game/abr-brush/testing/adobeBrushes';
 import { expect, it } from 'vitest';
+import { prepareAbrBrush } from './preset';
 
-const adobeFixtures = Object.fromEntries(await Promise.all(['megapack.abr', 'halftones_and_screentones.abr'].map(async (name) => [name, await readAdobeBrushFixture(name)])));
+const hsbPresets = [
+  ["Kyle's FX Box - Add Canvas New", '#9e9e9e'],
+  ["Kyle's Paintbox - Gesso Thin", '#f6f5f2'],
+  ["Kyle's Paintbox - Gesso Regular", '#f6f5f2'],
+  ["Kyle's Paintbox - Gesso Thick", '#f6f6f2']
+] as const;
+const megapack = await readAdobeBrushPresets('megapack.abr', [
+  ...hsbPresets.map(([name]) => name),
+  "Kyle's Drawing Box - Charcoal Champ 3"
+]);
+const [halftone] = await readAdobeBrushPresets('halftones_and_screentones.abr', ["Kyle's Halftone - Circle Range Tiny"]);
 
-await initAbr(
-  readFileSync(new URL('../../abr-parser/wasm/pkg/photoshop_abr_wasm_bg.wasm', import.meta.url))
-);
-
-it('applies all bundled HSB-color presets without replacing their native color descriptors', () => {
-  const file = loadBrushLibrary(
-    adobeFixtures['megapack.abr']!
-  );
-  for (const [name, color] of [
-    ["Kyle's FX Box - Add Canvas New", '#9e9e9e'],
-    ["Kyle's Paintbox - Gesso Thin", '#f6f5f2'],
-    ["Kyle's Paintbox - Gesso Regular", '#f6f5f2'],
-    ["Kyle's Paintbox - Gesso Thick", '#f6f6f2']
-  ]) {
-    const brush = file.brushes.find((brush) => brush.name === name)!;
+it('applies the Megapack HSB-color presets without replacing their native color descriptors', () => {
+  for (const [name, color] of hsbPresets) {
+    const brush = megapack.find((brush) => brush.name === name)!;
     expect(brush).toBeDefined();
     const saved = structuredClone(brush.preset.toolOptions);
     const preset = prepareAbrBrush(brush);
@@ -33,11 +28,7 @@ it('applies all bundled HSB-color presets without replacing their native color d
 });
 
 it('imports embedded example presets with their full dynamics and auxiliary resources', () => {
-  const bytes = adobeFixtures['halftones_and_screentones.abr']!;
-  const file = loadBrushLibrary(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
-  const brush = file.brushes.find((brush) => brush.name === "Kyle's Halftone - Circle Range Tiny")!;
-  expect(brush).toBeDefined();
-  const preset = prepareAbrBrush(brush);
+  const preset = prepareAbrBrush(halftone!);
   expect(preset.engine.settings.values.useTexture).toBe(true);
   expect(preset.flow).toBe(0.5);
   expect(preset.engine.settings.blendMode).toBe('Dslv');
@@ -45,10 +36,7 @@ it('imports embedded example presets with their full dynamics and auxiliary reso
 });
 
 it('Charcoal Champ 3 preserves its controls and Photoshop’s pressure-dependent base size', () => {
-  const file = loadBrushLibrary(
-    adobeFixtures['megapack.abr']!
-  );
-  const brush = file.brushes.find((brush) => brush.name === "Kyle's Drawing Box - Charcoal Champ 3");
+  const brush = megapack.find((brush) => brush.name === "Kyle's Drawing Box - Charcoal Champ 3");
   expect(brush).toBeDefined();
   const preset = prepareAbrBrush(brush!);
   const values = preset.engine.settings.values;

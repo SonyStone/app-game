@@ -1,43 +1,16 @@
-import { readAdobeBrushFixture } from '../../../../scripts/adobe-brush-fixture.mjs';
-import { brushToFormValues } from '@app-game/abr-brush/form';
-import { loadBrushLibrary } from '@app-game/abr-brush/library';
-import { adaptiveBrushQuality } from '@app-game/abr-paint/adaptiveQuality';
+import { readAdobeBrushPresets } from '@app-game/abr-brush/testing/adobeBrushes';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { createBrushResources } from '@app-game/abr-paint/resources';
-import { initAbr } from '@app-game/abr-parser';
 import { defaultBrush, type Dab } from '../brush';
 import { abrBrush } from './abrBrushEngine';
-import type { PaintRenderer } from './contracts';
+import { createRendererDouble } from '../../tests/fixtures/rendererDouble';
 import { createResourceSession } from './resourceSession';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
-import { readFileSync } from 'node:fs';
 import { expect, it, vi } from 'vitest';
 
-const adobeFixtures = Object.fromEntries(await Promise.all(['megapack.abr'].map(async (name) => [name, await readAdobeBrushFixture(name)])));
-
-await initAbr(
-  readFileSync(new URL('../../../abr-parser/wasm/pkg/photoshop_abr_wasm_bg.wasm', import.meta.url))
-);
-
-it('gives every bundled preset the same LOD sampling budget, including special tool paths', () => {
-  expect(megapack.brushes).toHaveLength(465);
-  for (const brush of megapack.brushes) {
-    const values = brushToFormValues(brush);
-    for (const mixing of ['classic', 'linear'] as const) {
-      for (const [lod, spacing] of [
-        [0, 1],
-        [1, 2],
-        [3, 8],
-        [6, 64]
-      ] as const)
-        expect(adaptiveBrushQuality(true, values, lod, values.tool.mode, mixing)?.minimumSpacing, brush.name).toBe(
-          spacing
-        );
-      expect(adaptiveBrushQuality(false, values, 3)).toBeUndefined();
-    }
-  }
-});
+// The every-preset LOD policy check lives in @app-game/abr-paint's megapack.test.ts; this suite needs two real presets.
+const megapack = await readAdobeBrushPresets('megapack.abr', ['KYLE Ultimate 2B Pencil', "Kyle's Paintbox - Wet Blender"]);
 
 it.each([
   ['KYLE Ultimate 2B Pencil', 222, 0, 450],
@@ -48,22 +21,19 @@ it.each([
   ["Kyle's Paintbox - Wet Blender", 222, 0, 4500],
   ["Kyle's Paintbox - Wet Blender", 222, 3, 2700]
 ] as const)('bounds real %s (%ipx) long-stroke work at LOD %i', async (name, size, lod, limit) => {
-  const source = megapack.brushes.find((brush) => brush.name === name)!;
+  const source = megapack.find((brush) => brush.name === name)!;
   const preset = prepareAbrBrush(source);
   const cache = createBrushResources();
   preset.resources.forEach((resource) => cache.put(resource));
   for (const mixing of ['classic', 'linear'] as const) {
     const dabs: Dab[] = [];
     const begin = vi.fn();
-    const renderer = {
+    const renderer = createRendererDouble({
       begin,
-      paint: async (batch: readonly Dab[]) => {
+      paint: vi.fn(async (batch: readonly Dab[]) => {
         dabs.push(...batch);
-      },
-      preview: vi.fn(),
-      cancel: vi.fn(),
-      finish: async () => []
-    } as unknown as PaintRenderer;
+      })
+    });
     const stroke = createResourceSession(cache, (resources) =>
       abrBrush.engine({
         settings: { ...preset.engine.settings, seed: 12345 },
@@ -95,7 +65,3 @@ it.each([
     expect(cache.stats().pinnedBytes).toBe(0);
   }
 });
-
-const megapack = loadBrushLibrary(
-  adobeFixtures['megapack.abr']!
-);
