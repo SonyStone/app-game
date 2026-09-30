@@ -186,15 +186,25 @@ export function createAbrRetouch<Layer extends PickupLayer>(
       }
       if (shared && options.onPaintProgress) await options.onPaintProgress();
     },
-    /** Commits reservoir consumption only after the host successfully commits its stroke. */
+    /** Commits reservoir consumption only after the host successfully commits its stroke.
+     * Always releases the gesture's settings and borrowed host layers, even if the reservoir update throws.
+     */
     finish() {
-      if (mixer) mixerWells!.finish();
-      clearGesture();
+      try {
+        if (mixer) mixerWells!.finish();
+      } finally {
+        clearGesture();
+      }
     },
-    /** Rolls back reservoir changes and releases carried paint; document rollback belongs to the host. */
+    /** Rolls back reservoir changes and releases carried paint and borrowed host layers, even if rollback throws.
+     * Document rollback belongs to the host.
+     */
     cancel() {
-      mixerWells?.cancel();
-      clearGesture();
+      try {
+        mixerWells?.cancel();
+      } finally {
+        clearGesture();
+      }
     },
     /** Captures device-independent tool paint between gestures, never during document autosave. */
     async snapshot(): Promise<RendererToolState> {
@@ -240,6 +250,7 @@ export function createAbrRetouch<Layer extends PickupLayer>(
     }
   };
 
+  /** Drops per-stroke tool settings (which reference host layers), carried paint and pending secondary dabs. */
   function clearGesture() {
     smudgePickup?.reset();
     previousSmudge = undefined;

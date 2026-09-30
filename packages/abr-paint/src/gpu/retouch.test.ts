@@ -143,3 +143,24 @@ function harness() {
   const retouch = createAbrRetouch(root, { capture, deposit, tileKeys: () => ['0,0', '1,0'] }, { onPaintProgress: progress });
   return { retouch, capture, deposit, progress, events };
 }
+
+it('releases tool settings and borrowed layers at stroke end even when the reservoir update throws', async () => {
+  const h = harness();
+  const preset = settings({ mixer: { key: 'wet', wet: 0.5, load: 1, mix: 0.6, autoFill: false, autoClean: false, layers: [layer], allLayers: false } });
+  h.retouch.begin(preset, '#ff0000', false);
+  mocks.mixer.finish.mockImplementationOnce(() => {
+    throw new Error('reservoir failed');
+  });
+
+  expect(() => h.retouch.finish()).toThrow('reservoir failed');
+  expect(h.retouch.active).toBe(false);
+  await h.retouch.paint([dab(0)]);
+  expect(h.capture).not.toHaveBeenCalled();
+
+  h.retouch.begin(preset, '#ff0000', false);
+  mocks.mixer.cancel.mockImplementationOnce(() => {
+    throw new Error('rollback failed');
+  });
+  expect(() => h.retouch.cancel()).toThrow('rollback failed');
+  expect(h.retouch.active).toBe(false);
+});
