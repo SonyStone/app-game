@@ -27,9 +27,8 @@ export default defineConfig(({ command }) => ({
         ]
       },
       workbox: {
-        // Precache the editor, GPU workers and color-management WASM.
-        // ABR implementations are cached after their first use, preserving lazy loading.
-        // ABR example packs can be hundreds of MB; they are deliberately fetched only on demand.
+        // Precache the editor, the drawing worker and color-management WASM.
+        // ABR parser runtimes are cached after their first use, preserving lazy loading.
         globPatterns: ['**/*.{js,css,html,svg,png,jpg,ico,woff2,wasm}'],
         globIgnores: ['**/abr-js-runtime-*.js', '**/abr-wasm-runtime-*.js', '**/photoshop_abr_wasm_bg-*.wasm'],
         runtimeCaching: [{

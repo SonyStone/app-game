@@ -1,0 +1,276 @@
+# Paint Studio editor
+
+The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhost:3030) and is embedded in the web playground at `/paint/studio`. Older experiments remain at `/paint`.
+
+[Maintenance guide](./maintenance.md): module map, error contracts, queue limits and required checks.
+
+[Brush performance regression checks](../performance/README.md): adaptive LOD contracts, CI checks, and the Wacom device baseline.
+
+## Features
+
+- Raster canvas with sparse 256×256 tiles and negative coordinates.
+- Soft round brush, eraser, size, hardness, and independent flow and whole-stroke opacity.
+- Pen pressure controls size and flow separately. The mouse uses pressure 1.
+- Layers, visibility, order, opacity, Smooth color / Normal (classic) / Multiply / Screen / Overlay.
+- The canvas fills the whole window. Compact floating tools use the `/grease-pencil-typegpu` style; brush, color, layer and file settings open on demand. On phones, panels sit at the bottom and scroll in short windows.
+- The button next to the zoom level toggles fullscreen for the whole editor. The state also updates when exiting with Escape; a browser refusal is shown as a message.
+- Undo/redo uses exact snapshots of changed tiles, including layer changes.
+- Lasso selects pixels of the active layer: move, Copy/Cut/Paste, delete, and move to a new layer as a single undo entry.
+- Camera pan, zoom, rotate and mirroring. The Puck is invoked by holding Space, pressing V, or the right mouse button.
+- Autosave of completed actions to IndexedDB, restore after reload, `.paint` import/export.
+- Drawing menu → Developer → Canvas wireframe shows source tiles, selected overview pages and their triangles. Green pages are resident, yellow use a coarse fallback, pink are loading. Statistics include LOD, draw calls, RAM/GPU caches and tile reads/writes. The overlay follows pan/zoom/rotate/mirror and the current stroke, and does not appear in PNG or the project file.
+- PNG exports the current canvas view with the background. It is not an export of the whole infinite document.
+- Losing the GPU device pauses drawing. The recovery button creates a new device from versioned tiles of completed strokes in RAM/IndexedDB.
+
+## Controls
+
+| Action                                | Control                                                   |
+| ------------------------------------- | --------------------------------------------------------- |
+| Draw                                  | Pen or left mouse button                                  |
+| Pan view                              | Pan zone of the Puck, middle button or one finger         |
+| Zoom and rotate                       | Two fingers                                               |
+| Zoom                                  | Wheel, top buttons or Puck                                |
+| Puck                                  | Hold Space, V, right button or the bottom-right button    |
+| Brush / eraser                        | B / E                                                     |
+| Lasso                                 | L                                                         |
+| Copy / cut / paste selection          | Ctrl or Cmd + C / X / V while Lasso is selected           |
+| Deselect                              | Escape or Ctrl/Cmd + D                                    |
+| Delete selected pixels                | Delete / Backspace while Lasso is selected                |
+| Brush size                            | [ / ]                                                     |
+| Undo / redo                           | Ctrl or Cmd + Z / Shift + Z                               |
+| Save file                             | Ctrl or Cmd + S                                           |
+| Cancel current stroke                 | Escape                                                    |
+
+Touches are ignored while drawing with a pen. This is simple palm rejection, not a tablet contact classifier.
+
+The lasso closes when the pen or mouse is released. Drag inside the outline to move the selected pixels; dragging outside starts a new selection. While moving, the outline moves and pixels are written on release, rounded to whole document pixels. Zoom, rotate and mirror are taken into account. Touches still control the camera.
+
+Copy/Cut/Paste use the current editor's internal clipboard. Paste inserts into the active layer at the original coordinates of the copied pixels; the result can then be moved. To copy into a separate layer, press Copy, create a layer in Layers and press Paste. Move to new layer moves the pixels into a new layer above the source, keeps the layer's opacity and blend, and selects the new layer. The whole move is undone with one Undo. The clipboard and outline do not survive a reload. The outline is cleared by drawing, switching tools, layer changes, undo/redo and import. The selection does not constrain subsequent brush painting.
+
+The first version uses a hard edge at pixel centers, without feathering or selection addition. The 256-tile limit is gone. Selection and result are processed one tile at a time; finished versions are written to IndexedDB in batches of about 8 MiB without replacing the current checkpoint. RAM holds a bounded cache and the current tile, so temporary memory does not grow with the selection area. A disk error before commit does not change the drawing.
+
+The Puck uses a vector version of the user-supplied image (`packages/navigation-puck/src/assets/navigation-puck.svg`); the source PNG is kept next to it as a reference: the blue ring rotates the view, the center pans, the bottom section zooms. UI, controller and input handlers live in the shared `@app-game/navigation-puck` package: the Puck hides during a gesture, zoom responds only to vertical movement, and zoom and rotation use the viewport center. When invoked once, the Puck closes after the operation. While Space is held, it reappears at the release point; releasing Space mid-gesture lets the gesture finish. A right drag selects the pictured zone after 30 px of movement, with a 12 px dead zone around the center when selecting by right drag; pressing a button directly starts the gesture immediately. Shift snaps rotation to 15° steps. Zones also support keyboard arrows; the cross closes the Puck. Panels close with the cross, a click outside or Escape.
+
+## Architecture
+
+`src/features/studio/PaintStudio.tsx` is the layout that assembles features: `src/features/brush/BrushPanel.tsx`, `src/features/layers/LayersPanel.tsx` and the shared `NavigationPuck`. `src/features/camera/paintNavigation.ts` adapts the shared gestures to the Paint 2D camera. `src/features/engine/createPaintEngine.ts` connects the engine per canvas, switches between worker and main thread, and exposes the reported document state; `src/features/camera/createPaintCamera.ts`, `src/features/selection/`, `src/features/brush/createBrushTools.ts` and `src/features/studio/createPaintShortcuts.ts` (keyboard) cover the camera, selection, brush tools and shortcuts. `packages/paint-core/src/input.ts` receives Pointer Events, keeps coalesced samples with their pressure and sends one batch per animation frame. Pending samples are always sent before `end`.
+
+The first sample is sent synchronously on `pointerdown`. The worker rasterizes and presents it within the `begin` command, before the next queued command. Otherwise a fast `end` could start readback and overview preparation before the deferred frame. Movement stays batched. `workerLatency.test.ts` checks the order of the first presentation with immediate pen release and blocked readback; this is a queue check, not a measurement of physical stylus latency.
+
+In a secure context with `pointerrawupdate` support, the pen delivers real coalesced samples through raw events. After the first raw event in a stroke, the corresponding `pointermove` events are not fed into the filter again. If raw events do not arrive, `pointermove` keeps working. The pen ring is hidden while drawing but stays on hover; the mouse keeps its cursor.
+
+The Drawing → Developer menu contains Canvas wireframe, Live stroke tail and Show cursor while drawing with a pen. The window distinguishes detected `pointerrawupdate` support from raw events actually received, and shows GPU resource usage and the prepare/submit time of the last frame. It is not a pen latency meter. Toggles last until page reload.
+
+The smoother's `preview()` computes temporary stamps up to the last real point without advancing pressure history or brush spacing. The renderer blends them with a copy of the base and accumulated mask in a separate pool of up to eight tiles. The old tail is removed on update, disable, cancel and finish. It is not part of readback, undo, export or saved overviews. The final curve and catch-up settings keep their previous behavior; browser-predicted points are not used yet. `Check live stroke tail` compares pixels with regular brush and eraser rasterization, including through the virtual texture and scratch-tile eviction.
+
+`src/features/selection/` holds the temporary outline in document coordinates and shows the selection commands. The outline is sent to the worker as a separate `selection-view` message that is merged with the current state. `paint-core/src/gpu/lassoOverlay.ts` ports the lasso example algorithm to TypeGPU: a triangle fan is expanded into a triangle list, stencil parity gives an even-odd fill in an R8 mask, and an edge shader draws moving diagonal stripes. The passes use Paint Studio's existing root, GPUDevice and GPUCanvasContext. There is no separate canvas or SVG. The mask updates only when the outline or camera changes; animation redraws the view from cache at up to 30 frames/s without re-rasterizing layers. The outline never reaches tiles, the drawing cache or PNG. Animation stops in hidden tabs and with reduced motion.
+
+`paint-core/src/selection.ts` reads the occupied tiles of the region, uses an even-odd mask at pixel centers and prepares immutable versions. For each target tile, the original selected pixels are removed first, then parts of at most four selected tiles are composited with premultiplied sRGB source-over. This preserves overlapping moves and bounds memory. The clipboard stores tile versions in IndexedDB and is included in the collector's live references. `document.commit` writes a new layer together with its pixels in one atomic operation. After commit, the usual GPU cache reset, overview preparation and autosave apply.
+
+The worker contains a Solid root for lifecycle, the document model and the GPU renderer. `paint-core/src/brush.ts` places stamps along path length, carrying the spacing remainder between batches. JSX is used for large UI modules; individual stamps are arrays, not reactive components.
+
+Each touched tile has a source image, a stroke mask and a separate result. These GPU textures are reused while the tile stays in cache. A new stroke copies the source image and clears the mask on the GPU. The mask accumulates flow with hardware source-over blending. The shader blends the source image with the mask, applying opacity once to the whole stroke. The eraser uses destination-out. On finish, only touched tiles are read back to the CPU and become one history entry. Resident tiles are read with one copy submission and one mapAsync, without waiting on each tile sequentially.
+
+Tiles store premultiplied RGBA8 in sRGB. Smooth color mode decodes colors to linear RGB, performs source-over and encodes the result back to premultiplied sRGB. Brush and layers use the shared TypeGPU function `paint-core/src/gpu/colorMixing.ts` with the [W3C sRGB transfer function](https://www.w3.org/TR/css-color-4/#color-conversion-code). The mode is on by default for the brush and new layers. It removes the brightness dip when mixing red with green; it is not a physical pigment model.
+
+Existing files keep their selected modes. For an old layer, Smooth color can be selected in the Layers panel. Multiply still darkens by design. Dark overlaps of old strokes already written into raster tiles are not recomputed. ICC, HDR and 16-bit painting are not implemented yet.
+
+The camera does not change pixels. Tile offsets relative to the camera center are sent to the GPU to keep precision far from the origin. The renderer culls invisible tiles and groups them into render passes. Mipmaps are updated only when the image is minified and they are needed for sampling. Layers are composited through two viewport-sized textures and an intermediate layer texture. A fourth texture keeps the finished view: while drawing, only the screen area of changed tiles is recomputed, including all layers in that area. Navigation, layer changes, undo/redo and stroke cancel invalidate the view. Clearing uses render-pass loadOp, without CPU arrays of zeros. No new frames are submitted while idle. The worker waits for the GPU frame to finish before the next scheduled frame and merges incoming camera changes so the render queue does not build up.
+
+## Virtual pages and storage
+
+`paint-core/src/tileStore.ts` stores immutable tile versions as separate IndexedDB records. The document model and undo/redo reference versions, so not all drawing pixels have to stay in RAM. Autosave writes only new versions plus document metadata in one transaction; rotating the camera does not rewrite pixels. The clean LRU cache is limited to 64 MiB. Unsaved versions are pinned until written successfully, so a large stroke can temporarily exceed this budget. The collector deletes versions no longer needed by the current checkpoint and live history. Old checkpoints migrate on the next save.
+
+`paint-core/src/virtualPages.ts` builds a sparse pyramid of levels 0–12: each parent merges four child tiles into one 256×256 page. Changing a source tile invalidates its parents and neighbor borders. Derived pixels use up to 16 MiB of RAM cache and are saved to IndexedDB together with source tiles. Each page's key is a SHA-256 of the filter version, level and four child versions. Checking a key reads metadata; opening a ready low-res does not require decoding high-res. After a tile changes, only its pyramid branch is recomputed, and unchanged child overviews are taken from disk. Undo can reuse a previously saved version.
+
+Before finishing a stroke, restoring a document and changing layers, `prepareOverview` updates the current overview and uploads it to the GPU. So zooming out after close-up drawing uses an already updated low-res. Autosave publishes document metadata and prepared pages in one transaction; large batches are pre-written without replacing the checkpoint. Unwritten overview data is flushed in batches of about 8 MiB. Old derived versions are limited by a 256 MiB disk budget; the current pinned root overviews are protected from deletion. Source pixels and history are cleaned up separately.
+
+Existing drawings without low-res need a one-time preparation on first open after the update. After that, the overview is saved and later opens use ready pages. The IndexedDB disk format migrates from version 2 to 3, keeping source tiles. The binary `.paint` currently carries source tiles; after importing it, the overview is built and saved once.
+
+`paint-core/src/gpu/virtualTexture.ts` selects occupied pages by viewport and scale on the CPU. Their placement in a shared `texture_2d_array` is limited to 256 slots (about 65 MiB); a page contains 256×256 pixels and a one-pixel border from its real neighbors. This prevents filtering across unrelated slots and seams at page borders. One instanced draw renders the pages of one layer. Two background jobs load visible pages and pre-build a small overview of the whole layer. While visible detail loads, one loading slot can build the overview; camera movement does not cancel it. The overview is pinned in the GPU pool and not evicted by navigation. When zooming in, parent pages are available; when zooming out, child pages are kept. Overlapping levels are drawn once so transparency is not doubled. A new parent can atomically take its child tile's slot even when the previous view uses the whole pool.
+
+`paint-core/src/gpu/viewFallback.ts` temporarily reprojects the last full frame during a cold transition between scales. The snapshot is created on the GPU only when needed, gets mipmaps and follows pan/zoom/rotate/mirror/resize. The image within the previous viewport stays visible; new areas outside are filled by loading pages. Once the new level is ready, the temporary texture is released. At the maximum viewport it takes about 43 MiB extra; regular warm frames do not copy it. This is a temporary view; it does not change the document and is not used in exact PNG export. A cold open reads the saved low-res; building the first overview is required when migrating an old drawing or importing a file without overview pages.
+
+This is software virtual texturing for 2D: the residency table and page selection are on the CPU, pixels and sampling on the GPU. A separate GPU feedback pass is not needed for direct 2D viewport display. It uses the principles of [Virtual Textures](https://discourse.threejs.org/t/virtual-textures/53353) and [virtual texturing research](https://publications.lib.chalmers.se/records/fulltext/155126.pdf), not the Three.js runtime. Sparse storage and the overview hierarchy come from the infinite canvas study. Leonardo's closed algorithm is not reproduced: deferred stroke rasterization through an independent preview is not implemented yet, and the brush still writes full resolution.
+
+`paint-core/src/paintFile.ts` exports `.paint` with a `PAINT3` header and separate binary tile payloads. Import reads tile by tile and writes batches of about 8 MiB, not replacing the current document until the file is fully validated. Export builds a Blob from separate payloads without a shared base64 buffer. The browser manages storage of the final Blob. JSON files of versions 1 and 2 still open; internal IndexedDB references are not accepted as an external file. PNG always waits for full display of the source pixels of the selected view.
+
+## Current limits
+
+- WebGPU and IndexedDB are required; Worker mode also requires OffscreenCanvas. There is no automatic WebGL2 fallback yet.
+- A document is limited to 65,536 occupied tiles and 128 layers, available browser storage and device resources. The former 256 MiB limit is lifted for the working paged document and the new binary file. The old JSON loader keeps its protective 256 MiB limit.
+- Undo/redo keeps up to 100 actions with a 1 GiB version budget; the last action is kept even when the budget is exceeded. History does not persist across reloads. An unfinished stroke is not part of the checkpoint.
+- The drawing cache holds up to 128 source tiles with auxiliary textures. Masks and results of evicted tiles of the current stroke may use extra CPU memory until it finishes.
+- While drawing, for exact PNG export and with more than 24 visible layers, the exact renderer is used with a separate display cache of up to 96 MiB. This ensures correctness when the shared pool capacity is exceeded but may be slower than the virtual-page overview.
+- The viewport is limited to DPR 2, the GPU texture limit and about 8 megapixels. Screen intermediate textures use memory in addition to the displayed GPU caches; document resolution does not depend on the viewport.
+- RGBA8 overview pages use a box filter on premultiplied channels. This is an approximate view when zoomed out; original pixels, history and files are unchanged. A cold transition into a previously unseen area may require building an overview.
+- No layer masks, PSD, ICC or collaborative editing.
+
+## Verification
+
+From the repository root:
+
+```sh
+pnpm --filter @app-game/paint typecheck
+pnpm --filter @app-game/paint test
+pnpm --filter @app-game/paint build
+```
+
+The production build is in `apps/paint/dist`. It uses the same editor component and the same worker as `/paint/studio`, without depending on the other playground experiments.
+
+The QA page `/paint-studio-qa.html` is served by the web playground dev server (`pnpm dev` at the repository root, http://localhost:3120/paint-studio-qa.html); it imports the harnesses from `apps/paint/tests/{browser,gpu}` through dev-only paths. Its buttons run checks against the real GPU and the production worker. They use separate documents and a separate temporary IndexedDB database, without touching the editor's autosave.
+
+GPU checks compare pixels at tile seams, opacity and erasing, results of different stamp groupings, active mask eviction, the four classic blend modes and recovery after device loss. A separate Smooth color check measures red-green mixing of strokes in both orders and mixing of two layers: with equal contribution, RGB (188, 188, 0) is expected. Worker checks cover drawing, history, the portable file, IndexedDB, worker restart, import and PNG export.
+
+GPU checks also verify no new textures and no CPU uploads for repeated strokes over resident tiles, a single mapAsync, deferred mipmaps and an exact match of partial/full redraw on 196 background tiles with a cache of 16. The `Measure 60 strokes` and `Measure large document` buttons run repeatable measurements on separate documents. The second compares a forced full redraw with changed-region updates on a document larger than the cache. Stroke completion time includes GPU wait and pixel readback; it is not real pen latency.
+
+Local run 2026-09-05: 60 strokes, 220 tiles, two layers, 25% zoom, 128-tile cache, viewport about 8.4 megapixels. Both strategies were measured on the fixed renderer; full redraw forcibly invalidates the saved view before each frame.
+
+| Metric                                | Full redraw | Changed regions |
+| ------------------------------------- | ----------: | --------------: |
+| Mean render CPU time                  |    59.93 ms |         0.87 ms |
+| p95 render CPU time                   |    79.70 ms |         2.10 ms |
+| Mean stroke completion with readback  |    17.39 ms |         3.72 ms |
+| CPU → GPU texture uploads per run     | 3504.25 MiB |          12 MiB |
+
+These numbers describe a synthetic workload on a local device. The run does not measure DOM input, physical pen latency or autosave. These historical measurements predate virtual pages and incremental storage; they do not measure the new streaming path.
+
+The `ms submit` value in the Drawing menu measures the CPU time to prepare/submit a frame. It does not measure GPU time or pen-to-screen latency. Those need separate measurements on target devices.
+
+### Navigation, 2026-09-05
+
+`Measure navigation` on `/paint-studio-qa.html` measures 60 pan/zoom/rotate frames on 196 tiles, viewport 1200×1800 CSS px, DPR 2 capped at about 8.4 megapixels. After warm-up, each frame waits for `onSubmittedWorkDone`, so completion time includes CPU and GPU but not DOM input or physical pen latency.
+
+| Metric | Shared brush/display cache, before fix | Separate display cache |
+| --- | ---: | ---: |
+| Mean frame CPU time | 44.82 ms | 0.60 ms |
+| Mean time to GPU completion | 66.92 ms | 1.68 ms |
+| p95 time to GPU completion | 80.70 ms | 2.30 ms |
+| CPU → GPU over 60 frames | 2940 MiB | 0 MiB |
+| Textures created over 60 frames | 11760 | 0 |
+
+This is a local synthetic measurement. A cold cache and zooming in that needs more detailed tiles still require uploads. The GPU regression compares every pixel with the source renderer at different scales, pan/rotate/mirror, drawing, erasing and undo. An overview of all 1024 tiles without re-upload and within the memory budget is checked separately.
+
+The old JSON `.paint` format version 2 stores compressed tiles; the loader still reads raw version 1 files. `paint-core/src/tilePixels.ts` keeps all premultiplied RGBA8 bytes, including soft transparency. The GPU regression `verifySparseStroke` draws a continuous stroke across 1101 tiles: 275.25 MiB raw → 34.40 MiB of stored pixels; it checks stroke edges, undo/redo and display at 5% zoom.
+
+`Run streaming checks` exercises real IndexedDB with a cache of only 1 KiB, saving unchanged tiles without rewrites, reading evicted versions, GC, an overview of 1024 visible tiles with four pages, no uploads during warm rotation, paged undo/redo and multi-layer blending. It also checks a binary roundtrip of 256.25 MiB of dense pixels, larger than the former document limit. The 60-frame measurement includes CPU and GPU wait on a 512×512 viewport; it does not measure physical pen latency.
+
+Local streaming run 2026-09-05: 1024 visible source tiles → 4 GPU pages and 1 layer draw call. Over 60 warm rotations on a 512×512 viewport: mean CPU+GPU 0.48 ms, p95 0.60 ms, 0 MiB of extra uploads. Parent-page fallback when zooming in and keeping the last stroke view until the overview update finishes were verified. This is a synthetic local measurement; cold loading and pen latency are not included.
+
+`Check cold zoom` deliberately blocks texture reads and checks the pixels of the first frames at 50%, 12% and 5%, including rotation, mirror, pan and resize. Then 80 moves fill and evict 256 GPU slots. A sharp zoom-out to 5% must show content outside the previous viewport without new uploads. It also checks that semi-transparent pixels are not blended twice.
+
+`Check saved low-res` closes and reopens IndexedDB and the renderer with 64 MiB of source pixels and a RAM cache of only 1 KiB. The first frame at 5% must read only ready overviews, without high-res and without recomputation. It then draws at 400%, checks the new stroke in the first frame at 5% with DPR 1 and 2, and checks undo on saved low-res versions.
+
+## Input continuity and autosave
+
+Stamp spacing is computed from the actual diameter including pen pressure. Previously, spacing stayed a fraction of the full brush size, so a thin light-pressure stroke broke into dots. The sampler carries the remaining interval fraction between events; for linearly changing pressure it integrates the inverse spacing, accounting for the minimum diameter separately. This keeps stamp placement when one motion is split into more events. A minimum spacing of 0.05 pixels lets even subpixel tips overlap; stationary input adds no repeated stamps.
+
+`Check stylus pressure` verifies real GPU pixels of 32/128/512 px brushes at 4% pressure and with rising/falling pressure. It checks continuity, uniform density and opacity across three tile borders with a working cache of two tiles. The change applies to new strokes; existing raster is not recomputed.
+
+The stroke processors in `packages/paint-core/src/strokeProcessors.ts` select stroke processing by the Stroke smoothing setting in the brush panel. **None (raw input)** bypasses coordinate and pressure filters, the input point threshold and curve construction. Each batch goes straight to the sampler, which places stamps along straight segments and interpolates pressure between real points. The mode leaves no tail until the next event or finish, so Live stroke tail adds nothing in it. Brush stamp edge antialiasing stays on. Studio keeps the previous quadratic curves through midpoints of adjacent segments and a 2 CSS pixel input point threshold adjusted for zoom. Leonardo modes are described below. In curve modes, after the curve is subdivided, the existing sampler places stamps by arc length and interpolates pressure. The last segment is appended on finish. Settings are fixed at stroke start; saved raster pixels do not change. `tests/smoothStroke.ts` is a test fixture that chains the stroke processor and sampler.
+
+### Leonardo stabilization probe
+
+In the brush panel, choose **Stroke smoothing → Leonardo normal** or **Leonardo smooth**. Normal starts at Stabilization 1, Smooth at 10; values are kept separately until the page is closed. Studio remains the default mode. On reload, brush parameters reset as before.
+
+`paint-core/src/leonardoStroke.ts` averages the last `N = clamp(setting + 1, 1, 50)` samples of position, raw pressure and time. History is filled with the first point; the Studio distance threshold does not apply here. Calibration runs after averaging: `clamp((pressure - minimum) / (maximum - minimum), 0, 1) ** firmness`. Initial minimum/maximum: 5%/80%, firmness: 100%, i.e. exponent 1. Mouse pressure stays full. Normalization guarantees an increasing range and a positive exponent.
+
+Normal always catches up to the end on pen lift. In Smooth, this is controlled by **Catch up on pen lift**. Catch-up synchronously repeats the last point `N` times, including the last contact pressure. The zero pressure of the pointerup event does not create an artificial taper; a stationary lift adds no extra input sample. With catch-up off, the line ends at the last filtered point.
+
+`paint-core/src/cubicStroke.ts` builds a uniform Catmull–Rom that waits for one next point, repeats the first point for the initial tangent and uses an extrapolated control point for the last. Subdivision bounds position and pressure error; pressure is clamped to 0–1. Coincident positions update pressure without a loop or an extra stamp. The cubic curve can overshoot polyline corners. Strong stabilization adds latency that depends on the sample rate. Predicted events are not used.
+
+Basis: a local study of Leonardo 0.17.70 dated 2026-09-06. The studied filter, calibration and cubic polynomial are reproduced. Stamp placement and GPU rasterization remain Paint Studio's implementation; these checks do not establish a full match with Leonardo or real pen latency. The round brush does not use pen tilt and rotation yet.
+
+`leonardoStroke.test.ts` and `cubicStroke.test.ts` check all 50 windows, calibration order, batching independence, endings and the polynomial. **Check stylus pressure** on the QA page checks GPU pixel continuity in all three modes for 32/128/512 px brushes.
+
+Losing pointer capture or pointercancel finishes the stroke with the points already received. A late capture loss from the previous stroke is ignored if a new stroke has already captured the pointer. Autosave takes a checkpoint between worker commands; the write itself stays in the background. The list of saved low-res keys lets a known-missing new page be skipped without waiting for a read behind an unfinished IndexedDB write. A neighbor tile's interior pixels are kept in cache when its border changes.
+
+`Run worker checks` holds a real IndexedDB write lock, triggers the autosave debounce and draws eight strokes. It checks pixels before the lock is released, and file identity after saving and after starting a new worker. Unit tests check capture loss, curve independence from event batching, corner shape, short stroke completion and smoothing at 5%/100%.
+
+## Large brush and long active strokes
+
+Displaying an evicted part of the active stroke uses its saved output through the display cache. The mask and source pixels return to the working GPU cache only when painting over that part again. Working tile eviction performs one readback per small LRU group, saving each tile's mask and output. The working tile limit stays 128. The round brush tests the disk's intersection with the tile, skipping empty bounding box corners.
+
+The display cache checks the immutable tile version before reading IndexedDB. Re-showing resident textures does not re-upload source pixels. The worker reuses the finished document's statistics until the revision changes; debug tile and page lists are sent at most 10 times per second unless debugging is explicitly enabled. The camera still moves the grid locally.
+
+`Check 512px brush` creates an active stroke larger than the working cache, forces four redraws and counts real GPU mapAsync calls. It checks zero readbacks when displaying the stroke, transparency preservation when returning to an evicted part, and no re-reading of source versions after the display cache is warm. In a local measurement, four full redraws at 5% dropped from 1422 ms / 1320 mapAsync to about 101 ms / 0 mapAsync; this is a synthetic scenario on one machine, including the first display cache fill.
+
+## Overview page quality
+
+LOD selection traverses only occupied pyramid branches within the viewport. Empty cells around the drawing do not consume budget and do not reduce detail when the window grows. The GPU pool stays at 256 pages: after reserving the actual number of pinned overviews, the remaining slots are split among visible layers. If occupied pages do not fit, a coarser level is chosen.
+
+The shader for minified pages averages four bilinear samples over the screen pixel size; when magnified, a single sample remains. This reduces shimmer of thin lines between pyramid levels without extra mip textures. Offsets are bounded by the existing page border. Saved source and overview pixels are not rewritten because of display filter changes.
+
+`Check overview quality` compares a thin curve at 5% in a 2537×2050 CSS pixel / DPR 2 window against the source tiles and their GPU mipmaps. It checks LOD 3 and a mean channel difference on the line below 12/255. The 8-megapixel viewport resolution limit still applies to both render paths.
+
+## Partial refinement and background work budget
+
+`paint-core/src/gpu/pageFallback.ts` cuts the area of a missing page along ready child pages. Ready detail is drawn immediately, and remaining parts use the matching UV fragments of the nearest resident parent. Areas do not overlap. One parent can serve several parts; more parts do not create extra GPU textures. The pool stays limited to 256 slots. When the pool is full, a page not needed for the current LOD may be replaced if its area covers a current pinned overview.
+
+`paint-core/src/pageWork.ts` sets a shared budget for background streaming and overview preparation after stroke completion. A window lasts 16 ms, the CPU budget is 4 ms, the operation limit is 64, and uploads are four 258×258 RGBA pages per window. These are scheduler windows, not measured monitor frames. Checks run before decoding, downsampling, packing, border copying and GPU upload. One tile operation may exceed the soft CPU budget; disk waits are not counted. At most two pages are prepared at once, including explicit overview updates. A cold traversal of pyramid keys also yields to event handling and does not queue the whole tree at once.
+
+Gaps in visible coverage take priority over extra detail. A job reserve is kept for the overall overview so that a long zoom-in does not leave the next zoom-out without a ready image. The page version and request freshness are checked before publishing. The continuation timer exists only while work is pending. Canvas wireframe shows the number of jobs, scheduler yields and peak CPU/bytes per window.
+
+`Check partial refinement` on an isolated GPU scene checks a ready striped page next to a coarse overview, negative coordinates, UV clipping, quadrant borders and 50% alpha. It then waits for the remaining parts to refine and checks that already ready pixels are unchanged. Unit tests check no overlaps, bounded geometry, the shared budget of parallel producers and cancellation of a stale upload after waiting.
+
+## Active stroke over a resident overview
+
+The active layer keeps displaying its committed part through the virtual texture. The renderer then writes only the `output` of stroke-touched tiles into the same temporary layer surface. The pipeline for these tiles runs without blending: the finished output replaces the previous pixels, including a fully transparent eraser result. Layer opacity and blend are applied after this replacement. This way `before` is not blended a second time, and the eraser actually reveals the layer below.
+
+The background coverage completeness check uses the number of occupied leaves in the sparse index. Empty parts of a large page count as transparent and need no textures. If current coverage of occupied areas is not ready yet, the active layer temporarily uses the original full-resolution path. In a normal worker session, the overall overview is prepared when the document opens and after a stroke finishes.
+
+New tiles of the active stroke are drawn regardless of committed occupancy. Cancel removes them together with the preview. Commit hands the result to the existing save and overview update mechanism. The preview is not written into the persistent pyramid while drawing; the brush still rasterizes at source resolution. A long stroke touching many of its own tiles remains a separate optimization direction.
+
+Active stroke tiles and virtual texture pages use linear filtering when magnified. Otherwise a touch would switch the existing drawing to `nearest`, and finishing the stroke would restore smoothing. `Check stroke filtering` compares GPU frames before a zero-flow touch, during it, after cancel and after commit at 4×/16×/32× zoom, rotation and DPR 1/2; the allowed difference is 2/255 per channel.
+
+On stroke completion, `prepareOverview` also updates changed resident pages shown in the last frame. They reuse their atlas slots; unchanged versions are skipped. This prevents the next stroke from showing a coarse overview in place of the just-finished line. The GPU check starts the next stroke in the adjacent tile immediately, without waiting for background refinement, and checks pixel preservation after brush and eraser. Re-preparing an unchanged document does not re-upload pages.
+
+In Canvas wireframe, the `Tile draws` line shows the number of individual tiles of the active stroke and committed document in the last frame. With a warm overview, a small stroke on a large layer should draw only its own tiles; the background is counted separately in page draws.
+
+`Check active preview` creates two layers of 256 tiles each, with transparency and Multiply on the active layer, and limits the scratch cache to four tiles. Local measurement 2026-09-06: the first full frame after one stamp dropped from 100.2 ms and 255 extra source tile reads to 1.8–2.4 ms and zero such reads. Overview preparation ran before the measurement; this is a synthetic CPU+GPU test, not a measurement of physical pen latency.
+
+The GPU check compares the preview with the source renderer for a transparent brush, incremental updates across a tile border, full erasing, pan/rotate/mirror/zoom, cancel after scratch eviction, commit, undo/redo and new cells appearing outside the drawing. In the run, the active result matched the reference in the checked areas; after switching to the committed overview, the maximum difference was 1/255 per channel. The farther zoom check additionally requires zero source tile reads when a page is mostly transparent.
+
+## Batched rasterization of large brushes
+
+Working textures, buffers and bind groups are reused after a tile's content is evicted. Before a slot is reassigned, active mask/output are saved by the existing readback mechanism. A new empty source explicitly clears output; restoring an active tile restores the original base and mask. Free slots count toward `residentTiles` and GPU memory usage, so keeping resources for reuse does not raise the configured limit. Reset and destroy release both occupied and free slots.
+
+`paint` merges independent passes of up to 32 tiles into one GPU command submission. The queue is always submitted before eviction/readback and before rewriting the same stamp buffer. With more than 1024 stamps per tile, the mask is accumulated in several chunks, and output is blended with source pixels once after the last chunk. The renderer's stamp-bounds clipping limits this pass to an integer rectangle of the changed area with an antialiasing margin. The rest of the output is preserved via loadOp: load.
+
+In a local synthetic run of a 512 px brush over 325 tiles, processing time with GPU wait dropped from 172.6 to 130.8 ms. New textures went from 975 to 384, GPU command submissions from 721 to 38. The working pool is limited to 128 tiles; 13 readbacks on active mask eviction remain. This is a full-resolution optimization without changing spacing, flow or the blending algorithm. It does not remove the cost of rasterizing and saving new source pixels for a very long stroke.
+
+`Check brush batching` compares the result of 2300 stamps with submission in short chunks, then compares a two-slot cache with a 128-slot cache for a large brush, revisiting evicted areas, eraser and cancel. All pixels and transparent tiles are compared byte for byte. `Check 512px brush` additionally bounds the number of new textures and command submissions, keeping the zero-readback checks when displaying the active stroke.
+
+## Background copying of evicted tiles
+
+`paint-core/src/gpu/readbackQueue.ts` submits the mask/output copy into a staging buffer before working textures are reused. The brush keeps rasterizing while `mapAsync` returns the previous group of pixels. The queue is limited to two reusable buffers: with the default scratch cache they take up to 16 MiB, included in `gpuBytes`. If both are busy, the next readback waits for free space. Canvas wireframe shows buffer size, pending copies and the number of such waits.
+
+Returning to an evicted tile, displaying it and finishing the stroke wait for the current snapshot. After mapping, pixels are packed losslessly; dense tiles are copied out of mapped memory separately before unmap. Cancel and reset cancel old mappings, and generation checks keep a late result from overwriting a new stroke or releasing a buffer already being reused. An error in the current readback is passed to the error handler and rejects stroke completion. Document and persistent storage formats do not change.
+
+Local synthetic run 2026-09-06: a 512 px brush over 325 tiles is processed in 87–89 ms instead of 130.8 ms, with GPU wait. In a repeat measurement, zero unfinished readbacks remained after processing; two buffers, 16 MiB and ten waits for free space were used. Readbacks stayed at 13, new textures at 384, command submissions at 38. This overlaps copying with rasterization rather than removing their cost; a full queue and revisiting a tile still being copied still require waiting. The measurement does not measure physical pen latency or application FPS.
+
+`Check readback queue` artificially delays real GPU responses. It checks operation with two busy buffers and waiting for a third job, returning to a tile and displaying it, stroke completion, cancel with immediate buffer reuse, a mapping error and destroying the renderer with an unfinished response. Byte-for-byte brush/eraser checks with eviction, preview GPU checks and worker save checks with a blocked IndexedDB followed by a restart also pass.
+
+## Solid 2 and Vite
+
+Developer → **Web Worker + OffscreenCanvas** switches the execution mode. The worker is the default; turning it off runs the same `paint-core/src/paintRuntime.ts` on the main thread with a regular `HTMLCanvasElement`. `src/features/engine/openLocalEngine.ts` loads the engine through a dynamic import only for this mode and keeps mutable data isolated by cloning messages like a worker boundary. The worker transport is `src/features/engine/openPaintTransport.ts`, using `openWorker` from `@app-game/solid-gpu/worker`. Local mode creates no Worker/OffscreenCanvas; PNG is exported through `HTMLCanvasElement.toBlob`.
+
+Switching sends `checkpoint`, temporarily blocks editing commands and waits for `checkpointed` after a successful IndexedDB write. If saving fails, the old canvas keeps working. After `dispose` and the `disposed` reply, the mode changes and Solid replaces only the canvas: `src/features/canvas/PaintCanvas.tsx` is keyed with `<Show when={engine.mode()} keyed>`, so the old element is removed together with its input/resize/listeners and a new one is mounted. The page, panels, brush and Developer settings stay in place; the ready engine restores the document and camera. Undo and the internal selection clipboard are reset. `history.replaceState` updates `?paintThread=main` without navigation. **Check execution modes** on the QA page compares documents byte for byte in both directions and checks the regular canvas PNG.
+
+The worker is `src/features/engine/paint.worker.ts`, imported with Vite's `?worker`. Both Vite configs, main and standalone, set ES modules and separate Solid/TypeGPU plugin instances for the worker build. Transferring OffscreenCanvas and sample arrays stays an explicit protocol; replacing the constructor with an RPC primitive does not replace building shader modules.
+
+The UI uses Solid 2 rc.4. Layer rows keep their DOM via `For keyed={(item) => item.id}`, since every worker message contains new objects even for unchanged layers. Row values are read through accessors so handlers use the current visibility and name. The panel-closing listener is part of the single keyboard module `src/features/studio/createPaintShortcuts.ts`, built on `@solid-primitives/event-listener`. `PaintCanvas` connects the engine and attaches input from an owned effect when the canvas element is set, and disconnects on cleanup. The GPU command sequence and pen samples stay outside the reactive graph.
+
+`pnpm --filter @app-game/paint test:ui` runs DOM checks with the Solid 2 browser runtime separately from the model and worker node tests. The layers check confirms focus is preserved when cloned records update, button identity across reordering and current callback values. The puck check confirms focus returns to the canvas after a one-shot gesture; the close decision is returned synchronously from the controller, without reading a signal that has not updated yet. `workerRecovery.test.ts` checks final rasterization and readback errors: a failed preview is discarded, completed pixels are kept, and the next stroke draws and goes through the usual autosave.
+
+### Adaptive brush quality
+
+Developer → **Adaptive brush quality** is on by default for every brush engine. Turning it off selects detailed rendering for the next stroke; switching Worker/main-thread preserves that choice. Reload restores the default.
+
+At contact, the renderer selects the layer's target document LOD using the same viewport pixel budget and sparse page budget as canvas rendering. Empty layers use the base view LOD. Temporary coarse loading fallback pages do not lower brush quality. The engine receives an integer LOD, not zoom or DPR, and holds it for the whole stroke. LOD 0 is the finest level; each following level covers twice the document distance per pixel.
+
+All brush families use a one-LOD-pixel minimum spacing, bounded by 64 document pixels and a quarter dynamic tip diameter. Larger preset spacing is preserved. Paint and Eraser compensate Flow; canvas sampling tools carry their spacing ratio separately. Smudge preserves configured strength and ordered pickup; reduced sampling can change fine texture and pigment transport. Blur/Sharpen compensate application strength while retaining the exact document-pixel kernel and tile halos. Timed stationary Build-up preserves its original dose and cadence. Mixer reservoir dosing continues to use distance traveled.
+
+Ordinary sampled Normal Paintbrush tips additionally accumulate GPU masks at the selected LOD, up to LOD 3, and expand them into document tiles. Composite regions align to that mask grid so input batching cannot clip coarse pixels. Eviction transfers compact mask squares; committed document pixels retain the usual full-resolution tile format. Progress batches are bounded by raster pixel coverage instead of always processing 256 stamps. Dual brushes, projected tips, Wet Edges, Build-up and other blend modes keep their specialized mask path with the shared LOD spacing budget. Smooth Smudge and Mixer use smaller pickup textures at coarse LODs. Classic Smudge keeps its source mip filtering, with reduced stamp work at coarse LODs.
+
+Reduced detail is permanent. This changes newly painted pixels only and writes normal document tiles through existing save, undo, redo and export paths. Document tiles still use full-resolution storage; there is no detailed replay. Full-resolution tile residency, readback and overview generation can still dominate large stroke completion.
