@@ -1,6 +1,6 @@
 import { attempt, type Result } from '../asyncResult';
 import { TILE_SIZE } from '../brush';
-import { packTile } from '../tilePixels';
+import { packTileCopy } from '../tilePixels';
 
 /** Two reusable staging buffers overlap eviction readback with painting. Each capture submits its
  * texture copies before returning; callers may then recycle source textures, but must check the ready
@@ -17,8 +17,12 @@ export function createReadbackQueue(device: GPUDevice, texturesPerBatch: number)
     /** Waits only for capacity, never for the newly submitted copy. Full tiles are packed losslessly;
      * smaller square masks return tightly packed raw RGBA bytes. Rejects invalid requests or cancellation
      * while waiting for capacity; mapping returns a Result. Copies start at each texture's top-left pixel.
+     * `inspect` receives each full tile's raw mapped bytes (valid only during the call) before packing.
      */
-    async capture(textures: readonly (GPUTexture | { texture: GPUTexture; side: number })[]) {
+    async capture(
+      textures: readonly (GPUTexture | { texture: GPUTexture; side: number })[],
+      inspect?: (raw: Uint8Array, index: number) => void
+    ) {
       if (!textures.length || textures.length > texturesPerBatch) throw new Error('Invalid eviction readback size.');
       const copies = textures.map(item => 'texture' in item ? item : { texture: item, side: TILE_SIZE });
       const layout = readbackLayout(copies.map(copy => copy.side));
@@ -83,9 +87,9 @@ export function createReadbackQueue(device: GPUDevice, texturesPerBatch: number)
               return pixels;
             }
             const view = mapped.subarray(offset, offset + bytesPerRow * side);
-            const packed = packTile(view);
-            // Dense tiles are returned unchanged by packTile; detach them from the mapped buffer.
-            return packed === view ? view.slice() : packed;
+            inspect?.(view, index);
+            // Detaches dense tiles from the mapped buffer; the result is marked as already packed.
+            return packTileCopy(view);
           });
         } finally {
           if (generation === current.generation) {

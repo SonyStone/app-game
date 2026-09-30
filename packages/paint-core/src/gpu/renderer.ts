@@ -8,7 +8,7 @@ import { TILE_SIZE, dabIntersectsTile, dabTiles, type Brush, type Dab } from '..
 import { screenToWorld, type Camera, type Point, type ViewSize } from '../camera';
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { Layer, TileChange } from '../document';
-import { isEmptyPackedTile, packTile, unpackTile, type TileData } from '../tilePixels';
+import { isEmptyPackedTile, tileHasAlpha, unpackTile, type TileData } from '../tilePixels';
 import { viewLod, type OverviewStorage } from '../virtualPages';
 import { createAbrStamps, type AbrRasterSettings, type AbrTile } from '@app-game/abr-paint/gpu/abrStamps';
 import { createCanvasPickup, type PickupRegion } from '@app-game/abr-paint/gpu/canvasPickup';
@@ -136,7 +136,9 @@ async function assemblePaintRenderer(
   let transientCoverage = false;
   let smudgeActive = false;
   let historySource: Layer | undefined;
-  let historyTexture: ReturnType<typeof historyTarget> | undefined;
+  // Immutable history-source tiles are uploaded once per stroke, not once per paint batch.
+  const historyTiles = new Map<string, ReturnType<typeof historyTarget>>();
+  const spareHistoryTiles: ReturnType<typeof historyTarget>[] = [];
   const retouch = resources.keep(createAbrRetouch<Layer>(root, {
     capture: captureRegion,
     deposit: paintStamps,
@@ -146,7 +148,7 @@ async function assemblePaintRenderer(
   resources.keep({
     destroy() {
       abrStamps?.destroy();
-      historyTexture?.destroy();
+      for (const texture of [...historyTiles.values(), ...spareHistoryTiles]) texture.destroy();
       pickup?.destroy();
       texturedStamps?.destroy();
       texturedPipeline = undefined;
@@ -197,7 +199,8 @@ async function assemblePaintRenderer(
     }
   >();
   const evictionSize = Math.min(16, Math.max(1, Math.floor((options.cacheTiles ?? MAX_RESIDENT_TILES) / 8)));
-  const readbacks = resources.keep(createReadbackQueue(device, evictionSize * 4));
+  const readbackBatch = evictionSize * 4;
+  const readbacks = resources.keep(createReadbackQueue(device, readbackBatch));
   let stroke: { layer: Layer; brush: Brush } | undefined;
   let view: ReturnType<typeof createView> | undefined;
   let presentedCamera = '';
@@ -326,6 +329,19 @@ async function assemblePaintRenderer(
   let viewportUpdate = { full: false, pixels: 0 };
   let previewTileDraws = 0,
     sourceTileDraws = 0;
+  // writeBuffer copies at call time, so one staging array serves every round-brush stamp upload.
+  const stampData = new Float32Array(STAMP_CAPACITY * 4);
+  /** Uploads tile-local round-brush instances (x, y, radius, flow) for one tile. */
+  const writeStamps = (buffer: GPUBuffer, stamps: readonly Dab[], tx: number, ty: number) => {
+    for (let index = 0; index < stamps.length; index++) {
+      const dab = stamps[index]!;
+      stampData[index * 4] = dab.x - tx * TILE_SIZE;
+      stampData[index * 4 + 1] = dab.y - ty * TILE_SIZE;
+      stampData[index * 4 + 2] = dab.radius;
+      stampData[index * 4 + 3] = dab.flow;
+    }
+    device.queue.writeBuffer(buffer, 0, stampData, 0, stamps.length * 4);
+  };
   const brushBuffer = resources.keep(root.createBuffer(shader.brushLayout.entries.settings.uniform).$usage('uniform'));
   const brushGroup = root.createBindGroup(shader.brushLayout, { settings: brushBuffer });
   const readTile = async (pixels: TileData | undefined) =>
@@ -457,9 +473,7 @@ async function assemblePaintRenderer(
         abrStamps!.draw(scratch.abr!, commands, stamps, x, y);
         continue;
       }
-      const data = new Float32Array(stamps.length * 4);
-      stamps.forEach((dab, i) => data.set([dab.x - x * TILE_SIZE, dab.y - y * TILE_SIZE, dab.radius, dab.flow], i * 4));
-      device.queue.writeBuffer(root.unwrap(scratch.stamps), 0, data);
+      writeStamps(root.unwrap(scratch.stamps), stamps, x, y);
       const pass = commands.encoder().beginRenderPass({
         colorAttachments: [{ view: scratch.maskRender, loadOp: 'load', storeOp: 'store' }]
       });
@@ -549,10 +563,7 @@ async function assemblePaintRenderer(
         if (!bounds) continue;
         let historyPickup: typeof sampled;
         if (historySource) {
-          // A single scratch texture is reused; submit every prior reader before uploading the next tile.
-          commands.flush();
-          historyTexture ??= historyTarget(root);
-          replacePixels(device, root.unwrap(historyTexture), await readTile(historySource.tiles.get(key)));
+          const historyTexture = await historyTile(historySource, key, commands);
           const [x, y] = coordinates(key);
           historyPickup = {
             patch: {
@@ -617,11 +628,7 @@ async function assemblePaintRenderer(
             abrStamps!.draw(scratch.abr!, commands, stamps, tx, ty);
             continue;
           }
-          const data = new Float32Array(stamps.length * 4);
-          stamps.forEach((dab, index) =>
-            data.set([dab.x - tx * TILE_SIZE, dab.y - ty * TILE_SIZE, dab.radius, dab.flow], index * 4)
-          );
-          device.queue.writeBuffer(root.unwrap(scratch.stamps), 0, data);
+          writeStamps(root.unwrap(scratch.stamps), stamps, tx, ty);
           const pass = commands.encoder().beginRenderPass({
             colorAttachments: [{ view: scratch.maskRender, loadOp: 'load', storeOp: 'store' }]
           });
@@ -666,6 +673,41 @@ async function assemblePaintRenderer(
       // An I/O failure must not discard commands for previously processed tiles in this batch.
       if (!batch) commands.flush();
     }
+  }
+
+  /** Returns the stroke's resident copy of a history-source tile, uploading it on first use. At most HISTORY_TILES
+   * stay resident; recycling the least recently used one first submits every encoded reader of it.
+   */
+  async function historyTile(source: Layer, key: string, commands: ReturnType<typeof commandBatch>) {
+    const cached = historyTiles.get(key);
+    if (cached) {
+      historyTiles.delete(key);
+      historyTiles.set(key, cached);
+      return cached;
+    }
+
+    let texture = spareHistoryTiles.pop();
+    if (!texture && historyTiles.size >= HISTORY_TILES) {
+      const [oldest, recycled] = historyTiles.entries().next().value!;
+      commands.flush();
+      historyTiles.delete(oldest);
+      texture = recycled;
+    }
+    texture ??= historyTarget(root);
+    try {
+      replacePixels(device, root.unwrap(texture), await readTile(source.tiles.get(key)), commands);
+    } catch (error) {
+      spareHistoryTiles.push(texture);
+      throw error;
+    }
+    historyTiles.set(key, texture);
+    return texture;
+  }
+
+  /** Stroke end: history tiles belong to that stroke's source; keep their textures for the next one. */
+  function releaseHistoryTiles() {
+    spareHistoryTiles.push(...historyTiles.values());
+    historyTiles.clear();
   }
 
   async function captureRegion(
@@ -774,22 +816,24 @@ async function assemblePaintRenderer(
     },
     /** Resident texture budget is bounded; the count also includes active-stroke resources. */
     stats() {
+      const virtualStats = virtual?.stats();
+      const readbackStats = readbacks.stats();
       return {
         residentTiles: cache.size + spareTiles.length,
         samplingScratchTiles: samplingScratch.length,
-        readback: readbacks.stats(),
+        readback: readbackStats,
         previewTileDraws,
         viewportUpdate,
         sourceTileDraws,
-        virtual: virtual?.stats(),
+        virtual: virtualStats,
         displayTiles: displayCache.stats().tiles,
         brushTextures: abrActive ? abrStamps?.stats() : texturedStamps?.stats(),
         gpuBytes:
           (texturedStamps?.stats().bytes ?? 0) +
           (abrStamps?.stats().bytes ?? 0) +
           lasso.bytes() +
-          readbacks.stats().bytes +
-          (virtual?.stats().gpuBytes ?? 0) +
+          readbackStats.bytes +
+          (virtualStats?.gpuBytes ?? 0) +
           (viewFallback?.bytes() ?? 0) +
           (view ? view.width * view.height * 16 : 0) +
           [...targets].reduce(
@@ -803,7 +847,7 @@ async function assemblePaintRenderer(
           displayCache.stats().bytes +
           (pickup?.bytes() ?? 0) +
           retouch.bytes() +
-          (historyTexture ? TILE_SIZE * TILE_SIZE * 4 : 0) +
+          (historyTiles.size + spareHistoryTiles.length) * TILE_SIZE * TILE_SIZE * 4 +
           (smudgeDeposits?.bytes() ?? 0) +
           samplingScratch.reduce((sum, scratch) => sum + scratchBytes(scratch), 0) +
           [...cache.values(), ...spareTiles, ...tailPool].reduce(
@@ -921,31 +965,42 @@ async function assemblePaintRenderer(
         if (result) unwrapResult(result);
       const changes: TileChange[] = [];
       const resident = [...strokeTiles.keys()].filter((id) => cache.has(id));
-      // Expanding pixel residency must not expand the temporary commit buffer beyond its previous 32 MiB.
-      const outputs = new Map<string, Uint8Array>();
-      for (let offset = 0; offset < resident.length; offset += MAX_RESIDENT_TILES) {
-        const ids = resident.slice(offset, offset + MAX_RESIDENT_TILES);
-        const pixels = await readTextures(
-          device,
-          ids.map((id) => root.unwrap(cache.get(id)!.texture))
+      // Commit readback reuses the bounded eviction staging buffers, two batches in flight. Alpha is checked on
+      // the raw mapped pixels; the queue packs each tile once and document.commit recognizes the packed arrays.
+      const outputs = new Map<string, { pixels: Uint8Array; alpha: boolean }>();
+      const reads: Promise<void>[] = [];
+      for (let offset = 0; offset < resident.length; offset += readbackBatch) {
+        const ids = resident.slice(offset, offset + readbackBatch);
+        const alpha: boolean[] = [];
+        const job = await readbacks.capture(
+          ids.map((id) => root.unwrap(cache.get(id)!.texture)),
+          (raw, index) => (alpha[index] = tileHasAlpha(raw))
         );
-        ids.forEach((id, index) => outputs.set(id, packTile(pixels[index]!)));
+        reads.push(
+          job.ready.then((result) => {
+            const pixels = unwrapResult(result);
+            ids.forEach((id, index) => outputs.set(id, { pixels: pixels[index]!, alpha: alpha[index]! }));
+          })
+        );
       }
+      await Promise.all(reads);
       for (const [id, data] of strokeTiles) {
-        const after = outputs.get(id) ?? data.output;
+        const read = outputs.get(id);
+        const after = read?.pixels ?? data.output;
         const key = id.slice(stroke.layer.id.length + 1);
         if (after)
           changes.push({
             layerId: stroke.layer.id,
             key,
             before: data.before,
-            after: hasAlpha(unpackTile(after)) ? packTile(after) : undefined
+            after: (read ? read.alpha : tileHasAlpha(after)) ? after : undefined
           });
       }
       strokeTiles.clear();
       retouch.finish();
       stroke = undefined;
       historySource = undefined;
+      releaseHistoryTiles();
       virtual?.invalidate();
       holdPresentation = presentedCamera;
       for (const [targetCanvas, target] of targets) {
@@ -977,6 +1032,7 @@ async function assemblePaintRenderer(
       readbacks.clear();
       stroke = undefined;
       historySource = undefined;
+      releaseHistoryTiles();
     },
     /** Invalidates cached pixels after undo, redo, import, or layer deletion. */
     reset() {
@@ -998,6 +1054,7 @@ async function assemblePaintRenderer(
       readbacks.clear();
       stroke = undefined;
       historySource = undefined;
+      releaseHistoryTiles();
     },
     /** Rebuilds the viewport without evicting tile resources. Also permits comparison with a full redraw. */
     invalidateView() {
@@ -1053,16 +1110,8 @@ async function assemblePaintRenderer(
         presentedCamera = '';
         holdPresentation = '';
       }
-      const cameraSignature = JSON.stringify([camera, size, width, height]);
-      const signature = JSON.stringify([
-        exact,
-        virtual?.uploadedBytes(),
-        camera,
-        size,
-        width,
-        height,
-        layers.map(({ id, visible, opacity, blend }) => [id, visible, opacity, blend])
-      ]);
+      const cameraSignature = viewSignature(camera, size, width, height);
+      const signature = `${exact}|${virtual?.uploadedBytes() ?? ''}|${cameraSignature}|${compositionSignature(layers)}`;
       const targetState = targets.get(canvas)!;
       const { damage, pages } = targetState;
       const plan = damage.plan(signature, camera, size, { width, height });
@@ -1425,30 +1474,6 @@ function clearAttachment(encoder: GPUCommandEncoder, view: GPUTextureView) {
   encoder.beginRenderPass({ colorAttachments: [{ view, loadOp: 'clear', storeOp: 'store' }] }).end();
 }
 
-/** Fixed RGBA8 tiles have aligned rows. One map waits for all copies instead of serial GPU round trips. */
-async function readTextures(device: GPUDevice, textures: GPUTexture[]): Promise<Uint8Array[]> {
-  if (!textures.length) return [];
-  const bytes = TILE_SIZE * TILE_SIZE * 4;
-  const buffer = device.createBuffer({
-    size: bytes * textures.length,
-    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-  });
-  try {
-    const encoder = device.createCommandEncoder();
-    textures.forEach((texture, index) =>
-      encoder.copyTextureToBuffer({ texture }, { buffer, offset: index * bytes, bytesPerRow: TILE_SIZE * 4 }, [
-        TILE_SIZE,
-        TILE_SIZE
-      ])
-    );
-    device.queue.submit([encoder.finish()]);
-    await buffer.mapAsync(GPUMapMode.READ);
-    const mapped = new Uint8Array(buffer.getMappedRange());
-    return textures.map((_, index) => mapped.slice(index * bytes, (index + 1) * bytes));
-  } finally {
-    buffer.destroy();
-  }
-}
 /** Assigns every level-zero pixel when recycling a slot, including transparent source/base/mask. */
 function replacePixels(
   device: GPUDevice,
@@ -1480,16 +1505,26 @@ function hexColor(hex: string): [number, number, number] {
     parseInt(hex.slice(5, 7), 16) / 255
   ];
 }
-function hasAlpha(pixels: Uint8Array) {
-  for (let i = 3; i < pixels.length; i += 4) if (pixels[i]) return true;
-  return false;
-}
 const STAMP_CAPACITY = 1024;
+/** Resident history-source tiles per stroke (4 MiB); larger brushes recycle the least recently used. */
+const HISTORY_TILES = 16;
 const MAX_RESIDENT_TILES = 128;
 
 /** One reusable full-resolution history tile, independent of destination tile-cache eviction. */
 function historyTarget(root: TgpuRoot) {
   return root.createTexture({ size: [TILE_SIZE, TILE_SIZE], format: 'rgba8unorm' }).$usage('sampled', 'render');
+}
+
+/** Identifies a presented camera and backing size without JSON-encoding objects every frame. */
+function viewSignature(camera: Camera, size: ViewSize, width: number, height: number) {
+  return `${camera.x},${camera.y},${camera.zoom},${camera.angle},${camera.mirrored},${size.width},${size.height},${width},${height}`;
+}
+
+/** Layer order and composite settings; length-prefixed ids cannot collide with separators. */
+function compositionSignature(layers: readonly Layer[]) {
+  let signature = '';
+  for (const { id, visible, opacity, blend } of layers) signature += `${id.length}:${id},${visible},${opacity},${blend};`;
+  return signature;
 }
 
 /** Shared target pixel budget for presentation and contact-time LOD selection. */

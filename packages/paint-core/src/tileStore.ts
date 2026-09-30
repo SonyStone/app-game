@@ -37,6 +37,8 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
   const identities = new WeakMap<Uint8Array, TileReference>();
   const loading = new Map<string, Promise<Uint8Array>>();
   let bytes = 0,
+    // Running total of pinned (unsaved) bytes; status reads it every frame.
+    dirtyBytes = 0,
     reads = 0,
     writes = 0;
   const queue = createTaskQueue();
@@ -50,10 +52,14 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
   };
   const remember = (id: string, pixels: Uint8Array, dirty: boolean) => {
     const old = cache.get(id);
-    if (old) bytes -= old.pixels.byteLength;
+    if (old) {
+      bytes -= old.pixels.byteLength;
+      if (old.dirty) dirtyBytes -= old.pixels.byteLength;
+    }
     cache.delete(id);
     cache.set(id, { pixels, dirty });
     bytes += pixels.byteLength;
+    if (dirty) dirtyBytes += pixels.byteLength;
     trim();
   };
   const read = async (data: TileData): Promise<Uint8Array> => {
@@ -110,9 +116,12 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
         tx.oncomplete = () => resolve();
         tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Tile checkpoint failed.'));
       });
-      for (const [id] of dirty) {
+      for (const [id, saved] of dirty) {
         const entry = cache.get(id);
-        if (entry) entry.dirty = false;
+        if (entry === saved && entry.dirty) {
+          entry.dirty = false;
+          dirtyBytes -= entry.pixels.byteLength;
+        }
       }
       for (const [key, pixels] of derived)
         if (overviewWrites.get(key) === pixels) {
@@ -269,7 +278,7 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
     },
     stats: () => ({
       ramBytes: bytes,
-      dirtyBytes: [...cache.values()].reduce((n, e) => n + (e.dirty ? e.pixels.byteLength : 0), 0),
+      dirtyBytes,
       reads,
       writes,
       pendingLoads: loading.size,

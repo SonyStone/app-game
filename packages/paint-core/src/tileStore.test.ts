@@ -101,3 +101,17 @@ function checkpoint(camera: { x: number; y: number; zoom: number; angle: number;
     layers: [{ id: 'layer-1', name: 'Layer 1', visible: true, opacity: 1, blend: 'normal', tiles: [] }]
   };
 }
+
+it('tracks unsaved bytes incrementally across capture and flush', async () => {
+  const store = await createTileStore('dirty-bytes');
+  store.capture(new Uint8Array(64).fill(1));
+  const second = new Uint8Array(32).fill(2);
+  store.capture(second);
+  store.capture(second);
+  expect(store.stats().dirtyBytes).toBe(96);
+
+  await store.flush();
+
+  expect(store.stats().dirtyBytes).toBe(0);
+  await store.close();
+});
