@@ -13,22 +13,46 @@ Round and textured brushes use LOD spacing. ABR presets also receive that spacin
 From the repository root:
 
 ```sh
+pnpm --filter @app-game/abr-paint test
+pnpm --filter @app-game/paint-core test
+pnpm --filter @app-game/paint test
 pnpm --filter @app-game/paint test:performance
-pnpm --filter @app-game/paint test:ui
 pnpm --filter @app-game/paint typecheck
 pnpm --filter @app-game/abr-paint typecheck
 ```
 
-`Paint regressions` runs the abr-paint package tests and typecheck, all Paint tests, UI tests, TypeScript, and the benchmark comparator tests on pull requests and pushes to master. Repository branch protection must require that job if merges should be blocked by failures.
+`pnpm --filter @app-game/abr-paint test` holds the full 465-preset Megapack LOD policy check (`src/megapack.test.ts`). The real-preset stamp budgets are `packages/paint-core/src/composition/brushWorkBudget.test.ts`; input batching and intermediate presentation are `runtimeLatency.test.ts` beside it. `pnpm --filter @app-game/paint test:performance` runs only the benchmark comparator tests (`node --test scripts/compare-brush-performance.test.mjs`), which the default `test` suites do not include.
+
+`Paint regressions` runs the abr-brush, abr-paint, paint-core, navigation-puck and Paint tests and typechecks, and the benchmark comparator tests, on pull requests and pushes to master. Repository branch protection must require that job if merges should be blocked by failures.
 
 The deterministic checks cover:
 
-- LOD sampling policy for all 465 bundled Megapack presets and all ABR tool families.
+- LOD sampling policy for all 465 Adobe Megapack presets and all ABR tool families.
 - Real 2B Pencil and Wet Blender long-stroke stamp budgets, coarse-mask/pickup selection, completed endpoints, and resource release.
 - Bounded GPU work per batch and compact coarse-mask readback.
 - Preserved input batches, intermediate presentation, bounded pending GPU frames, and the default-on setting across main-thread/worker switching.
 
 These assert work and behavior, not wall-clock timings on a shared CI machine. The 465-preset check is policy coverage, not an assertion that every preset has been timed or visually compared.
+
+The Megapack is not bundled with the repository or the app. `scripts/adobe-brush-fixture.mjs` downloads it from Adobe into the ignored `.tmp/adobe-brushes/` cache, pinned by SHA-256; CI caches that directory. The benchmark runner uses the same cache.
+
+## Local headless run
+
+Without `--cdp`, the runner launches headless Chromium with WebGPU (ANGLE Metal on macOS), starts its own Paint Vite dev server on a free loopback port, and stops both afterwards. From the repository root:
+
+```sh
+pnpm --filter @app-game/paint bench:brushes
+```
+
+Pass `--url http://localhost:3030` to use an already running dev server instead. The result JSON is written to `--output FILE`, or by default to `paint-brush-performance/<timestamp>.json` under the OS temporary directory (`os.tmpdir()`); the path is printed. `--output` inside the repository is rejected, and `--record` may write inside it only under `performance/baselines/`. The device label defaults to `headless-<platform>-<arch>`.
+
+Desktop headless timings are not comparable with the tablet baseline; the configuration gate rejects that comparison. Use them for local A/B checks: record a baseline outside the repository before a change, then compare after it on the same machine:
+
+```sh
+pnpm --filter @app-game/paint bench:brushes --record /tmp/paint-before.json
+# Apply the change, then:
+pnpm --filter @app-game/paint bench:brushes --baseline /tmp/paint-before.json
+```
 
 ## Wacom timing baseline
 
@@ -45,11 +69,13 @@ pnpm --filter @app-game/paint bench:brushes \
   --output /tmp/paint-performance-result.json
 ```
 
-The runner opens and closes its own test tab. It creates isolated documents, never reads saved artwork, and holds a screen wake lock during the run. It does not close Chrome. The benchmark module is not imported by the production app.
+With `--cdp`, `--device` is required and the dev server defaults to `http://localhost:3030`. The runner opens and closes its own test tab. It creates isolated documents, never reads saved artwork, and holds a screen wake lock during the run. It does not close Chrome. The benchmark module is not imported by the production app.
 
 Nine workloads cover actual 2B Pencil (9/222px) and Wet Blender (222/512px), fine/coarse LODs, and Classic/Smooth mixing. They use a fixed seed, pressure 1, opacity/flow 1, a 16-tile cache, and a 512×256 output. A single long input segment stresses progress within expensive drawing work. Each case runs four times; the first warm-up is retained in the JSON and the median of the next three is compared.
 
-The gate rejects different device/browser/viewport configurations, changed workloads, missing cases, changed output hashes, or increases beyond these tolerances:
+The gate compares configurations by the `--device` label, the WebGPU adapter (`adapter.info` vendor, architecture, device, and description), the viewport size, and `devicePixelRatio`. The browser user agent is recorded but not compared, so a Chrome update alone does not invalidate a baseline. An adapter field that the baseline does not record cannot be verified: the runner prints a warning and continues. `movinkpad-pro14.json` predates the adapter `device` field, so it produces that warning; record a replacement to verify it.
+
+The gate rejects different configurations, changed workloads, missing cases, changed output hashes, or increases beyond these tolerances:
 
 | Metric | Allowed increase over baseline |
 | --- | --- |
