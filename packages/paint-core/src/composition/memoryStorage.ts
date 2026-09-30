@@ -1,4 +1,4 @@
-import { restoreDocument } from '../storage';
+import { restoreDocument, restoreView, snapshotView } from '../storage';
 import type { TileData, TileReference } from '../tilePixels';
 import type { PaintStorage, StorageFactory } from './contracts';
 
@@ -39,7 +39,16 @@ export function createMemoryStorage(): StorageFactory {
       },
       async load() {
         check();
-        return document.checkpoint ? restoreDocument(structuredClone(document.checkpoint)) : undefined;
+        if (!document.checkpoint) {
+          return undefined;
+        }
+
+        const restored = restoreDocument(structuredClone(document.checkpoint));
+        return { ...restored, camera: restoreView(structuredClone(document.view)) ?? restored.camera };
+      },
+      async saveView(camera) {
+        check();
+        document.view = snapshotView(camera);
       },
       async save(snapshot) {
         check();
@@ -54,6 +63,7 @@ export function createMemoryStorage(): StorageFactory {
         // Validate completely before publishing a replacement checkpoint.
         restoreDocument(checkpoint);
         document.checkpoint = checkpoint;
+        document.view = snapshotView(checkpoint.camera);
         document.savedOverviews = new Set(document.retained);
       },
       async flush() {
@@ -114,6 +124,7 @@ function createMemoryDocument() {
     overviews: new Map<string, Uint8Array>(),
     retained: new Set<string>(),
     savedOverviews: new Set<string>(),
+    view: undefined as ReturnType<typeof snapshotView> | undefined,
     checkpoint: undefined as (Omit<import('../storage').SavedDocument, 'version'> & { version: number }) | undefined
   };
 }

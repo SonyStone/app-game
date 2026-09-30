@@ -59,6 +59,21 @@ export function restoreDocument(value: unknown): {
   return { layers, activeId: parsed.activeId, camera: parsed.camera, symmetry: parsed.symmetry };
 }
 
+/**
+ * Camera-only record stored beside the checkpoint under the `view` key. Navigation rewrites only this small record;
+ * a full checkpoint rewrites it too, so it always holds the newest camera. Older databases without it keep using the
+ * checkpoint camera, and the checkpoint format (version 3) is unchanged.
+ */
+export function snapshotView(camera: Camera) {
+  return { camera: { ...camera } };
+}
+
+/** Validates a stored view record. Missing or malformed records return undefined so the checkpoint camera is used. */
+export function restoreView(value: unknown): Camera | undefined {
+  const parsed = viewSchema.safeParse(value);
+  return parsed.success ? parsed.data.camera : undefined;
+}
+
 /** Encodes a portable JSON document. Large tile arrays are stored as base64, not JSON numbers. */
 export function encodeDocument(document: SavedDocument): string {
   return JSON.stringify({
@@ -139,12 +154,14 @@ function toBase64(pixels: Uint8Array): string {
 }
 const finite = z.number().finite();
 const unit = finite.min(0).max(1);
+const cameraSchema = z.object({ x: finite, y: finite, zoom: finite.min(0.05).max(32), angle: finite, mirrored: z.boolean() });
+const viewSchema = z.object({ camera: cameraSchema });
 const savedSchema = z.object({
   version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   tileSize: z.literal(TILE_SIZE),
   activeId: z.string(),
   symmetry: paintSymmetrySchema.default(defaultPaintSymmetry),
-  camera: z.object({ x: finite, y: finite, zoom: finite.min(0.05).max(32), angle: finite, mirrored: z.boolean() }),
+  camera: cameraSchema,
   layers: z
     .array(
       z.object({

@@ -52,6 +52,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     /** Read by storage when collection runs, after any saves queued ahead of it. */
     const liveTiles = () => [...document.snapshots(), ...(clipboard?.tiles.values() ?? [])];
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
+    let viewTimer: ReturnType<typeof setTimeout> | undefined;
     const queue = createTaskQueue();
     let active = true;
     let previousFrame: Promise<Result<void>> | undefined;
@@ -183,6 +184,17 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         });
       }, 300);
       scheduleDraw();
+    };
+    /** Persists navigation in the small view record, without a full checkpoint or marking the drawing unsaved. */
+    const viewChanged = () => {
+      clearTimeout(viewTimer);
+      viewTimer = setTimeout(() => {
+        enqueue(async () => {
+          if (tileStore) {
+            background(() => tileStore.saveView(camera));
+          }
+        });
+      }, 300);
     };
     const updatePreview = () => {
       try {
@@ -336,6 +348,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       clearTimeout(collectTimer);
       clearTimeout(renderTimer);
       clearTimeout(saveTimer);
+      clearTimeout(viewTimer);
       try {
         strokeSession?.cancel();
       } finally {
@@ -361,14 +374,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         camera = command.camera;
         size = command.size;
         dpr = command.dpr;
-        saveVersion++;
-        saved = false;
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => {
-          enqueue(async () => {
-            background(save);
-          });
-        }, 300);
+        viewChanged();
         scheduleDraw();
         return;
       }
@@ -481,8 +487,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             camera = command.camera;
             size = command.size;
             dpr = command.dpr;
-            if (moved) changed();
-            else scheduleDraw();
+            if (moved) viewChanged();
+            scheduleDraw();
             break;
           }
           case 'begin': {
@@ -550,13 +556,22 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             await renderer?.prepareOverview(document.layers);
             changed();
             break;
-          case 'layer':
+          case 'layer': {
             await end();
+            const before = [...document.layers];
             document.changeLayer(command.action);
-            renderer?.reset();
-            await renderer?.prepareOverview(document.layers);
+            // Selection changes no pixels or composition. Other actions recomposite; only a deleted
+            // layer's resident tiles are released, and every other layer's GPU cache survives.
+            if (command.action.type !== 'select' && renderer) {
+              for (const layer of before) {
+                if (!document.layers.includes(layer)) renderer.releaseLayer(layer.id);
+              }
+              renderer.recomposite();
+              await renderer.prepareOverview(document.layers);
+            }
             changed();
             break;
+          }
           case 'selection': {
             let points = command.points;
             editingSelection = true;
@@ -729,7 +744,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               camera = target.camera;
               size = target.size;
               dpr = target.dpr;
-              if (moved && tileStore) changed();
+              if (moved && tileStore) viewChanged();
             }
           } else {
             const previous = targets.get(id);

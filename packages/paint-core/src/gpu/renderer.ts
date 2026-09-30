@@ -1003,6 +1003,32 @@ async function assemblePaintRenderer(
     invalidateView() {
       invalidateViews();
     },
+    /** Layer order, visibility, opacity or blend changed, or a layer was added or removed. Recomposites every
+     * target and recomputes virtual-texture coverage; committed tile caches stay resident.
+     */
+    recomposite() {
+      invalidateOtherTargets();
+      completeView = undefined;
+      viewFallback?.clear();
+      holdPresentation = '';
+      virtual?.invalidate();
+      invalidateViews();
+    },
+    /** Returns a deleted layer's resident tiles to the spare pool and drops its display textures.
+     * Call only between strokes; undo that restores the layer re-reads its committed tiles.
+     */
+    releaseLayer(layerId: string) {
+      if (stroke?.layer.id === layerId) throw new Error('Finish or cancel the stroke before deleting its layer.');
+      // Tile keys never contain '/', so the last separator ends the layer id even if the id contains one.
+      const owned = (id: string) => id.slice(0, id.lastIndexOf('/')) === layerId;
+      for (const [id, tile] of cache) {
+        if (owned(id)) {
+          spareTiles.push(tile);
+          cache.delete(id);
+        }
+      }
+      displayCache.removeWhere(owned);
+    },
     /** Captures the target LOD used for drawing this layer, including viewport and sparse-page budgets. */
     brushLod(layers: Layer[], layer: Layer, camera: Camera, size: ViewSize, dpr: number) {
       const scale = renderScale(size, dpr, device.limits.maxTextureDimension2D);

@@ -1,5 +1,6 @@
 import { createTaskQueue, unwrapResult } from './asyncResult';
-import { restoreDocument, type SavedDocument } from './storage';
+import type { Camera } from './camera';
+import { restoreDocument, restoreView, snapshotView, type SavedDocument } from './storage';
 import { type TileData, type TileReference } from './tilePixels';
 
 /** Immutable tile versions in IndexedDB with a bounded RAM cache.
@@ -91,7 +92,7 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
     remember(ref.storageId, pixels, true);
     return ref;
   };
-  const flush = (checkpoint?: unknown) => {
+  const flush = (checkpoint?: { camera: Camera }) => {
     const task = queue.run(async () => {
       const dirty = [...cache].filter(([, entry]) => entry.dirty);
       const derived = [...overviewWrites];
@@ -102,7 +103,10 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
           tx.objectStore('overviews').put(pixels, key);
           tx.objectStore('overviewIndex').put({ bytes: pixels.byteLength, touched: Date.now() }, key);
         }
-        if (checkpoint) tx.objectStore('documents').put(checkpoint, 'current');
+        if (checkpoint) {
+          tx.objectStore('documents').put(checkpoint, 'current');
+          tx.objectStore('documents').put(snapshotView(checkpoint.camera), 'view');
+        }
         tx.oncomplete = () => resolve();
         tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Tile checkpoint failed.'));
       });
@@ -170,16 +174,37 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
     },
     /** Persists staged imports without replacing the current drawing checkpoint. Rejects failed transactions. */
     flush: () => flush(),
+    /** Persists only the camera, without staged tiles or the tile list. Ordered with checkpoints; `load` prefers it. */
+    saveView(camera: Camera) {
+      const task = queue.run(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            const tx = db.transaction('documents', 'readwrite');
+            tx.objectStore('documents').put(snapshotView(camera), 'view');
+            tx.oncomplete = () => resolve();
+            tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Saving the view failed.'));
+          })
+      );
+      return task.then(unwrapResult);
+    },
 
+    /** Restores the checkpoint, with the newer camera from the separate view record when one is valid. */
     async load() {
-      const value = await new Promise<unknown>((resolve, reject) => {
-        const request = db.transaction('documents').objectStore('documents').get('current');
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
+      const [value, view] = await new Promise<[unknown, unknown]>((resolve, reject) => {
+        const store = db.transaction('documents').objectStore('documents');
+        const current = store.get('current');
+        const view = store.get('view');
+        view.onsuccess = () => resolve([current.result, view.result]);
+        current.onerror = view.onerror = () => reject(current.error ?? view.error);
       });
       if (value && typeof value === 'object' && 'overviewKeys' in value && Array.isArray(value.overviewKeys))
         protectedOverviews = new Set(value.overviewKeys.filter((key): key is string => typeof key === 'string'));
-      return value === undefined ? undefined : restoreDocument(value);
+      if (value === undefined) {
+        return undefined;
+      }
+
+      const document = restoreDocument(value);
+      return { ...document, camera: restoreView(view) ?? document.camera };
     },
     /** Removes unreachable historical versions after a checkpoint.
      * `live` returns current, undo/redo and clipboard references. It is read when the queued collection
