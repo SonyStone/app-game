@@ -154,7 +154,9 @@ it('preserves double-precision sampled-tip geometry and conservative culling thr
   for (let i = 1; i < result.length; i++) {
     const copy = result[i]!;
     for (const vertex of tip.quad) {
-      const expected = symmetryPoint({ x: vertex[0], y: vertex[1] }, matrices[i]!);
+      // Sampled tips rasterize at pixel corners, so the matrix applies about pixel centers.
+      const center = symmetryPoint({ x: vertex[0] + .5, y: vertex[1] + .5 }, matrices[i]!);
+      const expected = { x: center.x - .5, y: center.y - .5 };
       const actual = copy.abr!.sampledTip!.quad.find(point => point[2] === vertex[2] && point[3] === vertex[3])!;
       expect(actual[0]).toBe(expected.x);
       expect(actual[1]).toBe(expected.y);

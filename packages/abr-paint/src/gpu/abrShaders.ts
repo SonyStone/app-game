@@ -43,6 +43,21 @@ export function createAbrPipelines(root: TgpuRoot) {
         }
       }
     }),
+    /** Max-accumulates each primary stamp's transfer opacity into the mask's green lane.
+     * Byte-exact mask accumulation uses it to cap Dual Hard Mix, which otherwise re-saturates capped alpha.
+     */
+    ceiling: root.createRenderPipeline({
+      attribs: abrStampLayout.attrib,
+      vertex,
+      fragment: ceilingFragment,
+      targets: {
+        format: 'rgba8unorm',
+        blend: {
+          color: { operation: 'max', srcFactor: 'one', dstFactor: 'one' },
+          alpha: { operation: 'max', srcFactor: 'one', dstFactor: 'one' }
+        }
+      }
+    }),
     /** Renders one stamp's coverage into the mask rasterizer's source view. */
     maskSource: root.createRenderPipeline({
       attribs: abrStampLayout.attrib,
@@ -299,6 +314,14 @@ const sampledSecondaryFragment = tgpu.fragmentFn({
   return d.vec4f(d.f32(std.max(byte, 0)) / 255);
 });
 
+/** Covers the whole stamp quad: outside real coverage the accumulated primary alpha is zero,
+ * and Hard Mix of zero primary coverage stays zero, so the ceiling cannot add ink there.
+ */
+const ceilingFragment = tgpu.fragmentFn({ in: { dynamics: d.vec4f }, out: d.vec4f })((input) => {
+  'use gpu';
+  return d.vec4f(0, input.dynamics.y, 0, 0);
+});
+
 const Coverage = d.struct({ paint: d.vec4f, mask: d.vec4f });
 
 function shadeStamp(position: d.v4f, tipUv: d.v2f, dynamics: d.v4f, color: d.v4f) {
@@ -420,8 +443,10 @@ function compositePixel(position: d.v4f, paint: d.v4f, mask: d.v4f): d.v4f {
   if (p.tone[toneLane.pencil]! > 0) {
     alpha = pencilCoverage(alpha);
   }
-  const opacity = std.select(mask.a, mask.g, dualEnabled && p.extra[extraLane.dualMode]! === dualHardMixMode);
-  if (p.maskAccumulation === maskAccumulation.stamp || p.maskAccumulation === maskAccumulation.approximate) {
+  const hardMix = dualEnabled && p.extra[extraLane.dualMode]! === dualHardMixMode;
+  const opacity = std.select(mask.a, mask.g, hardMix);
+  // Byte-exact accumulation already caps alpha, but Hard Mix re-saturates it; re-apply the ceiling afterwards.
+  if (p.maskAccumulation === maskAccumulation.stamp || p.maskAccumulation === maskAccumulation.approximate || hardMix) {
     alpha = std.min(alpha, opacity);
   }
   alpha *= p.compositeOpacity;
