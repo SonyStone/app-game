@@ -1047,6 +1047,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.60.0
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 6.9.1

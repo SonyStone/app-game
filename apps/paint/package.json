@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview --port 4030",
     "test": "vitest run",
+    "test:browser": "node tests/browser/verifications.browser.mjs",
     "test:performance": "node --test scripts/compare-brush-performance.test.mjs",
     "bench:brushes": "node scripts/brush-performance.mjs",
     "typecheck": "tsc -p tsconfig.json"
@@ -33,6 +34,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@testing-library/jest-dom": "catalog:",
     "@types/node": "catalog:",
     "@unocss/vite": "catalog:",
