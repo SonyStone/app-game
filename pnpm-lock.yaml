@@ -1877,6 +1877,9 @@ importers:
       '@app-game/navigation-puck':
         specifier: workspace:*
         version: link:../navigation-puck
+      '@app-game/solid-gpu':
+        specifier: workspace:*
+        version: link:../solid-gpu
       '@solid-primitives/timer':
         specifier: 'catalog:'
         version: 1.4.5-next.1(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)

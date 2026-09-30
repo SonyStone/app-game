@@ -203,3 +203,46 @@ it('cancels a stroke after device loss only once its suspended paint has finishe
   await vi.waitFor(() => expect(order).toEqual(['paint', 'cancel']));
   expect(events).toContainEqual(expect.objectContaining({ type: 'error', recoverable: true }));
 });
+
+it('reports uncaptured validation errors as terminal validation failures, not device loss', async () => {
+  let lose!: (message: string, error?: { kind: 'gpu'; code: string; message: string }) => void;
+  const renderer = {
+    setSelection: vi.fn(),
+    prepareOverview: vi.fn(async () => {}),
+    render: vi.fn(async () => {}),
+    submitted: vi.fn(async () => {}),
+    destroy: vi.fn(),
+    stats: () => ({ gpuBytes: 0, residentTiles: 0 }),
+    debugTiles: () => [],
+    debugPages: () => []
+  };
+  dependencies.renderer.mockImplementation(async (_canvas: unknown, lost: typeof lose) => {
+    lose = lost;
+    return renderer;
+  });
+  dependencies.store.mockResolvedValue({
+    load: async () => undefined,
+    capture: (pixels: unknown) => pixels,
+    save: vi.fn(async () => {}),
+    stats: () => undefined
+  });
+  const events: PaintEvent[] = [];
+  const worker = {
+    onmessage: undefined as ((event: MessageEvent<PaintCommand>) => void) | undefined,
+    postMessage: (event: PaintEvent) => events.push(event)
+  };
+  vi.stubGlobal('self', worker);
+  await import('./paint.worker');
+  worker.onmessage!({
+    data: { type: 'init', canvas: {} as OffscreenCanvas, size: { width: 256, height: 256 }, dpr: 1 }
+  } as MessageEvent<PaintCommand>);
+  await vi.waitFor(() => expect(events.some((event) => event.type === 'ready')).toBe(true));
+
+  lose('Invalid bind group.', { kind: 'gpu', code: 'validation', message: 'Invalid bind group.' });
+  lose('The graphics device was disconnected.', { kind: 'gpu', code: 'lost', message: 'lost' });
+
+  const errors = events.filter((event) => event.type === 'error');
+  expect(errors).toEqual([
+    expect.objectContaining({ code: 'validation', recoverable: true, message: expect.stringContaining('validation error') })
+  ]);
+});

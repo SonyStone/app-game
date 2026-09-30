@@ -11,6 +11,7 @@ import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { captureSelection, editSelection, translateSelection, type SelectionPixels } from './selection';
 import { decodeDocument, snapshotDocument } from './storage';
 import { defaultPaintSymmetry, paintSymmetrySchema, supportsPaintSymmetry } from './symmetry';
+import { errorMessage, type GpuError } from '@app-game/solid-gpu/errors';
 
 /** Owns document, persistence and GPU resources in either execution mode. Commands stay ordered.
  * The caller supplies event delivery and closes its transport after a graceful dispose.
@@ -91,8 +92,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         residentTiles: stats?.residentTiles ?? 0
       });
     };
-    const failure = (error: unknown, recoverable = false) =>
-      post({ type: 'error', message: error instanceof Error ? error.message : String(error), recoverable });
+    const failure = (error: unknown, recoverable = false, code?: GpuError['code']) =>
+      post({ type: 'error', message: errorMessage(error), recoverable, ...(code ? { code } : {}) });
     const reportResult = (result: Awaited<ReturnType<typeof attempt>>) => {
       if (!result.ok) failure(result.error);
     };
@@ -292,7 +293,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       renderer = undefined;
       renderer = await modules.renderer(
         canvas,
-        (message) => {
+        (message, error) => {
           if (lost) return;
           lost = true;
           stopIdle();
@@ -303,9 +304,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             strokeSession = undefined;
             abandoned?.cancel();
           });
+          const code = error?.code ?? 'lost';
           failure(
-            new Error(`${message} Your completed strokes are preserved. Restore the renderer to continue.`),
-            true
+            new Error(`${rendererFailureMessage(code, message)} Your completed strokes are preserved. Restore the renderer to continue.`),
+            true,
+            code
           );
         },
         {
@@ -757,6 +760,15 @@ async function canvasPng(canvas: OffscreenCanvas | HTMLCanvasElement): Promise<B
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not export the canvas.'))), 'image/png');
   });
+}
+
+/** Names the failure class so a validation bug is not reported to the user as a disconnected device. */
+function rendererFailureMessage(code: GpuError['code'], message: string) {
+  if (code === 'validation') {
+    return `The renderer stopped after a graphics validation error: ${message}`;
+  }
+
+  return message;
 }
 
 /** At most 60 intermediate redraws per second; first contact and packet completion still present immediately. */

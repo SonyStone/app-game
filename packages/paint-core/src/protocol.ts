@@ -6,6 +6,7 @@ import type { BrushEngine } from './composition/contracts';
 import type { HistorySource, LayerAction, createDocument } from './document';
 import type { RendererToolState } from '@app-game/abr-paint/gpu/toolState';
 import type { PaintSymmetry } from './symmetry';
+import type { GpuError } from '@app-game/solid-gpu/errors';
 
 /** Main-thread commands are processed in order; all sample batches precede their stroke end. */
 export type PaintCommand =
@@ -131,7 +132,8 @@ export type PaintEvent =
   | { type: 'selection'; points: Point[]; hasClipboard: boolean }
   | { type: 'disposed' }
   | { type: 'restored'; camera: Camera; symmetry?: PaintSymmetry }
-  | { type: 'error'; message: string; recoverable: boolean }
+  /** `code` classifies renderer failures, for example `validation` versus a `lost` device. */
+  | { type: 'error'; message: string; recoverable: boolean; code?: GpuError['code'] }
   | { type: 'download'; blob: Blob; name: string };
 
 /** Clipboard is private to this editor session; paste writes into the active layer at the copied coordinates. */

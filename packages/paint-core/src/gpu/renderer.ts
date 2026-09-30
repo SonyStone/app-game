@@ -26,78 +26,108 @@ import { createAbrRetouch } from '@app-game/abr-paint/gpu/retouch';
 import { createViewDamage } from './viewDamage';
 import { createViewFallback } from './viewFallback';
 import { createVirtualTexture } from './virtualTexture';
+import { gpuError, type GpuError } from '@app-game/solid-gpu/errors';
+import { makeGpuResources, type KeepGpuResource } from '@app-game/solid-gpu/gpu/resources';
 
 /** Creates one WebGPU device/cache owner with a default canvas. Additional targets share its raster resources.
  * Committed CPU tiles remain valid after cache eviction or device loss. Render/paint/detach calls must be serialized.
+ * Construction failures reject with an Error whose `cause` is a typed GpuError; every allocation made before the
+ * failure is released, including a self-created device.
+ * `onLost` reports the first terminal device failure: `lost` for device loss, `validation` for uncaptured validation
+ * errors and `device` for other uncaptured errors. It is not called after destroy().
  */
 export async function createPaintRenderer(
   canvas: OffscreenCanvas | HTMLCanvasElement,
-  onLost: (message: string) => void,
-  options: {
-    device?: GPUDevice;
-    /** Fixed write extent, including live previews and retouch tools. Omit for infinite drawing. */
-    bounds?: PaintBounds;
-    /** Hard pixel-tile limit for constrained devices and eviction verification. */
-    cacheTiles?: number;
-    /** Reuse transient sampling scratch; false retains per-tile scratch for GPU comparisons. */
-    sharedScratch?: boolean;
-    /** Batch pickup uploads until a pending source is invalidated; false retains eager flushes for GPU verification. */
-    batchPickupUploads?: boolean;
-    /** Build only view-required mip levels by default; false retains full chains for GPU comparisons. */
-    adaptiveMipmaps?: boolean;
-    displayCache?: boolean;
-    /** Batch small sampled-brush masks on GPU; false retains per-stamp passes for pixel/performance comparisons. */
-    batchSampledMasks?: boolean;
-    /** Use fused Smudge coverage by default; false retains the multipass reference for GPU verification. */
-    directSmudge?: boolean;
-    /** Batch eligible multi-tile Smudge deposits; false preserves individual tile passes for comparison. */
-    batchSmudgeTiles?: boolean;
-    /** Cache and batch mipmap passes; false retains TypeGPU's per-level helper for GPU comparisons. */
-    batchedMipmaps?: boolean;
-    /** Include visible tiles' mip updates in their display submission; false submits each chain for verification. */
-    batchViewMipmaps?: boolean;
-    /** Generate only mip levels used by Classic pickup; false builds all eight source levels for verification. */
-    adaptivePickupMipmaps?: boolean;
-    /** Submit pickup, carry and deposit together for each Smudge dab; false keeps separate submissions for verification. */
-    batchSmudgePasses?: boolean;
-    /** Share one submission across up to eight small-footprint Smudge dabs; false submits every dab for verification. */
-    batchSmudgeDabs?: boolean;
-    overviewStorage?: OverviewStorage;
-    readTile?: (pixels: TileData) => Promise<Uint8Array>;
-    virtualTexture?: boolean;
-    onRefine?: () => void;
-    /** Awaited between complete sampling dabs, after their GPU writes are submitted.
-     * May render/present progress. Must not paint, finish, cancel, reset or replace this renderer.
-     */
-    onPaintProgress?: () => Promise<void>;
-    onError?: (error: unknown) => void;
-  } = {}
+  onLost: (message: string, error: GpuError) => void,
+  options: PaintRendererOptions = {}
 ) {
+  const resources = makeGpuResources();
+  try {
+    return await assemblePaintRenderer(canvas, onLost, options, resources);
+  } catch (error) {
+    resources.destroy();
+    throw error;
+  }
+}
+
+/** Renderer configuration. Verification-only switches default to the production behavior. */
+export type PaintRendererOptions = {
+  device?: GPUDevice;
+  /** Fixed write extent, including live previews and retouch tools. Omit for infinite drawing. */
+  bounds?: PaintBounds;
+  /** Hard pixel-tile limit for constrained devices and eviction verification. */
+  cacheTiles?: number;
+  /** Reuse transient sampling scratch; false retains per-tile scratch for GPU comparisons. */
+  sharedScratch?: boolean;
+  /** Batch pickup uploads until a pending source is invalidated; false retains eager flushes for GPU verification. */
+  batchPickupUploads?: boolean;
+  /** Build only view-required mip levels by default; false retains full chains for GPU comparisons. */
+  adaptiveMipmaps?: boolean;
+  displayCache?: boolean;
+  /** Batch small sampled-brush masks on GPU; false retains per-stamp passes for pixel/performance comparisons. */
+  batchSampledMasks?: boolean;
+  /** Use fused Smudge coverage by default; false retains the multipass reference for GPU verification. */
+  directSmudge?: boolean;
+  /** Batch eligible multi-tile Smudge deposits; false preserves individual tile passes for comparison. */
+  batchSmudgeTiles?: boolean;
+  /** Cache and batch mipmap passes; false retains TypeGPU's per-level helper for GPU comparisons. */
+  batchedMipmaps?: boolean;
+  /** Include visible tiles' mip updates in their display submission; false submits each chain for verification. */
+  batchViewMipmaps?: boolean;
+  /** Generate only mip levels used by Classic pickup; false builds all eight source levels for verification. */
+  adaptivePickupMipmaps?: boolean;
+  /** Submit pickup, carry and deposit together for each Smudge dab; false keeps separate submissions for verification. */
+  batchSmudgePasses?: boolean;
+  /** Share one submission across up to eight small-footprint Smudge dabs; false submits every dab for verification. */
+  batchSmudgeDabs?: boolean;
+  overviewStorage?: OverviewStorage;
+  readTile?: (pixels: TileData) => Promise<Uint8Array>;
+  virtualTexture?: boolean;
+  onRefine?: () => void;
+  /** Awaited between complete sampling dabs, after their GPU writes are submitted.
+   * May render/present progress. Must not paint, finish, cancel, reset or replace this renderer.
+   */
+  onPaintProgress?: () => Promise<void>;
+  onError?: (error: unknown) => void;
+};
+
+/** Builds the renderer, registering every allocation in `resources` so a failed build releases all of them. */
+async function assemblePaintRenderer(
+  canvas: OffscreenCanvas | HTMLCanvasElement,
+  onLost: (message: string, error: GpuError) => void,
+  options: PaintRendererOptions,
+  resources: ReturnType<typeof makeGpuResources>
+) {
+  let disposed = false;
+  resources.keep({ destroy: () => { disposed = true; } });
   const paintBounds = capturePaintBounds(options.bounds);
   const allowsTile = (key: string) => !paintBounds || !!clipPaintBounds(paintBounds, ...coordinates(key));
-  if (!navigator.gpu) throw new Error('WebGPU is unavailable. Open this page in a browser with WebGPU support.');
-  const adapter = options.device ? undefined : await navigator.gpu.requestAdapter();
-  if (!options.device && !adapter)
-    throw new Error('A WebGPU device could not be opened. Check hardware acceleration in your browser.');
-  const device = options.device ?? (await adapter!.requestDevice());
-  const root = tgpu.initFromDevice({ device });
+  const device = await openDevice(options.device, resources.keep);
+  const root = resources.keep(tgpu.initFromDevice({ device }));
   let context = canvas.getContext('webgpu');
   if (!context) {
-    root.destroy();
-    throw new Error('The canvas could not start WebGPU.');
+    throw rendererError(gpuError('canvas', 'The canvas could not start WebGPU.'));
   }
+
   const format = navigator.gpu.getPreferredCanvasFormat();
   context.configure({ device, format, alphaMode: 'opaque' });
-  let disposed = false;
-  void device.lost.then((info) => {
-    if (!disposed) onLost(info.message || 'The graphics device was disconnected.');
-  });
-  const uncapturedError = (event: GPUUncapturedErrorEvent) => {
-    if (!disposed) onLost(event.error.message);
+  const primaryContext = context;
+  resources.keep({ destroy: () => primaryContext.unconfigure() });
+  let failed = false;
+  const fail = (error: GpuError) => {
+    if (disposed || failed) {
+      return;
+    }
+
+    failed = true;
+    onLost(error.message, error);
   };
+  void device.lost.then((info) => fail(gpuError('lost', info.message || 'The graphics device was disconnected.', info)));
+  const uncapturedError = (event: GPUUncapturedErrorEvent) => fail(uncapturedGpuError(event.error));
   device.addEventListener('uncapturederror', uncapturedError);
+  resources.keep({ destroy: () => device.removeEventListener('uncapturederror', uncapturedError) });
   const pipelines = createPipelines(root, format);
-  const lasso = createLassoOverlay(root, format);
+  const lasso = resources.keep(createLassoOverlay(root, format));
   let texturedStamps: ReturnType<typeof createTexturedStamps> | undefined;
   let texturedPipeline: ReturnType<ReturnType<typeof createTexturedStamps>['prepare']> | undefined;
   let abrStamps: ReturnType<typeof createAbrStamps> | undefined;
@@ -107,12 +137,21 @@ export async function createPaintRenderer(
   let smudgeActive = false;
   let historySource: Layer | undefined;
   let historyTexture: ReturnType<typeof historyTarget> | undefined;
-  const retouch = createAbrRetouch<Layer>(root, {
+  const retouch = resources.keep(createAbrRetouch<Layer>(root, {
     capture: captureRegion,
     deposit: paintStamps,
     tileKeys: dab => dabTiles(dab).filter(allowsTile)
-  }, options);
+  }, options));
   let pickup: ReturnType<typeof createCanvasPickup<Layer>> | undefined;
+  resources.keep({
+    destroy() {
+      abrStamps?.destroy();
+      historyTexture?.destroy();
+      pickup?.destroy();
+      texturedStamps?.destroy();
+      texturedPipeline = undefined;
+    }
+  });
   let animateSelection = true;
   // Match virtual pages so touching a magnified tile does not change existing artwork's filtering.
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
@@ -125,7 +164,7 @@ export async function createPaintRenderer(
     else tile.texture.generateMipmaps(tile.mipLevelReady, last - tile.mipLevelReady + 1);
     tile.mipLevelReady = last;
   };
-  const displayCache = createDisplayCache(root, sampler, generateMipmaps);
+  const displayCache = resources.keep(createDisplayCache(root, sampler, generateMipmaps));
   const cache = new Map<string, ReturnType<typeof createTile>>();
   const samplingScratch: ReturnType<typeof createStrokeScratch>[] = [];
   let smudgeDeposits: ReturnType<typeof createSmudgeDepositBatch> | undefined;
@@ -137,6 +176,16 @@ export async function createPaintRenderer(
   const tailTiles = new Map<string, Dab[]>();
   // A small reusable pool, independent of committed scratch and its eviction/readback lifecycle.
   const tailPool: ReturnType<typeof createTile>[] = [];
+  resources.keep({
+    destroy() {
+      smudgeDeposits?.destroy();
+      for (const tile of [...tailPool, ...cache.values(), ...spareTiles]) destroyTile(tile);
+      for (const scratch of samplingScratch) destroyStrokeScratch(scratch);
+      tailPool.length = spareTiles.length = samplingScratch.length = 0;
+      tailTiles.clear();
+      cache.clear();
+    }
+  });
   const strokeTiles = new Map<
     string,
     {
@@ -148,13 +197,13 @@ export async function createPaintRenderer(
     }
   >();
   const evictionSize = Math.min(16, Math.max(1, Math.floor((options.cacheTiles ?? MAX_RESIDENT_TILES) / 8)));
-  const readbacks = createReadbackQueue(device, evictionSize * 4);
+  const readbacks = resources.keep(createReadbackQueue(device, evictionSize * 4));
   let stroke: { layer: Layer; brush: Brush } | undefined;
   let view: ReturnType<typeof createView> | undefined;
   let presentedCamera = '';
   let holdPresentation = '';
   const virtual = options.virtualTexture
-    ? createVirtualTexture(
+    ? resources.keep(createVirtualTexture(
         root,
         async (pixels) => (pixels instanceof Uint8Array ? pixels : options.readTile!(pixels)),
         () => {
@@ -163,7 +212,7 @@ export async function createPaintRenderer(
         },
         (error) => options.onError?.(error),
         options.overviewStorage
-      )
+      ))
     : undefined;
   let viewFallback = virtual ? createViewFallback(root) : undefined;
   let completeView: { camera: Camera; size: ViewSize } | undefined;
@@ -188,6 +237,23 @@ export async function createPaintRenderer(
     hold: '',
     damage: createViewDamage(),
     pages: []
+  });
+  resources.keep({
+    destroy() {
+      for (const [targetCanvas, target] of targets) {
+        if (targetCanvas === canvas) {
+          view?.destroy();
+          viewFallback?.destroy();
+        } else {
+          target.view?.destroy();
+          target.fallback?.destroy();
+        }
+        if (target.context !== primaryContext) {
+          target.context.unconfigure();
+        }
+      }
+      targets.clear();
+    }
   });
   // Drawing is serialized by the document runtime. Targets share tile caches, pipelines and device;
   // only their composed viewport/fallback survives between presentations.
@@ -257,7 +323,7 @@ export async function createPaintRenderer(
   let viewportUpdate = { full: false, pixels: 0 };
   let previewTileDraws = 0,
     sourceTileDraws = 0;
-  const brushBuffer = root.createBuffer(shader.brushLayout.entries.settings.uniform).$usage('uniform');
+  const brushBuffer = resources.keep(root.createBuffer(shader.brushLayout.entries.settings.uniform).$usage('uniform'));
   const brushGroup = root.createBindGroup(shader.brushLayout, { settings: brushBuffer });
   const readTile = async (pixels: TileData | undefined) =>
     pixels === undefined
@@ -1150,43 +1216,45 @@ export async function createPaintRenderer(
     },
     /** Releases this device and all resources. Does not modify committed document snapshots. */
     destroy() {
-      disposed = true;
-      readbacks.destroy();
-      lasso.destroy();
-      smudgeDeposits?.destroy();
-      abrStamps?.destroy();
-      historyTexture?.destroy();
-      pickup?.destroy();
-      retouch.destroy();
-      texturedStamps?.destroy();
-      texturedPipeline = undefined;
-      view?.destroy();
-      virtual?.destroy();
-      viewFallback?.destroy();
-      displayCache.destroy();
-      for (const tile of tailPool) destroyTile(tile);
-      tailPool.length = 0;
-      tailTiles.clear();
-      for (const tile of [...cache.values(), ...spareTiles]) destroyTile(tile);
-      cache.clear();
-      spareTiles.length = 0;
-      for (const scratch of samplingScratch) destroyStrokeScratch(scratch);
-      samplingScratch.length = 0;
       strokeTiles.clear();
-      brushBuffer.destroy();
-      device.removeEventListener('uncapturederror', uncapturedError);
-      for (const [targetCanvas, target] of targets) {
-        if (targetCanvas !== canvas) {
-          target.view?.destroy();
-          target.fallback?.destroy();
-        }
-        target.context.unconfigure();
-      }
-      targets.clear();
-      root.destroy();
-      if (!options.device) device.destroy();
+      resources.destroy();
     }
   };
+}
+
+/** Borrows `borrowed`, or opens and registers a new device so a later construction failure destroys it. */
+async function openDevice(borrowed: GPUDevice | undefined, keep: KeepGpuResource) {
+  if (borrowed) {
+    return borrowed;
+  }
+
+  if (!navigator.gpu) {
+    throw rendererError(gpuError('unavailable', 'WebGPU is unavailable. Open this page in a browser with WebGPU support.'));
+  }
+
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) {
+    throw rendererError(
+      gpuError('adapter', 'A WebGPU device could not be opened. Check hardware acceleration in your browser.')
+    );
+  }
+
+  try {
+    return keep(await adapter.requestDevice());
+  } catch (cause) {
+    throw rendererError(gpuError('device', 'The WebGPU device could not be created.', cause));
+  }
+}
+
+/** Wraps a typed failure in an Error so ordered runtime queues keep its message; `cause` carries the code. */
+function rendererError(error: GpuError) {
+  return new Error(error.message, { cause: error });
+}
+
+/** Classifies an uncaptured device error. Validation errors are programming errors and remain terminal. */
+function uncapturedGpuError(error: GPUError): GpuError {
+  const validation = typeof GPUValidationError !== 'undefined' && error instanceof GPUValidationError;
+  return gpuError(validation ? 'validation' : 'device', error.message, error);
 }
 
 function createPipelines(root: TgpuRoot, format: GPUTextureFormat) {
