@@ -2,10 +2,8 @@ import { createSignal, onCleanup } from 'solid-js';
 import { attempt } from '@app-game/paint-core/asyncResult';
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { BrushEngineSelection } from '@app-game/paint-core/composition/defineBrushEngine';
-import type { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
 import type { PaintEndpoint } from '../mainThreadEndpoint';
 import type { PaintEvent } from '@app-game/paint-core/protocol';
-import type { BrushLibrary } from './decodeAbrLibrary';
 
 /** Owns a session library and correlated uploads. Changes become selectable only after upload succeeds.
  * Imperative busy/selected state guards asynchronous work independently of Solid's batched updates.
@@ -13,7 +11,6 @@ import type { BrushLibrary } from './decodeAbrLibrary';
 export function createBrushLibrary(options: {
   select: (engine: BrushEngineSelection | undefined) => void;
   canChange: () => boolean;
-  load?: (file: File, signal: AbortSignal) => Promise<BrushLibrary>;
 }) {
   const [library, setLibrary] = createSignal<BrushLibrary | undefined>(undefined, { ownedWrite: true });
   const [selected, setSelected] = createSignal<string | undefined>(undefined, { ownedWrite: true });
@@ -28,10 +25,8 @@ export function createBrushLibrary(options: {
     string,
     { id: string; resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
   >();
-  const abort = new AbortController();
   onCleanup(() => {
     disposed = true;
-    abort.abort();
     rejectPending();
     endpoint = undefined;
   });
@@ -61,39 +56,6 @@ export function createBrushLibrary(options: {
       resident.add(request.id);
       request.resolve();
     },
-    /** Keeps the current library/selection on import failure. A successful import selects its first tip. */
-    importFile(file: File) {
-      return run(async () => {
-        if (file.size > 32 * 1024 * 1024) throw new Error('Choose an ABR file smaller than 32 MiB.');
-        const load = options.load ?? (await import('./importAbr')).importAbr;
-        const next = await load(file, abort.signal);
-        if (disposed) return;
-        const first = next.brushes[0];
-        const tip = next.tips.find((tip) => tip.id === first?.tipId);
-        if (!first || !tip) throw new Error('This ABR has no usable brush tips.');
-        await upload(tip);
-        if (disposed) return;
-        current = next;
-        setLibrary(next);
-        apply(first.id);
-      });
-    },
-    /** Accepts decoded coverage from an embedded editor. True means the runtime acknowledged the selection. */
-    useTip(resource: BrushResource, name: string, angle = 0) {
-      return run(async () => {
-        await upload(resource);
-        if (disposed) return;
-        current = {
-          name,
-          brushes: [{ id: resource.id, name, tipId: resource.id, angle }],
-          tips: [resource],
-          skipped: 0,
-          notices: 0
-        };
-        setLibrary(current);
-        apply(resource.id);
-      });
-    },
     /** Selects a detached preset only after all primary/texture/dual resources are acknowledged. */
     usePreset(preset: { resources: BrushResource[]; engine: BrushEngineSelection; name: string }) {
       return run(async () => {
@@ -110,17 +72,6 @@ export function createBrushLibrary(options: {
         };
         setLibrary(current);
         apply(tip.id);
-      });
-    },
-    choose(id: string | undefined) {
-      return run(async () => {
-        if (id !== undefined) {
-          const item = current?.brushes.find((brush) => brush.id === id);
-          const tip = current?.tips.find((tip) => tip.id === item?.tipId);
-          if (!tip) throw new Error('Brush tip is missing from this library.');
-          await upload(tip);
-        }
-        if (!disposed) apply(id);
       });
     },
     /** Called before re-enabling input on a replacement runtime. Rejects explicitly if upload fails. */
@@ -172,11 +123,7 @@ export function createBrushLibrary(options: {
     selectedId = id;
     setSelected(id);
     const item = current?.brushes.find((brush) => brush.id === id);
-    // Keep the engine/schema in the runtime bundle. Its factory validates these settings on begin.
-    const engine: ReturnType<typeof texturedBrush.select> | undefined = item
-      ? { id: 'textured', settings: { tipId: item.tipId, ...(item.angle !== undefined ? { angle: item.angle } : {}) } }
-      : undefined;
-    options.select(item?.engine ?? engine);
+    options.select(item?.engine);
   }
   async function run(action: () => Promise<void>) {
     if (working || disposed || !options.canChange()) return false;
@@ -190,3 +137,12 @@ export function createBrushLibrary(options: {
     return result.ok && !disposed;
   }
 }
+
+/** The preset selected in this editor session. Source pixels outlive rendering-mode changes. */
+type BrushLibrary = {
+  name: string;
+  brushes: { id: string; name: string; tipId: string; engine?: BrushEngineSelection }[];
+  tips: BrushResource[];
+  skipped: number;
+  notices: number;
+};

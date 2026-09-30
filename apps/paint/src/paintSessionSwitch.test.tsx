@@ -16,15 +16,6 @@ vi.mock('./paint.worker?worker', () => ({
   }
 }));
 vi.mock('./mainThreadEndpoint', () => ({ createMainThreadEndpoint: () => transports.create() }));
-vi.mock('./brushLibrary/importAbr', () => ({
-  importAbr: async () => ({
-    name: 'test.abr',
-    brushes: [{ id: 'ink', name: 'Ink', tipId: 'ink-tip' }],
-    tips: [{ id: 'ink-tip', width: 1, height: 1, format: 'r8unorm', pixels: new Uint8Array([255]) }],
-    skipped: 0,
-    notices: 0
-  })
-}));
 let dispose: (() => void) | undefined;
 const originalTransfer = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'transferControlToOffscreen');
 afterEach(() => {
@@ -113,7 +104,11 @@ it.each([false, true])(
       });
     };
     if (withTip) {
-      const importing = session.brushLibrary.importFile(new File(['x'], 'test.abr'));
+      const importing = session.brushLibrary.usePreset({
+        name: 'Ink',
+        engine: { id: 'textured', settings: { tipId: 'ink-tip' } },
+        resources: [{ id: 'ink-tip', width: 1, height: 1, format: 'r8unorm', pixels: new Uint8Array([255]) }]
+      });
       await vi.waitFor(() => expect(uploaded(first)).toBeDefined());
       confirmUpload(first);
       await importing;
@@ -188,7 +183,7 @@ it.each([false, true])(
     if (withTip) {
       expect(session.ready()).toBe(false);
       expect(session.switchingRenderer()).toBe(true);
-      expect(session.brushLibrary.selected()).toBe('ink');
+      expect(session.brushLibrary.selected()).toBe('ink-tip');
       confirmUpload(second);
       await vi.waitFor(() => {
         flush();

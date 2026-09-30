@@ -3,29 +3,27 @@ import { expect, it, vi } from 'vitest';
 import type { PaintEndpoint } from '../mainThreadEndpoint';
 import type { PaintCommand } from '@app-game/paint-core/protocol';
 import { createBrushLibrary } from './createBrushLibrary';
-import type { BrushLibrary } from './decodeAbrLibrary';
 
 it('waits for upload, reuses resident tips and restores selection on a replacement endpoint', async () => {
   const select = vi.fn();
   let dispose!: () => void;
   const library = createRoot((stop) => {
     dispose = stop;
-    return createBrushLibrary({ select, canChange: () => true, load: async () => fixture() });
+    return createBrushLibrary({ select, canChange: () => true });
   });
   const first = endpoint();
   library.connect(first);
   try {
-    const importing = library.importFile(new File(['x'], 'test.abr'));
+    const importing = library.usePreset(fixture());
     await vi.waitFor(() => expect(first.postMessage).toHaveBeenCalledOnce());
     expect(select).not.toHaveBeenCalled();
     expect(library.isBusy()).toBe(true);
     ack(library, first);
     await importing;
     flush();
-    expect(library.selected()).toBe('first');
+    expect(library.selected()).toBe('tip');
     expect(select).toHaveBeenLastCalledWith({ id: 'textured', settings: { tipId: 'tip' } });
-    await library.choose(undefined);
-    await library.choose('first');
+    await library.usePreset(fixture());
     expect(first.postMessage).toHaveBeenCalledOnce();
     const second = endpoint();
     library.connect(second);
@@ -33,31 +31,29 @@ it('waits for upload, reuses resident tips and restores selection on a replaceme
     expect(second.postMessage).toHaveBeenCalledOnce();
     ack(library, second);
     await restored;
-    expect(library.selected()).toBe('first');
+    expect(library.selected()).toBe('tip');
   } finally {
     dispose();
   }
 });
 
 it('keeps the selected library after import/upload failure and cancels pending work on disposal', async () => {
-  const load = vi.fn(async () => fixture());
   let dispose!: () => void;
   const library = createRoot((stop) => {
     dispose = stop;
-    return createBrushLibrary({ select: vi.fn(), canChange: () => true, load });
+    return createBrushLibrary({ select: vi.fn(), canChange: () => true });
   });
   const target = endpoint();
   library.connect(target);
-  const first = library.importFile(new File(['x'], 'ok.abr'));
+  const first = library.usePreset(fixture());
   await vi.waitFor(() => expect(target.postMessage).toHaveBeenCalledOnce());
   ack(library, target);
   await first;
-  load.mockRejectedValueOnce(new Error('bad file'));
-  await library.importFile(new File(['bad'], 'bad.abr'));
+  await library.usePreset({ ...fixture(), name: 'bad.abr', resources: [] });
   flush();
   expect(library.library()?.name).toBe('test.abr');
-  expect(library.selected()).toBe('first');
-  expect(library.error()).toBe('bad file');
+  expect(library.selected()).toBe('tip');
+  expect(library.error()).toBe('The preset has no primary tip.');
   library.connect(endpoint());
   const restoring = library.restore();
   const rejection = expect(restoring).rejects.toThrow('engine changed');
@@ -70,12 +66,12 @@ it('reports typed upload errors without applying a missing tip', async () => {
   let dispose!: () => void;
   const library = createRoot((stop) => {
     dispose = stop;
-    return createBrushLibrary({ select, canChange: () => true, load: async () => fixture() });
+    return createBrushLibrary({ select, canChange: () => true });
   });
   const target = endpoint();
   library.connect(target);
   try {
-    const work = library.importFile(new File(['x'], 'test.abr'));
+    const work = library.usePreset(fixture());
     await vi.waitFor(() => expect(target.postMessage).toHaveBeenCalledOnce());
     const request = target.postMessage.mock.calls[0]![0];
     if (request.type !== 'brush-resources') throw new Error('Expected resource upload');
@@ -98,12 +94,12 @@ it('tracks a late upload acknowledgement after timeout without submitting duplic
   let dispose!: () => void;
   const library = createRoot((stop) => {
     dispose = stop;
-    return createBrushLibrary({ select: vi.fn(), canChange: () => true, load: async () => fixture() });
+    return createBrushLibrary({ select: vi.fn(), canChange: () => true });
   });
   try {
     const first = endpoint();
     library.connect(first);
-    const importing = library.importFile(new File(['x'], 'test.abr'));
+    const importing = library.usePreset(fixture());
     await vi.waitFor(() => expect(first.postMessage).toHaveBeenCalledOnce());
     ack(library, first);
     await importing;
@@ -124,13 +120,11 @@ it('tracks a late upload acknowledgement after timeout without submitting duplic
   }
 });
 
-function fixture(): BrushLibrary {
+function fixture() {
   return {
     name: 'test.abr',
-    brushes: [{ id: 'first', name: 'Ink', tipId: 'tip' }],
-    tips: [{ id: 'tip', width: 1, height: 1, format: 'r8unorm', pixels: new Uint8Array([255]) }],
-    skipped: 0,
-    notices: 0
+    engine: { id: 'textured', settings: { tipId: 'tip' } },
+    resources: [{ id: 'tip', width: 1, height: 1, format: 'r8unorm' as const, pixels: new Uint8Array([255]) }]
   };
 }
 function endpoint() {

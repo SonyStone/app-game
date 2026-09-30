@@ -24,7 +24,7 @@ Hold Space to invoke at the last canvas pointer, or use V/right click/the editor
 ```sh
 pnpm --filter @app-game/navigation-puck typecheck
 pnpm --filter @app-game/navigation-puck test
-pnpm --filter @app-game/paint test:studio
+pnpm --filter @app-game/paint test
 pnpm --filter @app-game/grease-pencil-typegpu exec vitest run
 ```
 

@@ -11,11 +11,7 @@
     "test:ui": "vitest run --config vitest.ui.config.ts",
     "test:performance": "pnpm --filter @app-game/abr-paint test && vitest run src/performance/brushWorkBudget.test.ts src/gpu/readbackQueue.test.ts src/workerLatency.test.ts src/pressureSpacing.test.ts src/virtualPages.test.ts && node --test scripts/compare-brush-performance.test.mjs",
     "bench:brushes": "node scripts/brush-performance.mjs",
-    "typecheck": "tsc -p tsconfig.json",
-    "build:studio": "pnpm build",
-    "test:studio": "pnpm test",
-    "test:studio-ui": "pnpm test:ui",
-    "typecheck:studio": "pnpm typecheck"
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@app-game/abr-brush": "workspace:*",
