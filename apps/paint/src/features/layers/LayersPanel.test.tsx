@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { createDocument } from '@app-game/paint-core/document';
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';

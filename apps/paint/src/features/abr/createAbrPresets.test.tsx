@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { err, ok, type Result } from 'neverthrow';
 import { createRoot, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';

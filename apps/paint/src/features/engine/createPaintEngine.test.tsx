@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import type { RendererToolState } from '@app-game/abr-paint/gpu/toolState';
 import { defaultBrush } from '@app-game/paint-core/brush';
 import { defaultCamera } from '@app-game/paint-core/camera';

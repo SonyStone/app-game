@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import type { App } from '@app-game/abr-viewer/editor';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';

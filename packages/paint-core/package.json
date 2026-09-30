@@ -7,7 +7,8 @@
     ".": "./src/composition/index.ts",
     "./*": "./src/*.ts",
     "./composition/CanvasTarget": "./src/composition/CanvasTarget.tsx",
-    "./composition/PaintApplication": "./src/composition/PaintApplication.tsx"
+    "./composition/PaintApplication": "./src/composition/PaintApplication.tsx",
+    "./testing/smoothStroke": "./tests/smoothStroke.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -25,9 +26,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@app-game/abr-parser": "workspace:*",
     "@types/node": "25.8.0",
     "@webgpu/types": "^0.1.70",
     "fake-indexeddb": "catalog:",
+    "jsdom": "catalog:",
     "typescript": "catalog:",
     "unplugin-typegpu": "^0.11.3",
     "vite": "catalog:",

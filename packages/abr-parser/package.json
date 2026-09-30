@@ -9,6 +9,7 @@
     "./browser": "./src/browser.ts",
     "./reader": "./src/reader.ts",
     "./wasm": "./wasm/pkg/photoshop_abr_wasm_bg.wasm",
+    "./wasm-bindings": "./wasm/pkg/photoshop_abr_wasm.js",
     "./js": "./src/index.ts",
     "./wasm-parser": "./src/wasm.ts",
     "./types": "./src/types.ts"

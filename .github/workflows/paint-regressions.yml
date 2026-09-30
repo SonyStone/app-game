@@ -11,7 +11,7 @@ permissions:
 jobs:
   brush-contracts:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -20,15 +20,19 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @app-game/abr-brush typecheck
+      - run: pnpm --filter @app-game/abr-brush test
       - run: pnpm --filter @app-game/abr-paint typecheck
       - run: pnpm --filter @app-game/abr-paint test
       - run: pnpm --filter @app-game/paint-core typecheck
       - run: pnpm --filter @app-game/paint-core test
+      - run: pnpm --filter @app-game/navigation-puck typecheck
+      - run: pnpm --filter @app-game/navigation-puck test
       - run: pnpm --filter @app-game/brush-preview typecheck
       - run: pnpm --filter @app-game/brush-preview test
       - run: pnpm --filter @app-game/brush-preview-demo build
       - run: pnpm --filter @app-game/paint typecheck
       - run: pnpm --filter @app-game/paint test
-      - run: pnpm --filter @app-game/paint test:ui
-      - run: node --test apps/paint/scripts/compare-brush-performance.test.mjs
-      # GPU timings run on the reference tablet, not GitHub's virtual GPU.
+      - run: pnpm --filter @app-game/paint test:performance
+      # GPU verifications (`pnpm --filter @app-game/paint test:browser`) need a real WebGPU adapter, and GPU timings run on
+      # the reference tablet, not GitHub's virtual GPU.

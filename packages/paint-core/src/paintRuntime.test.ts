@@ -1,8 +1,9 @@
 import { createBrushResources } from '@app-game/abr-paint/resources';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { createRendererDouble } from '../tests/fixtures/rendererDouble';
 import { defaultCamera } from './camera';
 import { createMemoryStorage } from './composition/memoryStorage';
-import type { PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
+import type { PaintModules, PaintStorage } from './composition/contracts';
 import { createDocument } from './document';
 import { createPaintRuntime } from './paintRuntime';
 import type { PaintEvent } from './protocol';
@@ -50,19 +51,8 @@ it('keeps GPU tile caches for layer selection and property changes, releasing on
 async function start() {
   const events: PaintEvent[] = [];
   const document = createDocument();
-  const renderer = {
-    setSelection: vi.fn(),
-    prepareOverview: vi.fn(async () => {}),
-    render: vi.fn(async () => {}),
-    submitted: vi.fn(async () => {}),
-    reset: vi.fn(),
-    recomposite: vi.fn(),
-    releaseLayer: vi.fn(),
-    destroy: vi.fn(),
-    stats: () => ({ gpuBytes: 0, residentTiles: 0 }),
-    debugTiles: () => [],
-    debugPages: () => []
-  };
+  const renderer = createRendererDouble();
+
   let storage!: PaintStorage & { save: ReturnType<typeof vi.fn>; saveView: ReturnType<typeof vi.fn> };
   const modules: PaintModules = {
     document: () => document,
@@ -91,5 +81,5 @@ async function start() {
   // Renderer start writes one full checkpoint; tests measure what happens afterwards.
   storage.save.mockClear();
 
-  return { runtime, renderer: renderer as typeof renderer & Partial<PaintRenderer>, storage, document, events, waitFor };
+  return { runtime, renderer, storage, document, events, waitFor };
 }

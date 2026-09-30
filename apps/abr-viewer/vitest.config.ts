@@ -1,10 +1,11 @@
 import { fileURLToPath } from 'node:url';
+import typegpu from 'unplugin-typegpu/vite';
 import solid from 'vite-plugin-solid';
 import { defineConfig } from 'vitest/config';
 
 /** Tests workspace changes against real ABR fixtures using Solid's client signal semantics. */
 export default defineConfig({
-  plugins: [solid({ hot: false })],
+  plugins: [solid({ hot: false }), typegpu()],
   resolve: {
     alias: [
       {

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import type { registerSW } from 'virtual:pwa-register';

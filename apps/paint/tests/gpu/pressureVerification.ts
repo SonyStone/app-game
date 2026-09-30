@@ -1,6 +1,6 @@
 import { defaultBrush } from '@app-game/paint-core/brush';
 import { createDocument } from '@app-game/paint-core/document';
-import { createSmoothStroke } from '../smoothStroke';
+import { createSmoothStroke } from '@app-game/paint-core/testing/smoothStroke';
 import { unpackTile } from '@app-game/paint-core/tilePixels';
 import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
 

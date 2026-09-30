@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { defaultBrush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
