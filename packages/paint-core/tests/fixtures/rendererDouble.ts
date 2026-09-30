@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import type { PaintRenderer, PaintStorage } from '../../src/composition/contracts';
 import type { TileChange } from '../../src/document';
+import type { TileData } from '../../src/tilePixels';
 
 /**
  * Test double for the WebGPU renderer: every method the runtime calls unconditionally is a `vi.fn` spy with a
@@ -38,7 +39,7 @@ export function createRendererDouble<Overrides extends Partial<Record<keyof Pain
 }
 
 /**
- * Storage double that keeps nothing: loads an empty document and records `save` calls. Overrides replace individual
+ * Storage double that keeps nothing: loads an empty document, returns in-memory tiles and records `save` calls. Overrides replace individual
  * methods, e.g. a `save` that blocks or rejects to simulate a slow or failing checkpoint.
  */
 export function createStorageDouble<Overrides extends Partial<Record<keyof PaintStorage, unknown>> = {}>(
@@ -46,7 +47,15 @@ export function createStorageDouble<Overrides extends Partial<Record<keyof Paint
 ) {
   const storage = {
     load: async () => undefined,
+    // Nothing is ever stored, so every tile stays in memory and reads return it unchanged.
     capture: (pixels: unknown) => pixels,
+    read: async (pixels: TileData) => {
+      if (!(pixels instanceof Uint8Array)) {
+        throw new Error('The storage double holds no tiles.');
+      }
+
+      return pixels;
+    },
     save: vi.fn(async (..._args: unknown[]) => {}),
     saveView: vi.fn(async (..._args: unknown[]) => {}),
     stats: () => undefined,

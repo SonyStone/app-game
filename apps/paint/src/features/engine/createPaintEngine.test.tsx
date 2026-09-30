@@ -203,6 +203,28 @@ it('pauses on a renderer failure and resets the camera and symmetry from a resto
   expect(error()).toMatchObject({ kind: 'gpu', code: 'lost' });
 });
 
+it('resets the editor when the worker fails: pauses input, ends the stroke, settles uploads and clears the selection', async () => {
+  const { engine, error, onSelection } = mount();
+  const transport = transports.opened[0]!;
+  reply(transport, { type: 'ready' });
+  expect(engine.canEdit()).toBe(true);
+  engine.send({ type: 'begin', brush: defaultBrush(), samples: [{ x: 1, y: 1, pressure: 1, time: 0 }] });
+  expect(engine.isDrawing()).toBe(true);
+  const upload = engine.putResource({ id: 'tip', width: 1, height: 1, format: 'r8unorm', pixels: new Uint8Array([255]) });
+  onSelection.mockClear();
+
+  transport.handlers.error({ kind: 'error', cause: new ErrorEvent('error', { message: 'Worker crashed' }) });
+  flush();
+
+  expect(engine.ready()).toBe(false);
+  expect(engine.canEdit()).toBe(false);
+  expect(engine.isDrawing()).toBe(false);
+  expect(error()).toMatchObject({ kind: 'engine', code: 'stopped', message: 'Worker crashed' });
+  expect((await upload).isErr()).toBe(true);
+  expect(onSelection).toHaveBeenCalledOnce();
+  expect(onSelection).toHaveBeenCalledWith({ type: 'selection', points: [], hasClipboard: false });
+});
+
 /** Assembles the engine with the UI state that must survive an engine replacement, as the studio does. */
 function mount() {
   let editor!: ReturnType<typeof assemble>;
@@ -236,12 +258,13 @@ function mount() {
 
 function assemble() {
   const [error, setError] = createSignal<PaintError>();
+  const onSelection = vi.fn<Parameters<typeof createPaintEngine>[0]['onSelection']>();
   const developer = createDeveloperSettings();
   const tools = createBrushTools();
   const engine = createPaintEngine({
     settings: developer,
     onError: setError,
-    onSelection: () => {},
+    onSelection,
     prepare: () => presets.restore()
   });
   const symmetry = createSymmetry({
@@ -268,7 +291,7 @@ function assemble() {
     scaleBrush: tools.scaleSize,
     cancel: () => {}
   });
-  return { engine, tools, symmetry, presets, developer, error, clearError: () => setError(undefined) };
+  return { engine, tools, symmetry, presets, developer, error, onSelection, clearError: () => setError(undefined) };
 }
 
 function reply(transport: FakeTransport, event: PaintEvent) {

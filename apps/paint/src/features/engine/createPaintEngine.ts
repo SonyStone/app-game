@@ -277,6 +277,8 @@ export function createPaintEngine(options: {
       resources.disconnect();
       commands.disconnect();
       options.onSelection(emptySelection);
+      // The failed engine discarded any stroke in progress; the next pen-down must start a new one.
+      setDrawing(false);
       setSwitchTarget(undefined);
       setReady(false);
       options.onError(engineError('stopped', transportFailureMessage(failure), failure));

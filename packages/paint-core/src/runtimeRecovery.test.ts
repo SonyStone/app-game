@@ -162,3 +162,56 @@ it('reports uncaptured validation errors as terminal validation failures, not de
     expect.objectContaining({ code: 'validation', recoverable: true, message: expect.stringContaining('validation error') })
   ]);
 });
+
+it('reports device loss as a recoverable session error and Recover restarts the renderer with the document intact', async () => {
+  const sessions: { renderer: ReturnType<typeof createRendererDouble>; loseDevice: (info: { message: string }) => void }[] = [];
+  const pixels = new Uint8Array(256 * 256 * 4);
+  pixels.set([90, 0, 0, 255]);
+  const { send, init, next } = startStudioRuntime({
+    // Each renderer reports its device's `lost` promise the way the WebGPU renderer does.
+    renderer: async (_canvas, onLost) => {
+      let loseDevice!: (info: { message: string }) => void;
+      const lost = new Promise<{ message: string }>((resolve) => {
+        loseDevice = resolve;
+      });
+      void lost.then((info) => onLost(info.message, { kind: 'gpu', code: 'lost', message: info.message }));
+      const renderer = createRendererDouble({
+        finish: vi.fn(async (): Promise<TileChange[]> => [
+          { layerId: 'layer-1', key: '0,0', before: undefined, after: pixels.slice() }
+        ])
+      });
+      sessions.push({ renderer, loseDevice });
+      return renderer;
+    },
+    storage: createStorageDouble()
+  });
+  await init();
+  send({ type: 'begin', brush: defaultBrush(), samples: [{ x: 10, y: 10, pressure: 1, time: 0 }] });
+  send({ type: 'end' });
+  await next((event) => event.type === 'state' && event.document.revision === 1);
+
+  sessions[0]!.loseDevice({ message: 'The GPU process crashed.' });
+  const lost = await next((event) => event.type === 'error');
+  expect(lost).toMatchObject({ recoverable: true, code: 'lost' });
+  expect(lost.type === 'error' && lost.message).toContain('Restore the renderer');
+
+  // Pen input is ignored while the renderer is lost. Commands run in order, so the debug reply proves begin was handled.
+  send({ type: 'begin', brush: defaultBrush(), samples: [{ x: 20, y: 20, pressure: 1, time: 1 }] });
+  send({ type: 'debug', enabled: true });
+  await next((event) => event.type === 'state' && event.debugTiles !== undefined);
+  expect(sessions[0]!.renderer.begin).toHaveBeenCalledOnce();
+
+  send({ type: 'recover' });
+  await next((event) => event.type === 'ready');
+  expect(sessions).toHaveLength(2);
+  expect(sessions[0]!.renderer.destroy).toHaveBeenCalledOnce();
+
+  send({ type: 'debug', enabled: false });
+  const state = await next((event) => event.type === 'state');
+  expect(state.type === 'state' && state.document.revision).toBe(1);
+  send({ type: 'begin', brush: defaultBrush(), samples: [{ x: 30, y: 30, pressure: 1, time: 2 }] });
+  send({ type: 'end' });
+  await next((event) => event.type === 'state' && event.document.revision === 2);
+  expect(sessions[1]!.renderer.begin).toHaveBeenCalledOnce();
+  expect(sessions[1]!.renderer.finish).toHaveBeenCalledOnce();
+});
