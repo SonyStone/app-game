@@ -1,4 +1,4 @@
-import type { KeepGpuResource } from '../../../../shared/gpu/resources';
+import type { KeepGpuResource } from '@app-game/solid-gpu/gpu';
 
 /**
  * Propagates image uploads to the pages that paint them.

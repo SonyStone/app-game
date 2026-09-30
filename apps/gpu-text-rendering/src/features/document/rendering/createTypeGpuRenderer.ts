@@ -1,4 +1,3 @@
-import { err, ok, Result, ResultAsync, safeTry } from 'neverthrow';
 import {
   checkAborted,
   errorMessage,
@@ -6,11 +5,15 @@ import {
   type AbortedError,
   type GpuError,
   type ResultValue
-} from '../../../shared/errors';
-import type { GpuContext, GpuDevice } from '../../../shared/gpu/context';
-import type { KeepGpuResource } from '../../../shared/gpu/resources';
-import { makeGpuResources } from '../../../shared/gpu/resources';
-import { serializeGpuPreparation } from '../../../shared/gpu/serializeGpuPreparation';
+} from '@app-game/solid-gpu/errors';
+import {
+  makeGpuResources,
+  serializeGpuPreparation,
+  type GpuContext,
+  type GpuDevice,
+  type KeepGpuResource
+} from '@app-game/solid-gpu/gpu';
+import { err, ok, Result, ResultAsync, safeTry } from 'neverthrow';
 import { renderScene } from '../../scene/renderScene';
 import type { TextDocument } from '../document';
 import type { SceneFrame } from './createFrame';

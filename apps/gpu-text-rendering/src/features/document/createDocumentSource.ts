@@ -1,8 +1,9 @@
+import { abortedError } from '@app-game/solid-gpu/errors';
 import { createAbortable } from '@solid-primitives/async';
 import { access, type MaybeAccessor } from '@solid-primitives/utils';
 import { err, ok } from 'neverthrow';
 import { createMemo, createSignal, latest, merge } from 'solid-js';
-import { abortedError, type ViewerError } from '../../shared/errors';
+import type { ViewerError } from '../../shared/errors';
 import demoUrl from './assets/demo.gdoc?url';
 import type { TextDocument } from './document';
 import type { DocumentProgress } from './documentProgress';

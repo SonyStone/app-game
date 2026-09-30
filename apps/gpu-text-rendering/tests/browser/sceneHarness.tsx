@@ -1,3 +1,4 @@
+import { GpuCanvas, useGpuCanvas } from '@app-game/solid-gpu/gpu';
 import { render } from '@solidjs/web';
 import { createRoot, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { Camera } from '../../src/features/camera/camera';
@@ -15,8 +16,6 @@ import { FrameLoop, useFrame } from '../../src/features/scene/FrameLoop';
 import { ScreenSpace, useSceneSpace, type Point } from '../../src/features/scene/SceneSpace';
 import { createViewport } from '../../src/features/viewport/createViewport';
 import type { ViewerError } from '../../src/shared/errors';
-import { GpuCanvas } from '../../src/shared/gpu/GpuCanvas';
-import { useGpuCanvas } from '../../src/shared/gpu/GpuCanvasProvider';
 
 /** Browser fixture with independently toggled document and graphic components. */
 export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {

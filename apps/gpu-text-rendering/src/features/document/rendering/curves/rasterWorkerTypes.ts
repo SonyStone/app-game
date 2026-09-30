@@ -1,4 +1,4 @@
-import type { WorkerReply } from '../../../../shared/worker/workerProtocol';
+import type { WorkerReply } from '@app-game/solid-gpu/worker';
 import type { Tile } from './virtualTiles';
 
 /** Jobs carry at most sixteen tiles. The worker retains only the current image's decoded pyramid. */

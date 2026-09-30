@@ -1,5 +1,6 @@
+import { errorMessage } from '@app-game/solid-gpu/errors';
 import { Result } from 'neverthrow';
-import { documentError, errorMessage } from '../../../shared/errors';
+import { documentError } from '../../../shared/errors';
 import { extractDocument } from './extractDocument';
 import { decodeDocument } from './wasm/gpu_document';
 

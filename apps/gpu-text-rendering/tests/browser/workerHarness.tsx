@@ -1,3 +1,5 @@
+import { abortedError } from '@app-game/solid-gpu/errors';
+import { mountWorker } from '@app-game/solid-gpu/worker';
 import { err, ok, type Result } from 'neverthrow';
 import { createRoot, onCleanup } from 'solid-js';
 import type { TextDocument } from '../../src/features/document/document';
@@ -6,9 +8,11 @@ import { buildCoverage, convertDocument, decodeDocument } from '../../src/featur
 import { createTypeGpuRenderer as prepare } from '../../src/features/document/rendering/createTypeGpuRenderer';
 import { createRasterWorker } from '../../src/features/document/rendering/curves/createRasterWorker';
 import type { DocumentWorkers } from '../../src/features/document/rendering/DocumentWorkers';
-import { abortedError, type ViewerError } from '../../src/shared/errors';
-import { mountWorker } from '../../src/shared/worker/mountWorker';
+import type { ViewerError } from '../../src/shared/errors';
 import { DocumentSource } from '../fixtures/DocumentSource';
+
+/** Browser tests wait out the worker shutdown grace period; pages can only import it through a served module. */
+export { workerShutdownGraceMs } from '@app-game/solid-gpu/worker';
 
 /** Tests mount the renderer's transports at their fixture boundary, not in production calculations. */
 export function mountRendererWorkers() {

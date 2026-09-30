@@ -1,6 +1,5 @@
+import type { GpuDevice, KeepGpuResource } from '@app-game/solid-gpu/gpu';
 import tgpu, { common, d, std, type TgpuBindGroup } from 'typegpu';
-import type { GpuDevice } from '../../../../shared/gpu/context';
-import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import { alphaMaskBlend, isMask, luminosityMaskBlend, type PaintNode } from '../../plan/paintTree';
 import { blendColor } from './blendColor';
 import type { PixelRect } from './paintBounds';

@@ -1,15 +1,16 @@
+import type { AbortedError } from '@app-game/solid-gpu/errors';
+import { runWorkerRequest } from '@app-game/solid-gpu/worker';
 import { render } from '@solidjs/web';
 import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 import { createSignal, flush } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { downloadFile } from '../../shared/downloadFile';
-import { documentError, type AbortedError, type DocumentError } from '../../shared/errors';
-import { runWorkerRequest } from '../../shared/worker/runWorkerRequest';
+import { documentError, type DocumentError } from '../../shared/errors';
 import type { PreparedDocument } from '../document/createDocumentSource';
 import type { TextDocument } from '../document/document';
 import { createDocumentExport } from './createDocumentExport';
 
-vi.mock('../../shared/worker/runWorkerRequest', () => ({ runWorkerRequest: vi.fn() }));
+vi.mock('@app-game/solid-gpu/worker/runWorkerRequest', () => ({ runWorkerRequest: vi.fn() }));
 
 vi.mock('../../shared/downloadFile', () => ({ downloadFile: vi.fn() }));
 

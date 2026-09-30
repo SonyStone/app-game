@@ -1,9 +1,8 @@
+import { errorMessage, gpuError, type GpuError, type ResultValue } from '@app-game/solid-gpu/errors';
+import { openWorker, type WorkerFailure } from '@app-game/solid-gpu/worker';
 import { debounce } from '@solid-primitives/scheduled';
 import { err, ok, Result } from 'neverthrow';
 import { onCleanup } from 'solid-js';
-import { errorMessage, gpuError, type GpuError, type ResultValue } from '../../../../shared/errors';
-import { openWorker } from '../../../../shared/worker/openWorker';
-import type { WorkerFailure } from '../../../../shared/worker/workerProtocol';
 import RasterWorker from './raster.worker?worker';
 import type { RasterReply, RasterRequest, RasterWorkerReply } from './rasterWorkerTypes';
 

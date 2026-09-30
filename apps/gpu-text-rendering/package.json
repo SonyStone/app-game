@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@app-game/components": "workspace:*",
+    "@app-game/solid-gpu": "workspace:*",
     "@solid-primitives/async": "catalog:",
     "@solid-primitives/drag-drop": "catalog:",
     "@solid-primitives/event-listener": "catalog:",

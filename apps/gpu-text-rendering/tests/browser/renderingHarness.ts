@@ -1,6 +1,5 @@
+import { createGpuCanvas, createGpuRoot, type GpuContext } from '@app-game/solid-gpu/gpu';
 import { createEffect, createRoot } from 'solid-js';
-import { createGpuCanvas, type GpuContext } from '../../src/shared/gpu/context';
-import { createGpuRoot } from '../../src/shared/gpu/createGpuRoot';
 
 /** Browser-only harness: exercises the provider lifetimes without mounting the viewer's camera/UI. */
 export function mountRenderingGpu(canvas: HTMLCanvasElement, bytes: number) {

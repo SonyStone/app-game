@@ -1,8 +1,9 @@
+import { errorMessage, type AbortedError } from '@app-game/solid-gpu/errors';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
 import { createMemo, createSignal, latest, onCleanup, type Accessor } from 'solid-js';
 import { downloadFile } from '../../shared/downloadFile';
-import { documentError, errorMessage, type AbortedError, type DocumentError } from '../../shared/errors';
+import { documentError, type DocumentError } from '../../shared/errors';
 import { readFileBytes } from '../../shared/readFileBytes';
 import type { PreparedDocument } from '../document/createDocumentSource';
 import { convertDocument } from '../document/documentWorkerProtocol';

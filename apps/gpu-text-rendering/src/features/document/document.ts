@@ -1,4 +1,4 @@
-import type { ResultValue } from '../../shared/errors';
+import type { ResultValue } from '@app-game/solid-gpu/errors';
 import type { DecodedDocument } from './format/types';
 import type { layoutPages } from './layoutPages';
 

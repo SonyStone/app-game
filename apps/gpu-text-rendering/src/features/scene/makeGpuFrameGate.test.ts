@@ -1,6 +1,6 @@
+import { gpuError } from '@app-game/solid-gpu/errors';
 import { err, ok } from 'neverthrow';
 import { expect, it, vi } from 'vitest';
-import { gpuError } from '../../shared/errors';
 import { makeGpuFrameGate } from './makeGpuFrameGate';
 
 it('admits two unfinished frames, coalesces later requests and reads fresh state when a frame finishes', async () => {

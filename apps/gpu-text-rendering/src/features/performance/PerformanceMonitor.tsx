@@ -1,7 +1,6 @@
+import { createGpuResource, useGpuCanvas } from '@app-game/solid-gpu/gpu';
 import { debounce } from '@solid-primitives/scheduled';
 import { onCleanup } from 'solid-js';
-import { createGpuResource } from '../../shared/gpu/createGpuResource';
-import { useGpuCanvas } from '../../shared/gpu/GpuCanvasProvider';
 import { useFrame, useFrameLoop } from '../scene/FrameLoop';
 import { RenderLayer } from '../scene/RenderLayer';
 import { useViewport } from '../viewport/createViewport';

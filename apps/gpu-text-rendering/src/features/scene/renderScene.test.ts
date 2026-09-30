@@ -1,7 +1,7 @@
+import { gpuError } from '@app-game/solid-gpu/errors';
 import { err } from 'neverthrow';
 import { expect, it, vi } from 'vitest';
 import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
-import { gpuError } from '../../shared/errors';
 import { renderScene } from './renderScene';
 
 it('clears once and records all layers into the same pass before submitting once', () => {

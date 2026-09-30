@@ -1,7 +1,6 @@
+import type { ResultValue } from '@app-game/solid-gpu/errors';
+import type { GpuDevice, KeepGpuResource } from '@app-game/solid-gpu/gpu';
 import { err, ok } from 'neverthrow';
-import type { ResultValue } from '../../../../shared/errors';
-import type { GpuDevice } from '../../../../shared/gpu/context';
-import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { TextDocument } from '../../document';
 import { buildCurvePreparation } from '../../plan/buildCurvePreparation';
 import type { SceneFrame } from '../createFrame';

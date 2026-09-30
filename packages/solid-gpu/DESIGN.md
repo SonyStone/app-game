@@ -3,7 +3,8 @@
 ## Status
 
 Proposal document. This file describes the desired public API and architecture
-before implementation.
+before implementation. The implemented subset (device/canvas lifetimes, worker
+transport and errors) is documented in [`README.md`](./README.md).
 
 Concrete API sketches live in [`examples/`](./examples/).
 

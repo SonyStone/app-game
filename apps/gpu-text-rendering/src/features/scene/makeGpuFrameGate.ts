@@ -1,5 +1,6 @@
+import { errorMessage, gpuError } from '@app-game/solid-gpu/errors';
 import { ok, ResultAsync, type Result } from 'neverthrow';
-import { errorMessage, gpuError, type ViewerError } from '../../shared/errors';
+import type { ViewerError } from '../../shared/errors';
 
 /**
  * Admits at most {@link maxUnfinishedFrames} unfinished scene frames, and none while `blocked` returns pending work.

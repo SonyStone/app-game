@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger
 } from '@app-game/components/ui/dropdown-menu';
 import { Resizable, ResizableHandle, ResizablePanel } from '@app-game/components/ui/resizable';
+import { GpuCanvasProvider, TypeGPURootProvider } from '@app-game/solid-gpu/gpu';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
@@ -20,7 +21,6 @@ import expand from '@tabler/icons/outline/maximize.svg?url';
 import collapse from '@tabler/icons/outline/minimize.svg?url';
 import closeIcon from '@tabler/icons/outline/x.svg?url';
 import { createSignal, For, Match, onCleanup, Show, Switch, untrack } from 'solid-js';
-import { GpuCanvasProvider, TypeGPURootProvider } from '../../shared/gpu';
 import { CameraControls, CameraTour, ViewCapture, ViewTour } from '../camera';
 import { createDocumentSource, DocumentRenderer, GlyphText, VectorArtwork } from '../document';
 import noticesUrl from '../document/pdf/wasm/third-party-notices.txt?url';

@@ -1,6 +1,7 @@
+import { errorMessage, gpuError } from '@app-game/solid-gpu/errors';
+import type { GpuContext } from '@app-game/solid-gpu/gpu';
 import { err, ok, Result } from 'neverthrow';
-import { errorMessage, gpuError, type ViewerError } from '../../shared/errors';
-import type { GpuContext } from '../../shared/gpu/context';
+import type { ViewerError } from '../../shared/errors';
 
 /** Clears once, draws every layer into one pass, and submits once. A failed layer prevents submission. */
 export function renderScene(gpu: GpuContext, layers: readonly SceneDraw[]): Result<void, ViewerError> {

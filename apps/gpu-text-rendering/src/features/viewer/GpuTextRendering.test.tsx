@@ -1,24 +1,25 @@
+import { gpuError, type GpuError } from '@app-game/solid-gpu/errors';
+import { runWorkerRequest } from '@app-game/solid-gpu/worker';
 import { render, type JSX } from '@solidjs/web';
 import { err, ok, type Result } from 'neverthrow';
 import { flush, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { documentError, gpuError, type DocumentError, type GpuError } from '../../shared/errors';
-import { runWorkerRequest } from '../../shared/worker/runWorkerRequest';
+import { documentError, type DocumentError } from '../../shared/errors';
 import type { DecodedDocument } from '../document/format/types';
 import type { DocumentRenderer } from '../document/rendering/DocumentRenderer';
 import type { ViewerStatus } from './createViewerStatus';
 import GpuTextRendering from './GpuTextRendering';
 
-vi.mock('../../shared/worker/runWorkerRequest', () => ({ runWorkerRequest: vi.fn() }));
+vi.mock('@app-game/solid-gpu/worker/runWorkerRequest', () => ({ runWorkerRequest: vi.fn() }));
 let gpuFailure: GpuError | undefined;
 let failGpu!: (error: GpuError) => JSX.Element;
-vi.mock('../../shared/gpu/TypeGPURootProvider', () => ({
+vi.mock('@app-game/solid-gpu/gpu/TypeGPURootProvider', () => ({
   TypeGPURootProvider: (props: { error: typeof failGpu; children: JSX.Element }) => {
     failGpu = props.error;
     return gpuFailure ? props.error(gpuFailure) : props.children;
   }
 }));
-vi.mock('../../shared/gpu/GpuCanvasProvider', () => ({
+vi.mock('@app-game/solid-gpu/gpu/GpuCanvasProvider', () => ({
   GpuCanvasProvider: (props: { children: JSX.Element }) => props.children
 }));
 vi.mock('../viewport/createViewport', () => ({

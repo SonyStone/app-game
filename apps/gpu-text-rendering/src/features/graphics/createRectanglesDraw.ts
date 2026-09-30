@@ -1,7 +1,6 @@
+import { createGpuResource, useGpuCanvas } from '@app-game/solid-gpu/gpu';
 import { createMemo, type Accessor } from 'solid-js';
 import tgpu, { d, type TgpuRoot } from 'typegpu';
-import { createGpuResource } from '../../shared/gpu/createGpuResource';
-import { useGpuCanvas } from '../../shared/gpu/GpuCanvasProvider';
 import { createUniform } from '../scene/createUniform';
 import { useFrame } from '../scene/FrameLoop';
 import type { SceneDraw } from '../scene/renderScene';

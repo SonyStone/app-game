@@ -1,8 +1,7 @@
+import { errorMessage, gpuError, type GpuError } from '@app-game/solid-gpu/errors';
+import type { GpuDevice, KeepGpuResource } from '@app-game/solid-gpu/gpu';
 import { err, ok, Result } from 'neverthrow';
 import { d, type TgpuBindGroup } from 'typegpu';
-import { errorMessage, gpuError, type GpuError } from '../../../../shared/errors';
-import type { GpuDevice } from '../../../../shared/gpu/context';
-import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { DecodedDocument } from '../../format/types';
 import { drawPage } from '../../plan/drawRecord';
 import { imageByteLength, imageCodec, imageInterpolation, imagePixelOffset } from '../../plan/imageRecord';

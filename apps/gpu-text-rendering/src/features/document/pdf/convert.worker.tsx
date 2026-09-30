@@ -1,7 +1,7 @@
+import { errorMessage } from '@app-game/solid-gpu/errors';
+import { mountWorker, WorkerTasks } from '@app-game/solid-gpu/worker';
 import { err, ok, type Result } from 'neverthrow';
-import { documentError, errorMessage, type DocumentError } from '../../../shared/errors';
-import { mountWorker } from '../../../shared/worker/mountWorker';
-import { WorkerTasks } from '../../../shared/worker/WorkerTasks';
+import { documentError, type DocumentError } from '../../../shared/errors';
 import type { ConvertInput, ConvertReply } from '../documentWorkerProtocol';
 import init, { convertPdf } from './wasm/gpu_document';
 import wasmUrl from './wasm/gpu_document_bg.wasm?url';

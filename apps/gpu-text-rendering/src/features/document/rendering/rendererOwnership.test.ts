@@ -1,7 +1,7 @@
+import type { GpuContext } from '@app-game/solid-gpu/gpu';
 import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { documentError } from '../../../shared/errors';
-import type { GpuContext } from '../../../shared/gpu/context';
 import type { TextDocument } from '../document';
 import { createTypeGpuRenderer } from './createTypeGpuRenderer';
 import { prepareCurveDocument } from './curves/prepareCurveDocument';

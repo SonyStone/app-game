@@ -1,0 +1,51 @@
+{
+  "name": "@app-game/solid-gpu",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./errors": "./src/errors.ts",
+    "./gpu": "./src/gpu/index.ts",
+    "./gpu/context": "./src/gpu/context.ts",
+    "./gpu/createGpuResource": "./src/gpu/createGpuResource.ts",
+    "./gpu/createGpuRoot": "./src/gpu/createGpuRoot.ts",
+    "./gpu/GpuCanvas": "./src/gpu/GpuCanvas.tsx",
+    "./gpu/GpuCanvasProvider": "./src/gpu/GpuCanvasProvider.tsx",
+    "./gpu/onGpuRelease": "./src/gpu/onGpuRelease.ts",
+    "./gpu/resources": "./src/gpu/resources.ts",
+    "./gpu/serializeGpuPreparation": "./src/gpu/serializeGpuPreparation.ts",
+    "./gpu/TypeGPURootProvider": "./src/gpu/TypeGPURootProvider.tsx",
+    "./worker": "./src/worker/index.ts",
+    "./worker/mountWorker": "./src/worker/mountWorker.ts",
+    "./worker/openWorker": "./src/worker/openWorker.ts",
+    "./worker/runWorkerRequest": "./src/worker/runWorkerRequest.ts",
+    "./worker/workerProtocol": "./src/worker/workerProtocol.ts",
+    "./worker/WorkerTasks": "./src/worker/WorkerTasks.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/match": "catalog:",
+    "neverthrow": "catalog:"
+  },
+  "peerDependencies": {
+    "@solidjs/web": "2.0.0-rc.4",
+    "solid-js": "catalog:",
+    "typegpu": "^0.11.4"
+  },
+  "devDependencies": {
+    "@solidjs/web": "2.0.0-rc.4",
+    "@types/node": "catalog:",
+    "@webgpu/types": "^0.1.70",
+    "happy-dom": "^20.9.0",
+    "solid-js": "catalog:",
+    "typegpu": "^0.11.4",
+    "typescript": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vitest": "catalog:"
+  }
+}

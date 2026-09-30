@@ -1,3 +1,4 @@
+import { onGpuRelease, pendingGpuPreparation, useGpuCanvas } from '@app-game/solid-gpu/gpu';
 import { resolveTokens } from '@solid-primitives/jsx-tokenizer';
 import { createPageVisibility } from '@solid-primitives/page-utilities';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
@@ -13,9 +14,6 @@ import {
   type Accessor
 } from 'solid-js';
 import type { ViewerError } from '../../shared/errors';
-import { useGpuCanvas } from '../../shared/gpu/GpuCanvasProvider';
-import { onGpuRelease } from '../../shared/gpu/onGpuRelease';
-import { pendingGpuPreparation } from '../../shared/gpu/serializeGpuPreparation';
 import { runWithContext } from '../../shared/jsx/TokenContext';
 import { ViewportContext, type Viewport } from '../viewport/createViewport';
 import { createFrameScheduler, type FrameSubscription } from './createFrameScheduler';

@@ -1,5 +1,5 @@
+import type { KeepGpuResource } from '@app-game/solid-gpu/gpu';
 import { d, type TgpuRoot } from 'typegpu';
-import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { PaintNode } from '../../plan/paintTree';
 import { View, viewLayout } from '../bindings';
 import type { SceneFrame } from '../createFrame';

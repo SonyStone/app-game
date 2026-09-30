@@ -35,9 +35,8 @@ src/
     graphics/            Independent graphics, currently Rectangle
     performance/         GPU frame-cost panel and window/dev-server reports for agents
   shared/
-    gpu/                 Device/root and canvas lifetimes, owned resource cleanup
     jsx/                 Token-preserving Solid context support
-    errors.ts            Shared typed error contract
+    errors.ts            Viewer error contract (document and fullscreen kinds)
   main.tsx               Standalone entry
   standalone.css         Standalone document styles
 rust/document-format/    Native container/profile library, WASM exports and migration CLI
@@ -56,7 +55,7 @@ Unit tests live beside the feature they exercise. Browser fixtures remain outsid
 - `features/camera` owns camera state (`createDocumentCamera`), gestures, the tour, `DocumentSpace` and camera math. Camera motion does not require UI state updates.
 - `features/scene` owns one frame loop and one shared color pass for all graphics, plus coordinate spaces and per-frame uniforms. It does not load documents or allocate their buffers.
 - `features/viewport` measures the canvas and bounds its framebuffer. `features/graphics` and `features/minimap` show drawables added without modifying the document renderer.
-- `shared/gpu` owns the device and configured canvas; feature renderers borrow them. `shared/jsx/TokenContext.tsx` preserves draw tokens through native Solid context ownership. Shared implementation imports no feature modules.
+- [`@app-game/solid-gpu`](../../packages/solid-gpu/README.md) supplies the app-agnostic infrastructure: `/gpu` owns the device and configured canvas, which feature renderers borrow; `/worker` provides the worker transport used by the document workers; `/errors` defines `GpuError`, `AbortedError` and their helpers. `shared/jsx/TokenContext.tsx` preserves draw tokens through native Solid context ownership. Shared implementation imports no feature modules.
 
 Each feature folder's `index.ts` lists its public API; consumers such as the layout import from the folder, while files inside a feature import each other directly. Keep feature-specific shaders, styles and tests with their feature. Move code into `shared` only when it represents infrastructure used by multiple features.
 
@@ -364,7 +363,7 @@ GPU initialization publishes a discriminated `GpuRootState`: `loading`, `ready` 
 
 Document loading and renderer preparation retain `neverthrow` results; frame submission returns a synchronous `Result`. These imperative APIs remain usable outside JSX. There is no custom Result implementation. A missing context provider is a programming error handled by Solid's context API, separate from expected GPU failures.
 
-`errors.ts` defines discriminated errors for document transport/decoding, GPU capability/validation/device loss and cancellation. Stable `kind` and `code` fields support programmatic handling; `message` is for display and `cause` preserves external diagnostics. Fullscreen failures have their own type and do not invalidate the renderer.
+`shared/errors.ts` defines discriminated errors for document transport/decoding and combines them with the GPU capability/validation/device-loss and cancellation errors from `@app-game/solid-gpu/errors` into `ViewerError`. Stable `kind` and `code` fields support programmatic handling; `message` is for display and `cause` preserves external diagnostics. Fullscreen failures have their own type and do not invalidate the renderer.
 
 `Result.fromThrowable` and `ResultAsync.fromThrowable` capture exceptions at the remaining browser/TypeGPU boundaries. Expected validation failures return `err(...)` directly. Cancellation returns `AbortedError`, never an error message from a rejected fetch. Partial initialization still releases devices and bitmaps. Document decoding terminates its Worker on completion or cancellation, releasing the WASM heap. The Solid viewer retains the typed error in its error state.
 

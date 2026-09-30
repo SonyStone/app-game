@@ -1,16 +1,16 @@
 import { createRoot } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
+import type { GpuContext } from './context';
 import { createGpuResource } from './createGpuResource';
 
 vi.mock('./GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
 
 let abort: AbortController;
-let gpu: ReturnType<typeof gpuFixture>['gpu'];
+let gpu: GpuContext;
 
 beforeEach(() => {
   abort = new AbortController();
-  gpu = gpuFixture(abort.signal).gpu;
+  gpu = { signal: abort.signal } as GpuContext;
 });
 
 it('passes the canvas context to create and destroys the resource with its owner', () => {

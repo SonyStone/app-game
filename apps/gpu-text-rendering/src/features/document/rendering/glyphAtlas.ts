@@ -1,6 +1,5 @@
+import type { GpuDevice, KeepGpuResource } from '@app-game/solid-gpu/gpu';
 import { d } from 'typegpu';
-import type { GpuDevice } from '../../../shared/gpu/context';
-import type { KeepGpuResource } from '../../../shared/gpu/resources';
 import type { TextDocument } from '../document';
 import { View, atlasLayout, glyphLayout, viewLayout } from './bindings';
 import { glyphFragment, glyphVertex } from './glyphShader';

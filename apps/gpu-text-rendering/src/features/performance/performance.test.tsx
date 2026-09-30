@@ -10,7 +10,7 @@ import { maxPanelQuads } from './makePerformancePanelRenderer';
 import { PerformanceMonitor } from './PerformanceMonitor';
 import { describeMonitor, type PerformanceMonitorSource } from './performanceReports';
 
-vi.mock('../../shared/gpu/GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
+vi.mock('@app-game/solid-gpu/gpu/GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
 
 const size = { css: { width: 800, height: 600 }, pixels: { width: 1600, height: 1200 }, dpr: 2 };
 const viewport = {

@@ -1,9 +1,8 @@
+import { onGpuRelease, useGpuDevice } from '@app-game/solid-gpu/gpu';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
 import { createContext, createSignal, Show, untrack, useContext, type Accessor } from 'solid-js';
 import type { ViewerError } from '../../../shared/errors';
-import { onGpuRelease } from '../../../shared/gpu/onGpuRelease';
-import { useGpuDevice } from '../../../shared/gpu/TypeGPURootProvider';
 import { TokenContext } from '../../../shared/jsx/TokenContext';
 import type { DocumentCamera } from '../../camera/createDocumentCamera';
 import type { Viewport } from '../../viewport/createViewport';

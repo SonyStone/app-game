@@ -1,7 +1,8 @@
 import type { ButtonProps } from '@app-game/components/ui/button';
+import { errorMessage } from '@app-game/solid-gpu/errors';
 import { createFullscreen } from '@solid-primitives/fullscreen';
 import { createSignal, getOwner, isDisposed, untrack } from 'solid-js';
-import { errorMessage, type FullscreenError } from '../../shared/errors';
+import type { FullscreenError } from '../../shared/errors';
 import type { createViewerI18n } from './i18n/createViewerI18n';
 
 /** Provides fullscreen button props for a replaceable container. Must be created within a Solid owner. */

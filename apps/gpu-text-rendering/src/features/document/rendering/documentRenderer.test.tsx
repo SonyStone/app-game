@@ -1,9 +1,9 @@
+import { gpuError } from '@app-game/solid-gpu/errors';
+import type { GpuDevice } from '@app-game/solid-gpu/gpu';
 import { render } from '@solidjs/web';
 import { err, ok, okAsync } from 'neverthrow';
 import { createRoot, createSignal, flush, onCleanup, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { gpuError } from '../../../shared/errors';
-import type { GpuDevice } from '../../../shared/gpu/context';
 import type { DocumentCamera } from '../../camera/createDocumentCamera';
 import type { RenderLayer } from '../../scene/RenderLayer';
 import type { TextDocument } from '../document';
@@ -12,7 +12,7 @@ import { DocumentRenderer } from './DocumentRenderer';
 import { GlyphText } from './GlyphText';
 import { VectorArtwork } from './VectorArtwork';
 
-vi.mock('../../../shared/gpu/TypeGPURootProvider', () => ({ useGpuDevice: () => gpu }));
+vi.mock('@app-game/solid-gpu/gpu/TypeGPURootProvider', () => ({ useGpuDevice: () => gpu }));
 vi.mock('./createTypeGpuRenderer', () => ({ createGlyphRenderer: vi.fn() }));
 vi.mock('../../scene/FrameLoop', () => ({ useFrameLoop: () => ({ invalidate }) }));
 vi.mock('../../viewport/createViewport', () => ({

@@ -1,5 +1,6 @@
+import { errorMessage } from '@app-game/solid-gpu/errors';
 import { err, ok, Result } from 'neverthrow';
-import { documentError, errorMessage, type DocumentError } from '../../../shared/errors';
+import { documentError, type DocumentError } from '../../../shared/errors';
 import { buildCoverageTables } from '../plan/buildCoverageTables';
 import { buildCurvePreparation } from '../plan/buildCurvePreparation';
 import { compactGlyphs } from './compactGlyphs';

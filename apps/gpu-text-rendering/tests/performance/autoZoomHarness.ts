@@ -1,9 +1,9 @@
+import type { GpuContext } from '@app-game/solid-gpu/gpu';
 import { makeCameraTour } from '../../src/features/camera/makeCameraTour';
 import type { TextDocument } from '../../src/features/document/document';
 import { createFrame } from '../../src/features/document/rendering/createFrame';
 import type { TextRenderer } from '../../src/features/document/rendering/createTypeGpuRenderer';
 import { makeGpuFrameGate } from '../../src/features/scene/makeGpuFrameGate';
-import type { GpuContext } from '../../src/shared/gpu/context';
 
 /** Captures actual tour zoom-out before settling, then compares each view with its fully refined counterpart. */
 export async function measureAutoZoom(

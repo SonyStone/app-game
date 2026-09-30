@@ -1,11 +1,11 @@
+import type { AbortedError } from '@app-game/solid-gpu/errors';
+import { runWorkerRequest } from '@app-game/solid-gpu/worker';
 import { render } from '@solidjs/web';
 import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 import { createRoot, createSignal, flush, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DocumentSource } from '../../../tests/fixtures/DocumentSource';
-import type { AbortedError, DocumentError } from '../../shared/errors';
-import { documentError } from '../../shared/errors';
-import { runWorkerRequest } from '../../shared/worker/runWorkerRequest';
+import { type DocumentError, documentError } from '../../shared/errors';
 import type { createDocumentExport } from '../viewer/createDocumentExport';
 import { createDocumentSource } from './createDocumentSource';
 import type { TextDocument } from './document';
@@ -13,7 +13,7 @@ import type { DecodedDocument } from './format/types';
 import ConvertWorker from './pdf/convert.worker?worker';
 import ImportWorker from './pdf/import.worker?worker';
 
-vi.mock('../../shared/worker/runWorkerRequest', () => ({ runWorkerRequest: vi.fn() }));
+vi.mock('@app-game/solid-gpu/worker/runWorkerRequest', () => ({ runWorkerRequest: vi.fn() }));
 vi.mock('./pdf/import.worker?worker', () => ({ default: class ImportWorker {} }));
 vi.mock('./pdf/convert.worker?worker', () => ({ default: class ConvertWorker {} }));
 vi.mock('./format/decode.worker?worker', () => ({ default: class DecodeWorker {} }));
