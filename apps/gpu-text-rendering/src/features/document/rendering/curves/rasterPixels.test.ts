@@ -1,7 +1,14 @@
 import { err, ok } from 'neverthrow';
 import { expect, it } from 'vitest';
-import { assembleTiledMip, expandPackedTile, tilePixels } from './rasterPixels';
+import { assembleTiledMip, expandChannels, expandPackedTile, tilePixels } from './rasterPixels';
 import { tileExtent, tileSize } from './virtualTiles';
+
+it('widens gray and RGB samples to opaque RGBA and keeps RGBA as is', () => {
+  expect(Array.from(expandChannels(Uint8Array.of(7, 250), 1))).toEqual([7, 7, 7, 255, 250, 250, 250, 255]);
+  expect(Array.from(expandChannels(Uint8Array.of(1, 2, 3, 4, 5, 6), 3))).toEqual([1, 2, 3, 255, 4, 5, 6, 255]);
+  const rgba = Uint8Array.of(1, 2, 3, 4);
+  expect(expandChannels(rgba, 4)).toBe(rgba);
+});
 
 it('transfers full packed tiles without copying or changing their pixels', () => {
   const pixels = new Uint8Array(tileExtent * tileExtent * 4);

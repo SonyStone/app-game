@@ -73,7 +73,9 @@ fn decode_sections(
         if matches!(
             &section.tag,
             b"IPCK" | b"HAIR" | b"MASK" | b"VTEX" | b"BLNX" | b"GFLG"
-        ) && (!section.required || section.data != [1, 0, 0, 0])
+        ) && (!section.required
+            || (section.data != [1, 0, 0, 0]
+                && !(section.tag == *b"VTEX" && section.data == [2, 0, 0, 0])))
         {
             return Err(DocumentError::Invalid("rendering extension version/flags"));
         }
@@ -96,9 +98,12 @@ fn decode_sections(
     {
         return Err(DocumentError::Invalid("image encoding extension"));
     }
-    if images.table.chunks_exact(24).any(|r| u32_at(r, 20) == 4)
-        && !sections.iter().any(|s| s.tag == *b"VTEX")
-    {
+    let tiled_version = sections
+        .iter()
+        .find(|s| s.tag == *b"VTEX")
+        .map(|s| u32_at(&s.data, 0));
+    let needed_version = images.tiled_version();
+    if needed_version > 0 && tiled_version.is_none_or(|version| version < needed_version) {
         return Err(DocumentError::Invalid("missing tiled image extension"));
     }
     if decode_image_payloads {
@@ -398,6 +403,8 @@ fn scene_sections(mut document: Document) -> Result<(Vec<Section>, u32), Documen
     } else {
         3
     };
+    // Read before PIXL moves out of the document.
+    let tiled_version = document.images.tiled_version();
     if profile == 3 {
         sections.push(Section {
             tag: *b"IMAG",
@@ -410,16 +417,11 @@ fn scene_sections(mut document: Document) -> Result<(Vec<Section>, u32), Documen
             data: std::mem::take(&mut document.images.pixels),
         });
     }
-    if document
-        .images
-        .table
-        .chunks_exact(24)
-        .any(|r| u32_at(r, 20) == 4)
-    {
+    if tiled_version > 0 {
         sections.push(Section {
             tag: *b"VTEX",
             required: true,
-            data: 1u32.to_le_bytes().to_vec(),
+            data: tiled_version.to_le_bytes().to_vec(),
         });
     }
     if !clips.is_empty() {

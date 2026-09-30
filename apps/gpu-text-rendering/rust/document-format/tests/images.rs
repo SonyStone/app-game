@@ -40,13 +40,40 @@ fn wrapped_jpeg_decode_mapping_still_uses_pixel_conversion() {
     assert_eq!(scene.images.pixels, expected.images.pixels);
 }
 
+#[test]
+fn reencodes_opaque_jpeg_2000_as_browser_jpeg() {
+    let jpx = include_bytes!("../../../tests/fixtures/jpx/rgb-320x240.jp2");
+    let source = encoded_image_fixture(
+        &format!("/Width 320 /Height 240 /Filter /JPXDecode /Length {}", jpx.len()),
+        jpx,
+    );
+    let scene = curves::decode(&pdf::convert(&source).unwrap()).unwrap();
+    assert_eq!(u32_at(&scene.images.table, 0), 320);
+    assert_eq!(u32_at(&scene.images.table, 4), 240);
+    assert_eq!(u32_at(&scene.images.table, 20), 2);
+    assert_eq!(
+        gpu_document::raster::jpeg_dimensions(&scene.images.pixels),
+        Some((320, 240))
+    );
+}
+
 fn jpeg_fixture(filters: &str, data: &[u8], extra: &str) -> Vec<u8> {
+    encoded_image_fixture(
+        &format!(
+            "/Width 64 /Height 16 /ColorSpace /DeviceCMYK /BitsPerComponent 8 /Filter {filters} {extra} /Length {}",
+            data.len()
+        ),
+        data,
+    )
+}
+
+/// A one-image page whose image XObject has `dict` entries and the binary stream `data`.
+fn encoded_image_fixture(dict: &str, data: &[u8]) -> Vec<u8> {
     let placeholder = "x".repeat(data.len());
     let mut source = fixture(
         "/Im Do",
         &format!(
-            "<< /Type /XObject /Subtype /Image /Width 64 /Height 16 /ColorSpace /DeviceCMYK /BitsPerComponent 8 /Filter {filters} {extra} /Length {} >>\nstream\n{placeholder}\nendstream",
-            data.len()
+            "<< /Type /XObject /Subtype /Image {dict} >>\nstream\n{placeholder}\nendstream"
         ),
         &[],
     );
@@ -337,8 +364,19 @@ fn writes_tiled_mips_with_a_required_extension_and_rejects_missing_capability() 
     let bytes = pdf::convert(&source).unwrap();
     let decoded = curves::decode(&bytes).unwrap();
     assert_eq!(u32_at(&decoded.images.table, 20), 4);
+    // Gray sources store one channel per tile, which needs VTEX version 2.
+    let pixels = &decoded.images.pixels;
+    assert_eq!(u32_at(pixels, 12), 1);
+    assert_eq!(pixels[u32_at(pixels, 16) as usize], 1);
     let mut sections = container::decode_profile(&bytes, 3).unwrap();
-    assert!(sections.iter().any(|s| s.tag == *b"VTEX" && s.required));
+    assert!(
+        sections
+            .iter()
+            .any(|s| s.tag == *b"VTEX" && s.required && s.data == 2u32.to_le_bytes())
+    );
+    let vtex = sections.iter().position(|s| s.tag == *b"VTEX").unwrap();
+    sections[vtex].data = 1u32.to_le_bytes().to_vec();
+    assert!(curves::decode(&container::encode_profile(&sections, 3).unwrap()).is_err());
     sections.retain(|s| s.tag != *b"VTEX");
     assert!(curves::decode(&container::encode_profile(&sections, 3).unwrap()).is_err());
 }

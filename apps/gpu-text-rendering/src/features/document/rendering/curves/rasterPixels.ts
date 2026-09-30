@@ -56,6 +56,33 @@ export function tilePixels(source: RasterMip, x: number, y: number) {
   return pixels.buffer;
 }
 
+/**
+ * Widens a packed tile to premultiplied RGBA8. `channels` is 1 (opaque gray), 3 (opaque RGB) or 4, which is
+ * returned unchanged; Rust validation has already rejected other counts.
+ */
+export function expandChannels(pixels: Uint8Array<ArrayBuffer>, channels: number): Uint8Array<ArrayBuffer> {
+  if (channels === 4) {
+    return pixels;
+  }
+
+  const count = pixels.length / channels;
+  const rgba = new Uint8Array(count * 4);
+  // One little-endian word per texel (R | G << 8 | B << 16 | 255 << 24); WebGPU platforms are little-endian.
+  const words = new Uint32Array(rgba.buffer);
+
+  if (channels === 1) {
+    for (let i = 0; i < count; i++) {
+      words[i] = (pixels[i]! * 0x10101) | 0xff000000;
+    }
+  } else {
+    for (let i = 0; i < count; i++) {
+      words[i] = pixels[i * 3]! | (pixels[i * 3 + 1]! << 8) | (pixels[i * 3 + 2]! << 16) | 0xff000000;
+    }
+  }
+
+  return rgba;
+}
+
 /** Expands only boundary tiles; full tiles transfer their decoded buffer without another pixel copy. */
 export function expandPackedTile(pixels: Uint8Array<ArrayBuffer>, width: number, height: number): ArrayBuffer {
   if (width === tileExtent && height === tileExtent) {

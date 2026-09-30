@@ -88,23 +88,6 @@ function passArray8ToWasm0(arg, malloc) {
     WASM_VECTOR_LEN = arg.length;
     return ptr;
 }
-
-function isLikeNone(x) {
-    return x === undefined || x === null;
-}
-/**
- * Imports a PDF directly into validated render buffers inside a disposable Worker.
- * @param {Uint8Array} bytes
- * @param {(completed: number, total: number) => void | null} [progress]
- * @returns {DecodeOutcome}
- */
-export function importPdf(bytes, progress) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.importPdf(ptr0, len0, isLikeNone(progress) ? 0 : addToExternrefTable0(progress));
-    return DecodeOutcome.__wrap(ret);
-}
-
 /**
  * Converts locally inside a disposable Worker; expected PDF failures never throw into JS.
  * @param {Uint8Array} bytes
@@ -115,6 +98,21 @@ export function convertPdf(bytes) {
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.convertPdf(ptr0, len0);
     return ConvertOutcome.__wrap(ret);
+}
+
+/**
+ * Decode synchronously inside a dedicated Worker; cancellation terminates that Worker.
+ *
+ * Takes ownership of the copied input so a raw image payload can be decoded in place
+ * (JavaScript still passes a `Uint8Array`; only WASM-side ownership changes).
+ * @param {Uint8Array} bytes
+ * @returns {DecodeOutcome}
+ */
+export function decodeDocument(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.decodeDocument(ptr0, len0);
+    return DecodeOutcome.__wrap(ret);
 }
 
 /**
@@ -131,18 +129,19 @@ export function decodeCmykJpeg(bytes, width, height) {
     return RasterOutcome.__wrap(ret);
 }
 
+function isLikeNone(x) {
+    return x === undefined || x === null;
+}
 /**
- * Decode synchronously inside a dedicated Worker; cancellation terminates that Worker.
- *
- * Takes ownership of the copied input so a raw image payload can be decoded in place
- * (JavaScript still passes a `Uint8Array`; only WASM-side ownership changes).
+ * Imports a PDF directly into validated render buffers inside a disposable Worker.
  * @param {Uint8Array} bytes
+ * @param {(completed: number, total: number) => void | null} [progress]
  * @returns {DecodeOutcome}
  */
-export function decodeDocument(bytes) {
+export function importPdf(bytes, progress) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.decodeDocument(ptr0, len0);
+    const ret = wasm.importPdf(ptr0, len0, isLikeNone(progress) ? 0 : addToExternrefTable0(progress));
     return DecodeOutcome.__wrap(ret);
 }
 

@@ -29,6 +29,44 @@ it('assembles a wide codec-4 tail mip from every packed tile it spans', async ()
   }
 });
 
+it('widens channel-prefixed gray and RGB tiles to opaque RGBA', async () => {
+  // A 3×1 image: level 0 is stored gray, its 1×1 level 1 as RGB. Tiles include a one-texel gutter.
+  const gray = Uint8Array.from({ length: 5 * 3 }, (_, i) => 10 + (i % 5));
+  const rgb = Uint8Array.from({ length: 3 * 3 * 3 }, (_, i) => [200, 100, 50][i % 3]!);
+  const tiles = [Uint8Array.of(1, ...deflateSync(gray)), Uint8Array.of(3, ...deflateSync(rgb))];
+  const header = 16 + tiles.length * 8;
+  const bytes = new Uint8Array(header + tiles[0]!.length + tiles[1]!.length);
+  const records = new DataView(bytes.buffer);
+  records.setUint32(0, tileSize, true);
+  records.setUint32(4, 2, true);
+  records.setUint32(8, 2, true);
+  records.setUint32(12, 1, true);
+  let offset = header;
+
+  for (const [index, tile] of tiles.entries()) {
+    records.setUint32(16 + index * 8, offset, true);
+    records.setUint32(20 + index * 8, tile.length, true);
+    bytes.set(tile, offset);
+    offset += tile.length;
+  }
+
+  const reply = (
+    await decode({
+      id: 0,
+      bytes: bytes.buffer,
+      width: 3,
+      height: 1,
+      codec: 4,
+      tiles: [
+        { image: 0, level: 0, x: 0, y: 0 },
+        { image: 0, level: 1, x: 0, y: 0 }
+      ]
+    })
+  )._unsafeUnwrap();
+  expect(Array.from(new Uint8Array(reply.tiles[0]!.pixels, 0, 8))).toEqual([10, 10, 10, 255, 11, 11, 11, 255]);
+  expect(Array.from(new Uint8Array(reply.tiles[1]!.pixels, 0, 4))).toEqual([200, 100, 50, 255]);
+});
+
 it('rejects raw pixels whose length does not match the declared dimensions', async () => {
   const result = await decode({
     id: 0,

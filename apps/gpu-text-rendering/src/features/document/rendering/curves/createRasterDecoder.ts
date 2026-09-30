@@ -3,6 +3,7 @@ import { onCleanup } from 'solid-js';
 import { decodePdfCmykJpeg, jpegComponents, stripJpegExif } from './decodeCmykJpeg';
 import {
   assembleTiledMip,
+  expandChannels,
   expandPackedTile,
   mipTail,
   packedTileIndex,
@@ -88,12 +89,16 @@ export function createRasterDecoder() {
           const length = records.getUint32(20 + index * 8, true);
           const width = Math.min(tileSize, mipSize(request.width, tile.level) - tile.x * tileSize) + 2;
           const height = Math.min(tileSize, mipSize(request.height, tile.level) - tile.y * tileSize) + 2;
-          const packed = await inflate(source.bytes.slice(offset, offset + length), width * height * 4);
+          // Header word 12 = 1: each tile starts with its channel count (VTEX version 2).
+          const prefixed = records.getUint32(12, true) === 1;
+          const channels = prefixed ? records.getUint8(offset) : 4;
+          const stream = prefixed ? offset + 1 : offset;
+          const packed = await inflate(source.bytes.slice(stream, offset + length), width * height * channels);
           if (packed.isErr()) {
             return err(packed.error);
           }
 
-          return ok(expandPackedTile(packed.value, width, height));
+          return ok(expandPackedTile(expandChannels(packed.value, channels), width, height));
         };
         const tail =
           request.tailLevel === undefined

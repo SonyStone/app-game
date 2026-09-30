@@ -60,7 +60,10 @@ fn every_tile_matches_clamped_sampling_of_its_box_filtered_level() {
             level = (0..nw * nh * 4)
                 .map(|i| {
                     let (x, y, c) = (i / 4 % nw, i / 4 / nw, i % 4);
-                    let (xs, ys) = (x * lw / nw..(x + 1) * lw / nw, y * lh / nh..(y + 1) * lh / nh);
+                    let (xs, ys) = (
+                        x * lw / nw..(x + 1) * lw / nw,
+                        y * lh / nh..(y + 1) * lh / nh,
+                    );
                     let count = xs.len() as u32 * ys.len() as u32;
                     let sum: u32 = ys
                         .flat_map(|sy| xs.clone().map(move |sx| (sx, sy)))
@@ -109,10 +112,83 @@ fn validates_tiled_images_through_the_shared_resource_table() {
     assert!(images.validate().is_ok());
 }
 
+#[test]
+fn stores_each_tile_with_the_fewest_exact_channels() {
+    // 128-pixel-wide bands: gray, gray, opaque colour, opaque colour, translucent.
+    let (w, h) = (640, 2);
+    let mut pixels = Vec::new();
+    for _ in 0..h {
+        for x in 0..w {
+            pixels.extend_from_slice(match x / 128 {
+                0 | 1 => &[90, 90, 90, 255],
+                2 | 3 => &[200, 10, 60, 255],
+                _ => &[40, 20, 10, 128],
+            });
+        }
+    }
+    let packed = raster_tiles::encode(w, h, &pixels).unwrap();
+    raster_tiles::validate(w, h, &packed).unwrap();
+    let channels: Vec<_> = (0..5)
+        .map(|index| packed[u32_at(&packed, 16 + index * 8) as usize])
+        .collect();
+    // Gutters include one neighbouring column, which decides the second and fourth tiles.
+    assert_eq!(channels, [1, 3, 3, 4, 4]);
+    for index in 0..5 {
+        let x = index * 128;
+        assert_eq!(&tile(&packed, index)[4..8], &pixels[x * 4..x * 4 + 4]);
+    }
+    let gray = raster_tiles::encode(130, 2, &[77, 77, 77, 255].repeat(130 * 2)).unwrap();
+    assert_eq!(gray[u32_at(&gray, 16) as usize], 1);
+    assert_eq!(tile(&gray, 0), [77, 77, 77, 255].repeat(128 + 2).repeat(4));
+}
+
+#[test]
+fn reads_legacy_rgba_tiles_and_rejects_unknown_channel_counts() {
+    let pixels = [9, 8, 7, 255].repeat(4);
+    let packed = raster_tiles::encode(2, 2, &pixels).unwrap();
+    // Rebuild the same pyramid in the original layout: header word 12 zero, bare RGBA streams.
+    let mut legacy = packed[..32].to_vec();
+    legacy[12..16].fill(0);
+    for index in 0..2 {
+        let rgba = tile(&packed, index);
+        let stream = miniz_oxide::deflate::compress_to_vec_zlib(&rgba, 1);
+        let offset = legacy.len() as u32;
+        legacy[16 + index * 8..20 + index * 8].copy_from_slice(&offset.to_le_bytes());
+        legacy[20 + index * 8..24 + index * 8]
+            .copy_from_slice(&(stream.len() as u32).to_le_bytes());
+        legacy.extend_from_slice(&stream);
+    }
+    raster_tiles::validate(2, 2, &legacy).unwrap();
+    assert_eq!(tile(&legacy, 0), tile(&packed, 0));
+    for channels in [0, 2, 5] {
+        let mut bad = packed.clone();
+        bad[u32_at(&packed, 16) as usize] = channels;
+        assert!(
+            raster_tiles::validate(2, 2, &bad).is_err(),
+            "{channels} channels"
+        );
+    }
+    let mut unknown_layout = packed.clone();
+    unknown_layout[12..16].copy_from_slice(&2u32.to_le_bytes());
+    assert!(raster_tiles::validate(2, 2, &unknown_layout).is_err());
+}
+
+/// Inflates one tile and widens it to premultiplied RGBA, for either tile layout.
 fn tile(bytes: &[u8], index: usize) -> Vec<u8> {
     let offset = u32_at(bytes, 16 + index * 8) as usize;
     let length = u32_at(bytes, 20 + index * 8) as usize;
-    miniz_oxide::inflate::decompress_to_vec_zlib(&bytes[offset..offset + length]).unwrap()
+    let prefixed = u32_at(bytes, 12) == 1;
+    let channels = if prefixed { bytes[offset] as usize } else { 4 };
+    let stream = &bytes[offset + usize::from(prefixed)..offset + length];
+    let packed = miniz_oxide::inflate::decompress_to_vec_zlib(stream).unwrap();
+    packed
+        .chunks_exact(channels)
+        .flat_map(|p| match channels {
+            1 => [p[0], p[0], p[0], 255],
+            3 => [p[0], p[1], p[2], 255],
+            _ => [p[0], p[1], p[2], p[3]],
+        })
+        .collect()
 }
 
 fn u32_at(bytes: &[u8], offset: usize) -> u32 {

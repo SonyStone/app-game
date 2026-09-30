@@ -1,17 +1,9 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Imports a PDF directly into validated render buffers inside a disposable Worker.
- */
-export function importPdf(bytes: Uint8Array, progress?: (completed: number, total: number) => void | null): DecodeOutcome;
-/**
  * Converts locally inside a disposable Worker; expected PDF failures never throw into JS.
  */
 export function convertPdf(bytes: Uint8Array): ConvertOutcome;
-/**
- * Decodes retained PDF CMYK/YCCK without the inversion applied by browser JPEG readers.
- */
-export function decodeCmykJpeg(bytes: Uint8Array, width: number, height: number): RasterOutcome;
 /**
  * Decode synchronously inside a dedicated Worker; cancellation terminates that Worker.
  *
@@ -19,6 +11,14 @@ export function decodeCmykJpeg(bytes: Uint8Array, width: number, height: number)
  * (JavaScript still passes a `Uint8Array`; only WASM-side ownership changes).
  */
 export function decodeDocument(bytes: Uint8Array): DecodeOutcome;
+/**
+ * Decodes retained PDF CMYK/YCCK without the inversion applied by browser JPEG readers.
+ */
+export function decodeCmykJpeg(bytes: Uint8Array, width: number, height: number): RasterOutcome;
+/**
+ * Imports a PDF directly into validated render buffers inside a disposable Worker.
+ */
+export function importPdf(bytes: Uint8Array, progress?: (completed: number, total: number) => void | null): DecodeOutcome;
 /**
  * Owns either the encoded GDOC or a stable error. Free after extraction.
  */

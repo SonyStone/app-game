@@ -24,6 +24,27 @@ impl Images {
         self.check(false)
     }
 
+    /// `VTEX` version these resources need: 0 without tiled images, 2 when a tiled pyramid
+    /// prefixes its tiles with channel counts, otherwise 1. Ranges need not be validated yet.
+    pub(crate) fn tiled_version(&self) -> u32 {
+        self.table
+            .chunks_exact(24)
+            .filter(|record| u32_at(record, 20) == 4)
+            .map(|record| {
+                let offset = u32_at(record, 8) as usize;
+                let payload = offset
+                    .checked_add(u32_at(record, 12) as usize)
+                    .and_then(|end| self.pixels.get(offset..end));
+                if payload.is_some_and(crate::raster_tiles::channel_prefixed) {
+                    2
+                } else {
+                    1
+                }
+            })
+            .max()
+            .unwrap_or(0)
+    }
+
     fn check(&self, decode_payloads: bool) -> Result<(), DocumentError> {
         if !self.table.len().is_multiple_of(24) || self.table.len() / 24 > 10_000 {
             return Err(DocumentError::Invalid("image table"));

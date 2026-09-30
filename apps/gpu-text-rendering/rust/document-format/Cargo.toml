@@ -12,13 +12,18 @@ crate-type = ["cdylib", "rlib"]
 default = []
 wasm = ["dep:wasm-bindgen"]
 migration = ["dep:serde", "dep:serde_json"]
-pdf = ["dep:hayro-interpret", "dep:kurbo"]
+pdf = ["dep:hayro-interpret", "dep:kurbo", "dep:flate2", "dep:jpeg-encoder"]
 
 [dependencies]
 hayro-interpret = { version = "=0.7.0", optional = true }
 kurbo = { version = "0.13", optional = true }
 crc32fast = "1.5"
+# Selects zlib-rs as Hayro's Flate backend: ~5% faster PDF image decoding than miniz in WASM.
+# Tiles are still compressed by miniz_oxide, which was faster and smaller for them.
+flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs"], optional = true }
 miniz_oxide = "0.8.9"
+# Re-encodes lossy JPEG 2000 sources, which browsers cannot decode, as baseline JPEG.
+jpeg-encoder = { version = "=0.7.1", default-features = false, features = ["std"], optional = true }
 moxcms = "=0.8.1"
 zune-jpeg = "=0.5.15"
 thiserror = "2"

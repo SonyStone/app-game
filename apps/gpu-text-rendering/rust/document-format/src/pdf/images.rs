@@ -7,6 +7,7 @@ use crate::{
 use hayro_interpret::{CacheKey, Image, ImageData, LumaData, Paint};
 use kurbo::Affine;
 use std::{
+    borrow::Cow,
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
 };
@@ -83,20 +84,23 @@ impl ImageCache {
         }
         let mut result = Err(DocumentError::Invalid("PDF image could not be decoded"));
         match image {
-            Image::Raster(image) => image.with_rgba(
-                |data, alpha| {
-                    result = self
-                        .append(images, &data, alpha.as_ref(), false)
-                        .map(|r| (r, [1.0; 4]));
-                },
-                None,
-            ),
+            Image::Raster(image) => {
+                let lossy = is_jpx(&image);
+                image.with_rgba(
+                    |data, alpha| {
+                        result = self
+                            .append(images, &data, alpha.as_ref(), false, lossy)
+                            .map(|r| (r, [1.0; 4]));
+                    },
+                    None,
+                );
+            }
             Image::Stencil(image) => {
                 let tint = stencil_tint(image.paint())?;
                 image.with_stencil(
                     |mask, _| {
                         result = self
-                            .append(images, &ImageData::Luma(mask), None, true)
+                            .append(images, &ImageData::Luma(mask), None, true, false)
                             .map(|r| (r, tint));
                     },
                     None,
@@ -190,12 +194,15 @@ impl ImageCache {
         Ok(index)
     }
 
+    /// Encodes decoded samples as one resource. `lossy` marks a lossy source (JPEG 2000), whose
+    /// opaque samples may be re-encoded as JPEG instead of lossless tiles.
     fn append(
         &self,
         images: &mut Images,
         data: &ImageData,
         alpha: Option<&LumaData>,
         stencil: bool,
+        lossy: bool,
     ) -> Result<ImageRecord, DocumentError> {
         let (width, height) = (data.width(), data.height());
         let size = pixel_bytes(width, height)?;
@@ -205,27 +212,8 @@ impl ImageCache {
         if let Some(mask) = alpha {
             pixel_bytes(mask.width, mask.height)?;
         }
-        let mut pixels = Vec::new();
-        pixels
-            .try_reserve_exact(size)
-            .map_err(|_| DocumentError::Limit("image storage memory"))?;
-        match (data, alpha) {
-            // Opaque premultiplication is the identity; whole-page scans take this path.
-            (ImageData::Rgb(data), None) => {
-                pixels.resize(size, 255);
-                for (rgba, rgb) in pixels.chunks_exact_mut(4).zip(data.data.chunks_exact(3)) {
-                    rgba[..3].copy_from_slice(rgb);
-                }
-            }
-            (ImageData::Luma(data), None) if !stencil => {
-                pixels.resize(size, 255);
-                for (rgba, &luma) in pixels.chunks_exact_mut(4).zip(&data.data) {
-                    rgba[..3].fill(luma);
-                }
-            }
-            _ => premultiply_into(&mut pixels, data, alpha, stencil, width, height),
-        }
-        let (codec, payload) = self.encode_pixels(images, width, height, pixels);
+        let samples = Samples::decode(data, alpha, stencil, size)?;
+        let (codec, payload) = self.encode_pixels(images, width, height, &samples, lossy)?;
         let header = ResourceHeader {
             width,
             height,
@@ -243,26 +231,42 @@ impl ImageCache {
         })
     }
 
-    /// Small images stay raw. Larger ones use independent tiles when their lossless pyramid
-    /// is at most twice its full-resolution tiles (16 KiB minimum allowance) and fits the
-    /// remaining budget; only otherwise is the whole image zlib-compressed.
+    /// Small images stay raw RGBA. Larger opaque `lossy` sources within browser Canvas2D limits
+    /// become baseline JPEG: storing a photographic JPEG 2000 losslessly takes about ten times
+    /// its source size, so a scanned art book would exceed the image budget. Other large images
+    /// use independent tiles when their lossless pyramid is at most twice its full-resolution
+    /// tiles (16 KiB minimum allowance) and fits the remaining budget; only otherwise is the
+    /// whole image zlib-compressed as RGBA.
     fn encode_pixels(
         &self,
         images: &Images,
         width: u32,
         height: u32,
-        pixels: Vec<u8>,
-    ) -> (u32, Vec<u8>) {
-        if pixels.len() <= 256 * 1024 {
-            return (0, pixels);
+        samples: &Samples<'_>,
+        lossy: bool,
+    ) -> Result<(u32, Vec<u8>), DocumentError> {
+        if pixel_bytes(width, height)? <= 256 * 1024 {
+            return Ok((0, samples.to_rgba()?));
         }
-        if let Ok((tiled, base)) = crate::raster_tiles::encode_with_base(width, height, &pixels)
+        if lossy
+            && samples.channels != 4
+            && width <= 16384
+            && height <= 16384
+            && let Some(jpeg) = encode_jpeg(width, height, samples)
+        {
+            return Ok((2, jpeg));
+        }
+        if let Ok((tiled, base)) =
+            crate::raster_tiles::encode_with_base(width, height, samples.channels, &samples.bytes)
             && tiled.len() <= base.saturating_mul(2).max(16 * 1024)
             && tiled.len() <= self.remaining(images)
         {
-            return (4, tiled);
+            return Ok((4, tiled));
         }
-        (1, miniz_oxide::deflate::compress_to_vec_zlib(&pixels, 6))
+        Ok((
+            1,
+            miniz_oxide::deflate::compress_to_vec_zlib(&samples.to_rgba()?, 6),
+        ))
     }
 
     // Avoid geometric Vec growth: a 600 MiB payload must not reserve a 1.2 GiB block
@@ -286,6 +290,34 @@ impl ImageCache {
     }
 }
 
+/// Whether Hayro decodes this image with the lossy JPEG 2000 filter.
+fn is_jpx(image: &hayro_interpret::RasterImage<'_>) -> bool {
+    use hayro_interpret::hayro_syntax::Filter;
+    image
+        .stream()
+        .filters()
+        .iter()
+        .any(|filter| matches!(filter, Filter::JpxDecode))
+}
+
+/// Quality for re-encoded JPEG 2000 images: visually transparent for photographic scans while
+/// keeping a 2650×3275 page near 1 MiB.
+const JPEG_QUALITY: u8 = 90;
+
+/// Baseline JPEG of opaque gray or RGB samples, or `None` if the encoder rejects them.
+fn encode_jpeg(width: u32, height: u32, samples: &Samples<'_>) -> Option<Vec<u8>> {
+    let color = match samples.channels {
+        1 => jpeg_encoder::ColorType::Luma,
+        3 => jpeg_encoder::ColorType::Rgb,
+        _ => return None,
+    };
+    let mut jpeg = Vec::new();
+    jpeg_encoder::Encoder::new(&mut jpeg, JPEG_QUALITY)
+        .encode(&samples.bytes, width as u16, height as u16, color)
+        .ok()?;
+    Some(jpeg)
+}
+
 /// Stencils draw premultiplied white; the PDF color becomes the draw tint. Hayro wraps image
 /// draws in a group with the same non-stroking alpha, applied once at group pop.
 fn stencil_tint(paint: &Paint<'_>) -> Result<[f32; 4], DocumentError> {
@@ -302,6 +334,96 @@ fn u32_at(bytes: &[u8], offset: usize) -> u32 {
 }
 
 // PDF soft masks can have a different resolution. Sample their pixel centers in image UV space.
+/// Decoded image samples in the fewest channels that represent them exactly: 1 for opaque
+/// gray, 3 for opaque RGB, 4 for premultiplied RGBA. Opaque images borrow Hayro's buffer, so
+/// scanned pages are never expanded to RGBA on the import path.
+struct Samples<'a> {
+    channels: usize,
+    bytes: Cow<'a, [u8]>,
+}
+
+impl<'a> Samples<'a> {
+    /// `size` is the image's RGBA byte count, already checked against the decoded-image limit.
+    ///
+    /// # Errors
+    /// `Invalid` when Hayro returned fewer samples than the image dimensions need; `Limit`
+    /// when a converted buffer cannot be allocated.
+    fn decode(
+        data: &'a ImageData,
+        alpha: Option<&LumaData>,
+        stencil: bool,
+        size: usize,
+    ) -> Result<Self, DocumentError> {
+        let pixels = size / 4;
+        let short = || DocumentError::Invalid("PDF image could not be decoded");
+        match (data, alpha) {
+            (ImageData::Rgb(data), None) => {
+                let rgb = data.data.get(..pixels * 3).ok_or_else(short)?;
+                // Branch-free per pixel so the scan vectorizes.
+                let gray = rgb
+                    .chunks_exact(3)
+                    .fold(true, |gray, p| gray & (p[0] == p[1]) & (p[1] == p[2]));
+                if !gray {
+                    return Ok(Self {
+                        channels: 3,
+                        bytes: Cow::Borrowed(rgb),
+                    });
+                }
+                let mut luma = reserve(pixels)?;
+                luma.extend(rgb.chunks_exact(3).map(|p| p[0]));
+                Ok(Self {
+                    channels: 1,
+                    bytes: Cow::Owned(luma),
+                })
+            }
+            (ImageData::Luma(data), None) if !stencil => Ok(Self {
+                channels: 1,
+                bytes: Cow::Borrowed(data.data.get(..pixels).ok_or_else(short)?),
+            }),
+            _ => {
+                let width = data.width();
+                let height = data.height();
+                let mut rgba = reserve(size)?;
+                premultiply_into(&mut rgba, data, alpha, stencil, width, height);
+                Ok(Self {
+                    channels: 4,
+                    bytes: Cow::Owned(rgba),
+                })
+            }
+        }
+    }
+
+    /// Premultiplied RGBA for the raw and whole-image zlib codecs.
+    fn to_rgba(&self) -> Result<Vec<u8>, DocumentError> {
+        if self.channels == 4 {
+            return Ok(self.bytes.to_vec());
+        }
+        let pixels = self.bytes.len() / self.channels;
+        let mut rgba = reserve(pixels * 4)?;
+        rgba.resize(pixels * 4, 255);
+        for (rgba, sample) in rgba
+            .chunks_exact_mut(4)
+            .zip(self.bytes.chunks_exact(self.channels))
+        {
+            if self.channels == 1 {
+                rgba[..3].fill(sample[0]);
+            } else {
+                rgba[..3].copy_from_slice(sample);
+            }
+        }
+        Ok(rgba)
+    }
+}
+
+/// An empty buffer with `capacity` bytes, or `Limit` instead of a WASM out-of-memory abort.
+fn reserve(capacity: usize) -> Result<Vec<u8>, DocumentError> {
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(capacity)
+        .map_err(|_| DocumentError::Limit("image storage memory"))?;
+    Ok(bytes)
+}
+
 /// Converts masked, stencil or gray-with-alpha samples to premultiplied RGBA8, per pixel.
 fn premultiply_into(
     pixels: &mut Vec<u8>,
