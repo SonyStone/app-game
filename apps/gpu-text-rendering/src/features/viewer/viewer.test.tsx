@@ -33,6 +33,18 @@ vi.mock('../document/rendering/createTypeGpuRenderer', () => ({ createGlyphRende
 vi.mock('../scene/createSceneUpscaler', () => ({
   createSceneUpscaler: () => ({ target: vi.fn(), blit: vi.fn(), destroy: vi.fn() })
 }));
+vi.mock('../document/rendering/createSettledView', () => ({
+  createSettledView: () => ({
+    draw: () => false,
+    pendingFor: () => false,
+    renderBand: vi.fn(),
+    invalidate: vi.fn(),
+    destroy: vi.fn()
+  })
+}));
+vi.mock('../document/rendering/createMotionCache', () => ({
+  createMotionCache: () => ({ draw: () => false, refresh: vi.fn(), invalidate: vi.fn(), destroy: vi.fn() })
+}));
 
 const cleanups: (() => void)[] = [];
 const frames = new Map<number, FrameRequestCallback>();

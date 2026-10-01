@@ -53,6 +53,12 @@ export async function prepareGlyphDocument(
   };
 
   const { atlasGroup, rasterSize, resourceBytes: atlasBytes } = await createGlyphAtlas(gpu, document, blend, keep);
+  // On screen, glyph edges must not lower the coverage of paper already drawn: a cached view composited over the
+  // scene, such as the motion cache, would otherwise show the scene's background through anti-aliased text.
+  const screenBlend: GPUBlendState = {
+    ...blend,
+    alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+  };
 
   const active = gpu.checkActive();
   if (active.isErr()) {
@@ -63,7 +69,7 @@ export async function prepareGlyphDocument(
     .createRenderPipeline({
       vertex: glyphInstanceVertex,
       fragment: glyphFragment,
-      targets: { format, blend },
+      targets: { format, blend: screenBlend },
       primitive: { topology: 'triangle-list' }
     })
     .with(background.group)
