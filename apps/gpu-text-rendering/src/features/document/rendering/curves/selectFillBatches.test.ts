@@ -57,5 +57,5 @@ describe('selectFillBatches', () => {
 });
 
 function batch(first: number, count: number, overrides: Partial<CurveBatch> = {}): CurveBatch {
-  return { first, count, simple: true, cacheScale: Infinity, minimumScale: 1, ...overrides };
+  return { first, count, simple: true, cacheScale: Infinity, minimumScale: 1, large: [], ...overrides };
 }

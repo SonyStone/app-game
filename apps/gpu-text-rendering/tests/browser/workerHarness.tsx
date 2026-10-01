@@ -6,6 +6,7 @@ import type { TextDocument } from '../../src/features/document/document';
 import type { OnDocumentProgress } from '../../src/features/document/documentProgress';
 import { buildCoverage, convertDocument, decodeDocument } from '../../src/features/document/documentWorkerProtocol';
 import { createTypeGpuRenderer as prepare } from '../../src/features/document/rendering/createTypeGpuRenderer';
+import { createDetailTableWorker } from '../../src/features/document/rendering/curves/createDetailTableWorker';
 import { createRasterWorker } from '../../src/features/document/rendering/curves/createRasterWorker';
 import type { DocumentWorkers } from '../../src/features/document/rendering/DocumentWorkers';
 import type { ViewerError } from '../../src/shared/errors';
@@ -18,10 +19,12 @@ export { workerShutdownGraceMs } from '@app-game/solid-gpu/worker';
 export function mountRendererWorkers() {
   return createRoot((dispose) => {
     const raster = createRasterWorker();
+    const tables = createDetailTableWorker();
     const controller = new AbortController();
     onCleanup(() => controller.abort());
     const workers: DocumentWorkers = {
       raster,
+      tables,
       coverage: (input) => buildCoverage(input, { signal: controller.signal })
     };
     return { workers, dispose };

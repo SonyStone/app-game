@@ -54,6 +54,40 @@ describe('createComposedPagePolicy', () => {
     expect([...drawn]).toEqual([4, 5, 6, 7]);
   });
 
+  it('offers whole-page overview tiles in a multi-page overview, with hysteresis for drawn pages', () => {
+    const policy = createComposedPagePolicy(
+      document,
+      { ...composition, wholePages: new Set([0, 2, 3, 4]) },
+      {
+        has: () => false,
+        observe() {}
+      }
+    );
+    const pages = [0, 1, 2, 3, 4];
+
+    // 500 px pages are within the threshold; page 1 has no whole-page tiles.
+    expect([...policy.overviewTilePages(frame(pages, 1), new Set())]).toEqual([0, 2, 3, 4]);
+    // 560 px pages exceed it unless already drawn from tiles.
+    expect([...policy.overviewTilePages(frame(pages, 1.12), new Set())]).toEqual([]);
+    expect([...policy.overviewTilePages(frame(pages, 1.12), new Set([2]))]).toEqual([2]);
+    expect([...policy.overviewTilePages(frame(pages, 1.4), new Set([2]))]).toEqual([]);
+    // Reading views and vector-only frames never use them.
+    expect([...policy.overviewTilePages(frame([0, 2, 3, 4], 1), new Set())]).toEqual([]);
+    expect([...policy.overviewTilePages({ ...frame(pages, 1), vectorOnly: true }, new Set())]).toEqual([]);
+  });
+
+  it('enters whole-page tiles once covered, or early once their fallback exists', () => {
+    const { policy } = setup();
+    const drawn = new Set([7]);
+    const options = { covered: (page: number) => page === 0, based: (page: number) => page !== 3, early: false };
+
+    policy.enterWholePages(drawn, new Set([0, 2, 3]), options);
+    expect([...drawn]).toEqual([0]);
+
+    policy.enterWholePages(drawn, new Set([0, 2, 3]), { ...options, early: true });
+    expect([...drawn].sort()).toEqual([0, 2]);
+  });
+
   it('keeps budget-retained overview pages composed at any scale', () => {
     const { policy, budget } = setup();
     budget.has.mockImplementation((page) => page === 6);

@@ -1,7 +1,11 @@
 import type { TextDocument } from '../../document';
 import type { SceneFrame } from '../createFrame';
 
-/** A page-local quadtree tile. Level zero covers the complete page. */
+/**
+ * A page-local tile. Level zero covers the complete page; each level doubles the page's texel resolution. The first
+ * `split` levels of a layout keep one tile per page (x and y zero); deeper levels split into quadrants, so halving x
+ * and y always yields the parent.
+ */
 export type PageTile = { page: number; level: number; x: number; y: number };
 
 /** Stable identity independent of camera position and rotation. */
@@ -14,23 +18,27 @@ export function parentTile(tile: PageTile): PageTile {
   return { page: tile.page, level: tile.level - 1, x: Math.floor(tile.x / 2), y: Math.floor(tile.y / 2) };
 }
 
-/** World rectangle, with y measured upward and texture v measured downward. */
-export function pageTileRect(document: TextDocument, tile: PageTile) {
+/** World rectangle, with y measured upward and texture v measured downward; `split` as in {@link PageTile}. */
+export function pageTileRect(document: TextDocument, tile: PageTile, split = 0) {
   const page = document.pages[tile.page]!;
-  const divisions = 2 ** tile.level;
+  const divisions = tileDivisions(tile.level, split);
   const width = page.width / document.pages[0]!.width / divisions;
   const height = page.height / document.pages[0]!.height / divisions;
 
   return { x: -page.x + tile.x * width, y: 1 - page.y - tile.y * height, width, height };
 }
 
-/** Selects only screen-intersecting tiles, at least 1.25 texels per physical pixel along either page axis. */
+/**
+ * Selects only screen-intersecting tiles, at least 1.25 texels per physical pixel along either page axis. Level zero
+ * holds `tileSize` texels along the page's longer side; `split` as in {@link PageTile}.
+ */
 export function visiblePageTiles(
   document: TextDocument,
   page: number,
   frame: SceneFrame,
   tileSize = 256,
-  minimumLevel = 0
+  minimumLevel = 0,
+  split = 0
 ) {
   const rect = pageTileRect(document, { page, level: 0, x: 0, y: 0 });
   const [a, b, c, d] = frame.rotation;
@@ -43,7 +51,7 @@ export function visiblePageTiles(
     minimumLevel,
     Math.min(16, Math.ceil(Math.log2(1.25 * Math.max(pixelsX / width, pixelsY / height))))
   );
-  const count = 2 ** level;
+  const count = tileDivisions(level, split);
   const determinant = a! * d! - b! * c!;
   let minX = 1;
   let minY = 1;
@@ -75,13 +83,17 @@ export function visiblePageTiles(
   return tiles;
 }
 
-/** Renders a tile with a two-pixel gutter; neighboring tiles sample the same PDF coordinates at their edges. */
-export function pageTileFrame(document: TextDocument, tile: PageTile, tileSize = 256): SceneFrame {
-  const rect = pageTileRect(document, tile);
+/**
+ * Renders a tile with a two-pixel gutter; neighboring tiles sample the same PDF coordinates at their edges. Tiles of
+ * the first `split` levels hold the whole page at `tileSize`·2^level texels; deeper tiles hold `tileSize`·2^split.
+ */
+export function pageTileFrame(document: TextDocument, tile: PageTile, tileSize = 256, split = 0): SceneFrame {
+  const rect = pageTileRect(document, tile, split);
+  const size = tileSize * 2 ** Math.min(tile.level, split);
   const page = document.pages[tile.page]!;
   const aspect = page.width / page.height;
-  const width = Math.max(1, Math.round(tileSize * Math.min(1, aspect))) + 4;
-  const height = Math.max(1, Math.round(tileSize / Math.max(1, aspect))) + 4;
+  const width = Math.max(1, Math.round(size * Math.min(1, aspect))) + 4;
+  const height = Math.max(1, Math.round(size / Math.max(1, aspect))) + 4;
   const mul: [number, number] = [(2 * (width - 4)) / (width * rect.width), (2 * (height - 4)) / (height * rect.height)];
 
   return {
@@ -92,6 +104,12 @@ export function pageTileFrame(document: TextDocument, tile: PageTile, tileSize =
     rotation: [1, 0, 0, 1],
     visible: [{ index: tile.page, page }],
     vectorOnly: false,
-    grids: false
+    grids: false,
+    moving: false
   };
+}
+
+/** Tiles per page side at `level` when the first `split` levels keep the whole page in one tile. */
+function tileDivisions(level: number, split: number) {
+  return 2 ** Math.max(0, level - split);
 }

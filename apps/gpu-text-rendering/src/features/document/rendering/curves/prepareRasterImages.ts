@@ -80,6 +80,8 @@ export function prepareRasterImages(
   let pending = false;
   let nextTail: number | undefined;
   let initialImages: number[] = [];
+  /** Fallbacks to decode once no visible, requested or preparing work remains; never awaited by `settle`. */
+  let prefetchedTails: number[] = [];
   let destroyed = false;
   let failure: GpuError | undefined;
   let clock = 0;
@@ -125,6 +127,22 @@ export function prepareRasterImages(
       }
 
       return destroyed ? err(gpuError('destroyed', 'The image cache has been destroyed')) : ok<void>(undefined);
+    },
+    /**
+     * Decodes the fallbacks of `images`, in order, whenever no visible, requested or preparing work remains, so pages
+     * can be composed before their first visit. Replaces any previous prefetch list; `settle` does not wait for it.
+     */
+    prefetchTails(images: Iterable<number>) {
+      if (destroyed) {
+        return;
+      }
+
+      prefetchedTails = [...new Set(images)];
+      pump();
+    },
+    /** Whether any view currently draws `image`, so its uploads can change the screen. */
+    isVisible(image: number) {
+      return visible.has(image);
     },
     /** Prepared images can draw immediately while detail is still loading; unvisited images return undefined. */
     get(index: number) {
@@ -295,10 +313,15 @@ export function prepareRasterImages(
       return;
     }
 
-    const id = nextImage();
+    let id = nextImage();
 
     if (id === undefined) {
       finish();
+      id = prefetchedTails.find((image) => !ready.has(image) && !failedImages.has(image));
+    }
+
+    if (id === undefined) {
+      prefetchedTails = [];
       return;
     }
 

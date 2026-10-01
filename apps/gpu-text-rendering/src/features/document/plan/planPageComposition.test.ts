@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { drawOffset, hairlineKind } from './drawRecord';
 import type { PaintNode } from './paintTree';
 import { planPageComposition } from './planPageComposition';
 
@@ -74,6 +75,30 @@ it('caches dense fills in an ordinary PDF while keeping the following text direc
   expect(plan.overview.size).toBe(0);
   expect(plan.cached).toEqual([[leaf(0)], []]);
   expect(plan.direct).toEqual([[leaf(1)], ordinary]);
+});
+
+it('offers complete pages to overview tiles unless a hairline needs screen-space width', () => {
+  const records = new DataView(new ArrayBuffer(160));
+  records.setUint32(80 + drawOffset.kind, hairlineKind, true);
+  const plan = planPageComposition(records.buffer, [[leaf(0)], [leaf(0), leaf(1)], []]);
+
+  expect([...plan.wholePages]).toEqual([0, 2]);
+});
+
+it('leaves composed pages without foreground to their prefix tiles', () => {
+  const groups = [group(), group(), group()];
+  const plan = planPageComposition(new ArrayBuffer(160), [groups, [...groups, leaf(1)]]);
+
+  expect([...plan.wholePages]).toEqual([1]);
+});
+
+it('marks pages with dense outlines so their tiles are not prepared ahead of display', () => {
+  const records = new DataView(new ArrayBuffer(160));
+  records.setUint32(80 + drawOffset.count, 2203, true);
+  const plan = planPageComposition(records.buffer, [[leaf(0)], [leaf(1), leaf(0)]]);
+
+  expect([...plan.densePages]).toEqual([1]);
+  expect([...plan.wholePages]).toEqual([0, 1]);
 });
 
 it('does not mistake raster image dimensions for dense curve counts', () => {

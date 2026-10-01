@@ -464,5 +464,6 @@ const frame: SceneFrame = {
   rotation: [1, 0, 0, 1],
   visible: [],
   vectorOnly: false,
-  grids: false
+  grids: false,
+  moving: false
 };

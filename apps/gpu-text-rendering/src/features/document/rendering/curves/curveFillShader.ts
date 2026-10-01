@@ -1,7 +1,7 @@
 import tgpu, { d, std } from 'typegpu';
 import { gridCoverage } from './coverageGrid';
 import { tableCoverage } from './coverageTable';
-import { curveLayout, shapeOnlySlot } from './curveBindings';
+import { CurveInstance, curveLayout, shapeOnlySlot } from './curveBindings';
 import { outlineCoverage } from './curveCoverage';
 
 /** Uses area tables only when the draw's projected footprints are entirely within their supported range. */
@@ -22,7 +22,10 @@ export const cachedCurveFragment = tgpu.fragmentFn({
   return paintCoverage(coverage.x, item.color, item.clip, input.pagePosition);
 });
 
-/** Magnified fills evaluate source cubics without carrying the area-table shader into each pixel. */
+/**
+ * Magnified fills evaluate source cubics, skipping boundary-free grid cells, unless a magnified table built on demand
+ * already covers the pixel finely enough.
+ */
 export const analyticCurveFragment = tgpu.fragmentFn({
   in: {
     local: d.vec2f,
@@ -35,14 +38,52 @@ export const analyticCurveFragment = tgpu.fragmentFn({
 })((input) => {
   'use gpu';
   const item = curveLayout.$.instances[input.instance]!;
-  let coverage = gridCoverage(item.info.x, input.local, input.localDx, input.localDy);
+  const coverage = analyticCoverage(item, input.local, input.localDx, input.localDy);
 
-  if (coverage < 0) {
-    coverage = outlineCoverage(item, input.local, input.localDx, input.localDy);
+  return paintCoverage(coverage, item.color, item.clip, input.pagePosition);
+});
+
+/** Pairs with `cellCurveVertex`: solid cells are fully covered; boundary cells take the analytic path. */
+export const cellCurveFragment = tgpu.fragmentFn({
+  in: {
+    local: d.vec2f,
+    pagePosition: d.vec2f,
+    instance: d.interpolate('flat', d.u32),
+    localDx: d.interpolate('flat', d.vec2f),
+    localDy: d.interpolate('flat', d.vec2f),
+    solid: d.interpolate('flat', d.u32)
+  },
+  out: d.vec4f
+})((input) => {
+  'use gpu';
+  const item = curveLayout.$.instances[input.instance]!;
+  let coverage = d.f32(1);
+
+  if (input.solid === 0) {
+    coverage = analyticCoverage(item, input.local, input.localDx, input.localDy);
   }
 
   return paintCoverage(coverage, item.color, item.clip, input.pagePosition);
 });
+
+/** Table coverage where trusted, else grid lookup or source-cubic integration, blended across the trust range. */
+function analyticCoverage(item: d.Infer<typeof CurveInstance>, local: d.v2f, dx: d.v2f, dy: d.v2f) {
+  'use gpu';
+  const cached = tableCoverage(item.info.x, local, dx, dy);
+  let coverage = d.f32(cached.x);
+
+  if (cached.y < 1) {
+    let exact = gridCoverage(item.info.x, local, dx, dy);
+
+    if (exact < 0) {
+      exact = outlineCoverage(item, local, dx, dy);
+    }
+
+    coverage = std.mix(exact, cached.x, cached.y);
+  }
+
+  return coverage;
+}
 
 /** Ordinary unclipped fills avoid the register pressure of hairline and analytic-clip evaluation. */
 export const simpleCurveFragment = tgpu.fragmentFn({

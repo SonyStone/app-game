@@ -3,7 +3,7 @@ import { viewLayout } from '../bindings';
 import { project } from '../pageShader';
 
 import { Cubic, CurveInstance, curveLayout, shapeOnlySlot } from './curveBindings';
-import { clipOutlineCoverage, outlineCoverage } from './curveCoverage';
+import { clipOutlineCoverage, outlineCoverage, segmentSide, windingCoverage } from './curveCoverage';
 
 /** Expands bounds by the pixel's half footprint, including a small rounding margin. */
 export const curveVertex = tgpu.vertexFn({
@@ -20,7 +20,86 @@ export const curveVertex = tgpu.vertexFn({
   'use gpu';
   const instance = input.instance;
   const item = curveLayout.$.instances[instance]!;
+  const shape = footprint(item);
+  const local = std.sub(std.mul(quadCorner(input.vertex), std.add(d.vec2f(1), std.mul(shape.margin, 2))), shape.margin);
 
+  return {
+    position: projected(item, local),
+    local,
+    pagePosition: transformed(item, local),
+    instance,
+    localDx: shape.localDx,
+    localDy: shape.localDy
+  };
+});
+
+/**
+ * Draws one magnified ordinary fill as a grid of cells: a non-indexed draw of six vertices per cell whose first instance
+ * is the outline's and whose first vertex is the cells per side shifted left by {@link cellGridShift}. Each cell is
+ * classified against the outline, widened by a pixel's footprint: off-screen cells and cells the boundary does not
+ * reach are dropped when outside and marked `solid` when inside, so only cells along the boundary evaluate coverage and
+ * a screen-filling figure costs little more than a flat fill. Outputs as {@link curveVertex}, plus `solid`.
+ */
+export const cellCurveVertex = tgpu.vertexFn({
+  in: { vertex: d.builtin.vertexIndex, instance: d.builtin.instanceIndex },
+  out: {
+    position: d.builtin.position,
+    local: d.vec2f,
+    pagePosition: d.vec2f,
+    instance: d.interpolate('flat', d.u32),
+    localDx: d.interpolate('flat', d.vec2f),
+    localDy: d.interpolate('flat', d.vec2f),
+    solid: d.interpolate('flat', d.u32)
+  }
+})((input) => {
+  'use gpu';
+  const instance = input.instance;
+  const item = curveLayout.$.instances[instance]!;
+  const shape = footprint(item);
+  const cells = d.f32(input.vertex >> cellGridShift);
+  const vertex = input.vertex & d.u32(cellVertexMask);
+  // Integer division would compile as float division in TypeGPU; these small integers divide exactly in f32.
+  const cell = std.floor(d.f32(vertex) / 6);
+  const span = std.add(d.vec2f(1), std.mul(shape.margin, 2));
+  const index = d.vec2f(cell - std.floor(cell / cells) * cells, std.floor(cell / cells));
+  const low = std.sub(std.mul(std.div(index, cells), span), shape.margin);
+  const high = std.sub(std.mul(std.div(std.add(index, d.vec2f(1)), cells), span), shape.margin);
+  const local = std.mix(low, high, quadCorner(vertex - d.u32(cell) * 6));
+  let position = projected(item, local);
+  let state = d.u32(0);
+
+  if (onScreen(item, low, high)) {
+    const pixel = std.mul(std.add(std.abs(shape.localDx), std.abs(shape.localDy)), 0.5);
+    state = cellState(item, std.mul(std.add(low, high), 0.5), std.add(std.mul(std.sub(high, low), 0.5), pixel));
+  }
+
+  // Every vertex of an outside cell collapses to one point, leaving nothing to rasterize.
+  if (state === 0) {
+    position = d.vec4f(2, 2, 0, 1);
+  }
+
+  return {
+    position,
+    local,
+    pagePosition: transformed(item, local),
+    instance,
+    localDx: shape.localDx,
+    localDy: shape.localDy,
+    solid: std.select(d.u32(0), d.u32(1), state === 1)
+  };
+});
+
+/** Bit position of the cells per side in a {@link cellCurveVertex} draw's first vertex. */
+export const cellGridShift = 16;
+/** Bits of a {@link cellCurveVertex} vertex index below the cells per side. */
+const cellVertexMask = (1 << cellGridShift) - 1;
+
+/** An instance's quad margin and constant pixel derivatives, all in its local unit space. */
+const Footprint = d.struct({ margin: d.vec2f, localDx: d.vec2f, localDy: d.vec2f });
+
+/** The pixel derivatives of an instance's local space and the half-pixel margin its quad needs for anti-aliasing. */
+function footprint(item: d.Infer<typeof CurveInstance>) {
+  'use gpu';
   const scale = std.mul(viewLayout.$.view.mul, d.vec2f(1, -1));
   const r = viewLayout.$.view.rotation;
   const a = std.mul(item.matrix.xy, scale);
@@ -30,27 +109,86 @@ export const curveVertex = tgpu.vertexFn({
   const signed = x.x * y.y - x.y * y.x;
   const determinant = std.max(std.abs(signed), 1e-20);
   const inverse = std.select(-1, 1, signed >= 0) / determinant;
-  const margin = std.mul(
-    d.vec2f((std.abs(y.x) + std.abs(y.y)) / determinant, (std.abs(x.x) + std.abs(x.y)) / determinant),
-    0.501
-  );
-  const corner = d.vec2f(
-    std.select(0, 1, input.vertex === 1 || input.vertex === 4 || input.vertex === 5),
-    std.select(0, 1, input.vertex >= 2 && input.vertex !== 4)
-  );
-  const local = std.sub(std.mul(corner, std.add(d.vec2f(1), std.mul(margin, 2))), margin);
 
-  return {
-    position: projected(item, local),
-    local,
-    pagePosition: transformed(item, local),
-    instance,
+  return Footprint({
+    margin: std.mul(
+      d.vec2f((std.abs(y.x) + std.abs(y.y)) / determinant, (std.abs(x.x) + std.abs(x.y)) / determinant),
+      0.501
+    ),
     // Affine derivatives are constant. Interpolated dpdx/dpdy on tiny quads can introduce
     // cross-axis noise and incorrectly send axis-aligned text through rotated-pixel integration.
     localDx: std.mul(d.vec2f(y.y, -x.y), inverse),
     localDy: std.mul(d.vec2f(y.x, -x.x), inverse)
-  };
-});
+  });
+}
+
+/** The unit-square corner of vertex 0–5 of a two-triangle quad. */
+function quadCorner(vertex: number) {
+  'use gpu';
+  return d.vec2f(
+    std.select(0, 1, vertex === 1 || vertex === 4 || vertex === 5),
+    std.select(0, 1, vertex >= 2 && vertex !== 4)
+  );
+}
+
+/** Whether any part of the box from `low` to `high` in an instance's unit space projects inside clip space. */
+function onScreen(item: d.Infer<typeof CurveInstance>, low: d.v2f, high: d.v2f) {
+  'use gpu';
+  const a = projected(item, low).xy;
+  const b = projected(item, d.vec2f(high.x, low.y)).xy;
+  const c = projected(item, d.vec2f(low.x, high.y)).xy;
+  const e = projected(item, high).xy;
+  const minimum = std.min(std.min(a, b), std.min(c, e));
+  const maximum = std.max(std.max(a, b), std.max(c, e));
+  return minimum.x <= 1 && minimum.y <= 1 && maximum.x >= -1 && maximum.y >= -1;
+}
+
+/**
+ * Classifies the box at `center` with half-size `extent` in an outline's unit space: 2 when a segment may cross it,
+ * otherwise 1 inside the fill and 0 outside.
+ */
+function cellState(item: d.Infer<typeof CurveInstance>, center: d.v2f, extent: d.v2f) {
+  'use gpu';
+  const binned = item.bins !== 0;
+  const first = std.select(d.u32(0), d.u32(std.clamp(std.floor((center.y - extent.y) * 128), 0, 127)), binned);
+  const last = std.select(d.u32(0), d.u32(std.clamp(std.floor((center.y + extent.y) * 128), 0, 127)), binned);
+  const middle = std.select(d.u32(0), d.u32(std.clamp(std.floor(center.y * 128), 0, 127)), binned);
+  let winding = d.i32(0);
+
+  for (let row = first; row <= last; row++) {
+    let start = d.u32(item.info.x);
+    let count = d.u32(item.info.y);
+
+    if (binned) {
+      start = curveLayout.$.bins[item.bins + row * 2]!;
+      count = curveLayout.$.bins[item.bins + row * 2 + 1]!;
+    }
+
+    for (let i = d.u32(0); i < count; i++) {
+      let index = start + i;
+
+      if (binned) {
+        index = curveLayout.$.bins[index]!;
+      }
+
+      const curve = curveLayout.$.curves[index]!;
+      const side = segmentSide(curve, center, extent);
+
+      if (side < 0) {
+        return d.u32(2);
+      }
+
+      const minimum = std.min(curve.p0.y, curve.p3.y);
+      const maximum = std.max(curve.p0.y, curve.p3.y);
+
+      if (row === middle && side === 1 && center.y >= minimum && center.y < maximum) {
+        winding += std.select(d.i32(-1), d.i32(1), curve.p3.y > curve.p0.y);
+      }
+    }
+  }
+
+  return std.select(d.u32(0), d.u32(1), windingCoverage(winding, item.info.z) > 0);
+}
 
 /** Integrates original fill boundaries; zero-width strokes retain their one-pixel hairline treatment. */
 export const curveFragment = tgpu.fragmentFn({

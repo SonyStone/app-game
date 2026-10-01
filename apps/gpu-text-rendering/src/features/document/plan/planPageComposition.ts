@@ -18,6 +18,10 @@ import type { PaintNode } from './paintTree';
  * prefix. The renderer bypasses that prefix at reading/magnified scales unless GPU cost requires it.
  * Dense fills and clip chains that exceed the small-outline coverage-table limit are cached even
  * in documents without transparency groups. Their ordinary suffix stays direct.
+ * Separately, `wholePages` lists pages whose complete paint, foreground included, may be cached for
+ * multi-page overviews; pages with hairlines are excluded because their width is defined in screen pixels, and composed
+ * pages without foreground because their prefix tiles already hold the complete page. `densePages` lists pages whose
+ * small tiles are disproportionately expensive to render, so they should not be prepared ahead of display.
  */
 export function planPageComposition(
   instances: ArrayBuffer,
@@ -41,10 +45,21 @@ export function planPageComposition(
   const images = new Map<number, Set<number>>();
   const cached: PaintNode[][] = [];
   const direct: PaintNode[][] = [];
+  const wholePages = new Set<number>();
+  const densePages = new Set<number>();
 
   for (const [page, nodes] of trees.entries()) {
     const densePath = (index: number) => denseOutline(records, index) || denseClips[drawClip(records, index)] === 1;
     const dense = containsOutline(nodes, densePath);
+
+    const overviewCandidate = !containsHairline(nodes, records);
+
+    // A minified dense outline integrates nearly all its segments in every pixel, so its small tiles can stall a
+    // mobile GPU for seconds. Build them only when shown, as its composed prefix always did.
+    if (dense) {
+      densePages.add(page);
+    }
+
     const cost = compositeCost(nodes);
     const expensive = cost >= 8 || dense;
     const largePath = (index: number) => costlyOutline(records, index, pageAreas?.[page] ?? 1);
@@ -78,7 +93,15 @@ export function planPageComposition(
     if ((!expensive && !overviewOnly) || boundary === 0 || containsHairline(prefix, records)) {
       cached.push([]);
       direct.push(nodes);
+      if (overviewCandidate) {
+        wholePages.add(page);
+      }
       continue;
+    }
+
+    // Without foreground, the composed prefix is already the complete page.
+    if (overviewCandidate && foreground.length > 0) {
+      wholePages.add(page);
     }
 
     pages.add(page);
@@ -90,7 +113,7 @@ export function planPageComposition(
     images.set(page, imageResources(prefix));
   }
 
-  return { pages, overview, cached, direct, images };
+  return { pages, overview, cached, direct, images, wholePages, densePages };
 }
 
 function containsImage(nodes: PaintNode[]): boolean {

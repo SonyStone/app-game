@@ -70,7 +70,8 @@ describe('virtual texture addressing', () => {
       rotation: [0, 1, -1, 0],
       visible: [],
       vectorOnly: false,
-      grids: false
+      grids: false,
+      moving: false
     };
     const visible = visibleImage(data, 0, frame)!;
     expect([visible.left, visible.right, visible.top, visible.bottom]).toEqual([0.25, 0.75, 0.25, 0.75]);

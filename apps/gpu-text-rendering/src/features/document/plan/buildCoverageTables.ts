@@ -1,5 +1,6 @@
 import { drawOffset, drawWords } from './drawRecord';
 import { outlineGrid } from './outlineGrid';
+import { writeOutlineTable } from './outlineTable';
 
 /** CPU-only area integrals, computed in document workers before transferring geometry. */
 export function buildCoverageTables(document: { instances: ArrayBuffer; curves: ArrayBuffer }) {
@@ -89,38 +90,7 @@ export function buildCoverageTables(document: { instances: ArrayBuffer; curves: 
       if (used + stride * stride > areas.length) {
         break;
       }
-      canvas.width = canvas.height = size;
-      context.fillStyle = 'white';
-      const path = new Path2D();
-      let endX = NaN;
-      let endY = NaN;
 
-      for (let curve = start; curve < start + entry.count; curve++) {
-        const offset = curve * 8;
-        const x = curves[offset]!;
-        const y = curves[offset + 1]!;
-
-        if (x !== endX || y !== endY) {
-          path.closePath();
-          path.moveTo(x * size, y * size);
-        }
-
-        path.bezierCurveTo(
-          curves[offset + 2]! * size,
-          curves[offset + 3]! * size,
-          curves[offset + 4]! * size,
-          curves[offset + 5]! * size,
-          curves[offset + 6]! * size,
-          curves[offset + 7]! * size
-        );
-        endX = curves[offset + 6]!;
-        endY = curves[offset + 7]!;
-      }
-
-      path.closePath();
-      context.clearRect(0, 0, size, size);
-      context.fill(path, entry.rule === 1 ? 'evenodd' : 'nonzero');
-      const pixels = context.getImageData(0, 0, size, size).data;
       const base = used;
       used += stride * stride;
 
@@ -131,15 +101,7 @@ export function buildCoverageTables(document: { instances: ArrayBuffer; curves: 
 
       grids.set(outlineGrid(curves, start, entry.count, entry.rule), gridUsed);
       gridUsed += 64;
-
-      for (let y = 1; y <= size; y++) {
-        let row = 0;
-
-        for (let x = 1; x <= size; x++) {
-          row += pixels[((y - 1) * size + x - 1) * 4 + 3]! / 255;
-          areas[base + y * stride + x] = row + areas[base + (y - 1) * stride + x]!;
-        }
-      }
+      writeOutlineTable(context, curves, { first: start, count: entry.count, rule: entry.rule }, size, areas, base);
     }
   }
 

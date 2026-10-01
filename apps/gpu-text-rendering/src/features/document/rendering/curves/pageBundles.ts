@@ -11,8 +11,8 @@ export function createPageBundles(
   keep: KeepGpuResource
 ) {
   // Pan reuses commands. Crossing a shader-selection scale band records the page's new variant; views at different
-  // scales keep one variant each. Keep ordinary books resident instead of evicting them every overview frame.
-  const capacity = Math.max(512, Math.min(trees.length, 2048));
+  // scales keep one variant each, so two variants of every page stay resident instead of evicting each other.
+  const capacity = Math.max(512, Math.min(trees.length * 2, 4096));
   const cache = new Map<string, GPURenderBundle>();
   keep({ destroy: () => cache.clear() });
 

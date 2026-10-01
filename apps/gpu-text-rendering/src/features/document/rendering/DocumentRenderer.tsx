@@ -10,6 +10,7 @@ import type { TextDocument } from '../document';
 import { buildCoverage } from '../documentWorkerProtocol';
 import { createFrame } from './createFrame';
 import { createCurveRenderer, createGlyphRenderer, type TextRenderer } from './createTypeGpuRenderer';
+import { createDetailTableWorker } from './curves/createDetailTableWorker';
 import { createRasterWorker } from './curves/createRasterWorker';
 
 /**
@@ -42,6 +43,7 @@ export function DocumentRenderer(props: {
     const abort = new AbortController();
     // Only curve documents stream images and build coverage tables; prepareCurves creates their workers.
     let raster: ReturnType<typeof createRasterWorker> | undefined;
+    let tables: ReturnType<typeof createDetailTableWorker> | undefined;
     let prepared: TextRenderer | undefined;
 
     onGpuRelease(gpu.signal, dispose);
@@ -89,9 +91,10 @@ export function DocumentRenderer(props: {
 
     function prepareCurves(document: Extract<TextDocument, { kind: 'curves' }>) {
       raster = createRasterWorker();
+      tables = createDetailTableWorker();
 
       return createCurveRenderer(gpu, document, {
-        workers: { raster, coverage: (input) => buildCoverage(input, { signal: abort.signal }) },
+        workers: { raster, tables, coverage: (input) => buildCoverage(input, { signal: abort.signal }) },
         signal: abort.signal,
         initialFrame
       });
@@ -104,6 +107,7 @@ export function DocumentRenderer(props: {
 
       abort.abort();
       raster?.destroy();
+      tables?.destroy();
       prepared?.destroy();
     }
   }
