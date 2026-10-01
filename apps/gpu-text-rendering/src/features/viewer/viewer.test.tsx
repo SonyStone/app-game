@@ -30,6 +30,9 @@ const readGdoc = vi.fn<(input: string | ArrayBuffer) => ResultAsync<DecodedDocum
 const cancellations: ReturnType<typeof vi.fn>[] = [];
 let setProgress: (value: import('../document/documentProgress').DocumentProgress) => void;
 vi.mock('../document/rendering/createTypeGpuRenderer', () => ({ createGlyphRenderer: vi.fn() }));
+vi.mock('../scene/createSceneUpscaler', () => ({
+  createSceneUpscaler: () => ({ target: vi.fn(), blit: vi.fn(), destroy: vi.fn() })
+}));
 
 const cleanups: (() => void)[] = [];
 const frames = new Map<number, FrameRequestCallback>();

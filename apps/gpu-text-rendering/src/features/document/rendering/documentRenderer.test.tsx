@@ -137,12 +137,26 @@ it('draws with the current camera and reactive options', async () => {
   const mounted = mount();
   await settle();
   const view = views[0]!;
-  mounted.layers[0]!.draw({ pass: {} as GPURenderPassEncoder, width: 1, height: 1 });
+  mounted.layers[0]!.draw({
+    pass: {} as GPURenderPassEncoder,
+    width: 1,
+    height: 1,
+    moving: false,
+    strained: false,
+    scale: 1
+  });
   expect(view.draw.mock.lastCall![1]).toMatchObject({ grids: false });
 
   mounted.setGrids(true);
   flush();
-  mounted.layers[0]!.draw({ pass: {} as GPURenderPassEncoder, width: 1, height: 1 });
+  mounted.layers[0]!.draw({
+    pass: {} as GPURenderPassEncoder,
+    width: 1,
+    height: 1,
+    moving: false,
+    strained: false,
+    scale: 1
+  });
   expect(view.draw.mock.lastCall![1]).toMatchObject({ grids: true });
 });
 
@@ -222,7 +236,7 @@ function mount({ views: initialViews = 1 } = {}) {
   function drawnBy() {
     return layers.map((layer) => {
       views.forEach((view) => view.draw.mockClear());
-      layer.draw({ pass: {} as GPURenderPassEncoder, width: 1, height: 1 });
+      layer.draw({ pass: {} as GPURenderPassEncoder, width: 1, height: 1, moving: false, strained: false, scale: 1 });
       return views.find((view) => view.draw.mock.calls.length > 0)?.renderer;
     });
   }

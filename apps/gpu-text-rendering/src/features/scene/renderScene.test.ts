@@ -14,7 +14,7 @@ it('clears once and records all layers into the same pass before submitting once
   expect(encoder.beginRenderPass).toHaveBeenCalledWith({
     colorAttachments: [expect.objectContaining({ loadOp: 'clear', storeOp: 'store' })]
   });
-  expect(first).toHaveBeenCalledWith({ pass, width: 800, height: 600 });
+  expect(first).toHaveBeenCalledWith({ pass, width: 800, height: 600, moving: false, strained: false, scale: 1 });
   expect(second).toHaveBeenCalledWith(first.mock.calls[0]![0]);
   expect(first.mock.invocationCallOrder[0]).toBeLessThan(second.mock.invocationCallOrder[0]!);
   expect(pass.end).toHaveBeenCalledOnce();
