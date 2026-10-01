@@ -339,8 +339,10 @@ adb reverse --remove tcp:3180
 
 The curve-quality regression compares normal drawing with the unspecialized exact-curve
 path on dense text, images and transparency groups. It checks multiple scales,
-rotation, close views and zoom return, with a mean channel-error budget of 0.05/255 for the
-integral-table approximation; magnified views retain exact path parity. The test covers both ordinary page bundles
+rotation, close views and zoom return. Views that read coverage tables, including the magnified tables built on
+demand, keep a mean channel error below 0.15/255 (at most about 22/255 at glyph edges). Multi-page overviews draw
+whole-page tiles and allow 12/255, set by the fixture's one-texel image checkerboard; text stays near 1.5/255 there.
+The test covers both ordinary page bundles
 and transparency compositing. `GPU_TEXT_COMPARE_EXACT=1` adds the same pixel comparison
 and `normal.png`/`exact.png` captures to a single-file performance run after image uploads
 settle. No source PDF is required by the synthetic browser test.
