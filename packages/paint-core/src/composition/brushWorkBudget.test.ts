@@ -57,7 +57,8 @@ it.each([
       // A dropped/truncated gesture must never count as a successful optimization.
       expect(Math.max(...dabs.map((dab) => dab.x))).toBeGreaterThan(5900);
       const options = begin.mock.calls[0]![3];
-      if (name === 'KYLE Ultimate 2B Pencil') expect(options.tipLodBias).toBe(lod);
+      // LOD 0 keeps the exact mask path; coarse masks start at LOD 1.
+      if (name === 'KYLE Ultimate 2B Pencil') expect(options.tipLodBias).toBe(lod > 0 ? lod : undefined);
       else expect(options.smudge.pickupScale).toBe(lod > 0 && mixing === 'linear' ? 0.125 : undefined);
     } finally {
       stroke.cancel();

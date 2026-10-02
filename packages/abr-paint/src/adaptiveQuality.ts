@@ -31,6 +31,8 @@ export function adaptiveBrushQuality(
     // Classic retains its source filtering; its LOD spacing still reduces dense stroke work.
     pickupScale: lod > 0 && (values.tool.type === 'MixB' || (values.tool.type === 'SmTl' && mixing === 'linear'))
       ? quality.pickupScale : undefined,
-    lod: batchedPaint ? Math.min(3, lod) : undefined
+    // At LOD 0 every document pixel is visible, so strokes keep Photoshop's byte-exact mask path; only coarser
+    // views trade it for approximate coarse masks.
+    lod: batchedPaint && lod > 0 ? Math.min(3, lod) : undefined
   };
 }

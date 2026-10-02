@@ -37,7 +37,10 @@ it('uses integer LODs rather than zoom percentages for every brush family', () =
     expect(quality.minimumSpacing).toBe(8);
     expect(quality.lod).toBeUndefined(); // Preserve their specialized mask accumulation.
   }
-  expect(adaptiveBrushQuality(true, v, 0)?.lod).toBe(0);
+  // Full-resolution views keep the exact mask path; approximate coarse masks start at LOD 1.
+  expect(adaptiveBrushQuality(true, v, 0)?.lod).toBeUndefined();
+  expect(adaptiveBrushQuality(true, v, 1)?.lod).toBe(1);
+  expect(adaptiveBrushQuality(true, v, 5)?.lod).toBe(3);
 });
 
 it('reduces stamp density without losing input batches or letting previews advance the stroke', () => {
