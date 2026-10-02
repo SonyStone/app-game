@@ -227,6 +227,25 @@ export function textureTone(sample: number, invert: number, brightness: number, 
 }
 
 /**
+ * Coverage of one stamp that stands in for `ratio` stamps when adaptive quality widens the spacing. Every skipped
+ * stamp would have taken the same share of the remaining headroom, so the stand-in deposits
+ * 1 − (1 − coverage · flow)^ratio. `compensatedFlow` is the stamp's flow already raised the same way,
+ * 1 − (1 − flow)^ratio, as the stroke sampler stores it; the returned coverage times that flow is the combined
+ * deposit. Scaling only the flow cannot do this: at full flow a textured or soft tip would simply lose ink.
+ * Returns `coverage` unchanged for a ratio of 1 or less.
+ */
+export function spacingCoverage(coverage: number, compensatedFlow: number, ratio: number): number {
+  'use gpu';
+  if (ratio <= 1 || compensatedFlow <= 0) {
+    return coverage;
+  }
+
+  const flow = 1 - std.pow(std.max(0, 1 - compensatedFlow), 1 / ratio);
+  const deposit = 1 - std.pow(std.max(0, 1 - coverage * flow), ratio);
+  return std.clamp(deposit / compensatedFlow, 0, 1);
+}
+
+/**
  * Photoshop's RGB8 Wet Edges lookup for one completed stroke coverage value: a rising segment to 192 at half
  * coverage, then a parabola down to 150 at full coverage, so solid ink turns translucent and soft edges stay darker.
  * It is a per-pixel table, not a spatial edge filter. Apply once after texture, Dual Brush and the Pencil threshold,

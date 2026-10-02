@@ -42,9 +42,11 @@ it('gives every Megapack preset the same LOD sampling budget, including special 
         [3, 8],
         [6, 64]
       ] as const) {
-        expect(adaptiveBrushQuality(true, values, lod, values.tool.mode, mixing)?.minimumSpacing, brush.name).toBe(
-          spacing
-        );
+        // One stamp per view pixel; painting tools and the Mixer may widen that to a tenth of the stamp.
+        const quality = adaptiveBrushQuality(true, values, lod, values.tool.mode, mixing)!;
+        const retouch = ['SmTl', 'BlTl', 'ShTl', 'PcTl'].includes(values.tool.type);
+        expect(quality.minimumSpacing, brush.name).toBe(spacing);
+        expect(quality.tipSpacing, brush.name).toBe(retouch || lod === 0 ? undefined : lod === 1 ? 0.06 : 0.1);
       }
 
       expect(adaptiveBrushQuality(false, values, 3)).toBeUndefined();

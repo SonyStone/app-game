@@ -20,6 +20,8 @@ export type MaskRasterRect = {
   x: number; y: number; width: number; height: number;
   flow: number; opacity: number;
   color: readonly [number, number, number];
+  /** Adaptive spacing ratio of the dab; 1 for the preset's own spacing. */
+  spacing: number;
 };
 
 /** Quantizes the caller's normalized per-dab color once before byte-channel accumulation. */
@@ -43,7 +45,8 @@ export function maskRasterRects(data: ArrayLike<number>, offset: number, width: 
     for (let x = left; x < right; x += 2048) rectangles.push({
       x, y, width: Math.min(2048, right - x), height: Math.min(256, bottom - y),
       flow: data[offset + 8]!, opacity: data[offset + 9]!,
-      color: [data[offset + 12]!, data[offset + 13]!, data[offset + 14]!]
+      color: [data[offset + 12]!, data[offset + 13]!, data[offset + 14]!],
+      spacing: data[offset + 15]!
     });
   return rectangles;
 }

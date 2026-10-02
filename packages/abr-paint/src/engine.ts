@@ -44,7 +44,13 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
     : undefined;
   const dual = computedDual ? computedDualResource(computedDual) : storedDual;
   const quality = adaptiveBrushQuality(
-    adaptiveQuality ?? false, settings.values, lod, settings.blendMode, brush.mixing
+    adaptiveQuality ?? false,
+    settings.values,
+    lod,
+    settings.blendMode,
+    brush.mixing,
+    brush.size,
+    settings.values.tipKind === 'sampledBrush' ? tip : undefined
   );
   const input = {
     seed: settings.seed ?? crypto.getRandomValues(new Uint32Array(1))[0]!,
@@ -54,8 +60,10 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
     flow: filter ? 1 : brush.flow,
     opacity: filter ? 1 : brush.opacity,
     size: brush.size,
-    sampledTipGeometry: quality?.lod === undefined,
-    minimumSpacing: quality?.minimumSpacing
+    // Approximate coarse masks draw the same traced tip quads as the exact rasterizer.
+    sampledTipGeometry: true,
+    minimumSpacing: quality?.minimumSpacing,
+    tipSpacing: quality?.tipSpacing
   };
   const sampler = createAbrStrokeSampler(input, tip);
   let pencilContact = settings.values.tool.type === 'PcTl' && settings.values.tool.autoErase;
@@ -273,6 +281,7 @@ function dabs(stroke: PreviewStroke, secondary: boolean): Dab[] {
         secondary,
         sampledTip,
         spacingRatio: stroke.spacingRatios?.[i],
+        spacingStep: stroke.spacingSteps?.[i],
         mixing: stroke.mixing ? { wet: stroke.mixing[i * 2]!, mix: stroke.mixing[i * 2 + 1]! } : undefined
       }
     };

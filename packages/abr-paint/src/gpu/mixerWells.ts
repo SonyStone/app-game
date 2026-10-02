@@ -203,10 +203,12 @@ export function createMixerWells(root: TgpuRoot) {
       mix: number,
       flow: number,
       distanceInDiameters: number,
-      batch?: ReturnType<typeof commandBatch>
+      batch?: ReturnType<typeof commandBatch>,
+      /** Adaptive spacing of this dab; see mixerDose. */
+      spacing?: Parameters<typeof mixerDose>[3]
     ) {
       if (!active) throw new Error('Begin the Mixer Brush stroke before sampling.');
-      const dose = mixerDose(remaining, flow, distanceInDiameters);
+      const dose = mixerDose(remaining, flow, distanceInDiameters, spacing);
       const { exchange, available } = dose;
       const commands = batch ?? commandBatch(root.device);
       const slot = slots[reserve(commands)]!;

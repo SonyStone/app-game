@@ -14,6 +14,8 @@ import {
   abrStampLayout,
   compositeLayout,
   planRowLayout,
+  TracedQuad,
+  tracedQuadLayout,
   createAbrPipelines,
   extraLane,
   flagsLane,
@@ -107,6 +109,7 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
   let sharedTips: ReturnType<typeof prepareTips> | undefined;
   let sharedSecondaryTips: ReturnType<typeof prepareSecondaryTips> | undefined;
   let planRowData = new Int32Array(0);
+  let quadData = new Float32Array(0);
   let settings: PreparedSettings | undefined;
   let tip: CoverageTexture | undefined;
   let dual: CoverageTexture | undefined;
@@ -149,7 +152,8 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
         pattern: !!value.pattern,
         dual: !!value.dual,
         smudge: !!value.smudge,
-        mixer: !!value.mixer
+        mixer: !!value.mixer,
+        tipSize: { width: value.tip.width, height: value.tip.height }
       };
       maskColor = { x: 0, y: 0, z: 0 };
       bindings = new WeakMap();
@@ -310,7 +314,7 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
       if (maskMode) {
         drawMasked(tile, commands, binding, maskMode, secondCount, tx, ty);
       } else {
-        drawPrimary(tile, commands, binding, secondCount);
+        drawPrimary(tile, commands, binding, secondCount, tx, ty);
       }
     },
     composite(tile: AbrTile, pass: GPURenderPassEncoder, pickup?: AbrPickup) {
@@ -471,6 +475,7 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
         planRowData[index * 4] = row.firstRow;
         planRowData[index * 4 + 1] = tx * 256 - row.x;
         planRowData[index * 4 + 2] = ty * 256 - row.y;
+        planRowData[index * 4 + 3] = Math.round(ordered[index]!.abr!.data[15]! * 1024);
       });
       root.device.queue.writeBuffer(root.unwrap(tile.planRows), 0, planRowData, 0, secondCount * 4);
     }
@@ -627,7 +632,9 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
     tile: AbrTile,
     commands: ReturnType<typeof commandBatch>,
     binding: ReturnType<typeof createBindings>,
-    secondCount: number
+    secondCount: number,
+    tx: number,
+    ty: number
   ) {
     const pass = commands.encoder().beginRenderPass({
       colorAttachments: [
@@ -639,12 +646,58 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
     // that region into ordinary document pixels, including after tile eviction.
     const side = 256 / paramsData[paramsOffsets.rasterScale]!;
     pass.setViewport(0, 0, side, side, 0, 1);
-    pipelines.primary
-      .with(pass)
-      .with(binding.primary)
-      .with(abrStampLayout, tile.stamps)
-      .draw(6, ordered.length - secondCount, 0, secondCount);
+    if (uploadTracedQuads(tile, secondCount, tx, ty)) {
+      pipelines.tracedPrimary
+        .with(pass)
+        .with(binding.primary)
+        .with(abrStampLayout, tile.stamps)
+        .with(tracedQuadLayout, tile.quads)
+        .draw(6, ordered.length - secondCount, 0, secondCount);
+    } else {
+      pipelines.primary
+        .with(pass)
+        .with(binding.primary)
+        .with(abrStampLayout, tile.stamps)
+        .draw(6, ordered.length - secondCount, 0, secondCount);
+    }
+
     pass.end();
+  }
+
+  /** Uploads the traced tip quads of the primary dabs at their instance indices. Returns false, uploading nothing,
+   * when a dab has no traced tip or a projected one; those keep the stamp's own rotated rectangle.
+   */
+  function uploadTracedQuads(tile: AbrTile, secondCount: number, tx: number, ty: number) {
+    const floats = ordered.length * tracedQuadFloats;
+    if (quadData.length < floats) {
+      quadData = new Float32Array(Math.max(floats, quadData.length * 2));
+    }
+
+    const tip = settings!.tipSize;
+    for (let index = secondCount; index < ordered.length; index++) {
+      const quad = ordered[index]!.abr?.sampledTip?.quad;
+      if (!quad || quad.length !== 4 || quad.some((vertex) => vertex[4] !== undefined)) {
+        return false;
+      }
+
+      const first = quad[0]!, right = quad[1]!, opposite = quad[2]!, below = quad[3]!;
+      const at = index * tracedQuadFloats;
+      quadData[at] = (first[0]! + opposite[0]!) / 2 - tx * 256;
+      quadData[at + 1] = (first[1]! + opposite[1]!) / 2 - ty * 256;
+      quadData[at + 2] = (right[0]! - first[0]!) / 2;
+      quadData[at + 3] = (right[1]! - first[1]!) / 2;
+      quadData[at + 4] = (below[0]! - first[0]!) / 2;
+      quadData[at + 5] = (below[1]! - first[1]!) / 2;
+      // Source coordinates include a one-pixel margin on every side of the tip.
+      quadData[at + 6] = (first[2]! - 0.5) / tip.width;
+      quadData[at + 7] = (first[3]! - 0.5) / tip.height;
+      quadData[at + 8] = (opposite[2]! - 0.5) / tip.width;
+      quadData[at + 9] = (opposite[3]! - 0.5) / tip.height;
+    }
+
+    root.device.queue.writeBuffer(root.unwrap(tile.quads), secondCount * tracedQuadFloats * 4, quadData,
+      secondCount * tracedQuadFloats, (ordered.length - secondCount) * tracedQuadFloats);
+    return true;
   }
 
   /** Keeps compiled tip plans alive until their readers are submitted. */
@@ -796,6 +849,8 @@ type PreparedSettings = Pick<AbrRasterSettings, 'values' | 'tipLodBias' | 'blend
   dual: boolean;
   smudge: boolean;
   mixer: boolean;
+  /** Pixel size of the primary tip, for mapping traced source coordinates to its texture. */
+  tipSize: { width: number; height: number };
 };
 
 /** Tile-local mapping of a captured canvas patch; uniforms are consumed before the next write. */
@@ -836,12 +891,13 @@ function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: n
   const pickupParams = root.createBuffer(PickupParams).$usage('uniform');
   const stamps = root.createBuffer(d.arrayOf(Stamp, capacity)).$usage('vertex');
   const planRows = root.createBuffer(d.arrayOf(d.vec4i, capacity)).$usage('vertex');
+  const quads = root.createBuffer(d.arrayOf(TracedQuad, capacity)).$usage('vertex');
   const coverage = createAbrCoverage(root.device, { mask: root.unwrap(mask), paint: root.unwrap(paint), dual: root.unwrap(dualMask) });
   const tile = {
     capacity,
     coverage,
     /** Additional ABR textures and instance data, excluding borrowed base/mask and small uniforms. */
-    bytes: (): number => 256 * 256 * 4 * 2 + capacity * 80 + (tile.maskBatch?.bytes ?? 0) + (tile.pattern?.region.bytes ?? 0),
+    bytes: (): number => 256 * 256 * 4 * 2 + capacity * 128 + (tile.maskBatch?.bytes ?? 0) + (tile.pattern?.region.bytes ?? 0),
     pattern: undefined as { region: ReturnType<ReturnType<typeof createPatternRasterGpu>['rasterize']>;
       source: symbol; tx: number; ty: number; scale: number } | undefined,
     maskBatch: undefined as ReturnType<ReturnType<typeof createMaskRasterGpu>['createBatch']> | undefined,
@@ -851,6 +907,7 @@ function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: n
     pickupParams,
     stamps,
     planRows,
+    quads,
     paintView: coverage.views.paint,
     dualView: coverage.views.dual,
     maskView: coverage.views.mask,
@@ -866,6 +923,7 @@ function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: n
       pickupParams.destroy();
       stamps.destroy();
       planRows.destroy();
+      quads.destroy();
     }
   };
   return tile;
@@ -889,6 +947,9 @@ const sampledMaskBatchLimit = 512;
 
 /** Covered pixels per progress batch of batched masks: about 110 stamps of a 95 px tip, 20 of a 222 px tip. */
 const maskBatchCoverage = 1024 * 1024;
+
+/** Floats of one TracedQuad instance. */
+const tracedQuadFloats = d.sizeOf(TracedQuad) / 4;
 
 /** A transformed sampled tip produced by the stroke sampler. */
 type SampledTip = NonNullable<NonNullable<Dab['abr']>['sampledTip']>;

@@ -10,6 +10,7 @@ import {
   retouchCompositeInSpace,
   sampleMixing,
   textureCoverage,
+  spacingCoverage,
   textureTone,
   wetEdgesCoverage
 } from '@app-game/abr-brush/effects';
@@ -28,6 +29,34 @@ export function createAbrPipelines(root: TgpuRoot) {
       attribs: abrStampLayout.attrib,
       vertex,
       fragment,
+      targets: {
+        paint: {
+          format: 'rgba8unorm',
+          blend: {
+            color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }
+          }
+        },
+        mask: {
+          format: 'rgba8unorm',
+          blend: {
+            color: { operation: 'max', srcFactor: 'one', dstFactor: 'one' },
+            alpha: { operation: 'max', srcFactor: 'one', dstFactor: 'one' }
+          }
+        }
+      }
+    }),
+    /** The same targets for approximate coarse masks, drawn with each stamp's traced tip quad. */
+    tracedPrimary: root.createRenderPipeline({
+      attribs: {
+        placement: tracedQuadLayout.attrib.placement,
+        axis: tracedQuadLayout.attrib.axis,
+        corners: tracedQuadLayout.attrib.corners,
+        dynamics: abrStampLayout.attrib.dynamics,
+        color: abrStampLayout.attrib.color
+      },
+      vertex: tracedVertex,
+      fragment: tracedFragment,
       targets: {
         paint: {
           format: 'rgba8unorm',
@@ -79,7 +108,7 @@ export function createAbrPipelines(root: TgpuRoot) {
       targets: { format: 'rgba8unorm' }
     }),
     sampledTip: root.createRenderPipeline({
-      attribs: { dynamics: abrStampLayout.attrib.dynamics },
+      attribs: { dynamics: abrStampLayout.attrib.dynamics, color: abrStampLayout.attrib.color },
       vertex: sampledTipVertex,
       fragment: sampledTipFragment,
       targets: { format: 'rgba8unorm' }
@@ -163,8 +192,18 @@ export const Stamp = d.struct({ bounds: d.vec4f, transform: d.vec4f, dynamics: d
 export const abrStampLayout = tgpu.vertexLayout(d.arrayOf(Stamp), 'instance');
 
 /**
+ * A stamp's traced tip parallelogram in tile pixels: `placement` is its center (xy) and the half edge along the
+ * tip's u axis (zw); `axis` is the half edge along v (xy) and the tip texture coordinate at the first corner (zw);
+ * `corners` is the texture coordinate at the opposite corner (xy).
+ */
+export const TracedQuad = d.struct({ placement: d.vec4f, axis: d.vec4f, corners: d.vec4f });
+
+/** Instance-rate vertex layout for traced tip quads, parallel to abrStampLayout. */
+export const tracedQuadLayout = tgpu.vertexLayout(d.arrayOf(TracedQuad), 'instance');
+
+/**
  * Instance-rate location of a stamp's complete row plan: x is its first uploaded row, yz the tile origin relative to
- * the plan's origin in document pixels.
+ * the plan's origin in document pixels, w the stamp's adaptive spacing ratio in 1/1024 units.
  */
 export const planRowLayout = tgpu.vertexLayout(d.arrayOf(d.vec4i), 'instance');
 
@@ -223,7 +262,9 @@ export function sampledMaskByte(x: number, row: number): number {
   const py = d.u32(at / 256);
   const byte = sampleTipPlanByte(d.u32(d.i32(px) + p.planX), p.planRow + row);
   const position = d.vec4f(d.f32(px) + 0.5, d.f32(py) + 0.5, 0, 1);
-  const coverage = stampEffects(d.f32(std.max(byte, 0)) / 255, position, p.sourceData);
+  const coverage = spacingCoverage(
+    stampEffects(d.f32(std.max(byte, 0)) / 255, position, p.sourceData), p.sourceData.x, p.color.w
+  );
   return d.u32(std.round(std.clamp(coverage, 0, 1) * 255));
 }
 
@@ -272,6 +313,51 @@ const fragment = tgpu.fragmentFn({
   return { paint: coverage.paint, mask: coverage.mask };
 });
 
+const tracedVertex = tgpu.vertexFn({
+  in: {
+    index: d.builtin.vertexIndex,
+    placement: d.vec4f,
+    axis: d.vec4f,
+    corners: d.vec4f,
+    dynamics: d.vec4f,
+    color: d.vec4f
+  },
+  out: { position: d.builtin.position, uv: d.vec2f, dynamics: d.vec4f, color: d.vec4f }
+})((input) => {
+  'use gpu';
+  const corners = d.arrayOf(
+    d.vec2f,
+    6
+  )([d.vec2f(-1, -1), d.vec2f(1, -1), d.vec2f(-1, 1), d.vec2f(-1, 1), d.vec2f(1, -1), d.vec2f(1, 1)]);
+  const corner = corners[input.index]!;
+  const pixel = std.add(
+    input.placement.xy,
+    std.add(std.mul(input.placement.zw, corner.x), std.mul(input.axis.xy, corner.y))
+  );
+  const along = std.add(std.mul(corner, 0.5), d.vec2f(0.5));
+  return {
+    position: d.vec4f(pixel.x / 128 - 1, 1 - pixel.y / 128, 0, 1),
+    uv: std.mix(input.axis.zw, input.corners.xy, along),
+    dynamics: d.vec4f(input.dynamics),
+    color: d.vec4f(input.color)
+  };
+});
+
+/** The traced quad carries Photoshop's one-pixel margin around the tip; outside the tip it deposits nothing. */
+const tracedFragment = tgpu.fragmentFn({
+  in: { position: d.builtin.position, uv: d.vec2f, dynamics: d.vec4f, color: d.vec4f },
+  out: { paint: d.vec4f, mask: d.vec4f }
+})((input) => {
+  'use gpu';
+  const position = d.vec4f(std.mul(input.position.xy, stampLayout.$.params.rasterScale), input.position.zw);
+  const coverage = shadeStamp(position, input.uv, input.dynamics, input.color);
+  const inside = input.uv.x >= 0 && input.uv.y >= 0 && input.uv.x <= 1 && input.uv.y <= 1;
+  return {
+    paint: std.select(d.vec4f(0), coverage.paint, inside),
+    mask: std.select(d.vec4f(0), coverage.mask, inside)
+  };
+});
+
 const maskSourceFragment = tgpu.fragmentFn({
   in: { position: d.builtin.position, uv: d.vec2f, dynamics: d.vec4f, color: d.vec4f },
   out: d.vec4f
@@ -281,22 +367,38 @@ const maskSourceFragment = tgpu.fragmentFn({
 });
 
 const sampledTipVertex = tgpu.vertexFn({
-  in: { index: d.builtin.vertexIndex, instance: d.builtin.instanceIndex, dynamics: d.vec4f },
-  out: { position: d.builtin.position, firstRow: d.interpolate('flat', d.u32), dynamics: d.vec4f }
+  in: { index: d.builtin.vertexIndex, instance: d.builtin.instanceIndex, dynamics: d.vec4f, color: d.vec4f },
+  out: {
+    position: d.builtin.position,
+    firstRow: d.interpolate('flat', d.u32),
+    dynamics: d.vec4f,
+    spacing: d.interpolate('flat', d.f32)
+  }
 })((input) => {
   'use gpu';
   const x = d.f32((input.index << 1) & 2);
   const y = d.f32(input.index & 2);
-  return { position: d.vec4f(x * 2 - 1, 1 - y * 2, 0, 1), firstRow: input.instance * 256, dynamics: input.dynamics };
+  return {
+    position: d.vec4f(x * 2 - 1, 1 - y * 2, 0, 1),
+    firstRow: input.instance * 256,
+    dynamics: input.dynamics,
+    spacing: input.color.w
+  };
 });
 
 const sampledTipFragment = tgpu.fragmentFn({
-  in: { position: d.builtin.position, firstRow: d.interpolate('flat', d.u32), dynamics: d.vec4f },
+  in: {
+    position: d.builtin.position,
+    firstRow: d.interpolate('flat', d.u32),
+    dynamics: d.vec4f,
+    spacing: d.interpolate('flat', d.f32)
+  },
   out: d.vec4f
 })((input) => {
   'use gpu';
   const byte = sampleTipPlanByte(d.u32(input.position.x), input.firstRow + d.u32(input.position.y));
-  return d.vec4f(stampEffects(d.f32(std.max(byte, 0)) / 255, input.position, input.dynamics));
+  const coverage = stampEffects(d.f32(std.max(byte, 0)) / 255, input.position, input.dynamics);
+  return d.vec4f(spacingCoverage(coverage, input.dynamics.x, input.spacing));
 });
 
 const sampledSecondaryVertex = tgpu.vertexFn({
@@ -319,7 +421,8 @@ const sampledSecondaryFragment = tgpu.fragmentFn({
     d.u32(d.i32(input.position.x) + input.plan.y),
     d.u32(input.plan.x + d.i32(input.position.y) + input.plan.z)
   );
-  return d.vec4f(d.f32(std.max(byte, 0)) / 255);
+  // plan.w is the adaptive spacing ratio in 1/1024 units; the dual mask accumulates like a full-flow stamp.
+  return d.vec4f(spacingCoverage(d.f32(std.max(byte, 0)) / 255, 1, d.f32(input.plan.w) / 1024));
 });
 
 const Coverage = d.struct({ paint: d.vec4f, mask: d.vec4f });
@@ -330,22 +433,25 @@ function shadeStamp(position: d.v4f, tipUv: d.v2f, dynamics: d.v4f, color: d.v4f
   // Texture modes such as Height are nonlinear: averaging the tip before applying
   // them can erase fine ink entirely. Retain document-scale filtering for those tips.
   const bias = std.select(std.max(0, p.tipLodBias - std.log2(p.rasterScale)), 0, p.flags[flagsLane.texture]! > 0);
-  const coverage = stampEffects(
+  const tip = stampEffects(
     std.textureSampleBias(stampLayout.$.tip, stampLayout.$.sampler, tipUv, bias).r,
     position,
     dynamics
   );
+  const coverage = spacingCoverage(tip, dynamics.x, color.w);
   const flow = coverage * dynamics.x;
   const ceiling = std.select(0, dynamics.y, coverage > 0);
   // Approximate accumulation caps by transfer opacity, not by one tip's filtered
   // coverage. Repeated soft stamps must still be able to build dense pencil ink.
+  // The per-stamp cap is the largest coverage any stamp left on the pixel. Widened spacing leaves fewer stamps to
+  // take it from, so the cap sits halfway between the tip's own coverage and its spacing-compensated deposit.
   return Coverage({
     paint: d.vec4f(std.mul(color.rgb, flow), flow),
     mask: d.vec4f(
       coverage,
       ceiling,
       0,
-      std.select(coverage * dynamics.y, ceiling, p.maskAccumulation === maskAccumulation.approximate)
+      std.select((tip + coverage) * 0.5 * dynamics.y, ceiling, p.maskAccumulation === maskAccumulation.approximate)
     )
   });
 }
@@ -374,7 +480,8 @@ const secondaryFragment = tgpu.fragmentFn({ in: { uv: d.vec2f, dynamics: d.vec4f
   input
 ) => {
   'use gpu';
-  return d.vec4f(std.floor(std.textureSample(stampLayout.$.tip, stampLayout.$.sampler, input.uv).r * 255 + 0.5) / 255);
+  const coverage = std.floor(std.textureSample(stampLayout.$.tip, stampLayout.$.sampler, input.uv).r * 255 + 0.5) / 255;
+  return d.vec4f(spacingCoverage(coverage, 1, input.color.w));
 });
 
 const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
@@ -408,6 +515,11 @@ function compositePixel(position: d.v4f, paint: d.v4f, mask: d.v4f): d.v4f {
   const linear = p.origin[originLane.linearMixing]! > 0;
   const dualEnabled = p.flags[flagsLane.dual]! > 0;
   let alpha = d.f32(paint.a);
+  // Photoshop caps each dab's accumulation by its transfer opacity, so a stroke of equal dabs ends at the cap times
+  // its accumulated coverage, before stroke-wide texture and Dual Brush. Approximate masks keep the largest cap.
+  if (p.maskAccumulation === maskAccumulation.approximate) {
+    alpha *= mask.a;
+  }
   if (p.flags[flagsLane.texture]! > 0 && p.flags[flagsLane.textureEachTip]! === 0) {
     const sample = std.textureLoad(compositeLayout.$.pattern, xy, 0).r;
     const tone = textureTone(sample, p.tone[toneLane.invert]!, p.tone[toneLane.brightness]!, p.tone[toneLane.contrast]!);
@@ -426,7 +538,7 @@ function compositePixel(position: d.v4f, paint: d.v4f, mask: d.v4f): d.v4f {
     alpha = wetEdgesCoverage(alpha);
   }
   const opacity = std.select(mask.a, mask.g, dualEnabled && p.extra[extraLane.dualMode]! === dualHardMixMode);
-  if (p.maskAccumulation === maskAccumulation.stamp || p.maskAccumulation === maskAccumulation.approximate) {
+  if (p.maskAccumulation === maskAccumulation.stamp) {
     alpha = std.min(alpha, opacity);
   }
   alpha *= p.compositeOpacity;

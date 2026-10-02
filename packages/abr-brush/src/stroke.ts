@@ -76,6 +76,8 @@ export type PreviewStroke = {
   count: number;
   /** Detailed placement intervals represented by each adaptive stamp. Not part of the GPU vertex layout. */
   spacingRatios?: Float32Array;
+  /** The adaptive step that follows each stamp, in document pixels; parallel to `spacingRatios`. */
+  spacingSteps?: Float32Array;
   /** Mixer-only wetness/mix pairs, aligned with stamps; ordinary brush layout stays unchanged. */
   mixing?: Float32Array;
   /** Primary/secondary sampled-source placement retained in double precision through row planning. */
@@ -152,6 +154,10 @@ export function createAbrStrokeSampler(
      * Alters random/fade evolution; omit for detailed rendering.
      */
     minimumSpacing?: number;
+    /** With `minimumSpacing`: lets a step widen further, to this fraction of the longer side of its smallest
+     * stamp. Follows dynamic size, so a stamp shrunk by pressure also steps less.
+     */
+    tipSpacing?: number;
     /** Preview-only budget. The document engine leaves this unset. */
     maxStamps?: number;
   },
@@ -215,6 +221,7 @@ export function createAbrStrokeSampler(
   let data: number[] = [];
   let mixing: number[] = [];
   let spacingRatios: number[] = [];
+  let spacingSteps: number[] = [];
   let sampledTips: NonNullable<PreviewStroke['sampledTips']> = [];
   const sampledPrimary =
     input.sampledTipGeometry && !secondary && v.tool.type === 'PbTl' && v.tipKind === 'sampledBrush';
@@ -234,6 +241,7 @@ export function createAbrStrokeSampler(
     data = [];
     mixing = [];
     spacingRatios = [];
+    spacingSteps = [];
     sampledTips = [];
     for (const b of points) {
       if (data.length / stampStride >= (input.maxStamps ?? Infinity)) break;
@@ -271,7 +279,9 @@ export function createAbrStrokeSampler(
     return {
       data: new Float32Array(data),
       count: data.length / stampStride,
-      ...(retainSpacing ? { spacingRatios: new Float32Array(spacingRatios) } : {}),
+      ...(retainSpacing
+        ? { spacingRatios: new Float32Array(spacingRatios), spacingSteps: new Float32Array(spacingSteps) }
+        : {}),
       ...(sampledPrimary || sampledSecondary ? { sampledTips } : {}),
       ...(v.tool.type === 'MixB' ? { mixing: new Float32Array(mixing) } : {})
     };
@@ -350,6 +360,7 @@ export function createAbrStrokeSampler(
         mixing = [];
         sampledTips = [];
         spacingRatios = [];
+        spacingSteps = [];
         data = [];
       }
     }
@@ -704,16 +715,39 @@ export function createAbrStrokeSampler(
     // Photoshop's primary and secondary spacing loops both clamp the advance to
     // one document pixel, including their subpixel-coordinate paths.
     const detailed = Math.max(photoshopPlacement || secondary ? 1 : 0.25, advance);
-    const requested = timed ? undefined : input.minimumSpacing;
+    // A widened step must still overlap along any travel direction, so it is limited by the thinnest side of this
+    // step's stamps: a flat tip dragged sideways would otherwise leave gaps.
+    let thinnest = stampSize;
+    let smallest = stampSize;
+    for (let at = firstStamp; at < data.length; at += stampStride) {
+      thinnest = Math.min(thinnest, 2 * Math.min(data[at + 2]!, data[at + 3]!));
+      smallest = Math.min(smallest, 2 * Math.max(data[at + 2]!, data[at + 3]!));
+    }
+
+    const requested =
+      timed || input.minimumSpacing === undefined
+        ? undefined
+        : Math.max(input.minimumSpacing, (input.tipSpacing ?? 0) * smallest);
+
     const spacing =
       requested && Number.isFinite(requested) && requested > detailed
-        ? Math.max(detailed, Math.min(requested, stampSize * 0.25))
+        ? Math.max(detailed, Math.min(requested, thinnest * 0.25))
         : detailed;
     // Contact is one application, regardless of the spacing used for the following movement.
     const ratio = step === 1 ? 1 : spacing / detailed;
+    // A widened stamp stands in for `ratio` steps, so step-counted fades keep their length along the stroke.
+    step += ratio - 1;
     for (let at = firstStamp; at < data.length; at += stampStride) {
-      if (retainSpacing) spacingRatios.push(ratio);
-      if (ratio > 1 && !samplingTool) data[at + 8] = 1 - Math.pow(1 - Math.max(0, Math.min(1, data[at + 8]!)), ratio);
+      if (retainSpacing) {
+        spacingRatios.push(ratio);
+        spacingSteps.push(spacing);
+      }
+
+      if (ratio > 1 && !samplingTool) {
+        data[at + 8] = 1 - Math.pow(1 - Math.max(0, Math.min(1, data[at + 8]!)), ratio);
+        // The rasterizer raises each pixel's coverage by the same ratio; see spacingCoverage.
+        data[at + 15] = ratio;
+      }
     }
     return spacing;
   }

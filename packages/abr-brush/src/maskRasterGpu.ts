@@ -147,7 +147,8 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
             words![at + o.destinationStart] = address.destinationStart;
             words![at + o.packedRgba] = 1;
             for (let c = 0; c < 3; c++) floats![at + o.color + c] = rect.color[c]!;
-            floats![at + o.color + 3] = 1;
+            // Fixed-color accumulation never reads the color's alpha; the coverage stage finds the spacing ratio there.
+            floats![at + o.color + 3] = rect.spacing;
             for (let c = 0; c < 4; c++) floats![at + o.sourceData + c] = source?.data[(source.offset ?? 0) + c] ?? 0;
             words![at + o.planRow] = source ? source.firstRow + rect.y + (source.y ?? 0) : 0;
             words![at + o.planX] = source?.x ?? 0;

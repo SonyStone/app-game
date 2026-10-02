@@ -1,11 +1,31 @@
 import { d, std } from 'typegpu';
 
-/** Diameter-normalized reservoir dose. The exchange/depletion model still needs native calibration. */
-export function mixerDose(remaining: number, flow: number, distanceInDiameters: number) {
-  const exchange = Math.min(1, Math.max(0.01, distanceInDiameters));
-  const dose = flow * exchange * 0.05;
+/**
+ * Diameter-normalized reservoir dose. The exchange/depletion model still needs native calibration.
+ *
+ * Under adaptive spacing one dab stands in for `spacing.ratio` dabs at the preset's own spacing, and the reservoir
+ * loses the paint and exchanges the color those dabs would have; `flow` stays the flow of one such dab, before any
+ * compensation of the deposit. `spacing.step` is the adaptive step that follows this dab and `spacing.travelled` the
+ * one that led to it, both in diameters. The part of the distance within the longer of the two is travel along the
+ * stroke, which the replaced dabs share; the rest comes from scatter and is counted whole for each of them.
+ */
+export function mixerDose(
+  remaining: number,
+  flow: number,
+  distanceInDiameters: number,
+  spacing?: { ratio: number; step: number; travelled: number }
+) {
+  const ratio = Math.max(1, spacing?.ratio ?? 1);
+  const travel = Math.min(
+    distanceInDiameters,
+    spacing ? Math.max(spacing.step, spacing.travelled) : distanceInDiameters
+  );
+  const scatter = Math.sqrt(Math.max(0, distanceInDiameters ** 2 - travel ** 2));
+  const each = Math.min(1, Math.max(0.01, Math.hypot(scatter, travel / ratio)));
+  const dose = flow * each * 0.05 * ratio;
   return {
-    exchange,
+    // One dab keeps its exact value: detailed strokes must not change with this compensation.
+    exchange: ratio === 1 ? each : 1 - (1 - each) ** ratio,
     available: dose > 0 ? Math.min(1, remaining / dose) : Number(remaining > 0),
     remaining: Math.max(0, remaining - dose)
   };

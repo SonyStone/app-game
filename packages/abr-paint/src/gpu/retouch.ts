@@ -60,7 +60,7 @@ export function createAbrRetouch<Layer extends PickupLayer>(
   let retouchLinear = false;
   let sharedScratch = false;
   let color = '#000000';
-  let previousSmudge: { x: number; y: number } | undefined;
+  let previousSmudge: { x: number; y: number; step?: number } | undefined;
   let smudgeSecondary: Dab[] = [];
   let canvasFilter: ReturnType<typeof createCanvasFilter> | undefined;
   let mixerWells: ReturnType<typeof createMixerWells> | undefined;
@@ -103,8 +103,8 @@ export function createAbrRetouch<Layer extends PickupLayer>(
             continue;
           }
           const first = !previousSmudge;
-          const previous = previousSmudge ?? dab;
-          previousSmudge = { x: dab.x, y: dab.y };
+          const previous = previousSmudge ?? { x: dab.x, y: dab.y, step: undefined };
+          previousSmudge = { x: dab.x, y: dab.y, step: dab.abr?.spacingStep };
           const radius = Math.max(1, dab.radius);
           const center = dab;
           const region = { x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2 };
@@ -153,9 +153,28 @@ export function createAbrRetouch<Layer extends PickupLayer>(
                   dab.abr?.mixing?.mix ?? mixer.mix,
                   dab.flow,
                   first ? 0 : Math.hypot(dab.x - previous.x, dab.y - previous.y) / (radius * 2),
-                  commands
+                  commands,
+                  first || !dab.abr?.spacingRatio
+                    ? undefined
+                    : {
+                        ratio: dab.abr.spacingRatio,
+                        step: (dab.abr.spacingStep ?? 0) / (radius * 2),
+                        travelled: (previous.step ?? 0) / (radius * 2)
+                      }
                 )
               : carried!;
+            if (mixer) {
+              // The Mixer deposits through ordinary stamp coverage, so a dab placed at adaptive spacing lays the
+              // paint of the dabs it replaces; see spacingCoverage. The reservoir dose above used the dab's own flow.
+              for (const deposited of [...smudgeSecondary, dab]) {
+                const ratio = deposited.abr?.spacingRatio ?? 1;
+                if (ratio > 1) {
+                  deposited.abr!.data[8] = 1 - (1 - Math.min(1, deposited.flow)) ** ratio;
+                  deposited.abr!.data[15] = ratio;
+                }
+              }
+            }
+
             await host.deposit(
               [...smudgeSecondary, dab],
               {
