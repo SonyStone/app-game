@@ -76,7 +76,50 @@ export function textureCoverage(coverage: number, tone: number, mode: number, de
   if (mode === 8 || mode === 9) {
     return heightTextureCoverage(coverage, tone, depth, mode === 8);
   }
-  return coverage * (1 - depth) + blendCoverage(coverage, tone, mode) * depth;
+
+  // Darken and Color Dodge have no reconstructed texture kernel; they keep a depth blend.
+  if (mode === 2 || mode === 4) {
+    return coverage * (1 - depth) + blendCoverage(coverage, tone, mode) * depth;
+  }
+
+  return byteTextureCoverage(coverage, tone, mode, depth);
+}
+
+/**
+ * Photoshop's byte texture kernels for Multiply, Subtract, Overlay, Color Burn, Linear Burn and Hard Mix.
+ * Depth scales the texture's contribution inside each formula rather than blending results, so Hard Mix at
+ * low depth thresholds soft coverage (`4c - 765`) instead of leaving it soft.
+ */
+function byteTextureCoverage(coverage: number, tone: number, mode: number, depth: number): number {
+  'use gpu';
+  const c = d.i32(std.floor(std.clamp(coverage, 0, 1) * 255 + 0.5));
+  const t = d.i32(std.floor(std.clamp(tone, 0, 1) * 255 + 0.5));
+  const k = d.i32(std.floor(std.clamp(depth, 0, 1) * 255 + 0.5));
+  let result = c;
+
+  if (mode === 0) {
+    result = c - multiplyMaskBytes(d.f32(c - multiplyMaskBytes(d.f32(c), d.f32(t))), d.f32(k));
+  } else if (mode === 1) {
+    result = c - multiplyMaskBytes(d.f32(t), d.f32(k));
+  } else if (mode === 3) {
+    let combined = 255 - multiplyMaskBytes(d.f32(2 * (255 - c)), d.f32(255 - t));
+    if (c < 128) {
+      combined = multiplyMaskBytes(d.f32(2 * c), d.f32(t));
+    }
+    const difference = multiplyMaskBytes(d.f32(std.abs(combined - c)), d.f32(k));
+    result = std.select(c + difference, c - difference, combined < c);
+  } else if (mode === 5) {
+    // The brush caller scales Color Burn depth by 248/255 before dispatch.
+    const burnDepth = multiplyMaskBytes(d.f32(k), 248);
+    const denominator = 255 - multiplyMaskBytes(d.f32(255 - t), d.f32(burnDepth));
+    result = 255 - d.i32(divideMaskBytes(d.f32(255 - c), d.f32(denominator)));
+  } else if (mode === 6) {
+    result = c - multiplyMaskBytes(d.f32(255 - t), d.f32(k));
+  } else if (mode === 7) {
+    result = multiplyMaskBytes(d.f32(t), d.f32(k)) * 3 + c * 4 - 765;
+  }
+
+  return d.f32(std.clamp(result, 0, 255)) / 255;
 }
 
 /** Photoshop's Height/Linear Height operate on byte masks before stamp flow. */
@@ -187,4 +230,21 @@ export function textureTone(sample: number, invert: number, brightness: number, 
 export function grain(x: number, y: number, seed: number): number {
   'use gpu';
   return std.fract(std.sin(std.floor(x) * 12.9898 + std.floor(y) * 78.233 + seed) * 43758.5453);
+}
+
+/**
+ * Photoshop's brush Noise for one rasterized tip coverage, applied before texture.
+ * Empty and solid pixels stay unchanged; partial coverage moves two thirds of the way toward a random
+ * rescale (`coverage * 2r` below one half, mirrored above), so the mean is preserved and only soft edges
+ * gain grain. `random` must be uniform in [0, 1); Photoshop draws it from a uniform lookup table.
+ */
+export function brushNoise(coverage: number, random: number): number {
+  'use gpu';
+  if (coverage < 0.5 / 255 || coverage >= 254.5 / 255) {
+    return coverage;
+  }
+
+  const scale = random * 2;
+  const perturbed = std.select(1 - (1 - coverage) * scale, coverage * scale, coverage < 0.5);
+  return std.clamp(coverage + (perturbed - coverage) * (170 / 255), 0, 1);
 }

@@ -13,7 +13,7 @@ import { paintBlend, paintModes } from '@app-game/abr-brush/paintBlend';
 import { pencilCoverage, usesPencilCoverage } from '@app-game/abr-brush/pencil';
 import { d } from 'typegpu';
 import type { BrushTipImage } from '../../lib/abr';
-import { blendModeId, dualCoverage, grain, textureCoverage, textureTone } from './effects';
+import { blendModeId, brushNoise, dualCoverage, grain, textureCoverage, textureTone } from './effects';
 import { eraserPreviewColor } from './eraser';
 import { renderResourcePixels } from './resource-pixels';
 import { preparePreviewResources, type PreviewResources } from './resources';
@@ -244,12 +244,10 @@ function renderLayers(
           for (let c = 0; c < 3; c++) paint[i * 3 + c] = s[offset + 12 + c]! * accumulated;
           continue;
         }
+        // Photoshop applies Noise to the rasterized tip, before texture.
+        if (v.useNoise) coverage = brushNoise(coverage, grain(px, py, s[offset + 11]!));
         if (v.useTexture && v.texture.eachTip && pattern && toneTable)
           coverage = textured(coverage, pattern[i]!, s[offset + 10]!, input, toneTable);
-        if (v.useNoise) {
-          const n = Math.sin(Math.floor(px) * 12.9898 + Math.floor(py) * 78.233 + s[offset + 11]!) * 43758.5453;
-          coverage *= 0.35 + 0.65 * (n - Math.floor(n));
-        }
         if (usesPencilCoverage(v.tool)) coverage = pencilCoverage(coverage);
         if (byteSource) {
           byteSource[i] = Math.max(0, Math.min(255, Math.round(coverage * 255)));

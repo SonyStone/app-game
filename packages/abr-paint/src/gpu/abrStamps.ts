@@ -180,8 +180,7 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
     coveragePlan: (transient: boolean) => abrCoveragePlan({
       transient,
       scale: paramsData[paramsOffsets.rasterScale]!,
-      mask: !settings || settings.tipLodBias !== undefined || paintbrushMaskMode(settings.values) === maskAccumulation.stamp ||
-        capsHardMix(settings),
+      mask: !settings || settings.tipLodBias !== undefined || paintbrushMaskMode(settings.values) === maskAccumulation.stamp,
       dual: !!settings?.values.useDualBrush && !!settings.dual
     }),
     /** Creates device scratch without owning the base or mask supplied by the tile cache. */
@@ -265,9 +264,6 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
       const maskMode = settings!.tipLodBias !== undefined ? maskAccumulation.stamp : paintbrushMaskMode(settings!.values);
       if (maskMode) {
         drawMasked(tile, commands, binding, maskMode, secondCount, tx, ty);
-        if (capsHardMix(settings!)) {
-          drawCeilings(tile, commands, binding, secondCount);
-        }
       } else {
         drawPrimary(tile, commands, binding, secondCount);
       }
@@ -528,26 +524,6 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
     }
   }
 
-  /** Max-accumulates primary transfer opacity into the mask's green lane after byte-exact accumulation. */
-  function drawCeilings(
-    tile: AbrTile,
-    commands: ReturnType<typeof commandBatch>,
-    binding: ReturnType<typeof createBindings>,
-    secondCount: number
-  ) {
-    const pass = commands.encoder().beginRenderPass({
-      colorAttachments: [{ view: tile.maskView, loadOp: 'load', storeOp: 'store' }]
-    });
-    const side = 256 / paramsData[paramsOffsets.rasterScale]!;
-    pass.setViewport(0, 0, side, side, 0, 1);
-    pipelines.ceiling
-      .with(pass)
-      .with(binding.primary)
-      .with(abrStampLayout, tile.stamps)
-      .draw(6, ordered.length - secondCount, 0, secondCount);
-    pass.end();
-  }
-
   /** Blends primary dabs into paint and max-accumulated mask targets. */
   function drawPrimary(
     tile: AbrTile,
@@ -722,13 +698,6 @@ type PreparedSettings = Pick<AbrRasterSettings, 'values' | 'tipLodBias' | 'blend
   dual: boolean;
   smudge: boolean;
 };
-
-/** Dual Hard Mix re-saturates byte-exact accumulated alpha, so those strokes also keep a
- * persistent transfer-opacity ceiling for composite. Stamp accumulation always keeps one.
- */
-function capsHardMix(settings: PreparedSettings): boolean {
-  return settings.values.useDualBrush && settings.dual && settings.values.dualBrush.mode === 'hardMix';
-}
 
 /** Tile-local mapping of a captured canvas patch; uniforms are consumed before the next write. */
 type AbrPickup = {

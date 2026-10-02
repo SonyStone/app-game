@@ -1,6 +1,7 @@
 import { maskParams } from '@app-game/abr-brush/maskAccumulationGpu';
 import {
   blendModeId,
+  brushNoise,
   dualCoverage,
   fingerPaintCompositeInSpace,
   grain,
@@ -40,21 +41,6 @@ export function createAbrPipelines(root: TgpuRoot) {
             color: { operation: 'max', srcFactor: 'one', dstFactor: 'one' },
             alpha: { operation: 'max', srcFactor: 'one', dstFactor: 'one' }
           }
-        }
-      }
-    }),
-    /** Max-accumulates each primary stamp's transfer opacity into the mask's green lane.
-     * Byte-exact mask accumulation uses it to cap Dual Hard Mix, which otherwise re-saturates capped alpha.
-     */
-    ceiling: root.createRenderPipeline({
-      attribs: abrStampLayout.attrib,
-      vertex,
-      fragment: ceilingFragment,
-      targets: {
-        format: 'rgba8unorm',
-        blend: {
-          color: { operation: 'max', srcFactor: 'one', dstFactor: 'one' },
-          alpha: { operation: 'max', srcFactor: 'one', dstFactor: 'one' }
         }
       }
     }),
@@ -314,14 +300,6 @@ const sampledSecondaryFragment = tgpu.fragmentFn({
   return d.vec4f(d.f32(std.max(byte, 0)) / 255);
 });
 
-/** Covers the whole stamp quad: outside real coverage the accumulated primary alpha is zero,
- * and Hard Mix of zero primary coverage stays zero, so the ceiling cannot add ink there.
- */
-const ceilingFragment = tgpu.fragmentFn({ in: { dynamics: d.vec4f }, out: d.vec4f })((input) => {
-  'use gpu';
-  return d.vec4f(0, input.dynamics.y, 0, 0);
-});
-
 const Coverage = d.struct({ paint: d.vec4f, mask: d.vec4f });
 
 function shadeStamp(position: d.v4f, tipUv: d.v2f, dynamics: d.v4f, color: d.v4f) {
@@ -354,13 +332,15 @@ function stampEffects(source: number, position: d.v4f, dynamics: d.v4f): number 
   'use gpu';
   const p = stampLayout.$.params;
   let coverage = source;
+  // Photoshop applies Noise to the rasterized tip, before texture.
+  if (p.flags[flagsLane.noise]! > 0) {
+    const random = grain(position.x + p.origin[originLane.x]!, position.y + p.origin[originLane.y]!, dynamics.w);
+    coverage = brushNoise(coverage, random);
+  }
   if (p.flags[flagsLane.texture]! > 0 && p.flags[flagsLane.textureEachTip]! > 0) {
     const sample = std.textureLoad(stampLayout.$.pattern, d.vec2i(position.xy), 0).r;
     const tone = textureTone(sample, p.tone[toneLane.invert]!, p.tone[toneLane.brightness]!, p.tone[toneLane.contrast]!);
     coverage = textureCoverage(coverage, tone, p.texture[textureLane.mode]!, dynamics.z);
-  }
-  if (p.flags[flagsLane.noise]! > 0) {
-    coverage *= 0.35 + 0.65 * grain(position.x + p.origin[originLane.x]!, position.y + p.origin[originLane.y]!, dynamics.w);
   }
   if (p.tone[toneLane.pencil]! > 0) {
     coverage = pencilCoverage(coverage);
@@ -443,10 +423,8 @@ function compositePixel(position: d.v4f, paint: d.v4f, mask: d.v4f): d.v4f {
   if (p.tone[toneLane.pencil]! > 0) {
     alpha = pencilCoverage(alpha);
   }
-  const hardMix = dualEnabled && p.extra[extraLane.dualMode]! === dualHardMixMode;
-  const opacity = std.select(mask.a, mask.g, hardMix);
-  // Byte-exact accumulation already caps alpha, but Hard Mix re-saturates it; re-apply the ceiling afterwards.
-  if (p.maskAccumulation === maskAccumulation.stamp || p.maskAccumulation === maskAccumulation.approximate || hardMix) {
+  const opacity = std.select(mask.a, mask.g, dualEnabled && p.extra[extraLane.dualMode]! === dualHardMixMode);
+  if (p.maskAccumulation === maskAccumulation.stamp || p.maskAccumulation === maskAccumulation.approximate) {
     alpha = std.min(alpha, opacity);
   }
   alpha *= p.compositeOpacity;

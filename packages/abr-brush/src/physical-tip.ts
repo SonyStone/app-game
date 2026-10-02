@@ -1,6 +1,7 @@
 import type { BrushFormValues } from './form';
 import type { BrushTipImage } from './library';
 import { usesPencilCoverage } from './pencil';
+import { computedPrimaryTip } from './computedTip';
 import { generateComputedBrushTip } from './stroke';
 
 /** A deterministic 2D preview for physical tips; does not emulate Photoshop's proprietary bristle solver. */
@@ -87,5 +88,8 @@ export function generatePhysicalTip(values: BrushFormValues): BrushTipImage {
 export function generatePreviewTip(values: BrushFormValues) {
   return values.tipKind === 'dBrush' || values.tipKind === 'dTips'
     ? generatePhysicalTip(values)
-    : generateComputedBrushTip(128, usesPencilCoverage(values.tool) ? 100 : values.hardness);
+    : values.tool.type === 'PbTl'
+      ? // Brush strokes draw Photoshop's enlarged computed raster; see computedTipScale.
+        computedPrimaryTip(values.diameter, values.hardness)
+      : generateComputedBrushTip(128, usesPencilCoverage(values.tool) ? 100 : values.hardness);
 }

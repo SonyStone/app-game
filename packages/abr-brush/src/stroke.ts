@@ -18,6 +18,7 @@ import {
 import { browserTabletInput, prepareTabletInput } from './tabletInput';
 import { textureDepth } from './textureDynamics';
 import { placeSampledTip } from './tipPlacement';
+import { computedTipScale } from './computedTip';
 import { computedTipSpacing, sampledTipSpacing } from './tipSpacing';
 import { transferValue } from './transferDynamics';
 
@@ -187,6 +188,7 @@ export function createAbrStrokeSampler(
   const paintbrushTransfer = usesPaintbrushTransfer(input);
   // Sampled primary-tip branch in Photoshop 0x103e3ae9c (f8 predicate is zero).
   const sampledShape = !secondary && v.tool.type === 'PbTl' && v.tipKind === 'sampledBrush';
+  const computedRaster = !secondary && v.tipKind === 'computedBrush' && v.tool.type === 'PbTl';
   const channels = createBrushRandomChannels(input.seed, input.randomState);
   const random = rng(input.seed ?? 0x6d2b79f5),
     colorRandom = rng((input.seed ?? 0x152dc2e1) ^ 0x124f),
@@ -517,7 +519,10 @@ export function createAbrStrokeSampler(
       const renderedScale = sampledShape
         ? sampledTipRenderScale(sampledScale, Math.max(tip.width, tip.height))
         : sampledScale;
-      const renderedSize = sampledShape ? renderedScale * Math.max(tip.width, tip.height) : stampSize;
+      // Computed tips span Photoshop's enlarged raster; generatePreviewTip supplies that whole raster.
+      const renderedSize = sampledShape
+        ? renderedScale * Math.max(tip.width, tip.height)
+        : stampSize * (computedRaster ? computedTipScale(size, v.hardness) : 1);
       const flow = usesPencilCoverage(v.tool)
         ? 1
         : paintbrushTransfer
