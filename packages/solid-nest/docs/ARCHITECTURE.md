@@ -61,26 +61,27 @@ Think of it as a Notion-style block editor's structural layer, or a Photoshop la
              ▼                              ▼
 ┌────────────────────┐        ┌──────────────────────────┐
 │   VirtualTree      │        │     createDnd()          │
-│  Immutable tree    │◄──────►│  Drag state machine      │
-│  data structure    │        │  Insertion point calc    │
+│  Immutable tree    │◄──────►│  Pointer gestures,       │
+│  data structure    │        │  auto-scroll, drop state │
 └────────┬───────────┘        └──────────┬───────────────┘
          │                               │
          ▼                               ▼
 ┌────────────────────┐        ┌──────────────────────────┐
-│  calculateLayout() │        │  getInsertionPoints()    │
-│  Y-position math   │        │  Valid drop targets      │
-└────────────────────┘        └──────────────────────────┘
+│ createAnimations() │        │  findDropTarget()        │
+│ FLIP engine        │        │  Hit-tests live DOM rects│
+└────────┬───────────┘        └──────────────────────────┘
          │
          ▼
 ┌────────────────────┐        ┌──────────────────────────┐
-│ createAnimations() │        │  selection.ts            │
-│ FLIP engine        │◄──────►│  Multi-select logic      │
+│  calculateLayout() │        │  selection.ts            │
+│  Y-position math   │        │  Multi-select logic      │
 └────────────────────┘        └──────────────────────────┘
          │
          ▼
 ┌────────────────────────────────────────────────────────┐
 │                     DOM Output                         │
 │  Nested divs with inline transition styles             │
+│  + drop marker overlay (position:absolute)             │
 │  + drag ghost overlay (position:fixed)                 │
 └────────────────────────────────────────────────────────┘
 ```
@@ -88,9 +89,9 @@ Think of it as a Notion-style block editor's structural layer, or a Photoshop la
 ### Data Flow Summary
 
 1. **User data** (tree of blocks) → converted to a **VirtualTree** (internal immutable representation)
-2. On drag start → VirtualTree is **modified** (blocks removed, dropzone inserted) → produces a new tree
-3. New tree is fed to **createAnimations** → FLIP engine measures before/after DOM → applies transition styles
-4. On drop → **ReorderEvent** fired to consumer → consumer updates their store → new VirtualTree created
+2. The VirtualTree is fed directly to **createAnimations**, which renders it and runs FLIP (measure before/after DOM → transition styles) whenever it changes
+3. During a drag the tree is **not modified**: dragged blocks stay in place with `dragging: true`, `findDropTarget` hit-tests live DOM rects, and a drop marker overlay shows the target
+4. On drop → **ReorderEvent** fired to consumer → consumer updates their store → new VirtualTree created → FLIP animates the move
 
 ---
 
@@ -98,41 +99,41 @@ Think of it as a Notion-style block editor's structural layer, or a Photoshop la
 
 ### Source Files (`src/`)
 
-| File                             | Role                                                                                        | Lines |
-| -------------------------------- | ------------------------------------------------------------------------------------------- | ----- |
-| **index.tsx**                    | Public entry point; re-exports everything                                                   | 6     |
-| **BlockTree.tsx**                | Advanced API component (the real renderer)                                                  | ~465  |
-| **LegacyBlockTree.tsx**          | Legacy/simple API component (wraps Advanced)                                                | ~105  |
-| **createBlockTree.ts**           | Convenience store helper (quick-start utility)                                              | ~130  |
-| **virtual-tree.ts**              | `VirtualTree` class — immutable tree data structure                                         | ~210  |
-| **Item.ts**                      | Item types (`BlockItem`, `ContainerItem`, `PlaceholderItem`, `GapItem`) + factory functions | ~90   |
-| **events.ts**                    | Event types (`ReorderEvent`, `SelectionEvent`, etc.)                                        | ~80   |
-| **selection.ts**                 | Selection modes (Set/Toggle/Range), `updateSelection`, `normaliseSelection`                 | ~100  |
-| **calculateLayout.ts**           | Pure function: VirtualTree + measurements → DOMRect map                                     | ~95   |
-| **calculateTransitionStyles.ts** | FLIP: prev layout vs next layout → invert/play style maps                                   | ~175  |
-| **createAnimations.ts**          | SolidJS effect that orchestrates the FLIP animation                                         | ~65   |
-| **measure.ts**                   | DOM measurement: reads `getBoundingClientRect()` from element map                           | ~55   |
-| **styles.ts**                    | CSS class names, CSS custom properties, stylesheet injection                                | ~40   |
-| **dnd/createDnd.ts**             | Drag-and-drop state machine (pointer tracking, tree manipulation)                           | ~233  |
-| **dnd/getInsertionPoints.ts**    | Computes all valid drop targets from a tree + measurements                                  | ~70   |
-| **components/DragContainer.tsx** | Default drag ghost overlay component                                                        | ~30   |
-| **components/Dropzone.tsx**      | Default dropzone indicator component                                                        | ~8    |
-| **components/Placeholder.tsx**   | Default empty placeholder component                                                         | ~4    |
-| **util/types.ts**                | `Vec2` type + namespace                                                                     | ~6    |
-| **util/notNull.ts**              | Type guard `notNull<T>()`                                                                   | ~3    |
-| **util/modifierKey.ts**          | Platform-aware Ctrl/Cmd detection                                                           | ~6    |
-| **util/findIndex.ts**            | `findIndex` with start offset                                                               | ~8    |
+| File                             | Role                                                                                | Lines |
+| -------------------------------- | ----------------------------------------------------------------------------------- | ----- |
+| **index.tsx**                    | Public entry point; re-exports everything                                           | 6     |
+| **BlockTree.tsx**                | Advanced API component (the real renderer)                                          | ~500  |
+| **LegacyBlockTree.tsx**          | Legacy/simple API component (wraps Advanced)                                        | ~115  |
+| **createBlockTree.ts**           | Convenience store helper (quick-start utility)                                      | ~130  |
+| **virtual-tree.ts**              | `VirtualTree` class — immutable tree data structure                                 | ~165  |
+| **Item.ts**                      | Item types (`BlockItem`, `ContainerItem`, `PlaceholderItem`) + factory functions    | ~65   |
+| **events.ts**                    | Event types (`ReorderEvent`, `SelectionEvent`, etc.)                                | ~80   |
+| **selection.ts**                 | Selection modes (Set/Toggle/Range), `updateSelection`, `normaliseSelection`         | ~100  |
+| **calculateLayout.ts**           | Pure function: VirtualTree + measurements → DOMRect map                             | ~95   |
+| **calculateTransitionStyles.ts** | FLIP: prev layout vs next layout → invert/play style maps                           | ~145  |
+| **createAnimations.ts**          | SolidJS effect that orchestrates the FLIP animation                                 | ~65   |
+| **measure.ts**                   | DOM measurement: reads `getBoundingClientRect()` from element map                   | ~55   |
+| **styles.ts**                    | CSS class names, CSS custom properties, stylesheet injection                        | ~40   |
+| **dnd/createDnd.ts**             | Drag-and-drop gestures (mouse/pen threshold, touch long press, auto-scroll, drop)   | ~305  |
+| **dnd/findDropTarget.ts**        | Hit-tests the pointer against live DOM rects to find the drop place and marker rect | ~185  |
+| **components/DragContainer.tsx** | Default drag ghost overlay component                                                | ~30   |
+| **components/Dropzone.tsx**      | Default drop marker component                                                       | ~8    |
+| **components/Placeholder.tsx**   | Default empty placeholder component                                                 | ~4    |
+| **util/types.ts**                | `Vec2` type + namespace                                                             | ~6    |
+| **util/notNull.ts**              | Type guard `notNull<T>()`                                                           | ~3    |
+| **util/modifierKey.ts**          | Platform-aware Ctrl/Cmd detection                                                   | ~6    |
+| **util/findIndex.ts**            | `findIndex` with start offset                                                       | ~8    |
 
 ### Test Files (`test/`)
 
-| File                           | What it tests                                                                               |
-| ------------------------------ | ------------------------------------------------------------------------------------------- |
-| **index.test.tsx**             | Basic instantiation of both BlockTree and AdvancedBlockTree                                 |
-| **virtual-tree.test.ts**       | VirtualTree creation, findBlock, containsChild, removeBlocks, insertDropzone, extractBlocks |
-| **calculateLayout.test.ts**    | Layout rect computation for flat lists, nested groups, wrap layouts                         |
-| **getInsertionPoints.test.ts** | Valid insertion point calculation, tag filtering, nested containers                         |
-| **selection.test.ts**          | Selection modes (Set/Toggle/Range), normaliseSelection                                      |
-| **setup.ts**                   | Polyfill for `adoptedStyleSheets` in jsdom                                                  |
+| File                        | What it tests                                                                                                        |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **index.test.tsx**          | Basic instantiation of both BlockTree and AdvancedBlockTree                                                          |
+| **virtual-tree.test.ts**    | VirtualTree creation, findBlock, containsChildBlock, extractBlocks, findParent                                       |
+| **calculateLayout.test.ts** | Layout rect computation for flat lists, nested groups, wrap layouts                                                  |
+| **findDropTarget.test.ts**  | Row/cell splitting, end-of-row anchoring, dragged blocks ignored, into/beside group headers, no target, no self-drop |
+| **selection.test.ts**       | Selection modes (Set/Toggle/Range), normaliseSelection                                                               |
+| **setup.ts**                | Polyfill for `adoptedStyleSheets` in jsdom                                                                           |
 
 ---
 
@@ -147,8 +148,7 @@ ContainerItem       — Represents a container that holds children
   ├── BlockItem     — Represents a user block (brush, group, etc.)
   │     └── ContainerItem (nested)  — Block's child container(s)
   │           └── BlockItem ...
-  ├── PlaceholderItem — "Insert at end" sentinel (one per container)
-  └── GapItem       — Dropzone indicator (inserted during drag)
+  └── PlaceholderItem — "Insert at end" sentinel (one per container)
 ```
 
 #### Item Types
@@ -178,13 +178,6 @@ type PlaceholderItem<K> = {
   kind: 'placeholder';
   parent: K;
 };
-
-type GapItem = {
-  id: ItemId; // "gap"
-  kind: 'gap';
-  before: ItemId; // Inserted before this item
-  height: number; // Height of the dropzone
-};
 ```
 
 #### ID Convention
@@ -194,7 +187,6 @@ type GapItem = {
 | `c-{key}` | Container item                          |
 | `b-{key}` | Block item                              |
 | `p-{key}` | Placeholder (end-of-container sentinel) |
-| `gap`     | Dropzone (only one at a time)           |
 
 ### Place — The Insertion Point
 
@@ -242,6 +234,8 @@ type BlockTreeProps<K, T> = {
   getKey: (block: T) => K;
   getOptions?: (block: T) => BlockOptions;
   getContainers?: (block: T) => Container<K, T>[]; // Multiple containers per block
+  dragThreshold?: number; // Mouse/pen drag distance in px (default 10)
+  touchDragDelay?: number; // Touch long-press in ms before dragging (default 350); not typed on the Legacy props
   // ... same event handlers, selection, etc.
   children: Component<BlockProps<K, T>>;
 };
@@ -288,83 +282,84 @@ Internally it:
 
 ### Key Methods
 
-| Method                          | What it does                                                   |
-| ------------------------------- | -------------------------------------------------------------- |
-| `children(id)`                  | Get child items of a container or block                        |
-| `findBlock(key)`                | Find the original user block by key                            |
-| `findItemById(id)`              | Find any item by its ItemId                                    |
-| `findParent(id)`                | Find the parent item id (linear scan)                          |
-| `containsChild(item, other)`    | Recursive containment check                                    |
-| `removeBlocks(keys)`            | Returns a **new** tree with blocks removed from child maps     |
-| `removeItems(ids)`              | Lower-level: remove by ItemId                                  |
-| `insertDropzone(place, height)` | Returns a **new** tree with a GapItem inserted                 |
-| `extractBlocks(keys)`           | Returns a **new** tree with only specified blocks under root   |
-| `levels()`                      | Iterator yielding `[ItemId, depth]` pairs (BFS-like via stack) |
+| Method                       | What it does                                                   |
+| ---------------------------- | -------------------------------------------------------------- |
+| `children(id)`               | Get child items of a container or block                        |
+| `findBlock(key)`             | Find the original user block by key                            |
+| `findItemById(id)`           | Find any item by its ItemId                                    |
+| `findParent(id)`             | Find the parent item id (linear scan)                          |
+| `containsChild(item, other)` | Recursive containment check                                    |
+| `extractBlocks(keys)`        | Returns a **new** tree with only specified blocks under root   |
+| `levels()`                   | Iterator yielding `[ItemId, depth]` pairs (BFS-like via stack) |
 
 ### Immutability Pattern
 
-The VirtualTree is immutable. Modifications return new instances that share the `_items` map but have modified `_childMap` copies. This is critical for the animation system, which needs to compare prev vs next tree states.
+The VirtualTree is immutable. `extractBlocks` (used for the drag ghost) returns a new instance that shares the `_items` map with a modified `_childMap` copy. Immutability is critical for the animation system, which needs to compare prev vs next tree states.
 
 ---
 
 ## 7. Drag & Drop Pipeline
 
+The layout does **not** change during a drag. Dragged blocks stay where they are (rendered with `dragging: true`, as is the ghost), no gap or dropzone item is inserted into the tree, and `createAnimations` receives the input tree directly. FLIP animations therefore only play when the tree changes, e.g. after the consumer applies a drop.
+
 ### State Machine (`createDnd.ts`)
 
-The DnD system is a SolidJS reactive pipeline:
-
 ```
-                 pointerdown on [data-drag-handle]
+          pointerdown on [data-drag-handle]  (onDragHandleDown)
+                              │
+                 document listeners attached (one AbortController)
+                              │
+              ┌───────────────┴────────────────┐
+         mouse / pen                         touch
+              │                                │
+   moved ≥ dragThreshold?          held still for touchDragDelay?
+              │                    (moved > 10px first → abandon, browser scrolls)
+              └───────────────┬────────────────┘
+                              ▼
+                     ┌─────────────────┐
+                     │  dragState set  │   dragged blocks render with dragging: true
+                     │  keys, topItem  │   dragTree → ghost (position: fixed)
+                     │  offset, size   │
+                     │  tags           │
+                     └────────┬────────┘
+                              │
+                    rAF loop, every frame:
+                      auto-scroll nearest scrollable ancestor near its edges
+                      if pointer moved or anything scrolled:
+                        findDropTarget(tree, dragged, tags, pointer, measure)
                               │
                               ▼
-                     clickedBlock signal set
+                     dropTarget signal → drop marker overlay
                               │
-                     pointermove listener attached
-                              │
-                   mouse moved > dragThreshold?
-                         │           │
-                        no          yes
-                         │           │
-                     (wait)    ┌─────▼──────────┐
-                               │  dragState set  │
-                               │  keys, topItem  │
-                               │  offset, size   │
-                               │  tags           │
-                               └─────┬──────────┘
-                                     │
-                    ┌────────────────┼────────────────┐
-                    ▼                ▼                 ▼
-           treeWithoutDragged  insertionPoints   dragPosition
-           (blocks removed)    (valid targets)   (ghost pos)
-                    │                │
-                    ▼                ▼
-              treeWithDropzone ← insertion (best match)
-              (gap inserted)
-                    │
-                    ▼
-              createAnimations → FLIP → DOM
-
-                 pointerup
-                    │
-                    ▼
-              onReorder event fired
-              dragState cleared
+          pointerup ──────────┼────────── Escape / pointercancel / cleanup
+              │                                │
+   onReorder({ keys, place })            gesture ends, no reorder
+   if a target exists
 ```
 
-### Insertion Point Algorithm (`getInsertionPoints.ts`)
+Gesture details:
 
-1. Takes the tree (with dragged blocks already removed) and DOM measurements
-2. Runs `calculateLayout()` to get positioned rects for every item
-3. Walks the tree, checking which containers `accept` the dragged block's tags
-4. For each valid position, creates an `InsertionPoint` with `{place, y, x?, width?, height?, inWrap?}`
+- Mouse and pen drags start once the pointer travels `dragThreshold` pixels (default `10`).
+- Touch keeps native scrolling: a drag starts only after a long press of `touchDragDelay` ms (default `350`); moving more than 10px first abandons the gesture so the browser scrolls. Blocks should use `touch-action: manipulation` or `pan-y` so touch can scroll.
+- `touchmove` is prevented once dragging (and for pen/mouse presses on a handle); the context menu is suppressed for the duration of a gesture; Escape cancels.
+- A `requestAnimationFrame` loop auto-scrolls the nearest scrollable ancestor when the pointer nears its top or bottom edge, and re-targets on pointer move or scroll, so the target follows content scrolled under a still pointer.
 
-### Best-Match Selection (in `createDnd.ts`)
+### Drop Targeting (`findDropTarget.ts`)
 
-The pointer position is compared against insertion points:
+The pointer is hit-tested against **live DOM rects** from the shared element map (no layout calculation involved). The result is `{ place, kind: 'line' | 'into', indicator: DOMRect }`, or `undefined` when nothing under the pointer accepts the drag.
 
-- **List mode**: Y-band matching — each point owns a vertical band from its Y up to halfway to the next point
-- **Wrap mode**: 2D distance matching — finds the closest point by Euclidean distance
-- When both exist, the closer match wins
+- The **deepest accepting container** under the pointer wins (all dragged tags must be in the container's `accepts`).
+- Inside a container, blocks are read in **reading order** and the drop goes before the first block that follows the pointer. **Cells that share a row** split at their horizontal centre; **full-width rows** (≥ 75% of the container width) split at their vertical centre.
+- Pointing at a **block header** whose container explicitly accepts the tags (non-empty `accepts`) drops **into** that block: `kind: 'into'` over a collapsed block, or a line at the start of an expanded one. The outer **25%** of the header still means before/after the block when its parent accepts the drag.
+- Dragged blocks (and everything inside them) are ignored.
+
+### Drop Marker
+
+`BlockTree` renders the `dropzone` component in an absolutely positioned overlay over `dropTarget().indicator` (converted to root-relative coordinates). The wrapper carries `data-drop="line"` or `data-drop="into"` so the marker can be styled differently for lines between blocks and for outlined "into" targets.
+
+### Selection on Touch
+
+Touch presses select on tap (`click`), or when a long press starts a drag, rather than on `pointerdown` — a touch that turns into a scroll should not change the selection.
 
 ---
 
@@ -468,14 +463,11 @@ A pure function that computes the **virtual Y position** of every item in the tr
 - For **list containers**: stacks children vertically with spacing
 - For **wrap containers**: reads actual DOM measurements to get x/y positions (since flex-wrap is non-deterministic)
 - For **blocks**: processes child containers using measured offsets
-- For **placeholders** and **gaps**: just advances `nextY` by their measured height
+- For **placeholders**: just advances `nextY` by their measured height
 
 #### Usage
 
-Called in two places:
-
-1. **`getInsertionPoints`** — to determine Y positions of valid drop targets
-2. **`calculateTransitionStyles`** — to compute FLIP deltas between tree states
+Called only by **`calculateTransitionStyles`**, to compute FLIP deltas between tree states. Drop targeting does not use it; `findDropTarget` reads live DOM rects instead.
 
 ---
 
@@ -501,7 +493,7 @@ Simpler: just gets `getBoundingClientRect()` for every element. Used for the "in
 
 ### Element Map
 
-Both `BlockTree` and `createDnd` share a `Map<ItemId, HTMLElement>` that is populated via `ref` callbacks in the render function. This is the bridge between the virtual tree and the real DOM.
+Both `BlockTree` and `createDnd` share a `Map<ItemId, HTMLElement>` that is populated via `ref` callbacks in the render function. This is the bridge between the virtual tree and the real DOM. Entries are removed when their item unmounts, and items rendered inside the drag ghost are never registered, so measurement and drop hit-testing only see the real elements.
 
 ---
 
@@ -525,9 +517,8 @@ All events are **externalized** — the component does not modify its own state.
 
 The component only manages **ephemeral state** internally:
 
-- Drag state (what's being dragged, where the pointer is)
+- Drag state (what's being dragged, where the pointer is, the current drop target)
 - Animation state (current FLIP phase)
-- Computed trees (with dropzone inserted)
 
 ---
 
@@ -604,17 +595,17 @@ The animation system applies inline styles for:
 
 ### Coverage
 
-| Area                    | Test file                    | What's tested                                                                 |
-| ----------------------- | ---------------------------- | ----------------------------------------------------------------------------- |
-| Component instantiation | `index.test.tsx`             | Both APIs can render without error                                            |
-| VirtualTree             | `virtual-tree.test.ts`       | create, findBlock, containsChild, removeBlocks, insertDropzone, extractBlocks |
-| Layout                  | `calculateLayout.test.ts`    | Flat list, spacing, empty tree, wrap layout placeholders                      |
-| Insertion points        | `getInsertionPoints.test.ts` | Tag filtering, nested containers, wrap layout, Y ordering                     |
-| Selection               | `selection.test.ts`          | All three modes, normaliseSelection                                           |
+| Area                    | Test file                 | What's tested                                                               |
+| ----------------------- | ------------------------- | --------------------------------------------------------------------------- |
+| Component instantiation | `index.test.tsx`          | Both APIs can render without error                                          |
+| VirtualTree             | `virtual-tree.test.ts`    | create, findBlock, containsChildBlock, extractBlocks, findParent            |
+| Layout                  | `calculateLayout.test.ts` | Flat list, spacing, empty tree, wrap layout placeholders                    |
+| Drop targeting          | `findDropTarget.test.ts`  | Row/cell splits, end-of-row marker, into/beside group headers, no self-drop |
+| Selection               | `selection.test.ts`       | All three modes, normaliseSelection                                         |
 
 ### What's NOT Tested
 
-- The actual DnD flow (no DOM interaction tests in unit tests — covered by Playwright e2e in the playground app)
+- The actual DnD gesture flow in `createDnd` (pointer/touch handling, auto-scroll) — covered by Playwright e2e in the playground app; `findDropTarget` is unit-tested with stubbed rects
 - Animation timing and FLIP correctness
 - Clipboard events
 - Keyboard navigation (Delete key)
@@ -670,46 +661,42 @@ Located at `apps/dnd-playground/`, this is a Vite + SolidJS app that exercises s
 
 3. **`findParent()` is O(n)**: The `VirtualTree.findParent(id)` method does a linear scan of the entire `_childMap`. For large trees, consider maintaining a reverse lookup `Map<ItemId, ItemId>` (child → parent) built during tree construction.
 
-4. **Single dropzone limitation**: Only one `GapItem` (with id `"gap"`) can exist at a time. This is fine for single-pointer DnD but would need rework for multi-touch or collaborative scenarios.
-
-5. **Generator-based animation is clever but fragile**: The `createAnimations` generator relies on precise timing of yields and SolidJS effect scheduling. Consider documenting the invariants more explicitly, or replacing with a more explicit state machine.
+4. **Generator-based animation is clever but fragile**: The `createAnimations` generator relies on precise timing of yields and SolidJS effect scheduling. Consider documenting the invariants more explicitly, or replacing with a more explicit state machine.
 
 ### Code Quality
 
-6. **Test helper duplication**: The `TestBlock`, `block()`, `group()`, and `buildTree()` helpers are copy-pasted across 4 test files. Extract into a shared `test/helpers.ts`.
+5. **Test helper duplication**: The `TestBlock`, `block()`, `group()`, and `buildTree()` helpers are copy-pasted across 4 test files. Extract into a shared `test/helpers.ts`.
 
-7. **Missing `createBlockTree` tests**: The convenience helper in `createBlockTree.ts` has zero test coverage. Its tree manipulation logic (`findBlock`, `removeBlocks`, `insertBlocks`) duplicates logic that the consumer app also has to implement.
+6. **Missing `createBlockTree` tests**: The convenience helper in `createBlockTree.ts` has zero test coverage. Its tree manipulation logic (`findBlock`, `removeBlocks`, `insertBlocks`) duplicates logic that the consumer app also has to implement.
 
-8. **Inconsistent import paths**: Some files use `'src/events'` while others use `'../events'`. The `src` alias works via tsconfig paths and vitest alias, but relative imports would be more portable.
+7. **Inconsistent import paths**: Some files use `'src/events'` while others use `'../events'`. The `src` alias works via tsconfig paths and vitest alias, but relative imports would be more portable.
 
-9. **`any` usage in playground**: The playground app casts extensively to `any` when using `BlockTree`. This suggests the Legacy API's generic inference could be improved.
+8. **`any` usage in playground**: The playground app casts extensively to `any` when using `BlockTree`. This suggests the Legacy API's generic inference could be improved.
 
-10. **`findIndex.ts` is unused**: The `findIndex` utility in `util/findIndex.ts` doesn't appear to be imported by any source file. Consider removing it.
+9. **`findIndex.ts` is unused**: The `findIndex` utility in `util/findIndex.ts` doesn't appear to be imported by any source file. Consider removing it.
 
 ### Features & Robustness
 
-11. **No accessibility (a11y)**: There's no ARIA tree role, no keyboard-based reordering (arrow keys), no screen reader announcements for drag operations. This is a significant gap for production use.
+10. **No accessibility (a11y)**: There's no ARIA tree role, no keyboard-based reordering (arrow keys), no screen reader announcements for drag operations. This is a significant gap for production use.
 
-12. **No scroll-during-drag**: When dragging near container edges, the container doesn't auto-scroll. This is essential for long lists.
+11. **Pointer capture**: The DnD system attaches `pointermove`/`pointerup` listeners to `document` rather than using `setPointerCapture()`. Pointer capture would be more robust (no lost events if pointer leaves the window).
 
-13. **Pointer capture**: The DnD system attaches `pointermove`/`pointerup` listeners to `document` rather than using `setPointerCapture()`. Pointer capture would be more robust (no lost events if pointer leaves the window).
+12. **Limited touch affordances**: Touch has long-press-to-drag, but no haptic feedback hooks, and touch users can't range-select since there's no shift key.
 
-14. **No touch-specific affordances**: While `PointerEvent` is used (good!), there's no long-press-to-drag for touch, no haptic feedback hooks, and touch users can't range-select since there's no shift key.
-
-15. **Wrap layout measurement dependency**: The wrap layout in `calculateLayout` relies on actual DOM measurements (`container.x`, `container.y`) rather than computing positions mathematically. This means layout calculation isn't pure for wrap mode — it requires a rendered DOM. This prevents server-side rendering of wrap layouts.
+13. **Wrap layout measurement dependency**: The wrap layout in `calculateLayout` relies on actual DOM measurements (`container.x`, `container.y`) rather than computing positions mathematically. This means layout calculation isn't pure for wrap mode — it requires a rendered DOM. This prevents server-side rendering of wrap layouts.
 
 ### Performance
 
-16. **`normaliseSelection` walks the full tree**: For every selection change, it traverses all tree nodes. For trees with hundreds of blocks, this could be optimized with an index.
+14. **`normaliseSelection` walks the full tree**: For every selection change, it traverses all tree nodes. For trees with hundreds of blocks, this could be optimized with an index.
 
-17. **`measureBlocks` queries all elements**: `querySelectorAll('.solidnest-block')` on every measurement pass could be expensive for large trees. Consider maintaining a pre-built measurement cache that invalidates on tree changes.
+15. **`measureBlocks` queries all elements**: `querySelectorAll('.solidnest-block')` on every measurement pass could be expensive for large trees. Consider maintaining a pre-built measurement cache that invalidates on tree changes.
 
-18. **No virtualization**: All blocks are rendered in the DOM. For trees with thousands of items, a virtualized rendering approach would be necessary.
+16. **No virtualization**: All blocks are rendered in the DOM. For trees with thousands of items, a virtualized rendering approach would be necessary.
 
 ### Developer Experience
 
-19. **No JSDoc on most internal functions**: Functions like `calculateLayout`, `measureBlocks`, `createAnimations` lack JSDoc comments explaining their contracts, especially edge cases.
+17. **No JSDoc on most internal functions**: Functions like `calculateLayout`, `measureBlocks`, `createAnimations` lack JSDoc comments explaining their contracts, especially edge cases.
 
-20. **No TypeScript strict null checks in some paths**: The code uses `!` (non-null assertions) frequently when accessing element maps and measurements. Consider `Map.get()` + explicit null checks for safer code.
+18. **No TypeScript strict null checks in some paths**: The code uses `!` (non-null assertions) frequently when accessing element maps and measurements. Consider `Map.get()` + explicit null checks for safer code.
 
-21. **Consider publishing as a proper npm package**: Currently `"private": true` with `"main"` pointing to raw `.tsx` source. For external consumption, a build step producing `.js` + `.d.ts` would be needed.
+19. **Consider publishing as a proper npm package**: Currently `"private": true` with `"main"` pointing to raw `.tsx` source. For external consumption, a build step producing `.js` + `.d.ts` would be needed.

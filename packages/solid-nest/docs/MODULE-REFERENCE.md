@@ -20,7 +20,7 @@
 12. [measure.ts — DOM Measurement](#12-measurets--dom-measurement)
 13. [styles.ts — CSS Injection](#13-stylests--css-injection)
 14. [dnd/createDnd.ts — Drag & Drop State Machine](#14-dndcreatedndts--drag--drop-state-machine)
-15. [dnd/getInsertionPoints.ts — Drop Target Calculator](#15-dndgetinsertionpointsts--drop-target-calculator)
+15. [dnd/findDropTarget.ts — Drop Target Hit-Testing](#15-dndfinddroptargetts--drop-target-hit-testing)
 16. [Component Files](#16-component-files)
 
 ---
@@ -43,7 +43,7 @@ export { BlockTree as AdvancedBlockTree } from './BlockTree'; // Advanced API
 
 ### `BlockTree<K, T>(props: BlockTreeProps<K, T>)`
 
-The main rendering component. This is a single monolithic function component (~465 lines) that:
+The main rendering component. This is a single monolithic function component (~500 lines) that:
 
 1. Creates the reactive `VirtualTree` from props
 2. Initializes the DnD system via `createDnd()`
@@ -52,7 +52,8 @@ The main rendering component. This is a single monolithic function component (~4
 5. Handles clipboard events (Copy/Cut/Paste)
 6. Handles pointer events for selection
 7. Renders the tree recursively via `renderItem()`
-8. Renders the drag ghost overlay
+8. Renders the drop marker overlay at the current drop target
+9. Renders the drag ghost overlay
 
 ### Props
 
@@ -70,29 +71,37 @@ The main rendering component. This is a single monolithic function component (~4
 | `onCopy`                   | `EventHandler<CopyEvent<T>>`         | ❌       | —               | Ctrl+C                            |
 | `onCut`                    | `EventHandler<CutEvent<T>>`          | ❌       | —               | Ctrl+X                            |
 | `onPaste`                  | `EventHandler<PasteEvent<K>>`        | ❌       | —               | Ctrl+V                            |
-| `dropzone`                 | `Component<{}>`                      | ❌       | `Dropzone`      | Custom dropzone UI                |
+| `dropzone`                 | `Component<{}>`                      | ❌       | `Dropzone`      | Custom drop marker UI             |
 | `placeholder`              | `Component<{ parent: K }>`           | ❌       | `Placeholder`   | Custom placeholder UI             |
 | `dragContainer`            | `Component<DragContainerProps<T>>`   | ❌       | `DragContainer` | Custom drag ghost                 |
 | `transitionDuration`       | `number`                             | ❌       | `200`           | Animation duration (ms)           |
-| `dragThreshold`            | `number`                             | ❌       | `10`            | Pixels to move before drag starts |
+| `dragThreshold`            | `number`                             | ❌       | `10`            | Mouse/pen pixels before drag      |
+| `touchDragDelay`           | `number`                             | ❌       | `350`           | Touch long-press (ms) before drag |
 | `fixedHeightWhileDragging` | `boolean`                            | ❌       | `false`         | Lock container height during drag |
 | `multiselect`              | `boolean`                            | ❌       | `true`          | Allow multi-selection             |
 | `children`                 | `Component<BlockProps<K, T>>`        | ✅       | —               | Block render function             |
+
+`touchDragDelay` is typed only on the Advanced API's props. The Legacy `BlockTreeProps` does not declare it, although the Legacy wrapper forwards all remaining props to the Advanced component at runtime. Blocks should use `touch-action: manipulation` (or `pan-y`) so touches can still scroll before a long press completes.
 
 ### Internal Architecture
 
 ```
 BlockTree component
 ├── VirtualTree.create() → inputTree (reactive)
-├── createDnd() → { treeWithDropzone, dragTree, dragState, ... }
-├── createAnimations(treeWithDropzone) → { tree, styles }
+├── createDnd(inputTree, ...) → { dragState, dropTarget, dragPosition, dragTree, onDragHandleDown }
+├── createAnimations(inputTree) → { tree, styles }   — layout never changes during a drag
 ├── renderItem() — recursive renderer
 │   ├── container → <div> with spacing styles, <For each={children}>
 │   ├── block → <div> with outer/inner wrappers, <Dynamic component={children}>
-│   ├── placeholder → <div> with placeholder component
-│   └── gap → <div> with dropzone component
+│   └── placeholder → <div> with placeholder component
+├── Drop marker → <div data-drop="line"|"into"> absolutely positioned over dropTarget().indicator,
+│                 containing <Dynamic component={dropzone}>
 └── Drag ghost → <Show when={dragTree}><Dynamic component={dragContainer}>
 ```
+
+Dragged blocks stay in place in the rendered tree; they receive `dragging: true` (via a `draggedKeys` set derived from `dragState`), as do all blocks rendered inside the drag ghost. No item is inserted or removed while dragging, so FLIP animations only play when the input tree itself changes, e.g. after the consumer applies a drop.
+
+The drop marker wrapper is positioned relative to the component's root element (converted from the viewport-space `indicator` rect), with `pointer-events: none` and `z-index: 50`. The drag ghost wrapper is `position: fixed` with `pointer-events: none`.
 
 ### `renderItem()` Function
 
@@ -101,22 +110,27 @@ The core rendering function, called recursively. For each item kind:
 - **Container**: Renders a `div` with `data-kind="container"` and CSS spacing. Children rendered via `<For>`. Includes a "spacer" div at the end (used by animations to adjust container height).
 - **Block**: Two nested divs — outer (holds absolute space) and inner (transforms for animation). The user's render function is called via `<Dynamic component={props.children}>`.
 - **Placeholder**: Hidden by CSS when siblings exist. Visible only in empty containers.
-- **Gap (Dropzone)**: Shows the drop indicator during drag.
+
+Each container, block (inner wrapper) and placeholder element is registered in the shared `itemElements` map via a `ref`, and removed from it on unmount (only if the map still points at that element). Items rendered inside the drag ghost (`ghost: true`) are never registered, so measurement and hit-testing always see the real, in-place elements.
 
 ### Drag Handle Detection
 
-The component scans for `[data-drag-handle]` attributes inside the clicked element:
+The component scans for `[data-drag-handle]` attributes inside the pressed element:
 
 ```tsx
 for (const el of ev.currentTarget.querySelectorAll('[data-drag-handle]')) {
   if (el.contains(ev.target)) {
-    onDragHandleClick(ev, item.key);
+    onDragHandleDown(ev, item.key, onTouchDragStart);
     break;
   }
 }
 ```
 
 Consumer blocks should add `data-drag-handle` to their draggable areas.
+
+### Selection on Press
+
+Mouse and pen presses select on `pointerdown`, except when `updateSelection` returns `onClick` (the block is already selected), which defers selection to `click`. Touch presses always defer: a touch may turn into a scroll, so the block is selected on tap (`click`) or, when a long press starts a drag, from the `onTouchDragStart` callback (which drops the pending click handler and selects, unless selection was deferred by `onClick`).
 
 ---
 
@@ -225,9 +239,6 @@ Uses three helper functions that work on mutable `T extends Block<T>`:
 | `findParent(id)`                   | `ItemId \| undefined`         | Find parent of an item (**O(n)** linear scan)  |
 | `containsChildBlock(block, child)` | `boolean`                     | Check if block contains child (recursive)      |
 | `containsChild(item, other)`       | `boolean`                     | Check containment by ItemId                    |
-| `removeBlocks(keys)`               | `VirtualTree`                 | New tree without specified blocks              |
-| `removeItems(ids)`                 | `VirtualTree`                 | New tree without specified items               |
-| `insertDropzone(place, height)`    | `VirtualTree`                 | New tree with gap item inserted                |
 | `extractBlocks(keys)`              | `VirtualTree`                 | New tree with only specified blocks under root |
 | `levels()`                         | `Generator<[ItemId, number]>` | Iterate items with depth level                 |
 
@@ -251,7 +262,6 @@ This provides **referential stability** for items, which is important for SolidJ
 | `ContainerItem<K>`   | `'container'`   | `c-{key}`  | Holds child items, has spacing/accepts/layout |
 | `BlockItem<K, T>`    | `'block'`       | `b-{key}`  | User block with nested containers             |
 | `PlaceholderItem<K>` | `'placeholder'` | `p-{key}`  | End-of-container sentinel                     |
-| `GapItem`            | `'gap'`         | `gap`      | Dropzone indicator                            |
 
 ### Factory Functions
 
@@ -260,17 +270,14 @@ This provides **referential stability** for items, which is important for SolidJ
 | `createContainerItem(container)`          | `ContainerItem` with reactive getters for spacing/accepts/layout |
 | `createBlockItem(block, key, containers)` | `BlockItem`                                                      |
 | `createPlaceholderItem(parent)`           | `PlaceholderItem`                                                |
-| `createDropzoneItem(before, height)`      | `GapItem`                                                        |
 
 ### ID Helper Functions
 
-| Function                          | Returns                       |
-| --------------------------------- | ----------------------------- |
-| `createContainerItemId(key)`      | `c-{key}` as ItemId           |
-| `createBlockItemId(key)`          | `b-{key}` as ItemId           |
-| `createPlaceholderItemId(parent)` | `p-{parent}` as ItemId        |
-| `createDropzoneItemId()`          | `gap` as ItemId               |
-| `isPlaceholderId(id)`             | `true` if id starts with `p-` |
+| Function                          | Returns                |
+| --------------------------------- | ---------------------- |
+| `createContainerItemId(key)`      | `c-{key}` as ItemId    |
+| `createBlockItemId(key)`          | `b-{key}` as ItemId    |
+| `createPlaceholderItemId(parent)` | `p-{parent}` as ItemId |
 
 ---
 
@@ -358,9 +365,10 @@ Maintains a `nextY` cursor. For each item type:
 | **Container (wrap)** | Read actual DOM positions from measurements. Compute placeholder position after last child. |
 | **Block**            | Process nested containers using measured child offsets (`children[].x`, `children[].y`).    |
 | **Placeholder**      | Advance `nextY` by `bottom` measurement.                                                    |
-| **Gap**              | Advance `nextY` by `bottom` measurement.                                                    |
 
 **Output**: `Map<ItemId, DOMRect>` where each `DOMRect` has `{x, y, width, height}` relative to the root container's origin.
+
+**Used by**: `calculateTransitionStyles` only. Drop targeting does not use the computed layout; it hit-tests live DOM rects (see `findDropTarget`).
 
 ---
 
@@ -387,19 +395,17 @@ Computes FLIP animation data by comparing two tree layouts.
 
 **Special handling**:
 
-- **New dropzone**: If a gap appears in `nextTree` but not `prevTree`, its initial height is computed based on the position delta of the item after it
 - **Parent delta subtraction**: Child deltas exclude their parent's delta to avoid double-counting
 - **Wrap children**: Items in wrap containers get `inWrap: true`, which causes style functions to return `{}` (no absolute positioning)
 
 ### Style Helper Functions
 
-| Function                  | Used on                 | What it produces                                                   |
-| ------------------------- | ----------------------- | ------------------------------------------------------------------ |
-| `outerStyle(state)`       | Block outer wrapper     | `position: relative`, fixed `width`/`height`                       |
-| `innerStyle(state)`       | Block inner wrapper     | `position: absolute`, `transform`, `width`, `transition`           |
-| `placeholderStyle(state)` | Placeholder wrapper     | `position: absolute`, `width`, `transition`                        |
-| `spacerStyle(state)`      | Container bottom spacer | `margin-top` (adjusts container visual height)                     |
-| `dropzoneStyle(state)`    | Gap/dropzone wrapper    | `position: absolute`, `transform`, `width`, `height`, `transition` |
+| Function                  | Used on                 | What it produces                                         |
+| ------------------------- | ----------------------- | -------------------------------------------------------- |
+| `outerStyle(state)`       | Block outer wrapper     | `position: relative`, fixed `width`/`height`             |
+| `innerStyle(state)`       | Block inner wrapper     | `position: absolute`, `transform`, `width`, `transition` |
+| `placeholderStyle(state)` | Placeholder wrapper     | `position: absolute`, `width`, `transition`              |
+| `spacerStyle(state)`      | Container bottom spacer | `margin-top` (adjusts container visual height)           |
 
 ---
 
@@ -411,7 +417,7 @@ Computes FLIP animation data by comparing two tree layouts.
 
 Creates a reactive animation pipeline:
 
-1. Watches `input()` for tree changes
+1. Watches `input()` for tree changes (`BlockTree` passes the input tree directly, so this fires when consumer data changes — never during a drag)
 2. On change, starts the FLIP generator
 3. Generator yields control at each phase (measure, apply, wait)
 4. `createEffect` drives the generator forward, using `setTimeout` for non-zero delays
@@ -474,8 +480,8 @@ Simple: returns `getBoundingClientRect()` for every element. Used as the "First"
 
 | Name          | Value                    | Purpose                                    |
 | ------------- | ------------------------ | ------------------------------------------ |
-| `blockClass`  | module-generated      | CSS class on all item wrappers             |
-| `spacerClass` | module-generated     | CSS class on container bottom spacers      |
+| `blockClass`  | module-generated         | CSS class on all item wrappers             |
+| `spacerClass` | module-generated         | CSS class on container bottom spacers      |
 | `durationVar` | `'--solidnest-duration'` | CSS custom property for animation duration |
 | `spacingVar`  | `'--solidnest-spacing'`  | CSS custom property for container spacing  |
 
@@ -487,25 +493,27 @@ Importing `styles.ts` loads `styles.module.css`. Block and spacer selectors use 
 
 ## 14. dnd/createDnd.ts — Drag & Drop State Machine
 
-### `createDnd<K, T>(input, options, itemElements, getBlocksToDrag, onReorder)`
+### `createDnd<K, T>(tree, options, itemElements, getBlocksToDrag, onReorder)`
+
+Pointer-driven reordering over a layout that stays still while dragging. Dragged blocks are neither removed nor replaced by a gap; the component only tracks the drag, the pointer and the current drop target.
 
 **Parameters**:
 
-- `input` — Reactive VirtualTree accessor
-- `options` — `{ dragRadius: Vec2, dragThreshold: number }`
-- `itemElements` — Shared element map
-- `getBlocksToDrag` — Returns blocks to drag (respects multi-selection)
-- `onReorder` — Callback for completed reorder
+- `tree` — Reactive input `VirtualTree` accessor (the same tree that is rendered)
+- `options` — `Accessor<{ dragThreshold: number; touchDragDelay: number }>`
+- `itemElements` — Shared element map, used to measure live DOM rects
+- `getBlocksToDrag` — Returns blocks to drag for a pressed key (respects multi-selection)
+- `onReorder` — Callback for a completed drop
 
 **Returns**:
 
 ```typescript
 {
-  treeWithDropzone: Accessor<VirtualTree>;  // Tree with gap inserted
-  dragTree: Accessor<VirtualTree | null>;   // Extracted blocks for ghost
-  dragState: Accessor<DragState | null>;    // Current drag info
-  dragPosition: Accessor<DOMRect>;          // Ghost position
-  onDragHandleClick: (ev, key) => void;     // Entry point
+  dragState: Accessor<DragState<K> | undefined>;          // Current drag info
+  dropTarget: Accessor<DropTarget<K> | undefined>;        // Current drop target (see findDropTarget)
+  dragPosition: Accessor<DOMRect>;                        // Ghost rect: pointer + offset, dragged block size
+  dragTree: Accessor<VirtualTree<K, T> | undefined>;      // tree.extractBlocks(keys), for the ghost
+  onDragHandleDown: (ev: PointerEvent, key: K, onTouchDragStart: () => void) => void; // Entry point
 }
 ```
 
@@ -514,58 +522,65 @@ Importing `styles.ts` loads `styles.module.css`. Block and spacer selectors use 
 ```typescript
 {
   keys: K[];           // Keys being dragged
-  topItem: ItemId;     // Top-most block ItemId
-  offset: Vec2;        // Cursor offset from block origin
+  topItem: ItemId;     // Block ItemId of the dragged block that contains the pressed one
+  offset: Vec2;        // Offset from the pointer to the block's top-left corner
   size: Vec2;          // Size of the dragged block
   tags: string[];      // Combined tags of all dragged blocks
 }
 ```
 
-### Insertion Matching Logic
+### Gesture Lifecycle
 
-The system builds a pipeline of derived signals:
+Gesture state lives in a plain variable (not signals) because event handlers need current values synchronously. Only signals exposed to rendering (`dragState`, `dropTarget`, pointer position) are reactive.
 
-1. `treeWithoutDragged` — Input tree with dragged blocks removed
-2. `insertionPoints` — All valid drop positions (from `getInsertionPoints`)
-3. `insertion` — Best matching point for current pointer position
-4. `treeWithDropzone` — Tree with gap item inserted at best match
+1. **Arm** — `onDragHandleDown` ignores non-primary buttons and presses while another gesture is active. It attaches document listeners (`pointermove`, `pointerup`, `pointercancel`, capturing `scroll`, non-passive `touchmove`, `contextmenu`, `keydown`) through one `AbortController`. Pointer events are matched by `pointerId`.
+2. **Start**
+   - **Mouse / pen**: the drag starts once the pointer has moved `dragThreshold` pixels (default `10`).
+   - **Touch**: the drag starts after a long press of `touchDragDelay` milliseconds (default `350`). Moving more than 10px before that abandons the gesture so the browser can scroll. When a long press starts a drag, `onTouchDragStart` is called so `BlockTree` can select the block.
+   - Starting measures the top dragged block; if it isn't mounted the gesture ends. The scroller is the nearest ancestor of the root container with `overflow-y: auto | scroll` that actually overflows, falling back to `document.scrollingElement`.
+3. **Drag** — a `requestAnimationFrame` loop auto-scrolls the scroller when the pointer is within `min(48px, height / 4)` of its top or bottom edge (up to 16px per frame, faster closer to the edge). When anything scrolled or the pointer/content moved since the last frame, it calls `findDropTarget` and updates `dropTarget` only if the target actually changed (same kind, place and indicator rect).
+4. **Drop** — on `pointerup` the gesture ends, and if there was a drag with a target, `onReorder({ keys, place })` fires.
+5. **Cancel** — `pointercancel`, Escape, or component cleanup end the gesture without reordering.
 
-For **list points**: Y-band algorithm with configurable radius (1.5× block height)
-For **wrap points**: 2D Euclidean distance with height-based Y tolerance
+While a gesture is active, `touchmove` is prevented once dragging (and for pen/mouse presses on a handle, which never scroll), and the context menu is suppressed so a long press doesn't open it.
 
 ---
 
-## 15. dnd/getInsertionPoints.ts — Drop Target Calculator
+## 15. dnd/findDropTarget.ts — Drop Target Hit-Testing
 
-### `getInsertionPoints<K, T>(tree, tags, measures): InsertionPoint<K>[]`
+### `findDropTarget<K, T>(tree, dragged, tags, pointer, measure): DropTarget<K> | undefined`
+
+Hit-tests the pointer against the rendered layout, which stays static while dragging.
 
 **Parameters**:
 
-- `tree` — Tree with dragged blocks already removed
-- `tags` — Tags of the blocks being dragged
-- `measures` — Current DOM measurements
+- `tree` — The rendered (input) tree
+- `dragged` — `ReadonlySet<K>` of dragged keys; these blocks (and therefore everything inside them) are ignored, so a group can't be dropped into itself
+- `tags` — Tags of the blocks being dragged; a container accepts the drag when every tag is in its `accepts`
+- `pointer` — Pointer position in viewport coordinates
+- `measure` — Returns the current viewport rect of a rendered item, or `undefined` when it isn't mounted
 
-**Algorithm**:
-
-1. Computes full layout via `calculateLayout()`
-2. Recursively walks the tree
-3. For each container, checks if `tags` are accepted (all tags must be in `container.accepts`)
-4. For each accepted block/placeholder, creates an insertion point with the layout rect's position
-5. Wrap-layout containers get `inWrap: true` and include x/width/height for 2D matching
-
-**Returns** an array of:
+**Returns** `undefined` when no accepting container is under the pointer, otherwise:
 
 ```typescript
-{
-  id: ItemId;
+type DropTarget<K> = {
   place: Place<K>;
-  y: number;
-  x?: number;        // Only for wrap layout
-  width?: number;     // Only for wrap layout
-  height?: number;    // Only for wrap layout
-  inWrap?: boolean;
-}
+  kind: 'line' | 'into'; // line: between blocks; into: outlines a collapsed block receiving the drop
+  indicator: DOMRect; // Where to draw the marker, in viewport coordinates
+};
 ```
+
+**Rules**:
+
+1. **Deepest accepting container wins.** Starting at the root, the search descends into the block under the pointer and into any of its containers under the pointer; if nothing deeper accepts, the enclosing accepting container is used.
+2. **Reading-order placement.** Inside a container, measured blocks are read in document order and the drop goes before the first block that follows the pointer: blocks below the pointer follow it, blocks above don't, and for the row the pointer is in, **full-width rows** (width ≥ 75% of the container's width) split at their vertical centre while **cells that share a row** split at their horizontal centre.
+3. **Indicators.** Before/after a full-width row → horizontal line half the container's spacing above/below it. Beside a cell → vertical line half the spacing left/right of it. Pointing past the end of a row anchors the marker after that row's last cell rather than before the next row's first cell (same `place`). An empty container gets a line at its top. Lines are 3px thick.
+4. **"Into" drops on headers.** Pointing at the header of a block whose container _explicitly_ accepts the tags (non-empty `accepts`) drops into that container. An empty `accepts` never turns a block into a target, otherwise every leaf in the Legacy API (which always gets a container) would swallow drops.
+   - Collapsed (container not mounted): `kind: 'into'`, `place.before = null`, indicator is the block's rect.
+   - Expanded: a line at the start of the container (before its first block). Pointing below the header places within the expanded container's flow.
+5. **Edge zones.** When the block's own parent also accepts the drag, the outer 25% of the header (top edge; and bottom edge when collapsed) means before/after the block instead of into it.
+
+Tested in `test/findDropTarget.test.ts`.
 
 ---
 
@@ -573,7 +588,7 @@ For **wrap points**: 2D Euclidean distance with height-based Y tolerance
 
 ### `components/DragContainer.tsx`
 
-Default drag ghost. Shows up to 3 stacked copies of the dragged block, offset by 6px each. Has a red border for debugging.
+Default drag ghost. Shows up to 3 stacked copies of the dragged block, offset by 6px each.
 
 ```typescript
 DragContainerProps<T> = { blocks: T[]; children: JSX.Element }
@@ -581,7 +596,7 @@ DragContainerProps<T> = { blocks: T[]; children: JSX.Element }
 
 ### `components/Dropzone.tsx`
 
-Default drop indicator. A rounded div with light background and blue border.
+Default drop marker. A rounded div with light background and blue border that fills its wrapper (`height: 100%`). The wrapper is sized to the drop target's indicator rect — a 3px line between blocks, or the whole block for an `into` drop — and carries `data-drop="line"` or `data-drop="into"` for styling.
 
 ### `components/Placeholder.tsx`
 

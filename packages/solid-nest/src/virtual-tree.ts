@@ -1,16 +1,12 @@
 import { Accessor, createMemo } from 'solid-js';
 import { BlockOptions, Container } from './BlockTree';
-import { Place } from './events';
 import {
   BlockItem,
   ContainerItem,
   createBlockItem,
   createBlockItemId,
   createContainerItem,
-  createContainerItemId,
-  createDropzoneItem,
   createPlaceholderItem,
-  createPlaceholderItemId,
   Item,
   ItemId
 } from './Item';
@@ -138,43 +134,6 @@ export class VirtualTree<K, T> {
       }
     }
     return false;
-  }
-
-  removeBlocks(keys: Iterable<K>): VirtualTree<K, T> {
-    const ids = new Set<ItemId>();
-    for (const key of keys) {
-      ids.add(createBlockItemId(key));
-    }
-    return this.removeItems(ids);
-  }
-
-  removeItems(ids: Set<ItemId>): VirtualTree<K, T> {
-    const childMap = new Map();
-    for (const [id, children] of this._childMap) {
-      const newChildren = children.filter((id) => !ids.has(id));
-      childMap.set(id, newChildren);
-    }
-
-    return new VirtualTree(this, this._items, childMap);
-  }
-
-  insertDropzone(place: Place<K>, height: number) {
-    const parent = createContainerItemId(place.parent);
-    const before = place.before ? createBlockItemId(place.before) : createPlaceholderItemId(place.parent);
-    const dropzone = createDropzoneItem(before, height);
-
-    // Create the dropzone
-    const items = new Map(this._items);
-    items.set(dropzone.id, dropzone);
-
-    // Insert into parent
-    const childMap = new Map(this._childMap);
-    const children = childMap.get(parent)?.slice() ?? [];
-    const index = children.indexOf(before);
-    children.splice(index, 0, dropzone.id);
-    childMap.set(parent, children);
-
-    return new VirtualTree(this, items, childMap);
   }
 
   extractBlocks(keys: Iterable<K>) {

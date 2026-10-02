@@ -3,14 +3,7 @@ import { Dynamic } from '@solidjs/web';
 import type { Accessor, Component } from 'solid-js';
 import { createMemo, createTrackedEffect, For, onCleanup, onSettled, Show, untrack } from 'solid-js';
 import { BlockItem, Item, ItemId } from './Item';
-import {
-  AnimationState,
-  dropzoneStyle,
-  innerStyle,
-  outerStyle,
-  placeholderStyle,
-  spacerStyle
-} from './calculateTransitionStyles';
+import { AnimationState, innerStyle, outerStyle, placeholderStyle, spacerStyle } from './calculateTransitionStyles';
 import { DragContainer, DragContainerProps } from './components/DragContainer';
 import { Dropzone } from './components/Dropzone';
 import { Placeholder } from './components/Placeholder';
@@ -61,7 +54,10 @@ export type BlockTreeProps<K, T> = {
   onCut?: EventHandler<CutEvent<T>>;
   /** Fired when blocks are pasted. */
   onPaste?: EventHandler<PasteEvent<K>>;
-  /** Optional custom dropzone component. */
+  /**
+   * Optional custom drop marker, stretched over a thin line between blocks or over a collapsed block
+   * being dropped into. Its wrapper carries `data-drop="line"` or `data-drop="into"` for styling.
+   */
   dropzone?: Component<{}>;
   /** Optional custom placeholder component. */
   placeholder?: Component<{ parent: K }>;
@@ -69,8 +65,13 @@ export type BlockTreeProps<K, T> = {
   dragContainer?: Component<DragContainerProps<T>>;
   /** Duration of transition animations, in milliseconds. */
   transitionDuration?: number;
-  /** Distance the cursor must move, in pixels, for a drag to be detected. */
+  /** Distance a mouse or pen must move, in pixels, for a drag to be detected; defaults to `10`. */
   dragThreshold?: number;
+  /**
+   * How long a touch must hold still, in milliseconds, before it drags instead of scrolling;
+   * defaults to `350`. Blocks should use `touch-action: manipulation` (or `pan-y`) so touches can scroll.
+   */
+  touchDragDelay?: number;
   /**
    * Forces the container to maintain a fixed height while dragging is in progress;
    * useful for preventing odd behaviour when the component is inside a scrollable element.
@@ -122,9 +123,9 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
 
   const options = createMemo(() => ({
     transitionDuration: props.transitionDuration ?? 200,
-    dragRadius: { x: 1.2, y: 1.5 },
     multiselect: props.multiselect ?? true,
-    dragThreshold: props.dragThreshold ?? 10
+    dragThreshold: props.dragThreshold ?? 10,
+    touchDragDelay: props.touchDragDelay ?? 350
   }));
 
   const selectedBlocks = () => props.selection?.blocks ?? [];
@@ -177,9 +178,10 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
   };
 
   const dnd = createDnd(inputTree, options, itemElements, blocksToDrag, (ev) => props.onReorder?.(ev));
-  const { treeWithDropzone, dragTree, dragState, dragPosition, onDragHandleClick } = dnd;
+  const { dragTree, dragState, dropTarget, dragPosition, onDragHandleDown } = dnd;
 
-  const { tree, styles } = createAnimations(treeWithDropzone, itemElements, options);
+  const { tree, styles } = createAnimations(inputTree, itemElements, options);
+  const draggedKeys = createMemo(() => new Set(dragState()?.keys));
 
   const containerHeight = createMemo(() => {
     if (dragState() != null && props.fixedHeightWhileDragging) {
@@ -200,7 +202,26 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
       width: `${rect.width}px`,
       height: `${rect.height}px`,
       transform: `translate(${rect.x}px, ${rect.y}px)`,
-      'z-index': 10000
+      'z-index': 10000,
+      'pointer-events': 'none' as const
+    };
+  });
+
+  let rootElement!: HTMLDivElement;
+  const dropMarkerStyle = createMemo(() => {
+    const target = dropTarget();
+    if (!target) return undefined;
+
+    const origin = rootElement.getBoundingClientRect();
+    const { x, y, width, height } = target.indicator;
+    return {
+      position: 'absolute' as const,
+      left: `${x - origin.x}px`,
+      top: `${y - origin.y}px`,
+      width: `${width}px`,
+      height: `${height}px`,
+      'z-index': 50,
+      'pointer-events': 'none' as const
     };
   });
 
@@ -269,14 +290,17 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
       props.onSelectionChange?.({ kind: 'blocks', key: item.key, mode, blocks: keys });
     };
 
-    if (nextSelection.onClick) {
+    // A touch may turn out to be a scroll, so it selects on tap or when a long press starts a drag.
+    const touch = ev.pointerType === 'touch';
+    if (nextSelection.onClick || touch) {
       const handler = (ev: Event) => {
         ev.preventDefault();
         ev.stopPropagation();
         select();
       };
-      ev.currentTarget?.addEventListener('click', handler, { once: true });
-      removeClickHandler = () => ev.currentTarget?.removeEventListener('click', handler);
+      const target = ev.currentTarget;
+      target?.addEventListener('click', handler, { once: true });
+      removeClickHandler = () => target?.removeEventListener('click', handler);
     } else {
       select();
     }
@@ -284,7 +308,12 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
     if (ev.target instanceof HTMLElement && ev.currentTarget instanceof HTMLElement) {
       for (const el of ev.currentTarget.querySelectorAll('[data-drag-handle]')) {
         if (el.contains(ev.target)) {
-          onDragHandleClick(ev, item.key);
+          onDragHandleDown(ev, item.key, () => {
+            if (!nextSelection.onClick) {
+              removeClickHandler?.();
+              select();
+            }
+          });
           break;
         }
       }
@@ -306,17 +335,27 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
   const renderItem = (
     item: Item<K, T>,
     tree: Accessor<VirtualTree<K, T>>,
-    itemProps: { dragging?: boolean; parentLayout?: 'list' | 'wrap' } = {},
+    itemProps: { ghost?: boolean; parentLayout?: 'list' | 'wrap' } = {},
     styles?: Accessor<Map<string, AnimationState>>
   ) => {
     const inWrapParent = itemProps.parentLayout === 'wrap';
     const itemChildren = createMemo(() => tree().children(item.id));
+    // The drag ghost renders copies of tree items; only the real ones are measured.
+    let element: HTMLElement | undefined;
+    const register = (el: HTMLElement) => {
+      if (itemProps.ghost) return;
+      element = el;
+      itemElements.set(item.id, el);
+    };
+    onCleanup(() => {
+      if (element && itemElements.get(item.id) === element) itemElements.delete(item.id);
+    });
 
     if (item.kind === 'container') {
       const isWrap = item.layout === 'wrap';
       return (
         <div
-          ref={(el) => itemElements.set(item.id, el)}
+          ref={register}
           class={blockClass}
           data-kind={item.kind}
           data-id={item.id}
@@ -335,7 +374,9 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
             ...(inWrapParent ? { width: '100%' } : {})
           }}
         >
-          <For each={itemChildren()}>{(child) => renderItem(child, tree, { parentLayout: item.layout }, styles)}</For>
+          <For each={itemChildren()}>
+            {(child) => renderItem(child, tree, { ghost: itemProps.ghost, parentLayout: item.layout }, styles)}
+          </For>
           <Show when={!isWrap}>
             <div class={spacerClass} style={spacerStyle(styles?.().get(item.id))} />
             <div style={{ 'margin-top': '-1px', 'padding-bottom': '1px' }} />
@@ -367,7 +408,7 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
         >
           <div
             ref={(el) => {
-              itemElements.set(item.id, el);
+              register(el);
               // Apply wrap sizing via direct DOM manipulation (SolidJS style
               // diffing doesn't reliably merge spread objects with reactive styles).
               if (isWrapLeaf) {
@@ -384,9 +425,9 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
               key={item.key}
               block={item.block}
               selected={selectedBlocks().includes(item.key)}
-              dragging={itemProps.dragging === true}
+              dragging={itemProps.ghost === true || draggedKeys().has(item.key)}
             >
-              <For each={itemChildren()}>{(child) => renderItem(child, tree, {}, styles)}</For>
+              <For each={itemChildren()}>{(child) => renderItem(child, tree, { ghost: itemProps.ghost }, styles)}</For>
             </Dynamic>
           </div>
         </div>
@@ -397,22 +438,8 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
       if (inWrapParent) return null;
       return (
         <div class={blockClass} data-kind={item.kind} style={outerStyle(styles?.().get(item.id))}>
-          <div ref={(el) => itemElements.set(item.id, el)} style={placeholderStyle(styles?.().get(item.id))}>
+          <div ref={register} style={placeholderStyle(styles?.().get(item.id))}>
             <Dynamic component={props.placeholder ?? Placeholder} parent={item.parent} />
-          </div>
-        </div>
-      );
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (item.kind === 'gap') {
-      return (
-        <div class={blockClass} data-kind={item.kind} style={outerStyle(styles?.().get(item.id))}>
-          <div
-            ref={(el) => itemElements.set(item.id, el)}
-            style={{ 'z-index': 50, height: `${item.height}px`, ...dropzoneStyle(styles?.().get(item.id)) }}
-          >
-            <Dynamic component={props.dropzone ?? Dropzone} />
           </div>
         </div>
       );
@@ -423,6 +450,7 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
 
   return (
     <div
+      ref={rootElement}
       onFocusOut={(ev) => {
         if (ev.relatedTarget === focusElement) return;
         props.onSelectionChange?.({ kind: 'deselect' });
@@ -442,6 +470,13 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
       <Show when={root()} keyed>
         {(rootItem) => renderItem(rootItem, tree, {}, styles)}
       </Show>
+      <Show when={dropMarkerStyle()}>
+        {(style) => (
+          <div data-drop={dropTarget()?.kind} style={style()}>
+            <Dynamic component={props.dropzone ?? Dropzone} />
+          </div>
+        )}
+      </Show>
       {/* Drag ghost */}
       <Show when={dragTree()} keyed>
         {(tree) => {
@@ -457,7 +492,7 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
             <div style={dragContainerStyle()}>
               <Dynamic component={props.dragContainer ?? DragContainer} blocks={blocks}>
                 <Show when={top()} keyed>
-                  {(top) => renderItem(top, () => tree, { dragging: true })}
+                  {(top) => renderItem(top, () => tree, { ghost: true })}
                 </Show>
               </Dynamic>
             </div>
