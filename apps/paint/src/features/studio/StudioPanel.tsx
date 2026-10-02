@@ -5,7 +5,7 @@ import styles from './PaintStudio.module.css';
 /** Floating side panel opened from the toolbar; a backdrop button closes it when tapping outside. */
 export function StudioPanel(props: {
   /** Identifies the panel for styling. */
-  id: string;
+  id: PanelId;
   title: string;
   onClose: () => void;
   children: JSX.Element;
@@ -25,3 +25,15 @@ export function StudioPanel(props: {
     </>
   );
 }
+
+/** Side panels, by id, with their titles. */
+export const panelTitles = {
+  symmetry: 'Paint symmetry',
+  file: 'Drawing',
+  brush: 'Brush',
+  color: 'Color',
+  layers: 'Layers'
+} as const;
+
+/** A side panel opened from the toolbar or the brush, color and drawing launchers. */
+export type PanelId = keyof typeof panelTitles;

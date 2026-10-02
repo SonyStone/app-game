@@ -4,8 +4,8 @@ import { NavigationPuck } from '@app-game/navigation-puck';
 import type { Point } from '@app-game/paint-core/camera';
 import { supportsPaintSymmetry } from '@app-game/paint-core/symmetry';
 import type { JSX } from '@solidjs/web';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
-import { isRestorable, type PaintError } from '../../shared/errors';
+import { createSignal, Match, Show, Switch } from 'solid-js';
+import type { PaintError } from '../../shared/errors';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { AbrViewerDialog, createAbrPresets } from '../abr';
 import { BrushPanel, createBrushTools, createMixerBrush, MixerActions, type PaintTool } from '../brush';
@@ -21,8 +21,11 @@ import { createSymmetry, SymmetryGuide, SymmetryPanel } from '../symmetry';
 import { createFullscreenToggle } from './createFullscreenToggle';
 import { createPaintShortcuts } from './createPaintShortcuts';
 import { DrawingMenu } from './DrawingMenu';
+import { ErrorNotice } from './ErrorNotice';
 import styles from './PaintStudio.module.css';
-import { StudioPanel } from './StudioPanel';
+import { panelTitles, StudioPanel, type PanelId } from './StudioPanel';
+import { ToolBar } from './ToolBar';
+import { ViewControls } from './ViewControls';
 
 /**
  * Paint Studio: a full-window infinite canvas with on-demand controls; opening panels never resizes the drawing
@@ -263,66 +266,23 @@ export function PaintStudio(props: {
         <span class={styles.saveState} role="status" title={saveStatus[engine.saveState()].title}>
           {ready() ? saveStatus[engine.saveState()].label : 'Preparing drawing…'}
         </span>
-        <div class={styles.viewControls} aria-label="Canvas view">
-          <button {...fullscreen.props}>
-            <SketchIcon name={fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={16} />
-          </button>
-          <button aria-label="Zoom out" onClick={() => camera.zoomBy(0.8)}>
-            <SketchIcon name="minus" size={16} />
-          </button>
-          <button aria-label="Reset zoom" title="Reset zoom to 100%" onClick={() => camera.resetZoom()}>
-            {Math.round(camera.camera().zoom * 100)}%
-          </button>
-          <button aria-label="Zoom in" onClick={() => camera.zoomBy(1.25)}>
-            <SketchIcon name="plus" size={16} />
-          </button>
-          <Show when={Math.abs(camera.camera().angle) > 0.005}>
-            <button aria-label="Reset rotation" title="Reset rotation" onClick={() => camera.resetRotation()}>
-              {Math.round((camera.camera().angle * 180) / Math.PI)}°
-            </button>
-          </Show>
-        </div>
-        <nav class={styles.tools} aria-label="Drawing tools">
-          <For each={toolButtons}>
-            {(button) => (
-              <button
-                aria-label={button.label}
-                title={button.title}
-                aria-pressed={tool() === button.tool ? 'true' : 'false'}
-                onClick={() => chooseTool(button.tool)}
-              >
-                <SketchIcon name={button.icon} />
-              </button>
-            )}
-          </For>
-          <span class={styles.toolSeparator} />
-          <button
-            aria-label="Mirror canvas"
-            title="Mirror view"
-            aria-pressed={camera.camera().mirrored ? 'true' : 'false'}
-            onClick={() => camera.toggleMirror()}
-          >
-            <SketchIcon name="mirror" />
-          </button>
-          <button
-            aria-label="Paint symmetry"
-            title="Paint symmetry"
-            aria-pressed={symmetry.symmetry().mode !== 'off' ? 'true' : 'false'}
-            aria-expanded={panel() === 'symmetry' ? 'true' : 'false'}
-            onClick={(event) => togglePanel('symmetry', event.currentTarget)}
-          >
-            <SketchIcon name="symmetry" />
-          </button>
-          <button
-            aria-label="Layers"
-            title="Layers"
-            aria-expanded={panel() === 'layers' ? 'true' : 'false'}
-            aria-controls="paint-panel"
-            onClick={(event) => togglePanel('layers', event.currentTarget)}
-          >
-            <SketchIcon name="layers" />
-          </button>
-        </nav>
+        <ViewControls
+          fullscreen={fullscreen}
+          zoom={camera.camera().zoom}
+          angle={camera.camera().angle}
+          onZoomBy={camera.zoomBy}
+          onResetZoom={camera.resetZoom}
+          onResetRotation={camera.resetRotation}
+        />
+        <ToolBar
+          tool={tool()}
+          mirrored={camera.camera().mirrored}
+          symmetry={symmetry.symmetry().mode !== 'off'}
+          panel={panel()}
+          onChooseTool={chooseTool}
+          onToggleMirror={camera.toggleMirror}
+          onTogglePanel={togglePanel}
+        />
         <Show when={tool() === 'lasso'}>
           <SelectionActions
             disabled={!ready() || selection.drawing()}
@@ -515,55 +475,9 @@ export function PaintStudio(props: {
   }
 }
 
-/** Side panels, by id, with their titles. */
-const panelTitles = {
-  symmetry: 'Paint symmetry',
-  file: 'Drawing',
-  brush: 'Brush',
-  color: 'Color',
-  layers: 'Layers'
-} as const;
-
-type PanelId = keyof typeof panelTitles;
-
-/** Tool buttons in toolbar order. */
-const toolButtons = [
-  { tool: 'brush', label: 'Brush', title: 'Brush · B', icon: 'draw' },
-  { tool: 'abr-brush', label: 'ABR Brush', title: 'ABR Brush · experimental', icon: 'brush' },
-  { tool: 'eraser', label: 'Eraser', title: 'Eraser · E', icon: 'erase' },
-  { tool: 'lasso', label: 'Lasso', title: 'Lasso · L', icon: 'lasso' }
-] as const satisfies readonly { tool: PaintTool; label: string; title: string; icon: string }[];
-
 /** Save indicator text for each engine save state. */
 const saveStatus = {
   saved: { label: 'Saved', title: 'Saved on this device' },
   saving: { label: 'Saving…', title: 'Writing completed changes to this device' },
   unsaved: { label: 'Unsaved changes', title: 'Changes are saved automatically after the stroke finishes' }
 } as const;
-
-/**
- * Alert for the latest failure. A paused renderer offers "Restore renderer"; a busy editor asks to retry later;
- * other failures only need dismissing.
- */
-function ErrorNotice(props: { error: PaintError; onRestore: () => void; onDismiss: () => void }) {
-  const title = () => {
-    if (isRestorable(props.error)) {
-      return 'Canvas paused';
-    }
-
-    return props.error.kind === 'engine' && props.error.code === 'busy'
-      ? 'Paint is busy'
-      : 'Could not complete that action';
-  };
-
-  return (
-    <div class={styles.error} role="alert">
-      <strong>{title()}</strong>
-      <p>{props.error.message}</p>
-      <Show when={isRestorable(props.error)}>
-        <button onClick={() => props.onRestore()}>Restore renderer</button>
-      </Show>
-      <button onClick={() => props.onDismiss()}>Dismiss</button>
-    </div>
-  );
-}
