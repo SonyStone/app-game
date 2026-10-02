@@ -162,28 +162,35 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, symmetry));
         savedVersion = Math.max(savedVersion, version);
         saved = savedVersion === saveVersion && !strokeSession;
-        clearTimeout(collectTimer);
-        collectTimer = setTimeout(() => {
-          if (!strokeSession && !importing && !editingSelection)
-            background(() => tileStore.collect(liveTiles));
-        }, 5000);
+        scheduleCollect();
       } finally {
         pendingSaves--;
         status();
       }
+    };
+    /** Collects unreachable tile versions after edits settle; strokes, imports and selection edits postpone it. */
+    const scheduleCollect = () => {
+      clearTimeout(collectTimer);
+      collectTimer = setTimeout(() => {
+        if (!strokeSession && !importing && !editingSelection) background(() => tileStore.collect(liveTiles));
+      }, collectDelay);
     };
     const changed = () => {
       saved = false;
       saveVersion++;
       document.persist(tileStore.capture);
       status();
+      scheduleSave();
+      scheduleDraw();
+    };
+    /** Autosaves once input has paused for `saveDelay`; a later change restarts the delay. */
+    const scheduleSave = () => {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
         enqueue(async () => {
           background(save);
         });
-      }, 300);
-      scheduleDraw();
+      }, saveDelay);
     };
     /** Persists navigation in the small view record, without a full checkpoint or marking the drawing unsaved. */
     const viewChanged = () => {
@@ -196,13 +203,17 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         });
       }, 300);
     };
+    /** Drops a stroke whose engine failed; the session already cancelled itself and released its pins. */
+    const abandonStroke = () => {
+      strokeSession = undefined;
+      renderer?.reset();
+      changed();
+    };
     const updatePreview = () => {
       try {
         strokeSession?.preview(liveTail);
       } catch (error) {
-        strokeSession = undefined;
-        renderer?.reset();
-        changed();
+        abandonStroke();
         throw error;
       }
     };
@@ -224,10 +235,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         strokeSession?.preview(liveTail);
         scheduleIdle();
       } catch (error) {
-        // The resource session already cancelled the engine and released its pins.
-        strokeSession = undefined;
-        renderer?.reset();
-        changed();
+        abandonStroke();
         throw error;
       }
     };
@@ -250,9 +258,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               scheduleIdle(now);
             } catch (error) {
               stopIdle();
-              strokeSession = undefined;
-              renderer?.reset();
-              changed();
+              abandonStroke();
               throw error;
             }
           });
@@ -289,15 +295,14 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       } finally {
         strokeSession = undefined;
       }
-      if (!saved) {
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => {
-          enqueue(async () => {
-            background(save);
-          });
-        }, 300);
-      }
+      if (!saved) scheduleSave();
       scheduleDraw();
+    };
+    /** Captures pixels of a large edit, flushing about every 8 MiB so RAM does not grow with the edit's area. */
+    const stage = async (pixels: Uint8Array) => {
+      const ref = tileStore.capture(pixels);
+      if (tileStore.stats().dirtyBytes >= stagedFlushBytes) await tileStore.flush();
+      return ref;
     };
     const startRenderer = async () => {
       renderer?.destroy();
@@ -390,6 +395,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         for (const sample of command.samples) pendingSamples.samples.push(sample);
         return;
       }
+      // Later packets append to this batch, so it must not share the caller's array.
+      if (command.type === 'samples') command = { ...command, samples: [...command.samples] };
       pendingSamples = command.type === 'samples' ? command : undefined;
       enqueue(async () => {
         if (pendingSamples === command) pendingSamples = undefined;
@@ -542,20 +549,10 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'cancel':
             cancel();
             break;
-          case 'undo': {
-            cancel();
-            const restored = document.undo();
-            if (restored) {
-              renderer?.restore(restored, document.layers);
-              await renderer?.prepareOverview(document.layers);
-            }
-
-            changed();
-            break;
-          }
+          case 'undo':
           case 'redo': {
             cancel();
-            const restored = document.redo();
+            const restored = command.type === 'undo' ? document.undo() : document.redo();
             if (restored) {
               renderer?.restore(restored, document.layers);
               await renderer?.prepareOverview(document.layers);
@@ -590,14 +587,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               if (document.active.id !== command.layerId || document.revision !== command.revision)
                 throw new Error('The layer changed. Select the pixels again.');
               if (!document.active.visible) throw new Error('Show the active layer before editing its pixels.');
-              const storage = {
-                read: tileStore.read,
-                write: async (pixels: Uint8Array) => {
-                  const ref = tileStore.capture(pixels);
-                  if (tileStore.stats().dirtyBytes >= 8 * 1048576) await tileStore.flush();
-                  return ref;
-                }
-              };
+              const storage = { read: tileStore.read, write: stage };
               const selected =
                 command.action === 'paste' ? clipboard : await captureSelection(document.active, points, storage);
               if (!selected) throw new Error('Copy or cut a selection before pasting.');
@@ -637,11 +627,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               await renderer.prepareOverview(document.layers);
             } finally {
               editingSelection = false;
-              clearTimeout(collectTimer);
-              collectTimer = setTimeout(() => {
-                if (!strokeSession && !importing && !editingSelection)
-                  background(() => tileStore.collect(liveTiles));
-              }, 5000);
+              scheduleCollect();
               post({ type: 'selection', points, hasClipboard: !!clipboard });
             }
             break;
@@ -685,11 +671,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             try {
               const next =
                 'file' in command
-                  ? await readPaintFile(command.file, async (pixels) => {
-                      const ref = tileStore.capture(pixels);
-                      if (tileStore.stats().dirtyBytes >= 8 * 1048576) await tileStore.flush();
-                      return ref;
-                    })
+                  ? await readPaintFile(command.file, stage)
                   : decodeDocument(command.text);
               await tileStore.flush();
               cancel();
@@ -703,14 +685,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               changed();
             } finally {
               importing = false;
-              if (!saved) {
-                clearTimeout(saveTimer);
-                saveTimer = setTimeout(() => {
-                  enqueue(async () => {
-                    background(save);
-                  });
-                }, 300);
-              }
+              if (!saved) scheduleSave();
             }
             break;
           }
@@ -796,3 +771,12 @@ function rendererFailureMessage(code: GpuError['code'], message: string) {
 
 /** At most 60 intermediate redraws per second; first contact and packet completion still present immediately. */
 const progressFrameInterval = 16;
+
+/** Autosave waits for this pause after a change, so consecutive strokes share one checkpoint. */
+const saveDelay = 300;
+
+/** Garbage collection of old tile versions waits this long after a save or selection edit. */
+const collectDelay = 5000;
+
+/** Selection edits and imports flush captured tiles to IndexedDB once this many bytes are pending. */
+const stagedFlushBytes = 8 * 1048576;

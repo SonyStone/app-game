@@ -102,51 +102,6 @@ export function decodeDocument(text: string): ReturnType<typeof restoreDocument>
   return restoreDocument(value);
 }
 
-/** Stores a complete checkpoint in one IndexedDB transaction. A failed write keeps the last checkpoint. */
-export async function saveCheckpoint(document: SavedDocument, databaseName = 'paint-studio'): Promise<void> {
-  const db = await openDatabase(databaseName);
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction('documents', 'readwrite');
-      tx.objectStore('documents').put(document, 'current');
-      tx.oncomplete = () => resolve();
-      tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Autosave failed.'));
-    });
-  } finally {
-    db.close();
-  }
-}
-
-/** Loads the last committed document. Missing storage yields a new document; corrupt data is surfaced. */
-export async function loadCheckpoint(
-  databaseName = 'paint-studio'
-): Promise<ReturnType<typeof restoreDocument> | undefined> {
-  const db = await openDatabase(databaseName);
-  try {
-    const value = await new Promise<unknown>((resolve, reject) => {
-      const request = db.transaction('documents').objectStore('documents').get('current');
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    return value === undefined ? undefined : restoreDocument(value);
-  } finally {
-    db.close();
-  }
-}
-
-function openDatabase(databaseName: string): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName, 3);
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains('documents')) request.result.createObjectStore('documents');
-      if (!request.result.objectStoreNames.contains('tiles')) request.result.createObjectStore('tiles');
-      if (!request.result.objectStoreNames.contains('overviews')) request.result.createObjectStore('overviews');
-      if (!request.result.objectStoreNames.contains('overviewIndex')) request.result.createObjectStore('overviewIndex');
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
 function toBase64(pixels: Uint8Array): string {
   let text = '';
   for (let i = 0; i < pixels.length; i += 8192) text += String.fromCharCode(...pixels.subarray(i, i + 8192));
