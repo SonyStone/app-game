@@ -13,7 +13,7 @@ import { paintBlend, paintModes } from '@app-game/abr-brush/paintBlend';
 import { pencilCoverage, usesPencilCoverage } from '@app-game/abr-brush/pencil';
 import { d } from 'typegpu';
 import type { BrushTipImage } from '../../lib/abr';
-import { blendModeId, brushNoise, dualCoverage, grainReference, textureCoverage, textureTone } from './effects';
+import { blendModeId, brushNoise, dualCoverage, grainReference, textureCoverage, textureTone, wetEdgesCoverage } from './effects';
 import { eraserPreviewColor } from './eraser';
 import { renderResourcePixels } from './resource-pixels';
 import { preparePreviewResources, type PreviewResources } from './resources';
@@ -125,18 +125,11 @@ function layerCoverage(
   // Photoshop's command combines the persistent masks after stroke-wide texture,
   // rather than applying the secondary mask separately to every primary dab.
   if (dual) alpha = dualCoverage(alpha, dual[i]!, blendModeId(input.values.dualBrush.mode));
-  if (input.values.useWetEdges) {
-    const x = i % input.width,
-      y = Math.floor(i / input.width);
-    const near = Math.min(
-      flow[Math.max(0, y - 1) * input.width + x]!,
-      flow[Math.min(input.height - 1, y + 1) * input.width + x]!,
-      flow[y * input.width + Math.max(0, x - 1)]!,
-      flow[y * input.width + Math.min(input.width - 1, x + 1)]!
-    );
-    alpha = Math.min(1, alpha * 0.65 + Math.max(0, flow[i]! - near) * 2);
-  }
-  if (usesPencilCoverage(input.values.tool)) alpha = Math.min(pencilCoverage(alpha), opacity[i]!);
+  const pencil = usesPencilCoverage(input.values.tool);
+  if (pencil) alpha = pencilCoverage(alpha);
+  // Photoshop maps the completed mask through its Wet Edges table before stroke opacity, except for Dissolve.
+  if (input.values.useWetEdges && input.values.tool.mode !== 'Dslv') alpha = wetEdgesCoverage(alpha);
+  if (pencil) alpha = Math.min(alpha, opacity[i]!);
   if (dual && !maskAccumulation) alpha = Math.min(alpha, input.values.dualBrush.mode === 'hardMix' ? rawOpacity[i]! : opacity[i]!);
   return alpha * strokeCompositeOpacity(input);
 }

@@ -10,7 +10,8 @@ import {
   retouchCompositeInSpace,
   sampleMixing,
   textureCoverage,
-  textureTone
+  textureTone,
+  wetEdgesCoverage
 } from '@app-game/abr-brush/effects';
 import { paintBlend, paintModes } from '@app-game/abr-brush/paintBlend';
 import { pencilCoverage } from '@app-game/abr-brush/pencil';
@@ -394,34 +395,14 @@ function compositePixel(position: d.v4f, paint: d.v4f, mask: d.v4f): d.v4f {
   if (dualEnabled) {
     alpha = dualCoverage(alpha, std.textureLoad(compositeLayout.$.dual, xy, 0).r, p.extra[extraLane.dualMode]!);
   }
-  // Local edge approximation; exact wet-edge diffusion requires a halo exchange between tiles.
-  if (p.extra[extraLane.wetEdges]! > 0) {
-    const up = std.textureLoad(
-      compositeLayout.$.paint,
-      std.clamp(std.add(xy, d.vec2i(0, -1)), d.vec2i(0), d.vec2i(255)),
-      0
-    ).a;
-    const down = std.textureLoad(
-      compositeLayout.$.paint,
-      std.clamp(std.add(xy, d.vec2i(0, 1)), d.vec2i(0), d.vec2i(255)),
-      0
-    ).a;
-    const left = std.textureLoad(
-      compositeLayout.$.paint,
-      std.clamp(std.add(xy, d.vec2i(-1, 0)), d.vec2i(0), d.vec2i(255)),
-      0
-    ).a;
-    const right = std.textureLoad(
-      compositeLayout.$.paint,
-      std.clamp(std.add(xy, d.vec2i(1, 0)), d.vec2i(0), d.vec2i(255)),
-      0
-    ).a;
-    alpha = std.min(1, alpha * 0.65 + std.max(0, paint.a - std.min(std.min(up, down), std.min(left, right))) * 2);
-  }
   // The legacy dynamic-opacity cap still needs destination-aware byte accumulation.
   // Global tool opacity is separate and applies after mask composition.
   if (p.tone[toneLane.pencil]! > 0) {
     alpha = pencilCoverage(alpha);
+  }
+  // Photoshop maps the completed mask through its Wet Edges table before stroke opacity, except for Dissolve.
+  if (p.extra[extraLane.wetEdges]! > 0 && blendMode !== dissolveMode) {
+    alpha = wetEdgesCoverage(alpha);
   }
   const opacity = std.select(mask.a, mask.g, dualEnabled && p.extra[extraLane.dualMode]! === dualHardMixMode);
   if (p.maskAccumulation === maskAccumulation.stamp || p.maskAccumulation === maskAccumulation.approximate) {

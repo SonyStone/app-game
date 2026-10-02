@@ -227,6 +227,24 @@ export function textureTone(sample: number, invert: number, brightness: number, 
 }
 
 /**
+ * Photoshop's RGB8 Wet Edges lookup for one completed stroke coverage value: a rising segment to 192 at half
+ * coverage, then a parabola down to 150 at full coverage, so solid ink turns translucent and soft edges stay darker.
+ * It is a per-pixel table, not a spatial edge filter. Apply once after texture, Dual Brush and the Pencil threshold,
+ * before stroke opacity; Photoshop skips it for Dissolve. Coverage is normalized and quantized to a byte first.
+ */
+export function wetEdgesCoverage(coverage: number): number {
+  'use gpu';
+  const value = std.floor(std.clamp(coverage, 0, 1) * 255 + 0.5);
+  if (value <= 128) {
+    return std.ceil(value * 1.5) / 255;
+  }
+
+  // The original truncates (42 / 127²) · (value − 128)²; every quotient is at least 1/16129 from an integer.
+  const offset = value - 128;
+  return (192 - std.floor((42 * offset * offset) / 16129)) / 255;
+}
+
+/**
  * A deterministic integer-grid noise value in [0, 1), so the pattern does not shimmer when settings change.
  * Integer hashing keeps it identical on every GPU and at any world position; a `sin()` hash loses
  * precision far from the origin. `seed` keeps 16 fractional bits. Shader-only: JavaScript does not wrap
@@ -271,18 +289,32 @@ function mixGrainBitsReference(value: number): number {
 }
 
 /**
- * Photoshop's brush Noise for one rasterized tip coverage, applied before texture.
- * Empty and solid pixels stay unchanged; partial coverage moves two thirds of the way toward a random
- * rescale (`coverage * 2r` below one half, mirrored above), so the mean is preserved and only soft edges
- * gain grain. `random` must be uniform in [0, 1); Photoshop draws it from a uniform lookup table.
+ * Photoshop's byte brush Noise for one rasterized tip coverage, applied before texture (0x104be114c, strength 170).
+ * Empty and solid bytes stay unchanged; partial coverage moves two thirds of the way toward a random rescale
+ * (`coverage · 2r` below one half, mirrored above), so the mean is preserved and only soft edges gain grain.
+ * Coverage is a byte over 255 and the result is again an exact byte, computed in integers so fragment, compute and CPU
+ * evaluations agree. `random` must be uniform in [0, 1); Photoshop draws its byte from a lookup table.
  */
 export function brushNoise(coverage: number, random: number): number {
   'use gpu';
-  if (coverage < 0.5 / 255 || coverage >= 254.5 / 255) {
+  const source = std.floor(std.clamp(coverage, 0, 1) * 255 + 0.5);
+  if (source <= 0 || source >= 255) {
     return coverage;
   }
 
-  const scale = random * 2;
-  const perturbed = std.select(1 - (1 - coverage) * scale, coverage * scale, coverage < 0.5);
-  return std.clamp(coverage + (perturbed - coverage) * (170 / 255), 0, 1);
+  const noise = std.min(255, std.floor(random * 256));
+  let perturbed = roundedByteProduct(source * noise * 2);
+  if (source >= 128) {
+    perturbed = 255 - roundedByteProduct((255 - source) * noise * 2);
+  }
+
+  const magnitude = roundedByteProduct(std.abs(source - perturbed) * 170);
+  return std.select(source + magnitude, source - magnitude, perturbed < source) / 255;
+}
+
+/** Photoshop's rounded division of a byte product by 255: `(p + 128 + ((p + 128) >> 8)) >> 8`, exact in floats. */
+function roundedByteProduct(product: number): number {
+  'use gpu';
+  const biased = product + 128;
+  return std.floor((biased + std.floor(biased / 256)) / 256);
 }
