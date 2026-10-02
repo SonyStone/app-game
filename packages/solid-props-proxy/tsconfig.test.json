@@ -7,7 +7,6 @@
     "./src/index.tsx",
     "./src/*.test.tsx",
     "./src/server.test.ts",
-    "../ui-components-examples/docking/SolidTabsExample.tsx",
     "../ui-components-examples/solid-props-proxy/index.tsx",
     "./tests/*.ts",
     "./tests/*.tsx",
