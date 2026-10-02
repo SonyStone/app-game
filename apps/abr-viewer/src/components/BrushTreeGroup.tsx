@@ -55,7 +55,7 @@ export function BrushTreeGroup(props: BrushTreeGroupProps): JSX.Element {
     <div
       data-drag-handle
       data-group-id={props.block.id}
-      class={`${styles.treeGroup} cursor-grab touch-none ${
+      class={`${styles.treeGroup} cursor-grab ${
         props.selected
           ? 'border-ps-accent bg-ps-accent/10'
           : isTopLevel()

@@ -46,6 +46,7 @@ export function App(
   const [busy, setBusy] = createSignal(false);
   const [draggingFiles, setDraggingFiles] = createSignal(false);
   const [split, setSplit] = createSignal(45);
+  let dividerGrab = 0;
   let input!: HTMLInputElement;
   let shell!: HTMLDivElement;
   let dragDepth = 0;
@@ -240,17 +241,20 @@ export function App(
               }
             }}
             onPointerDown={(event) => {
+              // Keeps the grabbed point under the pointer instead of snapping the divider's edge to it.
+              dividerGrab = event.clientX - event.currentTarget.getBoundingClientRect().left;
               event.currentTarget.setPointerCapture(event.pointerId);
             }}
             onPointerMove={(event) => {
               if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                 const rect = shell.getBoundingClientRect();
-                setSplit(Math.max(30, Math.min(60, ((event.clientX - rect.left) / rect.width) * 100)));
+                const width = event.clientX - dividerGrab - rect.left;
+                setSplit(Math.max(30, Math.min(60, (width / rect.width) * 100)));
               }
             }}
             onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
           />
-          <section class={styles.preset} aria-label="Brush Settings">
+          <section class={styles.settings} aria-label="Brush Settings">
             <header class={styles.panelHeading}>
               <h2>Brush Settings</h2>
               <span>{workspace.active() ? 'Live preview' : ''}</span>

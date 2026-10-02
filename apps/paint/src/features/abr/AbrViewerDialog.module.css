@@ -1,6 +1,6 @@
-@value workspace from '../../../../abr-viewer/src/App.module.css';
-
 .abrViewer {
+  /* The editor fills the dialog below its title bar. */
+  --abr-workspace-height: calc(100% - 44px);
   margin: auto;
   width: min(1200px, calc(100vw - 24px));
   height: calc(100dvh - 40px);
@@ -31,8 +31,4 @@
     width: 40px;
     height: 40px;
   }
-}
-
-.abrViewer .workspace {
-  height: calc(100% - 44px);
 }
