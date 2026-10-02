@@ -148,7 +148,8 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
         blendMode: value.blendMode,
         pattern: !!value.pattern,
         dual: !!value.dual,
-        smudge: !!value.smudge
+        smudge: !!value.smudge,
+        mixer: !!value.mixer
       };
       maskColor = { x: 0, y: 0, z: 0 };
       bindings = new WeakMap();
@@ -230,9 +231,10 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
     createTile: (base: Texture, mask: Texture, capacity: number) => createAbrTile(root, base, mask, capacity),
     /** Prepare before opening a caller-owned render pass for direct drawing. */
     prepareTile,
-    /** One primary Smudge stamp can composite directly unless coverage needs neighboring or secondary pixels. */
+    /** One primary Smudge or Mixer stamp can composite directly unless its coverage needs a secondary mask. */
     canDrawDirect: () =>
-      !!settings?.smudge && !settings.values.useWetEdges && !(settings.values.useDualBrush && settings.dual),
+      !!(settings?.smudge || settings?.mixer) && !settings.values.useWetEdges &&
+      !(settings.values.useDualBrush && settings.dual),
     /** Shared-area deposition currently excludes effects whose coordinates or masks are tile-local. */
     canBatchDirect: () => !!settings?.smudge && !settings.values.useWetEdges &&
       !(settings.values.useDualBrush && settings.dual) && !settings.values.useNoise &&
@@ -793,6 +795,7 @@ type PreparedSettings = Pick<AbrRasterSettings, 'values' | 'tipLodBias' | 'blend
   pattern: boolean;
   dual: boolean;
   smudge: boolean;
+  mixer: boolean;
 };
 
 /** Tile-local mapping of a captured canvas patch; uniforms are consumed before the next write. */

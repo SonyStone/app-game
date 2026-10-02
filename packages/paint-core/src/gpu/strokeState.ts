@@ -22,6 +22,8 @@ export type StrokeData = {
   abr: ReturnType<typeof createAbrStamps> | undefined;
   /** Smudge transports pixels between dabs. */
   smudge: boolean;
+  /** The stroke is a Mixer Brush gesture; like Smudge, each dab composites straight into its tiles. */
+  mixer: boolean;
   /** Sampling tools replace coverage at every stamp; only dual-brush coverage persists. */
   transientCoverage: boolean;
   /** Immutable history state restored by the history eraser. */
@@ -48,6 +50,7 @@ export function createStrokeData(): StrokeData {
     current: undefined,
     abr: undefined,
     smudge: false,
+    mixer: false,
     transientCoverage: false,
     historySource: undefined,
     tiles: new Map(),
@@ -94,6 +97,7 @@ export function createStrokeState(
 
       data.abr = abr ? raster.prepareAbr(abr) : undefined;
       data.smudge = !!abr?.smudge;
+      data.mixer = !!abr?.mixer;
       data.transientCoverage = !!(abr?.smudge || abr?.filter || abr?.mixer) && !(abr?.values.useDualBrush && abr.dual);
       residency.configure(data.transientCoverage && deps.sharedScratch !== false);
       data.historySource = abr?.historySource;

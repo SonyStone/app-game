@@ -32,7 +32,7 @@ export function createCanvasPickup<Layer extends PickupLayer>(
   const smallSlots: Array<ReturnType<typeof createSmallPlacement> | undefined> = Array(32);
   const reserveSmall = commandSlots(smallSlots.length);
   const groups = new WeakMap<TgpuTexture, ReturnType<typeof root.createBindGroup<typeof tileLayout.entries>>>();
-  let uploadedMixing: boolean | undefined;
+  let uploadedSampling: number | undefined;
   const layerParams = root.createBuffer(d.vec4f).$usage('uniform');
   const tilePipeline = root.createRenderPipeline({
     attribs: { placement: placementLayout.attrib },
@@ -63,6 +63,7 @@ export function createCanvasPickup<Layer extends PickupLayer>(
       layers: readonly Layer[],
       options: {
         allLayers?: boolean;
+        /** Adaptive pickup budget. Supplying one also selects level-zero sampling without mipmaps. */
         maxDimension?: number;
         exact?: boolean;
         linear?: boolean;
@@ -75,13 +76,17 @@ export function createCanvasPickup<Layer extends PickupLayer>(
       const plan = planCanvasPickup(region, options.maxDimension ?? 1024, options.exact);
       // Trilinear filtering needs at most the next level above its largest derivative.
       const ratio = Math.max(region.width / plan.width, region.height / plan.height);
-      const minify = !options.linear && ratio > 1;
+      // A caller-supplied budget is an adaptive, approximate pickup: it reads level zero like Smooth sampling, so
+      // tiles changed by the previous dab need no mip chain and consecutive dabs can share a submission.
+      const sampling = options.linear ? pickupSampling.linear
+        : options.maxDimension !== undefined ? pickupSampling.levelZero : pickupSampling.mipmapped;
+      const minify = sampling === pickupSampling.mipmapped && ratio > 1;
       const requiredMip = minify ? Math.min(8, Math.ceil(Math.log2(ratio)) + 1) : 0;
       busy = true;
-      if (uploadedMixing !== !!options.linear) {
+      if (uploadedSampling !== sampling) {
         options.commands?.flush();
-        mixing.write(options.linear ? 1 : 0);
-        uploadedMixing = !!options.linear;
+        mixing.write(sampling);
+        uploadedSampling = sampling;
       }
       try {
         if (!scratch || scratch.width !== plan.width || scratch.height !== plan.height) {
@@ -345,16 +350,24 @@ function placeTile(index: number, placement: d.v4f) {
 }
 const tileFragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f })((input) => {
   'use gpu';
-  if (tileLayout.$.mixing > 0) return sampleMixing(tileLayout.$.image, tileLayout.$.sampler, input.uv, true);
+  if (tileLayout.$.mixing === pickupSampling.linear)
+    return sampleMixing(tileLayout.$.image, tileLayout.$.sampler, input.uv, true);
+  if (tileLayout.$.mixing === pickupSampling.levelZero)
+    return std.textureSampleLevel(tileLayout.$.image, tileLayout.$.sampler, input.uv, 0);
   return std.textureSample(tileLayout.$.image, tileLayout.$.sampler, input.uv);
 });
 
 const smallTileFragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f })((input) => {
   'use gpu';
-  if (smallPlacementLayout.$.mixing > 0)
+  if (smallPlacementLayout.$.mixing === pickupSampling.linear)
     return sampleMixing(smallPlacementLayout.$.image, smallPlacementLayout.$.sampler, input.uv, true);
+  if (smallPlacementLayout.$.mixing === pickupSampling.levelZero)
+    return std.textureSampleLevel(smallPlacementLayout.$.image, smallPlacementLayout.$.sampler, input.uv, 0);
   return std.textureSample(smallPlacementLayout.$.image, smallPlacementLayout.$.sampler, input.uv);
 });
+
+/** How pickup reads source tiles: hardware-filtered mips, level zero only, or level zero decoded to linear light. */
+const pickupSampling = { mipmapped: 0, linear: 1, levelZero: 2 } as const;
 
 /** Layer properties needed to composite captured tiles. Tile storage remains owned by the host. */
 export type PickupLayer = { visible: boolean; opacity: number; blend: string };

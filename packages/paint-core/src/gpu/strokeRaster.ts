@@ -178,7 +178,7 @@ export function createStrokeRaster(
     const sharedScratch = residency.sharedScratch;
     const direct =
       !!sampled &&
-      stroke.smudge &&
+      (stroke.smudge || stroke.mixer) &&
       options.directSmudge !== false &&
       abr!.canDrawDirect() &&
       dabs.length === 1 &&

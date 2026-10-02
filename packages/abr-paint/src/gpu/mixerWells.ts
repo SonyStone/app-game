@@ -2,10 +2,13 @@ import { mixerDose, mixerPaint, mixerPickup, mixerReservoir } from '@app-game/ab
 import { previewColor } from '@app-game/abr-brush/stroke';
 import { common, d, std, tgpu, type TgpuRoot } from 'typegpu';
 import type { createCanvasPickup } from './canvasPickup';
+import { commandBatch } from './commandBatch';
+import { commandSlots } from './commandSlots';
 import type { RendererToolState } from './toolState';
 
 /** Device-owned reservoir and pickup wells. Current paint survives strokes until load/clean or preset replacement.
- * Cancellation restores both wells and remaining paint. All GPU consumers must submit before the next step.
+ * Cancellation restores both wells and remaining paint. A step's consumers must be submitted, or encoded in the
+ * step's own batch, before the next step.
  * Exchange/depletion rates are a brush-diameter-based approximation, not a measured Photoshop solvent model.
  */
 export function createMixerWells(root: TgpuRoot) {
@@ -16,7 +19,19 @@ export function createMixerWells(root: TgpuRoot) {
     savedPickup = texture(root),
     loadedPaint = texture(root),
     output = texture(root);
-  const params = root.createBuffer(Params).$usage('uniform');
+  type Group = ReturnType<typeof root.createBindGroup<typeof Layout.entries>>;
+  // Uniforms are written at call time, so every step encoded in one batch needs its own slot.
+  const slots = Array.from({ length: 8 }, () => ({
+    params: root.createBuffer(Params).$usage('uniform'),
+    /** Per canvas texture: bind groups reading well pair 0 and well pair 1. */
+    groups: new WeakMap<object, [Group | undefined, Group | undefined]>()
+  }));
+  const reserve = commandSlots(slots.length);
+  const views = {
+    reservoirs: reservoirs.map((well) => root.unwrap(well).createView()),
+    pickups: pickups.map((well) => root.unwrap(well).createView()),
+    output: root.unwrap(output).createView()
+  };
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear' });
   const update = root.createRenderPipeline({
     vertex: common.fullScreenTriangle,
@@ -178,56 +193,59 @@ export function createMixerWells(root: TgpuRoot) {
       copy(pickups[front]!, savedPickup);
       active = true;
     },
-    /** Takes up canvas paint, exchanges colors between wells, and emits premultiplied brush paint for one dab. */
+    /** Takes up canvas paint, exchanges colors between wells, and emits premultiplied brush paint for one dab.
+     * A borrowed batch may span steps: the returned paint is valid until the next step's passes in that batch,
+     * and the batch's owner must submit before begin, finish, cancel or any idle command.
+     */
     step(
       patch: Awaited<ReturnType<ReturnType<typeof createCanvasPickup>['capture']>>,
       wet: number,
       mix: number,
       flow: number,
-      distanceInDiameters: number
+      distanceInDiameters: number,
+      batch?: ReturnType<typeof commandBatch>
     ) {
       if (!active) throw new Error('Begin the Mixer Brush stroke before sampling.');
       const dose = mixerDose(remaining, flow, distanceInDiameters);
       const { exchange, available } = dose;
-      params.write({ controls: d.vec4f(wet, wet > 0 ? mix : 0, exchange, flow), paint: d.vec4f(available, 0, 0, 0) });
+      const commands = batch ?? commandBatch(root.device);
+      const slot = slots[reserve(commands)]!;
+      slot.params.write({
+        controls: d.vec4f(wet, wet > 0 ? mix : 0, exchange, flow),
+        paint: d.vec4f(available, 0, 0, 0)
+      });
+      let groups = slot.groups.get(patch.texture);
+      if (!groups) {
+        slot.groups.set(patch.texture, (groups = [undefined, undefined]));
+      }
+
+      const group = (well: number) =>
+        (groups[well] ??= root.createBindGroup(Layout, {
+          reservoir: reservoirs[well]!,
+          pickup: pickups[well]!,
+          canvas: patch.texture,
+          sampler,
+          params: slot.params
+        }));
       const back = 1 - front;
-      const encoder = root.device.createCommandEncoder();
+      const encoder = commands.encoder();
       const pass = encoder.beginRenderPass({
         colorAttachments: [
-          { view: root.unwrap(reservoirs[back]!).createView(), loadOp: 'clear', storeOp: 'store' },
-          { view: root.unwrap(pickups[back]!).createView(), loadOp: 'clear', storeOp: 'store' }
+          { view: views.reservoirs[back]!, loadOp: 'clear', storeOp: 'store' },
+          { view: views.pickups[back]!, loadOp: 'clear', storeOp: 'store' }
         ]
       });
-      update
-        .with(pass)
-        .with(
-          root.createBindGroup(Layout, {
-            reservoir: reservoirs[front]!,
-            pickup: pickups[front]!,
-            canvas: patch.texture,
-            sampler,
-            params
-          })
-        )
-        .draw(3);
+      update.with(pass).with(group(front)).draw(3);
       pass.end();
       const outputPass = encoder.beginRenderPass({
-        colorAttachments: [{ view: root.unwrap(output).createView(), loadOp: 'clear', storeOp: 'store' }]
+        colorAttachments: [{ view: views.output, loadOp: 'clear', storeOp: 'store' }]
       });
-      compose
-        .with(outputPass)
-        .with(
-          root.createBindGroup(Layout, {
-            reservoir: reservoirs[back]!,
-            pickup: pickups[back]!,
-            canvas: patch.texture,
-            sampler,
-            params
-          })
-        )
-        .draw(3);
+      compose.with(outputPass).with(group(back)).draw(3);
       outputPass.end();
-      root.device.queue.submit([encoder.finish()]);
+      if (!batch) {
+        commands.flush();
+      }
+
       front = back;
       remaining = dose.remaining;
       return { texture: output, region: patch.region, width: 256, height: 256 };
@@ -257,7 +275,7 @@ export function createMixerWells(root: TgpuRoot) {
     destroy() {
       for (const value of [...reservoirs, ...pickups, savedReservoir, savedPickup, loadedPaint, output])
         value.destroy();
-      params.destroy();
+      for (const slot of slots) slot.params.destroy();
     }
   };
 }

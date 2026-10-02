@@ -87,8 +87,9 @@ export function createAbrRetouch<Layer extends PickupLayer>(
       if (!smudge && !mixer && !filter) return;
       if (smudge?.strength === 0 || filter?.strength === 0) return;
       smudgeSecondary.push(...dabs.filter((dab) => dab.abr?.secondary));
+      // Smudge and Mixer dabs depend on each other in order, but several can share one submission.
       const batchDabs =
-        !!smudge && sharedScratch && options.batchSmudgePasses !== false && options.batchSmudgeDabs !== false;
+        !!(smudge || mixer) && sharedScratch && options.batchSmudgePasses !== false && options.batchSmudgeDabs !== false;
       const shared = batchDabs ? commandBatch(device) : undefined;
       let pendingDabs = 0;
       let presentedAt = performance.now();
@@ -109,7 +110,8 @@ export function createAbrRetouch<Layer extends PickupLayer>(
           const region = { x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2 };
           const tool = mixer ?? smudge!;
           const pickupScale = tool.pickupScale;
-          const commands = shared ?? (smudge && options.batchSmudgePasses !== false ? commandBatch(device) : undefined);
+          const commands =
+            shared ?? ((smudge || mixer) && options.batchSmudgePasses !== false ? commandBatch(device) : undefined);
           // Cross-dab batching helps submission-bound small footprints. Large dabs
           // already batch many tile passes and gain little from retaining extra scratch.
           const largeFootprint = radius > TILE_SIZE / 4;
@@ -150,7 +152,8 @@ export function createAbrRetouch<Layer extends PickupLayer>(
                   dab.abr?.mixing?.wet ?? mixer.wet,
                   dab.abr?.mixing?.mix ?? mixer.mix,
                   dab.flow,
-                  first ? 0 : Math.hypot(dab.x - previous.x, dab.y - previous.y) / (radius * 2)
+                  first ? 0 : Math.hypot(dab.x - previous.x, dab.y - previous.y) / (radius * 2),
+                  commands
                 )
               : carried!;
             await host.deposit(
