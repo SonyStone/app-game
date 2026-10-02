@@ -2,7 +2,7 @@ import { assign, registerElementClaim, render } from '@solidjs/web';
 import { createRoot, createSignal, flush, getOwner } from 'solid-js';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { createPropsProxy, PropsProxy } from './component';
-import { setEventListener } from './event-listener-patch';
+import { DELEGATED_EVENT_KEY, setEventListener } from './event-listener-patch';
 import { createSpread } from './spread';
 import type { Props } from './types';
 
@@ -264,8 +264,8 @@ describe('Solid 2 lifecycle and events', () => {
     proxy.dispose();
     button.click();
     expect(click).toHaveBeenCalledTimes(1);
-    expect(Object.hasOwn(button, '$$click')).toBe(false);
-    expect(Object.hasOwn(button, '$$clickData')).toBe(false);
+    expect(Object.hasOwn(button, `${DELEGATED_EVENT_KEY}click`)).toBe(false);
+    expect(Object.hasOwn(button, `${DELEGATED_EVENT_KEY}clickData`)).toBe(false);
   });
 
   it('composes handlers within a shadow render root', () => {

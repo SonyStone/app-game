@@ -1,6 +1,7 @@
 import { errorMessage } from '@app-game/solid-gpu/errors';
 import { createFullscreen } from '@solid-primitives/fullscreen';
-import { createSignal, getOwner, isDisposed, latest, untrack, type Accessor } from 'solid-js';
+import { getOwner, isDisposed, untrack, type Accessor } from 'solid-js';
+import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import type { FullscreenError } from '../../shared/errors';
 
 /**
@@ -13,7 +14,7 @@ export function createFullscreenToggle(
   onError: (error: FullscreenError) => void
 ) {
   const owner = getOwner()!;
-  const [pending, setPending] = createSignal(false);
+  const [pending, setPending, isRequesting] = createImmediateSignal(false);
   const { enter, exit, isActive } = untrack(() => createFullscreen(container));
   const supported = () => document.fullscreenEnabled;
 
@@ -43,7 +44,7 @@ export function createFullscreenToggle(
    * request settles is ignored. Failures after disposal are not reported.
    */
   async function toggle() {
-    if (isDisposed(owner) || latest(pending) || !supported()) {
+    if (isDisposed(owner) || isRequesting() || !supported()) {
       return;
     }
 

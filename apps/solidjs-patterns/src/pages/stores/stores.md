@@ -3,8 +3,8 @@
 # Stores <Badge>State</Badge>
 
 <Description>
-  createStore provides fine-grained reactivity for nested objects and arrays. Solid 2 uses storePath for targeted
-  updates and draft callbacks for grouped mutations.
+  createStore provides fine-grained reactivity for nested objects and arrays. Solid 2 updates stores by mutating a
+  draft inside the setter callback.
 </Description>
 
 </Header>
@@ -16,7 +16,7 @@
 `createStore` returns a reactive proxy and a setter. Import it from `solid-js` in Solid 2.
 
 ```ts
-import { createStore, storePath } from 'solid-js';
+import { createStore } from 'solid-js';
 
 const [state, setState] = createStore({
   user: { name: 'Alice', age: 30 },
@@ -27,8 +27,12 @@ const [state, setState] = createStore({
 });
 
 console.log(state.user.name);
-setState(storePath('user', 'name', 'Bob'));
-setState(storePath('items', 0, 'done', true));
+setState((draft) => {
+  draft.user.name = 'Bob';
+});
+setState((draft) => {
+  draft.items[0].done = true;
+});
 ```
 
 </Section>
@@ -43,16 +47,32 @@ setState(storePath('items', 0, 'done', true));
 
 <Section>
 
-## storePath
+## Targeted updates
 
-`storePath` describes a focused update. Its final argument can be a value or an updater function.
+A focused update writes one path of the draft. Only computations that read that path re-run. Solid 2 removed the
+`storePath` helper, which emulated the Solid 1 `setState('user', 'name', value)` form; plain draft writes cover the
+same cases.
 
 ```ts
-setState(storePath('count', 5));
-setState(storePath('count', (count) => count + 1));
-setState(storePath('user', 'address', 'city', 'London'));
-setState(storePath('list', 1, 'London'));
-setState(storePath('items', (item) => item.done, 'archived', true));
+setState((draft) => {
+  draft.count = 5;
+});
+setState((draft) => {
+  draft.count += 1;
+});
+setState((draft) => {
+  draft.user.address.city = 'London';
+});
+setState((draft) => {
+  draft.list[1] = 'London';
+});
+setState((draft) => {
+  for (const item of draft.items) {
+    if (item.done) {
+      item.archived = true;
+    }
+  }
+});
 ```
 
 </Section>

@@ -38,12 +38,12 @@
     "neverthrow": "catalog:"
   },
   "peerDependencies": {
-    "@solidjs/web": "2.0.0-rc.4",
+    "@solidjs/web": "catalog:",
     "solid-js": "catalog:",
     "typegpu": "^0.11.4"
   },
   "devDependencies": {
-    "@solidjs/web": "2.0.0-rc.4",
+    "@solidjs/web": "catalog:",
     "@types/node": "catalog:",
     "@webgpu/types": "^0.1.70",
     "happy-dom": "^20.9.0",

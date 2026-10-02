@@ -1,5 +1,5 @@
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createStore, storePath } from 'solid-js';
+import { createStore } from 'solid-js';
 
 /**
  * https://developer.mozilla.org/en-US/docs/Web/API/DeviceMotionEvent
@@ -28,22 +28,32 @@ export default function SensorAccessDemo() {
     console.log('Device Motion Event:', event);
     {
       const { x, y, z } = event.accelerationIncludingGravity ?? { x: 0, y: 0, z: 0 };
-      setState(storePath('accelerationIncludingGravity', { x: x ?? 0, y: y ?? 0, z: z ?? 0 }));
+      setState((draft) => {
+        Object.assign(draft.accelerationIncludingGravity, { x: x ?? 0, y: y ?? 0, z: z ?? 0 });
+      });
     }
     {
       const { x, y, z } = event.acceleration ?? { x: 0, y: 0, z: 0 };
-      setState(storePath('acceleration', { x: x ?? 0, y: y ?? 0, z: z ?? 0 }));
+      setState((draft) => {
+        Object.assign(draft.acceleration, { x: x ?? 0, y: y ?? 0, z: z ?? 0 });
+      });
     }
     {
       const { alpha, beta, gamma } = event.rotationRate ?? { alpha: 0, beta: 0, gamma: 0 };
-      setState(storePath('rotationRate', { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 }));
+      setState((draft) => {
+        Object.assign(draft.rotationRate, { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 });
+      });
     }
-    setState(storePath('interval', event.interval));
+    setState((draft) => {
+      draft.interval = event.interval;
+    });
   });
 
   createEventListener(window, 'deviceorientation', (event) => {
     const { alpha, beta, gamma } = event ?? { alpha: 0, beta: 0, gamma: 0 };
-    setState(storePath('orientation', { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 }));
+    setState((draft) => {
+      Object.assign(draft.orientation, { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 });
+    });
   });
 
   createEventListener(window, 'deviceorientation', (event) => {

@@ -2,7 +2,7 @@ import { createPointerEventsHandler } from '@app-game/hammer/pointerevent';
 import { Vec2 } from '@app-game/math';
 import { Animation, AnimationFrame } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { For, createSignal, createStore, createTrackedEffect, onCleanup, onSettled, storePath } from 'solid-js';
+import { For, createSignal, createStore, createTrackedEffect, onCleanup, onSettled } from 'solid-js';
 import GraphEditorToggle from './graph-editor-toggle';
 import PanelResizers from './panel-resizers';
 
@@ -48,12 +48,12 @@ export function Timeline(props: { animation?: Animation }) {
       dataset = (e.target as any).dataset as any;
 
       if (dataset?.name === 'keyframe') {
-        setFrames(
-          storePath(dataset.item, 'position', dataset.axis, (p: number) => {
-            posStart = p;
-            return posStart + input.delta.y;
-          })
-        );
+        const { item, axis } = dataset;
+        setFrames((draft) => {
+          const keyframePosition = draft[item].position;
+          posStart = keyframePosition[axis];
+          keyframePosition[axis] = posStart + input.delta.y;
+        });
       }
 
       if (!dataset) {
@@ -71,7 +71,10 @@ export function Timeline(props: { animation?: Animation }) {
       const input = pointerEventsHandler(e);
 
       if (dataset?.name === 'keyframe') {
-        setFrames(storePath(dataset.item, 'position', dataset.axis, () => posStart + input.delta.y));
+        const { item, axis } = dataset;
+        setFrames((draft) => {
+          draft[item].position[axis] = posStart + input.delta.y;
+        });
       }
 
       if (!dataset?.name) {
@@ -94,11 +97,10 @@ export function Timeline(props: { animation?: Animation }) {
       }
 
       if (dataset?.name === 'keyframe') {
-        setFrames(
-          storePath(dataset.item, 'position', dataset.axis, () => {
-            return posStart + input.delta.y;
-          })
-        );
+        const { item, axis } = dataset;
+        setFrames((draft) => {
+          draft[item].position[axis] = posStart + input.delta.y;
+        });
         dataset = undefined;
       }
 

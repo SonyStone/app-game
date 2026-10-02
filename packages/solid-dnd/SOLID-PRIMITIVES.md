@@ -541,7 +541,7 @@ Create deeply immutable reactive objects. `createImmutable` — like `createStor
 
 ### Solid stores
 
-Solid 2's built-in `createStore` supports focused `storePath` updates and draft callbacks. Prefer that API over the
+Solid 2's built-in `createStore` updates through draft callbacks, focused or grouped. Prefer that API over the
 Solid 1 mutable-store wrapper.
 
 ### `@solid-primitives/lifecycle`

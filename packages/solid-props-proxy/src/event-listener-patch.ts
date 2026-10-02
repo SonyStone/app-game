@@ -80,11 +80,20 @@ export function setDelegatedEvent(element: Element, name: string, value: unknown
   );
 }
 
+/**
+ * Prefix of the element slots read by @solidjs/web's delegated event dispatcher.
+ *
+ * Solid stores a delegated handler at `_$$<event>` and tuple data at `_$$<event>Data`
+ * (2.0.0-rc.13; rc.4 used `$$<event>`). The runtime does not export this key, so it is
+ * mirrored here and verified against compiled JSX by the delegation tests.
+ */
+export const DELEGATED_EVENT_KEY = '_$$';
+
 /** Installs the handler/data slots that the installed Solid 2 event dispatcher reads. */
 function createDelegatedPatch(element: Element, name: string) {
   const record = element as unknown as AnyRecord;
-  const handlerKey = `$$${name}`;
-  const dataKey = `$$${name}Data`;
+  const handlerKey = `${DELEGATED_EVENT_KEY}${name}`;
+  const dataKey = `${handlerKey}Data`;
   const handlerDescriptor = Object.getOwnPropertyDescriptor(element, handlerKey);
   const dataDescriptor = Object.getOwnPropertyDescriptor(element, dataKey);
   let baseHandler = record[handlerKey];
@@ -94,8 +103,8 @@ function createDelegatedPatch(element: Element, name: string) {
   const layers: { value: unknown; active: boolean }[] = [];
   const localContainer = !getDelegatedRoot(element);
   const handler = (event: Event) => {
-    if (typeof baseHandler === 'function') {
-      callSolidEventHandler(element, baseHandler as SolidEventHandler, baseData, baseData !== undefined, event);
+    if (baseHandler) {
+      callSolidEventHandler(element, baseHandler, baseData, event);
     }
     for (const layer of layers.slice()) {
       if (!layer.active) continue;
@@ -147,18 +156,20 @@ function restoreSlot(
 
 const delegatedPatches = new WeakMap<Element, Map<string, ReturnType<typeof createDelegatedPatch>>>();
 
-/** Calls either Solid delegated handler shape with the correct argument order. */
-function callSolidEventHandler(
-  element: Element,
-  handler: SolidEventHandler | SolidEventTupleHandler,
-  data: unknown,
-  hasData: boolean,
-  event: Event
-): void {
-  if (hasData) {
+/**
+ * Calls a base delegated slot like the installed dispatcher: tuple data first when
+ * present, otherwise a plain handler function or an EventListenerObject.
+ */
+function callSolidEventHandler(element: Element, handler: unknown, data: unknown, event: Event): void {
+  if (data !== undefined) {
     (handler as SolidEventTupleHandler).call(element, data, event);
     return;
   }
 
-  (handler as SolidEventHandler).call(element, event);
+  if (typeof handler === 'function') {
+    (handler as SolidEventHandler).call(element, event);
+    return;
+  }
+
+  (handler as EventListenerObject).handleEvent(event);
 }

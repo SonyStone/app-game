@@ -5,7 +5,8 @@ import type { Brush } from '@app-game/paint-core/brush';
 import type { BrushEngineSelection } from '@app-game/paint-core/composition/defineBrushEngine';
 import { abortedError, errorMessage } from '@app-game/solid-gpu/errors';
 import { err, ok, Result } from 'neverthrow';
-import { createSignal, getOwner, isDisposed, latest } from 'solid-js';
+import { getOwner, isDisposed } from 'solid-js';
+import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { brushError, engineError, type PaintError } from '../../shared/errors';
 
 /**
@@ -23,8 +24,8 @@ export function createAbrPresets(options: {
   select: (engine: BrushEngineSelection, settings: Partial<Brush>) => void;
 }) {
   const owner = getOwner();
-  const [preset, setPreset] = createSignal<AbrPreset>();
-  const [working, setWorking] = createSignal(false);
+  const [preset, setPreset, appliedPreset] = createImmediateSignal<AbrPreset | undefined>(undefined);
+  const [working, setWorking, isWorking] = createImmediateSignal(false);
 
   return {
     /** The applied preset, if any. */
@@ -32,7 +33,7 @@ export function createAbrPresets(options: {
     /** A preset is being prepared or uploaded. */
     busy: working,
     /** Like `busy`, including work started earlier in the current event; for synchronous guards. */
-    isBusy: () => latest(working),
+    isBusy: isWorking,
     useBrush,
     usePreset,
     /**
@@ -40,7 +41,7 @@ export function createAbrPresets(options: {
      * engine without one becomes ready immediately.
      */
     restore(): Promise<Result<void, PaintError>> | undefined {
-      const current = latest(preset);
+      const current = appliedPreset();
       if (!current) {
         return undefined;
       }
@@ -68,7 +69,7 @@ export function createAbrPresets(options: {
    * while another preset, stroke, selection edit or brush command is running.
    */
   async function usePreset(next: AbrPreset): Promise<Result<void, PaintError>> {
-    if (latest(working) || !options.canChange()) {
+    if (isWorking() || !options.canChange()) {
       return err(engineError('busy', 'Wait for Paint to finish the current operation.'));
     }
 

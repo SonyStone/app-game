@@ -1,4 +1,3 @@
-import { storePath } from 'solid-js';
 import { createEvents, EventManager, Events } from '../core/events';
 import { ThreeStore } from '../core/store';
 
@@ -28,7 +27,9 @@ export function createPointerEvents(_store: ThreeStore): EventManager<HTMLElemen
       const [store, setStore] = _store;
       const { events } = store;
       events.disconnect?.();
-      setStore(storePath('events', (events) => ({ ...events, connected: target })));
+      setStore((draft) => {
+        draft.events.connected = target;
+      });
       Object.entries(events?.handlers ?? []).forEach(([name, event]) => {
         const [eventName, passive] = DOM_EVENTS[name as keyof typeof DOM_EVENTS];
         target.addEventListener(eventName, event, { passive });
@@ -44,7 +45,9 @@ export function createPointerEvents(_store: ThreeStore): EventManager<HTMLElemen
             events.connected.removeEventListener(eventName, event);
           }
         });
-        setStore(storePath('events', (events) => ({ ...events, connected: false })));
+        setStore((draft) => {
+          draft.events.connected = false;
+        });
       }
     }
   };

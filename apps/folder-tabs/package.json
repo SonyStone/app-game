@@ -13,7 +13,7 @@
   "dependencies": {
     "@solid-primitives/event-listener": "catalog:",
     "@solid-primitives/media": "catalog:",
-    "@solidjs/web": "2.0.0-rc.4",
+    "@solidjs/web": "catalog:",
     "solid-js": "catalog:",
     "@app-game/card-stack": "workspace:*",
     "@app-game/app-router": "workspace:*",

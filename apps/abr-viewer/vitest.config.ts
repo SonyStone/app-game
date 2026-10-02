@@ -10,7 +10,7 @@ export default defineConfig({
     alias: [
       {
         find: /^solid-js$/,
-        replacement: fileURLToPath(new URL('./node_modules/solid-js/dist/dev.js', import.meta.url))
+        replacement: fileURLToPath(new URL('./node_modules/solid-js/dist/solid.dev.js', import.meta.url))
       }
     ],
     conditions: ['development', 'browser']

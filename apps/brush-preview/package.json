@@ -12,7 +12,7 @@
     "@app-game/brush-preview": "workspace:*",
     "@app-game/abr-paint": "workspace:*",
     "solid-js": "catalog:",
-    "@solidjs/web": "2.0.0-rc.4"
+    "@solidjs/web": "catalog:"
   },
   "devDependencies": {
     "@app-game/abr-parser": "workspace:*",

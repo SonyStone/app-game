@@ -128,7 +128,7 @@ const quickLinks = [
     title: 'Stores',
     description: 'createStore for nested/mutable reactive objects.',
     icon: '🗄️',
-    tags: ['createStore', 'storePath', 'reconcile']
+    tags: ['createStore', 'draft', 'reconcile']
   },
   {
     href: 'context',

@@ -1,0 +1,26 @@
+diff --git a/dist/persisted.js b/dist/persisted.js
+index ae2abf9..2b3c99e 100644
+--- a/dist/persisted.js
++++ b/dist/persisted.js
+@@ -41,8 +41,10 @@ function makePersisted(signal, options = {}) {
+ 		if (data.key !== name || !isServer && (data.url || globalThis.location.href) !== globalThis.location.href || data.newValue === serialize(untrack(getter))) return;
+ 		set(data.newValue);
+ 	});
+-	const persist = () => {
+-		const next = untrack(() => latest(getter));
++	// Solid holds a signal write until the next flush, so `latest` would read the old value;
++	// a signal setter's return value is the new one.
++	const persist = (written) => {
++		const next = written ? written.value : untrack(() => latest(getter));
+ 		if (next == null) {
+ 			storage.removeItem(name, storageOptions);
+ 			options.sync?.[1](name, null);
+@@ -56,7 +58,7 @@ function makePersisted(signal, options = {}) {
+ 		signal[0],
+ 		(value) => untrack(() => {
+ 			const output = signal[1](value);
+-			persist();
++			persist(isSignal && !(output instanceof Promise) ? { value: output } : undefined);
+ 			unchanged = false;
+ 			return output instanceof Promise ? output.then(async (result) => {
+ 				await Promise.resolve();

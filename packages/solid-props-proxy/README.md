@@ -4,8 +4,7 @@ Temporary prop layers for existing elements and objects, owned by a Solid scope.
 The element can be created elsewhere. Disposing the proxy or changing its target
 removes its props from the old target.
 
-This package targets the workspace's `solid-js` and `@solidjs/web` **2.0.0-rc.4**.
-Solid itself was not upgraded as part of this migration.
+This package targets the workspace's `solid-js` and `@solidjs/web` **2.0.0-rc.13**.
 
 ```tsx
 const [target, setTarget] = createSignal<HTMLButtonElement | null>(null);
@@ -46,7 +45,7 @@ is handled after rendering. Calls after owner disposal are ignored.
 ## Relationship to Solid's client.ts
 
 The source of truth is
-[`packages/web/src/client.ts` at 2.0.0-rc.4](https://github.com/solidjs/solid/blob/solid-js%402.0.0-rc.4/packages/web/src/client.ts),
+[`packages/web/src/client.ts` at 2.0.0-rc.13](https://github.com/solidjs/solid/blob/solid-js%402.0.0-rc.13/packages/web/src/client.ts),
 matching the installed runtime. A newer local Solid checkout does not change this
 package's dependency version.
 
@@ -60,10 +59,13 @@ package's dependency version.
   and `setAttributeNS` functions to write their resolved values. That also keeps
   Solid's attribute guards and element-claim hooks in the write path.
 - Style layers replay declarations on detached CSSOM objects. Object declarations
-  call `@solidjs/web.setStyleProperty`; the resolved style attribute uses Solid's
-  attribute writer. A shared stack owns priorities, shorthand overlap and cleanup.
+  (own keys only, as in `client.ts`) call `@solidjs/web.setStyleProperty`; the
+  resolved style attribute uses Solid's attribute writer. A shared stack owns
+  priorities, shorthand overlap and cleanup.
 - Refs and event delegation use Solid's `ref`, `delegateEvents` and delegated
-  container functions. Event composition and listener cleanup belong to the proxy.
+  container functions. The dispatcher's private `_$$<event>` slot name is mirrored
+  in `DELEGATED_EVENT_KEY` (`src/event-listener-patch.ts`). Event composition
+  and listener cleanup belong to the proxy.
 
 Calling Solid's whole `assign` or `spread` function directly would lose the layer
 contract: those functions do not return reversible patches, preserve a base value,

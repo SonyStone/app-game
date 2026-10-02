@@ -186,9 +186,16 @@ export function toAttributeValue(value: unknown): AttributeValue {
   return value == null || value === false ? null : value === true ? '' : String(value);
 }
 
-/** Snapshots the inherited enumerable declarations consumed by client.ts's style loop. */
+/**
+ * Snapshots the own declarations consumed by client.ts's style loop.
+ * Since @solidjs/web 2.0.0-rc.13, inherited style keys are ignored.
+ */
 function snapshotStyle(value: AnyRecord): AnyRecord {
   const snapshot: AnyRecord = Object.create(null);
-  for (const key in value) snapshot[key] = value[key];
+  for (const key in value) {
+    if (hasOwn(value, key)) {
+      snapshot[key] = value[key];
+    }
+  }
   return snapshot;
 }

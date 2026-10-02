@@ -1,6 +1,7 @@
 import { abortedError } from '@app-game/solid-gpu/errors';
 import { err, ok, type Result } from 'neverthrow';
-import { createSignal, latest, onCleanup } from 'solid-js';
+import { onCleanup } from 'solid-js';
+import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { engineError, type PaintError } from '../../shared/errors';
 
 /**
@@ -18,7 +19,7 @@ export function createEngineRequests<Value>(options: {
   /** Converts an error message reported by the engine into a typed failure. */
   failure: (message: string) => PaintError;
 }) {
-  const [waiting, setWaiting] = createSignal(0);
+  const [waiting, setWaiting, currentlyWaiting] = createImmediateSignal(0);
   const outstanding = new Map<string, Outstanding<Value>>();
   onCleanup(() => disconnect(abortedError()));
 
@@ -26,7 +27,7 @@ export function createEngineRequests<Value>(options: {
     /** Whether a caller is waiting for a reply. */
     busy: () => waiting() > 0,
     /** Like `busy`, including requests started earlier in the current event; for synchronous guards. */
-    isBusy: () => latest(waiting) > 0,
+    isBusy: () => currentlyWaiting() > 0,
     request,
     receive,
     disconnect
@@ -57,11 +58,11 @@ export function createEngineRequests<Value>(options: {
       entry = created;
     }
 
-    setWaiting((count) => count + 1);
+    setWaiting(currentlyWaiting() + 1);
     try {
       return await withTimeout(entry.reply, options.timeoutMs);
     } finally {
-      setWaiting((count) => count - 1);
+      setWaiting(currentlyWaiting() - 1);
     }
   }
 

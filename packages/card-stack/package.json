@@ -24,8 +24,8 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@solidjs/web": "2.0.0-rc.4",
-    "solid-js": "2.0.0-rc.4"
+    "@solidjs/web": "catalog:",
+    "solid-js": "catalog:"
   },
   "dependencies": {
     "@app-game/components": "workspace:*",
@@ -37,7 +37,7 @@
     "@solid-primitives/storage": "catalog:"
   },
   "devDependencies": {
-    "@solidjs/web": "2.0.0-rc.4",
+    "@solidjs/web": "catalog:",
     "@testing-library/jest-dom": "catalog:",
     "jsdom": "catalog:",
     "solid-js": "catalog:",

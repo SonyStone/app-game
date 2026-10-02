@@ -2,7 +2,7 @@ import { Camera, Orbit, Renderer, Transform, Vec3 } from '@app-game/ogl';
 import { toRadian } from '@app-game/ogl/extras/path/utils';
 import { numberPrecisionDragInput } from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import createRAF from '@solid-primitives/raf';
-import { createStore, createTrackedEffect, For, onCleanup, storePath, untrack } from 'solid-js';
+import { createStore, createTrackedEffect, For, onCleanup, untrack } from 'solid-js';
 
 import { NormalBox } from './camera-projection-webgl2/normal-box.component';
 import { GridHelperComponent } from './grid-helper.component';
@@ -67,10 +67,12 @@ export default function AffineTransformations3D() {
             const m30 = matrix[0][2]; // x
             const m31 = matrix[1][2]; // y
 
-            setMatrix(storePath(0, 0, cos * m10 - sin * m11));
-            setMatrix(storePath(0, 1, sin * m10 + cos * m11));
-            setMatrix(storePath(1, 0, cos * m20 - sin * m21));
-            setMatrix(storePath(1, 1, sin * m20 + cos * m21));
+            setMatrix((draft) => {
+              draft[0][0] = cos * m10 - sin * m11;
+              draft[0][1] = sin * m10 + cos * m11;
+              draft[1][0] = cos * m20 - sin * m21;
+              draft[1][1] = sin * m20 + cos * m21;
+            });
           }}
         >
           <input
@@ -102,13 +104,17 @@ export default function AffineTransformations3D() {
                           type="number"
                           onInput={(e) => {
                             const value = parseFloat(e.target.value);
-                            setMatrix(storePath(rowIndex, colIndex, value));
+                            setMatrix((draft) => {
+                              draft[rowIndex][colIndex] = value;
+                            });
                           }}
                           ref={(ref) => {
                             numberPrecisionDragInput(ref, {
                               value: cell,
                               onChange: (value) => {
-                                setMatrix(storePath(rowIndex, colIndex, value));
+                                setMatrix((draft) => {
+                                  draft[rowIndex][colIndex] = value;
+                                });
                               }
                             });
                           }}

@@ -1,7 +1,8 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { ResultAsync } from 'neverthrow';
-import { createSignal, getOwner, isDisposed, latest, onSettled } from 'solid-js';
+import { createSignal, getOwner, isDisposed, onSettled } from 'solid-js';
 import type { registerSW } from 'virtual:pwa-register';
+import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import type { InstallError } from '../../shared/errors';
 
 /**
@@ -11,7 +12,7 @@ import type { InstallError } from '../../shared/errors';
  */
 export function createPwa(register: typeof registerSW) {
   const owner = getOwner()!;
-  const [prompt, setPrompt] = createSignal<InstallPromptEvent>();
+  const [prompt, setPrompt, unusedPrompt] = createImmediateSignal<InstallPromptEvent | undefined>(undefined);
   const [installing, setInstalling] = createSignal(false);
   const [error, setError] = createSignal<InstallError>();
   const [status, setStatus] = createSignal(
@@ -66,7 +67,7 @@ export function createPwa(register: typeof registerSW) {
     error,
     /** Must run directly from a click to retain browser user activation. A prompt can be used only once. */
     async install() {
-      const event = latest(prompt);
+      const event = unusedPrompt();
       if (!event || isDisposed(owner)) {
         return;
       }

@@ -5,7 +5,7 @@ import {
   DropdownMenuTrigger
 } from '@app-game/components/ui/dropdown-menu';
 import type { ComponentProps } from '@solidjs/web';
-import { For, Match, Show, snapshot, storePath, Switch, type Element as JSXElement, type StoreSetter } from 'solid-js';
+import { For, Match, Show, snapshot, Switch, type Element as JSXElement, type StoreSetter } from 'solid-js';
 import { PathInput } from '../path-input';
 import { SVGNode } from '../svg-node';
 import { useSvgSelect } from '../use-svg-select';
@@ -123,7 +123,10 @@ function ListItem(props: {
             <select
               value={props.child.stroke || 'black'}
               onChange={(e) => {
-                props.map.get(props.child)?.update(storePath('stroke', e.currentTarget.value));
+                const stroke = e.currentTarget.value;
+                props.map.get(props.child)?.update((node) => {
+                  node.stroke = stroke;
+                });
               }}
             >
               <option value="black">Black</option>
@@ -136,7 +139,10 @@ function ListItem(props: {
             <select
               value={props.child?.fill || 'black'}
               onChange={(e) => {
-                props.map.get(props.child)?.update(storePath('fill', e.currentTarget.value));
+                const fill = e.currentTarget.value;
+                props.map.get(props.child)?.update((node) => {
+                  node.fill = fill;
+                });
               }}
             >
               <option value="black">Black</option>
@@ -152,7 +158,9 @@ function ListItem(props: {
                 <PathInput
                   value={props.child?.d || ''}
                   onChange={(e) => {
-                    props.map.get(props.child)?.update(storePath('d', e));
+                    props.map.get(props.child)?.update((node) => {
+                      node.d = e;
+                    });
                   }}
                 />
               </div>

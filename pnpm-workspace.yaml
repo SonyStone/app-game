@@ -45,6 +45,9 @@ catalog:
   '@solid-primitives/utils': 7.0.0-next.4
   '@solid-primitives/virtual': 1.0.0-next.4
   '@solidjs/router': 2.0.0-next.18
+  '@solidjs/h': 2.0.0-rc.13
+  '@solidjs/universal': 2.0.0-rc.13
+  '@solidjs/web': 2.0.0-rc.13
   '@tabler/icons': 3.34.1
   '@testing-library/jest-dom': ^6.9.1
   '@types/node': 25.8.0
@@ -57,7 +60,7 @@ catalog:
   neverthrow: ^8.2.0
   pdfjs-dist: 6.3.289
   shiki: ^4.1.0
-  solid-js: 2.0.0-rc.4
+  solid-js: 2.0.0-rc.13
   tailwind-merge: ^3.6.0
   typegpu-runtime-inspector-mcp: ^0.3.0
   typescript: ^6.0.3
@@ -73,10 +76,16 @@ patchedDependencies:
   '@kittl/little-cms@1.0.3': patches/@kittl__little-cms@1.0.3.patch
   '@solid-primitives/drag-drop@0.1.0-next.0': patches/@solid-primitives__drag-drop@0.1.0-next.0.patch
   '@solid-primitives/raf@4.0.0-next.2': patches/@solid-primitives__raf@4.0.0-next.2.patch
+  '@solid-primitives/storage@5.0.0-next.4': patches/@solid-primitives__storage@5.0.0-next.4.patch
   vite-plugin-solid-svg@0.8.1: patches/vite-plugin-solid-svg@0.8.1.patch
 
 peerDependencyRules:
   allowedVersions:
     grid-engine>phaser: 4.1.0
     tsconfck>typescript: 6.0.3
-    vite-plugin-solid-svg>solid-js: 2.0.0-rc.4
+    vite-plugin-solid-svg>solid-js: 2.0.0-rc.13
+
+# The JSX compiler must match the solid-js runtime; vite-plugin-solid only asks for a range.
+overrides:
+  '@solidjs/babel-plugin': 2.0.0-rc.13
+  '@solidjs/compiler': 2.0.0-rc.13

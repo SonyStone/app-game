@@ -40,7 +40,7 @@
     "@solid-primitives/scheduled": "catalog:",
     "@solid-primitives/utils": "catalog:",
     "@solidjs/router": "catalog:",
-    "@solidjs/web": "2.0.0-rc.4",
+    "@solidjs/web": "catalog:",
     "@tabler/icons": "catalog:",
     "neverthrow": "catalog:",
     "solid-js": "catalog:",

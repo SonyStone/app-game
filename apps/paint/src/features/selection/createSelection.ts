@@ -1,7 +1,8 @@
 import type { Point } from '@app-game/paint-core/camera';
 import type { PaintCommand, SelectionAction, SelectionEvent } from '@app-game/paint-core/protocol';
 import { pointInSelection, translateSelection } from '@app-game/paint-core/selection';
-import { createSignal, latest } from 'solid-js';
+import { createSignal } from 'solid-js';
+import { createImmediateSignal } from '../../shared/createImmediateSignal';
 
 /**
  * Owns the transient lasso outline, in document coordinates, and serializes pixel edits through the engine.
@@ -14,8 +15,9 @@ export function createSelection(options: {
   document: () => { activeId: string; revision: number };
   ready: () => boolean;
 }) {
-  const [points, setPoints] = createSignal<Point[]>([]);
-  const [busy, setBusy] = createSignal(false);
+  // `outline` and `isBusy` include changes made earlier in the current event.
+  const [points, setPoints, outline] = createImmediateSignal<Point[]>([]);
+  const [busy, setBusy, isBusy] = createImmediateSignal(false);
   const [drawing, setDrawing] = createSignal(false);
   const [hasClipboard, setHasClipboard] = createSignal(false);
   /** The pointer gesture in progress; `previous`/`original` restore the outline when it is cancelled. */
@@ -23,8 +25,6 @@ export function createSelection(options: {
     | { kind: 'lasso'; previous: Point[] }
     | { kind: 'move'; start: Point; original: Point[]; offset: Point }
     | undefined;
-  /** Outline including changes made earlier in the current event. */
-  const outline = () => latest(points);
 
   return {
     /** Outline vertices; fewer than three means nothing is selected. */
@@ -36,19 +36,19 @@ export function createSelection(options: {
     /** The engine holds copied pixels that Paste can insert. */
     hasClipboard,
     /** Like `busy`, including an edit started earlier in the current event; for synchronous guards. */
-    isBusy: () => latest(busy),
+    isBusy,
     action,
     /** Cancels a gesture and removes the outline, unless an edit is still applying. */
     clear() {
       cancel();
-      if (!latest(busy)) {
+      if (!isBusy()) {
         setPoints([]);
       }
     },
     cancel,
     /** Starts moving the outline when `point` is inside it, otherwise starts a new lasso. */
     begin(point: Point) {
-      if (latest(busy)) {
+      if (isBusy()) {
         return;
       }
 
@@ -91,7 +91,7 @@ export function createSelection(options: {
         setPoints(finished.original);
         if (finished.offset.x || finished.offset.y) {
           action('move', finished.offset);
-          if (latest(busy)) {
+          if (isBusy()) {
             setPoints(translateSelection(finished.original, finished.offset));
           }
         }
@@ -112,7 +112,7 @@ export function createSelection(options: {
    * a gesture, before the engine is ready, or without an outline (except Paste).
    */
   function action(kind: SelectionAction, offset?: Point) {
-    if (latest(busy) || gesture || !options.ready() || (kind !== 'paste' && outline().length < 3)) {
+    if (isBusy() || gesture || !options.ready() || (kind !== 'paste' && outline().length < 3)) {
       return;
     }
 

@@ -1,4 +1,4 @@
-import { createStore, createTrackedEffect, onCleanup, storePath } from 'solid-js';
+import { createStore, createTrackedEffect, onCleanup } from 'solid-js';
 import { Osc1Type } from './osc1-type';
 import { QwertyPianoBoard } from './qwerty-piano-board';
 import { Range } from './range';
@@ -88,46 +88,81 @@ export default function WebAudioPage() {
         <h2>Oscillator 1</h2>
         <Range
           value={ocs1Settings.frequency}
-          valueChange={(value) => setOcs1Settings(storePath('frequency', value))}
+          valueChange={(value) =>
+            setOcs1Settings((draft) => {
+              draft.frequency = value;
+            })
+          }
           name={'frequency'}
           max={5000}
         />
         <Range
           value={ocs1Settings.detune}
-          valueChange={(value) => setOcs1Settings(storePath('detune', value))}
+          valueChange={(value) =>
+            setOcs1Settings((draft) => {
+              draft.detune = value;
+            })
+          }
           name={'detune'}
           max={100}
         />
         <Range
           value={ocs1Settings.gain}
-          valueChange={(value) => setOcs1Settings(storePath('gain', value))}
+          valueChange={(value) =>
+            setOcs1Settings((draft) => {
+              draft.gain = value;
+            })
+          }
           name={'gain'}
           max={1}
           step={0.001}
         />
-        <Osc1Type type={ocs1Settings.type} changeType={(value) => setOcs1Settings(storePath('type', value))} />
+        <Osc1Type
+          type={ocs1Settings.type}
+          changeType={(value) =>
+            setOcs1Settings((draft) => {
+              draft.type = value;
+            })
+          }
+        />
 
         <h2>Filter</h2>
         <Range
           value={filterSetting.frequency}
-          valueChange={(value) => setFilterSetting(storePath('frequency', value))}
+          valueChange={(value) =>
+            setFilterSetting((draft) => {
+              draft.frequency = value;
+            })
+          }
           name={'frequency'}
           max={10000}
         />
         <Range
           value={filterSetting.detune}
-          valueChange={(value) => setFilterSetting(storePath('detune', value))}
+          valueChange={(value) =>
+            setFilterSetting((draft) => {
+              draft.detune = value;
+            })
+          }
           name={'detune'}
         />
         <Range
           value={filterSetting.Q}
-          valueChange={(value) => setFilterSetting(storePath('Q', value))}
+          valueChange={(value) =>
+            setFilterSetting((draft) => {
+              draft.Q = value;
+            })
+          }
           name={'Q'}
           max={10}
         />
         <Range
           value={filterSetting.gain}
-          valueChange={(value) => setFilterSetting(storePath('gain', value))}
+          valueChange={(value) =>
+            setFilterSetting((draft) => {
+              draft.gain = value;
+            })
+          }
           name={'gain'}
           max={10}
         />
@@ -135,26 +170,42 @@ export default function WebAudioPage() {
           <h2>Piano Keyboard</h2>
           <Range
             value={keyboardSettings.width}
-            valueChange={(value) => setKeyboardSettings(storePath('width', value))}
+            valueChange={(value) =>
+              setKeyboardSettings((draft) => {
+                draft.width = value;
+              })
+            }
             name={'width'}
             max={3500}
           />
           <Range
             value={keyboardSettings.height}
-            valueChange={(value) => setKeyboardSettings(storePath('height', value))}
+            valueChange={(value) =>
+              setKeyboardSettings((draft) => {
+                draft.height = value;
+              })
+            }
             name={'height'}
             max={500}
           />
           <Range
             value={keyboardSettings.borderWidth}
-            valueChange={(value) => setKeyboardSettings(storePath('borderWidth', value))}
+            valueChange={(value) =>
+              setKeyboardSettings((draft) => {
+                draft.borderWidth = value;
+              })
+            }
             name={'borderWidth'}
             step={0.5}
             max={5}
           />
           <Range
             value={keyboardSettings.octaves}
-            valueChange={(value) => setKeyboardSettings(storePath('octaves', value))}
+            valueChange={(value) =>
+              setKeyboardSettings((draft) => {
+                draft.octaves = value;
+              })
+            }
             name={'octaves'}
             step={1}
             min={1}
@@ -165,7 +216,11 @@ export default function WebAudioPage() {
             width={keyboardSettings.width}
             height={keyboardSettings.height}
             borderWidth={keyboardSettings.borderWidth}
-            onFrequencyChange={(value) => setOcs1Settings(storePath('frequency', value))}
+            onFrequencyChange={(value) =>
+              setOcs1Settings((draft) => {
+                draft.frequency = value;
+              })
+            }
           />
         </div>
       </div>

@@ -1,5 +1,5 @@
 import type { JSX } from '@solidjs/web';
-import { createStore, createTrackedEffect, storePath, untrack } from 'solid-js';
+import { createStore, createTrackedEffect, untrack } from 'solid-js';
 
 import { Id, useDragDropContext } from './drag-drop-context';
 import createContextProvider from './utils/create-context-provider';
@@ -22,8 +22,10 @@ export const [SortableProvider, useSortableContext] = createContextProvider(
     };
 
     createTrackedEffect(() => {
-      setState(storePath('initialIds', [...props.ids]));
-      setState(storePath('sortedIds', [...props.ids]));
+      setState((draft) => {
+        draft.initialIds = [...props.ids];
+        draft.sortedIds = [...props.ids];
+      });
     });
 
     createTrackedEffect(() => {
@@ -35,14 +37,20 @@ export const [SortableProvider, useSortableContext] = createContextProvider(
           const toIndex = state.initialIds.indexOf(droppableId!);
 
           if (!isValidIndex(fromIndex) || !isValidIndex(toIndex)) {
-            setState(storePath('sortedIds', [...props.ids]));
+            setState((draft) => {
+              draft.sortedIds = [...props.ids];
+            });
           } else if (fromIndex !== toIndex) {
             const resorted = moveArrayItem(state.sortedIds, fromIndex, toIndex);
-            setState(storePath('sortedIds', resorted));
+            setState((draft) => {
+              draft.sortedIds = resorted;
+            });
           }
         });
       } else {
-        setState(storePath('sortedIds', [...props.ids]));
+        setState((draft) => {
+          draft.sortedIds = [...props.ids];
+        });
       }
     });
 

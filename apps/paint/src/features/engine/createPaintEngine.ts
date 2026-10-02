@@ -8,6 +8,7 @@ import { gpuError } from '@app-game/solid-gpu/errors';
 import type { WorkerFailure } from '@app-game/solid-gpu/worker/workerProtocol';
 import { err, ok, type Result } from 'neverthrow';
 import { createEffect, createSignal, latest, untrack, type Accessor } from 'solid-js';
+import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { downloadBlob } from '../../shared/downloadBlob';
 import { brushError, engineError, type PaintError } from '../../shared/errors';
 import { createEngineRequests } from './createEngineRequests';
@@ -46,9 +47,9 @@ export function createPaintEngine(options: {
   frames?: { enabled: Accessor<boolean>; receive: (event: FrameEvent) => void };
 }) {
   const [mode, setMode] = createSignal<ExecutionMode>(initialMode());
-  const [switchTarget, setSwitchTarget] = createSignal<ExecutionMode>();
+  const [switchTarget, setSwitchTarget, requestedSwitch] = createImmediateSignal<ExecutionMode | undefined>(undefined);
   const [ready, setReady] = createSignal(false);
-  const [drawing, setDrawing] = createSignal(false);
+  const [, setDrawing, isDrawing] = createImmediateSignal(false);
   const [state, setState] = createSignal(createDocument().state());
   const [saveState, setSaveState] = createSignal<StateEvent['saveState']>('saved');
   const [metrics, setMetrics] = createSignal({ tiles: 0, gpu: 0, ms: 0 });
@@ -109,7 +110,7 @@ export function createPaintEngine(options: {
     /** Camera and symmetry of a loaded, imported or replaced document; UI state resets from it. */
     restored,
     /** Whether a stroke is in progress, including `begin` sent earlier in the current event. */
-    isDrawing: () => latest(drawing),
+    isDrawing,
     /** Whether a brush command is waiting for the engine. */
     commandBusy: commands.busy,
     /** Like `commandBusy`, including a command started earlier in the current event. */
@@ -209,7 +210,7 @@ export function createPaintEngine(options: {
 
     /** A checkpoint requested by `switchMode` succeeded: keep its tools and dispose this engine. */
     function retire(event: CheckpointedEvent) {
-      if (latest(switchTarget) === undefined || retiring) {
+      if (requestedSwitch() === undefined || retiring) {
         return;
       }
 
@@ -220,7 +221,7 @@ export function createPaintEngine(options: {
 
     /** The retired engine saved and disposed itself; changing `mode` remounts the canvas for the new engine. */
     function replace() {
-      const target = latest(switchTarget);
+      const target = requestedSwitch();
       if (target === undefined) {
         return;
       }
@@ -326,7 +327,7 @@ export function createPaintEngine(options: {
    */
   function send(command: EngineCommand) {
     // View and selection effects also send from effect callbacks, where a read must be explicitly untracked.
-    if (untrack(() => latest(switching))) {
+    if (untrack(requestedSwitch) !== undefined) {
       return;
     }
 
@@ -346,7 +347,7 @@ export function createPaintEngine(options: {
    * Returns false, without side effects, when `next` is current or the engine is not ready.
    */
   function switchMode(next: ExecutionMode): boolean {
-    if (next === latest(mode) || !latest(canEdit)) {
+    if (next === latest(mode) || !latest(ready) || requestedSwitch() !== undefined) {
       return false;
     }
 

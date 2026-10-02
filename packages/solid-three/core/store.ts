@@ -1,4 +1,4 @@
-import { createContext, createStore, Store, storePath, StoreSetter } from 'solid-js';
+import { createContext, createStore, Store, StoreSetter } from 'solid-js';
 import * as THREE from 'three';
 import * as ReactThreeFiber from '../three-types';
 import { DomEvent, EventManager, PointerCaptureTarget, ThreeEvent } from './events';
@@ -289,11 +289,16 @@ const createThreeStore = (
         if (performanceTimeout) clearTimeout(performanceTimeout);
         // Set lower bound performance
         if (state.performance.current !== state.performance.min) {
-          setStore(storePath('performance', 'current', state.performance.min));
+          setStore((draft) => {
+            draft.performance.current = state.performance.min;
+          });
         }
         // Go back to upper bound performance after a while unless something regresses meanwhile
         performanceTimeout = setTimeout(
-          () => setStore(storePath('performance', 'current', store.performance.max)),
+          () =>
+            setStore((draft) => {
+              draft.performance.current = store.performance.max;
+            }),
           state.performance.debounce
         );
       }
@@ -316,21 +321,28 @@ const createThreeStore = (
 
     setSize: (width: number, height: number) => {
       const newSize = { width, height };
-      setStore(storePath('size', newSize));
-      setStore(
-        storePath('viewport', {
-          ...store.viewport,
-          ...getCurrentViewport(camera, defaultTarget, newSize)
-        })
-      );
+      setStore((draft) => {
+        Object.assign(draft.size, newSize);
+      });
+      const viewport = {
+        ...store.viewport,
+        ...getCurrentViewport(camera, defaultTarget, newSize)
+      };
+      setStore((draft) => {
+        Object.assign(draft.viewport, viewport);
+      });
     },
 
     setDpr: (dpr: Dpr) => {
-      setStore(storePath('viewport', 'dpr', calculateDpr(dpr)));
+      setStore((draft) => {
+        draft.viewport.dpr = calculateDpr(dpr);
+      });
     },
 
     setFrameloop: (frameloop: 'always' | 'demand' | 'never' = 'always') => {
-      setStore(storePath('frameloop', frameloop));
+      setStore((draft) => {
+        draft.frameloop = frameloop;
+      });
     },
 
     events: { connected: false },
@@ -350,30 +362,26 @@ const createThreeStore = (
 
       xr,
       subscribe: (ref: RenderCallback, priority = 0) => {
-        setStore(
-          storePath('internal', (internal) => ({
-            ...internal,
-            // If this subscription was given a priority, it takes rendering into its own hands
-            // For that reason we switch off automatic rendering and increase the manual flag
-            // As long as this flag is positive there can be no internal rendering at all
-            // because there could be multiple render subscriptions
-            priority: internal.priority + (priority > 0 ? 1 : 0),
-            // Register subscriber and sort layers from lowest to highest, meaning,
-            // highest priority renders last (on top of the other frames)
-            subscribers: [...internal.subscribers, { ref, priority }].sort((a, b) => a.priority - b.priority)
-          }))
-        );
+        setStore((draft) => {
+          const internal = draft.internal;
+          // If this subscription was given a priority, it takes rendering into its own hands
+          // For that reason we switch off automatic rendering and increase the manual flag
+          // As long as this flag is positive there can be no internal rendering at all
+          // because there could be multiple render subscriptions
+          internal.priority = internal.priority + (priority > 0 ? 1 : 0);
+          // Register subscriber and sort layers from lowest to highest, meaning,
+          // highest priority renders last (on top of the other frames)
+          internal.subscribers = [...internal.subscribers, { ref, priority }].sort((a, b) => a.priority - b.priority);
+        });
 
         return () => {
-          setStore(
-            storePath('internal', (internal) => ({
-              ...internal,
-              // Decrease manual flag if this subscription had a priority
-              priority: internal.priority - (priority > 0 ? 1 : 0),
-              // Remove subscriber from list
-              subscribers: internal.subscribers.filter((s) => s.ref !== ref)
-            }))
-          );
+          setStore((draft) => {
+            const internal = draft.internal;
+            // Decrease manual flag if this subscription had a priority
+            internal.priority = internal.priority - (priority > 0 ? 1 : 0);
+            // Remove subscriber from list
+            internal.subscribers = internal.subscribers.filter((s) => s.ref !== ref);
+          });
         };
       }
     }

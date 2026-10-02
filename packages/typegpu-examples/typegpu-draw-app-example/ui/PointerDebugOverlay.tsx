@@ -11,7 +11,7 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { ReactiveMap } from '@solid-primitives/map';
 import type { JSX } from '@solidjs/web';
-import { createMemo, createSignal, createStore, For, reconcile, Show, storePath, type Accessor } from 'solid-js';
+import { createMemo, createSignal, createStore, For, reconcile, Show, type Accessor } from 'solid-js';
 
 // ============================================================================
 // Types
@@ -95,11 +95,23 @@ export function updatePointerDebug(id: number, info: PointerDebugInfo | null) {
 }
 
 export function updateTwoFingerDebug(info: TwoFingerDebugInfo | null) {
-  setPointerDebugStore(storePath('twoFingerGesture', reconcile(info)));
+  setPointerDebugStore((draft) => {
+    if (info && draft.twoFingerGesture) {
+      reconcile(info)(draft.twoFingerGesture);
+    } else {
+      draft.twoFingerGesture = info;
+    }
+  });
 }
 
 export function updateCanvasTransformDebug(info: CanvasTransformDebugInfo | null) {
-  setPointerDebugStore(storePath('canvasTransform', reconcile(info)));
+  setPointerDebugStore((draft) => {
+    if (info && draft.canvasTransform) {
+      reconcile(info)(draft.canvasTransform);
+    } else {
+      draft.canvasTransform = info;
+    }
+  });
 }
 
 // ============================================================================
