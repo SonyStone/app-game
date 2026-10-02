@@ -1,6 +1,6 @@
 import type { Brush } from '@app-game/paint-core/brush';
 import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import styles from './BrushPanel.module.css';
 
 /** Controls the captured settings of the next stroke, including independent flow and opacity. */
@@ -92,91 +92,7 @@ export function BrushPanel(props: BrushControlsProps) {
   );
 }
 
-/** Foreground and background colors, opened independently of the brush parameters. */
-export function ColorPanel(props: BrushControlsProps) {
-  const brush = () => props.brush;
-  const updateBrush = (patch: Partial<Brush>) => props.onChange(patch);
-
-  return (
-    <>
-      <section>
-        <div class={styles.sectionHeading}>
-          <span>Foreground</span>
-          <code>{brush().color.toUpperCase()}</code>
-        </div>
-        <label class={styles.colorField} style={{ background: brush().color }}>
-          <input
-            aria-label="Brush color"
-            type="color"
-            value={brush().color}
-            onInput={(e) => updateBrush({ color: e.currentTarget.value })}
-          />
-          <span>Choose foreground</span>
-        </label>
-        <div class={styles.swatches}>
-          <For
-            each={[
-              '#1e252b',
-              '#ffffff',
-              '#ff0000',
-              '#00e85d',
-              '#167bd7',
-              '#ffce32',
-              '#a9624a',
-              '#9183a1',
-              '#344b66',
-              '#77856d',
-              '#e78db0',
-              '#ece6da'
-            ]}
-          >
-            {(color) => (
-              <button
-                aria-label={`Set color ${color}`}
-                title={color}
-                style={{ background: color }}
-                class={{ [styles.selected!]: brush().color === color }}
-                onClick={() => updateBrush({ color })}
-              />
-            )}
-          </For>
-        </div>
-        <div class={styles.sectionHeading}>
-          <span>Background</span>
-          <code>{(brush().backgroundColor ?? '#ffffff').toUpperCase()}</code>
-        </div>
-        <label class={styles.colorField} style={{ background: brush().backgroundColor ?? '#ffffff' }}>
-          <input
-            aria-label="Background color"
-            type="color"
-            value={brush().backgroundColor ?? '#ffffff'}
-            onInput={(event) => updateBrush({ backgroundColor: event.currentTarget.value })}
-          />
-          <span>Choose background</span>
-        </label>
-        <div class={styles.mixerActions} role="group" aria-label="Foreground and background colors">
-          <button
-            title="Swap colors (X)"
-            onClick={() => updateBrush({ color: brush().backgroundColor ?? '#ffffff', backgroundColor: brush().color })}
-          >
-            Swap colors
-          </button>
-          <button
-            title="Reset colors (D)"
-            onClick={() => updateBrush({ color: '#000000', backgroundColor: '#ffffff' })}
-          >
-            Reset colors
-          </button>
-        </div>
-        <p class={styles.panelNote}>
-          Background is used by Color Dynamics and Pencil Auto Erase. It does not fill the canvas.
-        </p>
-      </section>
-    </>
-  );
-}
-
-/** Props of the brush and color panels. */
+/** Props of the brush panel. */
 type BrushControlsProps = {
   /** Settings captured by the next stroke. */
   brush: Brush;
