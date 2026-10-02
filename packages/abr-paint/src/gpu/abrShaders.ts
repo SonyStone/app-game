@@ -84,9 +84,10 @@ export function createAbrPipelines(root: TgpuRoot) {
       fragment: sampledTipFragment,
       targets: { format: 'rgba8unorm' }
     }),
+    /** Secondary tips read from complete row plans shared by every tile of a paint call. */
     sampledSecondary: root.createRenderPipeline({
-      attribs: { dynamics: abrStampLayout.attrib.dynamics },
-      vertex: sampledTipVertex,
+      attribs: { plan: planRowLayout.attrib },
+      vertex: sampledSecondaryVertex,
       fragment: sampledSecondaryFragment,
       targets: { format: 'rgba8unorm', blend: affineSecondaryBlend }
     })
@@ -160,6 +161,12 @@ export const Stamp = d.struct({ bounds: d.vec4f, transform: d.vec4f, dynamics: d
 
 /** Instance-rate vertex layout for ABR stamps. */
 export const abrStampLayout = tgpu.vertexLayout(d.arrayOf(Stamp), 'instance');
+
+/**
+ * Instance-rate location of a stamp's complete row plan: x is its first uploaded row, yz the tile origin relative to
+ * the plan's origin in document pixels.
+ */
+export const planRowLayout = tgpu.vertexLayout(d.arrayOf(d.vec4i), 'instance');
 
 /** Tip, pattern and uniforms shared by stamp shaders. */
 export const stampLayout = tgpu.bindGroupLayout({
@@ -292,12 +299,26 @@ const sampledTipFragment = tgpu.fragmentFn({
   return d.vec4f(stampEffects(d.f32(std.max(byte, 0)) / 255, input.position, input.dynamics));
 });
 
+const sampledSecondaryVertex = tgpu.vertexFn({
+  in: { index: d.builtin.vertexIndex, plan: d.vec4i },
+  out: { position: d.builtin.position, plan: d.interpolate('flat', d.vec4i) }
+})((input) => {
+  'use gpu';
+  const x = d.f32((input.index << 1) & 2);
+  const y = d.f32(input.index & 2);
+  return { position: d.vec4f(x * 2 - 1, 1 - y * 2, 0, 1), plan: input.plan };
+});
+
 const sampledSecondaryFragment = tgpu.fragmentFn({
-  in: { position: d.builtin.position, firstRow: d.interpolate('flat', d.u32) },
+  in: { position: d.builtin.position, plan: d.interpolate('flat', d.vec4i) },
   out: d.vec4f
 })((input) => {
   'use gpu';
-  const byte = sampleTipPlanByte(d.u32(input.position.x), input.firstRow + d.u32(input.position.y));
+  // The scissor keeps the pixel inside the stamp's bounds, so both plan coordinates are non-negative.
+  const byte = sampleTipPlanByte(
+    d.u32(d.i32(input.position.x) + input.plan.y),
+    d.u32(input.plan.x + d.i32(input.position.y) + input.plan.z)
+  );
   return d.vec4f(d.f32(std.max(byte, 0)) / 255);
 });
 

@@ -32,8 +32,9 @@ export function createTipRasterGpu(root: TgpuRoot, levels: readonly TipLevel[]) 
     /** Packs small affine tips directly into reusable row buffers. Returns undefined for
      * overlapping/split row writes or perspective tips, which require the general planner.
      * Exterior bytes are zero coverage; this path is for mask consumers only.
+     * secondary selects the affine secondary scan and sampling policy, including its extra axis column.
      */
-    prepareAffine(tips: readonly ReturnType<typeof sampledTipTransform>[]) {
+    prepareAffine(tips: readonly ReturnType<typeof sampledTipTransform>[], secondary = false) {
       if (disposed) throw new Error('The tip rasterizer is disposed.');
       if (tips.some(tip => tip.quad.some(vertex => vertex[4] !== undefined))) return undefined;
       const origins = tips.map(tip => ({ x: Math.floor(tip.bounds.left / 4) * 4, y: tip.bounds.top }));
@@ -45,7 +46,7 @@ export function createTipRasterGpu(root: TgpuRoot, levels: readonly TipLevel[]) 
       const firstRows: number[] = [];
       for (let index = 0; index < tips.length; index++) {
         const tip = tips[index]!, origin = origins[index]!;
-        const width = tip.bounds.right - origin.x, height = tip.bounds.bottom - origin.y;
+        const width = tip.bounds.right - origin.x + Number(secondary && tip.axisAligned), height = tip.bounds.bottom - origin.y;
         const stride = Math.ceil((width + 4) / 4) * 4;
         firstRows.push(baseRow);
         const at = index * destinationWordStride;
@@ -91,7 +92,7 @@ export function createTipRasterGpu(root: TgpuRoot, levels: readonly TipLevel[]) 
         writeSampledTip(levels, tip, { byteOffset: 0, clear: (start, end) => {
           if (hasSource) write(start, end - start);
         }, span: source => { hasSource = true; write(source.offset, source.count, source); } },
-          { offset: 0, stride, width, height, originX: origin.x, originY: origin.y });
+          { offset: 0, stride, width, height, originX: origin.x, originY: origin.y, secondary });
         baseRow += height;
         if (!supported) { recycleUpload(upload); return undefined; }
       }
