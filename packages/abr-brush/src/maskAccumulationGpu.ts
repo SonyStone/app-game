@@ -165,60 +165,161 @@ function writeMaskDestination(at: number, value: number) { 'use gpu'; maskAccumu
 function readMaskRounding(at: number): number { 'use gpu'; return maskAccumulationLayout.$.rounding[at]!; }
 
 /**
- * One batch owns its immutable records; destination and rounding storage may be shared in submission order.
- * `range` selects the chunk of records processed by one dispatch: x is the first record, y the record count.
+ * The records one dispatch processes: `count` records from `first`, whose rectangles all lie inside the destination
+ * rectangle at `origin` with `size`.
+ */
+export const MaskChunkRange = d.struct({ first: d.u32, count: d.u32, origin: d.vec2u, size: d.vec2u });
+
+/** Most records one chunk may hold; `rowInfo` has 256 rows for each of them. */
+export const maskChunkRecords = 256;
+
+/**
+ * One batch owns its immutable records; source, destination, row and rounding storage may be shared in submission
+ * order. The destination is `destinationStride` pixels wide and every record's `destinationOffset` addresses it.
+ * `rowInfo` holds, per record of the chunk and rectangle row, x: the non-zero source pixels in earlier rows and
+ * y: that row's rounding cursor.
  */
 export const maskBatchLayout = tgpu.bindGroupLayout({
-  source: { storage: d.arrayOf(d.u32), access: 'readonly' },
+  source: { storage: d.arrayOf(d.u32), access: 'mutable' },
   params: { storage: d.arrayOf(MaskAccumulationParams), access: 'readonly' },
   destination: { storage: d.arrayOf(d.u32), access: 'mutable' },
   rounding: { storage: d.arrayOf(d.u32), access: 'readonly' },
-  range: { uniform: d.vec2u }
+  rowInfo: { storage: d.arrayOf(d.vec2u), access: 'mutable' },
+  range: { uniform: MaskChunkRange }
 });
-const batchIndex = tgpu.privateVar(d.u32);
 
-/** Exactly one workgroup processes a chunk's ordered stamps. Both barriers precede the next stamp's destination reads. */
-const paintbrushMaskBatchKernel = tgpu.computeFn({
-  workgroupSize: [256], in: { row: d.builtin.localInvocationIndex }
-})(({ row }) => {
+/**
+ * Stage 1 of a chunk, one invocation per record row: stores beside each coverage byte the number of non-zero bytes
+ * before it in its row (bits 8 and up), and the row's total in `rowInfo`. Photoshop's rounding cursors advance once
+ * per non-zero source pixel, so later stages need these counts. Dispatch ceil(maxHeight / 64) by the record count.
+ */
+const maskRowCountKernel = tgpu.computeFn({ workgroupSize: [64], in: { id: d.builtin.globalInvocationId } })(({ id }) => {
   'use gpu';
   const range = maskBatchLayout.$.range;
-  for (let index = range.x; index < range.x + range.y; index++) {
-    batchIndex.$ = index;
-    accumulateMaskRow(row);
-    std.workgroupBarrier();
-    std.storageBarrier();
+  const p = maskBatchLayout.$.params[range.first + id.y]!;
+  if (id.x >= p.height) return;
+  let count = d.u32(0);
+  // Only partial flow consumes rounding entries sparsely; other stamps keep plain coverage bytes.
+  if (p.flow !== 1) {
+    for (let x = d.u32(0); x < p.width; x++) {
+      const at = p.sourceOffset + id.x * p.sourceStride + x;
+      const value = maskBatchLayout.$.source[at]! & 255;
+      maskBatchLayout.$.source[at] = value | (count << 8);
+      if (value !== 0) count++;
+    }
+  }
+  maskBatchLayout.$.rowInfo[id.y * 256 + id.x] = d.vec2u(count, 0);
+});
+
+/**
+ * Stage 2, one invocation per record: turns row totals into running totals and derives each row's rounding cursor
+ * with the same recurrence as the single-rectangle kernel. Dispatch ceil(count / 64).
+ */
+const maskRowCursorKernel = tgpu.computeFn({ workgroupSize: [64], in: { id: d.builtin.globalInvocationId } })(({ id }) => {
+  'use gpu';
+  const range = maskBatchLayout.$.range;
+  if (id.x >= range.count) return;
+  const p = maskBatchLayout.$.params[range.first + id.x]!;
+  const scaleSource = p.flow !== 1 && p.opacity !== 1;
+  const sourceAddress = std.select(p.sourceAddress, p.scaledSourceAddress, scaleSource);
+  let before = d.u32(0);
+  let cursor = d.u32(p.destinationStart);
+  for (let y = d.u32(0); y < p.height; y++) {
+    const at = id.x * 256 + y;
+    const count = maskBatchLayout.$.rowInfo[at]!.x;
+    cursor = (cursor & 0xfffffffc) | ((sourceAddress + y * p.sourceStride) & 3);
+    maskBatchLayout.$.rowInfo[at] = d.vec2u(before, cursor);
+    before += count;
+    cursor += p.width + 4;
+    if (cursor >= p.period) cursor -= p.period;
   }
 });
 
-/** Binds batch storage to the common accumulation routine and specializes its source sampling. */
-export function createMaskBatchPipeline(root: TgpuRoot) {
-  return root.with(maskSourceByte, readBatchSource).with(maskParams, readBatchParams)
-    .with(maskDestinationRead, readBatchDestination).with(maskDestinationWrite, writeBatchDestination)
-    .with(maskRoundingRead, readBatchRounding).createComputePipeline({ compute: paintbrushMaskBatchKernel });
-}
-
-function readBatchParams() { 'use gpu'; return MaskAccumulationParams(maskBatchLayout.$.params[batchIndex.$]!); }
-function readBatchDestination(at: number): number { 'use gpu'; return maskBatchLayout.$.destination[at]!; }
-function writeBatchDestination(at: number, value: number) { 'use gpu'; maskBatchLayout.$.destination[at] = value; }
-function readBatchRounding(at: number): number { 'use gpu'; return maskBatchLayout.$.rounding[at]!; }
-
-function readBatchSource(x: number, row: number): number {
+/**
+ * Stage 3, one invocation per destination pixel of the chunk's rectangle: applies the chunk's records in order.
+ * A pixel depends only on itself across stamps, so pixels run in parallel and produce the bytes of the ordered
+ * single-rectangle kernel. Dispatch ceil(size / 8) workgroups.
+ */
+const maskPixelKernel = tgpu.computeFn({ workgroupSize: [8, 8], in: { id: d.builtin.globalInvocationId } })(({ id }) => {
   'use gpu';
-  const p = maskBatchLayout.$.params[batchIndex.$]!;
-  return maskBatchLayout.$.source[p.sourceOffset + row * p.sourceStride + x]!;
+  const range = maskBatchLayout.$.range;
+  if (id.x >= range.size.x || id.y >= range.size.y) return;
+  const px = range.origin.x + id.x;
+  const py = range.origin.y + id.y;
+  let previous = d.u32(0);
+  let color = d.vec3f(0);
+  let loaded = false;
+  let changed = false;
+  let pixel = d.u32(0);
+  for (let index = d.u32(0); index < range.count; index++) {
+    const p = maskBatchLayout.$.params[range.first + index]!;
+    const left = p.destinationOffset % p.destinationStride;
+    const top = d.u32(p.destinationOffset / p.destinationStride);
+    if (px < left || py < top || px >= left + p.width || py >= top + p.height || p.flow === 0) continue;
+    const x = px - left;
+    const row = py - top;
+    const entry = maskBatchLayout.$.source[p.sourceOffset + row * p.sourceStride + x]!;
+    let value = entry & 255;
+    if (value === 0) continue;
+    if (!loaded) {
+      pixel = py * p.destinationStride + px;
+      previous = maskBatchLayout.$.destination[pixel]! >> 24;
+      loaded = true;
+    }
+    const info = maskBatchLayout.$.rowInfo[index * 256 + row]!;
+    const before = entry >> 8;
+    const partial = p.flow !== 1;
+    const scaleSource = partial && p.opacity !== 1;
+    const flowByte = d.u32(std.clamp(std.fma(p.flow, 255, 0.5), 0, 255));
+    const opacityByte = d.u32(std.clamp(std.fma(p.opacity, 255, 0.5), 0, 255));
+    let result = d.u32(previous);
+    if (scaleSource) {
+      // The scale cursor wraps at each row start and then runs on into the table's tail, as in the row kernel.
+      value = scalePaintbrushMaskByte(
+        value, flowByte, maskBatchLayout.$.rounding[(p.sourceStart + info.x) % p.period + before]!
+      );
+    }
+    if (partial && !scaleSource) {
+      const cursor = (p.destinationStart + info.x * 2) % p.period + before * 2;
+      const delta = scalePaintbrushMaskByte(value, 255 - previous, maskBatchLayout.$.rounding[cursor]!);
+      result = previous + scalePaintbrushMaskByte(delta, flowByte, maskBatchLayout.$.rounding[cursor + 1]!);
+    } else if (previous < opacityByte) {
+      result = previous +
+        scalePaintbrushMaskByte(value, opacityByte - previous, maskBatchLayout.$.rounding[info.y + x]!);
+    }
+    if (result !== previous) {
+      previous = result;
+      color = d.vec3f(p.color.rgb);
+      changed = true;
+    }
+  }
+  if (changed) {
+    const alpha = d.f32(previous) / 255;
+    maskBatchLayout.$.destination[pixel] = std.pack4x8unorm(d.vec4f(std.mul(color, alpha), alpha));
+  }
+});
+
+/** The three stages of a batched fixed-color chunk, in dispatch order. */
+export function createMaskBatchPipelines(root: TgpuRoot) {
+  return {
+    rows: root.createComputePipeline({ compute: maskRowCountKernel }),
+    cursors: root.createComputePipeline({ compute: maskRowCursorKernel }),
+    pixels: root.createComputePipeline({ compute: maskPixelKernel })
+  };
 }
+
+const batchIndex = tgpu.privateVar(d.u32);
 
 /** Separate bindings keep sampled-tip resources within the eight-storage-buffer device minimum. */
 export const maskCoverageLayout = tgpu.bindGroupLayout({
   params: { storage: d.arrayOf(MaskAccumulationParams), access: 'readonly' },
   source: { storage: d.arrayOf(d.u32), access: 'mutable' },
-  range: { uniform: d.vec2u }
+  range: { uniform: MaskChunkRange }
 });
 const coverageByte = tgpu.slot<(x: number, row: number) => number>();
 const coverageKernel = tgpu.computeFn({ workgroupSize: [8, 8], in: { id: d.builtin.globalInvocationId } })(({ id }) => {
   'use gpu';
-  const index = maskCoverageLayout.$.range.x + id.z;
+  const index = maskCoverageLayout.$.range.first + id.z;
   batchIndex.$ = index;
   const p = maskCoverageLayout.$.params[index]!;
   if (id.x >= p.width || id.y >= p.height) return;

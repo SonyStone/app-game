@@ -1,7 +1,7 @@
 import { d, tgpu, type TgpuRoot } from 'typegpu';
 import {
-  MaskAccumulationParams, maskAccumulationLayout, paintbrushMaskKernel, maskBatchLayout,
-  createMaskBatchPipeline, maskCoverageLayout, createMaskCoveragePipeline
+  MaskAccumulationParams, MaskChunkRange, maskAccumulationLayout, paintbrushMaskKernel, maskBatchLayout,
+  maskChunkRecords, createMaskBatchPipelines, maskCoverageLayout, createMaskCoveragePipeline
 } from './maskAccumulationGpu';
 import { maskRasterMaskAddresses, maskRasterAddresses, maskRasterColorBytes, type MaskRasterRect } from './maskRaster';
 import { createMaskRoundingTable } from './maskRounding';
@@ -34,7 +34,11 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
   const directPipeline = directSource
     ? createMaskCoveragePipeline(root, directSource)
     : undefined;
-  const accumulationPipeline = directSource ? createMaskBatchPipeline(root) : undefined;
+  const batchPipelines = directSource ? createMaskBatchPipelines(root) : undefined;
+  // Per chunk record and rectangle row: earlier non-zero pixels and the row's rounding cursor.
+  const rowInfo = directSource
+    ? root.createBuffer(d.arrayOf(d.vec2u, maskChunkRecords * 256)).$usage('storage')
+    : undefined;
   const sourceView = root.unwrap(sourceTexture).createView();
   let colorState: ReturnType<typeof createColorState> | undefined;
   return {
@@ -42,6 +46,7 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
     /** Shared scratch only. Caller-owned batch memory is reported separately. */
     get bytes() {
       return width * height * 4 + (entries + sourceEntries) * 4 + rounding.bytes.length * 4 + d.sizeOf(MaskAccumulationParams) +
+        (rowInfo ? maskChunkRecords * 256 * 8 : 0) +
         (colorState ? sourceEntries * 4 + d.sizeOf(ColorMaskParams) : 0);
     },
     /** Allocate once per scratch tile or preview target; retain until its queued commands have been submitted.
@@ -58,21 +63,26 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
       const words = upload ? new Uint32Array(upload) : undefined;
       const floats = upload ? new Float32Array(upload) : undefined;
       // Chunk ranges are staged per batch and copied into the uniform in encoder order, between dispatches.
-      const ranges = direct ? root.createBuffer(d.arrayOf(d.vec2u, capacity)) : undefined;
-      const range = direct ? root.createBuffer(d.vec2u).$usage('uniform') : undefined;
-      const rangeWords = direct ? new Uint32Array(capacity * 2) : undefined;
-      const batchGroup = direct && !color ? root.createBindGroup(maskBatchLayout, { params: buffer!, source, destination, rounding: noise, range: range! }) : undefined;
+      const ranges = direct ? root.createBuffer(d.arrayOf(MaskChunkRange, capacity)) : undefined;
+      const range = direct ? root.createBuffer(MaskChunkRange).$usage('uniform') : undefined;
+      const rangeWords = direct ? new Uint32Array(capacity * rangeWordCount) : undefined;
+      const batchGroup = direct && !color ? root.createBindGroup(maskBatchLayout, {
+        params: buffer!, source, destination, rounding: noise, rowInfo: rowInfo!, range: range!
+      }) : undefined;
       const colorBatchGroup = direct && color ? root.createBindGroup(colorBatchLayout, {
         params: colorBuffer!, source, destination, ratio: color.ratio, rounding: noise, range: range!
       }) : undefined;
       const coverageGroup = direct ? root.createBindGroup(maskCoverageLayout, { params: buffer!, source, range: range! }) : undefined;
       let rects: readonly MaskRasterRect[] = [];
       /** Consecutive records whose coverage fits the shared scratch together. */
-      const chunks: { first: number; count: number; width: number; height: number }[] = [];
+      const chunks: {
+        first: number; count: number; width: number; height: number;
+        left: number; top: number; right: number; bottom: number;
+      }[] = [];
       return {
         mode, direct,
         bytes: capacity * ((buffer ? d.sizeOf(MaskAccumulationParams) : 0) + (colorBuffer ? d.sizeOf(ColorMaskParams) : 0)) +
-          (ranges ? (capacity + 1) * d.sizeOf(d.vec2u) : 0),
+          (ranges ? (capacity + 1) * d.sizeOf(MaskChunkRange) : 0),
         /** Writes once before encoding this batch; do not overwrite it until the encoder has been submitted. */
         write(rectangles: readonly MaskRasterRect[], sources?: readonly { firstRow: number; x?: number; y?: number; data: ArrayLike<number>; offset?: number }[]) {
           if (direct && sources?.length !== rectangles.length) throw new Error('Direct mask source count differs from rectangles.');
@@ -87,8 +97,8 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
             if (direct) {
               const size = Math.ceil(rect.width / 4) * 4 * rect.height;
               if (size > sourceEntries) throw new RangeError('Direct mask coverage exceeds shared scratch capacity.');
-              if (!chunk || sourceOffset + size > sourceEntries) {
-                chunk = { first: index, count: 0, width: 0, height: 0 };
+              if (!chunk || sourceOffset + size > sourceEntries || chunk.count === maskChunkRecords) {
+                chunk = { first: index, count: 0, width: 0, height: 0, left: width, top: height, right: 0, bottom: 0 };
                 chunks.push(chunk);
                 sourceOffset = 0;
               }
@@ -96,6 +106,10 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
               chunk.count++;
               chunk.width = Math.max(chunk.width, rect.width);
               chunk.height = Math.max(chunk.height, rect.height);
+              chunk.left = Math.min(chunk.left, rect.x);
+              chunk.top = Math.min(chunk.top, rect.y);
+              chunk.right = Math.max(chunk.right, rect.x + rect.width);
+              chunk.bottom = Math.max(chunk.bottom, rect.y + rect.height);
             }
 
             const stride = Math.ceil(rect.width / 4) * 4;
@@ -142,13 +156,15 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
           if (buffer && rectangles.length) root.device.queue.writeBuffer(root.unwrap(buffer!), 0, upload!, 0, rectangles.length * d.sizeOf(MaskAccumulationParams));
           if (chunks.length) {
             chunks.forEach((item, index) => {
-              rangeWords![index * 2] = item.first;
-              rangeWords![index * 2 + 1] = item.count;
+              rangeWords!.set([
+                item.first, item.count, item.left, item.top, item.right - item.left, item.bottom - item.top
+              ], index * rangeWordCount);
             });
-            root.device.queue.writeBuffer(root.unwrap(ranges!), 0, rangeWords!, 0, chunks.length * 2);
+            root.device.queue.writeBuffer(root.unwrap(ranges!), 0, rangeWords!, 0, chunks.length * rangeWordCount);
           }
         },
-        /** Per chunk, prepares coverage in parallel, then accumulates its ordered stamps in a second dispatch.
+        /** Per chunk, prepares coverage in parallel and then accumulates its ordered stamps: fixed-color chunks
+         * in three parallel stages (row counts, row cursors, pixels), Color Dynamics chunks in one ordered workgroup.
          * The destination is copied in once and out once. Every stage uses shared scratch; encode them together
          * before any other batch.
          */
@@ -159,11 +175,19 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
           encoder.copyTextureToBuffer({ texture: target },
             { buffer: root.unwrap(destination), bytesPerRow: width * 4 }, { width, height });
           chunks.forEach((chunk, index) => {
-            encoder.copyBufferToBuffer(root.unwrap(ranges!), index * d.sizeOf(d.vec2u), root.unwrap(range!), 0, d.sizeOf(d.vec2u));
+            encoder.copyBufferToBuffer(root.unwrap(ranges!), index * d.sizeOf(MaskChunkRange), root.unwrap(range!), 0, d.sizeOf(MaskChunkRange));
             bind(directPipeline.with(coverageGroup)).with(encoder).dispatchWorkgroups(
               Math.ceil(chunk.width / 8), Math.ceil(chunk.height / 8), chunk.count);
-            if (colorBatchGroup) color!.batchPipeline().with(colorBatchGroup).with(encoder).dispatchWorkgroups(1);
-            else accumulationPipeline!.with(batchGroup!).with(encoder).dispatchWorkgroups(1);
+            if (colorBatchGroup) {
+              color!.batchPipeline().with(colorBatchGroup).with(encoder).dispatchWorkgroups(1);
+              return;
+            }
+
+            const stages = batchPipelines!;
+            stages.rows.with(batchGroup!).with(encoder).dispatchWorkgroups(Math.ceil(chunk.height / 64), chunk.count);
+            stages.cursors.with(batchGroup!).with(encoder).dispatchWorkgroups(Math.ceil(chunk.count / 64));
+            stages.pixels.with(batchGroup!).with(encoder).dispatchWorkgroups(
+              Math.ceil((chunk.right - chunk.left) / 8), Math.ceil((chunk.bottom - chunk.top) / 8));
           });
           encoder.copyBufferToTexture({ buffer: root.unwrap(destination), bytesPerRow: width * 4 },
             { texture: target }, { width, height });
@@ -196,6 +220,7 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
     },
     destroy() {
       sourceTexture.destroy(); source.destroy(); destination.destroy(); noise.destroy(); params.destroy();
+      rowInfo?.destroy();
       colorState?.params.destroy(); colorState?.ratio.destroy();
     }
   };
@@ -215,6 +240,8 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
 }
 
 
+/** Words of one MaskChunkRange: first, count, origin and size. */
+const rangeWordCount = d.sizeOf(MaskChunkRange) / Uint32Array.BYTES_PER_ELEMENT;
 const maskParamWords = d.sizeOf(MaskAccumulationParams) / Uint32Array.BYTES_PER_ELEMENT;
 const maskParamOffsets = Object.fromEntries(Object.keys(MaskAccumulationParams.propTypes).map(key => [key,
   d.memoryLayoutOf(MaskAccumulationParams, value => value[key as keyof d.InferInput<typeof MaskAccumulationParams>]).offset / Uint32Array.BYTES_PER_ELEMENT

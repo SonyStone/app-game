@@ -2,6 +2,7 @@ import { d, std, tgpu, type TgpuRoot } from 'typegpu';
 import { colorPaintbrushAlpha, mixPaintbrushColorByte } from './colorMaskAccumulation';
 import { divideMaskBytes } from './effects';
 import { scalePaintbrushMaskByte } from './maskAccumulation';
+import { MaskChunkRange } from './maskAccumulationGpu';
 
 /** One clipped rectangle; color and rounding offsets refer to straight RGB byte planes in Photoshop. */
 export const ColorMaskParams = d.struct({
@@ -131,7 +132,7 @@ function readColorRounding(at: number): number { 'use gpu'; return colorMaskLayo
 
 /**
  * One batch owns its immutable records; source, ratio, destination and rounding storage may be shared in submission
- * order. `range` selects the chunk of records processed by one dispatch: x is the first record, y the record count.
+ * order. `range` selects the chunk of records processed by one dispatch.
  */
 export const colorBatchLayout = tgpu.bindGroupLayout({
   params: { storage: d.arrayOf(ColorMaskParams), access: 'readonly' },
@@ -139,7 +140,7 @@ export const colorBatchLayout = tgpu.bindGroupLayout({
   destination: { storage: d.arrayOf(d.u32), access: 'mutable' },
   ratio: { storage: d.arrayOf(d.u32), access: 'mutable' },
   rounding: { storage: d.arrayOf(d.u32), access: 'readonly' },
-  range: { uniform: d.vec2u }
+  range: { uniform: MaskChunkRange }
 });
 const colorBatchIndex = tgpu.privateVar(d.u32);
 
@@ -149,7 +150,7 @@ const colorPaintbrushBatchKernel = tgpu.computeFn({
 })(({ row }) => {
   'use gpu';
   const range = colorBatchLayout.$.range;
-  for (let index = range.x; index < range.x + range.y; index++) {
+  for (let index = range.first; index < range.first + range.count; index++) {
     colorBatchIndex.$ = index;
     accumulateColorRow(row);
     std.workgroupBarrier();
