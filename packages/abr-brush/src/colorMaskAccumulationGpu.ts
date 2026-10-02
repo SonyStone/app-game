@@ -1,4 +1,4 @@
-import { d, std, tgpu } from 'typegpu';
+import { d, std, tgpu, type TgpuRoot } from 'typegpu';
 import { colorPaintbrushAlpha, mixPaintbrushColorByte } from './colorMaskAccumulation';
 import { divideMaskBytes } from './effects';
 import { scalePaintbrushMaskByte } from './maskAccumulation';
@@ -30,12 +30,18 @@ export const colorPaintbrushKernel = tgpu.computeFn({
   workgroupSize: [256], in: { row: d.builtin.localInvocationIndex }
 })(({ row }) => {
   'use gpu';
-  const p = colorMaskLayout.$.params;
-  if (p.flow === 0) return;
+  accumulateColorRow(row);
+});
+
+/** One rectangle's accumulation for the invocation owning `row`. Every invocation executes the same barriers. */
+function accumulateColorRow(row: number) {
+  'use gpu';
+  const p = colorParams.$();
+  const active = row < p.height && p.flow !== 0;
   let count = d.u32(0);
-  if (row < p.height) {
+  if (active) {
     for (let x = d.u32(0); x < p.width; x++)
-      if ((colorMaskLayout.$.source[p.sourceOffset + row * p.sourceStride + x]! & 255) !== 0) count++;
+      if ((colorSourceRead.$(p.sourceOffset + row * p.sourceStride + x) & 255) !== 0) count++;
   }
   counts.$[row] = count;
   std.workgroupBarrier();
@@ -46,15 +52,15 @@ export const colorPaintbrushKernel = tgpu.computeFn({
   let cursor = (p.sourceStart + before) % p.period;
   const flowByte = d.u32(std.clamp(std.fma(p.flow, 255, 0.5), 0, 255));
   count = 0;
-  if (row < p.height) {
+  if (active) {
     for (let x = d.u32(0); x < p.width; x++) {
       const at = p.sourceOffset + row * p.sourceStride + x;
-      let value = colorMaskLayout.$.source[at]! & 255;
+      let value = colorSourceRead.$(at) & 255;
       if (p.flow !== 1 && value !== 0) {
-        value = scalePaintbrushMaskByte(value, flowByte, colorMaskLayout.$.rounding[cursor]!);
+        value = scalePaintbrushMaskByte(value, flowByte, colorRoundingRead.$(cursor));
         cursor++;
       }
-      colorMaskLayout.$.ratio[at] = value;
+      colorRatioWrite.$(at, value);
       if (value !== 0) count++;
     }
   }
@@ -66,20 +72,20 @@ export const colorPaintbrushKernel = tgpu.computeFn({
   cursor = (p.alphaStart + before) % p.period;
   const opacityByte = d.u32(std.clamp(std.fma(p.opacity, 255, 0.5), 0, 255));
   count = 0;
-  if (row < p.height) {
+  if (active) {
     for (let x = d.u32(0); x < p.width; x++) {
       const sourceAt = p.sourceOffset + row * p.sourceStride + x;
-      const value = colorMaskLayout.$.ratio[sourceAt]!;
+      const value = colorRatioRead.$(sourceAt);
       if (value === 0) continue;
       const at = p.destinationOffset + row * p.destinationStride + x;
-      const stored = colorMaskLayout.$.destination[at]!;
-      const noise = colorMaskLayout.$.rounding[cursor]!;
+      const stored = colorDestinationRead.$(at);
+      const noise = colorRoundingRead.$(cursor);
       cursor++;
       const alpha = d.u32(colorPaintbrushAlpha(stored >> 24, value, opacityByte, noise, p.opacity === 1));
       const numerator = std.select(scalePaintbrushMaskByte(value, opacityByte, noise), value, p.opacity === 1);
       const ratio = d.u32(divideMaskBytes(numerator, alpha));
-      colorMaskLayout.$.ratio[sourceAt] = ratio;
-      colorMaskLayout.$.destination[at] = (stored & 0xffffff) | (alpha << 24);
+      colorRatioWrite.$(sourceAt, ratio);
+      colorDestinationWrite.$(at, (stored & 0xffffff) | (alpha << 24));
       if (ratio !== 0) count++;
     }
   }
@@ -87,21 +93,82 @@ export const colorPaintbrushKernel = tgpu.computeFn({
   std.workgroupBarrier();
   before = 0;
   for (let y = d.u32(0); y < row; y++) before += counts.$[y]!;
-  if (row >= p.height || p.flow === 0) return;
+  if (!active) return;
   let r = (p.colorStart.x + before) % p.period;
   let g = (p.colorStart.y + before) % p.period;
   let b = (p.colorStart.z + before) % p.period;
   for (let x = d.u32(0); x < p.width; x++) {
-    const ratio = colorMaskLayout.$.ratio[p.sourceOffset + row * p.sourceStride + x]!;
+    const ratio = colorRatioRead.$(p.sourceOffset + row * p.sourceStride + x);
     if (ratio === 0) continue;
     const at = p.destinationOffset + row * p.destinationStride + x;
-    const value = colorMaskLayout.$.destination[at]!;
-    const red = d.u32(mixPaintbrushColorByte(value & 255, p.color.x, ratio, colorMaskLayout.$.rounding[r]!));
-    const green = d.u32(mixPaintbrushColorByte((value >> 8) & 255, p.color.y, ratio, colorMaskLayout.$.rounding[g]!));
-    const blue = d.u32(mixPaintbrushColorByte((value >> 16) & 255, p.color.z, ratio, colorMaskLayout.$.rounding[b]!));
+    const value = colorDestinationRead.$(at);
+    const red = d.u32(mixPaintbrushColorByte(value & 255, p.color.x, ratio, colorRoundingRead.$(r)));
+    const green = d.u32(mixPaintbrushColorByte((value >> 8) & 255, p.color.y, ratio, colorRoundingRead.$(g)));
+    const blue = d.u32(mixPaintbrushColorByte((value >> 16) & 255, p.color.z, ratio, colorRoundingRead.$(b)));
     r++; g++; b++;
-    colorMaskLayout.$.destination[at] = (value & 0xff000000) | red | (green << 8) | (blue << 16);
+    colorDestinationWrite.$(at, (value & 0xff000000) | red | (green << 8) | (blue << 16));
+  }
+}
+
+const counts = tgpu.workgroupVar(d.arrayOf(d.u32, 256));
+
+/** Storage access is specialized so one routine serves the single-rectangle kernel and ordered batches. */
+const colorParams = tgpu.slot(readColorParams);
+const colorSourceRead = tgpu.slot(readColorSource);
+const colorDestinationRead = tgpu.slot(readColorDestination);
+const colorDestinationWrite = tgpu.slot(writeColorDestination);
+const colorRatioRead = tgpu.slot(readColorRatio);
+const colorRatioWrite = tgpu.slot(writeColorRatio);
+const colorRoundingRead = tgpu.slot(readColorRounding);
+
+function readColorParams() { 'use gpu'; return ColorMaskParams(colorMaskLayout.$.params); }
+function readColorSource(at: number): number { 'use gpu'; return colorMaskLayout.$.source[at]!; }
+function readColorDestination(at: number): number { 'use gpu'; return colorMaskLayout.$.destination[at]!; }
+function writeColorDestination(at: number, value: number) { 'use gpu'; colorMaskLayout.$.destination[at] = value; }
+function readColorRatio(at: number): number { 'use gpu'; return colorMaskLayout.$.ratio[at]!; }
+function writeColorRatio(at: number, value: number) { 'use gpu'; colorMaskLayout.$.ratio[at] = value; }
+function readColorRounding(at: number): number { 'use gpu'; return colorMaskLayout.$.rounding[at]!; }
+
+/**
+ * One batch owns its immutable records; source, ratio, destination and rounding storage may be shared in submission
+ * order. `range` selects the chunk of records processed by one dispatch: x is the first record, y the record count.
+ */
+export const colorBatchLayout = tgpu.bindGroupLayout({
+  params: { storage: d.arrayOf(ColorMaskParams), access: 'readonly' },
+  source: { storage: d.arrayOf(d.u32), access: 'readonly' },
+  destination: { storage: d.arrayOf(d.u32), access: 'mutable' },
+  ratio: { storage: d.arrayOf(d.u32), access: 'mutable' },
+  rounding: { storage: d.arrayOf(d.u32), access: 'readonly' },
+  range: { uniform: d.vec2u }
+});
+const colorBatchIndex = tgpu.privateVar(d.u32);
+
+/** Exactly one workgroup processes a chunk's ordered stamps. Both barriers precede the next stamp's reads. */
+const colorPaintbrushBatchKernel = tgpu.computeFn({
+  workgroupSize: [256], in: { row: d.builtin.localInvocationIndex }
+})(({ row }) => {
+  'use gpu';
+  const range = colorBatchLayout.$.range;
+  for (let index = range.x; index < range.x + range.y; index++) {
+    colorBatchIndex.$ = index;
+    accumulateColorRow(row);
+    std.workgroupBarrier();
+    std.storageBarrier();
   }
 });
 
-const counts = tgpu.workgroupVar(d.arrayOf(d.u32, 256));
+/** Binds batch storage to the common Color Dynamics accumulation routine. */
+export function createColorBatchPipeline(root: TgpuRoot) {
+  return root.with(colorParams, readBatchColorParams).with(colorSourceRead, readBatchColorSource)
+    .with(colorDestinationRead, readBatchColorDestination).with(colorDestinationWrite, writeBatchColorDestination)
+    .with(colorRatioRead, readBatchColorRatio).with(colorRatioWrite, writeBatchColorRatio)
+    .with(colorRoundingRead, readBatchColorRounding).createComputePipeline({ compute: colorPaintbrushBatchKernel });
+}
+
+function readBatchColorParams() { 'use gpu'; return ColorMaskParams(colorBatchLayout.$.params[colorBatchIndex.$]!); }
+function readBatchColorSource(at: number): number { 'use gpu'; return colorBatchLayout.$.source[at]!; }
+function readBatchColorDestination(at: number): number { 'use gpu'; return colorBatchLayout.$.destination[at]!; }
+function writeBatchColorDestination(at: number, value: number) { 'use gpu'; colorBatchLayout.$.destination[at] = value; }
+function readBatchColorRatio(at: number): number { 'use gpu'; return colorBatchLayout.$.ratio[at]!; }
+function writeBatchColorRatio(at: number, value: number) { 'use gpu'; colorBatchLayout.$.ratio[at] = value; }
+function readBatchColorRounding(at: number): number { 'use gpu'; return colorBatchLayout.$.rounding[at]!; }

@@ -102,6 +102,8 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
   let pendingPlanBytes = 0;
   let pendingPatternBytes = 0;
   let pendingMaskBytes = 0;
+  /** Tips prepared by beginPaint for every tile of the current paint call. */
+  let sharedTips: ReturnType<typeof prepareTips> | undefined;
   let settings: PreparedSettings | undefined;
   let tip: CoverageTexture | undefined;
   let dual: CoverageTexture | undefined;
@@ -156,25 +158,62 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
         return adaptivePaintBatchSize(dabs, paramsData[paramsOffsets.rasterScale]!);
       }
 
-      if (!batchSampledMasks || !settings || paintbrushMaskMode(settings.values) !== maskAccumulation.fixedColor) {
+      if (!batchSampledMasks || !settings || !paintbrushMaskMode(settings.values)) {
         return 32;
       }
 
+      // Batched masks cost GPU time in proportion to covered pixels, so the batch holds a pixel budget, not a count.
       let largestCoverage = 1;
       for (const dab of dabs) {
+        if (dab.abr?.secondary) {
+          continue;
+        }
+
         const bounds = dab.abr?.sampledTip?.bounds;
-        if (dab.abr?.secondary || !bounds) {
+        if (!bounds) {
           return 32;
         }
 
-        const width = bounds.right - bounds.left, height = bounds.bottom - bounds.top;
-        if (width > 16 || height > 16) {
-          return 32;
-        }
-
-        largestCoverage = Math.max(largestCoverage, Math.ceil(width / 4) * 4 * height);
+        largestCoverage = Math.max(largestCoverage,
+          Math.ceil((bounds.right - bounds.left) / 4) * 4 * (bounds.bottom - bounds.top));
       }
-      return Math.min(sampledMaskBatchLimit, Math.floor(256 * 256 / largestCoverage));
+
+      return Math.max(8, Math.min(sampledMaskBatchLimit, Math.floor(maskBatchCoverage / largestCoverage)));
+    },
+    /** Prepares the primary sampled tips of one paint call once, so every tile it touches shares their upload.
+     * Pair with endPaint after the last tile is encoded. Draws outside such a pair prepare their own tips.
+     */
+    beginPaint(dabs: readonly Dab[]) {
+      const source = sources.sampled;
+      if (!batchSampledMasks || !settings || !source || settings.tipLodBias !== undefined ||
+          !paintbrushMaskMode(settings.values)) {
+        return;
+      }
+
+      const tips: SampledTip[] = [];
+      for (const dab of dabs) {
+        if (dab.abr?.secondary) {
+          continue;
+        }
+
+        if (!dab.abr?.sampledTip) {
+          return;
+        }
+
+        tips.push(dab.abr.sampledTip);
+      }
+
+      if (tips.length) {
+        sharedTips = prepareTips(source, tips);
+      }
+    },
+    /** Releases the tips shared since beginPaint once `commands`, which must hold every draw using them, is submitted. */
+    endPaint(commands: ReturnType<typeof commandBatch>) {
+      if (sharedTips) {
+        commands.encoder();
+        retainPlans(commands, sharedTips.plans);
+        sharedTips = undefined;
+      }
     },
     /** Only persistent masks used by this preset need eviction snapshots. */
     coveragePlan: (transient: boolean) => abrCoveragePlan({
@@ -447,7 +486,6 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
     ty: number
   ) {
     const encoder = commands.encoder();
-    const raster = (maskRaster ??= createMaskRasterGpu(root, 256, 256, sampledMaskByte));
     const source = sources.sampled;
     const geometry = source && ordered.every((dab) => dab.abr?.secondary || dab.abr?.sampledTip)
       ? ordered.map((dab) => dab.abr?.secondary ? undefined : dab.abr?.sampledTip)
@@ -466,51 +504,50 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
       }
     }
 
-    // Large stamps use the existing fragment path. Bound both serial accumulation
-    // and shared coverage memory so a long packet cannot monopolize the GPU.
-    const directMask = batchSampledMasks && maskMode === maskAccumulation.fixedColor && !!geometry &&
-      recordRects.length <= sampledMaskBatchLimit &&
-      recordRects.every((rect) => rect.width <= 64 && rect.height <= 64) &&
-      recordRects.reduce((area, rect) => area + Math.ceil(rect.width / 4) * 4 * rect.height, 0) <= 256 * 256;
-    // Compute consumers address the full stamp directly. Avoid cloning its spans
-    // into 256-row tile plans when only a few rows contain pencil coverage.
-    const compact = directMask && secondCount === 0 && geometry!.every((tip) => tip &&
-      tip.bounds.right - tip.bounds.left <= 64 && tip.bounds.bottom - tip.bounds.top <= 64);
-    const affine = compact ? source!.gpu.prepareAffine(geometry! as NonNullable<typeof geometry[number]>[]) : undefined;
-    const complete = compact && !affine ? geometry!.map((tip) => source!.planner.get(tip!)) : undefined;
-    const plans = affine ?? (geometry && source
-      ? source.gpu.prepare(complete
-        ? complete.map((entry) => entry.plan)
-        : geometry.map((tip) => tip ? source.planner.crop(tip, tx * 256, ty * 256, 256, 256) : emptyTilePlan))
-      : undefined);
-    if (plans) {
-      retainPlans(commands, plans);
-    }
+    // Sampled stamps of any size share coverage and accumulation dispatches. Their coverage is sampled from
+    // each stamp's complete row plan, addressed by the tile's offset, so no per-tile plan is built.
+    if (batchSampledMasks && geometry && source && recordRects.length <= tile.capacity) {
+      const tips = geometry.slice(secondCount) as SampledTip[];
+      let prepared = sharedTips;
+      if (!prepared || !tips.every((tip) => prepared!.rows.has(tip))) {
+        prepared = prepareTips(source, tips);
+        retainPlans(commands, prepared.plans);
+      }
 
-    if (tile.maskBatch?.mode !== maskMode || tile.maskBatch.direct !== directMask) {
-      retireMaskBatch(tile, commands);
-      tile.maskBatch = raster.createBatch(tile.capacity, maskMode, directMask);
-    }
-
-    // The batch borrows recordRects until it is recorded below, within this draw.
-    tile.maskBatch.write(recordRects, directMask ? recordIndices.map((index) => ({
-      firstRow: plans!.firstRows[index]!,
-      x: affine ? tx * 256 - affine.origins[index]!.x : complete ? tx * 256 - complete[index]!.x : 0,
-      y: affine ? ty * 256 - affine.origins[index]!.y : complete ? ty * 256 - complete[index]!.y : 0,
-      data: stampData,
-      offset: index * 16 + 8
-    })) : undefined);
-    if (directMask && plans) {
-      tile.maskBatch.recordBatch(encoder, root.unwrap(tile.paint), (pipeline) =>
+      const { plans, rows } = prepared;
+      const batch = maskBatchFor(tile, commands, maskMode, true);
+      // The batch borrows recordRects until it is recorded below, within this draw.
+      batch.write(recordRects, recordIndices.map((index) => {
+        const row = rows.get(tips[index - secondCount]!)!;
+        return {
+          firstRow: row.firstRow,
+          x: tx * 256 - row.x,
+          y: ty * 256 - row.y,
+          data: stampData,
+          offset: index * 16 + 8
+        };
+      }));
+      batch.recordBatch(encoder, root.unwrap(tile.paint), (pipeline) =>
         pipeline.with(binding.primary).with(plans.group));
       return;
     }
 
+    // Computed tips and the unbatched reference accumulate one stamp per dispatch.
+    const plans = geometry && source
+      ? source.gpu.prepare(geometry.map((tip) => tip ? source.planner.crop(tip, tx * 256, ty * 256, 256, 256) : emptyTilePlan))
+      : undefined;
+    if (plans) {
+      retainPlans(commands, plans);
+    }
+
+    const batch = maskBatchFor(tile, commands, maskMode, false);
+    // The batch borrows recordRects until its last record below, within this draw.
+    batch.write(recordRects);
     for (let record = 0; record < recordRects.length; record++) {
       const rect = recordRects[record]!;
       const index = recordIndices[record]!;
       const pass = encoder.beginRenderPass({
-        colorAttachments: [{ view: raster.sourceView, clearValue: [0, 0, 0, 0], loadOp: 'clear', storeOp: 'store' }]
+        colorAttachments: [{ view: maskRaster!.sourceView, clearValue: [0, 0, 0, 0], loadOp: 'clear', storeOp: 'store' }]
       });
       if (plans) {
         pass.setScissorRect(rect.x, rect.y, rect.width, rect.height);
@@ -520,8 +557,34 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
         pipelines.maskSource.with(pass).with(binding.primary).with(abrStampLayout, tile.stamps).draw(6, 1, 0, index);
       }
       pass.end();
-      tile.maskBatch.record(encoder, record, root.unwrap(tile.paint));
+      batch.record(encoder, record, root.unwrap(tile.paint));
     }
+  }
+
+  /** Uploads complete row plans for `tips` and maps each tip to its first uploaded row and document origin.
+   * The caller keeps the plans until their readers are submitted.
+   */
+  function prepareTips(source: NonNullable<typeof sources.sampled>, tips: readonly SampledTip[]) {
+    const affine = source.gpu.prepareAffine(tips);
+    const complete = affine ? undefined : tips.map((tip) => source.planner.get(tip));
+    const plans = affine ?? source.gpu.prepare(complete!.map((entry) => entry.plan));
+    const rows = new Map<SampledTip, { firstRow: number; x: number; y: number }>();
+    tips.forEach((tip, index) => {
+      const origin = affine ? affine.origins[index]! : complete![index]!;
+      rows.set(tip, { firstRow: plans.firstRows[index]!, x: origin.x, y: origin.y });
+    });
+    return { plans, rows };
+  }
+
+  /** The tile's mask batch for this mode, replacing one of another mode after its readers are submitted. */
+  function maskBatchFor(tile: AbrTile, commands: ReturnType<typeof commandBatch>, mode: 1 | 2, direct: boolean) {
+    const raster = (maskRaster ??= createMaskRasterGpu(root, 256, 256, sampledMaskByte, maskCoverageEntries));
+    if (tile.maskBatch?.mode !== mode || tile.maskBatch.direct !== direct) {
+      retireMaskBatch(tile, commands);
+      tile.maskBatch = raster.createBatch(tile.capacity, mode, direct);
+    }
+
+    return tile.maskBatch;
   }
 
   /** Blends primary dabs into paint and max-accumulated mask targets. */
@@ -784,3 +847,12 @@ const emptyTilePlan: Parameters<ReturnType<typeof createTipRasterGpu>['prepare']
 
 /** Limits serial mask accumulation even when a pointer packet contains thousands of stamps. */
 const sampledMaskBatchLimit = 512;
+
+/** Covered pixels per progress batch of batched masks: about 110 stamps of a 95 px tip, 20 of a 222 px tip. */
+const maskBatchCoverage = 1024 * 1024;
+
+/** A transformed sampled tip produced by the stroke sampler. */
+type SampledTip = NonNullable<NonNullable<Dab['abr']>['sampledTip']>;
+
+/** Coverage bytes that one chunk of a batched mask draw may hold: four full tiles (1 MiB of u32 scratch). */
+const maskCoverageEntries = 4 * 256 * 256;

@@ -264,6 +264,10 @@ export function createStrokeRaster(
     const directStamp = direct ? abr!.prepareDirect(dabs[0]!) : undefined;
     let pendingTiles = 0;
     try {
+      if (!direct) {
+        abr?.beginPaint(dabs);
+      }
+
       for (const [key, dabs] of groups) {
         const [tx, ty] = tileCoordinates(key);
         const stampRegion = expandToRasterGrid(
@@ -400,6 +404,7 @@ export function createStrokeRaster(
         }
       }
     } finally {
+      abr?.endPaint(commands);
       // An I/O failure must not discard commands for previously processed tiles in this batch.
       if (!batch) {
         commands.flush();

@@ -31,6 +31,26 @@ import { verifyWorker } from './workerVerification';
 type Report = (message: string) => void;
 
 /**
+ * Sampled Paintbrush masks accumulated in shared GPU batches must equal the one-stamp-per-dispatch reference byte for
+ * byte at every tip size, with and without a dual brush or Color Dynamics, across input batching, progress
+ * presentation and eviction.
+ */
+async function verifyAbrMaskBatches(report: Report) {
+  for (const size of [24, 80, 222, 500]) {
+    for (const dualBrush of [true, false]) {
+      for (const progress of [false, true]) {
+        await verifyAbrBrush(report, true, true, 'sampledBrush', 'sampledBrush', size, { dualBrush, progress });
+      }
+
+      // Color Dynamics stores straight color bytes and accumulates through its own batched kernel.
+      await verifyAbrBrush(report, false, true, 'sampledBrush', 'sampledBrush', size, { dualBrush });
+    }
+
+    report(`PASS: ${size}px sampled masks match the unbatched reference`);
+  }
+}
+
+/**
  * Every real-GPU verification, by name. `tests/browser/verifications.browser.mjs` opens `harness.html` in Chromium with
  * WebGPU and runs each one in a fresh page; the manual QA page (`apps/web/paint-studio-qa.html`) calls the same
  * functions. Each resolves when all of its checks pass and throws on the first failure. Benchmarks
@@ -55,6 +75,7 @@ export const verifications = {
   streaming: verifyStreaming,
   'abr-mixing': verifyAbrColorMixing,
   'abr-brush': verifyAbrBrush,
+  'abr-mask-batches': verifyAbrMaskBatches,
   'textured-brush': (report: Report) => verifyTexturedBrush(report, loadFixtureTip),
   'canvas-targets': verifyCanvasTargets,
   lasso: verifySelection,

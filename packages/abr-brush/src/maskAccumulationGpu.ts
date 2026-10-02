@@ -164,22 +164,26 @@ function readMaskDestination(at: number): number { 'use gpu'; return maskAccumul
 function writeMaskDestination(at: number, value: number) { 'use gpu'; maskAccumulationLayout.$.destination[at] = value; }
 function readMaskRounding(at: number): number { 'use gpu'; return maskAccumulationLayout.$.rounding[at]!; }
 
-/** One batch owns its immutable records; destination and rounding storage may be shared in submission order. */
+/**
+ * One batch owns its immutable records; destination and rounding storage may be shared in submission order.
+ * `range` selects the chunk of records processed by one dispatch: x is the first record, y the record count.
+ */
 export const maskBatchLayout = tgpu.bindGroupLayout({
   source: { storage: d.arrayOf(d.u32), access: 'readonly' },
   params: { storage: d.arrayOf(MaskAccumulationParams), access: 'readonly' },
   destination: { storage: d.arrayOf(d.u32), access: 'mutable' },
   rounding: { storage: d.arrayOf(d.u32), access: 'readonly' },
-  count: { uniform: d.u32 }
+  range: { uniform: d.vec2u }
 });
 const batchIndex = tgpu.privateVar(d.u32);
 
-/** Exactly one workgroup processes ordered stamps. Both barriers precede the next stamp's destination reads. */
+/** Exactly one workgroup processes a chunk's ordered stamps. Both barriers precede the next stamp's destination reads. */
 const paintbrushMaskBatchKernel = tgpu.computeFn({
   workgroupSize: [256], in: { row: d.builtin.localInvocationIndex }
 })(({ row }) => {
   'use gpu';
-  for (let index = d.u32(0); index < maskBatchLayout.$.count; index++) {
+  const range = maskBatchLayout.$.range;
+  for (let index = range.x; index < range.x + range.y; index++) {
     batchIndex.$ = index;
     accumulateMaskRow(row);
     std.workgroupBarrier();
@@ -208,13 +212,15 @@ function readBatchSource(x: number, row: number): number {
 /** Separate bindings keep sampled-tip resources within the eight-storage-buffer device minimum. */
 export const maskCoverageLayout = tgpu.bindGroupLayout({
   params: { storage: d.arrayOf(MaskAccumulationParams), access: 'readonly' },
-  source: { storage: d.arrayOf(d.u32), access: 'mutable' }
+  source: { storage: d.arrayOf(d.u32), access: 'mutable' },
+  range: { uniform: d.vec2u }
 });
 const coverageByte = tgpu.slot<(x: number, row: number) => number>();
 const coverageKernel = tgpu.computeFn({ workgroupSize: [8, 8], in: { id: d.builtin.globalInvocationId } })(({ id }) => {
   'use gpu';
-  batchIndex.$ = id.z;
-  const p = maskCoverageLayout.$.params[id.z]!;
+  const index = maskCoverageLayout.$.range.x + id.z;
+  batchIndex.$ = index;
+  const p = maskCoverageLayout.$.params[index]!;
   if (id.x >= p.width || id.y >= p.height) return;
   maskCoverageLayout.$.source[p.sourceOffset + id.y * p.sourceStride + id.x] = coverageByte.$(id.x, id.y);
 });
