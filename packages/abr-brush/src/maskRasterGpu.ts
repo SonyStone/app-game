@@ -6,7 +6,7 @@ import {
 import { maskRasterMaskAddresses, maskRasterAddresses, maskRasterColorBytes, type MaskRasterRect } from './maskRaster';
 import { createMaskRoundingTable } from './maskRounding';
 import {
-  ColorMaskParams, colorMaskLayout, colorPaintbrushKernel, colorBatchLayout, createColorBatchPipeline
+  ColorMaskParams, colorMaskLayout, colorPaintbrushKernel, colorBatchLayout, createColorBatchPipelines
 } from './colorMaskAccumulationGpu';
 import { maskRoundingOffset } from './maskAccumulation';
 
@@ -69,9 +69,11 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
       const batchGroup = direct && !color ? root.createBindGroup(maskBatchLayout, {
         params: buffer!, source, destination, rounding: noise, rowInfo: rowInfo!, range: range!
       }) : undefined;
-      const colorBatchGroup = direct && color ? root.createBindGroup(colorBatchLayout, {
-        params: colorBuffer!, source, destination, ratio: color.ratio, rounding: noise, range: range!
-      }) : undefined;
+      // One binding per row stage: the stage number is a constant uniform, selected by the bind group.
+      const colorBatchGroups = direct && color ? color.batch().stages.map((stage) => root.createBindGroup(colorBatchLayout, {
+        params: colorBuffer!, source, destination, ratio: color.ratio, rounding: noise,
+        rowInfo: color.batch().rowInfo, range: range!, stage
+      })) : undefined;
       const coverageGroup = direct ? root.createBindGroup(maskCoverageLayout, { params: buffer!, source, range: range! }) : undefined;
       let rects: readonly MaskRasterRect[] = [];
       /** Consecutive records whose coverage fits the shared scratch together. */
@@ -163,14 +165,15 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
             root.device.queue.writeBuffer(root.unwrap(ranges!), 0, rangeWords!, 0, chunks.length * rangeWordCount);
           }
         },
-        /** Per chunk, prepares coverage in parallel and then accumulates its ordered stamps: fixed-color chunks
-         * in three parallel stages (row counts, row cursors, pixels), Color Dynamics chunks in one ordered workgroup.
+        /** Per chunk, prepares coverage in parallel and then accumulates its ordered stamps in parallel stages:
+         * row counts, row cursors and pixels for fixed color; three row and total stages, then pixels, for Color
+         * Dynamics.
          * The destination is copied in once and out once. Every stage uses shared scratch; encode them together
          * before any other batch.
          */
         recordBatch(encoder: GPUCommandEncoder, target: GPUTexture,
           bind: (pipeline: NonNullable<typeof directPipeline>) => NonNullable<typeof directPipeline>) {
-          if (!directPipeline || !coverageGroup || !(batchGroup || colorBatchGroup)) throw new Error('This mask batch has no direct source sampler.');
+          if (!directPipeline || !coverageGroup || !(batchGroup || colorBatchGroups)) throw new Error('This mask batch has no direct source sampler.');
           if (!rects.length) return;
           encoder.copyTextureToBuffer({ texture: target },
             { buffer: root.unwrap(destination), bytesPerRow: width * 4 }, { width, height });
@@ -178,16 +181,22 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
             encoder.copyBufferToBuffer(root.unwrap(ranges!), index * d.sizeOf(MaskChunkRange), root.unwrap(range!), 0, d.sizeOf(MaskChunkRange));
             bind(directPipeline.with(coverageGroup)).with(encoder).dispatchWorkgroups(
               Math.ceil(chunk.width / 8), Math.ceil(chunk.height / 8), chunk.count);
-            if (colorBatchGroup) {
-              color!.batchPipeline().with(colorBatchGroup).with(encoder).dispatchWorkgroups(1);
+            const columns = Math.ceil((chunk.right - chunk.left) / 8), lines = Math.ceil((chunk.bottom - chunk.top) / 8);
+            if (colorBatchGroups) {
+              const { pipelines } = color!.batch();
+              for (const group of colorBatchGroups) {
+                pipelines.rows.with(group).with(encoder).dispatchWorkgroups(Math.ceil(chunk.height / 64), chunk.count);
+                pipelines.totals.with(group).with(encoder).dispatchWorkgroups(Math.ceil(chunk.count / 64));
+              }
+
+              pipelines.pixels.with(colorBatchGroups[0]!).with(encoder).dispatchWorkgroups(columns, lines);
               return;
             }
 
             const stages = batchPipelines!;
             stages.rows.with(batchGroup!).with(encoder).dispatchWorkgroups(Math.ceil(chunk.height / 64), chunk.count);
             stages.cursors.with(batchGroup!).with(encoder).dispatchWorkgroups(Math.ceil(chunk.count / 64));
-            stages.pixels.with(batchGroup!).with(encoder).dispatchWorkgroups(
-              Math.ceil((chunk.right - chunk.left) / 8), Math.ceil((chunk.bottom - chunk.top) / 8));
+            stages.pixels.with(batchGroup!).with(encoder).dispatchWorkgroups(columns, lines);
           });
           encoder.copyBufferToTexture({ buffer: root.unwrap(destination), bytesPerRow: width * 4 },
             { texture: target }, { width, height });
@@ -221,7 +230,7 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
     destroy() {
       sourceTexture.destroy(); source.destroy(); destination.destroy(); noise.destroy(); params.destroy();
       rowInfo?.destroy();
-      colorState?.params.destroy(); colorState?.ratio.destroy();
+      colorState?.destroy();
     }
   };
 
@@ -229,12 +238,26 @@ export function createMaskRasterGpu(root: TgpuRoot, width: number, height: numbe
     const params = root.createBuffer(ColorMaskParams).$usage('uniform');
     const ratio = root.createBuffer(d.arrayOf(d.u32, sourceEntries)).$usage('storage');
     const group = root.createBindGroup(colorMaskLayout, { params, source, destination, ratio, rounding: noise });
-    let batch: ReturnType<typeof createColorBatchPipeline> | undefined;
+    let batch: ReturnType<typeof createColorBatch> | undefined;
     return {
       params, ratio,
       pipeline: root.createComputePipeline({ compute: colorPaintbrushKernel }).with(group),
       /** Created on first use: only direct Color Dynamics batches need it. */
-      batchPipeline: () => (batch ??= createColorBatchPipeline(root))
+      batch: () => (batch ??= createColorBatch()),
+      destroy() {
+        params.destroy(); ratio.destroy();
+        batch?.rowInfo.destroy();
+        batch?.stages.forEach((stage) => stage.destroy());
+      }
+    };
+  }
+
+  /** Pipelines, per-row cursor bases and the three constant stage numbers of batched Color Dynamics chunks. */
+  function createColorBatch() {
+    return {
+      pipelines: createColorBatchPipelines(root),
+      rowInfo: root.createBuffer(d.arrayOf(d.vec4u, maskChunkRecords * 256)).$usage('storage'),
+      stages: [0, 1, 2].map((stage) => root.createBuffer(d.u32, stage).$usage('uniform'))
     };
   }
 }
