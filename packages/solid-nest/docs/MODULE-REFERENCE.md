@@ -415,17 +415,19 @@ Computes FLIP animation data by comparing two tree layouts.
 
 **Returns**: `{ tree: Accessor<VirtualTree>, styles: Accessor<Map<ItemId, AnimationState>> }`
 
-Creates a reactive animation pipeline:
+Creates the animation pipeline:
 
 1. Watches `input()` for tree changes (`BlockTree` passes the input tree directly, so this fires when consumer data changes — never during a drag)
-2. On change, starts the FLIP generator
+2. On change, starts the FLIP generator from a microtask (the effect phase itself cannot flush)
 3. Generator yields control at each phase (measure, apply, wait)
-4. `createEffect` drives the generator forward, using `setTimeout` for non-zero delays
+4. A plain driver steps the generator: after every step it calls `flush()` so the writes reach the DOM, then continues at once for a zero delay or after `setTimeout` otherwise. The driver is deliberately outside the reactive graph: in Solid 2 an effect does not re-run for a signal it writes itself, so a signal-driven state machine would stall after its first step.
+
+Before the root element is registered nothing can be measured, so `tree` simply follows `input`.
 
 **Phase timing**:
 
 ```
-yield 0    → synchronous re-render (microtask)
+yield 0    → flush, then continue
 yield 10   → 10ms delay for browser paint
 yield 200+ → wait for transition to complete
 ```

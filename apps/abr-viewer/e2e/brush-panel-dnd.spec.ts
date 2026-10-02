@@ -95,3 +95,22 @@ async function touchscreen(page: Page) {
     end: async () => send('touchEnd', [])
   };
 }
+
+/** The tree re-renders after mount: Solid 2 no longer re-runs an effect for a signal it writes itself. */
+test('groups collapse and expand after mount and a later import joins the collection', async ({ page }) => {
+  const groups = page.getByLabel('Brush collection', { exact: true }).locator('[data-group-id]');
+  const files = await groups.count();
+  const shown = await page.locator('[data-brush-id]').count();
+  const collapse = page.getByRole('button', { name: /^Collapse / }).first();
+  const name = (await collapse.getAttribute('aria-label'))!.replace(/^Collapse /, '');
+  await collapse.click();
+  await expect.poll(() => page.locator('[data-brush-id]').count()).toBeLessThan(shown);
+  await page.getByRole('button', { name: `Expand ${name}` }).click();
+  await expect(page.locator('[data-brush-id]')).toHaveCount(shown);
+
+  await page
+    .locator('input[type=file]')
+    .setInputFiles(fileURLToPath(new URL('Chunky_Chalk_Brush_by_MarkWinters.abr', samples)));
+  await expect(groups).toHaveCount(files + 1);
+  await expect(groups.last()).toContainText('Chunky_Chalk_Brush_by_MarkWinters');
+});
