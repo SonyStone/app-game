@@ -7,7 +7,7 @@ import styles from './LayersPanel.module.css';
 export function LayersPanel(props: {
   /** Document state reported by the engine; each report clones every layer record. */
   state: DocumentState;
-  /** Adding layers waits for the engine. */
+  /** Adding, moving and deleting layers wait for the engine. */
   ready: boolean;
   onAction: (action: LayerAction) => void;
 }) {
@@ -43,13 +43,16 @@ export function LayersPanel(props: {
           min="0"
           max="100"
           value={Math.round(selected().opacity * 100)}
-          onChange={(e) =>
-            layer({
-              type: 'update',
-              id: state().activeId,
-              patch: { opacity: Math.max(0, Math.min(100, Number(e.currentTarget.value))) / 100 }
-            })
-          }
+          onChange={(e) => {
+            const percent = parsePercent(e.currentTarget.value);
+            if (percent === undefined) {
+              // An empty or invalid entry keeps the layer unchanged instead of hiding it at 0%.
+              e.currentTarget.value = String(Math.round(selected().opacity * 100));
+              return;
+            }
+
+            layer({ type: 'update', id: state().activeId, patch: { opacity: percent / 100 } });
+          }}
         />
         <span>%</span>
       </div>
@@ -90,6 +93,7 @@ export function LayersPanel(props: {
         <button
           aria-label="Move layer up"
           title="Move layer up"
+          disabled={!props.ready}
           onClick={() => layer({ type: 'move', id: state().activeId, direction: 1 })}
         >
           <SketchIcon name="up" size={18} />
@@ -97,6 +101,7 @@ export function LayersPanel(props: {
         <button
           aria-label="Move layer down"
           title="Move layer down"
+          disabled={!props.ready}
           onClick={() => layer({ type: 'move', id: state().activeId, direction: -1 })}
         >
           <SketchIcon name="down" size={18} />
@@ -104,7 +109,7 @@ export function LayersPanel(props: {
         <button
           aria-label="Delete layer"
           title="Delete selected layer"
-          disabled={state().layers.length <= 1}
+          disabled={!props.ready || state().layers.length <= 1}
           onClick={() => layer({ type: 'delete', id: state().activeId })}
         >
           Delete
@@ -112,6 +117,16 @@ export function LayersPanel(props: {
       </div>
     </section>
   );
+}
+
+/** Clamps a typed percentage to [0, 100]; returns undefined for an empty or non-numeric entry. */
+function parsePercent(text: string): number | undefined {
+  const value = text.trim() === '' ? Number.NaN : Number(text);
+  if (!Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return Math.max(0, Math.min(100, value));
 }
 
 /** Layers, history and the active layer as reported by the engine. */

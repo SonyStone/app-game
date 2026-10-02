@@ -7,7 +7,8 @@ import { defaultPaintSymmetry, type PaintSymmetry } from '@app-game/paint-core/s
 import { gpuError } from '@app-game/solid-gpu/errors';
 import type { WorkerFailure } from '@app-game/solid-gpu/worker/workerProtocol';
 import { err, ok, type Result } from 'neverthrow';
-import { createEffect, createSignal, latest, untrack, type Accessor } from 'solid-js';
+import { createEventListener } from '@solid-primitives/event-listener';
+import { createEffect, createSignal, latest, onCleanup, untrack, type Accessor } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { downloadBlob } from '../../shared/downloadBlob';
 import { brushError, engineError, type PaintError } from '../../shared/errors';
@@ -27,6 +28,10 @@ import {
  *
  * Switching modes checkpoints the document (with renderer tool state), disposes the engine, and then changes `mode`;
  * the caller keys the canvas on `mode`, so Solid replaces only the canvas, whose `connect` starts the new engine.
+ * A switch that gets no reply within `switchTimeoutMs` is abandoned before the checkpoint, or completed after it.
+ *
+ * Pending changes are saved when the page is hidden or unloaded, and the first change asks the browser to keep the
+ * origin's storage persistent so that drawings are not evicted under storage pressure.
  */
 export function createPaintEngine(options: {
   /** Developer switches, sent to every connection whenever it becomes ready and whenever they change. */
@@ -73,6 +78,10 @@ export function createPaintEngine(options: {
   let connection: PaintTransport | undefined;
   /** Renderer tools and history source moving from a checkpointed engine to its replacement. */
   let handoff: Pick<EngineInit, 'tools' | 'historySource'> = {};
+  /** Ends the current connection's stalled switch; set by `connect`. */
+  let expireSwitch: (() => void) | undefined;
+  let switchTimer: ReturnType<typeof setTimeout> | undefined;
+  let persistenceRequested = false;
 
   syncWhenEditable(options.settings.adaptiveQuality, (enabled) => ({ type: 'adaptive-quality', enabled }));
   syncWhenEditable(options.settings.liveTail, (enabled) => ({ type: 'live-tail', enabled }));
@@ -87,6 +96,15 @@ export function createPaintEngine(options: {
       setDebugTiles([]);
     }
   });
+
+  // Mobile browsers may discard a hidden page without another event, so save as soon as it is hidden.
+  createEventListener(document, 'visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      saveNow();
+    }
+  });
+  createEventListener(window, 'pagehide', saveNow);
+  onCleanup(endSwitchWait);
 
   return {
     /** Execution mode of the mounted engine; key the canvas on it so a switch replaces the canvas. */
@@ -150,6 +168,7 @@ export function createPaintEngine(options: {
 
     const transport = opened.value;
     connection = transport;
+    expireSwitch = stall;
     return disconnect;
 
     function receive(event: PaintEvent) {
@@ -192,9 +211,16 @@ export function createPaintEngine(options: {
           break;
         case 'error':
           setDrawing(false);
-          setSwitchTarget(undefined);
           options.onError(runtimeError(event));
-          if (event.recoverable || retiring) {
+          if (retiring) {
+            // The engine checkpointed and failed while disposing; it cannot take edits, so finish the switch.
+            replace();
+            break;
+          }
+
+          endSwitchWait();
+          setSwitchTarget(undefined);
+          if (event.recoverable) {
             setReady(false);
           }
 
@@ -219,6 +245,21 @@ export function createPaintEngine(options: {
       transport.post({ type: 'dispose' });
     }
 
+    /** No reply within the switch budget: keep a live engine, or replace one that was already told to dispose. */
+    function stall() {
+      if (connection !== transport || requestedSwitch() === undefined) {
+        return;
+      }
+
+      if (retiring) {
+        replace();
+        return;
+      }
+
+      setSwitchTarget(undefined);
+      options.onError(engineError('timeout', 'The drawing engine did not prepare the switch. Try again.'));
+    }
+
     /** The retired engine saved and disposed itself; changing `mode` remounts the canvas for the new engine. */
     function replace() {
       const target = requestedSwitch();
@@ -226,6 +267,7 @@ export function createPaintEngine(options: {
         return;
       }
 
+      endSwitchWait();
       close();
       connection = undefined;
       setReady(false);
@@ -253,6 +295,7 @@ export function createPaintEngine(options: {
 
       handoff = {};
       setReady(true);
+      endSwitchWait();
       setSwitchTarget(undefined);
       rememberMode(executionMode);
     }
@@ -278,6 +321,10 @@ export function createPaintEngine(options: {
       }
 
       setSaveState(event.saveState);
+      if (event.saveState !== 'saved') {
+        requestPersistentStorage();
+      }
+
       setMetrics({ tiles: event.residentTiles, gpu: event.gpuBytes, ms: event.renderMs });
       firstState = false;
     }
@@ -293,6 +340,7 @@ export function createPaintEngine(options: {
       options.onSelection(emptySelection);
       // The failed engine discarded any stroke in progress; the next pen-down must start a new one.
       setDrawing(false);
+      endSwitchWait();
       setSwitchTarget(undefined);
       setReady(false);
       options.onError(engineError('stopped', transportFailureMessage(failure), failure));
@@ -344,16 +392,40 @@ export function createPaintEngine(options: {
 
   /**
    * Starts switching to `next`: the engine checkpoints the document, then `mode` changes once it has disposed.
-   * Returns false, without side effects, when `next` is current or the engine is not ready.
+   * Returns false, without side effects, when `next` is current, the engine is not ready or a stroke is in progress.
    */
   function switchMode(next: ExecutionMode): boolean {
-    if (next === latest(mode) || !latest(ready) || requestedSwitch() !== undefined) {
+    if (next === latest(mode) || !latest(ready) || requestedSwitch() !== undefined || isDrawing()) {
       return false;
     }
 
     setSwitchTarget(next);
+    endSwitchWait();
+    switchTimer = setTimeout(() => expireSwitch?.(), switchTimeoutMs);
     post({ type: 'checkpoint', includeTools: true }).mapErr(options.onError);
     return true;
+  }
+
+  function endSwitchWait() {
+    clearTimeout(switchTimer);
+    switchTimer = undefined;
+  }
+
+  /** Asks the engine to write pending changes now; a stroke in progress is committed first. */
+  function saveNow() {
+    if (latest(ready) && latest(saveState) !== 'saved') {
+      post({ type: 'save' });
+    }
+  }
+
+  /** Asks once for persistent storage; browsers may grant it silently, prompt, or decline. */
+  function requestPersistentStorage() {
+    if (persistenceRequested) {
+      return;
+    }
+
+    persistenceRequested = true;
+    navigator.storage?.persist?.().catch(() => {});
   }
 
   /** Uploads a brush resource unless it is already resident in the connected engine. Never rejects. */
@@ -417,6 +489,9 @@ type ResourceReply = { evicted: string[]; stats: ReturnType<ReturnType<typeof cr
 
 /** A resource upload or brush command waits this long before the caller may retry. */
 const requestTimeoutMs = 30_000;
+
+/** A mode switch waits this long for the checkpoint and the dispose replies. Large documents can take seconds to save. */
+const switchTimeoutMs = 60_000;
 
 /**
  * Time a disposing engine has to save the document and close storage before its transport is closed anyway. Large

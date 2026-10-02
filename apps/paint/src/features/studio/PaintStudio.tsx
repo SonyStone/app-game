@@ -117,9 +117,12 @@ export function PaintStudio(props: {
 
   createPaintShortcuts({
     closePanel() {
-      if (panel()) {
-        closePanel();
+      if (!panel()) {
+        return false;
       }
+
+      closePanel();
+      return true;
     },
     tool,
     chooseTool,

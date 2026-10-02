@@ -2,6 +2,7 @@
 import type { RendererToolState } from '@app-game/abr-paint/gpu/toolState';
 import { defaultBrush } from '@app-game/paint-core/brush';
 import { defaultCamera } from '@app-game/paint-core/camera';
+import { createDocument } from '@app-game/paint-core/document';
 import type { PaintEvent } from '@app-game/paint-core/protocol';
 import { defaultPaintSymmetry } from '@app-game/paint-core/symmetry';
 import { render } from '@solidjs/web';
@@ -225,6 +226,85 @@ it('resets the editor when the worker fails: pauses input, ends the stroke, sett
   expect(onSelection).toHaveBeenCalledWith({ type: 'selection', points: [], hasClipboard: false });
 });
 
+it('abandons a switch that gets no checkpoint, keeping the engine editable', () => {
+  vi.useFakeTimers();
+  try {
+    const { engine, error } = mount();
+    const transport = transports.opened[0]!;
+    reply(transport, { type: 'ready' });
+    expect(engine.switchMode('main')).toBe(true);
+    flush();
+    expect(engine.canEdit()).toBe(false);
+
+    vi.advanceTimersByTime(60_000);
+    flush();
+    expect(engine.switching()).toBe(false);
+    expect(engine.canEdit()).toBe(true);
+    expect(engine.mode()).toBe('worker');
+    expect(error()).toMatchObject({ kind: 'engine', code: 'timeout' });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it.each(['error', 'timeout'] as const)('completes a switch when the retired engine fails to dispose (%s)', (failure) => {
+  vi.useFakeTimers();
+  try {
+    const { engine } = mount();
+    const first = transports.opened[0]!;
+    reply(first, { type: 'ready' });
+    engine.switchMode('main');
+    flush();
+    reply(first, { type: 'checkpointed' });
+    expect(first.post).toHaveBeenLastCalledWith({ type: 'dispose' });
+
+    if (failure === 'error') {
+      reply(first, { type: 'error', recoverable: false, message: 'Storage closed' });
+    } else {
+      vi.advanceTimersByTime(60_000);
+      flush();
+    }
+
+    expect(first.close).toHaveBeenCalledOnce();
+    expect(engine.mode()).toBe('main');
+    expect(transports.opened).toHaveLength(2);
+    reply(transports.opened[1]!, { type: 'ready' });
+    expect(engine.canEdit()).toBe(true);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('refuses to switch during a stroke and saves pending changes when the page is hidden', () => {
+  const { engine } = mount();
+  const transport = transports.opened[0]!;
+  reply(transport, { type: 'ready' });
+  engine.send({ type: 'begin', brush: defaultBrush(), samples: [{ x: 1, y: 1, pressure: 1, time: 0 }] });
+  expect(engine.switchMode('main')).toBe(false);
+
+  reply(transport, stateEvent('unsaved'));
+  window.dispatchEvent(new PageTransitionEvent('pagehide'));
+  expect(transport.post).toHaveBeenLastCalledWith({ type: 'save' });
+
+  transport.post.mockClear();
+  reply(transport, stateEvent('saved'));
+  window.dispatchEvent(new PageTransitionEvent('pagehide'));
+  expect(transport.post).not.toHaveBeenCalledWith({ type: 'save' });
+});
+
+function stateEvent(saveState: Extract<PaintEvent, { type: 'state' }>['saveState']): PaintEvent {
+  return {
+    type: 'state',
+    document: createDocument().state(),
+    saveState,
+    camera: defaultCamera(),
+    symmetry: defaultPaintSymmetry(),
+    residentTiles: 0,
+    gpuBytes: 0,
+    renderMs: 0
+  } as PaintEvent;
+}
+
 /** Assembles the engine with the UI state that must survive an engine replacement, as the studio does. */
 function mount() {
   let editor!: ReturnType<typeof assemble>;
@@ -278,7 +358,7 @@ function assemble() {
     select: tools.selectPreset
   });
   createPaintShortcuts({
-    closePanel: () => {},
+    closePanel: () => false,
     tool: tools.tool,
     chooseTool: tools.chooseTool,
     selectionAction: () => {},

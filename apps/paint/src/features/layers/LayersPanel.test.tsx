@@ -55,3 +55,22 @@ it('preserves controls across worker snapshots and reorders, keeping focus on pr
   select.click();
   expect(layer).toHaveBeenLastCalledWith({ type: 'select', id: first.id });
 });
+
+it('ignores an empty opacity entry instead of hiding the layer', () => {
+  const initial = createDocument().state();
+  const layer = vi.fn();
+  const host = document.createElement('div');
+  document.body.append(host);
+  dispose = render(() => <LayersPanel state={initial} ready onAction={layer} />, host);
+  flush();
+
+  const opacity = host.querySelector<HTMLInputElement>('[aria-label="Layer opacity"]')!;
+  opacity.value = '';
+  opacity.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(layer).not.toHaveBeenCalled();
+  expect(opacity.value).toBe('100');
+
+  opacity.value = '140';
+  opacity.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(layer).toHaveBeenLastCalledWith({ type: 'update', id: initial.activeId, patch: { opacity: 1 } });
+});
