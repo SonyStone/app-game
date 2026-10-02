@@ -23,6 +23,29 @@ Changed regions of each canvas are tracked in `packages/paint-core/src/gpu/viewD
 
 The reusable stroke engine, preset conversion, resource cache, and brush GPU operations live in [abr-paint](../../../packages/abr-paint/README.md). `packages/paint-core/src/composition/abrBrushEngine.ts` registers the package with Paint. The app retains document/worker scheduling, tile residency, history, and UI; the package never imports app files. Run package tests together with Paint integration and device performance checks.
 
+## Paintbrush mask batches
+
+Sampled Paintbrush presets on the exact path accumulate Photoshop's byte mask in `abr-brush` `maskRasterGpu.ts`. `abrStamps.drawMasked` batches every sampled stamp of a tile draw, whatever its size. The destination tile is copied to the accumulation buffer once per draw and back once. In between, the draw's records run in chunks of at most 256 stamps and 1 MiB of coverage scratch; each chunk's record range and bounding rectangle are copied into a uniform in encoder order, because queue writes are not ordered with encoded passes. A fixed-color chunk is four parallel dispatches:
+
+1. coverage of every stamp into the shared scratch (`maskCoverageLayout`);
+2. per record row, the number of non-zero coverage bytes before each pixel (`maskRowCountKernel`);
+3. per record, running row totals and each row's rounding cursor (`maskRowCursorKernel`);
+4. per destination pixel of the chunk's rectangle, the chunk's records applied in order (`maskPixelKernel`).
+
+Stages 2 and 3 exist because Photoshop's rounding cursor advances once per non-zero source pixel; with those counts every pixel depends only on itself across stamps. An ordered single-workgroup kernel computing the same bytes was 70% of a long 300 px stroke on the MovinkPad's Adreno. Color Dynamics chunks have three such cursors (flow scale, alpha, RGB), each counting values that depend only on the stamp, so `colorRowKernel` and `colorRowTotalKernel` run once per cursor before `colorPixelKernel`; the stage number is a constant uniform selected by the bind group.
+
+In these kernels copy scalars out of a storage element before overwriting it: TypeGPU turns `const info = buffer[i]` into a reference, so a later read of `info` sees the new value.
+
+`strokeRaster.paintStamps` brackets a paint call with `abr.beginPaint`/`endPaint`: complete row plans of every primary and secondary (Dual Brush) tip are packed once, by the affine packer where a row needs one span, and shared by all tiles the call touches. Primary records address their plan through `planRow`/`planX`; secondary draws receive the plan's first row and the tile offset per instance (`planRowLayout`). No plan is cropped per stamp per tile: that CPU work was about half of a Dual Brush stroke on the tablet. `abrStamps.paintBatchSize` sizes progress batches by covered pixels (`maskBatchCoverage`), not by a stamp count.
+
+The one-stamp-per-dispatch path remains for computed tips (no row plan) and as the reference: `batchSampledMasks: false`. `abr-mask-batches` in `test:browser` requires both paths to produce identical bytes at 24, 80, 222 and 500 px with and without a dual brush and Color Dynamics. Per-stamp effects that feed the mask (Noise, texture) must therefore be exact in fragment and compute shaders alike; `brushNoise` is integer arithmetic for that reason.
+
+## Mixer Brush batches
+
+Mixer dabs depend on each other in order, like Smudge dabs, and share submissions the same way (`retouch.paint`): canvas pickup, the well exchange in `mixerWells.step` and the deposit of up to eight dabs are encoded into one batch. Well uniforms use one slot per step of a batch; views and bind groups are cached. A single primary dab without Dual Brush or Wet Edges composites straight into its tiles through `abrStamps.canDrawDirect`, as Smudge does, and saves the same pixels as the clear, MRT and composite passes.
+
+A pickup with an adaptive budget (`maxDimension`, LOD 1 and coarser) reads level zero of its source tiles. Sampling mipmaps there forced every dab to rebuild the mip chain of the tiles the previous dab changed and to submit before it.
+
 ## Smudge performance
 
 `packages/abr-paint/src/gpu/canvasPickup.ts` captures current pixels on the GPU for Smudge, Mixer and filters. A single layer without Sample All Layers is drawn directly into the result texture; the first pass also clears it. An empty capture must clear the result, otherwise pixels from the previous dab appear. For multiple layers, separate blending, opacity and visibility are preserved.

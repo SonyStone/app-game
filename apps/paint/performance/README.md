@@ -90,6 +90,23 @@ Run with `--verify` to additionally check adaptive Paintbrush, Smudge, Blur/Shar
 
 Timing measures engine/GPU throughput and progress delivery; it does not measure physical stylus latency, browser input dispatch, brush-library loading, or app autosave. Cold-start times are recorded but not gated because browser shader caches vary. Keep a manual long-stroke check in the actual app at fine and coarse LODs before releasing tablet-facing performance changes.
 
+## Megapack sweep
+
+The nine baseline workloads cover two presets. `scripts/megapack-sweep.mjs` measures every preset of the Megapack through the production worker and IndexedDB: one long pen stroke (4000 CSS px at 1600 px/s by default) per preset and zoom, drawn across a view of the device's size, so document distance and touched tiles grow as the view zooms out. Retouch tools and erasers first receive a round stroke to work on.
+
+```sh
+adb reverse tcp:3047 tcp:3047
+adb forward tcp:9224 localabstract:chrome_devtools_remote
+node apps/paint/scripts/megapack-sweep.mjs --cdp http://127.0.0.1:9224 \
+  --zooms 0.1,0.25,0.6 --output /tmp/paint-sweep/run.jsonl
+```
+
+The runner starts its own Paint dev server on `--port` (default 3047), which also serves the cached Megapack; a second origin would need Chrome's local-network permission on the tablet. It opens and closes its own tab, appends one JSON line per preset and zoom to `--output` (outside the repository), and skips presets already in that file, so an interrupted sweep resumes with the same command. `--presets 0-57,65,75` selects presets by library index; `--paced` sends samples on the pen's clock and reports how far drawing lags behind it. Without `--cdp` it runs in headless Chromium; keep that to a few presets.
+
+Each row records the time from pen-down until every sample is presented (`drawMs`), its ratio to the pen's own time (`realTimeFactor`; above 1 the engine falls behind the pen), pen-up until commit (`finishMs`), the longest gap between presented frames, touched tiles and the settings that select the preset's rendering path. On the MovinkPad's view, zooms 0.1, 0.25 and 0.6 select LODs 2, 1 and 0; 0.6 is the longest stroke that still draws at full resolution.
+
+The dev server serves edited sources on the next request even without file watching, and the sweep restarts its worker for every preset. Do not edit engine sources during a sweep; to keep working, run it from a frozen copy of the repository (for example a detached git worktree with `node_modules` linked). A full sweep takes one to several hours, most of it in the slowest presets.
+
 ## Updating a baseline
 
 Use `--record performance/baselines/NEW-NAME.json` instead of `--baseline` to record a new file. The runner refuses to overwrite an existing file. Keep the old baseline for comparison, inspect output changes, and check the actual app with the stylus before accepting a replacement. A timing failure should be reproduced under the same conditions; do not increase tolerances or record a slower baseline just to make the check pass.
