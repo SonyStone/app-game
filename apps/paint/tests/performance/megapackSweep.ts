@@ -452,8 +452,8 @@ function viewLod(zoom: number, dpr: number) {
 
 let loaded: Promise<readonly BrushAsset[]> | undefined;
 
-/** Parses the fixture once per page; later calls reuse it and need no fixture. */
-function library(fixture: Blob | undefined) {
+/** Parses the fixture once per page; later calls, also from other benchmark modules, reuse it and need no fixture. */
+export function library(fixture: Blob | undefined) {
   loaded ??= (async () => {
     if (!fixture) {
       throw new Error('The first call needs the ABR fixture.');

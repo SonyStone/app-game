@@ -21,6 +21,10 @@ import { parseArgs } from 'node:util';
  *
  * Without --cdp it launches headless Chromium with WebGPU; keep that to a few presets for debugging the harness.
  *
+ * --quality LODS (for example --quality 1,2) measures appearance instead of speed: every preset draws one
+ * stroke exactly, exactly with another seed and with adaptive quality at each LOD, and the strokes are compared at
+ * the view's resolution (tests/performance/lodQuality.ts). It needs no tablet; run it headless.
+ *
  * Rows are appended to --output (JSON lines, default under the OS temporary directory) after every preset. Presets
  * already present in the file are skipped, so an interrupted sweep resumes by running the same command again. A
  * crashed tab is reopened and the preset that crashed it is recorded as an error.
@@ -39,6 +43,7 @@ const { values } = parseArgs({
     speed: { type: 'string', default: '1600' },
     timeout: { type: 'string', default: '60000' },
     paced: { type: 'boolean', default: false },
+    quality: { type: 'string' },
     output: { type: 'string' }
   }
 });
@@ -84,12 +89,17 @@ try {
     let rows;
     try {
       rows = await page.evaluate(
-        async ({ index, options }) => {
+        async ({ index, options, lods }) => {
+          if (lods) {
+            const { measureLodQuality } = await import('/tests/performance/lodQuality.ts');
+            return measureLodQuality(undefined, { presets: [index], lods });
+          }
+
           const { measureMegapackSweep } = await import('/tests/performance/megapackSweep.ts');
           const view = { width: innerWidth, height: innerHeight, dpr: devicePixelRatio };
           return measureMegapackSweep(undefined, { ...options, presets: [index], view });
         },
-        { index, options }
+        { index, options, lods: values.quality?.split(',').map(Number) }
       );
     } catch (error) {
       // The tab crashed or the evaluation was lost; record it and continue in a fresh tab.
@@ -100,6 +110,15 @@ try {
 
     await appendFile(output, rows.map((row) => JSON.stringify(row)).join('\n') + '\n');
     for (const row of rows) {
+      if (values.quality) {
+        console.log(
+          row.adaptive
+            ? `#${row.index} ${row.name} LOD ${row.lod}: ink ×${row.adaptive.ink.toFixed(3)}, difference ${row.adaptive.difference.toFixed(1)} (own variation ${row.reseeded.difference.toFixed(1)}), ${row.exactMs.toFixed(0)} -> ${row.adaptiveMs.toFixed(0)} ms`
+            : `#${row.index} ${row.name} LOD ${row.lod}: ${row.error ? `ERROR ${row.error}` : row.skipped}`
+        );
+        continue;
+      }
+
       console.log(
         row.error
           ? `#${row.index} ${row.name} @${row.zoom ?? '?'}: ERROR ${row.error}`
