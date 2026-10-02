@@ -14,8 +14,8 @@ export function createReadbackQueue(device: GPUDevice, texturesPerBatch: number)
     batches = 0,
     capacityWaits = 0;
   return {
-    /** Waits only for capacity, never for the newly submitted copy. Full tiles are packed losslessly;
-     * smaller square masks return tightly packed raw RGBA bytes. Rejects invalid requests or cancellation
+    /** Waits only for capacity, never for the newly submitted copy. Full RGBA8 tiles are packed losslessly;
+     * smaller square masks and non-RGBA8 textures (the r16float round-brush coverage) return tightly packed raw bytes. Rejects invalid requests or cancellation
      * while waiting for capacity; mapping returns a Result. Copies start at each texture's top-left pixel.
      * `inspect` receives each full tile's raw mapped bytes (valid only during the call) before packing.
      */
@@ -24,8 +24,14 @@ export function createReadbackQueue(device: GPUDevice, texturesPerBatch: number)
       inspect?: (raw: Uint8Array, index: number) => void
     ) {
       if (!textures.length || textures.length > texturesPerBatch) throw new Error('Invalid eviction readback size.');
-      const copies = textures.map(item => 'texture' in item ? item : { texture: item, side: TILE_SIZE });
-      const layout = readbackLayout(copies.map(copy => copy.side));
+      const copies = textures.map((item) => {
+        const { texture, side } = 'texture' in item ? item : { texture: item, side: TILE_SIZE };
+        return { texture, side, pixelBytes: texelBytes(texture.format) };
+      });
+      const layout = readbackLayout(
+        copies.map((copy) => copy.side),
+        copies.map((copy) => copy.pixelBytes)
+      );
       const bytes = layout.bytes;
       const owner = epoch;
       let slot: (typeof slots)[number] | undefined;
@@ -77,13 +83,16 @@ export function createReadbackQueue(device: GPUDevice, texturesPerBatch: number)
           if (disposed || owner !== epoch || generation !== current.generation)
             throw new Error('Eviction readback cancelled.');
           const mapped = new Uint8Array(current.buffer.getMappedRange(0, bytes));
-          return copies.map(({ side }, index) => {
+          return copies.map(({ side, pixelBytes }, index) => {
             const { offset, bytesPerRow } = layout.items[index]!;
-            if (side < TILE_SIZE) {
-              // Transient LOD masks are raw compact squares, not persisted document tiles.
-              const pixels = new Uint8Array(side * side * 4);
-              for (let y = 0; y < side; y++)
-                pixels.set(mapped.subarray(offset + y * bytesPerRow, offset + y * bytesPerRow + side * 4), y * side * 4);
+            if (side < TILE_SIZE || pixelBytes !== 4) {
+              // Transient LOD masks and coverage are raw compact squares, not persisted document tiles.
+              const row = side * pixelBytes;
+              const pixels = new Uint8Array(side * row);
+              for (let y = 0; y < side; y++) {
+                pixels.set(mapped.subarray(offset + y * bytesPerRow, offset + y * bytesPerRow + row), y * row);
+              }
+
               return pixels;
             }
             const view = mapped.subarray(offset, offset + bytesPerRow * side);
@@ -132,16 +141,31 @@ export function createReadbackQueue(device: GPUDevice, texturesPerBatch: number)
   };
 }
 
-/** Packs square RGBA copies into a staging buffer with WebGPU-aligned row strides and offsets. */
-export function readbackLayout(sides: readonly number[]) {
+/** Packs square copies into a staging buffer with WebGPU-aligned row strides and offsets. `pixelBytes` holds each
+ * copy's texel size and defaults to RGBA8.
+ */
+export function readbackLayout(sides: readonly number[], pixelBytes: readonly number[] = []) {
   let bytes = 0;
-  const items = sides.map(side => {
+  const items = sides.map((side, index) => {
     if (!Number.isInteger(side) || side <= 0 || side > TILE_SIZE)
       throw new Error('Readback side must be an integer between 1 and 256.');
-    const bytesPerRow = Math.ceil(side * 4 / 256) * 256;
+    const bytesPerRow = Math.ceil((side * (pixelBytes[index] ?? 4)) / 256) * 256;
     const offset = bytes;
     bytes += bytesPerRow * side;
     return { offset, bytesPerRow };
   });
   return { items, bytes };
+}
+
+/** Bytes per texel of the formats the renderer reads back. */
+function texelBytes(format: GPUTextureFormat) {
+  if (format === 'r16float') {
+    return 2;
+  }
+
+  if (format === 'rgba8unorm') {
+    return 4;
+  }
+
+  throw new Error(`Readback does not support ${format} textures.`);
 }

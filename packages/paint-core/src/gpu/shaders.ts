@@ -9,7 +9,7 @@ export const brushLayout = tgpu.bindGroupLayout({
 /** Stamp instances carry tile-local center, radius, and flow. */
 export const stampLayout = tgpu.vertexLayout(d.arrayOf(d.vec4f), 'instance');
 
-/** Rasterizes round stamps into an alpha mask using hardware source-over blending. */
+/** Rasterizes round stamps; the stamp pipeline multiplies transmittance by 1 − alpha with hardware blending. */
 export const stampVertex = tgpu.vertexFn({
   in: { index: d.builtin.vertexIndex, stamp: d.vec4f },
   out: { position: d.builtin.position, local: d.vec2f, radius: d.f32, flow: d.f32 }
@@ -40,10 +40,10 @@ export const stampFragment = tgpu.fragmentFn({ in: { local: d.vec2f, radius: d.f
   return d.vec4f(alpha, alpha, alpha, alpha);
 });
 
-/** Reads immutable pre-stroke pixels and the accumulated mask, writing a separate result texture. */
+/** Reads immutable pre-stroke pixels and the accumulated transmittance (1 − coverage), writing a separate result. */
 export const strokeLayout = tgpu.bindGroupLayout({
   base: { texture: d.texture2d() },
-  mask: { texture: d.texture2d() }
+  transmittance: { texture: d.texture2d() }
 });
 export const fullscreenVertex = common.fullScreenTriangle;
 
@@ -52,7 +52,7 @@ export const strokeFragment = tgpu.fragmentFn({ in: { position: d.builtin.positi
   'use gpu';
   const pixel = d.vec2i(input.position.xy);
   const base = std.textureLoad(strokeLayout.$.base, pixel, 0);
-  const mask = std.textureLoad(strokeLayout.$.mask, pixel, 0).a;
+  const mask = 1 - std.textureLoad(strokeLayout.$.transmittance, pixel, 0).x;
   const alpha = mask * brushLayout.$.settings.params.y;
   if (brushLayout.$.settings.params.z > 0.5) return std.mul(base, 1 - alpha);
   if (brushLayout.$.settings.params.w > 0.5)

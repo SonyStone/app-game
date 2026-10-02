@@ -35,7 +35,8 @@ export type StrokeData = {
 /** Committed tile before the stroke plus the evicted stroke output and coverage needed to resume painting it. */
 export type StrokeTileSnapshot = {
   before: TileData | undefined;
-  mask?: Uint8Array;
+  /** Round-brush transmittance as raw r16float bytes. */
+  transmittance?: Uint8Array;
   coverage?: AbrCoverageSnapshot;
   output?: Uint8Array;
   /** Pending eviction readback; failed results stay attached until finish or a revisit observes them. */

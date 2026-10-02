@@ -86,7 +86,8 @@ export async function verifyReadbackQueue(report: (message: string) => void) {
       'The third copy never waited for staging capacity'
     );
     check(!done && renderer.stats().readback.buffers === 2, 'A third pending copy bypassed the memory limit');
-    check(renderer.stats().readback.bytes === 1048576, 'Two-tile scratch cache used more than 1 MiB staging');
+    // Two staging buffers, each holding one RGBA8 tile and its r16float round-brush transmittance.
+    check(renderer.stats().readback.bytes === 2 * 256 * 256 * (4 + 2), 'Two-tile scratch cache used more than 768 KiB staging');
     blocked.release();
     held = undefined;
     await limited;
@@ -96,7 +97,7 @@ export async function verifyReadbackQueue(report: (message: string) => void) {
     check(alpha(changes, '4,0') === 51, 'Later tiles were lost while staging was full');
     check(renderer.stats().readback.capacityWaits > 0, 'Capacity backpressure was not exercised');
     report(
-      'PASS: painting advances with two GPU maps stalled; the third copy waits within 1 MiB, and revisits preserve flow'
+      'PASS: painting advances with two GPU maps stalled; the third copy waits within 768 KiB, and revisits preserve flow'
     );
 
     reset();

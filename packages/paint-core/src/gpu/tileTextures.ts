@@ -51,17 +51,27 @@ export function prepareStroke(root: TgpuRoot, tile: PaintTile) {
   return (tile.scratch ??= createStrokeScratch(root));
 }
 
-/** Pre-stroke base, accumulated mask and stamp instances for rasterizing one tile. */
+/** Pre-stroke base, accumulated coverage and stamp instances for rasterizing one tile. */
 export type StrokeScratch = ReturnType<typeof createStrokeScratch>;
 
+/**
+ * `transmittance` accumulates round and textured stamps as 1 − coverage in r16float: each stamp multiplies it by
+ * 1 − alpha, so low-flow build-up keeps relative precision instead of stalling where an 8-bit increment rounds to
+ * zero. Every first touch, revisit and tail resets or restores it before stamping. `mask` is the 8-bit coverage that ABR tiles accumulate in, matching
+ * Photoshop's 8-bit arithmetic.
+ */
 export function createStrokeScratch(root: TgpuRoot) {
   const base = tileTexture(root);
   const mask = tileTexture(root);
+  const transmittance = root
+    .createTexture({ size: [TILE_SIZE, TILE_SIZE], format: 'r16float' })
+    .$usage('sampled', 'render');
   return {
     base,
     mask,
-    maskRender: root.unwrap(mask).createView(),
-    strokeGroup: root.createBindGroup(shader.strokeLayout, { base, mask }),
+    transmittance,
+    transmittanceRender: root.unwrap(transmittance).createView(),
+    strokeGroup: root.createBindGroup(shader.strokeLayout, { base, transmittance }),
     stamps: root.createBuffer(d.arrayOf(d.vec4f, STAMP_CAPACITY)).$usage('vertex'),
     abr: undefined as AbrTile | undefined
   };
@@ -69,7 +79,7 @@ export function createStrokeScratch(root: TgpuRoot) {
 
 /** Texture and instance-buffer footprint; small uniforms/bindings are excluded from this estimate. */
 export function scratchBytes(scratch: StrokeScratch) {
-  return TILE_SIZE * TILE_SIZE * 4 * 2 + STAMP_CAPACITY * 16 + (scratch.abr?.bytes() ?? 0);
+  return TILE_SIZE * TILE_SIZE * (4 * 2 + 2) + STAMP_CAPACITY * 16 + (scratch.abr?.bytes() ?? 0);
 }
 
 /** Mipmapped tile texture plus any per-tile scratch. */
@@ -80,6 +90,7 @@ export function tileBytes(tile: PaintTile) {
 export function destroyStrokeScratch(scratch: StrokeScratch) {
   scratch.abr?.destroy();
   scratch.mask.destroy();
+  scratch.transmittance.destroy();
   scratch.base.destroy();
   scratch.stamps.destroy();
 }
@@ -101,6 +112,38 @@ export function historyTexture(root: TgpuRoot) {
 /** Attachment clears avoid allocating/uploading a viewport-sized CPU array of zeros. */
 export function clearAttachment(encoder: GPUCommandEncoder, view: GPUTextureView) {
   encoder.beginRenderPass({ colorAttachments: [{ view, loadOp: 'clear', storeOp: 'store' }] }).end();
+}
+
+/** Multiplies transmittance by 1 − stamp alpha, the complement of source-over coverage accumulation. */
+export const transmittanceBlend = {
+  color: { srcFactor: 'zero', dstFactor: 'one-minus-src-alpha' },
+  alpha: { srcFactor: 'zero', dstFactor: 'one-minus-src-alpha' }
+} as const satisfies GPUBlendState;
+
+/** Resets round-brush transmittance to 1, meaning the stroke covers nothing yet. */
+export function clearTransmittance(encoder: GPUCommandEncoder, view: GPUTextureView) {
+  encoder
+    .beginRenderPass({ colorAttachments: [{ view, clearValue: [1, 1, 1, 1], loadOp: 'clear', storeOp: 'store' }] })
+    .end();
+}
+
+/** Restores evicted round-brush transmittance from its raw r16float readback, or resets it when absent. */
+export function replaceTransmittance(
+  device: GPUDevice,
+  texture: GPUTexture,
+  bytes: Uint8Array | undefined,
+  batch: ReturnType<typeof commandBatch> | undefined
+) {
+  if (bytes) {
+    device.queue.writeTexture({ texture }, bytes, { bytesPerRow: TILE_SIZE * 2 }, [TILE_SIZE, TILE_SIZE]);
+    return;
+  }
+
+  const commands = batch ?? commandBatch(device);
+  clearTransmittance(commands.encoder(), texture.createView());
+  if (!batch) {
+    commands.flush();
+  }
 }
 
 /** Assigns every level-zero pixel when recycling a slot, including transparent source/base/mask.

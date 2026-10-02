@@ -5,6 +5,7 @@ import { verifyAbrBrush } from '../gpu/abrBrushVerification';
 import { verifyAbrColorMixing } from '../gpu/abrColorMixingVerification';
 import { verifyActivePreview } from '../gpu/activePreviewVerification';
 import { verifyBrushBatches } from '../gpu/brushBatchVerification';
+import { verifyFlowAccumulation } from '../gpu/flowAccumulationVerification';
 import { verifyLargeBrush } from '../gpu/largeBrushVerification';
 import { verifyLiveTail } from '../gpu/liveTailVerification';
 import { verifyColdNavigation } from '../gpu/navigationStreamingVerification';
@@ -43,6 +44,7 @@ export const verifications = {
   refinement: verifyRefinement,
   'overview-quality': verifyOverviewQuality,
   'large-brush': verifyLargeBrush,
+  'flow-accumulation': verifyFlowAccumulation,
   pressure: verifyPressureSpacing,
   'stroke-filtering': verifyStrokeFiltering,
   'live-tail': verifyLiveTail,

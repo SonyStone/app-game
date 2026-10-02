@@ -1,6 +1,7 @@
 import { d, std, tgpu, type TgpuRoot } from 'typegpu';
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import { stampLayout, stampVertex } from './shaders';
+import { transmittanceBlend } from './tileTextures';
 
 /** Device-local counterpart of the decoded brush cache. Uploads once per resource identity and reuses
  * views/bind groups across strokes. Call prepare only between strokes; it may evict older GPU textures.
@@ -13,13 +14,7 @@ export function createTexturedStamps(root: TgpuRoot, maxBytes = 64 * 1024 * 1024
     attribs: { stamp: stampLayout.attrib },
     vertex: stampVertex,
     fragment: texturedStampFragment,
-    targets: {
-      format: 'rgba8unorm',
-      blend: {
-        color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-        alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }
-      }
-    }
+    targets: { format: 'r16float', blend: transmittanceBlend }
   });
   const transform = root.createBuffer(d.vec4f).$usage('uniform');
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });

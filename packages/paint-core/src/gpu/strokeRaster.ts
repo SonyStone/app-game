@@ -17,7 +17,7 @@ import type { TargetViews } from './targetView';
 import { createTexturedStamps } from './texturedStamps';
 import type { TileResidency } from './tileResidency';
 import {
-  clearAttachment,
+  clearTransmittance,
   createMipmapEnsurer,
   createTile,
   destroyTile,
@@ -28,6 +28,7 @@ import {
   tileBytes,
   tileCoordinates,
   tileId,
+  transmittanceBlend,
   type PaintTile,
   type StrokeScratch
 } from './tileTextures';
@@ -65,13 +66,7 @@ export function createStrokeRaster(
       attribs: { stamp: shader.stampLayout.attrib },
       vertex: shader.stampVertex,
       fragment: shader.stampFragment,
-      targets: {
-        format: 'rgba8unorm',
-        blend: {
-          color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }
-        }
-      }
+      targets: { format: 'r16float', blend: transmittanceBlend }
     }),
     stroke: root.createRenderPipeline({
       vertex: shader.fullscreenVertex,
@@ -326,7 +321,7 @@ export function createStrokeRaster(
             if (abr) {
               scratch.abr!.coverage.clear(commands);
             } else {
-              clearAttachment(commands.encoder(), scratch.maskRender);
+              clearTransmittance(commands.encoder(), scratch.transmittanceRender);
             }
           }
         }
@@ -434,12 +429,12 @@ export function createStrokeRaster(
       commands
         .encoder()
         .copyTextureToTexture(
-          { texture: root.unwrap(original.scratch!.mask) },
-          { texture: root.unwrap(scratch.mask) },
+          { texture: root.unwrap(original.scratch!.transmittance) },
+          { texture: root.unwrap(scratch.transmittance) },
           [TILE_SIZE, TILE_SIZE]
         );
     } else {
-      clearAttachment(commands.encoder(), scratch.maskRender);
+      clearTransmittance(commands.encoder(), scratch.transmittanceRender);
     }
 
     for (let offset = 0; offset < tail.length; offset += STAMP_CAPACITY) {
@@ -473,7 +468,7 @@ export function createStrokeRaster(
     return temporary;
   }
 
-  /** Accumulates round or textured stamps into a tile's mask. The instance buffer is rewritten, so callers
+  /** Accumulates round or textured stamps into a tile's transmittance. The instance buffer is rewritten, so callers
    * submit before drawing the same scratch again.
    */
   function drawRoundStamps(
@@ -493,7 +488,7 @@ export function createStrokeRaster(
 
     device.queue.writeBuffer(root.unwrap(scratch.stamps), 0, stampData, 0, stamps.length * 4);
     const pass = commands.encoder().beginRenderPass({
-      colorAttachments: [{ view: scratch.maskRender, loadOp: 'load', storeOp: 'store' }]
+      colorAttachments: [{ view: scratch.transmittanceRender, loadOp: 'load', storeOp: 'store' }]
     });
     if (texturedPipeline) {
       texturedPipeline.with(pass).with(shader.stampLayout, scratch.stamps).draw(6, stamps.length);

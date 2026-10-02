@@ -15,6 +15,7 @@ import {
   MAX_RESIDENT_TILES,
   prepareStroke,
   replacePixels,
+  replaceTransmittance,
   scratchBytes,
   STAMP_CAPACITY,
   tileBytes,
@@ -98,7 +99,7 @@ export function createTileResidency(
           if (!stroke.transientCoverage) {
             replacePixels(device, root.unwrap(scratch.base), await readTile(active.before), batch);
             if (!stroke.abr) {
-              replacePixels(device, root.unwrap(scratch.mask), active.mask, batch);
+              replaceTransmittance(device, root.unwrap(scratch.transmittance), active.transmittance, batch);
             }
           }
 
@@ -317,7 +318,7 @@ export function createTileResidency(
           ...(coverage?.count
             ? coverage.sources(tile.scratch!.abr!.coverage)
             : roundMask
-              ? [root.unwrap(tile.scratch!.mask)]
+              ? [root.unwrap(tile.scratch!.transmittance)]
               : [])
         ])
       );
@@ -342,7 +343,7 @@ export function createTileResidency(
 
           const at = index * channels;
           snapshot.output = pixels[at]!;
-          snapshot.mask = roundMask ? pixels[at + 1] : undefined;
+          snapshot.transmittance = roundMask ? pixels[at + 1] : undefined;
           snapshot.coverage = coverage?.snapshot(pixels, at + 1);
           snapshot.pending = undefined;
         });
