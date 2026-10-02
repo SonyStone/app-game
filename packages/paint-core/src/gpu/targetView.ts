@@ -163,7 +163,8 @@ function createTargetView(
     },
 
     bytes() {
-      return (this.fallback?.bytes() ?? 0) + (this.view ? this.view.width * this.view.height * 16 : 0);
+      // Two rgba16float composition textures and two rgba8unorm images.
+      return (this.fallback?.bytes() ?? 0) + (this.view ? this.view.width * this.view.height * (8 * 2 + 4 * 2) : 0);
     },
 
     /** Releases every GPU resource of this target and unconfigures its context. */
@@ -180,15 +181,20 @@ function createTargetView(
   };
 }
 
-/** Ping-pong composition textures, the per-layer scratch target and the presented image of one target. */
+/**
+ * Ping-pong composition textures, the per-layer scratch target and the presented image of one target. Layers blend
+ * into `a`/`b` in rgba16float, so rounding does not accumulate across many translucent layers; `layer` holds 8-bit
+ * tile pixels and `composed` the 8-bit result.
+ */
 export type ViewTextures = ReturnType<typeof createViewTextures>;
 
 function createViewTextures(root: TgpuRoot, width: number, height: number) {
-  const texture = () => root.createTexture({ size: [width, height], format: 'rgba8unorm' }).$usage('sampled', 'render');
-  const a = texture(),
-    b = texture(),
-    layer = texture(),
-    composed = texture();
+  const texture = <F extends 'rgba8unorm' | 'rgba16float'>(format: F) =>
+    root.createTexture({ size: [width, height], format }).$usage('sampled', 'render');
+  const a = texture(compositionFormat),
+    b = texture(compositionFormat),
+    layer = texture('rgba8unorm'),
+    composed = texture('rgba8unorm');
   const slots: { settings: TgpuBuffer<d.Vec4f> & UniformFlag; fromA: TgpuBindGroup; fromB: TgpuBindGroup }[] = [];
   return {
     width,
@@ -200,6 +206,10 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
     aRender: root.unwrap(a).createView(),
     bRender: root.unwrap(b).createView(),
     layerRender: root.unwrap(layer).createView(),
+    composedRender: root.unwrap(composed).createView(),
+    /** Sources of the resolve pass that writes the final ping-pong texture into `composed`. */
+    resolveA: root.createBindGroup(shader.presentLayout, { image: a }),
+    resolveB: root.createBindGroup(shader.presentLayout, { image: b }),
     /** Composite bindings for the frame's `slot`-th visible layer. Distinct settings buffers let one encoder
      * hold every layer's composite pass; slots are created on first use and reused by later frames.
      */
@@ -230,3 +240,6 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
     }
   };
 }
+
+/** Format of the textures layers are blended into. */
+export const compositionFormat = 'rgba16float';

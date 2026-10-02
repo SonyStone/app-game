@@ -7,7 +7,7 @@ import type { createDisplayCache } from './displayCache';
 import * as shader from './shaders';
 import type { StrokeRaster } from './strokeRaster';
 import type { StrokeData } from './strokeState';
-import type { TargetView } from './targetView';
+import { compositionFormat, type TargetView } from './targetView';
 import type { TileResidency } from './tileResidency';
 import { clearAttachment, MAX_RESIDENT_TILES, tileCoordinates, tileId, type createMipmapEnsurer } from './tileTextures';
 import type { createVirtualTexture } from './virtualTexture';
@@ -49,6 +49,11 @@ export function createFrameComposer(
     composite: root.createRenderPipeline({
       vertex: shader.fullscreenVertex,
       fragment: shader.compositeFragment,
+      targets: { format: compositionFormat }
+    }),
+    resolve: root.createRenderPipeline({
+      vertex: shader.fullscreenVertex,
+      fragment: shader.resolveFragment,
       targets: { format: 'rgba8unorm' }
     }),
     present: root.createRenderPipeline({
@@ -59,7 +64,7 @@ export function createFrameComposer(
     clear: root.createRenderPipeline({
       vertex: shader.fullscreenVertex,
       fragment: shader.clearFragment,
-      targets: { format: 'rgba8unorm' }
+      targets: { format: compositionFormat }
     })
   };
   const stats = { viewportUpdate: { full: false, pixels: 0 }, previewTileDraws: 0, sourceTileDraws: 0 };
@@ -223,23 +228,24 @@ export function createFrameComposer(
         }
 
         if (refining && !stroke.current && target.complete) {
-          // Captures the previous composed image, which the copy below has not replaced yet.
+          // Captures the previous composed image, which the resolve pass below has not replaced yet.
           target.fallback?.capture(root.unwrap(view.composed), target.complete.camera, target.complete.size);
           target.complete = undefined;
         }
 
         target.hold = '';
         target.presented = cameraSignature;
-        const origin = { x: region.x, y: region.y };
-        frame
-          .encoder()
-          .copyTextureToTexture(
-            { texture: root.unwrap(read), origin },
-            { texture: root.unwrap(view.composed), origin },
-            [region.width, region.height]
-          );
+        const resolve = frame.encoder().beginRenderPass({
+          colorAttachments: [{ view: view.composedRender, loadOp: 'load', storeOp: 'store' }]
+        });
+        resolve.setScissorRect(region.x, region.y, region.width, region.height);
+        pipelines.resolve
+          .with(resolve)
+          .with(read === view.a ? view.resolveA : view.resolveB)
+          .draw(3);
+        resolve.end();
         if (refining && !stroke.current) {
-          // Reprojection submits its own pass, which must draw over the copied region.
+          // Reprojection submits its own pass, which must draw over the resolved region.
           frame.flush();
           target.fallback?.draw(root.unwrap(view.composed), camera, size);
         }

@@ -101,6 +101,12 @@ export const presentFragment = tgpu.fragmentFn({ in: { position: d.builtin.posit
   return d.vec4f(std.add(color.rgb, std.mul(d.vec3f(0.98, 0.974, 0.957), 1 - color.a)), 1);
 });
 
+/** Converts the float composition result to the 8-bit composed image, unchanged apart from rounding. */
+export const resolveFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
+  'use gpu';
+  return std.textureLoad(presentLayout.$.image, d.vec2i(input.position.xy), 0);
+});
+
 /** Writes transparent pixels; with a scissor it clears only a damaged region instead of the whole attachment. */
 export const clearFragment = tgpu.fragmentFn({ out: d.vec4f })(() => {
   'use gpu';
