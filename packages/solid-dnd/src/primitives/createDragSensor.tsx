@@ -246,7 +246,7 @@ export function createDragSensorFactory(factoryOptions: DragSensorFactoryOptions
     onLostCapture
   });
 
-  createEscapeKeyHandler({ cancel, isActive });
+  createEscapeKeyHandler({ cancel: () => cancel('escape'), isActive });
   onCleanup(resetState);
 
   function createSensor<TData = unknown, TElement extends HTMLElement = HTMLElement>(
@@ -424,8 +424,8 @@ export function createDragSensorFactory(factoryOptions: DragSensorFactoryOptions
     resetState();
   }
 
-  function cancel(): void {
-    cancelSession('manual');
+  function cancel(reason: DragCancelEvent['reason'] = 'manual'): void {
+    cancelSession(reason);
     resetState();
   }
 
@@ -496,7 +496,8 @@ export function createDragSensorFactory(factoryOptions: DragSensorFactoryOptions
     pointerType,
     activePointerId,
     activeSource,
-    cancel
+    // Wrapped so a caller passing it as an event handler cannot set the reason.
+    cancel: () => cancel()
   }) satisfies DragSensorFactory;
 
   return factory;
