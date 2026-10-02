@@ -13,6 +13,7 @@ pnpm --filter @app-game/paint dev        # http://localhost:3030
 pnpm --filter @app-game/paint typecheck
 pnpm --filter @app-game/paint test          # feature tests: engine connection, panels, dialogs, input, PWA
 pnpm --filter @app-game/paint test:browser  # every real-GPU verification in headless Chromium with WebGPU
+pnpm --filter @app-game/paint test:ui       # editor UI smoke test: panels, shortcuts, undo/redo, engine switch
 pnpm --filter @app-game/paint build      # apps/paint/dist
 pnpm --filter @app-game/paint preview    # http://localhost:4030
 ```
@@ -42,7 +43,7 @@ src/
     ui/            Sketch line icons
   main.tsx         Standalone entry
 tests/
-  browser/         Worker and main-thread harnesses, harness page and the test:browser runner
+  browser/         Worker and main-thread harnesses, harness page, the test:browser runner and the test:ui smoke test
   gpu/             Real-GPU renderer checks
   waits.ts         The only waiting primitives harnesses use (events first, bounded polls last)
   performance/     Device brush benchmark (scripts/brush-performance.mjs)

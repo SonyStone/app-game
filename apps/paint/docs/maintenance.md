@@ -151,12 +151,15 @@ pnpm --filter @app-game/paint test
 pnpm --filter @app-game/paint-core test
 pnpm --filter @app-game/abr-paint test
 pnpm --filter @app-game/paint test:browser
+pnpm --filter @app-game/paint test:ui
 pnpm --filter @app-game/paint build
 ```
 
 `test` runs the app's feature tests; component tests opt into jsdom with a `// @vitest-environment jsdom` docblock. Runtime, storage and renderer behavior is tested in `@app-game/paint-core`: `tests/fixtures/rendererDouble.ts` is the one renderer and storage double, and `tests/fixtures/studioRuntime.tsx` mounts the Studio recipe and waits on posted events. Tests that need real Adobe presets read the pinned packs through `@app-game/abr-brush/testing/adobeBrushes`; only abr-paint's `megapack.test.ts` parses the whole Megapack.
 
 `test:browser` (`tests/browser/verifications.browser.mjs`) starts a Vite dev server, opens `tests/browser/harness.html` in headless Chromium with WebGPU (ANGLE Metal on macOS) and runs every verification the harness exports in a fresh page: renderer, readback, streaming, ABR, textured brush, lasso, symmetry, pattern, execution-mode and worker checks. A verification fails when it throws, when the page logs an uncaught or console error, or after five minutes. Pass names to run a subset (`pnpm --filter @app-game/paint test:browser readback worker`); set `PAINT_URL` to use a running dev server and `PAINT_BROWSER_CHANNEL=chrome` for an installed Chrome. Logs and `report.json` are written to `$TMPDIR/paint-verifications`. CI has no WebGPU adapter, so run it locally after renderer, queue, storage or worker changes.
+
+`test:ui` (`tests/browser/studio.browser.mjs`) drives the real editor in headless Chromium with a fresh profile on its own dev server: zoom, the layers panel, Escape, tool shortcuts, a mouse stroke with undo/redo, and a worker → main-thread switch that keeps the drawing. Run it after changes to the studio layout, shortcuts or engine connection.
 
 Harnesses wait only through `tests/waits.ts`: await the operation, then an event the code emits (`onRefine`, posted paint events, gate arrivals), and poll (`until`) only for state exposed as a value. To prove that an operation is blocked, wait for the counter that shows it is waiting (`stats().readback.capacityWaits`, `snapshotWaits`, `settledSnapshots`), never for a fixed delay.
 

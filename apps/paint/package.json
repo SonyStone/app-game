@@ -9,6 +9,7 @@
     "preview": "vite preview --port 4030",
     "test": "vitest run",
     "test:browser": "node tests/browser/verifications.browser.mjs",
+    "test:ui": "node tests/browser/studio.browser.mjs",
     "test:performance": "node --test scripts/compare-brush-performance.test.mjs",
     "bench:brushes": "node scripts/brush-performance.mjs",
     "typecheck": "tsc -p tsconfig.json"
