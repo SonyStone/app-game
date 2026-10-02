@@ -13,7 +13,7 @@ import { paintBlend, paintModes } from '@app-game/abr-brush/paintBlend';
 import { pencilCoverage, usesPencilCoverage } from '@app-game/abr-brush/pencil';
 import { d } from 'typegpu';
 import type { BrushTipImage } from '../../lib/abr';
-import { blendModeId, brushNoise, dualCoverage, grain, textureCoverage, textureTone } from './effects';
+import { blendModeId, brushNoise, dualCoverage, grainReference, textureCoverage, textureTone } from './effects';
 import { eraserPreviewColor } from './eraser';
 import { renderResourcePixels } from './resource-pixels';
 import { preparePreviewResources, type PreviewResources } from './resources';
@@ -81,7 +81,7 @@ export function renderPreviewPixels(
       pixels[i * 4 + 3] = 255;
       continue;
     }
-    if (mode === 1) alpha = grain(i % input.width, Math.floor(i / input.width), 13.75) < alpha ? 1 : 0;
+    if (mode === 1) alpha = grainReference(i % input.width, Math.floor(i / input.width), 13.75) < alpha ? 1 : 0;
     if (mode === 27 || mode === 28) alpha = 0;
     const source = layers.channels ? d.vec3f(layers.channels[0][i]! / 255, layers.channels[1][i]! / 255, layers.channels[2][i]! / 255) : d.vec3f(
       paint[i * 3]! / Math.max(0.00001, flow[i]!),
@@ -245,7 +245,7 @@ function renderLayers(
           continue;
         }
         // Photoshop applies Noise to the rasterized tip, before texture.
-        if (v.useNoise) coverage = brushNoise(coverage, grain(px, py, s[offset + 11]!));
+        if (v.useNoise) coverage = brushNoise(coverage, grainReference(px, py, s[offset + 11]!));
         if (v.useTexture && v.texture.eachTip && pattern && toneTable)
           coverage = textured(coverage, pattern[i]!, s[offset + 10]!, input, toneTable);
         if (usesPencilCoverage(v.tool)) coverage = pencilCoverage(coverage);

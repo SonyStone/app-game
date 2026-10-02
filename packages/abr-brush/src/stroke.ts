@@ -494,7 +494,10 @@ export function createAbrStrokeSampler(
             inputValue(shape.roundnessControl, shape.roundnessFade, shape.roundnessMinimum) *
               (1 - (random() * shape.roundnessJitter) / 100)
           );
-        if (!sampledShape && shape.sizeControl === 3) roundness *= shape.tiltScale / 100;
+        // Matches the traced stretch in `sampledTipRaster`: an upright pen leaves the tip unchanged.
+        if (!sampledShape && shape.sizeControl === 3 && !v.tool.pressureOverridesSize) {
+          roundness *= 1 + (shape.tiltScale / 100) * tiltMagnitude;
+        }
         if (shape.brushProjection && !sampledPrimary) {
           roundness *= Math.max(0.05, 1 - Math.hypot(tx, ty) / 1.2);
           angle += Math.atan2(ty, tx) + (rotation * Math.PI) / 180;

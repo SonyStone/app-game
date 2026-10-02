@@ -1,6 +1,6 @@
 import { d, tgpu } from 'typegpu';
 import { describe, expect, it } from 'vitest';
-import { brushNoise, dualCoverage, textureCoverage, textureTone } from './effects';
+import { brushNoise, dualCoverage, grain, grainReference, textureCoverage, textureTone } from './effects';
 import { accumulatePaintbrushMaskByte } from './maskAccumulation';
 import { paintbrushMaskKernel } from './maskAccumulationGpu';
 
@@ -22,6 +22,26 @@ describe('ABR shader compilation', () => {
     expect(wgsl).toContain('257');
     expect(wgsl).toContain('>>');
     expect(wgsl).not.toContain('f32');
+  });
+  it('resolves brush grain as an integer hash without trigonometry', () => {
+    const noise = tgpu.fn([d.f32, d.f32, d.f32], d.f32)((x, y, seed) => {
+      'use gpu';
+      return grain(x, y, seed);
+    });
+    const wgsl = tgpu.resolve([noise]);
+    expect(wgsl).not.toContain('sin(');
+    expect(wgsl).toContain('2221713035u');
+  });
+  it('keeps brush grain uniform far from the document origin', () => {
+    const near = Array.from({ length: 4096 }, (_, i) => grainReference(i % 64, Math.floor(i / 64), 13.75));
+    const far = Array.from({ length: 4096 }, (_, i) => grainReference(65000 + (i % 64), -9_000_000 + Math.floor(i / 64), 13.75));
+    for (const values of [near, far]) {
+      const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+      expect(Math.min(...values)).toBeGreaterThanOrEqual(0);
+      expect(Math.max(...values)).toBeLessThan(1);
+      expect(mean).toBeCloseTo(0.5, 1);
+      expect(new Set(values).size).toBeGreaterThan(4000);
+    }
   });
   it('resolves byte Dual Brush modes with dynamic inputs', () => {
     const blend = tgpu.fn([d.f32, d.f32, d.f32], d.f32)((primary, secondary, mode) => {

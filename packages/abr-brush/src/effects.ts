@@ -226,10 +226,48 @@ export function textureTone(sample: number, invert: number, brightness: number, 
   return d.f32(value) / 255;
 }
 
-/** A deterministic integer-grid noise pattern avoids shimmering when settings change. */
+/**
+ * A deterministic integer-grid noise value in [0, 1), so the pattern does not shimmer when settings change.
+ * Integer hashing keeps it identical on every GPU and at any world position; a `sin()` hash loses
+ * precision far from the origin. `seed` keeps 16 fractional bits. Shader-only: JavaScript does not wrap
+ * the unsigned products, so CPU callers use {@link grainReference}.
+ */
 export function grain(x: number, y: number, seed: number): number {
   'use gpu';
-  return std.fract(std.sin(std.floor(x) * 12.9898 + std.floor(y) * 78.233 + seed) * 43758.5453);
+  const column = d.u32(d.i32(std.floor(x)));
+  const row = d.u32(d.i32(std.floor(y)));
+  const salt = d.u32(seed * 65536);
+  const hash = mixGrainBits(column ^ mixGrainBits(row ^ mixGrainBits(salt)));
+  return d.f32(hash >> 8) / 16777216;
+}
+
+/** Chris Wellons' lowbias32 finalizer: every input bit affects every output bit. */
+function mixGrainBits(value: number): number {
+  'use gpu';
+  let bits = d.u32(value);
+  bits = bits ^ (bits >> 16);
+  bits = bits * d.u32(0x7feb352d);
+  bits = bits ^ (bits >> 15);
+  bits = bits * d.u32(0x846ca68b);
+  return bits ^ (bits >> 16);
+}
+
+/** CPU twin of {@link grain} with 32-bit wrapping arithmetic; returns the same value for f32-exact inputs. */
+export function grainReference(x: number, y: number, seed: number): number {
+  const salt = Math.trunc(Math.fround(Math.fround(seed) * 65536)) >>> 0;
+  const hash = mixGrainBitsReference(
+    (Math.floor(x) >>> 0) ^ mixGrainBitsReference((Math.floor(y) >>> 0) ^ mixGrainBitsReference(salt))
+  );
+  return (hash >>> 8) / 16777216;
+}
+
+function mixGrainBitsReference(value: number): number {
+  let bits = value >>> 0;
+  bits = (bits ^ (bits >>> 16)) >>> 0;
+  bits = Math.imul(bits, 0x7feb352d) >>> 0;
+  bits = (bits ^ (bits >>> 15)) >>> 0;
+  bits = Math.imul(bits, 0x846ca68b) >>> 0;
+  return (bits ^ (bits >>> 16)) >>> 0;
 }
 
 /**

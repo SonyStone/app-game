@@ -75,6 +75,25 @@ describe('shared ABR stroke state', () => {
     expect(stroke.count).toBeGreaterThan(16384);
     expect(stroke.data[(stroke.count - 1) * 16]).toBeCloseTo(20000);
   });
+  it('Tilt Scale stretches untraced tips only by the pen tilt', () => {
+    const config = input();
+    config.values.useScattering = false;
+    config.values.shapeDynamics.sizeJitter = 0;
+    config.values.shapeDynamics.angleJitter = 0;
+    config.values.shapeDynamics.roundnessJitter = 0;
+    config.values.shapeDynamics.sizeControl = 3;
+    config.values.shapeDynamics.tiltScale = 200;
+    const aspect = (values: typeof config.values, tiltX: number) => {
+      const { data } = createAbrStrokeSampler({ ...config, values }, tip).add([
+        { x: 0, y: 0, pressure: 1, tiltX, tiltY: 0, rotation: 0, time: 0, pointerType: 'pen' }
+      ]);
+      return data[3]! / data[2]!;
+    };
+    const upright = aspect(config.values, 0);
+
+    expect(upright).toBeCloseTo(aspect({ ...config.values, useShapeDynamics: false }, 0));
+    expect(aspect(config.values, 45)).toBeCloseTo(upright * 2);
+  });
   it('wheel controls use tangential pressure rather than the canvas X coordinate', () => {
     const config = input();
     config.values.useScattering = false;
