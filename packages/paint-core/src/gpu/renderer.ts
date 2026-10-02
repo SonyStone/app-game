@@ -18,7 +18,7 @@ import { createStrokeData, createStrokeState } from './strokeState';
 import { createTargetViews } from './targetView';
 import { createTileMipmaps } from './tileMipmaps';
 import { createTileResidency } from './tileResidency';
-import { createMipmapEnsurer, tileCoordinates } from './tileTextures';
+import { createMipmapEnsurer, tileCoordinates, tileId } from './tileTextures';
 import { createVirtualTexture } from './virtualTexture';
 
 /** Creates one WebGPU device/cache owner with a default canvas. Additional targets share its raster resources.
@@ -185,6 +185,15 @@ async function assemblePaintRenderer(
     options
   );
 
+  function recomposite() {
+    for (const target of targets.all()) {
+      target.dropFallback();
+    }
+
+    virtual?.invalidate();
+    targets.invalidate();
+  }
+
   return {
     /** Captures transient tool paint for a planned renderer replacement, never for document autosave. */
     async snapshotTools() {
@@ -333,9 +342,30 @@ async function assemblePaintRenderer(
     cancel() {
       strokes.cancel();
     },
-    /** Invalidates cached pixels after undo, redo or import. */
+    /** Drops every cached pixel after an import or a failed stroke; committed tiles reload on demand. */
     reset() {
       strokes.reset();
+    },
+    /** Reloads only `changes` after undo, redo or a selection edit, and recomposites for layer changes.
+     * Resident tiles of other layers stay cached; tiles of layers missing from `layers` return to the spare pool.
+     * Display-cache entries and overview pages check tile versions themselves. Call only between strokes.
+     */
+    restore(changes: readonly TileChange[], layers: readonly Layer[]) {
+      if (stroke.current) {
+        throw new Error('Finish or cancel the stroke before restoring tiles.');
+      }
+
+      const present = new Set(layers.map((layer) => layer.id));
+      const changed = new Set(changes.map((change) => tileId(change.layerId, change.key)));
+      // Tile keys never contain '/', so the last separator ends the layer id even if the id contains one.
+      const stale = (id: string) => changed.has(id) || !present.has(id.slice(0, id.lastIndexOf('/')));
+      residency.releaseWhere(stale);
+      displayCache.removeWhere(stale);
+      for (const change of changes) {
+        targets.mark(change.key);
+      }
+
+      recomposite();
     },
     /** Rebuilds the viewport without evicting tile resources. Also permits comparison with a full redraw. */
     invalidateView() {
@@ -344,14 +374,7 @@ async function assemblePaintRenderer(
     /** Layer order, visibility, opacity or blend changed, or a layer was added or removed. Recomposites every
      * target and recomputes virtual-texture coverage; committed tile caches stay resident.
      */
-    recomposite() {
-      for (const target of targets.all()) {
-        target.dropFallback();
-      }
-
-      virtual?.invalidate();
-      targets.invalidate();
-    },
+    recomposite,
     /** Returns a deleted layer's resident tiles to the spare pool and drops its display textures.
      * Call only between strokes; undo that restores the layer re-reads its committed tiles.
      */

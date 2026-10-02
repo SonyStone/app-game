@@ -542,20 +542,28 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'cancel':
             cancel();
             break;
-          case 'undo':
+          case 'undo': {
             cancel();
-            document.undo();
-            renderer?.reset();
-            await renderer?.prepareOverview(document.layers);
+            const restored = document.undo();
+            if (restored) {
+              renderer?.restore(restored, document.layers);
+              await renderer?.prepareOverview(document.layers);
+            }
+
             changed();
             break;
-          case 'redo':
+          }
+          case 'redo': {
             cancel();
-            document.redo();
-            renderer?.reset();
-            await renderer?.prepareOverview(document.layers);
+            const restored = document.redo();
+            if (restored) {
+              renderer?.restore(restored, document.layers);
+              await renderer?.prepareOverview(document.layers);
+            }
+
             changed();
             break;
+          }
           case 'layer': {
             await end();
             const before = [...document.layers];
@@ -623,7 +631,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                   : command.action === 'move'
                     ? translateSelection(selected.points, command.offset ?? { x: 0, y: 0 })
                     : selected.points;
-              renderer.reset();
+              renderer.restore(changes, document.layers);
               // Mark the committed edit dirty even if preparing derived GPU pages fails.
               changed();
               await renderer.prepareOverview(document.layers);

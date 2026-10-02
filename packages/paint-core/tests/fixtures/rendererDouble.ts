@@ -18,6 +18,7 @@ export function createRendererDouble<Overrides extends Partial<Record<keyof Pain
     finish: vi.fn(async (): Promise<TileChange[]> => []),
     cancel: vi.fn(),
     reset: vi.fn(),
+    restore: vi.fn(),
     render: vi.fn(async (..._args: unknown[]) => {}),
     submitted: vi.fn(async () => {}),
     invalidateView: vi.fn(),

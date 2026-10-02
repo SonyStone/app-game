@@ -236,23 +236,29 @@ export function createDocument(options: { paged?: boolean } = {}) {
       }
       record({ before, after: info(), activeBefore, activeAfter: active, tiles, bytes: tileBytes(tiles) });
     },
-    /** Restores exact snapshots, avoiding nondeterministic GPU replay during undo. */
-    undo() {
+    /** Restores exact snapshots, avoiding nondeterministic GPU replay during undo.
+     * Returns the replaced tiles so pixel caches can reload only those, or undefined when nothing was undone.
+     */
+    undo(): readonly TileChange[] | undefined {
       const entry = undo.pop();
       if (entry) {
         apply(entry, 'before');
         redo.push(entry);
         revision++;
       }
+
+      return entry?.tiles;
     },
-    /** Reapplies the same snapshots that were originally committed. */
-    redo() {
+    /** Reapplies the same snapshots that were originally committed; returns them like {@link undo}. */
+    redo(): readonly TileChange[] | undefined {
       const entry = redo.pop();
       if (entry) {
         apply(entry, 'after');
         undo.push(entry);
         revision++;
       }
+
+      return entry?.tiles;
     },
     /** Replaces a document after validation, clearing its session-only undo history. */
     replace(next: Layer[], selected: string) {

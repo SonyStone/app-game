@@ -37,10 +37,13 @@ it('undoes and redoes committed strokes through the runtime, and a new stroke di
   };
   const history = async (command: 'undo' | 'redo') => {
     const resets = renderer.reset.mock.calls.length;
+    const restores = renderer.restore.mock.calls.length;
     send({ type: command });
     const state = await next((event) => event.type === 'state');
-    // Undo and redo drop GPU tiles of the changed state and rebuild the overview from the restored layers.
-    expect(renderer.reset.mock.calls.length).toBe(resets + 1);
+    // Undo and redo reload only the restored tiles; other GPU caches stay resident.
+    expect(renderer.reset.mock.calls.length).toBe(resets);
+    expect(renderer.restore.mock.calls.length).toBe(restores + 1);
+    expect(renderer.restore.mock.calls.at(-1)![0]).toEqual([expect.objectContaining({ layerId: 'layer-1', key: '0,0' })]);
     return (state as Extract<PaintEvent, { type: 'state' }>).document;
   };
 
