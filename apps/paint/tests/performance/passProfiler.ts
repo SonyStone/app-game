@@ -13,8 +13,11 @@ export function installPassProfiler() {
   const pending = new WeakMap<object, Recorded[]>();
   let warning: string | undefined;
   /** Query sets ready for reuse, and how many exist. */
-  const free: GPUQuerySet[] = [];
-  let created = 0;
+  const pools = new WeakMap<GPUDevice, { free: GPUQuerySet[]; created: number }>();
+  /** First and last timestamp of the measured period, and submissions in it; see `report().timeline`. */
+  let first = Infinity,
+    last = -Infinity,
+    submissions = 0;
 
   const requestDevice = GPUAdapter.prototype.requestDevice;
   GPUAdapter.prototype.requestDevice = function (descriptor?: GPUDeviceDescriptor) {
@@ -81,6 +84,8 @@ export function installPassProfiler() {
   GPUQueue.prototype.submit = function (buffers: Iterable<GPUCommandBuffer>) {
     const list = [...buffers];
     submit.call(this, list);
+    submissions++;
+    count(`submit ${caller()}`, transfers, (entry) => entry.count++);
     const recorded = list.flatMap((buffer) => pending.get(buffer) ?? []);
     if (recorded.length) {
       resolve(this, recorded);
@@ -117,8 +122,19 @@ export function installPassProfiler() {
   return {
     /** Passes and GPU milliseconds per call site, and transfer counts, since installation or the last reset. */
     report() {
+      const busy = [...sites.values()].reduce((sum, site) => sum + site.gpuNs, 0);
       return {
         warning,
+        /**
+         * GPU span from the first to the last timed pass, the time inside timed passes, and submissions. A span close
+         * to the stroke's time with little time in passes means work outside passes (copies) or GPU bubbles between
+         * submissions; a short span means the GPU waited for the CPU.
+         */
+        timeline: {
+          spanMs: Number.isFinite(first) ? Math.round((last - first) / 1e4) / 100 : 0,
+          passMs: Math.round(busy / 1e4) / 100,
+          submissions
+        },
         passes: Object.fromEntries(
           [...sites]
             .sort((a, b) => b[1].gpuNs - a[1].gpuNs)
@@ -130,6 +146,9 @@ export function installPassProfiler() {
     reset() {
       sites.clear();
       transfers.clear();
+      first = Infinity;
+      last = -Infinity;
+      submissions = 0;
     },
     /** Waits for every submitted query to be read back. */
     settled: () => Promise.all([...reading])
@@ -146,20 +165,27 @@ export function installPassProfiler() {
       pending.set(encoder, list);
     }
 
-    const last = list.at(-1);
-    let set = last && last.index + 2 < querySetSize ? last.set : undefined;
+    const previous = list.at(-1);
+    let set = previous && previous.index + 2 < querySetSize ? previous.set : undefined;
     if (!set) {
+      // A restarted engine gets a new device; query sets belong to the device that made them.
+      let pool = pools.get(device);
+      if (!pool) {
+        pool = { free: [], created: 0 };
+        pools.set(device, pool);
+      }
+
       set =
-        free.pop() ??
-        (created < querySets
-          ? (created++, device.createQuerySet({ type: 'timestamp', count: querySetSize }))
+        pool.free.pop() ??
+        (pool.created < querySets
+          ? (pool.created++, device.createQuerySet({ type: 'timestamp', count: querySetSize }))
           : undefined);
       if (!set) {
         return undefined;
       }
     }
 
-    const index = last && set === last.set ? last.index + 2 : 0;
+    const index = previous && set === previous.set ? previous.index + 2 : 0;
     const entry = { set, index, site: caller(), device };
     list.push(entry);
     return entry;
@@ -193,6 +219,11 @@ export function installPassProfiler() {
           const times = new BigUint64Array(readable.getMappedRange());
           for (const entry of entries) {
             const duration = Number(times[entry.index + 1]! - times[entry.index]!);
+            if (duration > 0 && duration < 1e9) {
+              first = Math.min(first, Number(times[entry.index]!));
+              last = Math.max(last, Number(times[entry.index + 1]!));
+            }
+
             count(entry.site, sites, (site) => {
               site.passes++;
               // Unwritten or reordered timestamps would be negative or absurd; count the pass without time.
@@ -204,7 +235,7 @@ export function installPassProfiler() {
         .finally(() => {
           readable.destroy();
           resolved.destroy();
-          free.push(set);
+          pools.get(device)?.free.push(set);
           reading.delete(read);
         });
       reading.add(read);
