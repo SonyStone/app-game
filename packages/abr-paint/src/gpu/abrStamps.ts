@@ -732,41 +732,59 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
     preparePattern(tile, commands, tx, ty);
   }
 
-  /** Reuses each scratch tile's pattern texture. Writes follow earlier readers in
-   * the same encoder; coordinate uploads remain immutable until submission.
+  /**
+   * Makes the scratch tile's texture pattern cover tile (`tx`, `ty`). A shared scratch tile serves every tile a dab
+   * touches, so it keeps the patterns of the last `patternRegions` tiles and switches between them without
+   * re-rasterizing; the least recently used region is re-recorded for a new tile. Writes follow earlier readers in the
+   * same encoder; coordinate uploads remain immutable until submission.
    */
   function preparePattern(tile: AbrTile, commands: ReturnType<typeof commandBatch>, tx: number, ty: number) {
-    const old = tile.pattern;
     const pattern = sources.pattern;
     const scale = settings!.values.texture.scale / 100;
-    if (old && old.source === pattern?.key && old.tx === tx && old.ty === ty && old.scale === scale) {
+    const matches = (entry: NonNullable<AbrTile['pattern']>) =>
+      entry.source === pattern?.key && entry.tx === tx && entry.ty === ty && entry.scale === scale;
+    if (tile.pattern && matches(tile.pattern)) {
       return;
     }
 
-    if (!old && !pattern) {
+    if (!pattern) {
+      releasePatterns(tile, commands);
       return;
     }
 
-    if (pattern) {
-      const region = old?.region ?? pattern.gpu.createRegion(256, 256);
-      const batch = pattern.gpu.record(commands.encoder(), region, scale,
-        { x: tx * 256, y: ty * 256, width: 256, height: 256 });
-      commands.afterSubmit(() => batch.destroy());
-      tile.pattern = { region, source: pattern.key, tx, ty, scale };
-      if (!old) {
-        bindings.delete(tile);
-      }
-    } else {
-      tile.pattern = undefined;
-      if (old) {
-        pendingPatternBytes += old.region.bytes;
-        commands.afterSubmit(() => {
-          old.region.destroy();
-          pendingPatternBytes -= old.region.bytes;
-        });
-      }
-      bindings.delete(tile);
+    const index = tile.patterns.findIndex(matches);
+    if (index >= 0) {
+      tile.pattern = tile.patterns.splice(index, 1)[0]!;
+      tile.patterns.push(tile.pattern);
+      return;
     }
+
+    const reused = tile.patterns.length >= patternRegions ? tile.patterns.shift() : undefined;
+    const region = reused?.region ?? pattern.gpu.createRegion(256, 256);
+    const batch = pattern.gpu.record(commands.encoder(), region, scale, { x: tx * 256, y: ty * 256, width: 256, height: 256 });
+    commands.afterSubmit(() => batch.destroy());
+    tile.pattern = { region, source: pattern.key, tx, ty, scale };
+    tile.patterns.push(tile.pattern);
+  }
+
+  /** Destroys a scratch tile's pattern regions once the commands reading them have been submitted. */
+  function releasePatterns(tile: AbrTile, commands: ReturnType<typeof commandBatch>) {
+    const released = tile.patterns;
+    if (!released.length) {
+      return;
+    }
+
+    tile.patterns = [];
+    tile.pattern = undefined;
+    for (const { region } of released) {
+      pendingPatternBytes += region.bytes;
+      commands.afterSubmit(() => {
+        region.destroy();
+        pendingPatternBytes -= region.bytes;
+      });
+    }
+
+    bindings.delete(tile);
   }
 
   function pickupBinding(tile: AbrTile, pickup: AbrPickup | undefined, centerX = 0, centerY = 0) {
@@ -814,29 +832,52 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
   /** Bindings follow the scratch tile, not its world coordinate. Weak keys let
    * resized pickup textures and retired tiles be reclaimed; prepare resets preset resources.
    */
+  /** The tile's bindings, with the groups that read its current pattern; switching patterns reuses their groups. */
   function bindingsFor(tile: AbrTile) {
     let value = bindings.get(tile);
     if (!value) {
       value = createBindings(tile);
       bindings.set(tile, value);
     }
+
+    const pattern = tile.pattern?.region.texture ?? tip!;
+    if (value.pattern !== pattern) {
+      let groups = value.patternGroups.get(pattern);
+      if (!groups) {
+        groups = createPatternGroups(tile, pattern);
+        value.patternGroups.set(pattern, groups);
+      }
+
+      Object.assign(value, groups, { pattern });
+    }
+
     return value;
   }
 
+  /** Bindings of one tile. The cached origin and color describe the tile's params buffer, whatever its pattern. */
   function createBindings(tile: AbrTile) {
     if (!tip || !dual) {
       throw new Error('Prepare an ABR preset before drawing.');
     }
 
     const pattern = tile.pattern?.region.texture ?? tip;
+    const groups = createPatternGroups(tile, pattern);
     return {
       pattern,
-      primary: root.createBindGroup(stampLayout, { params: tile.params, tip, pattern, sampler: pipelines.sampler }),
-      secondary: root.createBindGroup(stampLayout, { params: tile.params, tip: dual, pattern, sampler: pipelines.sampler }),
-      composites: new WeakMap<TgpuTexture, ReturnType<typeof root.createBindGroup<typeof compositeLayout.entries>>>(),
+      ...groups,
+      patternGroups: new Map([[pattern, groups]]),
       color: { x: 0, y: 0, z: 0 },
       originX: Number.NaN,
       originY: Number.NaN
+    };
+  }
+
+  /** Bind groups that read `pattern`: stamp groups for both tips and the per-image composite groups. */
+  function createPatternGroups(tile: AbrTile, pattern: CoverageTexture | PatternRegion['region']['texture']) {
+    return {
+      primary: root.createBindGroup(stampLayout, { params: tile.params, tip: tip!, pattern, sampler: pipelines.sampler }),
+      secondary: root.createBindGroup(stampLayout, { params: tile.params, tip: dual!, pattern, sampler: pipelines.sampler }),
+      composites: new WeakMap<TgpuTexture, ReturnType<typeof root.createBindGroup<typeof compositeLayout.entries>>>()
     };
   }
 }
@@ -884,6 +925,18 @@ function createDirectStamp(root: TgpuRoot) {
 /** Extra ABR scratch survives eviction and disposable preview copies along with the ordinary mask. */
 export type AbrTile = ReturnType<typeof createAbrTile>;
 
+/** A texture pattern rasterized for one tile's world coordinates. */
+type PatternRegion = {
+  region: ReturnType<ReturnType<typeof createPatternRasterGpu>['rasterize']>;
+  source: symbol;
+  tx: number;
+  ty: number;
+  scale: number;
+};
+
+/** Pattern regions a shared scratch tile keeps: a dab rarely spans more than a 2×2 block of tiles. */
+const patternRegions = 4;
+
 function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: number) {
   const paint = texture(root),
     dualMask = texture(root);
@@ -897,9 +950,12 @@ function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: n
     capacity,
     coverage,
     /** Additional ABR textures and instance data, excluding borrowed base/mask and small uniforms. */
-    bytes: (): number => 256 * 256 * 4 * 2 + capacity * 128 + (tile.maskBatch?.bytes ?? 0) + (tile.pattern?.region.bytes ?? 0),
-    pattern: undefined as { region: ReturnType<ReturnType<typeof createPatternRasterGpu>['rasterize']>;
-      source: symbol; tx: number; ty: number; scale: number } | undefined,
+    bytes: (): number => 256 * 256 * 4 * 2 + capacity * 128 + (tile.maskBatch?.bytes ?? 0) +
+      tile.patterns.reduce((sum, entry) => sum + entry.region.bytes, 0),
+    /** The pattern region of the tile being drawn; one of `patterns`. */
+    pattern: undefined as PatternRegion | undefined,
+    /** Prepared pattern regions, least recently used first. */
+    patterns: [] as PatternRegion[],
     maskBatch: undefined as ReturnType<ReturnType<typeof createMaskRasterGpu>['createBatch']> | undefined,
     paint,
     dualMask,
@@ -915,7 +971,8 @@ function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: n
     mask,
     destroy() {
       tile.maskBatch?.destroy();
-      tile.pattern?.region.destroy();
+      for (const { region } of tile.patterns) region.destroy();
+      tile.patterns = [];
       tile.pattern = undefined;
       paint.destroy();
       dualMask.destroy();
