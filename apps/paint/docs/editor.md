@@ -19,7 +19,7 @@ The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhos
 - Camera pan, zoom, rotate and mirroring. The Puck is invoked by holding Space, pressing V, or the right mouse button.
 - Autosave of completed actions to IndexedDB, restore after reload, `.paint` import/export.
 - Drawing menu → Developer → Canvas wireframe shows source tiles, selected overview pages and their triangles. Green pages are resident, yellow use a coarse fallback, pink are loading. Statistics include LOD, draw calls, RAM/GPU caches and tile reads/writes. The overlay follows pan/zoom/rotate/mirror and the current stroke, and does not appear in PNG or the project file.
-- PNG exports the current canvas view with the background. It is not an export of the whole infinite document.
+- PNG exports the current canvas view with the background, without the lasso outline. It is not an export of the whole infinite document. The image is read back from the composed frame on the GPU, because a WebGPU canvas cannot be read once its frame has been presented; the canvas eyedropper reads its pixel the same way, so it picks the displayed color of all layers over the paper.
 - Losing the GPU device pauses drawing. The recovery button creates a new device from versioned tiles of completed strokes in RAM/IndexedDB.
 
 ## Controls
@@ -38,8 +38,10 @@ The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhos
 | Deselect                              | Escape or Ctrl/Cmd + D                                    |
 | Delete selected pixels                | Delete / Backspace while Lasso is selected                |
 | Brush size                            | [ / ]                                                     |
+| Pick color from the canvas            | Alt/Option-click with a brush, or the canvas eyedropper in Color, then tap |
 | Swap / reset colors                   | X / D                                                     |
-| Undo / redo                           | Ctrl or Cmd + Z / Shift + Z                               |
+| Undo / redo                           | Ctrl or Cmd + Z / Shift + Z, or Ctrl + Y                  |
+| Zoom in / out / 100%                  | Ctrl or Cmd + = / - / 0                                   |
 | Save file                             | Ctrl or Cmd + S                                           |
 | Cancel current stroke                 | Escape                                                    |
 

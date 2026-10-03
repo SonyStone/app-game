@@ -17,6 +17,10 @@
     font-size: 11px;
   }
 
+  span {
+    margin-right: auto;
+  }
+
   button {
     width: 36px;
     height: 36px;
@@ -24,6 +28,18 @@
     place-items: center;
     border-radius: 50%;
   }
+}
+
+.layerName {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  margin-bottom: 8px;
+  padding: 0 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
 }
 
 .layerControls {

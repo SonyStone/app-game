@@ -31,6 +31,8 @@ export type PaintCommand =
   | { type: 'symmetry'; settings: PaintSymmetry }
   | { type: 'history-source'; id: number }
   | { type: 'brush-command'; requestId: string; brush: Brush; command: unknown }
+  /** Reads the presented color, all layers and the paper included, at `point` in CSS pixels of the primary canvas. */
+  | { type: 'pick-color'; requestId: string; point: Point }
   | { type: 'live-tail'; enabled: boolean }
   | { type: 'adaptive-quality'; enabled: boolean }
   | { type: 'selection-view'; points: Point[]; animate: boolean }
@@ -131,6 +133,8 @@ export type PaintEvent =
     }
   | { type: 'ready' }
   | { type: 'brush-command'; requestId: string; result: Result<void, string> }
+  /** The `#rrggbb` color at a `pick-color` point. */
+  | { type: 'picked-color'; requestId: string; result: Result<string, string> }
   | { type: 'checkpointed'; tools?: RendererToolState; historySource?: HistorySource }
   | { type: 'selection'; points: Point[]; hasClipboard: boolean }
   | { type: 'disposed' }

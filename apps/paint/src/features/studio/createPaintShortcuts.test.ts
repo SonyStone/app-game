@@ -22,6 +22,8 @@ function mount(panelOpen: () => boolean) {
     swapColors: vi.fn(),
     resetColors: vi.fn(),
     scaleBrush: vi.fn(),
+    zoomBy: vi.fn(),
+    resetZoom: vi.fn(),
     cancel: vi.fn()
   };
   createRoot((disposeRoot) => {
@@ -80,4 +82,20 @@ it('matches letters and brackets by physical key on non-Latin layouts, and by th
   press('e', { code: 'KeyD' });
   expect(actions.chooseTool).toHaveBeenLastCalledWith('eraser');
   expect(actions.resetColors).not.toHaveBeenCalled();
+});
+
+it('zooms the canvas instead of the page and redoes with Ctrl+Y', () => {
+  const actions = mount(() => false);
+  const zoomIn = new KeyboardEvent('keydown', { key: '=', ctrlKey: true, cancelable: true });
+  window.dispatchEvent(zoomIn);
+  press('-', { metaKey: true });
+  press('0', { ctrlKey: true });
+  press('y', { ctrlKey: true });
+  expect(zoomIn.defaultPrevented).toBe(true);
+  expect(actions.zoomBy.mock.calls).toEqual([[1.25], [0.8]]);
+  expect(actions.resetZoom).toHaveBeenCalledOnce();
+  expect(actions.redo).toHaveBeenCalledOnce();
+
+  press('0');
+  expect(actions.resetZoom).toHaveBeenCalledOnce();
 });

@@ -215,6 +215,31 @@ export function createDocument(options: { paged?: boolean } = {}) {
           if (layer) Object.assign(layer, action.patch);
           break;
         }
+        case 'duplicate': {
+          const index = layers.findIndex((l) => l.id === action.id);
+          if (index < 0) return;
+          if (layers.length >= 128) throw new Error('A drawing can contain at most 128 layers.');
+          const source = layers[index]!;
+          const tileCount = layers.reduce((n, layer) => n + layer.tiles.size, 0) + source.tiles.size;
+          const pixelBytes = layers.reduce(
+            (n, layer) => n + [...layer.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0),
+            0
+          );
+          const sourceBytes = [...source.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0);
+          if ((!options.paged && pixelBytes + sourceBytes > MAX_DOCUMENT_BYTES) || tileCount > MAX_DOCUMENT_TILES)
+            throw new Error('The drawing reached its storage budget. The layer was not duplicated.');
+          // Tile versions are immutable, so the copy shares them until either layer is painted.
+          const layer: Layer = {
+            ...source,
+            id: crypto.randomUUID(),
+            name: `${source.name} copy`,
+            tiles: new Map(source.tiles)
+          };
+          for (const [key, after] of layer.tiles) tiles.push({ layerId: layer.id, key, before: undefined, after });
+          layers.splice(index + 1, 0, layer);
+          active = layer.id;
+          break;
+        }
         case 'move': {
           const index = layers.findIndex((l) => l.id === action.id);
           const next = index + action.direction;
@@ -275,7 +300,8 @@ export function createDocument(options: { paged?: boolean } = {}) {
 
 /** Layer commands shared by UI and worker. Layer order runs from bottom to top. */
 export type LayerAction =
-  | { type: 'select' | 'delete'; id: string }
+  /** `duplicate` inserts a copy above the layer, with the same pixels and properties, and selects it. */
+  | { type: 'select' | 'delete' | 'duplicate'; id: string }
   | { type: 'add' }
   | { type: 'move'; id: string; direction: -1 | 1 }
   | { type: 'update'; id: string; patch: Partial<Pick<LayerInfo, 'name' | 'visible' | 'opacity' | 'blend'>> };

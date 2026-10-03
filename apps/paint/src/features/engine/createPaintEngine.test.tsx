@@ -268,6 +268,23 @@ it('keeps a stroke and a switch in progress when autosave fails in the backgroun
   expect(engine.switching()).toBe(false);
 });
 
+it('reads a displayed color through a correlated request', async () => {
+  const { engine } = mount();
+  const transport = transports.opened[0]!;
+  reply(transport, { type: 'ready' });
+  const picking = engine.pickColor({ x: 12, y: 34 });
+  const request = transport.post.mock.calls
+    .map(([command]) => command)
+    .find((command) => command.type === 'pick-color');
+  expect(request).toMatchObject({ type: 'pick-color', point: { x: 12, y: 34 } });
+  reply(transport, {
+    type: 'picked-color',
+    requestId: request!.type === 'pick-color' ? request!.requestId : '',
+    result: { ok: true, value: '#102030' }
+  });
+  expect((await picking)._unsafeUnwrap()).toBe('#102030');
+});
+
 it('uploads a resource set again when its own upload evicts a member that was already resident', async () => {
   const { engine } = mount();
   const transport = transports.opened[0]!;
@@ -476,6 +493,8 @@ function assemble() {
     swapColors: tools.swapColors,
     resetColors: tools.resetColors,
     scaleBrush: tools.scaleSize,
+    zoomBy: () => {},
+    resetZoom: () => {},
     cancel: () => {}
   });
   return { engine, tools, symmetry, presets, developer, error, onSelection, clearError: () => setError(undefined) };

@@ -3,7 +3,7 @@ import { For } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './LayersPanel.module.css';
 
-/** Edits layer order and compositing properties through undoable document commands. */
+/** Edits layer order, names and compositing properties, and duplicates layers, through undoable document commands. */
 export function LayersPanel(props: {
   /** Document state reported by the engine; each report clones every layer record. */
   state: DocumentState;
@@ -12,15 +12,50 @@ export function LayersPanel(props: {
   onAction: (action: LayerAction) => void;
 }) {
   const selected = () => props.state.layers.find((item) => item.id === props.state.activeId)!;
+  /** Position of the selected layer, bottom first, for disabling moves past either end. */
+  const selectedIndex = () => props.state.layers.findIndex((item) => item.id === props.state.activeId);
 
   return (
     <section class="paint-layers">
       <div class={styles.sectionHeading}>
-        <span>{props.state.layers.length} layers</span>
+        <span>
+          {props.state.layers.length} {props.state.layers.length === 1 ? 'layer' : 'layers'}
+        </span>
+        <button
+          aria-label="Duplicate layer"
+          title="Duplicate selected layer"
+          disabled={!props.ready}
+          onClick={() => props.onAction({ type: 'duplicate', id: props.state.activeId })}
+        >
+          <SketchIcon name="copy" size={18} />
+        </button>
         <button aria-label="Add layer" disabled={!props.ready} onClick={() => props.onAction({ type: 'add' })}>
           <SketchIcon name="plus" size={18} />
         </button>
       </div>
+      <input
+        class={styles.layerName}
+        aria-label="Layer name"
+        maxlength={64}
+        value={selected().name}
+        onChange={(e) => {
+          const name = e.currentTarget.value.trim();
+          if (!name) {
+            // An empty name would leave the layer unlabelled in the list.
+            e.currentTarget.value = selected().name;
+            return;
+          }
+
+          if (name !== selected().name) {
+            props.onAction({ type: 'update', id: props.state.activeId, patch: { name } });
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.currentTarget.blur();
+          }
+        }}
+      />
       <div class={styles.layerControls}>
         <select
           aria-label="Layer blend mode"
@@ -99,7 +134,7 @@ export function LayersPanel(props: {
         <button
           aria-label="Move layer up"
           title="Move layer up"
-          disabled={!props.ready}
+          disabled={!props.ready || selectedIndex() === props.state.layers.length - 1}
           onClick={() => props.onAction({ type: 'move', id: props.state.activeId, direction: 1 })}
         >
           <SketchIcon name="up" size={18} />
@@ -107,7 +142,7 @@ export function LayersPanel(props: {
         <button
           aria-label="Move layer down"
           title="Move layer down"
-          disabled={!props.ready}
+          disabled={!props.ready || selectedIndex() === 0}
           onClick={() => props.onAction({ type: 'move', id: props.state.activeId, direction: -1 })}
         >
           <SketchIcon name="down" size={18} />

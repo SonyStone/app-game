@@ -53,6 +53,7 @@ const paths = {
   lock: 'M6 10h12v11H6Zm2 0V6a4 4 0 0 1 8 0v4M12 14v3',
   unlock: 'M6 10h12v11H6Zm2 0V6a4 4 0 0 1 8 0M12 14v3',
   trash: 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7',
+  copy: 'M8 8h12v12H8ZM4 16V4h12',
   up: 'm6 14 6-6 6 6',
   down: 'm6 10 6 6 6-6',
   book: 'M4 3h15v18H4ZM8 3v18M2 7h4M2 12h4M2 17h4M12 7h4'

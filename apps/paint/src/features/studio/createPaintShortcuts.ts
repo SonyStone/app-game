@@ -7,8 +7,9 @@ import type { PaintTool } from '../brush';
  * Editor keyboard shortcuts on `window`. Escape closes an open panel, even from its own controls, and then does nothing
  * else; only an Escape with no panel open cancels work in progress. Shortcuts, including that cancel, are ignored in
  * open dialogs and text or form fields. Single-key tool and brush shortcuts ignore presses with Ctrl, Cmd or Alt and
- * IME composition. `event.code` also matches Z on non-Latin
- * layouts. Must be created within a Solid owner, which removes the listener on disposal.
+ * IME composition. Letters and brackets typed on non-Latin layouts match by physical key. Ctrl or Cmd with `=`/`+`,
+ * `-` and `0` zoom the canvas instead of the page. Must be created within a Solid owner, which removes the listener on
+ * disposal.
  */
 export function createPaintShortcuts(actions: {
   /** Closes the open side panel, if any; returns whether one was open. */
@@ -24,6 +25,9 @@ export function createPaintShortcuts(actions: {
   swapColors: () => void;
   resetColors: () => void;
   scaleBrush: (factor: number) => void;
+  /** Zooms the canvas around the viewport center by `factor`. */
+  zoomBy: (factor: number) => void;
+  resetZoom: () => void;
   /** Cancels the stroke, Mixer Brush pick, puck and outline in progress. */
   cancel: () => void;
 }) {
@@ -76,7 +80,11 @@ function match(event: KeyboardEvent, lasso: boolean) {
       preventDefault: true,
       run: (actions) => (event.shiftKey ? actions.redo() : actions.undo())
     },
+    { when: modifier && !event.shiftKey && key === 'y', preventDefault: true, run: (actions) => actions.redo() },
     { when: modifier && key === 's', preventDefault: true, run: (actions) => actions.save() },
+    { when: modifier && (key === '=' || key === '+'), preventDefault: true, run: (actions) => actions.zoomBy(1.25) },
+    { when: modifier && key === '-', preventDefault: true, run: (actions) => actions.zoomBy(0.8) },
+    { when: modifier && key === '0', preventDefault: true, run: (actions) => actions.resetZoom() },
     { when: plain && key === 'b', run: (actions) => actions.chooseTool('brush') },
     { when: plain && key === 'e', run: (actions) => actions.chooseTool('eraser') },
     { when: plain && key === 'l', run: (actions) => actions.chooseTool('lasso') },

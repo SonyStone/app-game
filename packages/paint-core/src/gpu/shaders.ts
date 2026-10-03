@@ -98,8 +98,12 @@ export const presentLayout = tgpu.bindGroupLayout({ image: { texture: d.texture2
 export const presentFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
   'use gpu';
   const color = std.textureLoad(presentLayout.$.image, d.vec2i(input.position.xy), 0);
+  // The literal is `paperColor`; keep both in step.
   return d.vec4f(std.add(color.rgb, std.mul(d.vec3f(0.98, 0.974, 0.957), 1 - color.a)), 1);
 });
+
+/** The paper shown under transparent pixels by `presentFragment`, in presented 0–1 channel values. */
+export const paperColor = [0.98, 0.974, 0.957] as const;
 
 /** Converts the float composition result to the 8-bit composed image, unchanged apart from rounding. */
 export const resolveFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {

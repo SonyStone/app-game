@@ -74,3 +74,37 @@ it('ignores an empty opacity entry instead of hiding the layer', () => {
   opacity.dispatchEvent(new Event('change', { bubbles: true }));
   expect(layer).toHaveBeenLastCalledWith({ type: 'update', id: initial.activeId, patch: { opacity: 1 } });
 });
+
+it('renames and duplicates the selected layer, and disables moves past either end', () => {
+  const drawing = createDocument();
+  drawing.changeLayer({ type: 'add' });
+  const [state, setState] = createSignal(drawing.state());
+  const layer = vi.fn();
+  const host = document.createElement('div');
+  document.body.append(host);
+  dispose = render(() => <LayersPanel state={state()} ready onAction={layer} />, host);
+  flush();
+  const button = (label: string) => host.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!;
+
+  // The added layer is selected and on top.
+  expect(button('Move layer up').disabled).toBe(true);
+  expect(button('Move layer down').disabled).toBe(false);
+  setState((previous) => ({ ...previous, activeId: previous.layers[0]!.id }));
+  flush();
+  expect(button('Move layer up').disabled).toBe(false);
+  expect(button('Move layer down').disabled).toBe(true);
+
+  const name = host.querySelector<HTMLInputElement>('[aria-label="Layer name"]')!;
+  expect(name.value).toBe('Layer 1');
+  name.value = '  Sketch ';
+  name.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(layer).toHaveBeenLastCalledWith({ type: 'update', id: state().activeId, patch: { name: 'Sketch' } });
+  layer.mockClear();
+  name.value = '   ';
+  name.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(layer).not.toHaveBeenCalled();
+  expect(name.value).toBe('Layer 1');
+
+  button('Duplicate layer').click();
+  expect(layer).toHaveBeenLastCalledWith({ type: 'duplicate', id: state().activeId });
+});

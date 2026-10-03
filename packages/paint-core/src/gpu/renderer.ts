@@ -13,6 +13,7 @@ import { createDisplayCache } from './displayCache';
 import { createFrameComposer, renderScale } from './frameComposer';
 import { createLassoOverlay } from './lassoOverlay';
 import { capturePaintBounds, clipPaintBounds, type PaintBounds } from './paintBounds';
+import { paperColor } from './shaders';
 import { createStrokeRaster } from './strokeRaster';
 import { createStrokeData, createStrokeState } from './strokeState';
 import { createTargetViews } from './targetView';
@@ -106,6 +107,54 @@ async function assemblePaintRenderer(
   const allowsTile = (key: string) => !paintBounds || !!clipPaintBounds(paintBounds, ...tileCoordinates(key));
   const device = await openDevice(options.device, resources.keep);
   const root = resources.keep(tgpu.initFromDevice({ device }));
+
+  /**
+   * Reads the presented image of `target` in backing pixels, the whole view by default, as opaque RGBA: the last
+   * composed frame over the paper, without the lasso outline. GPU readback works where reading the WebGPU canvas
+   * itself fails once its frame has been presented. Render the target first.
+   */
+  async function readPresented(
+    target: OffscreenCanvas | HTMLCanvasElement = canvas,
+    region?: { x: number; y: number; width: number; height: number }
+  ): Promise<{ width: number; height: number; data: Uint8ClampedArray<ArrayBuffer> }> {
+    const view = targets.get(target)?.view;
+    if (!view) throw new Error('Render the canvas before reading its colors.');
+    const { x, y, width, height } = region ?? { x: 0, y: 0, width: view.width, height: view.height };
+    // Rows of a texture copy are 256-byte aligned.
+    const bytesPerRow = Math.ceil((width * 4) / 256) * 256;
+    const buffer = device.createBuffer({
+      size: bytesPerRow * height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+    });
+    try {
+      const encoder = device.createCommandEncoder();
+      encoder.copyTextureToBuffer({ texture: root.unwrap(view.composed), origin: [x, y] }, { buffer, bytesPerRow }, [
+        width,
+        height
+      ]);
+      device.queue.submit([encoder.finish()]);
+      await buffer.mapAsync(GPUMapMode.READ);
+      const mapped = new Uint8Array(buffer.getMappedRange());
+      const data = new Uint8ClampedArray(width * height * 4);
+      const paper = paperColor.map((channel) => channel * 255);
+      for (let row = 0; row < height; row++) {
+        for (let column = 0; column < width; column++) {
+          const from = row * bytesPerRow + column * 4,
+            to = (row * width + column) * 4;
+          // Composed pixels are premultiplied; the presented frame adds the paper under their transparency.
+          const cover = 1 - mapped[from + 3]! / 255;
+          data[to] = mapped[from]! + paper[0]! * cover;
+          data[to + 1] = mapped[from + 1]! + paper[1]! * cover;
+          data[to + 2] = mapped[from + 2]! + paper[2]! * cover;
+          data[to + 3] = 255;
+        }
+      }
+
+      return { width, height, data };
+    } finally {
+      buffer.destroy();
+    }
+  }
   const format = navigator.gpu.getPreferredCanvasFormat();
   const primaryContext = canvas.getContext('webgpu');
   if (!primaryContext) {
@@ -315,6 +364,18 @@ async function assemblePaintRenderer(
       const offset = ((y - ty * TILE_SIZE) * TILE_SIZE + x - tx * TILE_SIZE) * 4;
       return pixels ? unpackTile(pixels).slice(offset, offset + 4) : new Uint8Array(4);
     },
+    /** Reads the presented color at `point`, in CSS pixels of a `size` view of `target`, as 8-bit RGB. See
+     * `readPresented`; this copies a single pixel.
+     */
+    async readPresentedColor(point: Point, size: ViewSize, target = canvas): Promise<[number, number, number]> {
+      const view = targets.get(target)?.view;
+      if (!view) throw new Error('Render the canvas before reading its colors.');
+      const x = Math.min(view.width - 1, Math.max(0, Math.floor((point.x / size.width) * view.width)));
+      const y = Math.min(view.height - 1, Math.max(0, Math.floor((point.y / size.height) * view.height)));
+      const { data } = await readPresented(target, { x, y, width: 1, height: 1 });
+      return [data[0]!, data[1]!, data[2]!];
+    },
+    readPresented,
     /** Paint accumulates by tile; canvas-sampling tools transport pixels in stamp order. */
     async paint(dabs: readonly Dab[]) {
       if (retouch.active) {

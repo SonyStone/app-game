@@ -667,11 +667,26 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               name: 'drawing.paint'
             });
             break;
+          case 'pick-color': {
+            const result = await attempt(async () => {
+              if (!primaryAttached || !renderer || lost) throw new Error('The drawing engine is not ready.');
+              await end();
+              await draw(true);
+              const rgb = await renderer.readPresentedColor(command.point, size);
+              return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+            });
+            post({
+              type: 'picked-color',
+              requestId: command.requestId,
+              result: result.ok ? result : { ok: false, error: result.error.message }
+            });
+            break;
+          }
           case 'png':
             if (!primaryAttached) throw new Error('Attach a primary canvas before exporting the view.');
             await end();
             await draw(true);
-            post({ type: 'download', blob: await canvasPng(canvas), name: 'drawing-view.png' });
+            post({ type: 'download', blob: await presentedPng(renderer!), name: 'drawing-view.png' });
             break;
           case 'import': {
             importing = true;
@@ -760,12 +775,14 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
   });
 }
 
-/** Exports the presented canvas without introducing an offscreen surface in main-thread mode. */
-async function canvasPng(canvas: OffscreenCanvas | HTMLCanvasElement): Promise<Blob> {
-  if ('convertToBlob' in canvas) return canvas.convertToBlob({ type: 'image/png' });
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not export the canvas.'))), 'image/png');
-  });
+/** Encodes the presented view as PNG from a GPU readback; the WebGPU canvas itself cannot be read after presenting. */
+async function presentedPng(renderer: PaintRenderer): Promise<Blob> {
+  const { width, height, data } = await renderer.readPresented();
+  const image = new OffscreenCanvas(width, height);
+  const context = image.getContext('2d');
+  if (!context) throw new Error('Could not export the canvas.');
+  context.putImageData(new ImageData(data, width, height), 0, 0);
+  return image.convertToBlob({ type: 'image/png' });
 }
 
 /** Names the failure class so a validation bug is not reported to the user as a disconnected device. */

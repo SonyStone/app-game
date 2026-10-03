@@ -1,6 +1,6 @@
 import type { BrushResource, createBrushResources } from '@app-game/abr-paint/resources';
 import type { Brush } from '@app-game/paint-core/brush';
-import type { Camera } from '@app-game/paint-core/camera';
+import type { Camera, Point } from '@app-game/paint-core/camera';
 import { createDocument } from '@app-game/paint-core/document';
 import type { CheckpointedEvent, PaintEvent, SelectionEvent, StateEvent } from '@app-game/paint-core/protocol';
 import { defaultPaintSymmetry, type PaintSymmetry } from '@app-game/paint-core/symmetry';
@@ -73,6 +73,10 @@ export function createPaintEngine(options: {
     timeoutMs: requestTimeoutMs,
     failure: (message) => brushError('upload', message)
   });
+  const colors = createEngineRequests<string>({
+    timeoutMs: requestTimeoutMs,
+    failure: (message) => engineError('failed', message)
+  });
   const commands = createEngineRequests<void>({
     timeoutMs: requestTimeoutMs,
     failure: (message) => brushError('command', message)
@@ -142,7 +146,8 @@ export function createPaintEngine(options: {
     switchMode,
     restart,
     putResources,
-    runBrushCommand
+    runBrushCommand,
+    pickColor
   };
 
   /**
@@ -153,6 +158,7 @@ export function createPaintEngine(options: {
   function connect(canvas: HTMLCanvasElement, executionMode: ExecutionMode): () => void {
     resources.disconnect();
     commands.disconnect();
+    colors.disconnect();
     resident.clear();
     drawing = false;
     options.onError(undefined);
@@ -179,7 +185,8 @@ export function createPaintEngine(options: {
     const transport = opened.value;
     connection = transport;
     expireSwitch = stall;
-    if (requestedSwitch() !== undefined) {
+    // `connect` runs in the canvas's effect callback, where a read must be explicitly untracked.
+    if (untrack(requestedSwitch) !== undefined) {
       // The replacement engine of a switch gets the same budget to become ready.
       switchTimer = setTimeout(stall, switchTimeoutMs);
     }
@@ -205,6 +212,9 @@ export function createPaintEngine(options: {
           break;
         case 'brush-command':
           commands.receive(event.requestId, event.result);
+          break;
+        case 'picked-color':
+          colors.receive(event.requestId, event.result);
           break;
         case 'checkpointed':
           retire(event);
@@ -362,6 +372,7 @@ export function createPaintEngine(options: {
 
       resources.disconnect();
       commands.disconnect();
+      colors.disconnect();
       options.onSelection(emptySelection);
       // The failed engine discarded any stroke in progress; the next pen-down must start a new one.
       drawing = false;
@@ -376,6 +387,7 @@ export function createPaintEngine(options: {
         connection = undefined;
         resources.disconnect();
         commands.disconnect();
+        colors.disconnect();
       }
 
       if (phase !== 'active') {
@@ -515,6 +527,11 @@ export function createPaintEngine(options: {
   /** Runs an engine-specific brush command, such as loading a Mixer Brush, with the given brush. Never rejects. */
   function runBrushCommand(brush: Brush, command: unknown): Promise<Result<void, PaintError>> {
     return commands.request((requestId) => post({ type: 'brush-command', requestId, brush, command }));
+  }
+
+  /** Reads the presented `#rrggbb` color at `point`, in CSS pixels of the canvas, after committing any stroke. Never rejects. */
+  function pickColor(point: Point): Promise<Result<string, PaintError>> {
+    return colors.request((requestId) => post({ type: 'pick-color', requestId, point }));
   }
 
   /** Posts to the connected engine regardless of the switch; request replies and the switch handshake use this. */

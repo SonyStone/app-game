@@ -1,9 +1,9 @@
-import { unpackTile } from './tilePixels';
 import { describe, expect, it } from 'vitest';
 import { createStrokeSampler, dabTiles, defaultBrush, TILE_SIZE, type Sample } from './brush';
 import { defaultCamera, panCamera, screenToWorld, transformAt, worldToScreen } from './camera';
 import { createDocument, TILE_BYTES } from './document';
 import { decodeDocument, encodeDocument, restoreDocument, snapshotDocument } from './storage';
+import { unpackTile } from './tilePixels';
 
 describe('stroke sampling', () => {
   it('produces identical stamps across different event/frame batch sizes', () => {
@@ -103,6 +103,26 @@ describe('document transactions', () => {
     expect(doc.active.tiles.get('0,0')).toEqual(pixels);
     doc.redo();
     expect(doc.layers).toHaveLength(1);
+  });
+  it('duplicates a layer above its source with shared pixels, and undoes the copy', () => {
+    const doc = createDocument();
+    const source = doc.active.id,
+      pixels = new Uint8Array(TILE_BYTES).fill(5);
+    doc.changeLayer({ type: 'update', id: source, patch: { name: 'Ink', blend: 'multiply', opacity: 0.4 } });
+    doc.commit([{ layerId: source, key: '0,0', before: undefined, after: pixels }]);
+    doc.changeLayer({ type: 'add' });
+    doc.changeLayer({ type: 'duplicate', id: source });
+    expect(doc.layers.map((layer) => layer.name)).toEqual(['Ink', 'Ink copy', 'Layer 2']);
+    expect(doc.active).toMatchObject({ name: 'Ink copy', blend: 'multiply', opacity: 0.4 });
+    expect(doc.active.id).not.toBe(source);
+    expect(doc.active.tiles.get('0,0')).toBe(doc.layers[0]!.tiles.get('0,0'));
+    expect(doc.state().tileCount).toBe(2);
+
+    doc.undo();
+    expect(doc.layers.map((layer) => layer.name)).toEqual(['Ink', 'Layer 2']);
+    doc.redo();
+    expect(doc.active.name).toBe('Ink copy');
+    expect(unpackTile(doc.active.tiles.get('0,0') as Uint8Array)).toEqual(pixels);
   });
   it('drops redo after branching history and preserves layer blend settings', () => {
     const doc = createDocument();

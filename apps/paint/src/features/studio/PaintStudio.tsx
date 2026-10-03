@@ -1,7 +1,7 @@
 import { blockEraserSize, isBlockEraser } from '@app-game/abr-brush/blockEraser';
 import { record } from '@app-game/abr-brush/form';
 import { NavigationPuck } from '@app-game/navigation-puck';
-import type { Point } from '@app-game/paint-core/camera';
+import { worldToScreen, type Point } from '@app-game/paint-core/camera';
 import { supportsPaintSymmetry } from '@app-game/paint-core/symmetry';
 import type { JSX } from '@solidjs/web';
 import { createSignal, Match, Show, Switch } from 'solid-js';
@@ -10,8 +10,8 @@ import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { AbrViewerDialog, createAbrPresets } from '../abr';
 import { BrushPanel, createBrushTools, createMixerBrush, MixerActions, type PaintTool } from '../brush';
 import { createPaintCamera, createViewSize } from '../camera';
-import { BrushCursor, CanvasDebug, PaintCanvas, type CanvasInput } from '../canvas';
-import { ColorPanel } from '../color';
+import { BrushCursor, CanvasDebug, firstCanvasAction, PaintCanvas, type CanvasInput } from '../canvas';
+import { ColorPanel, createCanvasColorPicker } from '../color';
 import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
 import { HistorySourceControl, LayersPanel } from '../layers';
@@ -83,6 +83,13 @@ export function PaintStudio(props: {
     canChange: canChangeBrush,
     select: tools.selectPreset
   });
+  const colorPicker = createCanvasColorPicker({
+    paints: () => paintsColor(),
+    toScreen: (point) => worldToScreen(point, camera.current(), size()),
+    pick: engine.pickColor,
+    apply: (color) => tools.updateBrush({ color }),
+    onError: setError
+  });
   const fullscreen = createFullscreenToggle(editor, setError);
 
   const { brush, tool } = tools;
@@ -114,7 +121,8 @@ export function PaintStudio(props: {
     cursor: setCursor,
     showPenCursor: developer.showPenCursor,
     rawUpdate: developer.markRawReceived,
-    canvasAction: mixer.canvasAction,
+    // The Mixer Brush loads paint with Alt/Option; other painting tools pick a color.
+    canvasAction: firstCanvasAction(mixer.canvasAction, colorPicker.canvasAction),
     puck: camera.navigation,
     selection: { ...selection, enabled: () => tool() === 'lasso' }
   };
@@ -138,8 +146,11 @@ export function PaintStudio(props: {
     swapColors: tools.swapColors,
     resetColors: tools.resetColors,
     scaleBrush: tools.scaleSize,
+    zoomBy: camera.zoomBy,
+    resetZoom: camera.resetZoom,
     cancel() {
       mixer.cancelPick();
+      colorPicker.cancel();
       camera.navigation.close();
       selection.clear();
       edit({ type: 'cancel' });
@@ -163,6 +174,7 @@ export function PaintStudio(props: {
     }
 
     mixer.cancelPick();
+    colorPicker.cancel();
     selection.clear();
     tools.chooseTool(next);
   }
@@ -179,6 +191,7 @@ export function PaintStudio(props: {
     const next = enabled ? 'worker' : 'main';
     if (engine.switchMode(next) || engine.restart(next)) {
       mixer.cancelPick();
+      colorPicker.cancel();
       setCursor(undefined);
       camera.navigation.close();
     }
@@ -211,7 +224,12 @@ export function PaintStudio(props: {
 
   return (
     <div ref={setEditor} class={styles.studio}>
-      <main ref={setStage} class={styles.stage} aria-label="Drawing workspace" data-picking={mixer.picking()}>
+      <main
+        ref={setStage}
+        class={styles.stage}
+        aria-label="Drawing workspace"
+        data-picking={mixer.picking() || colorPicker.armed()}
+      >
         <Show when={engine.session()} keyed>
           {(session) => (
             <PaintCanvas
@@ -269,6 +287,7 @@ export function PaintStudio(props: {
           onMixingChange={(mixing) => tools.updateBrush({ mixing })}
           onUseBrush={(asset) => {
             mixer.cancelPick();
+            colorPicker.cancel();
             return presets.useBrush(asset);
           }}
         />
@@ -389,7 +408,14 @@ export function PaintStudio(props: {
                   <BrushPanel brush={brush()} onChange={tools.updateBrush} />
                 </Match>
                 <Match when={id === 'color'}>
-                  <ColorPanel brush={brush()} onChange={tools.updateBrush} />
+                  <ColorPanel
+                    brush={brush()}
+                    onChange={tools.updateBrush}
+                    onPickCanvas={() => {
+                      colorPicker.arm();
+                      closePanel();
+                    }}
+                  />
                   <Show when={mixer.available()}>
                     <MixerActions
                       disabled={!ready() || engine.commandBusy()}
@@ -475,6 +501,19 @@ export function PaintStudio(props: {
       </Show>
     </div>
   );
+
+  /**
+   * The active tool paints color, so Alt/Option-click picks a color: the round brush and ABR Brush or Pencil presets.
+   * ABR erasers keep Alt for erasing to history, and the Mixer Brush for loading paint.
+   */
+  function paintsColor() {
+    if (tool() === 'brush') {
+      return true;
+    }
+
+    const abrTool = record(record(record(brush().engine?.settings).values).tool).type;
+    return tool() === 'abr-brush' && brush().engine?.id === 'abr' && (abrTool === 'PbTl' || abrTool === 'PcTl');
+  }
 
   /** The ABR brush is chosen but no preset has been applied yet. */
   function needsPreset() {

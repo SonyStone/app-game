@@ -6,7 +6,7 @@ import { createServer } from 'vite';
 
 /**
  * End-to-end smoke test of the editor UI in headless Chromium with WebGPU: panels, keyboard shortcuts, a mouse stroke
- * with undo/redo, and a switch from the worker to the main-thread engine that keeps the drawing (undo history is
+ * with undo/redo, duplicating and renaming a layer, and a switch from the worker to the main-thread engine that keeps the drawing (undo history is
  * per engine session and does not survive the switch).
  *
  *   node tests/browser/studio.browser.mjs
@@ -76,6 +76,74 @@ try {
     await redo.click();
     await waitEnabled(undo);
     assert.equal(await redo.isDisabled(), true);
+  });
+
+  await step('a drawn layer can be duplicated, renamed and the copy undone', async () => {
+    await page.getByRole('button', { name: 'Layers' }).click();
+    const panel = page.getByRole('complementary', { name: 'Layers' });
+    await panel.getByRole('button', { name: 'Duplicate layer' }).click();
+    await panel.getByText('2 layers').waitFor({ timeout: 10_000 });
+    const name = panel.getByLabel('Layer name');
+    assert.equal(await name.inputValue(), 'Layer 1 copy');
+    await name.fill('Inks');
+    await name.press('Enter');
+    await panel.getByRole('button', { name: 'Select Inks' }).waitFor({ timeout: 10_000 });
+    await waitForSaved(page);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await panel.getByText('1 layer', { exact: true }).waitFor({ timeout: 10_000 });
+    await page.keyboard.press('Escape');
+    await waitForSaved(page);
+  });
+
+  await step('Alt-click and the canvas picker take the displayed color', async () => {
+    const hex = () => page.getByLabel('Hex color').inputValue();
+    /** The picked color arrives from the engine asynchronously; polls because rAF does not run in a hidden page. */
+    const hexOtherThan = async (previous) => {
+      await page.waitForFunction(
+        (previous) => document.querySelector('input[aria-label="Hex color"]')?.value !== previous,
+        previous,
+        { polling: 100, timeout: 10_000 }
+      );
+      return hex();
+    };
+    await page.getByRole('button', { name: 'Color palette' }).click();
+    await page.getByLabel('Hex color').fill('FF0000');
+    await page.getByLabel('Hex color').press('Enter');
+    assert.equal(await hex(), 'FF0000');
+    await page.keyboard.press('Escape');
+
+    // The stroke drawn earlier runs from the workspace center towards the lower right in black.
+    const box = await page.getByRole('main', { name: 'Drawing workspace' }).boundingBox();
+    await page.keyboard.down('Alt');
+    await page.mouse.click(box.x + box.width / 2 + 60, box.y + box.height / 2 + 30);
+    await page.keyboard.up('Alt');
+    await page.getByRole('button', { name: 'Color palette' }).click();
+    const stroke = await hexOtherThan('FF0000');
+    const channels = (hex) => [0, 2, 4].map((index) => parseInt(hex.slice(index, index + 2), 16));
+    assert.ok(Math.max(...channels(stroke)) < 0x90, `expected the dark stroke color, got ${stroke}`);
+
+    await page.getByRole('button', { name: 'Pick color from canvas' }).click();
+    // Empty paper up and to the left of the stroke, clear of the toolbars along the edges.
+    await page.mouse.click(box.x + box.width / 2 - 150, box.y + box.height / 2 - 100);
+    await page.getByRole('button', { name: 'Color palette' }).click();
+    const paper = await hexOtherThan(stroke);
+    assert.ok(Math.min(...channels(paper)) > 0xe0, `expected the light paper color, got ${paper}`);
+    await page.keyboard.press('Escape');
+    await waitForSaved(page);
+  });
+
+  await step('the visible canvas exports as PNG', async () => {
+    await page.getByRole('button', { name: 'Drawing menu' }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 15_000 }),
+      page.getByRole('button', { name: /Export visible canvas/ }).click()
+    ]);
+    assert.equal(download.suggestedFilename(), 'drawing-view.png');
+    assert.equal(await page.getByRole('alert').count(), 0);
+    await page.keyboard.press('Escape');
   });
 
   await step('switching to the main-thread engine keeps the drawing', async () => {
