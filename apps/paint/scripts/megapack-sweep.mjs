@@ -23,7 +23,8 @@ import { parseArgs } from 'node:util';
  *
  * --quality LODS (for example --quality 1,2) measures appearance instead of speed: every preset draws one
  * stroke exactly, exactly with another seed and with adaptive quality at each LOD, and the strokes are compared at
- * the view's resolution (tests/performance/lodQuality.ts). It needs no tablet; run it headless.
+ * the view's resolution (tests/performance/lodQuality.ts). It needs no tablet; run it headless. --hashes adds SHA-256
+ * digests of both strokes at full resolution, to prove that an optimization changed no pixels by comparing two runs.
  *
  * Rows are appended to --output (JSON lines, default under the OS temporary directory) after every preset. Presets
  * measured in the same mode (speed or --quality) without an error are skipped, so an interrupted sweep resumes by
@@ -45,6 +46,7 @@ const { values } = parseArgs({
     timeout: { type: 'string', default: '60000' },
     paced: { type: 'boolean', default: false },
     quality: { type: 'string' },
+    hashes: { type: 'boolean', default: false },
     output: { type: 'string' }
   }
 });
@@ -93,17 +95,17 @@ try {
     let rows;
     try {
       rows = await page.evaluate(
-        async ({ index, options, lods }) => {
+        async ({ index, options, lods, hashes }) => {
           if (lods) {
             const { measureLodQuality } = await import('/tests/performance/lodQuality.ts');
-            return measureLodQuality(undefined, { presets: [index], lods });
+            return measureLodQuality(undefined, { presets: [index], lods, hashes });
           }
 
           const { measureMegapackSweep } = await import('/tests/performance/megapackSweep.ts');
           const view = { width: innerWidth, height: innerHeight, dpr: devicePixelRatio };
           return measureMegapackSweep(undefined, { ...options, presets: [index], view });
         },
-        { index, options, lods: values.quality?.split(',').map(Number) }
+        { index, options, lods: values.quality?.split(',').map(Number), hashes: values.hashes }
       );
     } catch (error) {
       // The tab crashed or the evaluation was lost; record it and continue in a fresh tab.

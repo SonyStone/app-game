@@ -36,12 +36,11 @@ export function createMixerWells(root: TgpuRoot) {
   const update = root.createRenderPipeline({
     vertex: common.fullScreenTriangle,
     fragment: updateWells,
-    targets: { reservoir: { format: 'rgba16float' }, pickup: { format: 'rgba16float' } }
-  });
-  const compose = root.createRenderPipeline({
-    vertex: common.fullScreenTriangle,
-    fragment: composePaint,
-    targets: { format: 'rgba16float' }
+    targets: {
+      reservoir: { format: 'rgba16float' },
+      pickup: { format: 'rgba16float' },
+      paint: { format: 'rgba16float' }
+    }
   });
   const load = root.createRenderPipeline({
     vertex: common.fullScreenTriangle,
@@ -234,16 +233,12 @@ export function createMixerWells(root: TgpuRoot) {
       const pass = encoder.beginRenderPass({
         colorAttachments: [
           { view: views.reservoirs[back]!, loadOp: 'clear', storeOp: 'store' },
-          { view: views.pickups[back]!, loadOp: 'clear', storeOp: 'store' }
+          { view: views.pickups[back]!, loadOp: 'clear', storeOp: 'store' },
+          { view: views.output, loadOp: 'clear', storeOp: 'store' }
         ]
       });
       update.with(pass).with(group(front)).draw(3);
       pass.end();
-      const outputPass = encoder.beginRenderPass({
-        colorAttachments: [{ view: views.output, loadOp: 'clear', storeOp: 'store' }]
-      });
-      compose.with(outputPass).with(group(back)).draw(3);
-      outputPass.end();
       if (!batch) {
         commands.flush();
       }
@@ -298,26 +293,45 @@ const Layout = tgpu.bindGroupLayout({
 });
 const updateWells = tgpu.fragmentFn({
   in: { position: d.builtin.position },
-  out: { reservoir: d.vec4f, pickup: d.vec4f }
+  out: { reservoir: d.vec4f, pickup: d.vec4f, paint: d.vec4f }
 })((input) => {
   'use gpu';
   const uv = std.div(input.position.xy, 256);
   const settings = Layout.$.params.controls;
-  const reservoir = std.textureSample(Layout.$.reservoir, Layout.$.sampler, uv);
+  const oldReservoir = std.textureSample(Layout.$.reservoir, Layout.$.sampler, uv);
   const oldPickup = std.textureSample(Layout.$.pickup, Layout.$.sampler, uv);
   const canvas = std.textureSample(Layout.$.canvas, Layout.$.sampler, uv);
   const pickup = mixerPickup(oldPickup, canvas, settings);
-  return { reservoir: mixerReservoir(reservoir, pickup, settings), pickup };
+  const reservoir = mixerReservoir(oldReservoir, pickup, settings);
+  // The wells are stored as f16, so paint is mixed from the values as stored, like a separate pass reading them.
+  const paint = mixerPaint(asStored(reservoir), asStored(pickup), settings.x, settings.y, Layout.$.params.paint.x);
+  return { reservoir, pickup, paint };
+});
+/**
+ * A color as an rgba16float attachment stores it: rounded toward zero to f16 precision, as Metal (Mac) and Adreno
+ * (Vulkan) both do. With it, the fused pass paints byte for byte like a separate pass reading the stored wells
+ * (`--quality --hashes` of `scripts/megapack-sweep.mjs` over every Mixer preset); a GPU rounding to nearest would differ
+ * by at most one level.
+ */
+const asStored = tgpu.fn(
+  [d.vec4f],
+  d.vec4f
+)((color) => {
+  'use gpu';
+  return d.vec4f(storedChannel(color.x), storedChannel(color.y), storedChannel(color.z), storedChannel(color.w));
+});
+const storedChannel = tgpu.fn(
+  [d.f32],
+  d.f32
+)((value) => {
+  'use gpu';
+  const parts = std.frexp(value);
+  // f16 keeps 11 significant bits; below its normal range the step is fixed at 2^-24.
+  if (parts.exp < -13) return std.trunc(value * 16777216) / 16777216;
+  return std.ldexp(std.trunc(parts.fract * 2048) / 2048, parts.exp);
 });
 const LoadLayout = tgpu.bindGroupLayout({ image: { texture: d.texture2d() }, sampler: { sampler: 'filtering' } });
 const loadPaint = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
   'use gpu';
   return std.textureSample(LoadLayout.$.image, LoadLayout.$.sampler, std.div(input.position.xy, 256));
-});
-const composePaint = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
-  'use gpu';
-  const uv = std.div(input.position.xy, 256);
-  const reservoir = std.textureSample(Layout.$.reservoir, Layout.$.sampler, uv);
-  const pickup = std.textureSample(Layout.$.pickup, Layout.$.sampler, uv);
-  return mixerPaint(reservoir, pickup, Layout.$.params.controls.x, Layout.$.params.controls.y, Layout.$.params.paint.x);
 });

@@ -30,6 +30,11 @@ export async function measureLodQuality(
     lods: number[];
     /** Also return both strokes at view resolution as base64 RGB bytes, for visual inspection. */
     images?: boolean;
+    /**
+     * Also return SHA-256 digests of both strokes at full resolution, so two builds can be compared byte for byte:
+     * an optimization that must not change pixels keeps every digest.
+     */
+    hashes?: boolean;
   }
 ): Promise<LodQualityRow[]> {
   const brushes = await library(fixture);
@@ -70,6 +75,9 @@ export async function measureLodQuality(
             reseeded: compare(base, reference, viewImage(reseeded.pixels, lod)),
             exactMs: exact.ms,
             adaptiveMs: adaptive.ms,
+            ...(options.hashes
+              ? { hashes: { exact: await digest(exact.pixels), adaptive: await digest(adaptive.pixels) } }
+              : {}),
             ...(options.images
               ? {
                   images: {
@@ -109,6 +117,8 @@ export type LodQualityRow = {
   adaptiveMs?: number;
   /** View-resolution RGB of both strokes, three bytes per pixel, base64. */
   images?: { width: number; exact: string; adaptive: string };
+  /** SHA-256 of both strokes' full-resolution RGBA, hex. */
+  hashes?: { exact: string; adaptive: string };
   error?: string;
 };
 
@@ -196,6 +206,12 @@ async function renderStroke(
   } finally {
     resources.dispose();
   }
+}
+
+/** SHA-256 of `pixels` as hex. */
+async function digest(pixels: Uint8Array<ArrayBuffer>) {
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', pixels));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /** Stripe colors of the retouch base; the pattern repeats every tile, so one tile serves the whole layer. */
