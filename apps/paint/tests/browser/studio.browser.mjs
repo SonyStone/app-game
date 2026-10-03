@@ -183,6 +183,64 @@ try {
     await waitForSaved(page);
   });
 
+  await step('an image placed from the menu or pasted becomes a centered layer', async () => {
+    const png = (color) =>
+      page.evaluate(async (fill) => {
+        const canvas = new OffscreenCanvas(200, 120);
+        const context = canvas.getContext('2d');
+        context.fillStyle = fill;
+        context.fillRect(0, 0, 200, 120);
+        const bytes = new Uint8Array(await (await canvas.convertToBlob()).arrayBuffer());
+        return btoa(String.fromCharCode(...bytes));
+      }, color);
+    await page.getByRole('button', { name: 'Drawing menu' }).click();
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+      name: 'swatch.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(await png('#ff0000'), 'base64')
+    });
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Layers' }).click();
+    const panel = page.getByRole('complementary', { name: 'Layers' });
+    await panel.getByText('2 layers').waitFor({ timeout: 10_000 });
+    assert.equal(await panel.getByLabel('Layer name').inputValue(), 'swatch');
+    await page.keyboard.press('Escape');
+
+    // The image covers the view center, above the earlier stroke.
+    const box = await page.getByRole('main', { name: 'Drawing workspace' }).boundingBox();
+    await page.keyboard.down('Alt');
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await page.keyboard.up('Alt');
+    await page.getByRole('button', { name: 'Color palette' }).click();
+    await page.waitForFunction(
+      () => document.querySelector('input[aria-label="Hex color"]')?.value === 'FF0000',
+      undefined,
+      {
+        polling: 100,
+        timeout: 10_000
+      }
+    );
+    await page.keyboard.press('Escape');
+
+    const blue = await png('#0000ff');
+    await page.evaluate((data) => {
+      const bytes = Uint8Array.from(atob(data), (character) => character.charCodeAt(0));
+      const clipboard = new DataTransfer();
+      clipboard.items.add(new File([bytes], 'pasted.png', { type: 'image/png' }));
+      window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: clipboard, bubbles: true, cancelable: true }));
+    }, blue);
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await panel.getByText('3 layers').waitFor({ timeout: 10_000 });
+    assert.equal(await panel.getByLabel('Layer name').inputValue(), 'pasted');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await panel.getByText('1 layer', { exact: true }).waitFor({ timeout: 10_000 });
+    await page.keyboard.press('Escape');
+    await waitForSaved(page);
+  });
+
   await step('the visible canvas exports as PNG', async () => {
     await page.getByRole('button', { name: 'Drawing menu' }).click();
     const [download] = await Promise.all([
@@ -236,7 +294,10 @@ async function step(name, check) {
 
 /** Waits until the engine is ready and has no pending changes. */
 function waitForSaved(page) {
-  return page.getByRole('status').filter({ hasText: /^Saved$/ }).waitFor({ timeout: 30_000 });
+  return page
+    .getByRole('status')
+    .filter({ hasText: /^Saved$/ })
+    .waitFor({ timeout: 30_000 });
 }
 
 /** Waits until a button reflects an engine state change. */

@@ -8,6 +8,7 @@ import { createResourceSession } from './composition/resourceSession';
 import { symmetryRenderer } from './composition/symmetryRenderer';
 import { readPaintFile, writePaintFile } from './paintFile';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
+import { imageTiles, placeImage } from './imageTiles';
 import { mergeTilePixels } from './layerMerge';
 import { captureSelection, editSelection, translateSelection, type SelectionPixels } from './selection';
 import { decodeDocument, snapshotDocument } from './storage';
@@ -711,6 +712,30 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             await draw(true);
             post({ type: 'download', blob: await presentedPng(renderer!), name: 'drawing-view.png' });
             break;
+          case 'place-image': {
+            await end();
+            if (lost || !renderer) throw new Error('Restore the renderer before placing an image.');
+            const bitmap = await createImageBitmap(command.file).catch(() => {
+              throw new Error('This file is not an image Paint can read.');
+            });
+            const place = placeImage(bitmap.width, bitmap.height, command.center, command.fit);
+            const context = new OffscreenCanvas(place.width, place.height).getContext('2d');
+            if (!context) throw new Error('Could not read the image.');
+            context.imageSmoothingQuality = 'high';
+            context.drawImage(bitmap, 0, 0, place.width, place.height);
+            bitmap.close();
+            const pixels = context.getImageData(0, 0, place.width, place.height).data;
+            const id = crypto.randomUUID();
+            const changes = [...imageTiles(pixels, place.width, place.height, place.left, place.top)].map(
+              ([key, after]) => ({ layerId: id, key, before: undefined, after })
+            );
+            if (!changes.length) throw new Error('The image is fully transparent.');
+            document.commit(changes, { id, name: command.name, visible: true, opacity: 1, blend: 'linear' });
+            renderer.restore(changes, document.layers);
+            changed();
+            await renderer.prepareOverview(document.layers);
+            break;
+          }
           case 'import': {
             importing = true;
             clearTimeout(collectTimer);

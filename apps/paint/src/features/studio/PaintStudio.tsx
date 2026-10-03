@@ -1,7 +1,7 @@
 import { blockEraserSize, isBlockEraser } from '@app-game/abr-brush/blockEraser';
 import { record } from '@app-game/abr-brush/form';
 import { NavigationPuck } from '@app-game/navigation-puck';
-import { worldToScreen, type Point } from '@app-game/paint-core/camera';
+import { screenToWorld, worldToScreen, type Point } from '@app-game/paint-core/camera';
 import { supportsPaintSymmetry } from '@app-game/paint-core/symmetry';
 import type { JSX } from '@solidjs/web';
 import { createSignal, Match, Show, Switch } from 'solid-js';
@@ -22,7 +22,7 @@ import { BrushCursor, CanvasDebug, firstCanvasAction, PaintCanvas, type CanvasIn
 import { ColorPanel, createCanvasColorPicker } from '../color';
 import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
-import { HistorySourceControl, LayersPanel } from '../layers';
+import { createImagePlacement, HistorySourceControl, LayersPanel } from '../layers';
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
 import { createSelection, createSelectionView, guardEdits, SelectionActions } from '../selection';
 import { createSymmetry, SymmetryGuide, SymmetryPanel } from '../symmetry';
@@ -102,6 +102,19 @@ export function PaintStudio(props: {
     pick: engine.pickColor,
     apply: (color) => tools.updateBrush({ color }),
     onError: setError
+  });
+  const images = createImagePlacement({
+    canPlace: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
+    view: () => {
+      const view = size();
+      const current = camera.current();
+      // Leave a margin, so an image larger than the view does not touch its edges.
+      return {
+        center: screenToWorld({ x: view.width / 2, y: view.height / 2 }, current, view),
+        fit: { width: (view.width * 0.9) / current.zoom, height: (view.height * 0.9) / current.zoom }
+      };
+    },
+    send: edit
   });
   const fullscreen = createFullscreenToggle(editor, setError);
 
@@ -239,10 +252,11 @@ export function PaintStudio(props: {
   return (
     <div ref={setEditor} class={styles.studio}>
       <main
-        ref={setStage}
+        ref={[setStage, images.ref]}
         class={styles.stage}
         aria-label="Drawing workspace"
         data-picking={mixer.picking() || colorPicker.armed()}
+        data-dropping={images.isOver()}
       >
         <Show when={engine.session()} keyed>
           {(session) => (
@@ -470,6 +484,10 @@ export function PaintStudio(props: {
                     ready={ready()}
                     onOpen={(file) => {
                       edit({ type: 'import', file });
+                      closePanel();
+                    }}
+                    onPlaceImage={(file) => {
+                      images.place(file);
                       closePanel();
                     }}
                     onSave={() => {

@@ -50,6 +50,11 @@ export type PaintCommand =
   | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'download' | 'png' | 'recover' | 'dispose' }
   | { type: 'layer'; action: LayerAction }
   | { type: 'selection'; action: SelectionAction; points: Point[]; offset?: Point; layerId: string; revision: number }
+  /**
+   * Places a decodable image as a new layer above the active one, centered on `center` in document pixels and scaled
+   * down to fit `fit`, as one undoable change named `name`.
+   */
+  | { type: 'place-image'; file: Blob; name: string; center: Point; fit: ViewSize }
   | { type: 'import'; text: string }
   | { type: 'import'; file: Blob };
 

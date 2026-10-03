@@ -2,12 +2,17 @@ import type { JSX } from '@solidjs/web';
 import { Show } from 'solid-js';
 import styles from './PaintStudio.module.css';
 
-/** Drawing panel: open, save and export the drawing, reset the view, developer tools and host controls. */
+/**
+ * Drawing panel: open, save and export the drawing, place an image as a new layer, reset the view, developer tools and
+ * host controls.
+ */
 export function DrawingMenu(props: {
   /** File commands wait for the engine. */
   ready: boolean;
   /** Receives a chosen `.paint` or legacy JSON file. */
   onOpen: (file: File) => void;
+  /** Receives a chosen image file to place as a new layer. */
+  onPlaceImage: (file: File) => void;
   onSave: () => void;
   onExportPng: () => void;
   onResetView: () => void;
@@ -18,6 +23,7 @@ export function DrawingMenu(props: {
   experimentsHref?: string;
 }) {
   let file!: HTMLInputElement;
+  let image!: HTMLInputElement;
 
   return (
     <>
@@ -35,9 +41,26 @@ export function DrawingMenu(props: {
           }
         }}
       />
+      <input
+        ref={image}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => {
+          const input = event.currentTarget;
+          const picked = input.files?.[0];
+          input.value = '';
+          if (picked) {
+            props.onPlaceImage(picked);
+          }
+        }}
+      />
       <div class={styles.fileActions}>
         <button disabled={!props.ready} onClick={() => file.click()}>
           Open drawing<span>.paint</span>
+        </button>
+        <button disabled={!props.ready} onClick={() => image.click()}>
+          Place image<span>New layer</span>
         </button>
         <button disabled={!props.ready} onClick={() => props.onSave()}>
           Save drawing<span>.paint</span>

@@ -439,3 +439,12 @@
 .stage[data-picking='true'] canvas {
   cursor: crosshair;
 }
+
+.stage[data-dropping='true']::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 2px dashed #2b8fd6;
+  border-radius: 8px;
+  pointer-events: none;
+}

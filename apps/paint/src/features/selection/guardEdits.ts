@@ -30,4 +30,12 @@ const allowedWhileApplying = new Set<PaintCommand['type']>([
   'live-tail'
 ]);
 
-const clearsOutline = new Set<PaintCommand['type']>(['begin', 'undo', 'redo', 'layer', 'import', 'recover']);
+const clearsOutline = new Set<PaintCommand['type']>([
+  'begin',
+  'undo',
+  'redo',
+  'layer',
+  'place-image',
+  'import',
+  'recover'
+]);
