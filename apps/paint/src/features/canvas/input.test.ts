@@ -297,6 +297,35 @@ describe('input to worker contract', () => {
     ignored.pointer('pointerdown', 400, 300, { pointerType: 'pen', button: 5, buttons: 32 });
     expect(ignored.commands).toEqual([]);
   });
+  it('lets an enabled drag adjustment consume the contact before canvas actions, ending on cancel', () => {
+    const adjust = {
+      enabled: vi.fn((event: { ctrlKey: boolean }) => event.ctrlKey),
+      begin: vi.fn(),
+      move: vi.fn(),
+      end: vi.fn()
+    };
+    const run = vi.fn();
+    const { pointer, commands } = setup(
+      undefined,
+      defaultBrush,
+      { enabled: () => true, run },
+      defaultCamera,
+      undefined,
+      adjust
+    );
+    pointer('pointerdown', 400, 300, { ctrlKey: true, altKey: true });
+    pointer('pointermove', 450, 280);
+    pointer('pointerup', 450, 280);
+    expect(adjust.begin).toHaveBeenCalledWith({ x: 400, y: 300 });
+    expect(adjust.move).toHaveBeenCalledWith({ x: 450, y: 280 });
+    expect(adjust.end).toHaveBeenCalledOnce();
+    expect(run).not.toHaveBeenCalled();
+    expect(commands).toEqual([]);
+
+    pointer('pointerdown', 400, 300, { ctrlKey: true });
+    pointer('pointercancel', 400, 300);
+    expect(adjust.end).toHaveBeenCalledTimes(2);
+  });
   it('keeps CSS coordinates independent of canvas backing resolution', () => {
     const { canvas, commands, pointer } = setup();
     canvas.width = 1600;
@@ -311,7 +340,8 @@ function setup(
   brush = defaultBrush,
   canvasAction?: Parameters<typeof attachInput>[1]['canvasAction'],
   camera = defaultCamera,
-  eraser?: Parameters<typeof attachInput>[1]['eraser']
+  eraser?: Parameters<typeof attachInput>[1]['eraser'],
+  adjust?: Parameters<typeof attachInput>[1]['adjust']
 ) {
   vi.stubGlobal(
     'requestAnimationFrame',
@@ -337,6 +367,7 @@ function setup(
       size: () => ({ width: 800, height: 600 }),
       brush,
       eraser,
+      adjust,
       ready: () => true,
       navigate,
       send: (c) => commands.push(c),

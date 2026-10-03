@@ -39,6 +39,7 @@ The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhos
 | Deselect                              | Escape or Ctrl/Cmd + D                                    |
 | Delete selected pixels                | Delete / Backspace while Lasso is selected                |
 | Brush size                            | [ / ]                                                     |
+| Brush size and opacity                | Ctrl+Alt (or Cmd+Option) drag: right/left for size, up/down for opacity |
 | Pick color from the canvas            | Alt/Option-click with a brush, or the canvas eyedropper in Color, then tap |
 | Swap / reset colors                   | X / D                                                     |
 | Undo / redo                           | Ctrl or Cmd + Z / Shift + Z, or Ctrl + Y                  |

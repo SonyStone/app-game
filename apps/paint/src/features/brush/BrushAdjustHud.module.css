@@ -1,0 +1,25 @@
+.hud {
+  position: absolute;
+  pointer-events: none;
+}
+
+.disc {
+  position: absolute;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px #fff,
+    0 0 0 2px #38444c9c;
+  transform: translate(-50%, -50%);
+}
+
+.label {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #1f2a30d9;
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+}

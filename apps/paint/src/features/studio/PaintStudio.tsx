@@ -8,7 +8,15 @@ import { createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintError } from '../../shared/errors';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { AbrViewerDialog, createAbrPresets } from '../abr';
-import { BrushPanel, createBrushTools, createMixerBrush, MixerActions, type PaintTool } from '../brush';
+import {
+  BrushAdjustHud,
+  BrushPanel,
+  createBrushAdjust,
+  createBrushTools,
+  createMixerBrush,
+  MixerActions,
+  type PaintTool
+} from '../brush';
 import { createPaintCamera, createViewSize } from '../camera';
 import { BrushCursor, CanvasDebug, firstCanvasAction, PaintCanvas, type CanvasInput } from '../canvas';
 import { ColorPanel, createCanvasColorPicker } from '../color';
@@ -83,6 +91,11 @@ export function PaintStudio(props: {
     canChange: canChangeBrush,
     select: tools.selectPreset
   });
+  const brushAdjust = createBrushAdjust({
+    brush: tools.brush,
+    update: tools.updateBrush,
+    available: () => tools.tool() !== 'lasso' && canChangeBrush()
+  });
   const colorPicker = createCanvasColorPicker({
     paints: () => paintsColor(),
     toScreen: (point) => worldToScreen(point, camera.current(), size()),
@@ -123,6 +136,7 @@ export function PaintStudio(props: {
     rawUpdate: developer.markRawReceived,
     // The Mixer Brush loads paint with Alt/Option; other painting tools pick a color.
     canvasAction: firstCanvasAction(mixer.canvasAction, colorPicker.canvasAction),
+    adjust: brushAdjust.adjust,
     puck: camera.navigation,
     selection: { ...selection, enabled: () => tool() === 'lasso' }
   };
@@ -263,6 +277,17 @@ export function PaintStudio(props: {
           <div class={styles.welcome}>
             <p>{needsPreset() ? 'Choose an ABR brush in Brush settings.' : 'Pen to draw. Touch to move.'}</p>
           </div>
+        </Show>
+        <Show when={brushAdjust.anchor()}>
+          {(anchor) => (
+            <BrushAdjustHud
+              anchor={anchor()}
+              size={brush().size}
+              opacity={brush().opacity}
+              color={brush().color}
+              zoom={camera.camera().zoom}
+            />
+          )}
         </Show>
         <Show when={ready() && tool() !== 'lasso' && cursor()}>
           {(point) => <BrushCursor point={point()} size={cursorSize()} square={blockCursor()} />}

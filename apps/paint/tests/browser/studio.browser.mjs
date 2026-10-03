@@ -64,6 +64,27 @@ try {
     assert.equal(await pressed('Brush'), 'true');
   });
 
+  await step('Ctrl+Alt drag resizes the brush with a HUD', async () => {
+    const size = page.getByRole('button', { name: 'Brush settings' }).locator('small');
+    assert.equal(await size.textContent(), '32');
+    const box = await page.getByRole('main', { name: 'Drawing workspace' }).boundingBox();
+    const x = box.x + box.width / 2 - 200,
+      y = box.y + box.height / 2;
+    await page.keyboard.down('Control');
+    await page.keyboard.down('Alt');
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 60, y, { steps: 3 });
+    await page.mouse.move(x + 120, y, { steps: 3 });
+    await page.getByText('64 px · 100%').waitFor({ timeout: 5_000 });
+    await page.mouse.move(x, y, { steps: 3 });
+    await page.mouse.up();
+    await page.keyboard.up('Alt');
+    await page.keyboard.up('Control');
+    assert.equal(await size.textContent(), '32');
+    assert.equal(await page.getByText(/ px · \d+%/).count(), 0);
+  });
+
   await step('a mouse stroke can be undone and redone', async () => {
     const undo = page.getByRole('button', { name: 'Undo' });
     const redo = page.getByRole('button', { name: 'Redo' });

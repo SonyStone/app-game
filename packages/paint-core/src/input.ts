@@ -27,6 +27,16 @@ export function attachInput(
       enabled: (event: Pick<PointerEvent, 'altKey' | 'pointerType'>) => boolean;
       run: (point: Point) => void;
     };
+    /**
+     * Optional drag adjustment, such as brush size and opacity. Takes precedence over `canvasAction`; `begin`, `move`
+     * and `end` receive canvas CSS pixels, and the contact neither draws nor navigates. `end` also runs on cancel.
+     */
+    adjust?: {
+      enabled: (event: Pick<PointerEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'pointerType'>) => boolean;
+      begin: (point: Point) => void;
+      move: (point: Point) => void;
+      end: () => void;
+    };
     puck?: ReturnType<typeof createNavigationPuck>;
     selection?: {
       enabled: () => boolean;
@@ -45,6 +55,7 @@ export function attachInput(
     | { kind: 'select'; id: number; camera: Camera; size: ViewSize }
     | { kind: 'pan'; id: number; previous: Point }
     | { kind: 'action'; id: number }
+    | { kind: 'adjust'; id: number }
     | undefined;
   let touchStart: { camera: Camera; center: Point; distance: number; angle: number } | undefined;
   const detachPuck = options.puck && attachNavigationPuck(canvas, options.puck, {
@@ -77,6 +88,7 @@ export function attachInput(
   const cursorAt = (event: PointerEvent) =>
     options.cursor(
       event.pointerType === 'touch' ||
+        gesture?.kind === 'adjust' ||
         (event.pointerType === 'pen' && gesture?.kind === 'draw' && !options.showPenCursor?.())
         ? undefined
         : local(event)
@@ -116,6 +128,7 @@ export function attachInput(
       options.send({ type: 'end' });
     }
     if (gesture?.kind === 'select') options.selection?.end();
+    if (gesture?.kind === 'adjust') options.adjust?.end();
     gesture = undefined;
   };
   canvas.addEventListener(
@@ -124,6 +137,14 @@ export function attachInput(
       if (!options.ready()) return;
       const point = local(event);
       canvas.focus({ preventScroll: true });
+      if (!gesture && !touches.size && event.button === 0 && options.adjust?.enabled(event)) {
+        canvas.setPointerCapture(event.pointerId);
+        gesture = { kind: 'adjust', id: event.pointerId };
+        options.cursor(undefined);
+        options.adjust.begin(point);
+        event.preventDefault();
+        return;
+      }
       if (!gesture && !touches.size && event.button === 0 && options.canvasAction?.enabled(event)) {
         canvas.setPointerCapture(event.pointerId);
         gesture = { kind: 'action', id: event.pointerId };
@@ -219,6 +240,10 @@ export function attachInput(
       }
       if (!gesture || gesture.id !== event.pointerId) return;
       if (gesture.kind === 'action') return;
+      if (gesture.kind === 'adjust') {
+        options.adjust?.move(point);
+        return;
+      }
       if (gesture.kind === 'pan') {
         options.navigate(
           panCamera(options.camera(), options.size(), {

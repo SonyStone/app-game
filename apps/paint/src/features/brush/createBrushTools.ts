@@ -73,7 +73,7 @@ export function createBrushTools() {
       const current = currentBrush();
       setBrush({
         ...current,
-        size: Math.max(1, Math.min(current.engine?.id === 'abr' ? 5000 : 512, current.size * factor))
+        size: Math.max(1, Math.min(maxBrushSize(current), current.size * factor))
       });
     }
   };
@@ -96,6 +96,11 @@ export function createBrushTools() {
 
     return current;
   }
+}
+
+/** Largest brush size in pixels: 5000 for ABR presets, 512 for the round brush and eraser. */
+export function maxBrushSize(brush: Brush) {
+  return brush.engine?.id === 'abr' ? 5000 : 512;
 }
 
 /** Canvas tools. `brush` and `eraser` also name the brush's own `tool`; the ABR brush paints with `tool: 'brush'`. */
