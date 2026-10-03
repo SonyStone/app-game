@@ -6,6 +6,7 @@ import { defaultBrush, type Brush, type Sample } from '@app-game/paint-core/brus
 import type { PaintCommand, PaintEvent } from '@app-game/paint-core/protocol';
 import PaintWorker from '../../src/features/engine/paint.worker?worker';
 import { createMainThreadEndpoint, type PaintEndpoint } from '../browser/mainThreadEndpoint';
+import { installPassProfiler } from './passProfiler';
 
 /**
  * Device sweep over every preset of an ABR library through the production worker: one long pen stroke per preset and
@@ -17,7 +18,11 @@ import { createMainThreadEndpoint, type PaintEndpoint } from '../browser/mainThr
 export async function measureMegapackSweep(fixture: Blob | undefined, options: SweepOptions): Promise<SweepRow[]> {
   const brushes = await library(fixture);
   const rows: SweepRow[] = [];
-  const engine = await startEngine(options.view, options.mainThread);
+  if (options.profilePasses) {
+    profiler ??= installPassProfiler();
+  }
+
+  const engine = await startEngine(options.view, options.mainThread || options.profilePasses);
   try {
     for (const index of options.presets) {
       const asset = brushes[index];
@@ -56,7 +61,15 @@ export type SweepOptions = {
   mainThread?: boolean;
   /** A run is abandoned, and the worker restarted, after this long. */
   timeoutMs: number;
+  /**
+   * Adds GPU time per pass call site to every row (`passProfiler.ts`); implies `mainThread`. Profiling adds work, so
+   * read the shares of time rather than the row's speed.
+   */
+  profilePasses?: boolean;
 };
+
+/** The page's pass profiler, installed by the first profiling sweep before its device exists. */
+let profiler: ReturnType<typeof installPassProfiler> | undefined;
 
 /** One preset at one zoom. Times are wall-clock milliseconds seen by the page. */
 export type SweepRow = {
@@ -86,6 +99,8 @@ export type SweepRow = {
   maxFrameGapMs: number;
   /** Paced runs: worst and final delay between a sample's pen time and the frame that shows it. */
   maxLagMs?: number;
+  /** With `profilePasses`: GPU time per pass call site and transfers during the measured stroke. */
+  passes?: ReturnType<NonNullable<typeof profiler>['report']>;
   tiles: number;
   error?: string;
 };
@@ -138,11 +153,20 @@ async function measurePreset(engine: Engine, asset: BrushAsset, index: number, o
     try {
       // Retouch tools and erasers need ink to work on; lay a wide round stroke under the same path first.
       if (features.samplesCanvas || features.tool === 'ErTl') {
-        const base = { ...defaultBrush(), color: '#b5452f', flow: 1, size: Math.min(512, Math.max(96, prepared.size * 2)) };
+        const base = {
+          ...defaultBrush(),
+          color: '#b5452f',
+          flow: 1,
+          size: Math.min(512, Math.max(96, prepared.size * 2))
+        };
         await engine.stroke(base, zoom, { ...options, paced: false });
       }
 
+      await profiler?.settled();
+      profiler?.reset();
       const run = await engine.stroke(brush, zoom, options);
+      await profiler?.settled();
+      const passes = profiler?.report();
       const penMs = (options.screenDistance / options.penSpeed) * 1000;
       rows.push({
         index,
@@ -155,7 +179,8 @@ async function measurePreset(engine: Engine, asset: BrushAsset, index: number, o
         penMs,
         ...run,
         at: Date.now(),
-        realTimeFactor: run.drawMs / penMs
+        realTimeFactor: run.drawMs / penMs,
+        ...(passes ? { passes } : {})
       });
       await engine.clear();
     } catch (error) {

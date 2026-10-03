@@ -25,6 +25,8 @@ import { parseArgs } from 'node:util';
  * stroke exactly, exactly with another seed and with adaptive quality at each LOD, and the strokes are compared at
  * the view's resolution (tests/performance/lodQuality.ts). It needs no tablet; run it headless. --hashes adds SHA-256
  * digests of both strokes at full resolution, to prove that an optimization changed no pixels by comparing two runs.
+ * --profile-passes runs the engine on the page and adds GPU time per pass call site to each row
+ * (tests/performance/passProfiler.ts).
  *
  * Rows are appended to --output (JSON lines, default under the OS temporary directory) after every preset. Presets
  * measured in the same mode (speed or --quality) without an error are skipped, so an interrupted sweep resumes by
@@ -47,6 +49,7 @@ const { values } = parseArgs({
     paced: { type: 'boolean', default: false },
     quality: { type: 'string' },
     hashes: { type: 'boolean', default: false },
+    'profile-passes': { type: 'boolean', default: false },
     output: { type: 'string' }
   }
 });
@@ -88,7 +91,8 @@ try {
     screenDistance: Number(values.distance),
     penSpeed: Number(values.speed),
     paced: values.paced,
-    timeoutMs: Number(values.timeout)
+    timeoutMs: Number(values.timeout),
+    profilePasses: values['profile-passes']
   };
 
   for (const index of indices) {

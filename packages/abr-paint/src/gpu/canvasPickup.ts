@@ -99,15 +99,17 @@ export function createCanvasPickup<Layer extends PickupLayer>(
           output = patch.b;
         // Current-layer pickup is already the final premultiplied image. It needs
         // neither a transparent base nor a full-screen identity composite per dab.
-        const direct = layers.length === 1 && !options.allLayers;
+        // So is all-layer pickup of a single visible layer at full opacity: compositing it over the transparent base
+        // returns its pixels in every blend mode.
+        const visible = options.allLayers ? layers.filter((layer) => layer.visible && layer.opacity > 0) : layers;
+        const direct = visible.length === 1 && (!options.allLayers || visible[0]!.opacity === 1);
         const commands = direct ? (options.commands ?? commandBatch(root.device)) : commandBatch(root.device);
         if (!direct) {
           // Layer compositing submits independently and must see earlier encoded dabs.
           options.commands?.flush();
           clear(root, result);
         }
-        for (const layer of layers) {
-          if (options.allLayers && (!layer.visible || layer.opacity <= 0)) continue;
+        for (const layer of visible) {
           const target = direct ? result : patch.layer;
           const targetView = root.unwrap(target).createView();
           const count = (plan.maxX - plan.minX + 1) * (plan.maxY - plan.minY + 1);
