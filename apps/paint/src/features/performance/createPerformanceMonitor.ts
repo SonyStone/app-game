@@ -23,7 +23,8 @@ export function createPerformanceMonitor(options: {
   size: Accessor<ViewSize>;
 }) {
   const history = makeFrameCostHistory(reportCapacity);
-  const [revision, setRevision] = createSignal(0);
+  /** Notifies `samples` readers; the history mutates its array in place. */
+  const [changed, notifyChanged] = createSignal<void>(undefined, { equals: false });
   const [idle, setIdle] = createSignal(true);
   let clearSettle: (() => void) | undefined;
 
@@ -54,7 +55,7 @@ export function createPerformanceMonitor(options: {
   return {
     /** Recorded frames, oldest first; reading it tracks new frames and resets. */
     samples: () => {
-      revision();
+      changed();
       return history.samples;
     },
     /** No frame has arrived for `settleMs`, so no frame rate applies. */
@@ -75,7 +76,7 @@ export function createPerformanceMonitor(options: {
 
     sample.gpuMs = frame.queueWaitMs;
     setIdle(false);
-    setRevision((value) => value + 1);
+    notifyChanged();
     clearSettle?.();
     clearSettle = makeTimer(() => setIdle(true), settleMs, setTimeout);
   }
@@ -86,7 +87,7 @@ export function createPerformanceMonitor(options: {
     clearSettle = undefined;
     history.reset();
     setIdle(true);
-    setRevision((value) => value + 1);
+    notifyChanged();
   }
 }
 

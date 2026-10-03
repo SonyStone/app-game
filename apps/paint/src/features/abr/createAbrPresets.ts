@@ -16,8 +16,8 @@ import { brushError, engineError, type PaintError } from '../../shared/errors';
  * Must be created within a Solid owner; results arriving after disposal resolve as aborted.
  */
 export function createAbrPresets(options: {
-  /** Uploads one resource unless the engine already holds it; see `PaintEngine.putResource`. */
-  upload: (resource: BrushResource) => Promise<Result<void, PaintError>>;
+  /** Makes all of a preset's resources resident in the engine at once; see `PaintEngine.putResources`. */
+  upload: (resources: readonly BrushResource[]) => Promise<Result<void, PaintError>>;
   /** Whether the brush may change now: the engine is ready and no stroke, selection edit or brush command runs. */
   canChange: () => boolean;
   /** Activates the uploaded preset's engine with its size, spacing, colors, flow and opacity. */
@@ -46,9 +46,9 @@ export function createAbrPresets(options: {
         return undefined;
       }
 
-      return uploadAll(current.resources).then((uploaded) =>
-        uploaded.mapErr((error) => brushError('restore', error.message, error))
-      );
+      return options
+        .upload(current.resources)
+        .then((uploaded) => uploaded.mapErr((error) => brushError('restore', error.message, error)));
     }
   };
 
@@ -78,7 +78,7 @@ export function createAbrPresets(options: {
     }
 
     setWorking(true);
-    const uploaded = await uploadAll(next.resources);
+    const uploaded = await options.upload(next.resources);
     if (isDisposed(owner!)) {
       return err(abortedError());
     }
@@ -90,17 +90,6 @@ export function createAbrPresets(options: {
 
     setPreset(next);
     options.select(next.engine, presetSettings(next));
-    return ok();
-  }
-
-  async function uploadAll(resources: BrushResource[]): Promise<Result<void, PaintError>> {
-    for (const resource of resources) {
-      const uploaded = await options.upload(resource);
-      if (uploaded.isErr()) {
-        return uploaded;
-      }
-    }
-
     return ok();
   }
 }

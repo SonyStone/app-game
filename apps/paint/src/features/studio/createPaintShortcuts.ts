@@ -51,10 +51,13 @@ export function createPaintShortcuts(actions: {
 
 type ShortcutActions = Parameters<typeof createPaintShortcuts>[0];
 
+/** One shortcut: whether it matches the key press, and its command. */
+type Shortcut = { when: boolean; preventDefault?: boolean; run: (actions: ShortcutActions) => void };
+
 /** Finds the shortcut for a key press, in priority order. */
 function match(event: KeyboardEvent, lasso: boolean) {
   const modifier = event.ctrlKey || event.metaKey;
-  const key = event.key.toLowerCase();
+  const key = shortcutKey(event);
   const plain = !modifier && !event.altKey && !event.isComposing;
   const shortcuts: Shortcut[] = [
     {
@@ -69,7 +72,7 @@ function match(event: KeyboardEvent, lasso: boolean) {
       run: (actions) => actions.selectionAction('delete')
     },
     {
-      when: modifier && !event.altKey && !event.isComposing && (key === 'z' || event.code === 'KeyZ'),
+      when: modifier && !event.altKey && !event.isComposing && key === 'z',
       preventDefault: true,
       run: (actions) => (event.shiftKey ? actions.redo() : actions.undo())
     },
@@ -80,11 +83,23 @@ function match(event: KeyboardEvent, lasso: boolean) {
     { when: plain && !event.repeat && key === 'x', run: (actions) => actions.swapColors() },
     { when: plain && key === 'd', run: (actions) => actions.resetColors() },
     { when: event.key === 'Escape', run: (actions) => actions.cancel() },
-    { when: plain && event.key === '[', run: (actions) => actions.scaleBrush(0.8) },
-    { when: plain && event.key === ']', run: (actions) => actions.scaleBrush(1.25) }
+    { when: plain && key === '[', run: (actions) => actions.scaleBrush(0.8) },
+    { when: plain && key === ']', run: (actions) => actions.scaleBrush(1.25) }
   ];
   return shortcuts.find((shortcut) => shortcut.when);
 }
 
-/** One shortcut: whether it matches the key press, and its command. */
-type Shortcut = { when: boolean; preventDefault?: boolean; run: (actions: ShortcutActions) => void };
+/**
+ * The lower-case key a shortcut matches. A letter or bracket typed on a non-Latin layout (`я` on the Z key) falls back
+ * to the physical key, so shortcuts keep working; Latin layouts such as AZERTY or Dvorak keep the typed letter.
+ */
+function shortcutKey(event: KeyboardEvent) {
+  const typed = event.key.toLowerCase();
+  if (typed.length !== 1 || /[a-z[\]]/.test(typed)) {
+    return typed;
+  }
+
+  return physicalKeys[event.code] ?? (/^Key[A-Z]$/.test(event.code) ? event.code.slice(3).toLowerCase() : typed);
+}
+
+const physicalKeys: Record<string, string> = { BracketLeft: '[', BracketRight: ']' };

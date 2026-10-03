@@ -15,6 +15,7 @@ export function HistorySourceControl(props: {
       ? state.historyStates
       : [state.historySource, ...state.historyStates];
   };
+
   return (
     <section>
       <label class={styles.mixing}>

@@ -6,8 +6,8 @@ import type { CheckpointedEvent, PaintEvent, SelectionEvent, StateEvent } from '
 import { defaultPaintSymmetry, type PaintSymmetry } from '@app-game/paint-core/symmetry';
 import { gpuError } from '@app-game/solid-gpu/errors';
 import type { WorkerFailure } from '@app-game/solid-gpu/worker/workerProtocol';
-import { err, ok, type Result } from 'neverthrow';
 import { createEventListener } from '@solid-primitives/event-listener';
+import { err, ok, type Result } from 'neverthrow';
 import { createEffect, createSignal, latest, onCleanup, untrack, type Accessor } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { downloadBlob } from '../../shared/downloadBlob';
@@ -51,15 +51,20 @@ export function createPaintEngine(options: {
    */
   frames?: { enabled: Accessor<boolean>; receive: (event: FrameEvent) => void };
 }) {
-  const [mode, setMode] = createSignal<ExecutionMode>(initialMode());
+  /** One mounted engine; a new object, even with the same mode, remounts the canvas and starts a new engine. */
+  const [session, setSession] = createSignal<{ mode: ExecutionMode }>({ mode: initialMode() });
+  const mode = () => session().mode;
   const [switchTarget, setSwitchTarget, requestedSwitch] = createImmediateSignal<ExecutionMode | undefined>(undefined);
   const [ready, setReady] = createSignal(false);
-  const [, setDrawing, isDrawing] = createImmediateSignal(false);
   const [state, setState] = createSignal(createDocument().state());
   const [saveState, setSaveState] = createSignal<StateEvent['saveState']>('saved');
   const [metrics, setMetrics] = createSignal({ tiles: 0, gpu: 0, ms: 0 });
   const [paging, setPaging] = createSignal<EnginePaging>({});
-  const [debugTiles, setDebugTiles] = createSignal<string[]>([]);
+  /** Tile keys last reported by the engine; toggling the wireframe and `replace` clear them. */
+  const [debugTiles, setDebugTiles] = createSignal<string[]>(() => {
+    options.settings.debug();
+    return [];
+  });
   const [restored, setRestored] = createSignal<RestoredView>();
   const switching = () => switchTarget() !== undefined;
   const canEdit = () => ready() && !switching();
@@ -82,6 +87,9 @@ export function createPaintEngine(options: {
   let expireSwitch: (() => void) | undefined;
   let switchTimer: ReturnType<typeof setTimeout> | undefined;
   let persistenceRequested = false;
+  /** Whether a stroke is in progress; read only by synchronous guards, so it needs no signal. */
+  let drawing = false;
+  const isDrawing = () => drawing;
 
   syncWhenEditable(options.settings.adaptiveQuality, (enabled) => ({ type: 'adaptive-quality', enabled }));
   syncWhenEditable(options.settings.liveTail, (enabled) => ({ type: 'live-tail', enabled }));
@@ -90,12 +98,6 @@ export function createPaintEngine(options: {
   if (options.frames) {
     syncWhenEditable(options.frames.enabled, (enabled) => ({ type: 'diagnostics', enabled }));
   }
-
-  createEffect(options.settings.debug, (enabled) => {
-    if (!enabled) {
-      setDebugTiles([]);
-    }
-  });
 
   // Mobile browsers may discard a hidden page without another event, so save as soon as it is hidden.
   createEventListener(document, 'visibilitychange', () => {
@@ -107,7 +109,9 @@ export function createPaintEngine(options: {
   onCleanup(endSwitchWait);
 
   return {
-    /** Execution mode of the mounted engine; key the canvas on it so a switch replaces the canvas. */
+    /** The mounted engine; key the canvas on it so a switch or restart replaces the canvas. */
+    session,
+    /** Execution mode of the mounted engine. */
     mode,
     /** True from a switch request until the replacement engine is ready or the switch fails. */
     switching,
@@ -123,7 +127,7 @@ export function createPaintEngine(options: {
     metrics,
     /** Storage, virtual texture and readback statistics for the canvas wireframe. */
     paging,
-    /** Occupied tile keys while the canvas wireframe is enabled. */
+    /** Occupied tile keys while the canvas wireframe is enabled; empty while it is off. */
     debugTiles,
     /** Camera and symmetry of a loaded, imported or replaced document; UI state resets from it. */
     restored,
@@ -136,7 +140,8 @@ export function createPaintEngine(options: {
     connect,
     send,
     switchMode,
-    putResource,
+    restart,
+    putResources,
     runBrushCommand
   };
 
@@ -149,11 +154,13 @@ export function createPaintEngine(options: {
     resources.disconnect();
     commands.disconnect();
     resident.clear();
-    setDrawing(false);
+    drawing = false;
     options.onError(undefined);
     let phase: 'active' | 'closing' | 'closed' = 'active';
     let firstState = true;
     let retiring = false;
+    /** Advances on every `ready` and recoverable error, so a slow `prepare` cannot mark a newer state ready. */
+    let readiness = 0;
     let graceTimer: ReturnType<typeof setTimeout> | undefined;
     const opened = openPaintTransport(
       executionMode,
@@ -162,6 +169,9 @@ export function createPaintEngine(options: {
       { message: receive, error: fail }
     );
     if (opened.isErr()) {
+      // A replacement engine that cannot start ends the switch, so the editor is not left waiting for it.
+      endSwitchWait();
+      setSwitchTarget(undefined);
       options.onError(opened.error);
       return () => {};
     }
@@ -169,6 +179,11 @@ export function createPaintEngine(options: {
     const transport = opened.value;
     connection = transport;
     expireSwitch = stall;
+    if (requestedSwitch() !== undefined) {
+      // The replacement engine of a switch gets the same budget to become ready.
+      switchTimer = setTimeout(stall, switchTimeoutMs);
+    }
+
     return disconnect;
 
     function receive(event: PaintEvent) {
@@ -210,8 +225,13 @@ export function createPaintEngine(options: {
           update(event);
           break;
         case 'error':
-          setDrawing(false);
           options.onError(runtimeError(event));
+          if (event.background) {
+            // Autosave and cleanup failures leave strokes and switches in progress untouched.
+            break;
+          }
+
+          drawing = false;
           if (retiring) {
             // The engine checkpointed and failed while disposing; it cannot take edits, so finish the switch.
             replace();
@@ -221,6 +241,7 @@ export function createPaintEngine(options: {
           endSwitchWait();
           setSwitchTarget(undefined);
           if (event.recoverable) {
+            readiness++;
             setReady(false);
           }
 
@@ -274,15 +295,16 @@ export function createPaintEngine(options: {
       setDebugTiles([]);
       setPaging({});
       options.onSelection(emptySelection);
-      setMode(target);
+      setSession({ mode: target });
     }
 
     async function finishReady() {
+      const current = ++readiness;
       const preparing = options.prepare?.();
       if (preparing) {
         setReady(false);
         const prepared = await preparing;
-        if (connection !== transport) {
+        if (connection !== transport || readiness !== current) {
           return;
         }
 
@@ -329,7 +351,10 @@ export function createPaintEngine(options: {
       firstState = false;
     }
 
-    /** The worker or the main-thread engine failed; input stays disabled until the editor is reloaded. */
+    /**
+     * The worker or the main-thread engine failed; input stays disabled until `restart`. The transport stays open:
+     * a worker survives an uncaught exception, so it can still save when hidden and on the restart's `dispose`.
+     */
     function fail(failure: WorkerFailure) {
       if (phase !== 'active' || connection !== transport) {
         return;
@@ -339,7 +364,7 @@ export function createPaintEngine(options: {
       commands.disconnect();
       options.onSelection(emptySelection);
       // The failed engine discarded any stroke in progress; the next pen-down must start a new one.
-      setDrawing(false);
+      drawing = false;
       endSwitchWait();
       setSwitchTarget(undefined);
       setReady(false);
@@ -380,11 +405,11 @@ export function createPaintEngine(options: {
     }
 
     if (command.type === 'begin') {
-      setDrawing(true);
+      drawing = true;
     }
 
     if (command.type === 'end' || command.type === 'cancel') {
-      setDrawing(false);
+      drawing = false;
     }
 
     connection?.post(command).mapErr(options.onError);
@@ -411,9 +436,28 @@ export function createPaintEngine(options: {
     switchTimer = undefined;
   }
 
-  /** Asks the engine to write pending changes now; a stroke in progress is committed first. */
+  /**
+   * Replaces an engine that is not ready, for example one that stopped or never finished starting, with a new engine
+   * in `next` mode. The old engine is asked to save and dispose, as on any disconnect; the new one restores the saved
+   * document. Renderer tools are not carried over, unlike `switchMode`. Returns false while the engine is ready or a
+   * switch is in progress.
+   */
+  function restart(next: ExecutionMode = latest(mode)): boolean {
+    if (latest(ready) || requestedSwitch() !== undefined) {
+      return false;
+    }
+
+    options.onSelection(emptySelection);
+    setSession({ mode: next });
+    return true;
+  }
+
+  /**
+   * Asks the engine to write pending changes now; a stroke in progress is committed first. Also sent to an engine
+   * that is paused or reported a failure, since it may still hold unsaved strokes.
+   */
   function saveNow() {
-    if (latest(ready) && latest(saveState) !== 'saved') {
+    if (latest(saveState) !== 'saved') {
       post({ type: 'save' });
     }
   }
@@ -426,6 +470,29 @@ export function createPaintEngine(options: {
 
     persistenceRequested = true;
     navigator.storage?.persist?.().catch(() => {});
+  }
+
+  /**
+   * Makes every resource in `set` resident in the connected engine, uploading only missing ones. The engine's cache
+   * evicts its oldest entries to make room, which can include members of `set` that were already resident, so
+   * evicted members are uploaded again. Fails with `upload` when the set cannot fit at once. Never rejects.
+   */
+  async function putResources(set: readonly BrushResource[]): Promise<Result<void, PaintError>> {
+    // Each pass inserts the missing members after every older entry, so a second pass evicts only other resources.
+    for (let pass = 0; pass < 2; pass++) {
+      for (const resource of set) {
+        const uploaded = await putResource(resource);
+        if (uploaded.isErr()) {
+          return uploaded;
+        }
+      }
+
+      if (set.every(({ id }) => resident.has(id))) {
+        return ok();
+      }
+    }
+
+    return err(brushError('upload', 'The brush resources do not fit in the engine cache together.'));
   }
 
   /** Uploads a brush resource unless it is already resident in the connected engine. Never rejects. */

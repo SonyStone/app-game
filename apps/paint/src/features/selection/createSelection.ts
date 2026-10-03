@@ -45,6 +45,7 @@ export function createSelection(options: {
         setPoints([]);
       }
     },
+    /** Ends a gesture without committing it, restoring the outline from before the gesture. */
     cancel,
     /** Starts moving the outline when `point` is inside it, otherwise starts a new lasso. */
     begin(point: Point) {
@@ -61,6 +62,7 @@ export function createSelection(options: {
 
       setDrawing(true);
     },
+    /** Continues the gesture: drags the outline by the offset from its start, or extends the lasso to `point`. */
     move(point: Point) {
       if (!gesture) {
         return;
@@ -95,12 +97,18 @@ export function createSelection(options: {
             setPoints(translateSelection(finished.original, finished.offset));
           }
         }
-      } else if (outline().length < 3) {
+      } else if (enclosedArea(outline()) < minimumArea) {
+        // Fewer than three points or a straight drag encloses no pixels to copy, cut or move.
         setPoints([]);
       }
     },
-    /** Applies the engine's outline and clipboard state after an edit, or a reset when the engine is replaced. */
+    /**
+     * Applies the engine's outline and clipboard state after an edit, or a reset when the engine is replaced. Edits
+     * never run during a gesture, so a gesture still in progress belonged to the replaced outline and ends here.
+     */
     receive(event: SelectionEvent) {
+      gesture = undefined;
+      setDrawing(false);
       setBusy(false);
       setPoints(event.points);
       setHasClipboard(event.hasClipboard);
@@ -133,3 +141,18 @@ export function createSelection(options: {
 
 /** The lasso state and commands used by the editor. */
 export type Selection = ReturnType<typeof createSelection>;
+
+/** Smallest outline area, in square document pixels, kept as a selection. */
+const minimumArea = 1;
+
+/** Absolute area of the closed polygon through `points` (shoelace formula); 0 for fewer than three points. */
+function enclosedArea(points: readonly Point[]) {
+  let twice = 0;
+  for (let index = 0; index < points.length; index++) {
+    const a = points[index]!;
+    const b = points[(index + 1) % points.length]!;
+    twice += a.x * b.y - b.x * a.y;
+  }
+
+  return Math.abs(twice) / 2;
+}

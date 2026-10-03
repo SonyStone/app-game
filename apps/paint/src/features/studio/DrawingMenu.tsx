@@ -51,9 +51,11 @@ export function DrawingMenu(props: {
         <Show when={props.experimentsHref}>{(href) => <a href={href()}>Paint experiments</a>}</Show>
       </div>
       <p class={styles.panelNote}>
-        B · Brush &nbsp; E · Eraser
+        B · Brush &nbsp; E · Eraser &nbsp; L · Lasso
         <br />
-        Space · Navigation &nbsp; V · Navigation
+        X · Swap colors &nbsp; D · Reset colors
+        <br />
+        Space or V · Navigation
       </p>
     </>
   );

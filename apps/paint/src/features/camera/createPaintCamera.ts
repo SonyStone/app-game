@@ -1,12 +1,14 @@
 import { defaultCamera, transformAt, type Camera, type ViewSize } from '@app-game/paint-core/camera';
 import type { PaintCommand } from '@app-game/paint-core/protocol';
+import { makeMediaQueryListener } from '@solid-primitives/media';
 import { createEffect, createSignal, latest, type Accessor } from 'solid-js';
 import { createPaintNavigation } from './paintNavigation';
 
 /**
  * Owns the editor camera: zoom, rotation, pan and mirroring of the view, never the document pixels. The camera
  * resets to `restored` whenever the engine loads a document and is otherwise changed by gestures and view controls.
- * The engine receives the camera and viewport size whenever it becomes ready and after every change.
+ * The engine receives the camera, viewport size and device pixel ratio whenever it becomes ready and after every
+ * change, including a window moving to a display with another pixel ratio.
  * Must be created within a Solid owner.
  */
 export function createPaintCamera(options: {
@@ -21,7 +23,7 @@ export function createPaintCamera(options: {
   bounds: () => { left: number; top: number; width: number; height: number } | undefined;
 }) {
   const [camera, setCamera] = createSignal<Camera>((previous) => options.restored() ?? previous ?? defaultCamera());
-  /** Includes changes made earlier in the current event, so consecutive gestures compose. */
+  /** The camera for gesture handlers; like `camera`, it shows a write only after the flush that carries it. */
   const current = () => latest(camera);
   const navigation = createPaintNavigation({
     size: options.size,
@@ -30,11 +32,13 @@ export function createPaintCamera(options: {
     viewport: () => options.bounds() ?? { left: 0, top: 0, ...options.size() }
   });
 
+  const dpr = createDevicePixelRatio();
+
   createEffect(
-    () => (options.ready() ? { camera: camera(), size: options.size() } : undefined),
+    () => (options.ready() ? { camera: camera(), size: options.size(), dpr: dpr() } : undefined),
     (view) => {
       if (view) {
-        options.send({ type: 'view', ...view, dpr: devicePixelRatio });
+        options.send({ type: 'view', ...view });
       }
     }
   );
@@ -71,4 +75,14 @@ export function createPaintCamera(options: {
     const size = options.size();
     setCamera(transformAt(current(), size, { x: size.width / 2, y: size.height / 2 }, zoom));
   }
+}
+
+/** `devicePixelRatio`, updated when the window moves to another display or the browser zoom changes. */
+function createDevicePixelRatio() {
+  const [ratio, setRatio] = createSignal(devicePixelRatio);
+  // A resolution query matches only the current ratio, so each change re-arms the listener for the new one.
+  createEffect(ratio, (current) =>
+    makeMediaQueryListener(`(resolution: ${current}dppx)`, () => setRatio(devicePixelRatio))
+  );
+  return ratio;
 }

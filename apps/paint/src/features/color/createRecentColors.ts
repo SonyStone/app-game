@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { parseHex } from './hsv';
 
 /**
@@ -6,14 +6,15 @@ import { parseHex } from './hsv';
  * reloading. Storage failures (private mode, quota) leave the list working for the current panel only.
  */
 export function createRecentColors() {
-  const [colors, setColors] = createSignal(read());
+  // `remember` builds on the list it last wrote, so repeated calls in one event keep every color.
+  const [colors, setColors, latestColors] = createImmediateSignal(read());
 
   return {
     /** Up to {@link LIMIT} distinct lowercase `#rrggbb` colors. */
     colors,
     /** Moves `hex` to the front, dropping a duplicate and the oldest entry beyond the limit. */
     remember(hex: string) {
-      const next = [hex, ...colors().filter((color) => color !== hex)].slice(0, LIMIT);
+      const next = [hex, ...latestColors().filter((color) => color !== hex)].slice(0, LIMIT);
       setColors(next);
       try {
         localStorage.setItem(KEY, JSON.stringify(next));
@@ -27,9 +28,13 @@ export function createRecentColors() {
 function read(): string[] {
   try {
     const stored: unknown = JSON.parse(localStorage.getItem(KEY) ?? '[]');
-    return Array.isArray(stored)
-      ? stored.flatMap((value) => (typeof value === 'string' ? (parseHex(value) ?? []) : [])).slice(0, LIMIT)
-      : [];
+    if (!Array.isArray(stored)) {
+      return [];
+    }
+
+    // Normalizing can turn distinct stored spellings (`#FFF`, `#ffffff`) into the same color.
+    const colors = stored.flatMap((value) => (typeof value === 'string' ? (parseHex(value) ?? []) : []));
+    return [...new Set(colors)].slice(0, LIMIT);
   } catch {
     return [];
   }

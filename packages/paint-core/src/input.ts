@@ -12,6 +12,8 @@ export function attachInput(
     camera: () => Camera;
     size: () => ViewSize;
     brush: () => Brush;
+    /** Brush for strokes drawn with the pen's eraser end (`button` 5), whatever the active tool; ignored when absent. */
+    eraser?: () => Brush;
     ready: () => boolean;
     navigate: (camera: Camera) => void;
     send: (command: PaintCommand) => void;
@@ -137,16 +139,17 @@ export function attachInput(
         return;
       }
       if (gesture || event.button === 2) return;
+      const eraser = event.pointerType === 'pen' && event.button === 5 ? options.eraser : undefined;
       canvas.setPointerCapture(event.pointerId);
       if (event.button === 1) {
         gesture = { kind: 'pan', id: event.pointerId, previous: point };
         return;
       }
-      if (event.button !== 0) return;
+      if (event.button !== 0 && !eraser) return;
       touches.clear();
       touchStart = undefined;
       const camera = options.camera();
-      if (options.selection?.enabled()) {
+      if (options.selection?.enabled() && !eraser) {
         gesture = { kind: 'select', id: event.pointerId, camera, size: { ...options.size() } };
         options.selection.begin(screenToWorld(point, camera, gesture.size));
         return;
@@ -160,14 +163,15 @@ export function attachInput(
       };
       gesture = { kind: 'draw', id: event.pointerId, camera, size: { ...options.size() }, latest, raw: false };
       cursorAt(event);
+      const brush = eraser ? eraser() : options.brush();
       options.send({
         type: 'begin',
-        brush: options.brush(),
+        brush,
         modifiers: { altKey: event.altKey },
         zoom: camera.zoom,
         samples: [latest]
       });
-      if (usesBuildUp(options.brush())) {
+      if (usesBuildUp(brush)) {
         stopBuildUp?.();
         const startedAt = performance.now(),
           eventStart = latest.time;

@@ -1,3 +1,4 @@
+import { flush } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import { createSelection } from './createSelection';
 
@@ -52,4 +53,32 @@ it('keeps the clipboard usable after deselecting and switching the active layer'
   selection.clear();
   selection.action('paste');
   expect(send).toHaveBeenCalledWith(expect.objectContaining({ action: 'paste', layerId: 'layer-2', revision: 8 }));
+});
+
+it('drops an outline that encloses no area, and ends a lasso when the engine resets the selection', () => {
+  const send = vi.fn();
+  const selection = createSelection({
+    send,
+    ready: () => true,
+    document: () => ({ activeId: 'layer-1', revision: 1 })
+  });
+  selection.begin({ x: 0, y: 0 });
+  selection.move({ x: 10, y: 10 });
+  selection.move({ x: 20, y: 20 });
+  flush();
+  expect(selection.points()).toHaveLength(3);
+  selection.end();
+  flush();
+  expect(selection.points()).toEqual([]);
+
+  selection.begin({ x: 0, y: 0 });
+  selection.move({ x: 10, y: 0 });
+  flush();
+  expect(selection.drawing()).toBe(true);
+  selection.receive({ type: 'selection', points: [], hasClipboard: false });
+  expect(() => selection.move({ x: 10, y: 10 })).not.toThrow();
+  selection.end();
+  flush();
+  expect(selection.drawing()).toBe(false);
+  expect(selection.points()).toEqual([]);
 });

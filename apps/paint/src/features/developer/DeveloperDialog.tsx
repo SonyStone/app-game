@@ -18,7 +18,10 @@ export function DeveloperDialog(props: {
   switching: boolean;
   /** GPU cache bytes and the last frame's CPU submission time. */
   metrics: { gpu: number; ms: number };
-  /** Requests the other execution mode; the checkbox shows `workerEnabled` until the switch completes. */
+  /**
+   * Requests the other execution mode; the checkbox shows `workerEnabled` until the switch completes. Also offered
+   * while the engine is not ready, so an engine that cannot start in one mode can be restarted in the other.
+   */
   onWorkerEnabledChange: (enabled: boolean) => void;
   close: () => void;
 }) {
@@ -34,7 +37,7 @@ export function DeveloperDialog(props: {
       ref={dialog}
       class={styles.developer}
       aria-labelledby="paint-developer-title"
-      onClose={props.close}
+      onClose={() => props.close()}
       onCancel={(event) => {
         event.preventDefault();
         props.close();
@@ -42,7 +45,7 @@ export function DeveloperDialog(props: {
     >
       <div class={styles.panelTitle}>
         <strong id="paint-developer-title">Developer</strong>
-        <button autofocus aria-label="Close developer tools" onClick={props.close}>
+        <button autofocus aria-label="Close developer tools" onClick={() => props.close()}>
           <SketchIcon name="close" size={18} />
         </button>
       </div>
@@ -76,7 +79,7 @@ export function DeveloperDialog(props: {
           <input
             type="checkbox"
             checked={props.workerEnabled}
-            disabled={!props.ready || props.switching}
+            disabled={props.switching}
             onChange={(event) => {
               const enabled = event.currentTarget.checked;
               event.currentTarget.checked = props.workerEnabled;

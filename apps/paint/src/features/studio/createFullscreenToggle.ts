@@ -15,6 +15,7 @@ export function createFullscreenToggle(
 ) {
   const owner = getOwner()!;
   const [pending, setPending, isRequesting] = createImmediateSignal(false);
+  // createFullscreen reads `container` once during setup; keep that read out of the caller's tracking scope.
   const { enter, exit, isActive } = untrack(() => createFullscreen(container));
   const supported = () => document.fullscreenEnabled;
 

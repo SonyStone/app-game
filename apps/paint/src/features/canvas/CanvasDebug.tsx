@@ -19,9 +19,8 @@ export function CanvasDebug(props: {
   gpuBytes: number;
 }) {
   const path = () => tileWireframe(props.tiles, props.camera, props.size);
-  const paging = () => props.paging;
   const pagesPath = (state: 'ready' | 'fallback' | 'loading') =>
-    (paging().debugPages ?? [])
+    (props.paging.debugPages ?? [])
       .filter((page) => (page.fallback ? 'fallback' : page.resident ? 'ready' : 'loading') === state)
       .map((page) => tileWireframe([`${page.x},${page.y}`], props.camera, props.size, TILE_SIZE * 2 ** page.level))
       .join('');
@@ -49,32 +48,35 @@ export function CanvasDebug(props: {
         <br />
         GPU caches {(props.gpuBytes / 1048576).toFixed(1)} MiB
         <br />
-        RAM tiles {((paging().storage?.ramBytes ?? 0) / 1048576).toFixed(1)} MiB · overviews{' '}
-        {((paging().virtual?.overviewBytes ?? 0) / 1048576).toFixed(1)} MiB
+        RAM tiles {((props.paging.storage?.ramBytes ?? 0) / 1048576).toFixed(1)} MiB · overviews{' '}
+        {((props.paging.virtual?.overviewBytes ?? 0) / 1048576).toFixed(1)} MiB
         <br />
-        {paging().virtual?.pages ?? 0} GPU pages · {paging().virtual?.drawCalls ?? 0} page draws ·{' '}
-        {paging().virtual?.pending ?? 0} loading
+        {props.paging.virtual?.pages ?? 0} GPU pages · {props.paging.virtual?.drawCalls ?? 0} page draws ·{' '}
+        {props.paging.virtual?.pending ?? 0} loading
         <br />
-        LOD {[...new Set(paging().debugPages?.map((page) => page.level) ?? [])].sort((a, b) => a - b).join(', ') ||
+        LOD{' '}
+        {[...new Set(props.paging.debugPages?.map((page) => page.level) ?? [])].sort((a, b) => a - b).join(', ') ||
           '—'}{' '}
-        · uploads {((paging().virtual?.uploadedBytes ?? 0) / 1048576).toFixed(1)} MiB
+        · uploads {((props.paging.virtual?.uploadedBytes ?? 0) / 1048576).toFixed(1)} MiB
         <br />
-        Tile draws: {paging().rasterDraws?.preview ?? 0} active · {paging().rasterDraws?.committed ?? 0} committed
+        Tile draws: {props.paging.rasterDraws?.preview ?? 0} active · {props.paging.rasterDraws?.committed ?? 0}{' '}
+        committed
         <br />
-        Pinned overview {paging().virtual?.coveragePages ?? 0} pages · {paging().virtual?.coveragePending ?? 0}{' '}
+        Pinned overview {props.paging.virtual?.coveragePages ?? 0} pages · {props.paging.virtual?.coveragePending ?? 0}{' '}
         preparing
         <br />
-        Readback staging {((paging().readback?.bytes ?? 0) / 1048576).toFixed(1)} MiB ·{' '}
-        {paging().readback?.pending ?? 0}/2 pending · {paging().readback?.capacityWaits ?? 0} capacity waits
+        Readback staging {((props.paging.readback?.bytes ?? 0) / 1048576).toFixed(1)} MiB ·{' '}
+        {props.paging.readback?.pending ?? 0}/2 pending · {props.paging.readback?.capacityWaits ?? 0} capacity waits
         <br />
-        Page jobs {paging().virtual?.activePageJobs ?? 0}/2 · budget yields {paging().virtual?.workYields ?? 0}
+        Page jobs {props.paging.virtual?.activePageJobs ?? 0}/2 · budget yields {props.paging.virtual?.workYields ?? 0}
         <br />
-        Peak / 16ms window: CPU {(paging().virtual?.peakWorkCpuMs ?? 0).toFixed(1)} ms · upload{' '}
-        {((paging().virtual?.peakUploadBytes ?? 0) / 1048576).toFixed(2)} MiB
+        Peak / 16ms window: CPU {(props.paging.virtual?.peakWorkCpuMs ?? 0).toFixed(1)} ms · upload{' '}
+        {((props.paging.virtual?.peakUploadBytes ?? 0) / 1048576).toFixed(2)} MiB
         <br />
-        Disk reads {paging().storage?.reads ?? 0} · writes {paging().storage?.writes ?? 0}
+        Disk reads {props.paging.storage?.reads ?? 0} · writes {props.paging.storage?.writes ?? 0}
         <br />
-        Low-res disk {paging().storage?.overviewReads ?? 0} reads · {paging().storage?.overviewWrites ?? 0} writes
+        Low-res disk {props.paging.storage?.overviewReads ?? 0} reads · {props.paging.storage?.overviewWrites ?? 0}{' '}
+        writes
         <br />
         Green: resident · amber: coarse fallback · pink: loading
       </output>

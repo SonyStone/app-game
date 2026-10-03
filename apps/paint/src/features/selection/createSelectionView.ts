@@ -9,7 +9,7 @@ import { createEffect, type Accessor } from 'solid-js';
  * change. The marching-ants animation stops while the page is hidden or the user prefers reduced motion.
  * Must be created within a Solid owner.
  */
-export function syncSelectionView(options: {
+export function createSelectionView(options: {
   points: Accessor<Point[]>;
   ready: Accessor<boolean>;
   send: (command: Extract<PaintCommand, { type: 'selection-view' }>) => void;

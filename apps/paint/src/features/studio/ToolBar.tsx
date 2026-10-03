@@ -46,6 +46,7 @@ export function ToolBar(props: {
         title="Paint symmetry"
         aria-pressed={props.symmetry ? 'true' : 'false'}
         aria-expanded={props.panel === 'symmetry' ? 'true' : 'false'}
+        aria-controls="paint-panel"
         onClick={(event) => props.onTogglePanel('symmetry', event.currentTarget)}
       >
         <SketchIcon name="symmetry" />

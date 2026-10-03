@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import { defaultCamera } from '@app-game/paint-core/camera';
+import { describe, expect, it } from 'vitest';
 import { createPaintNavigation as createNavigationPuck } from './paintNavigation';
 
 /** Behavior ported from Grease Pencil, including held invocation and camera pivot invariants. */
@@ -105,7 +105,12 @@ describe('Paint navigation puck', () => {
   });
   it('reclamps an open puck when the viewport shrinks', () => {
     let size = { width: 800, height: 600 };
-    const puck = createNavigationPuck({ size: () => size, camera: defaultCamera, navigate: () => {} });
+    const puck = createNavigationPuck({
+      size: () => size,
+      camera: defaultCamera,
+      navigate: () => {},
+      viewport: () => ({ left: 0, top: 0, ...size })
+    });
     puck.open({ x: 750, y: 500 });
     size = { width: 320, height: 568 };
     expect(puck.center()).toEqual({ x: 182, y: 430 });
@@ -118,7 +123,8 @@ function setup() {
     camera: () => camera,
     navigate: (next) => {
       camera = next;
-    }
+    },
+    viewport: () => ({ left: 0, top: 0, width: 800, height: 600 })
   });
   return { puck, camera: () => camera };
 }

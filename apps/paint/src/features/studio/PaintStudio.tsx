@@ -16,7 +16,7 @@ import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
 import { HistorySourceControl, LayersPanel } from '../layers';
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
-import { createSelection, guardEdits, SelectionActions, syncSelectionView } from '../selection';
+import { createSelection, createSelectionView, guardEdits, SelectionActions } from '../selection';
 import { createSymmetry, SymmetryGuide, SymmetryPanel } from '../symmetry';
 import { createFullscreenToggle } from './createFullscreenToggle';
 import { createPaintShortcuts } from './createPaintShortcuts';
@@ -54,7 +54,7 @@ export function PaintStudio(props: {
     frames: { enabled: developer.performanceMonitor, receive: (event) => monitor.record(event) }
   });
   const selection = createSelection({ send: engine.send, document: engine.state, ready: engine.canEdit });
-  syncSelectionView({ points: selection.points, ready: engine.canEdit, send: engine.send });
+  createSelectionView({ points: selection.points, ready: engine.canEdit, send: engine.send });
   /** Sends document commands, respecting a pending selection edit and clearing the outline where needed. */
   const edit = guardEdits(selection, engine.send);
   const size = createViewSize(stage);
@@ -68,7 +68,7 @@ export function PaintStudio(props: {
   });
   const symmetry = createSymmetry({
     restored: () => engine.restored()?.symmetry,
-    canUpdate: () => engine.canEdit() && !selection.busy(),
+    canUpdate: canUpdateSymmetry,
     send: engine.send
   });
   const mixer = createMixerBrush({
@@ -79,7 +79,7 @@ export function PaintStudio(props: {
     onError: setError
   });
   const presets = createAbrPresets({
-    upload: engine.putResource,
+    upload: engine.putResources,
     canChange: canChangeBrush,
     select: tools.selectPreset
   });
@@ -101,6 +101,7 @@ export function PaintStudio(props: {
     camera: camera.current,
     size,
     brush,
+    eraser: tools.eraser,
     ready: () =>
       engine.canEdit() && !selection.isBusy() && !presets.isBusy() && (tool() !== 'abr-brush' || !!brush().engine),
     navigate: camera.navigate,
@@ -145,13 +146,19 @@ export function PaintStudio(props: {
     }
   });
 
+  /** Symmetry may change: the engine accepts commands and no selection edit is waiting for it. */
+  function canUpdateSymmetry() {
+    return engine.canEdit() && !selection.busy();
+  }
+
   /** Brush settings may change: no stroke, selection edit, brush command or preset upload is running. */
   function canChangeBrush() {
     return engine.canEdit() && !selection.isBusy() && !engine.isDrawing() && !engine.isCommandBusy();
   }
 
+  /** Switches tools; choosing the active tool again keeps the lasso outline. */
   function chooseTool(next: PaintTool) {
-    if (selection.isBusy()) {
+    if (selection.isBusy() || next === tools.tool()) {
       return;
     }
 
@@ -160,13 +167,17 @@ export function PaintStudio(props: {
     tools.chooseTool(next);
   }
 
-  /** Switches the execution mode unless a selection edit, preset upload or brush command must finish first. */
+  /**
+   * Switches the execution mode unless a selection edit, preset upload or brush command must finish first. An engine
+   * that is not ready cannot checkpoint, so it is restarted in the other mode from the saved document instead.
+   */
   function setWorkerEnabled(enabled: boolean) {
     if (selection.isBusy() || presets.isBusy() || engine.isCommandBusy()) {
       return;
     }
 
-    if (engine.switchMode(enabled ? 'worker' : 'main')) {
+    const next = enabled ? 'worker' : 'main';
+    if (engine.switchMode(next) || engine.restart(next)) {
       mixer.cancelPick();
       setCursor(undefined);
       camera.navigation.close();
@@ -201,10 +212,10 @@ export function PaintStudio(props: {
   return (
     <div ref={setEditor} class={styles.studio}>
       <main ref={setStage} class={styles.stage} aria-label="Drawing workspace" data-picking={mixer.picking()}>
-        <Show when={engine.mode()} keyed>
-          {(mode) => (
+        <Show when={engine.session()} keyed>
+          {(session) => (
             <PaintCanvas
-              connect={(element) => engine.connect(element, mode)}
+              connect={(element) => engine.connect(element, session.mode)}
               input={input}
               crosshair={tool() === 'lasso'}
               ref={setCanvas}
@@ -368,7 +379,7 @@ export function PaintStudio(props: {
                 <Match when={id === 'symmetry'}>
                   <SymmetryPanel
                     symmetry={symmetry.symmetry()}
-                    disabled={!symmetry.canUpdate()}
+                    disabled={!canUpdateSymmetry()}
                     inactive={!supportsSymmetry()}
                     viewCenter={camera.camera()}
                     onChange={symmetry.update}
@@ -457,6 +468,7 @@ export function PaintStudio(props: {
               setError(undefined);
               edit({ type: 'recover' });
             }}
+            onRestart={() => engine.restart()}
             onDismiss={() => setError(undefined)}
           />
         )}

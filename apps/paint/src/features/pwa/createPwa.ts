@@ -1,13 +1,17 @@
 import { createEventListener } from '@solid-primitives/event-listener';
+import { createPageVisibility } from '@solid-primitives/page-utilities';
+import { makeTimer } from '@solid-primitives/timer';
 import { ResultAsync } from 'neverthrow';
-import { createSignal, getOwner, isDisposed, onSettled } from 'solid-js';
+import { createEffect, createSignal, getOwner, isDisposed, onSettled } from 'solid-js';
 import type { registerSW } from 'virtual:pwa-register';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import type { InstallError } from '../../shared/errors';
 
 /**
  * Tracks the browser's one-shot install prompt and the service worker's offline readiness for the standalone app.
- * Never calls skipWaiting or reloads: an update activates after every Paint window has closed.
+ * Never calls skipWaiting or reloads: an update activates after every Paint window has closed. An installed app may
+ * stay open for days without navigating, so a visible page also asks the server for a new version when it becomes
+ * visible and every `updateCheckMs`.
  * Must be created within a Solid owner; registration starts after mount, in production builds only.
  */
 export function createPwa(register: typeof registerSW) {
@@ -18,6 +22,8 @@ export function createPwa(register: typeof registerSW) {
   const [status, setStatus] = createSignal(
     import.meta.env.PROD ? 'Preparing offline access…' : 'Offline installation is available in the production build.'
   );
+  const [registration, setRegistration] = createSignal<ServiceWorkerRegistration>();
+  const visible = createPageVisibility();
   /** Reports status changes only while the editor is mounted. */
   const report = (message: string) => {
     if (!isDisposed(owner)) {
@@ -34,6 +40,17 @@ export function createPwa(register: typeof registerSW) {
     setPrompt(event);
   });
   createEventListener(window, 'appinstalled', () => setPrompt(undefined));
+  createEffect(
+    () => (visible() ? registration() : undefined),
+    (current) => {
+      if (!current) {
+        return;
+      }
+
+      checkForUpdate(current);
+      return makeTimer(() => checkForUpdate(current), updateCheckMs, setInterval);
+    }
+  );
   onSettled(() => {
     if (!import.meta.env.PROD) {
       return;
@@ -46,8 +63,13 @@ export function createPwa(register: typeof registerSW) {
 
     register({
       immediate: true,
-      onRegisteredSW: (_url, registration) => {
-        if (registration?.active && !registration.waiting && !registration.installing) {
+      onRegisteredSW: (_url, registered) => {
+        if (!registered || isDisposed(owner)) {
+          return;
+        }
+
+        setRegistration(registered);
+        if (registered.active && !registered.waiting && !registered.installing) {
           report('Ready to work offline.');
         }
       },
@@ -93,6 +115,14 @@ export function createPwa(register: typeof registerSW) {
       }
     }
   };
+}
+
+/** How often a visible app checks for a new version. */
+const updateCheckMs = 60 * 60 * 1000;
+
+/** Asks the server for a new service worker; a found update is reported through `onNeedRefresh`. Offline is fine. */
+function checkForUpdate(registration: ServiceWorkerRegistration) {
+  registration.update().catch(() => {});
 }
 
 /** Chromium supplies this event; browsers without it retain their own Add to Home Screen UI. */

@@ -27,9 +27,44 @@ it('reports offline readiness and waits for windows to close instead of activati
 
 it('recognizes an already active offline worker when reopening the app', () => {
   const { options, state } = mount();
-  options().onRegisteredSW?.('/sw.js', { active: {}, waiting: null, installing: null } as ServiceWorkerRegistration);
+  options().onRegisteredSW?.('/sw.js', {
+    active: {},
+    waiting: null,
+    installing: null,
+    update: vi.fn(async () => undefined)
+  } as unknown as ServiceWorkerRegistration);
   flush();
   expect(state().status()).toBe('Ready to work offline.');
+});
+
+it('checks for a new version when registered, when the page becomes visible again and every hour', () => {
+  vi.useFakeTimers();
+  try {
+    let visibility: DocumentVisibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    const { options } = mount();
+    const update = vi.fn(async () => undefined);
+    options().onRegisteredSW?.('/sw.js', { update } as unknown as ServiceWorkerRegistration);
+    flush();
+    expect(update).toHaveBeenCalledOnce();
+
+    vi.advanceTimersByTime(60 * 60 * 1000);
+    expect(update).toHaveBeenCalledTimes(2);
+
+    visibility = 'hidden';
+    document.dispatchEvent(new Event('visibilitychange'));
+    flush();
+    vi.advanceTimersByTime(2 * 60 * 60 * 1000);
+    expect(update).toHaveBeenCalledTimes(2);
+
+    visibility = 'visible';
+    document.dispatchEvent(new Event('visibilitychange'));
+    flush();
+    expect(update).toHaveBeenCalledTimes(3);
+  } finally {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  }
 });
 
 it('consumes each install prompt once even before reactive updates flush', async () => {
@@ -87,8 +122,11 @@ function mount() {
   }, host);
   dispose = () => {
     unmount();
-    if (previous) Object.defineProperty(navigator, 'serviceWorker', previous);
-    else Reflect.deleteProperty(navigator, 'serviceWorker');
+    if (previous) {
+      Object.defineProperty(navigator, 'serviceWorker', previous);
+    } else {
+      Reflect.deleteProperty(navigator, 'serviceWorker');
+    }
   };
   flush();
   return { options: () => callbacks, update, state: () => controller };

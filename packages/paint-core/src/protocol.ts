@@ -1,12 +1,12 @@
+import type { RendererToolState } from '@app-game/abr-paint/gpu/toolState';
+import type { BrushResource, createBrushResources } from '@app-game/abr-paint/resources';
+import type { GpuError } from '@app-game/solid-gpu/errors';
 import type { Result } from './asyncResult';
 import type { Brush, Sample } from './brush';
 import type { Camera, Point, ViewSize } from './camera';
-import type { BrushResource, createBrushResources } from '@app-game/abr-paint/resources';
 import type { BrushEngine } from './composition/contracts';
 import type { HistorySource, LayerAction, createDocument } from './document';
-import type { RendererToolState } from '@app-game/abr-paint/gpu/toolState';
 import type { PaintSymmetry } from './symmetry';
-import type { GpuError } from '@app-game/solid-gpu/errors';
 
 /** Main-thread commands are processed in order; all sample batches precede their stroke end. */
 export type PaintCommand =
@@ -135,8 +135,11 @@ export type PaintEvent =
   | { type: 'selection'; points: Point[]; hasClipboard: boolean }
   | { type: 'disposed' }
   | { type: 'restored'; camera: Camera; symmetry?: PaintSymmetry }
-  /** `code` classifies renderer failures, for example `validation` versus a `lost` device. */
-  | { type: 'error'; message: string; recoverable: boolean; code?: GpuError['code'] }
+  /**
+   * `code` classifies renderer failures, for example `validation` versus a `lost` device. `background` marks a failure
+   * of autosave or storage cleanup rather than of a command, so a stroke or checkpoint in progress is unaffected.
+   */
+  | { type: 'error'; message: string; recoverable: boolean; code?: GpuError['code']; background?: boolean }
   | { type: 'download'; blob: Blob; name: string };
 
 /** Document, storage and performance status posted after changes and frames. */

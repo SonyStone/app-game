@@ -99,7 +99,7 @@ it.each([false, true])(
     flush();
     expect(first.post).toHaveBeenLastCalledWith({ type: 'checkpoint', includeTools: true });
     expect(engine.switching()).toBe(true);
-    expect(symmetry.canUpdate()).toBe(false);
+    expect(engine.canEdit()).toBe(false);
     expect(symmetry.update(defaultPaintSymmetry())).toBe(false);
     expect(symmetry.symmetry()).toEqual(settings);
     reply(first, { type: 'error', recoverable: false, message: 'Storage is full' });
@@ -158,7 +158,7 @@ it.each([false, true])(
     expect(engine.switching()).toBe(false);
     expect(engine.mode()).toBe('main');
     expect(new URL(location.href).searchParams.get('paintThread')).toBe('main');
-    expect(symmetry.canUpdate()).toBe(true);
+    expect(engine.canEdit()).toBe(true);
     expect(symmetry.symmetry()).toEqual(settings);
     expect(tools.brush().size).toBe(123);
     expect(tools.brush()).toMatchObject({ color: '#abcdef', backgroundColor: '#123456' });
@@ -211,7 +211,9 @@ it('resets the editor when the worker fails: pauses input, ends the stroke, sett
   expect(engine.canEdit()).toBe(true);
   engine.send({ type: 'begin', brush: defaultBrush(), samples: [{ x: 1, y: 1, pressure: 1, time: 0 }] });
   expect(engine.isDrawing()).toBe(true);
-  const upload = engine.putResource({ id: 'tip', width: 1, height: 1, format: 'r8unorm', pixels: new Uint8Array([255]) });
+  const upload = engine.putResources([
+    { id: 'tip', width: 1, height: 1, format: 'r8unorm', pixels: new Uint8Array([255]) }
+  ]);
   onSelection.mockClear();
 
   transport.handlers.error({ kind: 'error', cause: new ErrorEvent('error', { message: 'Worker crashed' }) });
@@ -224,6 +226,69 @@ it('resets the editor when the worker fails: pauses input, ends the stroke, sett
   expect((await upload).isErr()).toBe(true);
   expect(onSelection).toHaveBeenCalledOnce();
   expect(onSelection).toHaveBeenCalledWith({ type: 'selection', points: [], hasClipboard: false });
+});
+
+it('restarts a stopped engine on a new canvas after asking the failed one to save and dispose', () => {
+  const { engine, error } = mount();
+  const first = transports.opened[0]!;
+  reply(first, { type: 'ready' });
+  reply(first, stateEvent('saving'));
+  expect(engine.restart()).toBe(false);
+
+  first.handlers.error({ kind: 'error', cause: new ErrorEvent('error', { message: 'Worker crashed' }) });
+  flush();
+  expect(error()).toMatchObject({ kind: 'engine', code: 'stopped' });
+  window.dispatchEvent(new PageTransitionEvent('pagehide'));
+  expect(first.post).toHaveBeenLastCalledWith({ type: 'save' });
+
+  expect(engine.restart('main')).toBe(true);
+  flush();
+  expect(first.post).toHaveBeenLastCalledWith({ type: 'dispose' });
+  expect(transports.opened).toHaveLength(2);
+  expect(transports.opened[1]!.mode).toBe('main');
+  expect(error()).toBeUndefined();
+  reply(transports.opened[1]!, { type: 'ready' });
+  expect(engine.canEdit()).toBe(true);
+});
+
+it('keeps a stroke and a switch in progress when autosave fails in the background', () => {
+  const { engine, error } = mount();
+  const transport = transports.opened[0]!;
+  reply(transport, { type: 'ready' });
+  engine.send({ type: 'begin', brush: defaultBrush(), samples: [{ x: 1, y: 1, pressure: 1, time: 0 }] });
+  reply(transport, { type: 'error', recoverable: false, background: true, message: 'Quota exceeded' });
+  expect(error()).toMatchObject({ message: 'Quota exceeded' });
+  expect(engine.isDrawing()).toBe(true);
+
+  engine.send({ type: 'end' });
+  expect(engine.switchMode('main')).toBe(true);
+  reply(transport, { type: 'error', recoverable: false, background: true, message: 'Quota exceeded' });
+  expect(engine.switching()).toBe(true);
+  reply(transport, { type: 'error', recoverable: false, message: 'Checkpoint failed' });
+  expect(engine.switching()).toBe(false);
+});
+
+it('uploads a resource set again when its own upload evicts a member that was already resident', async () => {
+  const { engine } = mount();
+  const transport = transports.opened[0]!;
+  reply(transport, { type: 'ready' });
+  const resource = (id: string) => ({
+    id,
+    width: 1,
+    height: 1,
+    format: 'r8unorm' as const,
+    pixels: new Uint8Array([255])
+  });
+
+  const pattern = engine.putResources([resource('pattern')]);
+  replyToUpload(transport, 'pattern', []);
+  expect(await pattern).toEqual(ok());
+
+  const preset = engine.putResources([resource('tip'), resource('pattern')]);
+  await vi.waitFor(() => replyToUpload(transport, 'tip', ['pattern']));
+  await vi.waitFor(() => replyToUpload(transport, 'pattern', []));
+  expect(await preset).toEqual(ok());
+  expect(uploads(transport)).toEqual(['pattern', 'tip', 'pattern']);
 });
 
 it('abandons a switch that gets no checkpoint, keeping the engine editable', () => {
@@ -247,32 +312,74 @@ it('abandons a switch that gets no checkpoint, keeping the engine editable', () 
   }
 });
 
-it.each(['error', 'timeout'] as const)('completes a switch when the retired engine fails to dispose (%s)', (failure) => {
+it.each(['error', 'timeout'] as const)(
+  'completes a switch when the retired engine fails to dispose (%s)',
+  (failure) => {
+    vi.useFakeTimers();
+    try {
+      const { engine } = mount();
+      const first = transports.opened[0]!;
+      reply(first, { type: 'ready' });
+      engine.switchMode('main');
+      flush();
+      reply(first, { type: 'checkpointed' });
+      expect(first.post).toHaveBeenLastCalledWith({ type: 'dispose' });
+
+      if (failure === 'error') {
+        reply(first, { type: 'error', recoverable: false, message: 'Storage closed' });
+      } else {
+        vi.advanceTimersByTime(60_000);
+        flush();
+      }
+
+      expect(first.close).toHaveBeenCalledOnce();
+      expect(engine.mode()).toBe('main');
+      expect(transports.opened).toHaveLength(2);
+      reply(transports.opened[1]!, { type: 'ready' });
+      expect(engine.canEdit()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+);
+
+it('ends a switch whose replacement engine never becomes ready', () => {
   vi.useFakeTimers();
   try {
-    const { engine } = mount();
+    const { engine, error } = mount();
     const first = transports.opened[0]!;
     reply(first, { type: 'ready' });
     engine.switchMode('main');
     flush();
     reply(first, { type: 'checkpointed' });
-    expect(first.post).toHaveBeenLastCalledWith({ type: 'dispose' });
-
-    if (failure === 'error') {
-      reply(first, { type: 'error', recoverable: false, message: 'Storage closed' });
-    } else {
-      vi.advanceTimersByTime(60_000);
-      flush();
-    }
-
-    expect(first.close).toHaveBeenCalledOnce();
-    expect(engine.mode()).toBe('main');
+    reply(first, { type: 'disposed' });
     expect(transports.opened).toHaveLength(2);
-    reply(transports.opened[1]!, { type: 'ready' });
-    expect(engine.canEdit()).toBe(true);
+    expect(engine.switching()).toBe(true);
+
+    vi.advanceTimersByTime(60_000);
+    flush();
+    expect(engine.switching()).toBe(false);
+    expect(error()).toMatchObject({ kind: 'engine', code: 'timeout' });
   } finally {
     vi.useRealTimers();
   }
+});
+
+it('stays paused when the renderer fails while a preset is restored', async () => {
+  const { engine, presets } = mount();
+  const first = transports.opened[0]!;
+  reply(first, { type: 'ready' });
+  const applying = presets.usePreset(inkPreset());
+  confirmUpload(first);
+  expect(await applying).toEqual(ok());
+
+  // A recovered renderer reports `ready` again, then is lost before the preset's restore settles.
+  reply(first, { type: 'ready' });
+  expect(engine.ready()).toBe(false);
+  reply(first, { type: 'error', recoverable: true, code: 'lost', message: 'Device lost' });
+  await new Promise((resolve) => setTimeout(resolve));
+  flush();
+  expect(engine.ready()).toBe(false);
 });
 
 it('refuses to switch during a stroke and saves pending changes when the page is hidden', () => {
@@ -312,10 +419,10 @@ function mount() {
     editor = assemble();
     return (
       <div>
-        <Show when={editor.engine.mode()} keyed>
-          {(mode) => (
+        <Show when={editor.engine.session()} keyed>
+          {(session) => (
             <PaintCanvas
-              connect={(canvas) => editor.engine.connect(canvas, mode)}
+              connect={(canvas) => editor.engine.connect(canvas, session.mode)}
               input={{
                 camera: defaultCamera,
                 size: () => ({ width: 256, height: 256 }),
@@ -353,7 +460,7 @@ function assemble() {
     send: engine.send
   });
   const presets = createAbrPresets({
-    upload: engine.putResource,
+    upload: engine.putResources,
     canChange: () => engine.canEdit() && !engine.isDrawing(),
     select: tools.selectPreset
   });
@@ -381,6 +488,28 @@ function reply(transport: FakeTransport, event: PaintEvent) {
 
 function uploaded(transport: FakeTransport) {
   return transport.post.mock.calls.map(([command]) => command).find((command) => command.type === 'brush-resources');
+}
+
+function uploads(transport: FakeTransport) {
+  return transport.post.mock.calls.flatMap(([command]) =>
+    command.type === 'brush-resources' && command.action === 'put' ? [command.resource.id] : []
+  );
+}
+
+/** Acknowledges the latest upload, which must be `id`, reporting `evicted` as removed from the engine cache. */
+function replyToUpload(transport: FakeTransport, id: string, evicted: string[]) {
+  const request = transport.post.mock.calls
+    .map(([command]) => command)
+    .findLast((command) => command.type === 'brush-resources');
+  if (request?.type !== 'brush-resources' || request.action !== 'put' || request.resource.id !== id) {
+    throw new Error(`Expected an upload of ${id}`);
+  }
+
+  reply(transport, {
+    type: 'brush-resources',
+    requestId: request.requestId,
+    result: { ok: true, value: { evicted, stats: { bytes: 1, entries: 1, pinnedBytes: 0 } } }
+  });
 }
 
 function confirmUpload(transport: FakeTransport) {

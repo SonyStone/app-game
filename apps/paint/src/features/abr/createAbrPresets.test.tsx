@@ -18,8 +18,6 @@ it('applies a preset only after every resource upload succeeds, and restores it 
   const applying = presets.usePreset(preset());
   expect(presets.isBusy()).toBe(true);
   expect((await presets.usePreset(preset()))._unsafeUnwrapErr()).toMatchObject({ kind: 'engine', code: 'busy' });
-  uploads.resolve(ok());
-  await vi.waitFor(() => expect(uploads.upload).toHaveBeenCalledTimes(2));
   expect(select).not.toHaveBeenCalled();
   uploads.resolve(ok());
   expect(await applying).toEqual(ok());
@@ -33,10 +31,11 @@ it('applies a preset only after every resource upload succeeds, and restores it 
 
   const restoring = presets.restore()!;
   uploads.resolve(ok());
-  await vi.waitFor(() => expect(uploads.upload).toHaveBeenCalledTimes(4));
-  uploads.resolve(ok());
   expect(await restoring).toEqual(ok());
-  expect(uploads.upload.mock.calls.map(([resource]) => resource.id)).toEqual(['tip', 'pattern', 'tip', 'pattern']);
+  expect(uploads.upload.mock.calls.map(([resources]) => resources.map(({ id }) => id))).toEqual([
+    ['tip', 'pattern'],
+    ['tip', 'pattern']
+  ]);
 });
 
 it('keeps the applied preset after a failed upload and reports restore failures as restorable', async () => {
@@ -68,8 +67,6 @@ it('refuses presets without a tip, and resolves uploads finishing after disposal
   dispose?.();
   dispose = undefined;
   uploads.resolve(ok());
-  await vi.waitFor(() => expect(uploads.upload).toHaveBeenCalledTimes(2));
-  uploads.resolve(ok());
   expect((await applying)._unsafeUnwrapErr()).toMatchObject({ kind: 'aborted' });
 });
 
@@ -83,8 +80,8 @@ function setup(options: Pick<Parameters<typeof createAbrPresets>[0], 'upload' | 
 /** Upload results that the test resolves one at a time, in call order. */
 function deferredUploads() {
   const pending: ((result: Result<void, PaintError>) => void)[] = [];
-  const upload = vi.fn(
-    (_resource: { id: string }) => new Promise<Result<void, PaintError>>((resolve) => pending.push(resolve))
+  const upload = vi.fn<(resources: readonly { id: string }[]) => Promise<Result<void, PaintError>>>(
+    () => new Promise((resolve) => pending.push(resolve))
   );
   return {
     upload,

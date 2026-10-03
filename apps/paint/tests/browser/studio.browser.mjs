@@ -85,9 +85,12 @@ try {
     await page.getByLabel('Web Worker + OffscreenCanvas').click();
     await page.waitForURL(/paintThread=main/);
     await page.getByRole('button', { name: 'Close developer tools' }).click();
+    // Undo history belongs to one engine session, so a disabled Undo shows that the replacement engine has reported
+    // its own document state; until then the editor still shows the previous engine's state.
+    const undo = page.getByRole('button', { name: 'Undo' });
+    await undo.and(page.locator(':disabled')).waitFor({ timeout: 30_000 });
     await waitForSaved(page);
-    // Undo history belongs to one engine session; the replacement restores the saved drawing, so the empty-canvas
-    // hint stays hidden.
+    // The replacement restored the saved drawing, so the empty-canvas hint stays hidden.
     assert.equal(await page.getByText('Pen to draw. Touch to move.').count(), 0);
   });
 

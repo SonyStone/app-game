@@ -3,20 +3,23 @@ import { panCamera, transformAt, type Camera, type ViewSize } from '@app-game/pa
 
 /** Adapts shared client-space navigation to Paint's clockwise 2D camera. */
 export function createPaintNavigation(params: {
+  /** Canvas size in CSS pixels; gestures transform the camera within it. */
   size: () => ViewSize;
+  /** Current camera, read untracked from gesture handlers. */
   camera: () => Camera;
+  /** Receives the camera produced by a gesture. */
   navigate: (camera: Camera) => void;
-  viewport?: () => { left: number; top: number; width: number; height: number };
+  /** Client-space bounds of the canvas; the puck is clamped to it and gesture points are offset by its corner. */
+  viewport: () => { left: number; top: number; width: number; height: number };
 }) {
-  const viewport = () => params.viewport?.() ?? { left: 0, top: 0, ...params.size() };
   return createNavigationPuck({
-    viewport,
+    viewport: params.viewport,
     mode: () => '2d',
     rotation: () => params.camera().angle,
     orbit: () => {},
     transform: (gesture) => {
-      const rect = viewport(),
-        camera = params.camera();
+      const rect = params.viewport();
+      const camera = params.camera();
       const next = transformAt(
         camera,
         params.size(),

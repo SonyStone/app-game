@@ -5,74 +5,71 @@ import styles from './BrushPanel.module.css';
 
 /** Controls the captured settings of the next stroke, including independent flow and opacity. */
 export function BrushPanel(props: BrushControlsProps) {
-  const brush = () => props.brush;
-  const updateBrush = (patch: Partial<Brush>) => props.onChange(patch);
-
   return (
     <>
       <StrokeControls brush={props.brush} onChange={props.onChange} />
       <section>
         <div class={styles.sectionHeading}>
-          <span>{brush().engine?.id === 'textured' ? 'Textured tip' : 'Soft round'}</span>
+          <span>{props.brush.engine?.id === 'textured' ? 'Textured tip' : 'Soft round'}</span>
         </div>
         <Range
           label="Size"
-          value={brush().size}
+          value={props.brush.size}
           min={1}
           max={512}
           step={1}
           suffix=" px"
-          change={(size) => updateBrush({ size })}
+          change={(size) => props.onChange({ size })}
         />
         <Range
           label="Opacity"
-          value={brush().opacity * 100}
+          value={props.brush.opacity * 100}
           min={1}
           max={100}
           suffix="%"
-          change={(opacity) => updateBrush({ opacity: opacity / 100 })}
+          change={(opacity) => props.onChange({ opacity: opacity / 100 })}
         />
         <Range
           label="Flow"
-          value={brush().flow * 100}
+          value={props.brush.flow * 100}
           min={1}
           max={100}
           suffix="%"
-          change={(flow) => updateBrush({ flow: flow / 100 })}
+          change={(flow) => props.onChange({ flow: flow / 100 })}
         />
-        <Show when={brush().engine?.id !== 'textured'}>
+        <Show when={props.brush.engine?.id !== 'textured'}>
           <Range
             label="Hardness"
-            value={brush().hardness * 100}
+            value={props.brush.hardness * 100}
             min={0}
             max={100}
             suffix="%"
-            change={(hardness) => updateBrush({ hardness: hardness / 100 })}
+            change={(hardness) => props.onChange({ hardness: hardness / 100 })}
           />
         </Show>
-        <Show when={brush().engine?.id === 'textured'}>
+        <Show when={props.brush.engine?.id === 'textured'}>
           <Range
             label="Tip spacing"
-            value={brush().spacing * 100}
+            value={props.brush.spacing * 100}
             min={1}
             max={100}
             suffix="%"
-            change={(spacing) => updateBrush({ spacing: spacing / 100 })}
+            change={(spacing) => props.onChange({ spacing: spacing / 100 })}
           />
         </Show>
         <label class={styles.check}>
           <input
             type="checkbox"
-            checked={brush().pressureSize}
-            onChange={(e) => updateBrush({ pressureSize: e.currentTarget.checked })}
+            checked={props.brush.pressureSize}
+            onChange={(e) => props.onChange({ pressureSize: e.currentTarget.checked })}
           />
           Pressure controls size
         </label>
         <label class={styles.check}>
           <input
             type="checkbox"
-            checked={brush().pressureFlow}
-            onChange={(e) => updateBrush({ pressureFlow: e.currentTarget.checked })}
+            checked={props.brush.pressureFlow}
+            onChange={(e) => props.onChange({ pressureFlow: e.currentTarget.checked })}
           />
           Pressure controls flow
         </label>
@@ -80,8 +77,8 @@ export function BrushPanel(props: BrushControlsProps) {
           Color mixing
           <select
             aria-label="Brush color mixing"
-            value={brush().mixing}
-            onChange={(e) => updateBrush({ mixing: e.currentTarget.value === 'linear' ? 'linear' : 'classic' })}
+            value={props.brush.mixing}
+            onChange={(e) => props.onChange({ mixing: e.currentTarget.value === 'linear' ? 'linear' : 'classic' })}
           >
             <option value="linear">Smooth color</option>
             <option value="classic">Classic</option>

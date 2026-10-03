@@ -68,7 +68,7 @@ export async function measurePainting(
     await device.queue.onSubmittedWorkDone();
     if (errors.length) throw new Error(errors.join('\n'));
     const mean = (values: number[]) => (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2);
-    const p95 = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length * 0.95)]!.toFixed(2);
+    const p95 = (values: number[]) => nearestRankP95(values).toFixed(2);
     report(
       JSON.stringify(
         {
@@ -162,7 +162,7 @@ export async function measureNavigation(report: (message: string) => void) {
           allocations,
           cpuMeanMs: mean(cpu),
           completedMeanMs: mean(completed),
-          completedP95Ms: +completed.sort((a, b) => a - b)[57]!.toFixed(2)
+          completedP95Ms: +nearestRankP95(completed).toFixed(2)
         },
         null,
         2
@@ -172,4 +172,9 @@ export async function measureNavigation(report: (message: string) => void) {
     renderer.destroy();
     device.destroy();
   }
+}
+
+/** Nearest-rank 95th percentile, as in the performance monitor's reports: the ⌈0.95·n⌉-th smallest value. */
+function nearestRankP95(values: number[]) {
+  return [...values].sort((a, b) => a - b)[Math.ceil(values.length * 0.95) - 1]!;
 }

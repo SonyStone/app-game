@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { flush } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defaultBrush } from '@app-game/paint-core/brush';
 import { defaultCamera, screenToWorld } from '@app-game/paint-core/camera';
 import { attachInput } from '@app-game/paint-core/input';
-import { createPaintNavigation as createNavigationPuck } from '../camera/paintNavigation';
 import type { PaintCommand } from '@app-game/paint-core/protocol';
+import { flush } from 'solid-js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createPaintNavigation as createNavigationPuck } from '../camera/paintNavigation';
 
 const disposals: (() => void)[] = [];
 afterEach(() => {
@@ -94,7 +94,9 @@ describe('input to worker contract', () => {
   it('preserves tilt, wheel and barrel rotation on the first and coalesced samples', () => {
     const { commands, pointer } = setup();
     pointer('pointerdown', 10, 10, { pointerType: 'pen', tiltX: 30, tiltY: -10, twist: 350, tangentialPressure: 0.4 });
-    expect(commands[0]).toMatchObject({ samples: [{ pointerType: 'pen', tiltX: 30, tiltY: -10, rotation: 350, tangentialPressure: 0.4 }] });
+    expect(commands[0]).toMatchObject({
+      samples: [{ pointerType: 'pen', tiltX: 30, tiltY: -10, rotation: 350, tangentialPressure: 0.4 }]
+    });
     pointer('pointermove', 20, 20, {
       pointerType: 'pen',
       getCoalescedEvents: () => [
@@ -282,6 +284,19 @@ describe('input to worker contract', () => {
     flush();
     expect(puck.center()).toBeUndefined();
   });
+  it("erases with the pen's eraser end, even with the lasso, and ignores it without an eraser brush", () => {
+    const eraser = { ...defaultBrush(), tool: 'eraser' as const, size: 40 };
+    const selection = { enabled: () => true, begin: vi.fn(), move: vi.fn(), end: vi.fn(), cancel: vi.fn() };
+    const { pointer, commands } = setup(selection, defaultBrush, undefined, defaultCamera, () => eraser);
+    pointer('pointerdown', 400, 300, { pointerType: 'pen', button: 5, buttons: 32 });
+    pointer('pointerup', 410, 300, { pointerType: 'pen', button: 5 });
+    expect(selection.begin).not.toHaveBeenCalled();
+    expect(commands[0]).toMatchObject({ type: 'begin', brush: eraser });
+
+    const ignored = setup();
+    ignored.pointer('pointerdown', 400, 300, { pointerType: 'pen', button: 5, buttons: 32 });
+    expect(ignored.commands).toEqual([]);
+  });
   it('keeps CSS coordinates independent of canvas backing resolution', () => {
     const { canvas, commands, pointer } = setup();
     canvas.width = 1600;
@@ -295,7 +310,8 @@ function setup(
   selection?: Parameters<typeof attachInput>[1]['selection'],
   brush = defaultBrush,
   canvasAction?: Parameters<typeof attachInput>[1]['canvasAction'],
-  camera = defaultCamera
+  camera = defaultCamera,
+  eraser?: Parameters<typeof attachInput>[1]['eraser']
 ) {
   vi.stubGlobal(
     'requestAnimationFrame',
@@ -309,12 +325,18 @@ function setup(
     navigate = vi.fn();
   const cursor = vi.fn(),
     rawUpdate = vi.fn();
-  const puck = createNavigationPuck({ size: () => ({ width: 800, height: 600 }), camera: defaultCamera, navigate });
+  const puck = createNavigationPuck({
+    size: () => ({ width: 800, height: 600 }),
+    camera: defaultCamera,
+    navigate,
+    viewport: () => ({ left: 0, top: 0, width: 800, height: 600 })
+  });
   disposals.push(
     attachInput(canvas, {
       camera,
       size: () => ({ width: 800, height: 600 }),
       brush,
+      eraser,
       ready: () => true,
       navigate,
       send: (c) => commands.push(c),

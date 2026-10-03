@@ -11,14 +11,13 @@ export function LayersPanel(props: {
   ready: boolean;
   onAction: (action: LayerAction) => void;
 }) {
-  const state = () => props.state;
-  const layer = (action: LayerAction) => props.onAction(action);
-  const selected = () => state().layers.find((item) => item.id === state().activeId)!;
+  const selected = () => props.state.layers.find((item) => item.id === props.state.activeId)!;
+
   return (
     <section class="paint-layers">
       <div class={styles.sectionHeading}>
-        <span>{state().layers.length} layers</span>
-        <button aria-label="Add layer" disabled={!props.ready} onClick={() => layer({ type: 'add' })}>
+        <span>{props.state.layers.length} layers</span>
+        <button aria-label="Add layer" disabled={!props.ready} onClick={() => props.onAction({ type: 'add' })}>
           <SketchIcon name="plus" size={18} />
         </button>
       </div>
@@ -27,7 +26,11 @@ export function LayersPanel(props: {
           aria-label="Layer blend mode"
           value={selected().blend}
           onChange={(e) =>
-            layer({ type: 'update', id: state().activeId, patch: { blend: e.currentTarget.value as BlendMode } })
+            props.onAction({
+              type: 'update',
+              id: props.state.activeId,
+              patch: { blend: e.currentTarget.value as BlendMode }
+            })
           }
         >
           <option value="linear">Smooth color</option>
@@ -51,7 +54,9 @@ export function LayersPanel(props: {
               return;
             }
 
-            layer({ type: 'update', id: state().activeId, patch: { opacity: percent / 100 } });
+            // Show the clamped value: when it equals the current opacity, the bound `value` does not change.
+            e.currentTarget.value = String(Math.round(percent));
+            props.onAction({ type: 'update', id: props.state.activeId, patch: { opacity: percent / 100 } });
           }}
         />
         <span>%</span>
@@ -64,20 +69,21 @@ export function LayersPanel(props: {
             : 'Standard layer blend mode.'}
       </p>
       <div class={styles.layerList}>
-        <For each={[...state().layers].reverse()} keyed={(item) => item.id}>
+        <For each={[...props.state.layers].reverse()} keyed={(item) => item.id}>
           {(item) => (
-            <div class={[styles.layer, { [styles.selected!]: item().id === state().activeId }]}>
+            <div class={[styles.layer, { [styles.selected!]: item().id === props.state.activeId }]}>
               <button
                 class={styles.layerEye}
                 aria-label={`${item().visible ? 'Hide' : 'Show'} ${item().name}`}
-                onClick={() => layer({ type: 'update', id: item().id, patch: { visible: !item().visible } })}
+                onClick={() => props.onAction({ type: 'update', id: item().id, patch: { visible: !item().visible } })}
               >
                 <SketchIcon name={item().visible ? 'eye' : 'hidden'} size={18} />
               </button>
               <button
                 class={styles.layerSelect}
                 aria-label={`Select ${item().name}`}
-                onClick={() => layer({ type: 'select', id: item().id })}
+                aria-current={item().id === props.state.activeId ? 'true' : undefined}
+                onClick={() => props.onAction({ type: 'select', id: item().id })}
               >
                 <SketchIcon name="paper" size={26} />
                 <span>
@@ -94,7 +100,7 @@ export function LayersPanel(props: {
           aria-label="Move layer up"
           title="Move layer up"
           disabled={!props.ready}
-          onClick={() => layer({ type: 'move', id: state().activeId, direction: 1 })}
+          onClick={() => props.onAction({ type: 'move', id: props.state.activeId, direction: 1 })}
         >
           <SketchIcon name="up" size={18} />
         </button>
@@ -102,15 +108,15 @@ export function LayersPanel(props: {
           aria-label="Move layer down"
           title="Move layer down"
           disabled={!props.ready}
-          onClick={() => layer({ type: 'move', id: state().activeId, direction: -1 })}
+          onClick={() => props.onAction({ type: 'move', id: props.state.activeId, direction: -1 })}
         >
           <SketchIcon name="down" size={18} />
         </button>
         <button
           aria-label="Delete layer"
           title="Delete selected layer"
-          disabled={!props.ready || state().layers.length <= 1}
-          onClick={() => layer({ type: 'delete', id: state().activeId })}
+          disabled={!props.ready || props.state.layers.length <= 1}
+          onClick={() => props.onAction({ type: 'delete', id: props.state.activeId })}
         >
           Delete
         </button>

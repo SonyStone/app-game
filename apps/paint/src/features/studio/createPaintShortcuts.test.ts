@@ -65,3 +65,19 @@ it('ignores single-key tool and size shortcuts held with modifiers', () => {
   expect(actions.chooseTool).toHaveBeenCalledWith('brush');
   expect(actions.scaleBrush).toHaveBeenCalledWith(1.25);
 });
+
+it('matches letters and brackets by physical key on non-Latin layouts, and by the typed letter on Latin ones', () => {
+  const actions = mount(() => false);
+
+  press('и', { code: 'KeyB' });
+  press('х', { code: 'BracketLeft' });
+  press('я', { code: 'KeyZ', ctrlKey: true });
+  expect(actions.chooseTool).toHaveBeenCalledWith('brush');
+  expect(actions.scaleBrush).toHaveBeenCalledWith(0.8);
+  expect(actions.undo).toHaveBeenCalledOnce();
+
+  // Dvorak types `e` on the physical D key.
+  press('e', { code: 'KeyD' });
+  expect(actions.chooseTool).toHaveBeenLastCalledWith('eraser');
+  expect(actions.resetColors).not.toHaveBeenCalled();
+});

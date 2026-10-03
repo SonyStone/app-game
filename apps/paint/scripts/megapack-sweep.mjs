@@ -1,6 +1,6 @@
 import { readAdobeBrushFixture } from '../../../scripts/adobe-brush-fixture.mjs';
 import { chromium } from '@playwright/test';
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,8 +26,9 @@ import { parseArgs } from 'node:util';
  * the view's resolution (tests/performance/lodQuality.ts). It needs no tablet; run it headless.
  *
  * Rows are appended to --output (JSON lines, default under the OS temporary directory) after every preset. Presets
- * already present in the file are skipped, so an interrupted sweep resumes by running the same command again. A
- * crashed tab is reopened and the preset that crashed it is recorded as an error.
+ * measured in the same mode (speed or --quality) without an error are skipped, so an interrupted sweep resumes by
+ * running the same command again, and presets that failed are retried. A crashed tab is reopened and the preset that
+ * crashed it is recorded as an error. Exits non-zero when every preset measured in this run failed.
  */
 const paintRoot = fileURLToPath(new URL('..', import.meta.url));
 const repositoryRoot = path.resolve(paintRoot, '../..');
@@ -54,12 +55,14 @@ if (isInside(output, repositoryRoot)) {
 }
 
 await mkdir(path.dirname(output), { recursive: true });
-const done = new Set(
-  (await readFile(output, 'utf8').catch(() => ''))
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => JSON.parse(line).index)
-);
+const mode = values.quality ? 'quality' : 'speed';
+const previous = (await readFile(output, 'utf8').catch(() => ''))
+  .split('\n')
+  .filter(Boolean)
+  .map((line) => JSON.parse(line))
+  .filter((row) => rowMode(row) === mode);
+const failed = new Set(previous.filter((row) => row.error).map((row) => row.index));
+const done = new Set(previous.map((row) => row.index).filter((index) => !failed.has(index)));
 
 const fixture = await readAdobeBrushFixture(values.fixture);
 const server = await startPaintServer(Number(values.port), fixture);
@@ -76,6 +79,7 @@ let page;
 try {
   let count = await openPage();
   const indices = selectPresets(values.presets, count).filter((index) => !done.has(index));
+  let succeeded = 0;
   console.log(`${indices.length} presets to measure (${done.size} already in ${output})`);
   const options = {
     zooms: values.zooms.split(',').map(Number),
@@ -108,7 +112,11 @@ try {
       count = await openPage();
     }
 
-    await appendFile(output, rows.map((row) => JSON.stringify(row)).join('\n') + '\n');
+    await appendFile(output, rows.map((row) => JSON.stringify({ ...row, mode })).join('\n') + '\n');
+    if (rows.some((row) => !row.error)) {
+      succeeded++;
+    }
+
     for (const row of rows) {
       if (values.quality) {
         console.log(
@@ -128,6 +136,9 @@ try {
   }
 
   console.log(`Wrote ${output}`);
+  if (indices.length && !succeeded) {
+    process.exitCode = 1;
+  }
 } finally {
   await page?.close().catch(() => {});
   // A CDP session belongs to the user's Chrome; only a launched browser is closed.
@@ -138,7 +149,12 @@ try {
   await server.close();
 }
 
-process.exit(0);
+process.exit();
+
+/** Whether a row measured speed or appearance; rows written before rows carried `mode` are told apart by `lod`. */
+function rowMode(row) {
+  return row.mode ?? ('lod' in row ? 'quality' : 'speed');
+}
 
 /** Opens the blank benchmark route, loads the library in the page and returns its preset count. */
 async function openPage() {
@@ -164,14 +180,23 @@ async function openPage() {
   }, fixtureUrl);
 }
 
-/** Parses `a-b` ranges and comma-separated indices; every preset by default. */
+/**
+ * Parses `a-b` ranges and comma-separated indices; every preset by default. Throws on a malformed part or an index
+ * outside the library, rather than measuring nothing.
+ */
 function selectPresets(selection, count) {
   if (!selection) {
     return Array.from({ length: count }, (_, index) => index);
   }
 
   return selection.split(',').flatMap((part) => {
-    const [from, to = from] = part.split('-').map(Number);
+    const match = /^(\d+)(?:-(\d+))?$/.exec(part.trim());
+    const from = Number(match?.[1]);
+    const to = Number(match?.[2] ?? from);
+    if (!match || from > to || to >= count) {
+      throw new Error(`--presets part "${part}" must be an index or range within 0-${count - 1}.`);
+    }
+
     return Array.from({ length: to - from + 1 }, (_, offset) => from + offset);
   });
 }

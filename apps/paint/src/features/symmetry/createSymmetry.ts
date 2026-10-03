@@ -20,10 +20,9 @@ export function createSymmetry(options: {
 
   return {
     symmetry,
-    canUpdate: options.canUpdate,
     /**
-     * Validates and applies new settings as an undoable document change. Returns false, leaving the guide unchanged,
-     * while document commands are suspended.
+     * Validates and applies new settings; they are saved with the document but are not an undo step. Returns false,
+     * leaving the guide unchanged, while document commands are suspended.
      */
     update(settings: PaintSymmetry): boolean {
       if (!latest(options.canUpdate)) {

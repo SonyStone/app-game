@@ -61,3 +61,8 @@ export type InstallError = { kind: 'install'; message: string; cause: unknown };
 export function isRestorable(error: PaintError): boolean {
   return error.kind === 'gpu' || (error.kind === 'brush' && error.code === 'restore');
 }
+
+/** Whether the drawing engine itself stopped, so only a new engine (`PaintEngine.restart`) can continue. */
+export function isRestartable(error: PaintError): boolean {
+  return error.kind === 'engine' && error.code === 'stopped';
+}

@@ -13,7 +13,7 @@ export function StudioPanel(props: {
   return (
     <>
       <button class={styles.panelDismiss} aria-label="Close panel" onClick={() => props.onClose()} />
-      <aside id="paint-panel" class={styles.panel} data-panel={props.id} aria-label={`${props.id} panel`}>
+      <aside id="paint-panel" class={styles.panel} data-panel={props.id} aria-label={props.title}>
         <div class={styles.panelTitle}>
           <strong>{props.title}</strong>
           <button aria-label="Close controls" onClick={() => props.onClose()}>

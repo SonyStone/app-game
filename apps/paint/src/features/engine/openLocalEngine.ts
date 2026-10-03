@@ -14,7 +14,8 @@ export function openLocalEngine(canvas: HTMLCanvasElement, init: EngineInit, han
   let closed = false;
   const queued: PaintRuntimeCommand[] = [];
   deliver({ type: 'init', canvas, ...structuredClone(init) });
-  void import('./StudioApplication').then(start, (cause: unknown) => {
+  // `catch` also reports a runtime that throws while starting, not only a module that fails to load.
+  void import('./StudioApplication').then(start).catch((cause: unknown) => {
     if (!closed) {
       handlers.error({ kind: 'create', cause });
     }

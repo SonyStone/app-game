@@ -120,7 +120,7 @@ export function ColorPanel(props: {
         aria-label="Hue"
         aria-valuemin="0"
         aria-valuemax="359"
-        aria-valuenow={Math.round(hsv().h)}
+        aria-valuenow={Math.min(359, Math.round(hsv().h))}
         onKeyDown={(event) => {
           const delta = ARROWS[event.key];
           const h =

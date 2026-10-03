@@ -31,15 +31,19 @@ The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhos
 | Zoom and rotate                       | Two fingers                                               |
 | Zoom                                  | Wheel, top buttons or Puck                                |
 | Puck                                  | Hold Space, V, right button or the bottom-right button    |
-| Brush / eraser                        | B / E                                                     |
+| Brush / eraser                        | B / E (the eraser keeps its own size and flow)            |
+| Erase without switching tools         | The pen's eraser end                                      |
 | Lasso                                 | L                                                         |
 | Copy / cut / paste selection          | Ctrl or Cmd + C / X / V while Lasso is selected           |
 | Deselect                              | Escape or Ctrl/Cmd + D                                    |
 | Delete selected pixels                | Delete / Backspace while Lasso is selected                |
 | Brush size                            | [ / ]                                                     |
+| Swap / reset colors                   | X / D                                                     |
 | Undo / redo                           | Ctrl or Cmd + Z / Shift + Z                               |
 | Save file                             | Ctrl or Cmd + S                                           |
 | Cancel current stroke                 | Escape                                                    |
+
+Letter and bracket shortcuts also work on non-Latin keyboard layouts: they fall back to the physical key.
 
 Touches are ignored while drawing with a pen. This is simple palm rejection, not a tablet contact classifier.
 
@@ -255,7 +259,7 @@ Local synthetic run 2026-09-06: a 512 px brush over 325 tiles is processed in 87
 
 Developer → **Web Worker + OffscreenCanvas** switches the execution mode. The worker is the default; turning it off runs the same `paint-core/src/paintRuntime.ts` on the main thread with a regular `HTMLCanvasElement`. `src/features/engine/openLocalEngine.ts` loads the engine through a dynamic import only for this mode and keeps mutable data isolated by cloning messages like a worker boundary. The worker transport is `src/features/engine/openPaintTransport.ts`, using `openWorker` from `@app-game/solid-gpu/worker`. Local mode creates no Worker/OffscreenCanvas; PNG is exported through `HTMLCanvasElement.toBlob`.
 
-Switching sends `checkpoint`, temporarily blocks editing commands and waits for `checkpointed` after a successful IndexedDB write. If saving fails, the old canvas keeps working. After `dispose` and the `disposed` reply, the mode changes and Solid replaces only the canvas: `src/features/canvas/PaintCanvas.tsx` is keyed with `<Show when={engine.mode()} keyed>`, so the old element is removed together with its input/resize/listeners and a new one is mounted. The page, panels, brush and Developer settings stay in place; the ready engine restores the document and camera. Undo and the internal selection clipboard are reset. `history.replaceState` updates `?paintThread=main` without navigation. **Check execution modes** on the QA page compares documents byte for byte in both directions and checks the regular canvas PNG.
+Switching sends `checkpoint`, temporarily blocks editing commands and waits for `checkpointed` after a successful IndexedDB write. If saving fails, the old canvas keeps working. After `dispose` and the `disposed` reply, the mode changes and Solid replaces only the canvas: `src/features/canvas/PaintCanvas.tsx` is keyed with `<Show when={engine.session()} keyed>`, so the old element is removed together with its input/resize/listeners and a new one is mounted. The page, panels, brush and Developer settings stay in place; the ready engine restores the document and camera. Undo and the internal selection clipboard are reset. `history.replaceState` updates `?paintThread=main` without navigation. **Check execution modes** on the QA page compares documents byte for byte in both directions and checks the regular canvas PNG.
 
 The worker is `src/features/engine/paint.worker.ts`, imported with Vite's `?worker`. Both Vite configs, main and standalone, set ES modules and separate Solid/TypeGPU plugin instances for the worker build. Transferring OffscreenCanvas and sample arrays stays an explicit protocol; replacing the constructor with an RPC primitive does not replace building shader modules.
 

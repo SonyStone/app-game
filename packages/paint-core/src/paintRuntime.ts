@@ -93,8 +93,14 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         residentTiles: stats?.residentTiles ?? 0
       });
     };
-    const failure = (error: unknown, recoverable = false, code?: GpuError['code']) =>
-      post({ type: 'error', message: errorMessage(error), recoverable, ...(code ? { code } : {}) });
+    const failure = (error: unknown, recoverable = false, code?: GpuError['code'], background = false) =>
+      post({
+        type: 'error',
+        message: errorMessage(error),
+        recoverable,
+        ...(code ? { code } : {}),
+        ...(background ? { background } : {})
+      });
     const reportResult = (result: Awaited<ReturnType<typeof attempt>>) => {
       if (!result.ok) failure(result.error);
     };
@@ -102,7 +108,9 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       void queue.run(() => (active ? action() : undefined)).then(reportResult);
     };
     const background = (action: () => Promise<unknown>) => {
-      void attempt(action).then(reportResult);
+      void attempt(action).then((result) => {
+        if (!result.ok) failure(result.error, false, undefined, true);
+      });
     };
     let presentedAt = performance.now();
     const draw = async (exact = false) => {
