@@ -99,7 +99,7 @@ try {
     assert.equal(await redo.isDisabled(), true);
   });
 
-  await step('a drawn layer can be duplicated, renamed, merged down and the steps undone', async () => {
+  await step('a drawn layer can be duplicated, renamed, dragged, merged down and the steps undone', async () => {
     await page.getByRole('button', { name: 'Layers' }).click();
     const panel = page.getByRole('complementary', { name: 'Layers' });
     await panel.getByRole('button', { name: 'Duplicate layer' }).click();
@@ -109,6 +109,28 @@ try {
     await name.fill('Inks');
     await name.press('Enter');
     await panel.getByRole('button', { name: 'Select Inks' }).waitFor({ timeout: 10_000 });
+
+    // Dragging the top row's grip onto the bottom row moves the layer to the bottom.
+    const rowNames = () => panel.getByRole('button', { name: /^Select / }).allTextContents();
+    const grip = await panel.getByLabel('Reorder Inks').boundingBox();
+    const target = await panel.getByRole('button', { name: 'Select Layer 1' }).boundingBox();
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(grip.x + grip.width / 2, target.y + target.height / 2 + 4, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForFunction(
+      () => document.querySelector('[aria-label^="Select "]')?.getAttribute('aria-label') === 'Select Layer 1',
+      undefined,
+      { polling: 100, timeout: 10_000 }
+    );
+    assert.match((await rowNames()).join('|'), /^Layer 1.*\|Inks/);
+    await page.keyboard.press('Control+z');
+    await page.waitForFunction(
+      () => document.querySelector('[aria-label^="Select "]')?.getAttribute('aria-label') === 'Select Inks',
+      undefined,
+      { polling: 100, timeout: 10_000 }
+    );
+
     await panel.getByRole('button', { name: 'Merge down' }).click();
     await panel.getByText('1 layer', { exact: true }).waitFor({ timeout: 10_000 });
     assert.equal(await panel.getByLabel('Layer name').inputValue(), 'Layer 1');

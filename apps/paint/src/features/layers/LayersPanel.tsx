@@ -1,5 +1,6 @@
-import type { BlendMode, createDocument, LayerAction } from '@app-game/paint-core/document';
-import { For } from 'solid-js';
+import type { BlendMode, createDocument, LayerAction, LayerInfo } from '@app-game/paint-core/document';
+import { closestCenter, createDragContext, createDraggable, createDroppable } from '@solid-primitives/drag-drop';
+import { For, untrack } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './LayersPanel.module.css';
 
@@ -17,6 +18,16 @@ export function LayersPanel(props: {
   const selected = () => props.state.layers.find((item) => item.id === props.state.activeId)!;
   /** Position of the selected layer, bottom first, for disabling moves past either end. */
   const selectedIndex = () => props.state.layers.findIndex((item) => item.id === props.state.activeId);
+  // Dropping a row's grip on another row moves the layer to that row's position.
+  const drag = createDragContext({
+    collisionDetection: closestCenter,
+    onDragEnd(item, over) {
+      const index = props.state.layers.findIndex((layer) => layer.id === over?.id);
+      if (index >= 0 && over?.id !== item.id) {
+        props.onAction({ type: 'reorder', id: String(item.id), index });
+      }
+    }
+  });
   /** A visible layer can be merged into a visible layer below it. */
   const canMergeDown = () => {
     const below = props.state.layers[selectedIndex() - 1];
@@ -111,33 +122,20 @@ export function LayersPanel(props: {
             ? 'Blends colors in linear light.'
             : 'Standard layer blend mode.'}
       </p>
-      <div class={styles.layerList}>
-        <For each={[...props.state.layers].reverse()} keyed={(item) => item.id}>
-          {(item) => (
-            <div class={[styles.layer, { [styles.selected!]: item().id === props.state.activeId }]}>
-              <button
-                class={styles.layerEye}
-                aria-label={`${item().visible ? 'Hide' : 'Show'} ${item().name}`}
-                onClick={() => props.onAction({ type: 'update', id: item().id, patch: { visible: !item().visible } })}
-              >
-                <SketchIcon name={item().visible ? 'eye' : 'hidden'} size={18} />
-              </button>
-              <button
-                class={styles.layerSelect}
-                aria-label={`Select ${item().name}`}
-                aria-current={item().id === props.state.activeId ? 'true' : undefined}
-                onClick={() => props.onAction({ type: 'select', id: item().id })}
-              >
-                <SketchIcon name="paper" size={26} />
-                <span>
-                  {item().name}
-                  <small>Raster layer</small>
-                </span>
-              </button>
-            </div>
-          )}
-        </For>
-      </div>
+      <drag.Provider>
+        <div class={styles.layerList}>
+          <For each={[...props.state.layers].reverse()} keyed={(item) => item.id}>
+            {(item) => (
+              <LayerRow
+                layer={item()}
+                selected={item().id === props.state.activeId}
+                ready={props.ready}
+                onAction={props.onAction}
+              />
+            )}
+          </For>
+        </div>
+      </drag.Provider>
       <div class={styles.layerActions}>
         <button
           aria-label="Move layer up"
@@ -172,6 +170,61 @@ export function LayersPanel(props: {
         </button>
       </div>
     </section>
+  );
+}
+
+/**
+ * One row of the layer list: visibility, selection and a grip that drags the row onto another row's position. The row
+ * is a drop target of the panel's drag context; the grip is also keyboard-draggable (Space or Enter, arrows, then
+ * Space or Enter). Rows are keyed by layer id, so the drag registration keeps the first id.
+ */
+function LayerRow(props: {
+  layer: LayerInfo;
+  selected: boolean;
+  ready: boolean;
+  onAction: (action: LayerAction) => void;
+}) {
+  const id = untrack(() => props.layer.id);
+  const grip = createDraggable(id, undefined, { disabled: () => !props.ready });
+  const drop = createDroppable(id);
+  const offset = () => grip.transform()?.y;
+
+  return (
+    <div
+      ref={drop.ref}
+      class={[
+        styles.layer,
+        {
+          [styles.selected!]: props.selected,
+          [styles.dragging!]: grip.isDragging(),
+          [styles.dropTarget!]: drop.isOver()
+        }
+      ]}
+      style={{ transform: offset() === undefined ? undefined : `translateY(${offset()}px)` }}
+    >
+      <button
+        class={styles.layerEye}
+        aria-label={`${props.layer.visible ? 'Hide' : 'Show'} ${props.layer.name}`}
+        onClick={() => props.onAction({ type: 'update', id: props.layer.id, patch: { visible: !props.layer.visible } })}
+      >
+        <SketchIcon name={props.layer.visible ? 'eye' : 'hidden'} size={18} />
+      </button>
+      <button
+        class={styles.layerSelect}
+        aria-label={`Select ${props.layer.name}`}
+        aria-current={props.selected ? 'true' : undefined}
+        onClick={() => props.onAction({ type: 'select', id: props.layer.id })}
+      >
+        <SketchIcon name="paper" size={26} />
+        <span>
+          {props.layer.name}
+          <small>Raster layer</small>
+        </span>
+      </button>
+      <span ref={grip.ref} class={styles.layerGrip} aria-label={`Reorder ${props.layer.name}`} title="Drag to reorder">
+        <SketchIcon name="grip" size={18} />
+      </span>
+    </div>
   );
 }
 

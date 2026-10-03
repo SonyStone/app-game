@@ -251,6 +251,14 @@ export function createDocument(options: { paged?: boolean } = {}) {
           }
           break;
         }
+        case 'reorder': {
+          const index = layers.findIndex((l) => l.id === action.id);
+          if (index < 0 || index === action.index || !Number.isInteger(action.index)) return;
+          if (action.index < 0 || action.index >= layers.length) return;
+          const [layer] = layers.splice(index, 1);
+          layers.splice(action.index, 0, layer!);
+          break;
+        }
         case 'delete': {
           if (layers.length <= 1) return;
           const layer = layers.find((l) => l.id === action.id);
@@ -337,6 +345,8 @@ export type LayerAction =
   | { type: 'select' | 'delete' | 'duplicate' | 'merge-down'; id: string }
   | { type: 'add' }
   | { type: 'move'; id: string; direction: -1 | 1 }
+  /** Moves the layer to position `index`, bottom first, shifting the layers in between; out-of-range is ignored. */
+  | { type: 'reorder'; id: string; index: number }
   | { type: 'update'; id: string; patch: Partial<Pick<LayerInfo, 'name' | 'visible' | 'opacity' | 'blend'>> };
 
 function newLayer(id: string, name: string): Layer {

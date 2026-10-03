@@ -22,6 +22,7 @@
     "@app-game/navigation-puck": "workspace:*",
     "@app-game/paint-core": "workspace:*",
     "@app-game/solid-gpu": "workspace:*",
+    "@solid-primitives/drag-drop": "catalog:",
     "@solid-primitives/event-listener": "catalog:",
     "@solid-primitives/fullscreen": "catalog:",
     "@solid-primitives/media": "catalog:",

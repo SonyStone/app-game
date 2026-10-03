@@ -152,6 +152,21 @@ describe('document transactions', () => {
     expect(doc.layers).toHaveLength(1);
     expect(doc.active.tiles.has('1,0')).toBe(true);
   });
+  it('reorders a layer to any position as one undoable change, ignoring no-op and out-of-range targets', () => {
+    const doc = createDocument();
+    doc.changeLayer({ type: 'add' });
+    doc.changeLayer({ type: 'add' });
+    const [a, b, c] = doc.layers.map((layer) => layer.id);
+    doc.changeLayer({ type: 'reorder', id: c!, index: 0 });
+    expect(doc.layers.map((layer) => layer.id)).toEqual([c, a, b]);
+    const revision = doc.revision;
+    doc.changeLayer({ type: 'reorder', id: c!, index: 0 });
+    doc.changeLayer({ type: 'reorder', id: c!, index: 3 });
+    doc.changeLayer({ type: 'reorder', id: c!, index: 1.5 });
+    expect(doc.revision).toBe(revision);
+    doc.undo();
+    expect(doc.layers.map((layer) => layer.id)).toEqual([a, b, c]);
+  });
   it('drops redo after branching history and preserves layer blend settings', () => {
     const doc = createDocument();
     doc.changeLayer({ type: 'update', id: doc.active.id, patch: { blend: 'multiply', opacity: 0.5 } });

@@ -1029,6 +1029,9 @@ importers:
       '@app-game/solid-gpu':
         specifier: workspace:*
         version: link:../../packages/solid-gpu
+      '@solid-primitives/drag-drop':
+        specifier: 'catalog:'
+        version: 0.1.0-next.0(patch_hash=d1ab21250a654d0876e2832902ed55627a512cc2d31a6ceae996b1cfe95c18cf)(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
       '@solid-primitives/event-listener':
         specifier: 'catalog:'
         version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
