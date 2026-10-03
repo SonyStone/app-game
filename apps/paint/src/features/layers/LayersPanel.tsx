@@ -3,7 +3,10 @@ import { For } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './LayersPanel.module.css';
 
-/** Edits layer order, names and compositing properties, and duplicates layers, through undoable document commands. */
+/**
+ * Edits layer order, names and compositing properties, and duplicates and merges layers, through undoable document
+ * commands.
+ */
 export function LayersPanel(props: {
   /** Document state reported by the engine; each report clones every layer record. */
   state: DocumentState;
@@ -14,6 +17,11 @@ export function LayersPanel(props: {
   const selected = () => props.state.layers.find((item) => item.id === props.state.activeId)!;
   /** Position of the selected layer, bottom first, for disabling moves past either end. */
   const selectedIndex = () => props.state.layers.findIndex((item) => item.id === props.state.activeId);
+  /** A visible layer can be merged into a visible layer below it. */
+  const canMergeDown = () => {
+    const below = props.state.layers[selectedIndex() - 1];
+    return below !== undefined && below.visible && selected().visible;
+  };
 
   return (
     <section class="paint-layers">
@@ -146,6 +154,13 @@ export function LayersPanel(props: {
           onClick={() => props.onAction({ type: 'move', id: props.state.activeId, direction: -1 })}
         >
           <SketchIcon name="down" size={18} />
+        </button>
+        <button
+          title="Merge the selected layer into the layer below"
+          disabled={!props.ready || !canMergeDown()}
+          onClick={() => props.onAction({ type: 'merge-down', id: props.state.activeId })}
+        >
+          Merge down
         </button>
         <button
           aria-label="Delete layer"

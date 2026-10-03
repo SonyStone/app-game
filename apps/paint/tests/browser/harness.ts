@@ -8,6 +8,7 @@ import { verifyBrushBatches } from '../gpu/brushBatchVerification';
 import { verifyFlowAccumulation } from '../gpu/flowAccumulationVerification';
 import { verifyLargeBrush } from '../gpu/largeBrushVerification';
 import { verifyLayerComposite } from '../gpu/layerCompositeVerification';
+import { verifyLayerMerge } from '../gpu/layerMergeVerification';
 import { verifyLiveTail } from '../gpu/liveTailVerification';
 import { verifyColdNavigation } from '../gpu/navigationStreamingVerification';
 import { verifyOverviewQuality } from '../gpu/overviewQualityVerification';
@@ -67,6 +68,7 @@ export const verifications = {
   'large-brush': verifyLargeBrush,
   'flow-accumulation': verifyFlowAccumulation,
   'layer-composite': verifyLayerComposite,
+  'layer-merge': verifyLayerMerge,
   pressure: verifyPressureSpacing,
   'stroke-filtering': verifyStrokeFiltering,
   'live-tail': verifyLiveTail,
@@ -104,7 +106,9 @@ async function loadFixtureTip(): Promise<BrushResource> {
   const response = await fetch('/__fixtures/spatter_brushes.abr');
 
   if (!response.ok) {
-    throw new Error('Serve spatter_brushes.abr at /__fixtures/ (the browser runner does this) to check textured brushes.');
+    throw new Error(
+      'Serve spatter_brushes.abr at /__fixtures/ (the browser runner does this) to check textured brushes.'
+    );
   }
 
   await initAbr();

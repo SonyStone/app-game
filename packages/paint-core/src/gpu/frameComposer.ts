@@ -3,6 +3,7 @@ import { d, type TgpuRoot } from 'typegpu';
 import { TILE_SIZE } from '../brush';
 import { screenToWorld, type Camera, type ViewSize } from '../camera';
 import type { Layer } from '../document';
+import { blendModes } from '../layerMerge';
 import type { createDisplayCache } from './displayCache';
 import * as shader from './shaders';
 import type { StrokeRaster } from './strokeRaster';
@@ -205,7 +206,7 @@ export function createFrameComposer(
 
           // Each composited layer owns a settings slot, so every composite pass can share the frame encoder.
           const composite = view.composite(slot++);
-          composite.settings.write(d.vec4f(layer.opacity, BLEND_MODES.indexOf(layer.blend), 0, 0));
+          composite.settings.write(d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), 0, 0));
           const pass = frame.encoder().beginRenderPass({
             colorAttachments: [
               { view: write === view.a ? view.aRender : view.bRender, loadOp: 'clear', storeOp: 'store' }
@@ -400,9 +401,6 @@ export function renderScale(size: ViewSize, dpr: number, maxDimension: number) {
     Math.sqrt(8_388_608 / Math.max(1, size.width * size.height))
   );
 }
-
-/** Blend mode indices understood by the composite shader. */
-const BLEND_MODES = ['normal', 'multiply', 'screen', 'overlay', 'linear'];
 
 /** Identifies a presented camera and backing size without JSON-encoding objects every frame. */
 function viewSignature(camera: Camera, size: ViewSize, width: number, height: number) {

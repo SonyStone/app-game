@@ -5,6 +5,7 @@ import { defaultCamera } from './camera';
 import { createMemoryStorage } from './composition/memoryStorage';
 import type { PaintModules, PaintStorage } from './composition/contracts';
 import { createDocument } from './document';
+import { TILE_BYTES, unpackTile } from './tilePixels';
 import { createPaintRuntime } from './paintRuntime';
 import type { PaintEvent } from './protocol';
 
@@ -45,6 +46,37 @@ it('keeps GPU tile caches for layer selection and property changes, releasing on
   expect(renderer.releaseLayer.mock.calls).toEqual([[added.id]]);
   // Selection prepares nothing; every other action refreshes coverage once. The first call is renderer start.
   expect(renderer.prepareOverview).toHaveBeenCalledTimes(5);
+});
+
+it('merges a layer down from its pixels, reloading only the merged tiles, and refuses hidden layers', async () => {
+  const { runtime, renderer, document, events, storage, waitFor } = await start();
+  const lower = document.active.id;
+  const red = new Uint8Array(TILE_BYTES);
+  for (let index = 0; index < TILE_BYTES; index += 4) red.set([255, 0, 0, 255], index);
+  document.changeLayer({ type: 'add' });
+  const upper = document.active.id;
+  document.commit([{ layerId: upper, key: '2,3', before: undefined, after: red }]);
+  document.changeLayer({ type: 'update', id: upper, patch: { blend: 'normal', opacity: 0.5 } });
+
+  document.changeLayer({ type: 'update', id: lower, patch: { visible: false } });
+  runtime.send({ type: 'layer', action: { type: 'merge-down', id: upper } });
+  await waitFor(() => events.some((event) => event.type === 'error'));
+  expect(events.find((event) => event.type === 'error')).toMatchObject({
+    message: 'Show both layers before merging them.'
+  });
+  expect(document.layers).toHaveLength(2);
+
+  document.changeLayer({ type: 'update', id: lower, patch: { visible: true } });
+  runtime.send({ type: 'layer', action: { type: 'merge-down', id: upper } });
+  await waitFor(() => document.layers.length === 1);
+  // Autosave may already have moved the merged tile to storage.
+  const merged = document.active.tiles.get('2,3')!;
+  const pixels = unpackTile(merged instanceof Uint8Array ? merged : await storage.read(merged));
+  expect([...pixels.subarray(0, 4)]).toEqual([128, 0, 0, 128]);
+  expect(renderer.releaseLayer).toHaveBeenCalledWith(upper);
+  expect(renderer.restore.mock.calls.at(-1)![0]).toEqual([
+    { layerId: lower, key: '2,3', before: undefined, after: undefined }
+  ]);
 });
 
 /** Starts a runtime with volatile storage and a renderer double, then waits until it is ready. */

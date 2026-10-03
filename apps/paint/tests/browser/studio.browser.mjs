@@ -78,7 +78,7 @@ try {
     assert.equal(await redo.isDisabled(), true);
   });
 
-  await step('a drawn layer can be duplicated, renamed and the copy undone', async () => {
+  await step('a drawn layer can be duplicated, renamed, merged down and the steps undone', async () => {
     await page.getByRole('button', { name: 'Layers' }).click();
     const panel = page.getByRole('complementary', { name: 'Layers' });
     await panel.getByRole('button', { name: 'Duplicate layer' }).click();
@@ -88,8 +88,13 @@ try {
     await name.fill('Inks');
     await name.press('Enter');
     await panel.getByRole('button', { name: 'Select Inks' }).waitFor({ timeout: 10_000 });
+    await panel.getByRole('button', { name: 'Merge down' }).click();
+    await panel.getByText('1 layer', { exact: true }).waitFor({ timeout: 10_000 });
+    assert.equal(await panel.getByLabel('Layer name').inputValue(), 'Layer 1');
     await waitForSaved(page);
     await page.keyboard.press('Escape');
+    // Undo the merge, the rename and the duplicate.
+    await page.keyboard.press('Control+z');
     await page.keyboard.press('Control+z');
     await page.keyboard.press('Control+z');
     await page.getByRole('button', { name: 'Layers' }).click();

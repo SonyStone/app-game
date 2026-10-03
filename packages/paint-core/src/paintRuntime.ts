@@ -8,9 +8,11 @@ import { createResourceSession } from './composition/resourceSession';
 import { symmetryRenderer } from './composition/symmetryRenderer';
 import { readPaintFile, writePaintFile } from './paintFile';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
+import { mergeTilePixels } from './layerMerge';
 import { captureSelection, editSelection, translateSelection, type SelectionPixels } from './selection';
 import { decodeDocument, snapshotDocument } from './storage';
 import { defaultPaintSymmetry, paintSymmetrySchema, supportsPaintSymmetry } from './symmetry';
+import { unpackTile, type TileData } from './tilePixels';
 import { errorMessage, type GpuError } from '@app-game/solid-gpu/errors';
 
 /** Owns document, persistence and GPU resources in either execution mode. Commands stay ordered.
@@ -106,6 +108,25 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     };
     const enqueue = (action: () => Promise<void>) => {
       void queue.run(() => (active ? action() : undefined)).then(reportResult);
+    };
+    /** Bakes a layer into the layer below with its blend mode and opacity. Returns the lower layer's changed tiles
+     * for `renderer.restore`, which reloads them by key. */
+    const mergeDown = async (upperId: string) => {
+      const index = document.layers.findIndex((layer) => layer.id === upperId);
+      const upper = document.layers[index],
+        lower = document.layers[index - 1];
+      if (!upper || !lower) throw new Error('There is no layer below to merge into.');
+      if (!upper.visible || !lower.visible) throw new Error('Show both layers before merging them.');
+      const read = async (pixels: TileData | undefined) =>
+        pixels && unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels));
+      const merged = new Map<string, Uint8Array | undefined>();
+      for (const [key, pixels] of upper.tiles) {
+        const base = await read(lower.tiles.get(key));
+        merged.set(key, mergeTilePixels(base, (await read(pixels))!, upper.blend, upper.opacity));
+      }
+
+      document.mergeDown(upperId, merged);
+      return [...merged.keys()].map((key) => ({ layerId: lower.id, key, before: undefined, after: undefined }));
     };
     const background = (action: () => Promise<unknown>) => {
       void attempt(action).then((result) => {
@@ -572,13 +593,15 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'layer': {
             await end();
             const before = [...document.layers];
-            document.changeLayer(command.action);
+            const merged = command.action.type === 'merge-down' ? await mergeDown(command.action.id) : undefined;
+            if (command.action.type !== 'merge-down') document.changeLayer(command.action);
             // Selection changes no pixels or composition. Other actions recomposite; only a deleted
             // layer's resident tiles are released, and every other layer's GPU cache survives.
             if (command.action.type !== 'select' && renderer) {
               for (const layer of before) {
                 if (!document.layers.includes(layer)) renderer.releaseLayer(layer.id);
               }
+              if (merged) renderer.restore(merged, document.layers);
               renderer.recomposite();
               await renderer.prepareOverview(document.layers);
             }

@@ -11,7 +11,8 @@ The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhos
 - Raster canvas with sparse 256×256 tiles and negative coordinates.
 - Soft round brush, eraser, size, hardness, and independent flow and whole-stroke opacity.
 - Pen pressure controls size and flow separately. The mouse uses pressure 1.
-- Layers, visibility, order, opacity, Smooth color / Normal (classic) / Multiply / Screen / Overlay.
+- Layers, visibility, order, names, opacity, Smooth color / Normal (classic) / Multiply / Screen / Overlay; duplicate and merge down.
+- Merge down bakes the selected layer into the visible layer below with its blend mode and opacity (`paint-core/src/layerMerge.ts`, a CPU port of the display composite); the lower layer keeps its name and properties. It looks unchanged wherever the lower layer is opaque, and everywhere when both layers use the same source-over mode (Normal on Normal, Smooth color on Smooth color). Where a translucent lower layer has a different mode, the upper layer has been blended with it alone, as in Photoshop. Both layers must be visible. `layer-merge` in `test:browser` compares the presented image before and after merging.
 - The canvas fills the whole window. Compact floating tools use the `/grease-pencil-typegpu` style; brush, color, layer and file settings open on demand. On phones, panels sit at the bottom and scroll in short windows.
 - The button next to the zoom level toggles fullscreen for the whole editor. The state also updates when exiting with Escape; a browser refusal is shown as a message.
 - Undo/redo uses exact snapshots of changed tiles, including layer changes.

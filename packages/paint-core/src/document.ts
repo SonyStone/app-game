@@ -215,6 +215,8 @@ export function createDocument(options: { paged?: boolean } = {}) {
           if (layer) Object.assign(layer, action.patch);
           break;
         }
+        case 'merge-down':
+          throw new Error('Merge layers through the runtime, which reads their pixels.');
         case 'duplicate': {
           const index = layers.findIndex((l) => l.id === action.id);
           if (index < 0) return;
@@ -261,6 +263,34 @@ export function createDocument(options: { paged?: boolean } = {}) {
       }
       record({ before, after: info(), activeBefore, activeAfter: active, tiles, bytes: tileBytes(tiles) });
     },
+    /**
+     * Merges the layer `upperId` into the layer below it as one undoable change. `merged` holds the lower layer's new
+     * pixels for every tile the upper layer covers (`mergeTilePixels`; `undefined` removes the tile). The lower layer
+     * keeps its name, visibility, opacity and blend mode, and becomes active. Throws for the bottom layer.
+     */
+    mergeDown(upperId: string, merged: ReadonlyMap<string, Uint8Array | undefined>) {
+      const index = layers.findIndex((layer) => layer.id === upperId);
+      if (index <= 0) throw new Error('There is no layer below to merge into.');
+      const upper = layers[index]!,
+        lower = layers[index - 1]!;
+      const before = info(),
+        activeBefore = active;
+      const tiles: TileChange[] = [];
+      for (const [key, pixels] of merged) {
+        tiles.push({ layerId: lower.id, key, before: lower.tiles.get(key), after: pixels && packTile(pixels) });
+      }
+
+      for (const [key, pixels] of upper.tiles) tiles.push({ layerId: upper.id, key, before: pixels, after: undefined });
+      for (const change of tiles) {
+        if (change.layerId !== lower.id) continue;
+        if (change.after) lower.tiles.set(change.key, change.after);
+        else lower.tiles.delete(change.key);
+      }
+
+      layers = layers.filter((layer) => layer.id !== upperId);
+      active = lower.id;
+      record({ before, after: info(), activeBefore, activeAfter: active, tiles, bytes: tileBytes(tiles) });
+    },
     /** Restores exact snapshots, avoiding nondeterministic GPU replay during undo.
      * Returns the replaced tiles so pixel caches can reload only those, or undefined when nothing was undone.
      */
@@ -300,8 +330,11 @@ export function createDocument(options: { paged?: boolean } = {}) {
 
 /** Layer commands shared by UI and worker. Layer order runs from bottom to top. */
 export type LayerAction =
-  /** `duplicate` inserts a copy above the layer, with the same pixels and properties, and selects it. */
-  | { type: 'select' | 'delete' | 'duplicate'; id: string }
+  /**
+   * `duplicate` inserts a copy above the layer, with the same pixels and properties, and selects it. `merge-down`
+   * needs the layers' pixels, so the runtime computes it and applies it with `mergeDown`; `changeLayer` rejects it.
+   */
+  | { type: 'select' | 'delete' | 'duplicate' | 'merge-down'; id: string }
   | { type: 'add' }
   | { type: 'move'; id: string; direction: -1 | 1 }
   | { type: 'update'; id: string; patch: Partial<Pick<LayerInfo, 'name' | 'visible' | 'opacity' | 'blend'>> };

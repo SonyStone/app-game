@@ -108,3 +108,29 @@ it('renames and duplicates the selected layer, and disables moves past either en
   button('Duplicate layer').click();
   expect(layer).toHaveBeenLastCalledWith({ type: 'duplicate', id: state().activeId });
 });
+
+it('merges a visible layer down into a visible layer below it', () => {
+  const drawing = createDocument();
+  drawing.changeLayer({ type: 'add' });
+  const [state, setState] = createSignal(drawing.state());
+  const layer = vi.fn();
+  const host = document.createElement('div');
+  document.body.append(host);
+  dispose = render(() => <LayersPanel state={state()} ready onAction={layer} />, host);
+  flush();
+  const merge = [...host.querySelectorAll('button')].find((button) => button.textContent === 'Merge down')!;
+
+  expect(merge.disabled).toBe(false);
+  merge.click();
+  expect(layer).toHaveBeenLastCalledWith({ type: 'merge-down', id: state().activeId });
+
+  setState((previous) => ({
+    ...previous,
+    layers: previous.layers.map((item, index) => (index === 0 ? { ...item, visible: false } : item))
+  }));
+  flush();
+  expect(merge.disabled).toBe(true);
+  setState((previous) => ({ ...previous, activeId: previous.layers[0]!.id }));
+  flush();
+  expect(merge.disabled).toBe(true);
+});

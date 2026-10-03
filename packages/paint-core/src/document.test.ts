@@ -124,6 +124,34 @@ describe('document transactions', () => {
     expect(doc.active.name).toBe('Ink copy');
     expect(unpackTile(doc.active.tiles.get('0,0') as Uint8Array)).toEqual(pixels);
   });
+  it('merges a layer down into one undoable change, keeping the lower layer and its properties', () => {
+    const doc = createDocument();
+    const lower = doc.active.id,
+      kept = new Uint8Array(TILE_BYTES).fill(3),
+      merged = new Uint8Array(TILE_BYTES).fill(7);
+    doc.commit([{ layerId: lower, key: '0,0', before: undefined, after: kept }]);
+    doc.changeLayer({ type: 'update', id: lower, patch: { name: 'Base', opacity: 0.5 } });
+    doc.changeLayer({ type: 'add' });
+    const upper = doc.active.id;
+    doc.commit([{ layerId: upper, key: '1,0', before: undefined, after: new Uint8Array(TILE_BYTES).fill(9) }]);
+    expect(() => doc.changeLayer({ type: 'merge-down', id: upper })).toThrow();
+    expect(() => doc.mergeDown(lower, new Map())).toThrow();
+
+    doc.mergeDown(upper, new Map([['1,0', merged]]));
+    expect(doc.layers).toHaveLength(1);
+    expect(doc.active).toMatchObject({ id: lower, name: 'Base', opacity: 0.5 });
+    expect(unpackTile(doc.active.tiles.get('1,0') as Uint8Array)).toEqual(merged);
+    expect(unpackTile(doc.active.tiles.get('0,0') as Uint8Array)).toEqual(kept);
+
+    doc.undo();
+    expect(doc.layers.map((layer) => layer.id)).toEqual([lower, upper]);
+    expect(doc.active.id).toBe(upper);
+    expect(doc.layers[0]!.tiles.has('1,0')).toBe(false);
+    expect(doc.layers[1]!.tiles.has('1,0')).toBe(true);
+    doc.redo();
+    expect(doc.layers).toHaveLength(1);
+    expect(doc.active.tiles.has('1,0')).toBe(true);
+  });
   it('drops redo after branching history and preserves layer blend settings', () => {
     const doc = createDocument();
     doc.changeLayer({ type: 'update', id: doc.active.id, patch: { blend: 'multiply', opacity: 0.5 } });
