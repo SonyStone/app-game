@@ -5,10 +5,11 @@ import { createSignal } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 
 /**
- * Owns the transient lasso outline, in document coordinates, and serializes pixel edits through the engine.
+ * Owns the transient selection outline, in document coordinates, and serializes pixel edits through the engine.
  * Dragging inside the outline moves the outline only, as in Photoshop's marquee; the transform moves the pixels.
- * Dragging outside replaces the outline. One selection edit runs at a time: `busy` stays true until the engine replies
- * through `receive`.
+ * Dragging outside replaces the outline with a new one of the chosen `shape`: drawn freehand (`lasso`), or spanned
+ * from where the drag starts to where it is (`rectangle`, `ellipse`, aligned to the document). One selection edit runs
+ * at a time: `busy` stays true until the engine replies through `receive`.
  */
 export function createSelection(options: {
   send: (command: Extract<PaintCommand, { type: 'selection' }>) => void;
@@ -21,8 +22,13 @@ export function createSelection(options: {
   const [busy, setBusy, isBusy] = createImmediateSignal(false);
   const [drawing, setDrawing] = createSignal(false);
   const [hasClipboard, setHasClipboard] = createSignal(false);
+  const [shape, setShape] = createSignal<SelectionShape>('lasso');
   /** The pointer gesture in progress; `previous`/`original` restore the outline when it is cancelled. */
-  let gesture: { kind: 'lasso'; previous: Point[] } | { kind: 'move'; start: Point; original: Point[] } | undefined;
+  let gesture:
+    | { kind: 'lasso'; previous: Point[] }
+    | { kind: 'rectangle' | 'ellipse'; start: Point; previous: Point[] }
+    | { kind: 'move'; start: Point; original: Point[] }
+    | undefined;
 
   return {
     /** Outline vertices; fewer than three means nothing is selected. */
@@ -35,6 +41,9 @@ export function createSelection(options: {
     hasClipboard,
     /** Like `busy`, including an edit started earlier in the current event; for synchronous guards. */
     isBusy,
+    /** The shape a new outline is drawn with. */
+    shape,
+    setShape,
     action,
     /** Cancels a gesture and removes the outline, unless an edit is still applying. */
     clear() {
@@ -52,7 +61,7 @@ export function createSelection(options: {
         setPoints(next);
       }
     },
-    /** Starts moving the outline when `point` is inside it, otherwise starts a new lasso. */
+    /** Starts moving the outline when `point` is inside it, otherwise starts a new outline of the chosen shape. */
     begin(point: Point) {
       if (isBusy()) {
         return;
@@ -60,9 +69,12 @@ export function createSelection(options: {
 
       if (pointInSelection(point, outline())) {
         gesture = { kind: 'move', start: point, original: outline() };
-      } else {
+      } else if (shape() === 'lasso') {
         gesture = { kind: 'lasso', previous: outline() };
         setPoints([point]);
+      } else {
+        gesture = { kind: shape() as 'rectangle' | 'ellipse', start: point, previous: outline() };
+        setPoints([]);
       }
 
       setDrawing(true);
@@ -75,6 +87,11 @@ export function createSelection(options: {
 
       if (gesture.kind === 'move') {
         setPoints(translateSelection(gesture.original, { x: point.x - gesture.start.x, y: point.y - gesture.start.y }));
+        return;
+      }
+
+      if (gesture.kind !== 'lasso') {
+        setPoints(spannedShape(gesture.kind, gesture.start, point));
         return;
       }
 
@@ -137,6 +154,41 @@ export function createSelection(options: {
 
 /** The lasso state and commands used by the editor. */
 export type Selection = ReturnType<typeof createSelection>;
+
+/** How a new outline is drawn: freehand, or spanned as an axis-aligned rectangle or ellipse. */
+export type SelectionShape = 'lasso' | 'rectangle' | 'ellipse';
+
+/**
+ * The outline of a rectangle or ellipse spanned from `start` to `end`, in document pixels, axis-aligned in the
+ * document. Its box is rounded to whole pixels, so a rectangle selects whole pixels, as Photoshop's marquee; an
+ * ellipse has 96 points.
+ */
+export function spannedShape(kind: 'rectangle' | 'ellipse', start: Point, end: Point): Point[] {
+  const left = Math.round(Math.min(start.x, end.x)),
+    right = Math.round(Math.max(start.x, end.x)),
+    top = Math.round(Math.min(start.y, end.y)),
+    bottom = Math.round(Math.max(start.y, end.y));
+  if (kind === 'rectangle') {
+    return [
+      { x: left, y: top },
+      { x: right, y: top },
+      { x: right, y: bottom },
+      { x: left, y: bottom }
+    ];
+  }
+
+  const center = { x: (left + right) / 2, y: (top + bottom) / 2 };
+  return Array.from({ length: ellipsePoints }, (_, index) => {
+    const angle = (index / ellipsePoints) * Math.PI * 2;
+    return {
+      x: center.x + ((right - left) / 2) * Math.cos(angle),
+      y: center.y + ((bottom - top) / 2) * Math.sin(angle)
+    };
+  });
+}
+
+/** Points along an ellipse's outline; enough for a smooth edge at ordinary sizes. */
+const ellipsePoints = 96;
 
 /** Smallest outline area, in square document pixels, kept as a selection. */
 const minimumArea = 1;

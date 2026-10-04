@@ -46,6 +46,35 @@ export function createGradient(options: {
       const current = drag();
       return current && command(current.start, current.end);
     },
+    /**
+     * Fills the whole selection with the foreground color at full opacity, in the gradient's mixing, as one undo step.
+     * Does nothing without a selection or while drawing is not possible.
+     */
+    fillSelection() {
+      const points = options.selection();
+      if (points.length < 3 || !options.canDraw()) {
+        return;
+      }
+
+      const color = options.colors().foreground;
+      const start = points[0]!;
+      options.send(
+        gradientEdit.command({
+          start,
+          end: { x: start.x + 1, y: start.y },
+          kind: 'linear',
+          repeat: 'none',
+          stops: [
+            { position: 0, color, alpha: 1 },
+            { position: 1, color, alpha: 1 }
+          ],
+          opacity: 1,
+          mixing: currentSettings().mixing,
+          area: options.area(),
+          points: [...points]
+        })
+      );
+    },
     canvasAction: {
       enabled: (event: Pick<PointerEvent, 'altKey' | 'pointerType'>) =>
         options.active() && !event.altKey && event.pointerType !== 'touch',

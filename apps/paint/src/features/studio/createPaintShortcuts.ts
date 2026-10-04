@@ -16,7 +16,7 @@ export function createPaintShortcuts(actions: {
   closePanel: () => boolean;
   tool: () => PaintTool;
   chooseTool: (tool: PaintTool) => void;
-  /** Runs a lasso command; only used while the lasso is active. */
+  /** Runs a selection command; only used while a tool working with the selection is active. */
   selectionAction: (action: SelectionAction) => void;
   deselect: () => void;
   undo: () => void;
@@ -53,7 +53,7 @@ export function createPaintShortcuts(actions: {
       return;
     }
 
-    const shortcut = match(event, actions.tool() === 'lasso');
+    const shortcut = match(event, selectionTools.has(actions.tool()));
     if (!shortcut) {
       return;
     }
@@ -71,7 +71,7 @@ type ShortcutActions = Parameters<typeof createPaintShortcuts>[0];
 /** One shortcut: whether it matches the key press, and its command. */
 type Shortcut = { when: boolean; preventDefault?: boolean; run: (actions: ShortcutActions) => void };
 
-/** Finds the shortcut for a key press, in priority order. */
+/** Finds the shortcut for a key press, in priority order; `lasso` enables the selection commands. */
 function match(event: KeyboardEvent, lasso: boolean) {
   const modifier = event.ctrlKey || event.metaKey;
   const key = shortcutKey(event);
@@ -125,5 +125,8 @@ function shortcutKey(event: KeyboardEvent) {
 
   return physicalKeys[event.code] ?? (/^Key[A-Z]$/.test(event.code) ? event.code.slice(3).toLowerCase() : typed);
 }
+
+/** Tools showing the selection actions, whose shortcuts they enable. */
+const selectionTools = new Set<PaintTool>(['lasso', 'fill', 'gradient']);
 
 const physicalKeys: Record<string, string> = { BracketLeft: '[', BracketRight: ']' };

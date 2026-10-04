@@ -193,6 +193,17 @@ export function PaintStudio(props: {
     onSelection: selection.replace,
     onError: setError
   });
+  createEffect(
+    () =>
+      (tools.tool() === 'fill' || tools.tool() === 'gradient') &&
+      selection.points().length < 3 &&
+      !transform.active(),
+    (unselected) => {
+      if (unselected) {
+        tools.chooseTool('lasso');
+      }
+    }
+  );
   const fullscreen = createFullscreenToggle(editor, setError);
   const colorWheel = createColorWheelSettings();
   const viewOptions = createViewOptions({ ready: engine.canEdit, send: engine.send });
@@ -367,9 +378,16 @@ export function PaintStudio(props: {
     return engine.canEdit() && !selection.isBusy() && !engine.isDrawing() && !engine.isCommandBusy();
   }
 
+  /** The active tool when it works with the selection: the lasso, or the fill or gradient inside the selection. */
+  function selectionTool() {
+    const current = tool();
+    return current === 'lasso' || current === 'fill' || current === 'gradient' ? current : undefined;
+  }
+
   /**
-   * Switches tools, applying a transform in progress. The lasso outline stays, so the fill and the gradient can work
-   * inside it; a lasso gesture in progress is cancelled.
+   * Switches tools, applying a transform in progress. The selection stays, so brushes, the fill and the gradient work
+   * inside it; a lasso gesture in progress is cancelled. The fill and the gradient work only inside a selection, so
+   * without one they are refused.
    */
   function chooseTool(next: PaintTool) {
     if (transform.active()) {
@@ -377,6 +395,10 @@ export function PaintStudio(props: {
     }
 
     if (selection.isBusy() || next === tools.tool()) {
+      return;
+    }
+
+    if ((next === 'fill' || next === 'gradient') && selection.points().length < 3) {
       return;
     }
 
@@ -625,7 +647,7 @@ export function PaintStudio(props: {
           onToggleMirror={camera.toggleMirror}
           onTogglePanel={togglePanel}
         />
-        <Show when={tool() === 'lasso' && !transform.active()}>
+        <Show when={selectionTool() && !transform.active()}>
           <SelectionActions
             outline={
               selection.drawing()
@@ -639,6 +661,11 @@ export function PaintStudio(props: {
             onAction={selection.action}
             onTransform={toggleTransform}
             onDeselect={selection.clear}
+            shape={selection.shape()}
+            onShape={selection.setShape}
+            tool={selectionTool()!}
+            onTool={chooseTool}
+            onFillSelection={gradient.fillSelection}
           />
         </Show>
         <div class={styles.doublePuck} aria-label="Brush and color">
@@ -1010,8 +1037,6 @@ export function PaintStudio(props: {
     return [
       toolItem('brush', 'Brush', 'draw', 0),
       toolItem('eraser', 'Eraser', 'erase', 1),
-      toolItem('fill', 'Fill', 'fill', 2),
-      toolItem('gradient', 'Gradient', 'gradient', 4),
       {
         id: 'redo',
         label: 'Redo',

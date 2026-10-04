@@ -40,13 +40,13 @@ try {
   await waitForSaved(page);
 
   await step('resting the pointer on a toolbar button shows its visual hint', async () => {
-    await page.getByRole('button', { name: 'Fill', exact: true }).hover();
+    await page.getByRole('button', { name: 'Eraser', exact: true }).hover();
     const hint = page.getByRole('tooltip');
     await hint.waitFor({ timeout: 5_000 });
-    assert.match(await hint.textContent(), /Fill/);
+    assert.match(await hint.textContent(), /Eraser/);
     await page.screenshot({ path: path.join(os.tmpdir(), 'paint-tool-hint.png') });
     await page.getByRole('button', { name: 'Lasso', exact: true }).hover();
-    await hint.filter({ hasText: 'Lasso' }).waitFor({ timeout: 5_000 });
+    await hint.filter({ hasText: 'Selection' }).waitFor({ timeout: 5_000 });
     await page.mouse.move(640, 400);
     await hint.waitFor({ state: 'detached', timeout: 5_000 });
   });
@@ -491,8 +491,19 @@ try {
     await page.getByLabel('Hex color').press('Enter');
     await page.keyboard.press('Escape');
 
+    // The fill works only inside a selection: without one, G is refused; a rectangle around the paper enables it.
+    await page.keyboard.press('b');
     await page.keyboard.press('g');
-    assert.equal(await page.getByRole('button', { name: 'Fill', exact: true }).getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.getByRole('button', { name: 'Brush', exact: true }).getAttribute('aria-pressed'), 'true');
+    await page.keyboard.press('l');
+    await page.getByRole('button', { name: 'Rectangle selection' }).click();
+    await page.mouse.move(paper.x - 60, paper.y - 60);
+    await page.mouse.down();
+    await page.mouse.move(paper.x + 60, paper.y + 60, { steps: 4 });
+    await page.mouse.up();
+    const fillTool = page.getByRole('toolbar', { name: 'Selection actions' }).getByRole('button', { name: 'Fill tool' });
+    await fillTool.click();
+    assert.equal(await fillTool.getAttribute('aria-pressed'), 'true');
     await page.getByRole('button', { name: 'Brush settings' }).click();
     assert.equal(await page.getByLabel('Fill sample').inputValue(), 'all');
     await page.keyboard.press('Escape');
@@ -510,14 +521,23 @@ try {
     const restored = await pick('00C040');
     const channels = [0, 2, 4].map((index) => parseInt(restored.slice(index, index + 2), 16));
     assert.ok(Math.min(...channels) > 0xe0, `expected paper after undo, got ${restored}`);
+    await page.keyboard.press('Control+d');
     await page.keyboard.press('b');
   });
 
-  await step('the gradient tool draws a dragged gradient over the view as one undo step', async () => {
+  await step('the gradient tool draws a dragged gradient in the selection as one undo step', async () => {
     const { cx, cy } = await workspaceCenter(page);
+    const bar = page.getByRole('toolbar', { name: 'Selection actions' });
+    const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed');
     // Black to white.
     await page.keyboard.press('d');
-    await page.getByRole('button', { name: 'Gradient', exact: true }).click();
+    await page.keyboard.press('l');
+    await page.getByRole('button', { name: 'Rectangle selection' }).click();
+    await page.mouse.move(cx - 300, cy - 220);
+    await page.mouse.down();
+    await page.mouse.move(cx + 300, cy + 220, { steps: 4 });
+    await page.mouse.up();
+    await bar.getByRole('button', { name: 'Gradient tool' }).click();
     await page.mouse.move(cx - 200, cy);
     await page.mouse.down();
     await page.mouse.move(cx + 200, cy, { steps: 6 });
@@ -554,6 +574,32 @@ try {
     await page.getByLabel('Gradient shape').selectOption('linear');
     await page.getByLabel('Gradient repeat').selectOption('none');
     await page.keyboard.press('Escape');
+
+    // Deselecting leaves the gradient for the lasso, as it works only inside a selection.
+    await page.keyboard.press('Control+d');
+    assert.equal(await pressed('Lasso'), 'true');
+
+    // Fill selection paints an ellipse with the color, leaving the corners of the box it was dragged across.
+    await page.getByRole('button', { name: 'Ellipse selection' }).click();
+    await page.mouse.move(cx - 100, cy - 100);
+    await page.mouse.down();
+    await page.mouse.move(cx + 100, cy + 100, { steps: 4 });
+    await page.mouse.up();
+    await setColor(page, '0000FF');
+    await bar.getByRole('button', { name: 'Fill selection' }).click();
+    await waitForSaved(page);
+    // Alt-click picks colors with the brush; with the lasso it is left to selecting.
+    await page.keyboard.press('b');
+    await setColor(page, 'FF0000');
+    const [r, g, b] = await pickRgb(page, { x: cx + 60, y: cy }, 'FF0000');
+    assert.ok(b > 0xe0 && r < 0x20 && g < 0x20, `expected blue in the ellipse, got ${[r, g, b]}`);
+    await setColor(page, 'FF0000');
+    const corner = await pickRgb(page, { x: cx - 90, y: cy - 90 }, 'FF0000');
+    assert.ok(Math.min(...corner) > 0xe0, `expected paper in the corner, got ${corner}`);
+    await undo(page, 1);
+    await page.keyboard.press('Control+d');
+    await page.keyboard.press('l');
+    await page.getByRole('button', { name: 'Lasso selection' }).click();
     await page.getByRole('button', { name: 'Brush', exact: true }).click();
   });
 

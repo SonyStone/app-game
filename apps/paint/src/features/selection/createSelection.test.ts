@@ -1,7 +1,7 @@
 import { flush } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import type { PaintCommand } from '@app-game/paint-core/protocol';
-import { createSelection } from './createSelection';
+import { createSelection, spannedShape } from './createSelection';
 import { guardEdits } from './guardEdits';
 
 it('moves only the outline when dragged inside it, blocks duplicate edits, and restores worker results', () => {
@@ -97,4 +97,34 @@ it('keeps the outline through drawing, history and edits, and removes it when a 
   send({ type: 'import', text: '{}' });
   expect(points).toHaveLength(0);
   expect(sent).toEqual(['undo', 'redo', 'end', 'edit', 'import']);
+});
+
+it('spans rectangles on whole pixels and ellipses inside the same box, whichever way they are dragged', () => {
+  expect(spannedShape('rectangle', { x: 30.6, y: 4.2 }, { x: 10.2, y: 20.7 })).toEqual([
+    { x: 10, y: 4 },
+    { x: 31, y: 4 },
+    { x: 31, y: 21 },
+    { x: 10, y: 21 }
+  ]);
+
+  const ellipse = spannedShape('ellipse', { x: 0, y: 0 }, { x: 40, y: 20 });
+  expect(ellipse).toHaveLength(96);
+  expect(ellipse[0]).toEqual({ x: 40, y: 10 });
+  expect(Math.min(...ellipse.map(({ x }) => x))).toBeCloseTo(0);
+  expect(Math.max(...ellipse.map(({ y }) => y))).toBeCloseTo(20);
+});
+
+it('draws the chosen shape when dragging outside the outline', () => {
+  const selection = createSelection({
+    send: vi.fn(),
+    ready: () => true,
+    document: () => ({ activeId: 'layer-1', revision: 1 })
+  });
+  selection.setShape('rectangle');
+  selection.begin({ x: 0, y: 0 });
+  selection.move({ x: 5, y: 5 });
+  selection.move({ x: 12, y: 8 });
+  selection.end();
+  flush();
+  expect(selection.points()).toEqual(spannedShape('rectangle', { x: 0, y: 0 }, { x: 12, y: 8 }));
 });

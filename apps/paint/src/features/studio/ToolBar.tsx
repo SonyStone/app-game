@@ -104,7 +104,5 @@ export function ToolBar(props: {
 const toolButtons = [
   { tool: 'brush', label: 'Brush', icon: 'draw' },
   { tool: 'eraser', label: 'Eraser', icon: 'erase' },
-  { tool: 'fill', label: 'Fill', icon: 'fill' },
-  { tool: 'gradient', label: 'Gradient', icon: 'gradient' },
   { tool: 'lasso', label: 'Lasso', icon: 'lasso' }
 ] as const satisfies readonly { tool: PaintTool; label: string; icon: string }[];

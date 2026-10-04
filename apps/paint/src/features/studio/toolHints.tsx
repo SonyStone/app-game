@@ -20,38 +20,10 @@ export const toolHints = {
       </>
     )
   },
-  fill: {
-    title: 'Fill',
-    shortcut: 'G',
-    description: 'Fills the area of similar color around a click, closing small gaps in line art.',
-    demo: () => (
-      <>
-        <path class={hintDemo.fillArea} d="M22 14h76v44H22Z" />
-        <path class={hintDemo.outline} d="M22 14h76v44H22Z" />
-        <circle class={hintDemo.click} cx="60" cy="36" r="4" />
-      </>
-    )
-  },
-  gradient: {
-    title: 'Gradient',
-    description: 'Drag from where the gradient starts to where it ends: linear, radial, angle or diamond.',
-    demo: () => (
-      <>
-        <defs>
-          <linearGradient id="tool-hint-gradient">
-            <stop offset="0" stop-color="#2f4b62" />
-            <stop offset="1" stop-color="#f3efe6" />
-          </linearGradient>
-        </defs>
-        <path class={hintDemo.fillArea} d="M10 10h100v52H10Z" style={{ fill: 'url(#tool-hint-gradient)' }} />
-        <path class={hintDemo.drag} d="M24 36h72" />
-      </>
-    )
-  },
   lasso: {
-    title: 'Lasso',
+    title: 'Selection',
     shortcut: 'L',
-    description: 'Draw around pixels to select them; fills and gradients then stay inside.',
+    description: 'Select pixels with a lasso, rectangle or ellipse; brushes, the fill and the gradient then stay inside.',
     demo: () => <path class={hintDemo.dashed} d="M30 18c20-12 62-8 66 12s-26 32-50 26-36-26-16-38Z" />
   },
   transform: {
