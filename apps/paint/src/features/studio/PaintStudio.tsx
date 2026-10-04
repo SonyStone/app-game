@@ -22,6 +22,7 @@ import { createBrushLibrary, createBrushStorage, createPresetUploads, createRece
 import { createPaintCamera, createViewSize } from '../camera';
 import { BrushCursor, CanvasDebug, firstCanvasAction, PaintCanvas, type CanvasInput } from '../canvas';
 import { ColorPanel, ColorPickerLoupe, ColorPickerSettings, createCanvasColorPicker } from '../color';
+import { ColorWheel, createColorWheelSettings } from '../color-wheel';
 import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
 import { createFill, FillPanel } from '../fill';
@@ -190,6 +191,7 @@ export function PaintStudio(props: {
     onError: setError
   });
   const fullscreen = createFullscreenToggle(editor, setError);
+  const colorWheel = createColorWheelSettings();
   const recentPresets = createRecentPresets({ current: tools.preset, exists: (id) => library.find(id) !== undefined });
   const radial = createRadialMenu({
     center: camera.navigation.center,
@@ -701,6 +703,20 @@ export function PaintStudio(props: {
                     onPickCanvas={() => {
                       colorPicker.arm();
                       closePanel();
+                    }}
+                    alternative={{
+                      label: 'Wheel',
+                      shown: colorWheel.settings().picker === 'wheel',
+                      onShownChange: (shown) => colorWheel.update({ picker: shown ? 'wheel' : 'square' }),
+                      render: (control) => (
+                        <ColorWheel
+                          color={control.color}
+                          onChange={control.onChange}
+                          onSettle={control.onSettle}
+                          settings={colorWheel.settings()}
+                          onSettings={colorWheel.update}
+                        />
+                      )
                     }}
                   />
                   <ColorPickerSettings

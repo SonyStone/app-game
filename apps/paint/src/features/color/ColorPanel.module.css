@@ -250,3 +250,27 @@
   color: var(--muted);
   text-align: center;
 }
+
+/* Switches between the square and another picker; `> button` outranks the studio's reset of buttons. */
+.pickers {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+
+  > button {
+    flex: 1;
+    min-height: 32px;
+    font-size: 11px;
+  }
+
+  > button + button {
+    border-left: 1px solid var(--line);
+  }
+
+  > button[aria-checked='true'] {
+    background: #e3eef5;
+    color: var(--accent);
+    font-weight: 600;
+  }
+}

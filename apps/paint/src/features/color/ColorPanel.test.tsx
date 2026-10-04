@@ -110,3 +110,47 @@ function pointer(target: HTMLElement, type: string, clientX: number, clientY: nu
   target.dispatchEvent(event);
   flush();
 }
+
+it('offers another picker in place of the square, which edits the color and settles into recents', () => {
+  const [shown, setShown] = createSignal(false);
+  const [color, setColor] = createSignal('#344b66');
+  const other = document.body.appendChild(document.createElement('div'));
+  const stop = render(
+    () => (
+      <ColorPanel
+        brush={{ ...defaultBrush(), color: color() }}
+        onChange={(patch) => patch.color && setColor(patch.color)}
+        alternative={{
+          label: 'Wheel',
+          shown: shown(),
+          onShownChange: setShown,
+          render: (control) => (
+            <button
+              aria-label="Alternative"
+              onClick={() => {
+                control.onChange('#ff8800');
+                control.onSettle();
+              }}
+            >
+              {control.color}
+            </button>
+          )
+        }}
+      />
+    ),
+    other
+  );
+  flush();
+  const within = (selector: string) => other.querySelector<HTMLElement>(selector);
+  expect(within('[aria-label="Saturation and brightness"]')).not.toBeNull();
+  [...other.querySelectorAll<HTMLElement>('[role="radio"]')].find((radio) => radio.textContent === 'Wheel')!.click();
+  flush();
+  expect(within('[aria-label="Saturation and brightness"]')).toBeNull();
+  within('[aria-label="Alternative"]')!.click();
+  flush();
+  expect(color()).toBe('#ff8800');
+  expect(within('[aria-label="Alternative"]')!.textContent).toBe('#ff8800');
+  expect(within('[aria-label="Set color #ff8800"]')).not.toBeNull();
+  stop();
+  other.remove();
+});

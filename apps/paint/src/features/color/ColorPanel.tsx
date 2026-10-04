@@ -1,4 +1,5 @@
 import type { Brush } from '@app-game/paint-core/brush';
+import type { JSX } from '@solidjs/web';
 import { createSignal, For, Show, untrack } from 'solid-js';
 import styles from './ColorPanel.module.css';
 import { createRecentColors } from './createRecentColors';
@@ -17,6 +18,16 @@ export function ColorPanel(props: {
   onChange: (patch: Partial<Brush>) => void;
   /** Arms picking the foreground color from the next canvas contact; the button is hidden without it. */
   onPickCanvas?: () => void;
+  /**
+   * Another way to choose the color, such as a color wheel, offered with a switch in place of the saturation plane
+   * and hue strip. `render` receives the edited color, `onChange` for live edits and `onSettle` for when an edit ends.
+   */
+  alternative?: {
+    label: string;
+    shown: boolean;
+    onShownChange: (shown: boolean) => void;
+    render: (control: { color: string; onChange: (color: string) => void; onSettle: () => void }) => JSX.Element;
+  };
 }) {
   const [target, setTarget] = createSignal<ColorTarget>('color');
   const hexOf = (which: ColorTarget) =>
@@ -29,12 +40,13 @@ export function ColorPanel(props: {
   const opened = untrack(() => ({ color: hexOf('color'), backgroundColor: hexOf('backgroundColor') }));
   const recent = createRecentColors();
   const [drag, setDrag] = createSignal<{ part: 'plane' | 'hue'; touch: boolean }>();
-  let edited = false;
+  /** The color written by the edit in progress; `hex()` shows it only after the next flush. */
+  let edited: string | undefined;
 
   const edit = (next: Hsv) => {
-    edited = true;
+    edited = hsvToHex(next);
     setHsv(next);
-    props.onChange({ [target()]: hsvToHex(next) });
+    props.onChange({ [target()]: edited });
   };
   const apply = (color: string) => {
     props.onChange({ [target()]: color });
@@ -42,8 +54,8 @@ export function ColorPanel(props: {
   };
   const settle = () => {
     if (edited) {
-      edited = false;
-      recent.remember(hex());
+      recent.remember(edited);
+      edited = undefined;
     }
   };
   const dragHandlers = (part: 'plane' | 'hue', move: (x: number, y: number) => void) =>
@@ -91,61 +103,102 @@ export function ColorPanel(props: {
         </button>
       </div>
 
-      <div
-        class={[styles.plane, { [styles.dragging!]: drag()?.part === 'plane' }]}
-        style={{ '--hue': `${hsv().h}` }}
-        role="slider"
-        tabindex="0"
-        aria-label="Saturation and brightness"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        aria-valuenow={Math.round(hsv().v * 100)}
-        aria-valuetext={`Saturation ${Math.round(hsv().s * 100)}%, brightness ${Math.round(hsv().v * 100)}%`}
-        onKeyDown={(event) => {
-          const step = event.shiftKey ? 0.1 : 0.01;
-          const delta = ARROWS[event.key];
-          if (delta) {
-            event.preventDefault();
-            edit({ ...hsv(), s: clamp(hsv().s + delta[0] * step), v: clamp(hsv().v + delta[1] * step) });
-          }
-        }}
-        onBlur={settle}
-        {...planeDrag}
-      >
-        <Thumb x={hsv().s} y={1 - hsv().v} color={hex()} loupe={drag()?.part === 'plane' && drag()!.touch} />
-      </div>
+      <Show when={props.alternative}>
+        {(alternative) => (
+          <div class={styles.pickers} role="radiogroup" aria-label="Color picker">
+            <button
+              role="radio"
+              aria-checked={alternative().shown ? 'false' : 'true'}
+              onClick={() => alternative().onShownChange(false)}
+            >
+              Square
+            </button>
+            <button
+              role="radio"
+              aria-checked={alternative().shown ? 'true' : 'false'}
+              onClick={() => alternative().onShownChange(true)}
+            >
+              {alternative().label}
+            </button>
+          </div>
+        )}
+      </Show>
 
-      <div
-        class={[styles.hue, { [styles.dragging!]: drag()?.part === 'hue' }]}
-        role="slider"
-        tabindex="0"
-        aria-label="Hue"
-        aria-valuemin="0"
-        aria-valuemax="359"
-        aria-valuenow={Math.min(359, Math.round(hsv().h))}
-        onKeyDown={(event) => {
-          const delta = ARROWS[event.key];
-          const h =
-            event.key === 'Home'
-              ? 0
-              : event.key === 'End'
-                ? 359
-                : delta && hsv().h + (delta[0] || delta[1]) * (event.shiftKey ? 10 : 1);
-          if (h !== undefined) {
-            event.preventDefault();
-            edit({ ...hsv(), h: ((h % 360) + 360) % 360 });
-          }
-        }}
-        onBlur={settle}
-        {...hueDrag}
+      <Show
+        when={props.alternative?.shown && props.alternative}
+        fallback={
+          <>
+            <div
+              class={[styles.plane, { [styles.dragging!]: drag()?.part === 'plane' }]}
+              style={{ '--hue': `${hsv().h}` }}
+              role="slider"
+              tabindex="0"
+              aria-label="Saturation and brightness"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={Math.round(hsv().v * 100)}
+              aria-valuetext={`Saturation ${Math.round(hsv().s * 100)}%, brightness ${Math.round(hsv().v * 100)}%`}
+              onKeyDown={(event) => {
+                const step = event.shiftKey ? 0.1 : 0.01;
+                const delta = ARROWS[event.key];
+                if (delta) {
+                  event.preventDefault();
+                  edit({ ...hsv(), s: clamp(hsv().s + delta[0] * step), v: clamp(hsv().v + delta[1] * step) });
+                }
+              }}
+              onBlur={settle}
+              {...planeDrag}
+            >
+              <Thumb x={hsv().s} y={1 - hsv().v} color={hex()} loupe={drag()?.part === 'plane' && drag()!.touch} />
+            </div>
+
+            <div
+              class={[styles.hue, { [styles.dragging!]: drag()?.part === 'hue' }]}
+              role="slider"
+              tabindex="0"
+              aria-label="Hue"
+              aria-valuemin="0"
+              aria-valuemax="359"
+              aria-valuenow={Math.min(359, Math.round(hsv().h))}
+              onKeyDown={(event) => {
+                const delta = ARROWS[event.key];
+                const h =
+                  event.key === 'Home'
+                    ? 0
+                    : event.key === 'End'
+                      ? 359
+                      : delta && hsv().h + (delta[0] || delta[1]) * (event.shiftKey ? 10 : 1);
+                if (h !== undefined) {
+                  event.preventDefault();
+                  edit({ ...hsv(), h: ((h % 360) + 360) % 360 });
+                }
+              }}
+              onBlur={settle}
+              {...hueDrag}
+            >
+              <Thumb
+                x={hsv().h / 360}
+                y={0.5}
+                color={hsvToHex({ h: hsv().h, s: 1, v: 1 })}
+                loupe={drag()?.part === 'hue' && drag()!.touch}
+              />
+            </div>
+          </>
+        }
       >
-        <Thumb
-          x={hsv().h / 360}
-          y={0.5}
-          color={hsvToHex({ h: hsv().h, s: 1, v: 1 })}
-          loupe={drag()?.part === 'hue' && drag()!.touch}
-        />
-      </div>
+        {(alternative) =>
+          alternative().render({
+            get color() {
+              return hex();
+            },
+            onChange(color) {
+              edited = color;
+              props.onChange({ [target()]: color });
+            },
+            onSettle: settle
+          })
+        }
+      </Show>
 
       <div class={styles.valueRow}>
         <button

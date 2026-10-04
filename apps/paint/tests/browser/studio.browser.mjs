@@ -179,6 +179,25 @@ try {
     assert.equal(await pressed('Brush'), 'true');
   });
 
+  await step('the perceptual color wheel picks colors and keeps them inside a gamut mask', async () => {
+    await page.getByRole('button', { name: 'Color palette' }).click();
+    await page.getByRole('radio', { name: 'Wheel' }).click();
+    const disk = await page.getByRole('slider', { name: 'Hue and saturation' }).boundingBox();
+    const hex = page.getByLabel('Hex color');
+    const before = await hex.inputValue();
+    await page.mouse.click(disk.x + disk.width * 0.7, disk.y + disk.height * 0.35);
+    assert.notEqual(await hex.inputValue(), before);
+    await page.getByLabel('Gamut mask').selectOption('triangle');
+    await page.getByRole('slider', { name: 'Hue and saturation' }).focus();
+    for (let step = 0; step < 12; step++) {
+      await page.keyboard.press('Shift+ArrowRight');
+    }
+    assert.match(await hex.inputValue(), /^[0-9A-F]{6}$/);
+    await page.getByLabel('Gamut mask').selectOption('none');
+    await page.getByRole('radio', { name: 'Square' }).click();
+    await page.keyboard.press('Escape');
+  });
+
   await step('two- and three-finger taps undo and redo, and a held finger picks a color', async () => {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
