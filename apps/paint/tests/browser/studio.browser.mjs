@@ -195,6 +195,24 @@ try {
     assert.equal(await redo.isDisabled(), true);
   });
 
+  await step('painting on a hidden layer is refused with a notice that shows the layer', async () => {
+    const panel = page.getByRole('complementary', { name: 'Layers' });
+    const notice = page.getByRole('toolbar', { name: 'Hidden layer' });
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await panel.getByRole('button', { name: 'Hide Layer 1' }).click();
+    await panel.getByRole('button', { name: 'Show Layer 1' }).waitFor({ timeout: 5_000 });
+    await page.keyboard.press('Escape');
+    await stroke(page);
+    await notice.waitFor({ timeout: 5_000 });
+    assert.match(await notice.textContent(), /Layer 1/);
+    await notice.getByRole('button', { name: 'Show layer' }).click();
+    await notice.waitFor({ state: 'detached', timeout: 5_000 });
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await panel.getByRole('button', { name: 'Hide Layer 1' }).waitFor({ timeout: 5_000 });
+    await page.keyboard.press('Escape');
+    await waitForSaved(page);
+  });
+
   await step('the right button opens quick actions around the puck, chosen by press or by a marking drag', async () => {
     const { cx, cy } = await workspaceCenter(page);
     const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed');

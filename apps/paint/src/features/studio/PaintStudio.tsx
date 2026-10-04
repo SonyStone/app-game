@@ -31,6 +31,7 @@ import { createPaintEngine } from '../engine';
 import { createFill, FillPanel } from '../fill';
 import { createFrames, FrameEditor, FrameGuides, frameRegion, FramesSection } from '../frames';
 import { createGradient, GradientPanel, GradientPreview } from '../gradient';
+import { createHiddenLayerGuard, HiddenLayerNotice } from '../hidden-layer';
 import { createImagePlacement, createLayerFilter, HistorySourceControl, LayersPanel } from '../layers';
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
 import { createRadialMenu, RadialMenu, radialLayout, type RadialItem } from '../radial-menu';
@@ -185,6 +186,10 @@ export function PaintStudio(props: {
     canDraw: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
     send: edit
   });
+  const hiddenLayer = createHiddenLayerGuard({
+    paints: () => tools.tool() === 'brush' || tools.tool() === 'eraser',
+    layer: () => engine.state().layers.find((layer) => layer.id === engine.state().activeId)
+  });
   const transform = createTransform({
     run: engine.runEdit,
     selection: selection.points,
@@ -307,6 +312,7 @@ export function PaintStudio(props: {
       // Alt/Option picks colors even while transforming; the transform then consumes other contacts.
       colorPicker.canvasAction,
       transform.canvasAction,
+      hiddenLayer.canvasAction,
       mixer.canvasAction,
       fill.canvasAction,
       gradient.canvasAction
@@ -667,6 +673,19 @@ export function PaintStudio(props: {
             onTool={chooseTool}
             onFillSelection={gradient.fillSelection}
           />
+        </Show>
+        <Show when={hiddenLayer.notice()}>
+          {(notice) => (
+            <HiddenLayerNotice
+              name={notice().name}
+              size={size()}
+              onShow={() => {
+                edit({ type: 'layer', action: { type: 'update', id: notice().id, patch: { visible: true } } });
+                hiddenLayer.dismiss();
+              }}
+              onDismiss={hiddenLayer.dismiss}
+            />
+          )}
         </Show>
         <div class={styles.doublePuck} aria-label="Brush and color">
           <button

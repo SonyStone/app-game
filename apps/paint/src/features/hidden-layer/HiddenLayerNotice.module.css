@@ -1,0 +1,7 @@
+/* Outranks the `FloatingBar` icon button size. */
+[role='toolbar'] > button.text:is(button) {
+  width: auto;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
