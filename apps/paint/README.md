@@ -33,6 +33,7 @@ src/
     symmetry/      Document paint symmetry: settings, guide and panel
     layers/        Layer list, blending and ordering, image placement, Erase to History source
     fill/          Bucket fill: engine edit, settings and canvas contact, fill panel
+    gradient/      Gradient tool: engine edit, drag with preview, settings panel
     frames/        Frames: named rectangles saved with the document, their chooser, guides, PNG export and links
     brush/         Tool choice and brush settings, Mixer Brush commands, brush and color panels
     brush-library/ Brush presets: built-in and user presets, IndexedDB storage, resource uploads to the engine

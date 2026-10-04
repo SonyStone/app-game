@@ -431,6 +431,24 @@ try {
     await page.keyboard.press('b');
   });
 
+  await step('the gradient tool draws a dragged gradient over the view as one undo step', async () => {
+    const { cx, cy } = await workspaceCenter(page);
+    // Black to white.
+    await page.keyboard.press('d');
+    await page.getByRole('button', { name: 'Gradient', exact: true }).click();
+    await page.mouse.move(cx - 200, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + 200, cy, { steps: 6 });
+    await page.mouse.up();
+    await waitForSaved(page);
+    await setColor(page, 'FF0000');
+    assert.ok(Math.max(...(await pickRgb(page, { x: cx - 220, y: cy + 150 }, 'FF0000'))) < 0x20);
+    await setColor(page, 'FF0000');
+    assert.ok(Math.min(...(await pickRgb(page, { x: cx + 220, y: cy + 150 }, 'FF0000'))) > 0xe0);
+    await undo(page, 1);
+    await page.getByRole('button', { name: 'Brush', exact: true }).click();
+  });
+
   await step('a layer with locked transparency only recolors its own pixels', async () => {
     const { cx, cy } = await workspaceCenter(page);
     await page.getByRole('button', { name: 'Layers' }).click();

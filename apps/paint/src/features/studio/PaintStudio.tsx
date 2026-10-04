@@ -27,6 +27,7 @@ import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
 import { createFill, FillPanel } from '../fill';
 import { createFrames, FrameGuides, frameRegion, FramesSection } from '../frames';
+import { createGradient, GradientPanel, GradientPreview } from '../gradient';
 import { createImagePlacement, createLayerFilter, HistorySourceControl, LayersPanel } from '../layers';
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
 import { createRadialMenu, RadialMenu, radialLayout, type RadialItem } from '../radial-menu';
@@ -165,22 +166,16 @@ export function PaintStudio(props: {
   const fill = createFill({
     active: () => tools.tool() === 'fill',
     color: () => tools.brush().color,
-    area: () => {
-      const view = size();
-      const current = camera.current();
-      const corners = [
-        { x: 0, y: 0 },
-        { x: view.width, y: 0 },
-        { x: 0, y: view.height },
-        { x: view.width, y: view.height }
-      ].map((corner) => screenToWorld(corner, current, view));
-      const xs = corners.map(({ x }) => x),
-        ys = corners.map(({ y }) => y);
-      const left = Math.min(...xs),
-        top = Math.min(...ys);
-      return { left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
-    },
+    area: visibleArea,
     canFill: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
+    send: edit
+  });
+  const gradient = createGradient({
+    active: () => tools.tool() === 'gradient',
+    colors: () => ({ foreground: tools.brush().color, background: tools.brush().backgroundColor ?? '#ffffff' }),
+    area: visibleArea,
+    selection: selection.points,
+    canDraw: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
     send: edit
   });
   const transform = createTransform({
@@ -277,7 +272,8 @@ export function PaintStudio(props: {
       colorPicker.canvasAction,
       transform.canvasAction,
       mixer.canvasAction,
-      fill.canvasAction
+      fill.canvasAction,
+      gradient.canvasAction
     ),
     adjust: brushAdjust.adjust,
     touchGestures: {
@@ -406,8 +402,8 @@ export function PaintStudio(props: {
 
   /** Opens the settings of the active tool: the fill panel for the fill, otherwise the brush panel and its presets. */
   function openBrushSettings(target: HTMLElement) {
-    if (tool() === 'fill') {
-      togglePanel('fill', target);
+    if (tool() === 'fill' || tool() === 'gradient') {
+      togglePanel(tool() as 'fill' | 'gradient', target);
       return;
     }
 
@@ -452,7 +448,7 @@ export function PaintStudio(props: {
             <PaintCanvas
               connect={(element) => engine.connect(element, session.mode)}
               input={input}
-              crosshair={tool() === 'lasso' || tool() === 'fill'}
+              crosshair={tool() === 'lasso' || tool() === 'fill' || tool() === 'gradient'}
               ref={setCanvas}
             />
           )}
@@ -520,6 +516,15 @@ export function PaintStudio(props: {
           {(point) => <BrushCursor point={point()} size={cursorSize()} square={blockCursor()} />}
         </Show>
         <Show when={colorPicker.preview()}>{(preview) => <ColorPickerLoupe preview={preview()} />}</Show>
+        <Show when={gradient.preview()}>
+          {(command) => (
+            <GradientPreview
+              command={command()}
+              toScreen={(point) => worldToScreen(point, camera.camera(), size())}
+              size={size()}
+            />
+          )}
+        </Show>
         <Show when={camera.navigation.center()}>
           {(center) => (
             <NavigationPuck navigation={camera.navigation} focusTarget={() => canvas()!}>
@@ -598,14 +603,14 @@ export function PaintStudio(props: {
           <button
             aria-label="Brush settings"
             title="Brush settings"
-            aria-expanded={panel() === 'brush' || panel() === 'fill' ? 'true' : 'false'}
+            aria-expanded={panel() === 'brush' || panel() === 'fill' || panel() === 'gradient' ? 'true' : 'false'}
             aria-controls="paint-panel"
             onClick={(event) => openBrushSettings(event.currentTarget)}
           >
             <SketchIcon
               name={
-                tool() === 'fill'
-                  ? 'fill'
+                tool() === 'fill' || tool() === 'gradient'
+                  ? tool() as 'fill' | 'gradient'
                   : tool() === 'eraser'
                     ? 'erase'
                     : brush().engine?.id === 'abr'
@@ -716,6 +721,9 @@ export function PaintStudio(props: {
                 </Match>
                 <Match when={id === 'fill'}>
                   <FillPanel settings={fill.settings()} onChange={fill.update} />
+                </Match>
+                <Match when={id === 'gradient'}>
+                  <GradientPanel settings={gradient.settings()} onChange={gradient.update} />
                 </Match>
                 <Match when={id === 'color'}>
                   <ColorPanel
@@ -874,7 +882,7 @@ export function PaintStudio(props: {
    * or Pencil presets. ABR erasers keep Alt for erasing to history, and the Mixer Brush for loading paint.
    */
   function paintsColor() {
-    if (tool() === 'fill') {
+    if (tool() === 'fill' || tool() === 'gradient') {
       return true;
     }
 
@@ -916,6 +924,7 @@ export function PaintStudio(props: {
       toolItem('brush', 'Brush', 'draw', 0),
       toolItem('eraser', 'Eraser', 'erase', 1),
       toolItem('fill', 'Fill', 'fill', 2),
+      toolItem('gradient', 'Gradient', 'gradient', 4),
       {
         id: 'redo',
         label: 'Redo',
@@ -954,6 +963,23 @@ export function PaintStudio(props: {
     }
 
     void choosePreset(id, slot);
+  }
+
+  /** The view's bounds in document pixels, for tools that cover the view, such as the fill and the gradient. */
+  function visibleArea() {
+    const view = size();
+    const current = camera.current();
+    const corners = [
+      { x: 0, y: 0 },
+      { x: view.width, y: 0 },
+      { x: 0, y: view.height },
+      { x: view.width, y: view.height }
+    ].map((corner) => screenToWorld(corner, current, view));
+    const xs = corners.map(({ x }) => x),
+      ys = corners.map(({ y }) => y);
+    const left = Math.min(...xs),
+      top = Math.min(...ys);
+    return { left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
   }
 
   /** The current tool paints symmetric copies. */

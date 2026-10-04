@@ -32,6 +32,7 @@ export const panelTitles = {
   file: 'Drawing',
   brush: 'Brush',
   fill: 'Fill',
+  gradient: 'Gradient',
   color: 'Color',
   layers: 'Layers'
 } as const;

@@ -1,0 +1,25 @@
+.preview,
+.fill,
+.line {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.line {
+  overflow: visible;
+
+  line {
+    stroke: #fff;
+    stroke-width: 1.5;
+    filter: drop-shadow(0 0 1px #000a);
+  }
+
+  circle {
+    fill: #fff;
+    stroke: #2b3338;
+    stroke-width: 1.5;
+  }
+}
