@@ -1,0 +1,41 @@
+/* The ring, the triangle canvas and the overlay for markers and pointers stack in one square. */
+.triangle {
+  position: relative;
+  width: min(100%, 220px);
+  aspect-ratio: 1;
+  margin: 4px auto 0;
+}
+
+.ring,
+.canvas,
+.overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Hue 0 at the top, increasing clockwise, as `hueAt` measures it; 22 of 110 units thick. */
+.ring {
+  border-radius: 50%;
+  background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  mask: radial-gradient(circle closest-side, transparent 79.5%, #000 80.5%);
+}
+
+.overlay {
+  overflow: visible;
+  touch-action: none;
+}
+
+.ringMarker,
+.triangleMarker {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 1px #000c);
+  outline: none;
+
+  &:focus-visible {
+    stroke: #237aab;
+  }
+}

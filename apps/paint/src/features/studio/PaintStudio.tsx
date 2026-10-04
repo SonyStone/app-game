@@ -24,6 +24,7 @@ import { createPaintCamera, createViewSize } from '../camera';
 import { BrushCursor, CanvasDebug, firstCanvasAction, PaintCanvas, type CanvasInput } from '../canvas';
 import { ColorPanel, ColorPickerLoupe, ColorPickerSettings, createCanvasColorPicker } from '../color';
 import { ColorWheel, createColorWheelSettings } from '../color-wheel';
+import { HueTriangle } from '../hue-triangle';
 import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
 import { createFill, FillPanel } from '../fill';
@@ -794,19 +795,32 @@ export function PaintStudio(props: {
                   <ColorPanel
                     brush={brush()}
                     onChange={tools.updateBrush}
-                    alternative={{
-                      label: 'Wheel',
-                      shown: colorWheel.settings().picker === 'wheel',
-                      onShownChange: (shown) => colorWheel.update({ picker: shown ? 'wheel' : 'square' }),
-                      render: (control) => (
-                        <ColorWheel
-                          color={control.color}
-                          onChange={control.onChange}
-                          onSettle={control.onSettle}
-                          settings={colorWheel.settings()}
-                          onSettings={colorWheel.update}
-                        />
-                      )
+                    alternatives={{
+                      chosen: colorWheel.settings().picker,
+                      onChoose: (picker) =>
+                        colorWheel.update({ picker: picker === 'wheel' || picker === 'triangle' ? picker : 'square' }),
+                      options: [
+                        {
+                          id: 'triangle',
+                          label: 'Triangle',
+                          render: (control) => (
+                            <HueTriangle color={control.color} onChange={control.onChange} onSettle={control.onSettle} />
+                          )
+                        },
+                        {
+                          id: 'wheel',
+                          label: 'Wheel',
+                          render: (control) => (
+                            <ColorWheel
+                              color={control.color}
+                              onChange={control.onChange}
+                              onSettle={control.onSettle}
+                              settings={colorWheel.settings()}
+                              onSettings={colorWheel.update}
+                            />
+                          )
+                        }
+                      ]
                     }}
                   />
                   <ColorPickerSettings

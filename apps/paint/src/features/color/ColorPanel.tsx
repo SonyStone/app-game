@@ -17,14 +17,18 @@ export function ColorPanel(props: {
   /** Receives `color` or `backgroundColor` patches; the caller merges them into the brush. */
   onChange: (patch: Partial<Brush>) => void;
   /**
-   * Another way to choose the color, such as a color wheel, offered with a switch in place of the saturation plane
-   * and hue strip. `render` receives the edited color, `onChange` for live edits and `onSettle` for when an edit ends.
+   * Other ways to choose the color, such as color wheels, offered with switches beside the built-in `square`
+   * (saturation plane and hue strip). `chosen` is `square` or an option's `id`; `render` receives the edited color,
+   * `onChange` for live edits and `onSettle` for when an edit ends.
    */
-  alternative?: {
-    label: string;
-    shown: boolean;
-    onShownChange: (shown: boolean) => void;
-    render: (control: { color: string; onChange: (color: string) => void; onSettle: () => void }) => JSX.Element;
+  alternatives?: {
+    chosen: string;
+    onChoose: (id: string) => void;
+    options: readonly {
+      id: string;
+      label: string;
+      render: (control: { color: string; onChange: (color: string) => void; onSettle: () => void }) => JSX.Element;
+    }[];
   };
 }) {
   const [target, setTarget] = createSignal<ColorTarget>('color');
@@ -101,29 +105,34 @@ export function ColorPanel(props: {
         </button>
       </div>
 
-      <Show when={props.alternative}>
-        {(alternative) => (
+      <Show when={props.alternatives}>
+        {(alternatives) => (
           <div class={styles.pickers} role="radiogroup" aria-label="Color picker">
-            <button
-              role="radio"
-              aria-checked={alternative().shown ? 'false' : 'true'}
-              onClick={() => alternative().onShownChange(false)}
-            >
-              Square
-            </button>
-            <button
-              role="radio"
-              aria-checked={alternative().shown ? 'true' : 'false'}
-              onClick={() => alternative().onShownChange(true)}
-            >
-              {alternative().label}
-            </button>
+            <For each={[{ id: 'square', label: 'Square' }, ...alternatives().options]}>
+              {(option) => (
+                <button
+                  role="radio"
+                  aria-checked={alternatives().chosen === option.id ? 'true' : 'false'}
+                  onClick={() => alternatives().onChoose(option.id)}
+                >
+                  {option.label}
+                </button>
+              )}
+            </For>
           </div>
         )}
       </Show>
 
+      {/*
+        Keyed by the chosen id, so switching between two alternatives mounts the chosen one afresh, while new option
+        objects for the same choice, as a caller's settings change, keep it mounted.
+      */}
       <Show
-        when={props.alternative?.shown && props.alternative}
+        keyed
+        when={
+          props.alternatives?.options.some((option) => option.id === props.alternatives?.chosen) &&
+          props.alternatives.chosen
+        }
         fallback={
           <>
             <div
@@ -184,8 +193,8 @@ export function ColorPanel(props: {
           </>
         }
       >
-        {(alternative) =>
-          alternative().render({
+        {(chosen) =>
+          untrack(() => props.alternatives!.options.find((option) => option.id === chosen)!).render({
             get color() {
               return hex();
             },

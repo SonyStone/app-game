@@ -2,8 +2,8 @@ import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { gamutMasks, harmonies, type DiskPoint, type GamutMask, type Harmony } from './wheelGeometry';
 
 /**
- * How colors are chosen in the Color panel, persisted in `localStorage`: the `square` (HSV plane and hue strip) or the
- * perceptual `wheel`, with the wheel's harmony, gamut mask and the mask's clockwise rotation in degrees. Storage
+ * How colors are chosen in the Color panel, persisted in `localStorage`: the `square` (HSV plane and hue strip), the
+ * perceptual `wheel` or the classic hue `triangle`, with the wheel's harmony, gamut mask and the mask's clockwise rotation in degrees. Storage
  * failures keep the choices for this session.
  */
 export function createColorWheelSettings() {
@@ -25,7 +25,8 @@ export function createColorWheelSettings() {
 
 /** The Color panel's picker and the wheel's guides. */
 export type ColorWheelSettings = {
-  picker: 'square' | 'wheel';
+  /** The Color panel's picker: the HSV square, this perceptual wheel, or the classic hue triangle. */
+  picker: 'square' | 'wheel' | 'triangle';
   harmony: Harmony;
   mask: GamutMask;
   maskAngle: number;
@@ -44,7 +45,7 @@ function read(): ColorWheelSettings {
   try {
     const stored = JSON.parse(localStorage.getItem(key) ?? '{}') as Partial<Record<keyof ColorWheelSettings, unknown>>;
     return {
-      picker: stored.picker === 'wheel' ? 'wheel' : 'square',
+      picker: stored.picker === 'wheel' || stored.picker === 'triangle' ? stored.picker : 'square',
       harmony: typeof stored.harmony === 'string' && stored.harmony in harmonies ? (stored.harmony as Harmony) : 'none',
       mask:
         typeof stored.mask === 'string' && (stored.mask in gamutMasks || stored.mask === 'custom')

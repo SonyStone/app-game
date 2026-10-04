@@ -112,7 +112,7 @@ function pointer(target: HTMLElement, type: string, clientX: number, clientY: nu
 }
 
 it('offers another picker in place of the square, which edits the color and settles into recents', () => {
-  const [shown, setShown] = createSignal(false);
+  const [chosen, setChosen] = createSignal('square');
   const [color, setColor] = createSignal('#344b66');
   const other = document.body.appendChild(document.createElement('div'));
   const stop = render(
@@ -120,21 +120,27 @@ it('offers another picker in place of the square, which edits the color and sett
       <ColorPanel
         brush={{ ...defaultBrush(), color: color() }}
         onChange={(patch) => patch.color && setColor(patch.color)}
-        alternative={{
-          label: 'Wheel',
-          shown: shown(),
-          onShownChange: setShown,
-          render: (control) => (
-            <button
-              aria-label="Alternative"
-              onClick={() => {
-                control.onChange('#ff8800');
-                control.onSettle();
-              }}
-            >
-              {control.color}
-            </button>
-          )
+        alternatives={{
+          chosen: chosen(),
+          onChoose: setChosen,
+          options: [
+            {
+              id: 'wheel',
+              label: 'Wheel',
+              render: (control) => (
+                <button
+                  aria-label="Alternative"
+                  onClick={() => {
+                    control.onChange('#ff8800');
+                    control.onSettle();
+                  }}
+                >
+                  {control.color}
+                </button>
+              )
+            },
+            { id: 'other', label: 'Other', render: () => <p aria-label="Other picker" /> }
+          ]
         }}
       />
     ),
@@ -151,6 +157,10 @@ it('offers another picker in place of the square, which edits the color and sett
   expect(color()).toBe('#ff8800');
   expect(within('[aria-label="Alternative"]')!.textContent).toBe('#ff8800');
   expect(within('[aria-label="Set color #ff8800"]')).not.toBeNull();
+  [...other.querySelectorAll<HTMLElement>('[role="radio"]')].find((radio) => radio.textContent === 'Other')!.click();
+  flush();
+  expect(within('[aria-label="Alternative"]')).toBeNull();
+  expect(within('[aria-label="Other picker"]')).not.toBeNull();
   stop();
   other.remove();
 });

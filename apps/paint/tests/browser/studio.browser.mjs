@@ -235,6 +235,17 @@ try {
     await corners.nth(1).dblclick();
     assert.equal(await corners.count(), 3);
     await page.getByLabel('Gamut mask').selectOption('none');
+
+    // The classic hue triangle: a press in the middle of the triangle picks a muted color.
+    await page.getByRole('radio', { name: 'Triangle' }).click();
+    const triangle = await page.getByRole('group', { name: 'Hue triangle' }).boundingBox();
+    const beforeTriangle = await hex.inputValue();
+    await page.mouse.click(triangle.x + triangle.width / 2, triangle.y + triangle.height / 2);
+    assert.notEqual(await hex.inputValue(), beforeTriangle);
+    await page.screenshot({ path: path.join(os.tmpdir(), 'paint-hue-triangle.png') });
+    // Later steps draw with the color the wheel left.
+    await hex.fill(beforeTriangle);
+    await hex.press('Enter');
     await page.getByRole('radio', { name: 'Square' }).click();
     await page.keyboard.press('Escape');
   });
