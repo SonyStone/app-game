@@ -1,13 +1,15 @@
-import { createSignal, For, onCleanup, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
+import { createHoverHints } from '../../shared/ui/createHoverHints';
+import { HintCard } from '../../shared/ui/HintCard';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import type { PaintTool } from '../brush';
 import styles from './PaintStudio.module.css';
 import type { PanelId } from './StudioPanel';
-import { ToolHint, toolHints } from './ToolHint';
+import { toolHints } from './toolHints';
 
 /**
  * Left tool rail: drawing tools and the transform, then the view mirror and the symmetry and layer panel toggles. A pen
- * or mouse resting on a button shows its visual hint beside the rail; see `ToolHint`.
+ * or mouse resting on a button shows its visual hint beside the rail; see `HintCard`.
  */
 export function ToolBar(props: {
   tool: PaintTool;
@@ -26,7 +28,11 @@ export function ToolBar(props: {
   /** Opens or closes `panel`; `target` receives focus again when the panel closes. */
   onTogglePanel: (panel: PanelId, target: HTMLElement) => void;
 }) {
-  const hints = createHints();
+  const hints = createHoverHints<keyof typeof toolHints>();
+  // Handlers created once, outside the JSX, so that re-applied attributes keep them.
+  const on = Object.fromEntries(Object.keys(toolHints).map((id) => [id, hints.on(id as keyof typeof toolHints)])) as {
+    [id in keyof typeof toolHints]: ReturnType<typeof hints.on>;
+  };
 
   return (
     <nav class={styles.tools} aria-label="Drawing tools">
@@ -36,7 +42,7 @@ export function ToolBar(props: {
             aria-label={button.label}
             aria-pressed={props.tool === button.tool ? 'true' : 'false'}
             onClick={() => props.onChooseTool(button.tool)}
-            {...hints.on[button.tool]}
+            {...on[button.tool]}
           >
             <SketchIcon name={button.icon} />
           </button>
@@ -46,7 +52,7 @@ export function ToolBar(props: {
         aria-label="Transform"
         aria-pressed={props.transforming ? 'true' : 'false'}
         onClick={() => props.onTransform()}
-        {...hints.on.transform}
+        {...on.transform}
       >
         <SketchIcon name="move" />
       </button>
@@ -55,7 +61,7 @@ export function ToolBar(props: {
         aria-label="Mirror canvas"
         aria-pressed={props.mirrored ? 'true' : 'false'}
         onClick={() => props.onToggleMirror()}
-        {...hints.on.mirror}
+        {...on.mirror}
       >
         <SketchIcon name="mirror" />
       </button>
@@ -65,7 +71,7 @@ export function ToolBar(props: {
         aria-expanded={props.panel === 'symmetry' ? 'true' : 'false'}
         aria-controls="paint-panel"
         onClick={(event) => props.onTogglePanel('symmetry', event.currentTarget)}
-        {...hints.on.symmetry}
+        {...on.symmetry}
       >
         <SketchIcon name="symmetry" />
       </button>
@@ -74,54 +80,24 @@ export function ToolBar(props: {
         aria-expanded={props.panel === 'layers' ? 'true' : 'false'}
         aria-controls="paint-panel"
         onClick={(event) => props.onTogglePanel('layers', event.currentTarget)}
-        {...hints.on.layers}
+        {...on.layers}
       >
         <SketchIcon name="layers" />
       </button>
-      <Show when={hints.shown()}>{(shown) => <ToolHint hint={toolHints[shown().id]} top={shown().top} />}</Show>
+      <Show when={hints.shown()}>
+        {(shown) => (
+          <HintCard
+            hint={toolHints[shown().id]}
+            style={{
+              left: 'calc(100% + 8px)',
+              top: `${shown().element.offsetTop + shown().element.offsetHeight / 2}px`,
+              transform: 'translateY(-50%)'
+            }}
+          />
+        )}
+      </Show>
     </nav>
   );
-}
-
-/**
- * Which hint shows: a pen or mouse resting 400 ms on a button shows its hint, moving on to the next button within a
- * moment shows that one at once, and leaving or pressing hides it. Touch shows none. `on` holds each button's pointer
- * handlers, created once, outside the JSX, so that re-applied attributes keep them.
- */
-function createHints() {
-  const [shown, setShown] = createSignal<{ id: keyof typeof toolHints; top: number }>();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  /** When the last hint hid, so that the next button's shows without waiting. */
-  let hidden = -Infinity;
-  const hide = () => {
-    clearTimeout(timer);
-    if (shown()) {
-      hidden = performance.now();
-      setShown(undefined);
-    }
-  };
-  onCleanup(() => clearTimeout(timer));
-  const handlers = (id: keyof typeof toolHints) => ({
-    onPointerEnter(event: PointerEvent & { currentTarget: HTMLElement }) {
-      if (event.pointerType === 'touch') {
-        return;
-      }
-
-      const button = event.currentTarget;
-      clearTimeout(timer);
-      timer = setTimeout(
-        () => setShown({ id, top: button.offsetTop + button.offsetHeight / 2 }),
-        performance.now() - hidden < 300 ? 0 : 400
-      );
-    },
-    onPointerLeave: hide,
-    onPointerDown: hide
-  });
-  const on = Object.fromEntries(Object.keys(toolHints).map((id) => [id, handlers(id as keyof typeof toolHints)])) as {
-    [id in keyof typeof toolHints]: ReturnType<typeof handlers>;
-  };
-
-  return { shown, on };
 }
 
 /** Tool buttons in toolbar order; their hints are `toolHints` by the same id. */

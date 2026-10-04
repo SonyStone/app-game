@@ -118,12 +118,10 @@
   }
 }
 
-.grid {
-  height: 32px;
-  padding: 0 6px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
-  font: inherit;
+/* Text options in the second row; outranks the floating bar's square icon buttons. */
+[role='toolbar'] > button.textOption:is(button) {
+  width: auto;
+  min-width: 38px;
+  padding: 0 8px;
   font-size: 12px;
 }

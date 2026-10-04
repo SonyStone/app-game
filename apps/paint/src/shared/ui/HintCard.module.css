@@ -1,10 +1,8 @@
-/* Beside the toolbar, centered on the hovered button. */
+/* Placed by its `style`. */
 .hint {
   position: absolute;
   z-index: 30;
-  left: calc(100% + 8px);
   width: 210px;
-  transform: translateY(-50%);
   display: grid;
   gap: 6px;
   padding: 8px;
@@ -85,11 +83,6 @@
   animation: click 2.2s ease-in-out infinite;
 }
 
-.gradientArea {
-  stroke: none;
-  animation: fill 2.2s ease-in-out infinite;
-}
-
 .drag {
   stroke: #fff;
   stroke-width: 2;
@@ -97,19 +90,19 @@
   animation: draw 2.2s ease-in-out infinite;
 }
 
-.lasso {
+.dashed {
   stroke: #2f4b62;
   stroke-width: 2;
   stroke-dasharray: 5 4;
   animation: march 1s linear infinite;
 }
 
-.transform {
+.turn {
   transform-origin: 60px 36px;
   animation: turn 2.6s ease-in-out infinite;
 }
 
-.mirror {
+.flip {
   transform-origin: 60px 36px;
   animation: flip 2.6s ease-in-out infinite;
 }
@@ -120,7 +113,7 @@
   stroke-dasharray: 3 3;
 }
 
-.layers path {
+.lift path {
   fill: #fbfbfa;
   stroke: #2f4b62;
   stroke-width: 1.5;
@@ -132,6 +125,49 @@
 
   &:nth-child(3) {
     animation-delay: 0.3s;
+  }
+}
+
+.flipY {
+  transform-origin: 60px 36px;
+  animation: flipY 2.6s ease-in-out infinite;
+}
+
+.shape {
+  fill: #7fa7c4;
+  stroke: #2f4b62;
+  stroke-width: 1.5;
+}
+
+/* Changes from the path's own `d` to `--to`, back and forth. */
+.morph {
+  fill: #7fa7c4;
+  stroke: #2f4b62;
+  stroke-width: 1.5;
+  animation: morph 2.6s ease-in-out infinite alternate;
+}
+
+@keyframes morph {
+  0%,
+  20% {
+    d: var(--from);
+  }
+
+  80%,
+  to {
+    d: var(--to);
+  }
+}
+
+@keyframes flipY {
+  0%,
+  35% {
+    transform: none;
+  }
+
+  50%,
+  85% {
+    transform: scaleY(-1);
   }
 }
 

@@ -679,10 +679,10 @@ try {
     const points = box.getByLabel('Warp point');
     assert.equal(await points.count(), 16);
     // A finer grid has more points; back to the default grid for the drags below.
-    const grid = page.getByRole('toolbar', { name: 'Transform actions' }).getByLabel('Warp grid');
-    await grid.selectOption('2');
+    const options = page.getByRole('toolbar', { name: 'Transform options' });
+    await options.getByRole('button', { name: 'Warp grid 2×2' }).click();
     assert.equal(await points.count(), 49);
-    await grid.selectOption('1');
+    await options.getByRole('button', { name: 'Warp grid 1×1' }).click();
     assert.equal(await points.count(), 16);
     for (const index of [5, 6, 9, 10]) {
       const handle = await points.nth(index).boundingBox();

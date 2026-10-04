@@ -118,10 +118,11 @@ export function TransformOverlay(props: {
       bounds: outline.map(props.toScreen)
     };
   };
-  /** Where the exact values go: below the actions, or above them near the bottom of the view. */
+  /** Where the exact values go: below the actions and their options row, or above them near the bottom of the view. */
   const numbersAt = () => {
     const actions = actionsAt();
-    const below = actions.top + actionsSize.height + 6;
+    const options = props.box.corners !== undefined || props.box.warp !== undefined;
+    const below = actions.top + actionsSize.height + 6 + (options ? actionsSize.height + 6 : 0);
     return {
       left: actions.left,
       top: below + numbersHeight <= props.size.height ? below : actions.top - numbersHeight - 6
