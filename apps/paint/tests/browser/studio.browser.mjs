@@ -158,6 +158,27 @@ try {
     assert.equal(await redo.isDisabled(), true);
   });
 
+  await step('the right button opens quick actions around the puck, chosen by press or by a marking drag', async () => {
+    const { cx, cy } = await workspaceCenter(page);
+    const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed');
+    const menu = page.getByRole('menu', { name: 'Quick actions' });
+    await page.mouse.move(cx, cy);
+    await page.mouse.down({ button: 'right' });
+    await page.mouse.up({ button: 'right' });
+    await menu.getByRole('menuitem', { name: 'Lasso' }).click({ timeout: 5_000 });
+    await menu.waitFor({ state: 'detached', timeout: 5_000 });
+    assert.equal(await pressed('Lasso'), 'true');
+
+    // Pressing the button, dragging up past the puck to the brush and releasing chooses it.
+    await page.mouse.move(cx, cy);
+    await page.mouse.down({ button: 'right' });
+    await page.mouse.move(cx, cy - 100, { steps: 8 });
+    assert.equal(await menu.getByText('Brush', { exact: true }).count(), 1);
+    await page.mouse.up({ button: 'right' });
+    await menu.waitFor({ state: 'detached', timeout: 5_000 });
+    assert.equal(await pressed('Brush'), 'true');
+  });
+
   await step('two- and three-finger taps undo and redo, and a held finger picks a color', async () => {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });

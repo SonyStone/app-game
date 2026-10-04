@@ -1,5 +1,5 @@
 /** Small, consistent line icons for the sketchbook controls. */
-export function SketchIcon(props: { name: keyof typeof paths; size?: number }) {
+export function SketchIcon(props: { name: SketchIconName; size?: number }) {
   return (
     <svg
       width={props.size ?? 20}
@@ -16,6 +16,9 @@ export function SketchIcon(props: { name: keyof typeof paths; size?: number }) {
     </svg>
   );
 }
+
+/** Names of the available icons. */
+export type SketchIconName = keyof typeof paths;
 
 const paths = {
   lasso: 'M7 17C2 15 2 9 6 5c4-3 13-2 15 3s-2 9-8 10M8 15c-4 0-5 4-2 5s6-2 4-4c-1-1-2-1-2-1Zm-2 5c-1 2-3 2-4 1',
@@ -41,6 +44,8 @@ const paths = {
   scene: 'm12 2 9 5v10l-9 5-9-5V7Zm0 10v10M3 7l9 5 9-5M12 2v10',
   animation: 'M3 5h18v14H3ZM7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4',
   undo: 'M9 5 3 11l6 6M3 11h11a6 6 0 0 1 6 6',
+  redo: 'm15 5 6 6-6 6m6-6H10a6 6 0 0 0-6 6',
+  picker: 'm14 7 3 3M5 19l1-4 9-9 3 3-9 9-4 1Zm9-15 2-1 5 5-1 2-3 1-4-4 1-3Z',
   close: 'm6 6 12 12M6 18 18 6',
   more: 'M5 11v2M12 11v2M19 11v2',
   home: 'm3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9',

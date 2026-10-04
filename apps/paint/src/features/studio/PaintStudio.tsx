@@ -4,7 +4,7 @@ import { NavigationPuck } from '@app-game/navigation-puck';
 import { screenToWorld, worldToScreen, type Point } from '@app-game/paint-core/camera';
 import { supportsPaintSymmetry } from '@app-game/paint-core/symmetry';
 import type { JSX } from '@solidjs/web';
-import { createSignal, Match, Show, Switch } from 'solid-js';
+import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintError } from '../../shared/errors';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { AbrViewerDialog, clearAbrBrush, createAbrPresets } from '../abr';
@@ -18,7 +18,7 @@ import {
   MixerActions,
   type PaintTool
 } from '../brush';
-import { createBrushLibrary, createBrushStorage, createPresetUploads } from '../brush-library';
+import { createBrushLibrary, createBrushStorage, createPresetUploads, createRecentPresets } from '../brush-library';
 import { createPaintCamera, createViewSize } from '../camera';
 import { BrushCursor, CanvasDebug, firstCanvasAction, PaintCanvas, type CanvasInput } from '../canvas';
 import { ColorPanel, createCanvasColorPicker } from '../color';
@@ -27,6 +27,7 @@ import { createPaintEngine } from '../engine';
 import { createFill, FillPanel } from '../fill';
 import { createImagePlacement, HistorySourceControl, LayersPanel } from '../layers';
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
+import { createRadialMenu, RadialMenu, radialLayout, type RadialItem } from '../radial-menu';
 import { createInputRecorder, RecordingControls } from '../recording';
 import { createSelection, createSelectionView, guardEdits, SelectionActions } from '../selection';
 import { createSymmetry, SymmetryGuide, SymmetryPanel } from '../symmetry';
@@ -101,7 +102,8 @@ export function PaintStudio(props: {
     size,
     ready: engine.canEdit,
     send: engine.send,
-    bounds: () => canvas()?.getBoundingClientRect()
+    bounds: () => canvas()?.getBoundingClientRect(),
+    puck: { size: radialLayout.puck, reach: radialLayout.reach }
   });
   const symmetry = createSymmetry({
     restored: () => engine.restored()?.features,
@@ -187,6 +189,21 @@ export function PaintStudio(props: {
     onError: setError
   });
   const fullscreen = createFullscreenToggle(editor, setError);
+  const recentPresets = createRecentPresets({ current: tools.preset, exists: (id) => library.find(id) !== undefined });
+  const radial = createRadialMenu({
+    center: camera.navigation.center,
+    items: radialItems,
+    close: camera.navigation.close
+  });
+  // Recent user presets are listed once the library has read its presets.
+  createEffect(
+    () => camera.navigation.center() !== undefined,
+    (open) => {
+      if (open) {
+        void library.loadAll();
+      }
+    }
+  );
   const recorder = createInputRecorder({
     exportFile: engine.exportFile,
     observe: () => ({
@@ -257,6 +274,7 @@ export function PaintStudio(props: {
       hold: (point) => void colorPicker.pickAt(point)
     },
     puck: camera.navigation,
+    puckPicker: radial.picker,
     selection: { ...selection, enabled: () => tool() === 'lasso' }
   };
 
@@ -386,8 +404,8 @@ export function PaintStudio(props: {
     setAbrOpen(true);
   }
 
-  /** Uploads a preset's images if needed and makes the active brush tool use it. */
-  async function choosePreset(id: string) {
+  /** Uploads a preset's images if needed and makes the brush tool `slot`, the active one by default, use it. */
+  async function choosePreset(id: string, slot = tools.slot()) {
     const preset = library.find(id);
     if (!preset) {
       return;
@@ -395,7 +413,7 @@ export function PaintStudio(props: {
 
     mixer.cancelPick();
     colorPicker.cancel();
-    const chosen = await uploads.choose(preset, tools.slot());
+    const chosen = await uploads.choose(preset, slot);
     if (chosen.isErr() && chosen.error.kind !== 'aborted') {
       setError(chosen.error);
     }
@@ -478,7 +496,17 @@ export function PaintStudio(props: {
           {(point) => <BrushCursor point={point()} size={cursorSize()} square={blockCursor()} />}
         </Show>
         <Show when={camera.navigation.center()}>
-          <NavigationPuck navigation={camera.navigation} focusTarget={() => canvas()!} />
+          {(center) => (
+            <NavigationPuck navigation={camera.navigation} focusTarget={() => canvas()!}>
+              <RadialMenu
+                center={center()}
+                items={radialItems()}
+                highlighted={radial.highlighted()}
+                hidden={camera.navigation.activeAction() !== undefined}
+                onChoose={radial.choose}
+              />
+            </NavigationPuck>
+          )}
         </Show>
         <Show when={mixer.picking()}>
           <div class={styles.welcome} role="status">
@@ -608,8 +636,8 @@ export function PaintStudio(props: {
         </button>
         <button
           class={`${styles.navTrigger} ${styles.floating}`}
-          aria-label="Navigation puck"
-          title="Navigation · hold Space / V / Right click"
+          aria-label="Navigation and quick actions"
+          title="Navigation and quick actions · hold Space / V / right click or the pen button"
           onClick={() => {
             setPanel(undefined);
             camera.navigation.open();
@@ -788,6 +816,76 @@ export function PaintStudio(props: {
     return brush().engine?.id !== 'abr' || abrTool === 'PbTl' || abrTool === 'PcTl';
   }
 
+  /**
+   * Actions of the radial menu around the navigation puck, by clock position: tools along the top, undo and redo at
+   * the sides, the color picker and the three most recently used brush presets along the bottom.
+   */
+  function radialItems(): RadialItem[] {
+    const toolItem = (id: PaintTool, label: string, icon: RadialItem['icon'], slot: number): RadialItem => ({
+      id,
+      label,
+      icon,
+      slot,
+      active: tool() === id,
+      run: () => chooseTool(id)
+    });
+    const presets = recentPresets.recent(3).map((id, index): RadialItem => {
+      const name = library.find(id)?.name ?? '';
+      return {
+        id: `preset:${id}`,
+        label: `Brush preset: ${name}`,
+        text: initials(name),
+        // The most recent preset sits at the bottom, the next ones beside it.
+        slot: [6, 5, 7][index]!,
+        disabled: !canChangeBrush(),
+        run: () => usePreset(id)
+      };
+    });
+
+    return [
+      toolItem('brush', 'Brush', 'draw', 0),
+      toolItem('eraser', 'Eraser', 'erase', 1),
+      toolItem('fill', 'Fill', 'fill', 2),
+      {
+        id: 'redo',
+        label: 'Redo',
+        icon: 'redo',
+        slot: 3,
+        disabled: !engine.state().canRedo || !ready(),
+        run: () => edit({ type: 'redo' })
+      },
+      ...presets,
+      { id: 'picker', label: 'Pick color from canvas', icon: 'picker', slot: 8, run: colorPicker.arm },
+      {
+        id: 'undo',
+        label: 'Undo',
+        icon: 'undo',
+        slot: 9,
+        disabled: !engine.state().canUndo || !ready(),
+        run: () => edit({ type: 'undo' })
+      },
+      {
+        id: 'transform',
+        label: transform.active() ? 'Apply transform' : 'Transform',
+        icon: 'move',
+        slot: 10,
+        active: transform.active(),
+        run: toggleTransform
+      },
+      toolItem('lasso', 'Lasso', 'lasso', 11)
+    ];
+  }
+
+  /** Paints with preset `id`: the eraser keeps erasing with it, other tools switch to the brush. */
+  function usePreset(id: string) {
+    const slot = tool() === 'eraser' ? 'eraser' : 'brush';
+    if (tool() !== slot) {
+      chooseTool(slot);
+    }
+
+    void choosePreset(id, slot);
+  }
+
   /** The current tool paints symmetric copies. */
   function supportsSymmetry() {
     return supportsPaintSymmetry(brush()) && paintsWithBrush();
@@ -797,6 +895,12 @@ export function PaintStudio(props: {
   function paintsWithBrush() {
     return tool() === 'brush' || tool() === 'eraser';
   }
+}
+
+/** Up to three letters naming a preset in the radial menu: the initials of its words, or the start of one word. */
+function initials(name: string) {
+  const words = name.split(/[\s_-]+/).filter(Boolean);
+  return (words.length > 1 ? words.map((word) => word[0]).join('') : (words[0] ?? '')).slice(0, 3).toUpperCase();
 }
 
 /** Commands that pass while a transform is in progress: view, settings and the transform's own edits. */

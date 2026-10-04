@@ -2,6 +2,7 @@ import type { createNavigationPuck, Point } from './controller';
 
 /** Owns Space/V, Escape, right-drag selection and cancellation for either editor.
  * Capture-phase listeners consume navigation events before painting. Dispose when the canvas unmounts.
+ * With `pick`, right-drags choose from controls around the puck instead of starting navigation.
  */
 export function attachNavigationPuck(
   canvas: HTMLCanvasElement,
@@ -11,6 +12,8 @@ export function attachNavigationPuck(
     busy: () => boolean;
     ready?: () => boolean;
     onOpen?: () => void;
+    /** Takes over right-drags, for a menu around the puck; see `PuckPicker`. */
+    pick?: PuckPicker;
   }
 ) {
   const abort = new AbortController();
@@ -27,6 +30,7 @@ export function attachNavigationPuck(
   };
   const ready = () => !options.busy() && (options.ready?.() ?? true);
   const close = () => {
+    if (right) options.pick?.cancel();
     right = undefined;
     navigation.close();
     canvas.focus({ preventScroll: true });
@@ -53,7 +57,8 @@ export function attachNavigationPuck(
       lastPointer = point(event);
       if (right?.id !== event.pointerId) return;
       consume(event);
-      if (navigation.activeAction()) navigation.move(pointer(event));
+      if (options.pick) options.pick.move(lastPointer, right.origin);
+      else if (navigation.activeAction()) navigation.move(pointer(event));
       else {
         const action = navigation.actionAt(lastPointer, right.origin);
         if (action) navigation.begin(action, pointer(event));
@@ -67,6 +72,12 @@ export function attachNavigationPuck(
       if (right?.id !== event.pointerId) return;
       consume(event);
       right = undefined;
+      if (options.pick) {
+        // A choice closes the puck; releasing without one leaves it open for direct presses.
+        if (options.pick.release(point(event))) close();
+        return;
+      }
+
       navigation.move(pointer(event));
       navigation.end(event.pointerId);
       if (!navigation.center()) canvas.focus({ preventScroll: true });
@@ -124,6 +135,7 @@ export function attachNavigationPuck(
   );
   const reset = () => {
     held = false;
+    if (right) options.pick?.cancel();
     right = undefined;
     navigation.close();
   };
@@ -137,6 +149,19 @@ export function attachNavigationPuck(
     navigation.close();
   };
 }
+
+/**
+ * Chooses from controls around the puck by right-dragging, as in a marking menu: the right button (a pen's barrel
+ * button) opens the puck where it is pressed, the drag points at a control and the release chooses it.
+ */
+export type PuckPicker = {
+  /** The right-dragging pointer moved to `point`, in client CSS pixels; `origin` is where it was pressed. */
+  move(point: Point, origin: Point): void;
+  /** The right button was released at `point`. Returns whether that chose a control, which closes the puck. */
+  release(point: Point): boolean;
+  /** The right-drag ended without a choice, because the puck closed or the pointer was cancelled. */
+  cancel(): void;
+};
 
 function editable(target: EventTarget | null) {
   return (

@@ -11,6 +11,8 @@ Create `createNavigationPuck` with viewport bounds, mode, clockwise screen rotat
 - `rotation()` returns the current clockwise screen angle for absolute Shift snapping. Paint supplies `camera.angle`; Grease supplies `-camera.roll`. Each editor owns this conversion, not the shared controller.
 - `orbit(dx, dy)` receives pixel deltas only in 3D. Shift snapping assumes 0.006 rad/px horizontally and 0.005 rad/px vertically, matching Grease's renderer.
 - `busy()` blocks invocation during painting or an existing touch/edit gesture. `ready()` optionally blocks it before renderer initialization.
+- `size` sets the largest puck diameter (260 by default) and `reach` the distance from its center that stays inside the viewport, for controls around the puck. Render those controls as `NavigationPuck` children: they sit above the layer that dismisses the puck and should hide themselves while `activeAction()` is set.
+- `attachNavigationPuck(..., { pick })` hands right-drags to a `PuckPicker`, such as Paint's radial menu, instead of selecting a navigation zone: `move` follows the drag, `release` returns whether it chose something, which closes the puck, and `cancel` ends it without a choice.
 - The component imports scoped CSS automatically. Headless consumers can import `/controller` and `/input` without loading JSX or assets.
 
 ## Controls

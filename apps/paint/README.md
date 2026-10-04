@@ -38,6 +38,7 @@ src/
     abr/           Embedded ABR viewer and import of its presets into the brush library
     developer/     Developer switches and dialog
     performance/   Live frame-cost panel, `window.paintPerformance` reports and the dev-server responder
+    radial-menu/   Quick actions around the navigation puck, chosen by press or barrel-button marking drag
     recording/     Input recording for bug reports: recorder, floating controls, recording format
     pwa/           Standalone shell: install prompt, offline status, build identity
   shared/

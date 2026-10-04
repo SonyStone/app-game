@@ -12,6 +12,22 @@ describe('navigation puck', () => {
     expect(puck.center()).toEqual({ x: 202, y: 168 });
   });
 
+  it('shrinks to its size and keeps its reach inside the viewport', () => {
+    const puck = createNavigationPuck({
+      viewport: () => ({ left: 0, top: 0, width: 800, height: 260 }),
+      mode: () => '2d',
+      rotation: () => 0,
+      transform: () => {},
+      orbit: () => {},
+      size: 120,
+      reach: 140
+    });
+    expect(puck.diameter()).toBe(120);
+    puck.open({ x: 10, y: 10 });
+    // 140 px of reach and an 8 px margin fit horizontally; vertically they do not, so the puck stays centered.
+    expect(puck.center()).toEqual({ x: 148, y: 130 });
+  });
+
   it('pans by the drag displacement and ignores a second pointer', () => {
     const { puck, renderer } = setup();
     puck.open();

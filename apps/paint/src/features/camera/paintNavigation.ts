@@ -11,8 +11,11 @@ export function createPaintNavigation(params: {
   navigate: (camera: Camera) => void;
   /** Client-space bounds of the canvas; the puck is clamped to it and gesture points are offset by its corner. */
   viewport: () => { left: number; top: number; width: number; height: number };
+  /** Largest puck diameter and the reach of controls around it that stays in view; see `createNavigationPuck`. */
+  puck?: { size: number; reach: number };
 }) {
   return createNavigationPuck({
+    ...params.puck,
     viewport: params.viewport,
     mode: () => '2d',
     rotation: () => params.camera().angle,

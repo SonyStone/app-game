@@ -94,6 +94,29 @@ describe('shared canvas navigation bindings', () => {
     key('keyup', 'Space');
     expect(puck.center()).toBeUndefined();
   });
+  it('lets a picker take right-drags: a choice closes the puck, a release without one keeps it open', () => {
+    const pick = { move: vi.fn(), release: vi.fn(() => false), cancel: vi.fn() };
+    const { puck, pointer, paint, transform } = setup('2d', pick);
+    pointer('pointerdown', 400, 300, 2);
+    pointer('pointermove', 300, 300, 2);
+    expect(pick.move).toHaveBeenLastCalledWith({ x: 300, y: 300 }, { x: 400, y: 300 });
+    expect(puck.activeAction()).toBeUndefined();
+    pointer('pointerup', 300, 300, 2);
+    expect(pick.release).toHaveBeenLastCalledWith({ x: 300, y: 300 });
+    expect(puck.center()).toBeDefined();
+
+    pick.release.mockReturnValue(true);
+    pointer('pointerdown', 400, 300, 2);
+    pointer('pointerup', 420, 300, 2);
+    expect(puck.center()).toBeUndefined();
+    expect(transform).not.toHaveBeenCalled();
+    expect(paint).not.toHaveBeenCalled();
+
+    pointer('pointerdown', 400, 300, 2);
+    pointer('lostpointercapture', 400, 300, 2);
+    expect(pick.cancel).toHaveBeenCalledOnce();
+    expect(puck.center()).toBeUndefined();
+  });
   it('supports V and Escape, and removes every listener on disposal', () => {
     const { puck, dispose } = setup();
     key('keydown', 'KeyV', { key: 'v' });
@@ -105,7 +128,7 @@ describe('shared canvas navigation bindings', () => {
     expect(puck.center()).toBeUndefined();
   });
 });
-function setup(mode: '2d' | '3d' = '2d') {
+function setup(mode: '2d' | '3d' = '2d', pick?: Parameters<typeof attachNavigationPuck>[2]['pick']) {
   const canvas = document.createElement('canvas');
   canvas.tabIndex = 0;
   canvas.setPointerCapture = vi.fn();
@@ -121,7 +144,7 @@ function setup(mode: '2d' | '3d' = '2d') {
     transform,
     orbit
   });
-  const dispose = attachNavigationPuck(canvas, puck, { busy: () => busy });
+  const dispose = attachNavigationPuck(canvas, puck, { busy: () => busy, ...(pick ? { pick } : {}) });
   cleanups.push(dispose);
   for (const type of ['pointerdown', 'pointermove', 'pointerup']) canvas.addEventListener(type, paint);
   const pointer = (type: string, x: number, y: number, button = 0, id = 1) => {

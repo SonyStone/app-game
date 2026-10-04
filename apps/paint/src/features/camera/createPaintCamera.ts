@@ -21,6 +21,8 @@ export function createPaintCamera(options: {
   send: (command: Extract<PaintCommand, { type: 'view' }>) => void;
   /** Client-space bounds of the canvas, which offset puck gestures. */
   bounds: () => { left: number; top: number; width: number; height: number } | undefined;
+  /** Size of the navigation puck and the reach of controls around it; see `createNavigationPuck`. */
+  puck?: { size: number; reach: number };
 }) {
   const [camera, setCamera] = createSignal<Camera>((previous) => options.restored() ?? previous ?? defaultCamera());
   /** The camera for gesture handlers; like `camera`, it shows a write only after the flush that carries it. */
@@ -29,7 +31,8 @@ export function createPaintCamera(options: {
     size: options.size,
     camera: current,
     navigate: setCamera,
-    viewport: () => options.bounds() ?? { left: 0, top: 0, ...options.size() }
+    viewport: () => options.bounds() ?? { left: 0, top: 0, ...options.size() },
+    puck: options.puck
   });
 
   const dpr = createDevicePixelRatio();

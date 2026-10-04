@@ -3,3 +3,4 @@ export * from './brushPresets';
 export * from './createBrushLibrary';
 export * from './createBrushStorage';
 export * from './createPresetUploads';
+export * from './createRecentPresets';

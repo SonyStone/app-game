@@ -1,12 +1,17 @@
+import type { JSX } from '@solidjs/web';
 import { For, Show } from 'solid-js';
 import puckImage from './assets/navigation-puck.svg?url';
 import type { createNavigationPuck, PuckAction } from './controller';
 import styles from './NavigationPuck.module.css';
 
-/** Shared 2D/3D controls that hide while a captured pointer navigates the canvas. */
+/**
+ * Shared 2D/3D controls that hide while a captured pointer navigates the canvas. `children` are shown with the puck,
+ * above the layer that dismisses it, for controls placed around it; they hide themselves while navigating.
+ */
 export function NavigationPuck(props: {
   navigation: ReturnType<typeof createNavigationPuck>;
   focusTarget: () => HTMLElement;
+  children?: JSX.Element;
 }) {
   const close = () => {
     props.navigation.close();
@@ -148,6 +153,7 @@ export function NavigationPuck(props: {
             <Show when={props.navigation.mode() === '3d'}>×</Show>
           </button>
         </div>
+        {props.children}
       </div>
     </Show>
   );

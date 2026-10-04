@@ -1,5 +1,5 @@
 import type { createNavigationPuck } from '@app-game/navigation-puck/controller';
-import { attachNavigationPuck } from '@app-game/navigation-puck/input';
+import { attachNavigationPuck, type PuckPicker } from '@app-game/navigation-puck/input';
 import { makeTimer } from '@solid-primitives/timer';
 import type { Brush, Sample } from './brush';
 import { panCamera, screenToWorld, transformAt, type Camera, type Point, type ViewSize } from './camera';
@@ -52,6 +52,8 @@ export function attachInput(
       hold?: (point: Point) => void;
     };
     puck?: ReturnType<typeof createNavigationPuck>;
+    /** Chooses from controls around the puck with right-drags, such as a radial menu; see `PuckPicker`. */
+    puckPicker?: PuckPicker;
     selection?: {
       enabled: () => boolean;
       begin: (point: Point) => void;
@@ -120,7 +122,8 @@ export function attachInput(
   const detachPuck = options.puck && attachNavigationPuck(canvas, options.puck, {
     busy: () => !!gesture || touches.size > 0,
     ready: options.ready,
-    onOpen: () => options.cursor(undefined)
+    onOpen: () => options.cursor(undefined),
+    ...(options.puckPicker ? { pick: options.puckPicker } : {})
   });
   const local = (event: { clientX: number; clientY: number }): Point => {
     const rect = canvas.getBoundingClientRect();
