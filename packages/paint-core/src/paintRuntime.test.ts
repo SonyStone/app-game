@@ -2,16 +2,16 @@ import { createBrushResources } from '@app-game/abr-paint/resources';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createRendererDouble } from '../tests/fixtures/rendererDouble';
 import { defaultCamera } from './camera';
-import { createMemoryStorage } from './composition/memoryStorage';
 import type { PaintModules, PaintStorage } from './composition/contracts';
 import { defineDocumentEdit, type DocumentEdit } from './composition/documentEdit';
 import type { DocumentFeature } from './composition/documentFeature';
+import { createMemoryStorage } from './composition/memoryStorage';
 import { symmetryFeature } from './composition/symmetryFeature';
 import { createDocument } from './document';
-import { TILE_BYTES, unpackTile } from './tilePixels';
 import { createPaintRuntime } from './paintRuntime';
 import type { PaintEvent } from './protocol';
 import { defaultPaintSymmetry } from './symmetry';
+import { TILE_BYTES, unpackTile, type TileData } from './tilePixels';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -136,11 +136,60 @@ it('commits a module edit as one undo step and leaves the document unchanged whe
   runtime.send(paint.command('fail'));
   runtime.send({ type: 'edit', edit: 'missing', command: undefined });
   await waitFor(() => events.filter((event) => event.type === 'error').length === 2);
-  expect(events.filter((event) => event.type === 'error').map((event) => event.type === 'error' && event.message)).toEqual([
-    'Nothing to fill here.',
-    'Document edit "missing" is not installed.'
-  ]);
+  expect(
+    events.filter((event) => event.type === 'error').map((event) => event.type === 'error' && event.message)
+  ).toEqual(['Nothing to fill here.', 'Document edit "missing" is not installed.']);
   expect(document.revision).toBe(revision);
+});
+
+it('amends an interactive edit into one undo step, replies to requests and refuses stale amendments', async () => {
+  // Fills tile 0,0 with the given alpha, replacing its own previous fill; 0 removes the fill.
+  const shade = defineDocumentEdit({
+    id: 'shade',
+    parse: (input: unknown) => input as number,
+    async run({ active, state }, alpha) {
+      const session = state.get() as { before: TileData | undefined } | undefined;
+      const before = session ? session.before : active.tiles.get('0,0');
+      // A zero alpha ends the session: its step is removed.
+      state.set(alpha ? { before } : undefined);
+      const after = new Uint8Array(TILE_BYTES).fill(alpha);
+      const changes = alpha ? [{ layerId: active.id, key: '0,0', before, after }] : [];
+      return { changes, amend: session !== undefined, reply: { alpha } };
+    }
+  });
+  const { runtime, document, events, storage, waitFor } = await start({ edits: [shade] });
+  const alphaAt = async () => {
+    const tile = document.active.tiles.get('0,0');
+    return tile && unpackTile(tile instanceof Uint8Array ? tile : await storage.read(tile))[3];
+  };
+  const replies = () => events.filter((event) => event.type === 'edited');
+  runtime.send(shade.command(10, 'a'));
+  runtime.send(shade.command(20, 'b'));
+  runtime.send(shade.command(30, 'c'));
+  await waitFor(() => replies().length === 3);
+  expect(replies()).toEqual([
+    { type: 'edited', requestId: 'a', result: { ok: true, value: { alpha: 10 } } },
+    { type: 'edited', requestId: 'b', result: { ok: true, value: { alpha: 20 } } },
+    { type: 'edited', requestId: 'c', result: { ok: true, value: { alpha: 30 } } }
+  ]);
+  expect(await alphaAt()).toBe(30);
+  expect(document.state().historyStates).toHaveLength(2);
+
+  // Amending without changes removes the step, as cancelling the edit does.
+  runtime.send(shade.command(0, 'd'));
+  await waitFor(() => replies().length === 4);
+  expect(await alphaAt()).toBeUndefined();
+  expect(document.state().canUndo).toBe(false);
+
+  // Another undo step in between makes the next amendment fail without changing the drawing.
+  runtime.send(shade.command(40, 'e'));
+  await waitFor(() => replies().length === 5);
+  runtime.send({ type: 'layer', action: { type: 'add' } });
+  runtime.send(shade.command(50, 'f'));
+  await waitFor(() => replies().length === 6);
+  expect(replies().at(-1)).toMatchObject({ requestId: 'f', result: { ok: false } });
+  document.changeLayer({ type: 'select', id: document.layers[0]!.id });
+  expect(await alphaAt()).toBe(40);
 });
 
 /** Disposes a runtime gracefully, saving its document. */
@@ -182,7 +231,11 @@ async function start(
     features: options.features ?? [],
     edits: options.edits ?? []
   };
-  const runtime = createPaintRuntime((event) => events.push(event), () => {}, modules);
+  const runtime = createPaintRuntime(
+    (event) => events.push(event),
+    () => {},
+    modules
+  );
   const waitFor = async (condition: () => boolean) => {
     for (let i = 0; i < 100 && !condition(); i++) {
       await vi.advanceTimersByTimeAsync(10);

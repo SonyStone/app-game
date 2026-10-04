@@ -320,6 +320,24 @@ export function createDocument(options: { paged?: boolean } = {}) {
 
       return entry?.tiles;
     },
+    /**
+     * Reverts the latest history entry and removes it, without a redo step, so that a following `commit` replaces it:
+     * an edit in progress, such as a transform, updates its single undo step this way. Returns the reverted tile
+     * changes, which the renderer must reload. Throws, changing nothing, when `id` is not the latest entry.
+     */
+    revertLatest(id: number): readonly TileChange[] {
+      const entry = undo.at(-1);
+      if (!entry || entry.id !== id) throw new Error('The drawing changed while this edit was in progress.');
+      undo.pop();
+      historyBytes -= entry.bytes;
+      apply(entry, 'before');
+      revision++;
+      return entry.tiles;
+    },
+    /** Id of the latest undoable entry, or `undefined` when there is none. */
+    get latestHistoryId(): number | undefined {
+      return undo.at(-1)?.id;
+    },
     /** Reapplies the same snapshots that were originally committed; returns them like {@link undo}. */
     redo(): readonly TileChange[] | undefined {
       const entry = redo.pop();

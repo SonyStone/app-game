@@ -51,7 +51,7 @@ export type PaintCommand =
   | { type: 'layer'; action: LayerAction }
   | { type: 'selection'; action: SelectionAction; points: Point[]; offset?: Point; layerId: string; revision: number }
   /** Runs a pixel edit registered with `DocumentFeatures`, such as a bucket fill; see `defineDocumentEdit`. */
-  | { type: 'edit'; edit: string; command: unknown }
+  | { type: 'edit'; edit: string; command: unknown; requestId?: string }
   | { type: 'import'; text: string }
   | { type: 'import'; file: Blob };
 
@@ -135,6 +135,8 @@ export type PaintEvent =
     }
   | { type: 'ready' }
   | { type: 'brush-command'; requestId: string; result: Result<void, string> }
+  /** Outcome of an `edit` command that carried a `requestId`, with the edit's `reply`. */
+  | { type: 'edited'; requestId: string; result: Result<unknown, string> }
   /** The `#rrggbb` color at a `pick-color` point. */
   | { type: 'picked-color'; requestId: string; result: Result<string, string> }
   | { type: 'checkpointed'; tools?: RendererToolState; historySource?: HistorySource }

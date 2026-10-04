@@ -37,8 +37,9 @@ it('fills the active layer by the active layer or all visible layers, over its e
   const lines: Layer = layer('lines', outline(0, 0, 20, 20));
   const paint: Layer = layer('paint', new Map());
   const read = async (pixels: unknown) => pixels as Uint8Array;
+  const state = { get: () => undefined, set: () => {} };
   const fill = (command: Partial<FillCommand>) =>
-    fillEdit.run({ layers: [paint, lines], active: paint, readTile: read }, { ...fillCommand(), ...command });
+    fillEdit.run({ layers: [paint, lines], active: paint, readTile: read, state }, { ...fillCommand(), ...command });
 
   // Judged on the empty paint layer alone, the fill covers the whole view area.
   const layerFill = await fill({ source: 'layer' });
@@ -52,7 +53,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
   expect([...pixels.subarray(index(5, 5), index(5, 5) + 4)]).toEqual([128, 0, 0, 128]);
 
   await expect(
-    fillEdit.run({ layers: [paint], active: { ...paint, visible: false }, readTile: read }, fillCommand())
+    fillEdit.run({ layers: [paint], active: { ...paint, visible: false }, readTile: read, state }, fillCommand())
   ).rejects.toThrow('Show the active layer');
 
   // A solid layer clipped to the line art shows only as the outline, so the fill still stops at it.
@@ -61,7 +62,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
     clipping: true
   };
   const clippedFill = await fillEdit.run(
-    { layers: [paint, lines, solid], active: paint, readTile: read },
+    { layers: [paint, lines, solid], active: paint, readTile: read, state },
     { ...fillCommand(), source: 'all' }
   );
   expect(count(alphaMask(clippedFill.changes[0]!.after as Uint8Array))).toBe(18 * 18);
@@ -69,7 +70,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
   // With alpha lock, only the layer's own pixels change color, keeping their alpha.
   const line = layer('line', outline(0, 0, 20, 20, [0, 0, 0, 128]));
   const locked = await fillEdit.run(
-    { layers: [{ ...line, alphaLock: true }], active: { ...line, alphaLock: true }, readTile: read },
+    { layers: [{ ...line, alphaLock: true }], active: { ...line, alphaLock: true }, readTile: read, state },
     { ...fillCommand(), point: { x: 0, y: 0 }, tolerance: 0, source: 'layer' }
   );
   const recolored = locked.changes[0]!.after as Uint8Array;

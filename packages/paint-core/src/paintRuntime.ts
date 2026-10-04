@@ -4,6 +4,7 @@ import { attempt, createTaskQueue, unwrapResult, type Result } from './asyncResu
 import { defaultCamera, type Point } from './camera';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
+import type { TileChange } from './document';
 import { createResourceSession } from './composition/resourceSession';
 import { restoreFeatureData } from './composition/documentFeature';
 import { readPaintFile, writePaintFile } from './paintFile';
@@ -135,6 +136,48 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
 
       document.mergeDown(upperId, merged);
       return [...merged.keys()].map((key) => ({ layerId: lower.id, key, before: undefined, after: undefined }));
+    };
+    /** Data that each document edit keeps between its commands; see `DocumentEditContext.state`. */
+    const editStates = new Map<string, unknown>();
+    /** The edit whose command committed the latest undo step, which its next command may amend. */
+    let lastEdit: { edit: string; historyId: number } | undefined;
+    /** Runs a module edit, committing or amending its undo step; returns the edit's reply. */
+    const runEdit = async (command: Extract<PaintRuntimeCommand, { type: 'edit' }>) => {
+      const edit = modules.edits.find((candidate) => candidate.id === command.edit);
+      if (!edit) throw new Error(`Document edit "${command.edit}" is not installed.`);
+      await end();
+      if (lost || !renderer) throw new Error('Restore the renderer before editing the drawing.');
+      const result = await edit.run(
+        {
+          layers: document.layers,
+          active: document.active,
+          readTile: async (pixels) => unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels)),
+          state: { get: () => editStates.get(edit.id), set: (value) => editStates.set(edit.id, value) }
+        },
+        command.command
+      );
+      let reverted: readonly TileChange[] = [];
+      if (result.amend) {
+        if (lastEdit?.edit !== edit.id) throw new Error('The drawing changed while this edit was in progress.');
+        reverted = document.revertLatest(lastEdit.historyId);
+        lastEdit = undefined;
+      }
+
+      try {
+        if (result.changes.length || result.layer) {
+          document.commit(result.changes, result.layer);
+          lastEdit = { edit: edit.id, historyId: document.latestHistoryId! };
+        }
+      } finally {
+        const restored = [...reverted, ...result.changes];
+        if (restored.length || result.layer) {
+          renderer.restore(restored, document.layers);
+          changed();
+          await renderer.prepareOverview(document.layers);
+        }
+      }
+
+      return result.reply;
     };
     const background = (action: () => Promise<unknown>) => {
       void attempt(action).then((result) => {
@@ -725,23 +768,17 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             post({ type: 'download', blob: await presentedPng(renderer!), name: 'drawing-view.png' });
             break;
           case 'edit': {
-            const edit = modules.edits.find((candidate) => candidate.id === command.edit);
-            if (!edit) throw new Error(`Document edit "${command.edit}" is not installed.`);
-            await end();
-            if (lost || !renderer) throw new Error('Restore the renderer before editing the drawing.');
-            const result = await edit.run(
-              {
-                layers: document.layers,
-                active: document.active,
-                readTile: async (pixels) => unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels))
-              },
-              command.command
-            );
-            if (!result.changes.length && !result.layer) break;
-            document.commit(result.changes, result.layer);
-            renderer.restore(result.changes, document.layers);
-            changed();
-            await renderer.prepareOverview(document.layers);
+            const result = await attempt(() => runEdit(command));
+            if (command.requestId !== undefined) {
+              post({
+                type: 'edited',
+                requestId: command.requestId,
+                result: result.ok ? result : { ok: false, error: result.error.message }
+              });
+            } else if (!result.ok) {
+              throw result.error;
+            }
+
             break;
           }
           case 'import': {
@@ -757,6 +794,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               document.replace(next.layers, next.activeId);
               camera = next.camera;
               featureData = restoreFeatureData(modules.features, next.features);
+              editStates.clear();
+              lastEdit = undefined;
               document.persist(tileStore.capture);
               renderer?.reset();
               await renderer?.prepareOverview(document.layers);
