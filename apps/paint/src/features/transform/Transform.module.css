@@ -86,3 +86,19 @@
     font-size: 10px;
   }
 }
+
+.pivot {
+  pointer-events: all;
+  cursor: move;
+
+  circle {
+    fill: #fff8;
+    stroke: #419bcf;
+    stroke-width: 1.5;
+  }
+
+  path {
+    stroke: #419bcf;
+    stroke-width: 1.5;
+  }
+}

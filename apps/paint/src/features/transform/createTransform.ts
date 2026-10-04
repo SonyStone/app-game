@@ -102,7 +102,8 @@ export function createTransform(options: {
       }
 
       if (!on) {
-        change({ offset: current.offset, scale: current.scale, angle: current.angle });
+        const { corners: _corners, ...box } = current;
+        change(box);
         return;
       }
 
@@ -222,11 +223,12 @@ export type Transform = ReturnType<typeof createTransform>;
 export type TransformSettings = { proportional: boolean; interpolation: 'smooth' | 'pixels' };
 
 /**
- * Box edits about the center of the bounds: scale (negative flips), clockwise angle in radians, then offset. A
+ * Box edits about a pivot, a point of the original pixels that is the center of the bounds unless `pivot` sets it:
+ * scale (negative flips), clockwise angle in radians, then offset. A
  * distorted box sets `corners`, where the bounds' corners go (top-left, top-right, bottom-right, bottom-left), which
  * then replace the other edits; they stay as they were, for when the distortion is turned off.
  */
-export type BoxState = { offset: Point; scale: Point; angle: number; corners?: Quad };
+export type BoxState = { offset: Point; scale: Point; angle: number; corners?: Quad; pivot?: Point };
 
 /** Four corners, clockwise from the top-left, of a convex quad. */
 export type Quad = readonly [Point, Point, Point, Point];
@@ -243,6 +245,13 @@ export function transformMatrix(bounds: TransformBounds | undefined, box: BoxSta
 
 /** The affine transform of `box` about the center of `bounds`, ignoring `corners`. */
 export function boxMatrix(bounds: TransformBounds | undefined, box: BoxState): Affine {
-  const pivot = bounds ? { x: (bounds.left + bounds.right) / 2, y: (bounds.top + bounds.bottom) / 2 } : { x: 0, y: 0 };
-  return boxAffine({ pivot, ...box });
+  return boxAffine({ ...box, pivot: boxPivot(bounds, box) });
+}
+
+/** The point of the original pixels that the box scales and turns about: `box.pivot`, or the bounds' center. */
+export function boxPivot(bounds: TransformBounds | undefined, box: BoxState): Point {
+  return (
+    box.pivot ??
+    (bounds ? { x: (bounds.left + bounds.right) / 2, y: (bounds.top + bounds.bottom) / 2 } : { x: 0, y: 0 })
+  );
 }

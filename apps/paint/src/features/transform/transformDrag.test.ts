@@ -2,8 +2,9 @@
 import { ok } from 'neverthrow';
 import { createRoot, flush } from 'solid-js';
 import { expect, it, vi } from 'vitest';
-import { createTransform, type BoxState, type Quad } from './createTransform';
-import { boxPoints, distortBox, moveBox, rotateBox } from './transformDrag';
+import { applyAffine } from './affine';
+import { boxMatrix, createTransform, type BoxState, type Quad } from './createTransform';
+import { boxPoints, distortBox, moveBox, movePivot, rotateBox } from './transformDrag';
 
 const bounds = { left: 0, top: 0, right: 100, bottom: 50 };
 const square: Quad = [
@@ -80,4 +81,24 @@ it('distorts the box by its corners, flips and turns them, and returns to the bo
     command: { matrix: number[] };
   };
   expect(update.command.matrix).toHaveLength(9);
+});
+
+it('moves the pivot without moving the pixels, then turns and scales about it', () => {
+  const box: BoxState = { offset: { x: 30, y: 10 }, scale: { x: 2, y: 1 }, angle: 0.5 };
+  const pinned = movePivot(bounds, box, { x: 40, y: 30 });
+  const before = boxMatrix(bounds, box),
+    after = boxMatrix(bounds, pinned);
+  before.forEach((value, index) => expect(after[index]).toBeCloseTo(value));
+  expect(boxPoints(bounds, pinned).pivot.x).toBeCloseTo(40);
+  expect(boxPoints(bounds, pinned).pivot.y).toBeCloseTo(30);
+
+  // Turning and resizing keep the pivot where it is on the canvas.
+  for (const changed of [
+    { ...pinned, angle: pinned.angle + 1 },
+    { ...pinned, scale: { x: 3, y: 0.5 } }
+  ]) {
+    const point = applyAffine(boxMatrix(bounds, changed), pinned.pivot!);
+    expect(point.x).toBeCloseTo(40);
+    expect(point.y).toBeCloseTo(30);
+  }
 });

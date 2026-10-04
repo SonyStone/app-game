@@ -1,6 +1,6 @@
 import type { Point } from '@app-game/paint-core/camera';
-import { applyAffine } from './affine';
-import { boxMatrix, transformMatrix, type BoxState, type Quad } from './createTransform';
+import { applyAffine, invertAffine } from './affine';
+import { boxMatrix, boxPivot, transformMatrix, type BoxState, type Quad } from './createTransform';
 import { applyProjective, isConvex } from './projective';
 import type { TransformBounds } from './transformEdit';
 
@@ -98,10 +98,11 @@ export function rotateBox(
   pointer: Point,
   snap: boolean
 ): BoxState {
-  const center = applyProjective(transformMatrix(bounds, box), {
-    x: (bounds.left + bounds.right) / 2,
-    y: (bounds.top + bounds.bottom) / 2
-  });
+  // A box turns about its pivot, a distorted one about its center.
+  const center = applyProjective(
+    transformMatrix(bounds, box),
+    box.corners ? { x: (bounds.left + bounds.right) / 2, y: (bounds.top + bounds.bottom) / 2 } : boxPivot(bounds, box)
+  );
   const delta =
     Math.atan2(pointer.y - center.y, pointer.x - center.x) - Math.atan2(start.y - center.y, start.x - center.x);
   const step = Math.PI / 12;
@@ -122,6 +123,29 @@ export function rotateBox(
 }
 
 /**
+ * The box with its pivot moved to where `pointer` is, in document pixels, and the offset changed so that the pixels
+ * stay where they are. The box then scales and turns about that point.
+ */
+export function movePivot(bounds: TransformBounds, box: BoxState, pointer: Point): BoxState {
+  const matrix = boxMatrix(bounds, box);
+  const inverse = invertAffine(matrix);
+  if (!inverse) {
+    return box;
+  }
+
+  const previous = boxPivot(bounds, box);
+  const pivot = applyAffine(inverse, pointer);
+  // Where the old pivot's offset put the pixels, the new pivot must too: offset' = offset + d - L d for d = old - new.
+  const d = { x: previous.x - pivot.x, y: previous.y - pivot.y };
+  const [a, b, c, e] = matrix;
+  return {
+    ...box,
+    pivot,
+    offset: { x: box.offset.x + d.x - (a * d.x + c * d.y), y: box.offset.y + d.y - (b * d.x + e * d.y) }
+  };
+}
+
+/**
  * Document points of the box's handles and center for `box`, as drawn by the overlay; a distorted box places its edge
  * handles and center in perspective.
  */
@@ -134,6 +158,8 @@ export function boxPoints(bounds: TransformBounds, box: BoxState) {
     applyProjective(matrix, { x: center.x + (handle.x * width) / 2, y: center.y + (handle.y * height) / 2 });
   return {
     center: applyProjective(matrix, center),
+    /** Where the pivot is, for a box that is not distorted. */
+    pivot: applyProjective(matrix, boxPivot(bounds, box)),
     corners: [at({ x: -1, y: -1 }), at({ x: 1, y: -1 }), at({ x: 1, y: 1 }), at({ x: -1, y: 1 })],
     handles: handles.map((handle) => ({ handle, point: at(handle) }))
   };

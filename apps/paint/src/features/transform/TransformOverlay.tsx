@@ -5,14 +5,24 @@ import styles from './Transform.module.css';
 import { TransformActions } from './TransformActions';
 import { TransformNumbers } from './TransformNumbers';
 import type { BoxState, TransformSettings } from './createTransform';
-import { boxPoints, distortBox, handles, moveBox, rotateBox, scaleBox, type BoxHandle } from './transformDrag';
+import {
+  boxPoints,
+  distortBox,
+  handles,
+  moveBox,
+  movePivot,
+  rotateBox,
+  scaleBox,
+  type BoxHandle
+} from './transformDrag';
 import type { TransformBounds } from './transformEdit';
 
 /**
  * The transform box over the canvas, with its actions next to it: drag inside to move, drag a corner or edge handle to
  * scale from the opposite handle, and drag the round handle to rotate about the center (Shift snaps to 15°). Corner
  * handles keep the proportions as the settings say; Shift does the opposite. A distorted box moves its corners on their
- * own instead, and its edge handles the two corners of their edge. Pen, mouse and touch all drag; touches
+ * own instead, and its edge handles the two corners of their edge. The crosshair is the pivot that turns and exact
+ * sizes go about; dragging it moves the pivot, not the pixels. Pen, mouse and touch all drag; touches
  * elsewhere keep navigating the canvas. A drag follows the pointer over the whole window until it is released. While
  * the box is moved, only the pixels show; while any part is dragged, the actions are hidden.
  */
@@ -40,7 +50,7 @@ export function TransformOverlay(props: {
   /** Removes the window listeners of the drag in progress. */
   let release: (() => void) | undefined;
   /** What the drag in progress changes. */
-  const [dragging, setDragging] = createSignal<'move' | 'rotate' | BoxHandle>();
+  const [dragging, setDragging] = createSignal<'move' | 'rotate' | 'pivot' | BoxHandle>();
   const [numbers, setNumbers] = createSignal(false);
   onCleanup(() => release?.());
   const points = () => boxPoints(props.bounds, props.box);
@@ -52,7 +62,13 @@ export function TransformOverlay(props: {
     const top = props.toScreen(current.handles[1]!.point);
     const length = Math.hypot(top.x - center.x, top.y - center.y) || 1;
     const rotation = { x: top.x + ((top.x - center.x) / length) * 32, y: top.y + ((top.y - center.y) / length) * 32 };
-    return { corners, top, rotation, handles: current.handles.map(({ point }) => props.toScreen(point)) };
+    return {
+      corners,
+      top,
+      rotation,
+      pivot: props.toScreen(current.pivot),
+      handles: current.handles.map(({ point }) => props.toScreen(point))
+    };
   };
   /** Where the exact values go: below the actions, or above them near the bottom of the view. */
   const numbersAt = () => {
@@ -73,7 +89,7 @@ export function TransformOverlay(props: {
     return props.toDocument({ x: event.clientX - rect.left, y: event.clientY - rect.top });
   };
   /** Starts dragging `kind`; the drag follows the pointer until it is released or cancelled. */
-  const begin = (kind: 'move' | 'rotate' | BoxHandle) => (event: PointerEvent) => {
+  const begin = (kind: 'move' | 'rotate' | 'pivot' | BoxHandle) => (event: PointerEvent) => {
     if (event.button !== 0 || release) {
       return;
     }
@@ -90,6 +106,8 @@ export function TransformOverlay(props: {
       const pointer = local(moved);
       if (kind === 'move') {
         props.onChange(moveBox(start.box, start.at, pointer));
+      } else if (kind === 'pivot') {
+        props.onChange(movePivot(props.bounds, start.box, pointer));
       } else if (kind === 'rotate') {
         props.onChange(rotateBox(props.bounds, start.box, start.at, pointer, moved.shiftKey));
       } else if (start.box.corners) {
@@ -153,6 +171,14 @@ export function TransformOverlay(props: {
             />
           )}
         </For>
+        <Show when={!props.box.corners}>
+          <g class={styles.pivot} aria-label="Pivot" role="slider" onPointerDown={begin('pivot')}>
+            <circle cx={screen().pivot.x} cy={screen().pivot.y} r={9} />
+            <path
+              d={`M ${screen().pivot.x - 5} ${screen().pivot.y} h 10 M ${screen().pivot.x} ${screen().pivot.y - 5} v 10`}
+            />
+          </g>
+        </Show>
         <circle
           class={styles.rotate}
           cx={screen().rotation.x}
