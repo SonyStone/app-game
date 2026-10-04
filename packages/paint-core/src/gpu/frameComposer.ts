@@ -35,6 +35,8 @@ export function createFrameComposer(
     floating: FloatingPixelsState;
     /** Whether the selection outline animates; read at presentation. */
     animateSelection: () => boolean;
+    /** Whether magnified pixels blend smoothly rather than show as flat squares; see `tileFragment`. */
+    smoothPixels: () => boolean;
   },
   options: {
     cacheTiles?: number;
@@ -388,7 +390,7 @@ export function createFrameComposer(
           zoom: camera.zoom,
           angle: camera.angle,
           mirror: camera.mirrored ? -1 : 1,
-          padding: 0,
+          sharp: deps.smoothPixels() ? 0 : 1,
           offset: d.vec2f(x * TILE_SIZE - camera.x, y * TILE_SIZE - camera.y)
         });
         batch.push(tile);

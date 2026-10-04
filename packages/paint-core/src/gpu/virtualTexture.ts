@@ -17,7 +17,9 @@ export function createVirtualTexture(
   read: (data: TileData) => Promise<Uint8Array>,
   changed: () => void,
   failure: (error: unknown) => void,
-  storage?: OverviewStorage
+  storage?: OverviewStorage,
+  /** Whether magnified pixels blend smoothly rather than show as flat squares; see `fragment`. */
+  smoothPixels: () => boolean = () => true
 ) {
   const capacity = Math.min(256, root.device.limits.maxTextureArrayLayers);
   const image = root.createTexture({ size: [PAGE_SIDE, PAGE_SIDE, capacity], format: 'rgba8unorm' }).$usage('sampled');
@@ -235,7 +237,8 @@ export function createVirtualTexture(
             zoom: camera.zoom,
             angle: camera.angle,
             mirror: camera.mirrored ? -1 : 1,
-            pixelRatio: scale
+            pixelRatio: scale,
+            sharp: smoothPixels() ? 0 : 1
           });
           cameraWritten = true;
         }
@@ -366,7 +369,9 @@ export function createVirtualTexture(
 const layout = tgpu.bindGroupLayout({
   image: { texture: d.texture2dArray() },
   sampler: { sampler: 'filtering' },
-  camera: { uniform: d.struct({ size: d.vec2f, zoom: d.f32, angle: d.f32, mirror: d.f32, pixelRatio: d.f32 }) }
+  camera: {
+    uniform: d.struct({ size: d.vec2f, zoom: d.f32, angle: d.f32, mirror: d.f32, pixelRatio: d.f32, sharp: d.f32 })
+  }
 });
 const instance = d.struct({ page: d.vec4f, crop: d.vec4f });
 const instanceLayout = tgpu.vertexLayout(d.arrayOf(instance), 'instance');
@@ -398,15 +403,25 @@ export const vertex = tgpu.vertexFn({
     footprint: (256 * input.crop.z) / (input.page.z * layout.$.camera.zoom * layout.$.camera.pixelRatio)
   };
 });
-/** Pages have explicit gutters and an explicit LOD; atlas slots cannot filter into each other. */
+/**
+ * Pages have explicit gutters and an explicit LOD; atlas slots cannot filter into each other. With `sharp`, magnified
+ * pixels are flat squares, as `tileFragment` draws them.
+ */
 export const fragment = tgpu.fragmentFn({
   in: { uv: d.vec2f, slot: d.interpolate('flat', d.u32), footprint: d.interpolate('flat', d.f32) },
   out: d.vec4f
 })((input) => {
   'use gpu';
-  const uv = std.div(std.add(std.mul(input.uv, 256), d.vec2f(1)), PAGE_SIDE);
+  const texel = std.mul(input.uv, 256);
+  // Derivatives first, while every pixel of the quad still runs the same code.
+  const width = std.max(std.fwidth(texel), d.vec2f(0.0001));
+  const uv = std.div(std.add(texel, d.vec2f(1)), PAGE_SIDE);
   const radius = std.clamp((input.footprint - 1) * 0.5, 0, 0.5) / PAGE_SIDE;
-  if (radius <= 0) return samplePage(uv, input.slot);
+  if (radius <= 0) {
+    const offset = std.clamp(std.div(std.sub(std.fract(texel), 0.5), width), d.vec2f(-0.5), d.vec2f(0.5));
+    const snapped = std.div(std.add(std.add(std.floor(texel), std.add(d.vec2f(0.5), offset)), d.vec2f(1)), PAGE_SIDE);
+    return samplePage(std.select(uv, snapped, layout.$.camera.sharp > 0.5), input.slot);
+  }
   // Integrate a minified page's pixel footprint; offsets stay within its one-texel gutters.
   return std.mul(
     std.add(

@@ -50,6 +50,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let debug = false;
     let liveTail = true;
     let adaptiveQuality = true;
+    /** Magnified pixels blend smoothly; a replacement renderer keeps the choice. */
+    let smoothPixels = true;
     let size = { width: 1, height: 1 },
       dpr = 1;
     let strokeSession: BrushSession | undefined;
@@ -490,6 +492,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       lost = false;
       renderer.setSelection(selectionPoints, selectionAnimate);
       renderer.setFloating(floating);
+      // A new renderer starts smooth.
+      if (!smoothPixels) renderer.setSmoothPixels(false);
       await renderer.prepareOverview(document.layers);
       await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData));
     };
@@ -637,6 +641,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             break;
           case 'adaptive-quality':
             adaptiveQuality = command.enabled;
+            break;
+          case 'smooth-pixels':
+            smoothPixels = command.enabled;
+            renderer?.setSmoothPixels(smoothPixels);
+            scheduleDraw();
             break;
           case 'live-tail':
             liveTail = command.enabled;

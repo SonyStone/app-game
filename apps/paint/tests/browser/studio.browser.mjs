@@ -58,6 +58,13 @@ try {
     assert.equal(await page.getByRole('button', { name: 'Reset zoom' }).textContent(), '100%');
   });
 
+  await step('the view shows sharp pixels with a pixel grid up close by default', async () => {
+    await page.getByRole('button', { name: 'Drawing menu' }).click();
+    assert.equal(await page.getByLabel('Smooth pixels when zoomed in').isChecked(), false);
+    assert.equal(await page.getByLabel(/^Pixel grid/).isChecked(), true);
+    await page.keyboard.press('Escape');
+  });
+
   await step('an empty layer opacity entry keeps the layer, and Escape closes the panel', async () => {
     await page.getByRole('button', { name: 'Layers' }).click();
     const opacity = page.getByLabel('Layer opacity');

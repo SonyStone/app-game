@@ -19,6 +19,8 @@ export function DrawingMenu(props: {
   onExportPsd: () => void;
   onResetView: () => void;
   onDeveloper: () => void;
+  /** How the canvas shows pixels, below the file actions. */
+  viewOptions?: JSX.Element;
   /** Host-specific controls, such as PWA installation. */
   applicationControls?: JSX.Element;
   /** Link back to the embedding playground. */
@@ -78,6 +80,7 @@ export function DrawingMenu(props: {
         {props.applicationControls}
         <Show when={props.experimentsHref}>{(href) => <a href={href()}>Paint experiments</a>}</Show>
       </div>
+      {props.viewOptions}
       <p class={styles.panelNote}>
         B · Brush &nbsp; E · Eraser &nbsp; L · Lasso
         <br />

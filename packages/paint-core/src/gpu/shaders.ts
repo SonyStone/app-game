@@ -68,10 +68,13 @@ export const strokeFragment = tgpu.fragmentFn({ in: { position: d.builtin.positi
   return result;
 });
 
-/** Camera uses tile positions relative to the view center to preserve precision far from the origin. */
+/**
+ * Camera uses tile positions relative to the view center to preserve precision far from the origin. `sharp` set draws
+ * magnified pixels as flat squares; see `tileFragment`.
+ */
 export const viewLayout = tgpu.bindGroupLayout({
   view: {
-    uniform: d.struct({ size: d.vec2f, zoom: d.f32, angle: d.f32, mirror: d.f32, padding: d.f32, offset: d.vec2f })
+    uniform: d.struct({ size: d.vec2f, zoom: d.f32, angle: d.f32, mirror: d.f32, sharp: d.f32, offset: d.vec2f })
   },
   image: { texture: d.texture2d() },
   sampler: { sampler: 'filtering' }
@@ -96,9 +99,26 @@ export const tileVertex = tgpu.vertexFn({
     uv
   };
 });
+/**
+ * Samples a tile. With `sharp`, magnified pixels are flat squares whose edges blend over one screen pixel ("sharp
+ * bilinear"): the position moves to its texel's center except within the last screen pixel before the next texel.
+ * Minified, the moved position stays where it was, so this falls back to smooth sampling; the original derivatives
+ * keep the mip level from jumping at texel edges.
+ */
 export const tileFragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f })((input) => {
   'use gpu';
-  return std.textureSample(viewLayout.$.image, viewLayout.$.sampler, input.uv);
+  const texel = std.mul(input.uv, 256);
+  const width = std.max(std.fwidth(texel), d.vec2f(0.0001));
+  const offset = std.clamp(std.div(std.sub(std.fract(texel), 0.5), width), d.vec2f(-0.5), d.vec2f(0.5));
+  const snapped = std.div(std.add(std.floor(texel), std.add(d.vec2f(0.5), offset)), 256);
+  const uv = std.select(input.uv, snapped, viewLayout.$.view.sharp > 0.5);
+  return std.textureSampleGrad(
+    viewLayout.$.image,
+    viewLayout.$.sampler,
+    uv,
+    std.dpdx(input.uv),
+    std.dpdy(input.uv)
+  );
 });
 
 /** Presents the composed document over a neutral paper background. */

@@ -168,6 +168,8 @@ async function assemblePaintRenderer(
 
   const lasso = resources.keep(createLassoOverlay(root, format));
   let animateSelection = true;
+  /** Magnified pixels blend smoothly; off, they are flat squares, as `setSmoothPixels` says. */
+  let smoothPixels = true;
   const virtual = options.virtualTexture
     ? resources.keep(
         createVirtualTexture(
@@ -178,7 +180,8 @@ async function assemblePaintRenderer(
             options.onRefine?.();
           },
           (error) => options.onError?.(error),
-          options.overviewStorage
+          options.overviewStorage,
+          () => smoothPixels
         )
       )
     : undefined;
@@ -251,7 +254,8 @@ async function assemblePaintRenderer(
       ensureMipmaps,
       virtual,
       floating,
-      animateSelection: () => animateSelection
+      animateSelection: () => animateSelection,
+      smoothPixels: () => smoothPixels
     },
     options
   );
@@ -301,6 +305,16 @@ async function assemblePaintRenderer(
     /** Replaces display-only stamps; these never enter readback, history or saved tiles. */
     preview(dabs: readonly Dab[]) {
       strokes.preview(dabs);
+    },
+    /**
+     * Whether magnified pixels blend smoothly into each other, or show as flat squares with edges smoothed over one
+     * screen pixel, as image editors show them; minified views are smooth either way. Redraws the views.
+     */
+    setSmoothPixels(smooth: boolean) {
+      if (smooth !== smoothPixels) {
+        smoothPixels = smooth;
+        targets.invalidate();
+      }
     },
     /** Keeps transient selection geometry on this device, outside committed artwork and exports. */
     setSelection(points: readonly Point[], animate = true) {
