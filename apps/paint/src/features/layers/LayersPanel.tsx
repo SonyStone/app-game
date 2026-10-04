@@ -2,6 +2,7 @@ import type { BlendMode, createDocument, LayerAction, LayerInfo } from '@app-gam
 import { closestCenter, createDragContext, createDraggable, createDroppable } from '@solid-primitives/drag-drop';
 import { For, Show, untrack } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
+import { BlendModePicker } from './BlendModePicker';
 import styles from './LayersPanel.module.css';
 
 /**
@@ -87,24 +88,11 @@ export function LayersPanel(props: {
           }
         }}
       />
+      <BlendModePicker
+        mode={selected().blend}
+        onChange={(blend) => props.onAction({ type: 'update', id: props.state.activeId, patch: { blend } })}
+      />
       <div class={styles.layerControls}>
-        <select
-          aria-label="Layer blend mode"
-          value={selected().blend}
-          onChange={(e) =>
-            props.onAction({
-              type: 'update',
-              id: props.state.activeId,
-              patch: { blend: e.currentTarget.value as BlendMode }
-            })
-          }
-        >
-          <option value="linear">Smooth color</option>
-          <option value="normal">Normal (classic)</option>
-          <option value="multiply">Multiply</option>
-          <option value="screen">Screen</option>
-          <option value="overlay">Overlay</option>
-        </select>
         <input
           aria-label="Layer opacity"
           title="Layer opacity"

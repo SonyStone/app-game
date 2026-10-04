@@ -198,3 +198,36 @@
   color: var(--muted);
   font-size: 11px;
 }
+
+/* `> button` outranks the studio's reset of buttons. */
+.blendModes {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 10px;
+
+  > button {
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+    padding: 3px 0 2px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  > button[aria-checked='true'] {
+    border-color: var(--accent);
+    background: #e3eef5;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  canvas {
+    width: 100%;
+    max-width: 44px;
+    aspect-ratio: 1;
+    border-radius: 4px;
+  }
+}
