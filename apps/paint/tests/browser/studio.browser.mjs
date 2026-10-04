@@ -460,6 +460,34 @@ try {
     await page.keyboard.press('Control+t');
     const box = page.getByLabel('Transform box');
     await box.waitFor({ timeout: 10_000 });
+
+    // A touch drag reaches its end instead of turning into a browser gesture: Chromium takes touch-action from the
+    // <svg>, not from the box shape. Touch emulation stays enabled from the gesture step.
+    const left = async () => Number((await box.locator('polygon').getAttribute('points')).split(',')[0]);
+    const cdp = await page.context().newCDPSession(page);
+    const touchDrag = async (dx) => {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx + 200, y: cy }] });
+      for (let i = 1; i <= 10; i++) {
+        await cdp.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{ x: cx + 200 + (dx * i) / 10, y: cy }]
+        });
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+    await page.evaluate(() => {
+      window.transformCancels = 0;
+      addEventListener('pointercancel', () => window.transformCancels++, true);
+    });
+    const before = await left();
+    await touchDrag(60);
+    assert.ok(Math.abs((await left()) - before - 60) < 2, 'a touch drag moves the box the whole way');
+    await page.mouse.move(cx + 260, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + 200, cy, { steps: 6 });
+    await page.mouse.up();
+    assert.equal(await page.evaluate(() => window.transformCancels), 0);
+
     await page.mouse.move(cx + 200, cy);
     await page.mouse.down();
     await page.mouse.move(cx + 260, cy, { steps: 6 });
