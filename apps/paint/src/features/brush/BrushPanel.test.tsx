@@ -1,18 +1,23 @@
 // @vitest-environment jsdom
-import { defaultBrush } from '@app-game/paint-core/brush';
+import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { expect, it } from 'vitest';
-import { BrushPanel } from './BrushPanel';
+import { BrushAdvancedControls, BrushDailyControls } from './BrushPanel';
 
 it('selects raw input without Leonardo controls and retains stabilization settings when switching back', () => {
   const [brush, setBrush] = createSignal(defaultBrush(), { ownedWrite: true });
   const host = document.createElement('div');
   document.body.append(host);
-  const dispose = render(
-    () => <BrushPanel brush={brush()} onChange={(patch) => setBrush({ ...brush(), ...patch })} />,
-    host
-  );
+  const dispose = render(() => {
+    const change = (patch: Partial<Brush>) => setBrush({ ...brush(), ...patch });
+    return (
+      <>
+        <BrushDailyControls brush={brush()} onChange={change} />
+        <BrushAdvancedControls brush={brush()} onChange={change} />
+      </>
+    );
+  }, host);
   try {
     flush();
     const select = host.querySelector<HTMLSelectElement>('[aria-label="Stroke smoothing"]')!;

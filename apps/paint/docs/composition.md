@@ -89,7 +89,7 @@ A custom engine implements `BrushEngine` from `contracts.ts` (`packages/paint-co
 
 To catch up with a stationary pen, a processor may implement `idle(elapsedMs)`, returning processed points. The engine passes them to the renderer without reprocessing and returns `true` from its own `idle` to show the result and keep the clock running, or `false` to stop it until the next input. The runtime calls this optional method in the shared queue, with at most one pending operation. Finish, cancel, device loss, and disposal stop the clock. The None processor does not provide idle and keeps raw input. The Airbrush engine may still use its own clock to accumulate paint, independently of path smoothing.
 
-For a decoded ABR tip there is `texturedBrush`, which rasterizes coverage into Studio tiles. The experimental ABR Brush tool opens the shared ABR viewer for importing and selecting a tip; the full preset is passed to the `abrBrush` engine, including supported dynamics and Tool Options. Currently `PaintRenderer` describes Studio's existing raster backend; there is no contract for arbitrary vector documents here.
+For a decoded ABR tip there is `texturedBrush`, which rasterizes coverage into Studio tiles. **Brush settings → ABR brushes…** opens the shared ABR viewer for importing and selecting a preset; it becomes a preset of the brush library, and the full preset is passed to the `abrBrush` engine, including supported dynamics and Tool Options. Currently `PaintRenderer` describes Studio's existing raster backend; there is no contract for arbitrary vector documents here.
 
 ## Typed engine settings
 
@@ -135,7 +135,7 @@ An explicit `brush.engine.id` takes precedence over `selectEngine`. Without `bru
 
 The built-in `roundBrush.select({ hardness, spacing })` sets optional overrides of the current round-brush settings. Omitted or `undefined` values keep the values from `Brush`. A preset explicitly overrides these fields; a UI editing such a preset must update its `engine.settings`.
 
-Settings must be transferable via `structuredClone`. ABR-tip and dual-tip pixels are loaded with a separate command; `begin` receives their IDs. Decoded tips are rasterized via `texturedBrush`; in the app, `src/features/abr/createAbrPresets.ts` uploads the resources of a preset chosen in the ABR viewer.
+Settings must be transferable via `structuredClone`. ABR-tip and dual-tip pixels are loaded with a separate command; `begin` receives their IDs. Decoded tips are rasterized via `texturedBrush`; in the app, `src/features/abr/createAbrPresets.ts` imports a preset chosen in the ABR viewer into the brush library, and `src/features/brush-library/createPresetUploads.ts` uploads its resources.
 
 ## Brush resources
 
@@ -206,15 +206,15 @@ Current support covers grayscale tips, constant rotation, proportions, and basic
 
 ## ABR import in Studio
 
-The separate **ABR Brush** tool opens its settings via `src/features/abr/AbrViewerDialog.tsx`. The dialog lazily loads the real `App` from `@app-game/abr-viewer/editor`. The `onUseBrush` export allows embedding the editor in another host without the viewer depending on Paint. The **Use in Paint** button passes the current edited preset; a host error is shown in the viewer status. Closing the dialog keeps its workspace and edits until Studio unmounts. The native dialog isolates focus and keyboard shortcuts from drawing. Hidden preview canvases are paused by the viewer's existing IntersectionObserver.
+**Brush settings → ABR brushes…** opens `src/features/abr/AbrViewerDialog.tsx`. The dialog lazily loads the real `App` from `@app-game/abr-viewer/editor`. The `onUseBrush` export allows embedding the editor in another host without the viewer depending on Paint. The **Use in Paint** button passes the current edited preset; a host error is shown in the viewer status. Closing the dialog keeps its workspace and edits until Studio unmounts. The native dialog isolates focus and keyboard shortcuts from drawing. Hidden preview canvases are paused by the viewer's existing IntersectionObserver.
 
 `@app-game/abr-paint/preset` creates a snapshot of the full preset and its resources for `abrBrush`. The shared library `packages/abr-brush` is also used by the viewer: settings, dynamics, smoothing, procedural tips, and coverage effects. Paint applies size up to 5000 px, spacing up to 1000%, roundness/flips, scatter, transfer, color dynamics, texture, and dual tip. Flow/Opacity, blend mode, and pressure overrides come from the saved tool options. None bypasses the preset's smoothing. Detailed limitations and Photoshop comparison status: [ABR painting engine](../../../packages/abr-paint/README.md). A single tip is limited to 8192 px / 32 MiB; the whole preset to 48 MiB CPU / 64 MiB GPU with mipmaps.
 
-`createAbrPresets` waits for `brush-resources` confirmation before applying a preset. The regular Brush and ABR Brush keep separate profiles (`src/features/brush/createBrushTools.ts`). When switching main/worker, all resources of the selected preset are loaded before input is enabled. A waiting upload times out after 30 seconds; the request stays outstanding until a response or disconnect, because the timeout does not cancel the sent command, and a retry of the same resource joins it instead of posting a duplicate (`src/features/engine/createEngineRequests.ts`). Successful responses update residency, accounting for evictions.
+A preset is applied only after `brush-resources` confirmation (`createPresetUploads`). Imported presets are stored in the brush library with their resources, so the chosen preset survives a reload; the brush and the eraser keep separate presets (`src/features/brush/createBrushTools.ts`). When switching main/worker, all resources of the selected preset are loaded before input is enabled. A waiting upload times out after 30 seconds; the request stays outstanding until a response or disconnect, because the timeout does not cancel the sent command, and a retry of the same resource joins it instead of posting a duplicate (`src/features/engine/createEngineRequests.ts`). Successful responses update residency, accounting for evictions.
 
 `.abr` files are imported in the embedded ABR viewer workspace (`src/features/abr/AbrViewerDialog.tsx`); the former compact tip-only importer was removed because no screen rendered it.
 
-The library and edited presets live until page reload. The `.paint` document and autosave contain raster strokes, not the library. To keep preset changes, use Export in the ABR viewer. The standalone Paint production build includes UnoCSS and the viewer's preview worker; built-in example files are fetched only when an example is selected.
+The viewer keeps its own library and edits in its own IndexedDB workspace; presets used in Paint are copied into Paint's brush library. The `.paint` document and autosave contain raster strokes, not brushes. To share preset changes, use Export in the ABR viewer. The standalone Paint production build includes UnoCSS and the viewer's preview worker; built-in example files are fetched only when an example is selected.
 
 ## Canvas and resources
 

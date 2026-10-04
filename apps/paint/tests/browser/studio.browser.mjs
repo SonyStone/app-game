@@ -85,6 +85,64 @@ try {
     assert.equal(await page.getByText(/ px · \d+%/).count(), 0);
   });
 
+  await step('brush sizes and the chosen tool survive a reload', async () => {
+    const size = page.getByRole('button', { name: 'Brush settings' }).locator('small');
+    const pressed = (name) => page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed');
+    await page.keyboard.press(']');
+    assert.equal(await size.textContent(), '40');
+    await page.keyboard.press('e');
+    await page.keyboard.press('[');
+    assert.equal(await size.textContent(), '26');
+    // Brush state is written to IndexedDB in the background.
+    await page.waitForTimeout(500);
+    await page.reload();
+    await waitForSaved(page);
+    assert.equal(await pressed('Eraser'), 'true');
+    assert.equal(await size.textContent(), '26');
+    await page.keyboard.press('b');
+    assert.equal(await size.textContent(), '40');
+    await page.keyboard.press('[');
+    assert.equal(await size.textContent(), '32');
+  });
+
+  await step(
+    'the brush panel chooses presets, saves changes as a new preset and sets how the eraser erases',
+    async () => {
+      const settings = page.getByRole('button', { name: 'Brush settings' });
+      const panel = page.getByRole('complementary', { name: 'Brush' });
+      const tile = (name) => panel.getByRole('group', { name: 'Brush presets' }).getByRole('button', { name });
+      await page.keyboard.press('e');
+      await settings.click();
+      assert.equal(await panel.getByLabel('The brush (Clear mode)').isChecked(), true);
+      await panel.getByLabel('Its own eraser brush').check();
+      assert.equal(await tile('Eraser').getAttribute('aria-pressed'), 'true');
+      await panel.getByLabel('The brush (Clear mode)').check();
+      await page.keyboard.press('Escape');
+
+      await page.keyboard.press('b');
+      await settings.click();
+      assert.equal(await tile('Soft round').getAttribute('aria-pressed'), 'true');
+      const current = panel.getByRole('region', { name: 'Current preset' });
+      await panel.getByRole('slider', { name: 'Opacity' }).fill('50');
+      await current.getByText('Changed').waitFor({ timeout: 5_000 });
+      await current.getByRole('button', { name: 'Save as…' }).click();
+      await current.getByLabel('Preset name').fill('Half soft');
+      await current.getByRole('button', { name: 'Save preset' }).click();
+      assert.equal(await tile('Half soft').getAttribute('aria-pressed'), 'true');
+      assert.equal(await current.getByText('Saved').count(), 1);
+      await current.getByRole('button', { name: 'Delete', exact: true }).click();
+      await current.getByRole('button', { name: 'Delete “Half soft”' }).click();
+      assert.equal(await tile('Soft round').getAttribute('aria-pressed'), 'true');
+      assert.equal(await tile('Half soft').count(), 0);
+      await panel.getByRole('slider', { name: 'Opacity' }).fill('100');
+
+      await panel.getByRole('button', { name: 'ABR brushes…' }).click();
+      await page.getByRole('dialog', { name: 'ABR brush editor' }).waitFor({ timeout: 10_000 });
+      await page.getByRole('button', { name: 'Close ABR editor' }).click();
+      assert.equal(await page.getByRole('dialog', { name: 'ABR brush editor' }).isVisible(), false);
+    }
+  );
+
   await step('a mouse stroke can be undone and redone', async () => {
     const undo = page.getByRole('button', { name: 'Undo' });
     const redo = page.getByRole('button', { name: 'Redo' });

@@ -1,102 +1,75 @@
 // @vitest-environment jsdom
-import { err, ok, type Result } from 'neverthrow';
+import { ok, type Result } from 'neverthrow';
 import { createRoot, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { brushError, type PaintError } from '../../shared/errors';
+import type { PaintError } from '../../shared/errors';
+import { createBrushLibrary, type BrushPreset } from '../brush-library';
 import { createAbrPresets, type AbrPreset } from './createAbrPresets';
 
-let dispose: (() => void) | undefined;
+const disposers: (() => void)[] = [];
 afterEach(() => {
-  dispose?.();
-  dispose = undefined;
+  disposers.splice(0).forEach((dispose) => dispose());
 });
 
-it('applies a preset only after every resource upload succeeds, and restores it on a replacement engine', async () => {
-  const uploads = deferredUploads();
-  const select = vi.fn();
-  const presets = setup({ upload: uploads.upload, select });
-  const applying = presets.usePreset(preset());
-  expect(presets.isBusy()).toBe(true);
-  expect((await presets.usePreset(preset()))._unsafeUnwrapErr()).toMatchObject({ kind: 'engine', code: 'busy' });
-  expect(select).not.toHaveBeenCalled();
-  uploads.resolve(ok());
-  expect(await applying).toEqual(ok());
-  flush();
-  expect(presets.busy()).toBe(false);
-  expect(select).toHaveBeenCalledExactlyOnceWith(
-    { id: 'textured', settings: { tipId: 'tip' } },
-    { size: 40, spacing: 0.1, color: '#123456' }
-  );
-  expect(presets.preset()?.name).toBe('Ink');
-
-  const restoring = presets.restore()!;
-  uploads.resolve(ok());
-  expect(await restoring).toEqual(ok());
-  expect(uploads.upload.mock.calls.map(([resources]) => resources.map(({ id }) => id))).toEqual([
-    ['tip', 'pattern'],
-    ['tip', 'pattern']
-  ]);
-});
-
-it('keeps the applied preset after a failed upload and reports restore failures as restorable', async () => {
-  const upload = vi.fn(async (): Promise<Result<void, PaintError>> => ok());
-  const select = vi.fn();
-  const presets = setup({ upload, select });
-  expect(presets.restore()).toBeUndefined();
-  await presets.usePreset(preset());
-  upload.mockResolvedValueOnce(err(brushError('upload', 'No space')));
-  expect((await presets.usePreset({ ...preset(), name: 'Other' }))._unsafeUnwrapErr()).toMatchObject({
-    code: 'upload',
-    message: 'No space'
+it('imports a preset into the library once per viewer brush and chooses it', async () => {
+  const choose = vi.fn<(preset: BrushPreset) => Promise<Result<void, PaintError>>>(async () => ok());
+  const { presets, library } = setup({ choose });
+  expect(await presets.usePreset(abrPreset(), 'abr:1')).toEqual(ok());
+  const chosen = choose.mock.calls[0]![0];
+  expect(chosen).toMatchObject({
+    name: 'Ink',
+    source: 'abr:1',
+    settings: {
+      engine: { id: 'textured', settings: { tipId: 'tip' } },
+      tool: 'brush',
+      size: 40,
+      spacing: 0.1,
+      color: '#123456'
+    }
   });
-  flush();
-  expect(presets.preset()?.name).toBe('Ink');
-  expect(select).toHaveBeenCalledOnce();
+  // Unset preset values are not part of the import, so the brush keeps its own.
+  expect(chosen.settings).not.toHaveProperty('opacity');
+  expect(chosen.resourceIds).toEqual(['tip', 'pattern']);
+  expect((await library.resources(chosen))._unsafeUnwrap().map(({ id }) => id)).toEqual(['tip', 'pattern']);
 
-  upload.mockResolvedValueOnce(err(brushError('upload', 'Engine changed')));
-  expect((await presets.restore()!)._unsafeUnwrapErr()).toMatchObject({ kind: 'brush', code: 'restore' });
+  await presets.usePreset({ ...abrPreset(), name: 'Edited ink' }, 'abr:1');
+  flush();
+  expect(choose.mock.calls[1]![0].id).toBe(chosen.id);
+  expect(
+    library
+      .presets()
+      .filter((preset) => !preset.builtIn)
+      .map(({ name }) => name)
+  ).toEqual(['Edited ink']);
 });
 
-it('refuses presets without a tip, and resolves uploads finishing after disposal as aborted', async () => {
-  const uploads = deferredUploads();
-  const presets = setup({ upload: uploads.upload, select: vi.fn() });
-  expect((await presets.usePreset({ ...preset(), resources: [] }))._unsafeUnwrapErr()).toMatchObject({
+it('refuses presets without a tip and imports nothing while Paint is busy', async () => {
+  const choose = vi.fn();
+  const { presets, library } = setup({ choose, canChange: () => false });
+  expect((await presets.usePreset(abrPreset(), 'abr:1'))._unsafeUnwrapErr()).toMatchObject({
+    kind: 'engine',
+    code: 'busy'
+  });
+
+  const ready = setup({ choose });
+  expect((await ready.presets.usePreset({ ...abrPreset(), resources: [] }, 'abr:1'))._unsafeUnwrapErr()).toMatchObject({
     code: 'invalid-preset'
   });
-  const applying = presets.usePreset(preset());
-  dispose?.();
-  dispose = undefined;
-  uploads.resolve(ok());
-  expect((await applying)._unsafeUnwrapErr()).toMatchObject({ kind: 'aborted' });
+  flush();
+  expect(choose).not.toHaveBeenCalled();
+  expect([...library.presets(), ...ready.library.presets()].every((preset) => preset.builtIn)).toBe(true);
 });
 
-function setup(options: Pick<Parameters<typeof createAbrPresets>[0], 'upload' | 'select'>) {
-  return createRoot((stop) => {
-    dispose = stop;
-    return createAbrPresets({ ...options, canChange: () => true });
+function setup(options: Partial<Parameters<typeof createAbrPresets>[0]>) {
+  return createRoot((dispose) => {
+    disposers.push(dispose);
+    const library = createBrushLibrary({});
+    const presets = createAbrPresets({ library, choose: async () => ok(), canChange: () => true, ...options });
+    return { library, presets };
   });
 }
 
-/** Upload results that the test resolves one at a time, in call order. */
-function deferredUploads() {
-  const pending: ((result: Result<void, PaintError>) => void)[] = [];
-  const upload = vi.fn<(resources: readonly { id: string }[]) => Promise<Result<void, PaintError>>>(
-    () => new Promise((resolve) => pending.push(resolve))
-  );
-  return {
-    upload,
-    resolve(result: Result<void, PaintError>) {
-      const next = pending.shift();
-      if (!next) {
-        throw new Error('No upload is waiting.');
-      }
-
-      next(result);
-    }
-  };
-}
-
-function preset(): AbrPreset {
+function abrPreset(): AbrPreset {
   const resource = (id: string) => ({
     id,
     width: 1,

@@ -7,16 +7,18 @@ import type { JSX } from '@solidjs/web';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintError } from '../../shared/errors';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
-import { AbrViewerDialog, createAbrPresets } from '../abr';
+import { AbrViewerDialog, clearAbrBrush, createAbrPresets } from '../abr';
 import {
   BrushAdjustHud,
-  BrushPanel,
+  BrushLibraryPanel,
+  clearRoundBrush,
   createBrushAdjust,
   createBrushTools,
   createMixerBrush,
   MixerActions,
   type PaintTool
 } from '../brush';
+import { createBrushLibrary, createBrushStorage, createPresetUploads } from '../brush-library';
 import { createPaintCamera, createViewSize } from '../camera';
 import { BrushCursor, CanvasDebug, firstCanvasAction, PaintCanvas, type CanvasInput } from '../canvas';
 import { ColorPanel, createCanvasColorPicker } from '../color';
@@ -53,12 +55,18 @@ export function PaintStudio(props: {
   const [cursor, setCursor] = createSignal<Point>();
 
   const developer = createDeveloperSettings();
-  const tools = createBrushTools();
+  const brushStorage = createBrushStorage({ onError: setError });
+  const library = createBrushLibrary({ storage: brushStorage });
+  const tools = createBrushTools({
+    library,
+    storage: brushStorage,
+    clear: (brush) => (brush.engine?.id === 'abr' ? clearAbrBrush(brush) : clearRoundBrush(brush))
+  });
   const engine = createPaintEngine({
     settings: developer,
     onError: setError,
     onSelection: (event) => selection.receive(event),
-    prepare: () => presets.restore(),
+    prepare: () => uploads.restore(),
     frames: { enabled: developer.performanceMonitor, receive: (event) => monitor.record(event) }
   });
   const selection = createSelection({ send: engine.send, document: engine.state, ready: engine.canEdit });
@@ -83,18 +91,30 @@ export function PaintStudio(props: {
     brush: tools.brush,
     tool: tools.tool,
     run: engine.runBrushCommand,
-    canRun: () => canChangeBrush() && !presets.isBusy(),
+    canRun: () => canChangeBrush() && !uploads.isBusy(),
     onError: setError
   });
-  const presets = createAbrPresets({
+  const uploads = createPresetUploads({
+    resources: library.resources,
     upload: engine.putResources,
     canChange: canChangeBrush,
-    select: tools.selectPreset
+    select: tools.selectPreset,
+    inUse: tools.presets,
+    onUnavailable(preset, error) {
+      tools.abandonPreset(preset.id);
+      setError(error);
+    },
+    loaded: tools.loaded
+  });
+  const presets = createAbrPresets({
+    library,
+    choose: (preset) => uploads.choose(preset, tools.slot()),
+    canChange: () => canChangeBrush() && !uploads.isBusy()
   });
   const brushAdjust = createBrushAdjust({
     brush: tools.brush,
     update: tools.updateBrush,
-    available: () => tools.tool() !== 'lasso' && canChangeBrush()
+    available: () => paintsWithBrush() && canChangeBrush()
   });
   const colorPicker = createCanvasColorPicker({
     paints: () => paintsColor(),
@@ -135,8 +155,7 @@ export function PaintStudio(props: {
     size,
     brush,
     eraser: tools.eraser,
-    ready: () =>
-      engine.canEdit() && !selection.isBusy() && !presets.isBusy() && (tool() !== 'abr-brush' || !!brush().engine),
+    ready: () => engine.canEdit() && !selection.isBusy() && !uploads.isBusy(),
     navigate: camera.navigate,
     send(command) {
       // Input never starts an engine; `init` belongs to the transport.
@@ -211,7 +230,7 @@ export function PaintStudio(props: {
    * that is not ready cannot checkpoint, so it is restarted in the other mode from the saved document instead.
    */
   function setWorkerEnabled(enabled: boolean) {
-    if (selection.isBusy() || presets.isBusy() || engine.isCommandBusy()) {
+    if (selection.isBusy() || uploads.isBusy() || engine.isCommandBusy()) {
       return;
     }
 
@@ -235,18 +254,33 @@ export function PaintStudio(props: {
     launcher?.focus({ preventScroll: true });
   }
 
-  /** The ABR brush edits its preset in the ABR viewer; other tools use the brush panel. */
+  /** Opens the brush panel, reading the preset list for its picker. */
   function openBrushSettings(target: HTMLElement) {
-    if (tool() !== 'abr-brush') {
-      togglePanel('brush', target);
-      return;
-    }
+    void library.loadAll();
+    togglePanel('brush', target);
+  }
 
-    launcher = target;
+  /** Opens the ABR viewer from the brush panel; focus returns to the brush settings button when it closes. */
+  function openAbrViewer() {
     setPanel(undefined);
     camera.navigation.close();
     setAbrMounted(true);
     setAbrOpen(true);
+  }
+
+  /** Uploads a preset's images if needed and makes the active brush tool use it. */
+  async function choosePreset(id: string) {
+    const preset = library.find(id);
+    if (!preset) {
+      return;
+    }
+
+    mixer.cancelPick();
+    colorPicker.cancel();
+    const chosen = await uploads.choose(preset, tools.slot());
+    if (chosen.isErr() && chosen.error.kind !== 'aborted') {
+      setError(chosen.error);
+    }
   }
 
   return (
@@ -287,9 +321,9 @@ export function PaintStudio(props: {
         <Show when={developer.performanceMonitor()}>
           <PerformancePanel samples={monitor.samples()} idle={monitor.idle()} />
         </Show>
-        <Show when={ready() && (engine.state().tileCount === 0 || needsPreset())}>
+        <Show when={ready() && engine.state().tileCount === 0}>
           <div class={styles.welcome}>
-            <p>{needsPreset() ? 'Choose an ABR brush in Brush settings.' : 'Pen to draw. Touch to move.'}</p>
+            <p>Pen to draw. Touch to move.</p>
           </div>
         </Show>
         <Show when={brushAdjust.anchor()}>
@@ -303,7 +337,7 @@ export function PaintStudio(props: {
             />
           )}
         </Show>
-        <Show when={ready() && tool() !== 'lasso' && cursor()}>
+        <Show when={ready() && paintsWithBrush() && cursor()}>
           {(point) => <BrushCursor point={point()} size={cursorSize()} square={blockCursor()} />}
         </Show>
         <Show when={camera.navigation.center()}>
@@ -366,12 +400,12 @@ export function PaintStudio(props: {
           <button
             aria-label="Brush settings"
             title="Brush settings"
-            aria-expanded={panel() === 'brush' || abrOpen() ? 'true' : 'false'}
+            aria-expanded={panel() === 'brush' ? 'true' : 'false'}
             aria-controls="paint-panel"
             onClick={(event) => openBrushSettings(event.currentTarget)}
           >
             <SketchIcon
-              name={tool() === 'abr-brush' ? 'brush' : brush().tool === 'eraser' ? 'erase' : 'draw'}
+              name={tool() === 'eraser' ? 'erase' : brush().engine?.id === 'abr' ? 'brush' : 'draw'}
               size={22}
             />
             <small>{blockCursor() ? 'Block' : Math.round(brush().size)}</small>
@@ -444,7 +478,32 @@ export function PaintStudio(props: {
                   />
                 </Match>
                 <Match when={id === 'brush'}>
-                  <BrushPanel brush={brush()} onChange={tools.updateBrush} />
+                  <BrushLibraryPanel
+                    presets={library.presets()}
+                    preset={tools.preset()}
+                    changed={(id) => tools.changes(id) !== undefined}
+                    brush={brush()}
+                    disabled={!ready() || uploads.busy()}
+                    onChange={tools.updateBrush}
+                    onSelect={(id) => void choosePreset(id)}
+                    onReset={tools.resetPreset}
+                    onSave={tools.savePreset}
+                    onSaveAs={(name, groups) => void tools.savePresetAs(name, groups)}
+                    onRename={(id, name) => library.update(id, { name })}
+                    onDelete={tools.deletePreset}
+                    sharedSize={tools.sharedSize()}
+                    onSharedSizeChange={tools.setSharedSize}
+                    onOpenAbr={openAbrViewer}
+                    eraser={
+                      tool() === 'eraser'
+                        ? {
+                            mode: tools.eraserMode(),
+                            canClear: tools.canClear(),
+                            onModeChange: tools.setEraserMode
+                          }
+                        : undefined
+                    }
+                  />
                 </Match>
                 <Match when={id === 'color'}>
                   <ColorPanel
@@ -546,26 +605,26 @@ export function PaintStudio(props: {
   );
 
   /**
-   * The active tool paints color, so Alt/Option-click picks a color: the round brush and ABR Brush or Pencil presets.
-   * ABR erasers keep Alt for erasing to history, and the Mixer Brush for loading paint.
+   * The brush paints color, so Alt/Option-click picks a color: round and textured presets and ABR Brush or Pencil
+   * presets. ABR erasers keep Alt for erasing to history, and the Mixer Brush for loading paint.
    */
   function paintsColor() {
-    if (tool() === 'brush') {
-      return true;
+    if (tool() !== 'brush') {
+      return false;
     }
 
     const abrTool = record(record(record(brush().engine?.settings).values).tool).type;
-    return tool() === 'abr-brush' && brush().engine?.id === 'abr' && (abrTool === 'PbTl' || abrTool === 'PcTl');
-  }
-
-  /** The ABR brush is chosen but no preset has been applied yet. */
-  function needsPreset() {
-    return tool() === 'abr-brush' && !brush().engine;
+    return brush().engine?.id !== 'abr' || abrTool === 'PbTl' || abrTool === 'PcTl';
   }
 
   /** The current tool paints symmetric copies. */
   function supportsSymmetry() {
-    return supportsPaintSymmetry(brush()) && tool() !== 'lasso';
+    return supportsPaintSymmetry(brush()) && paintsWithBrush();
+  }
+
+  /** The active tool paints with a brush: the brush or the eraser. */
+  function paintsWithBrush() {
+    return tool() === 'brush' || tool() === 'eraser';
   }
 }
 

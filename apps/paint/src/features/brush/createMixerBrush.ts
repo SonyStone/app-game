@@ -22,7 +22,7 @@ export function createMixerBrush(options: {
 }) {
   const [picking, setPicking] = createSignal(false);
   const available = () =>
-    options.tool() === 'abr-brush' &&
+    options.tool() === 'brush' &&
     options.brush().engine?.id === 'abr' &&
     record(record(record(options.brush().engine?.settings).values).tool).type === 'MixB';
 

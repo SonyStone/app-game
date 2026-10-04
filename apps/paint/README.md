@@ -31,9 +31,10 @@ src/
     camera/        Camera state and view commands, stage size, navigation puck adapter
     selection/     Lasso outline and pixel edits, on-canvas outline, edit gate, selection toolbar
     symmetry/      Document paint symmetry: settings, guide and panel
-    layers/        Layer list, blending and ordering, Erase to History source
+    layers/        Layer list, blending and ordering, image placement, Erase to History source
     brush/         Tool choice and brush settings, Mixer Brush commands, brush and color panels
-    abr/           Embedded ABR viewer and preset uploads
+    brush-library/ Brush presets: built-in and user presets, IndexedDB storage, resource uploads to the engine
+    abr/           Embedded ABR viewer and import of its presets into the brush library
     developer/     Developer switches and dialog
     performance/   Live frame-cost panel, `window.paintPerformance` reports and the dev-server responder
     pwa/           Standalone shell: install prompt, offline status, build identity
@@ -64,7 +65,7 @@ Each feature folder's `index.ts` lists its public API; the layout imports from t
 ## Composing the editor
 
 ```tsx
-const engine = createPaintEngine({ settings: developer, onError: setError, onSelection, prepare: () => presets.restore() });
+const engine = createPaintEngine({ settings: developer, onError: setError, onSelection, prepare: () => uploads.restore() });
 const camera = createPaintCamera({ restored: () => engine.restored()?.camera, size, ready: engine.canEdit, send: engine.send, bounds });
 
 <main ref={setStage}>

@@ -67,7 +67,6 @@ export function ToolBar(props: {
 /** Tool buttons in toolbar order. */
 const toolButtons = [
   { tool: 'brush', label: 'Brush', title: 'Brush · B', icon: 'draw' },
-  { tool: 'abr-brush', label: 'ABR Brush', title: 'ABR Brush · experimental', icon: 'brush' },
   { tool: 'eraser', label: 'Eraser', title: 'Eraser · E', icon: 'erase' },
   { tool: 'lasso', label: 'Lasso', title: 'Lasso · L', icon: 'lasso' }
 ] as const satisfies readonly { tool: PaintTool; label: string; title: string; icon: string }[];

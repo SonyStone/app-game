@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | JSX assembly, dependencies and swappable engines | `src/features/engine/StudioApplication.tsx`, [composition](./composition.md) | `PaintApplication.test.tsx`, Check execution modes |
 | Canvas targets and their lifecycle | `packages/paint-core/src/composition/CanvasTarget.tsx`, `packages/paint-core/src/gpu/targetView.ts` | Check canvas targets |
-| ABR preset import and selection | `src/features/abr/` (the embedded ABR viewer imports `.abr` files; `createAbrPresets.ts` uploads the chosen preset's resources before activating it) | `createAbrPresets.test.tsx`; import → draw → worker/main switch |
+| ABR preset import and selection | `src/features/abr/` (the embedded ABR viewer imports `.abr` files; `createAbrPresets.ts` imports the chosen preset into the brush library, `brush-library/createPresetUploads.ts` uploads its resources before activating it; `clearAbrBrush.ts` makes the eraser's Clear version) | `createAbrPresets.test.tsx`, `clearAbrBrush.test.ts`; import → draw → reload → worker/main switch |
 | Panels, keyboard, UI state | `src/features/studio/PaintStudio.tsx` (layout), `src/features/studio/createPaintShortcuts.ts`, feature factories; engine connection and mode switch in `src/features/engine/createPaintEngine.ts` | `test`, `createPaintEngine.test.tsx` |
 | Fullscreen | `src/features/studio/createFullscreenToggle.ts` (built on `@solid-primitives/fullscreen`) | enter/exit, external Escape, refusal, double click, unmount |
 | Puck gestures in 2D and 3D | `packages/navigation-puck/src/controller.ts` | package tests and puck DOM test |
