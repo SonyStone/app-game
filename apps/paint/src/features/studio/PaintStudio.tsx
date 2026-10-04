@@ -3,6 +3,7 @@ import { record } from '@app-game/abr-brush/form';
 import { NavigationPuck } from '@app-game/navigation-puck';
 import { screenToWorld, worldToScreen, type Point } from '@app-game/paint-core/camera';
 import { supportsPaintSymmetry } from '@app-game/paint-core/symmetry';
+import { createEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintError } from '../../shared/errors';
@@ -37,6 +38,7 @@ import { createSymmetry, SymmetryGuide, SymmetryPanel } from '../symmetry';
 import { createTransform, TransformOverlay } from '../transform';
 import { createFullscreenToggle } from './createFullscreenToggle';
 import { createPaintShortcuts } from './createPaintShortcuts';
+import { createPanelPins } from './createPanelPins';
 import { DrawingMenu } from './DrawingMenu';
 import { ErrorNotice } from './ErrorNotice';
 import styles from './PaintStudio.module.css';
@@ -245,6 +247,20 @@ export function PaintStudio(props: {
   const { brush, tool } = tools;
   const { ready } = engine;
   const [panel, setPanel] = createSignal<PanelId>();
+  const panelPins = createPanelPins();
+  // Panels leave the canvas usable: a contact on it closes an unpinned panel and still draws or navigates.
+  createEventListener(
+    stage,
+    'pointerdown',
+    (event) => {
+      const open = panel();
+      const onCanvas = event.target instanceof HTMLCanvasElement && !event.target.closest('#paint-panel');
+      if (open && onCanvas && !panelPins.pinned(open)) {
+        setPanel(undefined);
+      }
+    },
+    { capture: true }
+  );
   const [abrOpen, setAbrOpen] = createSignal(false);
   const [abrMounted, setAbrMounted] = createSignal(false);
   const [developerOpen, setDeveloperOpen] = createSignal(false);
@@ -718,7 +734,13 @@ export function PaintStudio(props: {
         </Show>
         <Show when={panel()} keyed>
           {(id) => (
-            <StudioPanel id={id} title={panelTitles[id]} onClose={closePanel}>
+            <StudioPanel
+              id={id}
+              title={panelTitles[id]}
+              pinned={panelPins.pinned(id)}
+              onPinnedChange={(pinned) => panelPins.setPinned(id, pinned)}
+              onClose={closePanel}
+            >
               <Switch>
                 <Match when={id === 'symmetry'}>
                   <SymmetryPanel

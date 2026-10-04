@@ -145,6 +145,23 @@ try {
     }
   );
 
+  await step('an open panel leaves the canvas usable and closes on contact unless pinned', async () => {
+    const { cx, cy } = await workspaceCenter(page);
+    const panel = page.locator('#paint-panel');
+    await page.getByRole('button', { name: 'Layers' }).click();
+    // The Layers panel opens on the left; draw right of it.
+    await drawLine(page, { x: cx + 100, y: cy - 250 }, { x: cx + 200, y: cy - 250 });
+    assert.equal(await panel.count(), 0, 'a stroke closes the panel');
+
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await panel.getByRole('button', { name: 'Keep panel open' }).click();
+    await drawLine(page, { x: cx + 100, y: cy - 230 }, { x: cx + 200, y: cy - 230 });
+    assert.equal(await panel.count(), 1, 'a pinned panel stays open');
+    await panel.getByRole('button', { name: 'Keep panel open' }).click();
+    await page.keyboard.press('Escape');
+    await undo(page, 2);
+  });
+
   await step('a mouse stroke can be undone and redone', async () => {
     const undo = page.getByRole('button', { name: 'Undo' });
     const redo = page.getByRole('button', { name: 'Redo' });
