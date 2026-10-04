@@ -198,10 +198,10 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                 renderer?.setFloating(floating);
                 scheduleDraw();
               },
-              move(matrix, interpolation) {
+              move(matrix, interpolation, warp) {
                 if (!floating) return;
-                floating = { ...floating, matrix, interpolation };
-                renderer?.moveFloating(matrix, interpolation);
+                floating = { ...floating, matrix, interpolation, warp };
+                renderer?.moveFloating(matrix, interpolation, warp);
                 scheduleDraw();
               },
               async clear() {

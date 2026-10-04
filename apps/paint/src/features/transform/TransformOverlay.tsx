@@ -11,17 +11,20 @@ import {
   handles,
   moveBox,
   movePivot,
+  moveWarpPoint,
   rotateBox,
   scaleBox,
   type BoxHandle
 } from './transformDrag';
 import type { TransformBounds } from './transformEdit';
+import { warpOutline, warpSide } from './warp';
 
 /**
  * The transform box over the canvas, with its actions next to it: drag inside to move, drag a corner or edge handle to
  * scale from the opposite handle, and drag the round handle to rotate about the center (Shift snaps to 15°). Corner
  * handles keep the proportions as the settings say; Shift does the opposite. A distorted box moves its corners on their
- * own instead, and its edge handles the two corners of their edge. The crosshair is the pivot that turns and exact
+ * own instead, and its edge handles the two corners of their edge. A warped box shows its 16 control points over a
+ * grid of the bent surface instead: drag a point to bend it, a corner to move it with its edges, inside to move it. The crosshair is the pivot that turns and exact
  * sizes go about; dragging it moves the pivot, not the pixels. Pen, mouse and touch all drag; touches
  * elsewhere keep navigating the canvas. A drag follows the pointer over the whole window until it is released. While
  * the box is moved, only the pixels show; while any part is dragged, the actions are hidden.
@@ -42,6 +45,8 @@ export function TransformOverlay(props: {
   onRotate: () => void;
   /** Turns distorting by the corners on or off; see `Transform.distort`. */
   onDistort: (on: boolean) => void;
+  /** Turns warping by a grid of points on or off; see `Transform.warp`. */
+  onWarp: (on: boolean) => void;
   onReset: () => void;
   onCancel: () => void;
   onDone: () => void;
@@ -50,7 +55,7 @@ export function TransformOverlay(props: {
   /** Removes the window listeners of the drag in progress. */
   let release: (() => void) | undefined;
   /** What the drag in progress changes. */
-  const [dragging, setDragging] = createSignal<'move' | 'rotate' | 'pivot' | BoxHandle>();
+  const [dragging, setDragging] = createSignal<DragKind>();
   const [numbers, setNumbers] = createSignal(false);
   onCleanup(() => release?.());
   const points = () => boxPoints(props.bounds, props.box);
@@ -70,6 +75,32 @@ export function TransformOverlay(props: {
       handles: current.handles.map(({ point }) => props.toScreen(point))
     };
   };
+  /** The warp's outline, grid lines and control points on screen, for a warped box. */
+  const warpScreen = () => {
+    const warp = props.box.warp;
+    if (!warp) {
+      return undefined;
+    }
+
+    const { outline, lines } = warpOutline(warp);
+    const path = (points: Point[]) =>
+      points
+        .map((point, index) => `${index ? 'L' : 'M'} ${props.toScreen(point).x} ${props.toScreen(point).y}`)
+        .join(' ');
+    const points = warp.map(props.toScreen);
+    // The control net: each row and each column of points joined.
+    const net = Array.from({ length: warpSide }, (_, line) => [
+      Array.from({ length: warpSide }, (_, at) => warp[line * warpSide + at]!),
+      Array.from({ length: warpSide }, (_, at) => warp[at * warpSide + line]!)
+    ]).flat();
+    return {
+      outline: `${path(outline)} Z`,
+      lines: lines.map(path).join(' '),
+      net: net.map(path).join(' '),
+      points,
+      bounds: outline.map(props.toScreen)
+    };
+  };
   /** Where the exact values go: below the actions, or above them near the bottom of the view. */
   const numbersAt = () => {
     const actions = actionsAt();
@@ -81,6 +112,11 @@ export function TransformOverlay(props: {
   };
   /** Where the actions go: next to the box and its rotation handle. */
   const actionsAt = () => {
+    const warped = warpScreen();
+    if (warped) {
+      return placeBeside(warped.bounds, props.size, actionsSize);
+    }
+
     const { corners, rotation } = screen();
     return placeBeside([...corners, rotation], props.size, actionsSize);
   };
@@ -89,7 +125,7 @@ export function TransformOverlay(props: {
     return props.toDocument({ x: event.clientX - rect.left, y: event.clientY - rect.top });
   };
   /** Starts dragging `kind`; the drag follows the pointer until it is released or cancelled. */
-  const begin = (kind: 'move' | 'rotate' | 'pivot' | BoxHandle) => (event: PointerEvent) => {
+  const begin = (kind: DragKind) => (event: PointerEvent) => {
     if (event.button !== 0 || release) {
       return;
     }
@@ -110,6 +146,10 @@ export function TransformOverlay(props: {
         props.onChange(movePivot(props.bounds, start.box, pointer));
       } else if (kind === 'rotate') {
         props.onChange(rotateBox(props.bounds, start.box, start.at, pointer, moved.shiftKey));
+      } else if ('warp' in kind) {
+        if (start.box.warp) {
+          props.onChange(moveWarpPoint({ ...start.box, warp: start.box.warp }, kind.warp, start.at, pointer));
+        }
       } else if (start.box.corners) {
         props.onChange(distortBox({ ...start.box, corners: start.box.corners }, kind, start.at, pointer));
       } else {
@@ -143,50 +183,73 @@ export function TransformOverlay(props: {
         aria-label="Transform box"
         data-moving={dragging() === 'move' ? 'true' : 'false'}
       >
-        <polygon
-          class={styles.body}
-          points={screen()
-            .corners.map(({ x, y }) => `${x},${y}`)
-            .join(' ')}
-          onPointerDown={begin('move')}
-        />
-        <line
-          class={styles.stem}
-          x1={screen().top.x}
-          y1={screen().top.y}
-          x2={screen().rotation.x}
-          y2={screen().rotation.y}
-        />
-        {/* A fixed list keeps each handle's element while the box changes. */}
-        <For each={handles}>
-          {(handle, index) => (
-            <rect
-              class={styles.handle}
-              x={screen().handles[index()]!.x - 7}
-              y={screen().handles[index()]!.y - 7}
-              width={14}
-              height={14}
-              aria-label="Scale handle"
-              onPointerDown={begin(handle)}
-            />
+        <Show when={warpScreen()}>
+          {(warped) => (
+            <>
+              <path class={styles.body} d={warped().outline} onPointerDown={begin('move')} />
+              <path class={styles.warpLines} d={warped().lines} />
+              <path class={styles.warpNet} d={warped().net} />
+              <For each={warpIndices}>
+                {(index) => (
+                  <circle
+                    class={styles.handle}
+                    cx={warped().points[index]!.x}
+                    cy={warped().points[index]!.y}
+                    r={7}
+                    aria-label="Warp point"
+                    onPointerDown={begin({ warp: index })}
+                  />
+                )}
+              </For>
+            </>
           )}
-        </For>
-        <Show when={!props.box.corners}>
-          <g class={styles.pivot} aria-label="Pivot" role="slider" onPointerDown={begin('pivot')}>
-            <circle cx={screen().pivot.x} cy={screen().pivot.y} r={9} />
-            <path
-              d={`M ${screen().pivot.x - 5} ${screen().pivot.y} h 10 M ${screen().pivot.x} ${screen().pivot.y - 5} v 10`}
-            />
-          </g>
         </Show>
-        <circle
-          class={styles.rotate}
-          cx={screen().rotation.x}
-          cy={screen().rotation.y}
-          r={9}
-          aria-label="Rotate handle"
-          onPointerDown={begin('rotate')}
-        />
+        <Show when={!props.box.warp}>
+          <polygon
+            class={styles.body}
+            points={screen()
+              .corners.map(({ x, y }) => `${x},${y}`)
+              .join(' ')}
+            onPointerDown={begin('move')}
+          />
+          <line
+            class={styles.stem}
+            x1={screen().top.x}
+            y1={screen().top.y}
+            x2={screen().rotation.x}
+            y2={screen().rotation.y}
+          />
+          {/* A fixed list keeps each handle's element while the box changes. */}
+          <For each={handles}>
+            {(handle, index) => (
+              <rect
+                class={styles.handle}
+                x={screen().handles[index()]!.x - 7}
+                y={screen().handles[index()]!.y - 7}
+                width={14}
+                height={14}
+                aria-label="Scale handle"
+                onPointerDown={begin(handle)}
+              />
+            )}
+          </For>
+          <Show when={!props.box.corners}>
+            <g class={styles.pivot} aria-label="Pivot" role="slider" onPointerDown={begin('pivot')}>
+              <circle cx={screen().pivot.x} cy={screen().pivot.y} r={9} />
+              <path
+                d={`M ${screen().pivot.x - 5} ${screen().pivot.y} h 10 M ${screen().pivot.x} ${screen().pivot.y - 5} v 10`}
+              />
+            </g>
+          </Show>
+          <circle
+            class={styles.rotate}
+            cx={screen().rotation.x}
+            cy={screen().rotation.y}
+            r={9}
+            aria-label="Rotate handle"
+            onPointerDown={begin('rotate')}
+          />
+        </Show>
       </svg>
       <Show when={!dragging()}>
         <TransformActions
@@ -195,8 +258,10 @@ export function TransformOverlay(props: {
           onSettings={props.onSettings}
           onFlip={props.onFlip}
           onRotate={props.onRotate}
-          distorted={props.box.corners !== undefined}
+          distorted={props.box.corners !== undefined && !props.box.warp}
           onDistort={props.onDistort}
+          warped={props.box.warp !== undefined}
+          onWarp={props.onWarp}
           numbers={numbers()}
           onNumbers={setNumbers}
           onReset={props.onReset}
@@ -215,6 +280,12 @@ export function TransformOverlay(props: {
     </div>
   );
 }
+
+/** What a drag changes: the whole box, its rotation, its pivot, a box handle or a warp control point. */
+type DragKind = 'move' | 'rotate' | 'pivot' | BoxHandle | { warp: number };
+
+/** Indices of the warp's control points, a fixed list so each handle keeps its element. */
+const warpIndices = Array.from({ length: warpSide * warpSide }, (_, index) => index);
 
 /** Approximate height of the exact values, for placing them. */
 const numbersHeight = 44;

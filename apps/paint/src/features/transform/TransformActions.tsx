@@ -3,7 +3,7 @@ import { SketchIcon } from '../../shared/ui/SketchIcon';
 import type { TransformSettings } from './createTransform';
 
 /**
- * Compact transform actions next to the box: flips, a quarter turn, the proportions and pixel-art settings, reset,
+ * Compact transform actions next to the box: flips, a quarter turn, distort and warp, exact values, the proportions and pixel-art settings, reset,
  * cancel and apply. Icons carry labels and tooltips.
  */
 export function TransformActions(props: {
@@ -16,6 +16,9 @@ export function TransformActions(props: {
   /** Whether the box is distorted by its corners. */
   distorted: boolean;
   onDistort: (on: boolean) => void;
+  /** Whether the pixels are warped by a grid of points. */
+  warped: boolean;
+  onWarp: (on: boolean) => void;
   /** Whether the exact values are shown. */
   numbers: boolean;
   onNumbers: (shown: boolean) => void;
@@ -41,6 +44,14 @@ export function TransformActions(props: {
         onClick={() => props.onDistort(!props.distorted)}
       >
         <SketchIcon name="distort" size={20} />
+      </button>
+      <button
+        aria-label="Warp"
+        title="Warp: bend the pixels by dragging a grid of points"
+        aria-pressed={props.warped ? 'true' : 'false'}
+        onClick={() => props.onWarp(!props.warped)}
+      >
+        <SketchIcon name="warp" size={20} />
       </button>
       <button
         aria-label="Exact values"

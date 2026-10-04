@@ -64,8 +64,12 @@ export type DocumentEditContext = {
   floating: {
     /** Shows lifted pixels, replacing any shown before, and redraws. */
     show(pixels: FloatingPixels): void;
-    /** Moves the shown pixels and redraws. */
-    move(matrix: FloatingPixels['matrix'], interpolation: FloatingPixels['interpolation']): void;
+    /** Moves the shown pixels and redraws; a `warp` bends them instead of `matrix`, see `FloatingPixels.warp`. */
+    move(
+      matrix: FloatingPixels['matrix'],
+      interpolation: FloatingPixels['interpolation'],
+      warp?: FloatingPixels['warp']
+    ): void;
     /**
      * Stops showing the pixels once this command's changes are committed. Draws pending moves first, and with
      * changes keeps that frame on screen until the changed pixels have loaded, so they replace the floating pixels

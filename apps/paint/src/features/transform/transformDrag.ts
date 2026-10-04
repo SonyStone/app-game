@@ -3,6 +3,7 @@ import { applyAffine, invertAffine } from './affine';
 import { boxMatrix, boxPivot, transformMatrix, type BoxState, type Quad } from './createTransform';
 import { applyProjective, isConvex } from './projective';
 import type { TransformBounds } from './transformEdit';
+import { moveWarp, warpSide } from './warp';
 
 /** A box handle: -1, 0 or 1 per axis, from the left/top edge through the middle to the right/bottom edge. */
 export type BoxHandle = { x: -1 | 0 | 1; y: -1 | 0 | 1 };
@@ -11,6 +12,10 @@ export type BoxHandle = { x: -1 | 0 | 1; y: -1 | 0 | 1 };
 export function moveBox(box: BoxState, start: Point, pointer: Point): BoxState {
   const dx = pointer.x - start.x,
     dy = pointer.y - start.y;
+  if (box.warp) {
+    return { ...box, warp: moveWarp(box.warp, { x: dx, y: dy }) };
+  }
+
   if (box.corners) {
     return { ...box, corners: box.corners.map(({ x, y }) => ({ x: x + dx, y: y + dy })) as unknown as Quad };
   }
@@ -36,6 +41,28 @@ export function distortBox(
   ) as unknown as Quad;
   return isConvex(corners) ? { ...box, corners } : box;
 }
+
+/**
+ * A warped box after its control point `index` is dragged from `start` to `pointer`, in document pixels. A corner
+ * point takes its two neighbors on the edges with it, as Photoshop's Warp does, so the edges keep their curve.
+ */
+export function moveWarpPoint(box: BoxState & { warp: readonly Point[] }, index: number, start: Point, pointer: Point) {
+  const dx = pointer.x - start.x,
+    dy = pointer.y - start.y;
+  const moved = new Set([index, ...(warpCornerNeighbors[index] ?? [])]);
+  return {
+    ...box,
+    warp: box.warp.map((point, at) => (moved.has(at) ? { x: point.x + dx, y: point.y + dy } : point))
+  };
+}
+
+/** The edge points next to each corner of the 4 × 4 control points, which move with it. */
+const warpCornerNeighbors: Record<number, number[]> = {
+  0: [1, warpSide],
+  [warpSide - 1]: [warpSide - 2, 2 * warpSide - 1],
+  [warpSide * (warpSide - 1)]: [warpSide * (warpSide - 2), warpSide * (warpSide - 1) + 1],
+  [warpSide * warpSide - 1]: [warpSide * (warpSide - 1) - 1, warpSide * warpSide - 2]
+};
 
 /** Indices of the corners, clockwise from the top-left, that a handle moves. */
 function cornersOf(handle: BoxHandle): number[] {

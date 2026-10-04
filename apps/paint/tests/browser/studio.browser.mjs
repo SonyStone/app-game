@@ -568,6 +568,46 @@ try {
     await undo(page, 2);
   });
 
+  await step('a warp bends the layer live by its grid points and applies the bend', async () => {
+    const { cx, cy } = await workspaceCenter(page);
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await page.getByRole('button', { name: 'Add layer' }).click();
+    await waitForSaved(page);
+    await page.keyboard.press('Escape');
+    await setColor(page, '000000');
+    await drawLine(page, { x: cx + 200, y: cy - 120 }, { x: cx + 200, y: cy + 60 });
+
+    await page.keyboard.press('Control+t');
+    const box = page.getByLabel('Transform box');
+    await box.waitFor({ timeout: 10_000 });
+    await page.getByRole('toolbar', { name: 'Transform actions' }).getByRole('button', { name: 'Warp' }).click();
+    // Dragging the four inner points 100 px right bows the middle of the line about 56 px right.
+    const points = box.getByLabel('Warp point');
+    assert.equal(await points.count(), 16);
+    for (const index of [5, 6, 9, 10]) {
+      const handle = await points.nth(index).boundingBox();
+      const from = { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 };
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(from.x + 100, from.y, { steps: 5 });
+      await page.mouse.up();
+    }
+
+    const middle = cy - 30;
+    await page.waitForTimeout(500);
+    await setColor(page, 'FF0000');
+    assert.ok(Math.max(...(await pickRgb(page, { x: cx + 252, y: middle }, 'FF0000'))) < 0x90, 'the preview bends');
+    await page.getByRole('button', { name: 'Done' }).click();
+    await box.waitFor({ state: 'detached', timeout: 10_000 });
+    await waitForSaved(page);
+    await setColor(page, '00FF00');
+    assert.ok(Math.max(...(await pickRgb(page, { x: cx + 252, y: middle }, '00FF00'))) < 0x90, 'the result bends');
+    // The edges of the stroke stay where they were, so the bend ends short of here.
+    await setColor(page, '0000FF');
+    assert.ok(Math.min(...(await pickRgb(page, { x: cx + 290, y: middle }, '0000FF'))) > 0xe0);
+    await undo(page, 3);
+  });
+
   await step('dragging inside a lasso selection moves only the outline; its bar starts a transform', async () => {
     const { cx, cy } = await workspaceCenter(page);
     await page.getByRole('button', { name: 'Layers' }).click();

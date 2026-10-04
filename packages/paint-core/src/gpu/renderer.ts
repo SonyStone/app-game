@@ -316,8 +316,12 @@ async function assemblePaintRenderer(
       floating.set(next);
     },
     /** Moves the shown floating pixels without uploading them again. */
-    moveFloating(matrix: FloatingPixels['matrix'], interpolation: FloatingPixels['interpolation']) {
-      floating.move(matrix, interpolation);
+    moveFloating(
+      matrix: FloatingPixels['matrix'],
+      interpolation: FloatingPixels['interpolation'],
+      warp?: FloatingPixels['warp']
+    ) {
+      floating.move(matrix, interpolation, warp);
     },
     /**
      * Keeps the presented frame of every target until the changed overview is resident at the same camera, as after

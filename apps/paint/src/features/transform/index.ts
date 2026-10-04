@@ -5,3 +5,4 @@ export * from './TransformActions';
 export * from './transformDrag';
 export * from './transformEdit';
 export * from './TransformOverlay';
+export * from './warp';

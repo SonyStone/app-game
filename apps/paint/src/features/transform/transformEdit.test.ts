@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest';
 import { applyAffine, boxAffine, identity, invertAffine, multiplyAffine, type Affine } from './affine';
 import { fromAffine, rectToQuad } from './projective';
 import { transformEdit, type TransformCommand } from './transformEdit';
+import { warpFromMatrix, warpNumbers } from './warp';
 
 it('lifts the pixels as floating pixels and moves them without changing the document', async () => {
   const { run, floating } = setup(square(10, 20, 4, 6, [0, 0, 255, 255]));
@@ -22,7 +23,7 @@ it('lifts the pixels as floating pixels and moves them without changing the docu
 
   const moved = await run({ phase: 'update', interpolation: 'pixels', matrix: [1, 0, 100, 0, 1, 0, 0, 0, 1] });
   expect(moved).toEqual({ changes: [] });
-  expect(floating.move).toHaveBeenLastCalledWith([1, 0, 100, 0, 1, 0, 0, 0, 1], 'pixels');
+  expect(floating.move).toHaveBeenLastCalledWith([1, 0, 100, 0, 1, 0, 0, 0, 1], 'pixels', undefined);
   await expect(run({ phase: 'update', interpolation: 'smooth', matrix: [0, 0, 0, 0, 1, 0, 0, 0, 1] })).rejects.toThrow(
     'too thin'
   );
@@ -101,6 +102,39 @@ it('draws a perspective distortion into the quad its corners make', async () => 
   expect(pixel(ended, 2, 97)[3]).toBe(255);
   // A trapezoid of (40 + 100) / 2 × 100 px.
   expect(Math.abs(alphaCount(ended) - 7000)).toBeLessThan(150);
+});
+
+it('warps the pixels through the patch, covering each pixel once', async () => {
+  const bounds = { left: 0, top: 0, right: 40, bottom: 30 };
+  // Half-transparent pixels show a pixel drawn twice, as more opaque.
+  const { run, floating } = setup(square(0, 0, 40, 30, [0, 64, 0, 128]));
+  const warp = async (points: { x: number; y: number }[]) => {
+    await run({ phase: 'begin' });
+    await run({ phase: 'update', interpolation: 'pixels', matrix: [...fromAffine(identity)], warp: points });
+    return run({ phase: 'end' });
+  };
+
+  // A warp that only moves the pixels draws each of them exactly once, with no seams between the mesh's triangles.
+  const moved = warpFromMatrix(bounds, fromAffine([1, 0, 0, 1, 100.25, 50]));
+  const shifted = await warp(moved);
+  expect(floating.move).toHaveBeenLastCalledWith(fromAffine(identity), 'pixels', warpNumbers(moved));
+  expect(alphaCount(shifted)).toBe(40 * 30);
+  expect([...alphas(shifted)].sort()).toEqual([0, 128]);
+  expect(pixel(shifted, 120, 65)).toEqual([0, 64, 0, 128]);
+
+  // Pulling the two middle points of the top row up 30 px bows the top edge upward; the corners stay.
+  const bowed = warpFromMatrix(bounds, fromAffine(identity)).map((point, index) =>
+    index === 1 || index === 2 ? { x: point.x, y: point.y - 30 } : point
+  );
+  const bent = await warp(bowed);
+  expect(pixel(bent, 20, -10)[3]).toBe(128);
+  expect(pixel(bent, 1, -10)[3]).toBe(0);
+  expect(pixel(bent, 20, 29)[3]).toBe(128);
+  // A warp needs all 16 control points.
+  await expect(
+    (async () =>
+      run({ phase: 'update', interpolation: 'smooth', matrix: [...fromAffine(identity)], warp: bowed.slice(1) }))()
+  ).rejects.toThrow('16');
 });
 
 it('builds box transforms about a pivot and inverts them', () => {

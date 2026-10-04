@@ -227,7 +227,7 @@ it('shows floating pixels of an edit and clears them after its result, keeping t
   runtime.send(float.command('move', 'b'));
   await waitFor(() => replies() === 2);
   expect(renderer.setFloating).toHaveBeenLastCalledWith(expect.objectContaining({ layerId: document.active.id }));
-  expect(renderer.moveFloating).toHaveBeenLastCalledWith([1, 0, 5, 0, 1, 0, 0, 0, 1], 'pixels');
+  expect(renderer.moveFloating).toHaveBeenLastCalledWith([1, 0, 5, 0, 1, 0, 0, 0, 1], 'pixels', undefined);
   expect(document.state().canUndo).toBe(false);
 
   // The result replaces the floating pixels after it is committed and restored, holding the presented frame.

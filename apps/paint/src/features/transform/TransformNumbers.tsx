@@ -4,7 +4,7 @@ import styles from './Transform.module.css';
 /**
  * Exact values of the transform box: width and height as percentages of the original, the clockwise angle in degrees
  * and the offset in document pixels. A value applies when it is committed, with Enter or by leaving the field; with
- * proportions kept, width and height change together. A distorted box has no such values, so the fields are disabled.
+ * proportions kept, width and height change together. A distorted or warped box has no such values, so the fields are disabled.
  */
 export function TransformNumbers(props: {
   /** Where the panel goes: its horizontal center and top, in CSS pixels of the canvas. */
@@ -13,7 +13,7 @@ export function TransformNumbers(props: {
   settings: TransformSettings;
   onChange: (box: BoxState) => void;
 }) {
-  const disabled = () => props.box.corners !== undefined;
+  const disabled = () => props.box.corners !== undefined || props.box.warp !== undefined;
   const degrees = () => normalizeDegrees((props.box.angle * 180) / Math.PI);
   const setScale = (axis: 'x' | 'y', percent: number) => {
     const sign = Math.sign(props.box.scale[axis]) || 1;

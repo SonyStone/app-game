@@ -21,6 +21,12 @@ export type FloatingPixels = {
    * they are shown; `w` must stay positive over the lifted bounds. Perspective is interpolated correctly.
    */
   matrix: readonly [number, number, number, number, number, number, number, number, number];
+  /**
+   * A warp that replaces `matrix`: the 16 control points of a bicubic Bézier patch, row by row from the top-left, as
+   * `[x0, y0, x1, y1, …]` in document pixels. The patch maps the lifted bounds onto a curved surface; control points
+   * evenly spaced over the bounds leave the pixels in place. The preview draws it as a fine mesh; see `warpGrid`.
+   */
+  warp?: readonly number[];
   /** `smooth` filters the pixels (with mipmaps when minified); `pixels` takes the nearest pixel. */
   interpolation: 'smooth' | 'pixels';
 };
@@ -77,8 +83,12 @@ export function createFloatingPixels(root: TgpuRoot, damage: (keys: readonly str
       }
     },
 
-    /** Moves the shown pixels without uploading them again. */
-    move(matrix: FloatingPixels['matrix'], interpolation: FloatingPixels['interpolation']) {
+    /** Moves the shown pixels without uploading them again; a `warp` replaces the matrix until a move without one. */
+    move(
+      matrix: FloatingPixels['matrix'],
+      interpolation: FloatingPixels['interpolation'],
+      warp?: FloatingPixels['warp']
+    ) {
       if (!shown) {
         return;
       }
@@ -86,6 +96,7 @@ export function createFloatingPixels(root: TgpuRoot, damage: (keys: readonly str
       damage(area(shown));
       shown.matrix = matrix;
       shown.interpolation = interpolation;
+      shown.warp = warp;
       damage(area(shown));
     },
 
@@ -104,15 +115,18 @@ export function createFloatingPixels(root: TgpuRoot, damage: (keys: readonly str
         return;
       }
 
-      const { bounds, matrix, resources } = shown;
+      const { bounds, matrix, warp, resources } = shown;
       const width = bounds.right - bounds.left,
         height = bounds.bottom - bounds.top;
-      uniforms.cut.write(uniform([1, 0, 0, 0, 1, 0, 0, 0, 1], bounds, width, height, camera, size));
-      uniforms.draw.write(uniform(matrix, bounds, width, height, camera, size));
+      uniforms.cut.write(uniform([1, 0, 0, 0, 1, 0, 0, 0, 1], undefined, bounds, width, height, camera, size));
+      uniforms.draw.write(uniform(matrix, warp, bounds, width, height, camera, size));
       const pass = encoder.beginRenderPass({ colorAttachments: [{ view: target, loadOp: 'load', storeOp: 'store' }] });
       pass.setScissorRect(region.x, region.y, region.width, region.height);
       cut.with(pass).with(resources.cut).draw(6);
-      draw.with(pass).with(resources[shown.interpolation]).draw(6);
+      draw
+        .with(pass)
+        .with(resources[shown.interpolation])
+        .draw(warp ? 6 * warpGrid * warpGrid : 6);
       pass.end();
     },
 
@@ -159,18 +173,23 @@ export function createFloatingPixels(root: TgpuRoot, damage: (keys: readonly str
 /** The renderer's floating pixels. */
 export type FloatingPixelsState = ReturnType<typeof createFloatingPixels>;
 
-/** Tiles under the lifted pixels and under where they are shown; too many invalidate the whole view instead. */
-function area({ bounds, matrix }: FloatingPixels): readonly string[] | 'all' {
+/**
+ * Tiles under the lifted pixels and under where they are shown; too many invalidate the whole view instead. A warp
+ * lies within its control points.
+ */
+function area({ bounds, matrix, warp }: FloatingPixels): readonly string[] | 'all' {
   const [a, b, c, d, e, f, g, h, i] = matrix;
-  const corners = [
-    [bounds.left, bounds.top],
-    [bounds.right, bounds.top],
-    [bounds.left, bounds.bottom],
-    [bounds.right, bounds.bottom]
-  ].map(([x, y]) => {
-    const w = g * x! + h * y! + i;
-    return [(a * x! + b * y! + c) / w, (d * x! + e * y! + f) / w] as const;
-  });
+  const corners = warp
+    ? Array.from({ length: warp.length / 2 }, (_, index) => [warp[index * 2]!, warp[index * 2 + 1]!] as const)
+    : [
+        [bounds.left, bounds.top],
+        [bounds.right, bounds.top],
+        [bounds.left, bounds.bottom],
+        [bounds.right, bounds.bottom]
+      ].map(([x, y]) => {
+        const w = g * x! + h * y! + i;
+        return [(a * x! + b * y! + c) / w, (d * x! + e * y! + f) / w] as const;
+      });
   const shownAt = {
     left: Math.min(...corners.map(([x]) => x)),
     top: Math.min(...corners.map(([, y]) => y)),
@@ -208,12 +227,19 @@ function tileKeys(bounds: FloatingPixels['bounds']): string[] {
 const maxDamageTiles = 1024;
 
 /**
+ * Rows and columns of the mesh a warp is drawn with. Each cell is about 1/32 of the patch, so its straight edges stay
+ * within a fraction of a pixel of the curve for warps of ordinary size.
+ */
+export const warpGrid = 32;
+
+/**
  * Uniforms of one pass: the rows of a projective transform from texture coordinates (0–1) to homogeneous document
- * positions relative to the camera, which keeps precision far from the origin; the rest describes the camera like the
- * tile shader's.
+ * positions relative to the camera, which keeps precision far from the origin, or the warp's control points relative
+ * to the camera; the rest describes the camera like the tile shader's.
  */
 function uniform(
   matrix: FloatingPixels['matrix'],
+  warp: FloatingPixels['warp'],
   bounds: FloatingPixels['bounds'],
   width: number,
   height: number,
@@ -227,7 +253,14 @@ function uniform(
   const [rowX, rowY, rowW] = [row(a, b, c), row(d2, e, f), row(g, h, i)] as [number[], number[], number[]];
   const relative = (values: number[], shift: number) =>
     d.vec4f(...(values.map((value, k) => value - shift * rowW[k]!) as [number, number, number]), 0);
+  const points = Array.from({ length: 8 }, (_, index) => {
+    const at = (k: number) => (warp?.[index * 4 + k] ?? 0) - (k % 2 ? camera.y : camera.x);
+    return d.vec4f(at(0), at(1), at(2), at(3));
+  });
   return {
+    points,
+    grid: warp ? warpGrid : 1,
+    warped: warp ? 1 : 0,
     rowX: relative(rowX, camera.x),
     rowY: relative(rowY, camera.y),
     rowW: d.vec4f(rowW[0]!, rowW[1]!, rowW[2]!, 0),
@@ -241,6 +274,12 @@ function uniform(
 }
 
 const floatingUniform = d.struct({
+  /** A warp's 16 control points relative to the camera, two per vector. */
+  points: d.arrayOf(d.vec4f, 8),
+  /** Cells per side of the drawn mesh: 1 for a quad, `warpGrid` for a warp. */
+  grid: d.f32,
+  /** 1 when the points place the pixels instead of the rows. */
+  warped: d.f32,
   rowX: d.vec4f,
   rowY: d.vec4f,
   rowW: d.vec4f,
@@ -258,9 +297,51 @@ const floatingLayout = tgpu.bindGroupLayout({
   sampler: { sampler: 'filtering' }
 });
 
+// Shader helpers come before the shaders that call them: TypeGPU reads their definitions when the shaders are created.
+
+/** The point of the warp's Bézier patch at `uv`: each row of control points is blended along u, then the rows along v. */
+const bezierPatch = tgpu.fn(
+  [d.vec2f],
+  d.vec2f
+)((uv) => {
+  'use gpu';
+  const points = floatingLayout.$.transform.points;
+  const u = bernstein(uv.x);
+  const v = bernstein(uv.y);
+  // Control point (column, row) is half `2 * row + column / 2` of the vectors: xy for even columns, zw for odd ones.
+  const row0 = std.add(
+    std.add(std.mul(points[0]!.xy, u.x), std.mul(points[0]!.zw, u.y)),
+    std.add(std.mul(points[1]!.xy, u.z), std.mul(points[1]!.zw, u.w))
+  );
+  const row1 = std.add(
+    std.add(std.mul(points[2]!.xy, u.x), std.mul(points[2]!.zw, u.y)),
+    std.add(std.mul(points[3]!.xy, u.z), std.mul(points[3]!.zw, u.w))
+  );
+  const row2 = std.add(
+    std.add(std.mul(points[4]!.xy, u.x), std.mul(points[4]!.zw, u.y)),
+    std.add(std.mul(points[5]!.xy, u.z), std.mul(points[5]!.zw, u.w))
+  );
+  const row3 = std.add(
+    std.add(std.mul(points[6]!.xy, u.x), std.mul(points[6]!.zw, u.y)),
+    std.add(std.mul(points[7]!.xy, u.z), std.mul(points[7]!.zw, u.w))
+  );
+  return std.add(std.add(std.mul(row0, v.x), std.mul(row1, v.y)), std.add(std.mul(row2, v.z), std.mul(row3, v.w)));
+});
+
+/** The four cubic Bernstein weights at `t`. */
+const bernstein = tgpu.fn(
+  [d.f32],
+  d.vec4f
+)((t) => {
+  'use gpu';
+  const s = 1 - t;
+  return d.vec4f(s * s * s, 3 * t * s * s, 3 * t * t * s, t * t * t);
+});
+
 /**
- * A quad of the floating pixels in their document position, projected like the tile shader's tiles. The homogeneous
- * coordinate goes into the clip position, so texture coordinates are interpolated with perspective.
+ * The floating pixels in their document position, projected like the tile shader's tiles: one quad through the
+ * projective rows, whose homogeneous coordinate goes into the clip position so texture coordinates are interpolated
+ * with perspective, or a `grid` × `grid` mesh of a warp's Bézier patch.
  */
 const floatingVertex = tgpu.vertexFn({
   in: { index: d.builtin.vertexIndex },
@@ -271,12 +352,22 @@ const floatingVertex = tgpu.vertexFn({
     d.vec2f,
     6
   )([d.vec2f(0, 0), d.vec2f(1, 0), d.vec2f(0, 1), d.vec2f(0, 1), d.vec2f(1, 0), d.vec2f(1, 1)]);
-  const uv = corners[input.index]!;
   const transform = floatingLayout.$.transform;
-  const w = transform.rowW.x * uv.x + transform.rowW.y * uv.y + transform.rowW.z;
-  const p = d.vec2f(
-    (transform.rowX.x * uv.x + transform.rowX.y * uv.y + transform.rowX.z) / w,
-    (transform.rowY.x * uv.x + transform.rowY.y * uv.y + transform.rowY.z) / w
+  const cell = d.u32(input.index / 6);
+  const grid = d.u32(transform.grid);
+  const uv = std.div(
+    std.add(d.vec2f(d.f32(cell % grid), d.f32(d.u32(cell / grid))), corners[input.index % 6]!),
+    transform.grid
+  );
+  const projective = transform.rowW.x * uv.x + transform.rowW.y * uv.y + transform.rowW.z;
+  const w = std.select(projective, 1, transform.warped > 0);
+  const p = std.select(
+    d.vec2f(
+      (transform.rowX.x * uv.x + transform.rowX.y * uv.y + transform.rowX.z) / w,
+      (transform.rowY.x * uv.x + transform.rowY.y * uv.y + transform.rowY.z) / w
+    ),
+    bezierPatch(uv),
+    transform.warped > 0
   );
   const x = p.x * transform.mirror;
   const c = std.cos(transform.angle);

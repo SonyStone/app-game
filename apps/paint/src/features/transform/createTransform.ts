@@ -7,6 +7,7 @@ import type { PaintError } from '../../shared/errors';
 import { applyAffine, boxAffine, type Affine } from './affine';
 import { applyProjective, fromAffine, rectToQuad, type Projective } from './projective';
 import { transformEdit, type TransformBounds, type TransformCommand } from './transformEdit';
+import { flipWarp, moveWarp, warpCenter, warpDocumentPoint, warpFromMatrix, type Warp } from './warp';
 
 /**
  * The UI half of the transform, whose engine half is `transformEdit` in the drawing engine's recipe: one transform
@@ -39,8 +40,8 @@ export function createTransform(options: {
   const matrix = createMemo(() => transformMatrix(session()?.bounds, box()));
   /** Commands in sending order; each starts after the previous one's reply. */
   let chain: Promise<unknown> = Promise.resolve();
-  /** The latest matrix waiting in `chain`; later changes replace it instead of queueing more updates. */
-  let queued: Projective | undefined;
+  /** The latest placement waiting in `chain`; later changes replace it instead of queueing more updates. */
+  let queued: { matrix: Projective; warp: Warp | undefined } | undefined;
 
   return {
     /** A transform session is open. */
@@ -66,6 +67,11 @@ export function createTransform(options: {
     /** Mirrors the pixels horizontally or vertically within the box. */
     flip(axis: 'x' | 'y') {
       const current = currentBox();
+      if (current.warp) {
+        change({ ...current, warp: flipWarp(current.warp, axis) });
+        return;
+      }
+
       if (current.corners) {
         const [a, b, c, d] = current.corners;
         change({ ...current, corners: axis === 'x' ? [b, a, d, c] : [d, c, b, a] });
@@ -78,6 +84,11 @@ export function createTransform(options: {
     rotate() {
       const current = currentBox();
       const bounds = currentSession()?.bounds;
+      if (current.warp) {
+        change({ ...current, warp: moveWarp(current.warp, { x: 0, y: 0 }, Math.PI / 2, warpCenter(current.warp)) });
+        return;
+      }
+
       if (current.corners && bounds) {
         const center = applyProjective(transformMatrix(bounds, current), {
           x: (bounds.left + bounds.right) / 2,
@@ -92,18 +103,19 @@ export function createTransform(options: {
     },
     /**
      * Distorts the box by its corners, which then move on their own, in perspective; turned off, the box returns to
-     * its shape from before the distortion.
+     * its shape from before the distortion. Replaces a warp, keeping the corners from before it.
      */
     distort(on: boolean) {
-      const current = currentBox();
+      // Distorting replaces a warp.
+      const { warp, ...current } = currentBox();
       const bounds = currentSession()?.bounds;
-      if (!bounds || on === !!current.corners) {
+      if (!bounds || (on === !!current.corners && !warp)) {
         return;
       }
 
-      if (!on) {
+      if (!on || current.corners) {
         const { corners: _corners, ...box } = current;
-        change(box);
+        change(on ? current : box);
         return;
       }
 
@@ -115,6 +127,25 @@ export function createTransform(options: {
         { x: bounds.left, y: bounds.bottom }
       ].map((corner) => applyAffine(matrix, corner));
       change({ ...current, corners: corners as unknown as Quad });
+    },
+    /**
+     * Warps the pixels by a grid of 16 points, which start where the box places the pixels and then bend it; turned
+     * off, the box returns to its shape from before the warp. Replaces distorting.
+     */
+    warp(on: boolean) {
+      const current = currentBox();
+      const bounds = currentSession()?.bounds;
+      if (!bounds || on === !!current.warp) {
+        return;
+      }
+
+      if (!on) {
+        const { warp: _warp, ...box } = current;
+        change(box);
+        return;
+      }
+
+      change({ ...current, warp: warpFromMatrix(bounds, transformMatrix(bounds, current)) });
     },
     /** Returns the box to the original placement, keeping the session. */
     reset() {
@@ -163,14 +194,15 @@ export function createTransform(options: {
 
     setBox(next);
     const waiting = queued !== undefined;
-    queued = transformMatrix(current.bounds, next);
+    queued = { matrix: transformMatrix(current.bounds, next), warp: next.warp };
     if (!waiting) {
       chain = chain.then(async () => {
         const latest = queued!;
         queued = undefined;
         const updated = await send({
           phase: 'update',
-          matrix: [...latest],
+          matrix: [...latest.matrix],
+          ...(latest.warp ? { warp: [...latest.warp] } : {}),
           interpolation: currentSettings().interpolation
         });
         if (updated.isErr() && !isDisposed(owner)) {
@@ -187,7 +219,10 @@ export function createTransform(options: {
       return;
     }
 
-    const finalMatrix = transformMatrix(current.bounds, currentBox());
+    const finalBox = currentBox();
+    const finalMatrix = transformMatrix(current.bounds, finalBox);
+    const place = (point: Point) =>
+      finalBox.warp ? warpDocumentPoint(current.bounds, finalBox.warp, point) : applyProjective(finalMatrix, point);
     setSession(undefined);
     const finishing = chain.then(() => send({ phase }));
     chain = finishing;
@@ -202,9 +237,7 @@ export function createTransform(options: {
     }
 
     if (current.points) {
-      options.onSelection(
-        phase === 'end' ? current.points.map((point) => applyProjective(finalMatrix, point)) : current.points
-      );
+      options.onSelection(phase === 'end' ? current.points.map(place) : current.points);
     }
   }
 
@@ -226,9 +259,10 @@ export type TransformSettings = { proportional: boolean; interpolation: 'smooth'
  * Box edits about a pivot, a point of the original pixels that is the center of the bounds unless `pivot` sets it:
  * scale (negative flips), clockwise angle in radians, then offset. A
  * distorted box sets `corners`, where the bounds' corners go (top-left, top-right, bottom-right, bottom-left), which
- * then replace the other edits; they stay as they were, for when the distortion is turned off.
+ * then replace the other edits; they stay as they were, for when the distortion is turned off. A warped box sets
+ * `warp`, which replaces both.
  */
-export type BoxState = { offset: Point; scale: Point; angle: number; corners?: Quad; pivot?: Point };
+export type BoxState = { offset: Point; scale: Point; angle: number; corners?: Quad; pivot?: Point; warp?: Warp };
 
 /** Four corners, clockwise from the top-left, of a convex quad. */
 export type Quad = readonly [Point, Point, Point, Point];
@@ -238,7 +272,10 @@ type Session = { bounds: TransformBounds; points: Point[] | undefined };
 
 const initialBox: BoxState = { offset: { x: 0, y: 0 }, scale: { x: 1, y: 1 }, angle: 0 };
 
-/** Where `box` takes the pixels of `bounds`: to its corners in perspective when distorted, otherwise as `boxMatrix`. */
+/**
+ * Where `box` takes the pixels of `bounds`: to its corners in perspective when distorted, otherwise as `boxMatrix`.
+ * Ignores a warp, which the pixels follow instead.
+ */
 export function transformMatrix(bounds: TransformBounds | undefined, box: BoxState): Projective {
   return bounds && box.corners ? rectToQuad(bounds, box.corners) : fromAffine(boxMatrix(bounds, box));
 }
