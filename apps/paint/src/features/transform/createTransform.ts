@@ -25,7 +25,10 @@ export function createTransform(options: {
   canStart: () => boolean;
   /** Runs when a session has started, for example to hide the lasso outline the transform replaces. */
   onStart?: () => void;
-  /** Receives the outline transformed with its pixels when a selection transform ends. */
+  /**
+   * Receives the outline of a selection transform as it ends: transformed with its pixels, or as it was when cancelled
+   * or when applying fails.
+   */
   onSelection: (points: Point[]) => void;
   onError: (error: PaintError) => void;
 }) {
@@ -224,6 +227,11 @@ export function createTransform(options: {
     const place = (point: Point) =>
       finalBox.warp ? warpDocumentPoint(current.bounds, finalBox.warp, point) : applyProjective(finalMatrix, point);
     setSession(undefined);
+    // The outline returns at once, so a fill or gradient started before the engine replies already sees it.
+    if (current.points) {
+      options.onSelection(phase === 'end' ? current.points.map(place) : current.points);
+    }
+
     const finishing = chain.then(() => send({ phase }));
     chain = finishing;
     const finished = await finishing;
@@ -233,11 +241,10 @@ export function createTransform(options: {
 
     if (finished.isErr()) {
       options.onError(finished.error);
-      return;
-    }
-
-    if (current.points) {
-      options.onSelection(phase === 'end' ? current.points.map(place) : current.points);
+      // The pixels stayed where they were, and so does the outline.
+      if (current.points && phase === 'end') {
+        options.onSelection(current.points);
+      }
     }
   }
 

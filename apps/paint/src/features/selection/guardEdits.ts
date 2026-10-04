@@ -3,8 +3,8 @@ import type { Selection } from './createSelection';
 
 /**
  * Wraps engine commands so document edits respect the lasso: while a selection edit applies, only view, selection and
- * setting commands pass; drawing, history, layer, module edit, import and recovery commands also remove the outline
- * first.
+ * setting commands pass. The outline outlasts drawing, history, layer and module edits, as in Photoshop, so the fill
+ * and the gradient can keep working inside it; opening a drawing or recovering the renderer removes it first.
  */
 export function guardEdits<Command extends PaintCommand>(
   selection: Pick<Selection, 'isBusy' | 'clear'>,
@@ -31,4 +31,4 @@ const allowedWhileApplying = new Set<PaintCommand['type']>([
   'live-tail'
 ]);
 
-const clearsOutline = new Set<PaintCommand['type']>(['begin', 'undo', 'redo', 'layer', 'edit', 'import', 'recover']);
+const clearsOutline = new Set<PaintCommand['type']>(['import', 'recover']);

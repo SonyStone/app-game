@@ -709,8 +709,20 @@ try {
     await page.getByLabel('Transform box').waitFor({ timeout: 10_000 });
     await page.getByRole('toolbar', { name: 'Transform actions' }).getByRole('button', { name: 'Cancel' }).click();
     await page.getByLabel('Transform box').waitFor({ state: 'detached', timeout: 10_000 });
+
+    // The outline stays when another tool is chosen: the fill then fills only inside it.
+    await page.keyboard.press('g');
+    await page.mouse.click(cx + 170, cy + 60);
+    await waitForSaved(page);
+    await setColor(page, 'FF0000');
+    assert.ok(Math.max(...(await pickRgb(page, { x: cx + 170, y: cy + 60 }, 'FF0000'))) < 0x40, 'filled inside');
+    await setColor(page, 'FF0000');
+    // Left of the lasso, above the earlier diagonal stroke.
+    const outside = await pickRgb(page, { x: cx + 120, y: cy - 100 }, 'FF0000');
+    assert.ok(Math.min(...outside) > 0xe0, `expected paper outside, got ${outside}`);
+    await page.keyboard.press('Control+d');
     await page.keyboard.press('b');
-    await undo(page, 2);
+    await undo(page, 3);
   });
 
   await step('the visible canvas exports as PNG', async () => {

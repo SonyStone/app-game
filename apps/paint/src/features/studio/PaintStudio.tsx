@@ -349,7 +349,10 @@ export function PaintStudio(props: {
     return engine.canEdit() && !selection.isBusy() && !engine.isDrawing() && !engine.isCommandBusy();
   }
 
-  /** Switches tools, applying a transform in progress; choosing the active tool again keeps the lasso outline. */
+  /**
+   * Switches tools, applying a transform in progress. The lasso outline stays, so the fill and the gradient can work
+   * inside it; a lasso gesture in progress is cancelled.
+   */
   function chooseTool(next: PaintTool) {
     if (transform.active()) {
       void transform.end();
@@ -361,7 +364,7 @@ export function PaintStudio(props: {
 
     mixer.cancelPick();
     colorPicker.cancel();
-    selection.clear();
+    selection.cancel();
     tools.chooseTool(next);
   }
 

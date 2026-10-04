@@ -1,6 +1,8 @@
 import { flush } from 'solid-js';
 import { expect, it, vi } from 'vitest';
+import type { PaintCommand } from '@app-game/paint-core/protocol';
 import { createSelection } from './createSelection';
+import { guardEdits } from './guardEdits';
 
 it('moves only the outline when dragged inside it, blocks duplicate edits, and restores worker results', () => {
   const send = vi.fn();
@@ -78,4 +80,21 @@ it('drops an outline that encloses no area, and ends a lasso when the engine res
   flush();
   expect(selection.drawing()).toBe(false);
   expect(selection.points()).toEqual([]);
+});
+
+it('keeps the outline through drawing, history and edits, and removes it when a drawing is opened', () => {
+  const sent: string[] = [];
+  let points = [{ x: 0, y: 0 }];
+  const send = guardEdits({ isBusy: () => false, clear: () => (points = []) }, (command: PaintCommand) =>
+    sent.push(command.type)
+  );
+  for (const type of ['undo', 'redo', 'end'] as const) {
+    send({ type });
+  }
+
+  send({ type: 'edit', edit: 'fill', command: {} });
+  expect(points).toHaveLength(1);
+  send({ type: 'import', text: '{}' });
+  expect(points).toHaveLength(0);
+  expect(sent).toEqual(['undo', 'redo', 'end', 'edit', 'import']);
 });
