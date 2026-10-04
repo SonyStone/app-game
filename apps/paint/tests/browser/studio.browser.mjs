@@ -457,6 +457,32 @@ try {
     await setColor(page, 'FF0000');
     assert.ok(Math.min(...(await pickRgb(page, { x: cx + 220, y: cy + 150 }, 'FF0000'))) > 0xe0);
     await undo(page, 1);
+
+    // A reflected diamond: black at the start, white along the square through the end, gray again halfway past it.
+    await page.keyboard.press('d');
+    await page.getByRole('button', { name: 'Brush settings' }).click();
+    await page.getByLabel('Gradient shape').selectOption('diamond');
+    await page.getByLabel('Gradient repeat').selectOption('reflect');
+    await page.keyboard.press('Escape');
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + 100, cy, { steps: 6 });
+    await page.mouse.up();
+    await waitForSaved(page);
+    await setColor(page, 'FF0000');
+    // Smooth color brightens fast in encoded values: a few percent of white in linear light reads as dark gray.
+    const startColor = await pickRgb(page, { x: cx, y: cy }, 'FF0000');
+    assert.ok(Math.max(...startColor) < 0x40, `expected near black, got ${startColor}`);
+    await setColor(page, 'FF0000');
+    assert.ok(Math.min(...(await pickRgb(page, { x: cx + 50, y: cy - 49 }, 'FF0000'))) > 0xe0);
+    await setColor(page, 'FF0000');
+    const past = await pickRgb(page, { x: cx - 150, y: cy }, 'FF0000');
+    assert.ok(past.every((channel) => channel > 0x50 && channel < 0xe0), `expected gray, got ${past}`);
+    await undo(page, 1);
+    await page.getByRole('button', { name: 'Brush settings' }).click();
+    await page.getByLabel('Gradient shape').selectOption('linear');
+    await page.getByLabel('Gradient repeat').selectOption('none');
+    await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Brush', exact: true }).click();
   });
 

@@ -1,5 +1,6 @@
 .preview,
 .fill,
+.shape,
 .line {
   position: absolute;
   inset: 0;

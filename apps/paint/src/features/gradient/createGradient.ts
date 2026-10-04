@@ -76,13 +76,14 @@ export function createGradient(options: {
   };
 
   function command(start: Point, end: Point): GradientCommand {
-    const { kind, stops, opacity, mixing } = currentSettings();
+    const { kind, repeat, stops, opacity, mixing } = currentSettings();
     const colors = options.colors();
     const points = options.selection();
     return {
       start,
       end,
       kind,
+      repeat,
       stops: stops.map((stop) => ({ ...stop, color: resolveStop(stop.color, colors) })),
       opacity,
       mixing,
@@ -96,11 +97,12 @@ export function createGradient(options: {
 export type Gradient = ReturnType<typeof createGradient>;
 
 /**
- * Gradient settings chosen in the gradient panel: its shape, its color stops, its opacity and its mixing (`linear`
- * like Smooth color).
+ * Gradient settings chosen in the gradient panel: its shape, what happens past its end, its color stops, its opacity
+ * and its mixing (`linear` like Smooth color).
  */
 export type GradientSettings = {
   kind: GradientCommand['kind'];
+  repeat: GradientCommand['repeat'];
   stops: GradientStop[];
   opacity: number;
   mixing: GradientCommand['mixing'];
@@ -129,10 +131,22 @@ export const gradientPresets = {
   ]
 } as const satisfies Record<string, readonly GradientStop[]>;
 
+/** Gradient shapes, in the order the panel lists them. */
+export const gradientKinds = [
+  'linear',
+  'radial',
+  'angle',
+  'diamond'
+] as const satisfies readonly GradientCommand['kind'][];
+
+/** What happens past the end of the gradient, in the order the panel lists the choices. */
+export const gradientRepeats = ['none', 'repeat', 'reflect'] as const satisfies readonly GradientCommand['repeat'][];
+
 const storageKey = 'paint.gradient';
 
 const defaultSettings: GradientSettings = {
   kind: 'linear',
+  repeat: 'none',
   stops: [...gradientPresets.background],
   opacity: 1,
   mixing: 'linear'
@@ -145,7 +159,8 @@ function readSettings(): GradientSettings {
       Record<keyof GradientSettings | 'end' | 'reverse', unknown>
     >;
     return {
-      kind: stored.kind === 'radial' ? 'radial' : 'linear',
+      kind: gradientKinds.find((kind) => kind === stored.kind) ?? 'linear',
+      repeat: gradientRepeats.find((repeat) => repeat === stored.repeat) ?? 'none',
       stops: readStops(stored),
       opacity:
         typeof stored.opacity === 'number' && stored.opacity >= 0 && stored.opacity <= 1

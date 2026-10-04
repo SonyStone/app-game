@@ -1,12 +1,13 @@
 import type { DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
 import type { Layer } from '@app-game/paint-core/document';
 import { expect, it } from 'vitest';
-import { gradientEdit, type GradientCommand } from './gradientEdit';
+import { gradientEdit, gradientPosition, type GradientCommand } from './gradientEdit';
 
 const base: GradientCommand = {
   start: { x: 0, y: 0 },
   end: { x: 100, y: 0 },
   kind: 'linear',
+  repeat: 'none',
   stops: [
     { position: 0, color: '#ff0000', alpha: 1 },
     { position: 1, color: '#0000ff', alpha: 1 }
@@ -26,6 +27,42 @@ it('runs from the start color to the end color, brighter in the middle with Smoo
   expect(pixel(smooth, 50, 5)[0]).toBeGreaterThan(175);
   expect(pixel(classic, 50, 5)[0]).toBeLessThan(135);
   expect(pixel(smooth, 50, 5)[3]).toBe(255);
+});
+
+it('places points along each shape and repeats or reflects past the end', () => {
+  const drag = { start: { x: 0, y: 0 }, end: { x: 10, y: 0 }, repeat: 'none' as const };
+  const at = (kind: GradientCommand['kind'], x: number, y: number, repeat: GradientCommand['repeat'] = 'none') =>
+    gradientPosition({ ...drag, kind, repeat }, x, y);
+
+  expect(at('linear', 5, 7)).toBeCloseTo(0.5);
+  expect(at('linear', -5, 0)).toBe(0);
+  expect(at('radial', 0, 5)).toBeCloseTo(0.5);
+  // Angle: clockwise on screen (y down) from the drag's direction, a quarter at a time.
+  expect(at('angle', 5, 0)).toBeCloseTo(0);
+  expect(at('angle', 0, 5)).toBeCloseTo(0.25);
+  expect(at('angle', -5, 0)).toBeCloseTo(0.5);
+  expect(at('angle', 0, -5)).toBeCloseTo(0.75);
+  // Diamond: a square with its corners on the axes of the drag.
+  expect(at('diamond', 10, 0)).toBeCloseTo(1);
+  expect(at('diamond', 2.5, 2.5)).toBeCloseTo(0.5);
+  expect(at('diamond', 0, -10)).toBeCloseTo(1);
+
+  expect(at('linear', 13, 0)).toBe(1);
+  expect(at('linear', 13, 0, 'repeat')).toBeCloseTo(0.3);
+  expect(at('linear', -3, 0, 'repeat')).toBeCloseTo(0.7);
+  expect(at('linear', 13, 0, 'reflect')).toBeCloseTo(0.7);
+  expect(at('linear', 23, 0, 'reflect')).toBeCloseTo(0.3);
+  expect(at('linear', -3, 0, 'reflect')).toBeCloseTo(0.3);
+  expect(at('radial', 0, 15, 'reflect')).toBeCloseTo(0.5);
+});
+
+it('draws repeated gradients in stripes', async () => {
+  const stripes = await run({ ...base, end: { x: 25, y: 0 }, repeat: 'repeat' });
+  // Each 25 px starts over: just before 25 it is blue, just after it red again.
+  expect(pixel(stripes, 24, 5)[2]).toBeGreaterThan(200);
+  expect(pixel(stripes, 25, 5)[0]).toBeGreaterThan(200);
+  const mirrored = await run({ ...base, end: { x: 25, y: 0 }, repeat: 'reflect' });
+  near(pixel(mirrored, 20, 5), pixel(mirrored, 29, 5));
 });
 
 it('fades out to transparent, spreads radially and lays its opacity over the paint', async () => {

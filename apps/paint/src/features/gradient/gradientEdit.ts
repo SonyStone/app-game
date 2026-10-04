@@ -5,8 +5,9 @@ import { z } from 'zod';
 import { polygonSpans } from '../../shared/polygonSpans';
 
 /**
- * The engine half of the gradient tool: draws a linear or radial gradient from `start` to `end` over the active
- * layer, as one undo step. The gradient runs through its color `stops`, mixed in linear light (`linear`,
+ * The engine half of the gradient tool: draws a gradient from `start` to `end` over the active layer, as one undo
+ * step: linear, radial, angle (sweeping clockwise around `start` from the direction of `end`) or diamond, ending at
+ * `end` or repeating there (see {@link gradientPosition}). The gradient runs through its color `stops`, mixed in linear light (`linear`,
  * like Smooth color) or in encoded sRGB (`classic`), and is laid over the layer's pixels with `opacity`; a layer with
  * locked transparency keeps its alpha. It covers the lasso selection when `points` are given, otherwise `area`, the
  * view's bounds, since the canvas has no edges; at most {@link maxGradientSide} pixels per side. Results are dithered
@@ -54,7 +55,9 @@ const point = z.object({ x: z.number().finite(), y: z.number().finite() });
 const gradientCommandSchema = z.object({
   start: point,
   end: point,
-  kind: z.enum(['linear', 'radial']),
+  kind: z.enum(['linear', 'radial', 'angle', 'diamond']),
+  /** Past `end`, the last color continues (`none`), the gradient starts over (`repeat`) or runs back (`reflect`). */
+  repeat: z.enum(['none', 'repeat', 'reflect']).default('none'),
   /**
    * Colors along the gradient, at `position` from 0 (start) to 1 (end), in order: `#rrggbb` with `alpha` from 0 to
    * 1. Before the first stop and after the last, their colors continue.
@@ -124,6 +127,44 @@ export function createRamp(command: Pick<GradientCommand, 'stops' | 'opacity' | 
   };
 }
 
+/**
+ * Where a document point falls along the gradient, from 0 at `start` to 1 at `end`. Linear runs along the drag, radial
+ * outwards from `start`, angle clockwise around it starting at the drag's direction, and diamond outwards in a square
+ * whose corner is at `end`. The position is then clamped, repeated or reflected as `repeat` says.
+ */
+export function gradientPosition(
+  command: Pick<GradientCommand, 'start' | 'end' | 'kind' | 'repeat'>,
+  x: number,
+  y: number
+) {
+  const dx = command.end.x - command.start.x,
+    dy = command.end.y - command.start.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const px = x - command.start.x,
+    py = y - command.start.y;
+  // Along the drag and across it, in lengths of the drag.
+  const along = (px * dx + py * dy) / (length * length),
+    across = (py * dx - px * dy) / (length * length);
+  const t =
+    command.kind === 'linear'
+      ? along
+      : command.kind === 'radial'
+        ? Math.hypot(along, across)
+        : command.kind === 'diamond'
+          ? Math.abs(along) + Math.abs(across)
+          : (Math.atan2(across, along) / (2 * Math.PI) + 1) % 1;
+  if (command.repeat === 'repeat') {
+    return t - Math.floor(t);
+  }
+
+  if (command.repeat === 'reflect') {
+    const cycle = t - 2 * Math.floor(t / 2);
+    return cycle > 1 ? 2 - cycle : cycle;
+  }
+
+  return Math.min(1, Math.max(0, t));
+}
+
 /** The gradient laid over one tile's pixels inside the area and selection; `undefined` when it touches none. */
 function paintTile(
   key: string,
@@ -135,9 +176,6 @@ function paintTile(
 ): Uint8Array | undefined {
   const [tx, ty] = key.split(',').map(Number) as [number, number];
   const result = base ? new Uint8Array(base) : new Uint8Array(TILE_SIZE * TILE_SIZE * 4);
-  const dx = command.end.x - command.start.x,
-    dy = command.end.y - command.start.y;
-  const length = Math.hypot(dx, dy) || 1;
   const source = [0, 0, 0, 0];
   let touched = false;
   for (let y = Math.max(area.top, ty * TILE_SIZE); y < Math.min(area.top + area.height, (ty + 1) * TILE_SIZE); y++) {
@@ -148,13 +186,7 @@ function paintTile(
       const x0 = Math.max(spanStart, area.left, tx * TILE_SIZE),
         x1 = Math.min(spanEnd, area.left + area.width, (tx + 1) * TILE_SIZE);
       for (let x = x0; x < x1; x++) {
-        const px = x + 0.5 - command.start.x,
-          py = y + 0.5 - command.start.y;
-        const t =
-          command.kind === 'linear'
-            ? Math.min(1, Math.max(0, (px * dx + py * dy) / (length * length)))
-            : Math.min(1, Math.hypot(px, py) / length);
-        ramp.at(t, source);
+        ramp.at(gradientPosition(command, x + 0.5, y + 0.5), source);
         const index = ((y - ty * TILE_SIZE) * TILE_SIZE + (x - tx * TILE_SIZE)) * 4;
         if (blendPixel(result, index, source, ramp.linear, alphaLock ?? false, dither(x, y))) {
           touched = true;

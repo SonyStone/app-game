@@ -1,9 +1,13 @@
+import { For } from 'solid-js';
 import styles from '../brush/BrushPanel.module.css';
-import { gradientPresets, type GradientSettings } from './createGradient';
+import { gradientKinds, gradientPresets, gradientRepeats, type GradientSettings } from './createGradient';
 import gradientStyles from './Gradient.module.css';
 import { GradientStops } from './GradientStops';
 
-/** Settings of the gradient tool: its shape, color stops, mixing and opacity. It draws into the active layer. */
+/**
+ * Settings of the gradient tool: its shape, what happens past its end, color stops, mixing and opacity. It draws into
+ * the active layer.
+ */
 export function GradientPanel(props: {
   settings: GradientSettings;
   /** The colors that `foreground` and `background` stops stand for now. */
@@ -17,10 +21,25 @@ export function GradientPanel(props: {
         <select
           aria-label="Gradient shape"
           value={props.settings.kind}
-          onChange={(event) => props.onChange({ kind: event.currentTarget.value === 'radial' ? 'radial' : 'linear' })}
+          onChange={(event) =>
+            props.onChange({ kind: gradientKinds.find((kind) => kind === event.currentTarget.value) ?? 'linear' })
+          }
         >
-          <option value="linear">Linear</option>
-          <option value="radial">Radial</option>
+          <For each={gradientKinds}>{(kind) => <option value={kind}>{kindLabels[kind]}</option>}</For>
+        </select>
+      </label>
+      <label class={styles.mixing}>
+        Past the end
+        <select
+          aria-label="Gradient repeat"
+          value={props.settings.repeat}
+          onChange={(event) =>
+            props.onChange({
+              repeat: gradientRepeats.find((repeat) => repeat === event.currentTarget.value) ?? 'none'
+            })
+          }
+        >
+          <For each={gradientRepeats}>{(repeat) => <option value={repeat}>{repeatLabels[repeat]}</option>}</For>
         </select>
       </label>
       <div class={gradientStyles.presets} role="group" aria-label="Gradient presets">
@@ -68,10 +87,24 @@ export function GradientPanel(props: {
         />
       </label>
       <p class={styles.panelNote}>
-        Drag on the canvas from where the gradient starts to where it ends. Press the bar to add a color stop; drag a
-        stop to move it. Smooth color mixes in linear light, without the dark middle of Classic. The gradient covers the
-        lasso selection, or else the view.
+        Drag on the canvas from where the gradient starts to where it ends; an angle gradient turns clockwise around the
+        start, a diamond has a corner at the end. Press the bar to add a color stop; drag a stop to move it. Smooth
+        color mixes in linear light, without the dark middle of Classic. The gradient covers the lasso selection, or
+        else the view.
       </p>
     </section>
   );
 }
+
+const kindLabels: Record<GradientSettings['kind'], string> = {
+  linear: 'Linear',
+  radial: 'Radial',
+  angle: 'Angle',
+  diamond: 'Diamond'
+};
+
+const repeatLabels: Record<GradientSettings['repeat'], string> = {
+  none: 'Last color',
+  repeat: 'Repeat',
+  reflect: 'Reflect'
+};
