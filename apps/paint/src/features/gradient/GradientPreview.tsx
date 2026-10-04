@@ -17,13 +17,23 @@ export function GradientPreview(props: {
   const start = () => props.toScreen(props.command.start);
   const end = () => props.toScreen(props.command.end);
   const space = () => (props.command.mixing === 'linear' ? 'srgb-linear' : 'srgb');
-  const to = () => (props.command.to === 'transparent' ? `${props.command.from}00` : props.command.to);
+  /** CSS color stops at distances `from` to `to` along the gradient, in pixels. */
+  const stops = (from: number, to: number) =>
+    [...props.command.stops]
+      .sort((a, b) => a.position - b.position)
+      .map(
+        ({ position, color, alpha }) =>
+          `${color}${Math.round(alpha * 255)
+            .toString(16)
+            .padStart(2, '0')} ${from + (to - from) * position}px`
+      )
+      .join(', ');
   const background = () => {
     const a = start(),
       b = end();
     const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     if (props.command.kind === 'radial') {
-      return `radial-gradient(in ${space()} circle ${length}px at ${a.x}px ${a.y}px, ${props.command.from} 0, ${to()} ${length}px)`;
+      return `radial-gradient(in ${space()} circle ${length}px at ${a.x}px ${a.y}px, ${stops(0, length)})`;
     }
 
     // CSS places a gradient on a line through the box's center; stops are distances along it from its start.
@@ -33,7 +43,7 @@ export function GradientPreview(props: {
     const origin = { x: width / 2 - (direction.x * line) / 2, y: height / 2 - (direction.y * line) / 2 };
     const along = (point: Point) => (point.x - origin.x) * direction.x + (point.y - origin.y) * direction.y;
     const angle = (Math.atan2(direction.x, -direction.y) * 180) / Math.PI;
-    return `linear-gradient(in ${space()} ${angle}deg, ${props.command.from} ${along(a)}px, ${to()} ${along(b)}px)`;
+    return `linear-gradient(in ${space()} ${angle}deg, ${stops(along(a), along(b))})`;
   };
   const clip = () =>
     props.command.points &&

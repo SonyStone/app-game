@@ -76,16 +76,14 @@ export function createGradient(options: {
   };
 
   function command(start: Point, end: Point): GradientCommand {
-    const { kind, end: ending, opacity, mixing, reverse } = currentSettings();
-    const { foreground, background } = options.colors();
+    const { kind, stops, opacity, mixing } = currentSettings();
+    const colors = options.colors();
     const points = options.selection();
-    const [from, to] = reverse && ending === 'background' ? [background, foreground] : [foreground, background];
     return {
       start,
       end,
       kind,
-      from,
-      to: ending === 'transparent' ? 'transparent' : to,
+      stops: stops.map((stop) => ({ ...stop, color: resolveStop(stop.color, colors) })),
       opacity,
       mixing,
       area: options.area(),
@@ -98,44 +96,96 @@ export function createGradient(options: {
 export type Gradient = ReturnType<typeof createGradient>;
 
 /**
- * Gradient settings chosen in the gradient panel: its shape, whether it ends in the background color or fades out,
- * its opacity, its mixing (`linear` like Smooth color) and whether the colors are swapped.
+ * Gradient settings chosen in the gradient panel: its shape, its color stops, its opacity and its mixing (`linear`
+ * like Smooth color).
  */
 export type GradientSettings = {
   kind: GradientCommand['kind'];
-  end: 'background' | 'transparent';
+  stops: GradientStop[];
   opacity: number;
   mixing: GradientCommand['mixing'];
-  reverse: boolean;
 };
+
+/**
+ * A color stop of the gradient: at `position` from 0 to 1, the foreground or background color as they are when the
+ * gradient is drawn, or a fixed `#rrggbb`, with `alpha` from 0 to 1.
+ */
+export type GradientStop = { position: number; color: 'foreground' | 'background' | string; alpha: number };
+
+/** The `#rrggbb` a stop's color stands for. */
+export function resolveStop(color: GradientStop['color'], colors: { foreground: string; background: string }) {
+  return color === 'foreground' ? colors.foreground : color === 'background' ? colors.background : color;
+}
+
+/** Stops of the presets in the gradient panel. */
+export const gradientPresets = {
+  background: [
+    { position: 0, color: 'foreground', alpha: 1 },
+    { position: 1, color: 'background', alpha: 1 }
+  ],
+  transparent: [
+    { position: 0, color: 'foreground', alpha: 1 },
+    { position: 1, color: 'foreground', alpha: 0 }
+  ]
+} as const satisfies Record<string, readonly GradientStop[]>;
 
 const storageKey = 'paint.gradient';
 
 const defaultSettings: GradientSettings = {
   kind: 'linear',
-  end: 'background',
+  stops: [...gradientPresets.background],
   opacity: 1,
-  mixing: 'linear',
-  reverse: false
+  mixing: 'linear'
 };
 
 /** Stored settings, with defaults for missing or invalid values. */
 function readSettings(): GradientSettings {
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Partial<
-      Record<keyof GradientSettings, unknown>
+      Record<keyof GradientSettings | 'end' | 'reverse', unknown>
     >;
     return {
       kind: stored.kind === 'radial' ? 'radial' : 'linear',
-      end: stored.end === 'transparent' ? 'transparent' : 'background',
+      stops: readStops(stored),
       opacity:
         typeof stored.opacity === 'number' && stored.opacity >= 0 && stored.opacity <= 1
           ? stored.opacity
           : defaultSettings.opacity,
-      mixing: stored.mixing === 'classic' ? 'classic' : 'linear',
-      reverse: stored.reverse === true
+      mixing: stored.mixing === 'classic' ? 'classic' : 'linear'
     };
   } catch {
     return defaultSettings;
   }
+}
+
+/** Stored stops, or those of settings saved before stops, which chose an end and whether to swap the colors. */
+function readStops(stored: Partial<Record<string, unknown>>): GradientStop[] {
+  if (Array.isArray(stored.stops)) {
+    const stops = stored.stops.filter(
+      (stop): stop is GradientStop =>
+        typeof stop === 'object' &&
+        stop !== null &&
+        typeof stop.position === 'number' &&
+        stop.position >= 0 &&
+        stop.position <= 1 &&
+        typeof stop.alpha === 'number' &&
+        stop.alpha >= 0 &&
+        stop.alpha <= 1 &&
+        (stop.color === 'foreground' || stop.color === 'background' || /^#[0-9a-f]{6}$/i.test(stop.color))
+    );
+    if (stops.length >= 2 && stops.length <= 16) {
+      return stops;
+    }
+  }
+
+  if (stored.end === 'transparent') {
+    return [...gradientPresets.transparent];
+  }
+
+  return stored.reverse === true
+    ? [
+        { position: 0, color: 'background', alpha: 1 },
+        { position: 1, color: 'foreground', alpha: 1 }
+      ]
+    : [...gradientPresets.background];
 }

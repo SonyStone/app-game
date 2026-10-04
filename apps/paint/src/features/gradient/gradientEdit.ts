@@ -6,7 +6,7 @@ import { polygonSpans } from '../../shared/polygonSpans';
 
 /**
  * The engine half of the gradient tool: draws a linear or radial gradient from `start` to `end` over the active
- * layer, as one undo step. The gradient runs from `from` to `to`, or to transparent, mixed in linear light (`linear`,
+ * layer, as one undo step. The gradient runs through its color `stops`, mixed in linear light (`linear`,
  * like Smooth color) or in encoded sRGB (`classic`), and is laid over the layer's pixels with `opacity`; a layer with
  * locked transparency keeps its alpha. It covers the lasso selection when `points` are given, otherwise `area`, the
  * view's bounds, since the canvas has no edges; at most {@link maxGradientSide} pixels per side. Results are dithered
@@ -55,10 +55,20 @@ const gradientCommandSchema = z.object({
   start: point,
   end: point,
   kind: z.enum(['linear', 'radial']),
-  /** `#rrggbb` at the start. */
-  from: z.string().regex(/^#[0-9a-f]{6}$/i),
-  /** `#rrggbb` at the end, or `transparent` to fade `from` out. */
-  to: z.union([z.string().regex(/^#[0-9a-f]{6}$/i), z.literal('transparent')]),
+  /**
+   * Colors along the gradient, at `position` from 0 (start) to 1 (end), in order: `#rrggbb` with `alpha` from 0 to
+   * 1. Before the first stop and after the last, their colors continue.
+   */
+  stops: z
+    .array(
+      z.object({
+        position: z.number().min(0).max(1),
+        color: z.string().regex(/^#[0-9a-f]{6}$/i),
+        alpha: z.number().min(0).max(1)
+      })
+    )
+    .min(2)
+    .max(16),
   opacity: z.number().min(0).max(1),
   mixing: z.enum(['linear', 'classic']),
   /** The view's bounds in document pixels, covered without a selection. */
@@ -85,19 +95,30 @@ function gradientArea(command: GradientCommand) {
  * The gradient's color at a position from 0 (start) to 1 (end), premultiplied, in the space it mixes in: linear
  * light or encoded sRGB, channels from 0 to 1, with `opacity` applied.
  */
-export function createRamp(command: Pick<GradientCommand, 'from' | 'to' | 'opacity' | 'mixing'>) {
+export function createRamp(command: Pick<GradientCommand, 'stops' | 'opacity' | 'mixing'>) {
   const linear = command.mixing === 'linear';
-  const color = (hex: string) => hexChannels(hex).map((channel) => (linear ? decode(channel) : channel));
-  const start = [...color(command.from), 1];
-  const end = command.to === 'transparent' ? [...color(command.from), 0] : [...color(command.to), 1];
-  const premultiplied = (rgba: number[]) => [...rgba.slice(0, 3).map((channel) => channel * rgba[3]!), rgba[3]!];
-  const [a, b] = [premultiplied(start), premultiplied(end)];
+  const stops = [...command.stops]
+    .sort((a, b) => a.position - b.position)
+    .map(({ position, color, alpha }) => ({
+      position,
+      // Premultiplied, in the mixing space.
+      rgba: [...hexChannels(color).map((channel) => (linear ? decode(channel) : channel) * alpha), alpha]
+    }));
   return {
     linear,
     /** Writes the premultiplied color at `t` into `out`. */
     at(t: number, out: number[]) {
+      let next = stops.findIndex((stop) => stop.position >= t);
+      if (next === -1) {
+        next = stops.length - 1;
+      }
+
+      const b = stops[next]!,
+        a = stops[Math.max(0, next - 1)]!;
+      const span = b.position - a.position;
+      const share = span > 0 ? Math.min(1, Math.max(0, (t - a.position) / span)) : 1;
       for (let channel = 0; channel < 4; channel++) {
-        out[channel] = (a[channel]! + (b[channel]! - a[channel]!) * t) * command.opacity;
+        out[channel] = (a.rgba[channel]! + (b.rgba[channel]! - a.rgba[channel]!) * share) * command.opacity;
       }
     }
   };

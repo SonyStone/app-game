@@ -7,8 +7,10 @@ const base: GradientCommand = {
   start: { x: 0, y: 0 },
   end: { x: 100, y: 0 },
   kind: 'linear',
-  from: '#ff0000',
-  to: '#0000ff',
+  stops: [
+    { position: 0, color: '#ff0000', alpha: 1 },
+    { position: 1, color: '#0000ff', alpha: 1 }
+  ],
   opacity: 1,
   mixing: 'linear',
   area: { left: 0, top: 0, width: 100, height: 10 }
@@ -27,7 +29,13 @@ it('runs from the start color to the end color, brighter in the middle with Smoo
 });
 
 it('fades out to transparent, spreads radially and lays its opacity over the paint', async () => {
-  const faded = await run({ ...base, to: 'transparent' });
+  const faded = await run({
+    ...base,
+    stops: [
+      { position: 0, color: '#ff0000', alpha: 1 },
+      { position: 1, color: '#ff0000', alpha: 0 }
+    ]
+  });
   expect(pixel(faded, 99, 0)[3]).toBeLessThan(6);
   expect(pixel(faded, 50, 0)[3]).toBeGreaterThan(120);
   // Unpremultiplied, the fading pixels keep the start color.
@@ -40,8 +48,35 @@ it('fades out to transparent, spreads radially and lays its opacity over the pai
   near(pixel(radial, 10, 5), pixel(radial, 89, 5));
 
   const green = layer(new Uint8Array(256 * 256 * 4).map((_, index) => (index % 4 === 1 || index % 4 === 3 ? 255 : 0)));
-  const half = await run({ ...base, to: '#ff0000', opacity: 0.5, mixing: 'classic' }, green);
+  const half = await run(
+    {
+      ...base,
+      stops: [
+        { position: 0, color: '#ff0000', alpha: 1 },
+        { position: 1, color: '#ff0000', alpha: 1 }
+      ],
+      opacity: 0.5,
+      mixing: 'classic'
+    },
+    green
+  );
   near(pixel(half, 10, 5), [128, 128, 0, 255]);
+});
+
+it('runs through every color stop, in order of position', async () => {
+  const stops = await run({
+    ...base,
+    stops: [
+      { position: 1, color: '#0000ff', alpha: 1 },
+      { position: 0.5, color: '#00ff00', alpha: 1 },
+      { position: 0, color: '#ff0000', alpha: 1 }
+    ]
+  });
+  // Half a pixel past the green stop, in linear light a trace of blue shows.
+  const [red, green, blue] = pixel(stops, 50, 5);
+  expect([red < 5, green > 250, blue < 30]).toEqual([true, true, true]);
+  expect(pixel(stops, 25, 5)[0]).toBeGreaterThan(150);
+  expect(pixel(stops, 75, 5)[2]).toBeGreaterThan(150);
 });
 
 it('keeps locked transparency, stays inside the selection and refuses areas larger than its limit', async () => {

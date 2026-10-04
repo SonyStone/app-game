@@ -23,3 +23,110 @@
     stroke-width: 1.5;
   }
 }
+
+.stops {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 4px 0 12px;
+}
+
+/* Doubled, `.presets.presets > button` outranks the studio's reset of buttons. */
+.presets.presets {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+
+  > button {
+    flex: 1;
+    min-height: 30px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 11px;
+  }
+}
+
+/* The gradient over a checkerboard, so that transparency shows. */
+.bar {
+  height: 24px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: repeating-conic-gradient(#ddd 0 25%, #fff 0 50%) 0 0 / 10px 10px;
+  cursor: copy;
+  touch-action: none;
+
+  > div {
+    height: 100%;
+  }
+}
+
+.markers {
+  position: relative;
+  height: 18px;
+  margin: -4px 7px 0;
+}
+
+/* `.markers .marker` outranks the studio's reset of buttons. */
+.markers .marker {
+  position: absolute;
+  top: 0;
+  width: 14px;
+  height: 16px;
+  transform: translateX(-50%);
+  border: 1.5px solid #2b3338;
+  border-radius: 3px 3px 7px 7px;
+  background: var(--stop);
+  cursor: ew-resize;
+  touch-action: none;
+
+  &[aria-pressed='true'] {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+}
+
+.stopFields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+
+  select {
+    min-height: 30px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+
+  input[type='color'] {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+
+  label {
+    display: flex;
+    flex: 1 1 100%;
+    order: 1;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    font-size: 11px;
+    color: var(--muted);
+
+    input {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+
+  > button {
+    padding: 0 8px !important;
+    min-height: 30px;
+    border: 1px solid var(--line) !important;
+    border-radius: 6px;
+    font-size: 11px;
+  }
+}

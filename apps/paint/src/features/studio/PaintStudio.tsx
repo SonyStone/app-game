@@ -740,7 +740,11 @@ export function PaintStudio(props: {
                   <FillPanel settings={fill.settings()} onChange={fill.update} />
                 </Match>
                 <Match when={id === 'gradient'}>
-                  <GradientPanel settings={gradient.settings()} onChange={gradient.update} />
+                  <GradientPanel
+                    settings={gradient.settings()}
+                    colors={{ foreground: brush().color, background: brush().backgroundColor ?? '#ffffff' }}
+                    onChange={gradient.update}
+                  />
                 </Match>
                 <Match when={id === 'color'}>
                   <ColorPanel

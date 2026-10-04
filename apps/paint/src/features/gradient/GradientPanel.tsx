@@ -1,9 +1,13 @@
 import styles from '../brush/BrushPanel.module.css';
-import type { GradientSettings } from './createGradient';
+import { gradientPresets, type GradientSettings } from './createGradient';
+import gradientStyles from './Gradient.module.css';
+import { GradientStops } from './GradientStops';
 
-/** Settings of the gradient tool. It draws from the foreground color into the active layer. */
+/** Settings of the gradient tool: its shape, color stops, mixing and opacity. It draws into the active layer. */
 export function GradientPanel(props: {
   settings: GradientSettings;
+  /** The colors that `foreground` and `background` stops stand for now. */
+  colors: { foreground: string; background: string };
   onChange: (patch: Partial<GradientSettings>) => void;
 }) {
   return (
@@ -19,19 +23,23 @@ export function GradientPanel(props: {
           <option value="radial">Radial</option>
         </select>
       </label>
-      <label class={styles.mixing}>
-        Colors
-        <select
-          aria-label="Gradient colors"
-          value={props.settings.end}
-          onChange={(event) =>
-            props.onChange({ end: event.currentTarget.value === 'transparent' ? 'transparent' : 'background' })
+      <div class={gradientStyles.presets} role="group" aria-label="Gradient presets">
+        <button onClick={() => props.onChange({ stops: [...gradientPresets.background] })}>To background</button>
+        <button onClick={() => props.onChange({ stops: [...gradientPresets.transparent] })}>To transparent</button>
+        <button
+          onClick={() =>
+            props.onChange({ stops: props.settings.stops.map((stop) => ({ ...stop, position: 1 - stop.position })) })
           }
         >
-          <option value="background">Foreground to background</option>
-          <option value="transparent">Foreground to transparent</option>
-        </select>
-      </label>
+          Reverse
+        </button>
+      </div>
+      <GradientStops
+        stops={props.settings.stops}
+        colors={props.colors}
+        linear={props.settings.mixing === 'linear'}
+        onChange={(stops) => props.onChange({ stops })}
+      />
       <label class={styles.mixing}>
         Mixing
         <select
@@ -59,18 +67,10 @@ export function GradientPanel(props: {
           onInput={(event) => props.onChange({ opacity: event.currentTarget.valueAsNumber / 100 })}
         />
       </label>
-      <label class={styles.check}>
-        <input
-          type="checkbox"
-          checked={props.settings.reverse}
-          disabled={props.settings.end === 'transparent'}
-          onChange={(event) => props.onChange({ reverse: event.currentTarget.checked })}
-        />
-        Swap colors
-      </label>
       <p class={styles.panelNote}>
-        Drag on the canvas from where the gradient starts to where it ends. Smooth color mixes in linear light, without
-        the dark middle of Classic. The gradient covers the lasso selection, or else the view.
+        Drag on the canvas from where the gradient starts to where it ends. Press the bar to add a color stop; drag a
+        stop to move it. Smooth color mixes in linear light, without the dark middle of Classic. The gradient covers the
+        lasso selection, or else the view.
       </p>
     </section>
   );
