@@ -1081,6 +1081,9 @@ importers:
       '@webgpu/types':
         specifier: ^0.1.70
         version: 0.1.70
+      fake-indexeddb:
+        specifier: 'catalog:'
+        version: 6.2.5
       jsdom:
         specifier: 'catalog:'
         version: 29.1.1

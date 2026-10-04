@@ -41,6 +41,7 @@
     "@types/node": "catalog:",
     "@unocss/vite": "catalog:",
     "@webgpu/types": "^0.1.70",
+    "fake-indexeddb": "catalog:",
     "jsdom": "catalog:",
     "typescript": "catalog:",
     "unplugin-typegpu": "^0.11.3",

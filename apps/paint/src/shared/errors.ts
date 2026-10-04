@@ -36,8 +36,9 @@ export type BrushError = {
    * - `upload`: the engine rejected a tip, texture or dual-brush resource.
    * - `command`: the engine rejected a brush command such as a Mixer Brush load.
    * - `restore`: the selected preset could not be uploaded to a replacement engine; restoring the renderer retries.
+   * - `storage`: saved brushes could not be read or written; brushes keep working until the page closes.
    */
-  code: 'invalid-preset' | 'upload' | 'command' | 'restore';
+  code: 'invalid-preset' | 'upload' | 'command' | 'restore' | 'storage';
   message: string;
   cause?: unknown;
 };
