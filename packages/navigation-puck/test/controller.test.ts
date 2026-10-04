@@ -114,6 +114,18 @@ describe('navigation puck', () => {
     expect(puck.center()).toBeUndefined();
   });
 
+  it('moves a pinned puck under the release pointer after each operation and keeps it open', () => {
+    const { puck } = setup();
+    puck.open({ x: 180, y: 350 }, 'pinned');
+    puck.begin('pan', pointer(1, 180, 350));
+    puck.move(pointer(1, 190, 450));
+    expect(puck.end(1)).toBe(false);
+    expect(puck.center()).toEqual({ x: 190, y: 450 });
+    expect(puck.pinned()).toBe(true);
+    puck.close();
+    expect(puck.center()).toBeUndefined();
+  });
+
   it.each(['pan', 'zoom', 'rotate', 'orbit'] as const)(
     'continues %s after key-up until the captured pointer is released',
     (action) => {

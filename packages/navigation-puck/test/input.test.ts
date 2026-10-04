@@ -123,13 +123,17 @@ describe('shared canvas navigation bindings', () => {
     expect(puck.center()).toBeUndefined();
     pen('pointermove', 400, 300, 2);
     expect(puck.center()).toEqual({ x: 400, y: 300 });
-    // Releasing or holding the button changes nothing; an operation keeps it open where it was.
+    // Releasing or holding the button changes nothing; an operation keeps it open, moved under the pen again.
     pen('pointermove', 420, 300, 2);
     pen('pointermove', 420, 300, 0);
     expect(puck.center()).toEqual({ x: 400, y: 300 });
     puck.begin('pan', { x: 400, y: 300, pointerId: 9 });
     puck.move({ x: 440, y: 300, pointerId: 9 });
     expect(puck.end(9)).toBe(false);
+    expect(puck.center()).toEqual({ x: 440, y: 300 });
+    puck.begin('pan', { x: 440, y: 300, pointerId: 9 });
+    puck.move({ x: 400, y: 300, pointerId: 9 });
+    puck.end(9);
     expect(puck.center()).toEqual({ x: 400, y: 300 });
 
     // The next press of a side button closes it, wherever the pen is.
