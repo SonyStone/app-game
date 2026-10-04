@@ -16,10 +16,12 @@ export function LayersPanel(props: {
   onAction: (action: LayerAction) => void;
   /**
    * Leaves layers out of the list, such as those without paint in view: `shown` says which are listed, `offScreen`
-   * how many the filter leaves out, and a button switches `showAll`. Omitted, every layer is listed.
+   * how many the filter leaves out, and a button switches `showAll`. `where` ends the button's label, such as
+   * "in view". Omitted, every layer is listed.
    */
   filter?: {
     shown: (id: string) => boolean;
+    where: string;
     offScreen: number;
     showAll: boolean;
     onShowAllChange: (showAll: boolean) => void;
@@ -175,7 +177,7 @@ export function LayersPanel(props: {
         {(filter) => (
           <button class={styles.offScreen} onClick={() => filter().onShowAllChange(!filter().showAll)}>
             {filter().showAll ? 'Hide' : 'Show'} {filter().offScreen} {filter().offScreen === 1 ? 'layer' : 'layers'}{' '}
-            without paint in view
+            without paint {filter().where}
           </button>
         )}
       </Show>

@@ -251,6 +251,28 @@ it('shows floating pixels of an edit and clears them after its result, keeping t
   expect(renderer.holdPresented).toHaveBeenCalledOnce();
 });
 
+it('reports the layers with paint in the view and in watched regions', async () => {
+  const paint = defineDocumentEdit({
+    id: 'paint-tile',
+    parse: (input: unknown) => input as string,
+    async run({ active }, key) {
+      return { changes: [{ layerId: active.id, key, before: undefined, after: new Uint8Array(TILE_BYTES).fill(255) }] };
+    }
+  });
+  const { runtime, document, events, waitFor } = await start({ edits: [paint] });
+  const latestState = () => events.filter((event) => event.type === 'state').at(-1);
+  runtime.send(paint.command('40,0'));
+  runtime.send({ type: 'watch-regions', regions: { far: { left: 40 * 256, top: 0, width: 100, height: 100 } } });
+  await waitFor(() => document.active.tiles.has('40,0'));
+  runtime.send({ type: 'undo' });
+  runtime.send({ type: 'redo' });
+  await waitFor(() => latestState()?.type === 'state' && latestState()!.document.canUndo);
+  const state = latestState()!;
+  expect(state.type === 'state' && state.layersInRegions).toEqual({ far: [document.active.id] });
+  expect(state.type === 'state' && state.layersInView).toEqual([]);
+  expect(state.type === 'state' && state.document.layers[0]!.tileCount).toBe(1);
+});
+
 /** Disposes a runtime gracefully, saving its document. */
 async function stop({ runtime, events, waitFor }: Awaited<ReturnType<typeof start>>) {
   runtime.send({ type: 'dispose' });

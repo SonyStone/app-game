@@ -22,6 +22,7 @@ import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
 import { studioProcessors } from '@app-game/paint-core/strokeProcessors';
 import { createTileStore } from '@app-game/paint-core/tileStore';
 import { fillEdit } from '../fill/fillEdit';
+import { framesFeature } from '../frames/framesFeature';
 import { transformEdit } from '../transform/transformEdit';
 
 /**
@@ -35,7 +36,7 @@ export function createStudioRuntime(post: RuntimeBinding['post'], close: Runtime
 
 /**
  * The Studio recipe: paged document, IndexedDB tiles, the WebGPU renderer, stroke processors, brush engines and the
- * feature modules: paint symmetry, image placement, the bucket fill and the transform.
+ * feature modules: paint symmetry, frames, image placement, the bucket fill and the transform.
  */
 export function StudioApplication(props: RuntimeBinding) {
   return (
@@ -58,7 +59,10 @@ export function StudioApplication(props: RuntimeBinding) {
               selectEngine={(brush) => (brush.tool === 'eraser' ? 'eraser' : 'round')}
             >
               <BrushResources resources={createBrushResources}>
-                <DocumentFeatures features={[symmetryFeature]} edits={[placeImageEdit, fillEdit, transformEdit]}>
+                <DocumentFeatures
+                  features={[symmetryFeature, framesFeature]}
+                  edits={[placeImageEdit, fillEdit, transformEdit]}
+                >
                   <PaintRuntime {...props} />
                 </DocumentFeatures>
               </BrushResources>

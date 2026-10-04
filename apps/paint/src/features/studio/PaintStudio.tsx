@@ -26,6 +26,7 @@ import { ColorWheel, createColorWheelSettings } from '../color-wheel';
 import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
 import { createFill, FillPanel } from '../fill';
+import { createFrames, FrameGuides, frameRegion, FramesSection } from '../frames';
 import { createImagePlacement, createLayerFilter, HistorySourceControl, LayersPanel } from '../layers';
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
 import { createRadialMenu, RadialMenu, radialLayout, type RadialItem } from '../radial-menu';
@@ -192,10 +193,19 @@ export function PaintStudio(props: {
   });
   const fullscreen = createFullscreenToggle(editor, setError);
   const colorWheel = createColorWheelSettings();
+  const frames = createFrames({
+    restored: () => engine.restored()?.features,
+    canUpdate: canUpdateSymmetry,
+    send: engine.send,
+    navigate: camera.navigate,
+    camera: camera.camera,
+    size
+  });
   const layerFilter = createLayerFilter({
     layers: () => engine.state().layers,
     activeId: () => engine.state().activeId,
-    inView: engine.layersInView,
+    // In a frame, the layers with paint in it; otherwise those in view.
+    inView: () => (frames.activeFrame() ? (engine.layersInRegions()[frameRegion] ?? []) : engine.layersInView()),
     camera: camera.camera
   });
   const recentPresets = createRecentPresets({ current: tools.preset, exists: (id) => library.find(id) !== undefined });
@@ -447,6 +457,11 @@ export function PaintStudio(props: {
             />
           )}
         </Show>
+        <FrameGuides
+          frames={frames.frames()}
+          activeId={frames.activeFrame()?.id}
+          toScreen={(point) => worldToScreen(point, camera.camera(), size())}
+        />
         <SymmetryGuide
           symmetry={symmetry.symmetry()}
           camera={camera.camera()}
@@ -743,12 +758,32 @@ export function PaintStudio(props: {
                   </Show>
                 </Match>
                 <Match when={id === 'layers'}>
+                  <FramesSection
+                    frames={frames.frames()}
+                    active={frames.activeFrame()}
+                    disabled={!canUpdateSymmetry()}
+                    onActivate={frames.activate}
+                    onAdd={() => frames.addFromView()}
+                    onRename={frames.rename}
+                    onGoTo={frames.goTo}
+                    onExport={({ left, top, width, height, name }) =>
+                      edit({ type: 'png', region: { left, top, width, height }, name: `${name}.png` })
+                    }
+                    onCopyLink={(id) =>
+                      navigator.clipboard.writeText(frames.linkTo(id)).then(
+                        () => true,
+                        () => false
+                      )
+                    }
+                    onRemove={frames.remove}
+                  />
                   <LayersPanel
                     state={engine.state()}
                     ready={ready()}
                     onAction={(action) => edit({ type: 'layer', action })}
                     filter={{
                       shown: layerFilter.shown,
+                      where: frames.activeFrame() ? `in ${frames.activeFrame()!.name}` : 'in view',
                       offScreen: layerFilter.offScreen(),
                       showAll: layerFilter.showAll(),
                       onShowAllChange: layerFilter.setShowAll

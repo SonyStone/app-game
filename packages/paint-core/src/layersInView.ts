@@ -13,10 +13,22 @@ export function layersInView(layers: readonly Pick<Layer, 'id' | 'tiles'>[], cam
     { x: 0, y: size.height },
     { x: size.width, y: size.height }
   ].map((corner) => screenToWorld(corner, camera, size));
-  const left = Math.floor(Math.min(...corners.map(({ x }) => x)) / TILE_SIZE),
-    right = Math.floor(Math.max(...corners.map(({ x }) => x)) / TILE_SIZE);
-  const top = Math.floor(Math.min(...corners.map(({ y }) => y)) / TILE_SIZE),
-    bottom = Math.floor(Math.max(...corners.map(({ y }) => y)) / TILE_SIZE);
+  const left = Math.min(...corners.map(({ x }) => x)),
+    top = Math.min(...corners.map(({ y }) => y));
+  return layersInRect(layers, {
+    left,
+    top,
+    width: Math.max(...corners.map(({ x }) => x)) - left,
+    height: Math.max(...corners.map(({ y }) => y)) - top
+  });
+}
+
+/** Ids of the layers with any tile overlapping `rect`, in document pixels, in layer order. */
+export function layersInRect(layers: readonly Pick<Layer, 'id' | 'tiles'>[], rect: DocumentRect): string[] {
+  const left = Math.floor(rect.left / TILE_SIZE),
+    right = Math.floor((rect.left + rect.width) / TILE_SIZE);
+  const top = Math.floor(rect.top / TILE_SIZE),
+    bottom = Math.floor((rect.top + rect.height) / TILE_SIZE);
   const area = (right - left + 1) * (bottom - top + 1);
 
   return layers
@@ -46,3 +58,6 @@ export function layersInView(layers: readonly Pick<Layer, 'id' | 'tiles'>[], cam
     })
     .map(({ id }) => id);
 }
+
+/** An axis-aligned rectangle in document pixels. */
+export type DocumentRect = { left: number; top: number; width: number; height: number };

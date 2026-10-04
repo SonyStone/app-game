@@ -3,10 +3,10 @@ import { createRoot, onCleanup } from 'solid-js';
 import { attempt, createTaskQueue, unwrapResult, type Result } from './asyncResult';
 import { defaultCamera, screenToWorld, type Point } from './camera';
 import { averageOpaque, defaultColorSample, sampleLayer } from './colorSample';
-import { layersInView } from './layersInView';
+import { layersInRect, layersInView, type DocumentRect } from './layersInView';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
-import type { TileChange } from './document';
+import type { Layer, TileChange } from './document';
 import type { FloatingPixels } from './gpu/floatingPixels';
 import { createResourceSession } from './composition/resourceSession';
 import { restoreFeatureData } from './composition/documentFeature';
@@ -80,11 +80,25 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let debugAt = 0;
     /** The latest `layersInView` result and the document revision, camera and size it describes. */
     let inView = { signature: '', ids: [] as string[] };
+    /** Regions named by `watch-regions` and their layers, for the document revision `revision`. */
+    let watched: { regions: Record<string, DocumentRect>; revision: number; layers: Record<string, string[]> } = {
+      regions: {},
+      revision: -1,
+      layers: {}
+    };
     const status = () => {
       if (documentState.revision !== document.revision) documentState = document.state();
       const viewSignature = `${document.revision}|${camera.x},${camera.y},${camera.zoom},${camera.angle}|${size.width},${size.height}`;
       if (inView.signature !== viewSignature)
         inView = { signature: viewSignature, ids: layersInView(document.layers, camera, size) };
+      if (watched.revision !== document.revision)
+        watched = {
+          ...watched,
+          revision: document.revision,
+          layers: Object.fromEntries(
+            Object.entries(watched.regions).map(([name, rect]) => [name, layersInRect(document.layers, rect)])
+          )
+        };
       const sendDebug = debug && performance.now() >= debugAt;
       if (sendDebug) debugAt = performance.now() + 100;
       const stats = renderer?.stats();
@@ -99,6 +113,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         document: documentState,
         camera,
         layersInView: inView.ids,
+        layersInRegions: watched.layers,
         features: reportedFeatures(),
         saved,
         saveState: strokeSession ? 'unsaved' : pendingSaves > 0 ? 'saving' : saved ? 'saved' : 'unsaved',
@@ -506,6 +521,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         scheduleDraw();
         return;
       }
+      if (command.type === 'watch-regions') {
+        watched = { regions: command.regions, revision: -1, layers: {} };
+        status();
+        return;
+      }
       if (command.type === 'view' && renderer) {
         camera = command.camera;
         size = command.size;
@@ -821,6 +841,15 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'png':
             if (!primaryAttached) throw new Error('Attach a primary canvas before exporting the view.');
             await end();
+            if (command.region) {
+              post({
+                type: 'download',
+                blob: await regionPng(renderer!, document.layers, command.region),
+                name: command.name ?? 'drawing-region.png',
+                requestId: command.requestId
+              });
+              break;
+            }
             await draw(true);
             post({
               type: 'download',
@@ -935,8 +964,20 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
 }
 
 /** Encodes the presented view as PNG from a GPU readback; the WebGPU canvas itself cannot be read after presenting. */
-async function presentedPng(renderer: PaintRenderer): Promise<Blob> {
-  const { width, height, data } = await renderer.readPresented();
+/** Renders a document rectangle at 100% into its own target and encodes it as a PNG. */
+async function regionPng(renderer: PaintRenderer, layers: Layer[], region: DocumentRect): Promise<Blob> {
+  const target = new OffscreenCanvas(1, 1);
+  const camera = { x: region.left + region.width / 2, y: region.top + region.height / 2, zoom: 1, angle: 0, mirrored: false };
+  try {
+    await renderer.render(layers, camera, { width: region.width, height: region.height }, 1, true, target);
+    return await presentedPng(renderer, target);
+  } finally {
+    renderer.releaseTarget(target);
+  }
+}
+
+async function presentedPng(renderer: PaintRenderer, target?: OffscreenCanvas): Promise<Blob> {
+  const { width, height, data } = await renderer.readPresented(target);
   const image = new OffscreenCanvas(width, height);
   const context = image.getContext('2d');
   if (!context) throw new Error('Could not export the canvas.');

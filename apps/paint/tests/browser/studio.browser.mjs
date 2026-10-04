@@ -1,5 +1,6 @@
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -613,6 +614,24 @@ try {
     ]);
     assert.equal(download.suggestedFilename(), 'drawing-view.png');
     assert.equal(await page.getByRole('alert').count(), 0);
+    await page.keyboard.press('Escape');
+  });
+
+  await step('a frame made from the view exports its rectangle as a PNG at 100%', async () => {
+    const panel = page.getByRole('complementary', { name: 'Layers' });
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await panel.getByRole('button', { name: 'New frame' }).click();
+    assert.equal(await panel.getByLabel('Frame name').inputValue(), 'Frame 1');
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 15_000 }),
+      panel.getByRole('button', { name: 'Export frame as PNG' }).click()
+    ]);
+    assert.equal(download.suggestedFilename(), 'Frame 1.png');
+    // The frame covers the 1280 × 800 view at 100%; PNG width and height are big-endian at bytes 16 and 20.
+    const png = await readFile(await download.path());
+    assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1280, 800]);
+    assert.equal(await page.getByRole('alert').count(), 0);
+    await panel.getByRole('button', { name: 'Delete frame' }).click();
     await page.keyboard.press('Escape');
   });
 

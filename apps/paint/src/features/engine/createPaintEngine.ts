@@ -66,6 +66,10 @@ export function createPaintEngine(options: {
     return [];
   });
   const [restored, setRestored] = createSignal<RestoredView>();
+  const [layersInRegions, setLayersInRegions] = createSignal<Readonly<Record<string, readonly string[]>>>(
+    {},
+    { equals: (a, b) => JSON.stringify(a) === JSON.stringify(b) }
+  );
   const [layersInView, setLayersInView] = createSignal<readonly string[]>([], {
     equals: (a, b) => a.length === b.length && a.every((id, index) => id === b[index])
   });
@@ -148,6 +152,8 @@ export function createPaintEngine(options: {
     restored,
     /** Ids of the layers with paint in the view, bottom to top, as the engine last reported. */
     layersInView,
+    /** For each region named by a `watch-regions` command, the ids of the layers with paint in it, bottom to top. */
+    layersInRegions,
     /** Whether a stroke is in progress, including `begin` sent earlier in the current event. */
     isDrawing,
     /** Whether a brush command is waiting for the engine. */
@@ -379,6 +385,10 @@ export function createPaintEngine(options: {
 
       if (event.layersInView) {
         setLayersInView(event.layersInView);
+      }
+
+      if (event.layersInRegions) {
+        setLayersInRegions(event.layersInRegions);
       }
 
       setSaveState(event.saveState);

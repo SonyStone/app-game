@@ -5,6 +5,7 @@ import type { Result } from './asyncResult';
 import type { Brush, Sample } from './brush';
 import type { Camera, Point, ViewSize } from './camera';
 import type { ColorSample } from './colorSample';
+import type { DocumentRect } from './layersInView';
 import type { BrushEngine } from './composition/contracts';
 import type { HistorySource, LayerAction, createDocument } from './document';
 
@@ -40,6 +41,11 @@ export type PaintCommand =
   | { type: 'live-tail'; enabled: boolean }
   | { type: 'adaptive-quality'; enabled: boolean }
   | { type: 'selection-view'; points: Point[]; animate: boolean }
+  /**
+   * Names document regions whose layers with paint each state reports in `layersInRegions`, such as the active frame
+   * of a frames module; replaces the regions named before.
+   */
+  | { type: 'watch-regions'; regions: Record<string, DocumentRect> }
   | { type: 'view'; camera: Camera; size: ViewSize; dpr: number }
   | {
       type: 'begin';
@@ -56,7 +62,12 @@ export type PaintCommand =
    * Exports the document as a `.paint` file (`download`) or the presented view as a PNG (`png`). With a `requestId`,
    * the `download` event carries it back, so the client can keep the file instead of offering it to the user.
    */
-  | { type: 'download' | 'png'; requestId?: string }
+  | { type: 'download'; requestId?: string }
+  /**
+   * With a `region`, the PNG shows that document rectangle at 100% instead of the view, reduced to the renderer's
+   * pixel budget when larger, and is named `name`.
+   */
+  | { type: 'png'; requestId?: string; region?: DocumentRect; name?: string }
   | { type: 'layer'; action: LayerAction }
   | { type: 'selection'; action: SelectionAction; points: Point[]; offset?: Point; layerId: string; revision: number }
   /** Runs a pixel edit registered with `DocumentFeatures`, such as a bucket fill; see `defineDocumentEdit`. */
@@ -93,6 +104,8 @@ export type PaintEvent =
       camera: Camera;
       /** Ids of the layers with tiles in the primary view, in layer order; see `layersInView`. */
       layersInView?: string[];
+      /** For each region named by `watch-regions`, the ids of the layers with tiles in it, in layer order. */
+      layersInRegions?: Record<string, string[]>;
       saved: boolean;
       /** Active strokes are unsaved; saving means a completed checkpoint is being written. */
       saveState: 'saved' | 'unsaved' | 'saving';
