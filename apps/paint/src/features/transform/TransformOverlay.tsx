@@ -3,6 +3,7 @@ import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { placeBeside } from '../../shared/ui/placeBeside';
 import styles from './Transform.module.css';
 import { TransformActions } from './TransformActions';
+import { TransformNumbers } from './TransformNumbers';
 import type { BoxState, TransformSettings } from './createTransform';
 import { boxPoints, distortBox, handles, moveBox, rotateBox, scaleBox, type BoxHandle } from './transformDrag';
 import type { TransformBounds } from './transformEdit';
@@ -40,6 +41,7 @@ export function TransformOverlay(props: {
   let release: (() => void) | undefined;
   /** What the drag in progress changes. */
   const [dragging, setDragging] = createSignal<'move' | 'rotate' | BoxHandle>();
+  const [numbers, setNumbers] = createSignal(false);
   onCleanup(() => release?.());
   const points = () => boxPoints(props.bounds, props.box);
   const screen = () => {
@@ -51,6 +53,15 @@ export function TransformOverlay(props: {
     const length = Math.hypot(top.x - center.x, top.y - center.y) || 1;
     const rotation = { x: top.x + ((top.x - center.x) / length) * 32, y: top.y + ((top.y - center.y) / length) * 32 };
     return { corners, top, rotation, handles: current.handles.map(({ point }) => props.toScreen(point)) };
+  };
+  /** Where the exact values go: below the actions, or above them near the bottom of the view. */
+  const numbersAt = () => {
+    const actions = actionsAt();
+    const below = actions.top + actionsSize.height + 6;
+    return {
+      left: actions.left,
+      top: below + numbersHeight <= props.size.height ? below : actions.top - numbersHeight - 6
+    };
   };
   /** Where the actions go: next to the box and its rotation handle. */
   const actionsAt = () => {
@@ -160,14 +171,27 @@ export function TransformOverlay(props: {
           onRotate={props.onRotate}
           distorted={props.box.corners !== undefined}
           onDistort={props.onDistort}
+          numbers={numbers()}
+          onNumbers={setNumbers}
           onReset={props.onReset}
           onCancel={props.onCancel}
           onDone={props.onDone}
         />
+        <Show when={numbers()}>
+          <TransformNumbers
+            placement={numbersAt()}
+            box={props.box}
+            settings={props.settings}
+            onChange={props.onChange}
+          />
+        </Show>
       </Show>
     </div>
   );
 }
 
+/** Approximate height of the exact values, for placing them. */
+const numbersHeight = 44;
+
 /** Approximate size of the actions, for placing them. */
-const actionsSize = { width: 440, height: 48 };
+const actionsSize = { width: 480, height: 48 };

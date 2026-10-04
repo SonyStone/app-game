@@ -16,6 +16,9 @@ export function TransformActions(props: {
   /** Whether the box is distorted by its corners. */
   distorted: boolean;
   onDistort: (on: boolean) => void;
+  /** Whether the exact values are shown. */
+  numbers: boolean;
+  onNumbers: (shown: boolean) => void;
   onReset: () => void;
   onCancel: () => void;
   onDone: () => void;
@@ -38,6 +41,14 @@ export function TransformActions(props: {
         onClick={() => props.onDistort(!props.distorted)}
       >
         <SketchIcon name="distort" size={20} />
+      </button>
+      <button
+        aria-label="Exact values"
+        title="Exact values: size, angle and position"
+        aria-pressed={props.numbers ? 'true' : 'false'}
+        onClick={() => props.onNumbers(!props.numbers)}
+      >
+        <SketchIcon name="numbers" size={20} />
       </button>
       <FloatingBarSeparator />
       <button
