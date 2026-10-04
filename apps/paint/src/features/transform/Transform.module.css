@@ -39,40 +39,53 @@
   touch-action: none;
 }
 
+.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Floats next to the box; `left` is the bar's center. */
 .actions {
   position: absolute;
-  top: max(66px, calc(env(safe-area-inset-top) + 54px));
-  left: 50%;
   transform: translateX(-50%);
-  width: max-content;
-  max-width: calc(100% - 24px);
-  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   background: #f8f8f8f5;
-  text-align: center;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 8%);
+  pointer-events: auto;
 
-  > span {
-    display: block;
-    color: var(--muted);
-    margin-bottom: 5px;
+  /* Outranks the studio reset of button backgrounds. */
+  > button:is(button) {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+
+    &[aria-pressed='true'] {
+      background: #e3f0f7;
+      color: #1f6f9a;
+    }
   }
 
-  > div {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 3px;
-  }
-
-  button {
-    min-height: 36px;
-    padding: 5px 9px;
-    border-radius: 4px;
-  }
-
-  .done {
+  > .done {
     background: #419bcf;
     color: #fff;
+
+    &:hover:not(:disabled) {
+      background: #3588b8;
+    }
   }
+}
+
+.separator {
+  width: 1px;
+  height: 24px;
+  margin: 0 3px;
+  background: var(--line);
 }

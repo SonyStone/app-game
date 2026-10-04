@@ -11,7 +11,8 @@ import { applyAffine, invertAffine, type Affine } from './affine';
  * The engine half of the transform: moves, scales, rotates and flips the pixels of a lasso selection, or of the whole
  * active layer, as one undo step. `begin` captures the pixels and replies with their bounds; each `update` redraws
  * them with a new transform from the original pixels, amending the same undo step; `end` keeps the result and
- * `cancel` restores the original. Pixels are resampled bilinearly in premultiplied color. Runs in the engine's realm.
+ * `cancel` restores the original. Pixels are resampled bilinearly in premultiplied color, or take the nearest pixel
+ * for pixel art. Runs in the engine's realm.
  */
 export const transformEdit = defineDocumentEdit({
   id: 'transform',
@@ -38,7 +39,7 @@ export const transformEdit = defineDocumentEdit({
       return { changes: [], amend: session.committed };
     }
 
-    const changes = await transformed(context, session, command.matrix);
+    const changes = await transformed(context, session, command.matrix, command.interpolation);
     const amend = session.committed;
     session.committed = changes.length > 0;
     return { changes, amend };
@@ -60,6 +61,8 @@ const transformCommandSchema = z.discriminatedUnion('phase', [
   z.object({ phase: z.literal('begin'), points: z.array(point).min(3).max(4096).optional() }),
   z.object({
     phase: z.literal('update'),
+    /** `smooth` resamples bilinearly; `pixels` takes the nearest pixel, keeping hard edges for pixel art. */
+    interpolation: z.enum(['smooth', 'pixels']).default('smooth'),
     matrix: z.tuple([z.number(), z.number(), z.number(), z.number(), z.number(), z.number()])
   }),
   z.object({ phase: z.literal('end') }),
@@ -119,7 +122,13 @@ async function begin(context: DocumentEditContext, points: Point[] | undefined):
 }
 
 /** Changes that erase the original pixels and draw them through `matrix`, from the layer as the transform began. */
-async function transformed(context: DocumentEditContext, session: TransformSession, matrix: Affine) {
+async function transformed(
+  context: DocumentEditContext,
+  session: TransformSession,
+  matrix: Affine,
+  interpolation: 'smooth' | 'pixels'
+) {
+  const sampleAt = interpolation === 'pixels' ? nearest : bilinear;
   const layer = context.layers.find((candidate) => candidate.id === session.layerId);
   const inverse = invertAffine(matrix);
   if (!layer || !inverse) {
@@ -167,7 +176,7 @@ async function transformed(context: DocumentEditContext, session: TransformSessi
       let u = ia * (left + 0.5) + ic * (y + 0.5) + ie - bounds.left - 0.5;
       let v = ib * (left + 0.5) + id * (y + 0.5) + iff - bounds.top - 0.5;
       for (let x = left; x < Math.min(tx + TILE_SIZE, target.right); x++, u += ia, v += ib) {
-        if (!bilinear(pixels, width, height, u, v, sample)) {
+        if (!sampleAt(pixels, width, height, u, v, sample)) {
           continue;
         }
 
@@ -224,6 +233,22 @@ function bilinear(pixels: Uint8Array, width: number, height: number, x: number, 
   }
 
   return out[3]! >= 0.5;
+}
+
+/** Takes the pixel nearest to a position, like `bilinear` but without blending, for hard pixel-art edges. */
+function nearest(pixels: Uint8Array, width: number, height: number, x: number, y: number, out: number[]) {
+  const column = Math.round(x),
+    row = Math.round(y);
+  if (column < 0 || row < 0 || column >= width || row >= height) {
+    return false;
+  }
+
+  const index = (row * width + column) * 4;
+  for (let channel = 0; channel < 4; channel++) {
+    out[channel] = pixels[index + channel]!;
+  }
+
+  return out[3]! > 0;
 }
 
 /** Bounds of the non-transparent pixels of unpacked tiles, or `undefined` when all are transparent. */

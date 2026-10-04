@@ -12,24 +12,43 @@ it('moves, scales and restores the whole layer, amending one undo step', async (
   expect(begun.changes).toEqual([]);
 
   // The identity keeps every byte; the first update starts the undo step and later ones amend it.
-  const kept = await run({ phase: 'update', matrix: [...identity] });
+  const kept = await run({ phase: 'update', interpolation: 'smooth', matrix: [...identity] });
   expect(kept.amend).toBe(false);
   expect(alphaCount(kept)).toBe(24);
   expect(pixel(kept, 10, 20)).toEqual([0, 0, 255, 255]);
 
-  const moved = await run({ phase: 'update', matrix: [1, 0, 0, 1, 100, 0] });
+  const moved = await run({ phase: 'update', interpolation: 'smooth', matrix: [1, 0, 0, 1, 100, 0] });
   expect(moved.amend).toBe(true);
   expect(pixel(moved, 10, 20)).toEqual([0, 0, 0, 0]);
   expect(pixel(moved, 110, 20)).toEqual([0, 0, 255, 255]);
   // `before` is always the layer as the transform began.
   expect(moved.changes.every((change) => change.before === tiles.get(change.key))).toBe(true);
 
-  const scaled = await run({ phase: 'update', matrix: [2, 0, 0, 2, -10, -20] });
+  const scaled = await run({ phase: 'update', interpolation: 'smooth', matrix: [2, 0, 0, 2, -10, -20] });
   expect(alphaCount(scaled)).toBe(8 * 12);
+
+  // Pixel art keeps hard edges: scaled by 1.5 with the nearest pixel, every pixel is either the color or empty.
+  const pixels = await run({ phase: 'update', interpolation: 'pixels', matrix: [1.5, 0, 0, 1.5, -5, -10] });
+  const alphas = new Set(
+    pixels.changes.flatMap((change) =>
+      [...((change.after as Uint8Array | undefined) ?? [])].filter((_, index) => index % 4 === 3)
+    )
+  );
+  expect([...alphas].sort()).toEqual([0, 255]);
+  const smooth = await run({ phase: 'update', interpolation: 'smooth', matrix: [1.5, 0, 0, 1.5, -5, -10] });
+  expect(
+    new Set(
+      smooth.changes.flatMap((change) =>
+        [...((change.after as Uint8Array | undefined) ?? [])].filter((_, index) => index % 4 === 3)
+      )
+    ).size
+  ).toBeGreaterThan(2);
 
   const cancelled = await run({ phase: 'cancel' });
   expect(cancelled).toEqual({ changes: [], amend: true });
-  await expect(run({ phase: 'update', matrix: [...identity] })).rejects.toThrow('Start a transform first');
+  await expect(run({ phase: 'update', interpolation: 'smooth', matrix: [...identity] })).rejects.toThrow(
+    'Start a transform first'
+  );
 });
 
 it('transforms only the selected pixels and refuses empty or oversized sources', async () => {
@@ -43,7 +62,7 @@ it('transforms only the selected pixels and refuses empty or oversized sources',
   expect((await run({ phase: 'begin', points: left })).reply).toEqual({
     bounds: { left: 0, top: 0, right: 10, bottom: 10 }
   });
-  const flipped = await run({ phase: 'update', matrix: [1, 0, 0, 1, 0, 30] });
+  const flipped = await run({ phase: 'update', interpolation: 'smooth', matrix: [1, 0, 0, 1, 0, 30] });
   // The selected half moves down; the other half stays.
   expect(pixel(flipped, 5, 5)).toEqual([0, 0, 0, 0]);
   expect(pixel(flipped, 15, 5)).toEqual([255, 0, 0, 255]);

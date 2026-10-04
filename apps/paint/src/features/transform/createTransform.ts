@@ -31,6 +31,10 @@ export function createTransform(options: {
   const [session, setSession, currentSession] = createImmediateSignal<Session | undefined>(undefined);
   const [box, setBox, currentBox] = createImmediateSignal<BoxState>(initialBox);
   const [starting, setStarting] = createSignal(false);
+  const [settings, setSettings, currentSettings] = createImmediateSignal<TransformSettings>({
+    proportional: true,
+    interpolation: 'smooth'
+  });
   const matrix = createMemo(() => boxMatrix(session()?.bounds, box()));
   /** Commands in sending order; each starts after the previous one's reply. */
   let chain: Promise<unknown> = Promise.resolve();
@@ -46,6 +50,16 @@ export function createTransform(options: {
     /** The current transform from those bounds to where the pixels go. */
     matrix,
     box,
+    /** How corner handles scale and how pixels are resampled. */
+    settings,
+    /** Changes the settings; a new interpolation redraws the pixels. */
+    setSettings(patch: Partial<TransformSettings>) {
+      const next = { ...currentSettings(), ...patch };
+      setSettings(next);
+      if (patch.interpolation !== undefined) {
+        change(currentBox());
+      }
+    },
     start,
     setBox: change,
     /** Mirrors the box horizontally or vertically about its center. */
@@ -110,7 +124,11 @@ export function createTransform(options: {
       chain = chain.then(async () => {
         const latest = queued!;
         queued = undefined;
-        const updated = await send({ phase: 'update', matrix: [...latest] });
+        const updated = await send({
+          phase: 'update',
+          matrix: [...latest],
+          interpolation: currentSettings().interpolation
+        });
         if (updated.isErr() && !isDisposed(owner)) {
           options.onError(updated.error);
         }
@@ -153,6 +171,12 @@ export function createTransform(options: {
 
 /** The transform state used by the editor. */
 export type Transform = ReturnType<typeof createTransform>;
+
+/**
+ * Transform settings: corner handles keep the proportions (Shift does the opposite), and `pixels` resamples with the
+ * nearest pixel for pixel art instead of smoothly.
+ */
+export type TransformSettings = { proportional: boolean; interpolation: 'smooth' | 'pixels' };
 
 /** Box edits about the center of the bounds: scale (negative flips), clockwise angle in radians, then offset. */
 export type BoxState = { offset: Point; scale: Point; angle: number };

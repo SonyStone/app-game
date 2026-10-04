@@ -29,7 +29,7 @@ import { createImagePlacement, HistorySourceControl, LayersPanel } from '../laye
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
 import { createSelection, createSelectionView, guardEdits, SelectionActions } from '../selection';
 import { createSymmetry, SymmetryGuide, SymmetryPanel } from '../symmetry';
-import { createTransform, TransformActions, TransformOverlay } from '../transform';
+import { createTransform, TransformOverlay } from '../transform';
 import { createFullscreenToggle } from './createFullscreenToggle';
 import { createPaintShortcuts } from './createPaintShortcuts';
 import { DrawingMenu } from './DrawingMenu';
@@ -439,9 +439,17 @@ export function PaintStudio(props: {
             <TransformOverlay
               bounds={bounds()}
               box={transform.box()}
+              settings={transform.settings()}
+              size={size()}
               toScreen={(point) => worldToScreen(point, camera.camera(), size())}
               toDocument={(point) => screenToWorld(point, camera.current(), size())}
               onChange={transform.setBox}
+              onSettings={transform.setSettings}
+              onFlip={transform.flip}
+              onRotate={transform.rotate}
+              onReset={transform.reset}
+              onCancel={() => void transform.cancel()}
+              onDone={() => void transform.end()}
             />
           )}
         </Show>
@@ -496,15 +504,6 @@ export function PaintStudio(props: {
           onToggleMirror={camera.toggleMirror}
           onTogglePanel={togglePanel}
         />
-        <Show when={transform.active()}>
-          <TransformActions
-            onFlip={transform.flip}
-            onRotate={transform.rotate}
-            onReset={transform.reset}
-            onCancel={() => void transform.cancel()}
-            onDone={() => void transform.end()}
-          />
-        </Show>
         <Show when={tool() === 'lasso' && !transform.active()}>
           <SelectionActions
             disabled={!ready() || selection.drawing()}
