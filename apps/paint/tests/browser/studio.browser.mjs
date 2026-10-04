@@ -217,8 +217,8 @@ try {
     await tap(2);
     await waitEnabled(redo);
     await tap(3);
-    await waitEnabled(undo);
-    assert.equal(await redo.isDisabled(), true);
+    // Undo may be enabled before the redo by earlier history, so wait for the redo itself.
+    await redo.and(page.locator(':disabled')).waitFor({ timeout: 10_000 });
 
     // Holding a finger on the stroke picks its color.
     await page.getByRole('button', { name: 'Color palette' }).click();
@@ -614,6 +614,39 @@ try {
     assert.equal(download.suggestedFilename(), 'drawing-view.png');
     assert.equal(await page.getByRole('alert').count(), 0);
     await page.keyboard.press('Escape');
+  });
+
+  await step('the Layers panel lists layers with paint in view and shows the others on request', async () => {
+    const { cx, cy } = await workspaceCenter(page);
+    const panel = page.getByRole('complementary', { name: 'Layers' });
+    const rows = () => panel.getByRole('button', { name: /^Select / }).count();
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await panel.getByRole('button', { name: 'Add layer' }).click();
+    await waitForSaved(page);
+    await page.keyboard.press('Escape');
+
+    // Far from the earlier drawings, paint on the new layer: only it has paint in view.
+    for (let i = 0; i < 6; i++) {
+      await page.mouse.move(cx + 300, cy);
+      await page.mouse.down({ button: 'middle' });
+      await page.mouse.move(cx - 300, cy, { steps: 4 });
+      await page.mouse.up({ button: 'middle' });
+    }
+    await drawLine(page, { x: cx - 60, y: cy }, { x: cx + 60, y: cy });
+    await page.waitForTimeout(600);
+    await page.getByRole('button', { name: 'Layers' }).click();
+    const toggle = panel.getByRole('button', { name: /without paint in view$/ });
+    await toggle.waitFor({ timeout: 5_000 });
+    assert.equal(await rows(), 1);
+    const total = Number((await panel.getByText(/^\d+ layers$/).textContent()).split(' ')[0]);
+    await toggle.click();
+    assert.equal(await rows(), total);
+    await toggle.click();
+    await page.keyboard.press('Escape');
+
+    await undo(page, 2);
+    await page.getByRole('button', { name: 'Drawing menu' }).click();
+    await page.getByRole('button', { name: 'Reset view' }).click();
   });
 
   await step('switching to the main-thread engine keeps the drawing', async () => {

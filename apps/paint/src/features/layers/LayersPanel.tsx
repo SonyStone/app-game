@@ -1,6 +1,6 @@
 import type { BlendMode, createDocument, LayerAction, LayerInfo } from '@app-game/paint-core/document';
 import { closestCenter, createDragContext, createDraggable, createDroppable } from '@solid-primitives/drag-drop';
-import { For, untrack } from 'solid-js';
+import { For, Show, untrack } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './LayersPanel.module.css';
 
@@ -14,6 +14,16 @@ export function LayersPanel(props: {
   /** Adding, moving and deleting layers wait for the engine. */
   ready: boolean;
   onAction: (action: LayerAction) => void;
+  /**
+   * Leaves layers out of the list, such as those without paint in view: `shown` says which are listed, `offScreen`
+   * how many the filter leaves out, and a button switches `showAll`. Omitted, every layer is listed.
+   */
+  filter?: {
+    shown: (id: string) => boolean;
+    offScreen: number;
+    showAll: boolean;
+    onShowAllChange: (showAll: boolean) => void;
+  };
 }) {
   const selected = () => props.state.layers.find((item) => item.id === props.state.activeId)!;
   /** Position of the selected layer, bottom first, for disabling moves past either end. */
@@ -146,7 +156,10 @@ export function LayersPanel(props: {
       </p>
       <drag.Provider>
         <div class={styles.layerList}>
-          <For each={[...props.state.layers].reverse()} keyed={(item) => item.id}>
+          <For
+            each={[...props.state.layers].reverse().filter((layer) => props.filter?.shown(layer.id) ?? true)}
+            keyed={(item) => item.id}
+          >
             {(item) => (
               <LayerRow
                 layer={item()}
@@ -158,6 +171,14 @@ export function LayersPanel(props: {
           </For>
         </div>
       </drag.Provider>
+      <Show when={props.filter && props.filter.offScreen > 0 && props.filter}>
+        {(filter) => (
+          <button class={styles.offScreen} onClick={() => filter().onShowAllChange(!filter().showAll)}>
+            {filter().showAll ? 'Hide' : 'Show'} {filter().offScreen} {filter().offScreen === 1 ? 'layer' : 'layers'}{' '}
+            without paint in view
+          </button>
+        )}
+      </Show>
       <div class={styles.layerActions}>
         <button
           aria-label="Move layer up"

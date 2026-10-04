@@ -26,7 +26,7 @@ import { ColorWheel, createColorWheelSettings } from '../color-wheel';
 import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
 import { createFill, FillPanel } from '../fill';
-import { createImagePlacement, HistorySourceControl, LayersPanel } from '../layers';
+import { createImagePlacement, createLayerFilter, HistorySourceControl, LayersPanel } from '../layers';
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
 import { createRadialMenu, RadialMenu, radialLayout, type RadialItem } from '../radial-menu';
 import { createInputRecorder, RecordingControls } from '../recording';
@@ -192,6 +192,12 @@ export function PaintStudio(props: {
   });
   const fullscreen = createFullscreenToggle(editor, setError);
   const colorWheel = createColorWheelSettings();
+  const layerFilter = createLayerFilter({
+    layers: () => engine.state().layers,
+    activeId: () => engine.state().activeId,
+    inView: engine.layersInView,
+    camera: camera.camera
+  });
   const recentPresets = createRecentPresets({ current: tools.preset, exists: (id) => library.find(id) !== undefined });
   const radial = createRadialMenu({
     center: camera.navigation.center,
@@ -741,6 +747,12 @@ export function PaintStudio(props: {
                     state={engine.state()}
                     ready={ready()}
                     onAction={(action) => edit({ type: 'layer', action })}
+                    filter={{
+                      shown: layerFilter.shown,
+                      offScreen: layerFilter.offScreen(),
+                      showAll: layerFilter.showAll(),
+                      onShowAllChange: layerFilter.setShowAll
+                    }}
                   />
                   <HistorySourceControl
                     state={engine.state()}

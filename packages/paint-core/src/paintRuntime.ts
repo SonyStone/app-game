@@ -3,6 +3,7 @@ import { createRoot, onCleanup } from 'solid-js';
 import { attempt, createTaskQueue, unwrapResult, type Result } from './asyncResult';
 import { defaultCamera, screenToWorld, type Point } from './camera';
 import { averageOpaque, defaultColorSample, sampleLayer } from './colorSample';
+import { layersInView } from './layersInView';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
 import type { TileChange } from './document';
@@ -77,8 +78,13 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     };
     let documentState = document.state();
     let debugAt = 0;
+    /** The latest `layersInView` result and the document revision, camera and size it describes. */
+    let inView = { signature: '', ids: [] as string[] };
     const status = () => {
       if (documentState.revision !== document.revision) documentState = document.state();
+      const viewSignature = `${document.revision}|${camera.x},${camera.y},${camera.zoom},${camera.angle}|${size.width},${size.height}`;
+      if (inView.signature !== viewSignature)
+        inView = { signature: viewSignature, ids: layersInView(document.layers, camera, size) };
       const sendDebug = debug && performance.now() >= debugAt;
       if (sendDebug) debugAt = performance.now() + 100;
       const stats = renderer?.stats();
@@ -92,6 +98,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         rasterDraws: { preview: stats?.previewTileDraws ?? 0, committed: stats?.sourceTileDraws ?? 0 },
         document: documentState,
         camera,
+        layersInView: inView.ids,
         features: reportedFeatures(),
         saved,
         saveState: strokeSession ? 'unsaved' : pendingSaves > 0 ? 'saving' : saved ? 'saved' : 'unsaved',

@@ -149,7 +149,8 @@ export function createDocument(options: { paged?: boolean } = {}) {
           { id: baseHistoryId, label: baseHistoryId === 0 ? 'Opened document' : `State ${baseHistoryId}` },
           ...[...undo, ...[...redo].reverse()].map((entry) => ({ id: entry.id, label: `State ${entry.id}` }))
         ],
-        layers: info(),
+        /** Layers bottom to top; `tileCount` is the number of tiles holding paint, 0 for an empty layer. */
+        layers: layers.map(({ tiles, ...layer }) => ({ ...layer, tileCount: tiles.size })),
         activeId: active,
         canUndo: undo.length > 0,
         canRedo: redo.length > 0,

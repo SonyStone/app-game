@@ -66,6 +66,9 @@ export function createPaintEngine(options: {
     return [];
   });
   const [restored, setRestored] = createSignal<RestoredView>();
+  const [layersInView, setLayersInView] = createSignal<readonly string[]>([], {
+    equals: (a, b) => a.length === b.length && a.every((id, index) => id === b[index])
+  });
   const switching = () => switchTarget() !== undefined;
   const canEdit = () => ready() && !switching();
 
@@ -143,6 +146,8 @@ export function createPaintEngine(options: {
     debugTiles,
     /** Camera and symmetry of a loaded, imported or replaced document; UI state resets from it. */
     restored,
+    /** Ids of the layers with paint in the view, bottom to top, as the engine last reported. */
+    layersInView,
     /** Whether a stroke is in progress, including `begin` sent earlier in the current event. */
     isDrawing,
     /** Whether a brush command is waiting for the engine. */
@@ -370,6 +375,10 @@ export function createPaintEngine(options: {
 
       if (firstState || event.document.revision !== latest(state).revision) {
         setState(event.document);
+      }
+
+      if (event.layersInView) {
+        setLayersInView(event.layersInView);
       }
 
       setSaveState(event.saveState);

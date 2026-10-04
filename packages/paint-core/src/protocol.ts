@@ -91,6 +91,8 @@ export type PaintEvent =
       features?: Record<string, unknown>;
       document: ReturnType<ReturnType<typeof createDocument>['state']>;
       camera: Camera;
+      /** Ids of the layers with tiles in the primary view, in layer order; see `layersInView`. */
+      layersInView?: string[];
       saved: boolean;
       /** Active strokes are unsaved; saving means a completed checkpoint is being written. */
       saveState: 'saved' | 'unsaved' | 'saving';
