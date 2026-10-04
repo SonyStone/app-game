@@ -146,6 +146,8 @@ export function PaintStudio(props: {
     paints: () => paintsColor(),
     toScreen: (point) => worldToScreen(point, camera.current(), size()),
     pick: engine.pickColor,
+    // A stroke in progress also moves the cursor; Alt pressed during it does not preview.
+    hovered: () => (engine.isDrawing() ? undefined : cursor()),
     current: () => brush().color,
     apply: (color) => tools.updateBrush({ color }),
     onError: setError

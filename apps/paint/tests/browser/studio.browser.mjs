@@ -328,6 +328,18 @@ try {
     const stroke = await hexOtherThan('FF0000');
     const channels = (hex) => [0, 2, 4].map((index) => parseInt(hex.slice(index, index + 2), 16));
     assert.ok(Math.max(...channels(stroke)) < 0x90, `expected the dark stroke color, got ${stroke}`);
+    await page.keyboard.press('Escape');
+
+    // Hovering with Alt held previews the color under the pointer without picking it.
+    await page.mouse.move(box.x + box.width / 2 - 150, box.y + box.height / 2 - 100);
+    await page.keyboard.down('Alt');
+    await page.mouse.move(box.x + box.width / 2 - 140, box.y + box.height / 2 - 100, { steps: 3 });
+    const loupe = page.getByRole('status', { name: /^Picking #/ });
+    await loupe.waitFor({ timeout: 10_000 });
+    await page.keyboard.up('Alt');
+    await loupe.waitFor({ state: 'detached', timeout: 5_000 });
+    await page.getByRole('button', { name: 'Color palette' }).click();
+    assert.equal(await hex(), stroke);
 
     await page.getByRole('button', { name: 'Pick color from canvas' }).click();
     // Empty paper up and to the left of the stroke, clear of the toolbars along the edges.

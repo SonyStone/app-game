@@ -1,8 +1,9 @@
 import type { Point } from '@app-game/paint-core/camera';
 import type { ColorSample } from '@app-game/paint-core/colorSample';
 import type { TouchHoldDrag } from '@app-game/paint-core/input';
+import { createEventListener } from '@solid-primitives/event-listener';
 import type { Result } from 'neverthrow';
-import { createSignal, getOwner, isDisposed, type Accessor } from 'solid-js';
+import { createEffect, createSignal, getOwner, isDisposed, type Accessor } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import type { PaintError } from '../../shared/errors';
 
@@ -10,7 +11,8 @@ import type { PaintError } from '../../shared/errors';
  * Picks the foreground color from the canvas: Alt/Option-press with a painting tool, as in Photoshop, the next
  * contact after `arm()`, or a touch hold through `hold`. While the contact is held, `preview` shows the color under it
  * next to the current one, sampled from the last presented frame as it moves; releasing picks the color there at full
- * detail and applies it, and a cancelled contact picks nothing. `settings` choose whether the view (all layers and the
+ * detail and applies it, and a cancelled contact picks nothing. Holding Alt/Option while a pen or mouse hovers over the
+ * canvas with a painting tool previews the color under it the same way, without picking. `settings` choose whether the view (all layers and the
  * paper) or the active layer is sampled, and over how many pixels. Must be created within a Solid owner; colors
  * arriving after disposal are dropped.
  */
@@ -21,6 +23,8 @@ export function createCanvasColorPicker(options: {
   toScreen: (point: Point) => Point;
   /** Reads a color at a canvas point; see `PaintEngine.pickColor`. */
   pick: (point: Point, sample: ColorSample) => Promise<Result<string | null, PaintError>>;
+  /** Where a pen or mouse hovers over the canvas, in CSS pixels of the canvas; undefined when it is elsewhere. */
+  hovered: Accessor<Point | undefined>;
   /** The color a pick replaces, shown beside the sample. */
   current: Accessor<string>;
   /** Receives the picked `#rrggbb` color. */
@@ -31,8 +35,19 @@ export function createCanvasColorPicker(options: {
   const settings = createColorPickerSettings();
   const [armed, setArmed, isArmed] = createImmediateSignal(false);
   const [preview, setPreview] = createSignal<PickerPreview>();
-  /** The contact being sampled, in CSS pixels of the canvas; cleared when it ends. */
-  let sampling: { point: Point; inFlight: boolean } | undefined;
+  /** Alt/Option is held. */
+  const [alt, setAlt] = createSignal(false);
+  /** The contact or hover being sampled, in CSS pixels of the canvas; cleared when it ends. */
+  let sampling: { point: Point; inFlight: boolean; hover?: boolean } | undefined;
+
+  createEventListener(window, ['keydown', 'keyup'], (event: KeyboardEvent) =>
+    setAlt(event.key === 'Alt' ? event.type === 'keydown' : event.altKey)
+  );
+  createEventListener(window, 'blur', () => setAlt(false));
+  createEffect(
+    () => (alt() && options.paints() ? options.hovered() : undefined),
+    (point) => hover(point)
+  );
 
   return {
     /** The next canvas contact picks a color instead of painting. */
@@ -62,6 +77,32 @@ export function createCanvasColorPicker(options: {
   function begin(point: Point) {
     sampling = { point: options.toScreen(point), inFlight: false };
     setPreview({ point: sampling.point, color: undefined, current: options.current() });
+    void sampleLive();
+  }
+
+  /** Previews the color under a hovering pointer, or stops at `undefined`; a contact being sampled takes precedence. */
+  function hover(point: Point | undefined) {
+    if (sampling && !sampling.hover) {
+      return;
+    }
+
+    if (!point) {
+      if (sampling) {
+        sampling = undefined;
+        setPreview(undefined);
+      }
+
+      return;
+    }
+
+    if (sampling) {
+      sampling.point = point;
+      setPreview((previous) => previous && { ...previous, point });
+    } else {
+      sampling = { point, inFlight: false, hover: true };
+      setPreview({ point, color: undefined, current: options.current() });
+    }
+
     void sampleLive();
   }
 

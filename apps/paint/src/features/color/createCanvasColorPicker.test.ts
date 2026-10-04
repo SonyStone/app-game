@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ColorSample } from '@app-game/paint-core/colorSample';
 import { err, ok, type Result } from 'neverthrow';
-import { createRoot, flush } from 'solid-js';
+import { createRoot, createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { engineError, type PaintError } from '../../shared/errors';
 import { firstCanvasAction } from '../canvas/firstCanvasAction';
@@ -120,16 +120,49 @@ it('runs the first canvas action enabled at contact, and gives it the drag and r
   expect(picker.move).toHaveBeenCalledTimes(1);
 });
 
+it('previews the color under a hovering pointer while Alt is held, without picking', async () => {
+  const { picker, pick, apply, setHovered } = setup(() => true);
+  setHovered({ x: 30, y: 30 });
+  flush();
+  expect(picker.preview()).toBeUndefined();
+
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Alt', altKey: true }));
+  flush();
+  expect(picker.preview()).toMatchObject({ point: { x: 30, y: 30 } });
+  expect(pick).toHaveBeenLastCalledWith({ x: 30, y: 30 }, { source: 'view', size: 1, exact: false });
+  await vi.waitFor(() => {
+    flush();
+    expect(picker.preview()?.color).toBe('#336699');
+  });
+  setHovered({ x: 40, y: 30 });
+  flush();
+  expect(picker.preview()?.point).toEqual({ x: 40, y: 30 });
+
+  // Leaving the canvas or releasing Alt ends the preview; nothing is picked.
+  setHovered(undefined);
+  flush();
+  expect(picker.preview()).toBeUndefined();
+  setHovered({ x: 50, y: 30 });
+  flush();
+  expect(picker.preview()).toBeDefined();
+  window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Alt' }));
+  flush();
+  expect(picker.preview()).toBeUndefined();
+  expect(apply).not.toHaveBeenCalled();
+});
+
 function setup(paints: () => boolean) {
   const pick = vi.fn<
     (point: { x: number; y: number }, sample: ColorSample) => Promise<Result<string | null, PaintError>>
   >(async () => ok('#336699'));
   const apply = vi.fn();
   const onError = vi.fn();
+  const [hovered, setHovered] = createSignal<{ x: number; y: number }>();
   const picker = createRoot((stop) => {
     dispose = stop;
     return createCanvasColorPicker({
       paints,
+      hovered,
       toScreen: (point) => ({ x: point.x * 2, y: point.y * 2 }),
       pick,
       current: () => '#000000',
@@ -137,5 +170,5 @@ function setup(paints: () => boolean) {
       onError
     });
   });
-  return { picker, pick, apply, onError };
+  return { picker, pick, apply, onError, setHovered };
 }
