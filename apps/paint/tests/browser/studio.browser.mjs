@@ -718,6 +718,27 @@ try {
     assert.equal(await page.getByText('Pen to draw. Touch to move.').count(), 0);
   });
 
+  await step('the layers export as a PSD that opens again as the drawing', async () => {
+    await page.getByRole('button', { name: 'Drawing menu' }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 30_000 }),
+      page.getByRole('button', { name: /Export layers/ }).click()
+    ]);
+    assert.equal(download.suggestedFilename(), 'drawing.psd');
+    // Without color mode data or resources, the layer count is the 16-bit value at byte 42, negative for a merged
+    // transparency.
+    const psd = await readFile(await download.path());
+    assert.equal(psd.toString('latin1', 0, 4), '8BPS');
+    const layers = -psd.readInt16BE(42);
+    assert.ok(layers >= 1, `The PSD has ${layers} layers.`);
+
+    await page.getByRole('button', { name: 'Drawing menu' }).click();
+    await page.locator('input[type="file"][accept*=".psd"]').setInputFiles(await download.path());
+    await waitForSaved(page);
+    assert.equal(await page.getByRole('alert').count(), 0);
+    assert.equal(await page.getByText('Pen to draw. Touch to move.').count(), 0);
+  });
+
   assert.deepEqual(pageErrors, [], 'The page reported errors.');
   console.log('Studio UI smoke test passed.');
 } catch (error) {

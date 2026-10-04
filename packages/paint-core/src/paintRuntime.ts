@@ -11,6 +11,7 @@ import type { FloatingPixels } from './gpu/floatingPixels';
 import { createResourceSession } from './composition/resourceSession';
 import { restoreFeatureData } from './composition/documentFeature';
 import { readPaintFile, writePaintFile } from './paintFile';
+import { isPsdFile, readPsdFile, writePsdFile } from './psdFile';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { mergeTilePixels } from './layerMerge';
 import { captureSelection, editSelection, translateSelection, type SelectionPixels } from './selection';
@@ -858,6 +859,15 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               requestId: command.requestId
             });
             break;
+          case 'psd':
+            await end();
+            post({
+              type: 'download',
+              blob: await writePsdFile(document.layers, tileStore.read, command.region),
+              name: command.name ?? 'drawing.psd',
+              requestId: command.requestId
+            });
+            break;
           case 'edit': {
             const result = await attempt(() => runEdit(command));
             if (command.requestId !== undefined) {
@@ -878,7 +888,9 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             try {
               const next =
                 'file' in command
-                  ? await readPaintFile(command.file, stage)
+                  ? (await isPsdFile(command.file))
+                    ? await readPsdFile(command.file, size, stage)
+                    : await readPaintFile(command.file, stage)
                   : decodeDocument(command.text);
               await tileStore.flush();
               cancel();

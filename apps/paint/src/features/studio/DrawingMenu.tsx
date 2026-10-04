@@ -9,12 +9,14 @@ import styles from './PaintStudio.module.css';
 export function DrawingMenu(props: {
   /** File commands wait for the engine. */
   ready: boolean;
-  /** Receives a chosen `.paint` or legacy JSON file. */
+  /** Receives a chosen `.paint`, legacy JSON or Photoshop file. */
   onOpen: (file: File) => void;
   /** Receives a chosen image file to place as a new layer. */
   onPlaceImage: (file: File) => void;
   onSave: () => void;
   onExportPng: () => void;
+  /** Exports every layer of the drawn area as a Photoshop document. */
+  onExportPsd: () => void;
   onResetView: () => void;
   onDeveloper: () => void;
   /** Host-specific controls, such as PWA installation. */
@@ -30,7 +32,7 @@ export function DrawingMenu(props: {
       <input
         ref={file}
         type="file"
-        accept=".paint,application/json"
+        accept=".paint,.psd,application/json,image/vnd.adobe.photoshop"
         hidden
         onChange={(event) => {
           const input = event.currentTarget;
@@ -57,7 +59,7 @@ export function DrawingMenu(props: {
       />
       <div class={styles.fileActions}>
         <button disabled={!props.ready} onClick={() => file.click()}>
-          Open drawing<span>.paint</span>
+          Open drawing<span>.paint, .psd</span>
         </button>
         <button disabled={!props.ready} onClick={() => image.click()}>
           Place image<span>New layer</span>
@@ -67,6 +69,9 @@ export function DrawingMenu(props: {
         </button>
         <button disabled={!props.ready} onClick={() => props.onExportPng()}>
           Export visible canvas<span>PNG</span>
+        </button>
+        <button disabled={!props.ready} onClick={() => props.onExportPsd()}>
+          Export layers<span>PSD</span>
         </button>
         <button onClick={() => props.onResetView()}>Reset view</button>
         <button onClick={() => props.onDeveloper()}>Developer</button>

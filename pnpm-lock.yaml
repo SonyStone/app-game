@@ -1914,6 +1914,9 @@ importers:
       '@app-game/navigation-puck':
         specifier: workspace:*
         version: link:../navigation-puck
+      '@app-game/psd':
+        specifier: workspace:*
+        version: link:../psd
       '@app-game/solid-gpu':
         specifier: workspace:*
         version: link:../solid-gpu
@@ -2017,6 +2020,15 @@ importers:
       '@app-game/webgl':
         specifier: workspace:*
         version: link:../webgl
+
+  packages/psd:
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.6(@types/node@25.8.0)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
 
   packages/rollup-plugin-svg-font: {}
 

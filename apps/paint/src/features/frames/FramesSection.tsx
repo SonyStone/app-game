@@ -4,7 +4,7 @@ import type { Frame } from './framesFeature';
 
 /**
  * The frame chooser at the top of the Layers panel: the whole canvas or one frame, and for the chosen frame its name
- * and actions: show it, export it as a PNG at 100%, copy a link that opens it, and delete it. A new frame goes around
+ * and actions: show it, export it as a PNG at 100% or a layered PSD, copy a link that opens it, and delete it. A new frame goes around
  * the lasso selection, or else covers the view.
  */
 export function FramesSection(props: {
@@ -18,7 +18,8 @@ export function FramesSection(props: {
   adjusting: boolean;
   onAdjust: (adjusting: boolean) => void;
   onGoTo: (id: string) => void;
-  onExport: (frame: Frame) => void;
+  /** Exports the frame's rectangle as a flattened PNG or a layered PSD. */
+  onExport: (frame: Frame, format: 'png' | 'psd') => void;
   /** Copies a link to the frame; resolves whether it was copied. */
   onCopyLink: (id: string) => Promise<boolean>;
   onRemove: (id: string) => void;
@@ -79,9 +80,16 @@ export function FramesSection(props: {
             <button
               aria-label="Export frame as PNG"
               title="Export the frame as a PNG at 100%"
-              onClick={() => props.onExport(frame)}
+              onClick={() => props.onExport(frame, 'png')}
             >
               PNG
+            </button>
+            <button
+              aria-label="Export frame as PSD"
+              title="Export the frame's layers as a Photoshop document"
+              onClick={() => props.onExport(frame, 'psd')}
+            >
+              PSD
             </button>
             <button
               aria-label="Copy frame link"

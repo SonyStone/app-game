@@ -18,6 +18,7 @@
     "@app-game/abr-brush": "workspace:*",
     "@app-game/abr-paint": "workspace:*",
     "@app-game/navigation-puck": "workspace:*",
+    "@app-game/psd": "workspace:*",
     "@app-game/solid-gpu": "workspace:*",
     "@solid-primitives/timer": "catalog:",
     "@solidjs/web": "catalog:",

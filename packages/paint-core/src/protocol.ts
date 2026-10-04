@@ -68,11 +68,17 @@ export type PaintCommand =
    * pixel budget when larger, and is named `name`.
    */
   | { type: 'png'; requestId?: string; region?: DocumentRect; name?: string }
+  /**
+   * Exports the layers as a layered Photoshop document of `region`, or of everything drawn, named `name`; see
+   * `writePsdFile`.
+   */
+  | { type: 'psd'; requestId?: string; region?: DocumentRect; name?: string }
   | { type: 'layer'; action: LayerAction }
   | { type: 'selection'; action: SelectionAction; points: Point[]; offset?: Point; layerId: string; revision: number }
   /** Runs a pixel edit registered with `DocumentFeatures`, such as a bucket fill; see `defineDocumentEdit`. */
   | { type: 'edit'; edit: string; command: unknown; requestId?: string }
   | { type: 'import'; text: string }
+  /** A `.paint` file, a legacy JSON drawing, or a Photoshop document, recognized by its contents. */
   | { type: 'import'; file: Blob };
 
 /** Starts a runtime on a transferred canvas; the first command of every worker connection. */

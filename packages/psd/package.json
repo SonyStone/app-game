@@ -1,0 +1,19 @@
+{
+  "name": "@app-game/psd",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read and write layered Photoshop documents (.psd): 8-bit RGB raster layers.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

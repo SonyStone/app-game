@@ -1,6 +1,6 @@
 # Paint
 
-Paint Studio is an infinite-canvas drawing app built with Solid 2 and TypeGPU/WebGPU. The drawing engine runs in a Web Worker with an OffscreenCanvas by default, or on the main thread with the page's canvas. Drawings are sparse 256×256 raster tiles with layers, undo/redo and lasso selections, saved automatically to IndexedDB. Brushes include the soft round brush, eraser, textured tips and Photoshop ABR presets; the view supports pan, zoom, rotation, mirroring and paint symmetry. Unsupported browsers (no WebGPU) display an error.
+Paint Studio is an infinite-canvas drawing app built with Solid 2 and TypeGPU/WebGPU. The drawing engine runs in a Web Worker with an OffscreenCanvas by default, or on the main thread with the page's canvas. Drawings are sparse 256×256 raster tiles with layers, undo/redo and lasso selections, saved automatically to IndexedDB and exported as `.paint` files or layered PSDs. Brushes include the soft round brush, eraser, textured tips and Photoshop ABR presets; the view supports pan, zoom, rotation, mirroring and paint symmetry. Unsupported browsers (no WebGPU) display an error.
 
 ## Running and integration
 

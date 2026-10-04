@@ -797,8 +797,8 @@ export function PaintStudio(props: {
                     adjusting={adjustingFrame() !== undefined && adjustingFrame() === frames.activeFrame()?.id}
                     onAdjust={(adjusting) => setAdjustingFrame(adjusting ? frames.activeFrame()?.id : undefined)}
                     onGoTo={frames.goTo}
-                    onExport={({ left, top, width, height, name }) =>
-                      edit({ type: 'png', region: { left, top, width, height }, name: `${name}.png` })
+                    onExport={({ left, top, width, height, name }, format) =>
+                      edit({ type: format, region: { left, top, width, height }, name: `${name}.${format}` })
                     }
                     onCopyLink={(id) =>
                       navigator.clipboard.writeText(frames.linkTo(id)).then(
@@ -843,6 +843,10 @@ export function PaintStudio(props: {
                     }}
                     onExportPng={() => {
                       edit({ type: 'png' });
+                      closePanel();
+                    }}
+                    onExportPsd={() => {
+                      edit({ type: 'psd' });
                       closePanel();
                     }}
                     onResetView={() => {
