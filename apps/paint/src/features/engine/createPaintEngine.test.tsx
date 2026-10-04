@@ -516,6 +516,8 @@ function assemble() {
     scaleBrush: tools.scaleSize,
     zoomBy: () => {},
     resetZoom: () => {},
+    transform: () => {},
+    confirm: () => false,
     cancel: () => {}
   });
   return {

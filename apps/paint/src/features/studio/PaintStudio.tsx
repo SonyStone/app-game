@@ -29,6 +29,7 @@ import { createImagePlacement, HistorySourceControl, LayersPanel } from '../laye
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
 import { createSelection, createSelectionView, guardEdits, SelectionActions } from '../selection';
 import { createSymmetry, SymmetryGuide, SymmetryPanel } from '../symmetry';
+import { createTransform, TransformActions, TransformOverlay } from '../transform';
 import { createFullscreenToggle } from './createFullscreenToggle';
 import { createPaintShortcuts } from './createPaintShortcuts';
 import { DrawingMenu } from './DrawingMenu';
@@ -73,7 +74,24 @@ export function PaintStudio(props: {
   const selection = createSelection({ send: engine.send, document: engine.state, ready: engine.canEdit });
   createSelectionView({ points: selection.points, ready: engine.canEdit, send: engine.send });
   /** Sends document commands, respecting a pending selection edit and clearing the outline where needed. */
-  const edit = guardEdits(selection, engine.send);
+  const guarded = guardEdits(selection, engine.send);
+  /**
+   * Sends document commands. While transforming, Undo cancels the transform and other document changes wait for it
+   * to be applied or cancelled, so the transform stays one undo step.
+   */
+  const edit: typeof guarded = (command) => {
+    if (transform.active()) {
+      if (command.type === 'undo') {
+        void transform.cancel();
+      }
+
+      if (!allowedWhileTransforming.has(command.type)) {
+        return;
+      }
+    }
+
+    guarded(command);
+  };
   const size = createViewSize(stage);
   const monitor = createPerformanceMonitor({ enabled: developer.performanceMonitor, label: engine.mode, size });
   const camera = createPaintCamera({
@@ -115,7 +133,7 @@ export function PaintStudio(props: {
   const brushAdjust = createBrushAdjust({
     brush: tools.brush,
     update: tools.updateBrush,
-    available: () => paintsWithBrush() && canChangeBrush()
+    available: () => paintsWithBrush() && !transform.active() && canChangeBrush()
   });
   const colorPicker = createCanvasColorPicker({
     paints: () => paintsColor(),
@@ -158,6 +176,14 @@ export function PaintStudio(props: {
     canFill: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
     send: edit
   });
+  const transform = createTransform({
+    run: engine.runEdit,
+    selection: selection.points,
+    canStart: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
+    onStart: () => selection.replace([]),
+    onSelection: selection.replace,
+    onError: setError
+  });
   const fullscreen = createFullscreenToggle(editor, setError);
 
   const { brush, tool } = tools;
@@ -189,7 +215,13 @@ export function PaintStudio(props: {
     showPenCursor: developer.showPenCursor,
     rawUpdate: developer.markRawReceived,
     // The Mixer Brush loads paint with Alt/Option; other painting tools pick a color.
-    canvasAction: firstCanvasAction(mixer.canvasAction, colorPicker.canvasAction, fill.canvasAction),
+    canvasAction: firstCanvasAction(
+      // Alt/Option picks colors even while transforming; the transform then consumes other contacts.
+      colorPicker.canvasAction,
+      transform.canvasAction,
+      mixer.canvasAction,
+      fill.canvasAction
+    ),
     adjust: brushAdjust.adjust,
     touchGestures: {
       tap(fingers) {
@@ -228,7 +260,17 @@ export function PaintStudio(props: {
     scaleBrush: tools.scaleSize,
     zoomBy: camera.zoomBy,
     resetZoom: camera.resetZoom,
+    transform: toggleTransform,
+    confirm() {
+      if (!transform.active()) {
+        return false;
+      }
+
+      void transform.end();
+      return true;
+    },
     cancel() {
+      void transform.cancel();
       mixer.cancelPick();
       colorPicker.cancel();
       camera.navigation.close();
@@ -247,8 +289,12 @@ export function PaintStudio(props: {
     return engine.canEdit() && !selection.isBusy() && !engine.isDrawing() && !engine.isCommandBusy();
   }
 
-  /** Switches tools; choosing the active tool again keeps the lasso outline. */
+  /** Switches tools, applying a transform in progress; choosing the active tool again keeps the lasso outline. */
   function chooseTool(next: PaintTool) {
+    if (transform.active()) {
+      void transform.end();
+    }
+
     if (selection.isBusy() || next === tools.tool()) {
       return;
     }
@@ -257,6 +303,18 @@ export function PaintStudio(props: {
     colorPicker.cancel();
     selection.clear();
     tools.chooseTool(next);
+  }
+
+  /** Starts transforming the selection or the active layer, or applies the transform in progress. */
+  function toggleTransform() {
+    if (transform.active()) {
+      void transform.end();
+      return;
+    }
+
+    mixer.cancelPick();
+    colorPicker.cancel();
+    void transform.start();
   }
 
   /**
@@ -376,7 +434,18 @@ export function PaintStudio(props: {
             />
           )}
         </Show>
-        <Show when={ready() && paintsWithBrush() && cursor()}>
+        <Show when={transform.bounds()}>
+          {(bounds) => (
+            <TransformOverlay
+              bounds={bounds()}
+              box={transform.box()}
+              toScreen={(point) => worldToScreen(point, camera.camera(), size())}
+              toDocument={(point) => screenToWorld(point, camera.current(), size())}
+              onChange={transform.setBox}
+            />
+          )}
+        </Show>
+        <Show when={ready() && paintsWithBrush() && !transform.active() && cursor()}>
           {(point) => <BrushCursor point={point()} size={cursorSize()} square={blockCursor()} />}
         </Show>
         <Show when={camera.navigation.center()}>
@@ -421,11 +490,22 @@ export function PaintStudio(props: {
           mirrored={camera.camera().mirrored}
           symmetry={symmetry.symmetry().mode !== 'off'}
           panel={panel()}
+          transforming={transform.active()}
+          onTransform={toggleTransform}
           onChooseTool={chooseTool}
           onToggleMirror={camera.toggleMirror}
           onTogglePanel={togglePanel}
         />
-        <Show when={tool() === 'lasso'}>
+        <Show when={transform.active()}>
+          <TransformActions
+            onFlip={transform.flip}
+            onRotate={transform.rotate}
+            onReset={transform.reset}
+            onCancel={() => void transform.cancel()}
+            onDone={() => void transform.end()}
+          />
+        </Show>
+        <Show when={tool() === 'lasso' && !transform.active()}>
           <SelectionActions
             disabled={!ready() || selection.drawing()}
             busy={selection.busy()}
@@ -681,6 +761,19 @@ export function PaintStudio(props: {
     return tool() === 'brush' || tool() === 'eraser';
   }
 }
+
+/** Commands that pass while a transform is in progress: view, settings and the transform's own edits. */
+const allowedWhileTransforming = new Set<Parameters<ReturnType<typeof guardEdits>>[0]['type']>([
+  'view',
+  'selection-view',
+  'debug',
+  'live-tail',
+  'adaptive-quality',
+  'diagnostics',
+  'download',
+  'png',
+  'cancel'
+]);
 
 /** Save indicator text for each engine save state. */
 const saveStatus = {

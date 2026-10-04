@@ -24,6 +24,8 @@ function mount(panelOpen: () => boolean) {
     scaleBrush: vi.fn(),
     zoomBy: vi.fn(),
     resetZoom: vi.fn(),
+    transform: vi.fn(),
+    confirm: vi.fn(() => true),
     cancel: vi.fn()
   };
   createRoot((disposeRoot) => {
@@ -50,6 +52,21 @@ it('closes an open panel with Escape without cancelling the lasso outline', () =
 
   press('Escape');
   expect(actions.cancel).toHaveBeenCalledTimes(1);
+});
+
+it('starts or applies a transform with Ctrl/Cmd+T and confirms with Enter', () => {
+  const actions = mount(() => false);
+  const transform = press('t', { metaKey: true });
+  press('t', { ctrlKey: true });
+  expect(transform).toBe(false);
+  expect(actions.transform).toHaveBeenCalledTimes(2);
+  press('Enter');
+  expect(actions.confirm).toHaveBeenCalledOnce();
+
+  const button = document.body.appendChild(document.createElement('button'));
+  button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  expect(actions.confirm).toHaveBeenCalledOnce();
+  button.remove();
 });
 
 it('ignores single-key tool and size shortcuts held with modifiers', () => {

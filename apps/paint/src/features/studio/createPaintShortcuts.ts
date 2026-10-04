@@ -28,7 +28,11 @@ export function createPaintShortcuts(actions: {
   /** Zooms the canvas around the viewport center by `factor`. */
   zoomBy: (factor: number) => void;
   resetZoom: () => void;
-  /** Cancels the stroke, Mixer Brush pick, puck and outline in progress. */
+  /** Starts transforming the selection or the active layer, or applies the transform in progress. */
+  transform: () => void;
+  /** Applies the work in progress that Enter confirms, such as a transform; returns whether there was any. */
+  confirm: () => boolean;
+  /** Cancels the stroke, Mixer Brush pick, puck, outline and transform in progress. */
   cancel: () => void;
 }) {
   createEventListener(window, 'keydown', (event) => {
@@ -37,6 +41,15 @@ export function createPaintShortcuts(actions: {
     }
 
     if ((event.target instanceof Element && event.target.closest('dialog[open]')) || editable(event.target)) {
+      return;
+    }
+
+    // Enter on a focused button or link presses it instead.
+    if (
+      event.key === 'Enter' &&
+      event.target instanceof Element &&
+      event.target.closest('button, a, [role="button"]')
+    ) {
       return;
     }
 
@@ -70,6 +83,8 @@ function match(event: KeyboardEvent, lasso: boolean) {
       run: (actions) => actions.selectionAction(key === 'c' ? 'copy' : key === 'x' ? 'cut' : 'paste')
     },
     { when: modifier && key === 'd', preventDefault: true, run: (actions) => actions.deselect() },
+    { when: modifier && key === 't', preventDefault: true, run: (actions) => actions.transform() },
+    { when: event.key === 'Enter', run: (actions) => actions.confirm() },
     {
       when: lasso && (key === 'delete' || key === 'backspace'),
       preventDefault: true,

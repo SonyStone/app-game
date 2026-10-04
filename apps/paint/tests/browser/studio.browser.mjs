@@ -447,6 +447,39 @@ try {
     await undo(page, 6);
   });
 
+  await step('the transform moves the layer live and applies as one undo step', async () => {
+    const { cx, cy } = await workspaceCenter(page);
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await page.getByRole('button', { name: 'Add layer' }).click();
+    await waitForSaved(page);
+    await page.keyboard.press('Escape');
+    await setColor(page, '000000');
+    await drawLine(page, { x: cx + 200, y: cy - 120 }, { x: cx + 200, y: cy + 60 });
+
+    await page.keyboard.press('Control+t');
+    const box = page.getByLabel('Transform box');
+    await box.waitFor({ timeout: 10_000 });
+    await page.mouse.move(cx + 200, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + 260, cy, { steps: 6 });
+    await page.mouse.up();
+    // The pixels leave their old place while the transform is open; inside the box, clicks drag the box.
+    await page.waitForTimeout(500);
+    await setColor(page, 'FF0000');
+    assert.ok(Math.min(...(await pickRgb(page, { x: cx + 200, y: cy - 40 }, 'FF0000'))) > 0xe0);
+    await page.getByRole('button', { name: 'Done' }).click();
+    await box.waitFor({ state: 'detached', timeout: 10_000 });
+    await waitForSaved(page);
+    await setColor(page, '00FF00');
+    assert.ok(Math.max(...(await pickRgb(page, { x: cx + 260, y: cy - 40 }, '00FF00'))) < 0x90);
+
+    // One undo restores the line where it was.
+    await undo(page, 1);
+    await setColor(page, '0000FF');
+    assert.ok(Math.max(...(await pickRgb(page, { x: cx + 200, y: cy - 40 }, '0000FF'))) < 0x90);
+    await undo(page, 2);
+  });
+
   await step('the visible canvas exports as PNG', async () => {
     await page.getByRole('button', { name: 'Drawing menu' }).click();
     const [download] = await Promise.all([

@@ -47,6 +47,13 @@ export function createSelection(options: {
     },
     /** Ends a gesture without committing it, restoring the outline from before the gesture. */
     cancel,
+    /** Replaces the outline, for example with one transformed together with its pixels; ignored while busy. */
+    replace(next: Point[]) {
+      cancel();
+      if (!isBusy()) {
+        setPoints(next);
+      }
+    },
     /** Starts moving the outline when `point` is inside it, otherwise starts a new lasso. */
     begin(point: Point) {
       if (isBusy()) {

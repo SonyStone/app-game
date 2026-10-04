@@ -76,6 +76,10 @@ export function createPaintEngine(options: {
     timeoutMs: requestTimeoutMs,
     failure: (message) => engineError('failed', message)
   });
+  const edits = createEngineRequests<unknown>({
+    timeoutMs: requestTimeoutMs,
+    failure: (message) => engineError('failed', message)
+  });
   const commands = createEngineRequests<void>({
     timeoutMs: requestTimeoutMs,
     failure: (message) => brushError('command', message)
@@ -146,7 +150,8 @@ export function createPaintEngine(options: {
     restart,
     putResources,
     runBrushCommand,
-    pickColor
+    pickColor,
+    runEdit
   };
 
   /**
@@ -158,6 +163,7 @@ export function createPaintEngine(options: {
     resources.disconnect();
     commands.disconnect();
     colors.disconnect();
+    edits.disconnect();
     resident.clear();
     drawing = false;
     options.onError(undefined);
@@ -214,6 +220,9 @@ export function createPaintEngine(options: {
           break;
         case 'picked-color':
           colors.receive(event.requestId, event.result);
+          break;
+        case 'edited':
+          edits.receive(event.requestId, event.result);
           break;
         case 'checkpointed':
           retire(event);
@@ -372,6 +381,7 @@ export function createPaintEngine(options: {
       resources.disconnect();
       commands.disconnect();
       colors.disconnect();
+      edits.disconnect();
       options.onSelection(emptySelection);
       // The failed engine discarded any stroke in progress; the next pen-down must start a new one.
       drawing = false;
@@ -387,6 +397,7 @@ export function createPaintEngine(options: {
         resources.disconnect();
         commands.disconnect();
         colors.disconnect();
+        edits.disconnect();
       }
 
       if (phase !== 'active') {
@@ -529,6 +540,14 @@ export function createPaintEngine(options: {
   }
 
   /** Reads the presented `#rrggbb` color at `point`, in CSS pixels of the canvas, after committing any stroke. Never rejects. */
+  /**
+   * Runs a module edit and resolves its reply, for edits that report back, such as a transform's bounds; see
+   * `defineDocumentEdit`. The edit's errors resolve as `failed` errors instead of reaching `onError`.
+   */
+  function runEdit(command: Omit<Extract<EngineCommand, { type: 'edit' }>, 'requestId'>) {
+    return edits.request((requestId) => post({ ...command, requestId }));
+  }
+
   function pickColor(point: Point): Promise<Result<string, PaintError>> {
     return colors.request((requestId) => post({ type: 'pick-color', requestId, point }));
   }

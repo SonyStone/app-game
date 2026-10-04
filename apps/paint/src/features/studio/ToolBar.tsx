@@ -4,7 +4,7 @@ import type { PaintTool } from '../brush';
 import styles from './PaintStudio.module.css';
 import type { PanelId } from './StudioPanel';
 
-/** Left tool rail: drawing tools, then the view mirror and the symmetry and layer panel toggles. */
+/** Left tool rail: drawing tools and the transform, then the view mirror and the symmetry and layer panel toggles. */
 export function ToolBar(props: {
   tool: PaintTool;
   /** The view is mirrored horizontally. */
@@ -13,6 +13,10 @@ export function ToolBar(props: {
   symmetry: boolean;
   /** The open side panel, if any. */
   panel: PanelId | undefined;
+  /** A transform is in progress. */
+  transforming: boolean;
+  /** Starts a transform of the selection or the active layer, or applies the one in progress. */
+  onTransform: () => void;
   onChooseTool: (tool: PaintTool) => void;
   onToggleMirror: () => void;
   /** Opens or closes `panel`; `target` receives focus again when the panel closes. */
@@ -32,6 +36,14 @@ export function ToolBar(props: {
           </button>
         )}
       </For>
+      <button
+        aria-label="Transform"
+        title="Transform · ⌘/Ctrl T"
+        aria-pressed={props.transforming ? 'true' : 'false'}
+        onClick={() => props.onTransform()}
+      >
+        <SketchIcon name="move" />
+      </button>
       <span class={styles.toolSeparator} />
       <button
         aria-label="Mirror canvas"
