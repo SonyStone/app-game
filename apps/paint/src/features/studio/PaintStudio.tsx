@@ -21,7 +21,7 @@ import {
 import { createBrushLibrary, createBrushStorage, createPresetUploads, createRecentPresets } from '../brush-library';
 import { createPaintCamera, createViewSize } from '../camera';
 import { BrushCursor, CanvasDebug, firstCanvasAction, PaintCanvas, type CanvasInput } from '../canvas';
-import { ColorPanel, createCanvasColorPicker } from '../color';
+import { ColorPanel, ColorPickerLoupe, ColorPickerSettings, createCanvasColorPicker } from '../color';
 import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
 import { createFill, FillPanel } from '../fill';
@@ -143,6 +143,7 @@ export function PaintStudio(props: {
     paints: () => paintsColor(),
     toScreen: (point) => worldToScreen(point, camera.current(), size()),
     pick: engine.pickColor,
+    current: () => brush().color,
     apply: (color) => tools.updateBrush({ color }),
     onError: setError
   });
@@ -271,7 +272,7 @@ export function PaintStudio(props: {
           edit({ type: 'redo' });
         }
       },
-      hold: (point) => void colorPicker.pickAt(point)
+      hold: colorPicker.hold
     },
     puck: camera.navigation,
     puckPicker: radial.picker,
@@ -492,9 +493,10 @@ export function PaintStudio(props: {
             />
           )}
         </Show>
-        <Show when={ready() && paintsWithBrush() && !transform.active() && cursor()}>
+        <Show when={ready() && paintsWithBrush() && !transform.active() && !colorPicker.preview() && cursor()}>
           {(point) => <BrushCursor point={point()} size={cursorSize()} square={blockCursor()} />}
         </Show>
+        <Show when={colorPicker.preview()}>{(preview) => <ColorPickerLoupe preview={preview()} />}</Show>
         <Show when={camera.navigation.center()}>
           {(center) => (
             <NavigationPuck navigation={camera.navigation} focusTarget={() => canvas()!}>
@@ -700,6 +702,11 @@ export function PaintStudio(props: {
                       colorPicker.arm();
                       closePanel();
                     }}
+                  />
+                  <ColorPickerSettings
+                    source={colorPicker.settings.source()}
+                    size={colorPicker.settings.size()}
+                    onChange={colorPicker.settings.update}
                   />
                   <Show when={mixer.available()}>
                     <MixerActions

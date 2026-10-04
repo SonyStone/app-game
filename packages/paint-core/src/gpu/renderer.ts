@@ -412,16 +412,18 @@ async function assemblePaintRenderer(
       const offset = ((y - ty * TILE_SIZE) * TILE_SIZE + x - tx * TILE_SIZE) * 4;
       return pixels ? unpackTile(pixels).slice(offset, offset + 4) : new Uint8Array(4);
     },
-    /** Reads the presented color at `point`, in CSS pixels of a `size` view of `target`, as 8-bit RGB. See
-     * `readPresented`; this copies a single pixel.
+    /** Reads the presented colors around `point`, in CSS pixels of a `size` view of `target`, as opaque RGBA: a
+     * square of `area` CSS pixels per side, in backing pixels and within the view. See `readPresented`, which reads the
+     * last composed frame; render first for an up-to-date image.
      */
-    async readPresentedColor(point: Point, size: ViewSize, target = canvas): Promise<[number, number, number]> {
+    async readPresentedArea(point: Point, size: ViewSize, area = 1, target = canvas) {
       const view = targets.get(target)?.view;
       if (!view) throw new Error('Render the canvas before reading its colors.');
-      const x = Math.min(view.width - 1, Math.max(0, Math.floor((point.x / size.width) * view.width)));
-      const y = Math.min(view.height - 1, Math.max(0, Math.floor((point.y / size.height) * view.height)));
-      const { data } = await readPresented(target, { x, y, width: 1, height: 1 });
-      return [data[0]!, data[1]!, data[2]!];
+      const side = Math.max(1, Math.round((area * view.width) / size.width));
+      const clamp = (value: number, length: number) => Math.min(length - side, Math.max(0, Math.floor(value)));
+      const x = clamp((point.x / size.width) * view.width - side / 2 + 0.5, view.width);
+      const y = clamp((point.y / size.height) * view.height - side / 2 + 0.5, view.height);
+      return (await readPresented(target, { x, y, width: side, height: side })).data;
     },
     readPresented,
     /** Paint accumulates by tile; canvas-sampling tools transport pixels in stamp order. */

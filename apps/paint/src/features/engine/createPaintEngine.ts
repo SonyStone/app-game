@@ -1,6 +1,7 @@
 import type { BrushResource, createBrushResources } from '@app-game/abr-paint/resources';
 import type { Brush } from '@app-game/paint-core/brush';
 import type { Camera, Point } from '@app-game/paint-core/camera';
+import type { ColorSample } from '@app-game/paint-core/colorSample';
 import { createDocument } from '@app-game/paint-core/document';
 import type { CheckpointedEvent, PaintEvent, SelectionEvent, StateEvent } from '@app-game/paint-core/protocol';
 import { gpuError } from '@app-game/solid-gpu/errors';
@@ -72,7 +73,7 @@ export function createPaintEngine(options: {
     timeoutMs: requestTimeoutMs,
     failure: (message) => brushError('upload', message)
   });
-  const colors = createEngineRequests<string>({
+  const colors = createEngineRequests<string | null>({
     timeoutMs: requestTimeoutMs,
     failure: (message) => engineError('failed', message)
   });
@@ -550,7 +551,6 @@ export function createPaintEngine(options: {
     return commands.request((requestId) => post({ type: 'brush-command', requestId, brush, command }));
   }
 
-  /** Reads the presented `#rrggbb` color at `point`, in CSS pixels of the canvas, after committing any stroke. Never rejects. */
   /**
    * Runs a module edit and resolves its reply, for edits that report back, such as a transform's bounds; see
    * `defineDocumentEdit`. The edit's errors resolve as `failed` errors instead of reaching `onError`.
@@ -559,8 +559,15 @@ export function createPaintEngine(options: {
     return edits.request((requestId) => post({ ...command, requestId }));
   }
 
-  function pickColor(point: Point): Promise<Result<string, PaintError>> {
-    return colors.request((requestId) => post({ type: 'pick-color', requestId, point }));
+  /**
+   * Picks the `#rrggbb` color at `point`, in CSS pixels of the canvas, as `sample` says: by default one presented
+   * pixel at full detail, after committing any stroke. Resolves `null` where the active layer has no paint to pick.
+   * Never rejects.
+   */
+  function pickColor(point: Point, sample?: ColorSample): Promise<Result<string | null, PaintError>> {
+    return colors.request((requestId) =>
+      post({ type: 'pick-color', requestId, point, ...(sample === undefined ? {} : { sample }) })
+    );
   }
 
   /**

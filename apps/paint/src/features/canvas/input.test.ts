@@ -49,6 +49,43 @@ describe('input to worker contract', () => {
     expect(commands.map((command) => command.type)).toEqual(['begin', 'samples', 'end']);
     expect(run).toHaveBeenCalledOnce();
   });
+  it('gives a canvas action the drag of its contact and its release or cancellation', () => {
+    const action = { enabled: () => true, run: vi.fn(), move: vi.fn(), end: vi.fn() };
+    const { pointer, commands } = setup(undefined, defaultBrush, action);
+    const world = (x: number, y: number) => screenToWorld({ x, y }, defaultCamera(), { width: 800, height: 600 });
+    pointer('pointerdown', 400, 300, { pointerType: 'pen' });
+    pointer('pointermove', 420, 310, { pointerType: 'pen' });
+    pointer('pointerup', 420, 310, { pointerType: 'pen' });
+    expect(action.move).toHaveBeenCalledExactlyOnceWith(world(420, 310));
+    expect(action.end).toHaveBeenLastCalledWith(false);
+    pointer('pointerdown', 400, 300, { pointerType: 'pen' });
+    pointer('pointercancel', 400, 300, { pointerType: 'pen' });
+    expect(action.end).toHaveBeenLastCalledWith(true);
+    expect(commands).toEqual([]);
+  });
+  it('lets a touch hold continue as a drag of the held finger until it lifts', () => {
+    vi.useFakeTimers();
+    const drag = { move: vi.fn(), end: vi.fn() };
+    const { pointer, navigate } = setup(undefined, defaultBrush, undefined, defaultCamera, undefined, undefined, {
+      tap: vi.fn(),
+      hold: () => drag
+    });
+    const world = (x: number, y: number) => screenToWorld({ x, y }, defaultCamera(), { width: 800, height: 600 });
+    pointer('pointerdown', 420, 330, { pointerType: 'touch' });
+    vi.advanceTimersByTime(500);
+    pointer('pointermove', 480, 360, { pointerType: 'touch' });
+    pointer('pointerup', 480, 360, { pointerType: 'touch' });
+    expect(drag.move).toHaveBeenCalledExactlyOnceWith(world(480, 360));
+    expect(drag.end).toHaveBeenCalledExactlyOnceWith(false);
+    expect(navigate).not.toHaveBeenCalled();
+
+    pointer('pointerdown', 420, 330, { pointerType: 'touch' });
+    vi.advanceTimersByTime(500);
+    pointer('pointercancel', 420, 330, { pointerType: 'touch' });
+    expect(drag.end).toHaveBeenLastCalledWith(true);
+    pointer('pointermove', 450, 330, { pointerType: 'touch' });
+    expect(drag.move).toHaveBeenCalledOnce();
+  });
   it('lets an armed touch pick paint without panning and releases the action on cancellation', () => {
     let armed = true;
     const run = vi.fn(() => {

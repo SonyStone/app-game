@@ -25,7 +25,9 @@ The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhos
 - Camera pan, zoom, rotate and mirroring. The Puck is invoked by holding Space, pressing V, the right mouse button or the pen's barrel button. A ring of quick actions surrounds it (`src/features/radial-menu/`): the brush, eraser, fill and lasso tools, transform, undo and redo, the canvas color picker, and the three most recently used brush presets other than the current one.
 - Autosave of completed actions to IndexedDB, restore after reload, `.paint` import/export.
 - Drawing menu → Developer → Canvas wireframe shows source tiles, selected overview pages and their triangles. Green pages are resident, yellow use a coarse fallback, pink are loading. Statistics include LOD, draw calls, RAM/GPU caches and tile reads/writes. The overlay follows pan/zoom/rotate/mirror and the current stroke, and does not appear in PNG or the project file.
-- PNG exports the current canvas view with the background, without the lasso outline. It is not an export of the whole infinite document. The image is read back from the composed frame on the GPU, because a WebGPU canvas cannot be read once its frame has been presented; the canvas eyedropper reads its pixel the same way, so it picks the displayed color of all layers over the paper.
+- PNG exports the current canvas view with the background, without the lasso outline. It is not an export of the whole infinite document. The image is read back from the composed frame on the GPU, because a WebGPU canvas cannot be read once its frame has been presented; the canvas eyedropper reads its pixels the same way, so by default it picks the displayed color of all layers over the paper.
+
+Picking a color from the canvas (`src/features/color/createCanvasColorPicker.ts`) lasts as long as the contact: while it is held, a ring around it shows the color under it in the upper half and the current color in the lower half (a checkerboard where the active layer has no paint), sampled from the last presented frame as the contact moves; releasing picks the color there at full detail and applies it, and a cancelled contact picks nothing. The Color panel chooses what is sampled: All layers (the view, paper included) or the Active layer's paint (paint-core `sampleLayer`, unpremultiplied, nothing where the layer is empty), averaged over 1, 3×3 or 5×5 pixels (CSS pixels of the view, document pixels of the layer); the choice is remembered. A one-finger hold starts the same pick, which then follows the finger.
 - Losing the GPU device pauses drawing. The recovery button creates a new device from versioned tiles of completed strokes in RAM/IndexedDB.
 
 ## Controls
@@ -36,7 +38,7 @@ The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhos
 | Pan view                              | Pan zone of the Puck, middle button or one finger         |
 | Zoom and rotate                       | Two fingers                                               |
 | Undo / redo                           | Tap with two / three fingers                              |
-| Pick a color                          | Hold one finger still for half a second                   |
+| Pick a color                          | Hold one finger still for half a second, drag, release    |
 | Zoom                                  | Wheel, top buttons or Puck                                |
 | Puck and quick actions                | Hold Space, V, right or pen barrel button, bottom-right button |
 | Brush / eraser                        | B / E (the eraser keeps its own size and flow)            |
@@ -47,7 +49,7 @@ The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhos
 | Delete selected pixels                | Delete / Backspace while Lasso is selected                |
 | Brush size                            | [ / ]                                                     |
 | Brush size and opacity                | Ctrl+Alt (or Cmd+Option) drag: right/left for size, up/down for opacity |
-| Pick color from the canvas            | Alt/Option-click with a brush, or the canvas eyedropper in Color, then tap |
+| Pick color from the canvas            | Alt/Option-press with a brush, or the canvas eyedropper in Color (or the quick actions), then press; drag to look, release to pick |
 | Swap / reset colors                   | X / D                                                     |
 | Undo / redo                           | Ctrl or Cmd + Z / Shift + Z, or Ctrl + Y                  |
 | Zoom in / out / 100%                  | Ctrl or Cmd + = / - / 0                                   |

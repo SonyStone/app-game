@@ -1,7 +1,8 @@
 import { makeTimer } from '@solid-primitives/timer';
 import { createRoot, onCleanup } from 'solid-js';
 import { attempt, createTaskQueue, unwrapResult, type Result } from './asyncResult';
-import { defaultCamera, type Point } from './camera';
+import { defaultCamera, screenToWorld, type Point } from './camera';
+import { averageOpaque, defaultColorSample, sampleLayer } from './colorSample';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
 import type { TileChange } from './document';
@@ -791,12 +792,17 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             });
             break;
           case 'pick-color': {
-            const result = await attempt(async () => {
+            const sample = command.sample ?? defaultColorSample;
+            const result = await attempt(async (): Promise<string | null> => {
               if (!primaryAttached || !renderer || lost) throw new Error('The drawing engine is not ready.');
-              await end();
-              await draw(true);
-              const rgb = await renderer.readPresentedColor(command.point, size);
-              return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+              if (sample.exact) await end();
+              if (sample.source === 'layer') {
+                return sampleLayer(document.active, screenToWorld(command.point, camera, size), sample.size, (pixels) =>
+                  pixels instanceof Uint8Array ? Promise.resolve(pixels) : tileStore.read(pixels)
+                );
+              }
+              if (sample.exact) await draw(true);
+              return averageOpaque(await renderer.readPresentedArea(command.point, size, sample.size));
             });
             post({
               type: 'picked-color',

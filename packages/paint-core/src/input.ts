@@ -27,10 +27,16 @@ export function attachInput(
     showPenCursor?: () => boolean;
     /** Called when real raw pen updates are received, rather than merely supported by the browser. */
     rawUpdate?: () => void;
-    /** Optional one-contact action, e.g. sampling canvas paint. Consumes contact without a stroke or touch pan. */
+    /**
+     * Optional contact action, e.g. sampling canvas paint. Consumes the contact without a stroke or touch pan: `run`
+     * receives the document point of the contact, `move` the points it is dragged to and `end` its release, or a
+     * cancellation with `cancelled` set.
+     */
     canvasAction?: {
       enabled: (event: Pick<PointerEvent, 'altKey' | 'pointerType'>) => boolean;
       run: (point: Point) => void;
+      move?: (point: Point) => void;
+      end?: (cancelled: boolean) => void;
     };
     /**
      * Optional drag adjustment, such as brush size and opacity. Takes precedence over `canvasAction`; `begin`, `move`
@@ -45,11 +51,13 @@ export function attachInput(
     /**
      * Optional touch shortcuts beside navigation. `tap` receives the finger count of a short touch of two or more
      * fingers that barely moved; the camera returns to where the touch started. `hold` receives the document point of
-     * one finger held still for half a second; the touch then no longer navigates until every finger lifts.
+     * one finger held still for half a second; the touch then no longer navigates until every finger lifts. A hold
+     * that returns a drag follows that finger: `move` receives its document points and `end` its release, or a
+     * cancellation with `cancelled` set.
      */
     touchGestures?: {
       tap: (fingers: number) => void;
-      hold?: (point: Point) => void;
+      hold?: (point: Point) => TouchHoldDrag | void;
     };
     puck?: ReturnType<typeof createNavigationPuck>;
     /** Chooses from controls around the puck with right-drags, such as a radial menu; see `PuckPicker`. */
@@ -79,6 +87,13 @@ export function attachInput(
     | { start: number; camera: Camera; origins: Map<number, Point>; fingers: number; moved: boolean; held: boolean }
     | undefined;
   let clearHold: (() => void) | undefined;
+  /** The drag of a held finger, while it is down. */
+  let holdDrag: (TouchHoldDrag & { id: number }) | undefined;
+  const endHoldDrag = (cancelled: boolean) => {
+    const drag = holdDrag;
+    holdDrag = undefined;
+    drag?.end(cancelled);
+  };
   /** Pens in contact anywhere in the window; their palms must not navigate. */
   const pens = new Set<number>();
   /** Time of the latest pen hover or contact event anywhere in the window. */
@@ -183,7 +198,7 @@ export function attachInput(
     const metrics = touchMetrics();
     touchStart = metrics ? { camera: options.camera(), ...metrics } : undefined;
   };
-  const finish = () => {
+  const finish = (cancelled = false) => {
     stopBuildUp?.();
     stopBuildUp = undefined;
     if (gesture?.kind === 'draw') {
@@ -191,6 +206,7 @@ export function attachInput(
     }
     if (gesture?.kind === 'select') options.selection?.end();
     if (gesture?.kind === 'adjust') options.adjust?.end();
+    if (gesture?.kind === 'action') options.canvasAction?.end?.(cancelled);
     gesture = undefined;
   };
   canvas.addEventListener(
@@ -243,7 +259,8 @@ export function attachInput(
                 clearHold = undefined;
                 if (touchSession !== session || session.moved || touches.size !== 1) return;
                 session.held = true;
-                hold(screenToWorld(point, options.camera(), options.size()));
+                const drag = hold(screenToWorld(point, options.camera(), options.size()));
+                if (drag) holdDrag = { ...drag, id: event.pointerId };
               },
               touchHoldMs,
               setTimeout
@@ -316,6 +333,7 @@ export function attachInput(
           touchSession.moved = true;
           stopHold();
         }
+        if (holdDrag?.id === event.pointerId) holdDrag.move(screenToWorld(point, options.camera(), options.size()));
         if (touchSession?.held || pens.size) return;
         const metrics = touchMetrics();
         if (!metrics || !touchStart) return;
@@ -338,7 +356,10 @@ export function attachInput(
         return;
       }
       if (!gesture || gesture.id !== event.pointerId) return;
-      if (gesture.kind === 'action') return;
+      if (gesture.kind === 'action') {
+        options.canvasAction?.move?.(screenToWorld(point, options.camera(), options.size()));
+        return;
+      }
       if (gesture.kind === 'adjust') {
         options.adjust?.move(point);
         return;
@@ -368,6 +389,7 @@ export function attachInput(
     'pointerup',
     (event) => {
       if (touches.delete(event.pointerId)) {
+        if (holdDrag?.id === event.pointerId) endHoldDrag(false);
         resetTouch();
         stopHold();
         const session = touchSession;
@@ -399,6 +421,7 @@ export function attachInput(
   );
   const interrupted = (event: PointerEvent) => {
     if (touches.delete(event.pointerId)) {
+      if (holdDrag?.id === event.pointerId) endHoldDrag(true);
       resetTouch();
       endTouchSession();
     }
@@ -406,7 +429,7 @@ export function attachInput(
       if (gesture.kind === 'select') {
         options.selection?.cancel();
         gesture = undefined;
-      } else finish();
+      } else finish(true);
     }
   };
   canvas.addEventListener('pointercancel', interrupted, { signal });
@@ -439,7 +462,8 @@ export function attachInput(
     'blur',
     () => {
       if (gesture?.kind === 'select') options.selection?.cancel();
-      finish();
+      finish(true);
+      endHoldDrag(true);
       touches.clear();
       resetTouch();
       endTouchSession();
@@ -450,11 +474,15 @@ export function attachInput(
   return () => {
     detachPuck?.();
     if (gesture?.kind === 'select') options.selection?.cancel();
-    finish();
+    finish(true);
+    endHoldDrag(true);
     endTouchSession();
     abort.abort();
   };
 }
+
+/** A drag that continues a touch hold, such as sampling colors under the held finger. */
+export type TouchHoldDrag = { move: (point: Point) => void; end: (cancelled: boolean) => void };
 
 /** Touches starting this many milliseconds after pen hover or contact are taken for a resting palm. */
 const palmWindowMs = 500;
