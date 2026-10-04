@@ -136,7 +136,8 @@ async function verifyColorMixing(report: (message: string) => void) {
         throw new Error(`Dark or incorrect stroke mix: ${result}`);
     }
     renderer.reset();
-    const layers = [solidLayer('red', [255, 0, 0], 1), solidLayer('green', [0, 255, 0], 0.5, 'linear')];
+    const layers = [solidLayer('red', [255, 0, 0], 1), solidLayer('green', [0, 255, 0], 0.5)];
+    renderer.setLinearBlending(true);
     await renderer.render(layers, camera, size, 1);
     const result = await readCanvas(canvas);
     if (Math.abs(result[0]! - 188) > 1 || Math.abs(result[1]! - 188) > 1 || result[2] !== 0)

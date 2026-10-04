@@ -40,6 +40,8 @@ export function createFrameComposer(
     smoothPixels: () => boolean;
     /** Whether the pixel grid shows over presented frames, from `pixelGridZoom`. */
     pixelGrid: () => boolean;
+    /** Whether layers blend in linear light; see the composite shader's `settings.w`. */
+    linearBlending: () => boolean;
   },
   options: {
     cacheTiles?: number;
@@ -262,7 +264,9 @@ export function createFrameComposer(
 
           // Each composited layer owns a settings slot, so every composite pass can share the frame encoder.
           const composite = view.composite(slot++);
-          composite.settings.write(d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), clipped ? 1 : 0, 0));
+          composite.settings.write(
+            d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), clipped ? 1 : 0, deps.linearBlending() ? 1 : 0)
+          );
           const pass = frame.encoder().beginRenderPass({
             colorAttachments: [
               { view: write === view.a ? view.aRender : view.bRender, loadOp: 'clear', storeOp: 'store' }

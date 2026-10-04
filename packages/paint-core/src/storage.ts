@@ -15,12 +15,14 @@ export function snapshotDocument(
   layers: Layer[],
   activeId: string,
   camera: Camera,
-  features: Readonly<Record<string, unknown>> = {}
+  features: Readonly<Record<string, unknown>> = {},
+  linearBlending = true
 ) {
   return {
     version: 2 as const,
     tileSize: TILE_SIZE,
     activeId,
+    blending: linearBlending ? ('linear' as const) : ('classic' as const),
     camera: { ...camera },
     features: { ...features },
     layers: layers.map(({ tiles, ...layer }) => ({
@@ -40,6 +42,7 @@ export function restoreDocument(value: unknown): {
   activeId: string;
   camera: Camera;
   features: Record<string, unknown>;
+  linearBlending: boolean;
 } {
   const parsed = savedSchema.parse(value);
   if (
@@ -65,10 +68,22 @@ export function restoreDocument(value: unknown): {
         return [tile.key, pixels] as const;
       })
     );
-    return { ...layer, tiles };
+    // Smooth color layers become Normal ones in a document that blends in linear light.
+    return { ...layer, blend: layer.blend === 'linear' ? ('normal' as const) : layer.blend, tiles };
   });
   const legacy = parsed.symmetry === undefined ? {} : { symmetry: parsed.symmetry };
-  return { layers, activeId: parsed.activeId, camera: parsed.camera, features: { ...legacy, ...parsed.features } };
+  // Documents saved before `blending` blend in linear light, unless no layer used Smooth color and one used Normal.
+  const linearBlending =
+    parsed.blending === undefined
+      ? parsed.layers.some(({ blend }) => blend === 'linear') || !parsed.layers.some(({ blend }) => blend === 'normal')
+      : parsed.blending === 'linear';
+  return {
+    layers,
+    activeId: parsed.activeId,
+    camera: parsed.camera,
+    features: { ...legacy, ...parsed.features },
+    linearBlending
+  };
 }
 
 /**
@@ -130,6 +145,8 @@ const savedSchema = z.object({
   /** Paint symmetry of documents saved before document features; see `restoreDocument`. */
   symmetry: z.unknown().optional(),
   features: z.record(z.string(), z.unknown()).default({}),
+  /** Whether layers blend in linear light or encoded sRGB; see `restoreDocument` for documents without it. */
+  blending: z.enum(['linear', 'classic']).optional(),
   camera: cameraSchema,
   layers: z
     .array(
@@ -138,6 +155,7 @@ const savedSchema = z.object({
         name: z.string().max(200),
         visible: z.boolean(),
         opacity: unit,
+        /** `linear`, Smooth color, was a blend mode before linear blending became the document's `blending`. */
         blend: z.enum(['normal', 'multiply', 'screen', 'overlay', 'linear']),
         alphaLock: z.boolean().optional(),
         clipping: z.boolean().optional(),

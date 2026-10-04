@@ -18,8 +18,11 @@ export type Layer = {
   clipping?: boolean;
   tiles: Map<string, TileData>;
 };
-/** Separable color blend modes; alpha always follows source-over. */
-export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay' | 'linear';
+/**
+ * Separable color blend modes; alpha always follows source-over. Whether they blend encoded sRGB or linear light is
+ * the document's `linearBlending`.
+ */
+export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay';
 /** The serializable user-visible layer properties. */
 export type LayerInfo = Omit<Layer, 'tiles'>;
 /** Before/after tile snapshots for one user action. Undefined means the tile did not exist. */
@@ -43,6 +46,8 @@ type HistoryEntry = {
 export function createDocument(options: { paged?: boolean } = {}) {
   let layers: Layer[] = [newLayer('layer-1', 'Layer 1')];
   let active = 'layer-1';
+  /** Layers blend in linear light ("Smooth color") rather than in encoded sRGB, for every blend mode. */
+  let linearBlending = true;
   let revision = 0;
   let nextHistoryId = 0,
     baseHistoryId = 0;
@@ -152,6 +157,8 @@ export function createDocument(options: { paged?: boolean } = {}) {
         /** Layers bottom to top; `tileCount` is the number of tiles holding paint, 0 for an empty layer. */
         layers: layers.map(({ tiles, ...layer }) => ({ ...layer, tileCount: tiles.size })),
         activeId: active,
+        /** Layers blend in linear light ("Smooth color") rather than in encoded sRGB; see `setLinearBlending`. */
+        linearBlending,
         canUndo: undo.length > 0,
         canRedo: redo.length > 0,
         pixelBytes: layers.reduce((n, l) => n + [...l.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0), 0),
@@ -350,10 +357,23 @@ export function createDocument(options: { paged?: boolean } = {}) {
 
       return entry?.tiles;
     },
+    /** Whether layers blend in linear light ("Smooth color") rather than in encoded sRGB, for every blend mode. */
+    linearBlending: () => linearBlending,
+    /**
+     * Makes every layer blend in linear light, as Photoshop's "Blend RGB colors using gamma 1.0", or in encoded sRGB.
+     * A setting of the document, saved with it, outside the undo history.
+     */
+    setLinearBlending(linear: boolean) {
+      if (linear !== linearBlending) {
+        linearBlending = linear;
+        revision++;
+      }
+    },
     /** Replaces a document after validation, clearing its session-only undo history. */
-    replace(next: Layer[], selected: string) {
+    replace(next: Layer[], selected: string, linear = true) {
       layers = next;
       active = selected;
+      linearBlending = linear;
       undo.length = redo.length = 0;
       historyBytes = 0;
       nextHistoryId = baseHistoryId = 0;
@@ -381,7 +401,7 @@ export type LayerAction =
     };
 
 function newLayer(id: string, name: string): Layer {
-  return { id, name, visible: true, opacity: 1, blend: 'linear', tiles: new Map() };
+  return { id, name, visible: true, opacity: 1, blend: 'normal', tiles: new Map() };
 }
 function tileBytes(changes: TileChange[]): number {
   return changes.reduce((n, c) => n + (c.before?.byteLength ?? 0) + (c.after?.byteLength ?? 0), 0);

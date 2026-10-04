@@ -33,6 +33,19 @@ it('persists navigation in the view record without a full checkpoint', async () 
   expect(storage.save).not.toHaveBeenCalled();
 });
 
+it('blends in linear light as the document says, and saves the setting with it', async () => {
+  const { runtime, renderer, document, storage, waitFor } = await start();
+  // A new document blends in linear light; the renderer, which starts in encoded sRGB, follows it.
+  expect(renderer.setLinearBlending).toHaveBeenLastCalledWith(true);
+
+  runtime.send({ type: 'blending', linear: false });
+  await waitFor(() => !document.linearBlending());
+  expect(renderer.setLinearBlending).toHaveBeenLastCalledWith(false);
+  await vi.advanceTimersByTimeAsync(400);
+  await waitFor(() => storage.save.mock.calls.length > 0);
+  expect(storage.save.mock.calls.at(-1)![0]).toMatchObject({ blending: 'classic' });
+});
+
 it('keeps GPU tile caches for layer selection and property changes, releasing only deleted layers', async () => {
   const { runtime, renderer, document, waitFor } = await start();
   const layer = document.layers[0]!;
@@ -76,7 +89,8 @@ it('merges a layer down from its pixels, reloading only the merged tiles, and re
   // Autosave may already have moved the merged tile to storage.
   const merged = document.active.tiles.get('2,3')!;
   const pixels = unpackTile(merged instanceof Uint8Array ? merged : await storage.read(merged));
-  expect([...pixels.subarray(0, 4)]).toEqual([128, 0, 0, 128]);
+  // Blended in linear light, as documents do by default: half of red over nothing stays red at half alpha.
+  expect([...pixels.subarray(0, 4)]).toEqual([127, 0, 0, 128]);
   expect(renderer.releaseLayer).toHaveBeenCalledWith(upper);
   expect(renderer.restore.mock.calls.at(-1)![0]).toEqual([
     { layerId: lower, key: '2,3', before: undefined, after: undefined }

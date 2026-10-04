@@ -289,7 +289,7 @@ try {
     const trigger = panel.getByRole('button', { name: 'Layer blend mode' });
     await trigger.click();
     const list = panel.getByRole('listbox', { name: 'Layer blend modes' });
-    assert.equal(await list.getByRole('option').count(), 5);
+    assert.equal(await list.getByRole('option').count(), 4);
     await page.screenshot({ path: path.join(os.tmpdir(), 'paint-blend-dropdown.png') });
     await list.getByRole('option', { name: 'Multiply' }).click();
     await list.waitFor({ state: 'detached', timeout: 5_000 });
@@ -298,6 +298,13 @@ try {
     await page.keyboard.press('Escape');
     await list.waitFor({ state: 'detached', timeout: 5_000 });
     assert.equal(await panel.count(), 1, 'Escape closes the list, not the panel');
+    // Smooth color is a setting of the whole drawing, on by default, outside the undo history.
+    const smooth = panel.getByLabel('Smooth color for all layers');
+    assert.equal(await smooth.isChecked(), true);
+    await smooth.uncheck();
+    await waitForSaved(page);
+    await smooth.check();
+    await waitForSaved(page);
     await undo(page, 1);
     await page.keyboard.press('Escape');
   });

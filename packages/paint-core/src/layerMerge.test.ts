@@ -10,11 +10,15 @@ describe('mergeTilePixels', () => {
     expect(first(mergeTilePixels(undefined, upper, 'normal', 0.5))).toEqual([128, 0, 0, 128]);
   });
 
-  it('blends Smooth color in linear light', () => {
+  it('blends every mode in linear light for a document that does', () => {
     const lower = tile([0, 0, 0, 255]);
     const upper = tile([255, 255, 255, 255]);
     // Half of white over black in linear light is linear 0.5, which encodes to sRGB 188.
-    expect(first(mergeTilePixels(lower, upper, 'linear', 0.5))).toEqual([188, 188, 188, 255]);
+    expect(first(mergeTilePixels(lower, upper, 'normal', 0.5, undefined, true))).toEqual([188, 188, 188, 255]);
+    // Multiply of two sRGB 188 grays: linear 0.503 × 0.503 = 0.253 encodes to 138, where encoded values give 139.
+    const gray = tile([188, 188, 188, 255]);
+    expect(first(mergeTilePixels(gray, gray, 'multiply', 1, undefined, true))).toEqual([138, 138, 138, 255]);
+    expect(first(mergeTilePixels(gray, gray, 'multiply', 1))).toEqual([139, 139, 139, 255]);
   });
 
   it('applies separable blend modes against the lower layer', () => {

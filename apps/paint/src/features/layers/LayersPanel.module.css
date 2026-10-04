@@ -181,11 +181,14 @@
   }
 }
 
-.blendNote {
+.smoothColor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  margin: -4px 0 8px;
+  font-size: 12px;
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.5;
-  margin: 0 0 12px;
 }
 
 /* Doubled to outrank the studio's reset of buttons. */

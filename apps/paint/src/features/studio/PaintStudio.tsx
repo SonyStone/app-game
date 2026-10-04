@@ -868,6 +868,7 @@ export function PaintStudio(props: {
                     state={engine.state()}
                     ready={ready()}
                     onAction={(action) => edit({ type: 'layer', action })}
+                    onLinearBlending={(linear) => edit({ type: 'blending', linear })}
                     filter={{
                       shown: layerFilter.shown,
                       where: frames.activeFrame() ? `in ${frames.activeFrame()!.name}` : 'in view',

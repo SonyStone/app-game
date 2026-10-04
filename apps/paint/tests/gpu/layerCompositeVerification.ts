@@ -8,7 +8,13 @@ import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
  * 40-layer viewport.
  */
 export async function verifyLayerComposite(report: (message: string) => void) {
-  const stacks: { name: string; base: Rgb; layers: { color: Rgb; alpha: number; opacity: number; blend: BlendMode }[] }[] = [
+  const stacks: {
+    name: string;
+    base: Rgb;
+    /** The document blends in linear light ("Smooth color"). */
+    linear?: boolean;
+    layers: { color: Rgb; alpha: number; opacity: number; blend: BlendMode }[];
+  }[] = [
     {
       name: '40 glazes at 3% (normal)',
       base: [30, 40, 60],
@@ -17,12 +23,20 @@ export async function verifyLayerComposite(report: (message: string) => void) {
     {
       name: '40 glazes at 3% (smooth color)',
       base: [30, 40, 60],
-      layers: repeat(40, { color: [230, 180, 90], alpha: 255, opacity: 0.03, blend: 'linear' })
+      linear: true,
+      layers: repeat(40, { color: [230, 180, 90], alpha: 255, opacity: 0.03, blend: 'normal' })
     },
     {
       name: '20 dark washes, 5% tile alpha (smooth color)',
       base: [250, 248, 240],
-      layers: repeat(20, { color: [20, 30, 70], alpha: 13, opacity: 1, blend: 'linear' })
+      linear: true,
+      layers: repeat(20, { color: [20, 30, 70], alpha: 13, opacity: 1, blend: 'normal' })
+    },
+    {
+      name: '12 multiply layers at 40% (smooth color)',
+      base: [240, 230, 210],
+      linear: true,
+      layers: repeat(12, { color: [200, 210, 230], alpha: 255, opacity: 0.4, blend: 'multiply' })
     },
     {
       name: '12 multiply layers at 40%',
@@ -36,8 +50,8 @@ export async function verifyLayerComposite(report: (message: string) => void) {
       layer('base', stack.base, 255, 1, 'normal'),
       ...stack.layers.map((item, index) => layer(`layer-${index}`, item.color, item.alpha, item.opacity, item.blend))
     ];
-    const actual = await renderCenter(layers);
-    const expected = composeReference(layers);
+    const actual = await renderCenter(layers, !!stack.linear);
+    const expected = composeReference(layers, !!stack.linear);
     const error = Math.max(...actual.map((value, channel) => Math.abs(value - expected[channel]!)));
     worst = Math.max(worst, error);
     report(
@@ -65,11 +79,12 @@ async function recomposeMs() {
       name: `layer-${index}`,
       visible: true,
       opacity: 0.5,
-      blend: 'linear' as const,
+      blend: 'normal' as const,
       tiles: tiles([230, 180, 90], 128)
     }))
   ];
   const renderer = await createPaintRenderer(new OffscreenCanvas(1024, 1024), () => {}, { cacheTiles: 1024 });
+  renderer.setLinearBlending(true);
   try {
     const camera = { x: 512, y: 512, zoom: 1, angle: 0, mirrored: false };
     const size = { width: 1024, height: 1024 };
@@ -109,11 +124,12 @@ function layer(id: string, color: Rgb, alpha: number, opacity: number, blend: Bl
   return { id, name: id, visible: true, opacity, blend, tiles: new Map([['0,0', pixels]]) };
 }
 
-/** Renders the stack centered on tile 0,0 and returns the presented center pixel. */
-async function renderCenter(layers: Layer[]): Promise<number[]> {
+/** Renders the stack centered on tile 0,0, in linear light with `linear`, and returns the presented center pixel. */
+async function renderCenter(layers: Layer[], linear: boolean): Promise<number[]> {
   const errors: string[] = [];
   const canvas = new OffscreenCanvas(64, 64);
   const renderer = await createPaintRenderer(canvas, (message) => errors.push(message));
+  renderer.setLinearBlending(linear);
   try {
     await renderer.render(layers, { x: 128, y: 128, zoom: 1, angle: 0, mirrored: false }, { width: 64, height: 64 }, 1, true);
     await renderer.submitted();
@@ -130,13 +146,18 @@ async function renderCenter(layers: Layer[]): Promise<number[]> {
   }
 }
 
-/** The composite shader's formulas in double precision, over an opaque first layer. */
-function composeReference(layers: Layer[]): number[] {
+/**
+ * The composite shader's formulas in double precision, over an opaque first layer; with `linear`, both colors are
+ * decoded from sRGB before each blend and the result encoded again.
+ */
+function composeReference(layers: Layer[], linear: boolean): number[] {
   let base = [0, 0, 0, 0];
   for (const item of layers) {
     const pixels = item.tiles.get('0,0') as Uint8Array;
     const source = [...pixels.slice(0, 4)].map((value) => value / 255);
-    base = item.blend === 'linear' ? linearSourceOver(base, source.map((value) => value * item.opacity)) : composite(base, source, item.opacity, item.blend);
+    base = linear
+      ? convert(composite(convert(base, decode), convert(source, decode), item.opacity, item.blend), encode)
+      : composite(base, source, item.opacity, item.blend);
   }
 
   return base.slice(0, 3).map((value) => value * 255);
@@ -166,22 +187,14 @@ function composite(base: number[], source: number[], opacity: number, blend: Ble
   return [...rgb, alpha + base[3]! * (1 - alpha)];
 }
 
-function linearSourceOver(base: number[], source: number[]) {
-  if (source[3]! <= 0) {
-    return base;
+/** A premultiplied color with its straight channels passed through `transfer`. */
+function convert(pixel: number[], transfer: (value: number) => number) {
+  const alpha = pixel[3]!;
+  if (alpha <= 0) {
+    return [0, 0, 0, 0];
   }
 
-  if (base[3]! <= 0 || source[3]! >= 1) {
-    return source;
-  }
-
-  const alpha = source[3]! + base[3]! * (1 - source[3]!);
-  const rgb = [0, 1, 2].map((channel) => {
-    const b = decode(Math.min(1, base[channel]! / base[3]!));
-    const s = decode(Math.min(1, source[channel]! / source[3]!));
-    return encode((s * source[3]! + b * base[3]! * (1 - source[3]!)) / alpha) * alpha;
-  });
-  return [...rgb, alpha];
+  return [...pixel.slice(0, 3).map((value) => transfer(Math.min(1, value / alpha)) * alpha), alpha];
 }
 
 function decode(value: number) {

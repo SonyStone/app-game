@@ -51,6 +51,8 @@ export type DocumentEditContext = {
   active: Layer;
   /** Unpacked premultiplied sRGB RGBA8 pixels of a tile, reading paged-out tiles from storage. */
   readTile: (pixels: TileData) => Promise<Uint8Array>;
+  /** Whether the document blends its layers in linear light; see `mergeTilePixels`. */
+  linearBlending: boolean;
   /**
    * This edit's data kept between its commands, for example the pixels a transform started from. It lasts while the
    * runtime runs and is cleared when a document is imported.

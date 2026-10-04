@@ -50,6 +50,16 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let debug = false;
     let liveTail = true;
     let adaptiveQuality = true;
+    /** Whether the renderer composites in linear light; it starts in encoded sRGB and follows the document. */
+    let rendererLinear = false;
+    /** Has the renderer composite as the document blends, and redraw when that changed. */
+    const syncBlending = () => {
+      if (renderer && rendererLinear !== document.linearBlending()) {
+        rendererLinear = document.linearBlending();
+        renderer.setLinearBlending(rendererLinear);
+        scheduleDraw();
+      }
+    };
     /** How pixels show up close; a replacement renderer keeps it. */
     let pixelView = { smooth: true, grid: false };
     let size = { width: 1, height: 1 },
@@ -157,7 +167,14 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         const base = await read(lower.tiles.get(key));
         merged.set(
           key,
-          mergeTilePixels(base, (await read(pixels))!, upper.blend, upper.opacity, clipsToLower ? { base } : undefined)
+          mergeTilePixels(
+            base,
+            (await read(pixels))!,
+            upper.blend,
+            upper.opacity,
+            clipsToLower ? { base } : undefined,
+            document.linearBlending()
+          )
         );
       }
 
@@ -193,6 +210,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             active: document.active,
             readTile: async (pixels) =>
               unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels)),
+            linearBlending: document.linearBlending(),
             state: { get: () => editStates.get(edit.id), set: (value) => editStates.set(edit.id, value) },
             floating: {
               show(pixels) {
@@ -307,7 +325,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       pendingSaves++;
       status();
       try {
-        await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData));
+        await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData, document.linearBlending()));
         savedVersion = Math.max(savedVersion, version);
         saved = savedVersion === saveVersion && !strokeSession;
         scheduleCollect();
@@ -492,10 +510,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       lost = false;
       renderer.setSelection(selectionPoints, selectionAnimate);
       renderer.setFloating(floating);
+      rendererLinear = false;
+      syncBlending();
       // A new renderer starts smooth and without a grid.
       if (!pixelView.smooth || pixelView.grid) renderer.setPixelView(pixelView);
       await renderer.prepareOverview(document.layers);
-      await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData));
+      await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData, document.linearBlending()));
     };
     onCleanup(() => {
       active = false;
@@ -566,7 +586,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             tileStore = await modules.storage(storageName);
             const previous = await tileStore.load();
             if (previous) {
-              document.replace(previous.layers, previous.activeId);
+              document.replace(previous.layers, previous.activeId, previous.linearBlending);
               camera = previous.camera;
               featureData = restoreFeatureData(modules.features, previous.features);
               document.persist(tileStore.capture);
@@ -641,6 +661,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             break;
           case 'adaptive-quality':
             adaptiveQuality = command.enabled;
+            break;
+          case 'blending':
+            document.setLinearBlending(command.linear);
+            syncBlending();
+            changed();
             break;
           case 'pixel-view':
             pixelView = { smooth: command.smooth, grid: command.grid };
@@ -821,7 +846,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             post({
               type: 'download',
               blob: await writePaintFile(
-                snapshotDocument(document.layers, document.active.id, camera, featureData),
+                snapshotDocument(document.layers, document.active.id, camera, featureData, document.linearBlending()),
                 tileStore.read
               ),
               name: 'drawing.paint',
@@ -875,7 +900,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             await end();
             post({
               type: 'download',
-              blob: await writePsdFile(document.layers, tileStore.read, command.region),
+              blob: await writePsdFile(document.layers, tileStore.read, command.region, document.linearBlending()),
               name: command.name ?? 'drawing.psd',
               requestId: command.requestId
             });
@@ -906,7 +931,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                   : decodeDocument(command.text);
               await tileStore.flush();
               cancel();
-              document.replace(next.layers, next.activeId);
+              document.replace(next.layers, next.activeId, next.linearBlending);
+              syncBlending();
               camera = next.camera;
               featureData = restoreFeatureData(modules.features, next.features);
               editStates.clear();

@@ -40,6 +40,8 @@ export type PaintCommand =
   | { type: 'pick-color'; requestId: string; point: Point; sample?: ColorSample }
   | { type: 'live-tail'; enabled: boolean }
   | { type: 'adaptive-quality'; enabled: boolean }
+  /** Whether every layer blends in linear light ("Smooth color") or in encoded sRGB; saved with the document. */
+  | { type: 'blending'; linear: boolean }
   /** How pixels show up close: smoothing and the pixel grid; see `PaintRenderer.setPixelView`. */
   | { type: 'pixel-view'; smooth: boolean; grid: boolean }
   | { type: 'selection-view'; points: Point[]; animate: boolean }

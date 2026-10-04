@@ -1,6 +1,6 @@
 import { TILE_SIZE } from '@app-game/paint-core/brush';
 import type { BlendMode } from '@app-game/paint-core/document';
-import { createEffect, createSignal, For, onSettled, Show } from 'solid-js';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import { blendPreview } from './blendPreview';
 import styles from './LayersPanel.module.css';
 
@@ -10,7 +10,12 @@ import styles from './LayersPanel.module.css';
  * canvas, so that a mode can be chosen by its look rather than its name. The list closes on a choice, Escape or a
  * press outside; arrow keys move through it.
  */
-export function BlendModePicker(props: { mode: BlendMode; onChange: (mode: BlendMode) => void }) {
+export function BlendModePicker(props: {
+  mode: BlendMode;
+  /** Whether the document blends in linear light, which the previews show. */
+  linear: boolean;
+  onChange: (mode: BlendMode) => void;
+}) {
   const [open, setOpen] = createSignal(false);
   let root!: HTMLDivElement;
   let trigger!: HTMLButtonElement;
@@ -49,7 +54,7 @@ export function BlendModePicker(props: { mode: BlendMode; onChange: (mode: Blend
         title={current().description}
         onClick={() => setOpen(!open())}
       >
-        <Preview mode={current().id} />
+        <Preview mode={current().id} linear={props.linear} />
         <span>{current().label}</span>
         <svg viewBox="0 0 12 12" aria-hidden="true">
           <path d="m3 4.5 3 3 3-3" />
@@ -83,7 +88,7 @@ export function BlendModePicker(props: { mode: BlendMode; onChange: (mode: Blend
                 aria-label={mode.name}
                 onClick={() => choose(mode.id)}
               >
-                <Preview mode={mode.id} />
+                <Preview mode={mode.id} linear={props.linear} />
                 <span>
                   <strong>{mode.name}</strong>
                   <small>{mode.summary}</small>
@@ -97,25 +102,23 @@ export function BlendModePicker(props: { mode: BlendMode; onChange: (mode: Blend
   );
 }
 
-/** One mode's preview, drawn once into a canvas. */
-function Preview(props: { mode: BlendMode }) {
+/** One mode's preview, drawn into a canvas again when the document's blending changes. */
+function Preview(props: { mode: BlendMode; linear: boolean }) {
   let canvas!: HTMLCanvasElement;
-  onSettled(() => {
-    canvas.getContext('2d')?.putImageData(new ImageData(blendPreview(props.mode), TILE_SIZE, TILE_SIZE), 0, 0);
-  });
+  createEffect(
+    () => props.linear,
+    (linear) => {
+      canvas
+        .getContext('2d')
+        ?.putImageData(new ImageData(blendPreview(props.mode, linear), TILE_SIZE, TILE_SIZE), 0, 0);
+    }
+  );
 
   return <canvas ref={canvas} width={TILE_SIZE} height={TILE_SIZE} aria-hidden="true" />;
 }
 
 /** Modes in menu order, with a short label for the button, a one-line summary for the list and a tooltip sentence. */
 const modes = [
-  {
-    id: 'linear',
-    label: 'Smooth',
-    name: 'Smooth color',
-    summary: 'Mixes in linear light',
-    description: 'Smooth color: mixes in linear light, without dark edges'
-  },
   {
     id: 'normal',
     label: 'Normal',

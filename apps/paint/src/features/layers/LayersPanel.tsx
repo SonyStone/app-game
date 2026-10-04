@@ -15,6 +15,8 @@ export function LayersPanel(props: {
   /** Adding, moving and deleting layers wait for the engine. */
   ready: boolean;
   onAction: (action: LayerAction) => void;
+  /** Makes every layer blend in linear light ("Smooth color") or in encoded sRGB; a setting of the document. */
+  onLinearBlending: (linear: boolean) => void;
   /**
    * Leaves layers out of the list, such as those without paint in view: `shown` says which are listed, `offScreen`
    * how many the filter leaves out, and a button switches `showAll`. `where` ends the button's label, such as
@@ -91,6 +93,7 @@ export function LayersPanel(props: {
       <div class={styles.layerControls}>
         <BlendModePicker
           mode={selected().blend}
+          linear={props.state.linearBlending}
           onChange={(blend) => props.onAction({ type: 'update', id: props.state.activeId, patch: { blend } })}
         />
         <input
@@ -137,13 +140,17 @@ export function LayersPanel(props: {
           <SketchIcon name="clip" size={18} />
         </button>
       </div>
-      <p class={styles.blendNote}>
-        {selected().blend === 'multiply'
-          ? 'Multiply darkens overlaps. Choose Smooth color for brighter color transitions.'
-          : selected().blend === 'linear'
-            ? 'Blends colors in linear light.'
-            : 'Standard layer blend mode.'}
-      </p>
+      <label
+        class={styles.smoothColor}
+        title="Blend every layer, in every mode, in linear light: brighter mixes without dark edges, as Photoshop's “Blend RGB colors using gamma 1.0”. Saved with the drawing."
+      >
+        <input
+          type="checkbox"
+          checked={props.state.linearBlending}
+          onChange={(event) => props.onLinearBlending(event.currentTarget.checked)}
+        />
+        Smooth color for all layers
+      </label>
       <drag.Provider>
         <div class={styles.layerList}>
           <For

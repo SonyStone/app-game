@@ -5,15 +5,16 @@ import { mergeTilePixels } from '@app-game/paint-core/layerMerge';
 /**
  * A preview of a layer blend mode, as the canvas would show it: a blue circle with a soft edge on an upper layer over
  * an orange circle on the layer below, merged with `mergeTilePixels`, the CPU port of the display's composite, and
- * laid over the paper. The soft edge shows how Smooth color mixes without the dark fringe of Normal. Returns opaque
- * RGBA of `TILE_SIZE` × `TILE_SIZE` pixels; the circles are drawn once and kept.
+ * laid over the paper, in linear light with `linear` as the document blends. The soft edge shows how linear light mixes
+ * without the dark fringe of encoded sRGB. Returns opaque RGBA of `TILE_SIZE` × `TILE_SIZE` pixels; the circles are
+ * drawn once and kept.
  */
-export function blendPreview(mode: BlendMode): Uint8ClampedArray<ArrayBuffer> {
+export function blendPreview(mode: BlendMode, linear = false): Uint8ClampedArray<ArrayBuffer> {
   circles ??= {
     lower: circle({ x: 96, y: 128 }, 84, 8, [240, 150, 30]),
     upper: circle({ x: 160, y: 128 }, 84, 70, [30, 90, 230])
   };
-  const merged = mergeTilePixels(circles.lower, circles.upper, mode, 1);
+  const merged = mergeTilePixels(circles.lower, circles.upper, mode, 1, undefined, linear);
   const image = new Uint8ClampedArray(TILE_SIZE * TILE_SIZE * 4);
   for (let index = 0; index < image.length; index += 4) {
     const cover = 1 - (merged?.[index + 3] ?? 0) / 255;

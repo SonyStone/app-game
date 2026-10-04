@@ -63,6 +63,8 @@ export function createCanvasPickup<Layer extends PickupLayer>(
       layers: readonly Layer[],
       options: {
         allLayers?: boolean;
+        /** With `allLayers`, the layers blend in linear light, as the document composites them; see `compositeLayout`. */
+        linearBlending?: boolean;
         /** Adaptive pickup budget. Supplying one also selects level-zero sampling without mipmaps. */
         maxDimension?: number;
         exact?: boolean;
@@ -206,7 +208,7 @@ export function createCanvasPickup<Layer extends PickupLayer>(
               options.allLayers ? layer.opacity : 1,
               options.allLayers ? ['normal', 'multiply', 'screen', 'overlay', 'linear'].indexOf(layer.blend) : 0,
               0,
-              0
+              options.allLayers && options.linearBlending ? 1 : 0
             )
           );
           const compositeEncoder = root.device.createCommandEncoder();

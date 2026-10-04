@@ -7,22 +7,25 @@ import { unpackTile } from '@app-game/paint-core/tilePixels';
  * Merging a layer down must not change what the canvas shows. Each case renders a stack, merges its top layer into
  * the layer below with the runtime's CPU composite (`mergeTilePixels`) and renders it again; every presented pixel
  * must stay within 2 levels. The cases cover gradients of color and coverage, tiles only one of the two layers has, a
- * translucent lower layer over another layer with the same source-over mode (Normal on Normal, Smooth color on Smooth
- * color), and every mode over an opaque lower layer: the cases where merging is exact.
+ * translucent lower layer over another Normal layer, in encoded sRGB and in linear light (Smooth color), and every mode
+ * over an opaque lower layer: the cases where merging is exact.
  */
 export async function verifyLayerMerge(report: (message: string) => void) {
   const cases: {
     name: string;
     under?: Fill;
     lower: Fill;
-    /** The lower layer's blend mode; new layers default to Smooth color. */
+    /** The lower layer's blend mode; new layers default to Normal. */
     lowerBlend?: BlendMode;
     upper: Fill;
     blend: BlendMode;
     opacity: number;
+    /** The document blends in linear light ("Smooth color"). */
+    linear?: boolean;
   }[] = [
     { name: 'normal 60% over opaque', lower: opaque, upper: gradient, blend: 'normal', opacity: 0.6 },
-    { name: 'smooth color 70% over opaque', lower: opaque, upper: gradient, blend: 'linear', opacity: 0.7 },
+    { name: 'smooth color 70% over opaque', lower: opaque, upper: gradient, blend: 'normal', opacity: 0.7, linear: true },
+    { name: 'smooth color multiply over opaque', lower: opaque, upper: gradient, blend: 'multiply', opacity: 0.9, linear: true },
     {
       name: 'normal over translucent normal, layer below',
       under: opaque,
@@ -37,8 +40,9 @@ export async function verifyLayerMerge(report: (message: string) => void) {
       under: opaque,
       lower: gradient,
       upper: wash,
-      blend: 'linear',
-      opacity: 0.8
+      blend: 'normal',
+      opacity: 0.8,
+      linear: true
     },
     { name: 'multiply over opaque', lower: opaque, upper: gradient, blend: 'multiply', opacity: 0.9 },
     { name: 'screen over opaque', lower: opaque, upper: gradient, blend: 'screen', opacity: 1 },
@@ -46,7 +50,7 @@ export async function verifyLayerMerge(report: (message: string) => void) {
   ];
   const failures: string[] = [];
   for (const item of cases) {
-    const error = await mergeError(item.under, item.lower, item.lowerBlend, item.upper, item.blend, item.opacity);
+    const error = await mergeError(item, !!item.linear);
     report(`${item.name}: max presented difference ${error} of 255`);
     if (error > 2) {
       failures.push(`${item.name}: ${error}`);
@@ -71,14 +75,20 @@ function premultiply([r, g, b]: [number, number, number], alpha: number): [numbe
   return [Math.round((r * alpha) / 255), Math.round((g * alpha) / 255), Math.round((b * alpha) / 255), alpha];
 }
 
-/** Presents the stack before and after merging its top layer down; returns the largest channel difference. */
+/**
+ * Presents the stack before and after merging its top layer down, in linear light with `linear`; returns the largest
+ * channel difference.
+ */
 async function mergeError(
-  under: Fill | undefined,
-  lower: Fill,
-  lowerBlend: BlendMode | undefined,
-  upper: Fill,
-  blend: BlendMode,
-  opacity: number
+  {
+    under,
+    lower,
+    lowerBlend,
+    upper,
+    blend,
+    opacity
+  }: { under?: Fill; lower: Fill; lowerBlend?: BlendMode; upper: Fill; blend: BlendMode; opacity: number },
+  linear: boolean
 ) {
   const document = createDocument();
   const add = (fill: Fill, keys: string[], properties: Partial<Pick<Layer, 'blend' | 'opacity'>> = {}) => {
@@ -96,7 +106,7 @@ async function mergeError(
   add(upper, ['0,0', '1,0'], { blend, opacity });
   document.changeLayer({ type: 'delete', id: document.layers[0]!.id });
 
-  const before = await present(document.layers);
+  const before = await present(document.layers, linear);
   const upperLayer = document.active,
     lowerLayer = document.layers.at(-2)!;
   const merged = new Map<string, Uint8Array | undefined>();
@@ -104,12 +114,19 @@ async function mergeError(
     const base = lowerLayer.tiles.get(key);
     merged.set(
       key,
-      mergeTilePixels(base && unpackTile(base), unpackTile(pixels), upperLayer.blend, upperLayer.opacity)
+      mergeTilePixels(
+        base && unpackTile(base),
+        unpackTile(pixels),
+        upperLayer.blend,
+        upperLayer.opacity,
+        undefined,
+        linear
+      )
     );
   }
 
   document.mergeDown(upperLayer.id, merged);
-  const after = await present(document.layers);
+  const after = await present(document.layers, linear);
   let error = 0;
   for (let index = 0; index < before.length; index++) {
     error = Math.max(error, Math.abs(before[index]! - after[index]!));
@@ -130,11 +147,12 @@ function tile(fill: Fill, key: string) {
   return pixels;
 }
 
-/** Presents tiles 0,0 and 1,0 at 100% and reads the frame back. */
-async function present(layers: Layer[]) {
+/** Presents tiles 0,0 and 1,0 at 100%, in linear light with `linear`, and reads the frame back. */
+async function present(layers: Layer[], linear: boolean) {
   const errors: string[] = [];
   const canvas = new OffscreenCanvas(512, 256);
   const renderer = await createPaintRenderer(canvas, (message) => errors.push(message));
+  renderer.setLinearBlending(linear);
   try {
     const size = { width: 512, height: 256 };
     await renderer.render(layers, { x: 256, y: 128, zoom: 1, angle: 0, mirrored: false }, size, 1, true);

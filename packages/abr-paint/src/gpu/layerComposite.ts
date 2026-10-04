@@ -1,10 +1,13 @@
 import { d, std, tgpu } from 'typegpu';
-import { linearSourceOver } from '@app-game/abr-brush/effects';
+import { decodePremultiplied, encodePremultiplied, linearSourceOver } from '@app-game/abr-brush/effects';
 
 /**
  * Full viewport layer compositing uses two alternating result textures and a temporary layer image. `settings` holds
- * opacity, blend mode index and, in `z`, whether the layer is clipped: its alpha is then multiplied by the alpha of
- * `clip`, the clipping base layer's own pixels. Without clipping, `clip` may be any texture.
+ * opacity, blend mode index, in `z` whether the layer is clipped: its alpha is then multiplied by the alpha of `clip`,
+ * the clipping base layer's own pixels (without clipping, `clip` may be any texture), and in `w` whether the blend
+ * happens in linear light: both colors are decoded from sRGB first and the result encoded again, for every mode, as
+ * Photoshop's "Blend RGB colors using gamma 1.0". Mode 4 is the older source-over in linear light, kept for callers
+ * that pass it.
  */
 export const compositeLayout = tgpu.bindGroupLayout({
   base: { texture: d.texture2d() },
@@ -15,11 +18,18 @@ export const compositeLayout = tgpu.bindGroupLayout({
 export const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
   'use gpu';
   const pixel = d.vec2i(input.position.xy);
-  const base = std.textureLoad(compositeLayout.$.base, pixel, 0);
-  let source = std.textureLoad(compositeLayout.$.layer, pixel, 0);
-  if (compositeLayout.$.settings.z > 0.5) source = std.mul(source, std.textureLoad(compositeLayout.$.clip, pixel, 0).a);
+  const encodedBase = std.textureLoad(compositeLayout.$.base, pixel, 0);
+  let encodedSource = std.textureLoad(compositeLayout.$.layer, pixel, 0);
+  if (compositeLayout.$.settings.z > 0.5) {
+    encodedSource = std.mul(encodedSource, std.textureLoad(compositeLayout.$.clip, pixel, 0).a);
+  }
+  if (compositeLayout.$.settings.y > 3.5) {
+    return linearSourceOver(encodedBase, std.mul(encodedSource, compositeLayout.$.settings.x));
+  }
+  const linear = compositeLayout.$.settings.w > 0.5;
+  const base = std.select(encodedBase, decodePremultiplied(encodedBase), linear);
+  const source = std.select(encodedSource, decodePremultiplied(encodedSource), linear);
   const alpha = source.a * compositeLayout.$.settings.x;
-  if (compositeLayout.$.settings.y > 3.5) return linearSourceOver(base, std.mul(source, compositeLayout.$.settings.x));
   const cb = std.div(base.rgb, std.max(base.a, 0.000001));
   const cs = std.div(source.rgb, std.max(source.a, 0.000001));
   let blend = d.vec3f(cs);
@@ -39,5 +49,6 @@ export const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.pos
     std.mul(base.rgb, 1 - alpha),
     std.mul(std.add(std.mul(cs, 1 - base.a), std.mul(blend, base.a)), alpha)
   );
-  return d.vec4f(rgb, alpha + base.a * (1 - alpha));
+  const result = d.vec4f(rgb, alpha + base.a * (1 - alpha));
+  return std.select(result, encodePremultiplied(result), linear);
 });

@@ -169,7 +169,7 @@ describe('lasso raster edits', () => {
 
 const storage: SelectionStorage = { read: async (data) => unpackTile(data), write: async (data) => data };
 function layer(): Layer {
-  return { id: 'source', name: 'Source', visible: true, opacity: 1, blend: 'linear', tiles: new Map() };
+  return { id: 'source', name: 'Source', visible: true, opacity: 1, blend: 'normal', tiles: new Map() };
 }
 function rectangle(left: number, top: number, right: number, bottom: number): Point[] {
   return [

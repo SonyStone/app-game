@@ -27,6 +27,8 @@ export function createRendererDouble<Overrides extends Partial<Record<keyof Pain
     releaseTarget: vi.fn(),
     setSelection: vi.fn(),
     setFloating: vi.fn(),
+    setLinearBlending: vi.fn(),
+    setPixelView: vi.fn(),
     moveFloating: vi.fn(),
     holdPresented: vi.fn(),
     prepareOverview: vi.fn(async (..._args: unknown[]) => {}),

@@ -159,6 +159,7 @@ async function run(command: GradientCommand, target = layer()) {
     layers: [target],
     active: target,
     readTile: async (pixels) => pixels as Uint8Array,
+    linearBlending: false,
     state: { get: () => undefined, set: () => {} },
     floating: { show: () => {}, move: () => {}, clear: async () => {} }
   };

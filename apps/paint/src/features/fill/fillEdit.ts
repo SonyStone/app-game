@@ -137,7 +137,7 @@ function reachesLimit(mask: Uint8Array, area: FillArea, view: FillCommand['area'
 
 /**
  * Unpacked tiles of the area: the active layer's, or the visible layers composited bottom to top as displayed, with
- * clipped layers clipped to their base.
+ * clipped layers clipped to their base, in linear light when the document blends so.
  */
 async function sampleTiles(
   context: DocumentEditContext,
@@ -180,7 +180,8 @@ async function sampleTiles(
           pixels,
           layer.blend,
           layer.opacity,
-          clipped ? { base: base!.pixels } : undefined
+          clipped ? { base: base!.pixels } : undefined,
+          context.linearBlending
         );
       }
     }

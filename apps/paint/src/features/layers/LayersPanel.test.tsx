@@ -23,7 +23,7 @@ it('preserves controls across worker snapshots and reorders, keeping focus on pr
   const layer = vi.fn();
   const host = document.createElement('div');
   document.body.append(host);
-  dispose = render(() => <LayersPanel state={state()} ready={ready()} onAction={layer} />, host);
+  dispose = render(() => <LayersPanel state={state()} ready={ready()} onAction={layer} onLinearBlending={() => {}} />, host);
   flush();
 
   const eye = host.querySelector<HTMLButtonElement>(`[aria-label="Hide ${first.name}"]`)!;
@@ -61,7 +61,7 @@ it('ignores an empty opacity entry instead of hiding the layer', () => {
   const layer = vi.fn();
   const host = document.createElement('div');
   document.body.append(host);
-  dispose = render(() => <LayersPanel state={initial} ready onAction={layer} />, host);
+  dispose = render(() => <LayersPanel state={initial} ready onAction={layer} onLinearBlending={() => {}} />, host);
   flush();
 
   const opacity = host.querySelector<HTMLInputElement>('[aria-label="Layer opacity"]')!;
@@ -82,7 +82,7 @@ it('renames and duplicates the selected layer, and disables moves past either en
   const layer = vi.fn();
   const host = document.createElement('div');
   document.body.append(host);
-  dispose = render(() => <LayersPanel state={state()} ready onAction={layer} />, host);
+  dispose = render(() => <LayersPanel state={state()} ready onAction={layer} onLinearBlending={() => {}} />, host);
   flush();
   const button = (label: string) => host.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!;
 
@@ -116,7 +116,7 @@ it('merges a visible layer down into a visible layer below it', () => {
   const layer = vi.fn();
   const host = document.createElement('div');
   document.body.append(host);
-  dispose = render(() => <LayersPanel state={state()} ready onAction={layer} />, host);
+  dispose = render(() => <LayersPanel state={state()} ready onAction={layer} onLinearBlending={() => {}} />, host);
   flush();
   const merge = [...host.querySelectorAll('button')].find((button) => button.textContent === 'Merge down')!;
 
@@ -141,7 +141,7 @@ it('locks and unlocks the transparent pixels of the selected layer as an undoabl
   const [state, setState] = createSignal(drawing.state());
   const host = document.createElement('div');
   document.body.append(host);
-  dispose = render(() => <LayersPanel state={state()} ready={true} onAction={layer} />, host);
+  dispose = render(() => <LayersPanel state={state()} ready={true} onAction={layer} onLinearBlending={() => {}} />, host);
   flush();
 
   const lock = host.querySelector<HTMLButtonElement>('[aria-label="Lock transparent pixels"]')!;

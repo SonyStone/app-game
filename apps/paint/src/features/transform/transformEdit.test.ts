@@ -171,6 +171,7 @@ function setup(tiles: Map<string, Uint8Array>) {
     layers: [layer],
     active: layer,
     readTile: async (pixels) => unpackTile(pixels),
+    linearBlending: false,
     state: { get: () => state, set: (value) => (state = value) },
     floating
   };

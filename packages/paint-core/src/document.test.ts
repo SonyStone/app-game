@@ -171,7 +171,7 @@ describe('document transactions', () => {
     const doc = createDocument();
     doc.changeLayer({ type: 'update', id: doc.active.id, patch: { blend: 'multiply', opacity: 0.5 } });
     doc.undo();
-    expect(doc.active.blend).toBe('linear');
+    expect(doc.active.blend).toBe('normal');
     doc.changeLayer({ type: 'add' });
     expect(doc.state().canRedo).toBe(false);
   });
@@ -212,4 +212,41 @@ it('records alpha lock as an undoable layer property that survives saving and lo
   document.undo();
   expect(document.active.alphaLock).toBeFalsy();
   expect(restoreDocument(snapshotDocument(document.layers, id, defaultCamera())).layers[0]!.alphaLock).toBeFalsy();
+});
+
+describe('linear blending', () => {
+  it('blends in linear light by default, keeps the setting outside history and takes it from a replaced document', () => {
+    const doc = createDocument();
+    expect(doc.state().linearBlending).toBe(true);
+    const revision = doc.revision;
+    doc.setLinearBlending(false);
+    expect(doc.linearBlending()).toBe(false);
+    expect(doc.revision).toBe(revision + 1);
+    expect(doc.state().canUndo).toBe(false);
+    doc.replace(doc.layers, doc.active.id, true);
+    expect(doc.linearBlending()).toBe(true);
+  });
+});
+
+describe('blending of saved documents', () => {
+  const saved = (blends: string[], blending?: 'linear' | 'classic') => {
+    const doc = createDocument();
+    const snapshot = snapshotDocument(doc.layers, doc.active.id, defaultCamera()) as Record<string, unknown>;
+    const [layer] = snapshot.layers as Record<string, unknown>[];
+    const { blending: _ignored, ...rest } = snapshot;
+    return {
+      ...rest,
+      ...(blending ? { blending } : {}),
+      layers: blends.map((blend, index) => ({ ...layer, id: index ? `layer-${index + 1}` : layer!.id, blend }))
+    };
+  };
+
+  it('turns Smooth color layers of older documents into Normal ones in a document that blends in linear light', () => {
+    const restored = restoreDocument(saved(['linear', 'multiply']));
+    expect(restored.layers.map(({ blend }) => blend)).toEqual(['normal', 'multiply']);
+    expect(restored.linearBlending).toBe(true);
+    expect(restoreDocument(saved(['normal', 'screen'])).linearBlending).toBe(false);
+    expect(restoreDocument(saved(['normal'], 'linear')).linearBlending).toBe(true);
+    expect(restoreDocument(saved(['multiply'], 'classic')).linearBlending).toBe(false);
+  });
 });

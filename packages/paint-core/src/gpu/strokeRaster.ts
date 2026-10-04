@@ -49,6 +49,8 @@ export function createStrokeRaster(
     ensureMipmaps: ReturnType<typeof createMipmapEnsurer>;
     paintBounds: PaintBounds | undefined;
     allowsTile: (key: string) => boolean;
+    /** Whether the document blends its layers in linear light, for sampling all layers as displayed. */
+    linearBlending: () => boolean;
   },
   options: {
     displayCache?: boolean;
@@ -602,7 +604,14 @@ export function createStrokeRaster(
 
       return tile.texture;
     });
-    return pickup.capture(region, layers, { allLayers, exact, linear, commands, maxDimension });
+    return pickup.capture(region, layers, {
+      allLayers,
+      linearBlending: deps.linearBlending(),
+      exact,
+      linear,
+      commands,
+      maxDimension
+    });
   }
 }
 

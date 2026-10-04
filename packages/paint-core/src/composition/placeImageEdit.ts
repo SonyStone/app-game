@@ -35,7 +35,7 @@ export const placeImageEdit = defineDocumentEdit({
       after
     }));
     if (!changes.length) throw new Error('The image is fully transparent.');
-    return { changes, layer: { id, name: command.name, visible: true, opacity: 1, blend: 'linear' } };
+    return { changes, layer: { id, name: command.name, visible: true, opacity: 1, blend: 'normal' } };
   }
 });
 

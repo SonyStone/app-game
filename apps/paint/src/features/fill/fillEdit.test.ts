@@ -88,7 +88,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
   const floating = { show: () => {}, move: () => {}, clear: async () => {} };
   const fill = (command: Partial<FillCommand>) =>
     fillEdit.run(
-      { layers: [paint, lines], active: paint, readTile: read, state, floating },
+      { layers: [paint, lines], active: paint, readTile: read, linearBlending: false, state, floating },
       { ...fillCommand(), ...command }
     );
 
@@ -105,7 +105,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
 
   await expect(
     fillEdit.run(
-      { layers: [paint], active: { ...paint, visible: false }, readTile: read, state, floating },
+      { layers: [paint], active: { ...paint, visible: false }, readTile: read, linearBlending: false, state, floating },
       fillCommand()
     )
   ).rejects.toThrow('Show the active layer');
@@ -116,7 +116,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
     clipping: true
   };
   const clippedFill = await fillEdit.run(
-    { layers: [paint, lines, solid], active: paint, readTile: read, state, floating },
+    { layers: [paint, lines, solid], active: paint, readTile: read, linearBlending: false, state, floating },
     { ...fillCommand(), source: 'all' }
   );
   expect(count(alphaMask(clippedFill.changes[0]!.after as Uint8Array))).toBe(18 * 18);
@@ -124,7 +124,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
   // With alpha lock, only the layer's own pixels change color, keeping their alpha.
   const line = layer('line', outline(0, 0, 20, 20, [0, 0, 0, 128]));
   const locked = await fillEdit.run(
-    { layers: [{ ...line, alphaLock: true }], active: { ...line, alphaLock: true }, readTile: read, state, floating },
+    { layers: [{ ...line, alphaLock: true }], active: { ...line, alphaLock: true }, readTile: read, linearBlending: false, state, floating },
     { ...fillCommand(), point: { x: 0, y: 0 }, tolerance: 0, source: 'layer' }
   );
   const recolored = locked.changes[0]!.after as Uint8Array;
@@ -146,6 +146,7 @@ it('stays inside the lasso selection, also when it grows under edges, and fills 
         layers: [paint],
         active: paint,
         readTile: async (pixels) => pixels as Uint8Array,
+        linearBlending: false,
         state: { get: () => undefined, set: () => {} },
         floating: { show: () => {}, move: () => {}, clear: async () => {} }
       },

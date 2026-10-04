@@ -19,7 +19,7 @@ function solidLayer(id: string, color: number[], left: number, top: number, widt
     name: id,
     visible: true,
     opacity: 1,
-    blend: 'linear',
+    blend: 'normal',
     tiles: imageTiles(pixels, width, height, left, top)
   };
 }

@@ -10,13 +10,15 @@ import { packTile, unpackTile, type TileData } from './tilePixels';
 /**
  * Exports `layers` as a layered Photoshop document of `region`, or of the bounds of everything drawn when it is
  * omitted. Every layer, hidden ones too, is cropped to its pixels within the canvas; the flattened image is merged as
- * `mergeTilePixels` merges layers down. Smooth color layers are saved as Normal, the nearest Photoshop mode. Throws
+ * `mergeTilePixels` merges layers down, in linear light with `linearBlending` as the document does; Photoshop keeps no
+ * such flag in the file, so it shows the layers blended in encoded sRGB unless set to blend RGB with gamma 1.0. Throws
  * when there is nothing to export or the canvas is larger than a PSD allows.
  */
 export async function writePsdFile(
   layers: Layer[],
   read: (data: TileData) => Promise<Uint8Array>,
-  region?: DocumentRect
+  region?: DocumentRect,
+  linearBlending = true
 ): Promise<Blob> {
   const loaded = await Promise.all(
     layers.map(async (layer) => {
@@ -44,14 +46,14 @@ export async function writePsdFile(
       pixels: straightPixels(tiles, bounds),
       opacity: layer.opacity,
       visible: layer.visible,
-      blend: layer.blend === 'linear' ? 'normal' : layer.blend,
+      blend: layer.blend,
       clipping: !!layer.clipping,
       transparencyLocked: !!layer.alphaLock
     };
   });
   const file = writePsd(
     { width: canvas.width, height: canvas.height, layers: psdLayers },
-    straightPixels(flatten(loaded), canvas)
+    straightPixels(flatten(loaded, linearBlending), canvas)
   );
   return new Blob([file as Uint8Array<ArrayBuffer>], { type: 'image/vnd.adobe.photoshop' });
 }
@@ -71,7 +73,13 @@ export async function readPsdFile(
   file: Blob,
   view: ViewSize,
   capture: (pixels: Uint8Array) => Promise<TileData> = async (pixels) => pixels
-): Promise<{ layers: Layer[]; activeId: string; camera: Camera; features: Record<string, unknown> }> {
+): Promise<{
+  layers: Layer[];
+  activeId: string;
+  camera: Camera;
+  features: Record<string, unknown>;
+  linearBlending: boolean;
+}> {
   const psd = readPsd(await file.arrayBuffer());
   const layers: Layer[] = [];
   for (const source of psd.layers) {
@@ -98,7 +106,9 @@ export async function readPsdFile(
     layers,
     activeId: layers.at(-1)!.id,
     camera: { x: psd.width / 2, y: psd.height / 2, zoom, angle: 0, mirrored: false },
-    features: {}
+    features: {},
+    // Photoshop blends in encoded sRGB unless its color settings say otherwise, which the file does not record.
+    linearBlending: false
   };
 }
 
@@ -198,7 +208,10 @@ function straightPixels(tiles: Map<string, Uint8Array>, rect: DocumentRect): Uin
  * Merges the visible layers bottom up, tile by tile, clipping each clipped layer to its base. A hidden base hides
  * the layers clipped to it, as on screen.
  */
-function flatten(loaded: { layer: Layer; tiles: Map<string, Uint8Array> }[]): Map<string, Uint8Array> {
+function flatten(
+  loaded: { layer: Layer; tiles: Map<string, Uint8Array> }[],
+  linear: boolean
+): Map<string, Uint8Array> {
   const result = new Map<string, Uint8Array>();
   let base: (typeof loaded)[number] | undefined;
   for (const entry of loaded) {
@@ -218,7 +231,8 @@ function flatten(loaded: { layer: Layer; tiles: Map<string, Uint8Array> }[]): Ma
         pixels,
         layer.blend,
         layer.opacity,
-        clipped ? { base: base!.tiles.get(key) } : undefined
+        clipped ? { base: base!.tiles.get(key) } : undefined,
+        linear
       );
       if (merged) {
         result.set(key, merged);

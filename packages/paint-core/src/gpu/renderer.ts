@@ -171,6 +171,8 @@ async function assemblePaintRenderer(
   /** Magnified pixels blend smoothly; off, they are flat squares, as `setPixelView` says. */
   let smoothPixels = true;
   let pixelGrid = false;
+  /** Layers blend in linear light, as `setLinearBlending` says; in encoded sRGB until then. */
+  let linearBlending = false;
   const virtual = options.virtualTexture
     ? resources.keep(
         createVirtualTexture(
@@ -206,7 +208,17 @@ async function assemblePaintRenderer(
   const raster = resources.keep(
     createStrokeRaster(
       root,
-      { stroke, residency, displayCache, targets, sampler, ensureMipmaps, paintBounds, allowsTile },
+      {
+        stroke,
+        residency,
+        displayCache,
+        targets,
+        sampler,
+        ensureMipmaps,
+        paintBounds,
+        allowsTile,
+        linearBlending: () => linearBlending
+      },
       options
     )
   );
@@ -257,7 +269,8 @@ async function assemblePaintRenderer(
       floating,
       animateSelection: () => animateSelection,
       smoothPixels: () => smoothPixels,
-      pixelGrid: () => pixelGrid
+      pixelGrid: () => pixelGrid,
+      linearBlending: () => linearBlending
     },
     options
   );
@@ -317,6 +330,13 @@ async function assemblePaintRenderer(
       if (view.smooth !== smoothPixels || view.grid !== pixelGrid) {
         smoothPixels = view.smooth;
         pixelGrid = view.grid;
+        targets.invalidate();
+      }
+    },
+    /** Composites every layer in linear light, or in encoded sRGB; see `mergeTilePixels`. Redraws the views. */
+    setLinearBlending(linear: boolean) {
+      if (linear !== linearBlending) {
+        linearBlending = linear;
         targets.invalidate();
       }
     },
