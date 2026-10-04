@@ -56,7 +56,7 @@ The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhos
 
 Letter and bracket shortcuts also work on non-Latin keyboard layouts: they fall back to the physical key.
 
-Touches are ignored while drawing with a pen. This is simple palm rejection, not a tablet contact classifier.
+Touches are ignored while a pen touches the screen anywhere in the window (drawing, or dragging a transform handle), and a touch starting within 500 ms of pen hover or contact is taken for a resting palm. When the pen lifts, fingers still down navigate on from where they are. This is simple palm rejection, not a tablet contact classifier.
 
 The lasso closes when the pen or mouse is released. Dragging inside the outline moves only the outline, as with Photoshop's marquee; dragging outside starts a new selection. The pixels move with the transform. An icon bar next to the selection transforms, copies, cuts, pastes, moves the pixels to a new layer, deletes them and deselects; without a selection, a hint at the top offers Paste when pixels were copied. Both bars use `FloatingBar` and `placeBeside` from `src/shared/ui`. Zoom, rotate and mirror are taken into account. Touches still control the camera.
 

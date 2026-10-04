@@ -286,6 +286,44 @@ describe('input to worker contract', () => {
     vi.advanceTimersByTime(500);
     expect(hold).toHaveBeenCalledOnce();
   });
+  it('ignores palm touches while a pen touches the screen outside the canvas, such as dragging a handle', () => {
+    const { pointer, navigate } = setup();
+    const handle = document.body.appendChild(document.createElement('div'));
+    const pen = (type: string) => {
+      const event = new MouseEvent(type, { bubbles: true });
+      Object.defineProperty(event, 'pointerType', { value: 'pen' });
+      Object.defineProperty(event, 'pointerId', { value: 7 });
+      handle.dispatchEvent(event);
+    };
+    pointer('pointerdown', 100, 100, { pointerType: 'touch', pointerId: 2 });
+    pen('pointerdown');
+    pointer('pointermove', 160, 140, { pointerType: 'touch', pointerId: 2 });
+    pointer('pointerdown', 300, 300, { pointerType: 'touch', pointerId: 3 });
+    pointer('pointermove', 340, 300, { pointerType: 'touch', pointerId: 3 });
+    expect(navigate).not.toHaveBeenCalled();
+
+    // After the pen lifts, the resting finger navigates from where it is, without a jump.
+    pen('pointerup');
+    pointer('pointermove', 170, 140, { pointerType: 'touch', pointerId: 2 });
+    expect(navigate).toHaveBeenCalledOnce();
+    const moved = navigate.mock.calls[0]![0];
+    expect(moved.x).toBeCloseTo(defaultCamera().x - 10);
+    handle.remove();
+  });
+  it('ignores a touch that starts while the pen hovers, taking it for a palm', () => {
+    const { pointer, navigate } = setup();
+    const hover = new MouseEvent('pointermove', { bubbles: true });
+    Object.defineProperty(hover, 'pointerType', { value: 'pen' });
+    Object.defineProperty(hover, 'timeStamp', { value: 1000 });
+    window.dispatchEvent(hover);
+    pointer('pointerdown', 100, 100, { pointerType: 'touch', pointerId: 2, timeStamp: 1200 });
+    pointer('pointermove', 160, 140, { pointerType: 'touch', pointerId: 2, timeStamp: 1250 });
+    pointer('pointerup', 160, 140, { pointerType: 'touch', pointerId: 2, timeStamp: 1300 });
+    expect(navigate).not.toHaveBeenCalled();
+    pointer('pointerdown', 100, 100, { pointerType: 'touch', pointerId: 2, timeStamp: 1600 });
+    pointer('pointermove', 160, 140, { pointerType: 'touch', pointerId: 2, timeStamp: 1650 });
+    expect(navigate).toHaveBeenCalled();
+  });
   it('commits real samples on capture loss instead of deleting the stroke', () => {
     const { commands, pointer } = setup();
     pointer('pointerdown', 0, 0);
