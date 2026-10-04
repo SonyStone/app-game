@@ -191,6 +191,18 @@ export function PaintStudio(props: {
     // The Mixer Brush loads paint with Alt/Option; other painting tools pick a color.
     canvasAction: firstCanvasAction(mixer.canvasAction, colorPicker.canvasAction, fill.canvasAction),
     adjust: brushAdjust.adjust,
+    touchGestures: {
+      tap(fingers) {
+        if (fingers === 2 && engine.state().canUndo) {
+          edit({ type: 'undo' });
+        }
+
+        if (fingers === 3 && engine.state().canRedo) {
+          edit({ type: 'redo' });
+        }
+      },
+      hold: (point) => void colorPicker.pickAt(point)
+    },
     puck: camera.navigation,
     selection: { ...selection, enabled: () => tool() === 'lasso' }
   };

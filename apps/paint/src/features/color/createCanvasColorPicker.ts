@@ -5,8 +5,8 @@ import type { PaintError } from '../../shared/errors';
 
 /**
  * Picks the foreground color from the canvas as displayed, all layers and the paper included: Alt/Option-click with a
- * painting tool, as in Photoshop, or the next contact after `arm()`, for tablets and touch. Must be created within a
- * Solid owner; a color arriving after disposal is dropped.
+ * painting tool, as in Photoshop, the next contact after `arm()`, or `pickAt`, for example from a touch hold. Must be
+ * created within a Solid owner; a color arriving after disposal is dropped.
  */
 export function createCanvasColorPicker(options: {
   /** Whether the active tool paints color, so Alt/Option-click samples instead of painting. */
@@ -30,20 +30,26 @@ export function createCanvasColorPicker(options: {
     /** Canvas contact handler for `attachInput`. */
     canvasAction: {
       enabled: (event: Pick<PointerEvent, 'altKey'>) => armed() || (event.altKey && options.paints()),
-      async run(point: Point) {
+      run(point: Point) {
         setArmed(false);
-        const picked = await options.pick(options.toScreen(point));
-        if (isDisposed(owner)) {
-          return;
-        }
-
-        if (picked.isErr()) {
-          options.onError(picked.error);
-          return;
-        }
-
-        options.apply(picked.value);
+        void pickAt(point);
       }
-    }
+    },
+    pickAt
   };
+
+  /** Picks the displayed color at a document point. */
+  async function pickAt(point: Point) {
+    const picked = await options.pick(options.toScreen(point));
+    if (isDisposed(owner)) {
+      return;
+    }
+
+    if (picked.isErr()) {
+      options.onError(picked.error);
+      return;
+    }
+
+    options.apply(picked.value);
+  }
 }

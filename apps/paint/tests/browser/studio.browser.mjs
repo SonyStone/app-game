@@ -157,6 +157,51 @@ try {
     assert.equal(await redo.isDisabled(), true);
   });
 
+  await step('two- and three-finger taps undo and redo, and a held finger picks a color', async () => {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    const box = await page.getByRole('main', { name: 'Drawing workspace' }).boundingBox();
+    const fingers = (count, x = box.x + 300, y = box.y + 200) =>
+      Array.from({ length: count }, (_, id) => ({ x: x + id * 60, y, id }));
+    const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+    const tap = async (count) => {
+      await touch('touchStart', fingers(count));
+      await page.waitForTimeout(60);
+      await touch('touchEnd', []);
+    };
+    const undo = page.getByRole('button', { name: 'Undo' });
+    const redo = page.getByRole('button', { name: 'Redo' });
+    await stroke(page);
+    await waitEnabled(undo);
+    await tap(2);
+    await waitEnabled(redo);
+    await tap(3);
+    await waitEnabled(undo);
+    assert.equal(await redo.isDisabled(), true);
+
+    // Holding a finger on the stroke picks its color.
+    await page.getByRole('button', { name: 'Color palette' }).click();
+    await page.getByLabel('Hex color').fill('FF0000');
+    await page.getByLabel('Hex color').press('Enter');
+    await page.keyboard.press('Escape');
+    const center = { x: box.x + box.width / 2 + 60, y: box.y + box.height / 2 + 30, id: 0 };
+    await touch('touchStart', [center]);
+    await page.waitForTimeout(700);
+    await touch('touchEnd', []);
+    await page.getByRole('button', { name: 'Color palette' }).click();
+    await page.waitForFunction(
+      () => document.querySelector('input[aria-label="Hex color"]')?.value !== 'FF0000',
+      null,
+      {
+        polling: 100,
+        timeout: 10_000
+      }
+    );
+    await page.keyboard.press('Escape');
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+    await cdp.detach();
+  });
+
   await step('a drawn layer can be duplicated, renamed, dragged, merged down and the steps undone', async () => {
     await page.getByRole('button', { name: 'Layers' }).click();
     const panel = page.getByRole('complementary', { name: 'Layers' });

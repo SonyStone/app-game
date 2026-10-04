@@ -34,6 +34,8 @@ The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhos
 | Draw                                  | Pen or left mouse button                                  |
 | Pan view                              | Pan zone of the Puck, middle button or one finger         |
 | Zoom and rotate                       | Two fingers                                               |
+| Undo / redo                           | Tap with two / three fingers                              |
+| Pick a color                          | Hold one finger still for half a second                   |
 | Zoom                                  | Wheel, top buttons or Puck                                |
 | Puck                                  | Hold Space, V, right button or the bottom-right button    |
 | Brush / eraser                        | B / E (the eraser keeps its own size and flow)            |

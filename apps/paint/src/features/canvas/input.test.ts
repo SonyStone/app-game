@@ -225,6 +225,67 @@ describe('input to worker contract', () => {
     expect(navigate).not.toHaveBeenCalled();
     expect(commands).toHaveLength(1);
   });
+  it('turns short two- and three-finger taps into shortcuts, restoring the camera they nudged', () => {
+    const tap = vi.fn();
+    const { pointer, navigate } = setup(undefined, defaultBrush, undefined, defaultCamera, undefined, undefined, {
+      tap
+    });
+    const touch = (type: string, id: number, x: number, time: number) =>
+      pointer(type, x, 300, { pointerType: 'touch', pointerId: id, timeStamp: time });
+    touch('pointerdown', 1, 100, 0);
+    touch('pointerdown', 2, 200, 20);
+    touch('pointermove', 2, 204, 40);
+    touch('pointerup', 1, 100, 150);
+    touch('pointerup', 2, 204, 160);
+    expect(tap).toHaveBeenCalledExactlyOnceWith(2);
+    expect(navigate).toHaveBeenLastCalledWith(defaultCamera());
+
+    for (const id of [1, 2, 3]) touch('pointerdown', id, id * 100, 1000);
+    for (const id of [1, 2, 3]) touch('pointerup', id, id * 100, 1200);
+    expect(tap).toHaveBeenLastCalledWith(3);
+
+    // A slow tap, a pinch and a single finger are navigation, not shortcuts.
+    touch('pointerdown', 1, 100, 2000);
+    touch('pointerdown', 2, 200, 2000);
+    touch('pointerup', 1, 100, 2500);
+    touch('pointerup', 2, 200, 2500);
+    touch('pointerdown', 1, 100, 3000);
+    touch('pointerdown', 2, 200, 3000);
+    touch('pointermove', 2, 260, 3050);
+    touch('pointerup', 1, 100, 3100);
+    touch('pointerup', 2, 260, 3100);
+    touch('pointerdown', 1, 100, 4000);
+    touch('pointerup', 1, 100, 4050);
+    expect(tap).toHaveBeenCalledTimes(2);
+  });
+  it('holds one still finger to run the hold action, then stops navigating until the finger lifts', () => {
+    vi.useFakeTimers();
+    const hold = vi.fn();
+    const { pointer, navigate } = setup(undefined, defaultBrush, undefined, defaultCamera, undefined, undefined, {
+      tap: vi.fn(),
+      hold
+    });
+    pointer('pointerdown', 420, 330, { pointerType: 'touch' });
+    pointer('pointermove', 424, 332, { pointerType: 'touch' });
+    vi.advanceTimersByTime(500);
+    expect(hold).toHaveBeenCalledExactlyOnceWith(
+      screenToWorld({ x: 420, y: 330 }, defaultCamera(), { width: 800, height: 600 })
+    );
+    navigate.mockClear();
+    pointer('pointermove', 500, 400, { pointerType: 'touch' });
+    expect(navigate).not.toHaveBeenCalled();
+    pointer('pointerup', 500, 400, { pointerType: 'touch' });
+
+    // Moving or adding a finger before the hold cancels it.
+    pointer('pointerdown', 420, 330, { pointerType: 'touch' });
+    pointer('pointermove', 450, 330, { pointerType: 'touch' });
+    vi.advanceTimersByTime(500);
+    pointer('pointerup', 450, 330, { pointerType: 'touch' });
+    pointer('pointerdown', 420, 330, { pointerType: 'touch' });
+    pointer('pointerdown', 520, 330, { pointerType: 'touch', pointerId: 2 });
+    vi.advanceTimersByTime(500);
+    expect(hold).toHaveBeenCalledOnce();
+  });
   it('commits real samples on capture loss instead of deleting the stroke', () => {
     const { commands, pointer } = setup();
     pointer('pointerdown', 0, 0);
@@ -341,7 +402,8 @@ function setup(
   canvasAction?: Parameters<typeof attachInput>[1]['canvasAction'],
   camera = defaultCamera,
   eraser?: Parameters<typeof attachInput>[1]['eraser'],
-  adjust?: Parameters<typeof attachInput>[1]['adjust']
+  adjust?: Parameters<typeof attachInput>[1]['adjust'],
+  touchGestures?: Parameters<typeof attachInput>[1]['touchGestures']
 ) {
   vi.stubGlobal(
     'requestAnimationFrame',
@@ -375,6 +437,7 @@ function setup(
       rawUpdate,
       canvasAction,
       selection,
+      touchGestures,
       puck
     })
   );

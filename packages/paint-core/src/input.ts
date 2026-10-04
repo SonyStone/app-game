@@ -37,6 +37,15 @@ export function attachInput(
       move: (point: Point) => void;
       end: () => void;
     };
+    /**
+     * Optional touch shortcuts beside navigation. `tap` receives the finger count of a short touch of two or more
+     * fingers that barely moved; the camera returns to where the touch started. `hold` receives the document point of
+     * one finger held still for half a second; the touch then no longer navigates until every finger lifts.
+     */
+    touchGestures?: {
+      tap: (fingers: number) => void;
+      hold?: (point: Point) => void;
+    };
     puck?: ReturnType<typeof createNavigationPuck>;
     selection?: {
       enabled: () => boolean;
@@ -58,6 +67,19 @@ export function attachInput(
     | { kind: 'adjust'; id: number }
     | undefined;
   let touchStart: { camera: Camera; center: Point; distance: number; angle: number } | undefined;
+  /** One touch interaction, from the first finger down until every finger lifts, for tap and hold shortcuts. */
+  let touchSession:
+    | { start: number; camera: Camera; origins: Map<number, Point>; fingers: number; moved: boolean; held: boolean }
+    | undefined;
+  let clearHold: (() => void) | undefined;
+  const stopHold = () => {
+    clearHold?.();
+    clearHold = undefined;
+  };
+  const endTouchSession = () => {
+    stopHold();
+    touchSession = undefined;
+  };
   const detachPuck = options.puck && attachNavigationPuck(canvas, options.puck, {
     busy: () => !!gesture || touches.size > 0,
     ready: options.ready,
@@ -155,7 +177,36 @@ export function attachInput(
       if (event.pointerType === 'touch') {
         if (gesture?.kind === 'draw' || gesture?.kind === 'select' || gesture?.kind === 'action') return;
         canvas.setPointerCapture(event.pointerId);
+        if (!touches.size) {
+          stopHold();
+          touchSession = {
+            start: event.timeStamp,
+            camera: options.camera(),
+            origins: new Map(),
+            fingers: 0,
+            moved: false,
+            held: false
+          };
+        }
         touches.set(event.pointerId, point);
+        if (touchSession) {
+          touchSession.origins.set(event.pointerId, point);
+          touchSession.fingers = Math.max(touchSession.fingers, touches.size);
+          stopHold();
+          const hold = options.touchGestures?.hold;
+          const session = touchSession;
+          if (hold && touches.size === 1 && !session.held)
+            clearHold = makeTimer(
+              () => {
+                clearHold = undefined;
+                if (touchSession !== session || session.moved || touches.size !== 1) return;
+                session.held = true;
+                hold(screenToWorld(point, options.camera(), options.size()));
+              },
+              touchHoldMs,
+              setTimeout
+            );
+        }
         resetTouch();
         return;
       }
@@ -218,6 +269,12 @@ export function attachInput(
       cursorAt(event);
       if (touches.has(event.pointerId)) {
         touches.set(event.pointerId, point);
+        const origin = touchSession?.origins.get(event.pointerId);
+        if (touchSession && origin && Math.hypot(point.x - origin.x, point.y - origin.y) > touchSlop) {
+          touchSession.moved = true;
+          stopHold();
+        }
+        if (touchSession?.held) return;
         const metrics = touchMetrics();
         if (!metrics || !touchStart) return;
         const zoom =
@@ -270,6 +327,15 @@ export function attachInput(
     (event) => {
       if (touches.delete(event.pointerId)) {
         resetTouch();
+        stopHold();
+        const session = touchSession;
+        if (!touches.size && session) {
+          endTouchSession();
+          if (!session.moved && !session.held && session.fingers >= 2 && event.timeStamp - session.start <= touchTapMs) {
+            options.navigate(session.camera);
+            options.touchGestures?.tap(session.fingers);
+          }
+        }
         return;
       }
       if (gesture?.id !== event.pointerId) return;
@@ -290,7 +356,10 @@ export function attachInput(
     { signal }
   );
   const interrupted = (event: PointerEvent) => {
-    if (touches.delete(event.pointerId)) resetTouch();
+    if (touches.delete(event.pointerId)) {
+      resetTouch();
+      endTouchSession();
+    }
     if (gesture?.id === event.pointerId) {
       if (gesture.kind === 'select') {
         options.selection?.cancel();
@@ -331,6 +400,7 @@ export function attachInput(
       finish();
       touches.clear();
       resetTouch();
+      endTouchSession();
       canvas.style.cursor = '';
     },
     { signal }
@@ -339,9 +409,19 @@ export function attachInput(
     detachPuck?.();
     if (gesture?.kind === 'select') options.selection?.cancel();
     finish();
+    endTouchSession();
     abort.abort();
   };
 }
+
+/** Longest touch, in milliseconds, that still counts as a tap. */
+const touchTapMs = 350;
+
+/** How long one finger must stay still, in milliseconds, to count as a hold. */
+const touchHoldMs = 500;
+
+/** Distance in CSS pixels a finger may move during a tap or hold. */
+const touchSlop = 10;
 
 /** Feature detection only; receiving raw events is reported separately by the input adapter. */
 export function supportsRawPointerUpdates(): boolean {
