@@ -5,6 +5,7 @@ import { defaultCamera, type Point } from './camera';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
 import type { TileChange } from './document';
+import type { FloatingPixels } from './gpu/floatingPixels';
 import { createResourceSession } from './composition/resourceSession';
 import { restoreFeatureData } from './composition/documentFeature';
 import { readPaintFile, writePaintFile } from './paintFile';
@@ -141,21 +142,59 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     const editStates = new Map<string, unknown>();
     /** The edit whose command committed the latest undo step, which its next command may amend. */
     let lastEdit: { edit: string; historyId: number } | undefined;
+    /** Pixels an edit in progress shows moved; a replacement renderer shows them again. */
+    let floating: FloatingPixels | undefined;
     /** Runs a module edit, committing or amending its undo step; returns the edit's reply. */
     const runEdit = async (command: Extract<PaintRuntimeCommand, { type: 'edit' }>) => {
       const edit = modules.edits.find((candidate) => candidate.id === command.edit);
       if (!edit) throw new Error(`Document edit "${command.edit}" is not installed.`);
       await end();
       if (lost || !renderer) throw new Error('Restore the renderer before editing the drawing.');
-      const result = await edit.run(
-        {
-          layers: document.layers,
-          active: document.active,
-          readTile: async (pixels) => unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels)),
-          state: { get: () => editStates.get(edit.id), set: (value) => editStates.set(edit.id, value) }
-        },
-        command.command
-      );
+      /** The edit asked to stop showing its floating pixels once its changes are committed. */
+      let clearFloating = false;
+      const hideFloating = (hold: boolean) => {
+        if (!clearFloating || !floating) return;
+        floating = undefined;
+        renderer?.setFloating(undefined);
+        if (hold) renderer?.holdPresented();
+        scheduleDraw();
+      };
+      let result: Awaited<ReturnType<typeof edit.run>>;
+      try {
+        result = await edit.run(
+          {
+            layers: document.layers,
+            active: document.active,
+            readTile: async (pixels) =>
+              unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels)),
+            state: { get: () => editStates.get(edit.id), set: (value) => editStates.set(edit.id, value) },
+            floating: {
+              show(pixels) {
+                floating = { ...pixels };
+                renderer?.setFloating(floating);
+                scheduleDraw();
+              },
+              move(matrix, interpolation) {
+                if (!floating) return;
+                floating = { ...floating, matrix, interpolation };
+                renderer?.moveFloating(matrix, interpolation);
+                scheduleDraw();
+              },
+              async clear() {
+                // The frame kept on screen until the result has loaded shows the latest move.
+                if (floating && redraw) await draw();
+                clearFloating = true;
+              }
+            }
+          },
+          command.command
+        );
+      } catch (error) {
+        // A failed result leaves the document unchanged; floating pixels must not stay on screen for it.
+        hideFloating(false);
+        throw error;
+      }
+
       let reverted: readonly TileChange[] = [];
       if (result.amend) {
         if (lastEdit?.edit !== edit.id) throw new Error('The drawing changed while this edit was in progress.');
@@ -175,6 +214,9 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           changed();
           await renderer.prepareOverview(document.layers);
         }
+
+        // After `restore`, which drops held frames: the presented frame stays until the result has loaded.
+        hideFloating(restored.length > 0);
       }
 
       return result.reply;
@@ -423,6 +465,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       );
       lost = false;
       renderer.setSelection(selectionPoints, selectionAnimate);
+      renderer.setFloating(floating);
       await renderer.prepareOverview(document.layers);
       await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData));
     };
@@ -802,6 +845,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               featureData = restoreFeatureData(modules.features, next.features);
               editStates.clear();
               lastEdit = undefined;
+              floating = undefined;
+              renderer?.setFloating(undefined);
               document.persist(tileStore.capture);
               renderer?.reset();
               await renderer?.prepareOverview(document.layers);

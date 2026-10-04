@@ -1,4 +1,5 @@
 import type { Layer, LayerInfo, TileChange } from '../document';
+import type { FloatingPixels } from '../gpu/floatingPixels';
 import type { TileData } from '../tilePixels';
 
 /**
@@ -8,8 +9,9 @@ import type { TileData } from '../tilePixels';
  * the document unchanged; it is reported as an error event, or with `requestId` in the `edited` reply, which also
  * carries the result's `reply`. A new edit needs no change to the runtime or its protocol.
  *
- * Interactive edits such as a transform keep data between commands in `context.state` and update their own undo step
- * with `amend`, so the finished edit is one undo step however often it changed.
+ * Interactive edits keep data between commands in `context.state`. They can update their own undo step with `amend`,
+ * so the finished edit is one undo step however often it changed, or, like a transform, show their progress with
+ * `context.floating` and commit only the result.
  *
  * Edits run in the engine's realm, a worker or the main thread, so they must not use the DOM.
  */
@@ -54,6 +56,23 @@ export type DocumentEditContext = {
    * runtime runs and is cleared when a document is imported.
    */
   state: { get: () => unknown; set: (value: unknown) => void };
+  /**
+   * Pixels lifted off a layer and shown moved while the edit is in progress, drawn by the renderer each frame; see
+   * `FloatingPixels`. They never enter the document, its history or saved files, so the edit commits its result
+   * itself. Importing a document clears them.
+   */
+  floating: {
+    /** Shows lifted pixels, replacing any shown before, and redraws. */
+    show(pixels: FloatingPixels): void;
+    /** Moves the shown pixels and redraws. */
+    move(matrix: FloatingPixels['matrix'], interpolation: FloatingPixels['interpolation']): void;
+    /**
+     * Stops showing the pixels once this command's changes are committed. Draws pending moves first, and with
+     * changes keeps that frame on screen until the changed pixels have loaded, so they replace the floating pixels
+     * without a blurred interim.
+     */
+    clear(): Promise<void>;
+  };
 };
 
 /**

@@ -10,8 +10,8 @@ import { transformEdit, type TransformBounds, type TransformCommand } from './tr
 /**
  * The UI half of the transform, whose engine half is `transformEdit` in the drawing engine's recipe: one transform
  * session at a time over the lasso selection, or the whole active layer without one. The box follows every change at
- * once; the engine redraws the pixels with at most one update in flight, always the latest. `end` keeps the result as
- * one undo step and `cancel` restores the pixels. Must be created within a Solid owner; replies arriving after
+ * once; the engine moves its floating copy of the pixels with at most one update in flight, always the latest, and
+ * the document changes only when `end` keeps the result as one undo step. `cancel` leaves the pixels where they were. Must be created within a Solid owner; replies arriving after
  * disposal are dropped.
  */
 export function createTransform(options: {

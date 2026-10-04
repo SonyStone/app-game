@@ -5,6 +5,7 @@ import { screenToWorld, type Camera, type ViewSize } from '../camera';
 import type { Layer } from '../document';
 import { blendModes } from '../layerMerge';
 import type { createDisplayCache } from './displayCache';
+import type { FloatingPixelsState } from './floatingPixels';
 import * as shader from './shaders';
 import type { StrokeRaster } from './strokeRaster';
 import type { StrokeData } from './strokeState';
@@ -17,7 +18,8 @@ import { visibleTileKeys } from './visibleTileKeys';
 /**
  * Composes the document into a target's viewport and presents it. Changed screen regions are rebuilt layer by
  * layer: committed pixels come from the virtual texture when streaming, otherwise (and for the active stroke's
- * output and preview tail) from resident or display-cache tiles; each layer is then blended over the result.
+ * output and preview tail) from resident or display-cache tiles, with floating pixels cut out and drawn moved; each
+ * layer is then blended over the result.
  */
 export function createFrameComposer(
   root: TgpuRoot,
@@ -29,6 +31,8 @@ export function createFrameComposer(
     displayCache: ReturnType<typeof createDisplayCache>;
     ensureMipmaps: ReturnType<typeof createMipmapEnsurer>;
     virtual: ReturnType<typeof createVirtualTexture> | undefined;
+    /** Pixels lifted off a layer and shown moved, drawn into that layer before it is blended. */
+    floating: FloatingPixelsState;
     /** Whether the selection outline animates; read at presentation. */
     animateSelection: () => boolean;
   },
@@ -183,6 +187,7 @@ export function createFrameComposer(
           }
 
           const active = stroke.current?.layer.id === layer.id;
+          const floats = deps.floating.layerId() === layer.id;
           let streamed = false;
           if (stream && !exact) {
             const planned = pages!.plan(layer, camera, size, scale, frame.flush);
@@ -215,12 +220,21 @@ export function createFrameComposer(
               }
             );
             if (!drawn) {
-              if (!clipped) {
-                clipBase = 'hidden';
+              if (!floats) {
+                if (!clipped) {
+                  clipBase = 'hidden';
+                }
+
+                continue;
               }
 
-              continue;
+              // Floating pixels may move over a part of their layer without pixels of its own.
+              clearAttachment(frame.encoder(), view.layerRender);
             }
+          }
+
+          if (floats) {
+            deps.floating.render(frame.encoder(), view.layerRender, region, camera, size);
           }
 
           if (!clipped) {

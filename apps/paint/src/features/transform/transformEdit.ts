@@ -5,14 +5,14 @@ import type { TileChange } from '@app-game/paint-core/document';
 import { captureSelection } from '@app-game/paint-core/selection';
 import { TILE_BYTES, type TileData } from '@app-game/paint-core/tilePixels';
 import { z } from 'zod';
-import { applyAffine, invertAffine, type Affine } from './affine';
+import { applyAffine, identity, invertAffine, type Affine } from './affine';
 
 /**
  * The engine half of the transform: moves, scales, rotates and flips the pixels of a lasso selection, or of the whole
- * active layer, as one undo step. `begin` captures the pixels and replies with their bounds; each `update` redraws
- * them with a new transform from the original pixels, amending the same undo step; `end` keeps the result and
- * `cancel` restores the original. Pixels are resampled bilinearly in premultiplied color, or take the nearest pixel
- * for pixel art. Runs in the engine's realm.
+ * active layer, as one undo step. `begin` captures the pixels, lifts them off the layer as floating pixels that the
+ * renderer draws each frame, and replies with their bounds; each `update` only moves the floating pixels, so the
+ * document stays unchanged until `end` draws the result into the layer, and `cancel` leaves it untouched. The result
+ * is resampled bilinearly in premultiplied color, or takes the nearest pixel for pixel art. Runs in the engine's realm.
  */
 export const transformEdit = defineDocumentEdit({
   id: 'transform',
@@ -22,27 +22,33 @@ export const transformEdit = defineDocumentEdit({
     if (command.phase === 'begin') {
       const started = await begin(context, command.points);
       context.state.set(started);
-      return { changes: [], reply: { bounds: started.bounds } };
+      const { layerId, bounds, pixels } = started;
+      context.floating.show({ layerId, bounds, pixels, matrix: identity, interpolation: started.interpolation });
+      return { changes: [], reply: { bounds } };
     }
 
     if (!session) {
       throw new Error('Start a transform first.');
     }
 
-    if (command.phase === 'end') {
-      context.state.set(undefined);
+    if (command.phase === 'update') {
+      if (!invertAffine(command.matrix)) {
+        throw new Error('The transform is too thin to draw.');
+      }
+
+      session.matrix = command.matrix;
+      session.interpolation = command.interpolation;
+      context.floating.move(command.matrix, command.interpolation);
       return { changes: [] };
     }
 
-    if (command.phase === 'cancel') {
-      context.state.set(undefined);
-      return { changes: [], amend: session.committed };
+    context.state.set(undefined);
+    await context.floating.clear();
+    if (command.phase === 'cancel' || session.matrix.every((value, index) => value === identity[index])) {
+      return { changes: [] };
     }
 
-    const changes = await transformed(context, session, command.matrix, command.interpolation);
-    const amend = session.committed;
-    session.committed = changes.length > 0;
-    return { changes, amend };
+    return { changes: await transformed(context, session, session.matrix, session.interpolation) };
   }
 });
 
@@ -77,8 +83,9 @@ type TransformSession = {
   bounds: TransformBounds;
   /** The transformed pixels within `bounds`, row by row, premultiplied RGBA8. */
   pixels: Uint8Array;
-  /** Whether the latest update committed an undo step, which the next command amends. */
-  committed: boolean;
+  /** The latest transform and resampling, which `end` draws into the layer. */
+  matrix: Affine;
+  interpolation: 'smooth' | 'pixels';
 };
 
 /** Captures the pixels inside `points`, or the whole active layer, and their bounds. */
@@ -118,7 +125,14 @@ async function begin(context: DocumentEditContext, points: Point[] | undefined):
     }
   }
 
-  return { layerId: layer.id, original: new Map(layer.tiles), bounds, pixels, committed: false };
+  return {
+    layerId: layer.id,
+    original: new Map(layer.tiles),
+    bounds,
+    pixels,
+    matrix: identity,
+    interpolation: 'smooth'
+  };
 }
 
 /** Changes that erase the original pixels and draw them through `matrix`, from the layer as the transform began. */

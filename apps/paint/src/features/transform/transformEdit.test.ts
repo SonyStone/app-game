@@ -1,78 +1,67 @@
 import type { DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
 import type { Layer } from '@app-game/paint-core/document';
 import { unpackTile } from '@app-game/paint-core/tilePixels';
-import { expect, it } from 'vitest';
-import { applyAffine, boxAffine, identity, invertAffine, multiplyAffine } from './affine';
+import { expect, it, vi } from 'vitest';
+import { applyAffine, boxAffine, identity, invertAffine, multiplyAffine, type Affine } from './affine';
 import { transformEdit, type TransformCommand } from './transformEdit';
 
-it('moves, scales and restores the whole layer, amending one undo step', async () => {
-  const { run, tiles } = setup(square(10, 20, 4, 6, [0, 0, 255, 255]));
+it('lifts the pixels as floating pixels and moves them without changing the document', async () => {
+  const { run, floating } = setup(square(10, 20, 4, 6, [0, 0, 255, 255]));
   const begun = await run({ phase: 'begin' });
-  expect(begun.reply).toEqual({ bounds: { left: 10, top: 20, right: 14, bottom: 26 } });
-  expect(begun.changes).toEqual([]);
-
-  // The identity keeps every byte; the first update starts the undo step and later ones amend it.
-  const kept = await run({ phase: 'update', interpolation: 'smooth', matrix: [...identity] });
-  expect(kept.amend).toBe(false);
-  expect(alphaCount(kept)).toBe(24);
-  expect(pixel(kept, 10, 20)).toEqual([0, 0, 255, 255]);
-
-  const moved = await run({ phase: 'update', interpolation: 'smooth', matrix: [1, 0, 0, 1, 100, 0] });
-  expect(moved.amend).toBe(true);
-  expect(pixel(moved, 10, 20)).toEqual([0, 0, 0, 0]);
-  expect(pixel(moved, 110, 20)).toEqual([0, 0, 255, 255]);
-  // `before` is always the layer as the transform began.
-  expect(moved.changes.every((change) => change.before === tiles.get(change.key))).toBe(true);
-
-  const scaled = await run({ phase: 'update', interpolation: 'smooth', matrix: [2, 0, 0, 2, -10, -20] });
-  expect(alphaCount(scaled)).toBe(8 * 12);
-
-  // Pixel art keeps hard edges: scaled by 1.5 with the nearest pixel, every pixel is either the color or empty.
-  const pixels = await run({ phase: 'update', interpolation: 'pixels', matrix: [1.5, 0, 0, 1.5, -5, -10] });
-  const alphas = new Set(
-    pixels.changes.flatMap((change) =>
-      [...((change.after as Uint8Array | undefined) ?? [])].filter((_, index) => index % 4 === 3)
-    )
+  expect(begun).toEqual({ changes: [], reply: { bounds: { left: 10, top: 20, right: 14, bottom: 26 } } });
+  expect(floating.show).toHaveBeenCalledWith(
+    expect.objectContaining({
+      layerId: 'layer',
+      bounds: { left: 10, top: 20, right: 14, bottom: 26 },
+      matrix: identity,
+      interpolation: 'smooth'
+    })
   );
-  expect([...alphas].sort()).toEqual([0, 255]);
-  const smooth = await run({ phase: 'update', interpolation: 'smooth', matrix: [1.5, 0, 0, 1.5, -5, -10] });
-  expect(
-    new Set(
-      smooth.changes.flatMap((change) =>
-        [...((change.after as Uint8Array | undefined) ?? [])].filter((_, index) => index % 4 === 3)
-      )
-    ).size
-  ).toBeGreaterThan(2);
+  expect(floating.show.mock.calls[0]![0].pixels).toHaveLength(4 * 6 * 4);
 
-  const cancelled = await run({ phase: 'cancel' });
-  expect(cancelled).toEqual({ changes: [], amend: true });
+  const moved = await run({ phase: 'update', interpolation: 'pixels', matrix: [1, 0, 0, 1, 100, 0] });
+  expect(moved).toEqual({ changes: [] });
+  expect(floating.move).toHaveBeenLastCalledWith([1, 0, 0, 1, 100, 0], 'pixels');
+  await expect(run({ phase: 'update', interpolation: 'smooth', matrix: [0, 0, 0, 1, 0, 0] })).rejects.toThrow(
+    'too thin'
+  );
+
+  expect(await run({ phase: 'cancel' })).toEqual({ changes: [] });
+  expect(floating.clear).toHaveBeenCalledOnce();
   await expect(run({ phase: 'update', interpolation: 'smooth', matrix: [...identity] })).rejects.toThrow(
     'Start a transform first'
   );
 });
 
-it('transforms only the selected pixels and refuses empty or oversized sources', async () => {
-  const { run } = setup(square(0, 0, 20, 10, [255, 0, 0, 255]));
-  const left = [
-    { x: 0, y: 0 },
-    { x: 10, y: 0 },
-    { x: 10, y: 10 },
-    { x: 0, y: 10 }
-  ];
-  expect((await run({ phase: 'begin', points: left })).reply).toEqual({
-    bounds: { left: 0, top: 0, right: 10, bottom: 10 }
-  });
-  const flipped = await run({ phase: 'update', interpolation: 'smooth', matrix: [1, 0, 0, 1, 0, 30] });
-  // The selected half moves down; the other half stays.
-  expect(pixel(flipped, 5, 5)).toEqual([0, 0, 0, 0]);
-  expect(pixel(flipped, 15, 5)).toEqual([255, 0, 0, 255]);
-  expect(pixel(flipped, 5, 35)).toEqual([255, 0, 0, 255]);
-  await run({ phase: 'end' });
+it('draws the latest transform into the layer when it ends', async () => {
+  const blue = square(10, 20, 4, 6, [0, 0, 255, 255]);
+  const { run, floating } = setup(blue);
+  const finish = async (matrix?: Affine, interpolation: 'smooth' | 'pixels' = 'smooth') => {
+    await run({ phase: 'begin' });
+    if (matrix) {
+      await run({ phase: 'update', interpolation, matrix: [...matrix] });
+    }
 
-  const empty = setup(new Map());
-  await expect(empty.run({ phase: 'begin' })).rejects.toThrow('The active layer is empty');
-  const huge = setup(new Map([...square(0, 0, 1, 1), ...square(5000, 0, 1, 1)]));
-  await expect(huge.run({ phase: 'begin' })).rejects.toThrow('at most 4096 px');
+    return run({ phase: 'end' });
+  };
+
+  // Ending without a change, or back where it began, leaves the layer and its history alone.
+  expect(await finish()).toEqual({ changes: [] });
+  expect(await finish(identity)).toEqual({ changes: [] });
+  expect(floating.clear).toHaveBeenCalledTimes(2);
+
+  const moved = await finish([1, 0, 0, 1, 100, 0]);
+  expect(pixel(moved, 10, 20)).toEqual([0, 0, 0, 0]);
+  expect(pixel(moved, 110, 20)).toEqual([0, 0, 255, 255]);
+  expect(alphaCount(moved)).toBe(24);
+  // `before` is the layer as the transform began.
+  expect(moved.changes.every((change) => change.before === blue.get(change.key))).toBe(true);
+
+  expect(alphaCount(await finish([2, 0, 0, 2, -10, -20]))).toBe(8 * 12);
+
+  // Pixel art keeps hard edges: scaled by 1.5 with the nearest pixel, every pixel is either the color or empty.
+  expect([...alphas(await finish([1.5, 0, 0, 1.5, -5, -10], 'pixels'))].sort()).toEqual([0, 255]);
+  expect(alphas(await finish([1.5, 0, 0, 1.5, -5, -10], 'smooth')).size).toBeGreaterThan(2);
 });
 
 it('builds box transforms about a pivot and inverts them', () => {
@@ -93,13 +82,19 @@ it('builds box transforms about a pivot and inverts them', () => {
 function setup(tiles: Map<string, Uint8Array>) {
   const layer: Layer = { id: 'layer', name: 'Layer', visible: true, opacity: 1, blend: 'normal', tiles };
   let state: unknown;
+  const floating = {
+    show: vi.fn<DocumentEditContext['floating']['show']>(),
+    move: vi.fn<DocumentEditContext['floating']['move']>(),
+    clear: vi.fn(async () => {})
+  };
   const context: DocumentEditContext = {
     layers: [layer],
     active: layer,
     readTile: async (pixels) => unpackTile(pixels),
-    state: { get: () => state, set: (value) => (state = value) }
+    state: { get: () => state, set: (value) => (state = value) },
+    floating
   };
-  return { tiles, run: (command: TransformCommand) => transformEdit.run(context, command) };
+  return { tiles, floating, run: (command: TransformCommand) => transformEdit.run(context, command) };
 }
 
 /** An opaque rectangle of `rgba` with its top-left corner at (left, top), in tiles. */
@@ -124,6 +119,15 @@ function pixel(result: Result, x: number, y: number) {
   const tile = change?.after as Uint8Array | undefined;
   const index = ((y % 256) * 256 + (x % 256)) * 4;
   return tile ? [...tile.subarray(index, index + 4)] : [0, 0, 0, 0];
+}
+
+/** The distinct alpha values of the changed tiles. */
+function alphas(result: Result) {
+  return new Set(
+    result.changes.flatMap((change) =>
+      [...((change.after as Uint8Array | undefined) ?? [])].filter((_, index) => index % 4 === 3)
+    )
+  );
 }
 
 function alphaCount(result: Result) {

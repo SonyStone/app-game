@@ -20,6 +20,11 @@
   cursor: move;
 }
 
+/* The dragged shapes stay in place, transparent, so the pointer keeps its capture. */
+.overlay[data-moving='true'] > * {
+  opacity: 0;
+}
+
 .stem {
   stroke: #419bcf;
   stroke-width: 1.5;

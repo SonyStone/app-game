@@ -192,6 +192,65 @@ it('amends an interactive edit into one undo step, replies to requests and refus
   expect(await alphaAt()).toBe(40);
 });
 
+it('shows floating pixels of an edit and clears them after its result, keeping the frame until it has loaded', async () => {
+  // `lift` shows a tile's worth of pixels, `move` moves them, `drop` commits a tile and `fail` throws after clearing.
+  const float = defineDocumentEdit({
+    id: 'float',
+    parse: (input: unknown) => input as 'lift' | 'move' | 'drop' | 'fail' | 'cancel',
+    async run({ active, floating }, command) {
+      if (command === 'lift') {
+        const bounds = { left: 0, top: 0, right: 2, bottom: 2 };
+        floating.show({
+          layerId: active.id,
+          bounds,
+          pixels: new Uint8Array(16),
+          matrix: [1, 0, 0, 1, 0, 0],
+          interpolation: 'smooth'
+        });
+      } else if (command === 'move') {
+        floating.move([1, 0, 0, 1, 5, 0], 'pixels');
+      } else {
+        await floating.clear();
+        if (command === 'fail') throw new Error('The transform is too thin to draw.');
+        if (command === 'drop') {
+          const after = new Uint8Array(TILE_BYTES).fill(255);
+          return { changes: [{ layerId: active.id, key: '0,0', before: undefined, after }] };
+        }
+      }
+
+      return { changes: [] };
+    }
+  });
+  const { runtime, renderer, document, events, waitFor } = await start({ edits: [float] });
+  const replies = () => events.filter((event) => event.type === 'edited').length;
+  runtime.send(float.command('lift', 'a'));
+  runtime.send(float.command('move', 'b'));
+  await waitFor(() => replies() === 2);
+  expect(renderer.setFloating).toHaveBeenLastCalledWith(expect.objectContaining({ layerId: document.active.id }));
+  expect(renderer.moveFloating).toHaveBeenLastCalledWith([1, 0, 0, 1, 5, 0], 'pixels');
+  expect(document.state().canUndo).toBe(false);
+
+  // The result replaces the floating pixels after it is committed and restored, holding the presented frame.
+  runtime.send(float.command('drop', 'c'));
+  await waitFor(() => replies() === 3);
+  expect(document.state().canUndo).toBe(true);
+  expect(renderer.setFloating).toHaveBeenLastCalledWith(undefined);
+  expect(renderer.restore.mock.invocationCallOrder.at(-1)).toBeLessThan(
+    renderer.setFloating.mock.invocationCallOrder.at(-1)!
+  );
+  expect(renderer.holdPresented).toHaveBeenCalledOnce();
+
+  // Without changes nothing is held; a failed result still clears the floating pixels.
+  runtime.send(float.command('lift', 'd'));
+  runtime.send(float.command('cancel', 'e'));
+  runtime.send(float.command('lift', 'f'));
+  runtime.send(float.command('fail', 'g'));
+  await waitFor(() => replies() === 7);
+  expect(renderer.setFloating).toHaveBeenLastCalledWith(undefined);
+  expect(renderer.setFloating).toHaveBeenCalledTimes(7);
+  expect(renderer.holdPresented).toHaveBeenCalledOnce();
+});
+
 /** Disposes a runtime gracefully, saving its document. */
 async function stop({ runtime, events, waitFor }: Awaited<ReturnType<typeof start>>) {
   runtime.send({ type: 'dispose' });

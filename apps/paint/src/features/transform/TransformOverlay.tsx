@@ -1,5 +1,5 @@
 import type { Point, ViewSize } from '@app-game/paint-core/camera';
-import { For, onCleanup } from 'solid-js';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { placeBeside } from '../../shared/ui/placeBeside';
 import styles from './Transform.module.css';
 import { TransformActions } from './TransformActions';
@@ -11,7 +11,8 @@ import type { TransformBounds } from './transformEdit';
  * The transform box over the canvas, with its actions next to it: drag inside to move, drag a corner or edge handle to
  * scale from the opposite handle, and drag the round handle to rotate about the center (Shift snaps to 15°). Corner
  * handles keep the proportions as the settings say; Shift does the opposite. Pen, mouse and touch all drag; touches
- * elsewhere keep navigating the canvas. A drag follows the pointer over the whole window until it is released.
+ * elsewhere keep navigating the canvas. A drag follows the pointer over the whole window until it is released. While
+ * the box is moved, only the pixels show; while any part is dragged, the actions are hidden.
  */
 export function TransformOverlay(props: {
   bounds: TransformBounds;
@@ -34,6 +35,8 @@ export function TransformOverlay(props: {
   let svg!: SVGSVGElement;
   /** Removes the window listeners of the drag in progress. */
   let release: (() => void) | undefined;
+  /** What the drag in progress changes. */
+  const [dragging, setDragging] = createSignal<'move' | 'rotate' | BoxHandle>();
   onCleanup(() => release?.());
   const points = () => boxPoints(props.bounds, props.box);
   const screen = () => {
@@ -88,17 +91,24 @@ export function TransformOverlay(props: {
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
+    setDragging(kind);
     release = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
       window.removeEventListener('pointercancel', end);
+      setDragging(undefined);
       release = undefined;
     };
   };
 
   return (
     <div class={styles.layer}>
-      <svg ref={svg} class={styles.overlay} aria-label="Transform box">
+      <svg
+        ref={svg}
+        class={styles.overlay}
+        aria-label="Transform box"
+        data-moving={dragging() === 'move' ? 'true' : 'false'}
+      >
         <polygon
           class={styles.body}
           points={screen()
@@ -136,16 +146,18 @@ export function TransformOverlay(props: {
           onPointerDown={begin('rotate')}
         />
       </svg>
-      <TransformActions
-        placement={actionsAt()}
-        settings={props.settings}
-        onSettings={props.onSettings}
-        onFlip={props.onFlip}
-        onRotate={props.onRotate}
-        onReset={props.onReset}
-        onCancel={props.onCancel}
-        onDone={props.onDone}
-      />
+      <Show when={!dragging()}>
+        <TransformActions
+          placement={actionsAt()}
+          settings={props.settings}
+          onSettings={props.onSettings}
+          onFlip={props.onFlip}
+          onRotate={props.onRotate}
+          onReset={props.onReset}
+          onCancel={props.onCancel}
+          onDone={props.onDone}
+        />
+      </Show>
     </div>
   );
 }

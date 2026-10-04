@@ -10,6 +10,7 @@ import type { Layer, TileChange } from '../document';
 import { unpackTile, type TileData } from '../tilePixels';
 import { viewLod, type OverviewStorage } from '../virtualPages';
 import { createDisplayCache } from './displayCache';
+import { createFloatingPixels, type FloatingPixels } from './floatingPixels';
 import { createFrameComposer, renderScale } from './frameComposer';
 import { createLassoOverlay } from './lassoOverlay';
 import { capturePaintBounds, clipPaintBounds, type PaintBounds } from './paintBounds';
@@ -227,10 +228,31 @@ async function assemblePaintRenderer(
     allowsTile,
     sharedScratch: options.sharedScratch
   });
+  const floating = resources.keep(
+    createFloatingPixels(root, (keys) => {
+      if (keys === 'all') {
+        targets.invalidate();
+        return;
+      }
+
+      for (const key of keys) {
+        targets.mark(key);
+      }
+    })
+  );
   const composer = createFrameComposer(
     root,
     format,
-    { stroke, residency, raster, displayCache, ensureMipmaps, virtual, animateSelection: () => animateSelection },
+    {
+      stroke,
+      residency,
+      raster,
+      displayCache,
+      ensureMipmaps,
+      virtual,
+      floating,
+      animateSelection: () => animateSelection
+    },
     options
   );
 
@@ -285,6 +307,31 @@ async function assemblePaintRenderer(
       lasso.set(points);
       animateSelection = animate;
     },
+    /**
+     * Shows pixels lifted off a layer, moved, until replaced or cleared with `undefined`; see `FloatingPixels`. They
+     * appear in presented frames and exports of the view, never in tiles, history or saved documents. Uploads the
+     * pixels; use `moveFloating` to move them.
+     */
+    setFloating(next: FloatingPixels | undefined) {
+      floating.set(next);
+    },
+    /** Moves the shown floating pixels without uploading them again. */
+    moveFloating(matrix: FloatingPixels['matrix'], interpolation: FloatingPixels['interpolation']) {
+      floating.move(matrix, interpolation);
+    },
+    /**
+     * Keeps the presented frame of every target until the changed overview is resident at the same camera, as after
+     * a stroke: committed pixels replacing a preview, such as floating pixels, appear without a blurred interim.
+     * Call after `restore`, which drops held frames.
+     */
+    holdPresented() {
+      for (const target of targets.all()) {
+        target.holdPreview();
+        if (virtual) {
+          target.damage.invalidate();
+        }
+      }
+    },
     /** Makes the current low-resolution image resident, rebuilding only edited branches. */
     prepareOverview: async (layers: Layer[]) => {
       await virtual?.prepare(layers);
@@ -309,6 +356,7 @@ async function assemblePaintRenderer(
           brush.bytes +
           tiles.bytes +
           lasso.bytes() +
+          floating.bytes() +
           (virtualStats?.gpuBytes ?? 0) +
           targets.bytes() +
           displayCache.stats().bytes +
