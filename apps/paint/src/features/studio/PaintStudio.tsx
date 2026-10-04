@@ -195,7 +195,8 @@ export function PaintStudio(props: {
     send: engine.send,
     navigate: camera.navigate,
     camera: camera.camera,
-    size
+    size,
+    selection: selection.points
   });
   const layerFilter = createLayerFilter({
     layers: () => engine.state().layers,
@@ -787,7 +788,7 @@ export function PaintStudio(props: {
                     active={frames.activeFrame()}
                     disabled={!canUpdateSymmetry()}
                     onActivate={frames.activate}
-                    onAdd={() => frames.addFromView()}
+                    onAdd={() => frames.add()}
                     onRename={frames.rename}
                     adjusting={adjustingFrame() !== undefined && adjustingFrame() === frames.activeFrame()?.id}
                     onAdjust={(adjusting) => setAdjustingFrame(adjusting ? frames.activeFrame()?.id : undefined)}

@@ -4,8 +4,8 @@ import type { Frame } from './framesFeature';
 
 /**
  * The frame chooser at the top of the Layers panel: the whole canvas or one frame, and for the chosen frame its name
- * and actions: show it, export it as a PNG at 100%, copy a link that opens it, and delete it. A new frame covers the
- * view.
+ * and actions: show it, export it as a PNG at 100%, copy a link that opens it, and delete it. A new frame goes around
+ * the lasso selection, or else covers the view.
  */
 export function FramesSection(props: {
   frames: readonly Frame[];
@@ -45,7 +45,11 @@ export function FramesSection(props: {
             <For each={props.frames}>{(frame) => <option value={frame.id}>{frame.name}</option>}</For>
           </select>
         </label>
-        <button title="Add a frame covering the view" disabled={props.disabled} onClick={() => props.onAdd()}>
+        <button
+          title="Add a frame around the lasso selection, or else covering the view"
+          disabled={props.disabled}
+          onClick={() => props.onAdd()}
+        >
           New frame
         </button>
       </div>

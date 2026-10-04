@@ -12,12 +12,12 @@ afterEach(() => {
 
 it('adds frames covering the view, names, renames and removes them, and saves them with the document', () => {
   const { frames, sent, dispose } = setup();
-  const first = frames.addFromView()!;
+  const first = frames.add()!;
   flush();
   // The view is 800 × 600 CSS pixels at 200%, centered on (100, 50).
   expect(first).toMatchObject({ name: 'Frame 1', left: -100, top: -100, width: 400, height: 300 });
   expect(frames.activeFrame()?.id).toBe(first.id);
-  const second = frames.addFromView()!;
+  const second = frames.add()!;
   expect(second.name).toBe('Frame 2');
 
   frames.resize(second.id, { left: 10.4, top: -3.6, width: 0.2, height: 50.2 });
@@ -37,9 +37,21 @@ it('adds frames covering the view, names, renames and removes them, and saves th
   dispose();
 });
 
+it('puts a new frame around the lasso selection when there is one', () => {
+  const { frames, setSelection, dispose } = setup();
+  setSelection([
+    { x: 10.5, y: 20 },
+    { x: 60, y: 22.2 },
+    { x: 30, y: 80.1 }
+  ]);
+  flush();
+  expect(frames.add()).toMatchObject({ left: 10, top: 20, width: 50, height: 61 });
+  dispose();
+});
+
 it('watches the active frame for the layers in it and shows a frame upright in the view', () => {
   const { frames, sent, camera, dispose } = setup();
-  const frame = frames.addFromView()!;
+  const frame = frames.add()!;
   flush();
   expect(sent.filter((command) => command.type === 'watch-regions').at(-1)).toEqual({
     type: 'watch-regions',
@@ -73,15 +85,17 @@ function setup() {
     const sent: Extract<PaintCommand, { type: 'feature' | 'watch-regions' }>[] = [];
     const [camera, setCamera] = createSignal<Camera>({ ...defaultCamera(), x: 100, y: 50, zoom: 2, angle: 0.3 });
     const [restored, setRestored] = createSignal<Record<string, unknown>>();
+    const [selection, setSelection] = createSignal<readonly { x: number; y: number }[]>([]);
     const frames = createFrames({
       restored,
       canUpdate: () => true,
       send: (command) => sent.push(command),
       navigate: setCamera,
       camera,
-      size: () => ({ width: 800, height: 600 })
+      size: () => ({ width: 800, height: 600 }),
+      selection
     });
     flush();
-    return { frames, sent, camera, setRestored, dispose };
+    return { frames, sent, camera, setRestored, setSelection, dispose };
   });
 }

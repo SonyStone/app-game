@@ -1,4 +1,4 @@
-import type { Camera, ViewSize } from '@app-game/paint-core/camera';
+import type { Camera, Point, ViewSize } from '@app-game/paint-core/camera';
 import type { DocumentRect } from '@app-game/paint-core/layersInView';
 import type { PaintCommand } from '@app-game/paint-core/protocol';
 import { createEffect, createMemo, latest, untrack, type Accessor } from 'solid-js';
@@ -22,6 +22,8 @@ export function createFrames(options: {
   navigate: (camera: Camera) => void;
   camera: Accessor<Camera>;
   size: Accessor<ViewSize>;
+  /** The lasso outline, whose bounds a new frame takes; fewer than three points leave it the view. */
+  selection?: Accessor<readonly Point[]>;
 }) {
   const [data, setData, currentData] = createImmediateSignal<FramesData>(
     framesFeature.read(untrack(options.restored)) ?? { frames: [] }
@@ -60,20 +62,12 @@ export function createFrames(options: {
   return {
     frames: () => data().frames,
     activeFrame,
-    /** Adds a frame covering the view, upright, and makes it active. Returns it, or nothing while commands wait. */
-    addFromView(): Frame | undefined {
-      const camera = latest(options.camera),
-        size = latest(options.size);
-      const width = Math.round(size.width / camera.zoom),
-        height = Math.round(size.height / camera.zoom);
-      const frame: Frame = {
-        id: crypto.randomUUID(),
-        name: nextName(currentData().frames),
-        left: Math.round(camera.x - width / 2),
-        top: Math.round(camera.y - height / 2),
-        width,
-        height
-      };
+    /**
+     * Adds a frame around the lasso selection, or else covering the view, upright, and makes it active. Returns it, or
+     * nothing while commands wait.
+     */
+    add(): Frame | undefined {
+      const frame: Frame = { id: crypto.randomUUID(), name: nextName(currentData().frames), ...newRect() };
       return change({ frames: [...currentData().frames, frame], active: frame.id }) ? frame : undefined;
     },
     /** Makes `id` the active frame, or none for the whole canvas. */
@@ -107,6 +101,27 @@ export function createFrames(options: {
     /** A link to this page that opens frame `id`; frames live in this device's document, so only here. */
     linkTo: (id: string) => `${location.origin}${location.pathname}${location.search}#frame=${encodeURIComponent(id)}`
   };
+
+  /** Whole document pixels around the selection, or covering the view. */
+  function newRect(): DocumentRect {
+    const points = latest(() => options.selection?.() ?? []);
+    if (points.length >= 3) {
+      const left = Math.floor(Math.min(...points.map(({ x }) => x))),
+        top = Math.floor(Math.min(...points.map(({ y }) => y)));
+      return {
+        left,
+        top,
+        width: Math.max(1, Math.ceil(Math.max(...points.map(({ x }) => x))) - left),
+        height: Math.max(1, Math.ceil(Math.max(...points.map(({ y }) => y))) - top)
+      };
+    }
+
+    const camera = latest(options.camera),
+      size = latest(options.size);
+    const width = Math.round(size.width / camera.zoom),
+      height = Math.round(size.height / camera.zoom);
+    return { left: Math.round(camera.x - width / 2), top: Math.round(camera.y - height / 2), width, height };
+  }
 
   /** Fits frame `id` in the view, upright, with a margin. */
   function goTo(id: string) {
