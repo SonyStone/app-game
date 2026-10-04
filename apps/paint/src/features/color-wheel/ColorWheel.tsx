@@ -9,8 +9,11 @@ import {
   gamutMasks,
   harmonies,
   harmonyColors,
+  insertMaskCorner,
   maskPolygon,
+  maxMaskCorners,
   moveMaskCorner,
+  removeMaskCorner,
   toDisk,
   type DiskPoint,
   type GamutMask,
@@ -21,7 +24,8 @@ import {
  * A perceptual color wheel, after Coolorus: hue around the disk and saturation from the center, at the lightness of
  * the slider below, all in OKLCH, so turning the hue keeps the perceived lightness. A harmony marks the scheme's other
  * colors, which a press picks; a gamut mask dims the colors outside it and keeps picks inside, and its handle on the
- * rim turns it. Dragging a mask's corner makes it a custom mask of that shape. Edits apply live through `onChange`; `onSettle` runs when a drag or keyboard change ends.
+ * rim turns it. Dragging a mask's corner makes it a custom mask of that shape; dragging the dot in the middle of an edge
+ * adds a corner there, and a double tap on a corner removes it. Edits apply live through `onChange`; `onSettle` runs when a drag or keyboard change ends.
  */
 export function ColorWheel(props: {
   /** `#rrggbb` color being edited. */
@@ -120,6 +124,8 @@ export function ColorWheel(props: {
               {/* Rows by position keep each corner's element, and its captured pointer, while the mask changes. */}
               <For each={mask()} keyed={false}>
                 {(corner, index) => {
+                  /** When this corner was last pressed, to recognize a double tap. */
+                  let pressed = -Infinity;
                   // Created once: a spread re-runs as the corner moves, which would forget the captured pointer.
                   const handlers = drag(
                     (event) =>
@@ -128,7 +134,20 @@ export function ColorWheel(props: {
                         maskAngle: 0,
                         customMask: moveMaskCorner(mask(), index, diskPoint(event))
                       }),
-                    props
+                    props,
+                    (event) => {
+                      const previous = pressed;
+                      pressed = event.timeStamp;
+                      if (event.timeStamp - previous > doubleTapMs || mask().length <= 3) {
+                        return true;
+                      }
+
+                      // A double tap removes the corner instead of dragging it; the rows after it shift by one.
+                      pressed = -Infinity;
+                      props.onSettings({ mask: 'custom', maskAngle: 0, customMask: removeMaskCorner(mask(), index) });
+                      props.onSettle();
+                      return false;
+                    }
                   );
                   return (
                     <rect
@@ -144,6 +163,41 @@ export function ColorWheel(props: {
                   );
                 }}
               </For>
+              <Show when={mask().length < maxMaskCorners}>
+                <For each={mask()} keyed={false}>
+                  {(corner, index) => {
+                    const next = () => mask()[(index + 1) % mask().length]!;
+                    /** Whether this drag has added its corner, which the rest of the drag moves. */
+                    let added = false;
+                    const handlers = drag(
+                      (event) => {
+                        const point = diskPoint(event);
+                        const customMask = added
+                          ? moveMaskCorner(mask(), index + 1, point)
+                          : insertMaskCorner(mask(), index, point);
+                        added = true;
+                        props.onSettings({ mask: 'custom', maskAngle: 0, customMask });
+                      },
+                      props,
+                      () => {
+                        added = false;
+                        return true;
+                      }
+                    );
+                    return (
+                      <circle
+                        class={styles.maskInsert}
+                        cx={(corner().x + next().x) / 2}
+                        cy={(corner().y + next().y) / 2}
+                        r={0.022}
+                        role="button"
+                        aria-label="Add mask corner"
+                        {...handlers}
+                      />
+                    );
+                  }}
+                </For>
+              </Show>
             </Show>
             <circle
               class={styles.maskHandle}
@@ -234,7 +288,12 @@ export function ColorWheel(props: {
  * Pointer handlers that capture the first pointer and report its moves until release; further pointers, such as a
  * resting palm, are ignored. `onSettle` runs when the drag ends.
  */
-function drag(move: (event: PointerEvent) => void, props: { onSettle: () => void }) {
+function drag(
+  move: (event: PointerEvent) => void,
+  props: { onSettle: () => void },
+  /** Runs first on each press; returning false leaves the press alone instead of starting a drag. */
+  begin: (event: PointerEvent) => boolean = () => true
+) {
   let pointer: number | undefined;
   const finish = (event: PointerEvent) => {
     if (event.pointerId === pointer) {
@@ -251,6 +310,10 @@ function drag(move: (event: PointerEvent) => void, props: { onSettle: () => void
 
       event.preventDefault();
       event.stopPropagation();
+      if (!begin(event)) {
+        return;
+      }
+
       event.currentTarget.setPointerCapture(event.pointerId);
       pointer = event.pointerId;
       move(event);
@@ -312,6 +375,9 @@ function path(points: readonly DiskPoint[]) {
 
 /** Backing pixels across the disk image, enough for a 240 CSS px disk at twice the density. */
 const diskPixels = 480;
+
+/** Longest pause between the two presses of a double tap on a mask corner. */
+const doubleTapMs = 350;
 
 /** The disk's radius as a share of the overlay's half-width; the rest holds the mask handle. */
 const diskScale = 0.86;

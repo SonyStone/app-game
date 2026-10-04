@@ -194,6 +194,17 @@ try {
       await page.keyboard.press('Shift+ArrowRight');
     }
     assert.match(await hex.inputValue(), /^[0-9A-F]{6}$/);
+
+    // Dragging an edge dot adds a corner there; a double click on a corner removes it.
+    const corners = page.getByRole('slider', { name: 'Mask corner' });
+    const dot = await page.getByRole('button', { name: 'Add mask corner' }).first().boundingBox();
+    await page.mouse.move(dot.x + dot.width / 2, dot.y + dot.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(dot.x + dot.width / 2 + 15, dot.y + dot.height / 2 + 15, { steps: 4 });
+    await page.mouse.up();
+    assert.equal(await corners.count(), 4);
+    await corners.nth(1).dblclick();
+    assert.equal(await corners.count(), 3);
     await page.getByLabel('Gamut mask').selectOption('none');
     await page.getByRole('radio', { name: 'Square' }).click();
     await page.keyboard.press('Escape');

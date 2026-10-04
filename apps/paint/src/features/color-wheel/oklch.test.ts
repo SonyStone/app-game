@@ -6,8 +6,11 @@ import {
   editableMask,
   fromDisk,
   harmonyColors,
+  insertMaskCorner,
   maskPolygon,
+  maxMaskCorners,
   moveMaskCorner,
+  removeMaskCorner,
   toDisk
 } from './wheelGeometry';
 
@@ -66,4 +69,19 @@ it('turns a dragged mask corner into a custom mask kept inside the disk', () => 
   expect(editableMask('square', [])).toBe(true);
   expect(editableMask('atmosphere', [])).toBe(false);
   expect(editableMask('custom', [])).toBe(false);
+});
+
+it('adds corners between two others, up to a limit, and removes them down to a triangle', () => {
+  const square = maskPolygon('square', 0);
+  const added = insertMaskCorner(square, 3, { x: 0, y: -2 });
+  expect(added).toHaveLength(5);
+  expect(added[4]).toEqual({ x: 0, y: -1 });
+  expect(added.slice(0, 4)).toEqual(square);
+  expect(insertMaskCorner(added, 0, { x: 0.1, y: 0.1 })[1]).toEqual({ x: 0.1, y: 0.1 });
+  const full = Array.from({ length: maxMaskCorners }, (_, index) => ({ x: index / 100, y: 0 }));
+  expect(insertMaskCorner(full, 2, { x: 0, y: 0 })).toEqual(full);
+
+  expect(removeMaskCorner(added, 4)).toEqual(square);
+  const triangle = maskPolygon('triangle', 0);
+  expect(removeMaskCorner(triangle, 0)).toEqual(triangle);
 });

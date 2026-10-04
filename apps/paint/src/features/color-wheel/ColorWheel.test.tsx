@@ -51,6 +51,43 @@ it('picks harmony colors, keeps keyboard edits inside the gamut mask and persist
   expect(createColorWheelSettings().settings()).toMatchObject({ harmony: 'complementary', mask: 'complementary' });
 });
 
+it('adds a mask corner by dragging an edge dot and removes one with a double tap', () => {
+  const { wheel } = setup('#c04040');
+  wheel.update({ mask: 'square', maskAngle: 0 });
+  flush();
+  // A 200 × 200 px disk area centered at (100, 100); jsdom lays nothing out.
+  const disk = slider('Hue and saturation') as unknown as SVGSVGElement;
+  disk.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 200 }) as DOMRect;
+  Element.prototype.setPointerCapture ??= () => {};
+
+  const [dot] = document.querySelectorAll('[aria-label="Add mask corner"]');
+  const press = (target: Element, type: string, x: number, y: number, timeStamp?: number) => {
+    const event = new PointerEvent(type, { bubbles: true, pointerId: 1, clientX: x, clientY: y });
+    if (timeStamp !== undefined) {
+      Object.defineProperty(event, 'timeStamp', { value: timeStamp });
+    }
+
+    target.dispatchEvent(event);
+    flush();
+  };
+  press(dot!, 'pointerdown', 100, 40);
+  press(dot!, 'pointermove', 100, 30);
+  press(dot!, 'pointerup', 100, 30);
+  const added = wheel.settings().customMask;
+  expect(wheel.settings().mask).toBe('custom');
+  expect(added).toHaveLength(5);
+  // The new corner, between the first two, follows the drag: 70 px above the center of an 86 px radius.
+  expect(added[1]!.y).toBeCloseTo(-70 / 86);
+  expect(document.querySelectorAll('[aria-label="Mask corner"]')).toHaveLength(5);
+
+  const corner = document.querySelectorAll('[aria-label="Mask corner"]')[1]!;
+  press(corner, 'pointerdown', 100, 30, 1000);
+  press(corner, 'pointerup', 100, 30, 1050);
+  press(corner, 'pointerdown', 100, 30, 1200);
+  expect(wheel.settings().customMask).toHaveLength(4);
+  expect(wheel.settings().customMask).toEqual(added.filter((_, index) => index !== 1));
+});
+
 function setup(initial: string) {
   const [color, setColor] = createSignal(initial);
   const settle = vi.fn();

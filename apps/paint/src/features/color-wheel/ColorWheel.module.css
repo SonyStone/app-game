@@ -60,6 +60,13 @@
   cursor: move;
 }
 
+.maskInsert {
+  fill: #fffc;
+  stroke: #2b3338;
+  stroke-width: 0.008;
+  cursor: copy;
+}
+
 .harmony {
   stroke: #fff;
   stroke-width: 0.02;

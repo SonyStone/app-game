@@ -76,9 +76,34 @@ export function editableMask(mask: GamutMask, custom: readonly DiskPoint[]) {
  * so the result is a custom mask at angle 0.
  */
 export function moveMaskCorner(polygon: readonly DiskPoint[], index: number, point: DiskPoint): DiskPoint[] {
-  const length = Math.hypot(point.x, point.y);
-  const inside = length > 1 ? { x: point.x / length, y: point.y / length } : point;
+  const inside = insideDisk(point);
   return polygon.map((corner, at) => (at === index ? inside : corner));
+}
+
+/** Most corners a custom mask can have; adding stops there. */
+export const maxMaskCorners = 16;
+
+/**
+ * A mask polygon with a new corner at `point`, kept inside the disk, between corner `after` and the next one; as
+ * `moveMaskCorner`, the result is a custom mask at angle 0. Returns the polygon unchanged at `maxMaskCorners`.
+ */
+export function insertMaskCorner(polygon: readonly DiskPoint[], after: number, point: DiskPoint): DiskPoint[] {
+  if (polygon.length >= maxMaskCorners) {
+    return [...polygon];
+  }
+
+  return [...polygon.slice(0, after + 1), insideDisk(point), ...polygon.slice(after + 1)];
+}
+
+/** A mask polygon without corner `index`, as a custom mask at angle 0; a triangle keeps all its corners. */
+export function removeMaskCorner(polygon: readonly DiskPoint[], index: number): DiskPoint[] {
+  return polygon.length > 3 ? polygon.filter((_, at) => at !== index) : [...polygon];
+}
+
+/** `point`, or the nearest point of the rim when it lies outside the disk. */
+function insideDisk(point: DiskPoint): DiskPoint {
+  const length = Math.hypot(point.x, point.y);
+  return length > 1 ? { x: point.x / length, y: point.y / length } : point;
 }
 
 /** `point` itself when inside `polygon` or without a polygon, otherwise the nearest point of its edge. */
