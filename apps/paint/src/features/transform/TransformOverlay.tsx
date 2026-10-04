@@ -4,13 +4,14 @@ import { placeBeside } from '../../shared/ui/placeBeside';
 import styles from './Transform.module.css';
 import { TransformActions } from './TransformActions';
 import type { BoxState, TransformSettings } from './createTransform';
-import { boxPoints, handles, moveBox, rotateBox, scaleBox, type BoxHandle } from './transformDrag';
+import { boxPoints, distortBox, handles, moveBox, rotateBox, scaleBox, type BoxHandle } from './transformDrag';
 import type { TransformBounds } from './transformEdit';
 
 /**
  * The transform box over the canvas, with its actions next to it: drag inside to move, drag a corner or edge handle to
  * scale from the opposite handle, and drag the round handle to rotate about the center (Shift snaps to 15°). Corner
- * handles keep the proportions as the settings say; Shift does the opposite. Pen, mouse and touch all drag; touches
+ * handles keep the proportions as the settings say; Shift does the opposite. A distorted box moves its corners on their
+ * own instead, and its edge handles the two corners of their edge. Pen, mouse and touch all drag; touches
  * elsewhere keep navigating the canvas. A drag follows the pointer over the whole window until it is released. While
  * the box is moved, only the pixels show; while any part is dragged, the actions are hidden.
  */
@@ -28,6 +29,8 @@ export function TransformOverlay(props: {
   onSettings: (patch: Partial<TransformSettings>) => void;
   onFlip: (axis: 'x' | 'y') => void;
   onRotate: () => void;
+  /** Turns distorting by the corners on or off; see `Transform.distort`. */
+  onDistort: (on: boolean) => void;
   onReset: () => void;
   onCancel: () => void;
   onDone: () => void;
@@ -78,6 +81,8 @@ export function TransformOverlay(props: {
         props.onChange(moveBox(start.box, start.at, pointer));
       } else if (kind === 'rotate') {
         props.onChange(rotateBox(props.bounds, start.box, start.at, pointer, moved.shiftKey));
+      } else if (start.box.corners) {
+        props.onChange(distortBox({ ...start.box, corners: start.box.corners }, kind, start.at, pointer));
       } else {
         const free = props.settings.proportional === moved.shiftKey;
         props.onChange(scaleBox(props.bounds, start.box, kind, pointer, free));
@@ -153,6 +158,8 @@ export function TransformOverlay(props: {
           onSettings={props.onSettings}
           onFlip={props.onFlip}
           onRotate={props.onRotate}
+          distorted={props.box.corners !== undefined}
+          onDistort={props.onDistort}
           onReset={props.onReset}
           onCancel={props.onCancel}
           onDone={props.onDone}
@@ -163,4 +170,4 @@ export function TransformOverlay(props: {
 }
 
 /** Approximate size of the actions, for placing them. */
-const actionsSize = { width: 400, height: 48 };
+const actionsSize = { width: 440, height: 48 };

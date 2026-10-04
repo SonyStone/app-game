@@ -3,6 +3,7 @@ import type { Layer } from '@app-game/paint-core/document';
 import { unpackTile } from '@app-game/paint-core/tilePixels';
 import { expect, it, vi } from 'vitest';
 import { applyAffine, boxAffine, identity, invertAffine, multiplyAffine, type Affine } from './affine';
+import { fromAffine, rectToQuad } from './projective';
 import { transformEdit, type TransformCommand } from './transformEdit';
 
 it('lifts the pixels as floating pixels and moves them without changing the document', async () => {
@@ -13,22 +14,22 @@ it('lifts the pixels as floating pixels and moves them without changing the docu
     expect.objectContaining({
       layerId: 'layer',
       bounds: { left: 10, top: 20, right: 14, bottom: 26 },
-      matrix: identity,
+      matrix: fromAffine(identity),
       interpolation: 'smooth'
     })
   );
   expect(floating.show.mock.calls[0]![0].pixels).toHaveLength(4 * 6 * 4);
 
-  const moved = await run({ phase: 'update', interpolation: 'pixels', matrix: [1, 0, 0, 1, 100, 0] });
+  const moved = await run({ phase: 'update', interpolation: 'pixels', matrix: [1, 0, 100, 0, 1, 0, 0, 0, 1] });
   expect(moved).toEqual({ changes: [] });
-  expect(floating.move).toHaveBeenLastCalledWith([1, 0, 0, 1, 100, 0], 'pixels');
-  await expect(run({ phase: 'update', interpolation: 'smooth', matrix: [0, 0, 0, 1, 0, 0] })).rejects.toThrow(
+  expect(floating.move).toHaveBeenLastCalledWith([1, 0, 100, 0, 1, 0, 0, 0, 1], 'pixels');
+  await expect(run({ phase: 'update', interpolation: 'smooth', matrix: [0, 0, 0, 0, 1, 0, 0, 0, 1] })).rejects.toThrow(
     'too thin'
   );
 
   expect(await run({ phase: 'cancel' })).toEqual({ changes: [] });
   expect(floating.clear).toHaveBeenCalledOnce();
-  await expect(run({ phase: 'update', interpolation: 'smooth', matrix: [...identity] })).rejects.toThrow(
+  await expect(run({ phase: 'update', interpolation: 'smooth', matrix: [...fromAffine(identity)] })).rejects.toThrow(
     'Start a transform first'
   );
 });
@@ -39,7 +40,7 @@ it('draws the latest transform into the layer when it ends', async () => {
   const finish = async (matrix?: Affine, interpolation: 'smooth' | 'pixels' = 'smooth') => {
     await run({ phase: 'begin' });
     if (matrix) {
-      await run({ phase: 'update', interpolation, matrix: [...matrix] });
+      await run({ phase: 'update', interpolation, matrix: [...fromAffine(matrix)] });
     }
 
     return run({ phase: 'end' });
@@ -62,6 +63,29 @@ it('draws the latest transform into the layer when it ends', async () => {
   // Pixel art keeps hard edges: scaled by 1.5 with the nearest pixel, every pixel is either the color or empty.
   expect([...alphas(await finish([1.5, 0, 0, 1.5, -5, -10], 'pixels'))].sort()).toEqual([0, 255]);
   expect(alphas(await finish([1.5, 0, 0, 1.5, -5, -10], 'smooth')).size).toBeGreaterThan(2);
+});
+
+it('draws a perspective distortion into the quad its corners make', async () => {
+  const { run } = setup(square(0, 0, 100, 100, [255, 0, 0, 255]));
+  await run({ phase: 'begin' });
+  // The top edge narrows to 40 px, centered, like a floor seen from above.
+  const quad = [
+    { x: 30, y: 0 },
+    { x: 70, y: 0 },
+    { x: 100, y: 100 },
+    { x: 0, y: 100 }
+  ] as const;
+  await run({
+    phase: 'update',
+    interpolation: 'smooth',
+    matrix: [...rectToQuad({ left: 0, top: 0, right: 100, bottom: 100 }, quad)]
+  });
+  const ended = await run({ phase: 'end' });
+  expect(pixel(ended, 50, 2)).toEqual([255, 0, 0, 255]);
+  expect(pixel(ended, 10, 2)).toEqual([0, 0, 0, 0]);
+  expect(pixel(ended, 2, 97)[3]).toBe(255);
+  // A trapezoid of (40 + 100) / 2 × 100 px.
+  expect(Math.abs(alphaCount(ended) - 7000)).toBeLessThan(150);
 });
 
 it('builds box transforms about a pivot and inverts them', () => {

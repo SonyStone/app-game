@@ -204,11 +204,11 @@ it('shows floating pixels of an edit and clears them after its result, keeping t
           layerId: active.id,
           bounds,
           pixels: new Uint8Array(16),
-          matrix: [1, 0, 0, 1, 0, 0],
+          matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
           interpolation: 'smooth'
         });
       } else if (command === 'move') {
-        floating.move([1, 0, 0, 1, 5, 0], 'pixels');
+        floating.move([1, 0, 5, 0, 1, 0, 0, 0, 1], 'pixels');
       } else {
         await floating.clear();
         if (command === 'fail') throw new Error('The transform is too thin to draw.');
@@ -227,7 +227,7 @@ it('shows floating pixels of an edit and clears them after its result, keeping t
   runtime.send(float.command('move', 'b'));
   await waitFor(() => replies() === 2);
   expect(renderer.setFloating).toHaveBeenLastCalledWith(expect.objectContaining({ layerId: document.active.id }));
-  expect(renderer.moveFloating).toHaveBeenLastCalledWith([1, 0, 0, 1, 5, 0], 'pixels');
+  expect(renderer.moveFloating).toHaveBeenLastCalledWith([1, 0, 5, 0, 1, 0, 0, 0, 1], 'pixels');
   expect(document.state().canUndo).toBe(false);
 
   // The result replaces the floating pixels after it is committed and restored, holding the presented frame.

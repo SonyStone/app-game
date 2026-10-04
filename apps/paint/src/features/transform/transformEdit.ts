@@ -5,10 +5,10 @@ import type { TileChange } from '@app-game/paint-core/document';
 import { captureSelection } from '@app-game/paint-core/selection';
 import { TILE_BYTES, type TileData } from '@app-game/paint-core/tilePixels';
 import { z } from 'zod';
-import { applyAffine, identity, invertAffine, type Affine } from './affine';
+import { applyProjective, invertProjective, type Projective } from './projective';
 
 /**
- * The engine half of the transform: moves, scales, rotates and flips the pixels of a lasso selection, or of the whole
+ * The engine half of the transform: moves, scales, rotates, flips and distorts in perspective the pixels of a lasso selection, or of the whole
  * active layer, as one undo step. `begin` captures the pixels, lifts them off the layer as floating pixels that the
  * renderer draws each frame, and replies with their bounds; each `update` only moves the floating pixels, so the
  * document stays unchanged until `end` draws the result into the layer, and `cancel` leaves it untouched. The result
@@ -32,7 +32,7 @@ export const transformEdit = defineDocumentEdit({
     }
 
     if (command.phase === 'update') {
-      if (!invertAffine(command.matrix)) {
+      if (!invertProjective(command.matrix)) {
         throw new Error('The transform is too thin to draw.');
       }
 
@@ -69,7 +69,18 @@ const transformCommandSchema = z.discriminatedUnion('phase', [
     phase: z.literal('update'),
     /** `smooth` resamples bilinearly; `pixels` takes the nearest pixel, keeping hard edges for pixel art. */
     interpolation: z.enum(['smooth', 'pixels']).default('smooth'),
-    matrix: z.tuple([z.number(), z.number(), z.number(), z.number(), z.number(), z.number()])
+    /** Where the pixels go, as a projective transform of document points; see `Projective`. */
+    matrix: z.tuple([
+      z.number(),
+      z.number(),
+      z.number(),
+      z.number(),
+      z.number(),
+      z.number(),
+      z.number(),
+      z.number(),
+      z.number()
+    ])
   }),
   z.object({ phase: z.literal('end') }),
   z.object({ phase: z.literal('cancel') })
@@ -84,7 +95,7 @@ type TransformSession = {
   /** The transformed pixels within `bounds`, row by row, premultiplied RGBA8. */
   pixels: Uint8Array;
   /** The latest transform and resampling, which `end` draws into the layer. */
-  matrix: Affine;
+  matrix: Projective;
   interpolation: 'smooth' | 'pixels';
 };
 
@@ -139,12 +150,12 @@ async function begin(context: DocumentEditContext, points: Point[] | undefined):
 async function transformed(
   context: DocumentEditContext,
   session: TransformSession,
-  matrix: Affine,
+  matrix: Projective,
   interpolation: 'smooth' | 'pixels'
 ) {
   const sampleAt = interpolation === 'pixels' ? nearest : bilinear;
   const layer = context.layers.find((candidate) => candidate.id === session.layerId);
-  const inverse = invertAffine(matrix);
+  const inverse = invertProjective(matrix);
   if (!layer || !inverse) {
     throw new Error(layer ? 'The transform is too thin to draw.' : 'The transformed layer was deleted.');
   }
@@ -157,7 +168,7 @@ async function transformed(
     { x: bounds.right, y: bounds.top },
     { x: bounds.left, y: bounds.bottom },
     { x: bounds.right, y: bounds.bottom }
-  ].map((corner) => applyAffine(matrix, corner));
+  ].map((corner) => applyProjective(matrix, corner));
   const target = {
     left: Math.floor(Math.min(...corners.map(({ x }) => x))),
     top: Math.floor(Math.min(...corners.map(({ y }) => y))),
@@ -183,13 +194,20 @@ async function transformed(
     }
 
     // Draw them where the transform puts them, sampling the original at each pixel center.
-    const [ia, ib, ic, id, ie, iff] = inverse;
+    const [ia, ib, ic, id, ie, iff, ig, ih, ii] = inverse;
     const left = Math.max(tx, target.left);
     for (let y = Math.max(ty, target.top); y < Math.min(ty + TILE_SIZE, target.bottom); y++) {
-      // Source position of the row's first pixel center, in raster pixels; it advances by (ia, ib) per pixel.
-      let u = ia * (left + 0.5) + ic * (y + 0.5) + ie - bounds.left - 0.5;
-      let v = ib * (left + 0.5) + id * (y + 0.5) + iff - bounds.top - 0.5;
-      for (let x = left; x < Math.min(tx + TILE_SIZE, target.right); x++, u += ia, v += ib) {
+      // The homogeneous source position of the row's first pixel center; along the row it advances by (ia, id, ig).
+      let su = ia * (left + 0.5) + ib * (y + 0.5) + ic;
+      let sv = id * (left + 0.5) + ie * (y + 0.5) + iff;
+      let sw = ig * (left + 0.5) + ih * (y + 0.5) + ii;
+      for (let x = left; x < Math.min(tx + TILE_SIZE, target.right); x++, su += ia, sv += id, sw += ig) {
+        if (sw <= 0) {
+          continue;
+        }
+
+        const u = su / sw - bounds.left - 0.5,
+          v = sv / sw - bounds.top - 0.5;
         if (!sampleAt(pixels, width, height, u, v, sample)) {
           continue;
         }
@@ -287,6 +305,9 @@ function contentBounds(tiles: ReadonlyMap<string, Uint8Array>): TransformBounds 
 
   return left < right ? { left, top, right, bottom } : undefined;
 }
+
+/** The transform that changes nothing. */
+const identity: Projective = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
 /** Keys of the tiles overlapping `bounds`. */
 function tileKeys(bounds: TransformBounds): string[] {

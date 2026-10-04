@@ -5,6 +5,7 @@ import { createMemo, createSignal, getOwner, isDisposed } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import type { PaintError } from '../../shared/errors';
 import { applyAffine, boxAffine, type Affine } from './affine';
+import { applyProjective, fromAffine, rectToQuad, type Projective } from './projective';
 import { transformEdit, type TransformBounds, type TransformCommand } from './transformEdit';
 
 /**
@@ -35,11 +36,11 @@ export function createTransform(options: {
     proportional: true,
     interpolation: 'smooth'
   });
-  const matrix = createMemo(() => boxMatrix(session()?.bounds, box()));
+  const matrix = createMemo(() => transformMatrix(session()?.bounds, box()));
   /** Commands in sending order; each starts after the previous one's reply. */
   let chain: Promise<unknown> = Promise.resolve();
   /** The latest matrix waiting in `chain`; later changes replace it instead of queueing more updates. */
-  let queued: Affine | undefined;
+  let queued: Projective | undefined;
 
   return {
     /** A transform session is open. */
@@ -62,15 +63,57 @@ export function createTransform(options: {
     },
     start,
     setBox: change,
-    /** Mirrors the box horizontally or vertically about its center. */
+    /** Mirrors the pixels horizontally or vertically within the box. */
     flip(axis: 'x' | 'y') {
       const current = currentBox();
+      if (current.corners) {
+        const [a, b, c, d] = current.corners;
+        change({ ...current, corners: axis === 'x' ? [b, a, d, c] : [d, c, b, a] });
+        return;
+      }
+
       change({ ...current, scale: { ...current.scale, [axis]: -current.scale[axis] } });
     },
     /** Turns the box by a quarter turn clockwise. */
     rotate() {
       const current = currentBox();
+      const bounds = currentSession()?.bounds;
+      if (current.corners && bounds) {
+        const center = applyProjective(transformMatrix(bounds, current), {
+          x: (bounds.left + bounds.right) / 2,
+          y: (bounds.top + bounds.bottom) / 2
+        });
+        const turn = ({ x, y }: Point): Point => ({ x: center.x - (y - center.y), y: center.y + (x - center.x) });
+        change({ ...current, corners: current.corners.map(turn) as unknown as Quad });
+        return;
+      }
+
       change({ ...current, angle: current.angle + Math.PI / 2 });
+    },
+    /**
+     * Distorts the box by its corners, which then move on their own, in perspective; turned off, the box returns to
+     * its shape from before the distortion.
+     */
+    distort(on: boolean) {
+      const current = currentBox();
+      const bounds = currentSession()?.bounds;
+      if (!bounds || on === !!current.corners) {
+        return;
+      }
+
+      if (!on) {
+        change({ offset: current.offset, scale: current.scale, angle: current.angle });
+        return;
+      }
+
+      const matrix = boxMatrix(bounds, current);
+      const corners = [
+        { x: bounds.left, y: bounds.top },
+        { x: bounds.right, y: bounds.top },
+        { x: bounds.right, y: bounds.bottom },
+        { x: bounds.left, y: bounds.bottom }
+      ].map((corner) => applyAffine(matrix, corner));
+      change({ ...current, corners: corners as unknown as Quad });
     },
     /** Returns the box to the original placement, keeping the session. */
     reset() {
@@ -119,7 +162,7 @@ export function createTransform(options: {
 
     setBox(next);
     const waiting = queued !== undefined;
-    queued = boxMatrix(current.bounds, next);
+    queued = transformMatrix(current.bounds, next);
     if (!waiting) {
       chain = chain.then(async () => {
         const latest = queued!;
@@ -143,7 +186,7 @@ export function createTransform(options: {
       return;
     }
 
-    const finalMatrix = boxMatrix(current.bounds, currentBox());
+    const finalMatrix = transformMatrix(current.bounds, currentBox());
     setSession(undefined);
     const finishing = chain.then(() => send({ phase }));
     chain = finishing;
@@ -159,7 +202,7 @@ export function createTransform(options: {
 
     if (current.points) {
       options.onSelection(
-        phase === 'end' ? current.points.map((point) => applyAffine(finalMatrix, point)) : current.points
+        phase === 'end' ? current.points.map((point) => applyProjective(finalMatrix, point)) : current.points
       );
     }
   }
@@ -178,15 +221,27 @@ export type Transform = ReturnType<typeof createTransform>;
  */
 export type TransformSettings = { proportional: boolean; interpolation: 'smooth' | 'pixels' };
 
-/** Box edits about the center of the bounds: scale (negative flips), clockwise angle in radians, then offset. */
-export type BoxState = { offset: Point; scale: Point; angle: number };
+/**
+ * Box edits about the center of the bounds: scale (negative flips), clockwise angle in radians, then offset. A
+ * distorted box sets `corners`, where the bounds' corners go (top-left, top-right, bottom-right, bottom-left), which
+ * then replace the other edits; they stay as they were, for when the distortion is turned off.
+ */
+export type BoxState = { offset: Point; scale: Point; angle: number; corners?: Quad };
+
+/** Four corners, clockwise from the top-left, of a convex quad. */
+export type Quad = readonly [Point, Point, Point, Point];
 
 /** One transform session: the bounds of its pixels and the lasso outline, if it transforms a selection. */
 type Session = { bounds: TransformBounds; points: Point[] | undefined };
 
 const initialBox: BoxState = { offset: { x: 0, y: 0 }, scale: { x: 1, y: 1 }, angle: 0 };
 
-/** The transform of `box` about the center of `bounds`. */
+/** Where `box` takes the pixels of `bounds`: to its corners in perspective when distorted, otherwise as `boxMatrix`. */
+export function transformMatrix(bounds: TransformBounds | undefined, box: BoxState): Projective {
+  return bounds && box.corners ? rectToQuad(bounds, box.corners) : fromAffine(boxMatrix(bounds, box));
+}
+
+/** The affine transform of `box` about the center of `bounds`, ignoring `corners`. */
 export function boxMatrix(bounds: TransformBounds | undefined, box: BoxState): Affine {
   const pivot = bounds ? { x: (bounds.left + bounds.right) / 2, y: (bounds.top + bounds.bottom) / 2 } : { x: 0, y: 0 };
   return boxAffine({ pivot, ...box });

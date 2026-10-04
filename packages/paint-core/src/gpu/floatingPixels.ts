@@ -16,10 +16,11 @@ export type FloatingPixels = {
   /** Premultiplied RGBA8 pixels of `bounds`, row by row. Pixels with any alpha are cut out of the layer. */
   pixels: Uint8Array;
   /**
-   * Affine transform `[a, b, c, d, e, f]` of document points, mapping `(x, y)` to `(a x + c y + e, b x + d y + f)`,
-   * from where the pixels were lifted to where they are shown.
+   * Projective transform `[a, b, c, d, e, f, g, h, i]` of document points, row by row, mapping `(x, y)` to
+   * `((a x + b y + c) / w, (d x + e y + f) / w)` with `w = g x + h y + i`, from where the pixels were lifted to where
+   * they are shown; `w` must stay positive over the lifted bounds. Perspective is interpolated correctly.
    */
-  matrix: readonly [number, number, number, number, number, number];
+  matrix: readonly [number, number, number, number, number, number, number, number, number];
   /** `smooth` filters the pixels (with mipmaps when minified); `pixels` takes the nearest pixel. */
   interpolation: 'smooth' | 'pixels';
 };
@@ -106,7 +107,7 @@ export function createFloatingPixels(root: TgpuRoot, damage: (keys: readonly str
       const { bounds, matrix, resources } = shown;
       const width = bounds.right - bounds.left,
         height = bounds.bottom - bounds.top;
-      uniforms.cut.write(uniform([1, 0, 0, 1, 0, 0], bounds, width, height, camera, size));
+      uniforms.cut.write(uniform([1, 0, 0, 0, 1, 0, 0, 0, 1], bounds, width, height, camera, size));
       uniforms.draw.write(uniform(matrix, bounds, width, height, camera, size));
       const pass = encoder.beginRenderPass({ colorAttachments: [{ view: target, loadOp: 'load', storeOp: 'store' }] });
       pass.setScissorRect(region.x, region.y, region.width, region.height);
@@ -160,13 +161,16 @@ export type FloatingPixelsState = ReturnType<typeof createFloatingPixels>;
 
 /** Tiles under the lifted pixels and under where they are shown; too many invalidate the whole view instead. */
 function area({ bounds, matrix }: FloatingPixels): readonly string[] | 'all' {
-  const [a, b, c, d, e, f] = matrix;
+  const [a, b, c, d, e, f, g, h, i] = matrix;
   const corners = [
     [bounds.left, bounds.top],
     [bounds.right, bounds.top],
     [bounds.left, bounds.bottom],
     [bounds.right, bounds.bottom]
-  ].map(([x, y]) => [a * x! + c * y! + e, b * x! + d * y! + f] as const);
+  ].map(([x, y]) => {
+    const w = g * x! + h * y! + i;
+    return [(a * x! + b * y! + c) / w, (d * x! + e * y! + f) / w] as const;
+  });
   const shownAt = {
     left: Math.min(...corners.map(([x]) => x)),
     top: Math.min(...corners.map(([, y]) => y)),
@@ -204,8 +208,9 @@ function tileKeys(bounds: FloatingPixels['bounds']): string[] {
 const maxDamageTiles = 1024;
 
 /**
- * Uniforms of one pass: `linear` and `translation` map texture coordinates (0–1) to document positions relative to
- * the camera, which keeps precision far from the origin; the rest describes the camera like the tile shader's.
+ * Uniforms of one pass: the rows of a projective transform from texture coordinates (0–1) to homogeneous document
+ * positions relative to the camera, which keeps precision far from the origin; the rest describes the camera like the
+ * tile shader's.
  */
 function uniform(
   matrix: FloatingPixels['matrix'],
@@ -215,14 +220,17 @@ function uniform(
   camera: Camera,
   size: ViewSize
 ) {
-  const [a, b, c, d2, e, f] = matrix;
+  const [a, b, c, d2, e, f, g, h, i] = matrix;
+  // The pixels span `width` × `height` from the bounds' corner, go through `matrix`, then move by the camera:
+  // the rows of translate(-camera) · matrix · (scale(width, height), then translate to the bounds' corner).
+  const row = (x: number, y: number, z: number) => [x * width, y * height, x * bounds.left + y * bounds.top + z];
+  const [rowX, rowY, rowW] = [row(a, b, c), row(d2, e, f), row(g, h, i)] as [number[], number[], number[]];
+  const relative = (values: number[], shift: number) =>
+    d.vec4f(...(values.map((value, k) => value - shift * rowW[k]!) as [number, number, number]), 0);
   return {
-    // The pixels span `width` × `height` from the bounds' corner, then go through `matrix`.
-    linear: d.vec4f(a * width, b * width, c * height, d2 * height),
-    translation: d.vec2f(
-      a * bounds.left + c * bounds.top + e - camera.x,
-      b * bounds.left + d2 * bounds.top + f - camera.y
-    ),
+    rowX: relative(rowX, camera.x),
+    rowY: relative(rowY, camera.y),
+    rowW: d.vec4f(rowW[0]!, rowW[1]!, rowW[2]!, 0),
     size: d.vec2f(size.width, size.height),
     texels: d.vec2f(width, height),
     zoom: camera.zoom,
@@ -233,8 +241,9 @@ function uniform(
 }
 
 const floatingUniform = d.struct({
-  linear: d.vec4f,
-  translation: d.vec2f,
+  rowX: d.vec4f,
+  rowY: d.vec4f,
+  rowW: d.vec4f,
   size: d.vec2f,
   texels: d.vec2f,
   zoom: d.f32,
@@ -249,7 +258,10 @@ const floatingLayout = tgpu.bindGroupLayout({
   sampler: { sampler: 'filtering' }
 });
 
-/** A quad of the floating pixels in their document position, projected like the tile shader's tiles. */
+/**
+ * A quad of the floating pixels in their document position, projected like the tile shader's tiles. The homogeneous
+ * coordinate goes into the clip position, so texture coordinates are interpolated with perspective.
+ */
 const floatingVertex = tgpu.vertexFn({
   in: { index: d.builtin.vertexIndex },
   out: { position: d.builtin.position, uv: d.vec2f }
@@ -261,16 +273,17 @@ const floatingVertex = tgpu.vertexFn({
   )([d.vec2f(0, 0), d.vec2f(1, 0), d.vec2f(0, 1), d.vec2f(0, 1), d.vec2f(1, 0), d.vec2f(1, 1)]);
   const uv = corners[input.index]!;
   const transform = floatingLayout.$.transform;
+  const w = transform.rowW.x * uv.x + transform.rowW.y * uv.y + transform.rowW.z;
   const p = d.vec2f(
-    transform.linear.x * uv.x + transform.linear.z * uv.y + transform.translation.x,
-    transform.linear.y * uv.x + transform.linear.w * uv.y + transform.translation.y
+    (transform.rowX.x * uv.x + transform.rowX.y * uv.y + transform.rowX.z) / w,
+    (transform.rowY.x * uv.x + transform.rowY.y * uv.y + transform.rowY.z) / w
   );
   const x = p.x * transform.mirror;
   const c = std.cos(transform.angle);
   const s = std.sin(transform.angle);
   const screen = std.mul(d.vec2f(x * c - p.y * s, x * s + p.y * c), transform.zoom);
   return {
-    position: d.vec4f((screen.x * 2) / transform.size.x, (-screen.y * 2) / transform.size.y, 0, 1),
+    position: d.vec4f(((screen.x * 2) / transform.size.x) * w, ((-screen.y * 2) / transform.size.y) * w, 0, w),
     uv
   };
 });

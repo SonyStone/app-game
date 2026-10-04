@@ -13,6 +13,9 @@ export function TransformActions(props: {
   onSettings: (patch: Partial<TransformSettings>) => void;
   onFlip: (axis: 'x' | 'y') => void;
   onRotate: () => void;
+  /** Whether the box is distorted by its corners. */
+  distorted: boolean;
+  onDistort: (on: boolean) => void;
   onReset: () => void;
   onCancel: () => void;
   onDone: () => void;
@@ -27,6 +30,14 @@ export function TransformActions(props: {
       </button>
       <button aria-label="Rotate 90°" title="Rotate 90° clockwise" onClick={() => props.onRotate()}>
         <SketchIcon name="rotate" size={20} />
+      </button>
+      <button
+        aria-label="Distort"
+        title="Distort: drag the corners on their own, in perspective"
+        aria-pressed={props.distorted ? 'true' : 'false'}
+        onClick={() => props.onDistort(!props.distorted)}
+      >
+        <SketchIcon name="distort" size={20} />
       </button>
       <FloatingBarSeparator />
       <button
