@@ -8,9 +8,10 @@ import { interpolateTabletAxes } from './tabletAxes';
  * is a Gaussian-weighted average of the latest ticks, newest weighted most. Because ticks continue while the pen
  * holds still (`idle`), the line keeps closing in on the pen, which a filter of input events alone cannot do; how far
  * it trails grows with `stroke.stabilizer`. Lifting the pen draws the rest of the way to it unless `stroke.catchUp` is
- * off: the averaged window shrinks tick by tick to the newest, so the line follows the pen's own path to where it
- * lifted, less and less smoothed, instead of cutting straight across to it. Pressure is averaged with the position and
- * calibrated like Leonardo's filter.
+ * off: the averaged window shrinks tick by tick to the newest, so the line follows the pen's own path, less and less
+ * smoothed, instead of cutting straight across. It ends where the pen was before lifting: the last moments in which
+ * the pressure falls away usually jerk the pen aside, so their positions are held at the point before them while their
+ * pressure still tapers the end. Pressure is averaged with the position and calibrated like Leonardo's filter.
  */
 export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
   const settings = normalizeStrokeSettings(brush.stroke);
@@ -24,6 +25,8 @@ export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
   let clock = 0;
   let previous: Sample | undefined;
   let latest: Sample | undefined;
+  /** Input samples of the last {@link liftWindowMs}, for finding where the pen began to lift. */
+  const recent: Sample[] = [];
   let output: Sample | undefined;
   let finished = false;
 
@@ -54,6 +57,10 @@ export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
         }
 
         previous = latest = current;
+        recent.push(current);
+        while (recent.length > 1 && current.time - recent[0]!.time > liftWindowMs) {
+          recent.shift();
+        }
       }
 
       return result;
@@ -85,15 +92,25 @@ export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
         return [];
       }
 
-      // The pen where it lifted becomes the newest tick, then the window narrows to it: the last output is the pen.
+      // Positions after the lift began stay at the point before it; their pressure still tapers the end.
+      const lift = liftPoint(recent);
+      for (let index = 0; index < ticks.length; index++) {
+        if (ticks[index]!.time > lift.time) {
+          ticks[index] = { ...ticks[index]!, x: lift.x, y: lift.y };
+        }
+      }
+
+      // The end becomes the newest tick, then the window narrows to it: the last output is the end.
+      const end = { ...latest, x: lift.x, y: lift.y };
+      latest = end;
       clock += tickMs;
-      const result = [tick({ ...latest, time: clock })];
+      const result = [tick({ ...end, time: clock })];
       for (let window = size - 1; window >= 1 && !reached(); window--) {
         clock += tickMs;
         result.push(emit(window));
       }
 
-      if (output && (output.x !== latest.x || output.y !== latest.y)) {
+      if (output && (output.x !== end.x || output.y !== end.y)) {
         result.push(emit(1));
       }
 
@@ -152,6 +169,26 @@ export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
   }
 }
 
+/**
+ * Where the pen was before it began to lift: the start of the pressure's steady fall at the end of the stroke, at most
+ * {@link hookMs} back, provided it fell by at least a third of the recent peak. Otherwise the last sample.
+ */
+function liftPoint(recent: readonly Sample[]): Sample {
+  const peak = Math.max(...recent.map(({ pressure }) => pressure));
+  const last = recent.at(-1)!;
+  let index = recent.length - 1;
+  while (
+    index > 0 &&
+    last.time - recent[index - 1]!.time <= hookMs &&
+    recent[index]!.pressure < peak * 0.95 &&
+    recent[index - 1]!.pressure >= recent[index]!.pressure
+  ) {
+    index--;
+  }
+
+  return recent[index]!.pressure - last.pressure >= peak / 3 ? recent[index]! : last;
+}
+
 /** The pen between two input samples, by time. */
 function between(a: Sample, b: Sample, t: number): Sample {
   return {
@@ -165,6 +202,12 @@ function between(a: Sample, b: Sample, t: number): Sample {
 
 /** The pen is resampled at 120 Hz, a common tablet report rate. */
 const tickMs = 1000 / 120;
+
+/** Input kept for finding the lift; long enough to know the stroke's pressure before it. */
+const liftWindowMs = 200;
+
+/** The longest stretch at the end of a stroke treated as the pen lifting. */
+const hookMs = 60;
 
 /** Ticks averaged per stabilizer level: each level trails the pen by about 33 ms more. */
 const ticksPerLevel = 4;

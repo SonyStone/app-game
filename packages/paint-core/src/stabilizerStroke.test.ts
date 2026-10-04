@@ -79,3 +79,21 @@ it('catches up on lift along the path the pen took, not straight across to where
   const heading = (Math.atan2(last!.y - before!.y, last!.x - before!.x) * 180) / Math.PI;
   expect(Math.abs(heading - 90)).toBeLessThan(10);
 });
+
+it('ends where the pen was before lifting, not on the jerk aside as the pressure falls away', () => {
+  const processor = createStabilizerProcessor(brush(12));
+  // A straight line to the right at full pressure, then 30 ms in which the pressure falls and the pen jerks 20 px down.
+  const line = Array.from({ length: 151 }, (_, index) => sample(index * 2, 0, index, 0.6));
+  const hook = Array.from({ length: 30 }, (_, index) =>
+    sample(300 + index * 0.3, (index + 1) * (20 / 30), 151 + index, 0.6 * (1 - (index + 1) / 30))
+  );
+  processor.add([...line, ...hook]);
+  const finish = processor.finish();
+  const end = finish.at(-1)!;
+  expect(Math.abs(end.x - 300)).toBeLessThan(1);
+  expect(Math.abs(end.y)).toBeLessThan(1);
+  // No tick at the end: the caught-up line stays straight.
+  expect(Math.max(...finish.map(({ y }) => Math.abs(y)))).toBeLessThan(1.5);
+  // The falling pressure still tapers the end.
+  expect(end.pressure).toBeLessThan(0.3);
+});
