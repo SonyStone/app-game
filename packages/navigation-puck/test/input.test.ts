@@ -141,6 +141,18 @@ describe('shared canvas navigation bindings', () => {
     expect(puck.center()).toBeUndefined();
     pen('pointermove', 600, 300, 0, 7, document.body);
 
+    // Pressing the puck's own controls with the pen keeps it open.
+    pen('pointermove', 400, 300, 2);
+    expect(puck.center()).toBeDefined();
+    pen('pointermove', 400, 300, 0);
+    pen('pointerdown', 380, 300, 1, 7, document.body);
+    pen('pointermove', 385, 300, 1, 7, document.body);
+    pen('pointerup', 385, 300, 0, 7, document.body);
+    expect(puck.center()).toBeDefined();
+    pen('pointermove', 400, 300, 2);
+    expect(puck.center()).toBeUndefined();
+    pen('pointermove', 400, 300, 0);
+
     // A touching pen's buttons are its contact, which paints.
     paint.mockClear();
     pen('pointerdown', 400, 300, 1);

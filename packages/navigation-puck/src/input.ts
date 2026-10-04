@@ -27,7 +27,7 @@ export function attachNavigationPuck(
   let lastPointer: Point | undefined;
   let held = false;
   let right: { id: number; origin: Point } | undefined;
-  /** Pens touching the canvas, whose `buttons` are their contact rather than a side button. */
+  /** Pens touching anything, the canvas or the puck's controls, whose `buttons` are their contact, not a side button. */
   const contacts = new Set<number>();
   /** Hovering pens holding a side button, so that one press toggles the puck once. */
   const sideButtons = new Set<number>();
@@ -72,10 +72,7 @@ export function attachNavigationPuck(
     (event) => {
       lastPointer = point(event);
       if (event.button === 2) openRight(event);
-      else {
-        if (event.pointerType === 'pen') contacts.add(event.pointerId);
-        if (navigation.center()) consume(event);
-      }
+      else if (navigation.center()) consume(event);
     },
     capture
   );
@@ -97,25 +94,35 @@ export function attachNavigationPuck(
   canvas.addEventListener(
     'pointerup',
     (event) => {
-      contacts.delete(event.pointerId);
       if (right?.id !== event.pointerId) return;
       releaseRight(event);
     },
     capture
   );
   const cancel = (event: PointerEvent) => {
-    if (event.type === 'pointercancel') contacts.delete(event.pointerId);
     if (right?.id !== event.pointerId) return;
     consume(event);
     close();
   };
   canvas.addEventListener('pointercancel', cancel, capture);
   canvas.addEventListener('lostpointercapture', cancel, capture);
-  // Side buttons of a hovering pen, seen on the window: an open puck covers the canvas with its dismiss layer.
+  // Pen contacts anywhere, so that a press on the puck's own controls is not taken for a side button.
+  win.addEventListener(
+    'pointerdown',
+    (event) => {
+      if (event.pointerType === 'pen' && event.button !== 2) contacts.add(event.pointerId);
+    },
+    capture
+  );
+  const lift = (event: PointerEvent) => contacts.delete(event.pointerId);
+  win.addEventListener('pointerup', lift, capture);
+  win.addEventListener('pointercancel', lift, capture);
+  // Side buttons of a hovering pen, seen on the window: an open puck covers the canvas with its dismiss layer. A
+  // hovering pen has no pressure; a touching one does, even before its `pointerdown` arrives.
   win.addEventListener(
     'pointermove',
     (event) => {
-      if (event.pointerType !== 'pen' || contacts.has(event.pointerId)) return;
+      if (event.pointerType !== 'pen' || contacts.has(event.pointerId) || event.pressure > 0) return;
       if (event.buttons === 0) {
         sideButtons.delete(event.pointerId);
         return;
