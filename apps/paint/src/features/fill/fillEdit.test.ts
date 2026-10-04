@@ -1,7 +1,7 @@
 import type { Layer } from '@app-game/paint-core/document';
 import { expect, it } from 'vitest';
 import { fillEdit, type FillCommand } from './fillEdit';
-import { expandMask, floodMask } from './floodFill';
+import { expandMask, fillTile, floodMask, smoothMask } from './floodFill';
 
 it('fills the connected area inside a closed outline, spanning tiles, and stays inside the area', () => {
   // A 300 px square outline across four tiles, with a 1 px gap in its top edge at x = 150 closed or open.
@@ -48,6 +48,24 @@ it('closes gaps in the outline up to twice the setting, reaching the lines again
   expect(at(closed, area, 13, 13)).toBe(1);
   expect(count(closed)).toBeGreaterThanOrEqual(94 * 94);
   expect(count(closed)).toBeLessThan(94 * 94 + 40);
+});
+
+it('softens the edge of an antialiased fill by a pixel and keeps its inside solid', () => {
+  const mask = new Uint8Array(10 * 10);
+  for (let y = 3; y < 7; y++) {
+    mask.fill(1, y * 10 + 3, y * 10 + 7);
+  }
+
+  const smooth = smoothMask(mask, 10, 10);
+  expect(smooth[5 * 10 + 5]).toBe(1);
+  // Beside an edge, three of nine neighbors are inside; at a corner, one.
+  expect(smooth[5 * 10 + 2]).toBe(85);
+  expect(smooth[2 * 10 + 2]).toBe(28);
+  expect(smooth[0]).toBe(0);
+
+  const tile = fillTile('0,0', undefined, smooth, { left: 0, top: 0, width: 10, height: 10 }, [255, 0, 0], 1)!;
+  expect([...tile.subarray((5 * 256 + 5) * 4, (5 * 256 + 5) * 4 + 4)]).toEqual([255, 0, 0, 255]);
+  expect([...tile.subarray((5 * 256 + 2) * 4, (5 * 256 + 2) * 4 + 4)]).toEqual([85, 0, 0, 85]);
 });
 
 it('treats colors within the tolerance as the same, and grows the filled area', () => {
@@ -154,6 +172,7 @@ function fillCommand(): FillCommand {
     tolerance: 0,
     expand: 0,
     gap: 0,
+    antialias: false,
     source: 'all'
   };
 }

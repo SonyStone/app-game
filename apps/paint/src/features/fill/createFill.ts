@@ -57,11 +57,18 @@ export function createFill(options: {
 }
 
 /** Fill settings chosen in the fill panel. */
-export type FillSettings = Pick<FillCommand, 'tolerance' | 'expand' | 'gap' | 'opacity' | 'source'>;
+export type FillSettings = Pick<FillCommand, 'tolerance' | 'expand' | 'gap' | 'antialias' | 'opacity' | 'source'>;
 
 const storageKey = 'paint.fill';
 
-const defaultSettings: FillSettings = { tolerance: 32, expand: 1, gap: 0, opacity: 1, source: 'all' };
+const defaultSettings: FillSettings = {
+  tolerance: 32,
+  expand: 1,
+  gap: 0,
+  antialias: true,
+  opacity: 1,
+  source: 'all'
+};
 
 /** Stored settings, with defaults for missing or invalid values. */
 function readSettings(): FillSettings {
@@ -74,6 +81,7 @@ function readSettings(): FillSettings {
       tolerance: integer(record.tolerance, 255, defaultSettings.tolerance),
       expand: integer(record.expand, 32, defaultSettings.expand),
       gap: integer(record.gap, 16, defaultSettings.gap),
+      antialias: typeof record.antialias === 'boolean' ? record.antialias : defaultSettings.antialias,
       opacity:
         typeof record.opacity === 'number' && record.opacity >= 0 && record.opacity <= 1
           ? record.opacity

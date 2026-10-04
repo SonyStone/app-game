@@ -242,7 +242,8 @@ function dilateLine(
 }
 
 /**
- * Paints `color` with `opacity` over a tile's premultiplied pixels where the area mask is set, source-over. With
+ * Paints `color` with `opacity` over a tile's premultiplied pixels where the area mask is set, source-over; a mask
+ * value from 2 to 255 is a partial coverage that scales the opacity, as `smoothMask` makes, and 1 is full. With
  * `alphaLock`, pixels keep their alpha: transparent ones stay transparent and the others take the result's color.
  * Returns the new tile, or `undefined` when nothing changes in the tile.
  */
@@ -265,14 +266,16 @@ export function fillTile(
   const y0 = Math.max(area.top, ty * TILE_SIZE),
     y1 = Math.min(area.top + area.height, (ty + 1) * TILE_SIZE);
   const result = base ? new Uint8Array(base) : new Uint8Array(TILE_SIZE * TILE_SIZE * 4);
-  const source = color.map((channel) => channel * opacity);
-  const keep = 1 - opacity;
   let touched = false;
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
-      if (!mask[(y - area.top) * area.width + (x - area.left)]) {
+      const value = mask[(y - area.top) * area.width + (x - area.left)]!;
+      if (!value) {
         continue;
       }
+
+      const covered = value === 1 ? opacity : (opacity * value) / 255;
+      const keep = 1 - covered;
 
       const index = ((y - ty * TILE_SIZE) * TILE_SIZE + (x - tx * TILE_SIZE)) * 4;
       const baseAlpha = result[index + 3]!;
@@ -280,11 +283,11 @@ export function fillTile(
         continue;
       }
 
-      const alpha = opacity * 255 + baseAlpha * keep;
+      const alpha = covered * 255 + baseAlpha * keep;
       // Under alpha lock the result's color is scaled back to the pixel's own alpha.
       const scale = alphaLock ? baseAlpha / alpha : 1;
       for (let channel = 0; channel < 3; channel++) {
-        result[index + channel] = Math.round((source[channel]! + result[index + channel]! * keep) * scale);
+        result[index + channel] = Math.round((color[channel]! * covered + result[index + channel]! * keep) * scale);
       }
 
       result[index + 3] = alphaLock ? baseAlpha : Math.round(alpha);
@@ -293,6 +296,39 @@ export function fillTile(
   }
 
   return touched ? result : undefined;
+}
+
+/**
+ * A binary mask with a soft outer edge, for antialiased fills: pixels outside it take the share of their 3 × 3
+ * neighborhood inside it as a coverage from 2 to 255, while pixels inside stay 1, full. See `fillTile`.
+ */
+export function smoothMask(mask: Uint8Array, width: number, height: number): Uint8Array {
+  const result = new Uint8Array(mask);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = y * width + x;
+      if (mask[index]) {
+        continue;
+      }
+
+      let inside = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx,
+            ny = y + dy;
+          if (nx >= 0 && ny >= 0 && nx < width && ny < height && mask[ny * width + nx]) {
+            inside++;
+          }
+        }
+      }
+
+      if (inside) {
+        result[index] = Math.max(2, Math.round((inside / 9) * 255));
+      }
+    }
+  }
+
+  return result;
 }
 
 /** Keys of the tiles an area overlaps. */

@@ -3,7 +3,7 @@ import type { Layer, TileChange } from '@app-game/paint-core/document';
 import { mergeTilePixels } from '@app-game/paint-core/layerMerge';
 import { z } from 'zod';
 import { polygonMask } from '../../shared/polygonSpans';
-import { areaTiles, expandMask, fillTile, floodMask, type FillArea } from './floodFill';
+import { areaTiles, expandMask, fillTile, floodMask, smoothMask, type FillArea } from './floodFill';
 
 /**
  * The engine half of the bucket fill: fills the connected area around a point of similar color with a color, in the
@@ -34,8 +34,9 @@ export const fillEdit = defineDocumentEdit({
       throw new Error('This area is too large to fill at this zoom. Zoom in and try again.');
     }
 
-    const mask = expandMask(flooded, area.width, area.height, command.expand);
-    // Growing under line edges stops at the selection too.
+    const grown = expandMask(flooded, area.width, area.height, command.expand);
+    const mask = command.antialias ? smoothMask(grown, area.width, area.height) : grown;
+    // Growing under line edges and smoothing stop at the selection too.
     if (allowed) {
       mask.forEach((value, index) => {
         if (value && !allowed[index]) {
@@ -88,6 +89,8 @@ const fillCommandSchema = z.object({
   expand: z.number().int().min(0).max(32),
   /** Openings in the outline up to about twice this many pixels wide are closed; see `floodMask`. */
   gap: z.number().int().min(0).max(16).default(0),
+  /** Softens the fill's edge by a pixel, as Photoshop's Anti-alias does; see `smoothMask`. */
+  antialias: z.boolean().default(false),
   /** Pixels compared: the active layer's, or all visible layers composited. */
   source: z.enum(['layer', 'all']),
   /** A closed lasso outline the fill stays inside, by the even-odd rule; a click outside it fills nothing. */

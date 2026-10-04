@@ -61,6 +61,14 @@ export function FillPanel(props: { settings: FillSettings; onChange: (patch: Par
           onInput={(event) => props.onChange({ opacity: event.currentTarget.valueAsNumber / 100 })}
         />
       </label>
+      <label class={styles.check}>
+        <input
+          type="checkbox"
+          checked={props.settings.antialias}
+          onChange={(event) => props.onChange({ antialias: event.currentTarget.checked })}
+        />
+        Smooth edges
+      </label>
       <label class={styles.mixing}>
         Sample
         <select
