@@ -1,5 +1,6 @@
 import type { Point, ViewSize } from '@app-game/paint-core/camera';
 import { For, onCleanup } from 'solid-js';
+import { placeBeside } from '../../shared/ui/placeBeside';
 import styles from './Transform.module.css';
 import { TransformActions } from './TransformActions';
 import type { BoxState, TransformSettings } from './createTransform';
@@ -45,15 +46,10 @@ export function TransformOverlay(props: {
     const rotation = { x: top.x + ((top.x - center.x) / length) * 32, y: top.y + ((top.y - center.y) / length) * 32 };
     return { corners, top, rotation, handles: current.handles.map(({ point }) => props.toScreen(point)) };
   };
-  /** Where the actions go: below the box, or above it when there is no room below, within the overlay. */
+  /** Where the actions go: next to the box and its rotation handle. */
   const actionsAt = () => {
     const { corners, rotation } = screen();
-    const xs = [...corners, rotation].map(({ x }) => x),
-      ys = [...corners, rotation].map(({ y }) => y);
-    const below = Math.max(...ys) + 16;
-    const top = below + actionsHeight <= props.size.height ? below : Math.max(8, Math.min(...ys) - 16 - actionsHeight);
-    const center = (Math.min(...xs) + Math.max(...xs)) / 2;
-    return { left: Math.max(actionsHalfWidth, Math.min(props.size.width - actionsHalfWidth, center)), top };
+    return placeBeside([...corners, rotation], props.size, actionsSize);
   };
   const local = (event: PointerEvent) => {
     const rect = svg.getBoundingClientRect();
@@ -141,7 +137,7 @@ export function TransformOverlay(props: {
         />
       </svg>
       <TransformActions
-        style={{ left: `${actionsAt().left}px`, top: `${actionsAt().top}px` }}
+        placement={actionsAt()}
         settings={props.settings}
         onSettings={props.onSettings}
         onFlip={props.onFlip}
@@ -154,8 +150,5 @@ export function TransformOverlay(props: {
   );
 }
 
-/** Height of the actions, for placing them above the box when there is no room below. */
-const actionsHeight = 48;
-
-/** Half the width of the actions, keeping them inside the overlay. */
-const actionsHalfWidth = 200;
+/** Approximate size of the actions, for placing them. */
+const actionsSize = { width: 400, height: 48 };

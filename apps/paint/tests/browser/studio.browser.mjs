@@ -1,5 +1,6 @@
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
@@ -477,6 +478,62 @@ try {
     await undo(page, 1);
     await setColor(page, '0000FF');
     assert.ok(Math.max(...(await pickRgb(page, { x: cx + 200, y: cy - 40 }, '0000FF'))) < 0x90);
+    await undo(page, 2);
+  });
+
+  await step('dragging inside a lasso selection moves only the outline; its bar starts a transform', async () => {
+    const { cx, cy } = await workspaceCenter(page);
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await page.getByRole('button', { name: 'Add layer' }).click();
+    await waitForSaved(page);
+    await page.keyboard.press('Escape');
+    await setColor(page, '000000');
+    await drawLine(page, { x: cx + 200, y: cy - 120 }, { x: cx + 200, y: cy + 60 });
+
+    await page.keyboard.press('l');
+    await page.mouse.move(cx + 150, cy - 150);
+    await page.mouse.down();
+    for (const [x, y] of [
+      [cx + 250, cy - 150],
+      [cx + 250, cy + 90],
+      [cx + 150, cy + 90],
+      [cx + 150, cy - 150]
+    ]) {
+      await page.mouse.move(x, y, { steps: 4 });
+    }
+
+    await page.mouse.up();
+    const bar = page.getByRole('toolbar', { name: 'Selection actions' });
+    await bar.getByRole('button', { name: 'Transform selection' }).waitFor({ timeout: 5_000 });
+    await page.screenshot({ path: path.join(os.tmpdir(), 'paint-selection-bar.png') });
+    // Drag inside: the outline moves, the pixels stay.
+    await page.mouse.move(cx + 200, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + 320, cy, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    await page.keyboard.press('b');
+    await setColor(page, 'FF0000');
+    assert.ok(Math.max(...(await pickRgb(page, { x: cx + 200, y: cy - 40 }, 'FF0000'))) < 0x90);
+
+    await page.keyboard.press('l');
+    await page.mouse.move(cx + 150, cy - 150);
+    await page.mouse.down();
+    for (const [x, y] of [
+      [cx + 250, cy - 150],
+      [cx + 250, cy + 90],
+      [cx + 150, cy + 90],
+      [cx + 150, cy - 150]
+    ]) {
+      await page.mouse.move(x, y, { steps: 4 });
+    }
+
+    await page.mouse.up();
+    await bar.getByRole('button', { name: 'Transform selection' }).click();
+    await page.getByLabel('Transform box').waitFor({ timeout: 10_000 });
+    await page.getByRole('toolbar', { name: 'Transform actions' }).getByRole('button', { name: 'Cancel' }).click();
+    await page.getByLabel('Transform box').waitFor({ state: 'detached', timeout: 10_000 });
+    await page.keyboard.press('b');
     await undo(page, 2);
   });
 

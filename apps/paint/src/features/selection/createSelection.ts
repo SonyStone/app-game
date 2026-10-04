@@ -6,8 +6,9 @@ import { createImmediateSignal } from '../../shared/createImmediateSignal';
 
 /**
  * Owns the transient lasso outline, in document coordinates, and serializes pixel edits through the engine.
- * Dragging inside the outline moves it; dragging outside replaces it. Pixels move when the pointer is released.
- * One selection edit runs at a time: `busy` stays true until the engine replies through `receive`.
+ * Dragging inside the outline moves the outline only, as in Photoshop's marquee; the transform moves the pixels.
+ * Dragging outside replaces the outline. One selection edit runs at a time: `busy` stays true until the engine replies
+ * through `receive`.
  */
 export function createSelection(options: {
   send: (command: Extract<PaintCommand, { type: 'selection' }>) => void;
@@ -21,10 +22,7 @@ export function createSelection(options: {
   const [drawing, setDrawing] = createSignal(false);
   const [hasClipboard, setHasClipboard] = createSignal(false);
   /** The pointer gesture in progress; `previous`/`original` restore the outline when it is cancelled. */
-  let gesture:
-    | { kind: 'lasso'; previous: Point[] }
-    | { kind: 'move'; start: Point; original: Point[]; offset: Point }
-    | undefined;
+  let gesture: { kind: 'lasso'; previous: Point[] } | { kind: 'move'; start: Point; original: Point[] } | undefined;
 
   return {
     /** Outline vertices; fewer than three means nothing is selected. */
@@ -61,7 +59,7 @@ export function createSelection(options: {
       }
 
       if (pointInSelection(point, outline())) {
-        gesture = { kind: 'move', start: point, original: outline(), offset: { x: 0, y: 0 } };
+        gesture = { kind: 'move', start: point, original: outline() };
       } else {
         gesture = { kind: 'lasso', previous: outline() };
         setPoints([point]);
@@ -76,8 +74,7 @@ export function createSelection(options: {
       }
 
       if (gesture.kind === 'move') {
-        gesture.offset = { x: Math.round(point.x - gesture.start.x), y: Math.round(point.y - gesture.start.y) };
-        setPoints(translateSelection(gesture.original, gesture.offset));
+        setPoints(translateSelection(gesture.original, { x: point.x - gesture.start.x, y: point.y - gesture.start.y }));
         return;
       }
 
@@ -91,20 +88,12 @@ export function createSelection(options: {
       const sampled = path.length >= 4095 ? path.filter((_, index) => index % 2 === 0) : path;
       setPoints([...sampled, point]);
     },
-    /** Commits a move as one undoable edit, or closes the lasso; an outline needs at least three points. */
+    /** Keeps a moved outline, or closes the lasso; an outline needs at least three points. */
     end() {
       const finished = gesture;
       gesture = undefined;
       setDrawing(false);
-      if (finished?.kind === 'move') {
-        setPoints(finished.original);
-        if (finished.offset.x || finished.offset.y) {
-          action('move', finished.offset);
-          if (isBusy()) {
-            setPoints(translateSelection(finished.original, finished.offset));
-          }
-        }
-      } else if (enclosedArea(outline()) < minimumArea) {
+      if (finished?.kind !== 'move' && enclosedArea(outline()) < minimumArea) {
         // Fewer than three points or a straight drag encloses no pixels to copy, cut or move.
         setPoints([]);
       }
@@ -126,14 +115,14 @@ export function createSelection(options: {
    * Sends one pixel edit for the current outline on the active layer. Ignored while another edit is applying, during
    * a gesture, before the engine is ready, or without an outline (except Paste).
    */
-  function action(kind: SelectionAction, offset?: Point) {
+  function action(kind: SelectionAction) {
     if (isBusy() || gesture || !options.ready() || (kind !== 'paste' && outline().length < 3)) {
       return;
     }
 
     setBusy(true);
     const { activeId, revision } = options.document();
-    options.send({ type: 'selection', action: kind, points: outline(), offset, layerId: activeId, revision });
+    options.send({ type: 'selection', action: kind, points: outline(), layerId: activeId, revision });
   }
 
   function cancel() {

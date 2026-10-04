@@ -58,7 +58,7 @@ Letter and bracket shortcuts also work on non-Latin keyboard layouts: they fall 
 
 Touches are ignored while drawing with a pen. This is simple palm rejection, not a tablet contact classifier.
 
-The lasso closes when the pen or mouse is released. Drag inside the outline to move the selected pixels; dragging outside starts a new selection. While moving, the outline moves and pixels are written on release, rounded to whole document pixels. Zoom, rotate and mirror are taken into account. Touches still control the camera.
+The lasso closes when the pen or mouse is released. Dragging inside the outline moves only the outline, as with Photoshop's marquee; dragging outside starts a new selection. The pixels move with the transform. An icon bar next to the selection transforms, copies, cuts, pastes, moves the pixels to a new layer, deletes them and deselects; without a selection, a hint at the top offers Paste when pixels were copied. Both bars use `FloatingBar` and `placeBeside` from `src/shared/ui`. Zoom, rotate and mirror are taken into account. Touches still control the camera.
 
 Copy/Cut/Paste use the current editor's internal clipboard. Paste inserts into the active layer at the original coordinates of the copied pixels; the result can then be moved. To copy into a separate layer, press Copy, create a layer in Layers and press Paste. Move to new layer moves the pixels into a new layer above the source, keeps the layer's opacity and blend, and selects the new layer. The whole move is undone with one Undo. The clipboard and outline do not survive a reload. The outline is cleared by drawing, switching tools, layer changes, undo/redo and import. The selection does not constrain subsequent brush painting.
 

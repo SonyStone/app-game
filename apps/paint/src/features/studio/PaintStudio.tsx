@@ -506,11 +506,17 @@ export function PaintStudio(props: {
         />
         <Show when={tool() === 'lasso' && !transform.active()}>
           <SelectionActions
+            outline={
+              selection.drawing()
+                ? []
+                : selection.points().map((point) => worldToScreen(point, camera.camera(), size()))
+            }
+            size={size()}
             disabled={!ready() || selection.drawing()}
             busy={selection.busy()}
-            selected={selection.points().length >= 3}
             hasClipboard={selection.hasClipboard()}
             onAction={selection.action}
+            onTransform={toggleTransform}
             onDeselect={selection.clear}
           />
         </Show>

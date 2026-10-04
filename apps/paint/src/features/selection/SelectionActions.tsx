@@ -1,55 +1,107 @@
+import type { Point, ViewSize } from '@app-game/paint-core/camera';
 import type { SelectionAction } from '@app-game/paint-core/protocol';
-import styles from './SelectionActions.module.css';
+import { Show } from 'solid-js';
+import { FloatingBar, FloatingBarSeparator } from '../../shared/ui/FloatingBar';
+import { placeBeside } from '../../shared/ui/placeBeside';
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 
-/** Lasso commands for mouse and pen users; keyboard shortcuts run the same undoable commands. */
+/**
+ * Lasso commands as an icon bar next to the selection: transform, copy, cut, paste, move to a new layer, delete and
+ * deselect. Without a selection, a hint at the top of the canvas, with Paste when pixels were copied. Keyboard
+ * shortcuts run the same undoable commands.
+ */
 export function SelectionActions(props: {
+  /** The outline in CSS pixels of the canvas; fewer than three points means nothing is selected. */
+  outline: readonly Point[];
+  /** Size of the canvas in CSS pixels. */
+  size: ViewSize;
   /** Commands are unavailable, for example before the engine is ready or during a lasso gesture. */
   disabled: boolean;
   /** A selection edit is applying. */
   busy: boolean;
-  /** An outline with at least three points exists. */
-  selected: boolean;
   /** Copied pixels are available to paste. */
   hasClipboard: boolean;
   onAction: (action: SelectionAction) => void;
+  onTransform: () => void;
   onDeselect: () => void;
 }) {
+  const selected = () => props.outline.length >= 3;
   const unavailable = () => props.disabled || props.busy;
-  const empty = () => unavailable() || !props.selected;
+  const paste = () => (
+    <button
+      aria-label="Paste"
+      title="Paste into the active layer · ⌘/Ctrl V"
+      disabled={unavailable() || !props.hasClipboard}
+      onClick={() => props.onAction('paste')}
+    >
+      <SketchIcon name="paste" size={20} />
+    </button>
+  );
 
   return (
-    <div class={styles.selectionActions} aria-label="Selection actions">
-      <span role="status">
-        {props.busy
-          ? 'Applying selection…'
-          : props.selected
-            ? 'Drag inside to move. Pixels move on release.'
-            : 'Draw around pixels on the active layer.'}
-      </span>
-      <div>
-        <button disabled={empty()} onClick={() => props.onAction('copy')} title="Copy · ⌘/Ctrl C">
-          Copy
+    <Show
+      when={selected()}
+      fallback={
+        <FloatingBar placement={{ left: props.size.width / 2, top: hintTop }} label="Selection actions">
+          <span role="status">{props.busy ? 'Applying selection…' : 'Draw around pixels to select them.'}</span>
+          <Show when={props.hasClipboard}>{paste()}</Show>
+        </FloatingBar>
+      }
+    >
+      <FloatingBar placement={placeBeside(props.outline, props.size, barSize)} label="Selection actions">
+        <button
+          aria-label="Transform selection"
+          title="Transform the selected pixels · ⌘/Ctrl T"
+          disabled={unavailable()}
+          onClick={() => props.onTransform()}
+        >
+          <SketchIcon name="move" size={20} />
         </button>
-        <button disabled={empty()} onClick={() => props.onAction('cut')} title="Cut · ⌘/Ctrl X">
-          Cut
+        <FloatingBarSeparator />
+        <button
+          aria-label="Copy"
+          title="Copy · ⌘/Ctrl C"
+          disabled={unavailable()}
+          onClick={() => props.onAction('copy')}
+        >
+          <SketchIcon name="copy" size={20} />
+        </button>
+        <button aria-label="Cut" title="Cut · ⌘/Ctrl X" disabled={unavailable()} onClick={() => props.onAction('cut')}>
+          <SketchIcon name="cut" size={20} />
+        </button>
+        {paste()}
+        <button
+          aria-label="Move to new layer"
+          title="Move the selected pixels to a new layer"
+          disabled={unavailable()}
+          onClick={() => props.onAction('new-layer')}
+        >
+          <SketchIcon name="newLayer" size={20} />
         </button>
         <button
-          disabled={unavailable() || !props.hasClipboard}
-          onClick={() => props.onAction('paste')}
-          title="Paste into active layer · ⌘/Ctrl V"
+          aria-label="Delete"
+          title="Delete the selected pixels · Delete"
+          disabled={unavailable()}
+          onClick={() => props.onAction('delete')}
         >
-          Paste
+          <SketchIcon name="trash" size={20} />
         </button>
-        <button disabled={empty()} onClick={() => props.onAction('new-layer')}>
-          Move to new layer
+        <FloatingBarSeparator />
+        <button
+          aria-label="Deselect"
+          title="Deselect · Escape"
+          disabled={unavailable()}
+          onClick={() => props.onDeselect()}
+        >
+          <SketchIcon name="close" size={20} />
         </button>
-        <button disabled={empty()} onClick={() => props.onAction('delete')} title="Delete selected pixels">
-          Delete
-        </button>
-        <button disabled={empty()} onClick={() => props.onDeselect()} title="Deselect · Escape">
-          Deselect
-        </button>
-      </div>
-    </div>
+      </FloatingBar>
+    </Show>
   );
 }
+
+/** Top of the hint bar, below the view controls. */
+const hintTop = 66;
+
+/** Approximate size of the bar, for placing it. */
+const barSize = { width: 360, height: 48 };

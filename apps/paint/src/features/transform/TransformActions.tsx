@@ -1,15 +1,14 @@
-import type { JSX } from '@solidjs/web';
+import { FloatingBar, FloatingBarSeparator, floatingBarPrimary } from '../../shared/ui/FloatingBar';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import type { TransformSettings } from './createTransform';
-import styles from './Transform.module.css';
 
 /**
  * Compact transform actions next to the box: flips, a quarter turn, the proportions and pixel-art settings, reset,
  * cancel and apply. Icons carry labels and tooltips.
  */
 export function TransformActions(props: {
-  /** Positions the bar; see `TransformOverlay`. */
-  style: JSX.CSSProperties;
+  /** Where the bar goes; see `placeBeside`. */
+  placement: { left: number; top: number };
   settings: TransformSettings;
   onSettings: (patch: Partial<TransformSettings>) => void;
   onFlip: (axis: 'x' | 'y') => void;
@@ -19,7 +18,7 @@ export function TransformActions(props: {
   onDone: () => void;
 }) {
   return (
-    <div class={styles.actions} style={props.style} role="toolbar" aria-label="Transform actions">
+    <FloatingBar placement={props.placement} label="Transform actions">
       <button aria-label="Flip horizontal" title="Flip horizontal" onClick={() => props.onFlip('x')}>
         <SketchIcon name="mirror" size={20} />
       </button>
@@ -29,7 +28,7 @@ export function TransformActions(props: {
       <button aria-label="Rotate 90°" title="Rotate 90° clockwise" onClick={() => props.onRotate()}>
         <SketchIcon name="rotate" size={20} />
       </button>
-      <span class={styles.separator} />
+      <FloatingBarSeparator />
       <button
         aria-label="Keep proportions"
         title="Keep proportions when scaling from a corner · Shift does the opposite"
@@ -48,16 +47,16 @@ export function TransformActions(props: {
       >
         <SketchIcon name="pixels" size={20} />
       </button>
-      <span class={styles.separator} />
+      <FloatingBarSeparator />
       <button aria-label="Reset" title="Reset to the original placement" onClick={() => props.onReset()}>
         <SketchIcon name="reset" size={20} />
       </button>
       <button aria-label="Cancel" title="Cancel · Escape" onClick={() => props.onCancel()}>
         <SketchIcon name="close" size={20} />
       </button>
-      <button class={styles.done} aria-label="Done" title="Apply · Enter" onClick={() => props.onDone()}>
+      <button class={floatingBarPrimary} aria-label="Done" title="Apply · Enter" onClick={() => props.onDone()}>
         <SketchIcon name="check" size={20} />
       </button>
-    </div>
+    </FloatingBar>
   );
 }

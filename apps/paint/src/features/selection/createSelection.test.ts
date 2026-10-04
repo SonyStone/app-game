@@ -2,7 +2,7 @@ import { flush } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import { createSelection } from './createSelection';
 
-it('moves the original polygon once, blocks duplicate edits, and restores worker results after failure', () => {
+it('moves only the outline when dragged inside it, blocks duplicate edits, and restores worker results', () => {
   const send = vi.fn();
   const selection = createSelection({
     send,
@@ -22,16 +22,13 @@ it('moves the original polygon once, blocks duplicate edits, and restores worker
   selection.begin({ x: 10, y: 10 });
   selection.move({ x: 40.3, y: -10.2 });
   selection.end();
-  expect(send).toHaveBeenCalledExactlyOnceWith({
-    type: 'selection',
-    action: 'move',
-    points,
-    offset: { x: 30, y: -20 },
-    layerId: 'layer-1',
-    revision: 4
-  });
+  flush();
+  const moved = points.map((point) => ({ x: point.x + 30, y: point.y - 20 }));
+  expect(send).not.toHaveBeenCalled();
+  expect(selection.points()).toEqual(moved);
   selection.action('cut');
-  expect(send).toHaveBeenCalledOnce();
+  selection.action('cut');
+  expect(send).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ action: 'cut', points: moved }));
   selection.receive({ type: 'selection', points, hasClipboard: false });
   selection.begin({ x: 10, y: 10 });
   selection.move({ x: 200, y: 200 });
