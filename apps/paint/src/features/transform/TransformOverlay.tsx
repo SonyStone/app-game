@@ -6,6 +6,7 @@ import { TransformActions } from './TransformActions';
 import { TransformNumbers } from './TransformNumbers';
 import type { BoxState, TransformSettings } from './createTransform';
 import {
+  bendBox,
   boxPoints,
   distortBox,
   handles,
@@ -17,7 +18,7 @@ import {
   type BoxHandle
 } from './transformDrag';
 import type { TransformBounds } from './transformEdit';
-import { warpOutline, warpSide } from './warp';
+import { locateOnWarp, warpCells, warpOutline, warpSide } from './warp';
 
 /**
  * The transform box over the canvas, with its actions next to it: drag inside to move, drag a corner or edge handle to
@@ -47,6 +48,8 @@ export function TransformOverlay(props: {
   onDistort: (on: boolean) => void;
   /** Turns warping by a grid of points on or off; see `Transform.warp`. */
   onWarp: (on: boolean) => void;
+  /** Changes the warp's patches per side; see `Transform.warpGrid`. */
+  onWarpGrid: (cells: number) => void;
   onReset: () => void;
   onCancel: () => void;
   onDone: () => void;
@@ -58,7 +61,7 @@ export function TransformOverlay(props: {
   const [dragging, setDragging] = createSignal<DragKind>();
   const [numbers, setNumbers] = createSignal(false);
   onCleanup(() => release?.());
-  const points = () => boxPoints(props.bounds, props.box);
+  const points = () => boxPoints(props.bounds, props.box, props.settings);
   const screen = () => {
     const current = points();
     const corners = current.corners.map(props.toScreen);
@@ -88,15 +91,29 @@ export function TransformOverlay(props: {
         .map((point, index) => `${index ? 'L' : 'M'} ${props.toScreen(point).x} ${props.toScreen(point).y}`)
         .join(' ');
     const points = warp.map(props.toScreen);
-    // The control net: each row and each column of points joined.
-    const net = Array.from({ length: warpSide }, (_, line) => [
-      Array.from({ length: warpSide }, (_, at) => warp[line * warpSide + at]!),
-      Array.from({ length: warpSide }, (_, at) => warp[at * warpSide + line]!)
-    ]).flat();
+    // Stems from each anchor, where patches meet, to the handle points beside it.
+    const side = warpSide(warp);
+    const stems = warp.flatMap((anchor, index) => {
+      const column = index % side,
+        row = Math.floor(index / side);
+      if (column % 3 || row % 3) {
+        return [];
+      }
+
+      return [
+        [column - 1, row],
+        [column + 1, row],
+        [column, row - 1],
+        [column, row + 1]
+      ]
+        .filter(([x, y]) => x! >= 0 && x! < side && y! >= 0 && y! < side)
+        .map(([x, y]) => [anchor, warp[y! * side + x!]!]);
+    });
     return {
       outline: `${path(outline)} Z`,
       lines: lines.map(path).join(' '),
-      net: net.map(path).join(' '),
+      net: stems.map(path).join(' '),
+      side,
       points,
       bounds: outline.map(props.toScreen)
     };
@@ -124,6 +141,11 @@ export function TransformOverlay(props: {
     const rect = svg.getBoundingClientRect();
     return props.toDocument({ x: event.clientX - rect.left, y: event.clientY - rect.top });
   };
+  /** Bends the warp where it is pressed, or moves it all when pressed off its surface. */
+  const beginBend = (event: PointerEvent) => {
+    const at = props.box.warp && locateOnWarp(props.box.warp, local(event));
+    begin(at ? { bend: at } : 'move')(event);
+  };
   /** Starts dragging `kind`; the drag follows the pointer until it is released or cancelled. */
   const begin = (kind: DragKind) => (event: PointerEvent) => {
     if (event.button !== 0 || release) {
@@ -149,6 +171,10 @@ export function TransformOverlay(props: {
       } else if ('warp' in kind) {
         if (start.box.warp) {
           props.onChange(moveWarpPoint({ ...start.box, warp: start.box.warp }, kind.warp, start.at, pointer));
+        }
+      } else if ('bend' in kind) {
+        if (start.box.warp) {
+          props.onChange(bendBox({ ...start.box, warp: start.box.warp }, kind.bend, start.at, pointer));
         }
       } else if (start.box.corners) {
         props.onChange(distortBox({ ...start.box, corners: start.box.corners }, kind, start.at, pointer));
@@ -181,21 +207,22 @@ export function TransformOverlay(props: {
         ref={svg}
         class={styles.overlay}
         aria-label="Transform box"
-        data-moving={dragging() === 'move' ? 'true' : 'false'}
+        data-moving={hidesBox(dragging()) ? 'true' : 'false'}
       >
         <Show when={warpScreen()}>
           {(warped) => (
             <>
-              <path class={styles.body} d={warped().outline} onPointerDown={begin('move')} />
+              <path class={styles.body} d={warped().outline} onPointerDown={beginBend} />
               <path class={styles.warpLines} d={warped().lines} />
               <path class={styles.warpNet} d={warped().net} />
-              <For each={warpIndices}>
+              {/* Rows by position keep each point's element while the warp changes; anchors are larger. */}
+              <For each={warpIndices(warped().side)}>
                 {(index) => (
                   <circle
                     class={styles.handle}
                     cx={warped().points[index]!.x}
                     cy={warped().points[index]!.y}
-                    r={7}
+                    r={isAnchor(index, warped().side) ? 7 : 5}
                     aria-label="Warp point"
                     onPointerDown={begin({ warp: index })}
                   />
@@ -259,9 +286,12 @@ export function TransformOverlay(props: {
           onFlip={props.onFlip}
           onRotate={props.onRotate}
           distorted={props.box.corners !== undefined && !props.box.warp}
+          perspective={props.settings.perspective}
           onDistort={props.onDistort}
           warped={props.box.warp !== undefined}
           onWarp={props.onWarp}
+          warpCells={props.box.warp ? warpCells(props.box.warp) : 1}
+          onWarpGrid={props.onWarpGrid}
           numbers={numbers()}
           onNumbers={setNumbers}
           onReset={props.onReset}
@@ -281,11 +311,29 @@ export function TransformOverlay(props: {
   );
 }
 
-/** What a drag changes: the whole box, its rotation, its pivot, a box handle or a warp control point. */
-type DragKind = 'move' | 'rotate' | 'pivot' | BoxHandle | { warp: number };
+/**
+ * What a drag changes: the whole box, its rotation, its pivot, a box handle, a warp control point, or the warp's
+ * surface at a point `bend` (`u`, `v` from 0 to 1).
+ */
+type DragKind = 'move' | 'rotate' | 'pivot' | BoxHandle | { warp: number } | { bend: Point };
 
-/** Indices of the warp's control points, a fixed list so each handle keeps its element. */
-const warpIndices = Array.from({ length: warpSide * warpSide }, (_, index) => index);
+/**
+ * Whether a drag hides the box so that only the pixels show: moving, turning, scaling and distorting do; moving the
+ * pivot and bending a warp keep their guides in view.
+ */
+function hidesBox(kind: DragKind | undefined) {
+  return kind !== undefined && kind !== 'pivot' && !(typeof kind === 'object' && ('warp' in kind || 'bend' in kind));
+}
+
+/** Indices of the control points of a warp with `side` points per side. */
+function warpIndices(side: number) {
+  return Array.from({ length: side * side }, (_, index) => index);
+}
+
+/** Whether control point `index` is an anchor, where patches meet. */
+function isAnchor(index: number, side: number) {
+  return (index % side) % 3 === 0 && Math.floor(index / side) % 3 === 0;
+}
 
 /** Approximate height of the exact values, for placing them. */
 const numbersHeight = 44;

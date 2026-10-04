@@ -14,7 +14,7 @@ it('applies exact sizes, angles and offsets, keeping proportions when asked, and
       <TransformNumbers
         placement={{ left: 0, top: 0 }}
         box={box()}
-        settings={{ proportional: proportional(), interpolation: 'smooth' }}
+        settings={{ proportional: proportional(), interpolation: 'smooth', perspective: true }}
         onChange={setBox}
       />
     ),

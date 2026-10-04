@@ -117,3 +117,13 @@
     stroke-width: 1.5;
   }
 }
+
+.grid {
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+}

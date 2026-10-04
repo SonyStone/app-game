@@ -544,6 +544,7 @@ export function PaintStudio(props: {
               onRotate={transform.rotate}
               onDistort={transform.distort}
               onWarp={transform.warp}
+              onWarpGrid={transform.warpGrid}
               onReset={transform.reset}
               onCancel={() => void transform.cancel()}
               onDone={() => void transform.end()}

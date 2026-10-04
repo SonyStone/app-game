@@ -130,11 +130,18 @@ it('warps the pixels through the patch, covering each pixel once', async () => {
   expect(pixel(bent, 20, -10)[3]).toBe(128);
   expect(pixel(bent, 1, -10)[3]).toBe(0);
   expect(pixel(bent, 20, 29)[3]).toBe(128);
-  // A warp needs all 16 control points.
+  // A warp needs (3n + 1)² control points; a 2 × 2 grid of patches has 49.
   await expect(
     (async () =>
       run({ phase: 'update', interpolation: 'smooth', matrix: [...fromAffine(identity)], warp: bowed.slice(1) }))()
-  ).rejects.toThrow('16');
+  ).rejects.toThrow('control points');
+  const grid = warpFromMatrix(bounds, fromAffine(identity), 2);
+  expect(grid).toHaveLength(49);
+  await run({ phase: 'begin' });
+  await expect(
+    run({ phase: 'update', interpolation: 'pixels', matrix: [...fromAffine(identity)], warp: grid })
+  ).resolves.toEqual({ changes: [] });
+  await run({ phase: 'cancel' });
 });
 
 it('builds box transforms about a pivot and inverts them', () => {

@@ -1,9 +1,17 @@
 import type { Point } from '@app-game/paint-core/camera';
 import { applyAffine, invertAffine } from './affine';
-import { boxMatrix, boxPivot, transformMatrix, type BoxState, type Quad } from './createTransform';
+import {
+  boxMatrix,
+  boxPivot,
+  boxPlacement,
+  transformMatrix,
+  type BoxState,
+  type Quad,
+  type TransformSettings
+} from './createTransform';
 import { applyProjective, isConvex } from './projective';
 import type { TransformBounds } from './transformEdit';
-import { moveWarp, warpSide } from './warp';
+import { bendWarp, moveWarp, warpSide } from './warp';
 
 /** A box handle: -1, 0 or 1 per axis, from the left/top edge through the middle to the right/bottom edge. */
 export type BoxHandle = { x: -1 | 0 | 1; y: -1 | 0 | 1 };
@@ -43,26 +51,43 @@ export function distortBox(
 }
 
 /**
- * A warped box after its control point `index` is dragged from `start` to `pointer`, in document pixels. A corner
- * point takes its two neighbors on the edges with it, as Photoshop's Warp does, so the edges keep their curve.
+ * A warped box after its control point `index` is dragged from `start` to `pointer`, in document pixels. An anchor,
+ * where patches meet (every third point), takes the handle points next to it along, as Photoshop's Warp does, so the
+ * curves through it keep their shape.
  */
 export function moveWarpPoint(box: BoxState & { warp: readonly Point[] }, index: number, start: Point, pointer: Point) {
   const dx = pointer.x - start.x,
     dy = pointer.y - start.y;
-  const moved = new Set([index, ...(warpCornerNeighbors[index] ?? [])]);
+  const side = warpSide(box.warp);
+  const column = index % side,
+    row = Math.floor(index / side);
+  const moved = new Set([index]);
+  if (column % 3 === 0 && row % 3 === 0) {
+    for (const [x, y] of [
+      [column - 1, row],
+      [column + 1, row],
+      [column, row - 1],
+      [column, row + 1]
+    ] as const) {
+      if (x >= 0 && x < side && y >= 0 && y < side) {
+        moved.add(y * side + x);
+      }
+    }
+  }
+
   return {
     ...box,
     warp: box.warp.map((point, at) => (moved.has(at) ? { x: point.x + dx, y: point.y + dy } : point))
   };
 }
 
-/** The edge points next to each corner of the 4 × 4 control points, which move with it. */
-const warpCornerNeighbors: Record<number, number[]> = {
-  0: [1, warpSide],
-  [warpSide - 1]: [warpSide - 2, 2 * warpSide - 1],
-  [warpSide * (warpSide - 1)]: [warpSide * (warpSide - 2), warpSide * (warpSide - 1) + 1],
-  [warpSide * warpSide - 1]: [warpSide * (warpSide - 1) - 1, warpSide * warpSide - 2]
-};
+/**
+ * A warped box bent by dragging inside it from `start` to `pointer`, in document pixels: the surface point that was
+ * under `start`, at `at` on the warp, follows the pointer; see `bendWarp`.
+ */
+export function bendBox(box: BoxState & { warp: readonly Point[] }, at: Point, start: Point, pointer: Point) {
+  return { ...box, warp: bendWarp(box.warp, at, { x: pointer.x - start.x, y: pointer.y - start.y }) };
+}
 
 /** Indices of the corners, clockwise from the top-left, that a handle moves. */
 function cornersOf(handle: BoxHandle): number[] {
@@ -174,19 +199,23 @@ export function movePivot(bounds: TransformBounds, box: BoxState, pointer: Point
 
 /**
  * Document points of the box's handles and center for `box`, as drawn by the overlay; a distorted box places its edge
- * handles and center in perspective.
+ * handles and center in perspective, or bilinearly without it.
  */
-export function boxPoints(bounds: TransformBounds, box: BoxState) {
-  const matrix = transformMatrix(bounds, box);
+export function boxPoints(
+  bounds: TransformBounds,
+  box: BoxState,
+  settings: Pick<TransformSettings, 'perspective'> = { perspective: true }
+) {
+  const place = boxPlacement(bounds, box, settings);
   const width = bounds.right - bounds.left,
     height = bounds.bottom - bounds.top;
   const center = { x: (bounds.left + bounds.right) / 2, y: (bounds.top + bounds.bottom) / 2 };
   const at = (handle: BoxHandle) =>
-    applyProjective(matrix, { x: center.x + (handle.x * width) / 2, y: center.y + (handle.y * height) / 2 });
+    place({ x: center.x + (handle.x * width) / 2, y: center.y + (handle.y * height) / 2 });
   return {
-    center: applyProjective(matrix, center),
+    center: place(center),
     /** Where the pivot is, for a box that is not distorted. */
-    pivot: applyProjective(matrix, boxPivot(bounds, box)),
+    pivot: place(boxPivot(bounds, box)),
     corners: [at({ x: -1, y: -1 }), at({ x: 1, y: -1 }), at({ x: 1, y: 1 }), at({ x: -1, y: 1 })],
     handles: handles.map((handle) => ({ handle, point: at(handle) }))
   };

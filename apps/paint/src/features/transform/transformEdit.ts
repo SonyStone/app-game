@@ -6,7 +6,7 @@ import { captureSelection } from '@app-game/paint-core/selection';
 import { TILE_BYTES, type TileData } from '@app-game/paint-core/tilePixels';
 import { z } from 'zod';
 import { applyProjective, invertProjective, type Projective } from './projective';
-import { warpNumbers, warpSide, warpTriangles, type Warp } from './warp';
+import { maxWarpCells, warpCells, warpNumbers, warpTriangles, type Warp } from './warp';
 
 /**
  * The engine half of the transform: moves, scales, rotates, flips, distorts in perspective and warps the pixels of a lasso
@@ -87,12 +87,15 @@ const transformCommandSchema = z.discriminatedUnion('phase', [
     /** A warp that bends the pixels instead of `matrix`; see `Warp`. */
     warp: z
       .array(point)
-      .length(warpSide * warpSide)
+      .refine((points) => warpLengths.includes(points.length), 'A warp has (3n + 1)² control points for n = 1 to 4.')
       .optional()
   }),
   z.object({ phase: z.literal('end') }),
   z.object({ phase: z.literal('cancel') })
 ]);
+
+/** Numbers of control points of the warps with 1 to {@link maxWarpCells} patches per side. */
+const warpLengths = Array.from({ length: maxWarpCells }, (_, index) => (3 * (index + 1) + 1) ** 2);
 
 /** What a transform started from. */
 type TransformSession = {
@@ -258,8 +261,8 @@ function projectivePlacement(matrix: Projective, bounds: TransformBounds) {
 function warpPlacement(warp: Warp, bounds: TransformBounds) {
   const target = boundsOf(warp);
   const extent = Math.max(target.right - target.left, target.bottom - target.top, 1);
-  const cells = Math.min(128, Math.max(8, Math.ceil(extent / 8)));
-  const triangles = warpTriangles(warp, cells);
+  const mesh = Math.min(192, Math.max(8 * warpCells(warp), Math.ceil(extent / 8)));
+  const triangles = warpTriangles(warp, mesh);
   const width = bounds.right - bounds.left,
     height = bounds.bottom - bounds.top;
   return {

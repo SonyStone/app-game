@@ -1,6 +1,9 @@
+import { For, Show } from 'solid-js';
 import { FloatingBar, FloatingBarSeparator, floatingBarPrimary } from '../../shared/ui/FloatingBar';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import type { TransformSettings } from './createTransform';
+import styles from './Transform.module.css';
+import { maxWarpCells } from './warp';
 
 /**
  * Compact transform actions next to the box: flips, a quarter turn, distort and warp, exact values, the proportions and pixel-art settings, reset,
@@ -15,10 +18,15 @@ export function TransformActions(props: {
   onRotate: () => void;
   /** Whether the box is distorted by its corners. */
   distorted: boolean;
+  /** Whether a distortion foreshortens in perspective rather than stretching bilinearly; see `TransformSettings`. */
+  perspective: boolean;
   onDistort: (on: boolean) => void;
   /** Whether the pixels are warped by a grid of points. */
   warped: boolean;
   onWarp: (on: boolean) => void;
+  /** The warp's patches per side, and the change of it; see `Warp`. */
+  warpCells: number;
+  onWarpGrid: (cells: number) => void;
   /** Whether the exact values are shown. */
   numbers: boolean;
   onNumbers: (shown: boolean) => void;
@@ -45,6 +53,16 @@ export function TransformActions(props: {
       >
         <SketchIcon name="distort" size={20} />
       </button>
+      <Show when={props.distorted}>
+        <button
+          aria-label="Perspective"
+          title="Perspective: far edges shrink · off: stretch evenly between the corners"
+          aria-pressed={props.perspective ? 'true' : 'false'}
+          onClick={() => props.onSettings({ perspective: !props.perspective })}
+        >
+          <SketchIcon name="perspective" size={20} />
+        </button>
+      </Show>
       <button
         aria-label="Warp"
         title="Warp: bend the pixels by dragging a grid of points"
@@ -53,6 +71,19 @@ export function TransformActions(props: {
       >
         <SketchIcon name="warp" size={20} />
       </button>
+      <Show when={props.warped}>
+        <select
+          class={styles.grid}
+          aria-label="Warp grid"
+          title="Warp grid: more patches bend smaller areas"
+          value={props.warpCells}
+          onChange={(event) => props.onWarpGrid(Number(event.currentTarget.value))}
+        >
+          <For each={warpGrids}>
+            {(cells) => <option value={cells}>{cells === 1 ? 'Default' : `${cells}×${cells}`}</option>}
+          </For>
+        </select>
+      </Show>
       <button
         aria-label="Exact values"
         title="Exact values: size, angle and position"
@@ -93,3 +124,6 @@ export function TransformActions(props: {
     </FloatingBar>
   );
 }
+
+/** Patches per side the warp grid offers. */
+const warpGrids = Array.from({ length: maxWarpCells }, (_, index) => index + 1);

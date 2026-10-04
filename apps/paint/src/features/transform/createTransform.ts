@@ -7,7 +7,16 @@ import type { PaintError } from '../../shared/errors';
 import { applyAffine, boxAffine, type Affine } from './affine';
 import { applyProjective, fromAffine, rectToQuad, type Projective } from './projective';
 import { transformEdit, type TransformBounds, type TransformCommand } from './transformEdit';
-import { flipWarp, moveWarp, warpCenter, warpDocumentPoint, warpFromMatrix, type Warp } from './warp';
+import {
+  flipWarp,
+  moveWarp,
+  regridWarp,
+  warpCenter,
+  warpDocumentPoint,
+  warpFromMatrix,
+  warpFromQuad,
+  type Warp
+} from './warp';
 
 /**
  * The UI half of the transform, whose engine half is `transformEdit` in the drawing engine's recipe: one transform
@@ -38,11 +47,14 @@ export function createTransform(options: {
   const [starting, setStarting] = createSignal(false);
   const [settings, setSettings, currentSettings] = createImmediateSignal<TransformSettings>({
     proportional: true,
-    interpolation: 'smooth'
+    interpolation: 'smooth',
+    perspective: true
   });
   const matrix = createMemo(() => transformMatrix(session()?.bounds, box()));
   /** Commands in sending order; each starts after the previous one's reply. */
   let chain: Promise<unknown> = Promise.resolve();
+  /** A pen or mouse drag on the canvas outside a warp, which moves the whole warp. */
+  let outside: { box: BoxState & { warp: Warp }; start: Point } | undefined;
   /** The latest placement waiting in `chain`; later changes replace it instead of queueing more updates. */
   let queued: { matrix: Projective; warp: Warp | undefined } | undefined;
 
@@ -57,11 +69,11 @@ export function createTransform(options: {
     box,
     /** How corner handles scale and how pixels are resampled. */
     settings,
-    /** Changes the settings; a new interpolation redraws the pixels. */
+    /** Changes the settings; a new interpolation or perspective redraws the pixels. */
     setSettings(patch: Partial<TransformSettings>) {
       const next = { ...currentSettings(), ...patch };
       setSettings(next);
-      if (patch.interpolation !== undefined) {
+      if (patch.interpolation !== undefined || patch.perspective !== undefined) {
         change(currentBox());
       }
     },
@@ -148,7 +160,16 @@ export function createTransform(options: {
         return;
       }
 
-      change({ ...current, warp: warpFromMatrix(bounds, transformMatrix(bounds, current)) });
+      // A bilinear distortion is already a warp; anything else starts from where the box puts the pixels.
+      const warp = boxWarp(current, currentSettings()) ?? warpFromMatrix(bounds, transformMatrix(bounds, current));
+      change({ ...current, warp });
+    },
+    /** Puts the warp on a grid of `cells` × `cells` patches, keeping its shape; see `regridWarp`. */
+    warpGrid(cells: number) {
+      const current = currentBox();
+      if (current.warp) {
+        change({ ...current, warp: regridWarp(current.warp, cells) });
+      }
     },
     /** Returns the box to the original placement, keeping the session. */
     reset() {
@@ -156,11 +177,26 @@ export function createTransform(options: {
     },
     end: () => finish('end'),
     cancel: () => finish('cancel'),
-    /** Canvas contact handler: while transforming, pen and mouse contacts on the canvas neither draw nor select. */
+    /**
+     * Canvas contact handler: while transforming, pen and mouse contacts on the canvas neither draw nor select. Off a
+     * warp, as dragging inside it bends it, they move the whole warp.
+     */
     canvasAction: {
       enabled: (event: Pick<PointerEvent, 'pointerType'>) =>
         currentSession() !== undefined && event.pointerType !== 'touch',
-      run: () => {}
+      run(point: Point) {
+        const current = currentBox();
+        outside = current.warp ? { box: { ...current, warp: current.warp }, start: point } : undefined;
+      },
+      move(point: Point) {
+        if (outside && currentSession()) {
+          const delta = { x: point.x - outside.start.x, y: point.y - outside.start.y };
+          change({ ...outside.box, warp: moveWarp(outside.box.warp, delta) });
+        }
+      },
+      end() {
+        outside = undefined;
+      }
     }
   };
 
@@ -197,7 +233,7 @@ export function createTransform(options: {
 
     setBox(next);
     const waiting = queued !== undefined;
-    queued = { matrix: transformMatrix(current.bounds, next), warp: next.warp };
+    queued = { matrix: transformMatrix(current.bounds, next), warp: boxWarp(next, currentSettings()) };
     if (!waiting) {
       chain = chain.then(async () => {
         const latest = queued!;
@@ -222,10 +258,7 @@ export function createTransform(options: {
       return;
     }
 
-    const finalBox = currentBox();
-    const finalMatrix = transformMatrix(current.bounds, finalBox);
-    const place = (point: Point) =>
-      finalBox.warp ? warpDocumentPoint(current.bounds, finalBox.warp, point) : applyProjective(finalMatrix, point);
+    const place = boxPlacement(current.bounds, currentBox(), currentSettings());
     setSession(undefined);
     // The outline returns at once, so a fill or gradient started before the engine replies already sees it.
     if (current.points) {
@@ -257,10 +290,11 @@ export function createTransform(options: {
 export type Transform = ReturnType<typeof createTransform>;
 
 /**
- * Transform settings: corner handles keep the proportions (Shift does the opposite), and `pixels` resamples with the
- * nearest pixel for pixel art instead of smoothly.
+ * Transform settings: corner handles keep the proportions (Shift does the opposite), `pixels` resamples with the
+ * nearest pixel for pixel art instead of smoothly, and a distorted box foreshortens in `perspective` or else
+ * stretches bilinearly between its corners.
  */
-export type TransformSettings = { proportional: boolean; interpolation: 'smooth' | 'pixels' };
+export type TransformSettings = { proportional: boolean; interpolation: 'smooth' | 'pixels'; perspective: boolean };
 
 /**
  * Box edits about a pivot, a point of the original pixels that is the center of the bounds unless `pivot` sets it:
@@ -285,6 +319,26 @@ const initialBox: BoxState = { offset: { x: 0, y: 0 }, scale: { x: 1, y: 1 }, an
  */
 export function transformMatrix(bounds: TransformBounds | undefined, box: BoxState): Projective {
   return bounds && box.corners ? rectToQuad(bounds, box.corners) : fromAffine(boxMatrix(bounds, box));
+}
+
+/** The warp the pixels follow: the box's own, or the bilinear one of a distorted box without perspective. */
+export function boxWarp(box: BoxState, settings: Pick<TransformSettings, 'perspective'>): Warp | undefined {
+  return box.warp ?? (box.corners && !settings.perspective ? warpFromQuad(box.corners) : undefined);
+}
+
+/** Where `box` puts a document point of `bounds`, through its warp or its matrix. */
+export function boxPlacement(
+  bounds: TransformBounds,
+  box: BoxState,
+  settings: Pick<TransformSettings, 'perspective'>
+): (point: Point) => Point {
+  const warp = boxWarp(box, settings);
+  if (warp) {
+    return (point) => warpDocumentPoint(bounds, warp, point);
+  }
+
+  const matrix = transformMatrix(bounds, box);
+  return (point) => applyProjective(matrix, point);
 }
 
 /** The affine transform of `box` about the center of `bounds`, ignoring `corners`. */

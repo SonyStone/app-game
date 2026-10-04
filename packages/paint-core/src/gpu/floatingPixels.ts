@@ -22,9 +22,10 @@ export type FloatingPixels = {
    */
   matrix: readonly [number, number, number, number, number, number, number, number, number];
   /**
-   * A warp that replaces `matrix`: the 16 control points of a bicubic Bézier patch, row by row from the top-left, as
-   * `[x0, y0, x1, y1, …]` in document pixels. The patch maps the lifted bounds onto a curved surface; control points
-   * evenly spaced over the bounds leave the pixels in place. The preview draws it as a fine mesh; see `warpGrid`.
+   * A warp that replaces `matrix`: the control points of an `n` × `n` grid of bicubic Bézier patches sharing their
+   * edges, `3n + 1` per side, row by row from the top-left, as `[x0, y0, x1, y1, …]` in document pixels; `n` is 1 to
+   * {@link maxWarpCells}. The grid maps the lifted bounds onto a curved surface; control points evenly spaced over the
+   * bounds leave the pixels in place. The preview draws it as a fine mesh; see `warpMesh`.
    */
   warp?: readonly number[];
   /** `smooth` filters the pixels (with mipmaps when minified); `pixels` takes the nearest pixel. */
@@ -126,7 +127,7 @@ export function createFloatingPixels(root: TgpuRoot, damage: (keys: readonly str
       draw
         .with(pass)
         .with(resources[shown.interpolation])
-        .draw(warp ? 6 * warpGrid * warpGrid : 6);
+        .draw(warp ? 6 * warpMesh(warp) ** 2 : 6);
       pass.end();
     },
 
@@ -226,11 +227,22 @@ function tileKeys(bounds: FloatingPixels['bounds']): string[] {
 /** Marking more tiles than this redraws the whole view, which costs no more. */
 const maxDamageTiles = 1024;
 
+/** Most patches per side of a warp. */
+export const maxWarpCells = 4;
+
 /**
- * Rows and columns of the mesh a warp is drawn with. Each cell is about 1/32 of the patch, so its straight edges stay
- * within a fraction of a pixel of the curve for warps of ordinary size.
+ * Rows and columns of the mesh a warp is drawn with: 32 for one patch, 16 per patch for more, so the straight edges
+ * of its triangles stay within a fraction of a pixel of the curves for warps of ordinary size.
  */
-export const warpGrid = 32;
+export function warpMesh(warp: readonly number[]) {
+  const cells = warpCells(warp);
+  return cells === 1 ? 32 : 16 * cells;
+}
+
+/** Patches per side of a warp's control points. */
+function warpCells(warp: readonly number[]) {
+  return Math.round((Math.sqrt(warp.length / 2) - 1) / 3);
+}
 
 /**
  * Uniforms of one pass: the rows of a projective transform from texture coordinates (0–1) to homogeneous document
@@ -253,14 +265,17 @@ function uniform(
   const [rowX, rowY, rowW] = [row(a, b, c), row(d2, e, f), row(g, h, i)] as [number[], number[], number[]];
   const relative = (values: number[], shift: number) =>
     d.vec4f(...(values.map((value, k) => value - shift * rowW[k]!) as [number, number, number]), 0);
-  const points = Array.from({ length: 8 }, (_, index) => {
+  const points = Array.from({ length: maxWarpPairs }, (_, index) => {
     const at = (k: number) => (warp?.[index * 4 + k] ?? 0) - (k % 2 ? camera.y : camera.x);
     return d.vec4f(at(0), at(1), at(2), at(3));
   });
+  const cells = warp ? warpCells(warp) : 1;
   return {
     points,
-    grid: warp ? warpGrid : 1,
+    grid: warp ? warpMesh(warp) : 1,
     warped: warp ? 1 : 0,
+    cells,
+    side: 3 * cells + 1,
     rowX: relative(rowX, camera.x),
     rowY: relative(rowY, camera.y),
     rowW: d.vec4f(rowW[0]!, rowW[1]!, rowW[2]!, 0),
@@ -273,13 +288,19 @@ function uniform(
   };
 }
 
+/** Vectors holding the most control points a warp has, two per vector. */
+const maxWarpPairs = Math.ceil((3 * maxWarpCells + 1) ** 2 / 2);
+
 const floatingUniform = d.struct({
-  /** A warp's 16 control points relative to the camera, two per vector. */
-  points: d.arrayOf(d.vec4f, 8),
-  /** Cells per side of the drawn mesh: 1 for a quad, `warpGrid` for a warp. */
+  /** A warp's control points relative to the camera, two per vector, row by row. */
+  points: d.arrayOf(d.vec4f, maxWarpPairs),
+  /** Cells per side of the drawn mesh: 1 for a quad, `warpMesh` for a warp. */
   grid: d.f32,
   /** 1 when the points place the pixels instead of the rows. */
   warped: d.f32,
+  /** The warp's patches per side and control points per side. */
+  cells: d.f32,
+  side: d.f32,
   rowX: d.vec4f,
   rowY: d.vec4f,
   rowW: d.vec4f,
@@ -299,33 +320,50 @@ const floatingLayout = tgpu.bindGroupLayout({
 
 // Shader helpers come before the shaders that call them: TypeGPU reads their definitions when the shaders are created.
 
-/** The point of the warp's Bézier patch at `uv`: each row of control points is blended along u, then the rows along v. */
+/**
+ * The point of the warp at `uv`: the patch under it is found, then each of its rows of control points is blended
+ * along u and the rows along v.
+ */
 const bezierPatch = tgpu.fn(
   [d.vec2f],
   d.vec2f
 )((uv) => {
   'use gpu';
-  const points = floatingLayout.$.transform.points;
-  const u = bernstein(uv.x);
-  const v = bernstein(uv.y);
-  // Control point (column, row) is half `2 * row + column / 2` of the vectors: xy for even columns, zw for odd ones.
-  const row0 = std.add(
-    std.add(std.mul(points[0]!.xy, u.x), std.mul(points[0]!.zw, u.y)),
-    std.add(std.mul(points[1]!.xy, u.z), std.mul(points[1]!.zw, u.w))
+  const transform = floatingLayout.$.transform;
+  const scaled = std.mul(uv, transform.cells);
+  const cell = std.min(std.floor(scaled), d.vec2f(transform.cells - 1));
+  const local = std.sub(scaled, cell);
+  const u = bernstein(local.x);
+  const v = bernstein(local.y);
+  const side = d.u32(transform.side);
+  const first = d.u32(cell.y) * 3 * side + d.u32(cell.x) * 3;
+  return std.add(
+    std.add(std.mul(patchRow(first, u), v.x), std.mul(patchRow(first + side, u), v.y)),
+    std.add(std.mul(patchRow(first + 2 * side, u), v.z), std.mul(patchRow(first + 3 * side, u), v.w))
   );
-  const row1 = std.add(
-    std.add(std.mul(points[2]!.xy, u.x), std.mul(points[2]!.zw, u.y)),
-    std.add(std.mul(points[3]!.xy, u.z), std.mul(points[3]!.zw, u.w))
+});
+
+/** Four consecutive control points from `first`, blended with the weights `w`. */
+const patchRow = tgpu.fn(
+  [d.u32, d.vec4f],
+  d.vec2f
+)((first, w) => {
+  'use gpu';
+  return std.add(
+    std.add(std.mul(controlPoint(first), w.x), std.mul(controlPoint(first + 1), w.y)),
+    std.add(std.mul(controlPoint(first + 2), w.z), std.mul(controlPoint(first + 3), w.w))
   );
-  const row2 = std.add(
-    std.add(std.mul(points[4]!.xy, u.x), std.mul(points[4]!.zw, u.y)),
-    std.add(std.mul(points[5]!.xy, u.z), std.mul(points[5]!.zw, u.w))
-  );
-  const row3 = std.add(
-    std.add(std.mul(points[6]!.xy, u.x), std.mul(points[6]!.zw, u.y)),
-    std.add(std.mul(points[7]!.xy, u.z), std.mul(points[7]!.zw, u.w))
-  );
-  return std.add(std.add(std.mul(row0, v.x), std.mul(row1, v.y)), std.add(std.mul(row2, v.z), std.mul(row3, v.w)));
+});
+
+/** Control point `k` of the warp: half of a vector, xy for even `k` and zw for odd. */
+const controlPoint = tgpu.fn(
+  [d.u32],
+  d.vec2f
+)((k) => {
+  'use gpu';
+  // Integer division would be done in floats; halve by flooring instead.
+  const pair = floatingLayout.$.transform.points[d.u32(std.floor(d.f32(k) * 0.5))]!;
+  return std.select(pair.xy, pair.zw, k % 2 === 1);
 });
 
 /** The four cubic Bernstein weights at `t`. */
