@@ -16,8 +16,6 @@ export function ColorPanel(props: {
   brush: Brush;
   /** Receives `color` or `backgroundColor` patches; the caller merges them into the brush. */
   onChange: (patch: Partial<Brush>) => void;
-  /** Arms picking the foreground color from the next canvas contact; the button is hidden without it. */
-  onPickCanvas?: () => void;
   /**
    * Another way to choose the color, such as a color wheel, offered with a switch in place of the saturation plane
    * and hue strip. `render` receives the edited color, `onChange` for live edits and `onSettle` for when an edit ends.
@@ -234,20 +232,6 @@ export function ColorPanel(props: {
             }}
           />
         </label>
-        <Show when={props.onPickCanvas}>
-          {(pickCanvas) => (
-            <button
-              class={styles.iconButton}
-              aria-label="Pick color from canvas"
-              title="Pick color from canvas (Alt/Option-click)"
-              onClick={() => pickCanvas()()}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m14 7 3 3M5 19l1-4 9-9 3 3-9 9-4 1Zm9-15 2-1 5 5-1 2-3 1-4-4 1-3Z" />
-              </svg>
-            </button>
-          )}
-        </Show>
         <Show when={eyeDropper() !== undefined}>
           <button
             class={styles.iconButton}

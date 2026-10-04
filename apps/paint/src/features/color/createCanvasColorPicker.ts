@@ -1,6 +1,5 @@
 import type { Point } from '@app-game/paint-core/camera';
-import type { ColorSample } from '@app-game/paint-core/colorSample';
-import type { TouchHoldDrag } from '@app-game/paint-core/input';
+import type { ColorSample, PickedColor } from '@app-game/paint-core/colorSample';
 import { createEventListener } from '@solid-primitives/event-listener';
 import type { Result } from 'neverthrow';
 import { createEffect, createSignal, getOwner, isDisposed, type Accessor } from 'solid-js';
@@ -8,11 +7,11 @@ import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import type { PaintError } from '../../shared/errors';
 
 /**
- * Picks the foreground color from the canvas: Alt/Option-press with a painting tool, as in Photoshop, the next
- * contact after `arm()`, or a touch hold through `hold`. While the contact is held, `preview` shows the color under it
- * next to the current one, sampled from the last presented frame as it moves; releasing picks the color there at full
- * detail and applies it, and a cancelled contact picks nothing. Holding Alt/Option while a pen or mouse hovers over the
- * canvas with a painting tool previews the color under it the same way, without picking. `settings` choose whether the view (all layers and the
+ * Picks the foreground color from the canvas: Alt/Option-press with a painting tool, as in Photoshop, or the next
+ * contact after `arm()`. While the contact is held, `preview` shows the color under it next to the current one and a
+ * magnified view around it, sampled from the last presented frame as it moves; releasing picks the color there at
+ * full detail and applies it, and a cancelled contact picks nothing. While armed, or while Alt/Option is held with a
+ * painting tool, a pen or mouse hovering over the canvas previews the same way without picking. `settings` choose whether the view (all layers and the
  * paper) or the active layer is sampled, and over how many pixels. Must be created within a Solid owner; colors
  * arriving after disposal are dropped.
  */
@@ -22,7 +21,7 @@ export function createCanvasColorPicker(options: {
   /** Converts a document point to CSS pixels of the canvas. */
   toScreen: (point: Point) => Point;
   /** Reads a color at a canvas point; see `PaintEngine.pickColor`. */
-  pick: (point: Point, sample: ColorSample) => Promise<Result<string | null, PaintError>>;
+  pick: (point: Point, sample: ColorSample) => Promise<Result<PickedColor, PaintError>>;
   /** Where a pen or mouse hovers over the canvas, in CSS pixels of the canvas; undefined when it is elsewhere. */
   hovered: Accessor<Point | undefined>;
   /** The color a pick replaces, shown beside the sample. */
@@ -45,7 +44,7 @@ export function createCanvasColorPicker(options: {
   );
   createEventListener(window, 'blur', () => setAlt(false));
   createEffect(
-    () => (alt() && options.paints() ? options.hovered() : undefined),
+    () => (armed() || (alt() && options.paints()) ? options.hovered() : undefined),
     (point) => hover(point)
   );
 
@@ -66,17 +65,12 @@ export function createCanvasColorPicker(options: {
       },
       move: (point: Point) => follow(point),
       end: (cancelled: boolean) => finish(cancelled)
-    },
-    /** Starts picking under a held finger, for `touchGestures.hold`; the finger's drag samples as it moves. */
-    hold(point: Point): TouchHoldDrag {
-      begin(point);
-      return { move: follow, end: finish };
     }
   };
 
   function begin(point: Point) {
     sampling = { point: options.toScreen(point), inFlight: false };
-    setPreview({ point: sampling.point, color: undefined, current: options.current() });
+    setPreview(blankPreview(sampling.point));
     void sampleLive();
   }
 
@@ -100,7 +94,7 @@ export function createCanvasColorPicker(options: {
       setPreview((previous) => previous && { ...previous, point });
     } else {
       sampling = { point, inFlight: false, hover: true };
-      setPreview({ point, color: undefined, current: options.current() });
+      setPreview(blankPreview(point));
     }
 
     void sampleLive();
@@ -125,14 +119,14 @@ export function createCanvasColorPicker(options: {
 
     current.inFlight = true;
     const point = current.point;
-    const sampled = await options.pick(point, { ...settings.sample(), exact: false });
+    const sampled = await options.pick(point, { ...settings.sample(), exact: false, loupe: loupeSide });
     current.inFlight = false;
     if (isDisposed(owner) || sampling !== current) {
       return;
     }
 
     if (sampled.isOk()) {
-      setPreview((previous) => previous && { ...previous, color: sampled.value });
+      setPreview((previous) => previous && { ...previous, color: sampled.value.color, loupe: sampled.value.loupe });
     }
 
     if (current.point !== point) {
@@ -159,9 +153,14 @@ export function createCanvasColorPicker(options: {
       return;
     }
 
-    if (picked.value !== null) {
-      options.apply(picked.value);
+    if (picked.value.color !== null) {
+      options.apply(picked.value.color);
     }
+  }
+
+  /** A preview at `point` before its first sample arrives. */
+  function blankPreview(point: Point): PickerPreview {
+    return { point, color: undefined, current: options.current(), size: settings.size(), loupeSide };
   }
 }
 
@@ -169,10 +168,22 @@ export function createCanvasColorPicker(options: {
 export type CanvasColorPicker = ReturnType<typeof createCanvasColorPicker>;
 
 /**
- * A held pick: the sampled point in CSS pixels of the canvas, the color there (`undefined` until the first sample
- * arrives, `null` where the sampled layer has no paint) and the current color it would replace.
+ * A pick being previewed: the sampled point in CSS pixels of the canvas, the color there (`undefined` until the first
+ * sample arrives, `null` where the sampled layer has no paint), the current color it would replace, the side of the
+ * averaged square (`size`) and of the magnified view (`loupeSide`) in CSS pixels, and the magnified view's pixels once
+ * sampled; see `PickedColor.loupe`.
  */
-export type PickerPreview = { point: Point; color: string | null | undefined; current: string };
+export type PickerPreview = {
+  point: Point;
+  color: string | null | undefined;
+  current: string;
+  size: ColorSample['size'];
+  loupeSide: number;
+  loupe?: PickedColor['loupe'];
+};
+
+/** CSS pixels per side of the view magnified in the preview's ring. */
+const loupeSide = 11;
 
 /**
  * What the color picker samples: the view with all layers and the paper, or the active layer only, averaged over 1, 3

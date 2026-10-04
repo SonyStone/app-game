@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { ColorSample } from '@app-game/paint-core/colorSample';
+import type { ColorSample, PickedColor } from '@app-game/paint-core/colorSample';
 import { err, ok, type Result } from 'neverthrow';
 import { createRoot, createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -31,24 +31,30 @@ it('picks with Alt only for painting tools, or once after arming', () => {
 
 it('previews colors from the presented frame while held and applies an exact pick on release', async () => {
   const { picker, pick, apply } = setup(() => true);
-  let answer!: (result: Result<string | null, PaintError>) => void;
+  let answer!: (result: Result<PickedColor, PaintError>) => void;
   pick.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
   picker.canvasAction.run({ x: 10, y: 20 });
   flush();
-  expect(picker.preview()).toEqual({ point: { x: 20, y: 40 }, color: undefined, current: '#000000' });
-  expect(pick).toHaveBeenLastCalledWith({ x: 20, y: 40 }, { source: 'view', size: 1, exact: false });
+  expect(picker.preview()).toEqual({
+    point: { x: 20, y: 40 },
+    color: undefined,
+    current: '#000000',
+    size: 1,
+    loupeSide: 11
+  });
+  expect(pick).toHaveBeenLastCalledWith({ x: 20, y: 40 }, { source: 'view', size: 1, exact: false, loupe: 11 });
 
   // Moves while a sample is in flight are sampled once it arrives, at the latest point only.
   picker.canvasAction.move!({ x: 11, y: 20 });
   picker.canvasAction.move!({ x: 12, y: 20 });
   expect(pick).toHaveBeenCalledTimes(1);
-  answer(ok('#112233'));
+  answer(ok({ color: '#112233' }));
   await vi.waitFor(() => expect(pick).toHaveBeenCalledTimes(2));
-  expect(pick).toHaveBeenLastCalledWith({ x: 24, y: 40 }, { source: 'view', size: 1, exact: false });
+  expect(pick).toHaveBeenLastCalledWith({ x: 24, y: 40 }, { source: 'view', size: 1, exact: false, loupe: 11 });
   // The preview shows the latest sample.
   await vi.waitFor(() => {
     flush();
-    expect(picker.preview()).toMatchObject({ point: { x: 24, y: 40 }, color: '#336699' });
+    expect(picker.preview()).toMatchObject({ point: { x: 24, y: 40 }, color: '#336699', loupe: { side: 2 } });
   });
 
   picker.settings.update({ source: 'layer', size: 5 });
@@ -59,17 +65,17 @@ it('previews colors from the presented frame while held and applies an exact pic
   expect(pick).toHaveBeenLastCalledWith({ x: 24, y: 40 }, { source: 'layer', size: 5, exact: true });
 });
 
-it('picks nothing when cancelled or over a layer without paint, and follows a held finger', async () => {
+it('picks nothing when cancelled or over a layer without paint', async () => {
   const { picker, pick, apply } = setup(() => true);
   picker.canvasAction.run({ x: 0, y: 0 });
   picker.canvasAction.end!(true);
   await Promise.resolve();
   expect(pick).toHaveBeenCalledTimes(1);
 
-  pick.mockResolvedValue(ok(null));
-  const drag = picker.hold({ x: 5, y: 5 });
-  drag.move({ x: 6, y: 5 });
-  drag.end(false);
+  pick.mockResolvedValue(ok({ color: null }));
+  picker.canvasAction.run({ x: 5, y: 5 });
+  picker.canvasAction.move!({ x: 6, y: 5 });
+  picker.canvasAction.end!(false);
   await vi.waitFor(() => expect(pick.mock.calls.at(-1)![1].exact).toBe(true));
   await Promise.resolve();
   expect(apply).not.toHaveBeenCalled();
@@ -78,7 +84,7 @@ it('picks nothing when cancelled or over a layer without paint, and follows a he
 it('reports a failed pick and drops a color arriving after disposal', async () => {
   const failure = engineError('failed', 'The drawing engine is not ready.');
   const { picker, pick, apply, onError } = setup(() => true);
-  pick.mockResolvedValueOnce(ok('#000000')).mockResolvedValueOnce(err(failure));
+  pick.mockResolvedValueOnce(ok({ color: '#000000' })).mockResolvedValueOnce(err(failure));
   picker.canvasAction.run({ x: 0, y: 0 });
   picker.canvasAction.end!(false);
   await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(failure));
@@ -129,7 +135,7 @@ it('previews the color under a hovering pointer while Alt is held, without picki
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Alt', altKey: true }));
   flush();
   expect(picker.preview()).toMatchObject({ point: { x: 30, y: 30 } });
-  expect(pick).toHaveBeenLastCalledWith({ x: 30, y: 30 }, { source: 'view', size: 1, exact: false });
+  expect(pick).toHaveBeenLastCalledWith({ x: 30, y: 30 }, { source: 'view', size: 1, exact: false, loupe: 11 });
   await vi.waitFor(() => {
     flush();
     expect(picker.preview()?.color).toBe('#336699');
@@ -151,10 +157,29 @@ it('previews the color under a hovering pointer while Alt is held, without picki
   expect(apply).not.toHaveBeenCalled();
 });
 
+it('previews under a hovering pointer while armed, until the pick', async () => {
+  const { picker, apply, setHovered } = setup(() => false);
+  setHovered({ x: 10, y: 10 });
+  flush();
+  expect(picker.preview()).toBeUndefined();
+  picker.arm();
+  flush();
+  expect(picker.preview()).toMatchObject({ point: { x: 10, y: 10 } });
+
+  // The contact picks; afterwards nothing is armed and the hover preview ends.
+  picker.canvasAction.run({ x: 5, y: 5 });
+  picker.canvasAction.end!(false);
+  flush();
+  await vi.waitFor(() => expect(apply).toHaveBeenCalledWith('#336699'));
+  setHovered({ x: 12, y: 10 });
+  flush();
+  expect(picker.preview()).toBeUndefined();
+});
+
 function setup(paints: () => boolean) {
   const pick = vi.fn<
-    (point: { x: number; y: number }, sample: ColorSample) => Promise<Result<string | null, PaintError>>
-  >(async () => ok('#336699'));
+    (point: { x: number; y: number }, sample: ColorSample) => Promise<Result<PickedColor, PaintError>>
+  >(async () => ok({ color: '#336699', loupe: { side: 2, pixels: new Uint8ClampedArray(16) } }));
   const apply = vi.fn();
   const onError = vi.fn();
   const [hovered, setHovered] = createSignal<{ x: number; y: number }>();

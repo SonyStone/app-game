@@ -9,7 +9,23 @@ import { unpackTile, type TileData } from './tilePixels';
  * document pixels of the layer. `exact` commits a stroke in progress and, for the view, redraws it at full detail
  * first; without it the last presented frame is read, which is fast enough for a live preview.
  */
-export type ColorSample = { source: 'view' | 'layer'; size: 1 | 3 | 5; exact: boolean };
+export type ColorSample = {
+  source: 'view' | 'layer';
+  size: 1 | 3 | 5;
+  exact: boolean;
+  /**
+   * With a side in CSS pixels, the pick also returns the presented view around the point, for a magnifier; see
+   * `PickedColor.loupe`. Read from the view whatever the `source`.
+   */
+  loupe?: number;
+};
+
+/**
+ * A pick's result: the color as `#rrggbb`, `null` where the sampled layer has no paint, and the requested `loupe`: the
+ * presented pixels of a `side` × `side` square around the point, row by row RGBA, at the view's device resolution.
+ * Near the edges of the view the square stays inside it, so the point is off its center.
+ */
+export type PickedColor = { color: string | null; loupe?: { side: number; pixels: Uint8ClampedArray } };
 
 /** Picks one pixel of the view at full detail, the behavior without sample options. */
 export const defaultColorSample: ColorSample = { source: 'view', size: 1, exact: true };

@@ -1,7 +1,7 @@
 import type { BrushResource, createBrushResources } from '@app-game/abr-paint/resources';
 import type { Brush } from '@app-game/paint-core/brush';
 import type { Camera, Point } from '@app-game/paint-core/camera';
-import type { ColorSample } from '@app-game/paint-core/colorSample';
+import type { ColorSample, PickedColor } from '@app-game/paint-core/colorSample';
 import { createDocument } from '@app-game/paint-core/document';
 import type { CheckpointedEvent, PaintEvent, SelectionEvent, StateEvent } from '@app-game/paint-core/protocol';
 import { gpuError } from '@app-game/solid-gpu/errors';
@@ -80,7 +80,7 @@ export function createPaintEngine(options: {
     timeoutMs: requestTimeoutMs,
     failure: (message) => brushError('upload', message)
   });
-  const colors = createEngineRequests<string | null>({
+  const colors = createEngineRequests<PickedColor>({
     timeoutMs: requestTimeoutMs,
     failure: (message) => engineError('failed', message)
   });
@@ -580,10 +580,10 @@ export function createPaintEngine(options: {
 
   /**
    * Picks the `#rrggbb` color at `point`, in CSS pixels of the canvas, as `sample` says: by default one presented
-   * pixel at full detail, after committing any stroke. Resolves `null` where the active layer has no paint to pick.
-   * Never rejects.
+   * pixel at full detail, after committing any stroke. The color is `null` where the active layer has no paint to
+   * pick; `sample.loupe` adds the presented pixels around the point. Never rejects.
    */
-  function pickColor(point: Point, sample?: ColorSample): Promise<Result<string | null, PaintError>> {
+  function pickColor(point: Point, sample?: ColorSample): Promise<Result<PickedColor, PaintError>> {
     return colors.request((requestId) =>
       post({ type: 'pick-color', requestId, point, ...(sample === undefined ? {} : { sample }) })
     );

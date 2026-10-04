@@ -2,7 +2,7 @@ import { makeTimer } from '@solid-primitives/timer';
 import { createRoot, onCleanup } from 'solid-js';
 import { attempt, createTaskQueue, unwrapResult, type Result } from './asyncResult';
 import { defaultCamera, screenToWorld, type Point } from './camera';
-import { averageOpaque, defaultColorSample, sampleLayer } from './colorSample';
+import { averageOpaque, defaultColorSample, sampleLayer, type PickedColor } from './colorSample';
 import { layersInRect, layersInView, type DocumentRect } from './layersInView';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
@@ -821,16 +821,19 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             break;
           case 'pick-color': {
             const sample = command.sample ?? defaultColorSample;
-            const result = await attempt(async (): Promise<string | null> => {
+            const result = await attempt(async (): Promise<PickedColor> => {
               if (!primaryAttached || !renderer || lost) throw new Error('The drawing engine is not ready.');
               if (sample.exact) await end();
-              if (sample.source === 'layer') {
-                return sampleLayer(document.active, screenToWorld(command.point, camera, size), sample.size, (pixels) =>
-                  pixels instanceof Uint8Array ? Promise.resolve(pixels) : tileStore.read(pixels)
-                );
-              }
-              if (sample.exact) await draw(true);
-              return averageOpaque(await renderer.readPresentedArea(command.point, size, sample.size));
+              if (sample.exact && sample.source === 'view') await draw(true);
+              const color =
+                sample.source === 'layer'
+                  ? await sampleLayer(document.active, screenToWorld(command.point, camera, size), sample.size, (pixels) =>
+                      pixels instanceof Uint8Array ? Promise.resolve(pixels) : tileStore.read(pixels)
+                    )
+                  : averageOpaque(await renderer.readPresentedArea(command.point, size, sample.size));
+              if (!sample.loupe) return { color };
+              const pixels = await renderer.readPresentedArea(command.point, size, sample.loupe);
+              return { color, loupe: { side: Math.round(Math.sqrt(pixels.length / 4)), pixels } };
             });
             post({
               type: 'picked-color',

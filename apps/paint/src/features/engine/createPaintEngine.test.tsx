@@ -285,9 +285,9 @@ it('reads a displayed color through a correlated request', async () => {
   reply(transport, {
     type: 'picked-color',
     requestId: request!.type === 'pick-color' ? request!.requestId : '',
-    result: { ok: true, value: '#102030' }
+    result: { ok: true, value: { color: '#102030' } }
   });
-  expect((await picking)._unsafeUnwrap()).toBe('#102030');
+  expect((await picking)._unsafeUnwrap()).toEqual({ color: '#102030' });
 });
 
 it('uploads a resource set again when its own upload evicts a member that was already resident', async () => {

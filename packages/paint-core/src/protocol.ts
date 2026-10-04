@@ -4,7 +4,7 @@ import type { GpuError } from '@app-game/solid-gpu/errors';
 import type { Result } from './asyncResult';
 import type { Brush, Sample } from './brush';
 import type { Camera, Point, ViewSize } from './camera';
-import type { ColorSample } from './colorSample';
+import type { ColorSample, PickedColor } from './colorSample';
 import type { DocumentRect } from './layersInView';
 import type { BrushEngine } from './composition/contracts';
 import type { HistorySource, LayerAction, createDocument } from './document';
@@ -168,7 +168,7 @@ export type PaintEvent =
   /** Outcome of an `edit` command that carried a `requestId`, with the edit's `reply`. */
   | { type: 'edited'; requestId: string; result: Result<unknown, string> }
   /** The `#rrggbb` color at a `pick-color` point, or `null` where the active layer has no paint to pick. */
-  | { type: 'picked-color'; requestId: string; result: Result<string | null, string> }
+  | { type: 'picked-color'; requestId: string; result: Result<PickedColor, string> }
   | { type: 'checkpointed'; tools?: RendererToolState; historySource?: HistorySource }
   | { type: 'selection'; points: Point[]; hasClipboard: boolean }
   | { type: 'disposed' }

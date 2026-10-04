@@ -210,7 +210,7 @@ try {
     await page.keyboard.press('Escape');
   });
 
-  await step('two- and three-finger taps undo and redo, and a held finger picks a color', async () => {
+  await step('two- and three-finger taps undo and redo', async () => {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     const box = await page.getByRole('main', { name: 'Drawing workspace' }).boundingBox();
@@ -232,25 +232,6 @@ try {
     // Undo may be enabled before the redo by earlier history, so wait for the redo itself.
     await redo.and(page.locator(':disabled')).waitFor({ timeout: 10_000 });
 
-    // Holding a finger on the stroke picks its color.
-    await page.getByRole('button', { name: 'Color palette' }).click();
-    await page.getByLabel('Hex color').fill('FF0000');
-    await page.getByLabel('Hex color').press('Enter');
-    await page.keyboard.press('Escape');
-    const center = { x: box.x + box.width / 2 + 60, y: box.y + box.height / 2 + 30, id: 0 };
-    await touch('touchStart', [center]);
-    await page.waitForTimeout(700);
-    await touch('touchEnd', []);
-    await page.getByRole('button', { name: 'Color palette' }).click();
-    await page.waitForFunction(
-      () => document.querySelector('input[aria-label="Hex color"]')?.value !== 'FF0000',
-      null,
-      {
-        polling: 100,
-        timeout: 10_000
-      }
-    );
-    await page.keyboard.press('Escape');
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
     await cdp.detach();
   });
@@ -340,8 +321,13 @@ try {
     await loupe.waitFor({ state: 'detached', timeout: 5_000 });
     await page.getByRole('button', { name: 'Color palette' }).click();
     assert.equal(await hex(), stroke);
+    await page.keyboard.press('Escape');
 
+    // The eyedropper beside the color closes the panel; while it is armed, hovering shows the ring and a magnifier.
     await page.getByRole('button', { name: 'Pick color from canvas' }).click();
+    await page.mouse.move(box.x + box.width / 2 - 160, box.y + box.height / 2 - 100);
+    await page.mouse.move(box.x + box.width / 2 - 150, box.y + box.height / 2 - 100, { steps: 3 });
+    await page.getByRole('status', { name: /^Picking #/ }).locator('canvas[data-ready="true"]').waitFor({ timeout: 10_000 });
     // Empty paper up and to the left of the stroke, clear of the toolbars along the edges.
     await page.mouse.click(box.x + box.width / 2 - 150, box.y + box.height / 2 - 100);
     await page.getByRole('button', { name: 'Color palette' }).click();

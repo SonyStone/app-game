@@ -291,8 +291,7 @@ export function PaintStudio(props: {
         if (fingers === 3 && engine.state().canRedo) {
           edit({ type: 'redo' });
         }
-      },
-      hold: colorPicker.hold
+      }
     },
     puck: camera.navigation,
     puckPicker: radial.picker,
@@ -654,6 +653,22 @@ export function PaintStudio(props: {
           >
             <span style={{ background: brush().color }} />
           </button>
+          <button
+            aria-label="Pick color from canvas"
+            title="Pick color from canvas · Alt/Option-click"
+            aria-pressed={colorPicker.armed() ? 'true' : 'false'}
+            onClick={() => {
+              if (colorPicker.armed()) {
+                colorPicker.cancel();
+                return;
+              }
+
+              closePanel();
+              colorPicker.arm();
+            }}
+          >
+            <SketchIcon name="picker" size={22} />
+          </button>
         </div>
         <div class={styles.history}>
           <button
@@ -756,10 +771,6 @@ export function PaintStudio(props: {
                   <ColorPanel
                     brush={brush()}
                     onChange={tools.updateBrush}
-                    onPickCanvas={() => {
-                      colorPicker.arm();
-                      closePanel();
-                    }}
                     alternative={{
                       label: 'Wheel',
                       shown: colorWheel.settings().picker === 'wheel',
