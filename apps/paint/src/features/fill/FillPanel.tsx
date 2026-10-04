@@ -35,6 +35,20 @@ export function FillPanel(props: { settings: FillSettings; onChange: (patch: Par
       </label>
       <label class={styles.range}>
         <span>
+          Close gaps
+          <output>{props.settings.gap ? `${props.settings.gap * 2} px` : 'Off'}</output>
+        </span>
+        <input
+          aria-label="Fill close gaps"
+          type="range"
+          min={0}
+          max={16}
+          value={props.settings.gap}
+          onInput={(event) => props.onChange({ gap: event.currentTarget.valueAsNumber })}
+        />
+      </label>
+      <label class={styles.range}>
+        <span>
           Opacity
           <output>{Math.round(props.settings.opacity * 100)}%</output>
         </span>
@@ -60,7 +74,8 @@ export function FillPanel(props: { settings: FillSettings; onChange: (patch: Par
       </label>
       <p class={styles.panelNote}>
         Fills the area of similar color around the click with the current color, into the active layer. Tolerance
-        decides how different a color may be; Expand grows the fill under line edges. The fill stays inside the view.
+        decides how different a color may be; Expand grows the fill under line edges; Close gaps keeps it from leaking
+        through openings in the line art up to that wide. The fill stays inside the view.
       </p>
     </section>
   );

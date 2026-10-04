@@ -29,7 +29,7 @@ export const fillEdit = defineDocumentEdit({
 
     const sampled = await sampleTiles(context, area, command.source);
     const allowed = command.points && polygonMask(command.points, area);
-    const flooded = floodMask(area, sampled, point, command.tolerance, allowed);
+    const flooded = floodMask(area, sampled, point, command.tolerance, allowed, command.gap);
     if (reachesLimit(flooded, area, command.area)) {
       throw new Error('This area is too large to fill at this zoom. Zoom in and try again.');
     }
@@ -86,6 +86,8 @@ const fillCommandSchema = z.object({
   tolerance: z.number().int().min(0).max(255),
   /** Pixels the filled area grows by, to reach under antialiased line edges. */
   expand: z.number().int().min(0).max(32),
+  /** Openings in the outline up to about twice this many pixels wide are closed; see `floodMask`. */
+  gap: z.number().int().min(0).max(16).default(0),
   /** Pixels compared: the active layer's, or all visible layers composited. */
   source: z.enum(['layer', 'all']),
   /** A closed lasso outline the fill stays inside, by the even-odd rule; a click outside it fills nothing. */

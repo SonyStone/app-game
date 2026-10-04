@@ -21,6 +21,35 @@ it('fills the connected area inside a closed outline, spanning tiles, and stays 
   expect(count(floodMask(area, tiles, { x: 900, y: 0 }, 0))).toBe(0);
 });
 
+it('closes gaps in the outline up to twice the setting, reaching the lines again after the closing', () => {
+  // A 100 px square outline, 3 px thick, with a 4 px opening in its top edge.
+  const tiles = new Map<string, Uint8Array>();
+  for (let inset = 0; inset < 3; inset++) {
+    for (const [key, tile] of outline(10 + inset, 10 + inset, 100 - inset * 2, 100 - inset * 2)) {
+      const merged = tiles.get(key) ?? new Uint8Array(256 * 256 * 4);
+      tile.forEach((value, index) => {
+        merged[index] ||= value;
+      });
+      tiles.set(key, merged);
+    }
+  }
+  for (let x = 58; x < 62; x++) {
+    for (let y = 10; y < 13; y++) {
+      tiles.get('0,0')!.fill(0, (y * 256 + x) * 4, (y * 256 + x) * 4 + 4);
+    }
+  }
+  const area = { left: 0, top: 0, width: 128, height: 128 };
+
+  // Without closing, the fill leaks out through the opening; closing 2 px per side keeps it inside.
+  expect(at(floodMask(area, tiles, { x: 60, y: 60 }, 0), area, 2, 2)).toBe(1);
+  const closed = floodMask(area, tiles, { x: 60, y: 60 }, 0, undefined, 2);
+  expect(at(closed, area, 2, 2)).toBe(0);
+  // It grows back up to the lines, filling the whole inside.
+  expect(at(closed, area, 13, 13)).toBe(1);
+  expect(count(closed)).toBeGreaterThanOrEqual(94 * 94);
+  expect(count(closed)).toBeLessThan(94 * 94 + 40);
+});
+
 it('treats colors within the tolerance as the same, and grows the filled area', () => {
   const tiles = outline(0, 0, 10, 10, [40, 40, 40, 40]);
   const area = { left: 0, top: 0, width: 20, height: 20 };
@@ -124,6 +153,7 @@ function fillCommand(): FillCommand {
     opacity: 1,
     tolerance: 0,
     expand: 0,
+    gap: 0,
     source: 'all'
   };
 }

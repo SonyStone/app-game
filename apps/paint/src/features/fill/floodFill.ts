@@ -8,6 +8,10 @@ export type FillArea = { left: number; top: number; width: number; height: numbe
  * size (1 inside). `tiles` holds premultiplied sRGB RGBA8 tiles keyed `"x,y"`, absent where transparent. Pixels match
  * when no RGBA channel differs from the seed's by more than `tolerance` (0–255). The fill is 4-connected and stays
  * within `area`; a seed outside it gives an empty mask.
+ *
+ * With `gap`, openings in the outline up to about twice that many pixels wide are closed first: the pixels of other
+ * colors grow by `gap`, the fill floods what is left, then grows back by `gap` through pixels of its color, up to the
+ * outline. A seed inside a closed gap fills without closing. `allowed` limits the fill, such as to a selection.
  */
 export function floodMask(
   area: FillArea,
@@ -15,37 +19,63 @@ export function floodMask(
   seed: { x: number; y: number },
   tolerance: number,
   /** Pixels the fill may reach, such as a selection's; all without it. */
-  allowed?: Uint8Array
+  allowed?: Uint8Array,
+  gap = 0
 ): Uint8Array {
   const { width, height } = area;
-  const mask = new Uint8Array(width * height);
   const sx = seed.x - area.left,
     sy = seed.y - area.top;
   if (sx < 0 || sy < 0 || sx >= width || sy >= height) {
-    return mask;
+    return new Uint8Array(width * height);
   }
 
   const matching = matchingPixels(area, tiles, seedPixel(tiles, seed), tolerance);
-  const open = (x: number, y: number) =>
-    matching[y * width + x] === 1 && mask[y * width + x] === 0 && (!allowed || allowed[y * width + x] === 1);
+  if (allowed) {
+    matching.forEach((value, index) => {
+      if (value && !allowed[index]) {
+        matching[index] = 0;
+      }
+    });
+  }
+
+  if (gap > 0) {
+    const walls = expandMask(
+      matching.map((value) => 1 - value),
+      width,
+      height,
+      gap
+    );
+    const open = matching.map((value, index) => (value && !walls[index] ? 1 : 0));
+    if (open[sy * width + sx]) {
+      return growWithin(floodWithin(open, width, height, sx, sy), matching, width, height, gap);
+    }
+  }
+
+  return floodWithin(matching, width, height, sx, sy);
+}
+
+/** Scanline flood from (sx, sy) through the pixels set in `open`. */
+function floodWithin(open: Uint8Array, width: number, height: number, sx: number, sy: number): Uint8Array {
+  const mask = new Uint8Array(width * height);
+  const free = (x: number, y: number) => open[y * width + x] === 1 && mask[y * width + x] === 0;
   const stack = [sx, sy];
   while (stack.length > 0) {
     const y = stack.pop()!;
     let x = stack.pop()!;
-    if (!open(x, y)) {
+    if (!free(x, y)) {
       continue;
     }
 
-    while (x > 0 && open(x - 1, y)) {
+    while (x > 0 && free(x - 1, y)) {
       x--;
     }
 
     let above = false,
       below = false;
-    for (; x < width && open(x, y); x++) {
+    for (; x < width && free(x, y); x++) {
       mask[y * width + x] = 1;
       if (y > 0) {
-        const next = open(x, y - 1);
+        const next = free(x, y - 1);
         if (next && !above) {
           stack.push(x, y - 1);
         }
@@ -54,7 +84,7 @@ export function floodMask(
       }
 
       if (y < height - 1) {
-        const next = open(x, y + 1);
+        const next = free(x, y + 1);
         if (next && !below) {
           stack.push(x, y + 1);
         }
@@ -62,6 +92,52 @@ export function floodMask(
         below = next;
       }
     }
+  }
+
+  return mask;
+}
+
+/**
+ * `mask` grown by up to `steps` pixels through the pixels set in `within`, to the eight neighbors at each step, as
+ * far as `expandMask` grows the outline.
+ */
+function growWithin(mask: Uint8Array, within: Uint8Array, width: number, height: number, steps: number) {
+  // Only the mask's edge can grow, so the first frontier is its pixels next to a pixel outside it.
+  let frontier: number[] = [];
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = y * width + x;
+      if (
+        mask[index] &&
+        ((x > 0 && !mask[index - 1]) ||
+          (x < width - 1 && !mask[index + 1]) ||
+          (y > 0 && !mask[index - width]) ||
+          (y < height - 1 && !mask[index + width]))
+      ) {
+        frontier.push(index);
+      }
+    }
+  }
+
+  for (let step = 0; step < steps && frontier.length > 0; step++) {
+    const next: number[] = [];
+    for (const index of frontier) {
+      const x = index % width,
+        y = (index - x) / width;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx,
+            ny = y + dy;
+          const neighbor = ny * width + nx;
+          if (nx >= 0 && ny >= 0 && nx < width && ny < height && within[neighbor] && !mask[neighbor]) {
+            mask[neighbor] = 1;
+            next.push(neighbor);
+          }
+        }
+      }
+    }
+
+    frontier = next;
   }
 
   return mask;
