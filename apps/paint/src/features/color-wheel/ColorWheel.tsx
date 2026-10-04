@@ -4,11 +4,13 @@ import type { ColorWheelSettings } from './createColorWheelSettings';
 import { hexToWheel, maxChroma, oklchToRgb, wheelToHex, type WheelColor } from './oklch';
 import {
   clampToPolygon,
+  editableMask,
   fromDisk,
   gamutMasks,
   harmonies,
   harmonyColors,
   maskPolygon,
+  moveMaskCorner,
   toDisk,
   type DiskPoint,
   type GamutMask,
@@ -19,7 +21,7 @@ import {
  * A perceptual color wheel, after Coolorus: hue around the disk and saturation from the center, at the lightness of
  * the slider below, all in OKLCH, so turning the hue keeps the perceived lightness. A harmony marks the scheme's other
  * colors, which a press picks; a gamut mask dims the colors outside it and keeps picks inside, and its handle on the
- * rim turns it. Edits apply live through `onChange`; `onSettle` runs when a drag or keyboard change ends.
+ * rim turns it. Dragging a mask's corner makes it a custom mask of that shape. Edits apply live through `onChange`; `onSettle` runs when a drag or keyboard change ends.
  */
 export function ColorWheel(props: {
   /** `#rrggbb` color being edited. */
@@ -34,7 +36,7 @@ export function ColorWheel(props: {
     previous && wheelToHex(previous) === props.color ? previous : hexToWheel(props.color, previous)
   );
   const lightness = createMemo(() => wheel().l);
-  const mask = () => maskPolygon(props.settings.mask, props.settings.maskAngle);
+  const mask = () => maskPolygon(props.settings.mask, props.settings.maskAngle, props.settings.customMask);
   let canvas!: HTMLCanvasElement;
   let disk!: SVGSVGElement;
   let track!: HTMLDivElement;
@@ -114,6 +116,35 @@ export function ColorWheel(props: {
               d={`M -1 0 A 1 1 0 1 0 1 0 A 1 1 0 1 0 -1 0 Z ${path(mask())}`}
             />
             <path class={styles.mask} d={path(mask())} />
+            <Show when={editableMask(props.settings.mask, props.settings.customMask)}>
+              {/* Rows by position keep each corner's element, and its captured pointer, while the mask changes. */}
+              <For each={mask()} keyed={false}>
+                {(corner, index) => {
+                  // Created once: a spread re-runs as the corner moves, which would forget the captured pointer.
+                  const handlers = drag(
+                    (event) =>
+                      props.onSettings({
+                        mask: 'custom',
+                        maskAngle: 0,
+                        customMask: moveMaskCorner(mask(), index, diskPoint(event))
+                      }),
+                    props
+                  );
+                  return (
+                    <rect
+                      class={styles.maskCorner}
+                      x={corner().x - 0.035}
+                      y={corner().y - 0.035}
+                      width={0.07}
+                      height={0.07}
+                      role="slider"
+                      aria-label="Mask corner"
+                      {...handlers}
+                    />
+                  );
+                }}
+              </For>
+            </Show>
             <circle
               class={styles.maskHandle}
               cx={toDisk({ s: 1.07, h: props.settings.maskAngle }).x}
@@ -189,6 +220,9 @@ export function ColorWheel(props: {
             onChange={(event) => props.onSettings({ mask: event.currentTarget.value as GamutMask })}
           >
             <For each={Object.entries(gamutMasks)}>{([id, { label }]) => <option value={id}>{label}</option>}</For>
+            <option value="custom" disabled={props.settings.customMask.length < 3}>
+              Custom
+            </option>
           </select>
         </label>
       </div>

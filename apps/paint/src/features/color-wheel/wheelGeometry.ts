@@ -51,15 +51,34 @@ export const gamutMasks = {
   atmosphere: { label: 'Atmospheric', points: circle({ x: 0, y: -0.35 }, 0.45) }
 } as const satisfies Record<string, { label: string; points: readonly DiskPoint[] }>;
 
-/** A gamut mask of `gamutMasks`. */
-export type GamutMask = keyof typeof gamutMasks;
+/** A gamut mask of `gamutMasks`, or `custom` for a shape of the user's. */
+export type GamutMask = keyof typeof gamutMasks | 'custom';
 
-/** The mask's polygon turned clockwise by `angle` degrees; empty for no mask. */
-export function maskPolygon(mask: GamutMask, angle: number): DiskPoint[] {
+/**
+ * The mask's polygon turned clockwise by `angle` degrees: a preset's, or `custom` points for a custom mask; empty for
+ * no mask.
+ */
+export function maskPolygon(mask: GamutMask, angle: number, custom: readonly DiskPoint[] = []): DiskPoint[] {
   const turn = (angle * Math.PI) / 180;
   const cos = Math.cos(turn),
     sin = Math.sin(turn);
-  return gamutMasks[mask].points.map(({ x, y }) => ({ x: x * cos - y * sin, y: x * sin + y * cos }));
+  const points = mask === 'custom' ? custom : gamutMasks[mask].points;
+  return points.map(({ x, y }) => ({ x: x * cos - y * sin, y: x * sin + y * cos }));
+}
+
+/** Masks with few enough corners to drag them, which turns the mask into a custom one. */
+export function editableMask(mask: GamutMask, custom: readonly DiskPoint[]) {
+  return (mask === 'custom' ? custom.length : gamutMasks[mask].points.length) >= 3 && mask !== 'atmosphere';
+}
+
+/**
+ * A mask polygon with corner `index` moved to `point`, kept inside the disk; the polygon is that of the mask as shown,
+ * so the result is a custom mask at angle 0.
+ */
+export function moveMaskCorner(polygon: readonly DiskPoint[], index: number, point: DiskPoint): DiskPoint[] {
+  const length = Math.hypot(point.x, point.y);
+  const inside = length > 1 ? { x: point.x / length, y: point.y / length } : point;
+  return polygon.map((corner, at) => (at === index ? inside : corner));
 }
 
 /** `point` itself when inside `polygon` or without a polygon, otherwise the nearest point of its edge. */

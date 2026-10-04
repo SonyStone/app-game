@@ -1,6 +1,15 @@
 import { expect, it } from 'vitest';
 import { hexToWheel, maxChroma, wheelToHex } from './oklch';
-import { clampToPolygon, contains, fromDisk, harmonyColors, maskPolygon, toDisk } from './wheelGeometry';
+import {
+  clampToPolygon,
+  contains,
+  editableMask,
+  fromDisk,
+  harmonyColors,
+  maskPolygon,
+  moveMaskCorner,
+  toDisk
+} from './wheelGeometry';
 
 it('round-trips sRGB colors through the wheel', () => {
   for (const hex of ['#ff0000', '#00e85d', '#167bd7', '#ffce32', '#808080', '#000000', '#ffffff', '#344b66']) {
@@ -44,4 +53,17 @@ it('derives harmonies and keeps picks inside a rotated gamut mask', () => {
   const clamped = clampToPolygon(toDisk({ s: 0.9, h: 0 }), triangle);
   expect(contains(triangle, { x: clamped.x * 0.999, y: clamped.y * 0.999 })).toBe(true);
   expect(clampToPolygon({ x: 0.3, y: 0.2 }, [])).toEqual({ x: 0.3, y: 0.2 });
+});
+
+it('turns a dragged mask corner into a custom mask kept inside the disk', () => {
+  const shown = maskPolygon('triangle', 90);
+  const moved = moveMaskCorner(shown, 1, { x: 3, y: 4 });
+  expect(moved[1]).toEqual({ x: 0.6, y: 0.8 });
+  expect(moved[0]).toEqual(shown[0]);
+  // A custom mask at angle 0 shows the moved shape as it is; turned, it turns.
+  expect(maskPolygon('custom', 0, moved)).toEqual(moved);
+  expect(maskPolygon('custom', 180, moved)[1]!.x).toBeCloseTo(-0.6);
+  expect(editableMask('square', [])).toBe(true);
+  expect(editableMask('atmosphere', [])).toBe(false);
+  expect(editableMask('custom', [])).toBe(false);
 });
