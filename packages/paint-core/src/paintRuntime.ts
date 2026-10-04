@@ -698,6 +698,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               : undefined;
             if (!engine) throw new Error(`Brush engine "${engineId}" is not registered.`);
             if (!processor) throw new Error(`Stroke processor "${processorId}" is not registered.`);
+            // A stroke paints only inside the lasso selection, when there is one.
+            renderer.clipStroke(selectionPoints.length >= 3 ? selectionPoints : undefined);
             const strokeRenderer = modules.features.reduce(
               (decorated, feature) =>
                 feature.decorateStroke?.({ data: featureData[feature.id], brush: command.brush, renderer: decorated }) ??

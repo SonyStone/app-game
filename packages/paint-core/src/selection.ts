@@ -142,6 +142,38 @@ export async function editSelection(options: {
   return changes;
 }
 
+/**
+ * Which pixels of the tile at tile coordinates (`tileX`, `tileY`) lie inside the selection, by the even-odd rule at
+ * pixel centers, as `captureSelection` takes them: none, all, or some, as an R8 mask of 255 inside and 0 outside.
+ */
+export function selectionTileMask(
+  points: readonly Point[],
+  tileX: number,
+  tileY: number
+): { kind: 'outside' | 'inside' } | { kind: 'partial'; mask: Uint8Array } {
+  const ox = tileX * TILE_SIZE,
+    oy = tileY * TILE_SIZE;
+  const mask = new Uint8Array(TILE_SIZE * TILE_SIZE);
+  let inside = 0;
+  for (let y = 0; y < TILE_SIZE; y++) {
+    const crossings = scanline(points as Point[], oy + y + 0.5);
+    for (let i = 0; i + 1 < crossings.length; i += 2) {
+      const start = Math.max(0, Math.ceil(crossings[i]! - ox - 0.5));
+      const end = Math.min(TILE_SIZE, Math.ceil(crossings[i + 1]! - ox - 0.5));
+      if (end > start) {
+        mask.fill(255, y * TILE_SIZE + start, y * TILE_SIZE + end);
+        inside += end - start;
+      }
+    }
+  }
+
+  if (inside === 0) {
+    return { kind: 'outside' };
+  }
+
+  return inside === TILE_SIZE * TILE_SIZE ? { kind: 'inside' } : { kind: 'partial', mask };
+}
+
 /** Even-odd hit testing in document coordinates; shared by the lasso and move interaction. */
 export function pointInSelection(point: Point, points: readonly Point[]): boolean {
   let inside = false;

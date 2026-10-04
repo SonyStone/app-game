@@ -785,9 +785,22 @@ try {
     // Left of the lasso, above the earlier diagonal stroke.
     const outside = await pickRgb(page, { x: cx + 120, y: cy - 100 }, 'FF0000');
     assert.ok(Math.min(...outside) > 0xe0, `expected paper outside, got ${outside}`);
-    await page.keyboard.press('Control+d');
+
+    // The brush paints only inside the outline too: a green stroke across it leaves the paper beside it untouched.
     await page.keyboard.press('b');
-    await undo(page, 3);
+    await setColor(page, '00FF00');
+    await drawLine(page, { x: cx + 100, y: cy - 100 }, { x: cx + 300, y: cy - 100 });
+    await setColor(page, 'FF0000');
+    const [r, g] = await pickRgb(page, { x: cx + 230, y: cy - 100 }, 'FF0000');
+    assert.ok(g > 0xa0 && r < 0x60, `expected green inside, got ${[r, g]}`);
+    for (const x of [cx + 120, cx + 280]) {
+      await setColor(page, 'FF0000');
+      const beside = await pickRgb(page, { x, y: cy - 100 }, 'FF0000');
+      assert.ok(Math.min(...beside) > 0xe0, `expected paper beside the outline, got ${beside}`);
+    }
+
+    await page.keyboard.press('Control+d');
+    await undo(page, 4);
   });
 
   await step('the visible canvas exports as PNG', async () => {

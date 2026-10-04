@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Point } from './camera';
 import { createDocument, type Layer } from './document';
-import { captureSelection, editSelection, pointInSelection, type SelectionStorage } from './selection';
+import {
+  captureSelection,
+  editSelection,
+  pointInSelection,
+  selectionTileMask,
+  type SelectionStorage
+} from './selection';
 import { TILE_BYTES, unpackTile, type TileData } from './tilePixels';
 
 describe('lasso raster edits', () => {
@@ -186,3 +192,24 @@ function pixel(layer: Layer, x: number, y: number) {
   const at = ((y - ty * 256) * 256 + x - tx * 256) * 4;
   return data ? [...unpackTile(data).slice(at, at + 4)] : [0, 0, 0, 0];
 }
+
+it('masks each tile by the selection at pixel centers: none, all or some of its pixels', () => {
+  // A square from (10, 10) to (300, 300) covers tile 0,0 from pixel 10 on and tile 1,1 up to pixel 43.
+  const square = [
+    { x: 10, y: 10 },
+    { x: 300, y: 10 },
+    { x: 300, y: 300 },
+    { x: 10, y: 300 }
+  ];
+  expect(selectionTileMask(square, 3, 3).kind).toBe('outside');
+  const corner = selectionTileMask(square, 0, 0);
+  expect(corner.kind).toBe('partial');
+  if (corner.kind === 'partial') {
+    expect(corner.mask[9 * 256 + 50]).toBe(0);
+    expect(corner.mask[10 * 256 + 10]).toBe(255);
+    expect(corner.mask[10 * 256 + 9]).toBe(0);
+  }
+
+  const big = square.map(({ x, y }) => ({ x: x * 4 - 100, y: y * 4 - 100 }));
+  expect(selectionTileMask(big, 1, 1).kind).toBe('inside');
+});

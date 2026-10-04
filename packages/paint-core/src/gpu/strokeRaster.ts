@@ -12,6 +12,7 @@ import { isEmptyPackedTile } from '../tilePixels';
 import type { createDisplayCache } from './displayCache';
 import { clipPaintBounds, type PaintBounds } from './paintBounds';
 import * as shader from './shaders';
+import type { StrokeClip } from './strokeClip';
 import type { StrokeData } from './strokeState';
 import type { TargetViews } from './targetView';
 import { createTexturedStamps } from './texturedStamps';
@@ -51,6 +52,8 @@ export function createStrokeRaster(
     allowsTile: (key: string) => boolean;
     /** Whether the document blends its layers in linear light, for sampling all layers as displayed. */
     linearBlending: () => boolean;
+    /** Keeps strokes inside the lasso selection; see `createStrokeClip`. */
+    clip: StrokeClip;
   },
   options: {
     displayCache?: boolean;
@@ -213,6 +216,7 @@ export function createStrokeRaster(
     const commands = batch ?? commandBatch(device);
     if (
       !paintBounds &&
+      !deps.clip.active() &&
       direct &&
       sharedScratch &&
       options.batchSmudgeTiles !== false &&
@@ -394,6 +398,7 @@ export function createStrokeRaster(
           }
 
           pass.end();
+          deps.clip.restore(commands.encoder(), tile.render, scratch.base, key, bounds);
         }
 
         tile.mipLevelReady = 0;
@@ -470,6 +475,7 @@ export function createStrokeRaster(
     }
 
     pass.end();
+    deps.clip.restore(commands.encoder(), temporary.render, scratch.base, `${x},${y}`, clip);
     commands.flush();
     temporary.mipLevelReady = 0;
     return temporary;

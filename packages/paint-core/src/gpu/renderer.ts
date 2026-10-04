@@ -11,6 +11,7 @@ import { unpackTile, type TileData } from '../tilePixels';
 import { viewLod, type OverviewStorage } from '../virtualPages';
 import { createDisplayCache } from './displayCache';
 import { createFloatingPixels, type FloatingPixels } from './floatingPixels';
+import { createStrokeClip } from './strokeClip';
 import { createFrameComposer, renderScale } from './frameComposer';
 import { createLassoOverlay } from './lassoOverlay';
 import { capturePaintBounds, clipPaintBounds, type PaintBounds } from './paintBounds';
@@ -105,9 +106,12 @@ async function assemblePaintRenderer(
     }
   });
   const paintBounds = capturePaintBounds(options.bounds);
-  const allowsTile = (key: string) => !paintBounds || !!clipPaintBounds(paintBounds, ...tileCoordinates(key));
+  // Strokes stay within the paint bounds and the lasso selection; `clip` exists by the time any stroke asks.
+  const allowsTile = (key: string) =>
+    (!paintBounds || !!clipPaintBounds(paintBounds, ...tileCoordinates(key))) && clip.allows(key);
   const device = await openDevice(options.device, resources.keep);
   const root = resources.keep(tgpu.initFromDevice({ device }));
+  const clip = resources.keep(createStrokeClip(root));
 
   /**
    * Reads the presented image of `target` in backing pixels, the whole view by default, as opaque RGBA: the last
@@ -217,7 +221,8 @@ async function assemblePaintRenderer(
         ensureMipmaps,
         paintBounds,
         allowsTile,
-        linearBlending: () => linearBlending
+        linearBlending: () => linearBlending,
+        clip
       },
       options
     )
@@ -332,6 +337,13 @@ async function assemblePaintRenderer(
         pixelGrid = view.grid;
         targets.invalidate();
       }
+    },
+    /**
+     * Keeps the strokes that follow inside the closed polygon `points`, in document pixels, such as the lasso
+     * selection: every engine, retouch tool and eraser then changes only pixels inside it. `undefined` stops clipping.
+     */
+    clipStroke(points: readonly Point[] | undefined) {
+      clip.set(points);
     },
     /** Composites every layer in linear light, or in encoded sRGB; see `mergeTilePixels`. Redraws the views. */
     setLinearBlending(linear: boolean) {
