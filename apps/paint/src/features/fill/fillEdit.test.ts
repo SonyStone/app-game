@@ -91,6 +91,31 @@ it('fills the active layer by the active layer or all visible layers, over its e
   expect(() => fillEdit.command({ ...fillCommand(), color: 'red' })).toThrow();
 });
 
+it('stays inside the lasso selection, also when it grows under edges, and fills nothing outside it', async () => {
+  const paint: Layer = layer('paint', new Map());
+  const run = (command: Partial<FillCommand>) =>
+    fillEdit.run(
+      {
+        layers: [paint],
+        active: paint,
+        readTile: async (pixels) => pixels as Uint8Array,
+        state: { get: () => undefined, set: () => {} },
+        floating: { show: () => {}, move: () => {}, clear: async () => {} }
+      },
+      { ...fillCommand(), source: 'layer', expand: 4, ...command }
+    );
+  const points = [
+    { x: 2, y: 2 },
+    { x: 12, y: 2 },
+    { x: 12, y: 8 },
+    { x: 2, y: 8 }
+  ];
+
+  const inside = await run({ points, point: { x: 5, y: 5 } });
+  expect(count(alphaMask(inside.changes[0]!.after as Uint8Array))).toBe(10 * 6);
+  expect((await run({ points, point: { x: 30, y: 30 } })).changes).toEqual([]);
+});
+
 function fillCommand(): FillCommand {
   return {
     point: { x: 5.5, y: 5.2 },

@@ -1,8 +1,8 @@
 import { TILE_SIZE } from '@app-game/paint-core/brush';
-import type { Point } from '@app-game/paint-core/camera';
 import { defineDocumentEdit } from '@app-game/paint-core/composition/documentEdit';
 import type { TileChange } from '@app-game/paint-core/document';
 import { z } from 'zod';
+import { polygonSpans } from '../../shared/polygonSpans';
 
 /**
  * The engine half of the gradient tool: draws a linear or radial gradient from `start` to `end` over the active
@@ -120,7 +120,9 @@ function paintTile(
   const source = [0, 0, 0, 0];
   let touched = false;
   for (let y = Math.max(area.top, ty * TILE_SIZE); y < Math.min(area.top + area.height, (ty + 1) * TILE_SIZE); y++) {
-    const spans = command.points ? rowSpans(command.points, y + 0.5) : [[area.left, area.left + area.width] as const];
+    const spans = command.points
+      ? polygonSpans(command.points, y + 0.5)
+      : [[area.left, area.left + area.width] as const];
     for (const [spanStart, spanEnd] of spans) {
       const x0 = Math.max(spanStart, area.left, tx * TILE_SIZE),
         x1 = Math.min(spanEnd, area.left + area.width, (tx + 1) * TILE_SIZE);
@@ -179,27 +181,6 @@ export function blendPixel(
 
   pixels[index + 3] = alphaLock ? pixels[index + 3]! : clampByte(alpha * 255 + noise);
   return true;
-}
-
-/** Spans of whole pixels inside a polygon on the row whose pixel centers lie at `y`, by the even-odd rule. */
-function rowSpans(points: readonly Point[], y: number): (readonly [number, number])[] {
-  const crossings: number[] = [];
-  for (let index = 0, previous = points.length - 1; index < points.length; previous = index++) {
-    const a = points[index]!,
-      b = points[previous]!;
-    if (a.y > y !== b.y > y) {
-      crossings.push(a.x + ((y - a.y) * (b.x - a.x)) / (b.y - a.y));
-    }
-  }
-
-  crossings.sort((a, b) => a - b);
-  const spans: (readonly [number, number])[] = [];
-  for (let index = 0; index + 1 < crossings.length; index += 2) {
-    // A pixel belongs to the span when its center lies inside.
-    spans.push([Math.ceil(crossings[index]! - 0.5), Math.ceil(crossings[index + 1]! - 0.5)]);
-  }
-
-  return spans;
 }
 
 /** Keys of the tiles overlapping the area. */

@@ -13,7 +13,9 @@ export function floodMask(
   area: FillArea,
   tiles: ReadonlyMap<string, Uint8Array>,
   seed: { x: number; y: number },
-  tolerance: number
+  tolerance: number,
+  /** Pixels the fill may reach, such as a selection's; all without it. */
+  allowed?: Uint8Array
 ): Uint8Array {
   const { width, height } = area;
   const mask = new Uint8Array(width * height);
@@ -24,7 +26,8 @@ export function floodMask(
   }
 
   const matching = matchingPixels(area, tiles, seedPixel(tiles, seed), tolerance);
-  const open = (x: number, y: number) => matching[y * width + x] === 1 && mask[y * width + x] === 0;
+  const open = (x: number, y: number) =>
+    matching[y * width + x] === 1 && mask[y * width + x] === 0 && (!allowed || allowed[y * width + x] === 1);
   const stack = [sx, sy];
   while (stack.length > 0) {
     const y = stack.pop()!;

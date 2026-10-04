@@ -167,6 +167,7 @@ export function PaintStudio(props: {
     active: () => tools.tool() === 'fill',
     color: () => tools.brush().color,
     area: visibleArea,
+    selection: selection.points,
     canFill: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
     send: edit
   });

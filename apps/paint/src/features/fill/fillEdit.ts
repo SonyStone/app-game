@@ -2,12 +2,14 @@ import { defineDocumentEdit, type DocumentEditContext } from '@app-game/paint-co
 import type { Layer, TileChange } from '@app-game/paint-core/document';
 import { mergeTilePixels } from '@app-game/paint-core/layerMerge';
 import { z } from 'zod';
+import { polygonMask } from '../../shared/polygonSpans';
 import { areaTiles, expandMask, fillTile, floodMask, type FillArea } from './floodFill';
 
 /**
  * The engine half of the bucket fill: fills the connected area around a point of similar color with a color, in the
  * active layer, as one undo step. Which pixels are similar is decided on the active layer or on all visible layers
- * composited, within the given area of the view, since the canvas has no edges. At most {@link maxFillSide} pixels
+ * composited, within the given area of the view, since the canvas has no edges, and within the lasso selection when
+ * its `points` are given. At most {@link maxFillSide} pixels
  * around the point on each side are examined: a fill that would continue past that limit inside the view is refused
  * rather than cut off. Runs in the drawing engine's realm.
  */
@@ -26,12 +28,21 @@ export const fillEdit = defineDocumentEdit({
     }
 
     const sampled = await sampleTiles(context, area, command.source);
-    const flooded = floodMask(area, sampled, point, command.tolerance);
+    const allowed = command.points && polygonMask(command.points, area);
+    const flooded = floodMask(area, sampled, point, command.tolerance, allowed);
     if (reachesLimit(flooded, area, command.area)) {
       throw new Error('This area is too large to fill at this zoom. Zoom in and try again.');
     }
 
     const mask = expandMask(flooded, area.width, area.height, command.expand);
+    // Growing under line edges stops at the selection too.
+    if (allowed) {
+      mask.forEach((value, index) => {
+        if (value && !allowed[index]) {
+          mask[index] = 0;
+        }
+      });
+    }
     const color = parseColor(command.color);
     const changes: TileChange[] = [];
     for (const key of areaTiles(area)) {
@@ -76,7 +87,13 @@ const fillCommandSchema = z.object({
   /** Pixels the filled area grows by, to reach under antialiased line edges. */
   expand: z.number().int().min(0).max(32),
   /** Pixels compared: the active layer's, or all visible layers composited. */
-  source: z.enum(['layer', 'all'])
+  source: z.enum(['layer', 'all']),
+  /** A closed lasso outline the fill stays inside, by the even-odd rule; a click outside it fills nothing. */
+  points: z
+    .array(z.object({ x: z.number().finite(), y: z.number().finite() }))
+    .min(3)
+    .max(4096)
+    .optional()
 });
 
 /** The whole-pixel area to examine: `area` around `point`, at most `maxFillSide` per side; none outside `area`. */
