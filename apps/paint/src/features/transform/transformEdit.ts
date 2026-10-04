@@ -12,7 +12,7 @@ import { applyProjective, invertProjective, type Projective } from './projective
  * active layer, as one undo step. `begin` captures the pixels, lifts them off the layer as floating pixels that the
  * renderer draws each frame, and replies with their bounds; each `update` only moves the floating pixels, so the
  * document stays unchanged until `end` draws the result into the layer, and `cancel` leaves it untouched. The result
- * is resampled bilinearly in premultiplied color, or takes the nearest pixel for pixel art. Runs in the engine's realm.
+ * is resampled bicubically in premultiplied color, or takes the nearest pixel for pixel art. Runs in the engine's realm.
  */
 export const transformEdit = defineDocumentEdit({
   id: 'transform',
@@ -153,7 +153,7 @@ async function transformed(
   matrix: Projective,
   interpolation: 'smooth' | 'pixels'
 ) {
-  const sampleAt = interpolation === 'pixels' ? nearest : bilinear;
+  const sampleAt = interpolation === 'pixels' ? nearest : bicubic;
   const layer = context.layers.find((candidate) => candidate.id === session.layerId);
   const inverse = invertProjective(matrix);
   if (!layer || !inverse) {
@@ -231,32 +231,34 @@ async function transformed(
 }
 
 /**
- * Samples premultiplied RGBA at a position in pixel units of a `width` × `height` raster, interpolating the four
- * nearest pixels; outside the raster is transparent. Writes `out` and returns whether the sample has any alpha.
+ * Samples premultiplied RGBA at a position in pixel units of a `width` × `height` raster from the 4 × 4 nearest
+ * pixels with Catmull-Rom weights, as Photoshop's Bicubic does, sharper than bilinear when enlarging; outside the
+ * raster is transparent. Writes `out` and returns whether the sample has any alpha. Overshoot is clamped, alpha to 0–255 and color to the alpha, so edges get no
+ * halos.
  */
-function bilinear(pixels: Uint8Array, width: number, height: number, x: number, y: number, out: number[]) {
+function bicubic(pixels: Uint8Array, width: number, height: number, x: number, y: number, out: number[]) {
   const x0 = Math.floor(x),
     y0 = Math.floor(y);
-  if (x0 < -1 || y0 < -1 || x0 >= width || y0 >= height) {
+  if (x0 < -2 || y0 < -2 || x0 > width || y0 > height) {
     return false;
   }
 
-  const fx = x - x0,
-    fy = y - y0;
+  const wx = catmullRom(x - x0),
+    wy = catmullRom(y - y0);
   out.fill(0);
-  for (let dy = 0; dy < 2; dy++) {
-    const row = y0 + dy;
+  for (let dy = 0; dy < 4; dy++) {
+    const row = y0 + dy - 1;
     if (row < 0 || row >= height) {
       continue;
     }
 
-    for (let dx = 0; dx < 2; dx++) {
-      const column = x0 + dx;
+    for (let dx = 0; dx < 4; dx++) {
+      const column = x0 + dx - 1;
       if (column < 0 || column >= width) {
         continue;
       }
 
-      const weight = (dx ? fx : 1 - fx) * (dy ? fy : 1 - fy);
+      const weight = wx[dx]! * wy[dy]!;
       const index = (row * width + column) * 4;
       for (let channel = 0; channel < 4; channel++) {
         out[channel]! += pixels[index + channel]! * weight;
@@ -264,10 +266,22 @@ function bilinear(pixels: Uint8Array, width: number, height: number, x: number, 
     }
   }
 
-  return out[3]! >= 0.5;
+  out[3] = Math.min(255, Math.max(0, out[3]!));
+  for (let channel = 0; channel < 3; channel++) {
+    out[channel] = Math.min(out[3], Math.max(0, out[channel]!));
+  }
+
+  return out[3] >= 0.5;
 }
 
-/** Takes the pixel nearest to a position, like `bilinear` but without blending, for hard pixel-art edges. */
+/** Catmull-Rom weights of the four pixels around a position `t` from 0 to 1 past the second one. */
+function catmullRom(t: number): [number, number, number, number] {
+  const t2 = t * t,
+    t3 = t2 * t;
+  return [(-t3 + 2 * t2 - t) / 2, (3 * t3 - 5 * t2 + 2) / 2, (-3 * t3 + 4 * t2 + t) / 2, (t3 - t2) / 2];
+}
+
+/** Takes the pixel nearest to a position, like `bicubic` but without blending, for hard pixel-art edges. */
 function nearest(pixels: Uint8Array, width: number, height: number, x: number, y: number, out: number[]) {
   const column = Math.round(x),
     row = Math.round(y);

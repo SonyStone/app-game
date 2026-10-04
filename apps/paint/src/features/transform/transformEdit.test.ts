@@ -65,6 +65,21 @@ it('draws the latest transform into the layer when it ends', async () => {
   expect(alphas(await finish([1.5, 0, 0, 1.5, -5, -10], 'smooth')).size).toBeGreaterThan(2);
 });
 
+it('enlarges bicubically without halos around the pixels', async () => {
+  const { run } = setup(square(10, 10, 4, 4, [255, 0, 0, 255]));
+  await run({ phase: 'begin' });
+  await run({ phase: 'update', interpolation: 'smooth', matrix: [3, 0, -20, 0, 3, -20, 0, 0, 1] });
+  const ended = await run({ phase: 'end' });
+  const tile = ended.changes.find((change) => change.key === '0,0')!.after as Uint8Array;
+  for (let index = 0; index < tile.length; index += 4) {
+    expect(tile[index]!).toBeLessThanOrEqual(tile[index + 3]!);
+  }
+
+  // The enlarged square spans 10–22 px; its middle is solid and nothing spills past a pixel beyond it.
+  expect(pixel(ended, 16, 16)).toEqual([255, 0, 0, 255]);
+  expect(pixel(ended, 24, 16)).toEqual([0, 0, 0, 0]);
+});
+
 it('draws a perspective distortion into the quad its corners make', async () => {
   const { run } = setup(square(0, 0, 100, 100, [255, 0, 0, 255]));
   await run({ phase: 'begin' });
