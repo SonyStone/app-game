@@ -168,8 +168,9 @@ async function assemblePaintRenderer(
 
   const lasso = resources.keep(createLassoOverlay(root, format));
   let animateSelection = true;
-  /** Magnified pixels blend smoothly; off, they are flat squares, as `setSmoothPixels` says. */
+  /** Magnified pixels blend smoothly; off, they are flat squares, as `setPixelView` says. */
   let smoothPixels = true;
+  let pixelGrid = false;
   const virtual = options.virtualTexture
     ? resources.keep(
         createVirtualTexture(
@@ -255,7 +256,8 @@ async function assemblePaintRenderer(
       virtual,
       floating,
       animateSelection: () => animateSelection,
-      smoothPixels: () => smoothPixels
+      smoothPixels: () => smoothPixels,
+      pixelGrid: () => pixelGrid
     },
     options
   );
@@ -307,12 +309,14 @@ async function assemblePaintRenderer(
       strokes.preview(dabs);
     },
     /**
-     * Whether magnified pixels blend smoothly into each other, or show as flat squares with edges smoothed over one
-     * screen pixel, as image editors show them; minified views are smooth either way. Redraws the views.
+     * How pixels show up close: `smooth` blends magnified pixels into each other, otherwise they are flat squares with
+     * edges smoothed over one screen pixel, as image editors show them (minified views are smooth either way);
+     * `grid` outlines each document pixel from `pixelGridZoom`, in presented frames only. Redraws the views.
      */
-    setSmoothPixels(smooth: boolean) {
-      if (smooth !== smoothPixels) {
-        smoothPixels = smooth;
+    setPixelView(view: { smooth: boolean; grid: boolean }) {
+      if (view.smooth !== smoothPixels || view.grid !== pixelGrid) {
+        smoothPixels = view.smooth;
+        pixelGrid = view.grid;
         targets.invalidate();
       }
     },

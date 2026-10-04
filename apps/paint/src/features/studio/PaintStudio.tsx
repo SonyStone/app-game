@@ -25,7 +25,7 @@ import { BrushCursor, CanvasDebug, firstCanvasAction, PaintCanvas, type CanvasIn
 import { ColorPanel, ColorPickerLoupe, ColorPickerSettings, createCanvasColorPicker } from '../color';
 import { ColorWheel, createColorWheelSettings } from '../color-wheel';
 import { HueTriangle } from '../hue-triangle';
-import { createViewOptions, PixelGrid, ViewOptionsControls } from '../view-options';
+import { createViewOptions, ViewOptionsControls } from '../view-options';
 import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
 import { createFill, FillPanel } from '../fill';
@@ -479,9 +479,6 @@ export function PaintStudio(props: {
               ref={setCanvas}
             />
           )}
-        </Show>
-        <Show when={viewOptions.settings().pixelGrid}>
-          <PixelGrid camera={camera.camera()} size={size()} />
         </Show>
         <FrameGuides
           frames={frames.frames()}

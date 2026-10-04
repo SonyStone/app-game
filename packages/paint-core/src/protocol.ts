@@ -40,8 +40,8 @@ export type PaintCommand =
   | { type: 'pick-color'; requestId: string; point: Point; sample?: ColorSample }
   | { type: 'live-tail'; enabled: boolean }
   | { type: 'adaptive-quality'; enabled: boolean }
-  /** Magnified pixels blend smoothly, or show as flat squares; see `PaintRenderer.setSmoothPixels`. */
-  | { type: 'smooth-pixels'; enabled: boolean }
+  /** How pixels show up close: smoothing and the pixel grid; see `PaintRenderer.setPixelView`. */
+  | { type: 'pixel-view'; smooth: boolean; grid: boolean }
   | { type: 'selection-view'; points: Point[]; animate: boolean }
   /**
    * Names document regions whose layers with paint each state reports in `layersInRegions`, such as the active frame

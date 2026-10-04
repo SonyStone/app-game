@@ -6,6 +6,7 @@ import type { Layer } from '../document';
 import { blendModes } from '../layerMerge';
 import type { createDisplayCache } from './displayCache';
 import type { FloatingPixelsState } from './floatingPixels';
+import { createPixelGrid } from './pixelGrid';
 import * as shader from './shaders';
 import type { StrokeRaster } from './strokeRaster';
 import type { StrokeData } from './strokeState';
@@ -37,6 +38,8 @@ export function createFrameComposer(
     animateSelection: () => boolean;
     /** Whether magnified pixels blend smoothly rather than show as flat squares; see `tileFragment`. */
     smoothPixels: () => boolean;
+    /** Whether the pixel grid shows over presented frames, from `pixelGridZoom`. */
+    pixelGrid: () => boolean;
   },
   options: {
     cacheTiles?: number;
@@ -45,6 +48,7 @@ export function createFrameComposer(
     batchViewMipmaps?: boolean;
   }
 ) {
+  const grid = createPixelGrid(root, format);
   const { stroke, residency, displayCache, virtual } = deps;
   const device = root.device;
   const pipelines = {
@@ -113,6 +117,10 @@ export function createFrameComposer(
         pipelines.present.with(pass).with(view.present).draw(3);
         pass.end();
         if (!exact) {
+          if (deps.pixelGrid()) {
+            grid.render(encoder, target, swapchain, camera, size, width, height);
+          }
+
           target
             .lasso()
             .render(

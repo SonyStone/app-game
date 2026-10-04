@@ -50,8 +50,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let debug = false;
     let liveTail = true;
     let adaptiveQuality = true;
-    /** Magnified pixels blend smoothly; a replacement renderer keeps the choice. */
-    let smoothPixels = true;
+    /** How pixels show up close; a replacement renderer keeps it. */
+    let pixelView = { smooth: true, grid: false };
     let size = { width: 1, height: 1 },
       dpr = 1;
     let strokeSession: BrushSession | undefined;
@@ -492,8 +492,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       lost = false;
       renderer.setSelection(selectionPoints, selectionAnimate);
       renderer.setFloating(floating);
-      // A new renderer starts smooth.
-      if (!smoothPixels) renderer.setSmoothPixels(false);
+      // A new renderer starts smooth and without a grid.
+      if (!pixelView.smooth || pixelView.grid) renderer.setPixelView(pixelView);
       await renderer.prepareOverview(document.layers);
       await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData));
     };
@@ -642,9 +642,9 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'adaptive-quality':
             adaptiveQuality = command.enabled;
             break;
-          case 'smooth-pixels':
-            smoothPixels = command.enabled;
-            renderer?.setSmoothPixels(smoothPixels);
+          case 'pixel-view':
+            pixelView = { smooth: command.smooth, grid: command.grid };
+            renderer?.setPixelView(pixelView);
             scheduleDraw();
             break;
           case 'live-tail':

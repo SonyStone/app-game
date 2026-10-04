@@ -1,3 +1,4 @@
+import { pixelGridZoom } from '@app-game/paint-core/gpu/pixelGrid';
 import type { PaintCommand } from '@app-game/paint-core/protocol';
 import { createEffect, type Accessor } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
@@ -5,22 +6,22 @@ import { createImmediateSignal } from '../../shared/createImmediateSignal';
 /**
  * How the canvas shows pixels up close, remembered in `localStorage`: `smoothPixels` blends magnified pixels into each
  * other instead of drawing them as flat squares (off by default, as image editors show them), and `pixelGrid` outlines
- * each pixel from {@link pixelGridZoom} on (on by default). Sends the pixel filtering to the engine whenever it becomes
- * ready and after every change. Storage failures keep the choices for this session. Must be created within a Solid
+ * each pixel from `pixelGridZoom` on (on by default), drawn by the engine with each frame. Sends both to the engine
+ * whenever it becomes ready and after every change. Storage failures keep the choices for this session. Must be created within a Solid
  * owner.
  */
 export function createViewOptions(options: {
   /** Whether the engine accepts commands. */
   ready: Accessor<boolean>;
-  send: (command: Extract<PaintCommand, { type: 'smooth-pixels' }>) => void;
+  send: (command: Extract<PaintCommand, { type: 'pixel-view' }>) => void;
 }) {
   const [, setStored, stored] = createImmediateSignal(read());
 
   createEffect(
-    () => (options.ready() ? stored().smoothPixels : undefined),
-    (enabled) => {
-      if (enabled !== undefined) {
-        options.send({ type: 'smooth-pixels', enabled });
+    () => (options.ready() ? stored() : undefined),
+    (view) => {
+      if (view) {
+        options.send({ type: 'pixel-view', smooth: view.smoothPixels, grid: view.pixelGrid });
       }
     }
   );
@@ -44,7 +45,7 @@ export function createViewOptions(options: {
 export type ViewOptions = { smoothPixels: boolean; pixelGrid: boolean };
 
 /** Zoom, in CSS pixels per document pixel, from which the pixel grid shows. */
-export const pixelGridZoom = 6;
+export { pixelGridZoom };
 
 function read(): ViewOptions {
   try {
