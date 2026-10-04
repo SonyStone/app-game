@@ -201,3 +201,15 @@ describe('portable document', () => {
     ).toThrow();
   });
 });
+
+it('records alpha lock as an undoable layer property that survives saving and loading', () => {
+  const document = createDocument();
+  const id = document.active.id;
+  document.changeLayer({ type: 'update', id, patch: { alphaLock: true } });
+  expect(document.active.alphaLock).toBe(true);
+  const restored = restoreDocument(snapshotDocument(document.layers, id, defaultCamera()));
+  expect(restored.layers[0]!.alphaLock).toBe(true);
+  document.undo();
+  expect(document.active.alphaLock).toBeFalsy();
+  expect(restoreDocument(snapshotDocument(document.layers, id, defaultCamera())).layers[0]!.alphaLock).toBeFalsy();
+});

@@ -1,6 +1,6 @@
 export { compositeLayout, compositeFragment } from '@app-game/abr-paint/gpu/layerComposite';
 import { common, d, std, tgpu } from 'typegpu';
-import { linearSourceOver } from './colorMixing';
+import { linearSourceOver, lockAlpha } from './colorMixing';
 
 /** All brush settings are stable for the lifetime of a stroke. */
 export const brushLayout = tgpu.bindGroupLayout({
@@ -47,17 +47,25 @@ export const strokeLayout = tgpu.bindGroupLayout({
 });
 export const fullscreenVertex = common.fullScreenTriangle;
 
-/** Applies stroke opacity exactly once, supporting destination-out erasing. */
+/**
+ * Applies stroke opacity exactly once, supporting destination-out erasing. `color.w` set locks the layer's alpha;
+ * see `lockAlpha`.
+ */
 export const strokeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
   'use gpu';
   const pixel = d.vec2i(input.position.xy);
   const base = std.textureLoad(strokeLayout.$.base, pixel, 0);
   const mask = 1 - std.textureLoad(strokeLayout.$.transmittance, pixel, 0).x;
   const alpha = mask * brushLayout.$.settings.params.y;
-  if (brushLayout.$.settings.params.z > 0.5) return std.mul(base, 1 - alpha);
-  if (brushLayout.$.settings.params.w > 0.5)
-    return linearSourceOver(base, std.mul(d.vec4f(brushLayout.$.settings.color.rgb, 1), alpha));
-  return std.add(std.mul(d.vec4f(brushLayout.$.settings.color.rgb, 1), alpha), std.mul(base, 1 - alpha));
+  const source = std.mul(d.vec4f(brushLayout.$.settings.color.rgb, 1), alpha);
+  let result = std.add(source, std.mul(base, 1 - alpha));
+  if (brushLayout.$.settings.params.z > 0.5) {
+    result = std.mul(base, 1 - alpha);
+  } else if (brushLayout.$.settings.params.w > 0.5) {
+    result = linearSourceOver(base, source);
+  }
+  if (brushLayout.$.settings.color.w > 0.5) return lockAlpha(base, result);
+  return result;
 });
 
 /** Camera uses tile positions relative to the view center to preserve precision far from the origin. */

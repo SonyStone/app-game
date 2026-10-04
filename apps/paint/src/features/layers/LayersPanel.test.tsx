@@ -134,3 +134,27 @@ it('merges a visible layer down into a visible layer below it', () => {
   flush();
   expect(merge.disabled).toBe(true);
 });
+
+it('locks and unlocks the transparent pixels of the selected layer as an undoable update', () => {
+  const drawing = createDocument();
+  const layer = vi.fn((action: Parameters<typeof drawing.changeLayer>[0]) => drawing.changeLayer(action));
+  const [state, setState] = createSignal(drawing.state());
+  const host = document.createElement('div');
+  document.body.append(host);
+  dispose = render(() => <LayersPanel state={state()} ready={true} onAction={layer} />, host);
+  flush();
+
+  const lock = host.querySelector<HTMLButtonElement>('[aria-label="Lock transparent pixels"]')!;
+  expect(lock.getAttribute('aria-pressed')).toBe('false');
+  lock.click();
+  expect(layer).toHaveBeenCalledWith({ type: 'update', id: drawing.active.id, patch: { alphaLock: true } });
+  setState(drawing.state());
+  flush();
+  expect(lock.getAttribute('aria-pressed')).toBe('true');
+  expect(host.textContent).toContain('Transparency locked');
+
+  drawing.undo();
+  setState(drawing.state());
+  flush();
+  expect(lock.getAttribute('aria-pressed')).toBe('false');
+});

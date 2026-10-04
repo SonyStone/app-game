@@ -95,7 +95,7 @@ export function createStrokeState(
         throw new Error('Finish the current stroke before beginning another.');
       }
 
-      data.abr = abr ? raster.prepareAbr(abr) : undefined;
+      data.abr = abr ? raster.prepareAbr({ ...abr, alphaLock: layer.alphaLock }) : undefined;
       data.smudge = !!abr?.smudge;
       data.mixer = !!abr?.mixer;
       data.transientCoverage = !!(abr?.smudge || abr?.filter || abr?.mixer) && !(abr?.values.useDualBrush && abr.dual);
@@ -113,7 +113,7 @@ export function createStrokeState(
       }
 
       data.current = { layer, brush: { ...brush } };
-      raster.prepareBrush(brush);
+      raster.prepareBrush(brush, layer.alphaLock);
       retouch.begin(abr, brush.color, residency.sharedScratch);
     },
 

@@ -8,6 +8,8 @@ export type Layer = {
   visible: boolean;
   opacity: number;
   blend: BlendMode;
+  /** Painting keeps the alpha of the layer's pixels: it recolors them and leaves transparent pixels transparent. */
+  alphaLock?: boolean;
   tiles: Map<string, TileData>;
 };
 /** Separable color blend modes; alpha always follows source-over. */
@@ -347,7 +349,11 @@ export type LayerAction =
   | { type: 'move'; id: string; direction: -1 | 1 }
   /** Moves the layer to position `index`, bottom first, shifting the layers in between; out-of-range is ignored. */
   | { type: 'reorder'; id: string; index: number }
-  | { type: 'update'; id: string; patch: Partial<Pick<LayerInfo, 'name' | 'visible' | 'opacity' | 'blend'>> };
+  | {
+      type: 'update';
+      id: string;
+      patch: Partial<Pick<LayerInfo, 'name' | 'visible' | 'opacity' | 'blend' | 'alphaLock'>>;
+    };
 
 function newLayer(id: string, name: string): Layer {
   return { id, name, visible: true, opacity: 1, blend: 'linear', tiles: new Map() };

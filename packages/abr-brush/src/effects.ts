@@ -2,6 +2,7 @@ export {
   decodePremultiplied,
   encodePremultiplied,
   linearSourceOver,
+  lockAlpha,
   mixPremultiplied,
   sampleMixing,
   type ColorMixing

@@ -58,6 +58,19 @@
     flex: 1;
   }
 
+  .layerToggle {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 4px;
+
+    &[aria-pressed='true'] {
+      background: #e3f0f7;
+      color: #1f6f9a;
+    }
+  }
+
   input {
     width: 46px;
     height: 36px;

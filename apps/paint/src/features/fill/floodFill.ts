@@ -163,8 +163,9 @@ function dilateLine(
 }
 
 /**
- * Paints `color` with `opacity` over a tile's premultiplied pixels where the area mask is set, source-over. Returns
- * the new tile, or `undefined` when the mask does not touch the tile.
+ * Paints `color` with `opacity` over a tile's premultiplied pixels where the area mask is set, source-over. With
+ * `alphaLock`, pixels keep their alpha: transparent ones stay transparent and the others take the result's color.
+ * Returns the new tile, or `undefined` when nothing changes in the tile.
  */
 export function fillTile(
   key: string,
@@ -172,8 +173,13 @@ export function fillTile(
   mask: Uint8Array,
   area: FillArea,
   color: readonly [number, number, number],
-  opacity: number
+  opacity: number,
+  alphaLock = false
 ): Uint8Array | undefined {
+  if (alphaLock && !base) {
+    return undefined;
+  }
+
   const [tx, ty] = key.split(',').map(Number) as [number, number];
   const x0 = Math.max(area.left, tx * TILE_SIZE),
     x1 = Math.min(area.left + area.width, (tx + 1) * TILE_SIZE);
@@ -190,11 +196,19 @@ export function fillTile(
       }
 
       const index = ((y - ty * TILE_SIZE) * TILE_SIZE + (x - tx * TILE_SIZE)) * 4;
-      for (let channel = 0; channel < 3; channel++) {
-        result[index + channel] = Math.round(source[channel]! + result[index + channel]! * keep);
+      const baseAlpha = result[index + 3]!;
+      if (alphaLock && baseAlpha === 0) {
+        continue;
       }
 
-      result[index + 3] = Math.round(opacity * 255 + result[index + 3]! * keep);
+      const alpha = opacity * 255 + baseAlpha * keep;
+      // Under alpha lock the result's color is scaled back to the pixel's own alpha.
+      const scale = alphaLock ? baseAlpha / alpha : 1;
+      for (let channel = 0; channel < 3; channel++) {
+        result[index + channel] = Math.round((source[channel]! + result[index + channel]! * keep) * scale);
+      }
+
+      result[index + 3] = alphaLock ? baseAlpha : Math.round(alpha);
       touched = true;
     }
   }

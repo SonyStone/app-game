@@ -21,6 +21,19 @@ export const linearSourceOver = tgpu.fn(
   return d.vec4f(std.mul(encoded, alpha), alpha);
 });
 
+/**
+ * Alpha lock: keeps the layer pixel's alpha while taking the painted result's color, so transparent pixels stay
+ * transparent and erasing leaves the pixel unchanged. Both values are premultiplied.
+ */
+export const lockAlpha = tgpu.fn(
+  [d.vec4f, d.vec4f],
+  d.vec4f
+)((base, result) => {
+  'use gpu';
+  if (result.a <= 0.00001) return d.vec4f(base);
+  return d.vec4f(std.mul(std.div(result.rgb, result.a), base.a), base.a);
+});
+
 /** sRGB transfer function, as specified by https://www.w3.org/TR/css-color-4/#color-conversion-code. */
 const decodeChannel = tgpu.fn(
   [d.f32],

@@ -55,6 +55,16 @@ it('fills the active layer by the active layer or all visible layers, over its e
     fillEdit.run({ layers: [paint], active: { ...paint, visible: false }, readTile: read }, fillCommand())
   ).rejects.toThrow('Show the active layer');
 
+  // With alpha lock, only the layer's own pixels change color, keeping their alpha.
+  const line = layer('line', outline(0, 0, 20, 20, [0, 0, 0, 128]));
+  const locked = await fillEdit.run(
+    { layers: [{ ...line, alphaLock: true }], active: { ...line, alphaLock: true }, readTile: read },
+    { ...fillCommand(), point: { x: 0, y: 0 }, tolerance: 0, source: 'layer' }
+  );
+  const recolored = locked.changes[0]!.after as Uint8Array;
+  expect(count(alphaMask(recolored))).toBe(76);
+  expect([...recolored.subarray(index(0, 0), index(0, 0) + 4)]).toEqual([128, 0, 0, 128]);
+
   // In a view wider than the fill limit, a closed shape still fills, but open paper is refused rather than cut off.
   const wide = { left: -5000, top: -5000, width: 10000, height: 10000 };
   expect((await fill({ area: wide })).changes).toHaveLength(1);

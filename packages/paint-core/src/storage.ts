@@ -139,6 +139,7 @@ const savedSchema = z.object({
         visible: z.boolean(),
         opacity: unit,
         blend: z.enum(['normal', 'multiply', 'screen', 'overlay', 'linear']),
+        alphaLock: z.boolean().optional(),
         tiles: z
           .array(
             z.object({

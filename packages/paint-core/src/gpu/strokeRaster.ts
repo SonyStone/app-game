@@ -104,11 +104,11 @@ export function createStrokeRaster(
         : undefined;
     },
 
-    /** Writes the round/textured brush uniform: color, hardness, opacity, eraser and linear mixing. */
-    prepareBrush(brush: Brush) {
+    /** Writes the round/textured brush uniform: color, alpha lock, hardness, opacity, eraser and linear mixing. */
+    prepareBrush(brush: Brush, alphaLock = false) {
       const rgb = hexColor(brush.color);
       brushBuffer.write({
-        color: d.vec4f(...rgb, 1),
+        color: d.vec4f(...rgb, Number(alphaLock)),
         params: d.vec4f(
           brush.hardness,
           brush.opacity,

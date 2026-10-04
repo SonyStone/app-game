@@ -389,6 +389,66 @@ try {
     await page.keyboard.press('b');
   });
 
+  await step('a layer with locked transparency only recolors its own pixels', async () => {
+    const box = await page.getByRole('main', { name: 'Drawing workspace' }).boundingBox();
+    const cx = box.x + box.width / 2,
+      cy = box.y + box.height / 2;
+    const line = async (from, to) => {
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      for (let i = 1; i <= 12; i++) {
+        await page.mouse.move(from.x + ((to.x - from.x) * i) / 12, from.y + ((to.y - from.y) * i) / 12);
+      }
+
+      await page.mouse.up();
+      await waitForSaved(page);
+    };
+    const setColor = async (hex) => {
+      await page.getByRole('button', { name: 'Color palette' }).click();
+      await page.getByLabel('Hex color').fill(hex);
+      await page.getByLabel('Hex color').press('Enter');
+      await page.keyboard.press('Escape');
+    };
+    const pick = async (point, previous) => {
+      await page.keyboard.down('Alt');
+      await page.mouse.click(point.x, point.y);
+      await page.keyboard.up('Alt');
+      await page.getByRole('button', { name: 'Color palette' }).click();
+      await page.waitForFunction(
+        (previous) => document.querySelector('input[aria-label="Hex color"]')?.value !== previous,
+        previous,
+        { polling: 100, timeout: 10_000 }
+      );
+      const hex = await page.getByLabel('Hex color').inputValue();
+      await page.keyboard.press('Escape');
+      return [0, 2, 4].map((index) => parseInt(hex.slice(index, index + 2), 16));
+    };
+
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await page.getByRole('button', { name: 'Add layer' }).click();
+    await waitForSaved(page);
+    await page.keyboard.press('Escape');
+    await setColor('000000');
+    await line({ x: cx + 200, y: cy - 120 }, { x: cx + 200, y: cy + 60 });
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await page.getByRole('button', { name: 'Lock transparent pixels' }).click();
+    await page.getByText('Transparency locked').waitFor({ timeout: 5_000 });
+    await page.keyboard.press('Escape');
+    await setColor('FF0000');
+    await line({ x: cx + 120, y: cy - 40 }, { x: cx + 280, y: cy - 40 });
+
+    const [r, g, b] = await pick({ x: cx + 200, y: cy - 40 }, 'FF0000');
+    assert.ok(r > g + 60 && r > b + 60, `expected the locked line recolored red, got ${[r, g, b]}`);
+    await setColor('00FF00');
+    const paper = await pick({ x: cx + 140, y: cy - 40 }, '00FF00');
+    assert.ok(Math.min(...paper) > 0xe0, `expected untouched paper beside the line, got ${paper}`);
+
+    for (let i = 0; i < 4; i++) {
+      await page.getByRole('button', { name: 'Undo' }).click();
+      await waitForSaved(page);
+    }
+  });
+
   await step('the visible canvas exports as PNG', async () => {
     await page.getByRole('button', { name: 'Drawing menu' }).click();
     const [download] = await Promise.all([

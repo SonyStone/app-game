@@ -36,7 +36,15 @@ export const fillEdit = defineDocumentEdit({
     const changes: TileChange[] = [];
     for (const key of areaTiles(area)) {
       const before = context.active.tiles.get(key);
-      const after = fillTile(key, before && (await context.readTile(before)), mask, area, color, command.opacity);
+      const after = fillTile(
+        key,
+        before && (await context.readTile(before)),
+        mask,
+        area,
+        color,
+        command.opacity,
+        context.active.alphaLock
+      );
       if (after) {
         changes.push({ layerId: context.active.id, key, before, after });
       }

@@ -54,6 +54,8 @@ export type AbrRasterSettings<Layer = unknown> = {
   /** Scales the secondary tip relative to the edited primary diameter. */
   size: number;
   mixing: ColorMixing;
+  /** Keeps the layer's alpha: paint changes only the color of pixels that are not transparent. */
+  alphaLock?: boolean;
   /** Global factor applied after mask composition. Defaults to 1 for stamps carrying tool opacity. */
   compositeOpacity?: number;
   /** Opt-in approximate GPU tip filtering and batched blending. Zero enables approximation at full source resolution; positive bias selects coarser source mips unless nonlinear texture effects require detail.
@@ -357,7 +359,7 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
     const flags = paramsOffsets.flags, extra = paramsOffsets.extra;
     paramsData[origin + originLane.x] = 0;
     paramsData[origin + originLane.y] = 0;
-    paramsData[origin + 2] = 256;
+    paramsData[origin + originLane.alphaLock] = Number(value.alphaLock ?? false);
     paramsData[origin + originLane.linearMixing] = Number(value.mixing === 'linear');
     paramsData[texture + textureLane.width] = value.pattern?.width ?? 1;
     paramsData[texture + textureLane.height] = value.pattern?.height ?? 1;

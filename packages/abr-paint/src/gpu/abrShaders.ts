@@ -6,6 +6,7 @@ import {
   fingerPaintCompositeInSpace,
   grain,
   linearSourceOver,
+  lockAlpha,
   mixerComposite,
   retouchCompositeInSpace,
   sampleMixing,
@@ -125,7 +126,7 @@ export function createAbrPipelines(root: TgpuRoot) {
 
 /** Per-tile stamp uniforms. Vector lanes are addressed through the named lane constants below. */
 export const Params = d.struct({
-  /** xy: world origin of the tile modulo 65536; w: linear color mixing. See originLane. */
+  /** xy: world origin of the tile modulo 65536; z: alpha lock; w: linear color mixing. See originLane. */
   origin: d.vec4f,
   /** Pattern width, height, scale and texture blend mode. See textureLane. */
   texture: d.vec4f,
@@ -160,7 +161,7 @@ export const paramsOffsets = {
 };
 
 /** Lanes of Params.origin. */
-export const originLane = { x: 0, y: 1, linearMixing: 3 } as const;
+export const originLane = { x: 0, y: 1, alphaLock: 2, linearMixing: 3 } as const;
 
 /** Lanes of Params.texture. */
 export const textureLane = { width: 0, height: 1, scale: 2, mode: 3 } as const;
@@ -506,7 +507,17 @@ const directFragment = tgpu.fragmentFn({
   return compositePixel(input.position, paint, mask);
 });
 
+/** Composites a stamp pixel onto the layer, keeping the layer's alpha when the stroke locks it. */
 function compositePixel(position: d.v4f, paint: d.v4f, mask: d.v4f): d.v4f {
+  'use gpu';
+  const result = compositeUnlocked(position, paint, mask);
+  if (compositeLayout.$.params.origin[originLane.alphaLock]! > 0) {
+    return lockAlpha(std.textureLoad(compositeLayout.$.base, d.vec2i(position.xy), 0), result);
+  }
+  return result;
+}
+
+function compositeUnlocked(position: d.v4f, paint: d.v4f, mask: d.v4f): d.v4f {
   'use gpu';
   const p = compositeLayout.$.params;
   const xy = d.vec2i(position.xy);

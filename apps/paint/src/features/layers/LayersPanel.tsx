@@ -5,8 +5,8 @@ import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './LayersPanel.module.css';
 
 /**
- * Edits layer order, names and compositing properties, and duplicates and merges layers, through undoable document
- * commands.
+ * Edits layer order, names, compositing properties and alpha lock, and duplicates and merges layers, through
+ * undoable document commands.
  */
 export function LayersPanel(props: {
   /** Document state reported by the engine; each report clones every layer record. */
@@ -114,6 +114,17 @@ export function LayersPanel(props: {
           }}
         />
         <span>%</span>
+        <button
+          class={styles.layerToggle}
+          aria-label="Lock transparent pixels"
+          title="Lock transparent pixels: paint only recolors existing pixels"
+          aria-pressed={selected().alphaLock ? 'true' : 'false'}
+          onClick={() =>
+            props.onAction({ type: 'update', id: props.state.activeId, patch: { alphaLock: !selected().alphaLock } })
+          }
+        >
+          <SketchIcon name={selected().alphaLock ? 'lock' : 'unlock'} size={18} />
+        </button>
       </div>
       <p class={styles.blendNote}>
         {selected().blend === 'multiply'
@@ -218,7 +229,7 @@ function LayerRow(props: {
         <SketchIcon name="paper" size={26} />
         <span>
           {props.layer.name}
-          <small>Raster layer</small>
+          <small>{props.layer.alphaLock ? 'Transparency locked' : 'Raster layer'}</small>
         </span>
       </button>
       <span ref={grip.ref} class={styles.layerGrip} aria-label={`Reorder ${props.layer.name}`} title="Drag to reorder">
