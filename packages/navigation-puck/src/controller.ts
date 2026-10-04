@@ -36,7 +36,11 @@ export function createNavigationPuck(params: {
       inset * 2 > length ? start + length / 2 : Math.max(start + inset, Math.min(start + length - inset, value));
     return { x: clamp(point.x, left, width), y: clamp(point.y, top, height) };
   };
-  let invocation: 'held' | 'once' = 'once';
+  /**
+   * How the puck was opened: `held` (Space) follows the release point after each operation, `once` closes after one,
+   * `pinned` (a pen's side button) stays where it opened until it is closed.
+   */
+  let invocation: 'held' | 'once' | 'pinned' = 'once';
   let drag:
     | {
         pointerId: number;
@@ -62,12 +66,17 @@ export function createNavigationPuck(params: {
     diameter,
     activeAction,
     close,
-    /** A held Space invocation returns to the release point after each operation. */
-    open(point: Point = viewportCenter(), source: 'held' | 'once' = 'once') {
+    /**
+     * A held Space invocation returns to the release point after each operation; a pinned one stays where it opened
+     * until it is closed; a `once` invocation closes after one operation.
+     */
+    open(point: Point = viewportCenter(), source: 'held' | 'once' | 'pinned' = 'once') {
       close();
       invocation = source;
       setPosition(point);
     },
+    /** Whether the open puck stays open until it is closed; see `open`. */
+    pinned: () => center() !== undefined && invocation === 'pinned',
     releaseHotkey() {
       if (invocation !== 'held') return;
       invocation = 'once';
@@ -161,6 +170,7 @@ export function createNavigationPuck(params: {
         setPosition(point);
         return false;
       }
+      if (invocation === 'pinned') return false;
       close();
       return true;
     },

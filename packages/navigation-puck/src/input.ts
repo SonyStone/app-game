@@ -4,9 +4,10 @@ import type { createNavigationPuck, Point } from './controller';
  * Capture-phase listeners consume navigation events before painting. Dispose when the canvas unmounts.
  * With `pick`, right-drags choose from controls around the puck instead of starting navigation.
  *
- * A pen's side buttons pressed while it hovers act as a right-drag too: Android Chrome reports them only as a change
- * of `buttons` on `pointermove`, without `pointerdown` (Wacom pens: 1, 2 and 4 for the three buttons), so a hovering
- * pen whose `buttons` become nonzero opens the puck there, and its `buttons` returning to zero releases.
+ * A pen's side button pressed while it hovers over the canvas opens the puck there, pinned: it stays open through
+ * operations until the side button is pressed again, a press lands outside it, or Escape. Android Chrome reports side
+ * buttons only as a change of `buttons` on `pointermove`, without `pointerdown` (Wacom pens: 1, 2 and 4 for the three
+ * buttons), so a hovering pen whose `buttons` become nonzero counts as one press.
  */
 export function attachNavigationPuck(
   canvas: HTMLCanvasElement,
@@ -25,10 +26,11 @@ export function attachNavigationPuck(
   const win = canvas.ownerDocument.defaultView!;
   let lastPointer: Point | undefined;
   let held = false;
-  /** The pointer right-dragging; `hover` when it is a hovering pen's side button. */
-  let right: { id: number; origin: Point; hover?: boolean } | undefined;
+  let right: { id: number; origin: Point } | undefined;
   /** Pens touching the canvas, whose `buttons` are their contact rather than a side button. */
   const contacts = new Set<number>();
+  /** Hovering pens holding a side button, so that one press toggles the puck once. */
+  const sideButtons = new Set<number>();
   const point = (event: PointerEvent) => ({ x: event.clientX, y: event.clientY });
   const pointer = (event: PointerEvent) => ({ ...point(event), pointerId: event.pointerId, shiftKey: event.shiftKey });
   const consume = (event: Event) => {
@@ -43,17 +45,13 @@ export function attachNavigationPuck(
     canvas.focus({ preventScroll: true });
   };
   /** Opens the puck at the pointer for a right-drag, unless something else is going on. */
-  const openRight = (event: PointerEvent, hover: boolean) => {
+  const openRight = (event: PointerEvent) => {
     consume(event);
     if (!ready() || right || navigation.activeAction()) return;
     options.onOpen?.();
     navigation.open(lastPointer);
-    right = { id: event.pointerId, origin: lastPointer!, hover };
-    try {
-      canvas.setPointerCapture(event.pointerId);
-    } catch {
-      // A hovering pen may not be capturable; its moves still reach the canvas while it stays over it.
-    }
+    right = { id: event.pointerId, origin: lastPointer! };
+    canvas.setPointerCapture(event.pointerId);
   };
   /** Ends the right-drag at the pointer: a picker chooses, navigation finishes its action. */
   const releaseRight = (event: PointerEvent) => {
@@ -73,7 +71,7 @@ export function attachNavigationPuck(
     'pointerdown',
     (event) => {
       lastPointer = point(event);
-      if (event.button === 2) openRight(event, false);
+      if (event.button === 2) openRight(event);
       else {
         if (event.pointerType === 'pen') contacts.add(event.pointerId);
         if (navigation.center()) consume(event);
@@ -85,18 +83,6 @@ export function attachNavigationPuck(
     'pointermove',
     (event) => {
       lastPointer = point(event);
-      if (event.pointerType === 'pen' && !contacts.has(event.pointerId)) {
-        if (event.buttons !== 0 && !right) {
-          openRight(event, true);
-          return;
-        }
-
-        if (event.buttons === 0 && right?.hover && right.id === event.pointerId) {
-          releaseRight(event);
-          return;
-        }
-      }
-
       if (right?.id !== event.pointerId) return;
       consume(event);
       if (options.pick) options.pick.move(lastPointer, right.origin);
@@ -112,21 +98,45 @@ export function attachNavigationPuck(
     'pointerup',
     (event) => {
       contacts.delete(event.pointerId);
-      if (right?.id !== event.pointerId || right.hover) return;
+      if (right?.id !== event.pointerId) return;
       releaseRight(event);
     },
     capture
   );
   const cancel = (event: PointerEvent) => {
     if (event.type === 'pointercancel') contacts.delete(event.pointerId);
-    // A hovering pen has no capture to lose; it ends with its buttons or when it leaves.
-    if (right?.id !== event.pointerId || (right.hover && event.type === 'lostpointercapture')) return;
+    if (right?.id !== event.pointerId) return;
     consume(event);
     close();
   };
   canvas.addEventListener('pointercancel', cancel, capture);
   canvas.addEventListener('lostpointercapture', cancel, capture);
-  canvas.addEventListener('pointerleave', (event) => right?.hover && cancel(event), capture);
+  // Side buttons of a hovering pen, seen on the window: an open puck covers the canvas with its dismiss layer.
+  win.addEventListener(
+    'pointermove',
+    (event) => {
+      if (event.pointerType !== 'pen' || contacts.has(event.pointerId)) return;
+      if (event.buttons === 0) {
+        sideButtons.delete(event.pointerId);
+        return;
+      }
+
+      if (sideButtons.has(event.pointerId)) return;
+      sideButtons.add(event.pointerId);
+      if (navigation.pinned()) {
+        consume(event);
+        close();
+        return;
+      }
+
+      if (event.target !== canvas || !ready() || right || navigation.activeAction()) return;
+      consume(event);
+      lastPointer = point(event);
+      options.onOpen?.();
+      navigation.open(lastPointer, 'pinned');
+    },
+    capture
+  );
   canvas.addEventListener('contextmenu', (event) => event.preventDefault(), capture);
   win.addEventListener(
     'keydown',

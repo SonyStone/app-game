@@ -117,25 +117,29 @@ describe('shared canvas navigation bindings', () => {
     expect(pick.cancel).toHaveBeenCalledOnce();
     expect(puck.center()).toBeUndefined();
   });
-  it("opens the puck with a hovering pen's side buttons, which Android reports only as buttons on pointermove", () => {
-    const pick = { move: vi.fn(), release: vi.fn(() => true), cancel: vi.fn() };
-    const { puck, pen, paint } = setup('2d', pick);
+  it("pins the puck open with a hovering pen's side button, reported only as buttons on pointermove", () => {
+    const { puck, pen, paint, canvas } = setup();
     pen('pointermove', 400, 300, 0);
     expect(puck.center()).toBeUndefined();
     pen('pointermove', 400, 300, 2);
     expect(puck.center()).toEqual({ x: 400, y: 300 });
-    pen('pointermove', 320, 300, 2);
-    expect(pick.move).toHaveBeenLastCalledWith({ x: 320, y: 300 }, { x: 400, y: 300 });
-    pen('pointermove', 320, 300, 0);
-    expect(pick.release).toHaveBeenLastCalledWith({ x: 320, y: 300 });
-    expect(puck.center()).toBeUndefined();
+    // Releasing or holding the button changes nothing; an operation keeps it open where it was.
+    pen('pointermove', 420, 300, 2);
+    pen('pointermove', 420, 300, 0);
+    expect(puck.center()).toEqual({ x: 400, y: 300 });
+    puck.begin('pan', { x: 400, y: 300, pointerId: 9 });
+    puck.move({ x: 440, y: 300, pointerId: 9 });
+    expect(puck.end(9)).toBe(false);
+    expect(puck.center()).toEqual({ x: 400, y: 300 });
 
-    // The first button reports 1, like a contact, but without pointerdown.
-    pen('pointermove', 400, 300, 1);
-    expect(puck.center()).toBeDefined();
-    pen('pointerleave', 900, 300, 1);
-    expect(pick.cancel).toHaveBeenCalledOnce();
+    // The next press of a side button closes it, wherever the pen is.
+    pen('pointermove', 600, 300, 4, 7, document.body);
     expect(puck.center()).toBeUndefined();
+    pen('pointermove', 600, 300, 0, 7, document.body);
+    // Over other controls a side button does not open it.
+    pen('pointermove', 600, 300, 1, 7, document.body);
+    expect(puck.center()).toBeUndefined();
+    pen('pointermove', 600, 300, 0, 7, document.body);
 
     // A touching pen's buttons are its contact, which paints.
     paint.mockClear();
@@ -144,6 +148,7 @@ describe('shared canvas navigation bindings', () => {
     pen('pointerup', 410, 300, 0);
     expect(puck.center()).toBeUndefined();
     expect(paint).toHaveBeenCalledTimes(3);
+    expect(canvas).toBeDefined();
   });
   it('supports V and Escape, and removes every listener on disposal', () => {
     const { puck, dispose } = setup();
@@ -181,11 +186,11 @@ function setup(mode: '2d' | '3d' = '2d', pick?: Parameters<typeof attachNavigati
     canvas.dispatchEvent(event);
   };
   /** A pen event with `buttons` held, as Android Chrome sends them for side buttons while hovering. */
-  const pen = (type: string, x: number, y: number, buttons: number, id = 7) => {
+  const pen = (type: string, x: number, y: number, buttons: number, id = 7, target: Element = canvas) => {
     const event = new MouseEvent(type, { clientX: x, clientY: y, buttons, bubbles: true, cancelable: true });
     Object.defineProperty(event, 'pointerId', { value: id });
     Object.defineProperty(event, 'pointerType', { value: 'pen' });
-    canvas.dispatchEvent(event);
+    target.dispatchEvent(event);
   };
   return {
     canvas,
