@@ -41,14 +41,19 @@ export function BrushDailyControls(props: BrushControlsProps) {
           aria-label="Stroke smoothing"
           value={props.brush.stroke.mode}
           onChange={(event) => {
-            const mode = event.currentTarget.value;
-            update({ mode: mode === 'none' || mode === 'normal' || mode === 'smooth' ? mode : 'studio' });
+            update({
+              mode: normalizeStrokeSettings({
+                ...props.brush.stroke,
+                mode: event.currentTarget.value as StrokeSettings['mode']
+              }).mode
+            });
           }}
         >
           <option value="none">None (raw input)</option>
           <option value="studio">Studio</option>
           <option value="normal">Leonardo normal</option>
           <option value="smooth">Leonardo smooth</option>
+          <option value="stabilizer">Stabilizer (SAI-like)</option>
         </select>
       </label>
       <Show when={props.brush.stroke.mode === 'none'}>
@@ -62,6 +67,17 @@ export function BrushDailyControls(props: BrushControlsProps) {
           suffix=""
           value={props.brush.stroke.mode === 'smooth' ? props.brush.stroke.smooth : props.brush.stroke.normal}
           change={(value) => update(props.brush.stroke.mode === 'smooth' ? { smooth: value } : { normal: value })}
+        />
+      </Show>
+      <Show when={props.brush.stroke.mode === 'stabilizer'}>
+        <Range
+          label="Stabilizer"
+          min={1}
+          max={20}
+          suffix=""
+          prefix="S-"
+          value={props.brush.stroke.stabilizer}
+          change={(stabilizer) => update({ stabilizer })}
         />
       </Show>
     </section>
@@ -119,11 +135,13 @@ export function BrushAdvancedControls(props: BrushControlsProps) {
           Pressure controls flow
         </label>
       </Show>
-      <Show when={isLeonardo(props.brush)}>
+      <Show when={calibratesPressure(props.brush)}>
         <p class={styles.panelNote}>
-          Higher stabilization smooths more and follows the pen more slowly. Zero keeps curve smoothing only.
+          {stroke().mode === 'stabilizer'
+            ? 'The line trails the pen and keeps closing in while the pen holds still, as in Paint Tool SAI. Higher levels steady the hand more and trail further.'
+            : 'Higher stabilization smooths more and follows the pen more slowly. Zero keeps curve smoothing only.'}
         </p>
-        <Show when={stroke().mode === 'smooth'}>
+        <Show when={stroke().mode === 'smooth' || stroke().mode === 'stabilizer'}>
           <label class={styles.check}>
             <input
               type="checkbox"
@@ -202,6 +220,11 @@ function isLeonardo(brush: Brush) {
   return brush.stroke.mode === 'normal' || brush.stroke.mode === 'smooth';
 }
 
+/** The stroke mode maps pen pressure through the calibration: Leonardo's filter and the stabilizer. */
+function calibratesPressure(brush: Brush) {
+  return isLeonardo(brush) || brush.stroke.mode === 'stabilizer';
+}
+
 /** Labeled brush range; values shown in UI units and converted by its caller. */
 function Range(props: {
   label: string;
@@ -209,6 +232,8 @@ function Range(props: {
   min: number;
   max: number;
   step?: number;
+  /** Shown before the value, such as `S-` for stabilizer levels. */
+  prefix?: string;
   suffix: string;
   change: (value: number) => void;
 }) {
@@ -217,6 +242,7 @@ function Range(props: {
       <span>
         {props.label}
         <output>
+          {props.prefix}
           {Math.round(props.value)}
           {props.suffix}
         </output>

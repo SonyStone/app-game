@@ -45,8 +45,11 @@ export function StudioApplication(props: RuntimeBinding) {
         <Renderer renderer={createPaintRenderer}>
           <StrokeProcessor
             processors={{ ...studioProcessors, abr: createAbrProcessor }}
+            // ABR presets smooth as their preset says unless the stroke is raw or uses the stabilizer.
             selectProcessor={(brush) =>
-              brush.engine?.id === 'abr' && brush.stroke.mode !== 'none' ? 'abr' : brush.stroke.mode
+              brush.engine?.id === 'abr' && brush.stroke.mode !== 'none' && brush.stroke.mode !== 'stabilizer'
+                ? 'abr'
+                : brush.stroke.mode
             }
           >
             <BrushEngines

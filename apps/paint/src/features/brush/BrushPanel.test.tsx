@@ -40,6 +40,19 @@ it('selects raw input without Leonardo controls and retains stabilization settin
     change('smooth');
     expect(brush().stroke.smooth).toBe(23);
     expect(host.querySelector<HTMLInputElement>('[aria-label="Stabilization"]')!.value).toBe('23');
+
+    // The SAI-like stabilizer has its own level, catch-up switch and pressure calibration.
+    change('stabilizer');
+    expect(brush().stroke.mode).toBe('stabilizer');
+    const level = host.querySelector<HTMLInputElement>('[aria-label="Stabilizer"]')!;
+    expect(level.value).toBe('6');
+    level.value = '12';
+    level.dispatchEvent(new Event('input', { bubbles: true }));
+    flush();
+    expect(brush().stroke.stabilizer).toBe(12);
+    expect(host.textContent).toContain('S-12');
+    expect(host.textContent).toContain('Catch up on pen lift');
+    expect(host.querySelector('[aria-label="Pressure firmness"]')).not.toBeNull();
   } finally {
     dispose();
     host.remove();
