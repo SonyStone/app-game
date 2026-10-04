@@ -743,7 +743,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                 snapshotDocument(document.layers, document.active.id, camera, featureData),
                 tileStore.read
               ),
-              name: 'drawing.paint'
+              name: 'drawing.paint',
+              requestId: command.requestId
             });
             break;
           case 'pick-color': {
@@ -765,7 +766,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             if (!primaryAttached) throw new Error('Attach a primary canvas before exporting the view.');
             await end();
             await draw(true);
-            post({ type: 'download', blob: await presentedPng(renderer!), name: 'drawing-view.png' });
+            post({
+              type: 'download',
+              blob: await presentedPng(renderer!),
+              name: 'drawing-view.png',
+              requestId: command.requestId
+            });
             break;
           case 'edit': {
             const result = await attempt(() => runEdit(command));

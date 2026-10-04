@@ -12,5 +12,5 @@
     "jsx": "preserve",
     "jsxImportSource": "@solidjs/web"
   },
-  "include": ["src", "tests", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src", "tests", "vite.config.ts", "vitest.config.ts", "recordingBridge.ts"]
 }

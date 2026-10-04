@@ -27,6 +27,7 @@ import { createPaintEngine } from '../engine';
 import { createFill, FillPanel } from '../fill';
 import { createImagePlacement, HistorySourceControl, LayersPanel } from '../layers';
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
+import { createInputRecorder, RecordingControls } from '../recording';
 import { createSelection, createSelectionView, guardEdits, SelectionActions } from '../selection';
 import { createSymmetry, SymmetryGuide, SymmetryPanel } from '../symmetry';
 import { createTransform, TransformOverlay } from '../transform';
@@ -80,6 +81,7 @@ export function PaintStudio(props: {
    * to be applied or cancelled, so the transform stays one undo step.
    */
   const edit: typeof guarded = (command) => {
+    recorder.command(command);
     if (transform.active()) {
       if (command.type === 'undo') {
         void transform.cancel();
@@ -185,6 +187,25 @@ export function PaintStudio(props: {
     onError: setError
   });
   const fullscreen = createFullscreenToggle(editor, setError);
+  const recorder = createInputRecorder({
+    exportFile: engine.exportFile,
+    observe: () => ({
+      ready: ready(),
+      tool: tool(),
+      brush: { preset: tools.preset(), size: brush().size, opacity: brush().opacity, color: brush().color },
+      panel: panel(),
+      camera: camera.camera(),
+      transforming: transform.active(),
+      selection: { points: selection.points().length, busy: selection.busy(), drawing: selection.drawing() },
+      document: {
+        layers: engine.state().layers.length,
+        activeId: engine.state().activeId,
+        canUndo: engine.state().canUndo,
+        canRedo: engine.state().canRedo
+      },
+      error: error()?.message
+    })
+  });
 
   const { brush, tool } = tools;
   const { ready } = engine;
@@ -596,6 +617,9 @@ export function PaintStudio(props: {
         >
           <SketchIcon name="pan" />
         </button>
+        <Show when={recorder.status() !== 'idle' || recorder.saved()}>
+          <RecordingControls recorder={recorder} />
+        </Show>
         <Show when={panel()} keyed>
           {(id) => (
             <StudioPanel id={id} title={panelTitles[id]} onClose={closePanel}>
@@ -717,6 +741,14 @@ export function PaintStudio(props: {
           switching={engine.switching()}
           metrics={engine.metrics()}
           onWorkerEnabledChange={setWorkerEnabled}
+          onRecordInput={
+            import.meta.env.DEV
+              ? () => {
+                  setDeveloperOpen(false);
+                  recorder.start();
+                }
+              : undefined
+          }
           close={() => {
             setDeveloperOpen(false);
             launcher?.focus({ preventScroll: true });

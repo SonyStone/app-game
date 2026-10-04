@@ -88,3 +88,22 @@
   line-height: 1.8;
   color: var(--muted);
 }
+
+.recording {
+  display: grid;
+  gap: 4px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+
+  button {
+    justify-self: start;
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #fff;
+  }
+
+  .panelNote {
+    padding: 0;
+  }
+}

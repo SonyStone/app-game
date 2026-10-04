@@ -1,5 +1,5 @@
 import { supportsRawPointerUpdates } from '@app-game/paint-core/input';
-import { onSettled } from 'solid-js';
+import { onSettled, Show } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import type { DeveloperSettings } from './createDeveloperSettings';
 import styles from './DeveloperDialog.module.css';
@@ -23,6 +23,11 @@ export function DeveloperDialog(props: {
    * while the engine is not ready, so an engine that cannot start in one mode can be restarted in the other.
    */
   onWorkerEnabledChange: (enabled: boolean) => void;
+  /**
+   * Closes the dialog and starts recording input for a bug report; the button is shown only when this is given,
+   * which the studio does on the Vite dev server, where recordings are saved.
+   */
+  onRecordInput?: () => void;
   close: () => void;
 }) {
   let dialog!: HTMLDialogElement;
@@ -138,6 +143,17 @@ export function DeveloperDialog(props: {
           <dd>{props.metrics.ms.toFixed(1)} ms</dd>
         </div>
       </dl>
+      <Show when={props.onRecordInput}>
+        {(record) => (
+          <div class={styles.recording}>
+            <button onClick={() => record()()}>Record input…</button>
+            <p class={styles.panelNote}>
+              Records pen, touch, mouse and keyboard input with a snapshot of the drawing, to reproduce a bug. Saved to
+              <code>apps/paint/recordings</code> on the dev server.
+            </p>
+          </div>
+        )}
+      </Show>
       <p class={styles.panelNote}>
         Submission measures CPU preparation, not pen latency. The performance monitor adds the wait for GPU work; the
         <code>?performance</code> query opens it. Execution mode stays in the URL; other switches apply to this session.

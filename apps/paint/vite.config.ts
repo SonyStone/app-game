@@ -6,6 +6,7 @@ import typegpu from 'unplugin-typegpu/vite';
 import { defineConfig, type Plugin } from 'vite';
 import solid from 'vite-plugin-solid';
 import { VitePWA } from 'vite-plugin-pwa';
+import { recordingBridge } from './recordingBridge';
 import type { PaintBuild } from './src/features/pwa/buildInfo';
 
 /** A standalone production build keeps the editor independent of unrelated playground experiments. */
@@ -14,6 +15,7 @@ export default defineConfig(({ command }) => ({
   plugins: [
     solid(), typegpu(), UnoCSS({ configFile: fileURLToPath(new URL('../../uno.config.ts', import.meta.url)) }),
     performanceBridge(),
+    recordingBridge(),
     VitePWA({
       registerType: 'prompt',
       injectRegister: null,

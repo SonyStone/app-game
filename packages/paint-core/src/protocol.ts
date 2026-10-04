@@ -47,7 +47,12 @@ export type PaintCommand =
     }
   | { type: 'samples'; samples: Sample[] }
   | { type: 'checkpoint'; includeTools?: boolean }
-  | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'download' | 'png' | 'recover' | 'dispose' }
+  | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'recover' | 'dispose' }
+  /**
+   * Exports the document as a `.paint` file (`download`) or the presented view as a PNG (`png`). With a `requestId`,
+   * the `download` event carries it back, so the client can keep the file instead of offering it to the user.
+   */
+  | { type: 'download' | 'png'; requestId?: string }
   | { type: 'layer'; action: LayerAction }
   | { type: 'selection'; action: SelectionAction; points: Point[]; offset?: Point; layerId: string; revision: number }
   /** Runs a pixel edit registered with `DocumentFeatures`, such as a bucket fill; see `defineDocumentEdit`. */
@@ -149,7 +154,8 @@ export type PaintEvent =
    * of autosave or storage cleanup rather than of a command, so a stroke or checkpoint in progress is unaffected.
    */
   | { type: 'error'; message: string; recoverable: boolean; code?: GpuError['code']; background?: boolean }
-  | { type: 'download'; blob: Blob; name: string };
+  /** An exported file; `requestId` repeats the one of the `download` or `png` command that asked for it, if any. */
+  | { type: 'download'; blob: Blob; name: string; requestId?: string };
 
 /** Document, storage and performance status posted after changes and frames. */
 export type StateEvent = Extract<PaintEvent, { type: 'state' }>;

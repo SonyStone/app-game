@@ -38,6 +38,7 @@ src/
     abr/           Embedded ABR viewer and import of its presets into the brush library
     developer/     Developer switches and dialog
     performance/   Live frame-cost panel, `window.paintPerformance` reports and the dev-server responder
+    recording/     Input recording for bug reports: recorder, floating controls, recording format
     pwa/           Standalone shell: install prompt, offline status, build identity
   shared/
     errors.ts      PaintError contract (engine, brush, fullscreen and install kinds)
@@ -82,6 +83,16 @@ The canvas connects the engine and attaches input from an owned effect once its 
 ## Performance monitor
 
 Open it with `?performance` or **Developer → Performance monitor**. The panel over the stage shows the engine's per-frame CPU submission time and wait for submitted GPU work (paint-core `frame` events), the frame rate and the 60 Hz budget. Scripts can call `window.paintPerformance.report({ samples: true })` or `reset()`. During `pnpm --filter @app-game/paint dev`, `GET /__performance[?samples]` collects reports from every open tab and `POST /__performance/reset` clears them. Device timing baselines are separate: see [Brush performance regression checks](performance/README.md).
+
+## Input recordings
+
+To report a bug that depends on real pen, touch or palm input, open **Developer → Record input…** on the dev server, reproduce the bug, press **Stop** and describe what went wrong. The recorder saves `recordings/<id>/` in this app (ignored by Git):
+
+- `recording.json`: pointer, pen and touch events with their coalesced samples, keys, wheel, viewport and focus changes, the document commands the editor sent and changes of editor state such as the tool, camera and selection (format in `src/features/recording/inputRecording.ts`);
+- `start.paint`: the drawing when the recording started, which **Drawing menu → Open drawing** loads;
+- `start.png` and `end.png`: the presented view at the start and at the end.
+
+`node scripts/recording-timeline.mjs recordings/<id>` prints the recording as a timeline: one line per contact, capture, key, command and state change, with the moves of each pointer merged into one line. `--from` and `--to` limit it to seconds since the start; `--events` prints the raw events in that range as JSON lines. Both dev servers, this app's and the playground's that `pnpm dev:tablet` runs, receive the files at `PUT /__recordings/<id>/<file>` (`recordingBridge.ts`); production builds have no recorder.
 
 ## Install and offline use
 

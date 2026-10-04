@@ -80,6 +80,10 @@ export function createPaintEngine(options: {
     timeoutMs: requestTimeoutMs,
     failure: (message) => engineError('failed', message)
   });
+  const exports = createEngineRequests<Blob>({
+    timeoutMs: requestTimeoutMs,
+    failure: (message) => engineError('failed', message)
+  });
   const commands = createEngineRequests<void>({
     timeoutMs: requestTimeoutMs,
     failure: (message) => brushError('command', message)
@@ -151,7 +155,8 @@ export function createPaintEngine(options: {
     putResources,
     runBrushCommand,
     pickColor,
-    runEdit
+    runEdit,
+    exportFile
   };
 
   /**
@@ -164,6 +169,7 @@ export function createPaintEngine(options: {
     commands.disconnect();
     colors.disconnect();
     edits.disconnect();
+    exports.disconnect();
     resident.clear();
     drawing = false;
     options.onError(undefined);
@@ -265,7 +271,12 @@ export function createPaintEngine(options: {
 
           break;
         case 'download':
-          downloadBlob(event.blob, event.name);
+          if (event.requestId === undefined) {
+            downloadBlob(event.blob, event.name);
+          } else {
+            exports.receive(event.requestId, { ok: true, value: event.blob });
+          }
+
           break;
         case 'frame':
           options.frames?.receive(event);
@@ -550,6 +561,14 @@ export function createPaintEngine(options: {
 
   function pickColor(point: Point): Promise<Result<string, PaintError>> {
     return colors.request((requestId) => post({ type: 'pick-color', requestId, point }));
+  }
+
+  /**
+   * Exports the document as a `.paint` file (`document`) or the presented view as a PNG (`view`) and resolves the file
+   * instead of downloading it. The engine commits a stroke in progress first. Never rejects.
+   */
+  function exportFile(kind: 'document' | 'view'): Promise<Result<Blob, PaintError>> {
+    return exports.request((requestId) => post({ type: kind === 'document' ? 'download' : 'png', requestId }));
   }
 
   /** Posts to the connected engine regardless of the switch; request replies and the switch handshake use this. */
