@@ -88,6 +88,17 @@ export function createFrames(options: {
         })
       );
     },
+    /** Gives frame `id` a new rectangle, in whole document pixels of at least one per side. */
+    resize(id: string, rect: DocumentRect) {
+      const left = Math.round(rect.left),
+        top = Math.round(rect.top);
+      const width = Math.max(1, Math.round(rect.left + rect.width) - left),
+        height = Math.max(1, Math.round(rect.top + rect.height) - top);
+      return change({
+        ...currentData(),
+        frames: currentData().frames.map((frame) => (frame.id === id ? { ...frame, left, top, width, height } : frame))
+      });
+    },
     remove(id: string) {
       const { frames, active } = currentData();
       return change({ frames: frames.filter((frame) => frame.id !== id), active: active === id ? undefined : active });

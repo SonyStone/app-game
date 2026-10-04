@@ -84,3 +84,30 @@
     font-weight: 600;
   }
 }
+
+/* Chromium takes touch-action from the <svg>, not from its shapes, so a drag on a handle is not cancelled. */
+.editor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.editorBody {
+  fill: #237aab14;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  pointer-events: all;
+  cursor: move;
+}
+
+.editorHandle {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  pointer-events: all;
+  cursor: crosshair;
+}

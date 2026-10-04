@@ -14,6 +14,9 @@ export function FramesSection(props: {
   onActivate: (id: string | undefined) => void;
   onAdd: () => void;
   onRename: (id: string, name: string) => void;
+  /** Whether the active frame shows handles on the canvas for changing its rectangle. */
+  adjusting: boolean;
+  onAdjust: (adjusting: boolean) => void;
   onGoTo: (id: string) => void;
   onExport: (frame: Frame) => void;
   /** Copies a link to the frame; resolves whether it was copied. */
@@ -59,6 +62,15 @@ export function FramesSection(props: {
             />
             <button aria-label="Show frame" title="Show the whole frame" onClick={() => props.onGoTo(frame.id)}>
               Show
+            </button>
+            <button
+              aria-label="Adjust frame"
+              title="Change the frame's rectangle with handles on the canvas"
+              aria-pressed={props.adjusting ? 'true' : 'false'}
+              disabled={props.disabled}
+              onClick={() => props.onAdjust(!props.adjusting)}
+            >
+              Adjust
             </button>
             <button
               aria-label="Export frame as PNG"

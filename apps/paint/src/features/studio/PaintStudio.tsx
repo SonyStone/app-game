@@ -26,7 +26,7 @@ import { ColorWheel, createColorWheelSettings } from '../color-wheel';
 import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
 import { createFill, FillPanel } from '../fill';
-import { createFrames, FrameGuides, frameRegion, FramesSection } from '../frames';
+import { createFrames, FrameEditor, FrameGuides, frameRegion, FramesSection } from '../frames';
 import { createGradient, GradientPanel, GradientPreview } from '../gradient';
 import { createImagePlacement, createLayerFilter, HistorySourceControl, LayersPanel } from '../layers';
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
@@ -245,6 +245,8 @@ export function PaintStudio(props: {
   const [abrOpen, setAbrOpen] = createSignal(false);
   const [abrMounted, setAbrMounted] = createSignal(false);
   const [developerOpen, setDeveloperOpen] = createSignal(false);
+  /** The active frame shows handles for changing its rectangle; ends when another frame or none becomes active. */
+  const [adjustingFrame, setAdjustingFrame] = createSignal<string>();
   /** The control that opened the current panel or dialog; focus returns to it on close. */
   let launcher: HTMLElement | undefined;
 
@@ -459,6 +461,18 @@ export function PaintStudio(props: {
           activeId={frames.activeFrame()?.id}
           toScreen={(point) => worldToScreen(point, camera.camera(), size())}
         />
+        <Show when={frames.activeFrame()?.id === adjustingFrame() && frames.activeFrame()} keyed>
+          {(frame) => (
+            <FrameEditor
+              frame={frame}
+              toScreen={(point) => worldToScreen(point, camera.camera(), size())}
+              toDocument={(point) => screenToWorld(point, camera.current(), size())}
+              onChange={(rect) => frames.resize(frame.id, rect)}
+              size={size()}
+              onDone={() => setAdjustingFrame(undefined)}
+            />
+          )}
+        </Show>
         <SymmetryGuide
           symmetry={symmetry.symmetry()}
           camera={camera.camera()}
@@ -775,6 +789,8 @@ export function PaintStudio(props: {
                     onActivate={frames.activate}
                     onAdd={() => frames.addFromView()}
                     onRename={frames.rename}
+                    adjusting={adjustingFrame() !== undefined && adjustingFrame() === frames.activeFrame()?.id}
+                    onAdjust={(adjusting) => setAdjustingFrame(adjusting ? frames.activeFrame()?.id : undefined)}
                     onGoTo={frames.goTo}
                     onExport={({ left, top, width, height, name }) =>
                       edit({ type: 'png', region: { left, top, width, height }, name: `${name}.png` })

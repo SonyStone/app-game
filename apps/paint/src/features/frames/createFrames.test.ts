@@ -20,6 +20,9 @@ it('adds frames covering the view, names, renames and removes them, and saves th
   const second = frames.addFromView()!;
   expect(second.name).toBe('Frame 2');
 
+  frames.resize(second.id, { left: 10.4, top: -3.6, width: 0.2, height: 50.2 });
+  flush();
+  expect(frames.frames()[1]).toMatchObject({ left: 10, top: -4, width: 1, height: 51 });
   frames.rename(first.id, '  Cover  ');
   frames.remove(second.id);
   flush();
