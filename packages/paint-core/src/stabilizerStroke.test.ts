@@ -59,3 +59,23 @@ it('can leave the end behind the pen, calibrates pressure and bounds its strengt
   expect(normalizeStrokeSettings({ ...defaultStrokeSettings(), stabilizer: 99 }).stabilizer).toBe(20);
   expect(normalizeStrokeSettings({ ...defaultStrokeSettings(), mode: 'stabilizer' }).mode).toBe('stabilizer');
 });
+
+it('catches up on lift along the path the pen took, not straight across to where it lifted', () => {
+  const processor = createStabilizerProcessor(brush(20));
+  // A quarter circle of radius 200 drawn in 200 ms, lifted at once: the line still trails far behind.
+  const arc = Array.from({ length: 201 }, (_, index) => {
+    const angle = (index / 200) * (Math.PI / 2);
+    return sample(200 * Math.sin(angle), 200 - 200 * Math.cos(angle), index);
+  });
+  const lifted = processor.add(arc).at(-1)!;
+  const finish = processor.finish();
+  expect(finish.at(-1)).toMatchObject({ x: 200, y: 200 });
+
+  // Filling the window with the lifted pen cut straight across, about 39 px inside the arc, then hooked onto it at the
+  // end. Narrowing the window stays within the line's own lag at lift, about 26 px, and meets the arc along it.
+  const inside = (point: Sample) => 200 - Math.hypot(point.x, point.y - 200);
+  expect(Math.max(...finish.map(inside))).toBeLessThan(inside(lifted) + 4);
+  const [before, last] = finish.slice(-6, -5).concat(finish.slice(-1));
+  const heading = (Math.atan2(last!.y - before!.y, last!.x - before!.x) * 180) / Math.PI;
+  expect(Math.abs(heading - 90)).toBeLessThan(10);
+});

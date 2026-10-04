@@ -8,12 +8,17 @@ import { interpolateTabletAxes } from './tabletAxes';
  * is a Gaussian-weighted average of the latest ticks, newest weighted most. Because ticks continue while the pen
  * holds still (`idle`), the line keeps closing in on the pen, which a filter of input events alone cannot do; how far
  * it trails grows with `stroke.stabilizer`. Lifting the pen draws the rest of the way to it unless `stroke.catchUp` is
- * off. Pressure is averaged with the position and calibrated like Leonardo's filter.
+ * off: the averaged window shrinks tick by tick to the newest, so the line follows the pen's own path to where it
+ * lifted, less and less smoothed, instead of cutting straight across to it. Pressure is averaged with the position and
+ * calibrated like Leonardo's filter.
  */
 export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
   const settings = normalizeStrokeSettings(brush.stroke);
   const size = settings.stabilizer * ticksPerLevel;
-  const weights = Array.from({ length: size }, (_, age) => Math.exp(-((age / (size / 2)) ** 2)));
+  /** Gaussian weights by age for a window of `length` ticks, newest first. */
+  const weightsFor = (length: number) =>
+    Array.from({ length }, (_, age) => Math.exp(-((age / Math.max(0.5, length / 2)) ** 2)));
+  const weights = weightsFor(size);
   /** Pen positions at the latest ticks, newest last. */
   const ticks: Sample[] = [];
   let clock = 0;
@@ -80,16 +85,16 @@ export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
         return [];
       }
 
-      const result: Sample[] = [];
-      for (let index = 0; index < size && !reached(); index++) {
+      // The pen where it lifted becomes the newest tick, then the window narrows to it: the last output is the pen.
+      clock += tickMs;
+      const result = [tick({ ...latest, time: clock })];
+      for (let window = size - 1; window >= 1 && !reached(); window--) {
         clock += tickMs;
-        result.push(tick({ ...latest, time: clock }));
+        result.push(emit(window));
       }
 
-      // The stroke ends exactly at the pen: once every tick holds it, so does their average.
       if (output && (output.x !== latest.x || output.y !== latest.y)) {
-        ticks.fill({ ...latest, time: clock });
-        result.push(emit());
+        result.push(emit(1));
       }
 
       return result;
@@ -102,16 +107,20 @@ export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
     return emit();
   }
 
-  /** The weighted average of the ticks, as offsets from the newest to keep precision far from the origin. */
-  function emit(): Sample {
+  /**
+   * The weighted average of the newest `window` ticks, all by default, as offsets from the newest to keep precision
+   * far from the origin.
+   */
+  function emit(window = ticks.length): Sample {
     const newest = ticks.at(-1)!;
+    const windowWeights = window === size ? weights : weightsFor(window);
     let x = 0,
       y = 0,
       pressure = 0,
       total = 0;
-    for (let age = 0; age < ticks.length; age++) {
+    for (let age = 0; age < window; age++) {
       const point = ticks[ticks.length - 1 - age]!;
-      const weight = weights[age]!;
+      const weight = windowWeights[age]!;
       x += (point.x - newest.x) * weight;
       y += (point.y - newest.y) * weight;
       pressure += point.pressure * weight;
