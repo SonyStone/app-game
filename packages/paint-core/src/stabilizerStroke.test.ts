@@ -72,9 +72,9 @@ it('catches up on lift along the path the pen took, not straight across to where
   expect(finish.at(-1)).toMatchObject({ x: 200, y: 200 });
 
   // Filling the window with the lifted pen cut straight across, about 39 px inside the arc, then hooked onto it at the
-  // end. Narrowing the window stays within the line's own lag at lift, about 26 px, and meets the arc along it.
+  // end. Averaging the rest of the path cuts the arc about as the line did, about 26 px inside at lift, and meets it.
   const inside = (point: Sample) => 200 - Math.hypot(point.x, point.y - 200);
-  expect(Math.max(...finish.map(inside))).toBeLessThan(inside(lifted) + 4);
+  expect(Math.max(...finish.map(inside))).toBeLessThan(inside(lifted) + 6);
   const [before, last] = finish.slice(-6, -5).concat(finish.slice(-1));
   const heading = (Math.atan2(last!.y - before!.y, last!.x - before!.x) * 180) / Math.PI;
   expect(Math.abs(heading - 90)).toBeLessThan(10);
@@ -117,4 +117,40 @@ it('joins the catch-up onto the pen path without a step, on a quick flick at a h
   }
 
   expect((worst * 180) / Math.PI).toBeLessThan(25);
+});
+
+it('turns gently onto the rest of the way, on a fast curved stroke whose line heads elsewhere when the pen lifts', () => {
+  // As recorded on the tablet at S-15: 300 ms along a bending arc, so the line trails far behind inside the curve and
+  // heads toward the pen rather than along the path where the catch-up continues it.
+  const stroke = Array.from({ length: 41 }, (_, index) => {
+    const angle = (index / 40) ** 1.5 * (Math.PI / 2);
+    return sample(300 * Math.sin(angle), 300 - 300 * Math.cos(angle), index * 7.5);
+  });
+  const processor = createStabilizerProcessor(brush(15));
+  const line = [...processor.add(stroke), ...processor.finish()];
+  expect(line.at(-1)).toMatchObject({ x: 300, y: 300 });
+
+  // Headings 10 px apart along the line differ by a few degrees at most: no corner or quick hook where it lifted.
+  const reach = [0];
+  for (let index = 1; index < line.length; index++) {
+    reach.push(
+      reach[index - 1]! + Math.hypot(line[index]!.x - line[index - 1]!.x, line[index]!.y - line[index - 1]!.y)
+    );
+  }
+
+  const headingAt = (distance: number) => {
+    const index = Math.max(
+      1,
+      reach.findIndex((value) => value >= distance)
+    );
+    const [a, b] = [line[index - 1]!, line[index]!];
+    return Math.atan2(b.y - a.y, b.x - a.x);
+  };
+  let sharpest = 0;
+  for (let distance = 10; distance < reach.at(-1)! - 10; distance += 2) {
+    const turn = headingAt(distance + 5) - headingAt(distance - 5);
+    sharpest = Math.max(sharpest, Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))));
+  }
+
+  expect((sharpest * 180) / Math.PI).toBeLessThan(8);
 });
