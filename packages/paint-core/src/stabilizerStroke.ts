@@ -8,25 +8,19 @@ import { interpolateTabletAxes } from './tabletAxes';
  * is a Gaussian-weighted average of the latest ticks, newest weighted most. Because ticks continue while the pen
  * holds still (`idle`), the line keeps closing in on the pen, which a filter of input events alone cannot do; how far
  * it trails grows with `stroke.stabilizer`. Lifting the pen draws the rest of the way to it unless `stroke.catchUp` is
- * off: the averaged window shrinks tick by tick to the newest, so the line follows the pen's own path, less and less
- * smoothed, instead of cutting straight across. It ends where the pen was before lifting: the last moments in which
- * the pressure falls away usually jerk the pen aside, so their positions are held at the point before them while their
- * pressure still tapers the end. Pressure is averaged with the position and calibrated like Leonardo's filter.
+ * off: from the point of the pen's path nearest the line, along that path to where the pen lifted, eased onto it over
+ * the first half, so the end neither cuts across a curve nor kinks where the catch-up begins. Pressure is averaged with
+ * the position and calibrated like Leonardo's filter.
  */
 export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
   const settings = normalizeStrokeSettings(brush.stroke);
   const size = settings.stabilizer * ticksPerLevel;
-  /** Gaussian weights by age for a window of `length` ticks, newest first. */
-  const weightsFor = (length: number) =>
-    Array.from({ length }, (_, age) => Math.exp(-((age / Math.max(0.5, length / 2)) ** 2)));
-  const weights = weightsFor(size);
+  const weights = Array.from({ length: size }, (_, age) => Math.exp(-((age / (size / 2)) ** 2)));
   /** Pen positions at the latest ticks, newest last. */
   const ticks: Sample[] = [];
   let clock = 0;
   let previous: Sample | undefined;
   let latest: Sample | undefined;
-  /** Input samples of the last {@link liftWindowMs}, for finding where the pen began to lift. */
-  const recent: Sample[] = [];
   let output: Sample | undefined;
   let finished = false;
 
@@ -57,10 +51,6 @@ export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
         }
 
         previous = latest = current;
-        recent.push(current);
-        while (recent.length > 1 && current.time - recent[0]!.time > liftWindowMs) {
-          recent.shift();
-        }
       }
 
       return result;
@@ -92,29 +82,45 @@ export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
         return [];
       }
 
-      // Positions after the lift began stay at the point before it; their pressure still tapers the end.
-      const lift = liftPoint(recent);
-      for (let index = 0; index < ticks.length; index++) {
-        if (ticks[index]!.time > lift.time) {
-          ticks[index] = { ...ticks[index]!, x: lift.x, y: lift.y };
+      // The pen where it lifted closes its path, the ticks; the line joins that path where it is nearest and follows it.
+      const from = output!;
+      ticks.push({ ...latest, time: clock + tickMs });
+      let start = 0,
+        nearest = Infinity;
+      ticks.forEach((point, index) => {
+        // On ties the later point wins, past the copies of the first contact the ticks start with.
+        const distance = Math.hypot(point.x - from.x, point.y - from.y);
+        if (distance <= nearest) {
+          nearest = distance;
+          start = index;
         }
-      }
+      });
 
-      // The end becomes the newest tick, then the window narrows to it: the last output is the end.
-      const end = { ...latest, x: lift.x, y: lift.y };
-      latest = end;
-      clock += tickMs;
-      const result = [tick({ ...end, time: clock })];
-      for (let window = size - 1; window >= 1 && !reached(); window--) {
+      // Each point of the path is shifted by the line's offset from it, which fades out smoothly over the first half,
+      // so the catch-up neither jumps aside nor kinks where it begins.
+      const smoothed = ticks.slice(start).map((point, index, all) => {
+        const before = all[index - 1] ?? point,
+          after = all[index + 1] ?? point;
+        return index === all.length - 1
+          ? point
+          : { x: (before.x + point.x * 2 + after.x) / 4, y: (before.y + point.y * 2 + after.y) / 4 };
+      });
+      const offset = { x: from.x - smoothed[0]!.x, y: from.y - smoothed[0]!.y };
+      const path = ticks.slice(start + 1);
+      const ease = Math.max(Math.min(easeTicks, path.length), Math.ceil(path.length / 2));
+      return path.map((point, index) => {
+        const t = Math.min(1, (index + 1) / ease);
+        const remaining = 1 - t * t * (3 - 2 * t);
         clock += tickMs;
-        result.push(emit(window));
-      }
-
-      if (output && (output.x !== end.x || output.y !== end.y)) {
-        result.push(emit(1));
-      }
-
-      return result;
+        output = {
+          ...point,
+          x: smoothed[index + 1]!.x + offset.x * remaining,
+          y: smoothed[index + 1]!.y + offset.y * remaining,
+          pressure: calibrate(point.pressure) + (from.pressure - calibrate(point.pressure)) * remaining,
+          time: clock
+        };
+        return output;
+      });
     }
   };
 
@@ -124,38 +130,37 @@ export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
     return emit();
   }
 
-  /**
-   * The weighted average of the newest `window` ticks, all by default, as offsets from the newest to keep precision
-   * far from the origin.
-   */
-  function emit(window = ticks.length): Sample {
+  /** The weighted average of the ticks, as offsets from the newest to keep precision far from the origin. */
+  function emit(): Sample {
     const newest = ticks.at(-1)!;
-    const windowWeights = window === size ? weights : weightsFor(window);
     let x = 0,
       y = 0,
       pressure = 0,
       total = 0;
-    for (let age = 0; age < window; age++) {
+    for (let age = 0; age < ticks.length; age++) {
       const point = ticks[ticks.length - 1 - age]!;
-      const weight = windowWeights[age]!;
+      const weight = weights[age]!;
       x += (point.x - newest.x) * weight;
       y += (point.y - newest.y) * weight;
       pressure += point.pressure * weight;
       total += weight;
     }
 
-    const calibrated = Math.max(
-      0,
-      Math.min(1, (pressure / total - settings.minimum) / (settings.maximum - settings.minimum))
-    );
     output = {
       ...newest,
       x: newest.x + x / total,
       y: newest.y + y / total,
-      pressure: calibrated ** settings.firmness,
+      pressure: calibrate(pressure / total),
       time: clock
     };
     return output;
+  }
+
+  /** Raw pen pressure through the brush's minimum, maximum and firmness. */
+  function calibrate(raw: number) {
+    return (
+      Math.max(0, Math.min(1, (raw - settings.minimum) / (settings.maximum - settings.minimum))) ** settings.firmness
+    );
   }
 
   /** Whether the line has reached the pen, so further ticks would change nothing visible. */
@@ -167,26 +172,6 @@ export function createStabilizerProcessor(brush: Brush): StrokeProcessor {
       ticks.every((point) => point.pressure === latest!.pressure)
     );
   }
-}
-
-/**
- * Where the pen was before it began to lift: the start of the pressure's steady fall at the end of the stroke, at most
- * {@link hookMs} back, provided it fell by at least a third of the recent peak. Otherwise the last sample.
- */
-function liftPoint(recent: readonly Sample[]): Sample {
-  const peak = Math.max(...recent.map(({ pressure }) => pressure));
-  const last = recent.at(-1)!;
-  let index = recent.length - 1;
-  while (
-    index > 0 &&
-    last.time - recent[index - 1]!.time <= hookMs &&
-    recent[index]!.pressure < peak * 0.95 &&
-    recent[index - 1]!.pressure >= recent[index]!.pressure
-  ) {
-    index--;
-  }
-
-  return recent[index]!.pressure - last.pressure >= peak / 3 ? recent[index]! : last;
 }
 
 /** The pen between two input samples, by time. */
@@ -203,11 +188,8 @@ function between(a: Sample, b: Sample, t: number): Sample {
 /** The pen is resampled at 120 Hz, a common tablet report rate. */
 const tickMs = 1000 / 120;
 
-/** Input kept for finding the lift; long enough to know the stroke's pressure before it. */
-const liftWindowMs = 200;
-
-/** The longest stretch at the end of a stroke treated as the pen lifting. */
-const hookMs = 60;
+/** Fewest ticks over which the catch-up eases from the line onto the pen's path; otherwise half of it. */
+const easeTicks = 4;
 
 /** Ticks averaged per stabilizer level: each level trails the pen by about 33 ms more. */
 const ticksPerLevel = 4;

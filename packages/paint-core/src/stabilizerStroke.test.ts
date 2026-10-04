@@ -80,20 +80,41 @@ it('catches up on lift along the path the pen took, not straight across to where
   expect(Math.abs(heading - 90)).toBeLessThan(10);
 });
 
-it('ends where the pen was before lifting, not on the jerk aside as the pressure falls away', () => {
-  const processor = createStabilizerProcessor(brush(12));
-  // A straight line to the right at full pressure, then 30 ms in which the pressure falls and the pen jerks 20 px down.
-  const line = Array.from({ length: 151 }, (_, index) => sample(index * 2, 0, index, 0.6));
-  const hook = Array.from({ length: 30 }, (_, index) =>
-    sample(300 + index * 0.3, (index + 1) * (20 / 30), 151 + index, 0.6 * (1 - (index + 1) / 30))
-  );
-  processor.add([...line, ...hook]);
-  const finish = processor.finish();
-  const end = finish.at(-1)!;
-  expect(Math.abs(end.x - 300)).toBeLessThan(1);
-  expect(Math.abs(end.y)).toBeLessThan(1);
-  // No tick at the end: the caught-up line stays straight.
-  expect(Math.max(...finish.map(({ y }) => Math.abs(y)))).toBeLessThan(1.5);
-  // The falling pressure still tapers the end.
-  expect(end.pressure).toBeLessThan(0.3);
+it('joins the catch-up onto the pen path without a step, on a quick flick at a high level', () => {
+  // A 90 ms flick recorded on the tablet at S-15: the line still trails about 120 px behind when the pen lifts.
+  const flick = [
+    [-1211.9, -2586.4, 0.62],
+    [-1203.7, -2584.3, 0.66],
+    [-1191.7, -2579.6, 0.7],
+    [-1178.4, -2571.9, 0.71],
+    [-1164.0, -2560.9, 0.72],
+    [-1149.0, -2546.8, 0.72],
+    [-1134.0, -2530.1, 0.71],
+    [-1119.3, -2511.6, 0.7],
+    [-1105.4, -2491.8, 0.67],
+    [-1092.7, -2471.6, 0.64],
+    [-1081.4, -2451.4, 0.61],
+    [-1071.8, -2431.4, 0.55],
+    [-1064.0, -2412.7, 0.46],
+    [-1058.2, -2396.4, 0.34],
+    [-1056.0, -2389.4, 0.2]
+  ].map(([x, y, pressure], index) => sample(x!, y!, index * 6.5, pressure));
+  const processor = createStabilizerProcessor(brush(15));
+  const line = [...processor.add(flick), ...processor.finish()];
+  expect(line.at(-1)).toMatchObject({ x: -1056, y: -2389.4 });
+
+  // Neither a step aside nor a step back: consecutive segments turn by less than 25°.
+  let worst = 0;
+  for (let index = 2; index < line.length; index++) {
+    const [a, b, c] = [line[index - 2]!, line[index - 1]!, line[index]!];
+    if (Math.hypot(c.x - b.x, c.y - b.y) < 0.5 || Math.hypot(b.x - a.x, b.y - a.y) < 0.5) {
+      continue;
+    }
+
+    let turn = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x);
+    turn = Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn)));
+    worst = Math.max(worst, turn);
+  }
+
+  expect((worst * 180) / Math.PI).toBeLessThan(25);
 });
