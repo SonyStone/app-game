@@ -253,6 +253,25 @@ try {
     await cdp.detach();
   });
 
+  await step('the blend mode dropdown lists the modes with previews and applies a choice', async () => {
+    const panel = page.getByRole('complementary', { name: 'Layers' });
+    await page.getByRole('button', { name: 'Layers' }).click();
+    const trigger = panel.getByRole('button', { name: 'Layer blend mode' });
+    await trigger.click();
+    const list = panel.getByRole('listbox', { name: 'Layer blend modes' });
+    assert.equal(await list.getByRole('option').count(), 5);
+    await page.screenshot({ path: path.join(os.tmpdir(), 'paint-blend-dropdown.png') });
+    await list.getByRole('option', { name: 'Multiply' }).click();
+    await list.waitFor({ state: 'detached', timeout: 5_000 });
+    await panel.getByRole('button', { name: 'Layer blend mode' }).filter({ hasText: 'Multiply' }).waitFor({ timeout: 10_000 });
+    await trigger.click();
+    await page.keyboard.press('Escape');
+    await list.waitFor({ state: 'detached', timeout: 5_000 });
+    assert.equal(await panel.count(), 1, 'Escape closes the list, not the panel');
+    await undo(page, 1);
+    await page.keyboard.press('Escape');
+  });
+
   await step('a drawn layer can be duplicated, renamed, dragged, merged down and the steps undone', async () => {
     await page.getByRole('button', { name: 'Layers' }).click();
     const panel = page.getByRole('complementary', { name: 'Layers' });

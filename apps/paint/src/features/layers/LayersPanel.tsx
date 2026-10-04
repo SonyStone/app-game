@@ -88,11 +88,11 @@ export function LayersPanel(props: {
           }
         }}
       />
-      <BlendModePicker
-        mode={selected().blend}
-        onChange={(blend) => props.onAction({ type: 'update', id: props.state.activeId, patch: { blend } })}
-      />
       <div class={styles.layerControls}>
+        <BlendModePicker
+          mode={selected().blend}
+          onChange={(blend) => props.onAction({ type: 'update', id: props.state.activeId, patch: { blend } })}
+        />
         <input
           aria-label="Layer opacity"
           title="Layer opacity"

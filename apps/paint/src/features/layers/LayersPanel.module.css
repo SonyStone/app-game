@@ -200,34 +200,87 @@
 }
 
 /* `> button` outranks the studio's reset of buttons. */
-.blendModes {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 4px;
-  margin-bottom: 10px;
+.blendPicker {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
 
-  > button {
-    display: grid;
-    justify-items: center;
-    gap: 2px;
-    padding: 3px 0 2px;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    font-size: 10px;
-    color: var(--muted);
+.blendTrigger {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 3px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  text-align: left;
+
+  span {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
-  > button[aria-checked='true'] {
-    border-color: var(--accent);
-    background: #e3eef5;
-    color: var(--accent);
-    font-weight: 600;
+  svg {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
   }
 
   canvas {
-    width: 100%;
-    max-width: 44px;
-    aspect-ratio: 1;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+  }
+}
+
+.blendList {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  left: 0;
+  width: max(100%, 220px);
+  display: grid;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 6px 20px #0002;
+
+  > button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px;
+    border-radius: 6px;
+    text-align: left;
+  }
+
+  > button[aria-selected='true'] {
+    background: #e3eef5;
+    color: var(--accent);
+  }
+
+  span {
+    display: grid;
+    font-size: 12px;
+  }
+
+  small {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  canvas {
+    width: 40px;
+    height: 40px;
     border-radius: 4px;
   }
 }
