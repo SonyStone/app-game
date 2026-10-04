@@ -3,7 +3,6 @@ import type { Brush } from '@app-game/paint-core/brush';
 import type { Camera, Point } from '@app-game/paint-core/camera';
 import { createDocument } from '@app-game/paint-core/document';
 import type { CheckpointedEvent, PaintEvent, SelectionEvent, StateEvent } from '@app-game/paint-core/protocol';
-import { defaultPaintSymmetry, type PaintSymmetry } from '@app-game/paint-core/symmetry';
 import { gpuError } from '@app-game/solid-gpu/errors';
 import type { WorkerFailure } from '@app-game/solid-gpu/worker/workerProtocol';
 import { createEventListener } from '@solid-primitives/event-listener';
@@ -229,7 +228,7 @@ export function createPaintEngine(options: {
           void finishReady();
           break;
         case 'restored':
-          setRestored({ camera: event.camera, symmetry: event.symmetry ?? defaultPaintSymmetry() });
+          setRestored({ camera: event.camera, features: event.features ?? {} });
           break;
         case 'state':
           update(event);
@@ -334,7 +333,7 @@ export function createPaintEngine(options: {
 
     function update(event: StateEvent) {
       if (firstState) {
-        setRestored({ camera: event.camera, symmetry: event.symmetry });
+        setRestored({ camera: event.camera, features: event.features ?? {} });
       }
 
       setPaging((previous) => ({
@@ -565,8 +564,12 @@ export type FrameEvent = Extract<PaintEvent, { type: 'frame' }>;
 /** Storage, virtual texture and readback statistics from the latest state event. */
 export type EnginePaging = Pick<StateEvent, 'storage' | 'virtual' | 'debugPages' | 'rasterDraws' | 'readback'>;
 
-/** View state stored with the document. `symmetry` is absent when an older document or engine did not report it. */
-export type RestoredView = { camera: Camera; symmetry?: PaintSymmetry };
+/** View state stored with the document: its camera and the data of the engine's document features. */
+export type RestoredView = {
+  camera: Camera;
+  /** Document feature data by feature ID; read one with its feature's `read`, such as `symmetryFeature.read`. */
+  features: Readonly<Record<string, unknown>>;
+};
 
 /** Acknowledgement of a resource upload. */
 type ResourceReply = { evicted: string[]; stats: ReturnType<ReturnType<typeof createBrushResources>['stats']> };

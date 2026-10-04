@@ -5,6 +5,8 @@ import type { createPaintRenderer } from '../gpu/renderer';
 import type { StrokeProcessor, StrokeProcessorFactory } from '../strokeProcessors';
 import type { createTileStore } from '../tileStore';
 import type { BrushResourceReader, BrushResourcesFactory } from '@app-game/abr-paint/resources';
+import type { DocumentEdit } from './documentEdit';
+import type { DocumentFeature } from './documentFeature';
 
 /** Raster document operations shared by tools, persistence, history and selection. */
 export type PaintDocument = ReturnType<typeof createDocument>;
@@ -79,4 +81,8 @@ export type PaintModules = {
   selectEngine: (brush: Brush) => string;
   /** Studio selects brush.stroke.mode; applications can select custom processor IDs. */
   selectProcessor: (brush: Brush) => string;
+  /** Feature modules owning document data, such as paint symmetry; see `defineDocumentFeature`. */
+  features: readonly DocumentFeature[];
+  /** Pixel edits of feature modules, such as a bucket fill; see `defineDocumentEdit`. */
+  edits: readonly DocumentEdit[];
 };

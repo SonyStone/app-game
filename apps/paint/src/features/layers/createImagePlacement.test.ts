@@ -22,11 +22,9 @@ it('places a pasted image named after its file, and leaves text pastes and text 
 
   expect(paste(window, [image]).defaultPrevented).toBe(true);
   expect(send).toHaveBeenCalledExactlyOnceWith({
-    type: 'place-image',
-    file: image,
-    name: 'Reference photo',
-    center: { x: 5, y: 6 },
-    fit: { width: 100, height: 80 }
+    type: 'edit',
+    edit: 'place-image',
+    command: { file: image, name: 'Reference photo', center: { x: 5, y: 6 }, fit: { width: 100, height: 80 } }
   });
 
   canPlace = false;

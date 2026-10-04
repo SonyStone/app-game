@@ -5,14 +5,12 @@ import { defaultCamera, type Point } from './camera';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
 import { createResourceSession } from './composition/resourceSession';
-import { symmetryRenderer } from './composition/symmetryRenderer';
+import { restoreFeatureData } from './composition/documentFeature';
 import { readPaintFile, writePaintFile } from './paintFile';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
-import { imageTiles, placeImage } from './imageTiles';
 import { mergeTilePixels } from './layerMerge';
 import { captureSelection, editSelection, translateSelection, type SelectionPixels } from './selection';
 import { decodeDocument, snapshotDocument } from './storage';
-import { defaultPaintSymmetry, paintSymmetrySchema, supportsPaintSymmetry } from './symmetry';
 import { unpackTile, type TileData } from './tilePixels';
 import { errorMessage, type GpuError } from '@app-game/solid-gpu/errors';
 
@@ -39,7 +37,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let savedVersion = 0;
     let pendingSaves = 0;
     let camera = defaultCamera();
-    let symmetry = defaultPaintSymmetry();
+    /** Data of the document's features by feature ID, including features this runtime does not have. */
+    let featureData = restoreFeatureData(modules.features);
+    /** Data of the runtime's own features, as reported to the UI. */
+    const reportedFeatures = () =>
+      Object.fromEntries(modules.features.map((feature) => [feature.id, featureData[feature.id]]));
     let debug = false;
     let liveTail = true;
     let adaptiveQuality = true;
@@ -87,7 +89,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         rasterDraws: { preview: stats?.previewTileDraws ?? 0, committed: stats?.sourceTileDraws ?? 0 },
         document: documentState,
         camera,
-        symmetry,
+        features: reportedFeatures(),
         saved,
         saveState: strokeSession ? 'unsaved' : pendingSaves > 0 ? 'saving' : saved ? 'saved' : 'unsaved',
         renderMs,
@@ -189,7 +191,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       pendingSaves++;
       status();
       try {
-        await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, symmetry));
+        await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData));
         savedVersion = Math.max(savedVersion, version);
         saved = savedVersion === saveVersion && !strokeSession;
         scheduleCollect();
@@ -374,7 +376,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       lost = false;
       renderer.setSelection(selectionPoints, selectionAnimate);
       await renderer.prepareOverview(document.layers);
-      await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, symmetry));
+      await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData));
     };
     onCleanup(() => {
       active = false;
@@ -442,7 +444,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             if (previous) {
               document.replace(previous.layers, previous.activeId);
               camera = previous.camera;
-              symmetry = previous.symmetry ?? defaultPaintSymmetry();
+              featureData = restoreFeatureData(modules.features, previous.features);
               document.persist(tileStore.capture);
             }
             await startRenderer();
@@ -494,10 +496,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             });
             break;
           }
-          case 'symmetry': {
-            const next = paintSymmetrySchema.parse(command.settings);
+          case 'feature': {
+            const feature = modules.features.find((candidate) => candidate.id === command.feature);
+            if (!feature?.apply) throw new Error(`Document feature "${command.feature}" does not accept commands.`);
+            const next = feature.apply(featureData[feature.id], command.command);
             await end();
-            symmetry = next;
+            featureData = { ...featureData, [feature.id]: next };
             changed();
             break;
           }
@@ -540,9 +544,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               : undefined;
             if (!engine) throw new Error(`Brush engine "${engineId}" is not registered.`);
             if (!processor) throw new Error(`Stroke processor "${processorId}" is not registered.`);
-            const strokeRenderer = supportsPaintSymmetry(command.brush)
-              ? symmetryRenderer(renderer, symmetry)
-              : renderer;
+            const strokeRenderer = modules.features.reduce(
+              (decorated, feature) =>
+                feature.decorateStroke?.({ data: featureData[feature.id], brush: command.brush, renderer: decorated }) ??
+                decorated,
+              renderer
+            );
             strokeSession = createResourceSession(resources, (resources) =>
               engine({
                 resources,
@@ -685,7 +692,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             post({
               type: 'download',
               blob: await writePaintFile(
-                snapshotDocument(document.layers, document.active.id, camera, symmetry),
+                snapshotDocument(document.layers, document.active.id, camera, featureData),
                 tileStore.read
               ),
               name: 'drawing.paint'
@@ -712,26 +719,22 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             await draw(true);
             post({ type: 'download', blob: await presentedPng(renderer!), name: 'drawing-view.png' });
             break;
-          case 'place-image': {
+          case 'edit': {
+            const edit = modules.edits.find((candidate) => candidate.id === command.edit);
+            if (!edit) throw new Error(`Document edit "${command.edit}" is not installed.`);
             await end();
-            if (lost || !renderer) throw new Error('Restore the renderer before placing an image.');
-            const bitmap = await createImageBitmap(command.file).catch(() => {
-              throw new Error('This file is not an image Paint can read.');
-            });
-            const place = placeImage(bitmap.width, bitmap.height, command.center, command.fit);
-            const context = new OffscreenCanvas(place.width, place.height).getContext('2d');
-            if (!context) throw new Error('Could not read the image.');
-            context.imageSmoothingQuality = 'high';
-            context.drawImage(bitmap, 0, 0, place.width, place.height);
-            bitmap.close();
-            const pixels = context.getImageData(0, 0, place.width, place.height).data;
-            const id = crypto.randomUUID();
-            const changes = [...imageTiles(pixels, place.width, place.height, place.left, place.top)].map(
-              ([key, after]) => ({ layerId: id, key, before: undefined, after })
+            if (lost || !renderer) throw new Error('Restore the renderer before editing the drawing.');
+            const result = await edit.run(
+              {
+                layers: document.layers,
+                active: document.active,
+                readTile: async (pixels) => unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels))
+              },
+              command.command
             );
-            if (!changes.length) throw new Error('The image is fully transparent.');
-            document.commit(changes, { id, name: command.name, visible: true, opacity: 1, blend: 'linear' });
-            renderer.restore(changes, document.layers);
+            if (!result.changes.length && !result.layer) break;
+            document.commit(result.changes, result.layer);
+            renderer.restore(result.changes, document.layers);
             changed();
             await renderer.prepareOverview(document.layers);
             break;
@@ -748,11 +751,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               cancel();
               document.replace(next.layers, next.activeId);
               camera = next.camera;
-              symmetry = next.symmetry;
+              featureData = restoreFeatureData(modules.features, next.features);
               document.persist(tileStore.capture);
               renderer?.reset();
               await renderer?.prepareOverview(document.layers);
-              post({ type: 'restored', camera, symmetry });
+              post({ type: 'restored', camera, features: reportedFeatures() });
               changed();
             } finally {
               importing = false;

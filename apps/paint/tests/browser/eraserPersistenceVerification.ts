@@ -130,7 +130,7 @@ async function assertPublished(name: string, expected: Blob) {
     if (!loaded) throw new Error('Saved status was published without a document checkpoint.');
     await assertEqual(
       expected,
-      await writePaintFile(snapshotDocument(loaded.layers, loaded.activeId, loaded.camera), store.read)
+      await writePaintFile(snapshotDocument(loaded.layers, loaded.activeId, loaded.camera, loaded.features), store.read)
     );
   } finally {
     unwrapResult(await store.close());

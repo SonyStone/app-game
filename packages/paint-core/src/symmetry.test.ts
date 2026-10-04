@@ -3,6 +3,8 @@ import { expect, it } from 'vitest';
 import { defaultBrush, type Dab } from './brush';
 import { defaultCamera, screenToWorld, worldToScreen } from './camera';
 import { createDocument } from './document';
+import { restoreFeatureData } from './composition/documentFeature';
+import { symmetryFeature } from './composition/symmetryFeature';
 import { readPaintFile, writePaintFile } from './paintFile';
 import { decodeDocument, encodeDocument, restoreDocument, snapshotDocument } from './storage';
 import {
@@ -122,12 +124,20 @@ it('stores guides in JSON, binary and internal checkpoints; legacy files default
     segments: 9,
     visible: false
   };
-  const saved = snapshotDocument(document.layers, document.active.id, defaultCamera(), symmetry);
+  const saved = snapshotDocument(document.layers, document.active.id, defaultCamera(), { symmetry });
   const file = await writePaintFile(saved, async (value) => value as Uint8Array);
-  expect((await readPaintFile(file)).symmetry).toEqual(symmetry);
-  expect(decodeDocument(encodeDocument(saved)).symmetry).toEqual(symmetry);
-  expect(restoreDocument({ ...saved, version: 3 }).symmetry).toEqual(symmetry);
-  expect(restoreDocument({ ...saved, symmetry: undefined }).symmetry).toEqual(defaultPaintSymmetry());
+  const restored = (value: { features: Record<string, unknown> }) =>
+    restoreFeatureData([symmetryFeature], value.features).symmetry;
+  expect(restored(await readPaintFile(file))).toEqual(symmetry);
+  expect(restored(decodeDocument(encodeDocument(saved)))).toEqual(symmetry);
+  expect(restored(restoreDocument({ ...saved, version: 3 }))).toEqual(symmetry);
+  // Documents saved before document features store symmetry at the top level, or not at all.
+  const legacy = { ...saved, features: undefined };
+  expect(restored(restoreDocument({ ...legacy, symmetry }))).toEqual(symmetry);
+  expect(restored(restoreDocument(legacy))).toEqual(defaultPaintSymmetry());
+  expect(restored(restoreDocument({ ...saved, features: { symmetry: { ...symmetry, segments: 99 } } }))).toEqual(
+    defaultPaintSymmetry()
+  );
   for (const segments of [0, 2, 11, 20, 3.5, NaN])
     expect(paintSymmetrySchema.safeParse({ ...symmetry, segments }).success).toBe(false);
   for (const mode of ['MixB', 'SmTl', 'BlTl', 'ShTl']) {

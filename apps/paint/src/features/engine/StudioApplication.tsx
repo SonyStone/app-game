@@ -6,13 +6,16 @@ import {
   BrushResources,
   createPaintApplication,
   Document,
+  DocumentFeatures,
   PaintRuntime,
   Renderer,
   Storage,
   StrokeProcessor,
   type RuntimeBinding
 } from '@app-game/paint-core/composition/PaintApplication';
+import { placeImageEdit } from '@app-game/paint-core/composition/placeImageEdit';
 import { roundBrush } from '@app-game/paint-core/composition/roundBrushEngine';
+import { symmetryFeature } from '@app-game/paint-core/composition/symmetryFeature';
 import { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
 import { createDocument } from '@app-game/paint-core/document';
 import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
@@ -28,7 +31,10 @@ export function createStudioRuntime(post: RuntimeBinding['post'], close: Runtime
   return createPaintApplication((binding) => <StudioApplication {...binding} />, post, close);
 }
 
-/** The Studio recipe: paged document, IndexedDB tiles, the WebGPU renderer, stroke processors and brush engines. */
+/**
+ * The Studio recipe: paged document, IndexedDB tiles, the WebGPU renderer, stroke processors, brush engines and the
+ * feature modules: paint symmetry and image placement.
+ */
 export function StudioApplication(props: RuntimeBinding) {
   return (
     <Document document={() => createDocument({ paged: true })}>
@@ -50,7 +56,9 @@ export function StudioApplication(props: RuntimeBinding) {
               selectEngine={(brush) => (brush.tool === 'eraser' ? 'eraser' : 'round')}
             >
               <BrushResources resources={createBrushResources}>
-                <PaintRuntime {...props} />
+                <DocumentFeatures features={[symmetryFeature]} edits={[placeImageEdit]}>
+                  <PaintRuntime {...props} />
+                </DocumentFeatures>
               </BrushResources>
             </BrushEngines>
           </StrokeProcessor>

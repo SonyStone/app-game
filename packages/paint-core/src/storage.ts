@@ -2,20 +2,27 @@ import { z } from 'zod';
 import { TILE_SIZE } from './brush';
 import type { Camera } from './camera';
 import { MAX_DOCUMENT_BYTES, MAX_DOCUMENT_TILES, TILE_BYTES, type Layer } from './document';
-import { defaultPaintSymmetry, paintSymmetrySchema, type PaintSymmetry } from './symmetry';
 import { packTile, unpackTile } from './tilePixels';
 
 /** Versioned on-disk format. Tile pixels remain premultiplied; no lossy image conversion occurs. */
 export type SavedDocument = ReturnType<typeof snapshotDocument>;
 
-/** Copies metadata while sharing immutable committed tile snapshots. */
-export function snapshotDocument(layers: Layer[], activeId: string, camera: Camera, symmetry = defaultPaintSymmetry()) {
+/**
+ * Copies metadata while sharing immutable committed tile snapshots. `features` holds document feature data by feature
+ * ID, including data of features this runtime does not have.
+ */
+export function snapshotDocument(
+  layers: Layer[],
+  activeId: string,
+  camera: Camera,
+  features: Readonly<Record<string, unknown>> = {}
+) {
   return {
     version: 2 as const,
     tileSize: TILE_SIZE,
     activeId,
     camera: { ...camera },
-    symmetry: { ...symmetry },
+    features: { ...features },
     layers: layers.map(({ tiles, ...layer }) => ({
       ...layer,
       tiles: [...tiles].map(([key, pixels]) => ({ key, pixels }))
@@ -23,12 +30,16 @@ export function snapshotDocument(layers: Layer[], activeId: string, camera: Came
   };
 }
 
-/** Validates imported/local data before replacing the current document. */
+/**
+ * Validates imported/local data before replacing the current document. Feature data is returned unvalidated; each
+ * feature validates its own. Documents saved before features existed store paint symmetry at the top level; it is
+ * returned as the `symmetry` feature's data.
+ */
 export function restoreDocument(value: unknown): {
   layers: Layer[];
   activeId: string;
   camera: Camera;
-  symmetry: PaintSymmetry;
+  features: Record<string, unknown>;
 } {
   const parsed = savedSchema.parse(value);
   if (
@@ -56,7 +67,8 @@ export function restoreDocument(value: unknown): {
     );
     return { ...layer, tiles };
   });
-  return { layers, activeId: parsed.activeId, camera: parsed.camera, symmetry: parsed.symmetry };
+  const legacy = parsed.symmetry === undefined ? {} : { symmetry: parsed.symmetry };
+  return { layers, activeId: parsed.activeId, camera: parsed.camera, features: { ...legacy, ...parsed.features } };
 }
 
 /**
@@ -115,7 +127,9 @@ const savedSchema = z.object({
   version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   tileSize: z.literal(TILE_SIZE),
   activeId: z.string(),
-  symmetry: paintSymmetrySchema.default(defaultPaintSymmetry),
+  /** Paint symmetry of documents saved before document features; see `restoreDocument`. */
+  symmetry: z.unknown().optional(),
+  features: z.record(z.string(), z.unknown()).default({}),
   camera: cameraSchema,
   layers: z
     .array(

@@ -6,7 +6,6 @@ import type { Brush, Sample } from './brush';
 import type { Camera, Point, ViewSize } from './camera';
 import type { BrushEngine } from './composition/contracts';
 import type { HistorySource, LayerAction, createDocument } from './document';
-import type { PaintSymmetry } from './symmetry';
 
 /** Main-thread commands are processed in order; all sample batches precede their stroke end. */
 export type PaintCommand =
@@ -28,7 +27,8 @@ export type PaintCommand =
     ))
   | { type: 'debug'; enabled: boolean }
   | { type: 'diagnostics'; enabled: boolean }
-  | { type: 'symmetry'; settings: PaintSymmetry }
+  /** Changes the data of a document feature registered with `DocumentFeatures`; see `defineDocumentFeature`. */
+  | { type: 'feature'; feature: string; command: unknown }
   | { type: 'history-source'; id: number }
   | { type: 'brush-command'; requestId: string; brush: Brush; command: unknown }
   /** Reads the presented color, all layers and the paper included, at `point` in CSS pixels of the primary canvas. */
@@ -50,11 +50,8 @@ export type PaintCommand =
   | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'download' | 'png' | 'recover' | 'dispose' }
   | { type: 'layer'; action: LayerAction }
   | { type: 'selection'; action: SelectionAction; points: Point[]; offset?: Point; layerId: string; revision: number }
-  /**
-   * Places a decodable image as a new layer above the active one, centered on `center` in document pixels and scaled
-   * down to fit `fit`, as one undoable change named `name`.
-   */
-  | { type: 'place-image'; file: Blob; name: string; center: Point; fit: ViewSize }
+  /** Runs a pixel edit registered with `DocumentFeatures`, such as a bucket fill; see `defineDocumentEdit`. */
+  | { type: 'edit'; edit: string; command: unknown }
   | { type: 'import'; text: string }
   | { type: 'import'; file: Blob };
 
@@ -81,8 +78,8 @@ export type PaintEvent =
     }
   | {
       type: 'state';
-      /** Document-owned guides and painting transforms. Absent from older/custom endpoints. */
-      symmetry?: PaintSymmetry;
+      /** Data of the runtime's document features, such as paint symmetry, by feature ID. */
+      features?: Record<string, unknown>;
       document: ReturnType<ReturnType<typeof createDocument>['state']>;
       camera: Camera;
       saved: boolean;
@@ -143,7 +140,8 @@ export type PaintEvent =
   | { type: 'checkpointed'; tools?: RendererToolState; historySource?: HistorySource }
   | { type: 'selection'; points: Point[]; hasClipboard: boolean }
   | { type: 'disposed' }
-  | { type: 'restored'; camera: Camera; symmetry?: PaintSymmetry }
+  /** A document was imported; UI state derived from its camera and feature data resets to them. */
+  | { type: 'restored'; camera: Camera; features?: Record<string, unknown> }
   /**
    * `code` classifies renderer failures, for example `validation` versus a `lost` device. `background` marks a failure
    * of autosave or storage cleanup rather than of a command, so a stroke or checkpoint in progress is unaffected.

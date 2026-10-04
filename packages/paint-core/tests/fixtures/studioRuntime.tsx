@@ -8,19 +8,22 @@ import {
   BrushResources,
   createPaintApplication,
   Document,
+  DocumentFeatures,
   PaintRuntime,
   Renderer,
   Storage,
   StrokeProcessor
 } from '../../src/composition/PaintApplication';
 import { roundBrush } from '../../src/composition/roundBrushEngine';
+import { symmetryFeature } from '../../src/composition/symmetryFeature';
 import { texturedBrush } from '../../src/composition/texturedBrushEngine';
 import { createDocument } from '../../src/document';
 import type { PaintCommand, PaintEvent } from '../../src/protocol';
 import { studioProcessors } from '../../src/strokeProcessors';
 
 /**
- * Mounts the same recipe as Paint Studio (paged document, stroke processors and every brush engine) with a renderer
+ * Mounts the same recipe as Paint Studio (paged document, stroke processors, every brush engine and the symmetry
+ * feature) with a renderer
  * and storage supplied by the test, and records the events it posts. The runtime is terminated when the test ends.
  *
  * `renderer` is either a ready double or a factory that also receives the device-loss callback and renderer options.
@@ -55,7 +58,9 @@ export function startStudioRuntime(options: {
                 selectEngine={(brush) => (brush.tool === 'eraser' ? 'eraser' : 'round')}
               >
                 <BrushResources resources={createBrushResources}>
-                  <PaintRuntime {...binding} />
+                  <DocumentFeatures features={[symmetryFeature]}>
+                    <PaintRuntime {...binding} />
+                  </DocumentFeatures>
                 </BrushResources>
               </BrushEngines>
             </StrokeProcessor>

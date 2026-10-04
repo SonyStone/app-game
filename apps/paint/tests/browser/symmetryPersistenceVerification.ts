@@ -1,5 +1,6 @@
 import { unwrapResult } from '@app-game/paint-core/asyncResult';
 import { defaultBrush } from '@app-game/paint-core/brush';
+import { symmetryFeature } from '@app-game/paint-core/composition/symmetryFeature';
 import { readPaintFile, writePaintFile } from '@app-game/paint-core/paintFile';
 import { snapshotDocument } from '@app-game/paint-core/storage';
 import { defaultPaintSymmetry, type PaintSymmetry } from '@app-game/paint-core/symmetry';
@@ -21,7 +22,7 @@ export async function verifySymmetryPersistence(report: (message: string) => voi
         y: -40,
         visible: false
       };
-      await connection.command({ type: 'symmetry', settings: symmetry }, 'state');
+      await connection.command(symmetryFeature.command(symmetry), 'state');
       const empty = (await connection.command({ type: 'download' }, 'download')).blob;
       let dirty = false;
       const saved = connection.wait('state', (event) => {
@@ -42,7 +43,7 @@ export async function verifySymmetryPersistence(report: (message: string) => voi
         const loaded = await store.load();
         if (!loaded) throw new Error('Symmetry idle autosave did not publish a document.');
         published = await writePaintFile(
-          snapshotDocument(loaded.layers, loaded.activeId, loaded.camera, loaded.symmetry),
+          snapshotDocument(loaded.layers, loaded.activeId, loaded.camera, loaded.features),
           store.read
         );
       } finally {
@@ -51,7 +52,8 @@ export async function verifySymmetryPersistence(report: (message: string) => voi
       const painted = (await connection.command({ type: 'download' }, 'download')).blob;
       await equal(published, painted);
       const restored = await readPaintFile(painted);
-      if (JSON.stringify(restored.symmetry) !== JSON.stringify(symmetry)) throw new Error('Guide settings were lost.');
+      if (JSON.stringify(symmetryFeature.read(restored.features)) !== JSON.stringify(symmetry))
+        throw new Error('Guide settings were lost.');
       for (const x of [-80, 113]) {
         const tx = Math.floor(x / 256),
           ty = -1;
@@ -63,9 +65,10 @@ export async function verifySymmetryPersistence(report: (message: string) => voi
       await equal(empty, (await connection.command({ type: 'download' }, 'download')).blob);
       connection.post({ type: 'redo' });
       await equal(painted, (await connection.command({ type: 'download' }, 'download')).blob);
-      await connection.command({ type: 'symmetry', settings: defaultPaintSymmetry() }, 'state');
+      await connection.command(symmetryFeature.command(defaultPaintSymmetry()), 'state');
       const imported = await connection.command({ type: 'import', file: painted }, 'restored');
-      if (JSON.stringify(imported.symmetry) !== JSON.stringify(symmetry)) throw new Error('Import lost symmetry.');
+      if (JSON.stringify(symmetryFeature.read(imported.features)) !== JSON.stringify(symmetry))
+        throw new Error('Import lost symmetry.');
       await equal(painted, (await connection.command({ type: 'download' }, 'download')).blob);
       await connection.command({ type: 'checkpoint' }, 'checkpointed');
       await connection.close();

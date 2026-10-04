@@ -75,7 +75,7 @@ export function PaintStudio(props: {
     bounds: () => canvas()?.getBoundingClientRect()
   });
   const symmetry = createSymmetry({
-    restored: () => engine.restored()?.symmetry,
+    restored: () => engine.restored()?.features,
     canUpdate: canUpdateSymmetry,
     send: engine.send
   });

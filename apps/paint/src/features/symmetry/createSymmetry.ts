@@ -1,21 +1,22 @@
+import { symmetryFeature } from '@app-game/paint-core/composition/symmetryFeature';
 import type { PaintCommand } from '@app-game/paint-core/protocol';
-import { defaultPaintSymmetry, paintSymmetrySchema, type PaintSymmetry } from '@app-game/paint-core/symmetry';
+import { defaultPaintSymmetry, type PaintSymmetry } from '@app-game/paint-core/symmetry';
 import { createSignal, latest, type Accessor } from 'solid-js';
 
 /**
- * Owns the document's paint symmetry: guides and mirrored stroke copies. It resets to `restored` when the engine
- * loads a document that reports symmetry, and otherwise changes only through `update`.
- * Must be created within a Solid owner.
+ * The UI half of the paint symmetry feature: guides and mirrored stroke copies, whose engine half is `symmetryFeature`
+ * in the drawing engine's recipe. It resets to the symmetry of a document the engine loads, and otherwise changes
+ * only through `update`. Must be created within a Solid owner.
  */
 export function createSymmetry(options: {
-  /** Symmetry stored with the loaded document; `undefined` keeps the current settings. */
-  restored: Accessor<PaintSymmetry | undefined>;
+  /** Feature data of the loaded document; without symmetry data the current settings stay. */
+  restored: Accessor<Readonly<Record<string, unknown>> | undefined>;
   /** Whether document commands are accepted. */
   canUpdate: Accessor<boolean>;
-  send: (command: Extract<PaintCommand, { type: 'symmetry' }>) => void;
+  send: (command: Extract<PaintCommand, { type: 'feature' }>) => void;
 }) {
   const [symmetry, setSymmetry] = createSignal<PaintSymmetry>(
-    (previous) => options.restored() ?? previous ?? defaultPaintSymmetry()
+    (previous) => symmetryFeature.read(options.restored()) ?? previous ?? defaultPaintSymmetry()
   );
 
   return {
@@ -29,9 +30,9 @@ export function createSymmetry(options: {
         return false;
       }
 
-      const next = paintSymmetrySchema.parse(settings);
-      setSymmetry(next);
-      options.send({ type: 'symmetry', settings: next });
+      const command = symmetryFeature.command(settings);
+      setSymmetry(command.command);
+      options.send(command);
       return true;
     }
   };

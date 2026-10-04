@@ -63,7 +63,7 @@ it.each([false, true])(
     expect(symmetry.symmetry()).toEqual(defaultPaintSymmetry());
     reply(first, { type: 'ready' });
     expect(symmetry.update(settings)).toBe(true);
-    expect(first.post).toHaveBeenLastCalledWith({ type: 'symmetry', settings });
+    expect(first.post).toHaveBeenLastCalledWith({ type: 'feature', feature: 'symmetry', command: settings });
 
     if (withTip) {
       const applying = presets.usePreset(inkPreset());
@@ -193,12 +193,14 @@ it.each([false, true])(
 );
 
 it('pauses on a renderer failure and resets the camera and symmetry from a restored document', () => {
-  const { engine, error } = mount();
+  const { engine, error, symmetry } = mount();
   const transport = transports.opened[0]!;
   const camera = { ...defaultCamera(), x: 12, zoom: 3 };
+  const features = { symmetry: { ...defaultPaintSymmetry(), mode: 'radial' as const, segments: 5 } };
   reply(transport, { type: 'ready' });
-  reply(transport, { type: 'restored', camera });
-  expect(engine.restored()).toEqual({ camera, symmetry: defaultPaintSymmetry() });
+  reply(transport, { type: 'restored', camera, features });
+  expect(engine.restored()).toEqual({ camera, features });
+  expect(symmetry.symmetry()).toEqual(features.symmetry);
   reply(transport, { type: 'error', recoverable: true, code: 'lost', message: 'Device lost' });
   expect(engine.ready()).toBe(false);
   expect(error()).toMatchObject({ kind: 'gpu', code: 'lost' });
@@ -422,7 +424,8 @@ function stateEvent(saveState: Extract<PaintEvent, { type: 'state' }>['saveState
     document: createDocument().state(),
     saveState,
     camera: defaultCamera(),
-    symmetry: defaultPaintSymmetry(),
+    features: { symmetry: defaultPaintSymmetry() },
+    saved: saveState === 'saved',
     residentTiles: 0,
     gpuBytes: 0,
     renderMs: 0
@@ -472,7 +475,7 @@ function assemble() {
     prepare: () => presets.restore()
   });
   const symmetry = createSymmetry({
-    restored: () => engine.restored()?.symmetry,
+    restored: () => engine.restored()?.features,
     canUpdate: engine.canEdit,
     send: engine.send
   });

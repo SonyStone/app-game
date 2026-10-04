@@ -4,10 +4,14 @@ import { createRendererDouble } from '../tests/fixtures/rendererDouble';
 import { defaultCamera } from './camera';
 import { createMemoryStorage } from './composition/memoryStorage';
 import type { PaintModules, PaintStorage } from './composition/contracts';
+import { defineDocumentEdit, type DocumentEdit } from './composition/documentEdit';
+import type { DocumentFeature } from './composition/documentFeature';
+import { symmetryFeature } from './composition/symmetryFeature';
 import { createDocument } from './document';
 import { TILE_BYTES, unpackTile } from './tilePixels';
 import { createPaintRuntime } from './paintRuntime';
 import type { PaintEvent } from './protocol';
+import { defaultPaintSymmetry } from './symmetry';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -79,8 +83,84 @@ it('merges a layer down from its pixels, reloading only the merged tiles, and re
   ]);
 });
 
-/** Starts a runtime with volatile storage and a renderer double, then waits until it is ready. */
-async function start() {
+it('applies document feature commands and keeps the data of features it does not have', async () => {
+  const openStorage = createMemoryStorage();
+  const mandala = { ...defaultPaintSymmetry(), mode: 'mandala' as const, segments: 6, x: 40 };
+  const reported = (events: PaintEvent[]) => events.findLast((event) => event.type === 'state')?.features;
+
+  const first = await start({ features: [symmetryFeature], openStorage });
+  expect(reported(first.events)).toEqual({ symmetry: defaultPaintSymmetry() });
+  first.runtime.send(symmetryFeature.command(mandala));
+  await first.waitFor(() => symmetryFeature.read(reported(first.events))?.mode === 'mandala');
+  await stop(first);
+
+  // A build without the feature neither reports nor changes the feature's data, and refuses its commands.
+  const second = await start({ features: [], openStorage });
+  expect(reported(second.events)).toEqual({});
+  second.runtime.send({ type: 'feature', feature: 'symmetry', command: mandala });
+  await second.waitFor(() => second.events.some((event) => event.type === 'error'));
+  second.runtime.send({ type: 'save' });
+  await second.waitFor(() => second.storage.save.mock.calls.length === 1);
+  expect(second.storage.save.mock.calls[0]![0].features).toEqual({ symmetry: mandala });
+  await stop(second);
+
+  const third = await start({ features: [symmetryFeature], openStorage });
+  expect(symmetryFeature.read(reported(third.events))).toEqual(mandala);
+});
+
+it('commits a module edit as one undo step and leaves the document unchanged when the edit fails', async () => {
+  const paint = defineDocumentEdit({
+    id: 'paint-tile',
+    parse: (input: unknown) => {
+      if (input !== 'ok' && input !== 'fail') throw new Error('Unknown payload.');
+      return input;
+    },
+    async run({ active, readTile }, command) {
+      if (command === 'fail') throw new Error('Nothing to fill here.');
+      const before = active.tiles.get('0,0');
+      expect(before === undefined || (await readTile(before)).length === TILE_BYTES).toBe(true);
+      return { changes: [{ layerId: active.id, key: '0,0', before, after: new Uint8Array(TILE_BYTES).fill(255) }] };
+    }
+  });
+  const { runtime, document, events, storage, waitFor } = await start({ edits: [paint] });
+  runtime.send(paint.command('ok'));
+  await waitFor(() => document.active.tiles.has('0,0'));
+  const tile = document.active.tiles.get('0,0')!;
+  expect(unpackTile(tile instanceof Uint8Array ? tile : await storage.read(tile))[3]).toBe(255);
+  expect(document.state().canUndo).toBe(true);
+
+  runtime.send({ type: 'undo' });
+  await waitFor(() => !document.active.tiles.has('0,0'));
+
+  const revision = document.revision;
+  runtime.send(paint.command('fail'));
+  runtime.send({ type: 'edit', edit: 'missing', command: undefined });
+  await waitFor(() => events.filter((event) => event.type === 'error').length === 2);
+  expect(events.filter((event) => event.type === 'error').map((event) => event.type === 'error' && event.message)).toEqual([
+    'Nothing to fill here.',
+    'Document edit "missing" is not installed.'
+  ]);
+  expect(document.revision).toBe(revision);
+});
+
+/** Disposes a runtime gracefully, saving its document. */
+async function stop({ runtime, events, waitFor }: Awaited<ReturnType<typeof start>>) {
+  runtime.send({ type: 'dispose' });
+  await waitFor(() => events.some((event) => event.type === 'disposed'));
+}
+
+/**
+ * Starts a runtime with volatile storage and a renderer double, then waits until it is ready. Runtimes sharing
+ * `openStorage` share their documents by storage name.
+ */
+async function start(
+  options: {
+    features?: readonly DocumentFeature[];
+    edits?: readonly DocumentEdit[];
+    openStorage?: ReturnType<typeof createMemoryStorage>;
+  } = {}
+) {
+  const openStorage = options.openStorage ?? createMemoryStorage();
   const events: PaintEvent[] = [];
   const document = createDocument();
   const renderer = createRendererDouble();
@@ -90,7 +170,7 @@ async function start() {
     document: () => document,
     resources: () => createBrushResources(),
     storage: async (name) => {
-      const inner = await createMemoryStorage()(name);
+      const inner = await openStorage(name);
       storage = { ...inner, save: vi.fn(inner.save), saveView: vi.fn(inner.saveView) };
       return storage;
     },
@@ -98,7 +178,9 @@ async function start() {
     processors: {},
     engines: {},
     selectEngine: () => 'none',
-    selectProcessor: () => 'none'
+    selectProcessor: () => 'none',
+    features: options.features ?? [],
+    edits: options.edits ?? []
   };
   const runtime = createPaintRuntime((event) => events.push(event), () => {}, modules);
   const waitFor = async (condition: () => boolean) => {
