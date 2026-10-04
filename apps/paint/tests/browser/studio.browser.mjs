@@ -39,6 +39,18 @@ try {
   await page.goto(`${baseURL}/`);
   await waitForSaved(page);
 
+  await step('resting the pointer on a toolbar button shows its visual hint', async () => {
+    await page.getByRole('button', { name: 'Fill', exact: true }).hover();
+    const hint = page.getByRole('tooltip');
+    await hint.waitFor({ timeout: 5_000 });
+    assert.match(await hint.textContent(), /Fill/);
+    await page.screenshot({ path: path.join(os.tmpdir(), 'paint-tool-hint.png') });
+    await page.getByRole('button', { name: 'Lasso', exact: true }).hover();
+    await hint.filter({ hasText: 'Lasso' }).waitFor({ timeout: 5_000 });
+    await page.mouse.move(640, 400);
+    await hint.waitFor({ state: 'detached', timeout: 5_000 });
+  });
+
   await step('zoom buttons change the zoom level', async () => {
     await page.getByRole('button', { name: 'Zoom in' }).click();
     assert.equal(await page.getByRole('button', { name: 'Reset zoom' }).textContent(), '125%');
