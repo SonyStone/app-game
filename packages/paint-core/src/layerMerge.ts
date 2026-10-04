@@ -12,19 +12,23 @@ import { TILE_BYTES } from './tilePixels';
  * the same source-over mode (Normal on Normal, Smooth color on Smooth color), apart from 8-bit rounding. Otherwise,
  * where the lower layer is translucent, the upper layer has been blended with it alone rather than with everything
  * below, so the result can differ; Photoshop's Merge Down has the same limitation.
+ *
+ * With `clip`, the upper layer is clipped: its alpha is multiplied by the alpha of `clip.base`, the clipping base
+ * layer's own tile (`undefined` where the base is transparent), as the shader does with its `clip` texture.
  */
 export function mergeTilePixels(
   lower: Uint8Array | undefined,
   upper: Uint8Array,
   blend: BlendMode,
-  opacity: number
+  opacity: number,
+  clip?: { base: Uint8Array | undefined }
 ): Uint8Array | undefined {
   const result = new Uint8Array(TILE_BYTES);
   const mode = blendModes.indexOf(blend);
   let covered = false;
   for (let index = 0; index < TILE_BYTES; index += 4) {
     const base = pixel(lower, index);
-    const source = pixel(upper, index);
+    const source = clip ? scale(pixel(upper, index), pixel(clip.base, index)[3]) : pixel(upper, index);
     const out =
       mode === linearMode ? linearSourceOver(base, scale(source, opacity)) : composite(base, source, opacity, mode);
     for (let channel = 0; channel < 4; channel++) {

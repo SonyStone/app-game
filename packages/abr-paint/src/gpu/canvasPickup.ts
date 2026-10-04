@@ -215,7 +215,10 @@ export function createCanvasPickup<Layer extends PickupLayer>(
           });
           composite
             .with(compositePass)
-            .with(root.createBindGroup(compositeLayout, { base: result, layer: patch.layer, settings: layerParams }))
+            .with(
+              // Pickup composites layers without clipping; `clip` is unused.
+              root.createBindGroup(compositeLayout, { base: result, layer: patch.layer, clip: patch.layer, settings: layerParams })
+            )
             .draw(3);
           compositePass.end();
           root.device.queue.submit([compositeEncoder.finish()]);

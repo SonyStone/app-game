@@ -1,5 +1,5 @@
 import { defineDocumentEdit, type DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
-import type { TileChange } from '@app-game/paint-core/document';
+import type { Layer, TileChange } from '@app-game/paint-core/document';
 import { mergeTilePixels } from '@app-game/paint-core/layerMerge';
 import { z } from 'zod';
 import { areaTiles, expandMask, fillTile, floodMask, type FillArea } from './floodFill';
@@ -113,24 +113,54 @@ function reachesLimit(mask: Uint8Array, area: FillArea, view: FillCommand['area'
   );
 }
 
-/** Unpacked tiles of the area: the active layer's, or the visible layers composited bottom to top as displayed. */
+/**
+ * Unpacked tiles of the area: the active layer's, or the visible layers composited bottom to top as displayed, with
+ * clipped layers clipped to their base.
+ */
 async function sampleTiles(
   context: DocumentEditContext,
   area: FillArea,
   source: FillCommand['source']
 ): Promise<Map<string, Uint8Array>> {
-  const layers = source === 'layer' ? [context.active] : context.layers.filter((layer) => layer.visible);
   const tiles = new Map<string, Uint8Array>();
+  const read = async (layer: Layer, key: string) => {
+    const stored = layer.tiles.get(key);
+    return stored && (await context.readTile(stored));
+  };
   for (const key of areaTiles(area)) {
+    if (source === 'layer') {
+      const pixels = await read(context.active, key);
+      if (pixels) {
+        tiles.set(key, pixels);
+      }
+
+      continue;
+    }
+
     let composite: Uint8Array | undefined;
-    for (const layer of layers) {
-      const stored = layer.tiles.get(key);
-      if (!stored) {
+    /** The clipping base of the layers that follow, as for the display; `hidden` hides them. */
+    let base: { pixels: Uint8Array | undefined } | 'hidden' | undefined;
+    for (const layer of context.layers) {
+      const clipped = !!layer.clipping && base !== undefined;
+      const shown = layer.visible && layer.opacity > 0;
+      if (!clipped) {
+        base = shown ? { pixels: await read(layer, key) } : 'hidden';
+      }
+
+      if (!shown || base === 'hidden') {
         continue;
       }
 
-      const pixels = await context.readTile(stored);
-      composite = source === 'layer' ? pixels : mergeTilePixels(composite, pixels, layer.blend, layer.opacity);
+      const pixels = clipped ? await read(layer, key) : base!.pixels;
+      if (pixels) {
+        composite = mergeTilePixels(
+          composite,
+          pixels,
+          layer.blend,
+          layer.opacity,
+          clipped ? { base: base!.pixels } : undefined
+        );
+      }
     }
 
     if (composite) {

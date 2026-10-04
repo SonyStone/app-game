@@ -55,6 +55,17 @@ it('fills the active layer by the active layer or all visible layers, over its e
     fillEdit.run({ layers: [paint], active: { ...paint, visible: false }, readTile: read }, fillCommand())
   ).rejects.toThrow('Show the active layer');
 
+  // A solid layer clipped to the line art shows only as the outline, so the fill still stops at it.
+  const solid: Layer = {
+    ...layer('solid', new Map([['0,0', new Uint8Array(256 * 256 * 4).fill(255)]])),
+    clipping: true
+  };
+  const clippedFill = await fillEdit.run(
+    { layers: [paint, lines, solid], active: paint, readTile: read },
+    { ...fillCommand(), source: 'all' }
+  );
+  expect(count(alphaMask(clippedFill.changes[0]!.after as Uint8Array))).toBe(18 * 18);
+
   // With alpha lock, only the layer's own pixels change color, keeping their alpha.
   const line = layer('line', outline(0, 0, 20, 20, [0, 0, 0, 128]));
   const locked = await fillEdit.run(

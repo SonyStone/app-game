@@ -112,8 +112,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     const enqueue = (action: () => Promise<void>) => {
       void queue.run(() => (active ? action() : undefined)).then(reportResult);
     };
-    /** Bakes a layer into the layer below with its blend mode and opacity. Returns the lower layer's changed tiles
-     * for `renderer.restore`, which reloads them by key. */
+    /** Bakes a layer into the layer below with its blend mode and opacity, clipped to the lower layer when that is
+     * its clipping base. Returns the lower layer's changed tiles for `renderer.restore`, which reloads them by key. */
     const mergeDown = async (upperId: string) => {
       const index = document.layers.findIndex((layer) => layer.id === upperId);
       const upper = document.layers[index],
@@ -122,10 +122,15 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       if (!upper.visible || !lower.visible) throw new Error('Show both layers before merging them.');
       const read = async (pixels: TileData | undefined) =>
         pixels && unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels));
+      // Layers clipped to the same base merge unclipped; the merged layer stays clipped to that base.
+      const clipsToLower = !!upper.clipping && !lower.clipping;
       const merged = new Map<string, Uint8Array | undefined>();
       for (const [key, pixels] of upper.tiles) {
         const base = await read(lower.tiles.get(key));
-        merged.set(key, mergeTilePixels(base, (await read(pixels))!, upper.blend, upper.opacity));
+        merged.set(
+          key,
+          mergeTilePixels(base, (await read(pixels))!, upper.blend, upper.opacity, clipsToLower ? { base } : undefined)
+        );
       }
 
       document.mergeDown(upperId, merged);

@@ -1,17 +1,23 @@
 import { d, std, tgpu } from 'typegpu';
 import { linearSourceOver } from '@app-game/abr-brush/effects';
 
-/** Full viewport layer compositing uses two alternating result textures and a temporary layer image. */
+/**
+ * Full viewport layer compositing uses two alternating result textures and a temporary layer image. `settings` holds
+ * opacity, blend mode index and, in `z`, whether the layer is clipped: its alpha is then multiplied by the alpha of
+ * `clip`, the clipping base layer's own pixels. Without clipping, `clip` may be any texture.
+ */
 export const compositeLayout = tgpu.bindGroupLayout({
   base: { texture: d.texture2d() },
   layer: { texture: d.texture2d() },
+  clip: { texture: d.texture2d() },
   settings: { uniform: d.vec4f }
 });
 export const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
   'use gpu';
   const pixel = d.vec2i(input.position.xy);
   const base = std.textureLoad(compositeLayout.$.base, pixel, 0);
-  const source = std.textureLoad(compositeLayout.$.layer, pixel, 0);
+  let source = std.textureLoad(compositeLayout.$.layer, pixel, 0);
+  if (compositeLayout.$.settings.z > 0.5) source = std.mul(source, std.textureLoad(compositeLayout.$.clip, pixel, 0).a);
   const alpha = source.a * compositeLayout.$.settings.x;
   if (compositeLayout.$.settings.y > 3.5) return linearSourceOver(base, std.mul(source, compositeLayout.$.settings.x));
   const cb = std.div(base.rgb, std.max(base.a, 0.000001));

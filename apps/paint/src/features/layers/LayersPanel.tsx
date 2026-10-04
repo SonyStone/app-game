@@ -5,8 +5,8 @@ import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './LayersPanel.module.css';
 
 /**
- * Edits layer order, names, compositing properties and alpha lock, and duplicates and merges layers, through
- * undoable document commands.
+ * Edits layer order, names, compositing properties, alpha lock and clipping, and duplicates and merges layers,
+ * through undoable document commands.
  */
 export function LayersPanel(props: {
   /** Document state reported by the engine; each report clones every layer record. */
@@ -125,6 +125,17 @@ export function LayersPanel(props: {
         >
           <SketchIcon name={selected().alphaLock ? 'lock' : 'unlock'} size={18} />
         </button>
+        <button
+          class={styles.layerToggle}
+          aria-label="Clip to layer below"
+          title="Clip to layer below: show this layer only where the layer below has pixels"
+          aria-pressed={selected().clipping ? 'true' : 'false'}
+          onClick={() =>
+            props.onAction({ type: 'update', id: props.state.activeId, patch: { clipping: !selected().clipping } })
+          }
+        >
+          <SketchIcon name="clip" size={18} />
+        </button>
       </div>
       <p class={styles.blendNote}>
         {selected().blend === 'multiply'
@@ -208,6 +219,7 @@ function LayerRow(props: {
         {
           [styles.selected!]: props.selected,
           [styles.dragging!]: grip.isDragging(),
+          [styles.clipped!]: !!props.layer.clipping,
           [styles.dropTarget!]: drop.isOver()
         }
       ]}
@@ -229,7 +241,11 @@ function LayerRow(props: {
         <SketchIcon name="paper" size={26} />
         <span>
           {props.layer.name}
-          <small>{props.layer.alphaLock ? 'Transparency locked' : 'Raster layer'}</small>
+          <small>
+            {[props.layer.clipping ? 'Clipped' : 'Raster layer', props.layer.alphaLock ? 'transparency locked' : '']
+              .filter(Boolean)
+              .join(' · ')}
+          </small>
         </span>
       </button>
       <span ref={grip.ref} class={styles.layerGrip} aria-label={`Reorder ${props.layer.name}`} title="Drag to reorder">

@@ -10,6 +10,12 @@ export type Layer = {
   blend: BlendMode;
   /** Painting keeps the alpha of the layer's pixels: it recolors them and leaves transparent pixels transparent. */
   alphaLock?: boolean;
+  /**
+   * The layer shows only where its clipping base, the nearest unclipped layer below, has pixels: its alpha is
+   * multiplied by the base's own pixel alpha, before the base's opacity. A hidden base hides its clipped layers; a
+   * clipped layer with no layer below shows as an ordinary layer.
+   */
+  clipping?: boolean;
   tiles: Map<string, TileData>;
 };
 /** Separable color blend modes; alpha always follows source-over. */
@@ -352,7 +358,7 @@ export type LayerAction =
   | {
       type: 'update';
       id: string;
-      patch: Partial<Pick<LayerInfo, 'name' | 'visible' | 'opacity' | 'blend' | 'alphaLock'>>;
+      patch: Partial<Pick<LayerInfo, 'name' | 'visible' | 'opacity' | 'blend' | 'alphaLock' | 'clipping'>>;
     };
 
 function newLayer(id: string, name: string): Layer {

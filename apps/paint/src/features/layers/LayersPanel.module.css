@@ -97,6 +97,11 @@
     background: #e6f3fa;
   }
 
+  /* Clipped layers are indented under their base. */
+  &.clipped {
+    padding-inline-start: 22px;
+  }
+
   &.dragging {
     position: relative;
     z-index: 1;

@@ -151,7 +151,7 @@ it('locks and unlocks the transparent pixels of the selected layer as an undoabl
   setState(drawing.state());
   flush();
   expect(lock.getAttribute('aria-pressed')).toBe('true');
-  expect(host.textContent).toContain('Transparency locked');
+  expect(host.textContent).toContain('Raster layer · transparency locked');
 
   drawing.undo();
   setState(drawing.state());

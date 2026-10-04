@@ -26,6 +26,18 @@ describe('mergeTilePixels', () => {
     expect(first(mergeTilePixels(lower, upper, 'overlay', 1))).toEqual([128, 255, 1, 255]);
   });
 
+  it('clips the upper layer to the alpha of its clipping base', () => {
+    const upper = tile([255, 0, 0, 255]);
+    // A half-transparent base lets half of the clipped red through, before its own opacity.
+    expect(first(mergeTilePixels(undefined, upper, 'normal', 1, { base: tile([0, 0, 0, 128]) }))).toEqual([
+      128, 0, 0, 128
+    ]);
+    // Without base pixels nothing of the clipped layer remains.
+    expect(mergeTilePixels(undefined, upper, 'normal', 1, { base: undefined })).toBeUndefined();
+    const base = tile([0, 0, 255, 255]);
+    expect(first(mergeTilePixels(base, upper, 'normal', 0.5, { base }))).toEqual([128, 0, 128, 255]);
+  });
+
   it('returns undefined for a fully transparent result', () => {
     expect(mergeTilePixels(undefined, new Uint8Array(TILE_BYTES), 'normal', 1)).toBeUndefined();
     expect(mergeTilePixels(undefined, tile([255, 0, 0, 255]), 'normal', 0)).toBeUndefined();

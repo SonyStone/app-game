@@ -163,8 +163,8 @@ function createTargetView(
     },
 
     bytes() {
-      // Two rgba16float composition textures and two rgba8unorm images.
-      return (this.fallback?.bytes() ?? 0) + (this.view ? this.view.width * this.view.height * (8 * 2 + 4 * 2) : 0);
+      // Two rgba16float composition textures and three rgba8unorm images.
+      return (this.fallback?.bytes() ?? 0) + (this.view ? this.view.width * this.view.height * (8 * 2 + 4 * 3) : 0);
     },
 
     /** Releases every GPU resource of this target and unconfigures its context. */
@@ -184,7 +184,8 @@ function createTargetView(
 /**
  * Ping-pong composition textures, the per-layer scratch target and the presented image of one target. Layers blend
  * into `a`/`b` in rgba16float, so rounding does not accumulate across many translucent layers; `layer` holds 8-bit
- * tile pixels and `composed` the 8-bit result.
+ * tile pixels, `clip` a copy of the clipping base layer's pixels for the layers clipped to it, and `composed` the
+ * 8-bit result.
  */
 export type ViewTextures = ReturnType<typeof createViewTextures>;
 
@@ -194,6 +195,7 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
   const a = texture(compositionFormat),
     b = texture(compositionFormat),
     layer = texture('rgba8unorm'),
+    clip = texture('rgba8unorm'),
     composed = texture('rgba8unorm');
   const slots: { settings: TgpuBuffer<d.Vec4f> & UniformFlag; fromA: TgpuBindGroup; fromB: TgpuBindGroup }[] = [];
   return {
@@ -202,6 +204,7 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
     a,
     b,
     layer,
+    clip,
     composed,
     aRender: root.unwrap(a).createView(),
     bRender: root.unwrap(b).createView(),
@@ -222,8 +225,8 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
       const settings = root.createBuffer(d.vec4f).$usage('uniform');
       const created = {
         settings,
-        fromA: root.createBindGroup(shader.compositeLayout, { base: a, layer, settings }),
-        fromB: root.createBindGroup(shader.compositeLayout, { base: b, layer, settings })
+        fromA: root.createBindGroup(shader.compositeLayout, { base: a, layer, clip, settings }),
+        fromB: root.createBindGroup(shader.compositeLayout, { base: b, layer, clip, settings })
       };
       slots[slot] = created;
       return created;
@@ -233,6 +236,7 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
       a.destroy();
       b.destroy();
       layer.destroy();
+      clip.destroy();
       composed.destroy();
       for (const slot of slots) {
         slot.settings.destroy();

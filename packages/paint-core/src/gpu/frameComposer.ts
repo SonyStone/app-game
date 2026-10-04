@@ -162,8 +162,23 @@ export function createFrameComposer(
         let read = view.a,
           write = view.b;
         let slot = 0;
-        for (const layer of layers) {
+        /**
+         * The clipping base for clipped layers that follow: none before the first unclipped layer, hidden when the
+         * base is not drawn, so its clipped layers are not either, and ready once its pixels are in `view.clip`.
+         */
+        let clipBase: 'none' | 'hidden' | 'ready' = 'none';
+        for (const [index, layer] of layers.entries()) {
+          // A clipped layer without a base below it is drawn as an ordinary layer.
+          const clipped = !!layer.clipping && clipBase !== 'none';
+          if (clipped && clipBase === 'hidden') {
+            continue;
+          }
+
           if (!layer.visible || layer.opacity <= 0) {
+            if (!clipped) {
+              clipBase = 'hidden';
+            }
+
             continue;
           }
 
@@ -200,13 +215,30 @@ export function createFrameComposer(
               }
             );
             if (!drawn) {
+              if (!clipped) {
+                clipBase = 'hidden';
+              }
+
               continue;
+            }
+          }
+
+          if (!clipped) {
+            clipBase = 'ready';
+            if (layers[index + 1]?.clipping) {
+              frame
+                .encoder()
+                .copyTextureToTexture(
+                  { texture: root.unwrap(view.layer), origin: [region.x, region.y] },
+                  { texture: root.unwrap(view.clip), origin: [region.x, region.y] },
+                  [region.width, region.height]
+                );
             }
           }
 
           // Each composited layer owns a settings slot, so every composite pass can share the frame encoder.
           const composite = view.composite(slot++);
-          composite.settings.write(d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), 0, 0));
+          composite.settings.write(d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), clipped ? 1 : 0, 0));
           const pass = frame.encoder().beginRenderPass({
             colorAttachments: [
               { view: write === view.a ? view.aRender : view.bRender, loadOp: 'clear', storeOp: 'store' }
@@ -407,11 +439,11 @@ function viewSignature(camera: Camera, size: ViewSize, width: number, height: nu
   return `${camera.x},${camera.y},${camera.zoom},${camera.angle},${camera.mirrored},${size.width},${size.height},${width},${height}`;
 }
 
-/** Layer order and composite settings; length-prefixed ids cannot collide with separators. */
+/** Layer order and composite settings, clipping included; length-prefixed ids cannot collide with separators. */
 function compositionSignature(layers: readonly Layer[]) {
   let signature = '';
-  for (const { id, visible, opacity, blend } of layers) {
-    signature += `${id.length}:${id},${visible},${opacity},${blend};`;
+  for (const { id, visible, opacity, blend, clipping } of layers) {
+    signature += `${id.length}:${id},${visible},${opacity},${blend},${!!clipping};`;
   }
 
   return signature;
