@@ -310,7 +310,7 @@ export function maxBrushSize(brush: Brush) {
 }
 
 /** Canvas tools. `brush` and `eraser` also name the round brush's own `tool`. */
-export type PaintTool = Brush['tool'] | 'lasso';
+export type PaintTool = Brush['tool'] | 'lasso' | 'fill';
 
 /** Tools that paint with a brush preset. */
 export type BrushSlot = Brush['tool'];
@@ -415,7 +415,9 @@ function restoredState(stored: unknown, find: (id: string) => BrushPreset | unde
   }
 
   const tool =
-    brushSlots.includes(stored.tool as BrushSlot) || stored.tool === 'lasso' ? (stored.tool as PaintTool) : 'brush';
+    brushSlots.includes(stored.tool as BrushSlot) || stored.tool === 'lasso' || stored.tool === 'fill'
+      ? (stored.tool as PaintTool)
+      : 'brush';
   const slot = brushSlots.includes(stored.slot as BrushSlot) ? (stored.slot as BrushSlot) : 'brush';
   const changes = isRecord(stored.changes)
     ? Object.fromEntries(Object.entries(stored.changes).filter(([, value]) => isRecord(value)))

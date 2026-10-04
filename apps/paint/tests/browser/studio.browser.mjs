@@ -299,6 +299,51 @@ try {
     await waitForSaved(page);
   });
 
+  await step('the fill tool fills empty paper with the current color as one undo step', async () => {
+    const hex = () => page.getByLabel('Hex color').inputValue();
+    const box = await page.getByRole('main', { name: 'Drawing workspace' }).boundingBox();
+    const paper = { x: box.x + box.width / 2 - 150, y: box.y + box.height / 2 - 100 };
+    const pick = async (previous) => {
+      await page.keyboard.down('Alt');
+      await page.mouse.click(paper.x, paper.y);
+      await page.keyboard.up('Alt');
+      await page.getByRole('button', { name: 'Color palette' }).click();
+      await page.waitForFunction(
+        (previous) => document.querySelector('input[aria-label="Hex color"]')?.value !== previous,
+        previous,
+        { polling: 100, timeout: 10_000 }
+      );
+      const value = await hex();
+      await page.keyboard.press('Escape');
+      return value;
+    };
+    await page.getByRole('button', { name: 'Color palette' }).click();
+    await page.getByLabel('Hex color').fill('00C040');
+    await page.getByLabel('Hex color').press('Enter');
+    await page.keyboard.press('Escape');
+
+    await page.keyboard.press('g');
+    assert.equal(await page.getByRole('button', { name: 'Fill', exact: true }).getAttribute('aria-pressed'), 'true');
+    await page.getByRole('button', { name: 'Brush settings' }).click();
+    assert.equal(await page.getByLabel('Fill sample').inputValue(), 'all');
+    await page.keyboard.press('Escape');
+    await page.mouse.click(paper.x, paper.y);
+    await waitForSaved(page);
+    // Alt-click with the fill tool picks the filled color; the pick replaces the current color with it.
+    await page.getByRole('button', { name: 'Color palette' }).click();
+    await page.getByLabel('Hex color').fill('FF0000');
+    await page.getByLabel('Hex color').press('Enter');
+    await page.keyboard.press('Escape');
+    assert.equal(await pick('FF0000'), '00C040');
+
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await waitForSaved(page);
+    const restored = await pick('00C040');
+    const channels = [0, 2, 4].map((index) => parseInt(restored.slice(index, index + 2), 16));
+    assert.ok(Math.min(...channels) > 0xe0, `expected paper after undo, got ${restored}`);
+    await page.keyboard.press('b');
+  });
+
   await step('the visible canvas exports as PNG', async () => {
     await page.getByRole('button', { name: 'Drawing menu' }).click();
     const [download] = await Promise.all([

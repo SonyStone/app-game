@@ -31,6 +31,7 @@ export const panelTitles = {
   symmetry: 'Paint symmetry',
   file: 'Drawing',
   brush: 'Brush',
+  fill: 'Fill',
   color: 'Color',
   layers: 'Layers'
 } as const;

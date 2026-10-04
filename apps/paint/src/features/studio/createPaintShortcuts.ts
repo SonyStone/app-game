@@ -88,6 +88,7 @@ function match(event: KeyboardEvent, lasso: boolean) {
     { when: plain && key === 'b', run: (actions) => actions.chooseTool('brush') },
     { when: plain && key === 'e', run: (actions) => actions.chooseTool('eraser') },
     { when: plain && key === 'l', run: (actions) => actions.chooseTool('lasso') },
+    { when: plain && key === 'g', run: (actions) => actions.chooseTool('fill') },
     { when: plain && !event.repeat && key === 'x', run: (actions) => actions.swapColors() },
     { when: plain && key === 'd', run: (actions) => actions.resetColors() },
     { when: event.key === 'Escape', run: (actions) => actions.cancel() },

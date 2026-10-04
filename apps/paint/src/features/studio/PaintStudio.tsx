@@ -24,6 +24,7 @@ import { BrushCursor, CanvasDebug, firstCanvasAction, PaintCanvas, type CanvasIn
 import { ColorPanel, createCanvasColorPicker } from '../color';
 import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
+import { createFill, FillPanel } from '../fill';
 import { createImagePlacement, HistorySourceControl, LayersPanel } from '../layers';
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
 import { createSelection, createSelectionView, guardEdits, SelectionActions } from '../selection';
@@ -136,6 +137,27 @@ export function PaintStudio(props: {
     },
     send: edit
   });
+  const fill = createFill({
+    active: () => tools.tool() === 'fill',
+    color: () => tools.brush().color,
+    area: () => {
+      const view = size();
+      const current = camera.current();
+      const corners = [
+        { x: 0, y: 0 },
+        { x: view.width, y: 0 },
+        { x: 0, y: view.height },
+        { x: view.width, y: view.height }
+      ].map((corner) => screenToWorld(corner, current, view));
+      const xs = corners.map(({ x }) => x),
+        ys = corners.map(({ y }) => y);
+      const left = Math.min(...xs),
+        top = Math.min(...ys);
+      return { left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
+    },
+    canFill: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
+    send: edit
+  });
   const fullscreen = createFullscreenToggle(editor, setError);
 
   const { brush, tool } = tools;
@@ -167,7 +189,7 @@ export function PaintStudio(props: {
     showPenCursor: developer.showPenCursor,
     rawUpdate: developer.markRawReceived,
     // The Mixer Brush loads paint with Alt/Option; other painting tools pick a color.
-    canvasAction: firstCanvasAction(mixer.canvasAction, colorPicker.canvasAction),
+    canvasAction: firstCanvasAction(mixer.canvasAction, colorPicker.canvasAction, fill.canvasAction),
     adjust: brushAdjust.adjust,
     puck: camera.navigation,
     selection: { ...selection, enabled: () => tool() === 'lasso' }
@@ -254,8 +276,13 @@ export function PaintStudio(props: {
     launcher?.focus({ preventScroll: true });
   }
 
-  /** Opens the brush panel, reading the preset list for its picker. */
+  /** Opens the settings of the active tool: the fill panel for the fill, otherwise the brush panel and its presets. */
   function openBrushSettings(target: HTMLElement) {
+    if (tool() === 'fill') {
+      togglePanel('fill', target);
+      return;
+    }
+
     void library.loadAll();
     togglePanel('brush', target);
   }
@@ -297,7 +324,7 @@ export function PaintStudio(props: {
             <PaintCanvas
               connect={(element) => engine.connect(element, session.mode)}
               input={input}
-              crosshair={tool() === 'lasso'}
+              crosshair={tool() === 'lasso' || tool() === 'fill'}
               ref={setCanvas}
             />
           )}
@@ -400,12 +427,20 @@ export function PaintStudio(props: {
           <button
             aria-label="Brush settings"
             title="Brush settings"
-            aria-expanded={panel() === 'brush' ? 'true' : 'false'}
+            aria-expanded={panel() === 'brush' || panel() === 'fill' ? 'true' : 'false'}
             aria-controls="paint-panel"
             onClick={(event) => openBrushSettings(event.currentTarget)}
           >
             <SketchIcon
-              name={tool() === 'eraser' ? 'erase' : brush().engine?.id === 'abr' ? 'brush' : 'draw'}
+              name={
+                tool() === 'fill'
+                  ? 'fill'
+                  : tool() === 'eraser'
+                    ? 'erase'
+                    : brush().engine?.id === 'abr'
+                      ? 'brush'
+                      : 'draw'
+              }
               size={22}
             />
             <small>{blockCursor() ? 'Block' : Math.round(brush().size)}</small>
@@ -504,6 +539,9 @@ export function PaintStudio(props: {
                         : undefined
                     }
                   />
+                </Match>
+                <Match when={id === 'fill'}>
+                  <FillPanel settings={fill.settings()} onChange={fill.update} />
                 </Match>
                 <Match when={id === 'color'}>
                   <ColorPanel
@@ -605,10 +643,14 @@ export function PaintStudio(props: {
   );
 
   /**
-   * The brush paints color, so Alt/Option-click picks a color: round and textured presets and ABR Brush or Pencil
-   * presets. ABR erasers keep Alt for erasing to history, and the Mixer Brush for loading paint.
+   * The tool paints color, so Alt/Option-click picks a color: the fill, and round and textured presets and ABR Brush
+   * or Pencil presets. ABR erasers keep Alt for erasing to history, and the Mixer Brush for loading paint.
    */
   function paintsColor() {
+    if (tool() === 'fill') {
+      return true;
+    }
+
     if (tool() !== 'brush') {
       return false;
     }
