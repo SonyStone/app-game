@@ -100,17 +100,13 @@ export const tileVertex = tgpu.vertexFn({
   };
 });
 /**
- * Samples a tile. With `sharp`, magnified pixels are flat squares whose edges blend over one screen pixel ("sharp
- * bilinear"): the position moves to its texel's center except within the last screen pixel before the next texel.
- * Minified, the moved position stays where it was, so this falls back to smooth sampling; the original derivatives
- * keep the mip level from jumping at texel edges.
+ * Samples a tile. With `sharp`, magnified pixels are flat squares whose edges blend over one screen pixel; see
+ * {@link sharpTexel}. The original derivatives keep the mip level from jumping at texel edges.
  */
 export const tileFragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f })((input) => {
   'use gpu';
   const texel = std.mul(input.uv, 256);
-  const width = std.max(std.fwidth(texel), d.vec2f(0.0001));
-  const offset = std.clamp(std.div(std.sub(std.fract(texel), 0.5), width), d.vec2f(-0.5), d.vec2f(0.5));
-  const snapped = std.div(std.add(std.floor(texel), std.add(d.vec2f(0.5), offset)), 256);
+  const snapped = std.div(sharpTexel(texel, std.fwidth(texel)), 256);
   const uv = std.select(input.uv, snapped, viewLayout.$.view.sharp > 0.5);
   return std.textureSampleGrad(
     viewLayout.$.image,
@@ -119,6 +115,22 @@ export const tileFragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f 
     std.dpdx(input.uv),
     std.dpdy(input.uv)
   );
+});
+
+/**
+ * Where a linearly filtered texture is sampled so that magnified texels show as flat squares ("sharp bilinear"):
+ * `texel` is the position in texels, `width` the texels one screen pixel spans. The position moves to the center of
+ * its texel, except within half a screen pixel of a texel edge, where it crosses the edge so the two texels blend over
+ * one screen pixel. Minified (`width` of 1 or more), it stays where it was, which is smooth sampling.
+ */
+export const sharpTexel = tgpu.fn(
+  [d.vec2f, d.vec2f],
+  d.vec2f
+)((texel, width) => {
+  'use gpu';
+  const edge = std.floor(std.add(texel, d.vec2f(0.5)));
+  const span = std.clamp(width, d.vec2f(0.0001), d.vec2f(1));
+  return std.add(edge, std.clamp(std.div(std.sub(texel, edge), span), d.vec2f(-0.5), d.vec2f(0.5)));
 });
 
 /** Presents the composed document over a neutral paper background. */

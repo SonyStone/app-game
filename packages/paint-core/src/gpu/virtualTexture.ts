@@ -6,6 +6,7 @@ import { type TileData } from '../tilePixels';
 import { pageCrop, pageFallback } from './pageFallback';
 import { createPageWork, ObsoletePageError } from '../pageWork';
 import { createPageRequests, type PageDemand } from './pageRequests';
+import { sharpTexel } from './shaders';
 
 /** Software virtual texture with a shared array-page pool, CPU page selection and instanced draws.
  * Loading is asynchronous and reprioritized per viewport. Resident parents provide coarse fallback.
@@ -414,12 +415,11 @@ export const fragment = tgpu.fragmentFn({
   'use gpu';
   const texel = std.mul(input.uv, 256);
   // Derivatives first, while every pixel of the quad still runs the same code.
-  const width = std.max(std.fwidth(texel), d.vec2f(0.0001));
+  const width = std.fwidth(texel);
   const uv = std.div(std.add(texel, d.vec2f(1)), PAGE_SIDE);
   const radius = std.clamp((input.footprint - 1) * 0.5, 0, 0.5) / PAGE_SIDE;
   if (radius <= 0) {
-    const offset = std.clamp(std.div(std.sub(std.fract(texel), 0.5), width), d.vec2f(-0.5), d.vec2f(0.5));
-    const snapped = std.div(std.add(std.add(std.floor(texel), std.add(d.vec2f(0.5), offset)), d.vec2f(1)), PAGE_SIDE);
+    const snapped = std.div(std.add(sharpTexel(texel, width), d.vec2f(1)), PAGE_SIDE);
     return samplePage(std.select(uv, snapped, layout.$.camera.sharp > 0.5), input.slot);
   }
   // Integrate a minified page's pixel footprint; offsets stay within its one-texel gutters.

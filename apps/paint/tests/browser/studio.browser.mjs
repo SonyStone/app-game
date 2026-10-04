@@ -603,6 +603,58 @@ try {
     await page.getByRole('button', { name: 'Brush', exact: true }).click();
   });
 
+  await step('up close, sharp pixels end on whole document pixels, where the pixel grid runs', async () => {
+    const { cx, cy } = await workspaceCenter(page);
+    await page.keyboard.press('l');
+    await page.getByRole('button', { name: 'Rectangle selection' }).click();
+    // Above the diagonal stroke of earlier steps, so only the rectangle's edge is in the sampled row.
+    await page.mouse.move(cx - 200, cy - 60);
+    await page.mouse.down();
+    await page.mouse.move(cx + 10, cy - 15, { steps: 4 });
+    await page.mouse.up();
+    await setColor(page, '000000');
+    await page.getByRole('toolbar', { name: 'Selection actions' }).getByRole('button', { name: 'Fill selection' }).click();
+    await waitForSaved(page);
+    await page.keyboard.press('Control+d');
+    await page.getByRole('button', { name: 'Lasso selection' }).click();
+    // The brush shows no selection hint over the sampled row.
+    await page.keyboard.press('b');
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press('Control+=');
+    }
+
+    const zoom = Number((await page.getByRole('button', { name: 'Reset zoom' }).textContent()).replace('%', '')) / 100;
+
+    // Along a row across the rectangle's right edge only the 1 px grid lines may be neither ink nor paper: sampling
+    // between texels showed the edge pixel as a whole column of half ink.
+    await page.waitForTimeout(500);
+    const row = await page.evaluate(
+      async ({ shot, y }) => {
+        const image = new Image();
+        image.src = `data:image/png;base64,${shot}`;
+        await image.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const context = canvas.getContext('2d');
+        context.drawImage(image, 0, 0);
+        const pixels = context.getImageData(0, Math.round(y), image.width, 1).data;
+        return Array.from({ length: image.width }, (_, x) => pixels[x * 4 + 1]);
+      },
+      { shot: (await page.screenshot()).toString('base64'), y: cy - 35 * zoom }
+    );
+    let run = 0,
+      longest = 0;
+    for (const green of row.slice(Math.round(cx - 50), Math.round(cx + 300))) {
+      run = green > 0x30 && green < 0xc0 ? run + 1 : 0;
+      longest = Math.max(longest, run);
+    }
+
+    assert.ok(longest <= 2, `expected crisp pixel edges, found ${longest} px of half ink`);
+    await page.getByRole('button', { name: 'Reset zoom' }).click();
+    await undo(page, 1);
+  });
+
   await step('a layer with locked transparency only recolors its own pixels', async () => {
     const { cx, cy } = await workspaceCenter(page);
     await page.getByRole('button', { name: 'Layers' }).click();
