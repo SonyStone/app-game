@@ -3,8 +3,8 @@ import { Show } from 'solid-js';
 import styles from './PaintStudio.module.css';
 
 /**
- * Drawing panel: open, save and export the drawing, place an image as a new layer, reset the view, developer tools and
- * host controls.
+ * Drawing panel: open, save and export the drawing, keep it in a folder, place an image as a new layer, reset the
+ * view, developer tools and host controls.
  */
 export function DrawingMenu(props: {
   /** File commands wait for the engine. */
@@ -19,6 +19,8 @@ export function DrawingMenu(props: {
   onExportPsd: () => void;
   onResetView: () => void;
   onDeveloper: () => void;
+  /** Keeping the drawing in a folder on disk, after the file actions; see `DrawingFolderControls`. */
+  folderControls?: JSX.Element;
   /** How the canvas shows pixels, below the file actions. */
   viewOptions?: JSX.Element;
   /** Host-specific controls, such as PWA installation. */
@@ -75,6 +77,7 @@ export function DrawingMenu(props: {
         <button disabled={!props.ready} onClick={() => props.onExportPsd()}>
           Export layers<span>PSD</span>
         </button>
+        {props.folderControls}
         <button onClick={() => props.onResetView()}>Reset view</button>
         <button onClick={() => props.onDeveloper()}>Developer</button>
         {props.applicationControls}

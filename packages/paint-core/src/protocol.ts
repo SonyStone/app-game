@@ -5,9 +5,9 @@ import type { Result } from './asyncResult';
 import type { Brush, Sample } from './brush';
 import type { Camera, Point, ViewSize } from './camera';
 import type { ColorSample, PickedColor } from './colorSample';
-import type { DocumentRect } from './layersInView';
 import type { BrushEngine } from './composition/contracts';
 import type { HistorySource, LayerAction, createDocument } from './document';
+import type { DocumentRect } from './layersInView';
 
 /** Main-thread commands are processed in order; all sample batches precede their stroke end. */
 export type PaintCommand =
@@ -83,7 +83,14 @@ export type PaintCommand =
   | { type: 'edit'; edit: string; command: unknown; requestId?: string }
   | { type: 'import'; text: string }
   /** A `.paint` file, a legacy JSON drawing, or a Photoshop document, recognized by its contents. */
-  | { type: 'import'; file: Blob };
+  | { type: 'import'; file: Blob }
+  /**
+   * Keeps the drawing in a folder on disk: `save` keeps the current drawing in `directory`, `open` opens the drawing
+   * kept there; either links the folder, so later checkpoints are written there too. `unlink` stops that, and
+   * `access` resumes a linked folder after the browser was allowed to use it again. Needs storage with folders.
+   */
+  | { type: 'folder'; action: 'save' | 'open'; directory: FileSystemDirectoryHandle }
+  | { type: 'folder'; action: 'unlink' | 'access' };
 
 /** Starts a runtime on a transferred canvas; the first command of every worker connection. */
 export type InitCommand = Extract<PaintCommand, { type: 'init' }>;
@@ -130,6 +137,11 @@ export type PaintEvent =
         overviewWrites: number;
         overviewDirty: number;
         overviewDirtyBytes: number;
+        /**
+         * The folder the drawing is kept in: its name, whether the browser allows using it (`prompt` until the user
+         * is asked again), whether it is being written and how many versions are left, and the last failure writing it.
+         */
+        folder?: { name: string; access: 'granted' | 'prompt'; writing: boolean; pending: number; error?: string };
       };
       /** Last submitted frame's individual tile draws; virtual page draws are reported separately. */
       rasterDraws?: { preview: number; committed: number };

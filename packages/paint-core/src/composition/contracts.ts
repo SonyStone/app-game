@@ -20,7 +20,11 @@ export type RendererFactory = typeof createPaintRenderer;
  * Save failures reject and retain staged pixels. close reports its outcome and releases resources.
  * Replication requires a separate ordered document-operation protocol, not just a storage adapter.
  */
-export type PaintStorage = Awaited<ReturnType<typeof createTileStore>>;
+export type PaintStorage = Omit<TileStore, 'folder'> & {
+  /** Keeping the drawing in a folder on disk, where the storage supports it; see the tile store's `folder`. */
+  folder?: TileStore['folder'];
+};
+type TileStore = Awaited<ReturnType<typeof createTileStore>>;
 /** Opens one storage session; its name identifies the document namespace. */
 export type StorageFactory = (name: string) => Promise<PaintStorage>;
 

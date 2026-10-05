@@ -1058,6 +1058,59 @@ try {
     await page.keyboard.press('Escape');
   });
 
+  await step('the drawing kept in a folder is written there as it changes and opens from it again', async () => {
+    // Headless Chromium cannot show the folder picker: it is given a folder of the origin private file system.
+    await page.evaluate(async () => {
+      const root = await navigator.storage.getDirectory();
+      await root.removeEntry('drawing-folder', { recursive: true }).catch(() => undefined);
+      const folder = await root.getDirectoryHandle('drawing-folder', { create: true });
+      window.showDirectoryPicker = async () => folder;
+    });
+    const folderFiles = () =>
+      page.evaluate(async () => {
+        const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle('drawing-folder');
+        const tiles = [];
+        for await (const shard of (await folder.getDirectoryHandle('tiles')).values())
+          for await (const tile of shard.values()) tiles.push(tile.name);
+        const drawing = JSON.parse(await (await (await folder.getFileHandle('drawing.json')).getFile()).text());
+        return { tiles, references: drawing.document.layers.flatMap((layer) => layer.tiles.map((tile) => tile.pixels.storageId)) };
+      });
+    const menu = page.getByRole('complementary', { name: 'Drawing' });
+    await page.getByRole('button', { name: 'Drawing menu' }).click();
+    await menu.getByRole('button', { name: /Keep in folder/ }).click();
+    await menu.getByText('Kept in “drawing-folder”').waitFor({ timeout: 10_000 });
+    await menu.getByText('Saved there').waitFor({ timeout: 60_000 });
+    const before = await folderFiles();
+    assert.ok(before.references.length > 0, 'the folder holds the drawing');
+    assert.ok(before.references.every((id) => before.tiles.includes(id)), 'every tile of the drawing is in the folder');
+    await page.keyboard.press('Escape');
+
+    // A stroke adds only its new tiles; the drawing in the folder refers to them.
+    await stroke(page);
+    await waitForSaved(page);
+    await page.waitForFunction(
+      async (count) => {
+        const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle('drawing-folder');
+        const drawing = JSON.parse(await (await (await folder.getFileHandle('drawing.json')).getFile()).text());
+        return JSON.stringify(drawing.document.layers).length !== count;
+      },
+      JSON.stringify(before.references).length,
+      { polling: 200, timeout: 30_000 }
+    );
+    const after = await folderFiles();
+    assert.ok(after.references.every((id) => after.tiles.includes(id)), 'every tile of the changed drawing is in the folder');
+
+    // Stopped and opened again, the drawing comes back from the folder, kept there.
+    await page.getByRole('button', { name: 'Drawing menu' }).click();
+    await menu.getByRole('button', { name: /Stop keeping in folder/ }).click();
+    await menu.getByRole('button', { name: /Keep in folder/ }).waitFor({ timeout: 10_000 });
+    await menu.getByRole('button', { name: /Open folder/ }).click();
+    await menu.getByText('Kept in “drawing-folder”').waitFor({ timeout: 10_000 });
+    assert.equal(await page.getByRole('alert').count(), 0);
+    await page.keyboard.press('Escape');
+    await waitForSaved(page);
+  });
+
   assert.deepEqual(pageErrors, [], 'The page reported errors.');
   console.log('Studio UI smoke test passed.');
 } catch (error) {

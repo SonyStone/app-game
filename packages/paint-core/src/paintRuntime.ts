@@ -15,7 +15,7 @@ import { isPsdFile, readPsdFile, writePsdFile } from './psdFile';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { mergeTilePixels } from './layerMerge';
 import { captureSelection, editSelection, translateSelection, type SelectionPixels } from './selection';
-import { decodeDocument, snapshotDocument } from './storage';
+import { decodeDocument, snapshotDocument, type restoreDocument } from './storage';
 import { unpackTile, type TileData } from './tilePixels';
 import { errorMessage, type GpuError } from '@app-game/solid-gpu/errors';
 
@@ -71,6 +71,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let redraw = false;
     let renderTimer: ReturnType<typeof setTimeout> | undefined;
     let collectTimer: ReturnType<typeof setTimeout> | undefined;
+    let folderTimer: ReturnType<typeof setInterval> | undefined;
     /** Read by storage when collection runs, after any saves queued ahead of it. */
     const liveTiles = () => [...document.snapshots(), ...(clipboard?.tiles.values() ?? [])];
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -132,7 +133,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         saveState: strokeSession ? 'unsaved' : pendingSaves > 0 ? 'saving' : saved ? 'saved' : 'unsaved',
         renderMs,
         gpuBytes: stats?.gpuBytes ?? 0,
-        storage: tileStore?.stats(),
+        storage: tileStore && { ...tileStore.stats(), folder: tileStore.folder?.status() },
         residentTiles: stats?.residentTiles ?? 0
       });
     };
@@ -144,6 +145,23 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         ...(code ? { code } : {}),
         ...(background ? { background } : {})
       });
+    /** Replaces the drawing with an opened one, its tiles already in storage, and starts showing it. */
+    const replaceDrawing = async (next: ReturnType<typeof restoreDocument>) => {
+      cancel();
+      document.replace(next.layers, next.activeId, next.linearBlending);
+      syncBlending();
+      camera = next.camera;
+      featureData = restoreFeatureData(modules.features, next.features);
+      editStates.clear();
+      lastEdit = undefined;
+      floating = undefined;
+      renderer?.setFloating(undefined);
+      document.persist(tileStore.capture);
+      renderer?.reset();
+      await renderer?.prepareOverview(document.layers);
+      post({ type: 'restored', camera, features: reportedFeatures() });
+      changed();
+    };
     const reportResult = (result: Awaited<ReturnType<typeof attempt>>) => {
       if (!result.ok) failure(result.error);
     };
@@ -329,10 +347,22 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         savedVersion = Math.max(savedVersion, version);
         saved = savedVersion === saveVersion && !strokeSession;
         scheduleCollect();
+        reportFolder();
       } finally {
         pendingSaves--;
         status();
       }
+    };
+    /** While the drawing's folder is being written, reports its progress every second, and once more when done. */
+    const reportFolder = () => {
+      const folder = tileStore.folder;
+      if (!folder?.status()?.writing || folderTimer) return;
+      folderTimer = setInterval(status, 1000);
+      void folder.idle().then(() => {
+        clearInterval(folderTimer);
+        folderTimer = undefined;
+        status();
+      });
     };
     /** Collects unreachable tile versions after edits settle; strokes, imports and selection edits postpone it. */
     const scheduleCollect = () => {
@@ -932,24 +962,37 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                     : await readPaintFile(command.file, stage)
                   : decodeDocument(command.text);
               await tileStore.flush();
-              cancel();
-              document.replace(next.layers, next.activeId, next.linearBlending);
-              syncBlending();
-              camera = next.camera;
-              featureData = restoreFeatureData(modules.features, next.features);
-              editStates.clear();
-              lastEdit = undefined;
-              floating = undefined;
-              renderer?.setFloating(undefined);
-              document.persist(tileStore.capture);
-              renderer?.reset();
-              await renderer?.prepareOverview(document.layers);
-              post({ type: 'restored', camera, features: reportedFeatures() });
-              changed();
+              // The opened drawing is not the one kept in a folder, if any.
+              tileStore.folder?.detach();
+              await replaceDrawing(next);
             } finally {
               importing = false;
               if (!saved) scheduleSave();
             }
+            break;
+          }
+          case 'folder': {
+            const folder = tileStore.folder;
+            if (!folder) throw new Error('This storage cannot keep drawings in folders.');
+            if (command.action === 'save') {
+              await folder.save(command.directory);
+              changed();
+            } else if (command.action === 'open') {
+              importing = true;
+              clearTimeout(collectTimer);
+              try {
+                await replaceDrawing(await folder.open(command.directory));
+              } finally {
+                importing = false;
+                if (!saved) scheduleSave();
+              }
+            } else if (command.action === 'unlink') {
+              await folder.unlink(liveTiles);
+            } else {
+              await folder.access();
+            }
+
+            scheduleDraw();
             break;
           }
           case 'recover':

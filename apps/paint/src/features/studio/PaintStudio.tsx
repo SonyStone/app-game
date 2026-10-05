@@ -30,6 +30,7 @@ import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
 import { createFill, FillPanel } from '../fill';
 import { createFrames, FrameEditor, FrameGuides, frameRegion, FramesSection } from '../frames';
+import { createDrawingFolder, DrawingFolderControls, FolderAccessNotice } from '../drawing-folder';
 import { createGradient, GradientPanel, GradientPreview } from '../gradient';
 import { createHiddenLayerGuard, HiddenLayerNotice } from '../hidden-layer';
 import { createImagePlacement, createLayerFilter, HistorySourceControl, LayersPanel } from '../layers';
@@ -212,6 +213,11 @@ export function PaintStudio(props: {
   const fullscreen = createFullscreenToggle(editor, setError);
   const colorWheel = createColorWheelSettings();
   const viewOptions = createViewOptions({ ready: engine.canEdit, send: engine.send });
+  const drawingFolder = createDrawingFolder({
+    status: () => engine.paging().storage?.folder,
+    send: edit,
+    onError: setError
+  });
   const frames = createFrames({
     restored: () => engine.restored()?.features,
     canUpdate: canUpdateSymmetry,
@@ -674,6 +680,11 @@ export function PaintStudio(props: {
             onFillSelection={gradient.fillSelection}
           />
         </Show>
+        <Show when={drawingFolder.status()?.access === 'prompt' ? drawingFolder.status() : undefined}>
+          {(status) => (
+            <FolderAccessNotice name={status().name} size={size()} onAllow={() => void drawingFolder.allow()} />
+          )}
+        </Show>
         <Show when={hiddenLayer.notice()}>
           {(notice) => (
             <HiddenLayerNotice
@@ -960,6 +971,7 @@ export function PaintStudio(props: {
                       closePanel();
                       setDeveloperOpen(true);
                     }}
+                    folderControls={<DrawingFolderControls folder={drawingFolder} ready={ready()} />}
                     viewOptions={
                       <ViewOptionsControls settings={viewOptions.settings()} onChange={viewOptions.update} />
                     }
