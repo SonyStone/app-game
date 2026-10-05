@@ -1,6 +1,8 @@
 import { createBrushResources } from '@app-game/abr-paint/resources';
 import { abrBrush } from '@app-game/paint-core/composition/abrBrushEngine';
 import { createAbrProcessor } from '@app-game/paint-core/composition/abrStrokeProcessor';
+import type { StorageFactory } from '@app-game/paint-core/composition/contracts';
+import { createMemoryStorage } from '@app-game/paint-core/composition/memoryStorage';
 import {
   BrushEngines,
   BrushResources,
@@ -36,6 +38,11 @@ export function createStudioRuntime(post: RuntimeBinding['post'], close: Runtime
   return createPaintApplication((binding) => <StudioApplication {...binding} />, post, close);
 }
 
+/** A live viewer's drawing (storage `live:…`) stays in memory; every other drawing is kept in IndexedDB. */
+const liveViewerStorage = createMemoryStorage();
+const studioStorage: StorageFactory = (name) =>
+  name.startsWith('live:') ? liveViewerStorage(name) : createTileStore(name);
+
 /**
  * The Studio recipe: paged document, IndexedDB tiles, the WebGPU renderer, stroke processors, brush engines and the
  * feature modules: paint symmetry, frames, image placement, the bucket fill, the gradient and the transform.
@@ -43,7 +50,7 @@ export function createStudioRuntime(post: RuntimeBinding['post'], close: Runtime
 export function StudioApplication(props: RuntimeBinding) {
   return (
     <Document document={() => createDocument({ paged: true })}>
-      <Storage storage={createTileStore}>
+      <Storage storage={studioStorage}>
         <Renderer renderer={createPaintRenderer}>
           <StrokeProcessor
             processors={{ ...studioProcessors, abr: createAbrProcessor }}

@@ -343,6 +343,61 @@ it('keeps the selection that edits return, shows it, hands it to the next edit a
   expect(selections()[1]).toMatchObject({ selection: { selected: false } });
 });
 
+it('lists and reads the tile versions a live viewer lacks, and a viewer applies them outside history', async () => {
+  const paint = defineDocumentEdit({
+    id: 'paint-tile',
+    parse: (input: unknown) => input as string,
+    async run({ active }, key) {
+      return { changes: [{ layerId: active.id, key, before: undefined, after: new Uint8Array(TILE_BYTES).fill(200) }] };
+    }
+  });
+  const author = await start({ edits: [paint] });
+  author.runtime.send(paint.command('0,0'));
+  author.runtime.send(paint.command('9,9'));
+  await author.waitFor(() => author.document.active.tiles.size === 2);
+  author.runtime.send({
+    type: 'live-list',
+    requestId: 'a',
+    region: { left: 0, top: 0, width: 512, height: 512 },
+    limit: 10
+  });
+  await author.waitFor(() => author.events.some((event) => event.type === 'live-listed'));
+  const listed = author.events.find((event) => event.type === 'live-listed');
+  if (listed?.type !== 'live-listed' || !listed.result.ok) throw new Error('No listing');
+  // Only the tile inside the region.
+  expect(listed.result.value.tiles.map(({ key }) => key)).toEqual(['0,0']);
+  author.runtime.send({ type: 'live-read', requestId: 'b', versions: [listed.result.value.tiles[0]!.version, 'gone'] });
+  await author.waitFor(() => author.events.some((event) => event.type === 'live-tiles'));
+  const read = author.events.find((event) => event.type === 'live-tiles');
+  if (read?.type !== 'live-tiles' || !read.result.ok) throw new Error('No tiles');
+  expect(read.result.value).toHaveLength(1);
+
+  const viewer = await start();
+  const { layers, activeId, linearBlending } = listed.result.value;
+  viewer.runtime.send({
+    type: 'live-apply',
+    state: {
+      layers,
+      activeId,
+      linearBlending,
+      tiles: [{ layerId: activeId, key: '0,0', bytes: read.result.value[0]!.bytes }]
+    }
+  });
+  await viewer.waitFor(() => viewer.document.active.id === activeId && viewer.document.active.tiles.has('0,0'));
+  const shown = viewer.document.active.tiles.get('0,0')!;
+  const pixels = unpackTile(shown instanceof Uint8Array ? shown : await viewer.storage.read(shown));
+  expect([...pixels.slice(0, 4)]).toEqual([200, 200, 200, 200]);
+  expect(viewer.document.state().canUndo).toBe(false);
+  expect(viewer.renderer.restore).toHaveBeenCalled();
+
+  // A cleared tile goes away.
+  viewer.runtime.send({
+    type: 'live-apply',
+    state: { layers, activeId, linearBlending, tiles: [{ layerId: activeId, key: '0,0', bytes: null }] }
+  });
+  await viewer.waitFor(() => !viewer.document.active.tiles.has('0,0'));
+});
+
 /** Disposes a runtime gracefully, saving its document. */
 async function stop({ runtime, events, waitFor }: Awaited<ReturnType<typeof start>>) {
   runtime.send({ type: 'dispose' });

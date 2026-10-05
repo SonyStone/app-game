@@ -11,7 +11,8 @@ let url: string;
 beforeAll(async () => {
   const port = await freePort();
   url = `ws://127.0.0.1:${port}`;
-  relay = spawn(fileURLToPath(new URL('../node_modules/.bin/bun', import.meta.url)), ['src/serve.ts'], {
+  // The binary itself: pnpm's `.bin/bun` shell shim would be the one killed, leaving Bun running.
+  relay = spawn(fileURLToPath(new URL('../node_modules/bun/bin/bun.exe', import.meta.url)), ['src/serve.ts'], {
     cwd: fileURLToPath(new URL('..', import.meta.url)),
     env: { ...process.env, PAINT_LIVE_PORT: String(port) },
     stdio: ['ignore', 'pipe', 'ignore']

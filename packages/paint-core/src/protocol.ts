@@ -8,6 +8,7 @@ import type { ColorSample, PickedColor } from './colorSample';
 import type { BrushEngine } from './composition/contracts';
 import type { HistorySource, LayerAction, createDocument } from './document';
 import type { DocumentRect } from './layersInView';
+import type { LiveListing, LiveState, LiveTileBytes } from './liveDrawing';
 import type { SelectionPreview, SelectionSummary } from './selectionMask';
 
 /** Main-thread commands are processed in order; all sample batches precede their stroke end. */
@@ -88,6 +89,14 @@ export type PaintCommand =
    */
   | { type: 'psd'; requestId?: string; region?: DocumentRect; name?: string }
   | { type: 'layer'; action: LayerAction }
+  /**
+   * For a live session's author: lists the layers and the versions of at most `limit` tiles in `region`; see
+   * `listLiveTiles`. `live-read` then reads versions of the latest listing.
+   */
+  | { type: 'live-list'; requestId: string; region: DocumentRect; limit: number }
+  | { type: 'live-read'; requestId: string; versions: string[] }
+  /** For a live session's viewer: shows the author's drawing as `state` says, outside undo history. */
+  | { type: 'live-apply'; state: LiveState }
   /** A pixel edit of the engine's selection on layer `layerId` at document `revision`; see `SelectionAction`. */
   | { type: 'selection'; action: SelectionAction; offset?: Point; layerId: string; revision: number }
   /** Runs a pixel edit registered with `DocumentFeatures`, such as a bucket fill; see `defineDocumentEdit`. */
@@ -198,6 +207,8 @@ export type PaintEvent =
   | { type: 'edited'; requestId: string; result: Result<unknown, string> }
   /** The `#rrggbb` color at a `pick-color` point, or `null` where the active layer has no paint to pick. */
   | { type: 'picked-color'; requestId: string; result: Result<PickedColor, string> }
+  | { type: 'live-listed'; requestId: string; result: Result<LiveListing, string> }
+  | { type: 'live-tiles'; requestId: string; result: Result<LiveTileBytes[], string> }
   | { type: 'checkpointed'; tools?: RendererToolState; historySource?: HistorySource }
   /** The selection changed, or a selection command finished; `selection` summarizes it, see `SelectionSummary`. */
   | { type: 'selection'; selection: SelectionSummary; hasClipboard: boolean }

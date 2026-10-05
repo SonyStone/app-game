@@ -4,6 +4,8 @@ import type { Camera, Point } from '@app-game/paint-core/camera';
 import type { ColorSample, PickedColor } from '@app-game/paint-core/colorSample';
 import { createDocument } from '@app-game/paint-core/document';
 import type { CheckpointedEvent, PaintEvent, SelectionEvent, StateEvent } from '@app-game/paint-core/protocol';
+import type { DocumentRect } from '@app-game/paint-core/layersInView';
+import type { LiveListing, LiveTileBytes } from '@app-game/paint-core/liveDrawing';
 import { emptySummary } from '@app-game/paint-core/selectionMask';
 import { gpuError } from '@app-game/solid-gpu/errors';
 import type { WorkerFailure } from '@app-game/solid-gpu/worker/workerProtocol';
@@ -51,6 +53,8 @@ export function createPaintEngine(options: {
    * submission time and its wait for submitted GPU work, to `receive` once the frame's GPU work has finished.
    */
   frames?: { enabled: Accessor<boolean>; receive: (event: FrameEvent) => void };
+  /** The storage engines open, `paint-studio` by default; a live viewer's starts with `live:`, kept in memory. */
+  storageName?: string;
 }) {
   /** One mounted engine; a new object, even with the same mode, remounts the canvas and starts a new engine. */
   const [session, setSession] = createSignal<{ mode: ExecutionMode }>({ mode: initialMode() });
@@ -90,6 +94,14 @@ export function createPaintEngine(options: {
     failure: (message) => engineError('failed', message)
   });
   const edits = createEngineRequests<unknown>({
+    timeoutMs: requestTimeoutMs,
+    failure: (message) => engineError('failed', message)
+  });
+  const liveListings = createEngineRequests<LiveListing>({
+    timeoutMs: requestTimeoutMs,
+    failure: (message) => engineError('failed', message)
+  });
+  const liveTiles = createEngineRequests<LiveTileBytes[]>({
     timeoutMs: requestTimeoutMs,
     failure: (message) => engineError('failed', message)
   });
@@ -179,6 +191,8 @@ export function createPaintEngine(options: {
     runBrushCommand,
     pickColor,
     runEdit,
+    liveList,
+    liveRead,
     exportFile
   };
 
@@ -192,6 +206,8 @@ export function createPaintEngine(options: {
     commands.disconnect();
     colors.disconnect();
     edits.disconnect();
+    liveListings.disconnect();
+    liveTiles.disconnect();
     exports.disconnect();
     resident.clear();
     drawing = false;
@@ -212,6 +228,7 @@ export function createPaintEngine(options: {
         size: { width: canvas.clientWidth, height: canvas.clientHeight },
         dpr: devicePixelRatio,
         ...handoff,
+        ...(options.storageName ? { storageName: options.storageName } : {}),
         ...(takeOver ? { takeOver } : {})
       },
       { message: receive, error: fail }
@@ -260,6 +277,12 @@ export function createPaintEngine(options: {
           break;
         case 'edited':
           edits.receive(event.requestId, event.result);
+          break;
+        case 'live-listed':
+          liveListings.receive(event.requestId, event.result);
+          break;
+        case 'live-tiles':
+          liveTiles.receive(event.requestId, event.result);
           break;
         case 'checkpointed':
           retire(event);
@@ -441,6 +464,8 @@ export function createPaintEngine(options: {
       commands.disconnect();
       colors.disconnect();
       edits.disconnect();
+      liveListings.disconnect();
+      liveTiles.disconnect();
       options.onSelection(emptySelection);
       // The failed engine discarded any stroke in progress; the next pen-down must start a new one.
       drawing = false;
@@ -457,6 +482,8 @@ export function createPaintEngine(options: {
         commands.disconnect();
         colors.disconnect();
         edits.disconnect();
+        liveListings.disconnect();
+        liveTiles.disconnect();
       }
 
       if (phase !== 'active') {
@@ -616,6 +643,19 @@ export function createPaintEngine(options: {
    */
   function runEdit(command: Omit<Extract<EngineCommand, { type: 'edit' }>, 'requestId'>) {
     return edits.request((requestId) => post({ ...command, requestId }));
+  }
+
+  /**
+   * Lists the drawing's layers and the versions of at most `limit` tiles in `region`, for a live session's author; see
+   * `listLiveTiles`. Never rejects.
+   */
+  function liveList(region: DocumentRect, limit: number): Promise<Result<LiveListing, PaintError>> {
+    return liveListings.request((requestId) => post({ type: 'live-list', requestId, region, limit }));
+  }
+
+  /** Reads the compressed pixels of `versions` from the latest `liveList`. Never rejects. */
+  function liveRead(versions: string[]): Promise<Result<LiveTileBytes[], PaintError>> {
+    return liveTiles.request((requestId) => post({ type: 'live-read', requestId, versions }));
   }
 
   /**

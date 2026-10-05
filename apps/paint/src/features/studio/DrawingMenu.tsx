@@ -21,6 +21,8 @@ export function DrawingMenu(props: {
   onDeveloper: () => void;
   /** Keeping the drawing in a folder on disk, after the file actions; see `DrawingFolderControls`. */
   folderControls?: JSX.Element;
+  /** Live broadcasting, below the folder controls. */
+  liveControls?: JSX.Element;
   /** How the canvas shows pixels, below the file actions. */
   viewOptions?: JSX.Element;
   /** Host-specific controls, such as PWA installation. */
@@ -78,6 +80,7 @@ export function DrawingMenu(props: {
           Export layers<span>PSD</span>
         </button>
         {props.folderControls}
+        {props.liveControls}
         <button onClick={() => props.onResetView()}>Reset view</button>
         <button onClick={() => props.onDeveloper()}>Developer</button>
         {props.applicationControls}

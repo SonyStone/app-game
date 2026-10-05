@@ -36,6 +36,15 @@ import { createDrawingFolder, DrawingFolderControls, FolderAccessNotice } from '
 import { createGradient, GradientPanel, GradientPreview } from '../gradient';
 import { createHiddenLayerGuard, HiddenLayerNotice } from '../hidden-layer';
 import { createImagePlacement, createLayerFilter, HistorySourceControl, LayersPanel } from '../layers';
+import {
+  createLiveBroadcast,
+  LiveBadge,
+  LiveControls,
+  LiveViewer,
+  liveRelayUrl,
+  watchedRoom,
+  watchLink
+} from '../live';
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
 import { createRadialMenu, RadialMenu, radialLayout, type RadialItem } from '../radial-menu';
 import { createInputRecorder, RecordingControls } from '../recording';
@@ -64,6 +73,12 @@ export function PaintStudio(props: {
   /** Host-specific controls shown in the drawing menu. */
   applicationControls?: JSX.Element;
 }) {
+  // A watch link opens a live viewer instead of the editor.
+  const room = watchedRoom(location);
+  if (room) {
+    return <LiveViewer room={room} url={liveRelayUrl(location, import.meta.env.DEV)} />;
+  }
+
   const [editor, setEditor] = createSignal<HTMLDivElement>();
   const [stage, setStage] = createSignal<HTMLElement>();
   const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
@@ -272,6 +287,20 @@ export function PaintStudio(props: {
       }
     }
   );
+  const live = createLiveBroadcast({
+    url: liveRelayUrl(location, import.meta.env.DEV),
+    list: engine.liveList,
+    read: engine.liveRead,
+    revision: () => engine.state().revision,
+    camera: camera.camera,
+    size,
+    pointer: () => {
+      const point = cursor();
+      return point && { point: screenToWorld(point, camera.current(), size()), contact: engine.isDrawing() };
+    },
+    brushSize: () => tools.brush().size,
+    ready: engine.canEdit
+  });
   const recorder = createInputRecorder({
     exportFile: engine.exportFile,
     observe: () => ({
@@ -758,6 +787,7 @@ export function PaintStudio(props: {
         >
           {(count) => <MissingTilesNotice count={count()} size={size()} onDismiss={() => setMissingSeen(count())} />}
         </Show>
+        <LiveBadge live={live} />
         <Show when={engine.storageLock()}>
           {(state) => <StorageLockNotice state={state()} onTakeOver={engine.takeOver} />}
         </Show>
@@ -1035,6 +1065,9 @@ export function PaintStudio(props: {
                       setDeveloperOpen(true);
                     }}
                     folderControls={<DrawingFolderControls folder={drawingFolder} ready={ready()} />}
+                    liveControls={
+                      <LiveControls live={live} link={(watched) => watchLink(location, watched)} ready={ready()} />
+                    }
                     viewOptions={
                       <ViewOptionsControls settings={viewOptions.settings()} onChange={viewOptions.update} />
                     }

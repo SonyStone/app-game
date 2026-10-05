@@ -1032,6 +1032,9 @@ importers:
       '@app-game/paint-core':
         specifier: workspace:*
         version: link:../../packages/paint-core
+      '@app-game/paint-live':
+        specifier: workspace:*
+        version: link:../../packages/paint-live
       '@app-game/solid-gpu':
         specifier: workspace:*
         version: link:../../packages/solid-gpu

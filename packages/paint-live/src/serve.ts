@@ -12,3 +12,11 @@ const server = Bun.serve({
 });
 
 console.log(`paint-live relay on ws://${server.hostname}:${server.port}`);
+
+// A running server keeps Bun alive on SIGTERM and SIGINT; stop it, so that test runs and Ctrl+C end the process.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => {
+    void server.stop(true);
+    process.exit(0);
+  });
+}

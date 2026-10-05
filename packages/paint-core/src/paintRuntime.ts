@@ -15,6 +15,7 @@ import { isPsdFile, readPsdFile, writePsdFile } from './psdFile';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { mergeTilePixels } from './layerMerge';
 import { captureSelection, editSelection, type SelectionPixels } from './selection';
+import { applyLiveState, listLiveTiles, readLiveTiles } from './liveDrawing';
 import { lockStorage, lockedStorage, type StorageLock } from './storageLock';
 import {
   emptySelection,
@@ -41,6 +42,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let primaryAttached = true;
     let storageName = 'paint-studio';
     let tileStore: PaintStorage;
+    /** Tile data by version of the latest live listing, which `live-read` reads from. */
+    let liveVersions = new Map<string, TileData>();
     /** The drawing's storage belongs to this engine while it holds the lock; see `lockStorage`. */
     let storageLock: StorageLock | undefined;
     let importing = false;
@@ -932,6 +935,47 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               requestId: command.requestId
             });
             break;
+          case 'live-list': {
+            const result = await attempt(async () => {
+              const listed = listLiveTiles(
+                { layers: document.layers, activeId: document.active.id, linearBlending: document.linearBlending() },
+                command.region,
+                tileStore.capture,
+                command.limit
+              );
+              liveVersions = listed.versions;
+              return listed.listing;
+            });
+            post({
+              type: 'live-listed',
+              requestId: command.requestId,
+              result: result.ok ? result : { ok: false, error: result.error.message }
+            });
+            break;
+          }
+          case 'live-read': {
+            const result = await attempt(() => readLiveTiles(liveVersions, command.versions, tileStore.read));
+            post({
+              type: 'live-tiles',
+              requestId: command.requestId,
+              result: result.ok ? result : { ok: false, error: result.error.message }
+            });
+            break;
+          }
+          case 'live-apply': {
+            await end();
+            const applied = await applyLiveState(document.layers, command.state);
+            document.replace(applied.layers, command.state.activeId, command.state.linearBlending);
+            syncBlending();
+            if (renderer && !lost) {
+              for (const id of applied.removed) renderer.releaseLayer(id);
+              renderer.restore(applied.changes, document.layers);
+              await renderer.prepareOverview(document.layers);
+            }
+
+            changed();
+            break;
+          }
           case 'pick-color': {
             const sample = command.sample ?? defaultColorSample;
             const result = await attempt(async (): Promise<PickedColor> => {
