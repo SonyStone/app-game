@@ -71,16 +71,26 @@ export function BrushDailyControls(props: BrushControlsProps) {
         />
       </Show>
       <Show when={props.brush.stroke.mode === 'stabilizer'}>
-        <label class={styles.mixing}>
-          Stabilizer
-          <select
-            aria-label="Stabilizer"
-            value={props.brush.stroke.stabilizer}
-            onChange={(event) => update({ stabilizer: Number(event.currentTarget.value) })}
-          >
-            <For each={stabilizerLevels}>{(level) => <option value={level}>{stabilizerLabel(level)}</option>}</For>
-          </select>
-        </label>
+        <div class={styles.stabilizer} role="group" aria-label="Stabilizer">
+          <span>Stabilizer</span>
+          <For each={stabilizerRows}>
+            {(row) => (
+              <div class={styles.levelGrid}>
+                <For each={row}>
+                  {(level) => (
+                    <button
+                      aria-label={`Stabilizer ${stabilizerLabel(level)}`}
+                      aria-pressed={props.brush.stroke.stabilizer === level ? 'true' : 'false'}
+                      onClick={() => update({ stabilizer: level })}
+                    >
+                      {stabilizerLabel(level)}
+                    </button>
+                  )}
+                </For>
+              </div>
+            )}
+          </For>
+        </div>
       </Show>
     </section>
   );
@@ -227,8 +237,12 @@ function calibratesPressure(brush: Brush) {
   return isLeonardo(brush) || brush.stroke.mode === 'stabilizer';
 }
 
-/** Stabilizer levels in SAI's order: 0 to 15, then S-1 to S-7. */
-const stabilizerLevels = Array.from({ length: maxStabilizerLevel + 1 }, (_, level) => level);
+/** Stabilizer levels in rows of the level grid, as SAI lists them: 0 to 7, 8 to 15, then S-1 to S-7. */
+const stabilizerRows = [
+  [0, 1, 2, 3, 4, 5, 6, 7],
+  [8, 9, 10, 11, 12, 13, 14, 15],
+  Array.from({ length: maxStabilizerLevel - 15 }, (_, index) => 16 + index)
+];
 
 /** Labeled brush range; values shown in UI units and converted by its caller. */
 function Range(props: {

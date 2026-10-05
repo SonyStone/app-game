@@ -90,6 +90,35 @@
   margin-top: 12px;
 }
 
+.stabilizer {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+/* Outranks the studio's reset of button borders and backgrounds. */
+.levelGrid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+
+  > button:is(button) {
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #fff;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+
+    &[aria-pressed='true'] {
+      border-color: #419bcf;
+      background: #e3f0f7;
+      color: #1f6f9a;
+    }
+  }
+}
+
 .pressureControls {
   summary {
     padding: 12px 0;
