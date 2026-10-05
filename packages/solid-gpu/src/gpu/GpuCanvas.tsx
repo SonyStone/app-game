@@ -14,6 +14,8 @@ export function GpuCanvas(props: {
   canvas: HTMLCanvasElement | undefined;
   /** Minimum maxBufferSize to request (at least 256 MiB). Changing it requests a new device. */
   requiredBufferBytes: number;
+  /** Features to enable on devices whose adapter supports them; read once. Default none. */
+  optionalFeatures?: readonly GPUFeatureName[];
   /** Mounted beneath the root and canvas contexts while both are ready. */
   children: JSX.Element;
   /** Shown while requesting an adapter/device, including during loss recovery. Default nothing. */
@@ -22,7 +24,12 @@ export function GpuCanvas(props: {
   error: (error: GpuError) => JSX.Element;
 }) {
   return (
-    <TypeGPURootProvider requiredBufferBytes={props.requiredBufferBytes} loading={props.loading} error={props.error}>
+    <TypeGPURootProvider
+      requiredBufferBytes={props.requiredBufferBytes}
+      optionalFeatures={props.optionalFeatures}
+      loading={props.loading}
+      error={props.error}
+    >
       <GpuCanvasProvider canvas={props.canvas} error={props.error}>
         {props.children}
       </GpuCanvasProvider>

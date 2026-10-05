@@ -33,6 +33,8 @@ package-internal callers see the mock too.
 
 - `TypeGPURootProvider` requests an adapter, device and TypeGPU root and mounts children only while it is ready.
   Changing `requiredBufferBytes` or recovering from device loss (up to `maxDeviceRecoveries`) replaces the subtree.
+  `optionalFeatures` enables features such as `timestamp-query` on devices whose adapter supports them; check
+  `device.features` before using one.
   `useTypeGPURoot()` returns the borrowed `GpuRoot`; `useGpuDevice()` adds the preferred canvas `format` (`GpuDevice`)
   for resources shared by every canvas.
 - `GpuCanvasProvider` configures one canvas on that device. Replacing the canvas remounts children; `undefined`

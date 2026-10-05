@@ -37,6 +37,14 @@ describe('GPU provider ownership and typed states', () => {
     expect(requestDevice).not.toHaveBeenCalled();
   });
 
+  it('enables only the optional features the adapter supports', async () => {
+    const { adapter, requestDevice } = setup();
+    Object.assign(adapter, { features: new Set(['timestamp-query']) });
+    mount(1, ['timestamp-query', 'float32-filterable']);
+    await settle();
+    expect(requestDevice).toHaveBeenLastCalledWith(expect.objectContaining({ requiredFeatures: ['timestamp-query'] }));
+  });
+
   it('does not request a device from an adapter resolved after disposal', async () => {
     const { requestAdapter, requestDevice, adapter } = setup();
     const pending = deferred<GPUAdapter | null>();
@@ -99,7 +107,10 @@ describe('GPU provider ownership and typed states', () => {
     await settle();
     expect(first.signal.aborted).toBe(true);
     expect(device.destroy).toHaveBeenCalledOnce();
-    expect(requestDevice).toHaveBeenLastCalledWith({ requiredLimits: { maxBufferSize: 512 * 1024 * 1024 } });
+    expect(requestDevice).toHaveBeenLastCalledWith({
+      requiredLimits: { maxBufferSize: 512 * 1024 * 1024 },
+      requiredFeatures: []
+    });
     lose({ message: 'Old device lost', reason: 'unknown' });
     await settle();
     expect(ready(owner).device).toBe(second);
@@ -213,11 +224,11 @@ describe('GPU provider ownership and typed states', () => {
   });
 });
 
-function mount(bytes = 1) {
+function mount(bytes = 1, optionalFeatures?: GPUFeatureName[]) {
   const result = createRoot((dispose) => {
     cleanups.push(dispose);
     const [bufferBytes, setBytes] = createSignal(bytes);
-    return { state: createGpuRoot(bufferBytes), setBytes, dispose };
+    return { state: createGpuRoot(bufferBytes, optionalFeatures), setBytes, dispose };
   });
   flush();
   return result;

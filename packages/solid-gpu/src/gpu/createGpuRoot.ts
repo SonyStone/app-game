@@ -7,9 +7,10 @@ import { errorMessage, gpuError, type GpuError } from '../errors';
  * Owns one device/root per buffer requirement. Late devices are destroyed after disposal or replacement.
  * Unexpected device loss aborts the old root, returns to loading and requests a new device, so dependents remount
  * on the new root. After maxDeviceRecoveries losses for one buffer requirement, loss becomes a terminal error.
- * An external device.destroy() and uncaptured validation errors are terminal.
+ * An external device.destroy() and uncaptured validation errors are terminal. Every device also enables those of
+ * `optionalFeatures` its adapter supports; callers check `device.features` before relying on one.
  */
-export function createGpuRoot(requiredBufferBytes: Accessor<number>) {
+export function createGpuRoot(requiredBufferBytes: Accessor<number>, optionalFeatures: readonly GPUFeatureName[] = []) {
   const [state, setState] = createSignal<GpuRootState>({ status: 'loading' }, { ownedWrite: true });
   // Bumped to re-run initialization after device loss; reset with each buffer requirement.
   const [attempt, setAttempt] = createSignal(0, { ownedWrite: true });
@@ -63,7 +64,10 @@ export function createGpuRoot(requiredBufferBytes: Accessor<number>) {
       }
 
       stage = 'device';
-      const acquiredDevice = await adapter.requestDevice({ requiredLimits: { maxBufferSize } });
+      const acquiredDevice = await adapter.requestDevice({
+        requiredLimits: { maxBufferSize },
+        requiredFeatures: optionalFeatures.filter((feature) => adapter.features.has(feature))
+      });
       if (abort.signal.aborted) {
         acquiredDevice.destroy();
         return;

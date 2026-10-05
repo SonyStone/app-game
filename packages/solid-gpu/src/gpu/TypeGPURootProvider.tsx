@@ -1,6 +1,6 @@
 import { MatchTag } from '@solid-primitives/match';
 import type { JSX } from '@solidjs/web';
-import { createContext, useContext } from 'solid-js';
+import { createContext, untrack, useContext } from 'solid-js';
 import type { GpuError } from '../errors';
 import type { GpuDevice } from './context';
 import { createGpuRoot, type GpuRoot } from './createGpuRoot';
@@ -12,6 +12,11 @@ import { createGpuRoot, type GpuRoot } from './createGpuRoot';
 export function TypeGPURootProvider(props: {
   /** Minimum maxBufferSize to request (at least 256 MiB). Changing it requests a new device. */
   requiredBufferBytes: number;
+  /**
+   * Features to enable on devices whose adapter supports them, such as `timestamp-query`; read once. Consumers check
+   * `device.features` before using one. Default none.
+   */
+  optionalFeatures?: readonly GPUFeatureName[];
   /** Mounted beneath the root context while a device is ready. */
   children: JSX.Element;
   /** Shown while requesting an adapter/device, including during loss recovery. Default nothing. */
@@ -19,7 +24,10 @@ export function TypeGPURootProvider(props: {
   /** Renders a terminal failure: no WebGPU/adapter, limits, validation, or unrecovered device loss. */
   error: (error: GpuError) => JSX.Element;
 }) {
-  const state = createGpuRoot(() => props.requiredBufferBytes);
+  const state = createGpuRoot(
+    () => props.requiredBufferBytes,
+    untrack(() => props.optionalFeatures)
+  );
 
   return (
     <MatchTag
