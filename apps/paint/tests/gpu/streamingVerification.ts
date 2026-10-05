@@ -94,8 +94,14 @@ export async function verifyStreaming(report: (message: string) => void) {
     report(
       `MEASURE: 60 warm rotation frames, ${(times.reduce((a, b) => a + b, 0) / times.length).toFixed(2)} ms mean CPU+GPU, ${times.sort((a, b) => a - b)[56]!.toFixed(2)} ms p95; ${(renderer.stats().virtual!.uploadedBytes - uploaded) / 1048576} MiB uploads`
     );
+    // The pixels cross the old 256 MiB document limit; the file itself is far smaller, its tiles compressed.
+    const pixelBytes = saved().layers.reduce(
+      (sum, layer) => sum + layer.tiles.reduce((bytes, tile) => bytes + tile.pixels.byteLength, 0),
+      0
+    );
+    assert(pixelBytes > 256 * 1048576, 'Large-file regression did not cross the old document limit');
     const file = await writePaintFile(saved(), store.read);
-    assert(file.size > 256 * 1048576, 'Large-file regression did not cross the old document limit');
+    assert(file.size < pixelBytes / 10, `Uniform tiles were not compressed: ${file.size} bytes`);
     const reopened = await readPaintFile(file, async (pixels) => {
       const ref = store.capture(pixels);
       if (store.stats().dirtyBytes >= 8 * 1048576) await store.flush();
@@ -106,7 +112,9 @@ export async function verifyStreaming(report: (message: string) => void) {
       reopened.layers[0]!.tiles.size === 1025 && store.stats().ramBytes <= 1024,
       'Large binary drawing failed to page in'
     );
-    report('PASS: 256.25 MiB of dense pixels export/import through bounded tile batches');
+    report(
+      `PASS: 256.25 MiB of dense pixels export as ${(file.size / 1048576).toFixed(2)} MiB and import through bounded tile batches`
+    );
     camera.zoom = 0.1;
     await renderer.render(document.layers, camera, size, 1);
     assert(renderer.stats().virtual!.fallbackPages > 0, 'Resident parent was not used while zooming in');
