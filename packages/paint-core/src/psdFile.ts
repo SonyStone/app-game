@@ -11,8 +11,9 @@ import { packTile, unpackTile, type TileData } from './tilePixels';
  * Exports `layers` as a layered Photoshop document of `region`, or of the bounds of everything drawn when it is
  * omitted. Every layer, hidden ones too, is cropped to its pixels within the canvas; the flattened image is merged as
  * `mergeTilePixels` merges layers down, in linear light with `linearBlending` as the document does; Photoshop keeps no
- * such flag in the file, so it shows the layers blended in encoded sRGB unless set to blend RGB with gamma 1.0. Throws
- * when there is nothing to export or the canvas is larger than a PSD allows.
+ * such flag in the file, so it shows the layers blended in encoded sRGB unless set to blend RGB with gamma 1.0. A canvas
+ * over 30,000 pixels on a side is written as PSB. Throws when there is nothing to export or the canvas is larger than a
+ * PSB allows.
  */
 export async function writePsdFile(
   layers: Layer[],
@@ -51,7 +52,7 @@ export async function writePsdFile(
       transparencyLocked: !!layer.alphaLock
     };
   });
-  const file = writePsd(
+  const file = await writePsd(
     { width: canvas.width, height: canvas.height, layers: psdLayers },
     straightPixels(flatten(loaded, linearBlending), canvas)
   );
@@ -80,7 +81,7 @@ export async function readPsdFile(
   features: Record<string, unknown>;
   linearBlending: boolean;
 }> {
-  const psd = readPsd(await file.arrayBuffer());
+  const psd = await readPsd(await file.arrayBuffer());
   const layers: Layer[] = [];
   for (const source of psd.layers) {
     const tiles = new Map<string, TileData>();
@@ -93,8 +94,9 @@ export async function readPsdFile(
       id: crypto.randomUUID(),
       name: source.name || `Layer ${layers.length + 1}`,
       visible: source.visible,
-      opacity: source.opacity,
-      blend: importedBlends[source.blend],
+      // Without layer effects Fill scales a layer like opacity, except in the eight modes where Photoshop treats it apart.
+      opacity: source.opacity * (source.fill ?? 1),
+      blend: importedBlends[source.blend] ?? 'normal',
       ...(source.transparencyLocked ? { alphaLock: true } : {}),
       ...(source.clipping ? { clipping: true } : {}),
       tiles
@@ -112,7 +114,8 @@ export async function readPsdFile(
   };
 }
 
-const importedBlends: Record<PsdBlend, BlendMode> = {
+/** Photoshop blend modes Paint has; the others open as Normal. */
+const importedBlends: Partial<Record<PsdBlend, BlendMode>> = {
   normal: 'normal',
   multiply: 'multiply',
   screen: 'screen',

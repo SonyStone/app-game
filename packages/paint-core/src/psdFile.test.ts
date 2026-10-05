@@ -28,7 +28,7 @@ it('exports the drawn bounds with each layer cropped to its pixels and a flatten
   const paper = solidLayer('Paper', [255, 255, 255, 255], -10, -10, 300, 20);
   const ink = { ...solidLayer('Ink', [0, 0, 255, 128], 250, 0, 40, 30), blend: 'multiply' as const, alphaLock: true };
   const hidden = { ...solidLayer('Hidden', [255, 0, 0, 255], 0, 0, 5, 5), visible: false, clipping: true };
-  const psd = readPsd(new Uint8Array(await (await writePsdFile([paper, ink, hidden], read)).arrayBuffer()));
+  const psd = await readPsd(new Uint8Array(await (await writePsdFile([paper, ink, hidden], read)).arrayBuffer()));
 
   expect(psd).toMatchObject({ width: 300, height: 40 });
   expect(psd.layers.map(({ name, left, top, width, height }) => [name, left, top, width, height])).toEqual([
@@ -44,7 +44,7 @@ it('exports the drawn bounds with each layer cropped to its pixels and a flatten
 
 it('exports a region and refuses an empty drawing', async () => {
   const paper = solidLayer('Paper', [10, 20, 30, 255], 0, 0, 100, 100);
-  const psd = readPsd(
+  const psd = await readPsd(
     new Uint8Array(
       await (await writePsdFile([paper], read, { left: 90, top: 90, width: 20, height: 20 })).arrayBuffer()
     )
