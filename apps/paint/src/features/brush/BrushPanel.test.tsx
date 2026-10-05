@@ -96,3 +96,34 @@ it('moves the size slider as Photoshop does: 102 px at 50.5%, 200 px at 75%, 500
     host.remove();
   }
 });
+
+it("moves the tip spacing slider along Photoshop's table, from 1% to 1000%", () => {
+  const textured = { ...defaultBrush(), spacing: 1.02, engine: { id: 'textured', settings: { tipId: 'tip' } } };
+  const [brush, setBrush] = createSignal<Brush>(textured, { ownedWrite: true });
+  const host = document.createElement('div');
+  document.body.append(host);
+  const dispose = render(
+    () => <BrushAdvancedControls brush={brush()} onChange={(patch) => setBrush({ ...brush(), ...patch })} />,
+    host
+  );
+  try {
+    flush();
+    const slider = host.querySelector<HTMLInputElement>('[aria-label="Tip spacing"]')!;
+    expect(Number(slider.value)).toBe(505);
+    for (const [position, percent] of [
+      ['0', 1],
+      ['250', 51],
+      ['900', 500],
+      ['950', 975],
+      ['1000', 1000]
+    ] as const) {
+      slider.value = position;
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      flush();
+      expect(Math.round(brush().spacing * 100)).toBe(percent);
+    }
+  } finally {
+    dispose();
+    host.remove();
+  }
+});

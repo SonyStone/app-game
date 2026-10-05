@@ -1,4 +1,10 @@
-import { brushSizeCurve, curvePosition, curveValue, type SliderCurve } from '@app-game/abr-brush/sliderCurves';
+import {
+  brushSizeCurve,
+  brushSpacingCurve,
+  curvePosition,
+  curveValue,
+  type SliderCurve
+} from '@app-game/abr-brush/sliderCurves';
 import type { Brush } from '@app-game/paint-core/brush';
 import { stabilizerLabel } from '@app-game/paint-core/stabilizerStroke';
 import { maxStabilizerLevel, normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
@@ -126,7 +132,8 @@ export function BrushAdvancedControls(props: BrushControlsProps) {
           label="Tip spacing"
           value={props.brush.spacing * 100}
           min={1}
-          max={100}
+          max={1000}
+          curve={brushSpacingCurve}
           suffix="%"
           change={(spacing) => props.onChange({ spacing: spacing / 100 })}
         />
