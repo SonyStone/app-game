@@ -19,9 +19,11 @@ import {
   createBrushAdjust,
   createBrushTools,
   createMixerBrush,
+  maxBrushSize,
   MixerActions,
   type PaintTool
 } from '../brush';
+import { BrushSizeGrid } from '../brush-size';
 import { createBrushLibrary, createBrushStorage, createPresetUploads, createRecentPresets } from '../brush-library';
 import { createPaintCamera, createViewSize } from '../camera';
 import { BrushCursor, CanvasDebug, firstCanvasAction, PaintCanvas, type CanvasInput } from '../canvas';
@@ -823,6 +825,13 @@ export function PaintStudio(props: {
             />
             <small>{blockCursor() ? 'Block' : Math.round(brush().size)}</small>
           </button>
+          <BrushSizeGrid
+            size={brush().size}
+            max={maxBrushSize(brush())}
+            disabled={!paintsWithBrush() || blockCursor() || transform.active() || !canChangeBrush()}
+            onPreview={(size) => tools.updateBrush({ size })}
+            onPick={(size) => tools.updateBrush({ size })}
+          />
           <button
             class={styles.colorLauncher}
             aria-label="Color palette"
