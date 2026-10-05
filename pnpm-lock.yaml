@@ -144,9 +144,6 @@ catalogs:
     '@testing-library/jest-dom':
       specifier: ^6.9.1
       version: 6.9.1
-    '@types/bun':
-      specifier: 1.4.2
-      version: 1.4.2
     '@types/node':
       specifier: 25.8.0
       version: 25.8.0
@@ -157,6 +154,9 @@ catalogs:
       specifier: 66.6.8
       version: 66.6.8
     bun:
+      specifier: 1.4.2
+      version: 1.4.2
+    bun-types:
       specifier: 1.4.2
       version: 1.4.2
     class-variance-authority:
@@ -1975,10 +1975,10 @@ importers:
 
   packages/paint-live:
     devDependencies:
-      '@types/bun':
+      bun:
         specifier: 'catalog:'
         version: 1.4.2
-      bun:
+      bun-types:
         specifier: 'catalog:'
         version: 1.4.2
       typescript:
@@ -4922,9 +4922,6 @@ packages:
 
   '@types/babel__traverse@7.28.0':
     resolution: {integrity: sha512-8PvcXf70gTDZBgt9ptxJ8elBeBjcLOAcOtoO/mPJjtji1+CdGbHgm77om1GrsPxsiE+uXIpNSK64UYaIwQXd4Q==}
-
-  '@types/bun@1.4.2':
-    resolution: {integrity: sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -9974,10 +9971,6 @@ snapshots:
   '@types/babel__traverse@7.28.0':
     dependencies:
       '@babel/types': 7.29.8
-
-  '@types/bun@1.4.2':
-    dependencies:
-      bun-types: 1.4.2
 
   '@types/chai@5.2.3':
     dependencies:

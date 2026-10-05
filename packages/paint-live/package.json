@@ -15,8 +15,8 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@types/bun": "catalog:",
     "bun": "catalog:",
+    "bun-types": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
