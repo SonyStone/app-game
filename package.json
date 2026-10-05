@@ -14,6 +14,7 @@
     "test": "pnpm run test:solid",
     "test:solid": "pnpm --filter solid-dnd --filter solid-nest --filter @app-game/solid-props-proxy --filter @app-game/solid-virtual --filter @app-game/solid-svg-editor test",
     "dev": "pnpm --filter @app-game/web dev",
+    "dev:tablet": "node ./scripts/dev-tablet.mjs",
     "watch": "rsw watch",
     "rsw": "rsw",
     "build": "pnpm --filter @app-game/web build",
