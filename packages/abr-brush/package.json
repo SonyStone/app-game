@@ -9,6 +9,7 @@
     "./pencil": "./src/pencil.ts",
     "./form": "./src/form.ts",
     "./settings-fields": "./src/settings-fields.ts",
+    "./sliderCurves": "./src/sliderCurves.ts",
     "./stroke": "./src/stroke.ts",
     "./effects": "./src/effects.ts",
     "./resources": "./src/resources.ts",

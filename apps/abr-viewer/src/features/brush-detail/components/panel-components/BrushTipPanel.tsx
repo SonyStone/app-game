@@ -1,3 +1,4 @@
+import { brushSizeCurve, brushSpacingCurve } from '@app-game/abr-brush/sliderCurves';
 import type { StoreSetter } from 'solid-js';
 import { createMemo, Show } from 'solid-js';
 import type { BrushWithPreview } from '../../../../lib/abr';
@@ -65,7 +66,7 @@ export function BrushTipPanel(props: {
 
       {/* Settings */}
       <div class="space-y-1">
-        <SliderInput
+        <NonLinearSliderInput
           label="Size"
           value={() => props.values.diameter}
           setValue={(v: number) =>
@@ -73,8 +74,7 @@ export function BrushTipPanel(props: {
               draft.diameter = v;
             })
           }
-          min={1}
-          max={2500}
+          curve={sizeCurve}
           unit=" px"
         />
 
@@ -181,9 +181,7 @@ export function BrushTipPanel(props: {
                 draft.spacing = v;
               })
             }
-            min={1}
-            breakpoint={100}
-            max={1000}
+            curve={brushSpacingCurve}
             unit="%"
           />
         </div>
@@ -191,3 +189,6 @@ export function BrushTipPanel(props: {
     </div>
   );
 }
+
+/** Photoshop's Size slider, up to the largest tip the viewer edits, 2500 px. */
+const sizeCurve = brushSizeCurve(2500);
