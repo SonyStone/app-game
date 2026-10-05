@@ -337,6 +337,8 @@ export function PaintStudio(props: {
     },
     puck: camera.navigation,
     puckPicker: radial.picker,
+    // Overlays such as the transform box sit over the canvas; the puck opens over them too.
+    puckSurface: stage,
     selection: { ...selection, enabled: () => tool() === 'lasso' }
   };
 

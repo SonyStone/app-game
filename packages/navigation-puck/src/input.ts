@@ -4,6 +4,10 @@ import type { createNavigationPuck, Point } from './controller';
  * Capture-phase listeners consume navigation events before painting. Dispose when the canvas unmounts.
  * With `pick`, right-drags choose from controls around the puck instead of starting navigation.
  *
+ * The right button and a pen's side button open the puck anywhere on the `surface`: the canvas and whatever is drawn
+ * over it, such as a transform box and its actions, so that navigation never depends on what lies under the pointer.
+ * Space and V open it where the pointer last was on that surface. The browser's context menu never opens there.
+ *
  * A pen's side button pressed while it hovers over the canvas opens the puck there, pinned: it stays open through
  * operations until the side button is pressed again, a press lands outside it, or Escape. Android Chrome reports side
  * buttons only as a change of `buttons` on `pointermove`, without `pointerdown` (Wacom pens: 1, 2 and 4 for the three
@@ -19,6 +23,11 @@ export function attachNavigationPuck(
     onOpen?: () => void;
     /** Takes over right-drags, for a menu around the puck; see `PuckPicker`. */
     pick?: PuckPicker;
+    /**
+     * The element holding the canvas and the overlays over it, read on each event; the puck opens on any of its
+     * descendants except text fields and dialogs. Defaults to the canvas alone.
+     */
+    surface?: () => Element | undefined;
   }
 ) {
   const abort = new AbortController();
@@ -38,6 +47,16 @@ export function attachNavigationPuck(
     event.stopImmediatePropagation();
   };
   const ready = () => !options.busy() && (options.ready?.() ?? true);
+  /** Whether `event` lands on the canvas or on something drawn over it that leaves navigation to the puck. */
+  const onSurface = (event: Event) => {
+    const target = event.target;
+    if (target === canvas) {
+      return true;
+    }
+
+    const surface = options.surface?.() ?? canvas;
+    return target instanceof Element && surface.contains(target) && !editable(target) && !target.closest('dialog');
+  };
   const close = () => {
     if (right) options.pick?.cancel();
     right = undefined;
@@ -67,21 +86,35 @@ export function attachNavigationPuck(
     navigation.end(event.pointerId);
     if (!navigation.center()) canvas.focus({ preventScroll: true });
   };
-  canvas.addEventListener(
+  // On the window, ahead of the overlays' own handlers: a right press opens the puck over a transform box too.
+  win.addEventListener(
     'pointerdown',
     (event) => {
+      if (!onSurface(event)) {
+        return;
+      }
+
       lastPointer = point(event);
       if (event.button === 2) openRight(event);
-      else if (navigation.center()) consume(event);
+      else if (event.target === canvas && navigation.center()) consume(event);
+    },
+    capture
+  );
+  win.addEventListener(
+    'pointermove',
+    (event) => {
+      if (onSurface(event)) {
+        lastPointer = point(event);
+      }
     },
     capture
   );
   canvas.addEventListener(
     'pointermove',
     (event) => {
-      lastPointer = point(event);
       if (right?.id !== event.pointerId) return;
       consume(event);
+      lastPointer = point(event);
       if (options.pick) options.pick.move(lastPointer, right.origin);
       else if (navigation.activeAction()) navigation.move(pointer(event));
       else {
@@ -136,7 +169,7 @@ export function attachNavigationPuck(
         return;
       }
 
-      if (event.target !== canvas || !ready() || right || navigation.activeAction()) return;
+      if (!onSurface(event) || !ready() || right || navigation.activeAction()) return;
       consume(event);
       lastPointer = point(event);
       options.onOpen?.();
@@ -144,7 +177,15 @@ export function attachNavigationPuck(
     },
     capture
   );
-  canvas.addEventListener('contextmenu', (event) => event.preventDefault(), capture);
+  win.addEventListener(
+    'contextmenu',
+    (event) => {
+      if (onSurface(event)) {
+        event.preventDefault();
+      }
+    },
+    capture
+  );
   win.addEventListener(
     'keydown',
     (event) => {

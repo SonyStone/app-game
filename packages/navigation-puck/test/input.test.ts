@@ -166,6 +166,64 @@ describe('shared canvas navigation bindings', () => {
     expect(paint).toHaveBeenCalledTimes(3);
     expect(canvas).toBeDefined();
   });
+  it('opens over overlays on the surface, but not over its text fields and dialogs', () => {
+    const stage = document.createElement('main');
+    const overlay = document.createElement('div');
+    const field = document.createElement('input');
+    const dialog = document.createElement('dialog');
+    stage.append(overlay, field, dialog);
+    document.body.append(stage);
+    const { puck, pointer, pen, canvas } = setup('2d', undefined, stage);
+    stage.prepend(canvas);
+    const press = (target: Element, x: number, y: number, button: number) => {
+      const event = new MouseEvent('pointerdown', { clientX: x, clientY: y, button, bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'pointerId', { value: 3 });
+      target.dispatchEvent(event);
+      return event;
+    };
+    const menu = (target: Element) => {
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      target.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+
+    // A right press on an overlay, such as a transform box, opens the puck where it is, ahead of the overlay.
+    const overlayDown = vi.fn();
+    overlay.addEventListener('pointerdown', overlayDown);
+    press(overlay, 500, 260, 2);
+    expect(puck.center()).toEqual({ x: 500, y: 260 });
+    expect(overlayDown).not.toHaveBeenCalled();
+    expect(canvas.setPointerCapture).toHaveBeenCalledWith(3);
+    pointer('pointerup', 500, 260, 2, 3);
+    expect(menu(overlay)).toBe(true);
+    key('keydown', 'Escape', { key: 'Escape' });
+
+    // Space opens it where the pointer last moved over the overlay, not where it last was over the canvas.
+    pointer('pointermove', 100, 100);
+    const move = new MouseEvent('pointermove', { clientX: 600, clientY: 400, bubbles: true });
+    Object.defineProperty(move, 'pointerId', { value: 1 });
+    overlay.dispatchEvent(move);
+    key('keydown', 'Space');
+    expect(puck.center()).toEqual({ x: 600, y: 400 });
+    key('keyup', 'Space');
+    key('keydown', 'Escape', { key: 'Escape' });
+
+    // A hovering pen's side button opens it over an overlay too.
+    pen('pointermove', 450, 300, 2, 7, overlay);
+    expect(puck.center()).toEqual({ x: 450, y: 300 });
+    pen('pointermove', 450, 300, 0, 7, overlay);
+    pen('pointermove', 450, 300, 2, 7, overlay);
+    expect(puck.center()).toBeUndefined();
+    pen('pointermove', 450, 300, 0, 7, overlay);
+
+    // Left presses on overlays are theirs; text fields and dialogs keep the right button.
+    press(overlay, 500, 260, 0);
+    expect(overlayDown).toHaveBeenCalledTimes(1);
+    press(field, 500, 260, 2);
+    press(dialog, 500, 260, 2);
+    expect(puck.center()).toBeUndefined();
+    expect(menu(field)).toBe(false);
+  });
   it('supports V and Escape, and removes every listener on disposal', () => {
     const { puck, dispose } = setup();
     key('keydown', 'KeyV', { key: 'v' });
@@ -177,7 +235,7 @@ describe('shared canvas navigation bindings', () => {
     expect(puck.center()).toBeUndefined();
   });
 });
-function setup(mode: '2d' | '3d' = '2d', pick?: Parameters<typeof attachNavigationPuck>[2]['pick']) {
+function setup(mode: '2d' | '3d' = '2d', pick?: Parameters<typeof attachNavigationPuck>[2]['pick'], surface?: Element) {
   const canvas = document.createElement('canvas');
   canvas.tabIndex = 0;
   canvas.setPointerCapture = vi.fn();
@@ -193,7 +251,11 @@ function setup(mode: '2d' | '3d' = '2d', pick?: Parameters<typeof attachNavigati
     transform,
     orbit
   });
-  const dispose = attachNavigationPuck(canvas, puck, { busy: () => busy, ...(pick ? { pick } : {}) });
+  const dispose = attachNavigationPuck(canvas, puck, {
+    busy: () => busy,
+    ...(pick ? { pick } : {}),
+    ...(surface ? { surface: () => surface } : {})
+  });
   cleanups.push(dispose);
   for (const type of ['pointerdown', 'pointermove', 'pointerup']) canvas.addEventListener(type, paint);
   const pointer = (type: string, x: number, y: number, button = 0, id = 1) => {

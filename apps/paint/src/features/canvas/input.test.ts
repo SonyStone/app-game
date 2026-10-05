@@ -400,7 +400,7 @@ describe('input to worker contract', () => {
     expect(puck.activeAction()).toBe('rotate');
     pointer('pointermove', 280, 310);
     pointer('pointerup', 270, 320, { button: 2 });
-    canvas.dispatchEvent(new MouseEvent('contextmenu', { cancelable: true }));
+    canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     expect(navigate).toHaveBeenCalled();
     expect(commands).toHaveLength(0);
     flush();
@@ -488,6 +488,9 @@ function setup(
   const canvas = document.createElement('canvas');
   canvas.setPointerCapture = vi.fn();
   canvas.hasPointerCapture = vi.fn(() => false);
+  // In the document, as in the app: the puck listens on the window.
+  document.body.append(canvas);
+  disposals.push(() => canvas.remove());
   const commands: PaintCommand[] = [],
     navigate = vi.fn();
   const cursor = vi.fn(),
@@ -517,7 +520,8 @@ function setup(
     })
   );
   const pointer = (type: string, x: number, y: number, extra: Record<string, unknown> = {}) => {
-    const event = new MouseEvent(type, { clientX: x, clientY: y, button: 0, buttons: 1 });
+    // Pointer events bubble, so that window listeners, such as the puck's, see them as in a browser.
+    const event = new MouseEvent(type, { clientX: x, clientY: y, button: 0, buttons: 1, bubbles: true });
     for (const [key, value] of Object.entries({ pointerId: 1, pointerType: 'mouse', pressure: 1, ...extra }))
       Object.defineProperty(event, key, { value });
     canvas.dispatchEvent(event);

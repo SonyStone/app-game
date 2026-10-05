@@ -62,6 +62,8 @@ export function attachInput(
     puck?: ReturnType<typeof createNavigationPuck>;
     /** Chooses from controls around the puck with right-drags, such as a radial menu; see `PuckPicker`. */
     puckPicker?: PuckPicker;
+    /** The canvas with the overlays drawn over it, where the puck opens too; see `attachNavigationPuck`'s `surface`. */
+    puckSurface?: () => Element | undefined;
     selection?: {
       enabled: () => boolean;
       begin: (point: Point) => void;
@@ -138,7 +140,8 @@ export function attachInput(
     busy: () => !!gesture || touches.size > 0,
     ready: options.ready,
     onOpen: () => options.cursor(undefined),
-    ...(options.puckPicker ? { pick: options.puckPicker } : {})
+    ...(options.puckPicker ? { pick: options.puckPicker } : {}),
+    ...(options.puckSurface ? { surface: options.puckSurface } : {})
   });
   const local = (event: { clientX: number; clientY: number }): Point => {
     const rect = canvas.getBoundingClientRect();

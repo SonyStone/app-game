@@ -771,6 +771,41 @@ try {
     await page.mouse.up();
     assert.equal(await page.evaluate(() => window.transformCancels), 0);
 
+    // The puck opens where the pointer is over the box and its actions too, and the browser's menu never opens.
+    const puck = page.getByRole('group', { name: 'Canvas navigation' });
+    const puckAt = async () =>
+      puck.evaluate((element) => [parseFloat(element.style.left), parseFloat(element.style.top)]);
+    await page.evaluate(() => {
+      window.contextMenus = 0;
+      addEventListener('contextmenu', (event) => {
+        if (!event.defaultPrevented) {
+          window.contextMenus++;
+        }
+      });
+    });
+    const actions = await page.getByRole('toolbar', { name: 'Transform actions' }).boundingBox();
+    for (const at of [
+      { x: cx + 200, y: cy },
+      { x: actions.x + 12, y: actions.y + actions.height / 2 }
+    ]) {
+      await page.mouse.move(at.x, at.y);
+      await page.mouse.down({ button: 'right' });
+      await page.mouse.up({ button: 'right' });
+      await puck.waitFor({ timeout: 5_000 });
+      assert.deepEqual(await puckAt(), [at.x, at.y]);
+      await page.keyboard.press('Escape');
+      await puck.waitFor({ state: 'detached', timeout: 5_000 });
+    }
+
+    assert.equal(await page.evaluate(() => window.contextMenus), 0);
+    await page.mouse.move(cx + 210, cy + 10);
+    await page.keyboard.down('Space');
+    await puck.waitFor({ timeout: 5_000 });
+    assert.deepEqual(await puckAt(), [cx + 210, cy + 10]);
+    await page.keyboard.up('Space');
+    await puck.waitFor({ state: 'detached', timeout: 5_000 });
+    await page.getByLabel('Transform box').waitFor({ timeout: 5_000 });
+
     await page.mouse.move(cx + 200, cy);
     await page.mouse.down();
     await page.mouse.move(cx + 260, cy, { steps: 6 });
