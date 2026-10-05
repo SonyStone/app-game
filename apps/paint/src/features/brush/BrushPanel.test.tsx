@@ -62,3 +62,30 @@ it('selects raw input without Leonardo controls and retains stabilization settin
     host.remove();
   }
 });
+
+it('moves the size slider along a curve that gives small sizes most of its length', () => {
+  const [brush, setBrush] = createSignal({ ...defaultBrush(), size: 65 }, { ownedWrite: true });
+  const host = document.createElement('div');
+  document.body.append(host);
+  const dispose = render(
+    () => <BrushDailyControls brush={brush()} onChange={(patch) => setBrush({ ...brush(), ...patch })} />,
+    host
+  );
+  try {
+    flush();
+    const slider = host.querySelector<HTMLInputElement>('[aria-label="Size"]')!;
+    // Halfway along is an eighth of the largest round brush, 512 px.
+    expect(Number(slider.value)).toBe(500);
+    slider.value = '200';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    flush();
+    expect(brush().size).toBe(5);
+    slider.value = '1000';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    flush();
+    expect(brush().size).toBe(512);
+  } finally {
+    dispose();
+    host.remove();
+  }
+});

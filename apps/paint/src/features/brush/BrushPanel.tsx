@@ -17,6 +17,7 @@ export function BrushDailyControls(props: BrushControlsProps) {
         min={1}
         max={maxBrushSize(props.brush)}
         step={1}
+        exponent={sizeExponent}
         suffix=" px"
         change={(size) => props.onChange({ size })}
       />
@@ -244,16 +245,41 @@ const stabilizerRows = [
   Array.from({ length: maxStabilizerLevel - 15 }, (_, index) => 16 + index)
 ];
 
-/** Labeled brush range; values shown in UI units and converted by its caller. */
+/**
+ * Labeled brush range; values shown in UI units and converted by its caller. With `exponent`, the slider moves along
+ * a power curve, `value = min + (max - min) · position^exponent`, so small values get most of its length, as brush
+ * size sliders in Krita do; values are still rounded to `step`.
+ */
 function Range(props: {
   label: string;
   value: number;
   min: number;
   max: number;
   step?: number;
+  /** Power of the slider's curve; 1, the default, is linear. */
+  exponent?: number;
   suffix: string;
   change: (value: number) => void;
 }) {
+  const exponent = () => props.exponent ?? 1;
+  const step = () => props.step ?? 1;
+  /** Slider positions from 0 to `positions` along a curve; the plain value range when linear. */
+  const curved = () => exponent() !== 1;
+  const position = () =>
+    curved()
+      ? Math.round(
+          Math.max(0, Math.min(1, (props.value - props.min) / (props.max - props.min))) ** (1 / exponent()) * positions
+        )
+      : props.value;
+  const valueAt = (slider: number) => {
+    if (!curved()) {
+      return slider;
+    }
+
+    const value = props.min + (props.max - props.min) * (slider / positions) ** exponent();
+    return Math.max(props.min, Math.min(props.max, Math.round(value / step()) * step()));
+  };
+
   return (
     <label class={styles.range}>
       <span>
@@ -266,12 +292,18 @@ function Range(props: {
       <input
         aria-label={props.label}
         type="range"
-        min={props.min}
-        max={props.max}
-        step={props.step ?? 1}
-        value={props.value}
-        onInput={(e) => props.change(e.currentTarget.valueAsNumber)}
+        min={curved() ? 0 : props.min}
+        max={curved() ? positions : props.max}
+        step={curved() ? 1 : step()}
+        value={position()}
+        onInput={(e) => props.change(valueAt(e.currentTarget.valueAsNumber))}
       />
     </label>
   );
 }
+
+/** Slider positions of a curved range: fine enough that every small size has its own. */
+const positions = 1000;
+
+/** Power of the size slider's curve: a third of the way is about 4% of the largest size, halfway 12.5%. */
+const sizeExponent = 3;
