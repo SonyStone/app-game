@@ -17,7 +17,7 @@ export function BrushDailyControls(props: BrushControlsProps) {
         min={1}
         max={maxBrushSize(props.brush)}
         step={1}
-        exponent={sizeExponent}
+        breakpoints={sizeBreakpoints}
         suffix=" px"
         change={(size) => props.onChange({ size })}
       />
@@ -246,9 +246,9 @@ const stabilizerRows = [
 ];
 
 /**
- * Labeled brush range; values shown in UI units and converted by its caller. With `exponent`, the slider moves along
- * a power curve, `value = min + (max - min) · position^exponent`, so small values get most of its length, as brush
- * size sliders in Krita do; values are still rounded to `step`.
+ * Labeled brush range; values shown in UI units and converted by its caller. With `breakpoints`, the slider moves
+ * along straight segments between them, as Photoshop's brush sliders do, so some values get more of its length;
+ * values are still rounded to `step`.
  */
 function Range(props: {
   label: string;
@@ -256,27 +256,31 @@ function Range(props: {
   min: number;
   max: number;
   step?: number;
-  /** Power of the slider's curve; 1, the default, is linear. */
-  exponent?: number;
+  /**
+   * Slider positions from 0 to 1 and their values, in order, from `[0, min]`; the last value is `max`, whatever it
+   * says. Without them the slider is linear.
+   */
+  breakpoints?: readonly (readonly [position: number, value: number])[];
   suffix: string;
   change: (value: number) => void;
 }) {
-  const exponent = () => props.exponent ?? 1;
   const step = () => props.step ?? 1;
-  /** Slider positions from 0 to `positions` along a curve; the plain value range when linear. */
-  const curved = () => exponent() !== 1;
-  const position = () =>
-    curved()
-      ? Math.round(
-          Math.max(0, Math.min(1, (props.value - props.min) / (props.max - props.min))) ** (1 / exponent()) * positions
-        )
-      : props.value;
+  /** The breakpoints ending at `max`, or none for a linear slider. */
+  const curve = () => {
+    const points = props.breakpoints;
+    return points?.length ? [...points.slice(0, -1), [1, props.max] as const] : undefined;
+  };
+  const position = () => {
+    const points = curve();
+    return points ? Math.round(curvePosition(points, props.value) * positions) : props.value;
+  };
   const valueAt = (slider: number) => {
-    if (!curved()) {
+    const points = curve();
+    if (!points) {
       return slider;
     }
 
-    const value = props.min + (props.max - props.min) * (slider / positions) ** exponent();
+    const value = curveValue(points, slider / positions);
     return Math.max(props.min, Math.min(props.max, Math.round(value / step()) * step()));
   };
 
@@ -292,9 +296,9 @@ function Range(props: {
       <input
         aria-label={props.label}
         type="range"
-        min={curved() ? 0 : props.min}
-        max={curved() ? positions : props.max}
-        step={curved() ? 1 : step()}
+        min={curve() ? 0 : props.min}
+        max={curve() ? positions : props.max}
+        step={curve() ? 1 : step()}
         value={position()}
         onInput={(e) => props.change(valueAt(e.currentTarget.valueAsNumber))}
       />
@@ -302,8 +306,42 @@ function Range(props: {
   );
 }
 
+/** The value at slider position `t`, 0 to 1, along straight segments between `points`. */
+function curveValue(points: readonly (readonly [number, number])[], t: number) {
+  const end = points.findIndex(([position]) => position >= t);
+  if (end <= 0) {
+    return end === 0 ? points[0]![1] : points.at(-1)![1];
+  }
+
+  const [p0, v0] = points[end - 1]!,
+    [p1, v1] = points[end]!;
+  return v0 + ((t - p0) * (v1 - v0)) / (p1 - p0);
+}
+
+/** The slider position, 0 to 1, of `value` along straight segments between `points`. */
+function curvePosition(points: readonly (readonly [number, number])[], value: number) {
+  const end = points.findIndex(([, at]) => at >= value);
+  if (end <= 0) {
+    return end === 0 ? 0 : 1;
+  }
+
+  const [p0, v0] = points[end - 1]!,
+    [p1, v1] = points[end]!;
+  return p0 + ((value - v0) * (p1 - p0)) / (v1 - v0);
+}
+
 /** Slider positions of a curved range: fine enough that every small size has its own. */
 const positions = 1000;
 
-/** Power of the size slider's curve: a third of the way is about 4% of the largest size, halfway 12.5%. */
-const sizeExponent = 3;
+/**
+ * Photoshop's brush Size slider (2025, 26.0.0), recovered from its binary in `photoshop-analysis`
+ * (`evidence/2026-10-05-brush-sliders`): 102 px at 50.5% of the track, 200 px at 75%, 500 px at 90%, then the largest
+ * size; for a smaller largest size Photoshop keeps the breakpoints and moves only the end.
+ */
+const sizeBreakpoints = [
+  [0, 1],
+  [0.505, 102],
+  [0.75, 200],
+  [0.9, 500],
+  [1, 5000]
+] as const;

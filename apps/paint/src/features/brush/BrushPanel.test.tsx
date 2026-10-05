@@ -63,8 +63,8 @@ it('selects raw input without Leonardo controls and retains stabilization settin
   }
 });
 
-it('moves the size slider along a curve that gives small sizes most of its length', () => {
-  const [brush, setBrush] = createSignal({ ...defaultBrush(), size: 65 }, { ownedWrite: true });
+it('moves the size slider as Photoshop does: 102 px at 50.5%, 200 px at 75%, 500 px at 90%', () => {
+  const [brush, setBrush] = createSignal({ ...defaultBrush(), size: 102 }, { ownedWrite: true });
   const host = document.createElement('div');
   document.body.append(host);
   const dispose = render(
@@ -74,12 +74,19 @@ it('moves the size slider along a curve that gives small sizes most of its lengt
   try {
     flush();
     const slider = host.querySelector<HTMLInputElement>('[aria-label="Size"]')!;
-    // Halfway along is an eighth of the largest round brush, 512 px.
-    expect(Number(slider.value)).toBe(500);
-    slider.value = '200';
-    slider.dispatchEvent(new Event('input', { bubbles: true }));
-    flush();
-    expect(brush().size).toBe(5);
+    expect(Number(slider.value)).toBe(505);
+    for (const [position, size] of [
+      ['100', 21],
+      ['750', 200],
+      ['900', 500],
+      ['950', 506]
+    ] as const) {
+      slider.value = position;
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      flush();
+      expect(brush().size).toBe(size);
+    }
+
     slider.value = '1000';
     slider.dispatchEvent(new Event('input', { bubbles: true }));
     flush();
