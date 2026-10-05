@@ -1034,6 +1034,30 @@ try {
     assert.equal(await page.getByText('Pen to draw. Touch to move.').count(), 0);
   });
 
+  await step('the drawing saves as a compressed version 4 file that opens again with its layers', async () => {
+    const panel = page.getByRole('complementary', { name: 'Layers' });
+    await page.getByRole('button', { name: 'Layers' }).click();
+    const count = await panel.getByText(/^\d+ layers?$/).textContent();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Drawing menu' }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 30_000 }),
+      page.getByRole('button', { name: /Save drawing/ }).click()
+    ]);
+    assert.equal(download.suggestedFilename(), 'drawing.paint');
+    const file = await readFile(await download.path());
+    assert.equal(file.toString('latin1', 0, 8), 'PAINT4\r\n');
+    assert.equal(file.toString('latin1', file.length - 4), 'P4IX');
+
+    await page.getByRole('button', { name: 'Drawing menu' }).click();
+    await page.locator('input[type="file"][accept*=".paint"]').setInputFiles(await download.path());
+    await waitForSaved(page);
+    assert.equal(await page.getByRole('alert').count(), 0);
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await panel.getByText(count, { exact: true }).waitFor({ timeout: 10_000 });
+    await page.keyboard.press('Escape');
+  });
+
   assert.deepEqual(pageErrors, [], 'The page reported errors.');
   console.log('Studio UI smoke test passed.');
 } catch (error) {

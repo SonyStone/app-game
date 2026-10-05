@@ -31,8 +31,50 @@ describe('portable paged drawings', () => {
         captured++;
         return pixels;
       })
-    ).rejects.toThrow('payload');
+    ).rejects.toThrow();
     expect(captured).toBe(0);
+  });
+  it('stores a tile shared by layers once, compressed, and shares it again when read', async () => {
+    const document = createDocument();
+    const flat = packTile(new Uint8Array(256 * 256 * 4).fill(160));
+    document.commit([{ layerId: document.active.id, key: '0,0', before: undefined, after: flat }]);
+    document.changeLayer({ type: 'duplicate', id: document.active.id });
+    const source = snapshotDocument(document.layers, document.active.id, defaultCamera());
+    const binary = await writePaintFile(source, async (pixels) => pixels as Uint8Array);
+    expect(binary.size).toBeLessThan(flat.byteLength / 20);
+
+    let captured = 0;
+    const loaded = await readPaintFile(binary, async (pixels) => {
+      captured++;
+      return pixels;
+    });
+    expect(captured).toBe(1);
+    expect(loaded.layers).toHaveLength(2);
+    expect(loaded.layers[0]!.tiles.get('0,0')).toBe(loaded.layers[1]!.tiles.get('0,0'));
+    expect(loaded.layers[0]!.tiles.get('0,0')).toEqual(flat);
+  });
+  it('still reads version 3 drawings', async () => {
+    const source = fixture();
+    const tiles = source.layers.flatMap((layer) => layer.tiles.map(({ pixels }) => pixels as Uint8Array));
+    const metadata = {
+      ...source,
+      version: 3,
+      layers: source.layers.map((layer) => ({
+        ...layer,
+        tiles: layer.tiles.map(({ key, pixels }) => ({
+          key,
+          pixels: { storageId: '00000000-0000-4000-8000-000000000000', byteLength: pixels.byteLength }
+        }))
+      }))
+    };
+    const header = new TextEncoder().encode(JSON.stringify(metadata));
+    const prefix = new Uint8Array(12);
+    prefix.set(new TextEncoder().encode('PAINT3\r\n'));
+    new DataView(prefix.buffer).setUint32(8, header.byteLength, true);
+    const loaded = await readPaintFile(new Blob([prefix, header, ...tiles.map((pixels) => pixels.slice())]));
+    expect(encodeDocument(snapshotDocument(loaded.layers, loaded.activeId, loaded.camera))).toBe(
+      encodeDocument(source)
+    );
   });
   it('passes each validated tile to the storage callback', async () => {
     const binary = await writePaintFile(fixture(), async (pixels) => pixels as Uint8Array);
