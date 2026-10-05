@@ -3,11 +3,14 @@ import type { GpuContext } from '@app-game/solid-gpu/gpu';
 import { err, ok, Result } from 'neverthrow';
 import type { ViewerError } from '../../shared/errors';
 import type { createSceneUpscaler } from './createSceneUpscaler';
+import { gpuFrameTimer } from './gpuFrameTimer';
 
 /**
  * Clears once, draws every layer into one pass, and submits once. A failed layer prevents submission. With `scaled`,
- * layers draw into the upscaler's target at `scale` of the canvas resolution, which is then stretched over the canvas.
- * `moving` tells layers that the frame continues motion and `strained` that such frames stay slow even scaled down.
+ * layers draw into the top-left part of the upscaler's target at `scale` of the canvas resolution, which is then
+ * stretched over the canvas. `moving` tells layers that the frame continues motion and `strained` that such frames
+ * stay slow even scaled down. Both passes count in the device's open frame measurement, which this closes; see
+ * {@link gpuFrameTimer}.
  */
 export function renderScene(
   gpu: GpuContext,
@@ -23,24 +26,29 @@ export function renderScene(
 
   const result = Result.fromThrowable(
     () => {
+      const timer = gpuFrameTimer(gpu.device);
       const encoder = gpu.device.createCommandEncoder();
       const canvasView = gpu.context.getCurrentTexture().createView();
-      const width = scaled
-        ? Math.max(1, Math.round(gpu.context.canvas.width * scaled.scale))
-        : gpu.context.canvas.width;
-      const height = scaled
-        ? Math.max(1, Math.round(gpu.context.canvas.height * scaled.scale))
-        : gpu.context.canvas.height;
+      const { width: canvasWidth, height: canvasHeight } = gpu.context.canvas;
+      const width = scaled ? Math.max(1, Math.round(canvasWidth * scaled.scale)) : canvasWidth;
+      const height = scaled ? Math.max(1, Math.round(canvasHeight * scaled.scale)) : canvasHeight;
       const pass = encoder.beginRenderPass({
+        ...timer.pass(),
         colorAttachments: [
           {
-            view: scaled ? scaled.upscaler.target(width, height) : canvasView,
+            view: scaled ? scaled.upscaler.target(canvasWidth, canvasHeight) : canvasView,
             clearValue: [160 / 255, 169 / 255, 175 / 255, 1],
             loadOp: 'clear',
             storeOp: 'store'
           }
         ]
       });
+
+      if (scaled) {
+        // Layers see a framebuffer of the scaled size: the viewport maps their clip space onto the target's corner.
+        pass.setViewport(0, 0, width, height, 0, 1);
+        pass.setScissorRect(0, 0, width, height);
+      }
 
       const frame: DrawFrame = { pass, width, height, moving, strained, scale: scaled?.scale ?? 1 };
 
@@ -57,12 +65,14 @@ export function renderScene(
 
       if (scaled) {
         const upscale = encoder.beginRenderPass({
+          ...timer.pass(),
           colorAttachments: [{ view: canvasView, loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }]
         });
-        scaled.upscaler.blit(upscale);
+        scaled.upscaler.blit(upscale, width, height);
         upscale.end();
       }
 
+      timer.finish(encoder);
       gpu.device.queue.submit([encoder.finish()]);
 
       return ok();

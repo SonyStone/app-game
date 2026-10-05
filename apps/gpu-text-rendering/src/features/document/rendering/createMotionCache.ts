@@ -1,5 +1,6 @@
 import type { GpuContext } from '@app-game/solid-gpu/gpu';
 import tgpu, { d, std } from 'typegpu';
+import { gpuFrameTimer } from '../../scene/gpuFrameTimer';
 import type { SceneFrame } from './createFrame';
 
 /**
@@ -58,6 +59,8 @@ export function createMotionCache({ root, device, format }: Pick<GpuContext, 'ro
       cached = undefined;
       const encoder = device.createCommandEncoder();
       const pass = encoder.beginRenderPass({
+        // A refresh is part of the frame that needs it.
+        ...gpuFrameTimer(device).pass(),
         colorAttachments: [{ view: target.view, clearValue: [0, 0, 0, 0], loadOp: 'clear', storeOp: 'store' }]
       });
       const result = render(pass);

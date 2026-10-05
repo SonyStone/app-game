@@ -2,6 +2,7 @@ import { createGpuResource, useGpuCanvas } from '@app-game/solid-gpu/gpu';
 import { debounce } from '@solid-primitives/scheduled';
 import { onCleanup } from 'solid-js';
 import { useFrame, useFrameLoop } from '../scene/FrameLoop';
+import { gpuFrameTimer } from '../scene/gpuFrameTimer';
 import { RenderLayer } from '../scene/RenderLayer';
 import { useViewport } from '../viewport/createViewport';
 import { layoutPerformancePanel } from './layoutPerformancePanel';
@@ -12,7 +13,8 @@ import { registerPerformanceMonitor } from './performanceReports';
 /**
  * Draws a frame-cost panel in the canvas's top-left corner with the enclosing FrameLoop's GPU pass. Every presented
  * frame is measured, including single on-demand frames such as those of a drag: its main-thread time until submission
- * and the time until the GPU finished its queue. Frame rate appears only while frames run back to back.
+ * and the time until the GPU finished its queue; reports add the GPU's own time for the frame's passes and its render
+ * scale. Frame rate appears only while frames run back to back.
  *
  * The panel draws in the pass it measures, so it shows each frame one frame later. Once frames stop, it draws one more,
  * unmeasured frame so the last measured frame and late GPU times appear; it never keeps the loop running otherwise.
@@ -73,12 +75,18 @@ export function PerformanceMonitor(props: {
       }
 
       idle = false;
-      const sample = history.record(frame, submitted - frame.timestamp);
+      const sample = history.record(frame, submitted - frame.timestamp, loop.scale);
 
       void device.queue.onSubmittedWorkDone().then(() => {
         sample.gpuMs = performance.now() - submitted;
         settle();
       });
+      // The loop's measurement of the frame just submitted; devices without timestamp queries leave it unknown.
+      void gpuFrameTimer(device)
+        .cost()
+        .then((cost) => {
+          sample.passMs = cost?.ms;
+        });
       settle();
     },
     { phase: 'present' }

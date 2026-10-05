@@ -1,41 +1,37 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { createDirectDrawPressure } from './createDirectDrawPressure';
 
-afterEach(() => vi.restoreAllMocks());
-
-it('turns constrained after two consecutive slow frames, resetting on a fast one', async () => {
-  let now = 0;
-  vi.spyOn(performance, 'now').mockImplementation(() => now);
-  let finish!: () => void;
-  const completed = vi.fn(
+it('turns constrained after two consecutive slow frames, resetting on a fast one and skipping unmeasured ones', async () => {
+  let finish!: (cost: number | undefined) => void;
+  const cost = vi.fn(
     () =>
-      new Promise<void>((resolve) => {
+      new Promise<number | undefined>((resolve) => {
         finish = resolve;
       })
   );
   const changed = vi.fn();
-  const pressure = createDirectDrawPressure(completed, changed);
+  const pressure = createDirectDrawPressure(cost, changed);
 
-  const sample = async (duration: number) => {
+  const sample = async (ms: number | undefined) => {
     pressure.observe();
     pressure.observe();
     await flush();
-    now += duration;
-    finish();
+    finish(ms);
     await flush();
   };
 
   await sample(40);
-  expect(completed).toHaveBeenCalledTimes(1);
+  expect(cost).toHaveBeenCalledTimes(1);
   await sample(5);
   await sample(40);
+  await sample(undefined);
   expect(pressure.constrained).toBe(false);
   await sample(40);
   expect(pressure.constrained).toBe(true);
   expect(changed).toHaveBeenCalledTimes(1);
 
   pressure.observe();
-  expect(completed).toHaveBeenCalledTimes(4);
+  expect(cost).toHaveBeenCalledTimes(5);
   pressure.destroy();
 });
 

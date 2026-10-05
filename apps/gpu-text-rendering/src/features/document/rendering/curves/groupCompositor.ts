@@ -1,5 +1,6 @@
 import type { GpuDevice, KeepGpuResource } from '@app-game/solid-gpu/gpu';
 import tgpu, { common, d, std, type TgpuBindGroup } from 'typegpu';
+import { gpuFrameTimer } from '../../../scene/gpuFrameTimer';
 import { alphaMaskBlend, isMask, luminosityMaskBlend, type PaintNode } from '../../plan/paintTree';
 import { blendColor } from './blendColor';
 import type { PixelRect } from './paintBounds';
@@ -14,6 +15,8 @@ import type { PixelRect } from './paintBounds';
  */
 export function createGroupCompositor(gpu: GpuDevice, keep: KeepGpuResource) {
   const { root, device, format } = gpu;
+  // Offscreen passes drawn for a scene frame count towards its measured cost.
+  const timer = gpuFrameTimer(device);
   const sampler = root.createSampler({ minFilter: 'nearest', magFilter: 'nearest' });
   type Surface = ReturnType<typeof makeSurface>;
   /** Scratch surfaces of one quantized size; `free` is a stack, so each frame reuses surfaces in the same order. */
@@ -286,6 +289,7 @@ export function createGroupCompositor(gpu: GpuDevice, keep: KeepGpuResource) {
 
       function begin(target: Surface, clear: boolean, rect: PixelRect) {
         const pass = encoder.beginRenderPass({
+          ...timer.pass(),
           colorAttachments: [
             { view: target.view, loadOp: clear ? 'clear' : 'load', storeOp: 'store', clearValue: [0, 0, 0, 0] }
           ]

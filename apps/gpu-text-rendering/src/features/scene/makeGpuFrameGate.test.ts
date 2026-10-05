@@ -31,6 +31,32 @@ it('admits two unfinished frames, coalesces later requests and reads fresh state
   gate.destroy();
 });
 
+it("follows the caller's limit of unfinished frames as it changes", async () => {
+  const frames = [deferred(), deferred(), deferred()];
+  const complete = vi.fn();
+  frames.forEach((frame) => complete.mockReturnValueOnce(frame.promise));
+  let limit = 3;
+  const invalidate = vi.fn();
+  const gate = makeGpuFrameGate(options({ complete, invalidate, maxUnfinished: () => limit }));
+  const render = vi.fn(() => ok());
+
+  gate.draw(render);
+  gate.draw(render);
+  gate.draw(render);
+  gate.draw(render);
+  expect(render).toHaveBeenCalledTimes(3);
+
+  // With the limit lowered, one finished frame is not enough to admit the skipped request.
+  limit = 2;
+  frames[0]!.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(invalidate).not.toHaveBeenCalled();
+  frames[1]!.resolve();
+  await vi.waitFor(() => expect(invalidate).toHaveBeenCalledOnce());
+  gate.destroy();
+});
+
 it('admits a resized frame at the limit, but still waits for blocking work', async () => {
   const frames = [deferred(), deferred(), deferred()];
   const complete = vi.fn();

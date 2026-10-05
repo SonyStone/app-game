@@ -495,7 +495,7 @@ The default demo retains all 1,273 pages and its golden byte-parity check.
 
 ### Live frame costs
 
-The Performance item in the ⋯ menu, or `?performance` in the URL, mounts a GPU-drawn `PerformanceMonitor` in each pane. It records every presented frame, including single on-demand frames during a drag: main-thread milliseconds from frame start to submission (`cpuMs`), and milliseconds from submission until the GPU finished its queue (`gpuMs`, which includes queueing and is not a timestamp-query measurement). Frame rate is reported only for frames drawn back to back. Each monitor keeps its latest 3,600 frames.
+The Performance item in the ⋯ menu, or `?performance` in the URL, mounts a GPU-drawn `PerformanceMonitor` in each pane. It records every presented frame, including single on-demand frames during a drag: main-thread milliseconds from frame start to submission (`cpuMs`), and milliseconds from submission until the GPU finished its queue (`gpuMs`, which includes queueing and presentation). Reports also carry `passMs`, the GPU's own time for the frame's render passes from timestamp queries where the device has them, and `scale`, the frame's render resolution relative to the canvas. Compare `passMs` when judging rendering work: `gpuMs` has a floor of several milliseconds on every device, about 9 ms on the Android tablet, however little a frame draws. Frame rate is reported only for frames drawn back to back. Each monitor keeps its latest 3,600 frames.
 
 Agents and scripts can read the same data without screenshots:
 
@@ -507,7 +507,7 @@ curl localhost:3180/__performance                 # summaries per tab and pane
 curl 'localhost:3180/__performance?samples'       # plus per-frame records
 ```
 
-The endpoint exists only during `vite dev` in this app; it relays requests over Vite's HMR websocket to every open tab and waits at most one second for answers. In a page driven by Playwright or another browser tool, `window.gpuPerformance.reset()` and `window.gpuPerformance.report({ samples: true })` return the same report directly, in any build. Each monitor reports `label` (`pane 1`, `pane 2`), canvas size, `idle`, `frames`, `spanMs`, `fps`, mean/p50/p95/max of `cpuMs`, `gpuMs` and `totalMs`, and `overBudget` frames above 16.7 ms. Absent statistics are `null`. See `src/features/performance/performanceReports.ts` for the types.
+The endpoint exists only during `vite dev` in this app; it relays requests over Vite's HMR websocket to every open tab and waits at most one second for answers. In a page driven by Playwright or another browser tool, `window.gpuPerformance.reset()` and `window.gpuPerformance.report({ samples: true })` return the same report directly, in any build. Each monitor reports `label` (`pane 1`, `pane 2`), canvas size, `idle`, `frames`, `spanMs`, `fps`, mean/p50/p95/max of `cpuMs`, `gpuMs`, `passMs` and `totalMs`, and `overBudget` frames above 16.7 ms. Absent statistics are `null`. See `src/features/performance/performanceReports.ts` for the types.
 
 ### Lossless instance packing and worker preparation
 
@@ -515,7 +515,21 @@ The full 1,273-page demo stays intact. The vertex shader reads compact records f
 
 PDF/GDOC loading Workers also prepare paint runs, trees, composition plans, spatial bounds and curve lookup rows. GPU preparation consumes that staging data. Programmatic scenes without staging data still build the plans locally; custom page placement rebuilds spatial bounds. Large glyph, curve, instance, clip, bin and coverage buffers upload in writes of at most 4 MiB, yielding between chunks and checking cancellation before each write. This reduces uninterrupted main-thread work, but does not make PDF interpretation or geometry residency page-streamed.
 
-No persistent document cache, predictive prefetch, reduced motion resolution or new approximate text rendering is enabled.
+No persistent document cache or predictive prefetch is enabled.
+
+### Moving frames and the GPU's clock
+
+`FrameLoop` draws moving frames below the canvas resolution only when they would miss 60 frames per second
+(`createDynamicResolution`), and stretches them over the canvas. It judges frames by the GPU's own time for their
+render passes (`gpuFrameTimer`, 13 ms budget), which needs the `timestamp-query` feature the viewer requests where
+available; other devices fall back to the time until the GPU finished its queue. Offscreen passes drawn for a frame,
+such as transparency compositing, count towards it.
+
+Mobile GPUs lower their clock within about 200 ms without work and need roughly eight loaded frames to raise it again;
+the same frame costs up to 2.75 times more meanwhile. The first twelve frames after idle are therefore not judged as
+steady: the controller learns how much slower each of them runs and draws only those at a smaller scale, when they
+would otherwise miss the budget. Policies that ask whether direct drawing keeps up (`createCompositionBudget`,
+`createDirectDrawPressure`) skip the same frames. See [PERFORMANCE.md](PERFORMANCE.md) for the measurements.
 
 ### Interface languages
 

@@ -197,7 +197,11 @@ export default function GpuTextRendering() {
         </For>
       </Resizable>
 
-      <TypeGPURootProvider requiredBufferBytes={256 * 1024 * 1024} error={reportGpuError}>
+      <TypeGPURootProvider
+        requiredBufferBytes={256 * 1024 * 1024}
+        optionalFeatures={['timestamp-query']}
+        error={reportGpuError}
+      >
         <Show when={documentSource.prepared()} keyed>
           {({ data, fail }) => (
             <DocumentRenderer

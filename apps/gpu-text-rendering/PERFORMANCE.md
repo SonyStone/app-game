@@ -1,5 +1,54 @@
 # Navigation performance, 2026-09-22
 
+## GPU-time frame budget and idle clock, 2026-10-02
+
+Measured on the Wacom MovinkPad 14 (Adreno 735, Chrome 154, 2879×1589 canvas) with in-page pointer gestures and
+timestamp queries around the scene's render passes. Two properties of the device had been steering every
+cost-based policy wrongly:
+
+- **`onSubmittedWorkDone` latency is not GPU time.** A frame whose passes take 0.4 ms of GPU time still reports
+  8.5–9.6 ms from submission to completion, and frames of 10.6 and 12.4 ms both report about 20 ms. The latency
+  follows presentation, not load.
+- **The GPU lowers its clock when idle.** After about 200 ms without work the same frame costs 2.75 times more, and the
+  clock returns over about eight frames of full load: 33, 33, 24–32, 17, 17, 17, 13, 12 ms for a frame that then costs
+  12 ms. A still frame drawn alone after a gesture also costs 33 ms. Under light load the clock stays partly lowered,
+  so a full-screen blit costs 2.3 ms instead of 1.2 ms.
+
+Dynamic resolution judged frames by latency against a 16.7 ms budget. The first two frames of every gesture looked slow,
+the scale dropped to 0.55 within five frames, stepping back up needed frames under 8.8 ms of latency, which the 9 ms
+floor never allows, and the motion cache latched on for every later gesture. The tablet therefore drew all motion at
+0.55 scale from a resampled cache while its GPU spent 2.7 ms per frame. Forced to full resolution, the same views had no
+long frames in steady motion (0 of 349 at 12.4 ms of GPU time); every long frame fell within the first ten frames of a
+gesture.
+
+Changes: frames are measured with timestamp queries (`gpuFrameTimer`) against a 13 ms budget; the first twelve frames
+after idle are excluded from the steady judgement and drawn at a learned smaller scale only when needed; a lightly
+loaded GPU's inflated times are corrected by the stretch pass, the same work every frame; the frame gate admits a third
+unfinished frame while the GPU keeps up; the first frame of a gesture counts as moving; a cached gesture returns to
+direct drawing once its refreshes fit the budget; the composition budget and overview pressure use the same measured
+cost instead of 8 and 25 ms of latency.
+
+Tablet results, long frames being intervals over 25 ms, "start" the first eight frames of a gesture:
+
+| View (Game Engine Architecture)  | Before: scale, long start / steady | After: scale, long start / steady |
+| -------------------------------- | ---------------------------------- | --------------------------------- |
+| Default view, pan                | 0.55 cached, 4/62, 3/224           | 1.0, 1/43, 0/284                  |
+| Text page at reading scale, pan  | 0.55 cached, 1/86, 0/424           | 1.0 (first frames 0.75–0.9), 0/56, 0/426 |
+| Text page, pinch                 | 0.55 cached, 8/81, 0/392           | 0.95, 9/46, 2/378                 |
+| Cover illustration, pan          | 0.55 cached, 1/80, 0/392           | 0.85 (first frames from 0.55), 3/56, 1/421 |
+
+Head First HTML5 and the milk brandbook now draw at full resolution with the same number of long frames as before
+(27–45 per 360 steady frames). Their scene passes take 1–8 ms; the long frames come from background tile and
+compositor jobs, with completion latencies up to 650 ms, which scene resolution does not affect. Measuring those jobs
+and fitting them into each frame's remaining budget is the next step for such documents.
+
+The first frames of a gesture on a heavy view are still softer than the rest. Pans could avoid this entirely by
+shifting the previous frame by whole pixels and drawing only the uncovered strips, which would also make them cheap
+enough for the idle clock; this is not implemented.
+
+Reproduce with `?performance` and `window.gpuPerformance.report({ samples: true })`: samples carry `passMs` and
+`scale`. Compare `passMs`, not `gpuMs`, and discard the first frames after any pause when comparing shaders.
+
 
 ## How to Draw scan import, 2026-09-23
 

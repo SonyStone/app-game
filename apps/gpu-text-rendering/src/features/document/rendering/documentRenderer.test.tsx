@@ -14,7 +14,7 @@ import { VectorArtwork } from './VectorArtwork';
 
 vi.mock('@app-game/solid-gpu/gpu/TypeGPURootProvider', () => ({ useGpuDevice: () => gpu }));
 vi.mock('./createTypeGpuRenderer', () => ({ createGlyphRenderer: vi.fn() }));
-vi.mock('../../scene/FrameLoop', () => ({ useFrameLoop: () => ({ invalidate }) }));
+vi.mock('../../scene/FrameLoop', () => ({ useFrameLoop: () => ({ invalidate }), useFrame: () => {} }));
 vi.mock('../../viewport/createViewport', () => ({
   useViewport: () => ({ size: () => ({ css: { width: 1, height: 1 }, pixels: { width: 1, height: 1 } }) })
 }));

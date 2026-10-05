@@ -3,7 +3,8 @@ import { makeEventListener } from '@solid-primitives/event-listener';
 import { onCleanup, Show } from 'solid-js';
 import type { DocumentCamera } from '../../camera/createDocumentCamera';
 import { createDynamicResolution } from '../../scene/createDynamicResolution';
-import { useFrameLoop } from '../../scene/FrameLoop';
+import { useFrame, useFrameLoop } from '../../scene/FrameLoop';
+import { gpuFrameBudgetMs, gpuFrameTimer } from '../../scene/gpuFrameTimer';
 import { RenderLayer } from '../../scene/RenderLayer';
 import type { SceneDraw } from '../../scene/renderScene';
 import { useViewport } from '../../viewport/createViewport';
@@ -52,22 +53,32 @@ export function DocumentView(props: {
         onCleanup(settledView.destroy);
         /** Whether the current or last gesture resampled cached views; such views also settle progressively. */
         let cachedGesture = false;
+        /** Whether the latest cache refresh cost so little that its view could be drawn directly every frame. */
+        let refreshFits = false;
         let wasMoving = false;
         // Refreshes render a widened view; their resolution adapts to their own cost, like moving frames'.
         const refreshResolution = createDynamicResolution({ budgetMs: refreshBudgetMs, scales: refreshScales });
         let caching = false;
         let previous: ReturnType<typeof camera> | undefined;
-        const draw: SceneDraw = ({ pass, width, height, moving, strained, scale }) => {
+        let zoomingIn = false;
+
+        // Before the frame is drawn, so the first frame of a gesture already counts as moving: a moving view lets the
+        // loop draw motion below full resolution.
+        useFrame(() => {
           const current = camera();
 
-          // A moving view lets the loop draw continuing motion below full resolution.
           if (previous && !sameCamera(previous, current)) {
             loop.reportMotion();
+            zoomingIn = current.zoom < previous.zoom;
           }
 
-          // Zooming in never uncovers area around a cached view, so it needs little margin and cheaper refreshes.
-          const margin = previous && current.zoom < previous.zoom ? zoomInMargin : cacheMargin;
           previous = current;
+        });
+
+        const draw: SceneDraw = ({ pass, width, height, moving, strained, scale }) => {
+          const current = camera();
+          // Zooming in never uncovers area around a cached view, so it needs little margin and cheaper refreshes.
+          const margin = zoomingIn ? zoomInMargin : cacheMargin;
           const options = {
             vectorOnly: props.vectorOnly,
             grids: props.grids,
@@ -77,10 +88,12 @@ export function DocumentView(props: {
           const frame = createFrame(document, current, width, height, options);
           // Motion too slow even at the smallest scale resamples cached renderings until it stops, when the view is
           // drawn exactly again, band by band. Devices that keep up, at full or reduced resolution, never cache.
-          // A gesture following one that had to cache starts cached, instead of first proving slow again.
+          // A gesture following one that had to cache starts cached, instead of first proving slow again, unless that
+          // gesture's last refresh showed the view has become cheap enough to draw directly.
           if (moving && !wasMoving) {
-            caching = cachedGesture;
+            caching = cachedGesture && !refreshFits;
             cachedGesture = false;
+            refreshFits = false;
           }
 
           wasMoving = moving;
@@ -120,9 +133,17 @@ export function DocumentView(props: {
             return rendered;
           }
 
+          // A refresh draws more than a frame of the same view, so when even the frame holding one fits the budget,
+          // the view no longer needs caching.
+          void gpuFrameTimer(gpu.device)
+            .cost()
+            .then((cost) => {
+              refreshFits = cost !== undefined && cost.ms <= gpuFrameBudgetMs;
+            });
+
           void gpu.device.queue
             .onSubmittedWorkDone()
-            .then(() => refreshResolution.observe(performance.now() - started));
+            .then(() => refreshResolution.observe({ ms: performance.now() - started }));
           cache.draw(pass, frame);
         };
 

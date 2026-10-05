@@ -19,6 +19,7 @@ import { ViewportContext, type Viewport } from '../viewport/createViewport';
 import { createDynamicResolution } from './createDynamicResolution';
 import { createFrameScheduler, type FrameSubscription } from './createFrameScheduler';
 import { createSceneUpscaler } from './createSceneUpscaler';
+import { gpuFrameBudgetMs, gpuFrameTimer, type FrameCost } from './gpuFrameTimer';
 import { makeGpuFrameGate } from './makeGpuFrameGate';
 import { makeScenePointerEvents } from './makeScenePointerEvents';
 import { RenderLayer } from './RenderLayer';
@@ -47,32 +48,41 @@ export function FrameLoop(props: {
   let resized = false;
   // Moving frames that miss their budget draw below the canvas resolution; the frame after motion stops is full.
   const upscaler = createSceneUpscaler(gpu);
-  const resolution = createDynamicResolution();
+  const timer = gpuFrameTimer(gpu.device);
+  const resolution = createDynamicResolution({ budgetMs: timer.supported ? gpuFrameBudgetMs : latencyBudgetMs });
   /**
    * When a layer last reported its view moving. Every frame shortly after counts as moving, including those drawn
    * for other reasons such as arriving tiles, which would otherwise interrupt a gesture with full-resolution frames.
    */
   let movedAt = -Infinity;
-  /** Start and motion of the frame just submitted, read once by the gate's completion. */
-  let submittedFrame: { started: number; moving: boolean } | undefined;
+  /** The frame just submitted, read once by the gate's completion. */
+  let submittedFrame:
+    | { started: number; moving: boolean; scale: number; sequence: number; cost: Promise<FrameCost | undefined> }
+    | undefined;
+  let submittedScale = 1;
   let settleTimer: ReturnType<typeof setTimeout> | undefined;
   const loop = createFrameScheduler(
     () => {
       const started = performance.now();
       const moving = !resized && started - movedAt < motionWindowMs;
-      const scale = moving ? resolution.scale : 1;
       let submitted = false;
       const drawn = gate.draw(
-        () =>
-          renderScene(
+        () => {
+          const sequence = timer.begin(started);
+          const cost = timer.cost();
+          const scale = moving ? resolution.scaleFor(sequence) : 1;
+
+          return renderScene(
             gpu,
             layers().map((layer) => layer.draw),
             scale < 1 ? { upscaler, scale } : undefined,
             { moving, strained: moving && resolution.strained }
           ).map(() => {
             submitted = true;
-            submittedFrame = { started, moving };
-          }),
+            submittedScale = scale;
+            submittedFrame = { started, moving, scale, sequence, cost };
+          });
+        },
         { resized }
       );
 
@@ -96,14 +106,36 @@ export function FrameLoop(props: {
       submittedFrame = undefined;
 
       return gpu.device.queue.onSubmittedWorkDone().then(() => {
-        if (frame?.moving) {
-          resolution.observe(performance.now() - frame.started);
+        if (!frame) {
+          return;
         }
+
+        const { moving, scale, sequence } = frame;
+        const latency = performance.now() - frame.started;
+
+        if (!moving) {
+          return;
+        }
+
+        void frame.cost.then((cost) => {
+          // The GPU's own time for the frame when the device measures it; else the time until it finished its queue,
+          // which also counts presentation. A scaled frame's last pass stretches it over the canvas, the same work at
+          // every scale.
+          resolution.observe(
+            cost
+              ? { ms: cost.ms, fixedMs: scale < 1 ? cost.passMs.at(-1) : undefined, scale, sequence }
+              : { ms: latency, scale, sequence }
+          );
+        });
       });
     },
     // Document preparation holds a device-wide validation error scope across awaits. A frame submitted meanwhile
     // would have its validation errors attributed to preparation and hidden from uncapturederror, so wait instead.
     blocked: () => pendingGpuPreparation(gpu.device),
+    // A GPU that keeps up still reports frames finished only after presentation, more than a display interval later
+    // right after idle; one more frame in flight then avoids skipping a refresh. Known only where GPU time is measured;
+    // a GPU that falls behind keeps the shorter queue, so the view does not lag further behind the input.
+    maxUnfinished: () => (timer.supported && !resolution.behind ? 3 : 2),
     invalidate: loop.invalidate,
     fail: loop.fail
   });
@@ -121,6 +153,10 @@ export function FrameLoop(props: {
     /** Marks this frame's view as moving, so continuing motion may draw below full resolution. */
     reportMotion() {
       movedAt = performance.now();
+    },
+    /** Framebuffer resolution of the latest submitted frame relative to the canvas; below 1 for scaled moving frames. */
+    get scale() {
+      return submittedScale;
     }
   };
 
@@ -201,8 +237,12 @@ export function useFrame(
   );
 }
 
-const FrameContext = createContext<ReturnType<typeof createFrameScheduler> & { reportMotion(): void }>();
+const FrameContext = createContext<
+  ReturnType<typeof createFrameScheduler> & { reportMotion(): void; readonly scale: number }
+>();
 
+/** Budget of a moving frame on devices that only report when it finished: one 60 Hz interval, presentation included. */
+const latencyBudgetMs = 1000 / 60;
 /** Frames this soon after a view moved count as moving. */
 const motionWindowMs = 150;
 /** Quiet time after a scaled frame before the full-resolution redraw; longer than the motion window. */

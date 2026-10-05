@@ -1,6 +1,7 @@
 import type { ResultValue } from '@app-game/solid-gpu/errors';
 import type { GpuDevice, KeepGpuResource } from '@app-game/solid-gpu/gpu';
 import { err, ok } from 'neverthrow';
+import { gpuFrameBudgetMs, gpuFrameTimer, warmupFrames } from '../../../scene/gpuFrameTimer';
 import type { TextDocument } from '../../document';
 import { buildCurvePreparation } from '../../plan/buildCurvePreparation';
 import type { SceneFrame } from '../createFrame';
@@ -214,8 +215,9 @@ function createPaintEngine(
     pageBundle: createPageBundles(device, format, trees, keep),
     imageRevision
   });
-  const budget = keep(createCompositionBudget(() => device.queue.onSubmittedWorkDone(), changed));
-  const pressure = keep(createDirectDrawPressure(() => device.queue.onSubmittedWorkDone(), changed));
+  const frameCost = directFrameCost(device);
+  const budget = keep(createCompositionBudget(frameCost.measure, changed, frameCost.slowMs));
+  const pressure = keep(createDirectDrawPressure(frameCost.measure, changed, frameCost.constrainedMs));
   const policy = createComposedPagePolicy(document, composition, budget);
   const detailTables = keep(
     createDetailTables({
@@ -416,6 +418,34 @@ function createCurveDrawing(
     raster.prefetchTails(pages.flatMap((page) => pageImages[page]!));
     wholeCache.prefetch(pages);
   }
+}
+
+/**
+ * How the engine judges whether direct drawing keeps up: `measure` resolves the cost of the scene frame just
+ * submitted, above `slowMs` a frame is too slow for its optional direct pages, and above `constrainedMs` too slow for
+ * direct overviews. Devices with timestamp queries report the GPU's own time for the frame, skipping the frames after
+ * idle that say nothing about its speed; others report the time until the GPU finished its queue, which includes
+ * presentation and so has lower thresholds only by convention of what was tuned on them.
+ */
+function directFrameCost(device: GPUDevice) {
+  const timer = gpuFrameTimer(device);
+
+  if (timer.supported) {
+    return {
+      measure: () => timer.cost().then((cost) => (cost && cost.sequence >= warmupFrames ? cost.ms : undefined)),
+      slowMs: gpuFrameBudgetMs,
+      constrainedMs: 16
+    };
+  }
+
+  return {
+    measure: () => {
+      const started = performance.now();
+      return device.queue.onSubmittedWorkDone().then(() => performance.now() - started);
+    },
+    slowMs: 8,
+    constrainedMs: 25
+  };
 }
 
 /** Whether worker-built spatial data used the same page placement as the live layout. */
