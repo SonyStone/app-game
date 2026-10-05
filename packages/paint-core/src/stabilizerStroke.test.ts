@@ -19,7 +19,9 @@ it('starts at the pen, trails it while it moves and steadies a shaking hand', ()
   // Resampled at 120 Hz: about 36 points for 300 ms.
   expect(output.length).toBeGreaterThanOrEqual(35);
   expect(output.length).toBeLessThanOrEqual(37);
-  expect(output.at(-1)!.x).toBeLessThan(300 - 50);
+  // Fast, it trails the pen's last few ticks, about 20 px behind here, by at most 4 screen pixels per level, 24 px.
+  expect(output.at(-1)!.x).toBeLessThan(300 - 30);
+  expect(output.at(-1)!.x).toBeGreaterThan(300 - 50);
   expect(Math.max(...output.slice(10).map(({ y }) => Math.abs(y)))).toBeLessThan(0.5);
 });
 
@@ -153,4 +155,31 @@ it('turns gently onto the rest of the way, on a fast curved stroke whose line he
   }
 
   expect((sharpest * 180) / Math.PI).toBeLessThan(8);
+});
+
+it('keeps to the arc of a fast stroke instead of cutting across it, and leaves out a hook at the lift', () => {
+  // As recorded on the tablet at S-15: a 300 ms arc of radius 300, then a quick curl aside as the pen eases off.
+  const arc = Array.from({ length: 41 }, (_, index) => {
+    const angle = (index / 40) * (Math.PI / 2);
+    return sample(300 * Math.sin(angle), 300 - 300 * Math.cos(angle), index * 7.5, 0.7);
+  });
+  const hook = Array.from({ length: 8 }, (_, index) => {
+    const angle = Math.PI / 2 + ((index + 1) / 8) * (Math.PI / 2);
+    return sample(
+      300 - 30 + 30 * Math.cos(angle - Math.PI / 2),
+      300 + 30 * Math.sin(angle - Math.PI / 2),
+      300 + (index + 1) * 4,
+      0.7 - (index + 1) * 0.07
+    );
+  });
+  const processor = createStabilizerProcessor(brush(15));
+  const drawn = processor.add([...arc, ...hook]);
+  const line = [...drawn, ...processor.finish()];
+
+  // Within a few pixels inside the arc wherever the line runs along it; the plain average cut about 40 px across.
+  const inside = (point: Sample) => 300 - Math.hypot(point.x, point.y - 300);
+  expect(Math.max(...line.filter(({ y }) => y < 280).map(inside))).toBeLessThan(10);
+
+  // It ends near where the hook began, at x 300, not where the pen lifted after curling aside, at x 270.
+  expect(line.at(-1)!.x).toBeGreaterThan(285);
 });
