@@ -1,6 +1,9 @@
 import { Camera, Orbit, Renderer, Transform, Vec3 } from '@app-game/ogl';
 import { toRadian } from '@app-game/ogl/extras/path/utils';
-import { numberPrecisionDragInput } from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
+import {
+  NumberPrecisionDragButton,
+  numberPrecisionDragInput
+} from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import createRAF from '@solid-primitives/raf';
 import { createStore, createTrackedEffect, For, onCleanup, untrack } from 'solid-js';
 
@@ -14,6 +17,13 @@ export default function AffineTransformations3D() {
     [0, 0, 1, 0],
     [0, 0, 0, 1]
   ]);
+
+  // The rotation field is uncontrolled: the form reads it on submit, so drags write straight to the element.
+  let rotation!: HTMLInputElement;
+  const readRotation = () => parseFloat(rotation.value);
+  const writeRotation = (value: number) => {
+    rotation.value = value.toString();
+  };
 
   const canvas = (() => {
     const canvas = (<canvas class="w-400px h-400px border-t" />) as HTMLCanvasElement;
@@ -75,20 +85,19 @@ export default function AffineTransformations3D() {
             });
           }}
         >
-          <input
-            id="rotation"
-            name="rotation"
-            value={30}
-            type="number"
-            ref={(ref) => {
-              numberPrecisionDragInput(ref, {
-                value: parseFloat(ref.value),
-                onChange: (value) => {
-                  ref.value = value.toString();
-                }
-              });
-            }}
-          />
+          <div class="flex items-center">
+            <input
+              id="rotation"
+              name="rotation"
+              value={30}
+              type="number"
+              ref={(ref) => {
+                rotation = ref;
+                numberPrecisionDragInput(ref, { value: readRotation, onChange: writeRotation });
+              }}
+            />
+            <NumberPrecisionDragButton value={readRotation} onChange={writeRotation} />
+          </div>
         </form>
         <table>
           <tbody>
@@ -96,31 +105,30 @@ export default function AffineTransformations3D() {
               {(row, rowIndex) => (
                 <tr>
                   <For keyed={false} each={row()}>
-                    {(cell, colIndex) => (
-                      <td class="border-e border-t">
-                        <input
-                          class="w-16"
-                          value={cell()}
-                          type="number"
-                          onInput={(e) => {
-                            const value = parseFloat(e.target.value);
-                            setMatrix((draft) => {
-                              draft[rowIndex][colIndex] = value;
-                            });
-                          }}
-                          ref={(ref) => {
-                            numberPrecisionDragInput(ref, {
-                              value: cell,
-                              onChange: (value) => {
-                                setMatrix((draft) => {
-                                  draft[rowIndex][colIndex] = value;
-                                });
-                              }
-                            });
-                          }}
-                        />
-                      </td>
-                    )}
+                    {(cell, colIndex) => {
+                      const setCell = (value: number) => {
+                        setMatrix((draft) => {
+                          draft[rowIndex][colIndex] = value;
+                        });
+                      };
+
+                      return (
+                        <td class="border-e border-t">
+                          <div class="flex items-center">
+                            <input
+                              class="w-16"
+                              value={cell()}
+                              type="number"
+                              onInput={(e) => setCell(parseFloat(e.target.value))}
+                              ref={(ref) => {
+                                numberPrecisionDragInput(ref, { value: cell, onChange: setCell });
+                              }}
+                            />
+                            <NumberPrecisionDragButton value={cell} onChange={setCell} />
+                          </div>
+                        </td>
+                      );
+                    }}
                   </For>
                 </tr>
               )}

@@ -5,7 +5,7 @@ import { Menu } from '@app-game/ui-components/menu/menu';
 import { Ripple } from '@app-game/ui-components/ripple';
 import { Meta, Title } from '@solidjs/meta';
 import { For, Show, createSignal } from 'solid-js';
-import { numberPrecisionDragInput } from './number-precision-drag-input';
+import { NumberPrecisionDragButton, numberPrecisionDragInput } from './number-precision-drag-input';
 
 const BREADCRUMBS: BreadcrumbProps[] = [
   { href: '/users', icon: 'folder-close', text: '1 Home Page' },
@@ -38,18 +38,21 @@ export default () => {
             max={100}
             onInput={(e) => setWidth(parseFloat((e.target as any).value))}
           />
-          <input
-            class="border rounded p-2"
-            type="number"
-            value={width()}
-            min={0}
-            step={10}
-            max={100}
-            onInput={(e) => setWidth(parseFloat((e.target as any).value))}
-            ref={(ref) => {
-              numberPrecisionDragInput(ref, { value: width, onChange: setWidth });
-            }}
-          />
+          <div class="flex items-center gap-2">
+            <input
+              class="border rounded p-2 grow"
+              type="number"
+              value={width()}
+              min={0}
+              step={10}
+              max={100}
+              onInput={(e) => setWidth(parseFloat((e.target as any).value))}
+              ref={(ref) => {
+                numberPrecisionDragInput(ref, { value: width, onChange: setWidth });
+              }}
+            />
+            <NumberPrecisionDragButton value={width} onChange={setWidth} />
+          </div>
           <div class="border p-4 rounded" style={{ width: width() + `%` }}>
             native:
             <nav class="truncate text-start">
@@ -92,16 +95,19 @@ export default () => {
         </div>
         {/* -- */}
         <div class="flex flex-col gap-2 w-100 place-content-center">
-          middle click input
-          <input
-            class="border rounded p-2 w-100"
-            ref={(ref) => {
-              numberPrecisionDragInput(ref, { value: value, onChange: setValue });
-            }}
-            type="number"
-            value={value()}
-            onInput={(e) => setValue(parseFloat(e.target.value))}
-          />
+          middle click input, or drag ↔ with a pen or finger
+          <div class="flex items-center gap-2">
+            <input
+              class="border rounded p-2 w-100"
+              ref={(ref) => {
+                numberPrecisionDragInput(ref, { value: value, onChange: setValue });
+              }}
+              type="number"
+              value={value()}
+              onInput={(e) => setValue(parseFloat(e.target.value))}
+            />
+            <NumberPrecisionDragButton value={value} onChange={setValue} />
+          </div>
         </div>
         <div class="flex flex-col">
           aria menu:

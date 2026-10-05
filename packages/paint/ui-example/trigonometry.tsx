@@ -1,6 +1,9 @@
 import { DEG_TO_RAD } from '@app-game/math';
 import { distance } from '@app-game/ogl/math/functions/vec-2-func';
-import { numberPrecisionDragInput } from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
+import {
+  NumberPrecisionDragButton,
+  numberPrecisionDragInput
+} from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import type { ComponentProps } from '@solidjs/web';
 import { RAD_TO_DEG } from 'pixi.js';
 import { createMemo, createSignal, omit, untrack } from 'solid-js';
@@ -120,29 +123,36 @@ const Input = (
   props: { value: number; onChange: (value: number) => void } & Omit<ComponentProps<'input'>, 'value' | 'onChange'>
 ) => {
   const others = omit(props, 'value', 'onChange');
-  const initialValue = untrack(() => props.value);
-  const onChange = untrack(() => props.onChange);
 
   return (
-    <input
-      class="w-16"
-      value={props.value}
-      type="number"
-      onInput={(e) => {
-        const value = parseFloat(e.target.value);
-        props.onChange(value);
-      }}
-      ref={(ref) => {
-        numberPrecisionDragInput(ref, {
-          value: initialValue,
-          onChange,
-          step: '.01',
-          max: '.1',
-          min: '.001'
-        });
-      }}
-      {...others}
-    />
+    <>
+      <input
+        class="w-16"
+        value={props.value}
+        type="number"
+        onInput={(e) => {
+          const value = parseFloat(e.target.value);
+          props.onChange(value);
+        }}
+        ref={(ref) => {
+          numberPrecisionDragInput(ref, {
+            value: () => props.value,
+            onChange: (value) => props.onChange(value),
+            step: '.01',
+            max: '.1',
+            min: '.001'
+          });
+        }}
+        {...others}
+      />
+      <NumberPrecisionDragButton
+        value={props.value}
+        onChange={(value) => props.onChange(value)}
+        step=".01"
+        max=".1"
+        min=".001"
+      />
+    </>
   );
 };
 

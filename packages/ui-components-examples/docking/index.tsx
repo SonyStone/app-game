@@ -3,6 +3,7 @@ import { For } from 'solid-js';
 import { ConstraintsExample } from './ConstraintsExample';
 import { DashboardExample } from './DashboardExample';
 import { Playground } from './Playground';
+import { StackedTabsExample } from './StackedTabsExample';
 
 /** Showcase of `solid-dock`: a playground configured from inside itself, a dashboard and constraints. */
 export default function DockingPage(): JSX.Element {
@@ -35,6 +36,7 @@ export default function DockingPage(): JSX.Element {
         <Playground />
         <DashboardExample />
         <ConstraintsExample />
+        <StackedTabsExample />
       </div>
     </main>
   );
