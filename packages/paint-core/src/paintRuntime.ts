@@ -1,7 +1,7 @@
 import { makeTimer } from '@solid-primitives/timer';
 import { createRoot, onCleanup } from 'solid-js';
 import { attempt, createTaskQueue, unwrapResult, type Result } from './asyncResult';
-import { defaultCamera, screenToWorld, type Point } from './camera';
+import { defaultCamera, screenToWorld } from './camera';
 import { averageOpaque, defaultColorSample, sampleLayer, type PickedColor } from './colorSample';
 import { layersInRect, layersInView, type DocumentRect } from './layersInView';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
@@ -14,7 +14,15 @@ import { readPaintFile, writePaintFile } from './paintFile';
 import { isPsdFile, readPsdFile, writePsdFile } from './psdFile';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { mergeTilePixels } from './layerMerge';
-import { captureSelection, editSelection, translateSelection, type SelectionPixels } from './selection';
+import { captureSelection, editSelection, type SelectionPixels } from './selection';
+import {
+  emptySelection,
+  isSelected,
+  summarizeSelection,
+  translateSelection,
+  type SelectionMask,
+  type SelectionPreview
+} from './selectionMask';
 import { decodeDocument, snapshotDocument, type restoreDocument } from './storage';
 import { unpackTile, type TileData } from './tilePixels';
 import { errorMessage, type GpuError } from '@app-game/solid-gpu/errors';
@@ -35,7 +43,9 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let importing = false;
     let clipboard: SelectionPixels | undefined;
     let editingSelection = false;
-    let selectionPoints: Point[] = [];
+    /** The selection that strokes and edits stay inside, and the selection gesture shown before it applies. */
+    let selection: SelectionMask = emptySelection;
+    let selectionPreview: SelectionPreview | undefined;
     let selectionAnimate = true;
     let selectionTimer: ReturnType<typeof setTimeout> | undefined;
     let saveVersion = 0;
@@ -145,9 +155,18 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         ...(code ? { code } : {}),
         ...(background ? { background } : {})
       });
+    /** Replaces the selection, outlines it and tells the editor. */
+    const changeSelection = (next: SelectionMask) => {
+      selection = next;
+      renderer?.setSelection(selection, selectionAnimate);
+      post({ type: 'selection', selection: summarizeSelection(selection), hasClipboard: !!clipboard });
+      scheduleDraw();
+    };
     /** Replaces the drawing with an opened one, its tiles already in storage, and starts showing it. */
     const replaceDrawing = async (next: ReturnType<typeof restoreDocument>) => {
       cancel();
+      // A selection belongs to the drawing it was made in.
+      changeSelection(emptySelection);
       document.replace(next.layers, next.activeId, next.linearBlending);
       syncBlending();
       camera = next.camera;
@@ -229,6 +248,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             readTile: async (pixels) =>
               unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels)),
             linearBlending: document.linearBlending(),
+            selection,
             state: { get: () => editStates.get(edit.id), set: (value) => editStates.set(edit.id, value) },
             floating: {
               show(pixels) {
@@ -281,6 +301,10 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         hideFloating(restored.length > 0);
       }
 
+      if (result.selection) {
+        changeSelection(result.selection);
+      }
+
       return result.reply;
     };
     const background = (action: () => Promise<unknown>) => {
@@ -318,7 +342,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       presentedAt = performance.now();
       if (!exact) {
         clearTimeout(selectionTimer);
-        if (selectionPoints.length >= 3 && selectionAnimate && !lost) selectionTimer = setTimeout(scheduleDraw, 33);
+        if (renderer?.showsSelection() && selectionAnimate && !lost) selectionTimer = setTimeout(scheduleDraw, 33);
       }
     };
     const scheduleDraw = () => {
@@ -538,7 +562,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         }
       );
       lost = false;
-      renderer.setSelection(selectionPoints, selectionAnimate);
+      renderer.setSelection(selection, selectionAnimate);
+      renderer.previewSelection(selectionPreview);
       renderer.setFloating(floating);
       rendererLinear = false;
       syncBlending();
@@ -569,9 +594,10 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     const send = (command: PaintRuntimeCommand) => {
       if (!active) return;
       if (command.type === 'selection-view') {
-        selectionPoints = command.points;
         selectionAnimate = command.animate;
-        renderer?.setSelection(selectionPoints, selectionAnimate);
+        selectionPreview = command.preview;
+        renderer?.setSelection(selection, selectionAnimate);
+        renderer?.previewSelection(selectionPreview);
         clearTimeout(selectionTimer);
         scheduleDraw();
         return;
@@ -728,8 +754,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               : undefined;
             if (!engine) throw new Error(`Brush engine "${engineId}" is not registered.`);
             if (!processor) throw new Error(`Stroke processor "${processorId}" is not registered.`);
-            // A stroke paints only inside the lasso selection, when there is one.
-            renderer.clipStroke(selectionPoints.length >= 3 ? selectionPoints : undefined);
+            // A stroke paints only inside the selection, when there is one.
+            renderer.clipStroke(isSelected(selection) ? selection : undefined);
             const strokeRenderer = modules.features.reduce(
               (decorated, feature) =>
                 feature.decorateStroke?.({ data: featureData[feature.id], brush: command.brush, renderer: decorated }) ??
@@ -803,7 +829,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             break;
           }
           case 'selection': {
-            let points = command.points;
+            let next = selection;
             editingSelection = true;
             clearTimeout(collectTimer);
             try {
@@ -814,7 +840,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               if (!document.active.visible) throw new Error('Show the active layer before editing its pixels.');
               const storage = { read: tileStore.read, write: stage };
               const selected =
-                command.action === 'paste' ? clipboard : await captureSelection(document.active, points, storage);
+                command.action === 'paste' ? clipboard : await captureSelection(document.active, selection, storage);
               if (!selected) throw new Error('Copy or cut a selection before pasting.');
               if (command.action === 'copy') {
                 await tileStore.flush();
@@ -840,12 +866,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               const addedInfo = added ? { ...properties, id: added.id, name: added.name } : undefined;
               document.commit(changes, addedInfo);
               if (command.action === 'cut') clipboard = selected;
-              points =
+              next =
                 command.action === 'cut' || command.action === 'delete'
-                  ? []
+                  ? emptySelection
                   : command.action === 'move'
-                    ? translateSelection(selected.points, command.offset ?? { x: 0, y: 0 })
-                    : selected.points;
+                    ? translateSelection(selected.mask, command.offset ?? { x: 0, y: 0 })
+                    : selected.mask;
               renderer.restore(changes, document.layers);
               // Mark the committed edit dirty even if preparing derived GPU pages fails.
               changed();
@@ -853,7 +879,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             } finally {
               editingSelection = false;
               scheduleCollect();
-              post({ type: 'selection', points, hasClipboard: !!clipboard });
+              changeSelection(next);
             }
             break;
           }

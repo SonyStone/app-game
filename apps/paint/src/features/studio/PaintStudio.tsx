@@ -38,7 +38,7 @@ import { createImagePlacement, createLayerFilter, HistorySourceControl, LayersPa
 import { createPerformanceMonitor, PerformancePanel } from '../performance';
 import { createRadialMenu, RadialMenu, radialLayout, type RadialItem } from '../radial-menu';
 import { createInputRecorder, RecordingControls } from '../recording';
-import { createSelection, createSelectionView, guardEdits, SelectionActions } from '../selection';
+import { createSelection, createSelectionView, guardEdits, SelectionActions, selectionClipPath } from '../selection';
 import { createSymmetry, SymmetryGuide, SymmetryPanel } from '../symmetry';
 import { createTransform, TransformOverlay } from '../transform';
 import { createFullscreenToggle } from './createFullscreenToggle';
@@ -83,8 +83,31 @@ export function PaintStudio(props: {
     prepare: () => uploads.restore(),
     frames: { enabled: developer.performanceMonitor, receive: (event) => monitor.record(event) }
   });
-  const selection = createSelection({ send: engine.send, document: engine.state, ready: engine.canEdit });
-  createSelectionView({ points: selection.points, ready: engine.canEdit, send: engine.send });
+  const selection = createSelection({
+    send: engine.send,
+    run: engine.runEdit,
+    document: engine.state,
+    ready: engine.canEdit,
+    area: visibleArea,
+    // A press this close to a polygon's first corner on screen closes it.
+    closeDistance: () => 10 / camera.camera().zoom,
+    onError: setError
+  });
+  // An open polygon's next edge follows the hovering pointer.
+  createEffect(
+    () => (selection.tool() === 'polygon' && selection.drawing() ? cursor() : undefined),
+    (point) => {
+      if (point) {
+        selection.hover(screenToWorld(point, camera.current(), size()));
+      }
+    }
+  );
+  createSelectionView({
+    preview: selection.preview,
+    hidden: () => transform.active(),
+    ready: engine.canEdit,
+    send: engine.send
+  });
   /** Sends document commands, respecting a pending selection edit and clearing the outline where needed. */
   const guarded = guardEdits(selection, engine.send);
   /**
@@ -176,7 +199,6 @@ export function PaintStudio(props: {
     active: () => tools.tool() === 'fill',
     color: () => tools.brush().color,
     area: visibleArea,
-    selection: selection.points,
     canFill: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
     send: edit
   });
@@ -184,7 +206,7 @@ export function PaintStudio(props: {
     active: () => tools.tool() === 'gradient',
     colors: () => ({ foreground: tools.brush().color, background: tools.brush().backgroundColor ?? '#ffffff' }),
     area: visibleArea,
-    selection: selection.points,
+    selected: selection.selected,
     canDraw: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
     send: edit
   });
@@ -194,17 +216,11 @@ export function PaintStudio(props: {
   });
   const transform = createTransform({
     run: engine.runEdit,
-    selection: selection.points,
     canStart: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
-    onStart: () => selection.replace([]),
-    onSelection: selection.replace,
     onError: setError
   });
   createEffect(
-    () =>
-      (tools.tool() === 'fill' || tools.tool() === 'gradient') &&
-      selection.points().length < 3 &&
-      !transform.active(),
+    () => (tools.tool() === 'fill' || tools.tool() === 'gradient') && !selection.selected() && !transform.active(),
     (unselected) => {
       if (unselected) {
         tools.chooseTool('lasso');
@@ -227,7 +243,7 @@ export function PaintStudio(props: {
     navigate: camera.navigate,
     camera: camera.camera,
     size,
-    selection: selection.points
+    selection: () => boundsCorners(selection.summary().bounds) ?? []
   });
   const layerFilter = createLayerFilter({
     layers: () => engine.state().layers,
@@ -260,7 +276,7 @@ export function PaintStudio(props: {
       panel: panel(),
       camera: camera.camera(),
       transforming: transform.active(),
-      selection: { points: selection.points().length, busy: selection.busy(), drawing: selection.drawing() },
+      selection: { selected: selection.selected(), busy: selection.busy(), drawing: selection.drawing() },
       document: {
         layers: engine.state().layers.length,
         activeId: engine.state().activeId,
@@ -357,6 +373,12 @@ export function PaintStudio(props: {
     chooseTool,
     selectionAction: selection.action,
     deselect: selection.clear,
+    selectAll: selection.selectAll,
+    invertSelection: selection.invert,
+    chooseWand() {
+      selection.setTool('wand');
+      chooseTool('lasso');
+    },
     undo: () => edit({ type: 'undo' }),
     redo: () => edit({ type: 'redo' }),
     save: () => edit({ type: 'download' }),
@@ -367,19 +389,30 @@ export function PaintStudio(props: {
     resetZoom: camera.resetZoom,
     transform: toggleTransform,
     confirm() {
-      if (!transform.active()) {
-        return false;
+      if (transform.active()) {
+        void transform.end();
+        return true;
       }
 
-      void transform.end();
-      return true;
+      if (selection.drawing()) {
+        selection.finish();
+        return true;
+      }
+
+      return false;
     },
     cancel() {
       void transform.cancel();
       mixer.cancelPick();
       colorPicker.cancel();
       camera.navigation.close();
-      selection.clear();
+      // Escape ends a selection gesture, and otherwise deselects.
+      if (selection.drawing()) {
+        selection.cancel();
+      } else {
+        selection.clear();
+      }
+
       edit({ type: 'cancel' });
     }
   });
@@ -414,7 +447,7 @@ export function PaintStudio(props: {
       return;
     }
 
-    if ((next === 'fill' || next === 'gradient') && selection.points().length < 3) {
+    if ((next === 'fill' || next === 'gradient') && !selection.selected()) {
       return;
     }
 
@@ -602,6 +635,11 @@ export function PaintStudio(props: {
               command={command()}
               toScreen={(point) => worldToScreen(point, camera.camera(), size())}
               size={size()}
+              clip={selectionClipPath(
+                selection.summary(),
+                (point) => worldToScreen(point, camera.camera(), size()),
+                size()
+              )}
             />
           )}
         </Show>
@@ -665,11 +703,10 @@ export function PaintStudio(props: {
         />
         <Show when={selectionTool() && !transform.active()}>
           <SelectionActions
-            outline={
-              selection.drawing()
-                ? []
-                : selection.points().map((point) => worldToScreen(point, camera.camera(), size()))
-            }
+            outline={boundsCorners(selection.summary().bounds)?.map((point) =>
+              worldToScreen(point, camera.camera(), size())
+            )}
+            selected={selection.selected() && !selection.drawing()}
             size={size()}
             disabled={!ready() || selection.drawing()}
             busy={selection.busy()}
@@ -677,8 +714,15 @@ export function PaintStudio(props: {
             onAction={selection.action}
             onTransform={toggleTransform}
             onDeselect={selection.clear}
-            shape={selection.shape()}
-            onShape={selection.setShape}
+            onSelectAll={selection.selectAll}
+            onInvert={selection.invert}
+            onFeather={selection.feather}
+            selectionTool={selection.tool()}
+            onSelectionTool={selection.setTool}
+            mode={selection.mode()}
+            onMode={selection.setMode}
+            wand={selection.wand()}
+            onWand={selection.updateWand}
             tool={selectionTool()!}
             onTool={chooseTool}
             onFillSelection={gradient.fillSelection}
@@ -1165,3 +1209,15 @@ const saveStatus = {
   saving: { label: 'Saving…', title: 'Writing completed changes to this device' },
   unsaved: { label: 'Unsaved changes', title: 'Changes are saved automatically after the stroke finishes' }
 } as const;
+
+/** The corners of `bounds`, clockwise from the top-left, as points; none without bounds. */
+function boundsCorners(bounds: { left: number; top: number; right: number; bottom: number } | undefined) {
+  return (
+    bounds && [
+      { x: bounds.left, y: bounds.top },
+      { x: bounds.right, y: bounds.top },
+      { x: bounds.right, y: bounds.bottom },
+      { x: bounds.left, y: bounds.bottom }
+    ]
+  );
+}

@@ -20,7 +20,8 @@ import {
 
 /**
  * The UI half of the transform, whose engine half is `transformEdit` in the drawing engine's recipe: one transform
- * session at a time over the lasso selection, or the whole active layer without one. The box follows every change at
+ * session at a time over the selection's pixels, or the whole active layer without one; the engine moves the
+ * selection with them. The box follows every change at
  * once; the engine moves its floating copy of the pixels with at most one update in flight, always the latest, and
  * the document changes only when `end` keeps the result as one undo step. `cancel` leaves the pixels where they were. Must be created within a Solid owner; replies arriving after
  * disposal are dropped.
@@ -28,17 +29,8 @@ import {
 export function createTransform(options: {
   /** Runs an edit and resolves its reply; see `PaintEngine.runEdit`. */
   run: (command: Extract<PaintCommand, { type: 'edit' }>) => Promise<Result<unknown, PaintError>>;
-  /** The lasso outline to transform; fewer than three points transforms the whole active layer. */
-  selection: () => readonly Point[];
   /** Whether a transform can start: the engine accepts edits and no stroke or other edit runs. */
   canStart: () => boolean;
-  /** Runs when a session has started, for example to hide the lasso outline the transform replaces. */
-  onStart?: () => void;
-  /**
-   * Receives the outline of a selection transform as it ends: transformed with its pixels, or as it was when cancelled
-   * or when applying fails.
-   */
-  onSelection: (points: Point[]) => void;
   onError: (error: PaintError) => void;
 }) {
   const owner = getOwner()!;
@@ -206,9 +198,8 @@ export function createTransform(options: {
       return;
     }
 
-    const points = options.selection().length >= 3 ? [...options.selection()] : undefined;
     setStarting(true);
-    const begun = await send({ phase: 'begin', points });
+    const begun = await send({ phase: 'begin' });
     if (isDisposed(owner)) {
       return;
     }
@@ -220,8 +211,7 @@ export function createTransform(options: {
     }
 
     setBox(initialBox);
-    setSession({ bounds: (begun.value as { bounds: TransformBounds }).bounds, points });
-    options.onStart?.();
+    setSession({ bounds: (begun.value as { bounds: TransformBounds }).bounds });
   }
 
   /** Replaces the box: offset, scale and angle about the center of the bounds; the pixels follow. */
@@ -251,20 +241,14 @@ export function createTransform(options: {
     }
   }
 
-  /** Waits for pending updates, then ends or cancels the session; a transformed selection keeps its outline. */
+  /** Waits for pending updates, then ends or cancels the session. */
   async function finish(phase: 'end' | 'cancel') {
     const current = currentSession();
     if (!current) {
       return;
     }
 
-    const place = boxPlacement(current.bounds, currentBox(), currentSettings());
     setSession(undefined);
-    // The outline returns at once, so a fill or gradient started before the engine replies already sees it.
-    if (current.points) {
-      options.onSelection(phase === 'end' ? current.points.map(place) : current.points);
-    }
-
     const finishing = chain.then(() => send({ phase }));
     chain = finishing;
     const finished = await finishing;
@@ -274,10 +258,6 @@ export function createTransform(options: {
 
     if (finished.isErr()) {
       options.onError(finished.error);
-      // The pixels stayed where they were, and so does the outline.
-      if (current.points && phase === 'end') {
-        options.onSelection(current.points);
-      }
     }
   }
 
@@ -308,8 +288,8 @@ export type BoxState = { offset: Point; scale: Point; angle: number; corners?: Q
 /** Four corners, clockwise from the top-left, of a convex quad. */
 export type Quad = readonly [Point, Point, Point, Point];
 
-/** One transform session: the bounds of its pixels and the lasso outline, if it transforms a selection. */
-type Session = { bounds: TransformBounds; points: Point[] | undefined };
+/** One transform session: the bounds of its pixels. */
+type Session = { bounds: TransformBounds };
 
 const initialBox: BoxState = { offset: { x: 0, y: 0 }, scale: { x: 1, y: 1 }, angle: 0 };
 

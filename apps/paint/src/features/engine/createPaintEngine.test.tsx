@@ -230,7 +230,11 @@ it('resets the editor when the worker fails: pauses input, ends the stroke, sett
   expect(error()).toMatchObject({ kind: 'engine', code: 'stopped', message: 'Worker crashed' });
   expect((await upload).isErr()).toBe(true);
   expect(onSelection).toHaveBeenCalledOnce();
-  expect(onSelection).toHaveBeenCalledWith({ type: 'selection', points: [], hasClipboard: false });
+  expect(onSelection).toHaveBeenCalledWith({
+    type: 'selection',
+    selection: { selected: false, inverted: false },
+    hasClipboard: false
+  });
 });
 
 it('restarts a stopped engine on a new canvas after asking the failed one to save and dispose', async () => {
@@ -508,6 +512,9 @@ function assemble() {
     chooseTool: tools.chooseTool,
     selectionAction: () => {},
     deselect: () => {},
+    selectAll: () => {},
+    invertSelection: () => {},
+    chooseWand: () => {},
     undo: () => {},
     redo: () => {},
     save: () => {},

@@ -202,7 +202,7 @@ describe('input to worker contract', () => {
     pointer('pointerdown', 400, 300);
     pointer('pointermove', 420, 330);
     pointer('pointerup', 440, 350);
-    expect(selection.begin).toHaveBeenCalledWith({ x: 0, y: 0 });
+    expect(selection.begin).toHaveBeenCalledWith({ x: 0, y: 0 }, { shiftKey: false, altKey: false });
     expect(selection.move).toHaveBeenLastCalledWith({ x: 40, y: 50 });
     expect(selection.end).toHaveBeenCalledOnce();
     pointer('pointerdown', 400, 300);

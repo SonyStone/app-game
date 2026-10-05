@@ -8,6 +8,7 @@ import type { ColorSample, PickedColor } from './colorSample';
 import type { BrushEngine } from './composition/contracts';
 import type { HistorySource, LayerAction, createDocument } from './document';
 import type { DocumentRect } from './layersInView';
+import type { SelectionPreview, SelectionSummary } from './selectionMask';
 
 /** Main-thread commands are processed in order; all sample batches precede their stroke end. */
 export type PaintCommand =
@@ -44,7 +45,11 @@ export type PaintCommand =
   | { type: 'blending'; linear: boolean }
   /** How pixels show up close: smoothing and the pixel grid; see `PaintRenderer.setPixelView`. */
   | { type: 'pixel-view'; smooth: boolean; grid: boolean }
-  | { type: 'selection-view'; points: Point[]; animate: boolean }
+  /**
+   * How the selection is outlined: whether its ants move, and the selection gesture in progress, if any, shown
+   * before it applies; see `SelectionPreview`.
+   */
+  | { type: 'selection-view'; animate: boolean; preview?: SelectionPreview }
   /**
    * Names document regions whose layers with paint each state reports in `layersInRegions`, such as the active frame
    * of a frames module; replaces the regions named before.
@@ -78,7 +83,8 @@ export type PaintCommand =
    */
   | { type: 'psd'; requestId?: string; region?: DocumentRect; name?: string }
   | { type: 'layer'; action: LayerAction }
-  | { type: 'selection'; action: SelectionAction; points: Point[]; offset?: Point; layerId: string; revision: number }
+  /** A pixel edit of the engine's selection on layer `layerId` at document `revision`; see `SelectionAction`. */
+  | { type: 'selection'; action: SelectionAction; offset?: Point; layerId: string; revision: number }
   /** Runs a pixel edit registered with `DocumentFeatures`, such as a bucket fill; see `defineDocumentEdit`. */
   | { type: 'edit'; edit: string; command: unknown; requestId?: string }
   | { type: 'import'; text: string }
@@ -186,7 +192,8 @@ export type PaintEvent =
   /** The `#rrggbb` color at a `pick-color` point, or `null` where the active layer has no paint to pick. */
   | { type: 'picked-color'; requestId: string; result: Result<PickedColor, string> }
   | { type: 'checkpointed'; tools?: RendererToolState; historySource?: HistorySource }
-  | { type: 'selection'; points: Point[]; hasClipboard: boolean }
+  /** The selection changed, or a selection command finished; `selection` summarizes it, see `SelectionSummary`. */
+  | { type: 'selection'; selection: SelectionSummary; hasClipboard: boolean }
   | { type: 'disposed' }
   /** A document was imported; UI state derived from its camera and feature data resets to them. */
   | { type: 'restored'; camera: Camera; features?: Record<string, unknown> }
@@ -201,11 +208,15 @@ export type PaintEvent =
 /** Document, storage and performance status posted after changes and frames. */
 export type StateEvent = Extract<PaintEvent, { type: 'state' }>;
 
-/** Lasso outline and clipboard availability after a selection command. */
+/** The selection's summary and clipboard availability, after the selection changed or a selection command. */
 export type SelectionEvent = Extract<PaintEvent, { type: 'selection' }>;
 
 /** Renderer tool state and the Erase to History source, handed from a checkpointed runtime to its replacement. */
 export type CheckpointedEvent = Extract<PaintEvent, { type: 'checkpointed' }>;
 
-/** Clipboard is private to this editor session; paste writes into the active layer at the copied coordinates. */
+/**
+ * Pixel edits of the selection: copy, cut, paste, delete, move by an offset, or move into a new layer. The clipboard
+ * is private to this editor session; paste writes into the active layer at the copied coordinates and selects what
+ * was copied.
+ */
 export type SelectionAction = 'copy' | 'cut' | 'paste' | 'delete' | 'move' | 'new-layer';

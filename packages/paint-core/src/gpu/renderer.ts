@@ -13,7 +13,8 @@ import { createDisplayCache } from './displayCache';
 import { createFloatingPixels, type FloatingPixels } from './floatingPixels';
 import { createStrokeClip } from './strokeClip';
 import { createFrameComposer, renderScale } from './frameComposer';
-import { createLassoOverlay } from './lassoOverlay';
+import type { SelectionMask, SelectionPreview } from '../selectionMask';
+import { createSelectionOverlay } from './selectionOverlay';
 import { capturePaintBounds, clipPaintBounds, type PaintBounds } from './paintBounds';
 import { paperColor } from './shaders';
 import { createStrokeRaster } from './strokeRaster';
@@ -106,7 +107,7 @@ async function assemblePaintRenderer(
     }
   });
   const paintBounds = capturePaintBounds(options.bounds);
-  // Strokes stay within the paint bounds and the lasso selection; `clip` exists by the time any stroke asks.
+  // Strokes stay within the paint bounds and the selection; `clip` exists by the time any stroke asks.
   const allowsTile = (key: string) =>
     (!paintBounds || !!clipPaintBounds(paintBounds, ...tileCoordinates(key))) && clip.allows(key);
   const device = await openDevice(options.device, resources.keep);
@@ -115,7 +116,7 @@ async function assemblePaintRenderer(
 
   /**
    * Reads the presented image of `target` in backing pixels, the whole view by default, as opaque RGBA: the last
-   * composed frame over the paper, without the lasso outline. GPU readback works where reading the WebGPU canvas
+   * composed frame over the paper, without the selection outline. GPU readback works where reading the WebGPU canvas
    * itself fails once its frame has been presented. Render the target first.
    */
   async function readPresented(
@@ -170,7 +171,7 @@ async function assemblePaintRenderer(
   resources.keep({ destroy: () => primaryContext.unconfigure() });
   watchDeviceFailures(device, () => disposed, onLost, resources.keep);
 
-  const lasso = resources.keep(createLassoOverlay(root, format));
+  const selection = resources.keep(createSelectionOverlay(root, format));
   let animateSelection = true;
   /** Magnified pixels blend smoothly; off, they are flat squares, as `setPixelView` says. */
   let smoothPixels = true;
@@ -195,7 +196,7 @@ async function assemblePaintRenderer(
   const targets = resources.keep(
     createTargetViews(root, format, {
       virtual,
-      lasso,
+      selection,
       contextError: () => rendererError(gpuError('canvas', 'The canvas target could not start WebGPU.'))
     })
   );
@@ -339,11 +340,11 @@ async function assemblePaintRenderer(
       }
     },
     /**
-     * Keeps the strokes that follow inside the closed polygon `points`, in document pixels, such as the lasso
-     * selection: every engine, retouch tool and eraser then changes only pixels inside it. `undefined` stops clipping.
+     * Keeps the strokes that follow inside the selection `mask`: every engine, retouch tool and eraser then changes
+     * pixels only in proportion to its coverage. `undefined` stops clipping.
      */
-    clipStroke(points: readonly Point[] | undefined) {
-      clip.set(points);
+    clipStroke(mask: SelectionMask | undefined) {
+      clip.set(mask);
     },
     /** Composites every layer in linear light, or in encoded sRGB; see `mergeTilePixels`. Redraws the views. */
     setLinearBlending(linear: boolean) {
@@ -352,11 +353,17 @@ async function assemblePaintRenderer(
         targets.invalidate();
       }
     },
-    /** Keeps transient selection geometry on this device, outside committed artwork and exports. */
-    setSelection(points: readonly Point[], animate = true) {
-      lasso.set(points);
+    /** Outlines the selection `mask` over the view, outside committed artwork and exports. */
+    setSelection(mask: SelectionMask, animate = true) {
+      selection.set(mask);
       animateSelection = animate;
     },
+    /** Shows a selection gesture before it applies, or stops with `undefined`; see `SelectionPreview`. */
+    previewSelection(preview: SelectionPreview | undefined) {
+      selection.preview(preview);
+    },
+    /** Whether a selection or a shape being drawn is outlined, so that the outline animates. */
+    showsSelection: () => selection.visible(),
     /**
      * Shows pixels lifted off a layer, moved, until replaced or cleared with `undefined`; see `FloatingPixels`. They
      * appear in presented frames and exports of the view, never in tiles, history or saved documents. Uploads the
@@ -409,7 +416,7 @@ async function assemblePaintRenderer(
         gpuBytes:
           brush.bytes +
           tiles.bytes +
-          lasso.bytes() +
+          selection.bytes() +
           floating.bytes() +
           (virtualStats?.gpuBytes ?? 0) +
           targets.bytes() +

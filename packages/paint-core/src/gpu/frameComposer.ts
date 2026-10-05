@@ -124,7 +124,7 @@ export function createFrameComposer(
           }
 
           target
-            .lasso()
+            .selection()
             .render(
               swapchain,
               camera,

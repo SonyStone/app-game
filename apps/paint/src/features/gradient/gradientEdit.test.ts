@@ -1,5 +1,6 @@
 import type { DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
 import type { Layer } from '@app-game/paint-core/document';
+import { emptySelection, polygonSelection, type SelectionMask } from '@app-game/paint-core/selectionMask';
 import { expect, it } from 'vitest';
 import { gradientEdit, gradientPosition, type GradientCommand } from './gradientEdit';
 
@@ -124,15 +125,16 @@ it('keeps locked transparency, stays inside the selection and refuses areas larg
   expect([red > 200, green, alpha]).toEqual([true, 0, 255]);
   expect(pixel(locked, 11, 5)).toEqual([0, 0, 0, 0]);
 
-  const selected = await run({
-    ...base,
-    points: [
+  const selected = await run(
+    base,
+    layer(),
+    polygonSelection([
       { x: 20, y: 0 },
       { x: 30, y: 0 },
       { x: 30, y: 10 },
       { x: 20, y: 10 }
-    ]
-  });
+    ])
+  );
   expect(pixel(selected, 19, 5)).toEqual([0, 0, 0, 0]);
   expect(pixel(selected, 20, 5)[3]).toBe(255);
   expect(pixel(selected, 29, 5)[3]).toBe(255);
@@ -154,12 +156,13 @@ function layer(pixels?: Uint8Array, tiles = new Map<string, Uint8Array>()): Laye
   return { id: 'layer', name: 'Layer', visible: true, opacity: 1, blend: 'normal', tiles };
 }
 
-async function run(command: GradientCommand, target = layer()) {
+async function run(command: GradientCommand, target = layer(), selection: SelectionMask = emptySelection) {
   const context: DocumentEditContext = {
     layers: [target],
     active: target,
     readTile: async (pixels) => pixels as Uint8Array,
     linearBlending: false,
+    selection,
     state: { get: () => undefined, set: () => {} },
     floating: { show: () => {}, move: () => {}, clear: async () => {} }
   };

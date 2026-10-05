@@ -46,9 +46,7 @@ it('distorts the box by its corners, flips and turns them, and returns to the bo
   const transform = createRoot(() =>
     createTransform({
       run: run as never,
-      selection: () => [],
       canStart: () => true,
-      onSelection: () => {},
       onError: () => {}
     })
   );

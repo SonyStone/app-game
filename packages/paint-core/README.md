@@ -7,7 +7,7 @@ use this implementation. The package imports no application code.
 - `gpu/renderer`: tiled WebGPU drawing, LOD, device resources and multiple presentation targets. The
   `createPaintRenderer` facade wires `tileResidency` (resident tiles, eviction, readback), `strokeState` and
   `strokeRaster` (stroke lifecycle and GPU rasterization), `targetView` (per-canvas viewport, damage, fallback,
-  virtual-texture page demand and lasso) and `frameComposer` (one command encoder per presented frame).
+  virtual-texture page demand and selection outline) and `frameComposer` (one command encoder per presented frame).
 - `paintRuntime`: ordered input, frame backpressure, resource ownership and save coordination.
 - `composition`: Solid 2 providers, reactive canvas targets, engine registration and storage adapters.
 - `input`: Studio's raw/coalesced stylus input and release behavior. Navigation puck is optional.

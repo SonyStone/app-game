@@ -24,6 +24,7 @@ import { createTileStore } from '@app-game/paint-core/tileStore';
 import { fillEdit } from '../fill/fillEdit';
 import { framesFeature } from '../frames/framesFeature';
 import { gradientEdit } from '../gradient/gradientEdit';
+import { selectionEdit } from '../selection/selectionEdit';
 import { transformEdit } from '../transform/transformEdit';
 
 /**
@@ -65,7 +66,7 @@ export function StudioApplication(props: RuntimeBinding) {
               <BrushResources resources={createBrushResources}>
                 <DocumentFeatures
                   features={[symmetryFeature, framesFeature]}
-                  edits={[placeImageEdit, fillEdit, gradientEdit, transformEdit]}
+                  edits={[placeImageEdit, selectionEdit, fillEdit, gradientEdit, transformEdit]}
                 >
                   <PaintRuntime {...props} />
                 </DocumentFeatures>

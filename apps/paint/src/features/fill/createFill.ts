@@ -13,10 +13,8 @@ export function createFill(options: {
   active: () => boolean;
   /** The color to fill with, `#rrggbb`. */
   color: () => string;
-  /** The visible part of the canvas in document pixels; a fill stays inside it. */
+  /** The visible part of the canvas in document pixels; a fill stays inside it, and inside the engine's selection. */
   area: () => FillCommand['area'];
-  /** The lasso outline a fill stays inside; fewer than three points leave the fill free. */
-  selection?: () => readonly Point[];
   /** Whether a fill can start now: the engine accepts edits and no stroke or selection edit runs. */
   canFill: () => boolean;
   send: (command: Extract<PaintCommand, { type: 'edit' }>) => void;
@@ -40,16 +38,7 @@ export function createFill(options: {
         options.active() && !event.altKey && event.pointerType !== 'touch',
       run(point: Point) {
         if (options.canFill()) {
-          const points = options.selection?.() ?? [];
-          options.send(
-            fillEdit.command({
-              ...settings(),
-              point,
-              area: options.area(),
-              color: options.color(),
-              ...(points.length >= 3 ? { points: [...points] } : {})
-            })
-          );
+          options.send(fillEdit.command({ ...settings(), point, area: options.area(), color: options.color() }));
         }
       }
     }

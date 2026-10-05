@@ -1,16 +1,17 @@
 import { TILE_SIZE } from '@app-game/paint-core/brush';
 import { defineDocumentEdit } from '@app-game/paint-core/composition/documentEdit';
 import type { TileChange } from '@app-game/paint-core/document';
+import { selectionBounds, tileCoverage, type SelectionMask } from '@app-game/paint-core/selectionMask';
 import { z } from 'zod';
-import { polygonSpans } from '../../shared/polygonSpans';
 
 /**
  * The engine half of the gradient tool: draws a gradient from `start` to `end` over the active layer, as one undo
  * step: linear, radial, angle (sweeping clockwise around `start` from the direction of `end`) or diamond, ending at
  * `end` or repeating there (see {@link gradientPosition}). The gradient runs through its color `stops`, mixed in linear light (`linear`,
  * like Smooth color) or in encoded sRGB (`classic`), and is laid over the layer's pixels with `opacity`; a layer with
- * locked transparency keeps its alpha. It covers the lasso selection when `points` are given, otherwise `area`, the
- * view's bounds, since the canvas has no edges; at most {@link maxGradientSide} pixels per side. Results are dithered
+ * locked transparency keeps its alpha. It covers the selection, in proportion to its coverage, within its bounds or,
+ * for a selection without bounds or without any, within `area`, the view's bounds, since the canvas has no edges; at
+ * most {@link maxGradientSide} pixels per side. Results are dithered
  * so that slow ramps do not band. Runs in the drawing engine's realm.
  */
 export const gradientEdit = defineDocumentEdit({
@@ -22,7 +23,7 @@ export const gradientEdit = defineDocumentEdit({
       throw new Error('Show the active layer before drawing a gradient on it.');
     }
 
-    const area = gradientArea(command);
+    const area = gradientArea(command, context.selection);
     if (area.width > maxGradientSide || area.height > maxGradientSide) {
       throw new Error('This area is too large for a gradient at this zoom. Zoom in or select a part of it.');
     }
@@ -35,7 +36,21 @@ export const gradientEdit = defineDocumentEdit({
         continue;
       }
 
-      const after = paintTile(key, before && (await context.readTile(before)), area, command, ramp, layer.alphaLock);
+      const [tx, ty] = key.split(',').map(Number) as [number, number];
+      const coverage = tileCoverage(context.selection, tx, ty);
+      if (coverage.kind === 'outside' && (context.selection.outside === 255 || context.selection.tiles.size > 0)) {
+        continue;
+      }
+
+      const after = paintTile(
+        key,
+        before && (await context.readTile(before)),
+        area,
+        command,
+        ramp,
+        layer.alphaLock,
+        coverage.kind === 'partial' ? coverage.coverage : undefined
+      );
       if (after) {
         changes.push({ layerId: layer.id, key, before, after });
       }
@@ -80,18 +95,29 @@ const gradientCommandSchema = z.object({
     top: z.number().finite(),
     width: z.number().finite().nonnegative(),
     height: z.number().finite().nonnegative()
-  }),
-  /** A closed lasso outline that limits the gradient, by the even-odd rule. */
-  points: z.array(point).min(3).max(4096).optional()
+  })
 });
 
 /** Whole pixels covered: the selection's bounds, or the view's. */
-function gradientArea(command: GradientCommand) {
-  const xs = command.points?.map(({ x }) => x) ?? [command.area.left, command.area.left + command.area.width];
-  const ys = command.points?.map(({ y }) => y) ?? [command.area.top, command.area.top + command.area.height];
-  const left = Math.floor(Math.min(...xs)),
-    top = Math.floor(Math.min(...ys));
-  return { left, top, width: Math.ceil(Math.max(...xs)) - left, height: Math.ceil(Math.max(...ys)) - top };
+function gradientArea(command: GradientCommand, selection: SelectionMask) {
+  const bounds = selectionBounds(selection);
+  if (bounds) {
+    return {
+      left: bounds.left,
+      top: bounds.top,
+      width: bounds.right - bounds.left,
+      height: bounds.bottom - bounds.top
+    };
+  }
+
+  const left = Math.floor(command.area.left),
+    top = Math.floor(command.area.top);
+  return {
+    left,
+    top,
+    width: Math.ceil(command.area.left + command.area.width) - left,
+    height: Math.ceil(command.area.top + command.area.height) - top
+  };
 }
 
 /**
@@ -165,32 +191,42 @@ export function gradientPosition(
   return Math.min(1, Math.max(0, t));
 }
 
-/** The gradient laid over one tile's pixels inside the area and selection; `undefined` when it touches none. */
+/**
+ * The gradient laid over one tile's pixels inside the area, scaled by the selection's `coverage` of the tile when it
+ * is partly selected; `undefined` when it touches none.
+ */
 function paintTile(
   key: string,
   base: Uint8Array | undefined,
   area: ReturnType<typeof gradientArea>,
   command: GradientCommand,
   ramp: ReturnType<typeof createRamp>,
-  alphaLock: boolean | undefined
+  alphaLock: boolean | undefined,
+  coverage: Uint8Array | undefined
 ): Uint8Array | undefined {
   const [tx, ty] = key.split(',').map(Number) as [number, number];
   const result = base ? new Uint8Array(base) : new Uint8Array(TILE_SIZE * TILE_SIZE * 4);
   const source = [0, 0, 0, 0];
   let touched = false;
   for (let y = Math.max(area.top, ty * TILE_SIZE); y < Math.min(area.top + area.height, (ty + 1) * TILE_SIZE); y++) {
-    const spans = command.points
-      ? polygonSpans(command.points, y + 0.5)
-      : [[area.left, area.left + area.width] as const];
-    for (const [spanStart, spanEnd] of spans) {
-      const x0 = Math.max(spanStart, area.left, tx * TILE_SIZE),
-        x1 = Math.min(spanEnd, area.left + area.width, (tx + 1) * TILE_SIZE);
-      for (let x = x0; x < x1; x++) {
-        ramp.at(gradientPosition(command, x + 0.5, y + 0.5), source);
-        const index = ((y - ty * TILE_SIZE) * TILE_SIZE + (x - tx * TILE_SIZE)) * 4;
-        if (blendPixel(result, index, source, ramp.linear, alphaLock ?? false, dither(x, y))) {
-          touched = true;
+    const x0 = Math.max(area.left, tx * TILE_SIZE),
+      x1 = Math.min(area.left + area.width, (tx + 1) * TILE_SIZE);
+    for (let x = x0; x < x1; x++) {
+      const pixel = (y - ty * TILE_SIZE) * TILE_SIZE + (x - tx * TILE_SIZE);
+      const covered = coverage ? coverage[pixel]! / 255 : 1;
+      if (!covered) {
+        continue;
+      }
+
+      ramp.at(gradientPosition(command, x + 0.5, y + 0.5), source);
+      if (covered < 1) {
+        for (let channel = 0; channel < 4; channel++) {
+          source[channel] = source[channel]! * covered;
         }
+      }
+
+      if (blendPixel(result, pixel * 4, source, ramp.linear, alphaLock ?? false, dither(x, y))) {
+        touched = true;
       }
     }
   }

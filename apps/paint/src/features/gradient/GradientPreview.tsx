@@ -5,7 +5,7 @@ import type { GradientCommand } from './gradientEdit';
 
 /**
  * A preview of the gradient being dragged, drawn over the canvas with CSS gradients in the same color space (Smooth
- * color as `srgb-linear`) and clipped to the selection, with the drag's line and ends. An angle gradient is a conic
+ * color as `srgb-linear`) and clipped to the selection by `clip`, with the drag's line and ends. An angle gradient is a conic
  * gradient, a diamond four linear ones, one per quarter around the start. It covers the layers instead of blending
  * into the active one, so the result can differ where the layer has paint or a blend mode.
  */
@@ -15,19 +15,15 @@ export function GradientPreview(props: {
   toScreen: (point: Point) => Point;
   /** Canvas size in CSS pixels. */
   size: { width: number; height: number };
+  /** A CSS `clip-path` of the selection over the canvas; none covers the canvas. */
+  clip?: string;
 }) {
   const start = () => props.toScreen(props.command.start);
   const end = () => props.toScreen(props.command.end);
-  const clip = () =>
-    props.command.points &&
-    `polygon(${props.command.points
-      .map(props.toScreen)
-      .map(({ x, y }) => `${x}px ${y}px`)
-      .join(', ')})`;
 
   return (
     <div class={styles.preview} aria-hidden="true">
-      <div class={styles.fill} style={{ opacity: props.command.opacity, 'clip-path': clip() }}>
+      <div class={styles.fill} style={{ opacity: props.command.opacity, 'clip-path': props.clip }}>
         <For each={shapes(props.command, start(), end(), props.size, mirrored(props.toScreen, props.command.start))}>
           {(shape) => <div class={styles.shape} style={{ background: shape.background, 'clip-path': shape.clip }} />}
         </For>

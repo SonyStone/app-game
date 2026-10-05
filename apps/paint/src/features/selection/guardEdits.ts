@@ -2,12 +2,13 @@ import type { PaintCommand } from '@app-game/paint-core/protocol';
 import type { Selection } from './createSelection';
 
 /**
- * Wraps engine commands so document edits respect the lasso: while a selection edit applies, only view, selection and
- * setting commands pass. The outline outlasts drawing, history, layer and module edits, as in Photoshop, so the fill
- * and the gradient can keep working inside it; opening a drawing or recovering the renderer removes it first.
+ * Wraps engine commands so document edits respect the selection: while a selection change or pixel command applies,
+ * only view, selection and setting commands pass. The selection outlasts drawing, history, layer and module edits, as
+ * in Photoshop, so the fill and the gradient can keep working inside it; opening a drawing, which removes it in the
+ * engine, or recovering the renderer first ends a selection gesture in progress.
  */
 export function guardEdits<Command extends PaintCommand>(
-  selection: Pick<Selection, 'isBusy' | 'clear'>,
+  selection: Pick<Selection, 'isBusy' | 'cancel'>,
   send: (command: Command) => void
 ) {
   return (command: Command) => {
@@ -15,8 +16,8 @@ export function guardEdits<Command extends PaintCommand>(
       return;
     }
 
-    if (clearsOutline.has(command.type)) {
-      selection.clear();
+    if (endsGesture.has(command.type)) {
+      selection.cancel();
     }
 
     send(command);
@@ -31,4 +32,4 @@ const allowedWhileApplying = new Set<PaintCommand['type']>([
   'live-tail'
 ]);
 
-const clearsOutline = new Set<PaintCommand['type']>(['import', 'recover']);
+const endsGesture = new Set<PaintCommand['type']>(['import', 'recover']);

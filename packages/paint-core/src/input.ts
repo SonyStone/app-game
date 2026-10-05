@@ -64,9 +64,13 @@ export function attachInput(
     puckPicker?: PuckPicker;
     /** The canvas with the overlays drawn over it, where the puck opens too; see `attachNavigationPuck`'s `surface`. */
     puckSurface?: () => Element | undefined;
+    /**
+     * Selection gestures of a pen or mouse, in document pixels, instead of strokes while `enabled`; `begin` receives
+     * the modifier keys held at the press, which choose how a new shape combines with the selection.
+     */
     selection?: {
       enabled: () => boolean;
-      begin: (point: Point) => void;
+      begin: (point: Point, modifiers: { shiftKey: boolean; altKey: boolean }) => void;
       move: (point: Point) => void;
       end: () => void;
       cancel: () => void;
@@ -285,7 +289,10 @@ export function attachInput(
       const camera = options.camera();
       if (options.selection?.enabled() && !eraser) {
         gesture = { kind: 'select', id: event.pointerId, camera, size: { ...options.size() } };
-        options.selection.begin(screenToWorld(point, camera, gesture.size));
+        options.selection.begin(screenToWorld(point, camera, gesture.size), {
+          shiftKey: event.shiftKey,
+          altKey: event.altKey
+        });
         return;
       }
       const pressure = event.pointerType === 'pen' ? event.pressure : 1;

@@ -311,7 +311,10 @@ try {
     await page.screenshot({ path: path.join(os.tmpdir(), 'paint-blend-dropdown.png') });
     await list.getByRole('option', { name: 'Multiply' }).click();
     await list.waitFor({ state: 'detached', timeout: 5_000 });
-    await panel.getByRole('button', { name: 'Layer blend mode' }).filter({ hasText: 'Multiply' }).waitFor({ timeout: 10_000 });
+    await panel
+      .getByRole('button', { name: 'Layer blend mode' })
+      .filter({ hasText: 'Multiply' })
+      .waitFor({ timeout: 10_000 });
     await trigger.click();
     await page.keyboard.press('Escape');
     await list.waitFor({ state: 'detached', timeout: 5_000 });
@@ -418,7 +421,10 @@ try {
     await page.getByRole('button', { name: 'Pick color from canvas' }).click();
     await page.mouse.move(box.x + box.width / 2 - 160, box.y + box.height / 2 - 100);
     await page.mouse.move(box.x + box.width / 2 - 150, box.y + box.height / 2 - 100, { steps: 3 });
-    await page.getByRole('status', { name: /^Picking #/ }).locator('canvas[data-ready="true"]').waitFor({ timeout: 10_000 });
+    await page
+      .getByRole('status', { name: /^Picking #/ })
+      .locator('canvas[data-ready="true"]')
+      .waitFor({ timeout: 10_000 });
     // Empty paper up and to the left of the stroke, clear of the toolbars along the edges.
     await page.mouse.click(box.x + box.width / 2 - 150, box.y + box.height / 2 - 100);
     await page.getByRole('button', { name: 'Color palette' }).click();
@@ -519,7 +525,9 @@ try {
     await page.mouse.down();
     await page.mouse.move(paper.x + 60, paper.y + 60, { steps: 4 });
     await page.mouse.up();
-    const fillTool = page.getByRole('toolbar', { name: 'Selection actions' }).getByRole('button', { name: 'Fill tool' });
+    const fillTool = page
+      .getByRole('toolbar', { name: 'Selection actions' })
+      .getByRole('button', { name: 'Fill tool' });
     await fillTool.click();
     assert.equal(await fillTool.getAttribute('aria-pressed'), 'true');
     await page.getByRole('button', { name: 'Brush settings' }).click();
@@ -586,16 +594,19 @@ try {
     assert.ok(Math.min(...(await pickRgb(page, { x: cx + 50, y: cy - 49 }, 'FF0000'))) > 0xe0);
     await setColor(page, 'FF0000');
     const past = await pickRgb(page, { x: cx - 150, y: cy }, 'FF0000');
-    assert.ok(past.every((channel) => channel > 0x50 && channel < 0xe0), `expected gray, got ${past}`);
+    assert.ok(
+      past.every((channel) => channel > 0x50 && channel < 0xe0),
+      `expected gray, got ${past}`
+    );
     await undo(page, 1);
     await page.getByRole('button', { name: 'Brush settings' }).click();
     await page.getByLabel('Gradient shape').selectOption('linear');
     await page.getByLabel('Gradient repeat').selectOption('none');
     await page.keyboard.press('Escape');
 
-    // Deselecting leaves the gradient for the lasso, as it works only inside a selection.
+    // Deselecting leaves the gradient for the lasso, as it works only inside a selection, once the engine applied it.
     await page.keyboard.press('Control+d');
-    assert.equal(await pressed('Lasso'), 'true');
+    await page.getByRole('button', { name: 'Lasso', exact: true, pressed: true }).waitFor({ timeout: 5_000 });
 
     // Fill selection paints an ellipse with the color, leaving the corners of the box it was dragged across.
     await page.getByRole('button', { name: 'Ellipse selection' }).click();
@@ -631,7 +642,10 @@ try {
     await page.mouse.move(cx + 10, cy - 15, { steps: 4 });
     await page.mouse.up();
     await setColor(page, '000000');
-    await page.getByRole('toolbar', { name: 'Selection actions' }).getByRole('button', { name: 'Fill selection' }).click();
+    await page
+      .getByRole('toolbar', { name: 'Selection actions' })
+      .getByRole('button', { name: 'Fill selection' })
+      .click();
     await waitForSaved(page);
     await page.keyboard.press('Control+d');
     await page.getByRole('button', { name: 'Lasso selection' }).click();
@@ -954,6 +968,112 @@ try {
     await undo(page, 4);
   });
 
+  await step('the magic wand, Shift, a polygon, Invert and Feather change the selection', async () => {
+    const { cx, cy } = await workspaceCenter(page);
+    const bar = page.getByRole('toolbar', { name: 'Selection actions' });
+    const options = page.getByRole('toolbar', { name: 'Selection options' });
+    const drag = async (from, to) => {
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(to.x, to.y, { steps: 4 });
+      await page.mouse.up();
+    };
+    const fillSelection = async (hex) => {
+      await setColor(page, hex);
+      await bar.getByRole('button', { name: 'Fill selection' }).click();
+      await waitForSaved(page);
+    };
+    /** The displayed color at (x, y), picked with the brush; the selection tools take Alt for themselves. */
+    const rgbAt = async (x, y) => {
+      await page.keyboard.press('b');
+      await setColor(page, 'FF00FF');
+      const rgb = await pickRgb(page, { x, y }, 'FF00FF');
+      await page.keyboard.press('l');
+      return rgb;
+    };
+    const deselect = async () => {
+      await page.keyboard.press('Control+d');
+      await bar.getByRole('button', { name: 'Transform selection' }).waitFor({ state: 'detached', timeout: 5_000 });
+    };
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await page.getByRole('button', { name: 'Add layer' }).click();
+    await waitForSaved(page);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('l');
+
+    // A red square, selected again by its color with the wand.
+    await page.getByRole('button', { name: 'Rectangle selection' }).click();
+    await drag({ x: cx - 250, y: cy - 150 }, { x: cx - 150, y: cy - 50 });
+    await fillSelection('FF0000');
+    await deselect();
+    await page.keyboard.press('w');
+    assert.equal(await page.getByRole('button', { name: 'Magic wand' }).getAttribute('aria-pressed'), 'true');
+    await options.getByLabel('Wand tolerance').waitFor({ timeout: 5_000 });
+    await page.mouse.click(cx - 200, cy - 100);
+    await bar.getByRole('button', { name: 'Transform selection' }).waitFor({ timeout: 5_000 });
+    await fillSelection('0000FF');
+    const [, , blue] = await rgbAt(cx - 200, cy - 100);
+    assert.ok(blue > 0xe0, 'the wand selected the square');
+    // Paper is nearly white, so its red channel tells it from the blue.
+    assert.ok((await rgbAt(cx - 130, cy - 100))[0] > 0xe0, 'the wand stayed inside the square');
+
+    // Shift adds a rectangle beside it; Invert then selects everything else in view.
+    await page.getByRole('button', { name: 'Rectangle selection' }).click();
+    await page.keyboard.down('Shift');
+    await drag({ x: cx - 120, y: cy - 150 }, { x: cx - 60, y: cy - 50 });
+    await page.keyboard.up('Shift');
+    await page.waitForTimeout(300);
+    await fillSelection('00FF00');
+    for (const x of [cx - 200, cx - 90]) {
+      const [r, g] = await rgbAt(x, cy - 100);
+      assert.ok(g > 0xe0 && r < 0x20, `expected green in both shapes, got ${[r, g]}`);
+    }
+
+    await options.getByRole('button', { name: 'Invert selection' }).click();
+    await page.waitForTimeout(300);
+    await fillSelection('FFFF00');
+    const [r, g, b] = await rgbAt(cx - 300, cy + 100);
+    assert.ok(r > 0xe0 && g > 0xe0 && b < 0x20, `expected yellow outside, got ${[r, g, b]}`);
+    assert.ok((await rgbAt(cx - 200, cy - 100))[0] < 0x20, 'the inverted selection left the square');
+    await deselect();
+
+    // A polygon of pressed corners, closed on its first corner.
+    await page.getByRole('button', { name: 'Polygon selection' }).click();
+    for (const [x, y] of [
+      [cx + 50, cy + 50],
+      [cx + 250, cy + 50],
+      [cx + 50, cy + 200],
+      [cx + 50, cy + 50]
+    ]) {
+      await page.mouse.click(x, y);
+    }
+
+    await bar.getByRole('button', { name: 'Transform selection' }).waitFor({ timeout: 5_000 });
+    await fillSelection('0000FF');
+    assert.ok((await rgbAt(cx + 100, cy + 90))[2] > 0xe0, 'the polygon was filled');
+    assert.ok((await rgbAt(cx + 200, cy + 170))[0] > 0xe0, 'the polygon left its outside');
+    await deselect();
+
+    // Feathering softens the edge of a rectangle.
+    await page.getByRole('button', { name: 'Rectangle selection' }).click();
+    await drag({ x: cx + 300, y: cy + 50 }, { x: cx + 450, y: cy + 200 });
+    await bar.getByRole('button', { name: 'Transform selection' }).waitFor({ timeout: 5_000 });
+    await options.getByLabel('Feather radius').fill('12');
+    await options.getByLabel('Feather radius').dispatchEvent('change');
+    await options.getByRole('button', { name: 'Feather selection' }).click();
+    await page.waitForTimeout(300);
+    await fillSelection('000000');
+    assert.ok(Math.max(...(await rgbAt(cx + 375, cy + 125))) < 0x20, 'the feathered rectangle was filled');
+    // The inverted selection filled the layer around the shapes yellow; the soft edge mixes black into it.
+    const edge = await rgbAt(cx + 300, cy + 125);
+    assert.ok(
+      edge[0] > 0x30 && edge[0] < 0xd0 && Math.abs(edge[0] - edge[1]) <= 2,
+      `expected a soft edge, got ${edge}`
+    );
+    await deselect();
+    await undo(page, 7);
+  });
+
   await step('the visible canvas exports as PNG', async () => {
     await page.getByRole('button', { name: 'Drawing menu' }).click();
     const [download] = await Promise.all([
@@ -961,43 +1081,47 @@ try {
       page.getByRole('button', { name: /Export visible canvas/ }).click()
     ]);
     assert.equal(download.suggestedFilename(), 'drawing-view.png');
-    assert.equal(await page.getByRole('alert').count(), 0);
+    assert.equal(await page.getByRole('alert').count(), 0, String(await page.getByRole('alert').allTextContents()));
     await page.keyboard.press('Escape');
   });
 
-  await step('a frame made from the view and adjusted with handles exports its rectangle as a PNG at 100%', async () => {
-    const panel = page.getByRole('complementary', { name: 'Layers' });
-    await page.getByRole('button', { name: 'Layers' }).click();
-    await panel.getByRole('button', { name: 'New frame' }).click();
-    assert.equal(await panel.getByLabel('Frame name').inputValue(), 'Frame 1');
-    // Adjusting: zoomed out so the frame's corners are in view, the bottom-right corner dragged 280 × 200 document
-    // pixels in shrinks the frame.
-    await panel.getByRole('button', { name: 'Adjust frame' }).click();
-    await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Zoom out' }).click();
-    const zoom = Number((await page.getByRole('button', { name: 'Reset zoom' }).textContent()).replace('%', '')) / 100;
-    const corner = await page.getByLabel('Resize frame').nth(4).boundingBox();
-    const from = { x: corner.x + corner.width / 2, y: corner.y + corner.height / 2 };
-    await page.mouse.move(from.x, from.y);
-    await page.mouse.down();
-    await page.mouse.move(from.x - 280 * zoom, from.y - 200 * zoom, { steps: 6 });
-    await page.mouse.up();
-    await page.getByRole('button', { name: 'Done adjusting the frame' }).click();
-    assert.equal(await page.getByLabel('Resize frame').count(), 0);
-    await page.getByRole('button', { name: 'Reset zoom' }).click();
-    await page.getByRole('button', { name: 'Layers' }).click();
-    const [download] = await Promise.all([
-      page.waitForEvent('download', { timeout: 15_000 }),
-      panel.getByRole('button', { name: 'Export frame as PNG' }).click()
-    ]);
-    assert.equal(download.suggestedFilename(), 'Frame 1.png');
-    // The frame covered the 1280 × 800 view at 100%; PNG width and height are big-endian at bytes 16 and 20.
-    const png = await readFile(await download.path());
-    assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1000, 600]);
-    assert.equal(await page.getByRole('alert').count(), 0);
-    await panel.getByRole('button', { name: 'Delete frame' }).click();
-    await page.keyboard.press('Escape');
-  });
+  await step(
+    'a frame made from the view and adjusted with handles exports its rectangle as a PNG at 100%',
+    async () => {
+      const panel = page.getByRole('complementary', { name: 'Layers' });
+      await page.getByRole('button', { name: 'Layers' }).click();
+      await panel.getByRole('button', { name: 'New frame' }).click();
+      assert.equal(await panel.getByLabel('Frame name').inputValue(), 'Frame 1');
+      // Adjusting: zoomed out so the frame's corners are in view, the bottom-right corner dragged 280 × 200 document
+      // pixels in shrinks the frame.
+      await panel.getByRole('button', { name: 'Adjust frame' }).click();
+      await page.keyboard.press('Escape');
+      await page.getByRole('button', { name: 'Zoom out' }).click();
+      const zoom =
+        Number((await page.getByRole('button', { name: 'Reset zoom' }).textContent()).replace('%', '')) / 100;
+      const corner = await page.getByLabel('Resize frame').nth(4).boundingBox();
+      const from = { x: corner.x + corner.width / 2, y: corner.y + corner.height / 2 };
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(from.x - 280 * zoom, from.y - 200 * zoom, { steps: 6 });
+      await page.mouse.up();
+      await page.getByRole('button', { name: 'Done adjusting the frame' }).click();
+      assert.equal(await page.getByLabel('Resize frame').count(), 0);
+      await page.getByRole('button', { name: 'Reset zoom' }).click();
+      await page.getByRole('button', { name: 'Layers' }).click();
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 15_000 }),
+        panel.getByRole('button', { name: 'Export frame as PNG' }).click()
+      ]);
+      assert.equal(download.suggestedFilename(), 'Frame 1.png');
+      // The frame covered the 1280 × 800 view at 100%; PNG width and height are big-endian at bytes 16 and 20.
+      const png = await readFile(await download.path());
+      assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1000, 600]);
+      assert.equal(await page.getByRole('alert').count(), 0);
+      await panel.getByRole('button', { name: 'Delete frame' }).click();
+      await page.keyboard.press('Escape');
+    }
+  );
 
   await step('the Layers panel lists layers with paint in view and shows the others on request', async () => {
     const { cx, cy } = await workspaceCenter(page);
@@ -1108,7 +1232,10 @@ try {
         for await (const shard of (await folder.getDirectoryHandle('tiles')).values())
           for await (const tile of shard.values()) tiles.push(tile.name);
         const drawing = JSON.parse(await (await (await folder.getFileHandle('drawing.json')).getFile()).text());
-        return { tiles, references: drawing.document.layers.flatMap((layer) => layer.tiles.map((tile) => tile.pixels.storageId)) };
+        return {
+          tiles,
+          references: drawing.document.layers.flatMap((layer) => layer.tiles.map((tile) => tile.pixels.storageId))
+        };
       });
     const menu = page.getByRole('complementary', { name: 'Drawing' });
     await page.getByRole('button', { name: 'Drawing menu' }).click();
@@ -1117,7 +1244,10 @@ try {
     await menu.getByText('Saved there').waitFor({ timeout: 60_000 });
     const before = await folderFiles();
     assert.ok(before.references.length > 0, 'the folder holds the drawing');
-    assert.ok(before.references.every((id) => before.tiles.includes(id)), 'every tile of the drawing is in the folder');
+    assert.ok(
+      before.references.every((id) => before.tiles.includes(id)),
+      'every tile of the drawing is in the folder'
+    );
     await page.keyboard.press('Escape');
 
     // A stroke adds only its new tiles; the drawing in the folder refers to them.
@@ -1133,7 +1263,10 @@ try {
       { polling: 200, timeout: 30_000 }
     );
     const after = await folderFiles();
-    assert.ok(after.references.every((id) => after.tiles.includes(id)), 'every tile of the changed drawing is in the folder');
+    assert.ok(
+      after.references.every((id) => after.tiles.includes(id)),
+      'every tile of the changed drawing is in the folder'
+    );
 
     // Stopped and opened again, the drawing comes back from the folder, kept there.
     await page.getByRole('button', { name: 'Drawing menu' }).click();

@@ -1,5 +1,13 @@
 import type { DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
 import type { Layer } from '@app-game/paint-core/document';
+import {
+  coverageAt,
+  emptySelection,
+  featherSelection,
+  polygonSelection,
+  selectionBounds,
+  type SelectionMask
+} from '@app-game/paint-core/selectionMask';
 import { unpackTile } from '@app-game/paint-core/tilePixels';
 import { expect, it, vi } from 'vitest';
 import { applyAffine, boxAffine, identity, invertAffine, multiplyAffine, type Affine } from './affine';
@@ -159,7 +167,7 @@ it('builds box transforms about a pivot and inverts them', () => {
   expect(invertAffine([0, 0, 0, 1, 0, 0])).toBeUndefined();
 });
 
-function setup(tiles: Map<string, Uint8Array>) {
+function setup(tiles: Map<string, Uint8Array>, selection: SelectionMask = emptySelection) {
   const layer: Layer = { id: 'layer', name: 'Layer', visible: true, opacity: 1, blend: 'normal', tiles };
   let state: unknown;
   const floating = {
@@ -172,6 +180,7 @@ function setup(tiles: Map<string, Uint8Array>) {
     active: layer,
     readTile: async (pixels) => unpackTile(pixels),
     linearBlending: false,
+    selection,
     state: { get: () => state, set: (value) => (state = value) },
     floating
   };
@@ -179,6 +188,50 @@ function setup(tiles: Map<string, Uint8Array>) {
 }
 
 /** An opaque rectangle of `rgba` with its top-left corner at (left, top), in tiles. */
+it('moves the selected part with the selection, fading across a feathered edge, and keeps the selection on cancel', async () => {
+  const half = polygonSelection([
+    { x: 10, y: 20 },
+    { x: 12, y: 20 },
+    { x: 12, y: 26 },
+    { x: 10, y: 26 }
+  ]);
+  const { run } = setup(square(10, 20, 4, 6, [0, 0, 255, 255]), half);
+  expect(await run({ phase: 'begin' })).toMatchObject({
+    reply: { bounds: { left: 10, top: 20, right: 12, bottom: 26 } }
+  });
+  await run({ phase: 'update', interpolation: 'pixels', matrix: [1, 0, 100, 0, 1, 0, 0, 0, 1] });
+  const ended = await run({ phase: 'end' });
+  expect(pixel(ended, 10, 20)).toEqual([0, 0, 0, 0]);
+  expect(pixel(ended, 12, 20)).toEqual([0, 0, 255, 255]);
+  expect(pixel(ended, 110, 20)).toEqual([0, 0, 255, 255]);
+  expect(selectionBounds(ended.selection!)).toEqual({ left: 110, top: 20, right: 112, bottom: 26 });
+
+  const again = setup(square(10, 20, 4, 6, [0, 0, 255, 255]), half);
+  await again.run({ phase: 'begin' });
+  await again.run({ phase: 'update', interpolation: 'pixels', matrix: [1, 0, 100, 0, 1, 0, 0, 0, 1] });
+  expect((await again.run({ phase: 'cancel' })).selection).toBeUndefined();
+
+  // A feathered selection takes part of its edge pixels and leaves the rest.
+  const soft = featherSelection(
+    polygonSelection([
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 40 },
+      { x: 0, y: 40 }
+    ]),
+    6
+  );
+  const edge = coverageAt(soft, 40, 20);
+  const feathered = setup(square(0, 0, 60, 40, [0, 0, 255, 255]), soft);
+  await feathered.run({ phase: 'begin' });
+  await feathered.run({ phase: 'update', interpolation: 'pixels', matrix: [1, 0, 0, 0, 1, 100, 0, 0, 1] });
+  const moved = await feathered.run({ phase: 'end' });
+  expect(pixel(moved, 20, 20)).toEqual([0, 0, 0, 0]);
+  expect(pixel(moved, 40, 20)[3]).toBe(Math.round((255 * (255 - edge)) / 255));
+  expect(pixel(moved, 55, 20)).toEqual([0, 0, 255, 255]);
+  expect(coverageAt(moved.selection!, 20, 120)).toBe(255);
+});
+
 function square(left: number, top: number, width: number, height: number, rgba = [0, 0, 0, 255]) {
   const tiles = new Map<string, Uint8Array>();
   for (let y = top; y < top + height; y++) {

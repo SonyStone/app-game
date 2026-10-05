@@ -1,6 +1,6 @@
 import { d, type TgpuBindGroup, type TgpuBuffer, type TgpuRoot, type UniformFlag } from 'typegpu';
 import type { Camera, ViewSize } from '../camera';
-import type { createLassoOverlay } from './lassoOverlay';
+import type { createSelectionOverlay } from './selectionOverlay';
 import * as shader from './shaders';
 import { createViewDamage } from './viewDamage';
 import { createViewFallback } from './viewFallback';
@@ -16,7 +16,7 @@ export function createTargetViews(
   format: GPUTextureFormat,
   deps: {
     virtual: ReturnType<typeof createVirtualTexture> | undefined;
-    lasso: ReturnType<typeof createLassoOverlay>;
+    selection: ReturnType<typeof createSelectionOverlay>;
     /** Builds the error thrown when a canvas cannot provide a WebGPU context. */
     contextError: () => Error;
   }
@@ -60,7 +60,7 @@ export function createTargetViews(
       targets.delete(canvas);
     },
 
-    /** Viewport and fallback texture bytes across targets; lasso bytes are counted by the overlay. */
+    /** Viewport and fallback texture bytes across targets; selection bytes are counted by the overlay. */
     bytes() {
       let sum = 0;
       for (const target of targets.values()) {
@@ -103,7 +103,7 @@ function createTargetView(
   }
 
   let pages: ReturnType<NonNullable<typeof deps.virtual>['view']> | undefined;
-  let lasso: ReturnType<typeof deps.lasso.target> | undefined;
+  let selection: ReturnType<typeof deps.selection.target> | undefined;
 
   return {
     canvas,
@@ -130,8 +130,8 @@ function createTargetView(
     },
 
     /** This target's selection overlay state, allocated on first use. */
-    lasso() {
-      return (lasso ??= deps.lasso.target());
+    selection() {
+      return (selection ??= deps.selection.target());
     },
 
     /** Replaces the viewport textures for a new backing size, keeping a reprojection of the last complete view. */
@@ -174,8 +174,8 @@ function createTargetView(
       this.fallback?.destroy();
       pages?.release();
       pages = undefined;
-      lasso?.destroy();
-      lasso = undefined;
+      selection?.destroy();
+      selection = undefined;
       context.unconfigure();
     }
   };

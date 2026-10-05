@@ -398,7 +398,7 @@ export function createStrokeRaster(
           }
 
           pass.end();
-          deps.clip.restore(commands.encoder(), tile.render, scratch.base, key, bounds);
+          deps.clip.restore(commands.encoder(), tile, scratch.base, key, bounds);
         }
 
         tile.mipLevelReady = 0;
@@ -475,7 +475,7 @@ export function createStrokeRaster(
     }
 
     pass.end();
-    deps.clip.restore(commands.encoder(), temporary.render, scratch.base, `${x},${y}`, clip);
+    deps.clip.restore(commands.encoder(), temporary, scratch.base, `${x},${y}`, clip);
     commands.flush();
     temporary.mipLevelReady = 0;
     return temporary;

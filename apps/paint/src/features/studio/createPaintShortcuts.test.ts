@@ -16,6 +16,9 @@ function mount(panelOpen: () => boolean) {
     chooseTool: vi.fn(),
     selectionAction: vi.fn(),
     deselect: vi.fn(),
+    selectAll: vi.fn(),
+    invertSelection: vi.fn(),
+    chooseWand: vi.fn(),
     undo: vi.fn(),
     redo: vi.fn(),
     save: vi.fn(),
@@ -115,4 +118,15 @@ it('zooms the canvas instead of the page and redoes with Ctrl+Y', () => {
 
   press('0');
   expect(actions.resetZoom).toHaveBeenCalledOnce();
+});
+
+it('selects all, inverts the selection and chooses the magic wand', () => {
+  const actions = mount(() => false);
+  press('a', { ctrlKey: true });
+  press('I', { metaKey: true, shiftKey: true });
+  press('w');
+  press('a');
+  expect(actions.selectAll).toHaveBeenCalledOnce();
+  expect(actions.invertSelection).toHaveBeenCalledOnce();
+  expect(actions.chooseWand).toHaveBeenCalledOnce();
 });

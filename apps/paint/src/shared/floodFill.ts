@@ -143,6 +143,19 @@ function growWithin(mask: Uint8Array, within: Uint8Array, width: number, height:
   return mask;
 }
 
+/**
+ * Every pixel of `area` within `tolerance` of the pixel at `seed`, connected or not, as a mask of the area's size (1
+ * where it matches), as a magic wand that is not contiguous selects; see {@link floodMask} for the comparison.
+ */
+export function colorMask(
+  area: FillArea,
+  tiles: ReadonlyMap<string, Uint8Array>,
+  seed: { x: number; y: number },
+  tolerance: number
+): Uint8Array {
+  return matchingPixels(area, tiles, seedPixel(tiles, seed), tolerance);
+}
+
 /** The RGBA of the document pixel at `point`, transparent where there is no tile. */
 function seedPixel(tiles: ReadonlyMap<string, Uint8Array>, point: { x: number; y: number }): number[] {
   const tx = Math.floor(point.x / TILE_SIZE),

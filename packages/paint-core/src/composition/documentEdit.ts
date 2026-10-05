@@ -1,5 +1,6 @@
 import type { Layer, LayerInfo, TileChange } from '../document';
 import type { FloatingPixels } from '../gpu/floatingPixels';
+import type { SelectionMask } from '../selectionMask';
 import type { TileData } from '../tilePixels';
 
 /**
@@ -54,6 +55,11 @@ export type DocumentEditContext = {
   /** Whether the document blends its layers in linear light; see `mergeTilePixels`. */
   linearBlending: boolean;
   /**
+   * The selection when the edit runs; edits that paint stay inside it in proportion to its coverage, as brushes do.
+   * Nothing selected leaves the whole canvas to the edit.
+   */
+  selection: SelectionMask;
+  /**
    * This edit's data kept between its commands, for example the pixels a transform started from. It lasts while the
    * runtime runs and is cleared when a document is imported.
    */
@@ -83,13 +89,20 @@ export type DocumentEditContext = {
 
 /**
  * The changes of an edit. `layer` adds a new layer above the active one and selects it; changes may then refer to its
- * id. A change's `after` holds unpacked RGBA8 pixels, or `undefined` to clear the tile.
+ * id. A change's `after` holds unpacked RGBA8 pixels, or `undefined` to clear the tile. `selection` replaces the
+ * selection, as selection tools and a transform of selected pixels do; it is not part of the undo step.
  *
  * `amend` replaces the undo step that this edit's previous command committed, which must still be the latest one:
  * that step is reverted first, so `before` of the changes is the state before it, and no changes remove the step.
  * `reply` is sent back to a command that carried a `requestId`.
  */
-export type DocumentEditResult = { changes: TileChange[]; layer?: LayerInfo; amend?: boolean; reply?: unknown };
+export type DocumentEditResult = {
+  changes: TileChange[];
+  layer?: LayerInfo;
+  amend?: boolean;
+  reply?: unknown;
+  selection?: SelectionMask;
+};
 
 /** A document edit as the runtime sees it, with an untyped command; see {@link defineDocumentEdit}. */
 export type DocumentEdit = {

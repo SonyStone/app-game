@@ -1,6 +1,6 @@
 # Paint
 
-Paint Studio is an infinite-canvas drawing app built with Solid 2 and TypeGPU/WebGPU. The drawing engine runs in a Web Worker with an OffscreenCanvas by default, or on the main thread with the page's canvas. Drawings are sparse 256×256 raster tiles with layers, undo/redo and lasso selections, saved automatically to IndexedDB and exported as `.paint` files or layered PSDs. Brushes include the soft round brush, eraser, textured tips and Photoshop ABR presets; the view supports pan, zoom, rotation, mirroring and paint symmetry. Unsupported browsers (no WebGPU) display an error.
+Paint Studio is an infinite-canvas drawing app built with Solid 2 and TypeGPU/WebGPU. The drawing engine runs in a Web Worker with an OffscreenCanvas by default, or on the main thread with the page's canvas. Drawings are sparse 256×256 raster tiles with layers, undo/redo and selections (lasso, polygon, rectangle, ellipse, magic wand; feathered, inverted, combined), saved automatically to IndexedDB and exported as `.paint` files or layered PSDs. Brushes include the soft round brush, eraser, textured tips and Photoshop ABR presets; the view supports pan, zoom, rotation, mirroring and paint symmetry. Unsupported browsers (no WebGPU) display an error.
 
 ## Running and integration
 
@@ -29,7 +29,7 @@ src/
     engine/        Engine connections: worker and main-thread transports, mode switch, reply correlation, Studio recipe
     canvas/        Drawing canvas keyed on the execution mode, with its connection and input; brush cursor, wireframe
     camera/        Camera state and view commands, stage size, navigation puck adapter
-    selection/     Lasso outline and pixel edits, on-canvas outline, edit gate, selection toolbar
+    selection/     Selection tools and their engine edit, pixel commands, on-canvas outline, edit gate, selection bars
     symmetry/      Document paint symmetry: settings, guide and panel
     layers/        Layer list, blending and ordering, image placement, Erase to History source
     fill/          Bucket fill: engine edit, settings and canvas contact, fill panel
@@ -62,7 +62,7 @@ Unit tests live beside the feature they exercise and cover only app code. Runtim
 
 - Start with `features/studio/PaintStudio.tsx`. It is the editor's layout: it creates the engine, camera, tools, selection, symmetry and preset uploads once, then composes the canvas and the UI from feature modules, passing each the values and callbacks it works on.
 - `features/engine` owns the drawing engine. `createPaintEngine` opens one connection per mounted canvas and reports document state, save state, metrics and the view stored with a document. The canvas is keyed on `engine.session()`, so switching between worker and main thread checkpoints the document and renderer tools, disposes the engine and replaces only the canvas; brush, symmetry, panels and developer switches stay mounted. `openPaintTransport` starts the worker with `openWorker` from `@app-game/solid-gpu/worker` and transfers an OffscreenCanvas; `openLocalEngine` loads the same recipe on the main thread. Disconnecting sends `dispose`, which saves the document and closes storage before the transport is closed. `createEngineRequests` correlates brush-resource uploads and brush commands with their replies and times out waiting callers without posting duplicate resources.
-- UI state lives outside the engine. Developer switches, the camera and the lasso outline reach the engine through effects gated on readiness, so a replacement engine receives them when it becomes ready. The camera and symmetry reset from `engine.restored()` when a document is loaded, imported or replaced. A write becomes visible to every reader, `latest()` included, only at the next flush; guards that must see a write made earlier in the same event (busy flags, the stroke in progress, the selected preset) use `createImmediateSignal` (`src/shared`).
+- UI state lives outside the engine. Developer switches, the camera and the selection gesture in progress reach the engine through effects gated on readiness, so a replacement engine receives them when it becomes ready. The camera and symmetry reset from `engine.restored()` when a document is loaded, imported or replaced. A write becomes visible to every reader, `latest()` included, only at the next flush; guards that must see a write made earlier in the same event (busy flags, the stroke in progress, the selected preset) use `createImmediateSignal` (`src/shared`).
 - `features/canvas`, `camera`, `selection`, `symmetry`, `layers`, `fill`, `brush`, `abr` and `developer` each provide a factory for their state and components for their UI. `features/studio/createPaintShortcuts.ts` is the single keyboard handler.
 - Expected failures are `PaintError` values (`src/shared/errors.ts`) returned as `neverthrow` results. Renderer failures reuse `GpuError`, and cancelled work `AbortedError`, from `@app-game/solid-gpu/errors`. A paused renderer offers **Restore renderer**; a busy editor asks the user to retry.
 

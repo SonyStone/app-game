@@ -19,6 +19,10 @@ export function createPaintShortcuts(actions: {
   /** Runs a selection command; only used while a tool working with the selection is active. */
   selectionAction: (action: SelectionAction) => void;
   deselect: () => void;
+  selectAll: () => void;
+  invertSelection: () => void;
+  /** Chooses the magic wand. */
+  chooseWand: () => void;
   undo: () => void;
   redo: () => void;
   save: () => void;
@@ -30,7 +34,10 @@ export function createPaintShortcuts(actions: {
   resetZoom: () => void;
   /** Starts transforming the selection or the active layer, or applies the transform in progress. */
   transform: () => void;
-  /** Applies the work in progress that Enter confirms, such as a transform; returns whether there was any. */
+  /**
+   * Applies the work in progress that Enter confirms, such as a transform or a polygon selection; returns whether
+   * there was any.
+   */
   confirm: () => boolean;
   /** Cancels the stroke, Mixer Brush pick, puck, outline and transform in progress. */
   cancel: () => void;
@@ -83,6 +90,16 @@ function match(event: KeyboardEvent, lasso: boolean) {
       run: (actions) => actions.selectionAction(key === 'c' ? 'copy' : key === 'x' ? 'cut' : 'paste')
     },
     { when: modifier && key === 'd', preventDefault: true, run: (actions) => actions.deselect() },
+    {
+      when: modifier && !event.shiftKey && key === 'a',
+      preventDefault: true,
+      run: (actions) => actions.selectAll()
+    },
+    {
+      when: modifier && event.shiftKey && key === 'i',
+      preventDefault: true,
+      run: (actions) => actions.invertSelection()
+    },
     { when: modifier && key === 't', preventDefault: true, run: (actions) => actions.transform() },
     { when: event.key === 'Enter', run: (actions) => actions.confirm() },
     {
@@ -104,6 +121,7 @@ function match(event: KeyboardEvent, lasso: boolean) {
     { when: plain && key === 'e', run: (actions) => actions.chooseTool('eraser') },
     { when: plain && key === 'l', run: (actions) => actions.chooseTool('lasso') },
     { when: plain && key === 'g', run: (actions) => actions.chooseTool('fill') },
+    { when: plain && key === 'w', run: (actions) => actions.chooseWand() },
     { when: plain && !event.repeat && key === 'x', run: (actions) => actions.swapColors() },
     { when: plain && key === 'd', run: (actions) => actions.resetColors() },
     { when: event.key === 'Escape', run: (actions) => actions.cancel() },

@@ -1,7 +1,8 @@
 import type { Layer } from '@app-game/paint-core/document';
+import { emptySelection, featherSelection, polygonSelection, type SelectionMask } from '@app-game/paint-core/selectionMask';
 import { expect, it } from 'vitest';
 import { fillEdit, type FillCommand } from './fillEdit';
-import { expandMask, fillTile, floodMask, smoothMask } from './floodFill';
+import { expandMask, fillTile, floodMask, smoothMask } from '../../shared/floodFill';
 
 it('fills the connected area inside a closed outline, spanning tiles, and stays inside the area', () => {
   // A 300 px square outline across four tiles, with a 1 px gap in its top edge at x = 150 closed or open.
@@ -88,7 +89,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
   const floating = { show: () => {}, move: () => {}, clear: async () => {} };
   const fill = (command: Partial<FillCommand>) =>
     fillEdit.run(
-      { layers: [paint, lines], active: paint, readTile: read, linearBlending: false, state, floating },
+      { layers: [paint, lines], active: paint, readTile: read, linearBlending: false, selection: emptySelection, state, floating },
       { ...fillCommand(), ...command }
     );
 
@@ -105,7 +106,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
 
   await expect(
     fillEdit.run(
-      { layers: [paint], active: { ...paint, visible: false }, readTile: read, linearBlending: false, state, floating },
+      { layers: [paint], active: { ...paint, visible: false }, readTile: read, linearBlending: false, selection: emptySelection, state, floating },
       fillCommand()
     )
   ).rejects.toThrow('Show the active layer');
@@ -116,7 +117,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
     clipping: true
   };
   const clippedFill = await fillEdit.run(
-    { layers: [paint, lines, solid], active: paint, readTile: read, linearBlending: false, state, floating },
+    { layers: [paint, lines, solid], active: paint, readTile: read, linearBlending: false, selection: emptySelection, state, floating },
     { ...fillCommand(), source: 'all' }
   );
   expect(count(alphaMask(clippedFill.changes[0]!.after as Uint8Array))).toBe(18 * 18);
@@ -124,7 +125,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
   // With alpha lock, only the layer's own pixels change color, keeping their alpha.
   const line = layer('line', outline(0, 0, 20, 20, [0, 0, 0, 128]));
   const locked = await fillEdit.run(
-    { layers: [{ ...line, alphaLock: true }], active: { ...line, alphaLock: true }, readTile: read, linearBlending: false, state, floating },
+    { layers: [{ ...line, alphaLock: true }], active: { ...line, alphaLock: true }, readTile: read, linearBlending: false, selection: emptySelection, state, floating },
     { ...fillCommand(), point: { x: 0, y: 0 }, tolerance: 0, source: 'layer' }
   );
   const recolored = locked.changes[0]!.after as Uint8Array;
@@ -138,30 +139,43 @@ it('fills the active layer by the active layer or all visible layers, over its e
   expect(() => fillEdit.command({ ...fillCommand(), color: 'red' })).toThrow();
 });
 
-it('stays inside the lasso selection, also when it grows under edges, and fills nothing outside it', async () => {
+it('stays inside the selection, also when it grows under edges, fades across a feather, and fills nothing outside', async () => {
   const paint: Layer = layer('paint', new Map());
-  const run = (command: Partial<FillCommand>) =>
+  const run = (command: Partial<FillCommand>, selection: SelectionMask) =>
     fillEdit.run(
       {
         layers: [paint],
         active: paint,
         readTile: async (pixels) => pixels as Uint8Array,
         linearBlending: false,
+        selection,
         state: { get: () => undefined, set: () => {} },
         floating: { show: () => {}, move: () => {}, clear: async () => {} }
       },
       { ...fillCommand(), source: 'layer', expand: 4, ...command }
     );
-  const points = [
+  const selection = polygonSelection([
     { x: 2, y: 2 },
     { x: 12, y: 2 },
     { x: 12, y: 8 },
     { x: 2, y: 8 }
-  ];
+  ]);
 
-  const inside = await run({ points, point: { x: 5, y: 5 } });
+  const inside = await run({ point: { x: 5, y: 5 } }, selection);
   expect(count(alphaMask(inside.changes[0]!.after as Uint8Array))).toBe(10 * 6);
-  expect((await run({ points, point: { x: 30, y: 30 } })).changes).toEqual([]);
+  expect((await run({ point: { x: 30, y: 30 } }, selection)).changes).toEqual([]);
+
+  // A feathered selection fills fully inside and partly across its edge.
+  const soft = await run({ point: { x: 20, y: 20 } }, featherSelection(polygonSelection([
+    { x: 10, y: 10 },
+    { x: 30, y: 10 },
+    { x: 30, y: 30 },
+    { x: 10, y: 30 }
+  ]), 4));
+  const pixels = soft.changes[0]!.after as Uint8Array;
+  expect(pixels[(20 * 256 + 20) * 4 + 3]).toBe(255);
+  expect(pixels[(20 * 256 + 10) * 4 + 3]).toBeGreaterThan(60);
+  expect(pixels[(20 * 256 + 10) * 4 + 3]).toBeLessThan(200);
 });
 
 function fillCommand(): FillCommand {

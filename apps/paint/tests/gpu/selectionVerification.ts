@@ -1,12 +1,21 @@
-import { tgpu } from 'typegpu';
-import { defaultCamera, worldToScreen, type Point } from '@app-game/paint-core/camera';
+import { defaultCamera, screenToWorld, worldToScreen, type Camera, type Point } from '@app-game/paint-core/camera';
 import { createDocument } from '@app-game/paint-core/document';
-import { createLassoOverlay } from '@app-game/paint-core/gpu/lassoOverlay';
 import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
-import { captureSelection, editSelection, pointInSelection, type SelectionStorage } from '@app-game/paint-core/selection';
+import { createSelectionOverlay } from '@app-game/paint-core/gpu/selectionOverlay';
+import { captureSelection, editSelection, type SelectionStorage } from '@app-game/paint-core/selection';
+import {
+  coverageAt,
+  emptySelection,
+  featherSelection,
+  invertSelection,
+  polygonSelection,
+  type SelectionMask,
+  type SelectionMode
+} from '@app-game/paint-core/selectionMask';
 import { snapshotDocument } from '@app-game/paint-core/storage';
 import { TILE_BYTES, unpackTile } from '@app-game/paint-core/tilePixels';
 import { createTileStore } from '@app-game/paint-core/tileStore';
+import { tgpu } from 'typegpu';
 
 /** Verifies shader pixels and large, disk-backed edits using a disposable canvas and database. */
 export async function verifySelection(report: (message: string) => void) {
@@ -41,12 +50,12 @@ export async function verifySelection(report: (message: string) => void) {
     };
     const selected = await captureSelection(
       document.active,
-      [
+      polygonSelection([
         { x: 0, y: 0 },
         { x: 5120, y: 0 },
         { x: 5120, y: 3840 },
         { x: 0, y: 3840 }
-      ],
+      ]),
       storage
     );
     assert(selected.tiles.size === 300, 'Large selection omitted occupied tiles');
@@ -101,7 +110,11 @@ export async function verifySelection(report: (message: string) => void) {
   report('ALL LASSO CHECKS PASSED');
 }
 
-/** Compare actual fragment alpha against the same even-odd mask used to edit document pixels. */
+/**
+ * Compares the outline the overlay draws with the edges of the expected selection: a shape preview by stencil parity
+ * on screen, the selection's tiles through the camera, both combined by each mode, a dragged selection, a feathered
+ * one and an inverted one; with rotated and mirrored cameras.
+ */
 async function verifyShader(report: (message: string) => void) {
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) throw new Error('WebGPU adapter unavailable');
@@ -109,7 +122,7 @@ async function verifyShader(report: (message: string) => void) {
   const root = tgpu.initFromDevice({ device });
   const errors: string[] = [];
   device.addEventListener('uncapturederror', (event) => errors.push(event.error.message));
-  const overlay = createLassoOverlay(root, 'rgba8unorm');
+  const overlay = createSelectionOverlay(root, 'rgba8unorm');
   const overlayTarget = overlay.target();
   const view = { width: 128, height: 128 };
   const target = device.createTexture({
@@ -137,6 +150,37 @@ async function verifyShader(report: (message: string) => void) {
       buffer.destroy();
     }
   };
+  /** Draws and counts the outline pixels that differ from the edges of `inside`, a test of screen pixels. */
+  const compare = async (camera: Camera, inside: (x: number, y: number) => boolean, what: string) => {
+    const pixels = await draw(0, camera);
+    assert(errors.length === 0, errors.join('\n'));
+    const at = (x: number, y: number) =>
+      inside(Math.max(0, Math.min(view.width - 1, x)), Math.max(0, Math.min(view.height - 1, y)));
+    let mismatch = 0,
+      edges = 0;
+    const samples: string[] = [];
+    for (let y = 0; y < view.height; y++)
+      for (let x = 0; x < view.width; x++) {
+        const expected = at(x, y) && [-1, 0, 1].some((dy) => [-1, 0, 1].some((dx) => !at(x + dx, y + dy)));
+        const actual = pixels[(y * view.width + x) * 4 + 3]! > 0;
+        if (actual) edges++;
+        if (actual !== expected) {
+          mismatch++;
+          if (samples.length < 12) samples.push(`${x},${y}:${expected ? 'E' : 'A'}`);
+        }
+      }
+    // Pixel centers exactly on an edge may round either way between the GPU and this test.
+    assert(
+      edges > 50 && mismatch <= Math.max(4, edges * 0.03),
+      `${what}: ${mismatch} pixels differ of ${edges} edges (${samples.join(' ')})`
+    );
+    return pixels;
+  };
+  /** Whether the screen pixel (x, y) shows a document point the selection `mask` covers at least half. */
+  const covered = (mask: SelectionMask, camera: Camera, x: number, y: number, offset = { x: 0, y: 0 }) => {
+    const point = screenToWorld({ x: x + 0.5, y: y + 0.5 }, camera, view);
+    return coverageAt(mask, point.x - offset.x, point.y - offset.y) >= 128;
+  };
   const polygons: Point[][] = [
     [
       { x: -60.2, y: -40.2 },
@@ -161,43 +205,80 @@ async function verifyShader(report: (message: string) => void) {
   try {
     for (const points of polygons)
       for (const mirrored of [false, true]) {
-        const camera = { ...defaultCamera(), angle: mirrored ? 0.3 : 0, mirrored, zoom: 0.85 };
-        overlay.set(points);
-        const pixels = await draw(0, camera);
-        assert(errors.length === 0, errors.join('\n'));
+        // A zoom that maps no screen pixel center exactly onto a document pixel edge, which either side may round.
+        const camera = { ...defaultCamera(), angle: mirrored ? 0.3 : 0, mirrored, zoom: 0.853 };
         const screen = points.map((point) => worldToScreen(point, camera, view));
-        const mask = (x: number, y: number) =>
-          pointInSelection(
-            { x: Math.max(0, Math.min(view.width - 1, x)) + 0.5, y: Math.max(0, Math.min(view.height - 1, y)) + 0.5 },
-            screen
-          );
-        let mismatch = 0,
-          edges = 0;
-        for (let y = 0; y < view.height; y++)
-          for (let x = 0; x < view.width; x++) {
-            const expected = mask(x, y) && [-1, 0, 1].some((dy) => [-1, 0, 1].some((dx) => !mask(x + dx, y + dy)));
-            const actual = pixels[(y * view.width + x) * 4 + 3]! > 0;
-            if (actual) edges++;
-            if (actual !== expected) mismatch++;
-          }
-        assert(
-          edges > 50 && mismatch <= 4,
-          `Lasso shader disagrees with pixel mask: ${mismatch} pixels, ${edges} edges`
-        );
+        overlay.set(emptySelection);
+        overlay.preview({ kind: 'shape', points, mode: 'replace' });
+        const pixels = await compare(camera, (x, y) => evenOdd({ x: x + 0.5, y: y + 0.5 }, screen), 'Shape preview');
         const animated = await draw(0.5, camera);
         assert(
           animated.some((value, i) => value !== pixels[i]),
-          'Lasso edge shader did not animate'
+          'Selection edge shader did not animate'
         );
+
+        const mask = polygonSelection(points);
+        overlay.preview(undefined);
+        overlay.set(mask);
+        await compare(camera, (x, y) => covered(mask, camera, x, y), 'Selection tiles');
       }
-    overlay.set([]);
+
+    // A shape combines with the selection on screen as the engine will combine it.
+    const camera = { ...defaultCamera(), angle: 0.4, zoom: 0.9 };
+    const base = polygonSelection(polygons[0]!);
+    const shape = polygons[1]!;
+    overlay.set(base);
+    // The shape being drawn is filled at screen pixels, the selection at document pixels.
+    const screenShape = shape.map((point) => worldToScreen(point, camera, view));
+    const combine: Record<Exclude<SelectionMode, 'replace'>, (a: boolean, b: boolean) => boolean> = {
+      add: (a, b) => a || b,
+      subtract: (a, b) => a && !b,
+      intersect: (a, b) => a && b
+    };
+    for (const mode of ['add', 'subtract', 'intersect'] as const) {
+      overlay.preview({ kind: 'shape', points: shape, mode });
+      await compare(
+        camera,
+        (x, y) => combine[mode](covered(base, camera, x, y), evenOdd({ x: x + 0.5, y: y + 0.5 }, screenShape)),
+        `Mode ${mode}`
+      );
+    }
+
+    overlay.preview({ kind: 'offset', offset: { x: 20, y: -10 } });
+    await compare(camera, (x, y) => covered(base, camera, x, y, { x: 20, y: -10 }), 'Dragged selection');
+    overlay.preview(undefined);
+    const feathered = featherSelection(base, 6);
+    overlay.set(feathered);
+    await compare(camera, (x, y) => covered(feathered, camera, x, y), 'Feathered selection');
+    const hole = invertSelection(base);
+    overlay.set(hole);
+    await compare(camera, (x, y) => covered(hole, camera, x, y), 'Inverted selection');
+
+    // A lasso just begun has fewer than three points and outlines nothing yet.
+    overlay.set(emptySelection);
+    overlay.preview({ kind: 'shape', points: shape.slice(0, 2), mode: 'replace' });
+    const begun = await draw(0);
+    assert(errors.length === 0, errors.join('\n'));
+    assert(
+      begun.every((value) => value === 0),
+      'A two-point shape drew an outline'
+    );
+    overlay.set(hole);
+    overlay.preview({ kind: 'hidden' });
+    const hidden = await draw(0);
+    assert(
+      hidden.every((value) => value === 0),
+      'A hidden selection still showed its outline'
+    );
+    overlay.preview(undefined);
+    overlay.set(emptySelection);
     const cleared = await draw(0);
     assert(
       cleared.every((value) => value === 0),
       'Deselect left a stale outline'
     );
     report(
-      'PASS: TypeGPU mask/edge shaders match concave, crossing, clipped, rotated and mirrored selections; animation and deselect work'
+      'PASS: TypeGPU selection outline matches shapes, tiles, modes, dragged, feathered and inverted selections, rotated and mirrored; animation, hiding and deselect work'
     );
     const canvas = new OffscreenCanvas(128, 128);
     const renderer = await createPaintRenderer(canvas, (message) => errors.push(message), { device });
@@ -212,7 +293,7 @@ async function verifyShader(report: (message: string) => void) {
         return cpu.getImageData(0, 0, 128, 128).data;
       };
       const baseline = await readCanvas();
-      renderer.setSelection(polygons[0]!, false);
+      renderer.setSelection(polygonSelection(polygons[0]!), false);
       await renderer.render(document.layers, defaultCamera(), view, 1);
       const selected = await readCanvas();
       assert(
@@ -225,7 +306,7 @@ async function verifyShader(report: (message: string) => void) {
         exported.every((value, i) => value === baseline[i]),
         'PNG export included the lasso'
       );
-      renderer.setSelection([]);
+      renderer.setSelection(emptySelection);
       await renderer.render(document.layers, defaultCamera(), view, 1);
       const empty = await readCanvas();
       assert(
@@ -245,6 +326,20 @@ async function verifyShader(report: (message: string) => void) {
     root.destroy();
     device.destroy();
   }
+}
+
+/** Even-odd hit test of a point against a closed polygon. */
+function evenOdd(point: Point, points: readonly Point[]) {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[i]!,
+      b = points[j]!;
+    if (a.y > point.y !== b.y > point.y && point.x < a.x + ((point.y - a.y) * (b.x - a.x)) / (b.y - a.y)) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
 }
 
 function assert(value: boolean, message: string): asserts value {

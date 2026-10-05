@@ -1,0 +1,30 @@
+/* Text buttons and fields in the selection options row. */
+[role='toolbar'] > button.textOption:is(button) {
+  width: auto;
+  min-width: 38px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  color: var(--muted);
+  white-space: nowrap;
+
+  input[type='number'] {
+    width: 52px;
+    height: 28px;
+    padding: 0 4px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink);
+  }
+
+  input[type='range'] {
+    width: 96px;
+  }
+}

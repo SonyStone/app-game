@@ -10,6 +10,8 @@ import { symmetryFeature } from './composition/symmetryFeature';
 import { createDocument } from './document';
 import { createPaintRuntime } from './paintRuntime';
 import type { PaintEvent } from './protocol';
+import { polygonSelection, selectionBounds, type SelectionMask } from './selectionMask';
+import { encodeDocument, snapshotDocument } from './storage';
 import { defaultPaintSymmetry } from './symmetry';
 import { TILE_BYTES, unpackTile, type TileData } from './tilePixels';
 
@@ -285,6 +287,60 @@ it('reports the layers with paint in the view and in watched regions', async () 
   expect(state.type === 'state' && state.layersInRegions).toEqual({ far: [document.active.id] });
   expect(state.type === 'state' && state.layersInView).toEqual([]);
   expect(state.type === 'state' && state.document.layers[0]!.tileCount).toBe(1);
+});
+
+it('keeps the selection that edits return, shows it, hands it to the next edit and drops it for an opened drawing', async () => {
+  const select = defineDocumentEdit({
+    id: 'select',
+    parse: (input: unknown) => input as number,
+    async run(_, side) {
+      return {
+        changes: [],
+        selection: polygonSelection([
+          { x: 0, y: 0 },
+          { x: side, y: 0 },
+          { x: side, y: side },
+          { x: 0, y: side }
+        ])
+      };
+    }
+  });
+  const seen = defineDocumentEdit({
+    id: 'seen',
+    parse: (input: unknown) => input,
+    async run({ selection }) {
+      return { changes: [], reply: selectionBounds(selection) };
+    }
+  });
+  const { runtime, renderer, events, document, waitFor } = await start({ edits: [select, seen] });
+  const selections = () => events.filter((event) => event.type === 'selection');
+  runtime.send(select.command(10));
+  await waitFor(() => selections().length === 1);
+  expect(selections()[0]).toMatchObject({
+    selection: { selected: true, inverted: false, bounds: { left: 0, top: 0, right: 10, bottom: 10 } },
+    hasClipboard: false
+  });
+  const shown = renderer.setSelection.mock.lastCall![0] as SelectionMask;
+  expect(selectionBounds(shown)).toEqual({ left: 0, top: 0, right: 10, bottom: 10 });
+  // A selection change is not an undo step.
+  expect(document.state().canUndo).toBe(false);
+
+  runtime.send(seen.command(undefined, 'r'));
+  await waitFor(() => events.some((event) => event.type === 'edited'));
+  expect(events.find((event) => event.type === 'edited')).toMatchObject({
+    result: { ok: true, value: { left: 0, top: 0, right: 10, bottom: 10 } }
+  });
+
+  runtime.send({ type: 'selection-view', animate: false, preview: { kind: 'hidden' } });
+  expect(renderer.previewSelection).toHaveBeenLastCalledWith({ kind: 'hidden' });
+
+  const opened = createDocument();
+  runtime.send({
+    type: 'import',
+    text: encodeDocument(snapshotDocument(opened.layers, opened.active.id, defaultCamera()))
+  });
+  await waitFor(() => selections().length === 2);
+  expect(selections()[1]).toMatchObject({ selection: { selected: false } });
 });
 
 /** Disposes a runtime gracefully, saving its document. */

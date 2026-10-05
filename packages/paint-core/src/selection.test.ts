@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Point } from './camera';
 import { createDocument, type Layer } from './document';
-import {
-  captureSelection,
-  editSelection,
-  pointInSelection,
-  selectionTileMask,
-  type SelectionStorage
-} from './selection';
+import { captureSelection, editSelection, type SelectionStorage } from './selection';
+import { coverageAt, featherSelection, polygonSelection, type SelectionMask } from './selectionMask';
 import { TILE_BYTES, unpackTile, type TileData } from './tilePixels';
 
 describe('lasso raster edits', () => {
@@ -25,10 +19,13 @@ describe('lasso raster edits', () => {
       { x: 1, y: 3 },
       { x: 0, y: 3 }
     ];
-    const selected = await captureSelection(source, polygon, { ...storage, read: async () => pixels });
+    const selected = await captureSelection(source, polygonSelection(polygon), {
+      ...storage,
+      read: async () => pixels
+    });
     expect(unpackTile(selected.tiles.get('0,0')!).slice(0, 4)).toEqual(new Uint8Array([60, 30, 0, 128]));
     expect(unpackTile(selected.tiles.get('0,0')!)[(2 * 256 + 2) * 4 + 3]).toBe(0);
-    expect(pointInSelection({ x: 2.5, y: 2.5 }, polygon)).toBe(false);
+    expect(coverageAt(selected.mask, 2, 2)).toBe(0);
   });
   it('moves overlapping pixels across zero and tile boundaries without smearing, then undoes exactly', async () => {
     const doc = createDocument();
@@ -177,13 +174,13 @@ const storage: SelectionStorage = { read: async (data) => unpackTile(data), writ
 function layer(): Layer {
   return { id: 'source', name: 'Source', visible: true, opacity: 1, blend: 'normal', tiles: new Map() };
 }
-function rectangle(left: number, top: number, right: number, bottom: number): Point[] {
-  return [
+function rectangle(left: number, top: number, right: number, bottom: number): SelectionMask {
+  return polygonSelection([
     { x: left, y: top },
     { x: right, y: top },
     { x: right, y: bottom },
     { x: left, y: bottom }
-  ];
+  ]);
 }
 function pixel(layer: Layer, x: number, y: number) {
   const tx = Math.floor(x / 256),
@@ -193,23 +190,22 @@ function pixel(layer: Layer, x: number, y: number) {
   return data ? [...unpackTile(data).slice(at, at + 4)] : [0, 0, 0, 0];
 }
 
-it('masks each tile by the selection at pixel centers: none, all or some of its pixels', () => {
-  // A square from (10, 10) to (300, 300) covers tile 0,0 from pixel 10 on and tile 1,1 up to pixel 43.
-  const square = [
-    { x: 10, y: 10 },
-    { x: 300, y: 10 },
-    { x: 300, y: 300 },
-    { x: 10, y: 300 }
-  ];
-  expect(selectionTileMask(square, 3, 3).kind).toBe('outside');
-  const corner = selectionTileMask(square, 0, 0);
-  expect(corner.kind).toBe('partial');
-  if (corner.kind === 'partial') {
-    expect(corner.mask[9 * 256 + 50]).toBe(0);
-    expect(corner.mask[10 * 256 + 10]).toBe(255);
-    expect(corner.mask[10 * 256 + 9]).toBe(0);
-  }
+it('takes and erases pixels in proportion to a feathered selection', async () => {
+  const doc = createDocument();
+  const pixels = new Uint8Array(TILE_BYTES).fill(200);
+  doc.commit([{ layerId: doc.active.id, key: '0,0', before: undefined, after: pixels }]);
+  const soft = featherSelection(rectangle(0, 0, 100, 256), 8);
+  const edge = coverageAt(soft, 100, 50);
+  expect(edge).toBeGreaterThan(0);
+  expect(edge).toBeLessThan(255);
+  const selected = await captureSelection(doc.active, soft, storage);
+  const taken = unpackTile(selected.tiles.get('0,0')!);
+  expect(taken[(50 * 256 + 10) * 4 + 3]).toBe(200);
+  expect(taken[(50 * 256 + 100) * 4 + 3]).toBe(Math.round((200 * edge) / 255));
+  expect(taken[(50 * 256 + 200) * 4 + 3]).toBe(0);
 
-  const big = square.map(({ x, y }) => ({ x: x * 4 - 100, y: y * 4 - 100 }));
-  expect(selectionTileMask(big, 1, 1).kind).toBe('inside');
+  doc.commit(await editSelection({ selection: selected, source: doc.active, storage }));
+  expect(pixel(doc.active, 10, 50)).toEqual([0, 0, 0, 0]);
+  expect(pixel(doc.active, 100, 50)[3]).toBe(Math.round((200 * (255 - edge)) / 255));
+  expect(pixel(doc.active, 200, 50)).toEqual([200, 200, 200, 200]);
 });

@@ -17,8 +17,8 @@ export function createGradient(options: {
   colors: () => { foreground: string; background: string };
   /** The view's bounds in document pixels, covered without a selection. */
   area: () => GradientCommand['area'];
-  /** The lasso outline limiting the gradient; fewer than three points cover the view. */
-  selection: () => readonly Point[];
+  /** Whether anything is selected; the engine keeps the gradient inside the selection. */
+  selected: () => boolean;
   /** Whether a gradient can be drawn now: the engine accepts edits and no stroke or selection edit runs. */
   canDraw: () => boolean;
   send: (command: Extract<PaintCommand, { type: 'edit' }>) => void;
@@ -51,17 +51,15 @@ export function createGradient(options: {
      * Does nothing without a selection or while drawing is not possible.
      */
     fillSelection() {
-      const points = options.selection();
-      if (points.length < 3 || !options.canDraw()) {
+      if (!options.selected() || !options.canDraw()) {
         return;
       }
 
       const color = options.colors().foreground;
-      const start = points[0]!;
       options.send(
         gradientEdit.command({
-          start,
-          end: { x: start.x + 1, y: start.y },
+          start: { x: 0, y: 0 },
+          end: { x: 1, y: 0 },
           kind: 'linear',
           repeat: 'none',
           stops: [
@@ -70,8 +68,7 @@ export function createGradient(options: {
           ],
           opacity: 1,
           mixing: currentSettings().mixing,
-          area: options.area(),
-          points: [...points]
+          area: options.area()
         })
       );
     },
@@ -107,7 +104,6 @@ export function createGradient(options: {
   function command(start: Point, end: Point): GradientCommand {
     const { kind, repeat, stops, opacity, mixing } = currentSettings();
     const colors = options.colors();
-    const points = options.selection();
     return {
       start,
       end,
@@ -116,8 +112,7 @@ export function createGradient(options: {
       stops: stops.map((stop) => ({ ...stop, color: resolveStop(stop.color, colors) })),
       opacity,
       mixing,
-      area: options.area(),
-      ...(points.length >= 3 ? { points: [...points] } : {})
+      area: options.area()
     };
   }
 }

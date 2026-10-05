@@ -63,7 +63,7 @@ it('turns settings saved before stops into stops and resolves stops when drawing
       active: () => true,
       colors: () => ({ foreground: '#112233', background: '#445566' }),
       area: () => ({ left: 0, top: 0, width: 100, height: 100 }),
-      selection: () => [],
+      selected: () => false,
       canDraw: () => true,
       send: (command) => sent.push(command)
     })

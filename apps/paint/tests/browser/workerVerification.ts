@@ -100,13 +100,19 @@ export async function verifyWorker(report: (message: string) => void) {
       send({
         type: 'selection',
         action,
-        points,
         offset,
         layerId: latest!.document.activeId,
         revision: latest!.document.revision
       });
       await done;
     };
+    /** Selects the square through the selection tools' edit; pixel commands act on the engine's selection. */
+    const select = async () => {
+      const done = wait((e) => e.type === 'selection');
+      send({ type: 'edit', edit: 'select', command: { op: 'shape', points, mode: 'replace' } });
+      await done;
+    };
+    await select();
     await selection('copy');
     await selection('move', { x: 256, y: -256 });
     const moved = await readPaintFile(await download());
@@ -122,6 +128,8 @@ export async function verifyWorker(report: (message: string) => void) {
     send({ type: 'undo' });
     // Downloads run after prior edits in the worker queue.
     assert(await equalDocuments(await download(), original), 'Selection move undo did not restore the source');
+    // The selection moved with the pixels; undo restores pixels, not the selection.
+    await select();
     await selection('cut');
     assert(latest!.document.tileCount === 0, 'Cut left selected pixels behind');
     await selection('paste');

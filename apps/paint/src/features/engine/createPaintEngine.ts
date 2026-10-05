@@ -4,6 +4,7 @@ import type { Camera, Point } from '@app-game/paint-core/camera';
 import type { ColorSample, PickedColor } from '@app-game/paint-core/colorSample';
 import { createDocument } from '@app-game/paint-core/document';
 import type { CheckpointedEvent, PaintEvent, SelectionEvent, StateEvent } from '@app-game/paint-core/protocol';
+import { emptySummary } from '@app-game/paint-core/selectionMask';
 import { gpuError } from '@app-game/solid-gpu/errors';
 import type { WorkerFailure } from '@app-game/solid-gpu/worker/workerProtocol';
 import { createEventListener } from '@solid-primitives/event-listener';
@@ -38,7 +39,7 @@ export function createPaintEngine(options: {
   settings: { debug: Accessor<boolean>; liveTail: Accessor<boolean>; adaptiveQuality: Accessor<boolean> };
   /** Reports engine failures; `undefined` clears the previous one when a new connection starts. */
   onError: (error: PaintError | undefined) => void;
-  /** Receives the engine's lasso outline and clipboard state, and an empty selection when an engine is replaced. */
+  /** Receives the engine's selection summary and clipboard state, and an empty selection when an engine is replaced. */
   onSelection: (event: SelectionEvent) => void;
   /**
    * Runs when a connection reports `ready`, before `ready` becomes true: for example re-uploading the selected brush
@@ -651,7 +652,7 @@ const switchTimeoutMs = 60_000;
 const disposeGraceMs = 30_000;
 
 /** Selection reset sent to the editor when an engine is replaced or fails; the clipboard belongs to the engine. */
-const emptySelection: SelectionEvent = { type: 'selection', points: [], hasClipboard: false };
+const emptySelection: SelectionEvent = { type: 'selection', selection: emptySummary, hasClipboard: false };
 
 /** `?paintThread=main` selects the main-thread engine; the worker is the default. */
 function initialMode(): ExecutionMode {

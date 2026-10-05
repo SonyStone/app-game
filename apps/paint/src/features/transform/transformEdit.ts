@@ -3,14 +3,22 @@ import type { Point } from '@app-game/paint-core/camera';
 import { defineDocumentEdit, type DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
 import type { TileChange } from '@app-game/paint-core/document';
 import { captureSelection } from '@app-game/paint-core/selection';
+import {
+  areaCoverage,
+  isSelected,
+  selectionBounds,
+  tileCoverage,
+  type SelectionMask
+} from '@app-game/paint-core/selectionMask';
 import { TILE_BYTES, type TileData } from '@app-game/paint-core/tilePixels';
 import { z } from 'zod';
 import { applyProjective, invertProjective, type Projective } from './projective';
 import { maxWarpCells, warpCells, warpNumbers, warpTriangles, type Warp } from './warp';
 
 /**
- * The engine half of the transform: moves, scales, rotates, flips, distorts in perspective and warps the pixels of a lasso
- * selection, or of the whole active layer, as one undo step. `begin` captures the pixels, lifts them off the layer as floating pixels that the
+ * The engine half of the transform: moves, scales, rotates, flips, distorts in perspective and warps the pixels of the
+ * selection, taken in proportion to its coverage, or of the whole active layer without one, as one undo step. The
+ * selection moves with its pixels. `begin` captures the pixels, lifts them off the layer as floating pixels that the
  * renderer draws each frame, and replies with their bounds; each `update` only moves the floating pixels, so the
  * document stays unchanged until `end` draws the result into the layer, and `cancel` leaves it untouched. The result
  * is resampled bicubically in premultiplied color, or takes the nearest pixel for pixel art. Runs in the engine's realm.
@@ -21,7 +29,7 @@ export const transformEdit = defineDocumentEdit({
   async run(context, command) {
     const session = context.state.get() as TransformSession | undefined;
     if (command.phase === 'begin') {
-      const started = await begin(context, command.points);
+      const started = await begin(context);
       context.state.set(started);
       const { layerId, bounds, pixels } = started;
       context.floating.show({ layerId, bounds, pixels, matrix: identity, interpolation: started.interpolation });
@@ -51,7 +59,8 @@ export const transformEdit = defineDocumentEdit({
       return { changes: [] };
     }
 
-    return { changes: await transformed(context, session) };
+    const changes = await transformed(context, session);
+    return session.selection ? { changes, selection: transformedSelection(session) } : { changes };
   }
 });
 
@@ -66,8 +75,8 @@ export const maxTransformSide = 4096;
 
 const point = z.object({ x: z.number().finite(), y: z.number().finite() });
 const transformCommandSchema = z.discriminatedUnion('phase', [
-  /** Captures the pixels inside `points`, a closed lasso, or the whole active layer without them. */
-  z.object({ phase: z.literal('begin'), points: z.array(point).min(3).max(4096).optional() }),
+  /** Captures the pixels of the selection, or of the whole active layer without one. */
+  z.object({ phase: z.literal('begin') }),
   z.object({
     phase: z.literal('update'),
     /** `smooth` resamples bilinearly; `pixels` takes the nearest pixel, keeping hard edges for pixel art. */
@@ -109,17 +118,20 @@ type TransformSession = {
   matrix: Projective;
   warp?: Warp;
   interpolation: 'smooth' | 'pixels';
+  /** The selection whose pixels are transformed; the whole layer's without it. */
+  selection?: SelectionMask;
 };
 
-/** Captures the pixels inside `points`, or the whole active layer, and their bounds. */
-async function begin(context: DocumentEditContext, points: Point[] | undefined): Promise<TransformSession> {
+/** Captures the pixels of the selection, or the whole active layer, and their bounds. */
+async function begin(context: DocumentEditContext): Promise<TransformSession> {
   const layer = context.active;
   if (!layer.visible) {
     throw new Error('Show the active layer before transforming it.');
   }
 
-  const source = points
-    ? (await captureSelection(layer, points, { read: context.readTile, write: async (pixels) => pixels })).tiles
+  const selection = isSelected(context.selection) ? context.selection : undefined;
+  const source = selection
+    ? (await captureSelection(layer, selection, { read: context.readTile, write: async (pixels) => pixels })).tiles
     : layer.tiles;
   const tiles = new Map<string, Uint8Array>();
   for (const [key, data] of source) {
@@ -128,7 +140,7 @@ async function begin(context: DocumentEditContext, points: Point[] | undefined):
 
   const bounds = contentBounds(tiles);
   if (!bounds) {
-    throw new Error(points ? 'The selection contains no pixels on the active layer.' : 'The active layer is empty.');
+    throw new Error(selection ? 'The selection contains no pixels on the active layer.' : 'The active layer is empty.');
   }
 
   const width = bounds.right - bounds.left,
@@ -154,7 +166,8 @@ async function begin(context: DocumentEditContext, points: Point[] | undefined):
     bounds,
     pixels,
     matrix: identity,
-    interpolation: 'smooth'
+    interpolation: 'smooth',
+    ...(selection ? { selection } : {})
   };
 }
 
@@ -181,13 +194,21 @@ async function transformed(context: DocumentEditContext, session: TransformSessi
     const result = before ? new Uint8Array(await context.readTile(before)) : new Uint8Array(TILE_BYTES);
     const [tx, ty] = origin(key);
     let touched = false;
-    // Erase the pixels that move.
+    // Erase the pixels that move, as much as the selection took of them.
+    const coverage = session.selection && tileCoverage(session.selection, tx / TILE_SIZE, ty / TILE_SIZE);
     for (let y = Math.max(ty, bounds.top); y < Math.min(ty + TILE_SIZE, bounds.bottom); y++) {
       for (let x = Math.max(tx, bounds.left); x < Math.min(tx + TILE_SIZE, bounds.right); x++) {
-        if (pixels[((y - bounds.top) * width + x - bounds.left) * 4 + 3]) {
-          result.fill(0, ((y - ty) * TILE_SIZE + x - tx) * 4, ((y - ty) * TILE_SIZE + x - tx) * 4 + 4);
-          touched = true;
+        if (!pixels[((y - bounds.top) * width + x - bounds.left) * 4 + 3]) {
+          continue;
         }
+
+        const at = ((y - ty) * TILE_SIZE + x - tx) * 4;
+        const kept = coverage?.kind === 'partial' ? 255 - coverage.coverage[at / 4]! : 0;
+        for (let channel = 0; channel < 4; channel++) {
+          result[at + channel] = Math.round((result[at + channel]! * kept) / 255);
+        }
+
+        touched = true;
       }
     }
 
@@ -199,6 +220,45 @@ async function transformed(context: DocumentEditContext, session: TransformSessi
   }
 
   return changes;
+}
+
+/**
+ * The session's selection moved as its pixels were: its coverage within its bounds, or within the pixels' bounds for a
+ * warp, for a selection without bounds or for one larger than {@link maxTransformSide}, drawn through the same
+ * placement and resampling.
+ */
+function transformedSelection(session: TransformSession): SelectionMask {
+  const selected = selectionBounds(session.selection!);
+  const region =
+    !session.warp &&
+    selected &&
+    selected.right - selected.left <= maxTransformSide &&
+    selected.bottom - selected.top <= maxTransformSide
+      ? selected
+      : session.bounds;
+  const width = region.right - region.left,
+    height = region.bottom - region.top;
+  const coverage = areaCoverage(session.selection!, { left: region.left, top: region.top, width, height });
+  const pixels = new Uint8Array(width * height * 4);
+  coverage.forEach((value, index) => pixels.fill(value, index * 4, index * 4 + 4));
+  const source = { pixels, width, height, sampleAt: session.interpolation === 'pixels' ? nearest : bicubic };
+  const placement = session.warp ? warpPlacement(session.warp, region) : projectivePlacement(session.matrix, region);
+  const tiles = new Map<string, Uint8Array>();
+  for (const key of tileKeys(placement.target)) {
+    const [tx, ty] = origin(key);
+    const result = new Uint8Array(TILE_BYTES);
+    if (!placement.draw(result, tx, ty, source)) {
+      continue;
+    }
+
+    const tile = new Uint8Array(TILE_SIZE * TILE_SIZE);
+    tile.forEach((_, index) => (tile[index] = result[index * 4 + 3]!));
+    if (tile.some((value) => value > 0)) {
+      tiles.set(key, tile);
+    }
+  }
+
+  return { outside: 0, tiles };
 }
 
 /** The lifted pixels and how to sample them. */

@@ -1,15 +1,15 @@
-import { defineDocumentEdit, type DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
-import type { Layer, TileChange } from '@app-game/paint-core/document';
-import { mergeTilePixels } from '@app-game/paint-core/layerMerge';
+import { defineDocumentEdit } from '@app-game/paint-core/composition/documentEdit';
+import type { TileChange } from '@app-game/paint-core/document';
+import { areaCoverage, isSelected } from '@app-game/paint-core/selectionMask';
 import { z } from 'zod';
-import { polygonMask } from '../../shared/polygonSpans';
-import { areaTiles, expandMask, fillTile, floodMask, smoothMask, type FillArea } from './floodFill';
+import { areaTiles, expandMask, fillTile, floodMask, smoothMask } from '../../shared/floodFill';
+import { areaAround, reachesLimit, sampleArea } from '../../shared/sampleArea';
 
 /**
  * The engine half of the bucket fill: fills the connected area around a point of similar color with a color, in the
  * active layer, as one undo step. Which pixels are similar is decided on the active layer or on all visible layers
- * composited, within the given area of the view, since the canvas has no edges, and within the lasso selection when
- * its `points` are given. At most {@link maxFillSide} pixels
+ * composited, within the given area of the view, since the canvas has no edges, and within the selection, if any, in
+ * proportion to its coverage. At most {@link maxFillSide} pixels
  * around the point on each side are examined: a fill that would continue past that limit inside the view is refused
  * rather than cut off. Runs in the drawing engine's realm.
  */
@@ -22,13 +22,13 @@ export const fillEdit = defineDocumentEdit({
     }
 
     const point = { x: Math.floor(command.point.x), y: Math.floor(command.point.y) };
-    const area = fillArea(command.area, point);
+    const area = areaAround(command.area, point, maxFillSide);
     if (!area) {
       return { changes: [] };
     }
 
-    const sampled = await sampleTiles(context, area, command.source);
-    const allowed = command.points && polygonMask(command.points, area);
+    const sampled = await sampleArea(context, area, command.source);
+    const allowed = isSelected(context.selection) ? areaCoverage(context.selection, area) : undefined;
     const flooded = floodMask(area, sampled, point, command.tolerance, allowed, command.gap);
     if (reachesLimit(flooded, area, command.area)) {
       throw new Error('This area is too large to fill at this zoom. Zoom in and try again.');
@@ -36,11 +36,11 @@ export const fillEdit = defineDocumentEdit({
 
     const grown = expandMask(flooded, area.width, area.height, command.expand);
     const mask = command.antialias ? smoothMask(grown, area.width, area.height) : grown;
-    // Growing under line edges and smoothing stop at the selection too.
+    // Growing under line edges and smoothing stop at the selection too, and fade across its soft edges.
     if (allowed) {
       mask.forEach((value, index) => {
-        if (value && !allowed[index]) {
-          mask[index] = 0;
+        if (value) {
+          mask[index] = withCoverage(value, allowed[index]!);
         }
       });
     }
@@ -92,106 +92,20 @@ const fillCommandSchema = z.object({
   /** Softens the fill's edge by a pixel, as Photoshop's Anti-alias does; see `smoothMask`. */
   antialias: z.boolean().default(false),
   /** Pixels compared: the active layer's, or all visible layers composited. */
-  source: z.enum(['layer', 'all']),
-  /** A closed lasso outline the fill stays inside, by the even-odd rule; a click outside it fills nothing. */
-  points: z
-    .array(z.object({ x: z.number().finite(), y: z.number().finite() }))
-    .min(3)
-    .max(4096)
-    .optional()
+  source: z.enum(['layer', 'all'])
 });
 
-/** The whole-pixel area to examine: `area` around `point`, at most `maxFillSide` per side; none outside `area`. */
-function fillArea(area: FillCommand['area'], point: { x: number; y: number }): FillArea | undefined {
-  const left = Math.max(Math.floor(area.left), point.x - maxFillSide / 2);
-  const top = Math.max(Math.floor(area.top), point.y - maxFillSide / 2);
-  const right = Math.min(Math.ceil(area.left + area.width), left + maxFillSide);
-  const bottom = Math.min(Math.ceil(area.top + area.height), top + maxFillSide);
-  if (point.x < left || point.y < top || point.x >= right || point.y >= bottom) {
-    return undefined;
-  }
-
-  return { left, top, width: right - left, height: bottom - top };
-}
-
-/** Whether the filled mask touches a side where `maxFillSide`, not the view, cut the area. */
-function reachesLimit(mask: Uint8Array, area: FillArea, view: FillCommand['area']): boolean {
-  const { left, top, width, height } = area;
-  const touches = (fromX: number, fromY: number, stepX: number, stepY: number, length: number) => {
-    for (let i = 0; i < length; i++) {
-      if (mask[(fromY + i * stepY) * width + fromX + i * stepX]) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
-  return (
-    (left > Math.floor(view.left) && touches(0, 0, 0, 1, height)) ||
-    (top > Math.floor(view.top) && touches(0, 0, 1, 0, width)) ||
-    (left + width < Math.ceil(view.left + view.width) && touches(width - 1, 0, 0, 1, height)) ||
-    (top + height < Math.ceil(view.top + view.height) && touches(0, height - 1, 1, 0, width))
-  );
-}
-
 /**
- * Unpacked tiles of the area: the active layer's, or the visible layers composited bottom to top as displayed, with
- * clipped layers clipped to their base, in linear light when the document blends so.
+ * A fill mask value (1 full, 2–255 partial; see `fillTile`) scaled by a selection coverage from 0 to 255, in the same
+ * encoding; 0 where nothing is left.
  */
-async function sampleTiles(
-  context: DocumentEditContext,
-  area: FillArea,
-  source: FillCommand['source']
-): Promise<Map<string, Uint8Array>> {
-  const tiles = new Map<string, Uint8Array>();
-  const read = async (layer: Layer, key: string) => {
-    const stored = layer.tiles.get(key);
-    return stored && (await context.readTile(stored));
-  };
-  for (const key of areaTiles(area)) {
-    if (source === 'layer') {
-      const pixels = await read(context.active, key);
-      if (pixels) {
-        tiles.set(key, pixels);
-      }
-
-      continue;
-    }
-
-    let composite: Uint8Array | undefined;
-    /** The clipping base of the layers that follow, as for the display; `hidden` hides them. */
-    let base: { pixels: Uint8Array | undefined } | 'hidden' | undefined;
-    for (const layer of context.layers) {
-      const clipped = !!layer.clipping && base !== undefined;
-      const shown = layer.visible && layer.opacity > 0;
-      if (!clipped) {
-        base = shown ? { pixels: await read(layer, key) } : 'hidden';
-      }
-
-      if (!shown || base === 'hidden') {
-        continue;
-      }
-
-      const pixels = clipped ? await read(layer, key) : base!.pixels;
-      if (pixels) {
-        composite = mergeTilePixels(
-          composite,
-          pixels,
-          layer.blend,
-          layer.opacity,
-          clipped ? { base: base!.pixels } : undefined,
-          context.linearBlending
-        );
-      }
-    }
-
-    if (composite) {
-      tiles.set(key, composite);
-    }
+function withCoverage(value: number, coverage: number) {
+  const amount = ((value === 1 ? 255 : value) * coverage) / 255;
+  if (amount >= 254.5) {
+    return 1;
   }
 
-  return tiles;
+  return amount < 1.5 ? 0 : Math.round(amount);
 }
 
 function parseColor(hex: string): [number, number, number] {
