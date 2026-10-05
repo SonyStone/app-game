@@ -5,35 +5,29 @@ import { normalizeStrokeSettings } from './strokeSettings';
 import { interpolateTabletAxes } from './tabletAxes';
 
 /**
- * A time-based stabilizer after Paint Tool SAI's: the pen position is resampled at a fixed rate and each output point
- * is a Gaussian-weighted average of the latest ticks, newest weighted most. Because ticks continue while the pen
- * holds still (`idle`), the line keeps closing in on the pen, which a filter of input events alone cannot do; how far
- * it trails grows with `stroke.stabilizer`. On a fast stroke the average would trail far behind and cut across the
- * pen's arcs, so beyond {@link lagPerLevel} screen pixels per level the line is pulled along behind the pen like a
- * string instead, taking the pressure the pen had there; see `follow`. Lifting the pen draws the rest of the way to
- * it unless `stroke.catchUp` is off: as one arc when the rest of the pen's path is one plain bend, else along that
- * path averaged over a window narrowing to where the pen lifted, eased onto from the line's heading; a hook aside as
- * the pen eases off to lift is left out, the line ending along its heading, tapering. Pressure is calibrated like
- * Leonardo's filter. `zoom` is the document-to-screen scale of the view.
+ * Paint Tool SAI 2's stroke stabilizer, ported from the routines recovered from its 2020-11-28 build
+ * (`paint-tool-sai-analysis/stylus-and-stabilization.md`), in its normal mode. Each pen sample is one filter update:
+ * levels 0 to 15 average the latest 1 to 16 samples equally, S-1 to S-7 average the latest 15 and then average that
+ * with their own latest outputs (`createSaiFilter`). Before the filter, a pen step much longer than the one before it
+ * is split along the circle through the last three samples, as SAI corrects uneven tablet packets; after it, cubic
+ * Bézier curves join the filtered points. A pen's pressure starts from zero and over a longer window, so strokes ease
+ * in; lifting the pen finishes the line toward the pen with its pressure tapering to zero. `stroke.stabilizer` is the
+ * level, 0 to 15 or 16 to 22 for S-1 to S-7; `zoom` is the document-to-screen scale, as SAI corrects packets in screen
+ * pixels. While the pen rests, the latest sample keeps being filtered at the pen's rate (`idle`), as tablets keep
+ * reporting a pen held still. Pressure is calibrated like Leonardo's filter.
  */
 export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcessor {
   const settings = normalizeStrokeSettings(brush.stroke);
-  /** The farthest the line trails the pen, in document pixels; see {@link lagPerLevel}. */
-  const maxLag = (settings.stabilizer * lagPerLevel) / Math.max(1e-6, zoom);
-  const size = settings.stabilizer * ticksPerLevel;
-  const weights = Array.from({ length: size }, (_, age) => Math.exp(-((age / (size / 2)) ** 2)));
-  /** The standard deviation of `weights`, in ticks. */
-  const sigma = size / (2 * Math.SQRT2);
-  /** Pen positions at the latest ticks, newest last. */
-  const ticks: Sample[] = [];
-  let clock = 0;
-  let previous: Sample | undefined;
-  let latest: Sample | undefined;
-  let output: Sample | undefined;
-  /** Whether the line is pulled along behind the pen; see `follow`. */
-  let roped = false;
-  /** The output before `output`, for the line's heading when the pen lifts. */
-  let beforeOutput: Sample | undefined;
+  const code = saiCode(settings.stabilizer);
+  let filter: SaiFilter | undefined;
+  /** Pen samples before the filter, newest last: the last three, for the packet correction. */
+  const recent: Sample[] = [];
+  /** Filter outputs, newest last, with the calibrated pressure; see `curve`. */
+  const filtered: Sample[] = [];
+  const curve = createCurve();
+  let tablet = false;
+  let interval = defaultInterval;
+  let idleTime = 0;
   let finished = false;
 
   return {
@@ -49,273 +43,147 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
         }
 
         const current = { ...sample, pressure: Math.max(0, Math.min(1, sample.pressure)) };
+        const previous = recent.at(-1);
         if (!previous) {
-          // The stroke starts exactly where the pen touched.
-          clock = current.time;
-          ticks.push(...Array<Sample>(size).fill(current));
-          result.push(emit());
+          tablet = current.pointerType === 'pen';
+          filter = createSaiFilter(code, current, tablet);
+          result.push(...emit(filter.initial));
         } else {
-          while (clock + tickMs <= current.time) {
-            clock += tickMs;
-            const span = current.time - previous.time;
-            result.push(tick(span > 0 ? between(previous, current, (clock - previous.time) / span) : current));
+          // A pen resting on the canvas at zero pressure adds nothing, as in SAI.
+          if (tablet && current.x === previous.x && current.y === previous.y && current.pressure === 0) {
+            continue;
           }
+
+          interval = recentInterval(previous, current, interval);
+          for (const inserted of evenOut(recent.at(-2), previous, current, zoom)) {
+            result.push(...emit(filter!.update(inserted)));
+          }
+
+          result.push(...emit(filter!.update(current)));
         }
 
-        previous = latest = current;
+        recent.push(current);
+        if (recent.length > 3) {
+          recent.shift();
+        }
+
+        idleTime = 0;
       }
 
       return result;
     },
-    /** The stabilized line is drawn as it is; a tail to the raw pen would show the jitter it removes. */
-    preview: () => [],
-    /** Keeps closing in on a pen held still; returns nothing once the line has reached it. */
+    /** The line on from the last curve drawn to the latest filtered point, which the next curve replaces. */
+    preview: () => {
+      const latest = filtered.at(-1);
+      return latest && curve.pending() ? [latest] : [];
+    },
+    /** Filters the latest sample again at the pen's rate while it rests; nothing once the line has reached it. */
     idle(elapsedMs) {
-      if (finished || !latest || !Number.isFinite(elapsedMs) || reached()) {
+      const latest = recent.at(-1);
+      if (finished || !filter || !latest || !Number.isFinite(elapsedMs) || reached(latest)) {
         return [];
       }
 
       const result: Sample[] = [];
-      const until = clock + elapsedMs;
-      while (clock + tickMs <= until) {
-        clock += tickMs;
-        result.push(tick({ ...latest, time: clock }));
+      idleTime += elapsedMs;
+      while (idleTime >= interval) {
+        idleTime -= interval;
+        result.push(...emit(filter.update({ ...latest, time: latest.time + interval })));
       }
 
       return result;
     },
     finish() {
-      if (finished) {
+      if (finished || !filter) {
+        finished = true;
         return [];
       }
 
       finished = true;
-      if (!latest || !settings.catchUp) {
-        return [];
+      const lift = recent.at(-1)!;
+      const result = code > 128 ? finishOnArc(lift) : [];
+      if (!result.length) {
+        result.push(...finishByRepeating(lift));
       }
 
-      // The line's last point averaged the ticks about `center` ticks along them; the pen where it lifted ends them.
-      const from = output!;
-      const path = [...ticks, { ...latest, time: clock + tickMs }];
-      const end = path.length - 1;
-      let center = 0,
-        total = 0;
-      for (let age = 0; age < ticks.length; age++) {
-        center += (ticks.length - 1 - age) * weights[age]!;
-        total += weights[age]!;
-      }
-
-      center /= total;
-      // A line held near the pen on a fast stroke starts from the pen's path where it is nearest instead.
-      let nearest = Infinity,
-        nearestIndex = 0;
-      ticks.forEach((point, index) => {
-        const distance = Math.hypot(point.x - from.x, point.y - from.y);
-        if (distance <= nearest) {
-          nearest = distance;
-          nearestIndex = index;
-        }
-      });
-      center = Math.max(center, nearestIndex);
-      const span = end - center;
-      if (span <= 0) {
-        return [];
-      }
-
-      // Pressure reaches the pen's own over the first half, so the end tapers as the pen did when it lifted.
-      const pressureAt = (u: number, at: number) => {
-        const base = Math.min(end - 1, Math.floor(at));
-        const sample = between(path[base]!, path[base + 1]!, at - base);
-        const pressure = calibrate(sample.pressure);
-        const t = Math.min(1, u * 2);
-        return { sample, pressure: pressure + (from.pressure - pressure) * (1 - t * t * (3 - 2 * t)) };
-      };
-      const heading = direction({ x: from.x - (beforeOutput?.x ?? from.x), y: from.y - (beforeOutput?.y ?? from.y) });
-      const bend = pathBend(path, center);
-      const lift = path[end]!;
-      if (heading && Math.abs(bend.net) > hookTurn && calibrate(lift.pressure) < from.pressure * hookPressure) {
-        // The pen hooked aside as it lifted, easing off: the line ends along its own heading, tapering, instead of
-        // following the hook and drawing a tick.
-        const length = Math.min(bend.length, maxLag) * hookShare;
-        const count = Math.max(1, Math.ceil(length / catchUpSpacing));
-        const last = calibrate(lift.pressure);
-        const result: Sample[] = [];
-        for (let step = 1; step <= count; step++) {
-          const u = step / count;
-          clock += (tickMs * span) / count;
-          output = {
-            ...lift,
-            x: from.x + heading.x * length * u,
-            y: from.y + heading.y * length * u,
-            pressure: from.pressure + (last - from.pressure) * u,
-            time: clock
-          };
-          result.push(output);
-        }
-
-        return result;
-      }
-
-      const arc = heading && plainArc(from, heading, path, bend);
-      if (arc) {
-        // The rest of the pen's path is one plain bend: the catch-up is one arc onto it, without bends of its own.
-        const count = Math.max(1, Math.ceil(arcLength(arc) / catchUpSpacing));
-        const result: Sample[] = [];
-        for (let step = 1; step <= count; step++) {
-          const u = step / count;
-          const { sample, pressure } = pressureAt(u, center + span * u);
-          const position = bezier(arc, u);
-          clock += (tickMs * span) / count;
-          output = { ...sample, x: position.x, y: position.y, pressure, time: clock };
-          result.push(output);
-        }
-
-        return result;
-      }
-
-      // The catch-up keeps averaging the pen's path, now on both sides of each point since the rest of it is known, over
-      // a window that narrows from the line's to nothing where the pen lifted. It cuts the pen's curves as the line did
-      // and bends nowhere the path does not, unlike joining the path itself, which turns a corner or swings out and back.
-      const knots = Math.max(1, Math.ceil(span));
-      const along = Array.from({ length: knots + 1 }, (_, index) => center + (span * index) / knots);
-      const curve = along.map((at) => averageAround(path, at, (sigma * (end - at)) / span));
-      const tangent = (index: number) => {
-        const before = curve[Math.max(0, index - 1)]!,
-          after = curve[Math.min(knots, index + 1)]!;
-        const steps = Math.min(knots, index + 1) - Math.max(0, index - 1);
-        return { x: (after.x - before.x) / steps, y: (after.y - before.y) / steps };
-      };
-
-      // The line's small offset from that curve fades out over all of it, leaving along the line's own heading.
-      const offset = { x: from.x - curve[0]!.x, y: from.y - curve[0]!.y };
-      const start = tangent(0);
-      const speed = Math.hypot(start.x, start.y);
-      const turn = heading ? { x: heading.x * speed - start.x, y: heading.y * speed - start.y } : { x: 0, y: 0 };
-      // Distances along the curve; the offset and the heading fade over all of it, so the turn onto it stays gentle.
-      const reach = [0];
-      for (let index = 1; index <= knots; index++) {
-        reach.push(
-          reach[index - 1]! + Math.hypot(curve[index]!.x - curve[index - 1]!.x, curve[index]!.y - curve[index - 1]!.y)
-        );
-      }
-
-      const ease = reach[knots]! * easeShare;
-      const result: Sample[] = [];
-      for (let index = 0; index < knots; index++) {
-        const a = curve[index]!,
-          b = curve[index + 1]!;
-        // Points close enough together that the curve's bend shows as a curve, not as corners.
-        const steps = Math.min(
-          maxCatchUpSteps,
-          Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / catchUpSpacing))
-        );
-        for (let step = 1; step <= steps; step++) {
-          const f = step / steps;
-          const position = hermite(a, tangent(index), b, tangent(index + 1), f);
-          const t = ease > 0 ? Math.min(1, (reach[index]! + (reach[index + 1]! - reach[index]!) * f) / ease) : 1;
-          const fade = 1 - t * t * (3 - 2 * t);
-          const bend = (index + f) * fade;
-          const at = along[index]! + (along[index + 1]! - along[index]!) * f;
-          const { sample, pressure } = pressureAt((at - center) / span, at);
-          clock += (tickMs * (along[index + 1]! - along[index]!)) / steps;
-          output = {
-            ...sample,
-            x: position.x + offset.x * fade + turn.x * bend,
-            y: position.y + offset.y * fade + turn.y * bend,
-            pressure,
-            time: clock
-          };
-          result.push(output);
-        }
-      }
-
+      result.push(...curve.flush());
       return result;
     }
   };
 
-  function tick(position: Sample) {
-    ticks.push(position);
-    ticks.shift();
-    return emit();
+  /** Passes a filter output on to the curve, with its pressure calibrated. */
+  function emit(output: Sample) {
+    return draw({ ...output, pressure: calibrate(output.pressure) });
   }
 
-  /** The weighted average of the ticks, as offsets from the newest to keep precision far from the origin. */
-  function emit(): Sample {
-    const newest = ticks.at(-1)!;
-    let x = 0,
-      y = 0,
-      pressure = 0,
-      total = 0;
-    for (let age = 0; age < ticks.length; age++) {
-      const point = ticks[ticks.length - 1 - age]!;
-      const weight = weights[age]!;
-      x += (point.x - newest.x) * weight;
-      y += (point.y - newest.y) * weight;
-      pressure += point.pressure * weight;
-      total += weight;
+  /** Passes a point of the line, its pressure calibrated, on to the curve. */
+  function draw(point: Sample) {
+    filtered.push(point);
+    if (filtered.length > 3) {
+      filtered.shift();
     }
 
-    const average = { x: newest.x + x / total, y: newest.y + y / total };
-    // The string pulls toward the pen over its last few ticks, so that it does not pass on a shaking hand.
-    const recent = ticks.slice(-anchorTicks);
-    const anchor = {
-      x: recent.reduce((sum, tick) => sum + tick.x, 0) / recent.length,
-      y: recent.reduce((sum, tick) => sum + tick.y, 0) / recent.length
-    };
-    const position = follow(anchor, average);
-    beforeOutput = output;
-    // Pulled along, the line takes the pressure the pen had where it now is, so a flick tapers where the pen lifted.
-    const raw = roped ? pressureNear(position) : pressure / total;
-    output = { ...newest, ...position, pressure: calibrate(raw), time: clock };
-    return output;
-  }
-
-  /** The pen's pressure at the tick nearest `point`, among those of the average. */
-  function pressureNear(point: Point) {
-    let nearest = Infinity,
-      pressure = ticks.at(-1)!.pressure;
-    for (const tick of ticks) {
-      const distance = Math.hypot(tick.x - point.x, tick.y - point.y);
-      if (distance < nearest) {
-        nearest = distance;
-        pressure = tick.pressure;
-      }
-    }
-
-    return pressure;
+    return curve.add(point);
   }
 
   /**
-   * Where the line goes for the pen at `pen` and the average of the ticks at `average`. On a fast stroke the average
-   * falls far behind and cuts across the pen's arcs; once it trails by more than `maxLag`, the line is pulled along
-   * behind the pen like a string instead, keeping to its arcs. As the pen slows the string shortens, by {@link closeIn}
-   * a tick but never nearer the pen than the average, so the line closes in along the pen's path; it is the average
-   * again once the two meet while the pen nearly rests.
+   * SAI's ordinary finish: the lifted sample is filtered again as many times as the filter is long (15 times K for S
+   * levels), with a pen's pressure at zero, so the line closes in on where the pen lifted; the pressure meanwhile
+   * tapers from the line's to zero (`1 - (1 - i/F)²`) instead of following the average.
    */
-  function follow(pen: Point, average: Point): Point {
-    const previous = output;
-    const distance = (point: Point) => Math.hypot(pen.x - point.x, pen.y - point.y);
-    if (!previous || (!roped && distance(average) <= maxLag)) {
-      roped = false;
-      return average;
+  function finishByRepeating(lift: Sample) {
+    const count = code > 128 ? 15 * feedbackWindow(code) : code;
+    const target = tablet ? 0 : lift.pressure;
+    const from = filtered.at(-1)!.pressure;
+    const result: Sample[] = [];
+    for (let step = 1; step <= count; step++) {
+      const output = filter!.update({ ...lift, pressure: target });
+      const share = 1 - (1 - step / count) ** 2;
+      const pressure = code > 1 ? from + share * (calibrate(target) - from) : calibrate(output.pressure);
+      result.push(...draw({ ...output, pressure }));
     }
 
-    roped = true;
-    const trail = distance(previous);
-    const length = Math.min(maxLag, Math.max(distance(average), trail * closeIn));
-    const string =
-      trail > length
-        ? { x: pen.x + ((previous.x - pen.x) * length) / trail, y: pen.y + ((previous.y - pen.y) * length) / trail }
-        : { x: previous.x, y: previous.y };
-    // Only a pen nearly at rest lets it go: a moving one may pass the average where that cuts inside its curve.
-    const recent = ticks[Math.max(0, ticks.length - 1 - restTicks)]!;
-    const resting = Math.hypot(pen.x - recent.x, pen.y - recent.y) <= releaseGap * restTicks;
-    if (resting && Math.hypot(average.x - string.x, average.y - string.y) <= releaseGap) {
-      roped = false;
-      return average;
+    return result;
+  }
+
+  /**
+   * SAI's finish for S levels: one more filter update with the lifted sample, then on along the circle through the
+   * last two points of the line and that one, to the angle where the pen lifted, in steps about as long as the line's
+   * last, with the pressure tapering linearly to zero. Nothing when the three points make no circle, so the ordinary
+   * finish runs instead.
+   */
+  function finishOnArc(lift: Sample) {
+    const [a, b] = filtered.slice(-2);
+    const target = tablet ? 0 : lift.pressure;
+    const c = filter!.update({ ...lift, pressure: target });
+    if (!a || !b || distance(a, b) < minimumStep || distance(b, c) < minimumStep) {
+      return [];
     }
 
-    return string;
+    const center = circleCenter(a, b, c);
+    if (!center) {
+      return [];
+    }
+
+    const step = turn(angle(center, a), angle(center, b));
+    const sweep = turn(angle(center, b), angle(center, lift));
+    const count = Math.min(maxArcSteps, Math.max(1, Math.trunc(sweep / step)));
+    const from = b.pressure;
+    const result: Sample[] = [];
+    for (let index = 1; index <= count + 1; index++) {
+      const share = index / count;
+      const point = rotate(b, center, share * sweep);
+      const pressure = from + (calibrate(target) - from) * Math.min(1, share);
+      result.push(...draw({ ...lift, ...point, pressure }));
+    }
+
+    return result;
+  }
+
+  /** Whether the line has reached the resting pen, so filtering it again would change nothing visible. */
+  function reached(latest: Sample) {
+    const last = filtered.at(-1);
+    return !!last && distance(last, latest) < 0.01 && Math.abs(last.pressure - calibrate(latest.pressure)) < 1e-4;
   }
 
   /** Raw pen pressure through the brush's minimum, maximum and firmness. */
@@ -324,207 +192,300 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
       Math.max(0, Math.min(1, (raw - settings.minimum) / (settings.maximum - settings.minimum))) ** settings.firmness
     );
   }
-
-  /** Whether the line has reached the pen, so further ticks would change nothing visible. */
-  function reached() {
-    return (
-      !!output &&
-      !!latest &&
-      Math.hypot(output.x - latest.x, output.y - latest.y) < 0.05 &&
-      ticks.every((point) => point.pressure === latest!.pressure)
-    );
-  }
-}
-
-/** The pen between two input samples, by time. */
-function between(a: Sample, b: Sample, t: number): Sample {
-  return {
-    ...interpolateTabletAxes(a, b, t),
-    x: a.x + (b.x - a.x) * t,
-    y: a.y + (b.y - a.y) * t,
-    pressure: a.pressure + (b.pressure - a.pressure) * t,
-    time: a.time + (b.time - a.time) * t
-  };
-}
-
-/** The cubic Hermite curve from `a` to `b` with tangents `ta` and `tb` per unit of `f`, at `f` from 0 to 1. */
-function hermite(a: Point, ta: Point, b: Point, tb: Point, f: number): Point {
-  const f2 = f * f,
-    f3 = f2 * f;
-  const h00 = 2 * f3 - 3 * f2 + 1,
-    h10 = f3 - 2 * f2 + f,
-    h01 = -2 * f3 + 3 * f2,
-    h11 = f3 - f2;
-  return {
-    x: h00 * a.x + h10 * ta.x + h01 * b.x + h11 * tb.x,
-    y: h00 * a.y + h10 * ta.y + h01 * b.y + h11 * tb.y
-  };
 }
 
 /**
- * The Gaussian-weighted average of `path` around the fractional index `at`, with standard deviation `sigma` ticks,
- * over a window symmetric about `at` that stays within the path, so the average is not pulled toward either end, and
- * tapers to nothing at its edges.
+ * SAI's filter for one stroke, started at `first`: `initial` is its first output and `update` filters each later
+ * sample. Position and pressure are averaged; other fields pass through. Numeric codes 1 to 16 average the latest
+ * `code` samples. S codes 129 to 135 average the latest 15 and then that with their own latest `K - 1` outputs,
+ * `K = (code & 31) + 1`. A pen's (`tablet`) pressure starts from zero above code 1, over a window `code` (or `2K`)
+ * longer that shortens by one each update. Matches `sai_filter.py`, checked against SAI's machine code.
  */
-function averageAround(path: readonly Sample[], at: number, sigma: number): Point {
-  const reach = Math.min(3 * sigma, at, path.length - 1 - at);
-  const tick = Math.min(path.length - 2, Math.floor(at));
-  const here = between(path[tick]!, path[tick + 1]!, at - tick);
-  if (sigma < 1e-3 || reach < 1e-3) {
-    return here;
-  }
+export function createSaiFilter(code: number, first: Sample, tablet: boolean) {
+  const seed = tablet && code !== 1 ? 0 : first.pressure;
+  const numeric = code < 128;
+  const k = numeric ? 0 : feedbackWindow(code);
+  let extra = numeric ? (code !== 1 ? code : 0) : 2 * k;
+  const input = numeric
+    ? [history(code, first.x), history(code, first.y), history(code + extra, seed)]
+    : [history(15, first.x), history(15, first.y), history(15, seed)];
+  const feedback = numeric ? undefined : [history(k, first.x), history(k, first.y), history(3 * k, seed)];
 
-  let x = 0,
-    y = 0,
-    total = 0;
-  for (let index = Math.ceil(at - reach); index <= Math.floor(at + reach); index++) {
-    // Tapered to nothing at the window's edges, so that ticks enter and leave it without a jump.
-    const weight = Math.exp(-(((index - at) / sigma) ** 2) / 2) * (1 - ((index - at) / (reach + 1)) ** 2) ** 2;
-    x += (path[index]!.x - here.x) * weight;
-    y += (path[index]!.y - here.y) * weight;
-    total += weight;
-  }
+  return {
+    initial: { ...first, pressure: seed } as Sample,
+    update(sample: Sample): Sample {
+      const values = [sample.x, sample.y, sample.pressure];
+      input.forEach((entries, index) => push(entries, values[index]!));
+      let output: number[];
+      if (!feedback) {
+        output = [average(input[0]!, code), average(input[1]!, code), average(input[2]!, code + extra)];
+      } else {
+        const counts = [k, k, k + extra];
+        output = feedback.map((entries, index) => averageWith(entries, counts[index]!, average(input[index]!, 15)));
+        feedback.forEach((entries, index) => push(entries, output[index]!));
+      }
 
-  return total > 0 ? { x: here.x + x / total, y: here.y + y / total } : here;
+      extra = Math.max(0, extra - 1);
+      return { ...sample, x: output[0]!, y: output[1]!, pressure: output[2]! };
+    }
+  };
+}
+
+/** A running SAI filter; see `createSaiFilter`. */
+export type SaiFilter = ReturnType<typeof createSaiFilter>;
+
+/** SAI's internal code of a stabilizer level: 0 to 15 are codes 1 to 16, 16 to 22 (S-1 to S-7) codes 129 to 135. */
+export function saiCode(level: number) {
+  return level <= 15 ? level + 1 : 129 + (level - 16);
+}
+
+/** The label SAI shows for a stabilizer level: `0` to `15`, then `S-1` to `S-7`. */
+export function stabilizerLabel(level: number) {
+  return level <= 15 ? String(level) : `S-${level - 15}`;
+}
+
+/** The feedback window K of an S code. */
+function feedbackWindow(code: number) {
+  return (code & 31) + 1;
+}
+
+/** SAI's filter history: 32 entries, the oldest dropped. */
+function history(count: number, value: number) {
+  return Array<number>(Math.min(Math.max(count, 0), historySize)).fill(value);
+}
+
+function push(entries: number[], value: number) {
+  entries.push(value);
+  if (entries.length > historySize) {
+    entries.shift();
+  }
+}
+
+/** The mean of the latest `count` entries, or of all when there are fewer. */
+function average(entries: number[], count: number) {
+  const latest = entries.slice(-Math.min(Math.max(count, 1), historySize));
+  return latest.reduce((sum, value) => sum + value, 0) / latest.length;
+}
+
+/** The mean of `value` and the latest `count - 1` entries. */
+function averageWith(entries: number[], count: number, value: number) {
+  const bounded = Math.min(Math.max(count, 1), historySize);
+  const latest = bounded > 1 ? entries.slice(-(bounded - 1)) : [];
+  return (value + latest.reduce((sum, entry) => sum + entry, 0)) / (1 + latest.length);
 }
 
 /**
- * The catch-up as one cubic Bézier arc from `from`, leaving along `heading`, to where the pen lifted, arriving along
- * the pen's last direction, when the rest of the pen's path, whose turns are `bend`, bends one way without wiggles by
- * at most {@link maxArcTurn}; otherwise `undefined`. Its handles are those of a circular arc turning as much.
+ * SAI's correction of uneven tablet packets ("Anti-Stroke-Distortion"): when the step to `current` is at least 1.4
+ * times the step before it, which is at least a screen pixel, the samples between are taken from the circle through
+ * the three points, as many as the new step turns times the last, up to 7, with the pressure changing linearly.
  */
-function plainArc(from: Point, heading: Point, path: readonly Sample[], { net, total }: ReturnType<typeof pathBend>) {
-  const end = path.length - 1;
-  const lift = path[end]!;
-  const arrive = direction({ x: lift.x - path[Math.max(0, end - 2)]!.x, y: lift.y - path[Math.max(0, end - 2)]!.y });
-  const chord = Math.hypot(lift.x - from.x, lift.y - from.y);
-  if (
-    !arrive ||
-    chord < 1e-6 ||
-    total - Math.abs(net) > maxArcWiggle ||
-    Math.abs(net) > maxArcTurn ||
-    // A line heading away from where the pen lifted would loop back to it.
-    heading.x * (lift.x - from.x) + heading.y * (lift.y - from.y) < 0
-  ) {
+function evenOut(older: Sample | undefined, previous: Sample, current: Sample, zoom: number): Sample[] {
+  if (!older) {
+    return [];
+  }
+
+  const last = distance(older, previous) * zoom;
+  const next = distance(previous, current) * zoom;
+  if (last < 1 || next / last < 1.4 || last < minimumStep || next <= minimumStep) {
+    return [];
+  }
+
+  const center = circleCenter(older, previous, current);
+  if (!center) {
+    return [];
+  }
+
+  const step = turn(angle(center, older), angle(center, previous));
+  const sweep = turn(angle(center, previous), angle(center, current));
+  const count = Math.min(maxInserted, Math.max(1, Math.trunc(sweep / step)));
+  const inserted: Sample[] = [];
+  for (let index = 1; index < count; index++) {
+    const share = index / count;
+    inserted.push({
+      ...interpolateTabletAxes(previous, current, share),
+      ...rotate(previous, center, share * sweep),
+      pressure: previous.pressure + (current.pressure - previous.pressure) * Math.min(1, share),
+      time: previous.time + (current.time - previous.time) * share
+    });
+  }
+
+  return inserted;
+}
+
+/**
+ * SAI's curve stage: each filtered point gets Bézier handles from its neighbors, longer toward the farther one
+ * (`handles`), and each curve between two points is split in half until its control points span at most a pixel, up
+ * to 16 times, the ends of the pieces becoming the samples painted. A curve is drawn once the point after it arrives.
+ */
+function createCurve() {
+  /** The latest points, newest last, with the handle each received: `out` toward the next point. */
+  const points: { sample: Sample; in: Point; out: Point }[] = [];
+  let started = false;
+
+  return {
+    /** Adds a filtered point; returns the samples of the curve it completes, or the point itself if it is the first. */
+    add(sample: Sample): Sample[] {
+      const point = { sample, in: { x: sample.x, y: sample.y }, out: { x: sample.x, y: sample.y } };
+      points.push(point);
+      if (points.length > 3) {
+        points.shift();
+      }
+
+      if (!started) {
+        started = true;
+        return [sample];
+      }
+
+      if (points.length < 3) {
+        return [];
+      }
+
+      const [a, b, c] = points as [(typeof points)[0], (typeof points)[0], (typeof points)[0]];
+      [b.in, b.out] = handles(a.sample, b.sample, c.sample);
+      return segment(a, b);
+    },
+    /** Whether a point waits for the next one to draw the curve to it. */
+    pending: () => points.length >= 2,
+    /** Draws the curve to the last point, which has no next point to shape its end. */
+    flush(): Sample[] {
+      if (points.length < 2) {
+        return [];
+      }
+
+      const [a, b] = points.slice(-2) as [(typeof points)[0], (typeof points)[0]];
+      points.length = 0;
+      return segment(a, b);
+    }
+  };
+
+  function segment(a: (typeof points)[0], b: (typeof points)[0]): Sample[] {
+    const leaves: Point[] = [];
+    split([a.sample, a.out, b.in, b.sample], maxSplits, leaves);
+    const lengths = leaves.map((point, index) => distance(index ? leaves[index - 1]! : a.sample, point));
+    const total = lengths.reduce((sum, length) => sum + length, 0);
+    let travelled = 0;
+    return leaves.map((point, index) => {
+      travelled += lengths[index]!;
+      const share = total > 0 ? travelled / total : 1;
+      return {
+        ...interpolateTabletAxes(a.sample, b.sample, share),
+        x: point.x,
+        y: point.y,
+        pressure: a.sample.pressure + (b.sample.pressure - a.sample.pressure) * share,
+        time: a.sample.time + (b.sample.time - a.sample.time) * share
+      };
+    });
+  }
+}
+
+/**
+ * SAI's Bézier handles at `point` between `previous` and `following`: `T = 0.7 (a (C - B) - b (A - B)) / (a + b)²`
+ * with `a` and `b` the distances to the neighbors; the incoming handle is `B - a T`, the outgoing `B + b T`.
+ */
+function handles(previous: Point, point: Point, following: Point): [Point, Point] {
+  const a = distance(previous, point);
+  const b = distance(point, following);
+  if (a <= degenerate || b <= degenerate) {
+    return [
+      { x: point.x, y: point.y },
+      { x: point.x, y: point.y }
+    ];
+  }
+
+  const scale = handleScale / (a + b) ** 2;
+  const tx = scale * (a * (following.x - point.x) - b * (previous.x - point.x));
+  const ty = scale * (a * (following.y - point.y) - b * (previous.y - point.y));
+  return [
+    { x: point.x - a * tx, y: point.y - a * ty },
+    { x: point.x + b * tx, y: point.y + b * ty }
+  ];
+}
+
+/** Splits a cubic Bézier curve in half while its control points span more than a pixel; collects the pieces' ends. */
+function split(curve: readonly [Point, Point, Point, Point], depth: number, ends: Point[]) {
+  if (depth > 0 && span(curve) > 1) {
+    const mix = (p: Point, q: Point) => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 });
+    const [p0, p1, p2, p3] = curve;
+    const a = mix(p0, p1),
+      b = mix(p1, p2),
+      c = mix(p2, p3);
+    const d = mix(a, b),
+      e = mix(b, c);
+    const middle = mix(d, e);
+    split([p0, a, d, middle], depth - 1, ends);
+    split([middle, e, c, p3], depth - 1, ends);
+    return;
+  }
+
+  ends.push({ x: curve[3].x, y: curve[3].y });
+}
+
+/** The larger side of the box around a curve's control points, as SAI measures it. */
+function span(curve: readonly Point[]) {
+  const xs = curve.map(({ x }) => x),
+    ys = curve.map(({ y }) => y);
+  return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+}
+
+/** The center of the circle through three points, or `undefined` when they are in line. */
+function circleCenter(a: Point, b: Point, c: Point): Point | undefined {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+  if (Math.abs(d) < 1e-9) {
     return undefined;
   }
 
-  const bend = Math.min(maxArcTurn, Math.acos(Math.max(-1, Math.min(1, heading.x * arrive.x + heading.y * arrive.y))));
-  const handle = bend > 1e-3 ? ((4 / 3) * Math.tan(bend / 4) * chord) / (2 * Math.sin(bend / 2)) : chord / 3;
-  return [
-    from,
-    { x: from.x + heading.x * handle, y: from.y + heading.y * handle },
-    { x: lift.x - arrive.x * handle, y: lift.y - arrive.y * handle },
-    { x: lift.x, y: lift.y }
-  ] as const;
-}
-
-/**
- * How the pen's path from the fractional index `start` on turns, in radians: its net turn, the sum of its turns either
- * way, and its length in document pixels. Lightly smoothed, so that the pen's jitter does not count as wiggles.
- */
-function pathBend(path: readonly Sample[], start: number) {
-  const points = path.slice(Math.max(0, Math.floor(start))).map((point, index, all) => {
-    const before = all[Math.max(0, index - 1)]!,
-      after = all[Math.min(all.length - 1, index + 1)]!;
-    return { x: (before.x + point.x * 2 + after.x) / 4, y: (before.y + point.y * 2 + after.y) / 4 };
-  });
-  let net = 0,
-    total = 0,
-    length = 0,
-    previous: number | undefined;
-  for (let index = 1; index < points.length; index++) {
-    const a = points[index - 1]!,
-      b = points[index]!;
-    const step = Math.hypot(b.x - a.x, b.y - a.y);
-    length += step;
-    if (step < minArcStep) {
-      continue;
-    }
-
-    const angle = Math.atan2(b.y - a.y, b.x - a.x);
-    if (previous !== undefined) {
-      const turn = Math.atan2(Math.sin(angle - previous), Math.cos(angle - previous));
-      net += turn;
-      total += Math.abs(turn);
-    }
-
-    previous = angle;
-  }
-
-  return { net, total, length };
-}
-
-/** The cubic Bézier curve through `points` at `u` from 0 to 1. */
-function bezier(points: readonly [Point, Point, Point, Point], u: number): Point {
-  const v = 1 - u;
-  const [a, b, c, d] = [v * v * v, 3 * v * v * u, 3 * v * u * u, u * u * u];
+  const aa = a.x * a.x + a.y * a.y,
+    bb = b.x * b.x + b.y * b.y,
+    cc = c.x * c.x + c.y * c.y;
   return {
-    x: a * points[0].x + b * points[1].x + c * points[2].x + d * points[3].x,
-    y: a * points[0].y + b * points[1].y + c * points[2].y + d * points[3].y
+    x: (aa * (b.y - c.y) + bb * (c.y - a.y) + cc * (a.y - b.y)) / d,
+    y: (aa * (c.x - b.x) + bb * (a.x - c.x) + cc * (b.x - a.x)) / d
   };
 }
 
-/** About the length of a cubic Bézier curve: between its chord and its control polygon. */
-function arcLength(points: readonly [Point, Point, Point, Point]) {
-  const length = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y);
-  return (
-    (length(points[0], points[3]) +
-      length(points[0], points[1]) +
-      length(points[1], points[2]) +
-      length(points[2], points[3])) /
-    2
-  );
+function angle(center: Point, point: Point) {
+  return Math.atan2(point.y - center.y, point.x - center.x);
 }
 
-/** `vector` at unit length, or `undefined` when it has none. */
-function direction(vector: Point): Point | undefined {
-  const length = Math.hypot(vector.x, vector.y);
-  return length > 1e-6 ? { x: vector.x / length, y: vector.y / length } : undefined;
+/** The signed turn from angle `from` to angle `to`, between -π and π. */
+function turn(from: number, to: number) {
+  const difference = to - from;
+  return Math.atan2(Math.sin(difference), Math.cos(difference));
 }
 
-/** The most the pen's path may turn, in radians, for the catch-up to be one arc. */
-const maxArcTurn = (170 * Math.PI) / 180;
+/** `point` turned about `center` by `radians`. */
+function rotate(point: Point, center: Point, radians: number): Point {
+  const cos = Math.cos(radians),
+    sin = Math.sin(radians);
+  const x = point.x - center.x,
+    y = point.y - center.y;
+  return { x: center.x + x * cos - y * sin, y: center.y + x * sin + y * cos };
+}
 
-/** How much the pen's path may turn back and forth, in radians, beyond its net turn, and still count as one bend. */
-const maxArcWiggle = (25 * Math.PI) / 180;
+function distance(a: Point, b: Point) {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
 
-/** Shortest step, in document pixels, whose heading counts for the bend of the pen's path. */
-const minArcStep = 0.5;
+/** The pen's rate from its latest samples, for filtering it again while it rests, between 4 and 16 ms. */
+function recentInterval(previous: Sample, current: Sample, last: number) {
+  const step = current.time - previous.time;
+  return step > 0 ? Math.min(16, Math.max(4, last * 0.8 + step * 0.2)) : last;
+}
 
-/** The share of its length a string pulling the line keeps per tick as the pen slows; see `follow`. */
-const closeIn = 0.97;
+/** SAI keeps 32 entries of each history. */
+const historySize = 32;
 
-/** How near, in document pixels, a line pulled along must come to the average to become it again. */
-const releaseGap = 0.5;
+/** Interval assumed before the pen's rate is known, in milliseconds. */
+const defaultInterval = 1000 / 120;
 
-/** Ticks of the pen averaged for the point a string pulling the line follows. */
-const anchorTicks = 6;
+/** Shortest step SAI's circle constructions accept. */
+const minimumStep = 0.0001;
 
-/** Ticks over which the pen moves less than `releaseGap` a tick when it nearly rests. */
-const restTicks = 4;
+/** Samples SAI's packet correction inserts at most, and arc steps its S-level finish takes at most. */
+const maxInserted = 8;
+const maxArcSteps = 256;
 
-/** Screen pixels per stabilizer level that the line may trail the pen at most, on fast strokes. */
-const lagPerLevel = 4;
-
-/** A lift hook: the pen turns more than this, in radians, between the line and where it lifted… */
-const hookTurn = (40 * Math.PI) / 180;
-
-/** …while its pressure falls below this share of the line's. */
-const hookPressure = 0.6;
-
-/** The share of the hook's length, at most of `maxLag`, that the line runs on along its heading, tapering. */
-const hookShare = 0.3;
-
-/** The pen is resampled at 120 Hz, a common tablet report rate. */
-const tickMs = 1000 / 120;
-
-/** The share of the catch-up's length over which it eases from the line onto its curve. */
-const easeShare = 1;
-
-/** Longest step, in document pixels, between points of the catch-up, and the most points per tick of it. */
-const catchUpSpacing = 2;
-const maxCatchUpSteps = 16;
-
-/** Ticks averaged per stabilizer level: each level trails the pen by about 33 ms more. */
-const ticksPerLevel = 4;
+/** SAI's Bézier handle coefficient, the length below which a neighbor gives no handle, and the deepest split. */
+const handleScale = 0.7;
+const degenerate = 2 ** -23;
+const maxSplits = 16;

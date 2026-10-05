@@ -1,6 +1,7 @@
 import type { Brush } from '@app-game/paint-core/brush';
-import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
-import { Show } from 'solid-js';
+import { stabilizerLabel } from '@app-game/paint-core/stabilizerStroke';
+import { maxStabilizerLevel, normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
+import { For, Show } from 'solid-js';
 import styles from './BrushPanel.module.css';
 import { maxBrushSize } from './createBrushTools';
 
@@ -53,7 +54,7 @@ export function BrushDailyControls(props: BrushControlsProps) {
           <option value="studio">Studio</option>
           <option value="normal">Leonardo normal</option>
           <option value="smooth">Leonardo smooth</option>
-          <option value="stabilizer">Stabilizer (SAI-like)</option>
+          <option value="stabilizer">Stabilizer (Paint Tool SAI)</option>
         </select>
       </label>
       <Show when={props.brush.stroke.mode === 'none'}>
@@ -70,15 +71,16 @@ export function BrushDailyControls(props: BrushControlsProps) {
         />
       </Show>
       <Show when={props.brush.stroke.mode === 'stabilizer'}>
-        <Range
-          label="Stabilizer"
-          min={1}
-          max={20}
-          suffix=""
-          prefix="S-"
-          value={props.brush.stroke.stabilizer}
-          change={(stabilizer) => update({ stabilizer })}
-        />
+        <label class={styles.mixing}>
+          Stabilizer
+          <select
+            aria-label="Stabilizer"
+            value={props.brush.stroke.stabilizer}
+            onChange={(event) => update({ stabilizer: Number(event.currentTarget.value) })}
+          >
+            <For each={stabilizerLevels}>{(level) => <option value={level}>{stabilizerLabel(level)}</option>}</For>
+          </select>
+        </label>
       </Show>
     </section>
   );
@@ -138,10 +140,10 @@ export function BrushAdvancedControls(props: BrushControlsProps) {
       <Show when={calibratesPressure(props.brush)}>
         <p class={styles.panelNote}>
           {stroke().mode === 'stabilizer'
-            ? 'The line trails the pen and keeps closing in while the pen holds still, as in Paint Tool SAI. Higher levels steady the hand more and trail further.'
+            ? 'As in Paint Tool SAI: levels 0 to 15 average the latest 1 to 16 pen samples, S-1 to S-7 steady the hand more and trail further. Strokes ease in and taper out where the pen lifts.'
             : 'Higher stabilization smooths more and follows the pen more slowly. Zero keeps curve smoothing only.'}
         </p>
-        <Show when={stroke().mode === 'smooth' || stroke().mode === 'stabilizer'}>
+        <Show when={stroke().mode === 'smooth'}>
           <label class={styles.check}>
             <input
               type="checkbox"
@@ -225,6 +227,9 @@ function calibratesPressure(brush: Brush) {
   return isLeonardo(brush) || brush.stroke.mode === 'stabilizer';
 }
 
+/** Stabilizer levels in SAI's order: 0 to 15, then S-1 to S-7. */
+const stabilizerLevels = Array.from({ length: maxStabilizerLevel + 1 }, (_, level) => level);
+
 /** Labeled brush range; values shown in UI units and converted by its caller. */
 function Range(props: {
   label: string;
@@ -232,8 +237,6 @@ function Range(props: {
   min: number;
   max: number;
   step?: number;
-  /** Shown before the value, such as `S-` for stabilizer levels. */
-  prefix?: string;
   suffix: string;
   change: (value: number) => void;
 }) {
@@ -242,7 +245,6 @@ function Range(props: {
       <span>
         {props.label}
         <output>
-          {props.prefix}
           {Math.round(props.value)}
           {props.suffix}
         </output>

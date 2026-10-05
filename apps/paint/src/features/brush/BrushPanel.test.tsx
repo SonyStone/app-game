@@ -41,17 +41,21 @@ it('selects raw input without Leonardo controls and retains stabilization settin
     expect(brush().stroke.smooth).toBe(23);
     expect(host.querySelector<HTMLInputElement>('[aria-label="Stabilization"]')!.value).toBe('23');
 
-    // The SAI-like stabilizer has its own level, catch-up switch and pressure calibration.
+    // SAI's stabilizer has its levels, 0 to 15 and S-1 to S-7, and pressure calibration; it always finishes the line.
     change('stabilizer');
     expect(brush().stroke.mode).toBe('stabilizer');
-    const level = host.querySelector<HTMLInputElement>('[aria-label="Stabilizer"]')!;
+    const level = host.querySelector<HTMLSelectElement>('[aria-label="Stabilizer"]')!;
     expect(level.value).toBe('6');
-    level.value = '12';
-    level.dispatchEvent(new Event('input', { bubbles: true }));
+    expect([...level.options].map((option) => option.textContent)).toEqual([
+      ...Array.from({ length: 16 }, (_, index) => String(index)),
+      ...Array.from({ length: 7 }, (_, index) => `S-${index + 1}`)
+    ]);
+    level.value = '18';
+    level.dispatchEvent(new Event('change', { bubbles: true }));
     flush();
-    expect(brush().stroke.stabilizer).toBe(12);
-    expect(host.textContent).toContain('S-12');
-    expect(host.textContent).toContain('Catch up on pen lift');
+    expect(brush().stroke.stabilizer).toBe(18);
+    expect(level.selectedOptions[0]!.textContent).toBe('S-3');
+    expect(host.textContent).not.toContain('Catch up on pen lift');
     expect(host.querySelector('[aria-label="Pressure firmness"]')).not.toBeNull();
   } finally {
     dispose();

@@ -6,11 +6,11 @@ export type StrokeSettings = {
   /** Independent window setting for smooth mode. */
   smooth: number;
   /**
-   * Strength of the SAI-like stabilizer, 1 to 20: how far the line trails the pen, about 33 ms per level; see
-   * `createStabilizerProcessor`.
+   * Level of Paint Tool SAI's stabilizer: 0 to 15 average the latest 1 to 16 pen samples, 16 to 22 are S-1 to S-7,
+   * which trail further; see `createStabilizerProcessor`.
    */
   stabilizer: number;
-  /** Smooth and stabilizer modes can leave the endpoint behind the pen; normal mode always catches up. */
+  /** Smooth mode can leave the endpoint behind the pen; normal mode and the stabilizer always finish the line. */
   catchUp: boolean;
   /** Raw pressure mapped to zero, in [0, maximum). */
   minimum: number;
@@ -41,7 +41,7 @@ export function normalizeStrokeSettings(settings: StrokeSettings): StrokeSetting
     mode: (['none', 'normal', 'smooth', 'stabilizer'] as const).find((mode) => mode === settings.mode) ?? 'studio',
     normal: Math.round(bounded(settings.normal, 0, 49, 1)),
     smooth: Math.round(bounded(settings.smooth, 0, 49, 10)),
-    stabilizer: Math.round(bounded(settings.stabilizer, 1, 20, 6)),
+    stabilizer: Math.round(bounded(settings.stabilizer, 0, maxStabilizerLevel, 6)),
     catchUp: settings.catchUp !== false,
     minimum,
     maximum: bounded(settings.maximum, minimum + 0.01, 1, 0.8),
@@ -52,3 +52,6 @@ export function normalizeStrokeSettings(settings: StrokeSettings): StrokeSetting
 function bounded(value: number, min: number, max: number, fallback: number): number {
   return Math.max(min, Math.min(max, Number.isFinite(value) ? value : fallback));
 }
+
+/** Highest stabilizer level, S-7; see `StrokeSettings.stabilizer`. */
+export const maxStabilizerLevel = 22;
