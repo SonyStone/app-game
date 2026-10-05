@@ -1,9 +1,9 @@
+import { gpuError } from '@app-game/solid-gpu/errors';
+import type { GpuDevice } from '@app-game/solid-gpu/gpu';
 import { render } from '@solidjs/web';
 import { err, ok, okAsync } from 'neverthrow';
 import { createRoot, createSignal, flush, onCleanup, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { gpuError } from '../../../shared/errors';
-import type { GpuDevice } from '../../../shared/gpu/context';
 import type { DocumentCamera } from '../../camera/createDocumentCamera';
 import type { RenderLayer } from '../../scene/RenderLayer';
 import type { TextDocument } from '../document';
@@ -12,9 +12,9 @@ import { DocumentRenderer } from './DocumentRenderer';
 import { GlyphText } from './GlyphText';
 import { VectorArtwork } from './VectorArtwork';
 
-vi.mock('../../../shared/gpu/TypeGPURootProvider', () => ({ useGpuDevice: () => gpu }));
+vi.mock('@app-game/solid-gpu/gpu/TypeGPURootProvider', () => ({ useGpuDevice: () => gpu }));
 vi.mock('./createTypeGpuRenderer', () => ({ createGlyphRenderer: vi.fn() }));
-vi.mock('../../scene/FrameLoop', () => ({ useFrameLoop: () => ({ invalidate }) }));
+vi.mock('../../scene/FrameLoop', () => ({ useFrameLoop: () => ({ invalidate }), useFrame: () => {} }));
 vi.mock('../../viewport/createViewport', () => ({
   useViewport: () => ({ size: () => ({ css: { width: 1, height: 1 }, pixels: { width: 1, height: 1 } }) })
 }));
@@ -137,12 +137,26 @@ it('draws with the current camera and reactive options', async () => {
   const mounted = mount();
   await settle();
   const view = views[0]!;
-  mounted.layers[0]!.draw({ pass: {} as GPURenderPassEncoder, width: 1, height: 1 });
+  mounted.layers[0]!.draw({
+    pass: {} as GPURenderPassEncoder,
+    width: 1,
+    height: 1,
+    moving: false,
+    strained: false,
+    scale: 1
+  });
   expect(view.draw.mock.lastCall![1]).toMatchObject({ grids: false });
 
   mounted.setGrids(true);
   flush();
-  mounted.layers[0]!.draw({ pass: {} as GPURenderPassEncoder, width: 1, height: 1 });
+  mounted.layers[0]!.draw({
+    pass: {} as GPURenderPassEncoder,
+    width: 1,
+    height: 1,
+    moving: false,
+    strained: false,
+    scale: 1
+  });
   expect(view.draw.mock.lastCall![1]).toMatchObject({ grids: true });
 });
 
@@ -222,7 +236,7 @@ function mount({ views: initialViews = 1 } = {}) {
   function drawnBy() {
     return layers.map((layer) => {
       views.forEach((view) => view.draw.mockClear());
-      layer.draw({ pass: {} as GPURenderPassEncoder, width: 1, height: 1 });
+      layer.draw({ pass: {} as GPURenderPassEncoder, width: 1, height: 1, moving: false, strained: false, scale: 1 });
       return views.find((view) => view.draw.mock.calls.length > 0)?.renderer;
     });
   }

@@ -1,4 +1,4 @@
-import { createTrackedEffect, storePath } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 import * as THREE from 'three';
 import { EventManager } from './events';
 import { addAfterEffect, addEffect, addTail, createLoop } from './loop';
@@ -109,13 +109,17 @@ function createThreeRoot<TCanvas extends HTMLElement>(canvas: TCanvas, config?: 
   roots.set(canvas, { store });
   // Store events internally
   if (events) {
-    store[1](storePath('events', () => events(store)));
+    store[1]((draft) => {
+      Object.assign(draft.events, events(store));
+    });
   }
 
   createTrackedEffect(() => {
     const state = store[0];
     // Flag the canvas active, rendering will now begin
-    store[1](storePath('internal', (internal) => ({ ...internal, active: true })));
+    store[1]((draft) => {
+      draft.internal.active = true;
+    });
     // Connect events
     state.events.connect?.(canvas);
     // Notifiy that init is completed, the scene graph exists, but nothing has yet rendered

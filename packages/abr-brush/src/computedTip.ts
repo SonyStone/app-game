@@ -140,6 +140,29 @@ export function rasterizeComputedTip(
   return { left, top, width, height, data, depth: 8 as const };
 }
 
+/**
+ * Width of a round computed tip's raster divided by its nominal diameter, as rasterizeComputedTip bounds it.
+ * Photoshop's soft tips extend beyond the nominal diameter (about 1.6x at hardness 0, near 1 when hard), so a
+ * primary computed tip generated at its native size is drawn this much larger than the brush diameter. Spacing and
+ * scatter keep using the nominal diameter.
+ */
+export function computedTipScale(size: number, hardness: number): number {
+  const { major } = prepareComputedTip(size, hardness, 0, 100);
+  const extent = major - 1;
+  const width = ((2 + extent + 2) >> 2) - ((2 - extent + 1) >> 2);
+  return width / Math.max(1, Math.min(5000, Math.floor(size + 0.5)));
+}
+
+/**
+ * Round primary computed tip at its native raster, before per-dab angle and roundness. Draw it at
+ * computedTipScale times the stamp diameter. Sizes above 512 px reuse the 512 px profile shape, which no longer
+ * changes noticeably, to bound the source.
+ */
+export function computedPrimaryTip(size: number, hardness: number): BrushTipImage {
+  const { width, height, data } = rasterizeComputedTip(prepareComputedTip(Math.min(size, 512), hardness, 0, 100));
+  return { width, height, depth: 8, data };
+}
+
 /** Rounding inputs for deterministic computed source generation. */
 export type ComputedTipContext = {
   profile: Uint16Array;

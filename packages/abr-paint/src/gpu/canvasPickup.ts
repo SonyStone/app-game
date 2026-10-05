@@ -32,7 +32,7 @@ export function createCanvasPickup<Layer extends PickupLayer>(
   const smallSlots: Array<ReturnType<typeof createSmallPlacement> | undefined> = Array(32);
   const reserveSmall = commandSlots(smallSlots.length);
   const groups = new WeakMap<TgpuTexture, ReturnType<typeof root.createBindGroup<typeof tileLayout.entries>>>();
-  let uploadedMixing: boolean | undefined;
+  let uploadedSampling: number | undefined;
   const layerParams = root.createBuffer(d.vec4f).$usage('uniform');
   const tilePipeline = root.createRenderPipeline({
     attribs: { placement: placementLayout.attrib },
@@ -63,6 +63,9 @@ export function createCanvasPickup<Layer extends PickupLayer>(
       layers: readonly Layer[],
       options: {
         allLayers?: boolean;
+        /** With `allLayers`, the layers blend in linear light, as the document composites them; see `compositeLayout`. */
+        linearBlending?: boolean;
+        /** Adaptive pickup budget. Supplying one also selects level-zero sampling without mipmaps. */
         maxDimension?: number;
         exact?: boolean;
         linear?: boolean;
@@ -75,13 +78,17 @@ export function createCanvasPickup<Layer extends PickupLayer>(
       const plan = planCanvasPickup(region, options.maxDimension ?? 1024, options.exact);
       // Trilinear filtering needs at most the next level above its largest derivative.
       const ratio = Math.max(region.width / plan.width, region.height / plan.height);
-      const minify = !options.linear && ratio > 1;
+      // A caller-supplied budget is an adaptive, approximate pickup: it reads level zero like Smooth sampling, so
+      // tiles changed by the previous dab need no mip chain and consecutive dabs can share a submission.
+      const sampling = options.linear ? pickupSampling.linear
+        : options.maxDimension !== undefined ? pickupSampling.levelZero : pickupSampling.mipmapped;
+      const minify = sampling === pickupSampling.mipmapped && ratio > 1;
       const requiredMip = minify ? Math.min(8, Math.ceil(Math.log2(ratio)) + 1) : 0;
       busy = true;
-      if (uploadedMixing !== !!options.linear) {
+      if (uploadedSampling !== sampling) {
         options.commands?.flush();
-        mixing.write(options.linear ? 1 : 0);
-        uploadedMixing = !!options.linear;
+        mixing.write(sampling);
+        uploadedSampling = sampling;
       }
       try {
         if (!scratch || scratch.width !== plan.width || scratch.height !== plan.height) {
@@ -94,15 +101,17 @@ export function createCanvasPickup<Layer extends PickupLayer>(
           output = patch.b;
         // Current-layer pickup is already the final premultiplied image. It needs
         // neither a transparent base nor a full-screen identity composite per dab.
-        const direct = layers.length === 1 && !options.allLayers;
+        // So is all-layer pickup of a single visible layer at full opacity: compositing it over the transparent base
+        // returns its pixels in every blend mode.
+        const visible = options.allLayers ? layers.filter((layer) => layer.visible && layer.opacity > 0) : layers;
+        const direct = visible.length === 1 && (!options.allLayers || visible[0]!.opacity === 1);
         const commands = direct ? (options.commands ?? commandBatch(root.device)) : commandBatch(root.device);
         if (!direct) {
           // Layer compositing submits independently and must see earlier encoded dabs.
           options.commands?.flush();
           clear(root, result);
         }
-        for (const layer of layers) {
-          if (options.allLayers && (!layer.visible || layer.opacity <= 0)) continue;
+        for (const layer of visible) {
           const target = direct ? result : patch.layer;
           const targetView = root.unwrap(target).createView();
           const count = (plan.maxX - plan.minX + 1) * (plan.maxY - plan.minY + 1);
@@ -199,7 +208,7 @@ export function createCanvasPickup<Layer extends PickupLayer>(
               options.allLayers ? layer.opacity : 1,
               options.allLayers ? ['normal', 'multiply', 'screen', 'overlay', 'linear'].indexOf(layer.blend) : 0,
               0,
-              0
+              options.allLayers && options.linearBlending ? 1 : 0
             )
           );
           const compositeEncoder = root.device.createCommandEncoder();
@@ -208,7 +217,10 @@ export function createCanvasPickup<Layer extends PickupLayer>(
           });
           composite
             .with(compositePass)
-            .with(root.createBindGroup(compositeLayout, { base: result, layer: patch.layer, settings: layerParams }))
+            .with(
+              // Pickup composites layers without clipping; `clip` is unused.
+              root.createBindGroup(compositeLayout, { base: result, layer: patch.layer, clip: patch.layer, settings: layerParams })
+            )
             .draw(3);
           compositePass.end();
           root.device.queue.submit([compositeEncoder.finish()]);
@@ -345,16 +357,24 @@ function placeTile(index: number, placement: d.v4f) {
 }
 const tileFragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f })((input) => {
   'use gpu';
-  if (tileLayout.$.mixing > 0) return sampleMixing(tileLayout.$.image, tileLayout.$.sampler, input.uv, true);
+  if (tileLayout.$.mixing === pickupSampling.linear)
+    return sampleMixing(tileLayout.$.image, tileLayout.$.sampler, input.uv, true);
+  if (tileLayout.$.mixing === pickupSampling.levelZero)
+    return std.textureSampleLevel(tileLayout.$.image, tileLayout.$.sampler, input.uv, 0);
   return std.textureSample(tileLayout.$.image, tileLayout.$.sampler, input.uv);
 });
 
 const smallTileFragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f })((input) => {
   'use gpu';
-  if (smallPlacementLayout.$.mixing > 0)
+  if (smallPlacementLayout.$.mixing === pickupSampling.linear)
     return sampleMixing(smallPlacementLayout.$.image, smallPlacementLayout.$.sampler, input.uv, true);
+  if (smallPlacementLayout.$.mixing === pickupSampling.levelZero)
+    return std.textureSampleLevel(smallPlacementLayout.$.image, smallPlacementLayout.$.sampler, input.uv, 0);
   return std.textureSample(smallPlacementLayout.$.image, smallPlacementLayout.$.sampler, input.uv);
 });
+
+/** How pickup reads source tiles: hardware-filtered mips, level zero only, or level zero decoded to linear light. */
+const pickupSampling = { mipmapped: 0, linear: 1, levelZero: 2 } as const;
 
 /** Layer properties needed to composite captured tiles. Tile storage remains owned by the host. */
 export type PickupLayer = { visible: boolean; opacity: number; blend: string };

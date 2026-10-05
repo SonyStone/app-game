@@ -34,7 +34,7 @@ export const brushEngineRoutes: Routes[] = [
     name: 'Paint Studio · TypeGPU',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() =>
-      import('@app-game/paint/editor').then(({ default: PaintStudio }) => ({
+      import('@app-game/paint/editor').then(({ PaintStudio }) => ({
         default: () => <PaintStudio experimentsHref="/paint" />
       }))
     )

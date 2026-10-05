@@ -1,9 +1,9 @@
+import { gpuError } from '@app-game/solid-gpu/errors';
+import { serializeGpuPreparation } from '@app-game/solid-gpu/gpu';
 import { render, type JSX } from '@solidjs/web';
 import { createEffect, createRoot, createSignal, flush, For, onCleanup, Show, untrack } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
-import { gpuError } from '../../shared/errors';
-import { serializeGpuPreparation } from '../../shared/gpu/serializeGpuPreparation';
 import { createDocumentCamera, type DocumentCamera } from '../camera/createDocumentCamera';
 import type { Viewport } from '../viewport/createViewport';
 import { FrameLoop, useFrame, useFrameLoop } from './FrameLoop';
@@ -16,7 +16,7 @@ const viewport = {
   screenToClip: (point: { x: number; y: number }) => point
 } as Viewport;
 
-vi.mock('../../shared/gpu/GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
+vi.mock('@app-game/solid-gpu/gpu/GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
 
 let abort: AbortController;
 let gpu: ReturnType<typeof gpuFixture>['gpu'];

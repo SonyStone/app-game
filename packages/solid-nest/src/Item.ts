@@ -2,7 +2,7 @@ import { Container } from './BlockTree';
 
 export type ItemId = string & { readonly brand: unique symbol };
 
-export type Item<K, T = unknown> = ContainerItem<K> | BlockItem<K, T> | PlaceholderItem<K> | GapItem;
+export type Item<K, T = unknown> = ContainerItem<K> | BlockItem<K, T> | PlaceholderItem<K>;
 
 export type ItemKind = Item<any, any>['kind'];
 
@@ -16,9 +16,6 @@ export type ContainerItem<K> = Readonly<{
 }>;
 export type BlockItem<K, T> = Readonly<{ id: ItemId; kind: 'block'; key: K; block: T; containers: Container<K, T>[] }>;
 export type PlaceholderItem<K> = Readonly<{ id: ItemId; kind: 'placeholder'; parent: K }>;
-export type GapItem = Readonly<{ id: ItemId; kind: 'gap'; before: ItemId; height: number }>;
-
-export const DropzoneItemId = 'gap' as ItemId;
 
 export function createContainerItem<K>(container: Container<K, unknown>): ContainerItem<K> {
   return {
@@ -65,21 +62,4 @@ export function createPlaceholderItem<K>(parent: K): PlaceholderItem<K> {
 
 export function createPlaceholderItemId<K>(parent: K): ItemId {
   return `p-${parent}` as ItemId;
-}
-
-export function isPlaceholderId(id: ItemId): boolean {
-  return id.startsWith('p-');
-}
-
-export function createDropzoneItem(before: ItemId, height: number): GapItem {
-  return {
-    id: createDropzoneItemId(),
-    kind: 'gap',
-    before,
-    height
-  };
-}
-
-export function createDropzoneItemId(): ItemId {
-  return `gap` as ItemId;
 }

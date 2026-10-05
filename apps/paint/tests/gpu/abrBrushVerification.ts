@@ -165,7 +165,12 @@ export async function verifyAbrBrush(
   await verifyAbrPencil(report);
 }
 
-/** Hard Mix changes tip coverage, but must not turn pressure-controlled opacity back into opaque ink. */
+/**
+ * Pressure-controlled opacity under Dual Hard Mix, as Photoshop composes it: the primary mask accumulates up to each
+ * dab's pressure opacity, then Hard Mix (4p + 3s - 765) with a solid secondary multiplies it by four without a
+ * re-cap. The stroke stays saturated until pressure drops below about a quarter, then fades; tool opacity still caps
+ * it. Photoshop evidence: photoshop-analysis `rust-reference/src/dual.rs` and its byte-exact Dual Hard Mix captures.
+ */
 async function verifyPressureFade(report: (message: string) => void) {
   const values = brushToFormValues({
     id: 'fade',
@@ -235,8 +240,8 @@ async function verifyPressureFade(report: (message: string) => void) {
           tail = alphaAt(218);
         if (head < opacity * 255 * 0.85)
           throw new Error(`Hard Mix incorrectly capped ${tip.id} tip density at ${head} for tool opacity ${opacity}.`);
-        if (!(head > middle && middle > tail && tail < opacity * 255 * 0.2))
-          throw new Error(`Dual Hard Mix lost the pressure fade at opacity ${opacity}: ${head}, ${middle}, ${tail}`);
+        if (middle < opacity * 255 * 0.85 || tail > middle * 0.5)
+          throw new Error(`Dual Hard Mix lost Photoshop's saturated pressure fade at opacity ${opacity}: ${head}, ${middle}, ${tail}`);
         if (pixels.some((value, i) => i % 4 === 3 && value > Math.ceil(opacity * 255)))
           throw new Error(`Dual Hard Mix exceeded tool opacity ${opacity}.`);
         report(`ABR Hard Mix ${tip.id} tip opacity ${opacity}: head/middle/tail alpha ${head}/${middle}/${tail}.`);

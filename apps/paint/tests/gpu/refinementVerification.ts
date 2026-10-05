@@ -3,6 +3,7 @@ import { defaultCamera } from '@app-game/paint-core/camera';
 import { createDocument } from '@app-game/paint-core/document';
 import { unpackTile } from '@app-game/paint-core/tilePixels';
 import { createVirtualTexture } from '@app-game/paint-core/gpu/virtualTexture';
+import { createRefinements, drawUntil } from '../waits';
 
 /** Real shader regression: one ready fine page beside cropped coarse fallback at negative coordinates. */
 export async function verifyRefinement(report: (message: string) => void) {
@@ -14,12 +15,14 @@ export async function verifyRefinement(report: (message: string) => void) {
   for (let y = 0; y < 256; y++)
     for (let x = 0; x < 256; x++) source.set(x % 4 < 2 ? [128, 0, 0, 128] : [0, 0, 128, 128], (y * 256 + x) * 4);
   for (let y = -2; y < 0; y++) for (let x = -2; x < 0; x++) document.active.tiles.set(`${x},${y}`, source);
+  const refinements = createRefinements();
   const virtual = createVirtualTexture(
     root,
     async (data) => unpackTile(data as Uint8Array),
-    () => {},
+    refinements.notify,
     (error) => errors.push(String(error))
   );
+  const view = virtual.view();
   const target = root.createTexture({ size: [512, 512], format: 'rgba8unorm' }).$usage('render');
   const buffer = root.device.createBuffer({
     size: 512 * 512 * 4,
@@ -27,17 +30,17 @@ export async function verifyRefinement(report: (message: string) => void) {
   });
   const camera = { ...defaultCamera(), x: -384, y: -384 };
   const draw = (side: number, stream = true) => {
-    virtual.begin(document.layers);
+    view.begin(document.layers);
     const encoder = root.device.createCommandEncoder();
     const pass = encoder.beginRenderPass({
       colorAttachments: [{ view: root.unwrap(target).createView(), loadOp: 'clear', storeOp: 'store' }]
     });
     pass.setViewport(0, 0, side, side, 0, 1);
-    virtual.draw(document.active, pass, camera, { width: side, height: side }, 1);
+    view.plan(document.active, camera, { width: side, height: side }, 1, () => {}).draw(pass);
     pass.end();
     encoder.copyTextureToBuffer({ texture: root.unwrap(target) }, { buffer, bytesPerRow: 512 * 4 }, [512, 512]);
     root.device.queue.submit([encoder.finish()]);
-    if (stream) virtual.end();
+    if (stream) view.end();
   };
   const pixels = async () => {
     await buffer.mapAsync(GPUMapMode.READ);
@@ -50,13 +53,16 @@ export async function verifyRefinement(report: (message: string) => void) {
   };
   try {
     await virtual.prepare(document.layers);
-    const start = performance.now();
-    do {
-      draw(128);
-      await root.device.queue.onSubmittedWorkDone();
-      await new Promise((resolve) => setTimeout(resolve, 16));
-      check(performance.now() - start < 10000, 'Fine page failed to load');
-    } while (virtual.debug().some((page) => !page.resident || page.fallback));
+    const settled = () => view.debug().every((page) => page.resident && !page.fallback);
+    await drawUntil(
+      async () => {
+        draw(128);
+        await root.device.queue.onSubmittedWorkDone();
+      },
+      settled,
+      'Fine page failed to load',
+      { refinements }
+    );
     check(virtual.stats().pages === 2, 'Expected one coarse and one fine resident page');
     camera.x = -256;
     camera.y = -256;
@@ -71,12 +77,15 @@ export async function verifyRefinement(report: (message: string) => void) {
     report(
       'PASS: ready fine stripes stay visible beside parent fallback; negative UV crops, quadrant boundaries and 50% alpha are correct'
     );
-    do {
-      draw(512);
-      await root.device.queue.onSubmittedWorkDone();
-      await new Promise((resolve) => setTimeout(resolve, 16));
-      check(performance.now() - start < 10000, 'Refinement failed to finish');
-    } while (virtual.debug().some((page) => !page.resident || page.fallback));
+    await drawUntil(
+      async () => {
+        draw(512);
+        await root.device.queue.onSubmittedWorkDone();
+      },
+      settled,
+      'Refinement failed to finish',
+      { refinements }
+    );
     const after = await pixels();
     check(pixel(after, 32, 32).join() === pixel(before, 32, 32).join(), 'Ready detail changed during refinement');
     check(pixel(after, 288, 32).join() === '128,0,0,128', 'Coarse remainder did not refine');

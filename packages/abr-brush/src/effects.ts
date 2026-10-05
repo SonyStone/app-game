@@ -2,6 +2,7 @@ export {
   decodePremultiplied,
   encodePremultiplied,
   linearSourceOver,
+  lockAlpha,
   mixPremultiplied,
   sampleMixing,
   type ColorMixing
@@ -76,7 +77,50 @@ export function textureCoverage(coverage: number, tone: number, mode: number, de
   if (mode === 8 || mode === 9) {
     return heightTextureCoverage(coverage, tone, depth, mode === 8);
   }
-  return coverage * (1 - depth) + blendCoverage(coverage, tone, mode) * depth;
+
+  // Darken and Color Dodge have no reconstructed texture kernel; they keep a depth blend.
+  if (mode === 2 || mode === 4) {
+    return coverage * (1 - depth) + blendCoverage(coverage, tone, mode) * depth;
+  }
+
+  return byteTextureCoverage(coverage, tone, mode, depth);
+}
+
+/**
+ * Photoshop's byte texture kernels for Multiply, Subtract, Overlay, Color Burn, Linear Burn and Hard Mix.
+ * Depth scales the texture's contribution inside each formula rather than blending results, so Hard Mix at
+ * low depth thresholds soft coverage (`4c - 765`) instead of leaving it soft.
+ */
+function byteTextureCoverage(coverage: number, tone: number, mode: number, depth: number): number {
+  'use gpu';
+  const c = d.i32(std.floor(std.clamp(coverage, 0, 1) * 255 + 0.5));
+  const t = d.i32(std.floor(std.clamp(tone, 0, 1) * 255 + 0.5));
+  const k = d.i32(std.floor(std.clamp(depth, 0, 1) * 255 + 0.5));
+  let result = c;
+
+  if (mode === 0) {
+    result = c - multiplyMaskBytes(d.f32(c - multiplyMaskBytes(d.f32(c), d.f32(t))), d.f32(k));
+  } else if (mode === 1) {
+    result = c - multiplyMaskBytes(d.f32(t), d.f32(k));
+  } else if (mode === 3) {
+    let combined = 255 - multiplyMaskBytes(d.f32(2 * (255 - c)), d.f32(255 - t));
+    if (c < 128) {
+      combined = multiplyMaskBytes(d.f32(2 * c), d.f32(t));
+    }
+    const difference = multiplyMaskBytes(d.f32(std.abs(combined - c)), d.f32(k));
+    result = std.select(c + difference, c - difference, combined < c);
+  } else if (mode === 5) {
+    // The brush caller scales Color Burn depth by 248/255 before dispatch.
+    const burnDepth = multiplyMaskBytes(d.f32(k), 248);
+    const denominator = 255 - multiplyMaskBytes(d.f32(255 - t), d.f32(burnDepth));
+    result = 255 - d.i32(divideMaskBytes(d.f32(255 - c), d.f32(denominator)));
+  } else if (mode === 6) {
+    result = c - multiplyMaskBytes(d.f32(255 - t), d.f32(k));
+  } else if (mode === 7) {
+    result = multiplyMaskBytes(d.f32(t), d.f32(k)) * 3 + c * 4 - 765;
+  }
+
+  return d.f32(std.clamp(result, 0, 255)) / 255;
 }
 
 /** Photoshop's Height/Linear Height operate on byte masks before stamp flow. */
@@ -183,8 +227,114 @@ export function textureTone(sample: number, invert: number, brightness: number, 
   return d.f32(value) / 255;
 }
 
-/** A deterministic integer-grid noise pattern avoids shimmering when settings change. */
+/**
+ * Coverage of one stamp that stands in for `ratio` stamps when adaptive quality widens the spacing. Every skipped
+ * stamp would have taken the same share of the remaining headroom, so the stand-in deposits
+ * 1 − (1 − coverage · flow)^ratio. `compensatedFlow` is the stamp's flow already raised the same way,
+ * 1 − (1 − flow)^ratio, as the stroke sampler stores it; the returned coverage times that flow is the combined
+ * deposit. Scaling only the flow cannot do this: at full flow a textured or soft tip would simply lose ink.
+ * Returns `coverage` unchanged for a ratio of 1 or less.
+ */
+export function spacingCoverage(coverage: number, compensatedFlow: number, ratio: number): number {
+  'use gpu';
+  if (ratio <= 1 || compensatedFlow <= 0) {
+    return coverage;
+  }
+
+  const flow = 1 - std.pow(std.max(0, 1 - compensatedFlow), 1 / ratio);
+  const deposit = 1 - std.pow(std.max(0, 1 - coverage * flow), ratio);
+  return std.clamp(deposit / compensatedFlow, 0, 1);
+}
+
+/**
+ * Photoshop's RGB8 Wet Edges lookup for one completed stroke coverage value: a rising segment to 192 at half
+ * coverage, then a parabola down to 150 at full coverage, so solid ink turns translucent and soft edges stay darker.
+ * It is a per-pixel table, not a spatial edge filter. Apply once after texture, Dual Brush and the Pencil threshold,
+ * before stroke opacity; Photoshop skips it for Dissolve. Coverage is normalized and quantized to a byte first.
+ */
+export function wetEdgesCoverage(coverage: number): number {
+  'use gpu';
+  const value = std.floor(std.clamp(coverage, 0, 1) * 255 + 0.5);
+  if (value <= 128) {
+    return std.ceil(value * 1.5) / 255;
+  }
+
+  // The original truncates (42 / 127²) · (value − 128)²; every quotient is at least 1/16129 from an integer.
+  const offset = value - 128;
+  return (192 - std.floor((42 * offset * offset) / 16129)) / 255;
+}
+
+/**
+ * A deterministic integer-grid noise value in [0, 1), so the pattern does not shimmer when settings change.
+ * Integer hashing keeps it identical on every GPU and at any world position; a `sin()` hash loses
+ * precision far from the origin. `seed` keeps 16 fractional bits. Shader-only: JavaScript does not wrap
+ * the unsigned products, so CPU callers use {@link grainReference}.
+ */
 export function grain(x: number, y: number, seed: number): number {
   'use gpu';
-  return std.fract(std.sin(std.floor(x) * 12.9898 + std.floor(y) * 78.233 + seed) * 43758.5453);
+  const column = d.u32(d.i32(std.floor(x)));
+  const row = d.u32(d.i32(std.floor(y)));
+  const salt = d.u32(seed * 65536);
+  const hash = mixGrainBits(column ^ mixGrainBits(row ^ mixGrainBits(salt)));
+  return d.f32(hash >> 8) / 16777216;
+}
+
+/** Chris Wellons' lowbias32 finalizer: every input bit affects every output bit. */
+function mixGrainBits(value: number): number {
+  'use gpu';
+  let bits = d.u32(value);
+  bits = bits ^ (bits >> 16);
+  bits = bits * d.u32(0x7feb352d);
+  bits = bits ^ (bits >> 15);
+  bits = bits * d.u32(0x846ca68b);
+  return bits ^ (bits >> 16);
+}
+
+/** CPU twin of {@link grain} with 32-bit wrapping arithmetic; returns the same value for f32-exact inputs. */
+export function grainReference(x: number, y: number, seed: number): number {
+  const salt = Math.trunc(Math.fround(Math.fround(seed) * 65536)) >>> 0;
+  const hash = mixGrainBitsReference(
+    (Math.floor(x) >>> 0) ^ mixGrainBitsReference((Math.floor(y) >>> 0) ^ mixGrainBitsReference(salt))
+  );
+  return (hash >>> 8) / 16777216;
+}
+
+function mixGrainBitsReference(value: number): number {
+  let bits = value >>> 0;
+  bits = (bits ^ (bits >>> 16)) >>> 0;
+  bits = Math.imul(bits, 0x7feb352d) >>> 0;
+  bits = (bits ^ (bits >>> 15)) >>> 0;
+  bits = Math.imul(bits, 0x846ca68b) >>> 0;
+  return (bits ^ (bits >>> 16)) >>> 0;
+}
+
+/**
+ * Photoshop's byte brush Noise for one rasterized tip coverage, applied before texture (0x104be114c, strength 170).
+ * Empty and solid bytes stay unchanged; partial coverage moves two thirds of the way toward a random rescale
+ * (`coverage · 2r` below one half, mirrored above), so the mean is preserved and only soft edges gain grain.
+ * Coverage is a byte over 255 and the result is again an exact byte, computed in integers so fragment, compute and CPU
+ * evaluations agree. `random` must be uniform in [0, 1); Photoshop draws its byte from a lookup table.
+ */
+export function brushNoise(coverage: number, random: number): number {
+  'use gpu';
+  const source = std.floor(std.clamp(coverage, 0, 1) * 255 + 0.5);
+  if (source <= 0 || source >= 255) {
+    return coverage;
+  }
+
+  const noise = std.min(255, std.floor(random * 256));
+  let perturbed = roundedByteProduct(source * noise * 2);
+  if (source >= 128) {
+    perturbed = 255 - roundedByteProduct((255 - source) * noise * 2);
+  }
+
+  const magnitude = roundedByteProduct(std.abs(source - perturbed) * 170);
+  return std.select(source + magnitude, source - magnitude, perturbed < source) / 255;
+}
+
+/** Photoshop's rounded division of a byte product by 255: `(p + 128 + ((p + 128) >> 8)) >> 8`, exact in floats. */
+function roundedByteProduct(product: number): number {
+  'use gpu';
+  const biased = product + 128;
+  return std.floor((biased + std.floor(biased / 256)) / 256);
 }

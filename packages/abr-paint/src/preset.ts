@@ -11,6 +11,8 @@ import type { BrushResource } from './resources';
 
 /** Detaches the editable preset and every referenced resource before selecting the runtime engine.
  * Missing embedded resources fail explicitly rather than silently rendering a different brush.
+ * Resource IDs are deterministic for the same preset ID and pixels, so repeated calls can reuse
+ * resident uploads; different presets, roles or edited pixels always receive different IDs.
  */
 export function prepareAbrBrush(brush: AbrBrush) {
   const type = record(brush.preset.toolOptions).kind;
@@ -46,9 +48,9 @@ export function prepareAbrBrush(brush: AbrBrush) {
       ? brush.tipImage
       : generatePreviewTip(values);
   if (!image) throw new Error('The sampled brush tip is missing.');
-  const resource = copyResource(image);
-  const pattern = auxiliary.pattern ? copyResource(auxiliary.pattern) : undefined;
-  const dual = auxiliary.dualTip ? copyResource(auxiliary.dualTip) : undefined;
+  const resource = copyResource(image, brush.id, 'tip');
+  const pattern = auxiliary.pattern ? copyResource(auxiliary.pattern, brush.id, 'pattern') : undefined;
+  const dual = auxiliary.dualTip ? copyResource(auxiliary.dualTip, brush.id, 'dual') : undefined;
   const resources = [resource, ...(pattern ? [pattern] : []), ...(dual ? [dual] : [])];
   if (resources.reduce((sum, resource) => sum + resource.pixels.byteLength, 0) > 48 * 1024 * 1024)
     throw new Error('This preset’s combined resources exceed the 48 MiB brush budget.');
@@ -82,14 +84,51 @@ export function prepareAbrBrush(brush: AbrBrush) {
     angle: (values.angle * Math.PI) / 180
   };
 }
-function copyResource(tip: BrushTipImage): BrushResource {
-  if (tip.width > 8192 || tip.height > 8192 || tip.data.byteLength > 32 * 1024 * 1024)
+
+/** Copies one decoded coverage image into a transport resource with a stable, content-derived ID.
+ * Re-preparing the same preset yields the same ID, so hosts can skip re-uploads and Mixer reservoirs
+ * keyed on the tip survive re-selection. The preset ID and role keep distinct presets and roles apart;
+ * the content digest changes the ID whenever edited settings regenerate different pixels.
+ */
+function copyResource(tip: BrushTipImage, brushId: string, role: 'tip' | 'pattern' | 'dual'): BrushResource {
+  if (tip.width > 8192 || tip.height > 8192 || tip.data.byteLength > 32 * 1024 * 1024) {
     throw new Error('This tip exceeds Paint’s 8192 px / 32 MiB limit.');
+  }
+
+  const pixels = new Uint8Array(tip.data);
+  const owner = brushId.length <= 128 ? brushId : digest(new TextEncoder().encode(brushId));
   return {
-    id: crypto.randomUUID(),
+    id: `abr:${owner}:${role}:${tip.width}x${tip.height}:${digest(pixels)}`,
     width: tip.width,
     height: tip.height,
     format: 'r8unorm',
-    pixels: new Uint8Array(tip.data)
+    pixels
   };
+}
+
+/** Non-cryptographic 64-bit digest (two independent 32-bit lanes) as 16 hex digits.
+ * Reads whole words from the zero-offset copy, then folds the unaligned tail byte by byte.
+ */
+function digest(bytes: Uint8Array) {
+  let a = 0x811c9dc5;
+  let b = 0x9747b28c ^ bytes.byteLength;
+  const words = bytes.byteOffset % 4 === 0 ? new Uint32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength >>> 2) : undefined;
+  const tail = words ? words.length * 4 : 0;
+
+  if (words) {
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i]!;
+      a = Math.imul(a ^ word, 0x01000193);
+      b = Math.imul(b ^ word, 0x5bd1e995);
+      b ^= b >>> 15;
+    }
+  }
+
+  for (let i = tail; i < bytes.byteLength; i++) {
+    a = Math.imul(a ^ bytes[i]!, 0x01000193);
+    b = Math.imul(b ^ bytes[i]!, 0x5bd1e995);
+    b ^= b >>> 15;
+  }
+
+  return (a >>> 0).toString(16).padStart(8, '0') + (b >>> 0).toString(16).padStart(8, '0');
 }

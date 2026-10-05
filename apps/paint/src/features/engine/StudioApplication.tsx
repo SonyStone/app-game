@@ -1,0 +1,87 @@
+import { createBrushResources } from '@app-game/abr-paint/resources';
+import { abrBrush } from '@app-game/paint-core/composition/abrBrushEngine';
+import { createAbrProcessor } from '@app-game/paint-core/composition/abrStrokeProcessor';
+import type { StorageFactory } from '@app-game/paint-core/composition/contracts';
+import { createMemoryStorage } from '@app-game/paint-core/composition/memoryStorage';
+import {
+  BrushEngines,
+  BrushResources,
+  createPaintApplication,
+  Document,
+  DocumentFeatures,
+  PaintRuntime,
+  Renderer,
+  Storage,
+  StrokeProcessor,
+  type RuntimeBinding
+} from '@app-game/paint-core/composition/PaintApplication';
+import { placeImageEdit } from '@app-game/paint-core/composition/placeImageEdit';
+import { roundBrush } from '@app-game/paint-core/composition/roundBrushEngine';
+import { symmetryFeature } from '@app-game/paint-core/composition/symmetryFeature';
+import { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
+import { createDocument } from '@app-game/paint-core/document';
+import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
+import { studioProcessors } from '@app-game/paint-core/strokeProcessors';
+import { createTileStore } from '@app-game/paint-core/tileStore';
+import { fillEdit } from '../fill/fillEdit';
+import { framesFeature } from '../frames/framesFeature';
+import { gradientEdit } from '../gradient/gradientEdit';
+import { selectionEdit } from '../selection/selectionEdit';
+import { transformEdit } from '../transform/transformEdit';
+
+/**
+ * Starts the Studio engine: mounts the recipe under its own Solid root and returns the command runtime. `post`
+ * delivers events to the editor and `close` ends the execution realm after a graceful `dispose`; both are supplied by
+ * the worker entry or the main-thread transport, which also own the canvas.
+ */
+export function createStudioRuntime(post: RuntimeBinding['post'], close: RuntimeBinding['close']) {
+  return createPaintApplication((binding) => <StudioApplication {...binding} />, post, close);
+}
+
+/** A live viewer's drawing (storage `live:…`) stays in memory; every other drawing is kept in IndexedDB. */
+const liveViewerStorage = createMemoryStorage();
+const studioStorage: StorageFactory = (name) =>
+  name.startsWith('live:') ? liveViewerStorage(name) : createTileStore(name);
+
+/**
+ * The Studio recipe: paged document, IndexedDB tiles, the WebGPU renderer, stroke processors, brush engines and the
+ * feature modules: paint symmetry, frames, image placement, the bucket fill, the gradient and the transform.
+ */
+export function StudioApplication(props: RuntimeBinding) {
+  return (
+    <Document document={() => createDocument({ paged: true })}>
+      <Storage storage={studioStorage}>
+        <Renderer renderer={createPaintRenderer}>
+          <StrokeProcessor
+            processors={{ ...studioProcessors, abr: createAbrProcessor }}
+            // ABR presets smooth as their preset says unless the stroke is raw or uses the stabilizer.
+            selectProcessor={(brush) =>
+              brush.engine?.id === 'abr' && brush.stroke.mode !== 'none' && brush.stroke.mode !== 'stabilizer'
+                ? 'abr'
+                : brush.stroke.mode
+            }
+          >
+            <BrushEngines
+              engines={{
+                [roundBrush.id]: roundBrush.engine,
+                eraser: roundBrush.engine,
+                [texturedBrush.id]: texturedBrush.engine,
+                [abrBrush.id]: abrBrush.engine
+              }}
+              selectEngine={(brush) => (brush.tool === 'eraser' ? 'eraser' : 'round')}
+            >
+              <BrushResources resources={createBrushResources}>
+                <DocumentFeatures
+                  features={[symmetryFeature, framesFeature]}
+                  edits={[placeImageEdit, selectionEdit, fillEdit, gradientEdit, transformEdit]}
+                >
+                  <PaintRuntime {...props} />
+                </DocumentFeatures>
+              </BrushResources>
+            </BrushEngines>
+          </StrokeProcessor>
+        </Renderer>
+      </Storage>
+    </Document>
+  );
+}

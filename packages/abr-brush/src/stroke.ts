@@ -18,6 +18,7 @@ import {
 import { browserTabletInput, prepareTabletInput } from './tabletInput';
 import { textureDepth } from './textureDynamics';
 import { placeSampledTip } from './tipPlacement';
+import { computedTipScale } from './computedTip';
 import { computedTipSpacing, sampledTipSpacing } from './tipSpacing';
 import { transferValue } from './transferDynamics';
 
@@ -75,6 +76,8 @@ export type PreviewStroke = {
   count: number;
   /** Detailed placement intervals represented by each adaptive stamp. Not part of the GPU vertex layout. */
   spacingRatios?: Float32Array;
+  /** The adaptive step that follows each stamp, in document pixels; parallel to `spacingRatios`. */
+  spacingSteps?: Float32Array;
   /** Mixer-only wetness/mix pairs, aligned with stamps; ordinary brush layout stays unchanged. */
   mixing?: Float32Array;
   /** Primary/secondary sampled-source placement retained in double precision through row planning. */
@@ -135,6 +138,7 @@ export function previewStrokeSize(input: PreviewInput): number {
 /** Incremental, viewport-independent stamp placement. Coordinates and size are document pixels.
  * Random state, spacing and fade survive input batches; preview restores all state after sampling.
  * There is no total-stroke stamp cap. Callers should submit input batches regularly.
+ * The input is copied at creation; later mutations have no effect. Change colors with setColors.
  */
 export function createAbrStrokeSampler(
   input: Pick<
@@ -150,11 +154,17 @@ export function createAbrStrokeSampler(
      * Alters random/fade evolution; omit for detailed rendering.
      */
     minimumSpacing?: number;
+    /** With `minimumSpacing`: lets a step widen further, to this fraction of the longer side of its smallest
+     * stamp. Follows dynamic size, so a stamp shrunk by pressure also steps less.
+     */
+    tipSpacing?: number;
     /** Preview-only budget. The document engine leaves this unset. */
     maxStamps?: number;
   },
   tip: Pick<BrushTipImage, 'width' | 'height'>
 ) {
+  // Private copy: callers change colors only through setColors, never by mutating their input.
+  input = { ...input };
   const v = input.values,
     shape = v.tool.pressureOverridesSize
       ? {
@@ -184,6 +194,7 @@ export function createAbrStrokeSampler(
   const paintbrushTransfer = usesPaintbrushTransfer(input);
   // Sampled primary-tip branch in Photoshop 0x103e3ae9c (f8 predicate is zero).
   const sampledShape = !secondary && v.tool.type === 'PbTl' && v.tipKind === 'sampledBrush';
+  const computedRaster = !secondary && v.tipKind === 'computedBrush' && v.tool.type === 'PbTl';
   const channels = createBrushRandomChannels(input.seed, input.randomState);
   const random = rng(input.seed ?? 0x6d2b79f5),
     colorRandom = rng((input.seed ?? 0x152dc2e1) ^ 0x124f),
@@ -204,12 +215,13 @@ export function createAbrStrokeSampler(
     saturation: channels.channel(10),
     brightness: channels.channel(11)
   };
-  const foreground16 = previewColor(input.color).map((c) => Math.round(c * 32768));
-  const background16 = previewColor(input.secondaryColor ?? '#477ca6').map((c) => Math.round(c * 32768));
+  let foreground16 = previewColor(input.color).map((c) => Math.round(c * 32768));
+  let background16 = previewColor(input.secondaryColor ?? '#477ca6').map((c) => Math.round(c * 32768));
   const size = input.size;
   let data: number[] = [];
   let mixing: number[] = [];
   let spacingRatios: number[] = [];
+  let spacingSteps: number[] = [];
   let sampledTips: NonNullable<PreviewStroke['sampledTips']> = [];
   const sampledPrimary =
     input.sampledTipGeometry && !secondary && v.tool.type === 'PbTl' && v.tipKind === 'sampledBrush';
@@ -229,6 +241,7 @@ export function createAbrStrokeSampler(
     data = [];
     mixing = [];
     spacingRatios = [];
+    spacingSteps = [];
     sampledTips = [];
     for (const b of points) {
       if (data.length / stampStride >= (input.maxStamps ?? Infinity)) break;
@@ -266,13 +279,26 @@ export function createAbrStrokeSampler(
     return {
       data: new Float32Array(data),
       count: data.length / stampStride,
-      ...(retainSpacing ? { spacingRatios: new Float32Array(spacingRatios) } : {}),
+      ...(retainSpacing
+        ? { spacingRatios: new Float32Array(spacingRatios), spacingSteps: new Float32Array(spacingSteps) }
+        : {}),
       ...(sampledPrimary || sampledSecondary ? { sampledTips } : {}),
       ...(v.tool.type === 'MixB' ? { mixing: new Float32Array(mixing) } : {})
     };
   }
   return {
     add,
+    /** Replaces the foreground/background colors used by subsequent stamps, such as Pencil Auto Erase
+     * swapping them on first contact. Discards any whole-stroke color evaluated from the old pair.
+     * Placement, spacing and random streams are unaffected.
+     */
+    setColors(color: string, secondaryColor: string | undefined) {
+      input.color = color;
+      input.secondaryColor = secondaryColor;
+      foreground16 = previewColor(color).map((c) => Math.round(c * 32768));
+      background16 = previewColor(secondaryColor ?? '#477ca6').map((c) => Math.round(c * 32768));
+      strokeColor = undefined;
+    },
     /** Snapshot of the 24 native dynamics channels; legacy tool/noise streams are separate. */
     randomState: channels.snapshot,
     preview(points: readonly PreviewPoint[]) {
@@ -334,6 +360,7 @@ export function createAbrStrokeSampler(
         mixing = [];
         sampledTips = [];
         spacingRatios = [];
+        spacingSteps = [];
         data = [];
       }
     }
@@ -478,7 +505,10 @@ export function createAbrStrokeSampler(
             inputValue(shape.roundnessControl, shape.roundnessFade, shape.roundnessMinimum) *
               (1 - (random() * shape.roundnessJitter) / 100)
           );
-        if (!sampledShape && shape.sizeControl === 3) roundness *= shape.tiltScale / 100;
+        // Matches the traced stretch in `sampledTipRaster`: an upright pen leaves the tip unchanged.
+        if (!sampledShape && shape.sizeControl === 3 && !v.tool.pressureOverridesSize) {
+          roundness *= 1 + (shape.tiltScale / 100) * tiltMagnitude;
+        }
         if (shape.brushProjection && !sampledPrimary) {
           roundness *= Math.max(0.05, 1 - Math.hypot(tx, ty) / 1.2);
           angle += Math.atan2(ty, tx) + (rotation * Math.PI) / 180;
@@ -503,7 +533,10 @@ export function createAbrStrokeSampler(
       const renderedScale = sampledShape
         ? sampledTipRenderScale(sampledScale, Math.max(tip.width, tip.height))
         : sampledScale;
-      const renderedSize = sampledShape ? renderedScale * Math.max(tip.width, tip.height) : stampSize;
+      // Computed tips span Photoshop's enlarged raster; generatePreviewTip supplies that whole raster.
+      const renderedSize = sampledShape
+        ? renderedScale * Math.max(tip.width, tip.height)
+        : stampSize * (computedRaster ? computedTipScale(size, v.hardness) : 1);
       const flow = usesPencilCoverage(v.tool)
         ? 1
         : paintbrushTransfer
@@ -682,16 +715,39 @@ export function createAbrStrokeSampler(
     // Photoshop's primary and secondary spacing loops both clamp the advance to
     // one document pixel, including their subpixel-coordinate paths.
     const detailed = Math.max(photoshopPlacement || secondary ? 1 : 0.25, advance);
-    const requested = timed ? undefined : input.minimumSpacing;
+    // A widened step must still overlap along any travel direction, so it is limited by the thinnest side of this
+    // step's stamps: a flat tip dragged sideways would otherwise leave gaps.
+    let thinnest = stampSize;
+    let smallest = stampSize;
+    for (let at = firstStamp; at < data.length; at += stampStride) {
+      thinnest = Math.min(thinnest, 2 * Math.min(data[at + 2]!, data[at + 3]!));
+      smallest = Math.min(smallest, 2 * Math.max(data[at + 2]!, data[at + 3]!));
+    }
+
+    const requested =
+      timed || input.minimumSpacing === undefined
+        ? undefined
+        : Math.max(input.minimumSpacing, (input.tipSpacing ?? 0) * smallest);
+
     const spacing =
       requested && Number.isFinite(requested) && requested > detailed
-        ? Math.max(detailed, Math.min(requested, stampSize * 0.25))
+        ? Math.max(detailed, Math.min(requested, thinnest * 0.25))
         : detailed;
     // Contact is one application, regardless of the spacing used for the following movement.
     const ratio = step === 1 ? 1 : spacing / detailed;
+    // A widened stamp stands in for `ratio` steps, so step-counted fades keep their length along the stroke.
+    step += ratio - 1;
     for (let at = firstStamp; at < data.length; at += stampStride) {
-      if (retainSpacing) spacingRatios.push(ratio);
-      if (ratio > 1 && !samplingTool) data[at + 8] = 1 - Math.pow(1 - Math.max(0, Math.min(1, data[at + 8]!)), ratio);
+      if (retainSpacing) {
+        spacingRatios.push(ratio);
+        spacingSteps.push(spacing);
+      }
+
+      if (ratio > 1 && !samplingTool) {
+        data[at + 8] = 1 - Math.pow(1 - Math.max(0, Math.min(1, data[at + 8]!)), ratio);
+        // The rasterizer raises each pixel's coverage by the same ratio; see spacingCoverage.
+        data[at + 15] = ratio;
+      }
     }
     return spacing;
   }

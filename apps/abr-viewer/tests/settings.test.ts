@@ -1,3 +1,4 @@
+import { computedTipScale } from '@app-game/abr-brush/computedTip';
 import { loadBrushLibrary, type BrushAsset } from '@app-game/abr-brush/library';
 import { composeAbr, percent, pixels } from '@app-game/abr-parser';
 import { readFileSync } from 'node:fs';
@@ -217,14 +218,16 @@ test('fade uses tip steps; pose overrides pressure', () => {
   input.values.shapeDynamics.sizeControl = 1;
   input.values.shapeDynamics.sizeFade = 4;
   const stroke = createPreviewStroke(input, tip);
-  expect(stroke.data[4 * stampStride + 2]).toBeCloseTo(0.025);
+  // Radii include Photoshop's computed raster, wider than the nominal 20 px diameter at hardness 30.
+  const raster = computedTipScale(20, 30);
+  expect(stroke.data[4 * stampStride + 2]).toBeCloseTo(0.025 * raster);
   input.values.shapeDynamics.sizeControl = 2;
   input.values.useBrushPose = true;
   input.values.brushPose.overridePressure = true;
   input.values.brushPose.pressure = 50;
   const posed = createPreviewStroke(input, tip);
-  expect(posed.data[2]).toBeCloseTo(5);
-  expect(posed.data[(posed.count - 1) * stampStride + 2]).toBeCloseTo(5);
+  expect(posed.data[2]).toBeCloseTo(5 * raster);
+  expect(posed.data[(posed.count - 1) * stampStride + 2]).toBeCloseTo(5 * raster);
 });
 test('build-up stamps while stationary; smoothing changes a jagged input path', () => {
   const input = preview();

@@ -1,0 +1,70 @@
+import { readAdobeBrushPresets } from '@app-game/abr-brush/testing/adobeBrushes';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
+import { createBrushResources } from '@app-game/abr-paint/resources';
+import { defaultBrush, type Dab } from '../brush';
+import { abrBrush } from './abrBrushEngine';
+import { createRendererDouble } from '../../tests/fixtures/rendererDouble';
+import { createResourceSession } from './resourceSession';
+import { createDocument } from '../document';
+import { createRawProcessor } from '../strokeProcessors';
+import { expect, it, vi } from 'vitest';
+
+// The every-preset LOD policy check lives in @app-game/abr-paint's megapack.test.ts; this suite needs two real presets.
+const megapack = await readAdobeBrushPresets('megapack.abr', ['KYLE Ultimate 2B Pencil', "Kyle's Paintbox - Wet Blender"]);
+
+it.each([
+  ['KYLE Ultimate 2B Pencil', 222, 0, 450],
+  ['KYLE Ultimate 2B Pencil', 222, 1, 450],
+  ['KYLE Ultimate 2B Pencil', 222, 3, 450],
+  ['KYLE Ultimate 2B Pencil', 9, 0, 10500],
+  // Widened spacing is limited by the tip's thinnest side, so a 9 px tip keeps more stamps than its diameter suggests.
+  ['KYLE Ultimate 2B Pencil', 9, 3, 7000],
+  ["Kyle's Paintbox - Wet Blender", 222, 0, 4500],
+  ["Kyle's Paintbox - Wet Blender", 222, 3, 2700]
+] as const)('bounds real %s (%ipx) long-stroke work at LOD %i', async (name, size, lod, limit) => {
+  const source = megapack.find((brush) => brush.name === name)!;
+  const preset = prepareAbrBrush(source);
+  const cache = createBrushResources();
+  preset.resources.forEach((resource) => cache.put(resource));
+  for (const mixing of ['classic', 'linear'] as const) {
+    const dabs: Dab[] = [];
+    const begin = vi.fn();
+    const renderer = createRendererDouble({
+      begin,
+      paint: vi.fn(async (batch: readonly Dab[]) => {
+        dabs.push(...batch);
+      })
+    });
+    const stroke = createResourceSession(cache, (resources) =>
+      abrBrush.engine({
+        settings: { ...preset.engine.settings, seed: 12345 },
+        resources,
+        renderer,
+        brush: { ...defaultBrush(), size, mixing },
+        layer: createDocument().active,
+        processor: createRawProcessor(),
+        adaptiveQuality: true,
+        lod
+      })
+    );
+    try {
+      await stroke.add([
+        { x: 0, y: 0, pressure: 1, time: 0 },
+        { x: 6000, y: 0, pressure: 1, time: 1000 }
+      ]);
+      await stroke.finish();
+      expect(dabs.length).toBeGreaterThan(100);
+      expect(dabs.length).toBeLessThan(limit);
+      // A dropped/truncated gesture must never count as a successful optimization.
+      expect(Math.max(...dabs.map((dab) => dab.x))).toBeGreaterThan(5900);
+      const options = begin.mock.calls[0]![3];
+      // LOD 0 and tips under 24 px keep the exact mask path; approximate masks start at LOD 1, one level finer
+      // than the view.
+      if (name === 'KYLE Ultimate 2B Pencil') expect(options.tipLodBias).toBe(lod > 0 && size >= 24 ? lod - 1 : undefined);
+      else expect(options.smudge.pickupScale).toBe(lod > 0 && mixing === 'linear' ? 0.125 : undefined);
+    } finally {
+      stroke.cancel();
+    }
+    expect(cache.stats().pinnedBytes).toBe(0);
+  }
+});

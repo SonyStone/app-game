@@ -1,35 +1,32 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { createCompositionBudget } from './createCompositionBudget';
 
-afterEach(() => vi.restoreAllMocks());
-
-it('requires consecutive slow submissions, coalesces pending fences and resets on a fast sample', async () => {
-  let now = 0;
-  vi.spyOn(performance, 'now').mockImplementation(() => now);
-  let finish!: () => void;
-  const completed = vi.fn(
+it('requires consecutive slow frames, coalesces pending costs, skips unmeasured frames and resets on a fast one', async () => {
+  let finish!: (cost: number | undefined) => void;
+  const cost = vi.fn(
     () =>
-      new Promise<void>((resolve) => {
+      new Promise<number | undefined>((resolve) => {
         finish = resolve;
       })
   );
   const changed = vi.fn();
-  const budget = createCompositionBudget(completed, changed);
+  const budget = createCompositionBudget(cost, changed);
 
-  const sample = async (duration: number) => {
+  const sample = async (ms: number | undefined) => {
     budget.observe([3]);
     budget.observe([9]);
     await flush();
-    now += duration;
-    finish();
+    finish(ms);
     await flush();
   };
 
   await sample(12);
   expect(budget.has(3)).toBe(false);
-  expect(completed).toHaveBeenCalledTimes(1);
+  expect(cost).toHaveBeenCalledTimes(1);
   await sample(2);
   await sample(12);
+  // A frame without a meaningful cost neither counts nor resets.
+  await sample(undefined);
   expect(budget.has(3)).toBe(false);
   await sample(12);
   expect(budget.has(3)).toBe(true);
@@ -38,12 +35,24 @@ it('requires consecutive slow submissions, coalesces pending fences and resets o
   budget.destroy();
 });
 
+it('judges frames by the given threshold', async () => {
+  const budget = createCompositionBudget(async () => 12, vi.fn(), 13);
+
+  for (let i = 0; i < 3; i++) {
+    budget.observe([1]);
+    await flush();
+  }
+
+  expect(budget.has(1)).toBe(false);
+  budget.destroy();
+});
+
 it('ignores completion after disposal and handles device failures without invalidating', async () => {
   const changed = vi.fn();
-  let finish!: () => void;
+  let finish!: (cost: number) => void;
   const budget = createCompositionBudget(
     () =>
-      new Promise<void>((resolve) => {
+      new Promise<number>((resolve) => {
         finish = resolve;
       }),
     changed
@@ -51,7 +60,7 @@ it('ignores completion after disposal and handles device failures without invali
   budget.observe([1]);
   await flush();
   budget.destroy();
-  finish();
+  finish(100);
   await flush();
   expect(budget.size).toBe(0);
   expect(changed).not.toHaveBeenCalled();

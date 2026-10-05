@@ -81,10 +81,6 @@ export function calculateLayout<K>(
       nextY += measure.bottom;
     }
 
-    if (item.kind === 'gap') {
-      nextY += measure.bottom;
-    }
-
     output.set(item.id, new DOMRect(x, y, width, nextY - y));
   };
 

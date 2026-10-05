@@ -1,5 +1,5 @@
 import type { JSX } from '@solidjs/web';
-import { createEffect, createStore, createTrackedEffect, merge, storePath, untrack } from 'solid-js';
+import { createEffect, createStore, createTrackedEffect, merge, untrack } from 'solid-js';
 
 import { CollisionDetector, mostIntersecting } from './utils/collision';
 import createContextProvider from './utils/create-context-provider';
@@ -113,7 +113,9 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
         return;
       }
 
-      setState(storePath(type, id, 'transformers', transformer.id, transformer));
+      setState((draft) => {
+        mergeOrSet(draft[type][id]!.transformers, transformer.id, transformer);
+      });
     };
 
     const removeTransformer = (type: 'draggables' | 'droppables', id: Id, transformerId: Id): void => {
@@ -129,7 +131,9 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
         return;
       }
 
-      setState(storePath(type, id, 'transformers', transformerId, undefined!));
+      setState((draft) => {
+        draft[type][id]!.transformers[transformerId] = undefined!;
+      });
     };
 
     const addDraggable = ({
@@ -206,7 +210,9 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
       }
 
       {
-        setState(storePath('draggables', id, draggable));
+        setState((draft) => {
+          mergeOrSet(draft.draggables, id, draggable as Draggable);
+        });
         if (transformer) {
           addTransformer('draggables', id, transformer);
         }
@@ -223,7 +229,9 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
         return;
       }
 
-      setState(storePath('draggables', id, '_pendingCleanup', true));
+      setState((draft) => {
+        draft.draggables[id]!._pendingCleanup = true;
+      });
       queueMicrotask(() => cleanupDraggable(id));
     };
 
@@ -232,9 +240,13 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
         const cleanupActive = state.active.draggableId === id;
         {
           if (cleanupActive) {
-            setState(storePath('active', 'draggableId', null));
+            setState((draft) => {
+              draft.active.draggableId = null;
+            });
           }
-          setState(storePath('draggables', id, undefined!));
+          setState((draft) => {
+            draft.draggables[id] = undefined!;
+          });
         }
       }
     };
@@ -285,7 +297,9 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
         });
       }
 
-      setState(storePath('droppables', id, droppable));
+      setState((draft) => {
+        mergeOrSet(draft.droppables, id, droppable as Droppable);
+      });
 
       if (state.active.draggable) {
         recomputeLayouts();
@@ -298,7 +312,9 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
         return;
       }
 
-      setState(storePath('droppables', id, '_pendingCleanup', true));
+      setState((draft) => {
+        draft.droppables[id]!._pendingCleanup = true;
+      });
       queueMicrotask(() => cleanupDroppable(id));
     };
 
@@ -307,9 +323,13 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
         const cleanupActive = state.active.droppableId === id;
         {
           if (cleanupActive) {
-            setState(storePath('active', 'droppableId', null));
+            setState((draft) => {
+              draft.active.droppableId = null;
+            });
           }
-          setState(storePath('droppables', id, undefined!));
+          setState((draft) => {
+            draft.droppables[id] = undefined!;
+          });
         }
       }
     };
@@ -318,8 +338,8 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
      * App pointer douw sensor
      */
     const addSensor = ({ id, activators }: Omit<Sensor, 'coordinates'>): void => {
-      setState(
-        storePath('sensors', id, {
+      setState((draft) => {
+        mergeOrSet(draft.sensors, id, {
           id,
           activators,
           coordinates: {
@@ -333,8 +353,8 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
               };
             }
           }
-        })
-      );
+        });
+      });
     };
 
     const removeSensor = (id: Id): void => {
@@ -346,9 +366,13 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
       const cleanupActive = state.active.sensorId === id;
       {
         if (cleanupActive) {
-          setState(storePath('active', 'sensorId', null));
+          setState((draft) => {
+            draft.active.sensorId = null;
+          });
         }
-        setState(storePath('sensors', id, undefined!));
+        setState((draft) => {
+          draft.sensors[id] = undefined!;
+        });
       }
     };
 
@@ -405,20 +429,29 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
         });
       }
 
-      setState(storePath('active', 'overlay', overlay));
+      setState((draft) => {
+        if (draft.active.overlay) {
+          Object.assign(draft.active.overlay, overlay);
+        } else {
+          draft.active.overlay = overlay as Overlay;
+        }
+      });
     };
 
-    const clearOverlay = (): void => setState(storePath('active', 'overlay', null));
+    const clearOverlay = (): void =>
+      setState((draft) => {
+        draft.active.overlay = null;
+      });
 
     const sensorStart = (id: Id, coordinates: Coordinates): void => {
       {
-        setState(
-          storePath('sensors', id, 'coordinates', {
+        setState((draft) => {
+          Object.assign(draft.sensors[id]!.coordinates, {
             origin: { ...coordinates },
             current: { ...coordinates }
-          })
-        );
-        setState(storePath('active', 'sensorId', id));
+          });
+          draft.active.sensorId = id;
+        });
       }
     };
 
@@ -429,14 +462,15 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
         return;
       }
 
-      setState(
-        storePath('sensors', sensorId, 'coordinates', 'current', {
-          ...coordinates
-        })
-      );
+      setState((draft) => {
+        Object.assign(draft.sensors[sensorId]!.coordinates.current, coordinates);
+      });
     };
 
-    const sensorEnd = (): void => setState(storePath('active', 'sensorId', null));
+    const sensorEnd = (): void =>
+      setState((draft) => {
+        draft.active.sensorId = null;
+      });
 
     const draggableActivators = (draggableId: Id, asHandlers?: boolean): Listeners => {
       const eventMap: Record<
@@ -498,7 +532,9 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
             const layout = cache.get(draggable.node)!;
 
             if (!layoutsAreEqual(currentLayout, layout)) {
-              setState(storePath('draggables', draggable.id, 'layout', layout));
+              setState((draft) => {
+                Object.assign(draft.draggables[draggable.id]!.layout, layout);
+              });
               anyLayoutChanged = true;
             }
           }
@@ -512,7 +548,9 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
             const layout = cache.get(droppable.node)!;
 
             if (!layoutsAreEqual(currentLayout, layout)) {
-              setState(storePath('droppables', droppable.id, 'layout', layout));
+              setState((draft) => {
+                Object.assign(draft.droppables[droppable.id]!.layout, layout);
+              });
               anyLayoutChanged = true;
             }
           }
@@ -522,7 +560,9 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
           const currentLayout = overlay.layout;
           const layout = elementLayout(overlay.node);
           if (!layoutsAreEqual(currentLayout, layout)) {
-            setState(storePath('active', 'overlay', 'layout', layout));
+            setState((draft) => {
+              Object.assign(draft.active.overlay!.layout, layout);
+            });
             anyLayoutChanged = true;
           }
         }
@@ -541,7 +581,9 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
         const droppableId: Id | null = droppable ? droppable.id : null;
 
         if (state.active.droppableId !== droppableId) {
-          setState(storePath('active', 'droppableId', droppableId));
+          setState((draft) => {
+            draft.active.droppableId = droppableId;
+          });
         }
       }
     };
@@ -564,7 +606,9 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
       recomputeLayouts();
 
       {
-        setState(storePath('active', 'draggableId', draggableId));
+        setState((draft) => {
+          draft.active.draggableId = draggableId;
+        });
         addTransformer('draggables', draggableId, transformer);
       }
 
@@ -577,7 +621,10 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
         if (draggableId !== null) {
           removeTransformer('draggables', draggableId, 'sensorMove');
         }
-        setState(storePath('active', ['draggableId', 'droppableId'], null));
+        setState((draft) => {
+          draft.active.draggableId = null;
+          draft.active.droppableId = null;
+        });
       }
 
       recomputeLayouts();
@@ -674,3 +721,17 @@ export const [DragDropProvider, useDragDropContext] = createContextProvider(
 );
 
 const toDisplay = (type: string) => type.substring(0, type.length - 1);
+
+/**
+ * Merges `value` into the object already stored at `record[key]`, keeping its identity and any
+ * properties `value` omits; stores `value` as-is when the slot is empty.
+ */
+function mergeOrSet<T extends object>(record: Record<Id, T | undefined>, key: Id, value: T): void {
+  const existing = record[key];
+
+  if (existing) {
+    Object.assign(existing, value);
+  } else {
+    record[key] = value;
+  }
+}

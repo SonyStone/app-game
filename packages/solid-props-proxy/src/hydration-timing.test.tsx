@@ -1,4 +1,6 @@
-import { createRoot, sharedConfig } from 'solid-js';
+import { createRoot } from 'solid-js';
+// Test-only seam: simulates the synchronous claim that the public isHydrating() reports.
+import { sharedConfig } from 'solid-js/internal';
 import { describe, expect, it } from 'vitest';
 import { createSpread } from './spread';
 

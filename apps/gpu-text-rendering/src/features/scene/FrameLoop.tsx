@@ -1,3 +1,4 @@
+import { onGpuRelease, pendingGpuPreparation, useGpuCanvas } from '@app-game/solid-gpu/gpu';
 import { resolveTokens } from '@solid-primitives/jsx-tokenizer';
 import { createPageVisibility } from '@solid-primitives/page-utilities';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
@@ -13,12 +14,12 @@ import {
   type Accessor
 } from 'solid-js';
 import type { ViewerError } from '../../shared/errors';
-import { useGpuCanvas } from '../../shared/gpu/GpuCanvasProvider';
-import { onGpuRelease } from '../../shared/gpu/onGpuRelease';
-import { pendingGpuPreparation } from '../../shared/gpu/serializeGpuPreparation';
 import { runWithContext } from '../../shared/jsx/TokenContext';
 import { ViewportContext, type Viewport } from '../viewport/createViewport';
+import { createDynamicResolution } from './createDynamicResolution';
 import { createFrameScheduler, type FrameSubscription } from './createFrameScheduler';
+import { createSceneUpscaler } from './createSceneUpscaler';
+import { gpuFrameBudgetMs, gpuFrameTimer, type FrameCost } from './gpuFrameTimer';
 import { makeGpuFrameGate } from './makeGpuFrameGate';
 import { makeScenePointerEvents } from './makeScenePointerEvents';
 import { RenderLayer } from './RenderLayer';
@@ -45,19 +46,53 @@ export function FrameLoop(props: {
   const track = trackFrames(() => loop.invalidate());
 
   let resized = false;
+  // Moving frames that miss their budget draw below the canvas resolution; the frame after motion stops is full.
+  const upscaler = createSceneUpscaler(gpu);
+  const timer = gpuFrameTimer(gpu.device);
+  const resolution = createDynamicResolution({ budgetMs: timer.supported ? gpuFrameBudgetMs : latencyBudgetMs });
+  /**
+   * When a layer last reported its view moving. Every frame shortly after counts as moving, including those drawn
+   * for other reasons such as arriving tiles, which would otherwise interrupt a gesture with full-resolution frames.
+   */
+  let movedAt = -Infinity;
+  /** The frame just submitted, read once by the gate's completion. */
+  let submittedFrame:
+    | { started: number; moving: boolean; scale: number; sequence: number; cost: Promise<FrameCost | undefined> }
+    | undefined;
+  let submittedScale = 1;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
   const loop = createFrameScheduler(
     () => {
+      const started = performance.now();
+      const moving = !resized && started - movedAt < motionWindowMs;
       let submitted = false;
       const drawn = gate.draw(
-        () =>
-          renderScene(
+        () => {
+          const sequence = timer.begin(started);
+          const cost = timer.cost();
+          const scale = moving ? resolution.scaleFor(sequence) : 1;
+
+          return renderScene(
             gpu,
-            layers().map((layer) => layer.draw)
+            layers().map((layer) => layer.draw),
+            scale < 1 ? { upscaler, scale } : undefined,
+            { moving, strained: moving && resolution.strained }
           ).map(() => {
             submitted = true;
-          }),
+            submittedScale = scale;
+            submittedFrame = { started, moving, scale, sequence, cost };
+          });
+        },
         { resized }
       );
+
+      // Redraw exactly once motion pauses: moving frames may be scaled or resample a layer's cached view, and a frame
+      // with no motion is neither.
+      clearTimeout(settleTimer);
+
+      if (submitted && moving) {
+        settleTimer = setTimeout(() => loop.invalidate(), settleMs);
+      }
 
       return drawn.map(() => submitted);
     },
@@ -66,18 +101,64 @@ export function FrameLoop(props: {
   );
 
   const gate = makeGpuFrameGate({
-    complete: () => gpu.device.queue.onSubmittedWorkDone(),
+    complete: () => {
+      const frame = submittedFrame;
+      submittedFrame = undefined;
+
+      return gpu.device.queue.onSubmittedWorkDone().then(() => {
+        if (!frame) {
+          return;
+        }
+
+        const { moving, scale, sequence } = frame;
+        const latency = performance.now() - frame.started;
+
+        if (!moving) {
+          return;
+        }
+
+        void frame.cost.then((cost) => {
+          // The GPU's own time for the frame when the device measures it; else the time until it finished its queue,
+          // which also counts presentation. A scaled frame's last pass stretches it over the canvas, the same work at
+          // every scale.
+          resolution.observe(
+            cost
+              ? { ms: cost.ms, fixedMs: scale < 1 ? cost.passMs.at(-1) : undefined, scale, sequence }
+              : { ms: latency, scale, sequence }
+          );
+        });
+      });
+    },
     // Document preparation holds a device-wide validation error scope across awaits. A frame submitted meanwhile
     // would have its validation errors attributed to preparation and hidden from uncapturederror, so wait instead.
     blocked: () => pendingGpuPreparation(gpu.device),
+    // A GPU that keeps up still reports frames finished only after presentation, more than a display interval later
+    // right after idle; one more frame in flight then avoids skipping a refresh. Known only where GPU time is measured;
+    // a GPU that falls behind keeps the shorter queue, so the view does not lag further behind the input.
+    maxUnfinished: () => (timer.supported && !resolution.behind ? 3 : 2),
     invalidate: loop.invalidate,
     fail: loop.fail
   });
 
   onGpuRelease(gpu.signal, () => {
+    clearTimeout(settleTimer);
     gate.destroy();
     loop.stop();
+    upscaler.destroy();
   });
+
+  /** The loop as seen by descendants: scheduling, plus reporting that a view moved. */
+  const frameLoop = {
+    ...loop,
+    /** Marks this frame's view as moving, so continuing motion may draw below full resolution. */
+    reportMotion() {
+      movedAt = performance.now();
+    },
+    /** Framebuffer resolution of the latest submitted frame relative to the canvas; below 1 for scaled moving frames. */
+    get scale() {
+      return submittedScale;
+    }
+  };
 
   createEffect(visible, loop.setActive);
   createEffect(viewport.size, () => loop.invalidate());
@@ -100,7 +181,7 @@ export function FrameLoop(props: {
   // for this component's lifetime; frames run from RAF callbacks, never during disposal, and the scheduler stops
   // with this owner.
   const layers = runWithContext(ViewportContext, viewport, () =>
-    runWithContext(FrameContext, loop, () => {
+    runWithContext(FrameContext, frameLoop, () => {
       const tokens = resolveTokens(RenderLayer, () => props.children);
       // Keep each token's props object: draws and pointer handlers are read when a frame or event happens.
       return createMemo(() =>
@@ -156,7 +237,16 @@ export function useFrame(
   );
 }
 
-const FrameContext = createContext<ReturnType<typeof createFrameScheduler>>();
+const FrameContext = createContext<
+  ReturnType<typeof createFrameScheduler> & { reportMotion(): void; readonly scale: number }
+>();
+
+/** Budget of a moving frame on devices that only report when it finished: one 60 Hz interval, presentation included. */
+const latencyBudgetMs = 1000 / 60;
+/** Frames this soon after a view moved count as moving. */
+const motionWindowMs = 150;
+/** Quiet time after a scaled frame before the full-resolution redraw; longer than the motion window. */
+const settleMs = 200;
 
 /**
  * Records a frame's reactive reads and calls `changed` once when any of them changes. Each recorded frame

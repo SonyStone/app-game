@@ -11,7 +11,10 @@
   border: 1px solid transparent;
   background: #333;
   cursor: grab;
-  touch-action: none;
+  /* Touch scrolls the panel; a long press starts dragging instead. */
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-touch-callout: none;
   overflow: hidden;
   padding: 1px;
   min-width: 0;

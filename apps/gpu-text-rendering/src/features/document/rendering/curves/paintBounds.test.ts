@@ -12,7 +12,8 @@ const frame: SceneFrame = {
   rotation: [1, 0, 0, 1],
   visible: [],
   vectorOnly: false,
-  grids: false
+  grids: false,
+  moving: false
 };
 
 it('preserves source order while skipping invisible instances and merges adjacent spans', () => {

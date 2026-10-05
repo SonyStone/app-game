@@ -1,0 +1,279 @@
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 14px;
+
+  h2 {
+    font-size: 12px;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  span,
+  code {
+    color: var(--muted);
+    font: inherit;
+    font-size: 11px;
+  }
+
+  span {
+    margin-right: auto;
+  }
+
+  button {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+  }
+}
+
+.layerName {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  margin-bottom: 8px;
+  padding: 0 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+}
+
+.layerControls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 12px;
+
+  select {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    min-width: 0;
+    height: 36px;
+    padding: 0 6px;
+    flex: 1;
+  }
+
+  .layerToggle {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 4px;
+
+    &[aria-pressed='true'] {
+      background: #e3f0f7;
+      color: #1f6f9a;
+    }
+  }
+}
+
+.layerList {
+  max-height: min(320px, 38dvh);
+  overflow: auto;
+}
+
+.layer {
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  border-top: 1px solid #ececec;
+
+  &.selected {
+    background: #e6f3fa;
+  }
+
+  /* Clipped layers are indented under their base. */
+  &.clipped {
+    padding-inline-start: 22px;
+  }
+
+  &.dragging {
+    position: relative;
+    z-index: 1;
+    background: #fff;
+    box-shadow: 0 6px 18px #1f2a3033;
+  }
+
+  &.dropTarget {
+    box-shadow: inset 0 0 0 2px #2b8fd6;
+  }
+}
+
+.layerGrip {
+  width: 28px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+  border-radius: 4px;
+
+  &:focus-visible {
+    outline: 2px solid #2b8fd6;
+  }
+}
+
+.dragging .layerGrip {
+  cursor: grabbing;
+}
+
+.layerEye {
+  width: 32px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.layerSelect {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px !important;
+  text-align: left;
+  align-items: center;
+
+  > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  small {
+    display: block;
+    color: var(--muted);
+    font-size: 10px;
+  }
+}
+
+.layerActions {
+  display: flex;
+  padding-top: 10px;
+  gap: 4px;
+
+  button {
+    min-width: 36px;
+    min-height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 4px;
+    padding: 0 6px;
+
+    &:last-child {
+      margin-left: auto;
+      color: #a45b52;
+    }
+  }
+}
+
+.smoothColor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  margin: -4px 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Doubled to outrank the studio's reset of buttons. */
+.offScreen.offScreen {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* `> button` outranks the studio's reset of buttons. */
+.blendPicker {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.blendTrigger {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 3px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  text-align: left;
+
+  span {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+  }
+
+  canvas {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+  }
+}
+
+.blendList {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  left: 0;
+  width: max(100%, 220px);
+  display: grid;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 6px 20px #0002;
+
+  > button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px;
+    border-radius: 6px;
+    text-align: left;
+  }
+
+  > button[aria-selected='true'] {
+    background: #e3eef5;
+    color: var(--accent);
+  }
+
+  span {
+    display: grid;
+    font-size: 12px;
+  }
+
+  small {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  canvas {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+  }
+}

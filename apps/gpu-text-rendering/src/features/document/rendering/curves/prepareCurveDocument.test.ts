@@ -1,7 +1,8 @@
+import type { AbortedError } from '@app-game/solid-gpu/errors';
+import type { GpuContext } from '@app-game/solid-gpu/gpu';
 import { err } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
-import { documentError, type AbortedError, type DocumentError } from '../../../../shared/errors';
-import type { GpuContext } from '../../../../shared/gpu/context';
+import { documentError, type DocumentError } from '../../../../shared/errors';
 import type { TextDocument } from '../../document';
 import type { DocumentWorkers } from '../DocumentWorkers';
 import { prepareCurveDocument } from './prepareCurveDocument';

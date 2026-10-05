@@ -1,3 +1,6 @@
+import { type AbortedError, gpuError } from '@app-game/solid-gpu/errors';
+import { GpuCanvasProvider, maxDeviceRecoveries, TypeGPURootProvider } from '@app-game/solid-gpu/gpu';
+import { runWorkerRequest } from '@app-game/solid-gpu/worker';
 import { render } from '@solidjs/web';
 import { err, ok, okAsync, ResultAsync } from 'neverthrow';
 import { createRoot, createSignal, flush, Show } from 'solid-js';
@@ -5,12 +8,7 @@ import tgpu from 'typegpu';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocumentSource } from '../../../tests/fixtures/DocumentSource';
 import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
-import type { AbortedError, DocumentError } from '../../shared/errors';
-import { gpuError } from '../../shared/errors';
-import { maxDeviceRecoveries } from '../../shared/gpu/createGpuRoot';
-import { GpuCanvasProvider } from '../../shared/gpu/GpuCanvasProvider';
-import { TypeGPURootProvider } from '../../shared/gpu/TypeGPURootProvider';
-import { runWorkerRequest } from '../../shared/worker/runWorkerRequest';
+import type { DocumentError } from '../../shared/errors';
 import { CameraControls } from '../camera/CameraControls';
 import { CameraTour } from '../camera/CameraTour';
 import { createDocumentCamera, pageAspectOf } from '../camera/createDocumentCamera';
@@ -26,12 +24,27 @@ import { createViewport } from '../viewport/createViewport';
 import { createViewerStatus } from './createViewerStatus';
 
 vi.mock('typegpu', () => ({ default: { initFromDevice: vi.fn() } }));
-vi.mock('../../shared/worker/runWorkerRequest', () => ({ runWorkerRequest: vi.fn() }));
+vi.mock('@app-game/solid-gpu/worker/runWorkerRequest', () => ({ runWorkerRequest: vi.fn() }));
 vi.mock('../document/readDocumentFile', () => ({ readDocumentFile: vi.fn() }));
 const readGdoc = vi.fn<(input: string | ArrayBuffer) => ResultAsync<DecodedDocument, DocumentError | AbortedError>>();
 const cancellations: ReturnType<typeof vi.fn>[] = [];
 let setProgress: (value: import('../document/documentProgress').DocumentProgress) => void;
 vi.mock('../document/rendering/createTypeGpuRenderer', () => ({ createGlyphRenderer: vi.fn() }));
+vi.mock('../scene/createSceneUpscaler', () => ({
+  createSceneUpscaler: () => ({ target: vi.fn(), blit: vi.fn(), destroy: vi.fn() })
+}));
+vi.mock('../document/rendering/createSettledView', () => ({
+  createSettledView: () => ({
+    draw: () => false,
+    pendingFor: () => false,
+    renderBand: vi.fn(),
+    invalidate: vi.fn(),
+    destroy: vi.fn()
+  })
+}));
+vi.mock('../document/rendering/createMotionCache', () => ({
+  createMotionCache: () => ({ draw: () => false, refresh: vi.fn(), invalidate: vi.fn(), destroy: vi.fn() })
+}));
 
 const cleanups: (() => void)[] = [];
 const frames = new Map<number, FrameRequestCallback>();

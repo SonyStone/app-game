@@ -1,5 +1,6 @@
-import { documentError, errorMessage, type AbortedError, type DocumentError } from '../../shared/errors';
-import type { WorkerFailure } from '../../shared/worker/workerProtocol';
+import { errorMessage, type AbortedError } from '@app-game/solid-gpu/errors';
+import type { WorkerFailure } from '@app-game/solid-gpu/worker';
+import { documentError, type DocumentError } from '../../shared/errors';
 
 /** Converts transport failures while preserving document errors and cancellation. */
 export function documentWorkerError(

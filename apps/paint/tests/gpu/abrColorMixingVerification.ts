@@ -76,7 +76,7 @@ async function render(tool: string, mixing: ColorMixing, mode: string, retouch =
     preset: {
       kind: 'brush',
       sourceId: 'fixture',
-      ...{ toolOptions: { kind: tool, strength: tool === 'SmTl' ? 50 : 100, Md: { enumType: 'BlnM', value: mode } } },
+      toolOptions: { kind: tool, strength: tool === 'SmTl' ? 50 : 100, mode: { domain: 'BlnM', value: mode } },
       tip: { kind: 'computed', diameter: pixels(32), spacing: percent(10), hardness: percent(100) }
     },
     resources: [],

@@ -13,12 +13,15 @@ export function createFrame(
   {
     vectorOnly = false,
     grids = false,
+    moving = false,
     displaySize = { width, height }
   }: {
     /** Draw only vectors instead of the glyph atlas. Default false. */
     vectorOnly?: boolean;
     /** Show the glyph grid overlay. Default false. */
     grids?: boolean;
+    /** Whether the frame continues motion, when background uploads yield to smooth frames. Default false. */
+    moving?: boolean;
     /** CSS display size; keeps overlays aligned at fractional DPR. Default the framebuffer size. */
     displaySize?: { width: number; height: number };
   } = {}
@@ -58,5 +61,5 @@ export function createFrame(
     return [{ index, page }];
   });
 
-  return { width, height, mul, add, rotation, visible, vectorOnly, grids };
+  return { width, height, mul, add, rotation, visible, vectorOnly, grids, moving };
 }

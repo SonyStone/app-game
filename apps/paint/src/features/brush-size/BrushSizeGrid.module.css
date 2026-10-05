@@ -1,0 +1,114 @@
+/* The grid renders into the body, outside the studio that defines the colour variables; fallbacks repeat them. */
+
+.trigger {
+  gap: 3px;
+}
+
+/*
+ * A pen counts as touch on Android: without this, sliding off the button pans and cancels the gesture. The doubled
+ * class outranks the studio's `button { touch-action: manipulation }`.
+ */
+.trigger.trigger {
+  touch-action: none;
+}
+
+.triggerDot {
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.panel {
+  position: fixed;
+  z-index: 90;
+  /* Presses on the grid stay off the canvas and never pan; the button's handlers do the hit testing. */
+  touch-action: none;
+  user-select: none;
+  border-radius: 10px;
+  background: #fff;
+  /* A ring rather than a border, so cells sit where the hit test expects them. */
+  box-shadow:
+    0 0 0 1px var(--line, #dedede),
+    0 6px 18px #0002;
+  color: var(--ink, #444);
+  font-variant-numeric: tabular-nums;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent, #237aab);
+}
+
+.cells {
+  position: relative;
+  display: grid;
+}
+
+.strings {
+  position: absolute;
+  inset: 0;
+
+  line {
+    stroke: #b9c0c4;
+  }
+}
+
+.cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 6px;
+
+  &[data-current] {
+    background: #e9edef;
+  }
+
+  &[data-exact] {
+    background: var(--accent, #237aab);
+    color: #fff;
+  }
+}
+
+.dotArea {
+  display: flex;
+  align-items: center;
+}
+
+.dot {
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.cellLabel {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.thumb {
+  position: absolute;
+}
+
+.thumbLine {
+  position: absolute;
+  width: 2px;
+  height: 32px;
+  border-radius: 1px;
+  background: var(--accent, #237aab);
+  transform: translateX(-50%);
+}
+
+.bubble {
+  position: absolute;
+  top: -6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--accent, #237aab);
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+  transform: translate(-50%, -100%);
+}

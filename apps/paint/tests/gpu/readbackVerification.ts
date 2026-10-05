@@ -5,6 +5,7 @@ import { createDocument, type TileChange } from '@app-game/paint-core/document';
 import { TILE_BYTES, unpackTile } from '@app-game/paint-core/tilePixels';
 import { createReadbackQueue } from '@app-game/paint-core/gpu/readbackQueue';
 import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
+import { until, within } from '../waits';
 
 /** Delays real GPU map completions to expose capacity, pixel ownership and cancellation races. */
 export async function verifyReadbackQueue(report: (message: string) => void) {
@@ -70,18 +71,23 @@ export async function verifyReadbackQueue(report: (message: string) => void) {
     const blocked = hold();
     renderer.begin(document.active, brush);
     const painting = track(renderer.paint([dab(0), dab(1), dab(2), dab(3)]));
-    const progressed = await Promise.race([painting.then(() => true), delay(1000).then(() => false)]);
-    check(progressed, 'Painting waited for readback despite available staging capacity');
+    await within(painting, 'Painting waited for readback despite available staging capacity');
     check(renderer.stats().readback.pending === 2, 'Expected two outstanding copies');
     let done = false;
+    const capacityWaits = renderer.stats().readback.capacityWaits;
     const limited = track(
       renderer.paint([dab(4)]).then(() => {
         done = true;
       })
     );
-    await delay(25);
+    // The counter increments as the third copy starts waiting for a staging buffer that the held map keeps busy.
+    await until(
+      () => renderer.stats().readback.capacityWaits > capacityWaits,
+      'The third copy never waited for staging capacity'
+    );
     check(!done && renderer.stats().readback.buffers === 2, 'A third pending copy bypassed the memory limit');
-    check(renderer.stats().readback.bytes === 1048576, 'Two-tile scratch cache used more than 1 MiB staging');
+    // Two staging buffers, each holding one RGBA8 tile and its r16float round-brush transmittance.
+    check(renderer.stats().readback.bytes === 2 * 256 * 256 * (4 + 2), 'Two-tile scratch cache used more than 768 KiB staging');
     blocked.release();
     held = undefined;
     await limited;
@@ -91,7 +97,7 @@ export async function verifyReadbackQueue(report: (message: string) => void) {
     check(alpha(changes, '4,0') === 51, 'Later tiles were lost while staging was full');
     check(renderer.stats().readback.capacityWaits > 0, 'Capacity backpressure was not exercised');
     report(
-      'PASS: painting advances with two GPU maps stalled; the third copy waits within 1 MiB, and revisits preserve flow'
+      'PASS: painting advances with two GPU maps stalled; the third copy waits within 768 KiB, and revisits preserve flow'
     );
 
     reset();
@@ -99,6 +105,7 @@ export async function verifyReadbackQueue(report: (message: string) => void) {
     renderer.begin(document.active, brush);
     await renderer.paint([dab(0), dab(1), dab(2)]);
     let displayed = false;
+    const displayWaits = renderer.stats().readback.snapshotWaits;
     const drawing = track(
       renderer
         .render(document.layers, { ...defaultCamera(), x: 128, y: 128 }, { width: 256, height: 256 }, 1)
@@ -106,8 +113,11 @@ export async function verifyReadbackQueue(report: (message: string) => void) {
           displayed = true;
         })
     );
-    await delay(25);
-    check(!displayed, 'Display treated the pending active tile as empty or committed pixels');
+    await until(
+      () => renderer.stats().readback.snapshotWaits > displayWaits,
+      'Display treated the pending active tile as empty or committed pixels'
+    );
+    check(!displayed, 'Display finished while its tile snapshot was still held');
     displayGate.release();
     held = undefined;
     await drawing;
@@ -125,24 +135,32 @@ export async function verifyReadbackQueue(report: (message: string) => void) {
     const old = hold();
     renderer.begin(document.active, brush);
     await renderer.paint([dab(0), dab(1), dab(2)]);
-    await waitFor(() => old.arrived === 1);
+    await until(() => old.arrived === 1, 'GPU mapping did not reach the test gate');
     renderer.cancel();
     const next = hold();
     renderer.begin(document.active, { ...brush, color: '#00ff00' });
     await renderer.paint([dab(0), dab(1), dab(2)]);
-    await waitFor(() => next.arrived === 1);
+    await until(() => next.arrived === 1, 'GPU mapping did not reach the test gate');
+    const cancelledSettled = renderer.stats().readback.settledSnapshots;
     old.release();
-    await delay(10);
+    await until(
+      () => renderer.stats().readback.settledSnapshots > cancelledSettled,
+      'The cancelled stroke’s readback never settled'
+    );
     check(renderer.stats().readback.pending === 1, 'An old completion released the new owner of the same buffer');
     let committed = false;
+    const finishWaits = renderer.stats().readback.snapshotWaits;
     const finishing = track(
       renderer.finish().then((result) => {
         committed = true;
         return result;
       })
     );
-    await delay(25);
-    check(!committed, 'Commit omitted an unfinished evicted tile');
+    await until(
+      () => renderer.stats().readback.snapshotWaits > finishWaits,
+      'Commit omitted an unfinished evicted tile'
+    );
+    check(!committed, 'Commit finished while an evicted tile was still being read back');
     next.release();
     held = undefined;
     const fresh = await finishing;
@@ -171,12 +189,16 @@ export async function verifyReadbackQueue(report: (message: string) => void) {
     const disposal = hold();
     renderer.begin(document.active, brush);
     await renderer.paint([dab(0), dab(1), dab(2)]);
-    await waitFor(() => disposal.arrived === 1);
+    await until(() => disposal.arrived === 1, 'GPU mapping did not reach the test gate');
+    const disposalSettled = renderer.stats().readback.settledSnapshots;
     renderer.destroy();
     destroyed = true;
     disposal.release();
     held = undefined;
-    await delay(10);
+    await until(
+      () => renderer.stats().readback.settledSnapshots > disposalSettled,
+      'The disposed renderer’s readback never settled'
+    );
     check(errors.length === 0, errors.join('\n'));
     report('PASS: disposing a renderer with a mapped job produces no late publication or error');
   } finally {
@@ -229,16 +251,6 @@ function gate() {
     release = resolve;
   });
   return { promise, release, arrived: 0 };
-}
-function delay(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-async function waitFor(condition: () => boolean) {
-  const start = performance.now();
-  while (!condition()) {
-    if (performance.now() - start > 1000) throw new Error('GPU mapping did not reach the test gate');
-    await delay(1);
-  }
 }
 function alpha(changes: TileChange[], key: string) {
   return unpackTile(changes.find((change) => change.key === key)!.after!)[(128 * 256 + 128) * 4 + 3]!;

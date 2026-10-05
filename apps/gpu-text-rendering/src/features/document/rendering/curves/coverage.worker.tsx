@@ -1,7 +1,7 @@
+import { errorMessage } from '@app-game/solid-gpu/errors';
+import { mountWorker, WorkerTasks } from '@app-game/solid-gpu/worker';
 import { ok } from 'neverthrow';
-import { documentError, errorMessage } from '../../../../shared/errors';
-import { mountWorker } from '../../../../shared/worker/mountWorker';
-import { WorkerTasks } from '../../../../shared/worker/WorkerTasks';
+import { documentError } from '../../../../shared/errors';
 import type { CoverageInput, CoverageReply } from '../../documentWorkerProtocol';
 import { buildCoverageTables } from '../../plan/buildCoverageTables';
 

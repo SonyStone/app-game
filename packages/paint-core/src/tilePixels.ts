@@ -2,9 +2,60 @@ import { TILE_SIZE } from './brush';
 
 /** Losslessly stores runs of empty RGBA pixels. Dense tiles keep their original bytes.
  * Packed tiles are shorter than TILE_BYTES; GPU uploads always use unpackTile().
+ * Tiles are immutable, so packing an array this module already produced returns it without scanning again.
  */
 export function packTile(pixels: Uint8Array): Uint8Array {
-  if (pixels.byteLength !== TILE_BYTES) return pixels;
+  if (pixels.byteLength !== TILE_BYTES || packedTiles.has(pixels)) return pixels;
+  const packed = encodeTile(pixels);
+  packedTiles.add(packed);
+  return packed;
+}
+
+/**
+ * Packs a borrowed full tile view, such as a mapped GPU staging buffer, into memory the caller owns.
+ * Dense tiles are copied; the result is recognized by later packTile calls without another scan.
+ */
+export function packTileCopy(view: Uint8Array): Uint8Array {
+  const packed = view.byteLength === TILE_BYTES ? encodeTile(view) : view;
+  const owned = packed === view ? view.slice() : packed;
+  packedTiles.add(owned);
+  return owned;
+}
+
+/**
+ * Whether any pixel of a raw or packed tile has nonzero alpha, without expanding packed runs.
+ * Throws for unloaded references and malformed packets.
+ */
+export function tileHasAlpha(pixels: TileData): boolean {
+  if (!(pixels instanceof Uint8Array)) throw new Error('Load this tile from storage before decoding it.');
+  if (pixels.byteLength === TILE_BYTES) return rawHasAlpha(pixels);
+  if (pixels.byteLength < 8 || pixels.byteLength % 4) throw new Error('Invalid packed tile length.');
+  const source = new DataView(pixels.buffer, pixels.byteOffset, pixels.byteLength);
+  if (source.getUint32(0, true) !== MAGIC) throw new Error('Invalid packed tile header.');
+  let read = 4;
+  while (read < pixels.byteLength) {
+    const packet = source.getUint32(read, true);
+    read += 4;
+    const length = (packet & 0x7fffffff) * 4;
+    if (!length || read + (packet & 0x80000000 ? 0 : length) > pixels.byteLength) throw new Error('Invalid packed tile run.');
+    if (packet & 0x80000000) continue;
+    if (rawHasAlpha(pixels.subarray(read, read + length))) return true;
+    read += length;
+  }
+  return false;
+}
+
+/** Scans RGBA bytes for any nonzero alpha channel. */
+function rawHasAlpha(pixels: Uint8Array) {
+  for (let i = 3; i < pixels.length; i += 4) if (pixels[i]) return true;
+  return false;
+}
+
+/** Arrays produced by packTile/packTileCopy; immutable, so they never need packing again. */
+const packedTiles = new WeakSet<Uint8Array>();
+
+/** Run-length encodes a full tile; returns the input unchanged when packing would not save space. */
+function encodeTile(pixels: Uint8Array): Uint8Array {
   const aligned = pixels.byteOffset % 4 ? pixels.slice() : pixels;
   const source = new Uint32Array(aligned.buffer, aligned.byteOffset, aligned.byteLength / 4);
   // Record run lengths before allocating pixels. Readback often contains wholly

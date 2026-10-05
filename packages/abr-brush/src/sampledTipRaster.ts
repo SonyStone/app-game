@@ -138,13 +138,18 @@ export function sampledTipRenderScale(scale: number, sourceSize: number, fractio
 
 /** Applies a document symmetry transform while preserving source UVs and scan direction.
  * The matrix must be a rigid rotation/reflection/translation; scale stays unchanged.
+ * The scan samples each destination pixel at its integer corner, so rendered coverage
+ * sits half a pixel right of and below the quad. The matrix is therefore applied about
+ * pixel centers (conjugated by that half-pixel offset), which makes a reflected copy
+ * mirror the rendered pixels exactly instead of landing one pixel past the axis.
  */
 export function transformSampledTip(
   tip: ReturnType<typeof sampledTipTransform>,
   matrix: { a: number; b: number; c: number; d: number; x: number; y: number }
 ): ReturnType<typeof sampledTipTransform> {
   let quad: TipVertex[] = tip.quad.map(([x, y, u, v, weight]) => {
-    const point: TipVertex = [matrix.a * x + matrix.c * y + matrix.x, matrix.b * x + matrix.d * y + matrix.y, u, v];
+    const cx = x + .5, cy = y + .5;
+    const point: TipVertex = [matrix.a * cx + matrix.c * cy + matrix.x - .5, matrix.b * cx + matrix.d * cy + matrix.y - .5, u, v];
     return weight === undefined ? point : [point[0], point[1], u, v, weight];
   });
   const axisAligned = tip.axisAligned && matrix.b === 0 && matrix.c === 0;

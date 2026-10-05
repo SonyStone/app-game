@@ -1,72 +1,73 @@
 import { TILE_SIZE } from './brush';
 import type { Point } from './camera';
 import type { Layer, TileChange } from './document';
+import { tileCoverage, type SelectionMask } from './selectionMask';
 import { packTile, TILE_BYTES, unpackTile, type TileData } from './tilePixels';
 
-/** Session-only clipboard. Immutable tile versions may be evicted from RAM and read back from disk. */
-export type SelectionPixels = { points: Point[]; tiles: Map<string, TileData> };
+/**
+ * Session-only clipboard: the selected pixels, already scaled by the selection's coverage, and the selection they
+ * were taken with. Immutable tile versions may be evicted from RAM and read back from disk.
+ */
+export type SelectionPixels = { mask: SelectionMask; tiles: Map<string, TileData> };
 /** Stages immutable pixels without publishing a document checkpoint. Production writes flush bounded batches. */
 export type SelectionStorage = {
   read: (data: TileData) => Promise<Uint8Array>;
   write: (pixels: Uint8Array) => Promise<TileData>;
 };
 
-/** Captures occupied pixels with an even-odd pixel-center mask, including concave and crossing paths.
- * Stages each result immediately; memory does not grow with the selected area. Failed reads/writes leave the document intact.
+/**
+ * Captures the active layer's pixels in the selection `mask`, each scaled by its coverage, so a feathered edge fades.
+ * Stages each result immediately; memory does not grow with the selected area. Failed reads/writes leave the document
+ * intact. Throws when the selection holds no pixels of the layer.
  */
-export async function captureSelection(layer: Layer, points: Point[], storage: SelectionStorage) {
-  validatePolygon(points);
-  const bounds = polygonBounds(points);
+export async function captureSelection(layer: Layer, mask: SelectionMask, storage: SelectionStorage) {
   const candidates = [...layer.tiles]
-    .map(([key, data]) => ({ key, data, origin: tileOrigin(key) }))
-    .filter(
-      ({ origin: [x, y] }) =>
-        x < bounds.right && x + TILE_SIZE > bounds.left && y < bounds.bottom && y + TILE_SIZE > bounds.top
-    )
-    .sort((a, b) => a.origin[1] - b.origin[1] || a.origin[0] - b.origin[0]);
+    .filter(([key]) => mask.outside === 255 || mask.tiles.has(key))
+    .sort(([a], [b]) => {
+      const [ax, ay] = tileOrigin(a),
+        [bx, by] = tileOrigin(b);
+      return ay - by || ax - bx;
+    });
   const tiles = new Map<string, TileData>();
-  let bandY = NaN;
-  let rows: number[][] = [];
   const yieldWork = workYield();
-  for (const {
-    key,
-    data,
-    origin: [ox, oy]
-  } of candidates) {
-    if (oy !== bandY) {
-      rows = Array.from({ length: TILE_SIZE }, (_, y) => scanline(points, oy + y + 0.5));
-      bandY = oy;
-    }
-    if (
-      !rows.some((crossings) => crossings.some((x, i) => i % 2 === 0 && x < ox + TILE_SIZE && crossings[i + 1]! > ox))
-    )
+  for (const [key, data] of candidates) {
+    const [tx, ty] = tileOrigin(key).map((origin) => origin / TILE_SIZE) as [number, number];
+    const coverage = tileCoverage(mask, tx, ty);
+    if (coverage.kind === 'outside') {
       continue;
+    }
+
     const source = unpackTile(await storage.read(data));
-    const pixels = new Uint8Array(TILE_BYTES);
-    let occupied = false;
-    for (let y = 0; y < TILE_SIZE; y++) {
-      const crossings = rows[y]!;
-      for (let i = 0; i + 1 < crossings.length; i += 2) {
-        const start = Math.max(0, Math.ceil(crossings[i]! - ox - 0.5));
-        const end = Math.min(TILE_SIZE, Math.ceil(crossings[i + 1]! - ox - 0.5));
-        for (let x = start; x < end; x++) {
-          const at = (y * TILE_SIZE + x) * 4;
-          if (!source[at + 3]) continue;
-          pixels.set(source.subarray(at, at + 4), at);
-          occupied = true;
+    const pixels = coverage.kind === 'inside' ? source.slice() : new Uint8Array(TILE_BYTES);
+    if (coverage.kind === 'partial') {
+      for (let pixel = 0; pixel < TILE_SIZE * TILE_SIZE; pixel++) {
+        const amount = coverage.coverage[pixel]!;
+        const at = pixel * 4;
+        if (!amount || !source[at + 3]) {
+          continue;
+        }
+
+        for (let channel = 0; channel < 4; channel++) {
+          pixels[at + channel] = Math.round((source[at + channel]! * amount) / 255);
         }
       }
     }
-    if (occupied) tiles.set(key, await storage.write(packTile(pixels)));
+
+    if (pixels.some((byte, index) => index % 4 === 3 && byte !== 0)) {
+      tiles.set(key, await storage.write(packTile(pixels)));
+    }
+
     await yieldWork();
   }
+
   if (!tiles.size) throw new Error('The selection contains no pixels on the active layer.');
-  return { points: points.map((point) => ({ ...point })), tiles } satisfies SelectionPixels;
+  return { mask, tiles } satisfies SelectionPixels;
 }
 
 /** Prepares a cut, paste, or move one destination tile at a time, including overlapping moves.
- * Results are immutable staged versions, committed together by the caller. Integer translation preserves bytes;
- * compositing uses premultiplied sRGB source-over. Only tile metadata grows with the edit.
+ * Results are immutable staged versions, committed together by the caller. The source loses the selected pixels in
+ * proportion to the selection's coverage; integer translation preserves bytes; compositing uses premultiplied sRGB
+ * source-over. Only tile metadata grows with the edit.
  */
 export async function editSelection(options: {
   selection: SelectionPixels;
@@ -104,12 +105,20 @@ export async function editSelection(options: {
     const pixels = before ? unpackTile(await storage.read(before)).slice() : new Uint8Array(TILE_BYTES);
     let touched = false;
     if (erase) {
-      const mask = unpackTile(await storage.read(selection.tiles.get(key)!));
-      for (let at = 0; at < TILE_BYTES; at += 4)
-        if (mask[at + 3]) {
-          pixels.fill(0, at, at + 4);
-          touched = true;
+      const [ex, ey] = tileOrigin(key);
+      const coverage = tileCoverage(selection.mask, ex / TILE_SIZE, ey / TILE_SIZE);
+      for (let at = 0; at < TILE_BYTES; at += 4) {
+        const amount = coverage.kind === 'partial' ? coverage.coverage[at / 4]! : coverage.kind === 'inside' ? 255 : 0;
+        if (!amount || !pixels[at + 3]) {
+          continue;
         }
+
+        for (let channel = 0; channel < 4; channel++) {
+          pixels[at + channel] = Math.round((pixels[at + channel]! * (255 - amount)) / 255);
+        }
+
+        touched = true;
+      }
     }
     const [ox, oy] = tileOrigin(key);
     for (const input of inputs) {
@@ -142,51 +151,9 @@ export async function editSelection(options: {
   return changes;
 }
 
-/** Even-odd hit testing in document coordinates; shared by the lasso and move interaction. */
-export function pointInSelection(point: Point, points: readonly Point[]): boolean {
-  let inside = false;
-  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-    const a = points[i]!,
-      b = points[j]!;
-    if (a.y > point.y !== b.y > point.y && point.x < a.x + ((point.y - a.y) * (b.x - a.x)) / (b.y - a.y))
-      inside = !inside;
-  }
-  return inside;
-}
-
-/** Translates the polygon by whole document pixels, matching the raster edit. */
-export function translateSelection(points: readonly Point[], offset: Point): Point[] {
-  return points.map((point) => ({ x: point.x + Math.round(offset.x), y: point.y + Math.round(offset.y) }));
-}
-
-function validatePolygon(points: Point[]) {
-  if (
-    points.length < 3 ||
-    points.length > 4096 ||
-    points.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y) || Math.abs(p.x) > 1e12 || Math.abs(p.y) > 1e12)
-  )
-    throw new Error('Draw a closed lasso with at least three points.');
-}
-function polygonBounds(points: Point[]) {
-  return {
-    left: Math.min(...points.map((p) => p.x)),
-    right: Math.max(...points.map((p) => p.x)),
-    top: Math.min(...points.map((p) => p.y)),
-    bottom: Math.max(...points.map((p) => p.y))
-  };
-}
 function tileOrigin(key: string): [number, number] {
   const [x, y] = key.split(',').map(Number);
   return [x! * TILE_SIZE, y! * TILE_SIZE];
-}
-function scanline(points: Point[], y: number) {
-  const crossings: number[] = [];
-  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-    const a = points[i]!,
-      b = points[j]!;
-    if (a.y > y !== b.y > y) crossings.push(a.x + ((y - a.y) * (b.x - a.x)) / (b.y - a.y));
-  }
-  return crossings.sort((a, b) => a - b);
 }
 /** Yield on elapsed CPU time instead of paying a timer delay for every sparse tile. */
 function workYield() {

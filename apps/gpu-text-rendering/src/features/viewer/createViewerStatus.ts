@@ -1,5 +1,6 @@
+import type { GpuError } from '@app-game/solid-gpu/errors';
 import { createMemo, createSignal } from 'solid-js';
-import type { GpuError, ViewerError } from '../../shared/errors';
+import type { ViewerError } from '../../shared/errors';
 import type { DocumentSource } from '../document/createDocumentSource';
 import type { DocumentProgress } from '../document/documentProgress';
 import type { DocumentRenderer } from '../document/rendering/DocumentRenderer';

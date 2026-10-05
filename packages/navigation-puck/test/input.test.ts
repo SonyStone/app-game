@@ -94,6 +94,136 @@ describe('shared canvas navigation bindings', () => {
     key('keyup', 'Space');
     expect(puck.center()).toBeUndefined();
   });
+  it('lets a picker take right-drags: a choice closes the puck, a release without one keeps it open', () => {
+    const pick = { move: vi.fn(), release: vi.fn(() => false), cancel: vi.fn() };
+    const { puck, pointer, paint, transform } = setup('2d', pick);
+    pointer('pointerdown', 400, 300, 2);
+    pointer('pointermove', 300, 300, 2);
+    expect(pick.move).toHaveBeenLastCalledWith({ x: 300, y: 300 }, { x: 400, y: 300 });
+    expect(puck.activeAction()).toBeUndefined();
+    pointer('pointerup', 300, 300, 2);
+    expect(pick.release).toHaveBeenLastCalledWith({ x: 300, y: 300 });
+    expect(puck.center()).toBeDefined();
+
+    pick.release.mockReturnValue(true);
+    pointer('pointerdown', 400, 300, 2);
+    pointer('pointerup', 420, 300, 2);
+    expect(puck.center()).toBeUndefined();
+    expect(transform).not.toHaveBeenCalled();
+    expect(paint).not.toHaveBeenCalled();
+
+    pointer('pointerdown', 400, 300, 2);
+    pointer('lostpointercapture', 400, 300, 2);
+    expect(pick.cancel).toHaveBeenCalledOnce();
+    expect(puck.center()).toBeUndefined();
+  });
+  it("pins the puck open with a hovering pen's side button, reported only as buttons on pointermove", () => {
+    const { puck, pen, paint, canvas } = setup();
+    pen('pointermove', 400, 300, 0);
+    expect(puck.center()).toBeUndefined();
+    pen('pointermove', 400, 300, 2);
+    expect(puck.center()).toEqual({ x: 400, y: 300 });
+    // Releasing or holding the button changes nothing; an operation keeps it open, moved under the pen again.
+    pen('pointermove', 420, 300, 2);
+    pen('pointermove', 420, 300, 0);
+    expect(puck.center()).toEqual({ x: 400, y: 300 });
+    puck.begin('pan', { x: 400, y: 300, pointerId: 9 });
+    puck.move({ x: 440, y: 300, pointerId: 9 });
+    expect(puck.end(9)).toBe(false);
+    expect(puck.center()).toEqual({ x: 440, y: 300 });
+    puck.begin('pan', { x: 440, y: 300, pointerId: 9 });
+    puck.move({ x: 400, y: 300, pointerId: 9 });
+    puck.end(9);
+    expect(puck.center()).toEqual({ x: 400, y: 300 });
+
+    // The next press of a side button closes it, wherever the pen is.
+    pen('pointermove', 600, 300, 4, 7, document.body);
+    expect(puck.center()).toBeUndefined();
+    pen('pointermove', 600, 300, 0, 7, document.body);
+    // Over other controls a side button does not open it.
+    pen('pointermove', 600, 300, 1, 7, document.body);
+    expect(puck.center()).toBeUndefined();
+    pen('pointermove', 600, 300, 0, 7, document.body);
+
+    // Pressing the puck's own controls with the pen keeps it open.
+    pen('pointermove', 400, 300, 2);
+    expect(puck.center()).toBeDefined();
+    pen('pointermove', 400, 300, 0);
+    pen('pointerdown', 380, 300, 1, 7, document.body);
+    pen('pointermove', 385, 300, 1, 7, document.body);
+    pen('pointerup', 385, 300, 0, 7, document.body);
+    expect(puck.center()).toBeDefined();
+    pen('pointermove', 400, 300, 2);
+    expect(puck.center()).toBeUndefined();
+    pen('pointermove', 400, 300, 0);
+
+    // A touching pen's buttons are its contact, which paints.
+    paint.mockClear();
+    pen('pointerdown', 400, 300, 1);
+    pen('pointermove', 410, 300, 1);
+    pen('pointerup', 410, 300, 0);
+    expect(puck.center()).toBeUndefined();
+    expect(paint).toHaveBeenCalledTimes(3);
+    expect(canvas).toBeDefined();
+  });
+  it('opens over overlays on the surface, but not over its text fields and dialogs', () => {
+    const stage = document.createElement('main');
+    const overlay = document.createElement('div');
+    const field = document.createElement('input');
+    const dialog = document.createElement('dialog');
+    stage.append(overlay, field, dialog);
+    document.body.append(stage);
+    const { puck, pointer, pen, canvas } = setup('2d', undefined, stage);
+    stage.prepend(canvas);
+    const press = (target: Element, x: number, y: number, button: number) => {
+      const event = new MouseEvent('pointerdown', { clientX: x, clientY: y, button, bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'pointerId', { value: 3 });
+      target.dispatchEvent(event);
+      return event;
+    };
+    const menu = (target: Element) => {
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      target.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+
+    // A right press on an overlay, such as a transform box, opens the puck where it is, ahead of the overlay.
+    const overlayDown = vi.fn();
+    overlay.addEventListener('pointerdown', overlayDown);
+    press(overlay, 500, 260, 2);
+    expect(puck.center()).toEqual({ x: 500, y: 260 });
+    expect(overlayDown).not.toHaveBeenCalled();
+    expect(canvas.setPointerCapture).toHaveBeenCalledWith(3);
+    pointer('pointerup', 500, 260, 2, 3);
+    expect(menu(overlay)).toBe(true);
+    key('keydown', 'Escape', { key: 'Escape' });
+
+    // Space opens it where the pointer last moved over the overlay, not where it last was over the canvas.
+    pointer('pointermove', 100, 100);
+    const move = new MouseEvent('pointermove', { clientX: 600, clientY: 400, bubbles: true });
+    Object.defineProperty(move, 'pointerId', { value: 1 });
+    overlay.dispatchEvent(move);
+    key('keydown', 'Space');
+    expect(puck.center()).toEqual({ x: 600, y: 400 });
+    key('keyup', 'Space');
+    key('keydown', 'Escape', { key: 'Escape' });
+
+    // A hovering pen's side button opens it over an overlay too.
+    pen('pointermove', 450, 300, 2, 7, overlay);
+    expect(puck.center()).toEqual({ x: 450, y: 300 });
+    pen('pointermove', 450, 300, 0, 7, overlay);
+    pen('pointermove', 450, 300, 2, 7, overlay);
+    expect(puck.center()).toBeUndefined();
+    pen('pointermove', 450, 300, 0, 7, overlay);
+
+    // Left presses on overlays are theirs; text fields and dialogs keep the right button.
+    press(overlay, 500, 260, 0);
+    expect(overlayDown).toHaveBeenCalledTimes(1);
+    press(field, 500, 260, 2);
+    press(dialog, 500, 260, 2);
+    expect(puck.center()).toBeUndefined();
+    expect(menu(field)).toBe(false);
+  });
   it('supports V and Escape, and removes every listener on disposal', () => {
     const { puck, dispose } = setup();
     key('keydown', 'KeyV', { key: 'v' });
@@ -105,7 +235,7 @@ describe('shared canvas navigation bindings', () => {
     expect(puck.center()).toBeUndefined();
   });
 });
-function setup(mode: '2d' | '3d' = '2d') {
+function setup(mode: '2d' | '3d' = '2d', pick?: Parameters<typeof attachNavigationPuck>[2]['pick'], surface?: Element) {
   const canvas = document.createElement('canvas');
   canvas.tabIndex = 0;
   canvas.setPointerCapture = vi.fn();
@@ -121,7 +251,11 @@ function setup(mode: '2d' | '3d' = '2d') {
     transform,
     orbit
   });
-  const dispose = attachNavigationPuck(canvas, puck, { busy: () => busy });
+  const dispose = attachNavigationPuck(canvas, puck, {
+    busy: () => busy,
+    ...(pick ? { pick } : {}),
+    ...(surface ? { surface: () => surface } : {})
+  });
   cleanups.push(dispose);
   for (const type of ['pointerdown', 'pointermove', 'pointerup']) canvas.addEventListener(type, paint);
   const pointer = (type: string, x: number, y: number, button = 0, id = 1) => {
@@ -129,10 +263,18 @@ function setup(mode: '2d' | '3d' = '2d') {
     Object.defineProperty(event, 'pointerId', { value: id });
     canvas.dispatchEvent(event);
   };
+  /** A pen event with `buttons` held, as Android Chrome sends them for side buttons while hovering. */
+  const pen = (type: string, x: number, y: number, buttons: number, id = 7, target: Element = canvas) => {
+    const event = new MouseEvent(type, { clientX: x, clientY: y, buttons, bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'pointerId', { value: id });
+    Object.defineProperty(event, 'pointerType', { value: 'pen' });
+    target.dispatchEvent(event);
+  };
   return {
     canvas,
     puck,
     pointer,
+    pen,
     paint,
     transform,
     orbit,

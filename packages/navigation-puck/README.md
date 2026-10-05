@@ -11,11 +11,14 @@ Create `createNavigationPuck` with viewport bounds, mode, clockwise screen rotat
 - `rotation()` returns the current clockwise screen angle for absolute Shift snapping. Paint supplies `camera.angle`; Grease supplies `-camera.roll`. Each editor owns this conversion, not the shared controller.
 - `orbit(dx, dy)` receives pixel deltas only in 3D. Shift snapping assumes 0.006 rad/px horizontally and 0.005 rad/px vertically, matching Grease's renderer.
 - `busy()` blocks invocation during painting or an existing touch/edit gesture. `ready()` optionally blocks it before renderer initialization.
+- `size` sets the largest puck diameter (260 by default) and `reach` the distance from its center that stays inside the viewport, for controls around the puck. Render those controls as `NavigationPuck` children: they sit above the layer that dismisses the puck and should hide themselves while `activeAction()` is set.
+- `attachNavigationPuck(..., { pick })` hands right-drags to a `PuckPicker`, such as Paint's radial menu, instead of selecting a navigation zone: `move` follows the drag, `release` returns whether it chose something, which closes the puck, and `cancel` ends it without a choice.
+- `attachNavigationPuck(..., { surface })` names the element holding the canvas and the overlays drawn over it, such as Paint's transform box. The right button and a pen's side button then open the puck over those overlays too, Space opens it where the pointer last was over them, and the browser's context menu stays closed there. Text fields and dialogs inside it are left alone. Without it only the canvas counts.
 - The component imports scoped CSS automatically. Headless consumers can import `/controller` and `/input` without loading JSX or assets.
 
 ## Controls
 
-Hold Space to invoke at the last canvas pointer, or use V/right click/the editor launcher for one operation. During capture the Puck hides. A held invocation reopens at the release point; releasing Space during a drag lets that drag finish. Right-drag selects an action after 30 px travel. Right-drag selection has a 12 px dead zone at the Puck center. Direct button presses start immediately, including at the center. In 2D the center pans, the lower segment zooms and the outer ring rotates. Zoom uses vertical movement and, like rotation, pivots around the viewport center. Shift snaps rotation and 3D orbit to 15° steps. Arrow keys nudge actions. Escape, window blur, resize and pointer cancellation clear navigation. Input bindings capture navigation before the editor's painting handlers.
+Hold Space to invoke at the last pointer on the canvas or its `surface`, or use V/right click/the editor launcher for one operation. A hovering pen's side button pins the puck open where the pen is: it stays through operations, moving to where each one is released so it is under the pen again, until a side button is pressed again, a press lands outside it, or Escape (`open(point, 'pinned')`, `pinned()`). Android Chrome sends no `pointerdown` for side buttons, only `pointermove` with nonzero `buttons` (Wacom: 1, 2 and 4), so each change from zero counts as one press. During capture the Puck hides. A held invocation reopens at the release point; releasing Space during a drag lets that drag finish. Right-drag selects an action after 30 px travel. Right-drag selection has a 12 px dead zone at the Puck center. Direct button presses start immediately, including at the center. In 2D the center pans, the lower segment zooms and the outer ring rotates. Zoom uses vertical movement and, like rotation, pivots around the viewport center. Shift snaps rotation and 3D orbit to 15° steps. Arrow keys nudge actions. Escape, window blur, resize and pointer cancellation clear navigation. Input bindings capture navigation before the editor's painting handlers.
 
 `src/assets/navigation-puck.svg` is the vector recreation used by the 2D component. It contains paths, circles, gradients and shadows, without an embedded bitmap. The original user-supplied `navigation-puck.png` is retained as a reference. Both use the same 560×560 coordinate system; the SVG icons follow the current action layout. The explicit `?url` import keeps the image working in hosts that compile ordinary SVG imports into components. 3D icon paths originated in Grease Pencil's existing icon set.
 
@@ -24,7 +27,7 @@ Hold Space to invoke at the last canvas pointer, or use V/right click/the editor
 ```sh
 pnpm --filter @app-game/navigation-puck typecheck
 pnpm --filter @app-game/navigation-puck test
-pnpm --filter @app-game/paint test:studio
+pnpm --filter @app-game/paint test
 pnpm --filter @app-game/grease-pencil-typegpu exec vitest run
 ```
 

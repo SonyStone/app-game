@@ -1,5 +1,5 @@
+import { createGpuResource } from '@app-game/solid-gpu/gpu';
 import type { d, ValidateUniformSchema } from 'typegpu';
-import { createGpuResource } from '../../shared/gpu/createGpuResource';
 import { useFrame } from './FrameLoop';
 
 /**

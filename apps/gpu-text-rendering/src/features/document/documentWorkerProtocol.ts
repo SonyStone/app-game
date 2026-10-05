@@ -1,7 +1,14 @@
+import type { AbortedError } from '@app-game/solid-gpu/errors';
+import {
+  runWorkerRequest,
+  type ReplyFailure,
+  type ReplyOutput,
+  type ReplyProgress,
+  type WorkerReply,
+  type WorkerRequestOptions
+} from '@app-game/solid-gpu/worker';
 import type { Result } from 'neverthrow';
-import type { AbortedError, DocumentError } from '../../shared/errors';
-import { runWorkerRequest, type WorkerRequestOptions } from '../../shared/worker/runWorkerRequest';
-import type { ReplyFailure, ReplyOutput, ReplyProgress, WorkerReply } from '../../shared/worker/workerProtocol';
+import type { DocumentError } from '../../shared/errors';
 import type { DocumentProgress } from './documentProgress';
 import { documentWorkerError } from './documentWorkerError';
 import DecodeWorker from './format/decode.worker?worker';

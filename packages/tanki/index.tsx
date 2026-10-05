@@ -6,7 +6,7 @@ import { createWindowSize } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { Container as _Container, Graphics as _Graphics, Sprite as _Sprite, Color, Point, Ticker } from 'pixi.js';
 import 'pixi.js/math-extras';
-import { createStore, createTrackedEffect, onCleanup, onSettled, storePath, untrack } from 'solid-js';
+import { createStore, createTrackedEffect, onCleanup, onSettled, untrack } from 'solid-js';
 import bunnyUrl from './bunny.png?url';
 import { Collider } from './Collider';
 import { RigidBody as _RigidBody, Rapier2D, useRapier2D } from './Rapier2D';
@@ -73,9 +73,13 @@ function App() {
     if (!event) return;
     const { alpha, beta, gamma } = event;
     if (alpha === null || beta === null || gamma === null) return;
-    setDevicemotion(storePath('orientation', { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 }));
+    setDevicemotion((draft) => {
+      Object.assign(draft.orientation, { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 });
+    });
     const gravity = new Point(gamma, beta).normalize().multiplyScalar(9.81);
-    setDevicemotion(storePath('gravity', { x: gravity.x, y: -gravity.y }));
+    setDevicemotion((draft) => {
+      Object.assign(draft.gravity, { x: gravity.x, y: -gravity.y });
+    });
     world.gravity = { x: gravity.x, y: -gravity.y };
     // world.gravity = { x: 0, y: 0 };
   });
@@ -138,8 +142,10 @@ function App() {
     const { alpha, beta, gamma } = event.rotationRate ?? { alpha: 0, beta: 0, gamma: 0 };
     if (x === null || y === null) return;
     if (alpha === null || beta === null || gamma === null) return;
-    setDevicemotion(storePath('acceleration', { x: x ?? 0, y: y ?? 0, z: 0 }));
-    setDevicemotion(storePath('rotationRate', { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 }));
+    setDevicemotion((draft) => {
+      Object.assign(draft.acceleration, { x: x ?? 0, y: y ?? 0, z: 0 });
+      Object.assign(draft.rotationRate, { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 });
+    });
     for (const { rigidBody } of bunnies) {
       // rigidBody.applyImpulse({ x: -x * 2, y: -y * 2 }, true);
 

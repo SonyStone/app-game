@@ -1,35 +1,47 @@
-import { abrCoveragePlan, createAbrCoverage } from './coverage';
-import { adaptivePaintBatchSize } from './brushBatchSize';
-import { maskParams } from '@app-game/abr-brush/maskAccumulationGpu';
-import { createPatternRasterGpu } from '@app-game/abr-brush/patternRasterGpu';
-import { affineSecondaryBlend } from '@app-game/abr-brush/secondaryMask';
-import { createTipPyramid } from '@app-game/abr-brush/tipPyramid';
-import { createTipRasterGpu, sampleTipPlanByte } from '@app-game/abr-brush/tipRasterGpu';
-import { createSampledTipTilePlanner } from '@app-game/abr-brush/sampledTipRaster';
-import type { commandBatch } from './commandBatch';
-import { maskRasterRects, paintbrushMaskMode } from '@app-game/abr-brush/maskRaster';
-import { createMaskRasterGpu } from '@app-game/abr-brush/maskRasterGpu';
 import type { ColorMixing } from '@app-game/abr-brush/effects';
-import {
-  blendModeId,
-  dualCoverage,
-  fingerPaintCompositeInSpace,
-  grain,
-  mixerComposite,
-  retouchCompositeInSpace,
-  sampleMixing,
-  textureCoverage,
-  textureTone
-} from '@app-game/abr-brush/effects';
+import { blendModeId } from '@app-game/abr-brush/effects';
 import type { BrushFormValues } from '@app-game/abr-brush/form';
-import { paintBlend, paintModes } from '@app-game/abr-brush/paintBlend';
-import { pencilCoverage, usesPencilCoverage } from '@app-game/abr-brush/pencil';
-import { common, d, std, tgpu, type TgpuRoot, type TgpuTexture } from 'typegpu';
+import { maskRasterRects, paintbrushMaskMode, type MaskRasterRect } from '@app-game/abr-brush/maskRaster';
+import { createMaskRasterGpu } from '@app-game/abr-brush/maskRasterGpu';
+import { paintModes } from '@app-game/abr-brush/paintBlend';
+import type { createPatternRasterGpu } from '@app-game/abr-brush/patternRasterGpu';
+import { usesPencilCoverage } from '@app-game/abr-brush/pencil';
+import type { createTipRasterGpu } from '@app-game/abr-brush/tipRasterGpu';
+import { d, type TgpuRoot, type TgpuTexture } from 'typegpu';
 import type { Dab } from '../input';
 import type { BrushResource } from '../resources';
+import {
+  abrStampLayout,
+  compositeLayout,
+  planRowLayout,
+  TracedQuad,
+  tracedQuadLayout,
+  createAbrPipelines,
+  extraLane,
+  flagsLane,
+  maskAccumulation,
+  originLane,
+  Params,
+  paramsOffsets,
+  PickupParams,
+  pickupFlagsLane,
+  pickupMode,
+  pickupOffsets,
+  sampledMaskByte,
+  Stamp,
+  stampLayout,
+  textureLane,
+  toneLane
+} from './abrShaders';
+import { createAbrPresetSources } from './abrPresetSources';
+import { createAbrTextureCache, type CoverageTexture } from './abrTextureCache';
+import { adaptivePaintBatchSize } from './brushBatchSize';
 import type { createCanvasPickup } from './canvasPickup';
-import { linearSourceOver } from '@app-game/abr-brush/effects';
+import type { commandBatch } from './commandBatch';
+import { abrCoveragePlan, createAbrCoverage } from './coverage';
 import type { createMixerWells } from './mixerWells';
+
+export { abrStampLayout } from './abrShaders';
 
 /** Immutable preset resources pinned by the brush session. */
 export type AbrRasterSettings<Layer = unknown> = {
@@ -42,6 +54,8 @@ export type AbrRasterSettings<Layer = unknown> = {
   /** Scales the secondary tip relative to the edited primary diameter. */
   size: number;
   mixing: ColorMixing;
+  /** Keeps the layer's alpha: paint changes only the color of pixels that are not transparent. */
+  alphaLock?: boolean;
   /** Global factor applied after mask composition. Defaults to 1 for stamps carrying tool opacity. */
   compositeOpacity?: number;
   /** Opt-in approximate GPU tip filtering and batched blending. Zero enables approximation at full source resolution; positive bias selects coarser source mips unless nonlinear texture effects require detail.
@@ -86,230 +100,147 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
   const pickupData = new Float32Array(d.sizeOf(PickupParams) / 4);
   const directStamps = Array.from({ length: 8 }, () => createDirectStamp(root));
   let nextDirectStamp = 0;
-  const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
-  const primary = root.createRenderPipeline({
-    attribs: abrStampLayout.attrib,
-    vertex,
-    fragment,
-    targets: {
-      paint: {
-        format: 'rgba8unorm',
-        blend: {
-          color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }
-        }
-      },
-      mask: {
-        format: 'rgba8unorm',
-        blend: {
-          color: { operation: 'max', srcFactor: 'one', dstFactor: 'one' },
-          alpha: { operation: 'max', srcFactor: 'one', dstFactor: 'one' }
-        }
-      }
-    }
-  });
-  const maskSource = root.createRenderPipeline({
-    attribs: abrStampLayout.attrib, vertex, fragment: maskSourceFragment, targets: { format: 'rgba8unorm' }
-  });
+  const pipelines = createAbrPipelines(root);
   let maskRaster: ReturnType<typeof createMaskRasterGpu> | undefined;
-  const secondary = root.createRenderPipeline({
-    attribs: abrStampLayout.attrib,
-    vertex,
-    fragment: secondaryFragment,
-    // Current secondary tips are affine; Photoshop accumulates their byte coverage.
-    targets: { format: 'rgba8unorm', blend: affineSecondaryBlend }
-  });
-  const composite = root.createRenderPipeline({
-    vertex: common.fullScreenTriangle,
-    fragment: compositeFragment,
-    targets: { format: 'rgba8unorm' }
-  });
-  const direct = root.createRenderPipeline({
-    attribs: abrStampLayout.attrib,
-    vertex,
-    fragment: directFragment,
-    targets: { format: 'rgba8unorm' }
-  });
-  const sharedDirect = root.with(sharedStamp, true).createRenderPipeline({
-    attribs: abrStampLayout.attrib,
-    vertex,
-    fragment: directFragment,
-    targets: { format: 'rgba8unorm' }
-  });
-  const sampledTipPipeline = root.createRenderPipeline({
-    attribs: { dynamics: abrStampLayout.attrib.dynamics }, vertex: sampledTipVertex,
-    fragment: sampledTipFragment, targets: { format: 'rgba8unorm' }
-  });
-  let sampledSource: { resource: BrushResource; levels: ReturnType<typeof createTipPyramid>;
-    gpu: ReturnType<typeof createTipRasterGpu>; planner: ReturnType<typeof createSampledTipTilePlanner>; bytes: number } | undefined;
-  let secondarySource: typeof sampledSource;
-  const sampledSecondaryPipeline = root.createRenderPipeline({
-    attribs: { dynamics: abrStampLayout.attrib.dynamics }, vertex: sampledTipVertex,
-    fragment: sampledSecondaryFragment, targets: { format: 'rgba8unorm', blend: affineSecondaryBlend }
-  });
+  const sources = createAbrPresetSources(root);
+  const textures = createAbrTextureCache(root);
   let pendingPlanBytes = 0;
   let pendingPatternBytes = 0;
-  let patternSource: { key: symbol; resource: BrushResource; gpu: ReturnType<typeof createPatternRasterGpu> } | undefined;
-  type Uploaded = ReturnType<typeof coverageTexture>;
-  let textures: Uploaded[] = [];
-  const lookup = new WeakMap<BrushResource, Uploaded>();
-  const budget = 64 * 1024 * 1024;
-  const bytes = (image: Uploaded) => (image.props.size[0] * image.props.size[1] * 4) / 3;
-  let uploads = 0;
-  let settings: AbrRasterSettings | undefined;
-  let tip: Uploaded, dual: Uploaded;
+  let pendingMaskBytes = 0;
+  /** Tips prepared by beginPaint for every tile of the current paint call. */
+  let sharedTips: ReturnType<typeof prepareTips> | undefined;
+  let sharedSecondaryTips: ReturnType<typeof prepareSecondaryTips> | undefined;
+  let planRowData = new Int32Array(0);
+  let quadData = new Float32Array(0);
+  let settings: PreparedSettings | undefined;
+  let tip: CoverageTexture | undefined;
+  let dual: CoverageTexture | undefined;
   // Fixed-color masks survive tile eviction independently of tile-local uniforms.
   let maskColor = { x: 0, y: 0, z: 0 };
   let bindings = new WeakMap<AbrTile, ReturnType<typeof createBindings>>();
-  function upload(resource: BrushResource) {
-    if (
-      resource.width > root.device.limits.maxTextureDimension2D ||
-      resource.height > root.device.limits.maxTextureDimension2D
-    )
-      throw new Error('ABR resource exceeds this device’s texture size.');
-    const cached = lookup.get(resource);
-    if (cached && textures.includes(cached)) {
-      textures.splice(textures.indexOf(cached), 1);
-      textures.push(cached);
-      return cached;
-    }
-    const mipLevelCount = Math.floor(Math.log2(Math.max(resource.width, resource.height))) + 1;
-    const texture = coverageTexture(root, resource.width, resource.height, mipLevelCount);
-    textures.push(texture);
-    uploads++;
-    root.device.queue.writeTexture(
-      { texture: root.unwrap(texture) },
-      resource.pixels,
-      { bytesPerRow: resource.width },
-      [resource.width, resource.height]
-    );
-    texture.generateMipmaps();
-    lookup.set(resource, texture);
-    return texture;
-  }
+  // Per-draw scratch. Queue writes and mask batches consume these before draw() returns.
+  const ordered: Dab[] = [];
+  let stampData = new Float32Array(0);
+  const recordRects: MaskRasterRect[] = [];
+  const recordIndices: number[] = [];
+
   return {
+    /** Selects the preset for the next stroke. Budgets and device limits are validated before any
+     * cached source or texture is replaced, so a rejected preset leaves the previous one intact.
+     * If a GPU allocation or upload fails afterwards, every cached resource is released and the
+     * rasterizer is left unprepared; call prepare again before drawing.
+     * Document layers and history are never retained past this call.
+     */
     prepare(value: AbrRasterSettings) {
-      maskColor = { x: 0, y: 0, z: 0 };
-      const v = value.values;
-      paramsData.set([0, 0, 256, Number(value.mixing === 'linear')], paramsOffsets.origin);
-      paramsData.set([value.pattern?.width ?? 1, value.pattern?.height ?? 1,
-        v.texture.scale / 100, blendModeId(v.texture.mode)], paramsOffsets.texture);
-      paramsData.set([Number(v.texture.invert), v.texture.brightness, v.texture.contrast,
-        Number(usesPencilCoverage(v.tool))], paramsOffsets.tone);
-      paramsData.set([Number(!!(v.useTexture && value.pattern)), Number(v.texture.eachTip),
-        Number(!!(v.useDualBrush && value.dual)), Number(v.useNoise)], paramsOffsets.flags);
-      paramsData.set([v.texture.depth / 100, blendModeId(v.dualBrush.mode), Number(v.useWetEdges),
-        Math.max(0, paintModes.findIndex(mode => mode === (value.blendMode ?? 'Nrml')))], paramsOffsets.extra);
-      paramsData[paramsOffsets.compositeOpacity] = value.compositeOpacity ?? 1;
-      paramsData[paramsOffsets.tipLodBias] = value.tipLodBias ?? 0;
-      paramsData[paramsOffsets.rasterScale] = 2 ** Math.min(3, value.tipLodBias ?? 0);
-      paramsIntegers[paramsOffsets.maskAccumulation] = value.tipLodBias !== undefined ? 3 : paintbrushMaskMode(v);
-      const required = [value.tip, ...(value.dual ? [value.dual] : [])];
-      const keep = new Set(required.map((resource) => lookup.get(resource)).filter(Boolean));
-      const missing = required.filter(
-        (resource) => !keep.has(lookup.get(resource)) || !textures.includes(lookup.get(resource)!)
-      );
-      const needsPattern = value.values.useTexture && value.pattern;
-      if (patternSource && (!needsPattern || patternSource.resource !== value.pattern)) {
-        patternSource.gpu.destroy();
-        patternSource = undefined;
-      }
-      if (needsPattern && !patternSource) {
-        // Four odd-sized levels can retain the full extent. Include host pixels
-        // as well as packed GPU bytes before allocating a new pattern source.
-        let width = needsPattern.width, height = needsPattern.height, patternBytes = 0;
-        for (let level = 0; level < 4; level++) {
-          patternBytes += width * height + Math.ceil(width * height / 4) * 4 + 8;
-          if (width % 2 === 0) width /= 2;
-          if (height % 2 === 0) height /= 2;
-        }
-        if (patternBytes > budget) throw new Error('ABR pattern levels exceed the 64 MiB brush budget.');
-        patternSource = { key: Symbol('pattern source'), resource: needsPattern, gpu: createPatternRasterGpu(root,
-          { width: needsPattern.width, height: needsPattern.height, data: needsPattern.pixels }) };
-      }
-      const needsSampled = value.tipLodBias === undefined && value.values.tool.type === 'PbTl' && value.values.tipKind === 'sampledBrush' &&
-        !(value.values.useShapeDynamics && value.values.shapeDynamics.brushProjection);
-      if (sampledSource && (!needsSampled || sampledSource.resource !== value.tip)) {
-        sampledSource.gpu.destroy();
-        sampledSource = undefined;
-      }
-      if (needsSampled && !sampledSource) {
-        const levels = createTipPyramid({ width: value.tip.width, height: value.tip.height, data: value.tip.pixels });
-        const sourceBytes = levels.reduce((sum, level) => sum + level.width * level.height + 16, 0);
-        if (required.reduce((sum, resource) => sum + (resource.width * resource.height * 4) / 3, sourceBytes + (patternSource?.gpu.bytes ?? 0)) > budget)
-          throw new Error('ABR mipmaps and sampled-tip pyramid exceed the 64 MiB GPU brush budget.');
-        sampledSource = { resource: value.tip, levels, gpu: createTipRasterGpu(root, levels), planner: createSampledTipTilePlanner(levels), bytes: sourceBytes };
-      }
-      // Computed secondary sources are already rasterized and use the same affine row planner.
-      const needsSecondary = value.values.useDualBrush && value.dual;
-      if (secondarySource && (!needsSecondary || secondarySource.resource !== needsSecondary)) {
-        secondarySource.gpu.destroy(); secondarySource = undefined;
-      }
-      if (needsSecondary && !secondarySource) {
-        const levels = createTipPyramid({ width: needsSecondary.width, height: needsSecondary.height, data: needsSecondary.pixels });
-        const bytes = levels.reduce((sum, level) => sum + level.width * level.height + 16, 0);
-        if (required.reduce((sum, resource) => sum + (resource.width * resource.height * 4) / 3,
-          bytes + (sampledSource?.bytes ?? 0) + (patternSource?.gpu.bytes ?? 0)) > budget)
-          throw new Error('ABR secondary tip pyramid exceeds the 64 MiB GPU brush budget.');
-        secondarySource = { resource: needsSecondary, levels, bytes, gpu: createTipRasterGpu(root, levels),
-          planner: createSampledTipTilePlanner(levels, true) };
-      }
-      const sourceBytes = (sampledSource?.bytes ?? 0) + (secondarySource?.bytes ?? 0) + (patternSource?.gpu.bytes ?? 0);
-      const additional = missing.reduce((sum, resource) => sum + (resource.width * resource.height * 4) / 3, sourceBytes);
-      if (required.reduce((sum, resource) => sum + (resource.width * resource.height * 4) / 3, sourceBytes) > budget)
-        throw new Error('ABR mipmaps exceed the 64 MiB GPU brush budget.');
-      for (const old of [...textures]) {
-        if (
-          textures.reduce((sum, texture) => sum + bytes(texture), additional) <= budget &&
-          textures.length + missing.length <= 256
-        )
-          break;
-        if (keep.has(old)) continue;
-        old.destroy();
-        textures.splice(textures.indexOf(old), 1);
-      }
-      // The renderer borrows history only while painting; GPU resource caches must not pin old document maps.
-      settings = { ...value, historySource: undefined };
+      const required = value.dual ? [value.tip, value.dual] : [value.tip];
+      const plan = sources.plan(value, required);
+      textures.validate(required, plan.bytes);
+
       try {
-        tip = upload(value.tip);
-        dual = value.dual ? upload(value.dual) : tip;
-        bindings = new WeakMap();
+        sources.apply(plan);
+        const [primary, secondary] = textures.acquire(required, sources.bytes());
+        tip = primary;
+        dual = secondary ?? primary;
       } catch (error) {
-        for (const texture of textures) texture.destroy();
-        textures = [];
+        reset();
         throw error;
       }
+
+      writeParams(value);
+      settings = {
+        values: value.values,
+        tipLodBias: value.tipLodBias,
+        blendMode: value.blendMode,
+        pattern: !!value.pattern,
+        dual: !!value.dual,
+        smudge: !!value.smudge,
+        mixer: !!value.mixer,
+        tipSize: { width: value.tip.width, height: value.tip.height }
+      };
+      maskColor = { x: 0, y: 0, z: 0 };
+      bindings = new WeakMap();
     },
     /** Document pixels per persistent mask pixel, fixed for the current stroke. */
     rasterScale: () => paramsData[paramsOffsets.rasterScale]!,
     /** Bounds progress batches by raster cost. Tiny tips amortize GPU setup; large tips present more often. */
     paintBatchSize(dabs: readonly Dab[]) {
-      if (settings?.tipLodBias !== undefined) return adaptivePaintBatchSize(dabs, paramsData[paramsOffsets.rasterScale]!);
-      if (!batchSampledMasks || !settings || paintbrushMaskMode(settings.values) !== 1) return 32;
+      if (settings?.tipLodBias !== undefined) {
+        return adaptivePaintBatchSize(dabs, paramsData[paramsOffsets.rasterScale]!);
+      }
+
+      if (!batchSampledMasks || !settings || !paintbrushMaskMode(settings.values)) {
+        return 32;
+      }
+
+      // Batched masks cost GPU time in proportion to covered pixels, so the batch holds a pixel budget, not a count.
       let largestCoverage = 1;
       for (const dab of dabs) {
+        if (dab.abr?.secondary) {
+          continue;
+        }
+
         const bounds = dab.abr?.sampledTip?.bounds;
-        if (dab.abr?.secondary || !bounds) return 32;
-        const width = bounds.right - bounds.left, height = bounds.bottom - bounds.top;
-        if (width > 16 || height > 16) return 32;
-        largestCoverage = Math.max(largestCoverage, Math.ceil(width / 4) * 4 * height);
+        if (!bounds) {
+          return 32;
+        }
+
+        largestCoverage = Math.max(largestCoverage,
+          Math.ceil((bounds.right - bounds.left) / 4) * 4 * (bounds.bottom - bounds.top));
       }
-      return Math.min(sampledMaskBatchLimit, Math.floor(256 * 256 / largestCoverage));
+
+      return Math.max(8, Math.min(sampledMaskBatchLimit, Math.floor(maskBatchCoverage / largestCoverage)));
+    },
+    /** Prepares the sampled tips of one paint call once, so every tile it touches shares their upload.
+     * Pair with endPaint after the last tile is encoded. Draws outside such a pair prepare their own tips.
+     */
+    beginPaint(dabs: readonly Dab[]) {
+      if (!settings) {
+        return;
+      }
+
+      const secondary = sources.secondary;
+      const secondaryTips = secondary ? sampledTipsOf(dabs, true) : undefined;
+      if (secondaryTips?.length) {
+        sharedSecondaryTips = prepareSecondaryTips(secondary!, secondaryTips);
+      }
+
+      const source = sources.sampled;
+      if (!batchSampledMasks || !source || settings.tipLodBias !== undefined || !paintbrushMaskMode(settings.values)) {
+        return;
+      }
+
+      const tips = sampledTipsOf(dabs, false);
+      if (tips?.length) {
+        sharedTips = prepareTips(source, tips);
+      }
+    },
+    /** Releases the tips shared since beginPaint once `commands`, which must hold every draw using them, is submitted. */
+    endPaint(commands: ReturnType<typeof commandBatch>) {
+      for (const shared of [sharedTips, sharedSecondaryTips]) {
+        if (shared) {
+          commands.encoder();
+          retainPlans(commands, shared.plans);
+        }
+      }
+
+      sharedTips = undefined;
+      sharedSecondaryTips = undefined;
     },
     /** Only persistent masks used by this preset need eviction snapshots. */
     coveragePlan: (transient: boolean) => abrCoveragePlan({
       transient,
       scale: paramsData[paramsOffsets.rasterScale]!,
-      mask: !settings || settings.tipLodBias !== undefined || paintbrushMaskMode(settings.values) === 0,
+      mask: !settings || settings.tipLodBias !== undefined || paintbrushMaskMode(settings.values) === maskAccumulation.stamp,
       dual: !!settings?.values.useDualBrush && !!settings.dual
     }),
     /** Creates device scratch without owning the base or mask supplied by the tile cache. */
     createTile: (base: Texture, mask: Texture, capacity: number) => createAbrTile(root, base, mask, capacity),
     /** Prepare before opening a caller-owned render pass for direct drawing. */
     prepareTile,
-    /** One primary Smudge stamp can composite directly unless coverage needs neighboring or secondary pixels. */
+    /** One primary Smudge or Mixer stamp can composite directly unless its coverage needs a secondary mask. */
     canDrawDirect: () =>
-      !!settings?.smudge && !settings.values.useWetEdges && !(settings.values.useDualBrush && settings.dual),
+      !!(settings?.smudge || settings?.mixer) && !settings.values.useWetEdges &&
+      !(settings.values.useDualBrush && settings.dual),
     /** Shared-area deposition currently excludes effects whose coordinates or masks are tile-local. */
     canBatchDirect: () => !!settings?.smudge && !settings.values.useWetEdges &&
       !(settings.values.useDualBrush && settings.dual) && !settings.values.useNoise &&
@@ -319,9 +250,15 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
      * The vertex shader reads tile placement from the pickup uniform's spare bytes.
      */
     prepareDirect(dab: Dab) {
-      if (!dab.abr || dab.abr.secondary) throw new Error('Direct Smudge requires one primary ABR dab.');
+      if (!dab.abr || dab.abr.secondary) {
+        throw new Error('Direct Smudge requires one primary ABR dab.');
+      }
+
       const slot = directStamps[nextDirectStamp++ % directStamps.length]!;
-      if (slot.batch && slot.batch.version === slot.version) slot.batch.flush();
+      if (slot.batch && slot.batch.version === slot.version) {
+        slot.batch.flush();
+      }
+
       root.device.queue.writeBuffer(root.unwrap(slot.buffer), 0, dab.abr.data);
       return slot;
     },
@@ -338,47 +275,27 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
       ty: number,
       destination?: { pass: GPURenderPassEncoder; pickup: AbrPickup; stamps?: ReturnType<typeof createDirectStamp> }
     ) {
-      if (!destination) prepareTile(tile, commands, tx, ty);
-      const encoder = commands.encoder();
-      const s = settings!;
-      const v = s.values;
-      const binding = bindingsFor(tile);
-      const colorData = dabs.find(dab => !dab.abr?.secondary)?.abr?.data;
-      if (colorData) maskColor = { x: colorData[12]!, y: colorData[13]!, z: colorData[14]! };
-      const color = maskColor;
-      if (binding.originX !== tx || binding.originY !== ty ||
-          color.x !== binding.color.x || color.y !== binding.color.y || color.z !== binding.color.z) {
-        paramsData[paramsOffsets.origin] = (tx * 256) % 65536;
-        paramsData[paramsOffsets.origin + 1] = (ty * 256) % 65536;
-        paramsData[paramsOffsets.maskColor] = color.x;
-        paramsData[paramsOffsets.maskColor + 1] = color.y;
-        paramsData[paramsOffsets.maskColor + 2] = color.z;
-        paramsData[paramsOffsets.maskColor + 3] = 1;
-        tile.params.write(paramsData.buffer);
-        binding.color = color;
-        binding.originX = tx;
-        binding.originY = ty;
+      if (!destination) {
+        prepareTile(tile, commands, tx, ty);
       }
+
+      // Open the encoder up front: flush() skips afterSubmit releases when no encoder exists.
+      commands.encoder();
+      const binding = bindingsFor(tile);
+      writeTileParams(tile, binding, dabs, tx, ty);
+
       if (destination?.stamps) {
-        sharedDirect.with(destination.pass).with(binding.primary)
+        pipelines.sharedDirect.with(destination.pass).with(binding.primary)
           .with(pickupBinding(tile, destination.pickup, dabs[0]!.x - tx * 256, dabs[0]!.y - ty * 256))
           .with(abrStampLayout, destination.stamps.buffer).draw(6);
         destination.stamps.batch = commands;
         destination.stamps.version = commands.version;
         return;
       }
-      // One upload, separate vertex ranges: never overwrite a buffer before its draws are submitted.
-      const ordered = [...dabs.filter((dab) => dab.abr?.secondary), ...dabs.filter((dab) => !dab.abr?.secondary)];
-      const data = new Float32Array(ordered.length * 16);
-      ordered.forEach((dab, i) => {
-        if (!dab.abr) throw new Error('ABR rasterizer requires ABR stamp attributes.');
-        data.set(dab.abr.data, i * 16);
-        data[i * 16] = dab.x - tx * 256;
-        data[i * 16 + 1] = dab.y - ty * 256;
-      });
-      root.device.queue.writeBuffer(root.unwrap(tile.stamps), 0, data);
+
+      const secondCount = uploadStamps(tile, dabs, tx, ty);
       if (destination) {
-        direct
+        pipelines.direct
           .with(destination.pass)
           .with(binding.primary)
           .with(pickupBinding(tile, destination.pickup))
@@ -386,159 +303,490 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
           .draw(6, ordered.length);
         return;
       }
-      const secondCount = ordered.filter((dab) => dab.abr?.secondary).length;
+
       if (secondCount) {
-        const source = secondarySource;
-        const tips = ordered.slice(0, secondCount).map(dab => dab.abr?.sampledTip);
-        const plans = source && tips.every(tip => !!tip) ? source.gpu.prepare(tips.map(tip =>
-          source.planner.crop(tip!, tx * 256, ty * 256, 256, 256))) : undefined;
-        if (plans) {
-          pendingPlanBytes += plans.bytes;
-          commands.afterSubmit(() => { plans.release(); pendingPlanBytes -= plans.bytes; });
-        }
-        const pass = encoder.beginRenderPass({
-          colorAttachments: [{ view: tile.dualView, loadOp: 'load', storeOp: 'store' }]
-        });
-        if (plans) tips.forEach((tip, index) => {
-          const left = Math.max(0, tip!.bounds.left - tx * 256), top = Math.max(0, tip!.bounds.top - ty * 256);
-          const right = Math.min(256, tip!.bounds.right - tx * 256), bottom = Math.min(256, tip!.bounds.bottom - ty * 256);
-          if (right <= left || bottom <= top) return;
-          pass.setScissorRect(left, top, right - left, bottom - top);
-          sampledSecondaryPipeline.with(pass).with(binding.secondary).with(plans.group).with(abrStampLayout, tile.stamps)
-            .draw(3, 1, 0, index);
-        });
-        else secondary.with(pass).with(binding.secondary).with(abrStampLayout, tile.stamps).draw(6, secondCount);
-        pass.end();
+        drawSecondary(tile, commands, binding, secondCount, tx, ty);
       }
-      const maskMode = s.tipLodBias !== undefined ? 0 : paintbrushMaskMode(v);
-      if (ordered.length > secondCount && maskMode) {
-        maskRaster ??= createMaskRasterGpu(root, 256, 256, sampledMaskByte);
-        const source = sampledSource;
-        const geometry = source && ordered.every(dab => dab.abr?.secondary || dab.abr?.sampledTip)
-          ? ordered.map(dab => dab.abr?.secondary ? undefined : dab.abr?.sampledTip) : undefined;
-        const records = ordered.slice(secondCount).flatMap((dab, i) => {
-          const bounds = geometry && dab.abr?.sampledTip?.bounds;
-          return maskRasterRects(data, (i + secondCount) * 16, 256, 256, bounds ? {
-            left: bounds.left - tx * 256, right: bounds.right - tx * 256,
-            top: bounds.top - ty * 256, bottom: bounds.bottom - ty * 256
-          } : undefined).map(rect => ({ rect, index: i + secondCount }));
-        });
-        // Large stamps use the existing fragment path. Bound both serial accumulation
-        // and shared coverage memory so a long packet cannot monopolize the GPU.
-        const directMask = batchSampledMasks && maskMode === 1 && !!geometry && records.length <= sampledMaskBatchLimit &&
-          records.every(({ rect }) => rect.width <= 64 && rect.height <= 64) &&
-          records.reduce((area, { rect }) => area + Math.ceil(rect.width / 4) * 4 * rect.height, 0) <= 256 * 256;
-        // Compute consumers address the full stamp directly. Avoid cloning its spans
-        // into 256-row tile plans when only a few rows contain pencil coverage.
-        const compact = directMask && secondCount === 0 && geometry!.every(tip => tip &&
-          tip.bounds.right - tip.bounds.left <= 64 && tip.bounds.bottom - tip.bounds.top <= 64);
-        const affine = compact ? source!.gpu.prepareAffine(geometry! as NonNullable<typeof geometry[number]>[]) : undefined;
-        const complete = compact && !affine ? geometry!.map(tip => source!.planner.get(tip!)) : undefined;
-        const plans = affine ?? (geometry && source ? source.gpu.prepare(complete ? complete.map(entry => entry.plan) : geometry.map(tip => tip
-          ? source.planner.crop(tip, tx * 256, ty * 256, 256, 256)
-          : { width: 256, height: 256, rows: Array.from({ length: 256 }, () => []) })) : undefined);
-        if (plans) {
-          pendingPlanBytes += plans.bytes;
-          commands.afterSubmit(() => { plans.release(); pendingPlanBytes -= plans.bytes; });
-        }
-        if (tile.maskBatch?.mode !== maskMode || tile.maskBatch.direct !== directMask) {
-          tile.maskBatch?.destroy();
-          tile.maskBatch = maskRaster.createBatch(tile.capacity, maskMode, directMask);
-        }
-        tile.maskBatch.write(records.map(record => record.rect), directMask ? records.map(record => ({
-          firstRow: plans!.firstRows[record.index]!,
-          x: affine ? tx * 256 - affine.origins[record.index]!.x : complete ? tx * 256 - complete[record.index]!.x : 0,
-          y: affine ? ty * 256 - affine.origins[record.index]!.y : complete ? ty * 256 - complete[record.index]!.y : 0,
-          data, offset: record.index * 16 + 8
-        })) : undefined);
-        if (directMask && plans) {
-          tile.maskBatch.recordBatch(encoder, root.unwrap(tile.paint), pipeline =>
-            pipeline.with(binding.primary).with(plans.group));
-          return;
-        }
-        records.forEach((record, index) => {
-          const pass = encoder.beginRenderPass({
-            colorAttachments: [{ view: maskRaster!.sourceView, clearValue: [0, 0, 0, 0], loadOp: 'clear', storeOp: 'store' }]
-          });
-          if (plans) {
-            pass.setScissorRect(record.rect.x, record.rect.y, record.rect.width, record.rect.height);
-            sampledTipPipeline.with(pass).with(binding.primary).with(plans.group).with(abrStampLayout, tile.stamps)
-              .draw(3, 1, 0, record.index);
-          } else maskSource.with(pass).with(binding.primary).with(abrStampLayout, tile.stamps).draw(6, 1, 0, record.index);
-          pass.end();
-          tile.maskBatch!.record(encoder, index, root.unwrap(tile.paint));
-        });
-      } else if (ordered.length > secondCount) {
-        const pass = encoder.beginRenderPass({
-          colorAttachments: [
-            { view: tile.paintView, loadOp: 'load', storeOp: 'store' },
-            { view: tile.maskView, loadOp: 'load', storeOp: 'store' }
-          ]
-        });
-        // Keep persistent masks in the tile's top-left LOD region. Composite expands
-        // that region into ordinary document pixels, including after tile eviction.
-        const side = 256 / paramsData[paramsOffsets.rasterScale]!;
-        pass.setViewport(0, 0, side, side, 0, 1);
-        primary
-          .with(pass)
-          .with(binding.primary)
-          .with(abrStampLayout, tile.stamps)
-          .draw(6, ordered.length - secondCount, 0, secondCount);
-        pass.end();
+
+      if (ordered.length === secondCount) {
+        return;
+      }
+
+      const maskMode = settings!.tipLodBias !== undefined ? maskAccumulation.stamp : paintbrushMaskMode(settings!.values);
+      if (maskMode) {
+        drawMasked(tile, commands, binding, maskMode, secondCount, tx, ty);
+      } else {
+        drawPrimary(tile, commands, binding, secondCount, tx, ty);
       }
     },
     composite(tile: AbrTile, pass: GPURenderPassEncoder, pickup?: AbrPickup) {
-      composite.with(pass).with(pickupBinding(tile, pickup)).draw(3);
+      pipelines.composite.with(pass).with(pickupBinding(tile, pickup)).draw(3);
     },
     stats: () => ({
-      uploads,
-      textures: textures.length,
-      sampledPlanRows: (sampledSource?.planner.rows ?? 0) + (secondarySource?.planner.rows ?? 0),
+      uploads: textures.uploads,
+      textures: textures.size,
+      sampledPlanRows: sources.planRows(),
       pendingTipPlanBytes: pendingPlanBytes,
       pendingPatternBytes,
-      bytes: directStamps.length * d.sizeOf(Stamp) + textures.reduce((sum, texture) => sum + (texture.props.size[0] * texture.props.size[1] * 4) / 3, 0) + (maskRaster?.bytes ?? 0) + (sampledSource?.bytes ?? 0) + (secondarySource?.bytes ?? 0) + (sampledSource?.gpu.pooledBytes ?? 0) + (secondarySource?.gpu.pooledBytes ?? 0) + pendingPlanBytes + pendingPatternBytes + (patternSource?.gpu.bytes ?? 0)
+      pendingMaskBytes,
+      bytes: directStamps.length * d.sizeOf(Stamp) + textures.bytes() + (maskRaster?.bytes ?? 0) + sources.bytes() +
+        sources.pooledBytes() + pendingPlanBytes + pendingPatternBytes + pendingMaskBytes
     }),
     destroy() {
-      for (const slot of directStamps) slot.buffer.destroy();
+      for (const slot of directStamps) {
+        slot.buffer.destroy();
+      }
+
       maskRaster?.destroy();
-      sampledSource?.gpu.destroy();
-      sampledSource = undefined;
-      secondarySource?.gpu.destroy(); secondarySource = undefined;
-      patternSource?.gpu.destroy();
-      patternSource = undefined;
-      for (const texture of textures) texture.destroy();
-      textures = [];
+      reset();
     }
   };
 
+  /** Releases every preset source and texture and forgets the prepared preset. */
+  function reset() {
+    sources.destroy();
+    textures.destroy();
+    settings = undefined;
+    tip = undefined;
+    dual = undefined;
+    bindings = new WeakMap();
+  }
+
+  /** Stages preset-wide uniforms; tile origin and mask color are written per tile in writeTileParams. */
+  function writeParams(value: AbrRasterSettings) {
+    const v = value.values;
+    const origin = paramsOffsets.origin, texture = paramsOffsets.texture, tone = paramsOffsets.tone;
+    const flags = paramsOffsets.flags, extra = paramsOffsets.extra;
+    paramsData[origin + originLane.x] = 0;
+    paramsData[origin + originLane.y] = 0;
+    paramsData[origin + originLane.alphaLock] = Number(value.alphaLock ?? false);
+    paramsData[origin + originLane.linearMixing] = Number(value.mixing === 'linear');
+    paramsData[texture + textureLane.width] = value.pattern?.width ?? 1;
+    paramsData[texture + textureLane.height] = value.pattern?.height ?? 1;
+    paramsData[texture + textureLane.scale] = v.texture.scale / 100;
+    paramsData[texture + textureLane.mode] = blendModeId(v.texture.mode);
+    paramsData[tone + toneLane.invert] = Number(v.texture.invert);
+    paramsData[tone + toneLane.brightness] = v.texture.brightness;
+    paramsData[tone + toneLane.contrast] = v.texture.contrast;
+    paramsData[tone + toneLane.pencil] = Number(usesPencilCoverage(v.tool));
+    paramsData[flags + flagsLane.texture] = Number(!!(v.useTexture && value.pattern));
+    paramsData[flags + flagsLane.textureEachTip] = Number(v.texture.eachTip);
+    paramsData[flags + flagsLane.dual] = Number(!!(v.useDualBrush && value.dual));
+    paramsData[flags + flagsLane.noise] = Number(v.useNoise);
+    paramsData[extra + extraLane.depth] = v.texture.depth / 100;
+    paramsData[extra + extraLane.dualMode] = blendModeId(v.dualBrush.mode);
+    paramsData[extra + extraLane.wetEdges] = Number(v.useWetEdges);
+    paramsData[extra + extraLane.blendMode] = Math.max(0, paintModes.findIndex((mode) => mode === (value.blendMode ?? 'Nrml')));
+    paramsData[paramsOffsets.compositeOpacity] = value.compositeOpacity ?? 1;
+    paramsData[paramsOffsets.tipLodBias] = value.tipLodBias ?? 0;
+    paramsData[paramsOffsets.rasterScale] = 2 ** Math.min(3, value.tipLodBias ?? 0);
+    paramsIntegers[paramsOffsets.maskAccumulation] =
+      value.tipLodBias !== undefined ? maskAccumulation.approximate : paintbrushMaskMode(v);
+  }
+
+  /** Rewrites a tile's uniforms only when its world origin or fixed mask color changed. */
+  function writeTileParams(tile: AbrTile, binding: ReturnType<typeof createBindings>, dabs: readonly Dab[], tx: number, ty: number) {
+    const colorData = dabs.find((dab) => !dab.abr?.secondary)?.abr?.data;
+    if (colorData) {
+      maskColor = { x: colorData[12]!, y: colorData[13]!, z: colorData[14]! };
+    }
+
+    const color = maskColor;
+    if (binding.originX === tx && binding.originY === ty &&
+        color.x === binding.color.x && color.y === binding.color.y && color.z === binding.color.z) {
+      return;
+    }
+
+    paramsData[paramsOffsets.origin + originLane.x] = (tx * 256) % 65536;
+    paramsData[paramsOffsets.origin + originLane.y] = (ty * 256) % 65536;
+    paramsData[paramsOffsets.maskColor] = color.x;
+    paramsData[paramsOffsets.maskColor + 1] = color.y;
+    paramsData[paramsOffsets.maskColor + 2] = color.z;
+    paramsData[paramsOffsets.maskColor + 3] = 1;
+    tile.params.write(paramsData.buffer);
+    binding.color = color;
+    binding.originX = tx;
+    binding.originY = ty;
+  }
+
+  /** Orders secondary dabs first into the shared scratch and uploads them tile-relative in one write.
+   * Separate vertex ranges never overwrite a buffer before its draws are submitted.
+   * Returns the number of leading secondary dabs.
+   */
+  function uploadStamps(tile: AbrTile, dabs: readonly Dab[], tx: number, ty: number) {
+    ordered.length = 0;
+    for (const dab of dabs) {
+      if (dab.abr?.secondary) {
+        ordered.push(dab);
+      }
+    }
+
+    const secondCount = ordered.length;
+    for (const dab of dabs) {
+      if (!dab.abr?.secondary) {
+        ordered.push(dab);
+      }
+    }
+
+    const floats = ordered.length * 16;
+    if (stampData.length < floats) {
+      stampData = new Float32Array(Math.max(floats, stampData.length * 2));
+    }
+
+    for (let i = 0; i < ordered.length; i++) {
+      const dab = ordered[i]!;
+      if (!dab.abr) {
+        throw new Error('ABR rasterizer requires ABR stamp attributes.');
+      }
+
+      stampData.set(dab.abr.data, i * 16);
+      stampData[i * 16] = dab.x - tx * 256;
+      stampData[i * 16 + 1] = dab.y - ty * 256;
+    }
+
+    root.device.queue.writeBuffer(root.unwrap(tile.stamps), 0, stampData, 0, floats);
+    return secondCount;
+  }
+
+  /** Accumulates the leading secondary dabs into the tile's dual mask, row-planned when every tip is sampled. */
+  function drawSecondary(
+    tile: AbrTile,
+    commands: ReturnType<typeof commandBatch>,
+    binding: ReturnType<typeof createBindings>,
+    secondCount: number,
+    tx: number,
+    ty: number
+  ) {
+    const source = sources.secondary;
+    const tips = source ? sampledTipsOf(ordered.slice(0, secondCount), true) : undefined;
+    let prepared = tips?.length === secondCount ? sharedSecondaryTips : undefined;
+    if (tips?.length === secondCount && (!prepared || !tips.every((tip) => prepared!.rows.has(tip)))) {
+      prepared = prepareSecondaryTips(source!, tips);
+      retainPlans(commands, prepared.plans);
+    }
+
+    const plans = prepared?.plans;
+    if (prepared) {
+      // Each instance reads its complete plan at the tile's offset; the buffer follows tile.stamps' lifetime.
+      if (planRowData.length < secondCount * 4) {
+        planRowData = new Int32Array(Math.max(secondCount * 4, planRowData.length * 2));
+      }
+
+      tips!.forEach((tip, index) => {
+        const row = prepared.rows.get(tip)!;
+        planRowData[index * 4] = row.firstRow;
+        planRowData[index * 4 + 1] = tx * 256 - row.x;
+        planRowData[index * 4 + 2] = ty * 256 - row.y;
+        planRowData[index * 4 + 3] = Math.round(ordered[index]!.abr!.data[15]! * 1024);
+      });
+      root.device.queue.writeBuffer(root.unwrap(tile.planRows), 0, planRowData, 0, secondCount * 4);
+    }
+
+    const pass = commands.encoder().beginRenderPass({
+      colorAttachments: [{ view: tile.dualView, loadOp: 'load', storeOp: 'store' }]
+    });
+    if (plans) {
+      tips!.forEach((tip, index) => {
+        const left = Math.max(0, tip.bounds.left - tx * 256), top = Math.max(0, tip.bounds.top - ty * 256);
+        const right = Math.min(256, tip.bounds.right - tx * 256), bottom = Math.min(256, tip.bounds.bottom - ty * 256);
+        if (right <= left || bottom <= top) {
+          return;
+        }
+
+        pass.setScissorRect(left, top, right - left, bottom - top);
+        pipelines.sampledSecondary.with(pass).with(plans.group).with(planRowLayout, tile.planRows).draw(3, 1, 0, index);
+      });
+    } else {
+      pipelines.secondary.with(pass).with(binding.secondary).with(abrStampLayout, tile.stamps).draw(6, secondCount);
+    }
+    pass.end();
+  }
+
+  /** Accumulates primary dabs through the byte-exact mask rasterizer (fixed or straight color). */
+  function drawMasked(
+    tile: AbrTile,
+    commands: ReturnType<typeof commandBatch>,
+    binding: ReturnType<typeof createBindings>,
+    maskMode: 1 | 2,
+    secondCount: number,
+    tx: number,
+    ty: number
+  ) {
+    const encoder = commands.encoder();
+    const source = sources.sampled;
+    const geometry = source && ordered.every((dab) => dab.abr?.secondary || dab.abr?.sampledTip)
+      ? ordered.map((dab) => dab.abr?.secondary ? undefined : dab.abr?.sampledTip)
+      : undefined;
+    recordRects.length = 0;
+    recordIndices.length = 0;
+    for (let index = secondCount; index < ordered.length; index++) {
+      const bounds = geometry && ordered[index]!.abr?.sampledTip?.bounds;
+      const rects = maskRasterRects(stampData, index * 16, 256, 256, bounds ? {
+        left: bounds.left - tx * 256, right: bounds.right - tx * 256,
+        top: bounds.top - ty * 256, bottom: bounds.bottom - ty * 256
+      } : undefined);
+      for (const rect of rects) {
+        recordRects.push(rect);
+        recordIndices.push(index);
+      }
+    }
+
+    // Sampled stamps of any size share coverage and accumulation dispatches. Their coverage is sampled from
+    // each stamp's complete row plan, addressed by the tile's offset, so no per-tile plan is built.
+    if (batchSampledMasks && geometry && source && recordRects.length <= tile.capacity) {
+      const tips = geometry.slice(secondCount) as SampledTip[];
+      let prepared = sharedTips;
+      if (!prepared || !tips.every((tip) => prepared!.rows.has(tip))) {
+        prepared = prepareTips(source, tips);
+        retainPlans(commands, prepared.plans);
+      }
+
+      const { plans, rows } = prepared;
+      const batch = maskBatchFor(tile, commands, maskMode, true);
+      // The batch borrows recordRects until it is recorded below, within this draw.
+      batch.write(recordRects, recordIndices.map((index) => {
+        const row = rows.get(tips[index - secondCount]!)!;
+        return {
+          firstRow: row.firstRow,
+          x: tx * 256 - row.x,
+          y: ty * 256 - row.y,
+          data: stampData,
+          offset: index * 16 + 8
+        };
+      }));
+      batch.recordBatch(encoder, root.unwrap(tile.paint), (pipeline) =>
+        pipeline.with(binding.primary).with(plans.group));
+      return;
+    }
+
+    // Computed tips and the unbatched reference accumulate one stamp per dispatch.
+    const plans = geometry && source
+      ? source.gpu.prepare(geometry.map((tip) => tip ? source.planner.crop(tip, tx * 256, ty * 256, 256, 256) : emptyTilePlan))
+      : undefined;
+    if (plans) {
+      retainPlans(commands, plans);
+    }
+
+    const batch = maskBatchFor(tile, commands, maskMode, false);
+    // The batch borrows recordRects until its last record below, within this draw.
+    batch.write(recordRects);
+    for (let record = 0; record < recordRects.length; record++) {
+      const rect = recordRects[record]!;
+      const index = recordIndices[record]!;
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{ view: maskRaster!.sourceView, clearValue: [0, 0, 0, 0], loadOp: 'clear', storeOp: 'store' }]
+      });
+      if (plans) {
+        pass.setScissorRect(rect.x, rect.y, rect.width, rect.height);
+        pipelines.sampledTip.with(pass).with(binding.primary).with(plans.group).with(abrStampLayout, tile.stamps)
+          .draw(3, 1, 0, index);
+      } else {
+        pipelines.maskSource.with(pass).with(binding.primary).with(abrStampLayout, tile.stamps).draw(6, 1, 0, index);
+      }
+      pass.end();
+      batch.record(encoder, record, root.unwrap(tile.paint));
+    }
+  }
+
+  /** Uploads complete row plans for `tips` and maps each tip to its first uploaded row and document origin.
+   * The caller keeps the plans until their readers are submitted.
+   */
+  function prepareTips(source: NonNullable<typeof sources.sampled>, tips: readonly SampledTip[]) {
+    const affine = source.gpu.prepareAffine(tips);
+    const complete = affine ? undefined : tips.map((tip) => source.planner.get(tip));
+    const plans = affine ?? source.gpu.prepare(complete!.map((entry) => entry.plan));
+    const rows = new Map<SampledTip, { firstRow: number; x: number; y: number }>();
+    tips.forEach((tip, index) => {
+      const origin = affine ? affine.origins[index]! : complete![index]!;
+      rows.set(tip, { firstRow: plans.firstRows[index]!, x: origin.x, y: origin.y });
+    });
+    return { plans, rows };
+  }
+
+  /** Uploads complete row plans of secondary `tips`, mapped like prepareTips. Their consumer treats unwritten
+   * pixels as zero coverage, so the affine packer's zero exterior is equivalent to the general planner's rows.
+   */
+  function prepareSecondaryTips(source: NonNullable<typeof sources.secondary>, tips: readonly SampledTip[]) {
+    const affine = source.gpu.prepareAffine(tips, true);
+    const complete = affine ? undefined : tips.map((tip) => source.planner.get(tip));
+    const plans = affine ?? source.gpu.prepare(complete!.map((entry) => entry.plan));
+    const rows = new Map<SampledTip, { firstRow: number; x: number; y: number }>();
+    tips.forEach((tip, index) => {
+      const origin = affine ? affine.origins[index]! : complete![index]!;
+      rows.set(tip, { firstRow: plans.firstRows[index]!, x: origin.x, y: origin.y });
+    });
+    return { plans, rows };
+  }
+
+  /** The tile's mask batch for this mode, replacing one of another mode after its readers are submitted. */
+  function maskBatchFor(tile: AbrTile, commands: ReturnType<typeof commandBatch>, mode: 1 | 2, direct: boolean) {
+    const raster = (maskRaster ??= createMaskRasterGpu(root, 256, 256, sampledMaskByte, maskCoverageEntries));
+    if (tile.maskBatch?.mode !== mode || tile.maskBatch.direct !== direct) {
+      retireMaskBatch(tile, commands);
+      tile.maskBatch = raster.createBatch(tile.capacity, mode, direct);
+    }
+
+    return tile.maskBatch;
+  }
+
+  /** Blends primary dabs into paint and max-accumulated mask targets. */
+  function drawPrimary(
+    tile: AbrTile,
+    commands: ReturnType<typeof commandBatch>,
+    binding: ReturnType<typeof createBindings>,
+    secondCount: number,
+    tx: number,
+    ty: number
+  ) {
+    const pass = commands.encoder().beginRenderPass({
+      colorAttachments: [
+        { view: tile.paintView, loadOp: 'load', storeOp: 'store' },
+        { view: tile.maskView, loadOp: 'load', storeOp: 'store' }
+      ]
+    });
+    // Keep persistent masks in the tile's top-left LOD region. Composite expands
+    // that region into ordinary document pixels, including after tile eviction.
+    const side = 256 / paramsData[paramsOffsets.rasterScale]!;
+    pass.setViewport(0, 0, side, side, 0, 1);
+    if (uploadTracedQuads(tile, secondCount, tx, ty)) {
+      pipelines.tracedPrimary
+        .with(pass)
+        .with(binding.primary)
+        .with(abrStampLayout, tile.stamps)
+        .with(tracedQuadLayout, tile.quads)
+        .draw(6, ordered.length - secondCount, 0, secondCount);
+    } else {
+      pipelines.primary
+        .with(pass)
+        .with(binding.primary)
+        .with(abrStampLayout, tile.stamps)
+        .draw(6, ordered.length - secondCount, 0, secondCount);
+    }
+
+    pass.end();
+  }
+
+  /** Uploads the traced tip quads of the primary dabs at their instance indices. Returns false, uploading nothing,
+   * when a dab has no traced tip or a projected one; those keep the stamp's own rotated rectangle.
+   */
+  function uploadTracedQuads(tile: AbrTile, secondCount: number, tx: number, ty: number) {
+    const floats = ordered.length * tracedQuadFloats;
+    if (quadData.length < floats) {
+      quadData = new Float32Array(Math.max(floats, quadData.length * 2));
+    }
+
+    const tip = settings!.tipSize;
+    for (let index = secondCount; index < ordered.length; index++) {
+      const quad = ordered[index]!.abr?.sampledTip?.quad;
+      if (!quad || quad.length !== 4 || quad.some((vertex) => vertex[4] !== undefined)) {
+        return false;
+      }
+
+      const first = quad[0]!, right = quad[1]!, opposite = quad[2]!, below = quad[3]!;
+      const at = index * tracedQuadFloats;
+      quadData[at] = (first[0]! + opposite[0]!) / 2 - tx * 256;
+      quadData[at + 1] = (first[1]! + opposite[1]!) / 2 - ty * 256;
+      quadData[at + 2] = (right[0]! - first[0]!) / 2;
+      quadData[at + 3] = (right[1]! - first[1]!) / 2;
+      quadData[at + 4] = (below[0]! - first[0]!) / 2;
+      quadData[at + 5] = (below[1]! - first[1]!) / 2;
+      // Source coordinates include a one-pixel margin on every side of the tip.
+      quadData[at + 6] = (first[2]! - 0.5) / tip.width;
+      quadData[at + 7] = (first[3]! - 0.5) / tip.height;
+      quadData[at + 8] = (opposite[2]! - 0.5) / tip.width;
+      quadData[at + 9] = (opposite[3]! - 0.5) / tip.height;
+    }
+
+    root.device.queue.writeBuffer(root.unwrap(tile.quads), secondCount * tracedQuadFloats * 4, quadData,
+      secondCount * tracedQuadFloats, (ordered.length - secondCount) * tracedQuadFloats);
+    return true;
+  }
+
+  /** Keeps compiled tip plans alive until their readers are submitted. */
+  function retainPlans(commands: ReturnType<typeof commandBatch>, plans: { bytes: number; release(): void }) {
+    pendingPlanBytes += plans.bytes;
+    commands.afterSubmit(() => {
+      plans.release();
+      pendingPlanBytes -= plans.bytes;
+    });
+  }
+
+  /** A replaced mask batch may still be read by encoded work; destroy it after submission. */
+  function retireMaskBatch(tile: AbrTile, commands: ReturnType<typeof commandBatch>) {
+    const old = tile.maskBatch;
+    if (!old) {
+      return;
+    }
+
+    tile.maskBatch = undefined;
+    pendingMaskBytes += old.bytes;
+    commands.afterSubmit(() => {
+      old.destroy();
+      pendingMaskBytes -= old.bytes;
+    });
+  }
+
   function prepareTile(tile: AbrTile, commands: ReturnType<typeof commandBatch>, tx: number, ty: number) {
-    if (pendingPlanBytes >= 8 * 1024 * 1024) commands.flush();
+    if (pendingPlanBytes >= 8 * 1024 * 1024) {
+      commands.flush();
+    }
+
     preparePattern(tile, commands, tx, ty);
   }
 
-  /** Reuses each scratch tile's pattern texture. Writes follow earlier readers in
-   * the same encoder; coordinate uploads remain immutable until submission.
+  /**
+   * Makes the scratch tile's texture pattern cover tile (`tx`, `ty`). A shared scratch tile serves every tile a dab
+   * touches, so it keeps the patterns of the last `patternRegions` tiles and switches between them without
+   * re-rasterizing; the least recently used region is re-recorded for a new tile. Writes follow earlier readers in the
+   * same encoder; coordinate uploads remain immutable until submission.
    */
   function preparePattern(tile: AbrTile, commands: ReturnType<typeof commandBatch>, tx: number, ty: number) {
-    const old = tile.pattern;
+    const pattern = sources.pattern;
     const scale = settings!.values.texture.scale / 100;
-    if (old && old.source === patternSource?.key && old.tx === tx && old.ty === ty && old.scale === scale) return;
-    if (!old && !patternSource) return;
-    if (patternSource) {
-      const region = old?.region ?? patternSource.gpu.createRegion(256, 256);
-      const batch = patternSource.gpu.record(commands.encoder(), region, scale,
-        { x: tx * 256, y: ty * 256, width: 256, height: 256 });
-      commands.afterSubmit(() => batch.destroy());
-      tile.pattern = { region, source: patternSource.key, tx, ty, scale };
-      if (!old) bindings.delete(tile);
-    } else {
-      tile.pattern = undefined;
-      if (old) {
-        pendingPatternBytes += old.region.bytes;
-        commands.afterSubmit(() => { old.region.destroy(); pendingPatternBytes -= old.region.bytes; });
-      }
-      bindings.delete(tile);
+    const matches = (entry: NonNullable<AbrTile['pattern']>) =>
+      entry.source === pattern?.key && entry.tx === tx && entry.ty === ty && entry.scale === scale;
+    if (tile.pattern && matches(tile.pattern)) {
+      return;
     }
+
+    if (!pattern) {
+      releasePatterns(tile, commands);
+      return;
+    }
+
+    const index = tile.patterns.findIndex(matches);
+    if (index >= 0) {
+      tile.pattern = tile.patterns.splice(index, 1)[0]!;
+      tile.patterns.push(tile.pattern);
+      return;
+    }
+
+    const reused = tile.patterns.length >= patternRegions ? tile.patterns.shift() : undefined;
+    const region = reused?.region ?? pattern.gpu.createRegion(256, 256);
+    const batch = pattern.gpu.record(commands.encoder(), region, scale, { x: tx * 256, y: ty * 256, width: 256, height: 256 });
+    commands.afterSubmit(() => batch.destroy());
+    tile.pattern = { region, source: pattern.key, tx, ty, scale };
+    tile.patterns.push(tile.pattern);
+  }
+
+  /** Destroys a scratch tile's pattern regions once the commands reading them have been submitted. */
+  function releasePatterns(tile: AbrTile, commands: ReturnType<typeof commandBatch>) {
+    const released = tile.patterns;
+    if (!released.length) {
+      return;
+    }
+
+    tile.patterns = [];
+    tile.pattern = undefined;
+    for (const { region } of released) {
+      pendingPatternBytes += region.bytes;
+      commands.afterSubmit(() => {
+        region.destroy();
+        pendingPatternBytes -= region.bytes;
+      });
+    }
+
+    bindings.delete(tile);
   }
 
   function pickupBinding(tile: AbrTile, pickup: AbrPickup | undefined, centerX = 0, centerY = 0) {
@@ -548,10 +796,11 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
     pickupData[placement + 1] = pickup?.y ?? 0;
     pickupData[placement + 2] = pickup?.width ?? 1;
     pickupData[placement + 3] = pickup?.height ?? 1;
-    pickupData[flags] = Number(!!pickup);
-    pickupData[flags + 1] = pickup?.strength ?? 0;
-    pickupData[flags + 2] = Number(!!pickup?.fingerPainting);
-    pickupData[flags + 3] = pickup?.history ? 2 : pickup?.mixer ? 1 : 0;
+    pickupData[flags + pickupFlagsLane.active] = Number(!!pickup);
+    pickupData[flags + pickupFlagsLane.strength] = pickup?.strength ?? 0;
+    pickupData[flags + pickupFlagsLane.fingerPainting] = Number(!!pickup?.fingerPainting);
+    pickupData[flags + pickupFlagsLane.mode] =
+      pickup?.history ? pickupMode.history : pickup?.mixer ? pickupMode.mixer : pickupMode.retouch;
     pickupData[clip] = pickup?.clip?.[0] ?? 0;
     pickupData[clip + 1] = pickup?.clip?.[1] ?? 0;
     pickupData[clip + 2] = pickup?.clip?.[2] ?? 1;
@@ -574,7 +823,7 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
         pattern: binding.pattern,
         params: tile.params,
         pickup: image,
-        pickupSampler: sampler,
+        pickupSampler: pipelines.sampler,
         pickupParams: tile.pickupParams
       });
       cache.set(image, group);
@@ -585,28 +834,67 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
   /** Bindings follow the scratch tile, not its world coordinate. Weak keys let
    * resized pickup textures and retired tiles be reclaimed; prepare resets preset resources.
    */
+  /** The tile's bindings, with the groups that read its current pattern; switching patterns reuses their groups. */
   function bindingsFor(tile: AbrTile) {
     let value = bindings.get(tile);
     if (!value) {
       value = createBindings(tile);
       bindings.set(tile, value);
     }
+
+    const pattern = tile.pattern?.region.texture ?? tip!;
+    if (value.pattern !== pattern) {
+      let groups = value.patternGroups.get(pattern);
+      if (!groups) {
+        groups = createPatternGroups(tile, pattern);
+        value.patternGroups.set(pattern, groups);
+      }
+
+      Object.assign(value, groups, { pattern });
+    }
+
     return value;
   }
 
+  /** Bindings of one tile. The cached origin and color describe the tile's params buffer, whatever its pattern. */
   function createBindings(tile: AbrTile) {
+    if (!tip || !dual) {
+      throw new Error('Prepare an ABR preset before drawing.');
+    }
+
     const pattern = tile.pattern?.region.texture ?? tip;
+    const groups = createPatternGroups(tile, pattern);
     return {
       pattern,
-      primary: root.createBindGroup(layout, { params: tile.params, tip, pattern, sampler }),
-      secondary: root.createBindGroup(layout, { params: tile.params, tip: dual, pattern, sampler }),
-      composites: new WeakMap<TgpuTexture, ReturnType<typeof root.createBindGroup<typeof compositeLayout.entries>>>(),
+      ...groups,
+      patternGroups: new Map([[pattern, groups]]),
       color: { x: 0, y: 0, z: 0 },
       originX: Number.NaN,
       originY: Number.NaN
     };
   }
+
+  /** Bind groups that read `pattern`: stamp groups for both tips and the per-image composite groups. */
+  function createPatternGroups(tile: AbrTile, pattern: CoverageTexture | PatternRegion['region']['texture']) {
+    return {
+      primary: root.createBindGroup(stampLayout, { params: tile.params, tip: tip!, pattern, sampler: pipelines.sampler }),
+      secondary: root.createBindGroup(stampLayout, { params: tile.params, tip: dual!, pattern, sampler: pipelines.sampler }),
+      composites: new WeakMap<TgpuTexture, ReturnType<typeof root.createBindGroup<typeof compositeLayout.entries>>>()
+    };
+  }
 }
+
+/** The prepared preset without document layers, history or resource pixels, so nothing
+ * from an earlier document stays reachable after its stroke ends.
+ */
+type PreparedSettings = Pick<AbrRasterSettings, 'values' | 'tipLodBias' | 'blendMode'> & {
+  pattern: boolean;
+  dual: boolean;
+  smudge: boolean;
+  mixer: boolean;
+  /** Pixel size of the primary tip, for mapping traced source coordinates to its texture. */
+  tipSize: { width: number; height: number };
+};
 
 /** Tile-local mapping of a captured canvas patch; uniforms are consumed before the next write. */
 type AbrPickup = {
@@ -638,26 +926,46 @@ function createDirectStamp(root: TgpuRoot) {
 
 /** Extra ABR scratch survives eviction and disposable preview copies along with the ordinary mask. */
 export type AbrTile = ReturnType<typeof createAbrTile>;
+
+/** A texture pattern rasterized for one tile's world coordinates. */
+type PatternRegion = {
+  region: ReturnType<ReturnType<typeof createPatternRasterGpu>['rasterize']>;
+  source: symbol;
+  tx: number;
+  ty: number;
+  scale: number;
+};
+
+/** Pattern regions a shared scratch tile keeps: a dab rarely spans more than a 2×2 block of tiles. */
+const patternRegions = 4;
+
 function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: number) {
   const paint = texture(root),
     dualMask = texture(root);
   const params = root.createBuffer(Params).$usage('uniform');
   const pickupParams = root.createBuffer(PickupParams).$usage('uniform');
   const stamps = root.createBuffer(d.arrayOf(Stamp, capacity)).$usage('vertex');
+  const planRows = root.createBuffer(d.arrayOf(d.vec4i, capacity)).$usage('vertex');
+  const quads = root.createBuffer(d.arrayOf(TracedQuad, capacity)).$usage('vertex');
   const coverage = createAbrCoverage(root.device, { mask: root.unwrap(mask), paint: root.unwrap(paint), dual: root.unwrap(dualMask) });
   const tile = {
     capacity,
     coverage,
     /** Additional ABR textures and instance data, excluding borrowed base/mask and small uniforms. */
-    bytes: (): number => 256 * 256 * 4 * 2 + capacity * 64 + (tile.maskBatch?.bytes ?? 0) + (tile.pattern?.region.bytes ?? 0),
-    pattern: undefined as { region: ReturnType<ReturnType<typeof createPatternRasterGpu>['rasterize']>;
-      source: symbol; tx: number; ty: number; scale: number } | undefined,
+    bytes: (): number => 256 * 256 * 4 * 2 + capacity * 128 + (tile.maskBatch?.bytes ?? 0) +
+      tile.patterns.reduce((sum, entry) => sum + entry.region.bytes, 0),
+    /** The pattern region of the tile being drawn; one of `patterns`. */
+    pattern: undefined as PatternRegion | undefined,
+    /** Prepared pattern regions, least recently used first. */
+    patterns: [] as PatternRegion[],
     maskBatch: undefined as ReturnType<ReturnType<typeof createMaskRasterGpu>['createBatch']> | undefined,
     paint,
     dualMask,
     params,
     pickupParams,
     stamps,
+    planRows,
+    quads,
     paintView: coverage.views.paint,
     dualView: coverage.views.dual,
     maskView: coverage.views.mask,
@@ -665,305 +973,63 @@ function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: n
     mask,
     destroy() {
       tile.maskBatch?.destroy();
-      tile.pattern?.region.destroy();
+      for (const { region } of tile.patterns) region.destroy();
+      tile.patterns = [];
       tile.pattern = undefined;
       paint.destroy();
       dualMask.destroy();
       params.destroy();
       pickupParams.destroy();
       stamps.destroy();
+      planRows.destroy();
+      quads.destroy();
     }
   };
   return tile;
 }
-function coverageTexture(root: TgpuRoot, width: number, height: number, mipLevelCount: number) {
-  return root.createTexture({ size: [width, height], format: 'r8unorm', mipLevelCount }).$usage('sampled', 'render');
-}
+
 function texture(root: TgpuRoot, side = 256) {
   return root.createTexture({ size: [side, side], format: 'rgba8unorm' }).$usage('sampled', 'render');
 }
+
 type Texture = ReturnType<typeof texture>;
-const Params = d.struct({
-  origin: d.vec4f,
-  texture: d.vec4f,
-  tone: d.vec4f,
-  flags: d.vec4f,
-  extra: d.vec4f,
-  /** Global tool opacity applied after all mask operations. */
-  compositeOpacity: d.f32,
-  tipLodBias: d.f32,
-  /** Document pixels covered by one adaptive mask pixel; detailed paths use one. */
-  rasterScale: d.f32,
-  /** 1 uses fixed color; 2 stores straight RGB. Both already contain accumulated alpha. */
-  maskAccumulation: d.u32,
-  maskColor: d.vec4f
-});
-// Offsets come from the shader schema, including struct alignment and padding.
-const paramsOffsets = {
-  origin: d.memoryLayoutOf(Params, value => value.origin).offset / 4,
-  texture: d.memoryLayoutOf(Params, value => value.texture).offset / 4,
-  tone: d.memoryLayoutOf(Params, value => value.tone).offset / 4,
-  flags: d.memoryLayoutOf(Params, value => value.flags).offset / 4,
-  extra: d.memoryLayoutOf(Params, value => value.extra).offset / 4,
-  tipLodBias: d.memoryLayoutOf(Params, value => value.tipLodBias).offset / 4,
-  rasterScale: d.memoryLayoutOf(Params, value => value.rasterScale).offset / 4,
-  compositeOpacity: d.memoryLayoutOf(Params, value => value.compositeOpacity).offset / 4,
-  maskAccumulation: d.memoryLayoutOf(Params, value => value.maskAccumulation).offset / 4,
-  maskColor: d.memoryLayoutOf(Params, value => value.maskColor).offset / 4
+
+/** Tile plan for secondary slots in a mixed batch: 256 empty rows. Plans are immutable, so one is shared. */
+const emptyTilePlan: Parameters<ReturnType<typeof createTipRasterGpu>['prepare']>[0][number] = {
+  width: 256,
+  height: 256,
+  rows: Array.from({ length: 256 }, () => [])
 };
-const Stamp = d.struct({ bounds: d.vec4f, transform: d.vec4f, dynamics: d.vec4f, color: d.vec4f });
-export const abrStampLayout = tgpu.vertexLayout(d.arrayOf(Stamp), 'instance');
-const layout = tgpu.bindGroupLayout({
-  params: { uniform: Params },
-  tip: { texture: d.texture2d() },
-  pattern: { texture: d.texture2d() },
-  sampler: { sampler: 'filtering' }
-});
-const sharedStamp = tgpu.slot(false);
-const vertex = tgpu.vertexFn({
-  in: { index: d.builtin.vertexIndex, bounds: d.vec4f, transform: d.vec4f, dynamics: d.vec4f, color: d.vec4f },
-  out: { position: d.builtin.position, uv: d.vec2f, dynamics: d.vec4f, color: d.vec4f }
-})((input) => {
-  'use gpu';
-  const corners = d.arrayOf(
-    d.vec2f,
-    6
-  )([d.vec2f(-1, -1), d.vec2f(1, -1), d.vec2f(-1, 1), d.vec2f(-1, 1), d.vec2f(1, -1), d.vec2f(1, 1)]);
-  const corner = corners[input.index]!;
-  const local = std.mul(corner, input.bounds.zw);
-  let center = d.vec2f(input.bounds.xy);
-  let halfTarget = d.vec2f(128);
-  if (sharedStamp.$) {
-    // CPU subtraction preserves local precision at large document coordinates.
-    center = d.vec2f(compositeLayout.$.pickupParams.center);
-    halfTarget = std.mul(d.vec2f(std.textureDimensions(compositeLayout.$.base)), 0.5);
-  }
-  const pixel = std.add(
-    center,
-    d.vec2f(
-      local.x * input.transform.x - local.y * input.transform.y,
-      local.x * input.transform.y + local.y * input.transform.x
-    )
-  );
-  return {
-    position: d.vec4f(pixel.x / halfTarget.x - 1, 1 - pixel.y / halfTarget.y, 0, 1),
-    uv: std.add(std.mul(std.mul(corner, input.transform.zw), 0.5), d.vec2f(0.5)),
-    dynamics: d.vec4f(input.dynamics),
-    color: d.vec4f(input.color)
-  };
-});
-const fragment = tgpu.fragmentFn({
-  in: { position: d.builtin.position, uv: d.vec2f, dynamics: d.vec4f, color: d.vec4f },
-  out: { paint: d.vec4f, mask: d.vec4f }
-})((input) => {
-  'use gpu';
-  const position = d.vec4f(std.mul(input.position.xy, layout.$.params.rasterScale), input.position.zw);
-  const coverage = shadeStamp(position, input.uv, input.dynamics, input.color);
-  return { paint: coverage.paint, mask: coverage.mask };
-});
-const maskSourceFragment = tgpu.fragmentFn({
-  in: { position: d.builtin.position, uv: d.vec2f, dynamics: d.vec4f, color: d.vec4f }, out: d.vec4f
-})((input) => {
-  'use gpu';
-  return d.vec4f(shadeStamp(input.position, input.uv, input.dynamics, input.color).mask.r);
-});
-const sampledTipVertex = tgpu.vertexFn({
-  in: { index: d.builtin.vertexIndex, instance: d.builtin.instanceIndex, dynamics: d.vec4f },
-  out: { position: d.builtin.position, firstRow: d.interpolate('flat', d.u32), dynamics: d.vec4f }
-})((input) => {
-  'use gpu';
-  const x = d.f32((input.index << 1) & 2);
-  const y = d.f32(input.index & 2);
-  return { position: d.vec4f(x * 2 - 1, 1 - y * 2, 0, 1), firstRow: input.instance * 256, dynamics: input.dynamics };
-});
-const sampledTipFragment = tgpu.fragmentFn({
-  in: { position: d.builtin.position, firstRow: d.interpolate('flat', d.u32), dynamics: d.vec4f }, out: d.vec4f
-})((input) => {
-  'use gpu';
-  const byte = sampleTipPlanByte(d.u32(input.position.x), input.firstRow + d.u32(input.position.y));
-  return d.vec4f(stampEffects(d.f32(std.max(byte, 0)) / 255, input.position, input.dynamics));
-});
-
-const sampledSecondaryFragment = tgpu.fragmentFn({
-  in: { position: d.builtin.position, firstRow: d.interpolate('flat', d.u32) }, out: d.vec4f
-})((input) => {
-  'use gpu';
-  const byte = sampleTipPlanByte(d.u32(input.position.x), input.firstRow + d.u32(input.position.y));
-  return d.vec4f(d.f32(std.max(byte, 0)) / 255);
-});
-
-const Coverage = d.struct({ paint: d.vec4f, mask: d.vec4f });
-function shadeStamp(position: d.v4f, tipUv: d.v2f, dynamics: d.v4f, color: d.v4f) {
-  'use gpu';
-  // Texture modes such as Height are nonlinear: averaging the tip before applying
-  // them can erase fine ink entirely. Retain document-scale filtering for those tips.
-  const bias = std.select(std.max(0, layout.$.params.tipLodBias - std.log2(layout.$.params.rasterScale)), 0, layout.$.params.flags.x > 0);
-  const coverage = stampEffects(std.textureSampleBias(layout.$.tip, layout.$.sampler, tipUv, bias).r, position, dynamics);
-  const flow = coverage * dynamics.x;
-  const ceiling = std.select(0, dynamics.y, coverage > 0);
-  // Approximate accumulation caps by transfer opacity, not by one tip's filtered
-  // coverage. Repeated soft stamps must still be able to build dense pencil ink.
-  return Coverage({ paint: d.vec4f(std.mul(color.rgb, flow), flow),
-    mask: d.vec4f(coverage, ceiling, 0, std.select(coverage * dynamics.y, ceiling, layout.$.params.maskAccumulation === 3)) });
-}
-function stampEffects(source: number, position: d.v4f, dynamics: d.v4f): number {
-  'use gpu';
-  const p = layout.$.params;
-  let coverage = source;
-  if (p.flags.x > 0 && p.flags.y > 0) {
-    const sample = std.textureLoad(layout.$.pattern, d.vec2i(position.xy), 0).r;
-    coverage = textureCoverage(coverage, textureTone(sample, p.tone.x, p.tone.y, p.tone.z), p.texture.w, dynamics.z);
-  }
-  if (p.flags.w > 0) coverage *= 0.35 + 0.65 * grain(position.x + p.origin.x, position.y + p.origin.y, dynamics.w);
-  if (p.tone.w > 0) coverage = pencilCoverage(coverage);
-  return coverage;
-}
-
-const secondaryFragment = tgpu.fragmentFn({ in: { uv: d.vec2f, dynamics: d.vec4f, color: d.vec4f }, out: d.vec4f })((
-  input
-) => {
-  'use gpu';
-  return d.vec4f(std.floor(std.textureSample(layout.$.tip, layout.$.sampler, input.uv).r * 255 + 0.5) / 255);
-});
-const PickupParams = d.struct({ placement: d.vec4f, flags: d.vec4f, clip: d.vec4f, sampleSize: d.vec2f, center: d.vec2f });
-// Offsets come from the shader schema, including struct alignment and padding.
-const pickupOffsets = {
-  placement: d.memoryLayoutOf(PickupParams, value => value.placement).offset / 4,
-  flags: d.memoryLayoutOf(PickupParams, value => value.flags).offset / 4,
-  clip: d.memoryLayoutOf(PickupParams, value => value.clip).offset / 4,
-  sampleSize: d.memoryLayoutOf(PickupParams, value => value.sampleSize).offset / 4,
-  center: d.memoryLayoutOf(PickupParams, value => value.center).offset / 4
-};
-const compositeLayout = tgpu.bindGroupLayout({
-  pickup: { texture: d.texture2d() },
-  pickupSampler: { sampler: 'filtering' },
-  pickupParams: { uniform: PickupParams },
-  base: { texture: d.texture2d() },
-  mask: { texture: d.texture2d() },
-  paint: { texture: d.texture2d() },
-  dual: { texture: d.texture2d() },
-  pattern: { texture: d.texture2d() },
-  params: { uniform: Params }
-});
-const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
-  'use gpu';
-  const xy = d.vec2i(std.div(input.position.xy, compositeLayout.$.params.rasterScale));
-  return compositePixel(
-    input.position,
-    std.textureLoad(compositeLayout.$.paint, xy, 0),
-    std.textureLoad(compositeLayout.$.mask, xy, 0)
-  );
-});
-/** Preserve the intermediate rgba8unorm rounding even when coverage never leaves the shader. */
-const directFragment = tgpu.fragmentFn({
-  in: { position: d.builtin.position, uv: d.vec2f, dynamics: d.vec4f, color: d.vec4f },
-  out: d.vec4f
-})((input) => {
-  'use gpu';
-  const stamp = shadeStamp(input.position, input.uv, input.dynamics, input.color);
-  const paint = std.unpack4x8unorm(std.pack4x8unorm(stamp.paint));
-  const mask = std.unpack4x8unorm(std.pack4x8unorm(stamp.mask));
-  return compositePixel(input.position, paint, mask);
-});
-
-function compositePixel(position: d.v4f, paint: d.v4f, mask: d.v4f): d.v4f {
-  'use gpu';
-  const p = compositeLayout.$.params;
-  const xy = d.vec2i(position.xy);
-  const base = std.textureLoad(compositeLayout.$.base, xy, 0);
-  let alpha = d.f32(paint.a);
-  if (p.flags.x > 0 && p.flags.y === 0) {
-    const sample = std.textureLoad(compositeLayout.$.pattern, xy, 0).r;
-    alpha = textureCoverage(alpha, textureTone(sample, p.tone.x, p.tone.y, p.tone.z), p.texture.w, p.extra.x);
-  }
-  if (p.flags.z > 0) alpha = dualCoverage(alpha, std.textureLoad(compositeLayout.$.dual, xy, 0).r, p.extra.y);
-  // Local edge approximation; exact wet-edge diffusion requires a halo exchange between tiles.
-  if (p.extra.z > 0) {
-    const up = std.textureLoad(
-      compositeLayout.$.paint,
-      std.clamp(std.add(xy, d.vec2i(0, -1)), d.vec2i(0), d.vec2i(255)),
-      0
-    ).a;
-    const down = std.textureLoad(
-      compositeLayout.$.paint,
-      std.clamp(std.add(xy, d.vec2i(0, 1)), d.vec2i(0), d.vec2i(255)),
-      0
-    ).a;
-    const left = std.textureLoad(
-      compositeLayout.$.paint,
-      std.clamp(std.add(xy, d.vec2i(-1, 0)), d.vec2i(0), d.vec2i(255)),
-      0
-    ).a;
-    const right = std.textureLoad(
-      compositeLayout.$.paint,
-      std.clamp(std.add(xy, d.vec2i(1, 0)), d.vec2i(0), d.vec2i(255)),
-      0
-    ).a;
-    alpha = std.min(1, alpha * 0.65 + std.max(0, paint.a - std.min(std.min(up, down), std.min(left, right))) * 2);
-  }
-  // The legacy dynamic-opacity cap still needs destination-aware byte accumulation.
-  // Global tool opacity is separate and applies after mask composition.
-  if (p.tone.w > 0) alpha = pencilCoverage(alpha);
-  const opacity = std.select(mask.a, mask.g, p.flags.z > 0 && p.extra.y === 7);
-  if (p.maskAccumulation === 0 || p.maskAccumulation === 3) alpha = std.min(alpha, opacity);
-  alpha *= p.compositeOpacity;
-  if (p.extra.w === 1) alpha = std.select(0, 1, grain(position.x + p.origin.x, position.y + p.origin.y, 13.75) < alpha);
-  let color = std.div(paint.rgb, std.max(0.00001, paint.a));
-  if (p.maskAccumulation === 1) color = d.vec3f(p.maskColor.rgb);
-  else if (p.maskAccumulation === 2) color = d.vec3f(paint.rgb);
-  const source = d.vec4f(std.mul(color, alpha), alpha);
-  if (compositeLayout.$.pickupParams.flags.x > 0) {
-    // Sparse tips leave most covered rectangles empty. Sampling and working-space
-    // conversion cannot affect a zero-coverage pixel, including transparent pickup.
-    if (alpha <= 0) return base;
-    const tool = compositeLayout.$.pickupParams;
-    const pickupUv = std.div(std.add(position.xy, tool.placement.xy), tool.placement.zw);
-    if (pickupUv.x < tool.clip.x || pickupUv.y < tool.clip.y || pickupUv.x > tool.clip.z || pickupUv.y > tool.clip.w)
-      return base;
-    const picked = sampleMixing(
-      compositeLayout.$.pickup,
-      compositeLayout.$.pickupSampler,
-      std.div(
-        std.clamp(std.mul(pickupUv, tool.sampleSize), d.vec2f(0.5), std.sub(tool.sampleSize, d.vec2f(0.5))),
-        d.vec2f(std.textureDimensions(compositeLayout.$.pickup))
-      ),
-      p.origin.w > 0 && tool.flags.w === 0
-    );
-    if (tool.flags.w === 2) return std.mix(base, picked, alpha);
-    if (tool.flags.w > 0) {
-      // The wells emit premultiplied paint. Flow/coverage modulates deposition;
-      // transparent pickup must not erase existing canvas pixels.
-      return mixerComposite(base, picked, alpha);
-    }
-    if (tool.flags.z > 0) {
-      return fingerPaintCompositeInSpace(base, color, alpha * tool.flags.y, p.extra.w, p.origin.w > 0);
-    }
-    return retouchCompositeInSpace(base, picked, alpha * tool.flags.y, p.extra.w, p.origin.w > 0);
-  }
-  if (p.extra.w === 28) return std.mul(base, 1 - alpha);
-  if (p.extra.w === 27) return std.add(base, std.mul(source, 1 - base.a));
-  if (p.extra.w < 2 && p.origin.w > 0) return linearSourceOver(base, source);
-  const cb = std.div(base.rgb, std.max(base.a, 0.00001));
-  const mixed = paintBlend(cb, color, p.extra.w);
-  const rgb = std.add(
-    std.mul(base.rgb, 1 - alpha),
-    std.mul(std.add(std.mul(color, 1 - base.a), std.mul(mixed, base.a)), alpha)
-  );
-  return d.vec4f(rgb, alpha + base.a * (1 - alpha));
-}
-
-/** Samples the same byte plan/effects as the fragment path, without a temporary render target. */
-function sampledMaskByte(x: number, row: number): number {
-  'use gpu';
-  const p = maskParams.$();
-  const at = p.destinationOffset + row * p.destinationStride + x;
-  const px = at % 256;
-  const py = d.u32(at / 256);
-  const byte = sampleTipPlanByte(d.u32(d.i32(px) + p.planX), p.planRow + row);
-  const position = d.vec4f(d.f32(px) + 0.5, d.f32(py) + 0.5, 0, 1);
-  const coverage = stampEffects(d.f32(std.max(byte, 0)) / 255, position, p.sourceData);
-  return d.u32(std.round(std.clamp(coverage, 0, 1) * 255));
-}
 
 /** Limits serial mask accumulation even when a pointer packet contains thousands of stamps. */
 const sampledMaskBatchLimit = 512;
+
+/** Covered pixels per progress batch of batched masks: about 110 stamps of a 95 px tip, 20 of a 222 px tip. */
+const maskBatchCoverage = 1024 * 1024;
+
+/** Floats of one TracedQuad instance. */
+const tracedQuadFloats = d.sizeOf(TracedQuad) / 4;
+
+/** A transformed sampled tip produced by the stroke sampler. */
+type SampledTip = NonNullable<NonNullable<Dab['abr']>['sampledTip']>;
+
+/** Sampled tips of the primary or secondary dabs in order, or undefined when one of them has none. */
+function sampledTipsOf(dabs: readonly Dab[], secondary: boolean): SampledTip[] | undefined {
+  const tips: SampledTip[] = [];
+  for (const dab of dabs) {
+    if (!!dab.abr?.secondary !== secondary) {
+      continue;
+    }
+
+    if (!dab.abr?.sampledTip) {
+      return undefined;
+    }
+
+    tips.push(dab.abr.sampledTip);
+  }
+
+  return tips;
+}
+
+/** Coverage bytes that one chunk of a batched mask draw may hold: four full tiles (1 MiB of u32 scratch). */
+const maskCoverageEntries = 4 * 256 * 256;

@@ -1,0 +1,58 @@
+/* A number field that fills with its value and drags sideways. */
+.scrub {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 84px;
+  height: 30px;
+  border: 1px solid var(--line, #dedede);
+  border-radius: 7px;
+  background: linear-gradient(to right, #d9ebf5 var(--fill), #fff var(--fill));
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+
+  input {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    padding: 0 2px 0 8px;
+    border: 0;
+    background: transparent;
+    color: var(--ink, #444);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    cursor: inherit;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+
+    &:focus {
+      outline: none;
+    }
+  }
+
+  &[data-editing='true'] {
+    background: #fff;
+    cursor: text;
+    outline: 2px solid #419bcf;
+    outline-offset: -1px;
+
+    input {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+  }
+
+  &[data-disabled='true'] {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.unit {
+  padding-right: 8px;
+  color: var(--muted, #777);
+  font-size: 11px;
+}

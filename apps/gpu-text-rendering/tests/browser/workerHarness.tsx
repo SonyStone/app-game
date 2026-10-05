@@ -1,23 +1,30 @@
+import { abortedError } from '@app-game/solid-gpu/errors';
+import { mountWorker } from '@app-game/solid-gpu/worker';
 import { err, ok, type Result } from 'neverthrow';
 import { createRoot, onCleanup } from 'solid-js';
 import type { TextDocument } from '../../src/features/document/document';
 import type { OnDocumentProgress } from '../../src/features/document/documentProgress';
 import { buildCoverage, convertDocument, decodeDocument } from '../../src/features/document/documentWorkerProtocol';
 import { createTypeGpuRenderer as prepare } from '../../src/features/document/rendering/createTypeGpuRenderer';
+import { createDetailTableWorker } from '../../src/features/document/rendering/curves/createDetailTableWorker';
 import { createRasterWorker } from '../../src/features/document/rendering/curves/createRasterWorker';
 import type { DocumentWorkers } from '../../src/features/document/rendering/DocumentWorkers';
-import { abortedError, type ViewerError } from '../../src/shared/errors';
-import { mountWorker } from '../../src/shared/worker/mountWorker';
+import type { ViewerError } from '../../src/shared/errors';
 import { DocumentSource } from '../fixtures/DocumentSource';
+
+/** Browser tests wait out the worker shutdown grace period; pages can only import it through a served module. */
+export { workerShutdownGraceMs } from '@app-game/solid-gpu/worker';
 
 /** Tests mount the renderer's transports at their fixture boundary, not in production calculations. */
 export function mountRendererWorkers() {
   return createRoot((dispose) => {
     const raster = createRasterWorker();
+    const tables = createDetailTableWorker();
     const controller = new AbortController();
     onCleanup(() => controller.abort());
     const workers: DocumentWorkers = {
       raster,
+      tables,
       coverage: (input) => buildCoverage(input, { signal: controller.signal })
     };
     return { workers, dispose };

@@ -1,6 +1,6 @@
 export { compositeLayout, compositeFragment } from '@app-game/abr-paint/gpu/layerComposite';
 import { common, d, std, tgpu } from 'typegpu';
-import { linearSourceOver } from './colorMixing';
+import { linearSourceOver, lockAlpha } from './colorMixing';
 
 /** All brush settings are stable for the lifetime of a stroke. */
 export const brushLayout = tgpu.bindGroupLayout({
@@ -9,7 +9,7 @@ export const brushLayout = tgpu.bindGroupLayout({
 /** Stamp instances carry tile-local center, radius, and flow. */
 export const stampLayout = tgpu.vertexLayout(d.arrayOf(d.vec4f), 'instance');
 
-/** Rasterizes round stamps into an alpha mask using hardware source-over blending. */
+/** Rasterizes round stamps; the stamp pipeline multiplies transmittance by 1 − alpha with hardware blending. */
 export const stampVertex = tgpu.vertexFn({
   in: { index: d.builtin.vertexIndex, stamp: d.vec4f },
   out: { position: d.builtin.position, local: d.vec2f, radius: d.f32, flow: d.f32 }
@@ -40,30 +40,41 @@ export const stampFragment = tgpu.fragmentFn({ in: { local: d.vec2f, radius: d.f
   return d.vec4f(alpha, alpha, alpha, alpha);
 });
 
-/** Reads immutable pre-stroke pixels and the accumulated mask, writing a separate result texture. */
+/** Reads immutable pre-stroke pixels and the accumulated transmittance (1 − coverage), writing a separate result. */
 export const strokeLayout = tgpu.bindGroupLayout({
   base: { texture: d.texture2d() },
-  mask: { texture: d.texture2d() }
+  transmittance: { texture: d.texture2d() }
 });
 export const fullscreenVertex = common.fullScreenTriangle;
 
-/** Applies stroke opacity exactly once, supporting destination-out erasing. */
+/**
+ * Applies stroke opacity exactly once, supporting destination-out erasing. `color.w` set locks the layer's alpha;
+ * see `lockAlpha`.
+ */
 export const strokeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
   'use gpu';
   const pixel = d.vec2i(input.position.xy);
   const base = std.textureLoad(strokeLayout.$.base, pixel, 0);
-  const mask = std.textureLoad(strokeLayout.$.mask, pixel, 0).a;
+  const mask = 1 - std.textureLoad(strokeLayout.$.transmittance, pixel, 0).x;
   const alpha = mask * brushLayout.$.settings.params.y;
-  if (brushLayout.$.settings.params.z > 0.5) return std.mul(base, 1 - alpha);
-  if (brushLayout.$.settings.params.w > 0.5)
-    return linearSourceOver(base, std.mul(d.vec4f(brushLayout.$.settings.color.rgb, 1), alpha));
-  return std.add(std.mul(d.vec4f(brushLayout.$.settings.color.rgb, 1), alpha), std.mul(base, 1 - alpha));
+  const source = std.mul(d.vec4f(brushLayout.$.settings.color.rgb, 1), alpha);
+  let result = std.add(source, std.mul(base, 1 - alpha));
+  if (brushLayout.$.settings.params.z > 0.5) {
+    result = std.mul(base, 1 - alpha);
+  } else if (brushLayout.$.settings.params.w > 0.5) {
+    result = linearSourceOver(base, source);
+  }
+  if (brushLayout.$.settings.color.w > 0.5) return lockAlpha(base, result);
+  return result;
 });
 
-/** Camera uses tile positions relative to the view center to preserve precision far from the origin. */
+/**
+ * Camera uses tile positions relative to the view center to preserve precision far from the origin. `sharp` set draws
+ * magnified pixels as flat squares; see `tileFragment`.
+ */
 export const viewLayout = tgpu.bindGroupLayout({
   view: {
-    uniform: d.struct({ size: d.vec2f, zoom: d.f32, angle: d.f32, mirror: d.f32, padding: d.f32, offset: d.vec2f })
+    uniform: d.struct({ size: d.vec2f, zoom: d.f32, angle: d.f32, mirror: d.f32, sharp: d.f32, offset: d.vec2f })
   },
   image: { texture: d.texture2d() },
   sampler: { sampler: 'filtering' }
@@ -88,9 +99,38 @@ export const tileVertex = tgpu.vertexFn({
     uv
   };
 });
+/**
+ * Samples a tile. With `sharp`, magnified pixels are flat squares whose edges blend over one screen pixel; see
+ * {@link sharpTexel}. The original derivatives keep the mip level from jumping at texel edges.
+ */
 export const tileFragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f })((input) => {
   'use gpu';
-  return std.textureSample(viewLayout.$.image, viewLayout.$.sampler, input.uv);
+  const texel = std.mul(input.uv, 256);
+  const snapped = std.div(sharpTexel(texel, std.fwidth(texel)), 256);
+  const uv = std.select(input.uv, snapped, viewLayout.$.view.sharp > 0.5);
+  return std.textureSampleGrad(
+    viewLayout.$.image,
+    viewLayout.$.sampler,
+    uv,
+    std.dpdx(input.uv),
+    std.dpdy(input.uv)
+  );
+});
+
+/**
+ * Where a linearly filtered texture is sampled so that magnified texels show as flat squares ("sharp bilinear"):
+ * `texel` is the position in texels, `width` the texels one screen pixel spans. The position moves to the center of
+ * its texel, except within half a screen pixel of a texel edge, where it crosses the edge so the two texels blend over
+ * one screen pixel. Minified (`width` of 1 or more), it stays where it was, which is smooth sampling.
+ */
+export const sharpTexel = tgpu.fn(
+  [d.vec2f, d.vec2f],
+  d.vec2f
+)((texel, width) => {
+  'use gpu';
+  const edge = std.floor(std.add(texel, d.vec2f(0.5)));
+  const span = std.clamp(width, d.vec2f(0.0001), d.vec2f(1));
+  return std.add(edge, std.clamp(std.div(std.sub(texel, edge), span), d.vec2f(-0.5), d.vec2f(0.5)));
 });
 
 /** Presents the composed document over a neutral paper background. */
@@ -98,5 +138,21 @@ export const presentLayout = tgpu.bindGroupLayout({ image: { texture: d.texture2
 export const presentFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
   'use gpu';
   const color = std.textureLoad(presentLayout.$.image, d.vec2i(input.position.xy), 0);
+  // The literal is `paperColor`; keep both in step.
   return d.vec4f(std.add(color.rgb, std.mul(d.vec3f(0.98, 0.974, 0.957), 1 - color.a)), 1);
+});
+
+/** The paper shown under transparent pixels by `presentFragment`, in presented 0–1 channel values. */
+export const paperColor = [0.98, 0.974, 0.957] as const;
+
+/** Converts the float composition result to the 8-bit composed image, unchanged apart from rounding. */
+export const resolveFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
+  'use gpu';
+  return std.textureLoad(presentLayout.$.image, d.vec2i(input.position.xy), 0);
+});
+
+/** Writes transparent pixels; with a scissor it clears only a damaged region instead of the whole attachment. */
+export const clearFragment = tgpu.fragmentFn({ out: d.vec4f })(() => {
+  'use gpu';
+  return d.vec4f(0);
 });

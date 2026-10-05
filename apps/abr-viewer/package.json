@@ -21,7 +21,7 @@
     "@app-game/app-router": "workspace:*",
     "@solid-primitives/event-listener": "catalog:",
     "@solid-primitives/resize-observer": "catalog:",
-    "@solidjs/web": "2.0.0-rc.4",
+    "@solidjs/web": "catalog:",
     "solid-js": "catalog:",
     "solid-nest": "workspace:*",
     "zod": "^4.4.3",

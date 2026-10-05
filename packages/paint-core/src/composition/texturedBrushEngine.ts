@@ -18,6 +18,16 @@ export const texturedBrush = defineBrushEngine({
     const bounds = (dabs: Dab[]) => dabs.map((dab) => ({ ...dab, radius: dab.radius * scale }));
     renderer.begin(layer, brush, { resource: tip, angle: settings.angle ?? 0 });
     return {
+      // A processor that keeps moving while the pen holds still, such as the stabilizer, paints from the idle clock.
+      ...(processor.idle
+        ? {
+            async idle(elapsedMs: number) {
+              const points = processor.idle!(elapsedMs);
+              await renderer.paint(bounds(sampler.add(points)));
+              return points.length > 0;
+            }
+          }
+        : {}),
       async add(samples) {
         await renderer.paint(bounds(sampler.add(processor.add(samples))));
       },

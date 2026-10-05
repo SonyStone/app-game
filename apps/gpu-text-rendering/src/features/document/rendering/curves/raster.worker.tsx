@@ -1,5 +1,4 @@
-import { mountWorker } from '../../../../shared/worker/mountWorker';
-import { WorkerTasks } from '../../../../shared/worker/WorkerTasks';
+import { mountWorker, WorkerTasks } from '@app-game/solid-gpu/worker';
 import { createRasterDecoder } from './createRasterDecoder';
 import type { RasterRequest, RasterWorkerReply } from './rasterWorkerTypes';
 

@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@app-game/components": "workspace:*",
+    "@app-game/solid-gpu": "workspace:*",
     "@solid-primitives/async": "catalog:",
     "@solid-primitives/drag-drop": "catalog:",
     "@solid-primitives/event-listener": "catalog:",
@@ -39,7 +40,7 @@
     "@solid-primitives/scheduled": "catalog:",
     "@solid-primitives/utils": "catalog:",
     "@solidjs/router": "catalog:",
-    "@solidjs/web": "2.0.0-rc.4",
+    "@solidjs/web": "catalog:",
     "@tabler/icons": "catalog:",
     "neverthrow": "catalog:",
     "solid-js": "catalog:",

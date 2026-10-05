@@ -1,0 +1,252 @@
+import { describe, expect, it } from 'vitest';
+import { createStrokeSampler, dabTiles, defaultBrush, TILE_SIZE, type Sample } from './brush';
+import { defaultCamera, panCamera, screenToWorld, transformAt, worldToScreen } from './camera';
+import { createDocument, TILE_BYTES } from './document';
+import { decodeDocument, encodeDocument, restoreDocument, snapshotDocument } from './storage';
+import { unpackTile } from './tilePixels';
+
+describe('stroke sampling', () => {
+  it('produces identical stamps across different event/frame batch sizes', () => {
+    const samples: Sample[] = Array.from({ length: 80 }, (_, index) => ({
+      x: index * 2.3 - 300,
+      y: Math.sin(index / 8) * 20,
+      pressure: index / 80,
+      time: index * 4
+    }));
+    const whole = createStrokeSampler(defaultBrush()).add(samples);
+    const sampler = createStrokeSampler(defaultBrush());
+    const split = samples.flatMap((sample) => sampler.add([sample]));
+    expect(split).toEqual(whole);
+  });
+  it('preserves spacing when collinear samples are subdivided', () => {
+    const a = { x: 0, y: 0, pressure: 1, time: 0 },
+      b = { x: 100, y: 0, pressure: 1, time: 100 };
+    const brush = { ...defaultBrush(), size: 20, spacing: 0.1 };
+    const direct = createStrokeSampler(brush).add([a, b]);
+    const split = createStrokeSampler(brush).add([a, { ...a, x: 33, time: 33 }, b]);
+    expect(split).toHaveLength(direct.length);
+    split.forEach((dab, index) => {
+      expect(dab.x).toBeCloseTo(direct[index]!.x, 10);
+      expect(dab.y).toBeCloseTo(direct[index]!.y, 10);
+      expect(dab.radius).toBe(direct[index]!.radius);
+      expect(dab.flow).toBe(direct[index]!.flow);
+    });
+  });
+  it('draws one stamp for a tap and no duplicate for stationary input', () => {
+    const sampler = createStrokeSampler(defaultBrush());
+    const sample = { x: 0, y: 0, pressure: 1, time: 0 };
+    expect(sampler.add([sample, sample])).toHaveLength(1);
+  });
+  it('enumerates every crossing tile with signed coordinates', () => {
+    expect(dabTiles({ x: 0, y: 0, radius: 3, flow: 1 })).toEqual(['-1,-1', '0,-1', '-1,0', '0,0']);
+    expect(dabTiles({ x: TILE_SIZE - 1, y: 10, radius: 2, flow: 1 })).toEqual(['0,0', '1,0']);
+  });
+  it('excludes empty bounding-box corners of a 512px round stamp while retaining its fringe', () => {
+    const tiles = dabTiles({ x: 0, y: 0, radius: 256, flow: 1 });
+    expect(tiles).toHaveLength(12);
+    expect(tiles).not.toContain('-2,-2');
+    expect(tiles).not.toContain('1,1');
+    expect(tiles).toContain('-2,0');
+    expect(tiles).toContain('1,0');
+  });
+});
+
+describe('camera', () => {
+  it('round-trips rotation, zoom, mirror, and distant origins', () => {
+    const camera = { x: 1e8, y: -1e8, zoom: 2.5, angle: 1.3, mirrored: true },
+      size = { width: 1200, height: 800 };
+    const point = { x: 318, y: 713 };
+    const result = worldToScreen(screenToWorld(point, camera, size), camera, size);
+    expect(result.x).toBeCloseTo(point.x, 5);
+    expect(result.y).toBeCloseTo(point.y, 5);
+  });
+  it('keeps the anchor stationary when zooming and rotating', () => {
+    const camera = defaultCamera(),
+      size = { width: 800, height: 600 },
+      anchor = { x: 130, y: 240 };
+    const world = screenToWorld(anchor, camera, size);
+    const next = transformAt(camera, size, anchor, 2, Math.PI / 3);
+    const result = worldToScreen(world, next, size);
+    expect(result.x).toBeCloseTo(anchor.x);
+    expect(result.y).toBeCloseTo(anchor.y);
+  });
+  it('pans in screen space even when the view is mirrored and rotated', () => {
+    const camera = { ...defaultCamera(), angle: 1, mirrored: true },
+      size = { width: 800, height: 600 };
+    const result = worldToScreen({ x: 0, y: 0 }, panCamera(camera, size, { x: 21, y: -37 }), size);
+    expect(result.x).toBeCloseTo(421);
+    expect(result.y).toBeCloseTo(263);
+  });
+});
+
+describe('document transactions', () => {
+  it('undoes and redoes exact pixels including creation and removal of tiles', () => {
+    const doc = createDocument(),
+      pixels = new Uint8Array(TILE_BYTES).fill(17);
+    doc.commit([{ layerId: doc.active.id, key: '-1,0', before: undefined, after: pixels }]);
+    expect(doc.active.tiles.get('-1,0')).toEqual(pixels);
+    doc.undo();
+    expect(doc.active.tiles.size).toBe(0);
+    doc.redo();
+    expect(doc.active.tiles.get('-1,0')).toEqual(pixels);
+  });
+  it('restores deleted layer pixels, order, and selection', () => {
+    const doc = createDocument();
+    doc.changeLayer({ type: 'add' });
+    const id = doc.active.id,
+      pixels = new Uint8Array(TILE_BYTES).fill(9);
+    doc.commit([{ layerId: id, key: '0,0', before: undefined, after: pixels }]);
+    doc.changeLayer({ type: 'delete', id });
+    expect(doc.layers).toHaveLength(1);
+    doc.undo();
+    expect(doc.active.id).toBe(id);
+    expect(doc.active.tiles.get('0,0')).toEqual(pixels);
+    doc.redo();
+    expect(doc.layers).toHaveLength(1);
+  });
+  it('duplicates a layer above its source with shared pixels, and undoes the copy', () => {
+    const doc = createDocument();
+    const source = doc.active.id,
+      pixels = new Uint8Array(TILE_BYTES).fill(5);
+    doc.changeLayer({ type: 'update', id: source, patch: { name: 'Ink', blend: 'multiply', opacity: 0.4 } });
+    doc.commit([{ layerId: source, key: '0,0', before: undefined, after: pixels }]);
+    doc.changeLayer({ type: 'add' });
+    doc.changeLayer({ type: 'duplicate', id: source });
+    expect(doc.layers.map((layer) => layer.name)).toEqual(['Ink', 'Ink copy', 'Layer 2']);
+    expect(doc.active).toMatchObject({ name: 'Ink copy', blend: 'multiply', opacity: 0.4 });
+    expect(doc.active.id).not.toBe(source);
+    expect(doc.active.tiles.get('0,0')).toBe(doc.layers[0]!.tiles.get('0,0'));
+    expect(doc.state().tileCount).toBe(2);
+
+    doc.undo();
+    expect(doc.layers.map((layer) => layer.name)).toEqual(['Ink', 'Layer 2']);
+    doc.redo();
+    expect(doc.active.name).toBe('Ink copy');
+    expect(unpackTile(doc.active.tiles.get('0,0') as Uint8Array)).toEqual(pixels);
+  });
+  it('merges a layer down into one undoable change, keeping the lower layer and its properties', () => {
+    const doc = createDocument();
+    const lower = doc.active.id,
+      kept = new Uint8Array(TILE_BYTES).fill(3),
+      merged = new Uint8Array(TILE_BYTES).fill(7);
+    doc.commit([{ layerId: lower, key: '0,0', before: undefined, after: kept }]);
+    doc.changeLayer({ type: 'update', id: lower, patch: { name: 'Base', opacity: 0.5 } });
+    doc.changeLayer({ type: 'add' });
+    const upper = doc.active.id;
+    doc.commit([{ layerId: upper, key: '1,0', before: undefined, after: new Uint8Array(TILE_BYTES).fill(9) }]);
+    expect(() => doc.changeLayer({ type: 'merge-down', id: upper })).toThrow();
+    expect(() => doc.mergeDown(lower, new Map())).toThrow();
+
+    doc.mergeDown(upper, new Map([['1,0', merged]]));
+    expect(doc.layers).toHaveLength(1);
+    expect(doc.active).toMatchObject({ id: lower, name: 'Base', opacity: 0.5 });
+    expect(unpackTile(doc.active.tiles.get('1,0') as Uint8Array)).toEqual(merged);
+    expect(unpackTile(doc.active.tiles.get('0,0') as Uint8Array)).toEqual(kept);
+
+    doc.undo();
+    expect(doc.layers.map((layer) => layer.id)).toEqual([lower, upper]);
+    expect(doc.active.id).toBe(upper);
+    expect(doc.layers[0]!.tiles.has('1,0')).toBe(false);
+    expect(doc.layers[1]!.tiles.has('1,0')).toBe(true);
+    doc.redo();
+    expect(doc.layers).toHaveLength(1);
+    expect(doc.active.tiles.has('1,0')).toBe(true);
+  });
+  it('reorders a layer to any position as one undoable change, ignoring no-op and out-of-range targets', () => {
+    const doc = createDocument();
+    doc.changeLayer({ type: 'add' });
+    doc.changeLayer({ type: 'add' });
+    const [a, b, c] = doc.layers.map((layer) => layer.id);
+    doc.changeLayer({ type: 'reorder', id: c!, index: 0 });
+    expect(doc.layers.map((layer) => layer.id)).toEqual([c, a, b]);
+    const revision = doc.revision;
+    doc.changeLayer({ type: 'reorder', id: c!, index: 0 });
+    doc.changeLayer({ type: 'reorder', id: c!, index: 3 });
+    doc.changeLayer({ type: 'reorder', id: c!, index: 1.5 });
+    expect(doc.revision).toBe(revision);
+    doc.undo();
+    expect(doc.layers.map((layer) => layer.id)).toEqual([a, b, c]);
+  });
+  it('drops redo after branching history and preserves layer blend settings', () => {
+    const doc = createDocument();
+    doc.changeLayer({ type: 'update', id: doc.active.id, patch: { blend: 'multiply', opacity: 0.5 } });
+    doc.undo();
+    expect(doc.active.blend).toBe('normal');
+    doc.changeLayer({ type: 'add' });
+    expect(doc.state().canRedo).toBe(false);
+  });
+});
+
+describe('portable document', () => {
+  it('round-trips pixels, negative tiles, layers, and camera', () => {
+    const doc = createDocument(),
+      camera = { ...defaultCamera(), angle: 0.7, x: -500 };
+    const pixels = new Uint8Array(TILE_BYTES);
+    pixels.set([7, 19, 23, 255]);
+    doc.commit([{ layerId: doc.active.id, key: '-2,1', before: undefined, after: pixels }]);
+    const restored = decodeDocument(encodeDocument(snapshotDocument(doc.layers, doc.active.id, camera)));
+    expect(restored.camera).toEqual(camera);
+    expect(unpackTile(restored.layers[0]!.tiles.get('-2,1')!)).toEqual(pixels);
+  });
+  it('rejects malformed and unsupported documents before replacement', () => {
+    const doc = createDocument(),
+      saved = snapshotDocument(doc.layers, doc.active.id, defaultCamera());
+    expect(() => restoreDocument({ ...saved, version: 4 })).toThrow();
+    expect(() => restoreDocument({ ...saved, activeId: 'missing' })).toThrow();
+    expect(() =>
+      restoreDocument({
+        ...saved,
+        layers: [{ ...saved.layers[0], tiles: [{ key: '0,0', pixels: new Uint8Array(4) }] }]
+      })
+    ).toThrow();
+  });
+});
+
+it('records alpha lock as an undoable layer property that survives saving and loading', () => {
+  const document = createDocument();
+  const id = document.active.id;
+  document.changeLayer({ type: 'update', id, patch: { alphaLock: true } });
+  expect(document.active.alphaLock).toBe(true);
+  const restored = restoreDocument(snapshotDocument(document.layers, id, defaultCamera()));
+  expect(restored.layers[0]!.alphaLock).toBe(true);
+  document.undo();
+  expect(document.active.alphaLock).toBeFalsy();
+  expect(restoreDocument(snapshotDocument(document.layers, id, defaultCamera())).layers[0]!.alphaLock).toBeFalsy();
+});
+
+describe('linear blending', () => {
+  it('blends in linear light by default, keeps the setting outside history and takes it from a replaced document', () => {
+    const doc = createDocument();
+    expect(doc.state().linearBlending).toBe(true);
+    const revision = doc.revision;
+    doc.setLinearBlending(false);
+    expect(doc.linearBlending()).toBe(false);
+    expect(doc.revision).toBe(revision + 1);
+    expect(doc.state().canUndo).toBe(false);
+    doc.replace(doc.layers, doc.active.id, true);
+    expect(doc.linearBlending()).toBe(true);
+  });
+});
+
+describe('blending of saved documents', () => {
+  const saved = (blends: string[], blending?: 'linear' | 'classic') => {
+    const doc = createDocument();
+    const snapshot = snapshotDocument(doc.layers, doc.active.id, defaultCamera()) as Record<string, unknown>;
+    const [layer] = snapshot.layers as Record<string, unknown>[];
+    const { blending: _ignored, ...rest } = snapshot;
+    return {
+      ...rest,
+      ...(blending ? { blending } : {}),
+      layers: blends.map((blend, index) => ({ ...layer, id: index ? `layer-${index + 1}` : layer!.id, blend }))
+    };
+  };
+
+  it('turns Smooth color layers of older documents into Normal ones in a document that blends in linear light', () => {
+    const restored = restoreDocument(saved(['linear', 'multiply']));
+    expect(restored.layers.map(({ blend }) => blend)).toEqual(['normal', 'multiply']);
+    expect(restored.linearBlending).toBe(true);
+    expect(restoreDocument(saved(['normal', 'screen'])).linearBlending).toBe(false);
+    expect(restoreDocument(saved(['normal'], 'linear')).linearBlending).toBe(true);
+    expect(restoreDocument(saved(['multiply'], 'classic')).linearBlending).toBe(false);
+  });
+});

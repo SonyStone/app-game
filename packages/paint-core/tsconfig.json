@@ -21,6 +21,8 @@
     "jsxImportSource": "@solidjs/web"
   },
   "include": [
-    "src"
+    "src",
+    "tests",
+    "vitest.config.ts"
   ]
 }

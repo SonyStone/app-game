@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "WebWorker"],
+    "types": ["@webgpu/types", "node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src", "tests/abrFixture.ts", "tests/initAbr.ts", "tests/adobeBrushes.ts", "vitest.config.ts"]
+}

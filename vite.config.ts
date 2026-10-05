@@ -8,6 +8,7 @@ import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import wasm from 'vite-plugin-wasm';
+import { recordingBridge } from './apps/paint/recordingBridge';
 import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
 import { vitePluginMarkdown } from './packages/vite-plugin-markdown/src';
 
@@ -55,7 +56,9 @@ export default defineConfig({
     vitePluginArraybuffer(),
     glsl(),
     // viteFBXPlugin(),
-    typegpuPlugin({})
+    typegpuPlugin({}),
+    // Paint Studio at /paint/studio saves its input recordings through this dev server too.
+    recordingBridge()
   ],
   server: {
     port: devServerPort,

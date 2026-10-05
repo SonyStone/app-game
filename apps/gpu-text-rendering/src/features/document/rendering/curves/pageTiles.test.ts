@@ -47,3 +47,15 @@ it('can reserve the root for a smaller pinned preview without using it as sharp 
   expect(visiblePageTiles(document, 0, frame, 512)[0]!.level).toBe(0);
   expect(visiblePageTiles(document, 0, frame, 512, 1)[0]!.level).toBe(1);
 });
+
+it('keeps one whole-page tile for the first split levels, then quadrants of the largest whole-page size', () => {
+  const far = createFrame(document, { x: 2.5, y: -2.5, zoom: 4, rotation: 0 }, 800, 600);
+  const near = createFrame(document, { x: 2.5, y: -2.5, zoom: 0.5, rotation: 0 }, 800, 600);
+
+  expect(visiblePageTiles(document, 0, far, 64, 0, 3)).toEqual([{ page: 0, level: 1, x: 0, y: 0 }]);
+  expect(visiblePageTiles(document, 0, near, 64, 0, 3).every(({ level }) => level > 3)).toBe(true);
+  expect(pageTileRect(document, { page: 0, level: 3, x: 0, y: 0 }, 3).width).toBe(1);
+  expect(pageTileFrame(document, { page: 0, level: 2, x: 0, y: 0 }, 64, 3).width).toBe(256 + 4);
+  expect(pageTileRect(document, { page: 0, level: 4, x: 1, y: 0 }, 3).width).toBe(0.5);
+  expect(pageTileFrame(document, { page: 0, level: 4, x: 1, y: 0 }, 64, 3).width).toBe(512 + 4);
+});

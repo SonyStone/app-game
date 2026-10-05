@@ -1,6 +1,6 @@
 import type { JSX } from '@solidjs/web';
 import { calculateLayout } from './calculateLayout';
-import { DropzoneItemId, isPlaceholderId, ItemId } from './Item';
+import { ItemId } from './Item';
 import { BlockMeasurements } from './measure';
 import { durationVar } from './styles';
 import { Vec2 } from './util/types';
@@ -24,21 +24,6 @@ export function calculateTransitionStyles<K>(
 ) {
   const prevRects = calculateLayout(prevTree, (id) => prevMeasures.get(id) ?? nextMeasures.get(id));
   const nextRects = calculateLayout(nextTree, (id) => nextMeasures.get(id) ?? prevMeasures.get(id));
-
-  // Special treatment for gaps
-  const [prevGap, nextGap] = [prevRects.get(DropzoneItemId), nextRects.get(DropzoneItemId)];
-  if (!prevGap && nextGap) {
-    const calcHeight = () => {
-      const dropzone = nextTree.findItemById(DropzoneItemId);
-      const itemId = dropzone?.kind === 'gap' && dropzone.before;
-      if (!itemId) return 0;
-      const [prevItem, nextItem] = [prevRects.get(itemId), nextRects.get(itemId)];
-      if (!prevItem || !nextItem) return 0;
-      const prop = isPlaceholderId(itemId) ? ('bottom' as const) : ('y' as const);
-      return nextGap.height + (prevItem[prop] - nextItem[prop]);
-    };
-    prevRects.set(DropzoneItemId, new DOMRect(nextGap.x, nextGap.y, nextGap.width, calcHeight()));
-  }
 
   // Collect IDs of items that are direct children of wrap containers
   const wrapChildIds = new Set<string>();
@@ -157,21 +142,5 @@ export function spacerStyle(state?: AnimationState): JSX.CSSProperties {
   return {
     transition: state.transition ? `margin-top var(${durationVar}) ease-out` : '',
     'margin-top': `${state.deltaSize.y}px`
-  };
-}
-
-export function dropzoneStyle(state?: AnimationState): JSX.CSSProperties {
-  if (!state) return {};
-  return {
-    position: 'absolute',
-    left: '0',
-    top: '0',
-    transition: state.transition
-      ? `transform var(${durationVar}) ease-out, width var(${durationVar}) ease-out, height var(${durationVar}) ease-out`
-      : '',
-    transform: `translate(${state.deltaPos.x}px, ${state.deltaPos.y}px)`,
-    width: `${state.size.x + state.deltaSize.x}px`,
-    height: `${Math.max(state.size.y + state.deltaSize.y, 0)}px`,
-    'box-sizing': 'border-box'
   };
 }

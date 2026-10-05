@@ -1,7 +1,7 @@
 import type { MaybeAccessor } from '@solid-primitives/utils';
 import { access } from '@solid-primitives/utils';
 import { DOMWithState, isServer } from '@solidjs/web';
-import { createEffect, onCleanup, sharedConfig, untrack } from 'solid-js';
+import { createEffect, isHydrating, onCleanup, untrack } from 'solid-js';
 import { setProperty } from './attribute-patch';
 import { assignDOMProp } from './solid-dom';
 import type { Cleanup, Props } from './types';
@@ -36,7 +36,7 @@ export function createSpread<T extends object>(target: MaybeAccessor<T | null | 
     if (disposed) return;
     // client.ts skips writes during the synchronous hydration claim. A proxy has
     // no SSR output to claim, so install its layers after that pass has finished.
-    if (sharedConfig.hydrating) {
+    if (isHydrating()) {
       pendingTarget = nextTarget;
       if (!queued) {
         queued = true;
@@ -94,7 +94,7 @@ type AppliedProp = {
 /**
  * Synchronizes a prop bag onto a target and disposes props that disappeared.
  *
- * This follows @solidjs/web 2.0.0-rc.4's assign step while keeping cleanup state for
+ * This follows @solidjs/web 2.0.0-rc.13's assign step while keeping cleanup state for
  * reversible overlays on existing DOM nodes or plain objects.
  */
 function assign(target: object, entries: ReturnType<typeof readProps>, applied: Map<string, AppliedProp>): void {

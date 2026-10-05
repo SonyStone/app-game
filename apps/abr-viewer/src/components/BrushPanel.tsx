@@ -54,7 +54,8 @@ export function BrushPanel(props: {
               getChildren={(node) => (node.kind === 'group' && node.expanded ? node.children : undefined)}
               getOptions={(node) => ({
                 tag: node.kind,
-                accepts: node.id === tree.id ? ['group'] : ['group', 'brush'],
+                // Brushes hold nothing, so they must not become drop targets.
+                accepts: node.id === tree.id ? ['group'] : node.kind === 'group' ? ['group', 'brush'] : [],
                 spacing: 3,
                 layout: node.id === tree.id ? 'list' : 'wrap'
               })}

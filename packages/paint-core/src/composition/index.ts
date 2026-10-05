@@ -24,6 +24,7 @@ export {
   BrushEngines,
   BrushResources,
   Document,
+  DocumentFeatures,
   PaintRuntime,
   Renderer,
   Storage,
@@ -36,7 +37,12 @@ export { roundBrushEngine } from './roundBrushEngine';
 
 export { defineBrushEngine } from './defineBrushEngine';
 export type { BrushEngineSelection } from './defineBrushEngine';
+export { defineDocumentEdit } from './documentEdit';
+export type { DocumentEdit, DocumentEditContext, DocumentEditResult } from './documentEdit';
+export { defineDocumentFeature } from './documentFeature';
+export type { DocumentFeature } from './documentFeature';
 export { roundBrush } from './roundBrushEngine';
+export { symmetryFeature } from './symmetryFeature';
 
 export { createBrushResources } from '@app-game/abr-paint/resources';
 export type { BrushResource, BrushResourceReader, BrushResourcesFactory } from '@app-game/abr-paint/resources';

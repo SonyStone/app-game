@@ -1,33 +1,7 @@
-import { readAdobeBrushFixture } from '../../../scripts/adobe-brush-fixture.mjs';
-import { loadBrushLibrary } from '@app-game/abr-brush/library';
-import { initAbr, percent } from '@app-game/abr-parser';
-import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { percent } from '@app-game/abr-parser';
 import { expect, it } from 'vitest';
 import { prepareAbrBrush } from './preset';
 import { decodeRuntimeBrush, encodeRuntimeBrush } from './runtimeBrush';
-
-const adobeFixtures = Object.fromEntries(await Promise.all(['megapack.abr'].map(async (name) => [name, await readAdobeBrushFixture(name)])));
-
-await initAbr(readFileSync(new URL('../../abr-parser/wasm/pkg/photoshop_abr_wasm_bg.wasm', import.meta.url)));
-
-it('preserves every prepared Megapack preset and every referenced coverage byte', () => {
-  const file = loadBrushLibrary(
-    adobeFixtures['megapack.abr']!
-  );
-  expect(file.errors).toEqual([]);
-  expect(file.brushes).toHaveLength(465);
-  for (const brush of file.brushes) {
-    const prepared = prepareAbrBrush(brush);
-    const bytes = encodeRuntimeBrush(prepared);
-    const loaded = decodeRuntimeBrush(bytes);
-    expect(normalize(loaded), brush.name).toEqual(normalize(prepared));
-    const length = new DataView(bytes.buffer).getUint32(8, true);
-    const manifest = new TextDecoder().decode(bytes.subarray(12, 12 + length));
-    for (const field of ['sourceSample', 'sampleDependencies', 'resourceBlocks', 'descriptor', 'rawSampleData'])
-      expect(manifest, brush.name).not.toContain(`"${field}"`);
-  }
-}, 120000);
 
 it('rejects truncated data, wrong versions, missing resources and incorrect dimensions', () => {
   const bytes = encodeRuntimeBrush(
@@ -79,25 +53,6 @@ it('owns decoded bytes and uses collision-free resource IDs on repeated loads', 
   expect(decodeRuntimeBrush(bytes).resource.pixels).toEqual(b.resource.pixels);
 });
 
-function normalize(preset: ReturnType<typeof prepareAbrBrush>) {
-  const id = (value: string | undefined) =>
-    value === undefined ? undefined : preset.resources.findIndex((r) => r.id === value);
-  return {
-    ...preset,
-    resource: { ...preset.resource, pixels: hash(preset.resource.pixels), id: id(preset.resource.id) },
-    resources: preset.resources.map((r) => ({ ...r, pixels: hash(r.pixels), id: id(r.id) })),
-    engine: {
-      ...preset.engine,
-      settings: {
-        ...preset.engine.settings,
-        tipId: id(preset.engine.settings.tipId),
-        patternId: id(preset.engine.settings.patternId),
-        dualId: id(preset.engine.settings.dualId)
-      }
-    }
-  };
-}
-
 function rewriteManifest(bytes: Uint8Array, change: (manifest: TestManifest) => void) {
   const length = new DataView(bytes.buffer).getUint32(8, true);
   const manifest = JSON.parse(new TextDecoder().decode(bytes.subarray(12, 12 + length)));
@@ -109,10 +64,6 @@ function rewriteManifest(bytes: Uint8Array, change: (manifest: TestManifest) => 
   output.set(json, 12);
   output.set(bytes.subarray(12 + length), 12 + json.length);
   return output;
-}
-
-function hash(pixels: Uint8Array) {
-  return createHash('sha256').update(pixels).digest('hex');
 }
 
 type TestManifest = {

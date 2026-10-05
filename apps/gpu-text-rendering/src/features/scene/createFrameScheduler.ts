@@ -1,7 +1,8 @@
+import { errorMessage, gpuError } from '@app-game/solid-gpu/errors';
 import { createRAF } from '@solid-primitives/raf';
 import { ok, Result } from 'neverthrow';
 import { flush, onCleanup, untrack } from 'solid-js';
-import { errorMessage, gpuError, type ViewerError } from '../../shared/errors';
+import type { ViewerError } from '../../shared/errors';
 
 /**
  * Owns one demand-driven clock. Subscriptions can keep it running independently of one another.

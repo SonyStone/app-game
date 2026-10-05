@@ -1,11 +1,15 @@
+import type { RendererToolState } from '@app-game/abr-paint/gpu/toolState';
+import type { BrushResource, createBrushResources } from '@app-game/abr-paint/resources';
+import type { GpuError } from '@app-game/solid-gpu/errors';
 import type { Result } from './asyncResult';
 import type { Brush, Sample } from './brush';
 import type { Camera, Point, ViewSize } from './camera';
-import type { BrushResource, createBrushResources } from '@app-game/abr-paint/resources';
+import type { ColorSample, PickedColor } from './colorSample';
 import type { BrushEngine } from './composition/contracts';
 import type { HistorySource, LayerAction, createDocument } from './document';
-import type { RendererToolState } from '@app-game/abr-paint/gpu/toolState';
-import type { PaintSymmetry } from './symmetry';
+import type { DocumentRect } from './layersInView';
+import type { LiveListing, LiveState, LiveTileBytes } from './liveDrawing';
+import type { SelectionPreview, SelectionSummary } from './selectionMask';
 
 /** Main-thread commands are processed in order; all sample batches precede their stroke end. */
 export type PaintCommand =
@@ -19,6 +23,11 @@ export type PaintCommand =
       diagnostics?: boolean;
       tools?: RendererToolState;
       historySource?: HistorySource;
+      /**
+       * Takes the drawing's storage from the engine that holds it, in another tab, which stops saving and gets
+       * `storage-lock` `lost`; without it the engine waits a few seconds for the storage and reports `busy`.
+       */
+      takeOver?: boolean;
     }
   | ({ type: 'brush-resources'; requestId: string } & (
       | { action: 'put'; resource: BrushResource }
@@ -27,12 +36,31 @@ export type PaintCommand =
     ))
   | { type: 'debug'; enabled: boolean }
   | { type: 'diagnostics'; enabled: boolean }
-  | { type: 'symmetry'; settings: PaintSymmetry }
+  /** Changes the data of a document feature registered with `DocumentFeatures`; see `defineDocumentFeature`. */
+  | { type: 'feature'; feature: string; command: unknown }
   | { type: 'history-source'; id: number }
   | { type: 'brush-command'; requestId: string; brush: Brush; command: unknown }
+  /**
+   * Picks a color at `point` in CSS pixels of the primary canvas, as `sample` says; one pixel of the view at full
+   * detail without it. See `ColorSample`.
+   */
+  | { type: 'pick-color'; requestId: string; point: Point; sample?: ColorSample }
   | { type: 'live-tail'; enabled: boolean }
   | { type: 'adaptive-quality'; enabled: boolean }
-  | { type: 'selection-view'; points: Point[]; animate: boolean }
+  /** Whether every layer blends in linear light ("Smooth color") or in encoded sRGB; saved with the document. */
+  | { type: 'blending'; linear: boolean }
+  /** How pixels show up close: smoothing and the pixel grid; see `PaintRenderer.setPixelView`. */
+  | { type: 'pixel-view'; smooth: boolean; grid: boolean }
+  /**
+   * How the selection is outlined: whether its ants move, and the selection gesture in progress, if any, shown
+   * before it applies; see `SelectionPreview`.
+   */
+  | { type: 'selection-view'; animate: boolean; preview?: SelectionPreview }
+  /**
+   * Names document regions whose layers with paint each state reports in `layersInRegions`, such as the active frame
+   * of a frames module; replaces the regions named before.
+   */
+  | { type: 'watch-regions'; regions: Record<string, DocumentRect> }
   | { type: 'view'; camera: Camera; size: ViewSize; dpr: number }
   | {
       type: 'begin';
@@ -44,16 +72,53 @@ export type PaintCommand =
     }
   | { type: 'samples'; samples: Sample[] }
   | { type: 'checkpoint'; includeTools?: boolean }
-  | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'download' | 'png' | 'recover' | 'dispose' }
+  | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'recover' | 'dispose' }
+  /**
+   * Exports the document as a `.paint` file (`download`) or the presented view as a PNG (`png`). With a `requestId`,
+   * the `download` event carries it back, so the client can keep the file instead of offering it to the user.
+   */
+  | { type: 'download'; requestId?: string }
+  /**
+   * With a `region`, the PNG shows that document rectangle at 100% instead of the view, reduced to the renderer's
+   * pixel budget when larger, and is named `name`.
+   */
+  | { type: 'png'; requestId?: string; region?: DocumentRect; name?: string }
+  /**
+   * Exports the layers as a layered Photoshop document of `region`, or of everything drawn, named `name`; see
+   * `writePsdFile`.
+   */
+  | { type: 'psd'; requestId?: string; region?: DocumentRect; name?: string }
   | { type: 'layer'; action: LayerAction }
-  | { type: 'selection'; action: SelectionAction; points: Point[]; offset?: Point; layerId: string; revision: number }
+  /**
+   * For a live session's author: lists the layers and the versions of at most `limit` tiles in `region`; see
+   * `listLiveTiles`. `live-read` then reads versions of the latest listing.
+   */
+  | { type: 'live-list'; requestId: string; region: DocumentRect; limit: number }
+  | { type: 'live-read'; requestId: string; versions: string[] }
+  /** For a live session's viewer: shows the author's drawing as `state` says, outside undo history. */
+  | { type: 'live-apply'; state: LiveState }
+  /** A pixel edit of the engine's selection on layer `layerId` at document `revision`; see `SelectionAction`. */
+  | { type: 'selection'; action: SelectionAction; offset?: Point; layerId: string; revision: number }
+  /** Runs a pixel edit registered with `DocumentFeatures`, such as a bucket fill; see `defineDocumentEdit`. */
+  | { type: 'edit'; edit: string; command: unknown; requestId?: string }
   | { type: 'import'; text: string }
-  | { type: 'import'; file: Blob };
+  /** A `.paint` file, a legacy JSON drawing, or a Photoshop document, recognized by its contents. */
+  | { type: 'import'; file: Blob }
+  /**
+   * Keeps the drawing in a folder on disk: `save` keeps the current drawing in `directory`, `open` opens the drawing
+   * kept there; either links the folder, so later checkpoints are written there too. `unlink` stops that, and
+   * `access` resumes a linked folder after the browser was allowed to use it again. Needs storage with folders.
+   */
+  | { type: 'folder'; action: 'save' | 'open'; directory: FileSystemDirectoryHandle }
+  | { type: 'folder'; action: 'unlink' | 'access' };
+
+/** Starts a runtime on a transferred canvas; the first command of every worker connection. */
+export type InitCommand = Extract<PaintCommand, { type: 'init' }>;
 
 /** Local execution accepts a DOM canvas; the worker protocol only permits a transferable canvas. */
 export type PaintRuntimeCommand =
   | Exclude<PaintCommand, { type: 'init' }>
-  | (Omit<Extract<PaintCommand, { type: 'init' }>, 'canvas'> & { canvas: OffscreenCanvas | HTMLCanvasElement });
+  | (Omit<InitCommand, 'canvas'> & { canvas: OffscreenCanvas | HTMLCanvasElement });
 
 /** Lightweight status; pixel payloads are limited to explicit downloads and requested tool handoffs. */
 export type PaintEvent =
@@ -70,10 +135,14 @@ export type PaintEvent =
     }
   | {
       type: 'state';
-      /** Document-owned guides and painting transforms. Absent from older/custom endpoints. */
-      symmetry?: PaintSymmetry;
+      /** Data of the runtime's document features, such as paint symmetry, by feature ID. */
+      features?: Record<string, unknown>;
       document: ReturnType<ReturnType<typeof createDocument>['state']>;
       camera: Camera;
+      /** Ids of the layers with tiles in the primary view, in layer order; see `layersInView`. */
+      layersInView?: string[];
+      /** For each region named by `watch-regions`, the ids of the layers with tiles in it, in layer order. */
+      layersInRegions?: Record<string, string[]>;
       saved: boolean;
       /** Active strokes are unsaved; saving means a completed checkpoint is being written. */
       saveState: 'saved' | 'unsaved' | 'saving';
@@ -88,6 +157,13 @@ export type PaintEvent =
         overviewWrites: number;
         overviewDirty: number;
         overviewDirtyBytes: number;
+        /** Tiles the drawing refers to that storage lost; they read as transparent. */
+        missingTiles: number;
+        /**
+         * The folder the drawing is kept in: its name, whether the browser allows using it (`prompt` until the user
+         * is asked again), whether it is being written and how many versions are left, and the last failure writing it.
+         */
+        folder?: { name: string; access: 'granted' | 'prompt'; writing: boolean; pending: number; error?: string };
       };
       /** Last submitted frame's individual tile draws; virtual page draws are reported separately. */
       rasterDraws?: { preview: number; committed: number };
@@ -127,12 +203,44 @@ export type PaintEvent =
     }
   | { type: 'ready' }
   | { type: 'brush-command'; requestId: string; result: Result<void, string> }
+  /** Outcome of an `edit` command that carried a `requestId`, with the edit's `reply`. */
+  | { type: 'edited'; requestId: string; result: Result<unknown, string> }
+  /** The `#rrggbb` color at a `pick-color` point, or `null` where the active layer has no paint to pick. */
+  | { type: 'picked-color'; requestId: string; result: Result<PickedColor, string> }
+  | { type: 'live-listed'; requestId: string; result: Result<LiveListing, string> }
+  | { type: 'live-tiles'; requestId: string; result: Result<LiveTileBytes[], string> }
   | { type: 'checkpointed'; tools?: RendererToolState; historySource?: HistorySource }
-  | { type: 'selection'; points: Point[]; hasClipboard: boolean }
+  /** The selection changed, or a selection command finished; `selection` summarizes it, see `SelectionSummary`. */
+  | { type: 'selection'; selection: SelectionSummary; hasClipboard: boolean }
   | { type: 'disposed' }
-  | { type: 'restored'; camera: Camera; symmetry?: PaintSymmetry }
-  | { type: 'error'; message: string; recoverable: boolean }
-  | { type: 'download'; blob: Blob; name: string };
+  /**
+   * The drawing's storage belongs to another engine, such as Paint in another tab: `busy` when this engine could not
+   * open it, and never becomes ready; `lost` when another engine took it over, after which this one no longer saves.
+   * See `lockStorage`.
+   */
+  | { type: 'storage-lock'; state: 'busy' | 'lost' }
+  /** A document was imported; UI state derived from its camera and feature data resets to them. */
+  | { type: 'restored'; camera: Camera; features?: Record<string, unknown> }
+  /**
+   * `code` classifies renderer failures, for example `validation` versus a `lost` device. `background` marks a failure
+   * of autosave or storage cleanup rather than of a command, so a stroke or checkpoint in progress is unaffected.
+   */
+  | { type: 'error'; message: string; recoverable: boolean; code?: GpuError['code']; background?: boolean }
+  /** An exported file; `requestId` repeats the one of the `download` or `png` command that asked for it, if any. */
+  | { type: 'download'; blob: Blob; name: string; requestId?: string };
 
-/** Clipboard is private to this editor session; paste writes into the active layer at the copied coordinates. */
+/** Document, storage and performance status posted after changes and frames. */
+export type StateEvent = Extract<PaintEvent, { type: 'state' }>;
+
+/** The selection's summary and clipboard availability, after the selection changed or a selection command. */
+export type SelectionEvent = Extract<PaintEvent, { type: 'selection' }>;
+
+/** Renderer tool state and the Erase to History source, handed from a checkpointed runtime to its replacement. */
+export type CheckpointedEvent = Extract<PaintEvent, { type: 'checkpointed' }>;
+
+/**
+ * Pixel edits of the selection: copy, cut, paste, delete, move by an offset, or move into a new layer. The clipboard
+ * is private to this editor session; paste writes into the active layer at the copied coordinates and selects what
+ * was copied.
+ */
 export type SelectionAction = 'copy' | 'cut' | 'paste' | 'delete' | 'move' | 'new-layer';

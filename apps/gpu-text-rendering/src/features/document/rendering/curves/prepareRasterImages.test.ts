@@ -1,10 +1,9 @@
+import { gpuError } from '@app-game/solid-gpu/errors';
+import { type GpuContext, makeGpuResources } from '@app-game/solid-gpu/gpu';
+import { isWorkerShutdown, type workerShutdown } from '@app-game/solid-gpu/worker';
 import { err } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mountRendererWorkers } from '../../../../../tests/browser/workerHarness';
-import { gpuError } from '../../../../shared/errors';
-import type { GpuContext } from '../../../../shared/gpu/context';
-import { makeGpuResources } from '../../../../shared/gpu/resources';
-import { isWorkerShutdown, type workerShutdown } from '../../../../shared/worker/workerProtocol';
 import type { SceneFrame } from '../createFrame';
 import { prepareRasterImages } from './prepareRasterImages';
 import type { RasterRequest } from './rasterWorkerTypes';
@@ -465,5 +464,6 @@ const frame: SceneFrame = {
   rotation: [1, 0, 0, 1],
   visible: [],
   vectorOnly: false,
-  grids: false
+  grids: false,
+  moving: false
 };

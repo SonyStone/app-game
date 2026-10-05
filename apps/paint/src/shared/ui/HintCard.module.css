@@ -1,0 +1,267 @@
+/* Placed by its `style`. */
+.hint {
+  position: absolute;
+  z-index: 30;
+  width: 210px;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfbfaf7;
+  box-shadow: 0 4px 16px #0002;
+  pointer-events: none;
+}
+
+.demo {
+  width: 100%;
+  height: auto;
+  border-radius: 5px;
+  background: #f3efe6;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.text {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+
+  strong {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  kbd {
+    font: inherit;
+    font-weight: 400;
+    color: var(--muted);
+  }
+
+  span {
+    color: var(--muted);
+    line-height: 1.35;
+  }
+}
+
+.draw {
+  stroke: #2f4b62;
+  stroke-width: 5;
+  stroke-dasharray: 160;
+  animation: draw 2.2s ease-in-out infinite;
+}
+
+.ink {
+  stroke: #2f4b62;
+  stroke-width: 9;
+}
+
+.erase {
+  stroke: #f3efe6;
+  stroke-width: 16;
+  stroke-dasharray: 60;
+  animation: draw 2.2s ease-in-out infinite;
+}
+
+.outline {
+  stroke: #2f4b62;
+  stroke-width: 2;
+}
+
+.fillArea {
+  fill: #7fa7c4;
+  stroke: none;
+  animation: fill 2.2s ease-in-out infinite;
+}
+
+.click {
+  fill: #fff;
+  stroke: #2f4b62;
+  stroke-width: 1.5;
+  animation: click 2.2s ease-in-out infinite;
+}
+
+.drag {
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-dasharray: 72;
+  animation: draw 2.2s ease-in-out infinite;
+}
+
+.dashed {
+  stroke: #2f4b62;
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  animation: march 1s linear infinite;
+}
+
+.turn {
+  transform-origin: 60px 36px;
+  animation: turn 2.6s ease-in-out infinite;
+}
+
+.flip {
+  transform-origin: 60px 36px;
+  animation: flip 2.6s ease-in-out infinite;
+}
+
+.axis {
+  stroke: #9fb6c6;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.lift path {
+  fill: #fbfbfa;
+  stroke: #2f4b62;
+  stroke-width: 1.5;
+  animation: lift 2.6s ease-in-out infinite;
+
+  &:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+
+  &:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+}
+
+.flipY {
+  transform-origin: 60px 36px;
+  animation: flipY 2.6s ease-in-out infinite;
+}
+
+.shape {
+  fill: #7fa7c4;
+  stroke: #2f4b62;
+  stroke-width: 1.5;
+}
+
+/* Changes from the path's own `d` to `--to`, back and forth. */
+.morph {
+  fill: #7fa7c4;
+  stroke: #2f4b62;
+  stroke-width: 1.5;
+  animation: morph 2.6s ease-in-out infinite alternate;
+}
+
+@keyframes morph {
+  0%,
+  20% {
+    d: var(--from);
+  }
+
+  80%,
+  to {
+    d: var(--to);
+  }
+}
+
+@keyframes flipY {
+  0%,
+  35% {
+    transform: none;
+  }
+
+  50%,
+  85% {
+    transform: scaleY(-1);
+  }
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 160;
+  }
+
+  60%,
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fill {
+  0%,
+  30% {
+    opacity: 0;
+  }
+
+  55%,
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes click {
+  0%,
+  20% {
+    r: 0;
+  }
+
+  30% {
+    r: 5;
+  }
+
+  45%,
+  to {
+    r: 0;
+  }
+}
+
+@keyframes march {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+@keyframes turn {
+  0%,
+  15% {
+    transform: none;
+  }
+
+  50%,
+  65% {
+    transform: rotate(-18deg) scale(1.3);
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+@keyframes flip {
+  0%,
+  35% {
+    transform: none;
+  }
+
+  50%,
+  85% {
+    transform: scaleX(-1);
+  }
+}
+
+@keyframes lift {
+  0%,
+  20% {
+    transform: none;
+  }
+
+  50% {
+    transform: translateY(-4px);
+  }
+
+  80%,
+  to {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint * {
+    animation: none !important;
+  }
+}

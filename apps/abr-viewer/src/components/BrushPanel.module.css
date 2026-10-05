@@ -125,9 +125,12 @@
 
 .insertionMarker {
   height: 100%;
-  min-height: 3px;
-  border: 1px solid #4db5e7;
-  background: #259cd52b;
+  background: #4db5e7;
+
+  [data-drop='into'] > & {
+    border: 1px solid #4db5e7;
+    background: #259cd52b;
+  }
 }
 
 .emptyGroup {

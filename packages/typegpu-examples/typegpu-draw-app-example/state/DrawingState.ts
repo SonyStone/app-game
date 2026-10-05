@@ -5,7 +5,7 @@
  * All drawing-related state is managed here.
  */
 
-import { createMemo, createSignal, createStore, storePath } from 'solid-js';
+import { createMemo, createSignal, createStore } from 'solid-js';
 import type {
   BlendMode,
   BrushSettings,
@@ -73,19 +73,48 @@ export function createToolState(initial?: Partial<ToolState>) {
     state,
 
     // Setters
-    setTool: (tool: ToolState['currentTool']) => setState(storePath('currentTool', tool)),
-    setBrushId: (id: string) => setState(storePath('currentBrushId', id)),
-    setBlendMode: (mode: BlendMode) => setState(storePath('blendMode', mode)),
-    setColorBlendMode: (mode: ColorBlendMode) => setState(storePath('colorBlendMode', mode)),
+    setTool: (tool: ToolState['currentTool']) =>
+      setState((draft) => {
+        draft.currentTool = tool;
+      }),
+    setBrushId: (id: string) =>
+      setState((draft) => {
+        draft.currentBrushId = id;
+      }),
+    setBlendMode: (mode: BlendMode) =>
+      setState((draft) => {
+        draft.blendMode = mode;
+      }),
+    setColorBlendMode: (mode: ColorBlendMode) =>
+      setState((draft) => {
+        draft.colorBlendMode = mode;
+      }),
 
     // Brush settings
-    setBrushColor: (color: string) => setState(storePath('brush', 'color', color)),
-    setBrushSize: (size: number) => setState(storePath('brush', 'size', size)),
-    setBrushOpacity: (opacity: number) => setState(storePath('brush', 'opacity', opacity)),
-    setBrushHardness: (hardness: number) => setState(storePath('brush', 'hardness', hardness)),
-    setBrushSpacing: (spacing: number) => setState(storePath('brush', 'spacing', spacing)),
+    setBrushColor: (color: string) =>
+      setState((draft) => {
+        draft.brush.color = color;
+      }),
+    setBrushSize: (size: number) =>
+      setState((draft) => {
+        draft.brush.size = size;
+      }),
+    setBrushOpacity: (opacity: number) =>
+      setState((draft) => {
+        draft.brush.opacity = opacity;
+      }),
+    setBrushHardness: (hardness: number) =>
+      setState((draft) => {
+        draft.brush.hardness = hardness;
+      }),
+    setBrushSpacing: (spacing: number) =>
+      setState((draft) => {
+        draft.brush.spacing = spacing;
+      }),
     setBrushSettings: (settings: Partial<BrushSettings>) =>
-      setState(storePath('brush', (brush) => Object.assign(brush, settings)))
+      setState((draft) => {
+        Object.assign(draft.brush, settings);
+      })
   };
 }
 
@@ -127,31 +156,54 @@ export function createCanvasState(initial?: Partial<CanvasState>) {
 
     // Setters
     setDimensions: (width: number, height: number) => {
-      setState(storePath('width', width));
-      setState(storePath('height', height));
+      setState((draft) => {
+        draft.width = width;
+        draft.height = height;
+      });
     },
 
     setDisplayDimensions: (width: number, height: number) => {
-      setState(storePath('displayWidth', width));
-      setState(storePath('displayHeight', height));
+      setState((draft) => {
+        draft.displayWidth = width;
+        draft.displayHeight = height;
+      });
     },
 
-    setBackgroundColor: (color: string) => setState(storePath('backgroundColor', color)),
+    setBackgroundColor: (color: string) =>
+      setState((draft) => {
+        draft.backgroundColor = color;
+      }),
 
     // Transform
-    setTransform: (transform: CanvasTransform) => setState(storePath('transform', transform)),
+    setTransform: (transform: CanvasTransform) =>
+      setState((draft) => {
+        Object.assign(draft.transform, transform);
+      }),
     setPan: (x: number, y: number) => {
-      setState(storePath('transform', 'panX', x));
-      setState(storePath('transform', 'panY', y));
+      setState((draft) => {
+        draft.transform.panX = x;
+        draft.transform.panY = y;
+      });
     },
-    setZoom: (zoom: number) => setState(storePath('transform', 'zoom', zoom)),
-    setRotation: (rotation: number) => setState(storePath('transform', 'rotation', rotation)),
+    setZoom: (zoom: number) =>
+      setState((draft) => {
+        draft.transform.zoom = zoom;
+      }),
+    setRotation: (rotation: number) =>
+      setState((draft) => {
+        draft.transform.rotation = rotation;
+      }),
 
     // Convenience methods
-    resetTransform: () => setState(storePath('transform', DEFAULT_TRANSFORM)),
+    resetTransform: () =>
+      setState((draft) => {
+        Object.assign(draft.transform, DEFAULT_TRANSFORM);
+      }),
 
     updateTransform: (partial: Partial<CanvasTransform>) =>
-      setState(storePath('transform', (t) => Object.assign(t, partial)))
+      setState((draft) => {
+        Object.assign(draft.transform, partial);
+      })
   };
 }
 
@@ -180,56 +232,77 @@ export function createLayerState(initial?: Partial<LayerState>) {
 
     // Layer management
     addLayer: (layer: Layer) => {
-      setState(storePath('layers', (layers) => [...layers, layer]));
-      setState(storePath('activeLayerId', layer.id));
+      setState((draft) => {
+        draft.layers = [...draft.layers, layer];
+        draft.activeLayerId = layer.id;
+      });
     },
 
     removeLayer: (id: string) => {
       const index = state.layers.findIndex((l) => l.id === id);
       if (index === -1) return;
 
-      setState(storePath('layers', (layers) => layers.filter((l) => l.id !== id)));
+      setState((draft) => {
+        draft.layers = draft.layers.filter((l) => l.id !== id);
+      });
 
       // Select another layer if active was removed
       if (state.activeLayerId === id) {
         const newActive = state.layers[Math.min(index, state.layers.length - 1)]?.id ?? null;
-        setState(storePath('activeLayerId', newActive));
+        setState((draft) => {
+          draft.activeLayerId = newActive;
+        });
       }
     },
 
-    setActiveLayer: (id: string) => setState(storePath('activeLayerId', id)),
+    setActiveLayer: (id: string) =>
+      setState((draft) => {
+        draft.activeLayerId = id;
+      }),
 
     updateLayer: (id: string, updates: Partial<Layer>) => {
       const index = state.layers.findIndex((l) => l.id === id);
       if (index === -1) return;
-      setState(storePath('layers', index, (layer) => Object.assign(layer, updates)));
+      setState((draft) => {
+        Object.assign(draft.layers[index], updates);
+      });
     },
 
     moveLayer: (id: string, newIndex: number) => {
       const currentIndex = state.layers.findIndex((l) => l.id === id);
       if (currentIndex === -1 || newIndex < 0 || newIndex >= state.layers.length) return;
 
-      setState(
-        storePath('layers', (layers) => {
-          const [layer] = layers.splice(currentIndex, 1);
-          layers.splice(newIndex, 0, layer);
-        })
-      );
+      setState((draft) => {
+        const [layer] = draft.layers.splice(currentIndex, 1);
+        draft.layers.splice(newIndex, 0, layer);
+      });
     },
 
     setLayerVisibility: (id: string, visible: boolean) => {
       const index = state.layers.findIndex((l) => l.id === id);
-      if (index !== -1) setState(storePath('layers', index, 'visible', visible));
+      if (index !== -1) {
+        setState((draft) => {
+          draft.layers[index].visible = visible;
+        });
+      }
     },
 
     setLayerOpacity: (id: string, opacity: number) => {
       const index = state.layers.findIndex((l) => l.id === id);
-      if (index !== -1) setState(storePath('layers', index, 'opacity', opacity));
+      if (index !== -1) {
+        setState((draft) => {
+          draft.layers[index].opacity = opacity;
+        });
+      }
     },
 
     setLayerBlendMode: (id: string, blendMode: Layer['blendMode']) => {
       const index = state.layers.findIndex((l) => l.id === id);
-      if (index !== -1) setState(storePath('layers', index, 'blendMode', blendMode));
+      if (index !== -1) {
+        setState((draft) => {
+          draft.layers[index].blendMode = blendMode;
+        });
+      }
     }
   };
 }

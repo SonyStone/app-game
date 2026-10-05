@@ -1,7 +1,6 @@
+import { workerShutdown, workerShutdownGraceMs } from '@app-game/solid-gpu/worker';
 import { createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { workerShutdownGraceMs } from '../../../../shared/worker/openWorker';
-import { workerShutdown } from '../../../../shared/worker/workerProtocol';
 import { createRasterWorker } from './createRasterWorker';
 import type { RasterRequest } from './rasterWorkerTypes';
 

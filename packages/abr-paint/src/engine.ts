@@ -16,6 +16,7 @@ import type { Dab, Sample } from './input';
 import type { AbrBrushInput, AbrStrokeContext, AbrStrokeSession } from './contracts';
 import { adaptiveBrushQuality } from './adaptiveQuality';
 import type { AbrBrushCommand } from './commands';
+import type { BrushResource } from './resources';
 
 /** Creates one ordered ABR gesture using host-owned resources, input processing, and rendering. */
 export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ settings, resources, brush, layer, layers, processor, renderer, view, historySource, modifiers, adaptiveQuality, lod }: AbrStrokeContext<Layer, Change, Brush>): AbrStrokeSession<Change> {
@@ -35,27 +36,21 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
   }
   const filter = settings.values.tool.type === 'ShTl' || settings.values.tool.type === 'BlTl';
   const samplesCanvas = filter || settings.values.tool.type === 'SmTl' || settings.values.tool.type === 'MixB';
-  const square = block ? blockEraserTip() : undefined;
-  const tip = square
-    ? {
-        id: 'block-eraser-square',
-        width: square.width,
-        height: square.height,
-        pixels: square.data,
-        format: 'r8unorm' as const
-      }
-    : resources.get(settings.tipId);
+  const tip = block ? blockEraserResource : resources.get(settings.tipId);
   const pattern = settings.patternId ? resources.get(settings.patternId) : undefined;
   const storedDual = settings.dualId ? resources.get(settings.dualId) : undefined;
   const computedDual = storedDual && !settings.values.dualBrush.tipId
     ? computedSecondaryTip(brush.size * settings.values.dualBrush.diameter / Math.max(1, settings.values.diameter), settings.values.dualBrush)
     : undefined;
-  const dual = computedDual
-    ? { id: computedDual.key, width: computedDual.width, height: computedDual.height,
-        pixels: computedDual.data, format: 'r8unorm' as const }
-    : storedDual;
+  const dual = computedDual ? computedDualResource(computedDual) : storedDual;
   const quality = adaptiveBrushQuality(
-    adaptiveQuality ?? false, settings.values, lod, settings.blendMode, brush.mixing
+    adaptiveQuality ?? false,
+    settings.values,
+    lod,
+    settings.blendMode,
+    brush.mixing,
+    brush.size,
+    settings.values.tipKind === 'sampledBrush' ? tip : undefined
   );
   const input = {
     seed: settings.seed ?? crypto.getRandomValues(new Uint32Array(1))[0]!,
@@ -65,8 +60,10 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
     flow: filter ? 1 : brush.flow,
     opacity: filter ? 1 : brush.opacity,
     size: brush.size,
-    sampledTipGeometry: quality?.lod === undefined,
-    minimumSpacing: quality?.minimumSpacing
+    // Approximate coarse masks draw the same traced tip quads as the exact rasterizer.
+    sampledTipGeometry: true,
+    minimumSpacing: quality?.minimumSpacing,
+    tipSpacing: quality?.tipSpacing
   };
   const sampler = createAbrStrokeSampler(input, tip);
   let pencilContact = settings.values.tool.type === 'PcTl' && settings.values.tool.autoErase;
@@ -167,9 +164,7 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
       if (pencilContact && samples.length) {
         const pixel = await renderer.readCommittedPixel(layer, samples[0]!);
         if (pencilUsesBackground(pixel, input.color)) {
-          const foreground = input.color;
-          input.color = input.secondaryColor;
-          input.secondaryColor = foreground;
+          sampler.setColors(input.secondaryColor, input.color);
         }
         pencilContact = false;
       }
@@ -235,6 +230,38 @@ export const abrBrushSettings = z
 /** Validated settings transported between editor UI and the drawing runtime. */
 export type AbrBrushSettings = z.infer<typeof abrBrushSettings>;
 
+/** Shared 1×1 Block Eraser coverage. One identity per session lets GPU caches reuse its texture. */
+const blockEraserResource: BrushResource = (() => {
+  const square = blockEraserTip();
+  return Object.freeze({
+    id: 'block-eraser-square',
+    width: square.width,
+    height: square.height,
+    format: 'r8unorm' as const,
+    pixels: square.data
+  });
+})();
+
+let lastComputedDual: BrushResource | undefined;
+
+/** Wraps a computed secondary tip as a resource, reusing the previous wrapper while its content key
+ * is unchanged so repeated strokes with the same dual settings keep hitting GPU texture caches.
+ */
+function computedDualResource(tip: ReturnType<typeof computedSecondaryTip>): BrushResource {
+  if (lastComputedDual?.id === tip.key) {
+    return lastComputedDual;
+  }
+
+  lastComputedDual = Object.freeze({
+    id: tip.key,
+    width: tip.width,
+    height: tip.height,
+    format: 'r8unorm' as const,
+    pixels: tip.data
+  });
+  return lastComputedDual;
+}
+
 function tabletPoint(sample: Sample): PreviewPoint {
   return { ...sample, tiltX: sample.tiltX ?? 0, tiltY: sample.tiltY ?? 0, rotation: sample.rotation ?? 0 };
 }
@@ -254,6 +281,7 @@ function dabs(stroke: PreviewStroke, secondary: boolean): Dab[] {
         secondary,
         sampledTip,
         spacingRatio: stroke.spacingRatios?.[i],
+        spacingStep: stroke.spacingSteps?.[i],
         mixing: stroke.mixing ? { wet: stroke.mixing[i * 2]!, mix: stroke.mixing[i * 2 + 1]! } : undefined
       }
     };

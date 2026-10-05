@@ -4,7 +4,10 @@ Shared drawing runtime extracted from Paint Studio. Both Studio and `@app-game/b
 use this implementation. The package imports no application code.
 
 - `document`: layers, immutable tile versions and undo/redo.
-- `gpu/renderer`: tiled WebGPU drawing, LOD, device resources and multiple presentation targets.
+- `gpu/renderer`: tiled WebGPU drawing, LOD, device resources and multiple presentation targets. The
+  `createPaintRenderer` facade wires `tileResidency` (resident tiles, eviction, readback), `strokeState` and
+  `strokeRaster` (stroke lifecycle and GPU rasterization), `targetView` (per-canvas viewport, damage, fallback,
+  virtual-texture page demand and selection outline) and `frameComposer` (one command encoder per presented frame).
 - `paintRuntime`: ordered input, frame backpressure, resource ownership and save coordination.
 - `composition`: Solid 2 providers, reactive canvas targets, engine registration and storage adapters.
 - `input`: Studio's raw/coalesced stylus input and release behavior. Navigation puck is optional.
@@ -37,5 +40,7 @@ coverage snapshots as opaque stroke data. Engine selection and fused destination
 an engine adapter; these extractions alone do not make the renderer engine-neutral. Do not rename
 an ABR-specific contract to “universal” without a second engine exercising it.
 
-GPU integration checks live in `apps/paint/tests/gpu`. Existing app tests still exercise the extracted
-modules, and the tablet performance baseline stays in `apps/paint/performance`.
+Unit tests live beside the modules in `src/`; `tests/fixtures/rendererDouble.ts` is the shared renderer and
+storage double and `tests/fixtures/studioRuntime.tsx` mounts the Studio recipe around them. Real-GPU checks
+live in `apps/paint/tests/gpu` and run with `pnpm --filter @app-game/paint test:browser`; the tablet
+performance baseline stays in `apps/paint/performance`.

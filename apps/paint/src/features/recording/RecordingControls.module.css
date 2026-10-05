@@ -1,0 +1,80 @@
+.recorder {
+  position: absolute;
+  /* Below the save status and clear of the view controls in the top center. */
+  top: max(48px, calc(env(safe-area-inset-top) + 34px));
+  left: max(14px, env(safe-area-inset-left));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: #fffffff2;
+  box-shadow: 0 4px 18px #0002;
+  font-size: 13px;
+
+  button {
+    padding: 6px 14px !important;
+    border-radius: 16px;
+    background: #ececec !important;
+  }
+}
+
+.live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #d83a34;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.review {
+  display: grid;
+  gap: 8px;
+  width: min(360px, calc(100vw - 64px));
+  padding: 6px 8px 2px 0;
+
+  label {
+    display: grid;
+    gap: 6px;
+  }
+
+  textarea {
+    resize: vertical;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font: inherit;
+  }
+
+  p {
+    margin: 0;
+    color: #b3261e;
+  }
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.recorder .primary {
+  background: var(--accent) !important;
+  color: #fff !important;
+}

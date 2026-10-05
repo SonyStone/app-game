@@ -1,0 +1,30 @@
+/* Text buttons and fields in the selection options row. */
+[role='toolbar'] > button.textOption:is(button) {
+  width: auto;
+  min-width: 38px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  color: var(--muted);
+  white-space: nowrap;
+
+  input[type='range'] {
+    width: 96px;
+  }
+}
+
+/* The feather radius in the Modify menu, above its command. */
+.featherRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 2px 42px;
+  color: var(--muted);
+  font-size: 12px;
+}

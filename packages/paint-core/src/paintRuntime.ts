@@ -1,16 +1,33 @@
 import { makeTimer } from '@solid-primitives/timer';
 import { createRoot, onCleanup } from 'solid-js';
 import { attempt, createTaskQueue, unwrapResult, type Result } from './asyncResult';
-import { defaultCamera, type Point } from './camera';
+import { defaultCamera, screenToWorld } from './camera';
+import { averageOpaque, defaultColorSample, sampleLayer, type PickedColor } from './colorSample';
+import { layersInRect, layersInView, type DocumentRect } from './layersInView';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
+import type { Layer, TileChange } from './document';
+import type { FloatingPixels } from './gpu/floatingPixels';
 import { createResourceSession } from './composition/resourceSession';
-import { symmetryRenderer } from './composition/symmetryRenderer';
+import { restoreFeatureData } from './composition/documentFeature';
 import { readPaintFile, writePaintFile } from './paintFile';
+import { isPsdFile, readPsdFile, writePsdFile } from './psdFile';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
-import { captureSelection, editSelection, translateSelection, type SelectionPixels } from './selection';
-import { decodeDocument, snapshotDocument } from './storage';
-import { defaultPaintSymmetry, paintSymmetrySchema, supportsPaintSymmetry } from './symmetry';
+import { mergeTilePixels } from './layerMerge';
+import { captureSelection, editSelection, type SelectionPixels } from './selection';
+import { applyLiveState, listLiveTiles, readLiveTiles } from './liveDrawing';
+import { lockStorage, lockedStorage, type StorageLock } from './storageLock';
+import {
+  emptySelection,
+  isSelected,
+  summarizeSelection,
+  translateSelection,
+  type SelectionMask,
+  type SelectionPreview
+} from './selectionMask';
+import { decodeDocument, snapshotDocument, type restoreDocument } from './storage';
+import { unpackTile, type TileData } from './tilePixels';
+import { errorMessage, type GpuError } from '@app-game/solid-gpu/errors';
 
 /** Owns document, persistence and GPU resources in either execution mode. Commands stay ordered.
  * The caller supplies event delivery and closes its transport after a graceful dispose.
@@ -25,20 +42,42 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let primaryAttached = true;
     let storageName = 'paint-studio';
     let tileStore: PaintStorage;
+    /** Tile data by version of the latest live listing, which `live-read` reads from. */
+    let liveVersions = new Map<string, TileData>();
+    /** The drawing's storage belongs to this engine while it holds the lock; see `lockStorage`. */
+    let storageLock: StorageLock | undefined;
     let importing = false;
     let clipboard: SelectionPixels | undefined;
     let editingSelection = false;
-    let selectionPoints: Point[] = [];
+    /** The selection that strokes and edits stay inside, and the selection gesture shown before it applies. */
+    let selection: SelectionMask = emptySelection;
+    let selectionPreview: SelectionPreview | undefined;
     let selectionAnimate = true;
     let selectionTimer: ReturnType<typeof setTimeout> | undefined;
     let saveVersion = 0;
     let savedVersion = 0;
     let pendingSaves = 0;
     let camera = defaultCamera();
-    let symmetry = defaultPaintSymmetry();
+    /** Data of the document's features by feature ID, including features this runtime does not have. */
+    let featureData = restoreFeatureData(modules.features);
+    /** Data of the runtime's own features, as reported to the UI. */
+    const reportedFeatures = () =>
+      Object.fromEntries(modules.features.map((feature) => [feature.id, featureData[feature.id]]));
     let debug = false;
     let liveTail = true;
     let adaptiveQuality = true;
+    /** Whether the renderer composites in linear light; it starts in encoded sRGB and follows the document. */
+    let rendererLinear = false;
+    /** Has the renderer composite as the document blends, and redraw when that changed. */
+    const syncBlending = () => {
+      if (renderer && rendererLinear !== document.linearBlending()) {
+        rendererLinear = document.linearBlending();
+        renderer.setLinearBlending(rendererLinear);
+        scheduleDraw();
+      }
+    };
+    /** How pixels show up close; a replacement renderer keeps it. */
+    let pixelView = { smooth: true, grid: false };
     let size = { width: 1, height: 1 },
       dpr = 1;
     let strokeSession: BrushSession | undefined;
@@ -48,7 +87,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let redraw = false;
     let renderTimer: ReturnType<typeof setTimeout> | undefined;
     let collectTimer: ReturnType<typeof setTimeout> | undefined;
+    let folderTimer: ReturnType<typeof setInterval> | undefined;
+    /** Read by storage when collection runs, after any saves queued ahead of it. */
+    const liveTiles = () => [...document.snapshots(), ...(clipboard?.tiles.values() ?? [])];
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
+    let viewTimer: ReturnType<typeof setTimeout> | undefined;
     const queue = createTaskQueue();
     let active = true;
     let previousFrame: Promise<Result<void>> | undefined;
@@ -65,8 +108,27 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     };
     let documentState = document.state();
     let debugAt = 0;
+    /** The latest `layersInView` result and the document revision, camera and size it describes. */
+    let inView = { signature: '', ids: [] as string[] };
+    /** Regions named by `watch-regions` and their layers, for the document revision `revision`. */
+    let watched: { regions: Record<string, DocumentRect>; revision: number; layers: Record<string, string[]> } = {
+      regions: {},
+      revision: -1,
+      layers: {}
+    };
     const status = () => {
       if (documentState.revision !== document.revision) documentState = document.state();
+      const viewSignature = `${document.revision}|${camera.x},${camera.y},${camera.zoom},${camera.angle}|${size.width},${size.height}`;
+      if (inView.signature !== viewSignature)
+        inView = { signature: viewSignature, ids: layersInView(document.layers, camera, size) };
+      if (watched.revision !== document.revision)
+        watched = {
+          ...watched,
+          revision: document.revision,
+          layers: Object.fromEntries(
+            Object.entries(watched.regions).map(([name, rect]) => [name, layersInRect(document.layers, rect)])
+          )
+        };
       const sendDebug = debug && performance.now() >= debugAt;
       if (sendDebug) debugAt = performance.now() + 100;
       const stats = renderer?.stats();
@@ -80,25 +142,186 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         rasterDraws: { preview: stats?.previewTileDraws ?? 0, committed: stats?.sourceTileDraws ?? 0 },
         document: documentState,
         camera,
-        symmetry,
+        layersInView: inView.ids,
+        layersInRegions: watched.layers,
+        features: reportedFeatures(),
         saved,
         saveState: strokeSession ? 'unsaved' : pendingSaves > 0 ? 'saving' : saved ? 'saved' : 'unsaved',
         renderMs,
         gpuBytes: stats?.gpuBytes ?? 0,
-        storage: tileStore?.stats(),
+        storage: tileStore && { ...tileStore.stats(), folder: tileStore.folder?.status() },
         residentTiles: stats?.residentTiles ?? 0
       });
     };
-    const failure = (error: unknown, recoverable = false) =>
-      post({ type: 'error', message: error instanceof Error ? error.message : String(error), recoverable });
+    const failure = (
+      error: unknown,
+      recoverable = false,
+      code = rendererErrorCode(error),
+      background = false
+    ) =>
+      post({
+        type: 'error',
+        message: errorMessage(error),
+        recoverable,
+        ...(code ? { code } : {}),
+        ...(background ? { background } : {})
+      });
+    /** Replaces the selection, outlines it and tells the editor. */
+    const changeSelection = (next: SelectionMask) => {
+      selection = next;
+      renderer?.setSelection(selection, selectionAnimate);
+      post({ type: 'selection', selection: summarizeSelection(selection), hasClipboard: !!clipboard });
+      scheduleDraw();
+    };
+    /** Replaces the drawing with an opened one, its tiles already in storage, and starts showing it. */
+    const replaceDrawing = async (next: ReturnType<typeof restoreDocument>) => {
+      cancel();
+      // A selection belongs to the drawing it was made in.
+      changeSelection(emptySelection);
+      document.replace(next.layers, next.activeId, next.linearBlending);
+      syncBlending();
+      camera = next.camera;
+      featureData = restoreFeatureData(modules.features, next.features);
+      editStates.clear();
+      lastEdit = undefined;
+      floating = undefined;
+      renderer?.setFloating(undefined);
+      document.persist(tileStore.capture);
+      renderer?.reset();
+      await renderer?.prepareOverview(document.layers);
+      post({ type: 'restored', camera, features: reportedFeatures() });
+      changed();
+    };
     const reportResult = (result: Awaited<ReturnType<typeof attempt>>) => {
       if (!result.ok) failure(result.error);
     };
     const enqueue = (action: () => Promise<void>) => {
       void queue.run(() => (active ? action() : undefined)).then(reportResult);
     };
+    /** Bakes a layer into the layer below with its blend mode and opacity, clipped to the lower layer when that is
+     * its clipping base. Returns the lower layer's changed tiles for `renderer.restore`, which reloads them by key. */
+    const mergeDown = async (upperId: string) => {
+      const index = document.layers.findIndex((layer) => layer.id === upperId);
+      const upper = document.layers[index],
+        lower = document.layers[index - 1];
+      if (!upper || !lower) throw new Error('There is no layer below to merge into.');
+      if (!upper.visible || !lower.visible) throw new Error('Show both layers before merging them.');
+      const read = async (pixels: TileData | undefined) =>
+        pixels && unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels));
+      // Layers clipped to the same base merge unclipped; the merged layer stays clipped to that base.
+      const clipsToLower = !!upper.clipping && !lower.clipping;
+      const merged = new Map<string, Uint8Array | undefined>();
+      for (const [key, pixels] of upper.tiles) {
+        const base = await read(lower.tiles.get(key));
+        merged.set(
+          key,
+          mergeTilePixels(
+            base,
+            (await read(pixels))!,
+            upper.blend,
+            upper.opacity,
+            clipsToLower ? { base } : undefined,
+            document.linearBlending()
+          )
+        );
+      }
+
+      document.mergeDown(upperId, merged);
+      return [...merged.keys()].map((key) => ({ layerId: lower.id, key, before: undefined, after: undefined }));
+    };
+    /** Data that each document edit keeps between its commands; see `DocumentEditContext.state`. */
+    const editStates = new Map<string, unknown>();
+    /** The edit whose command committed the latest undo step, which its next command may amend. */
+    let lastEdit: { edit: string; historyId: number } | undefined;
+    /** Pixels an edit in progress shows moved; a replacement renderer shows them again. */
+    let floating: FloatingPixels | undefined;
+    /** Runs a module edit, committing or amending its undo step; returns the edit's reply. */
+    const runEdit = async (command: Extract<PaintRuntimeCommand, { type: 'edit' }>) => {
+      const edit = modules.edits.find((candidate) => candidate.id === command.edit);
+      if (!edit) throw new Error(`Document edit "${command.edit}" is not installed.`);
+      await end();
+      if (lost || !renderer) throw new Error('Restore the renderer before editing the drawing.');
+      /** The edit asked to stop showing its floating pixels once its changes are committed. */
+      let clearFloating = false;
+      const hideFloating = (hold: boolean) => {
+        if (!clearFloating || !floating) return;
+        floating = undefined;
+        renderer?.setFloating(undefined);
+        if (hold) renderer?.holdPresented();
+        scheduleDraw();
+      };
+      let result: Awaited<ReturnType<typeof edit.run>>;
+      try {
+        result = await edit.run(
+          {
+            layers: document.layers,
+            active: document.active,
+            readTile: async (pixels) =>
+              unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels)),
+            linearBlending: document.linearBlending(),
+            selection,
+            state: { get: () => editStates.get(edit.id), set: (value) => editStates.set(edit.id, value) },
+            floating: {
+              show(pixels) {
+                floating = { ...pixels };
+                renderer?.setFloating(floating);
+                scheduleDraw();
+              },
+              move(matrix, interpolation, warp) {
+                if (!floating) return;
+                floating = { ...floating, matrix, interpolation, warp };
+                renderer?.moveFloating(matrix, interpolation, warp);
+                scheduleDraw();
+              },
+              async clear() {
+                // The frame kept on screen until the result has loaded shows the latest move.
+                if (floating && redraw) await draw();
+                clearFloating = true;
+              }
+            }
+          },
+          command.command
+        );
+      } catch (error) {
+        // A failed result leaves the document unchanged; floating pixels must not stay on screen for it.
+        hideFloating(false);
+        throw error;
+      }
+
+      let reverted: readonly TileChange[] = [];
+      if (result.amend) {
+        if (lastEdit?.edit !== edit.id) throw new Error('The drawing changed while this edit was in progress.');
+        reverted = document.revertLatest(lastEdit.historyId);
+        lastEdit = undefined;
+      }
+
+      try {
+        if (result.changes.length || result.layer) {
+          document.commit(result.changes, result.layer);
+          lastEdit = { edit: edit.id, historyId: document.latestHistoryId! };
+        }
+      } finally {
+        const restored = [...reverted, ...result.changes];
+        if (restored.length || result.layer) {
+          renderer.restore(restored, document.layers);
+          changed();
+          await renderer.prepareOverview(document.layers);
+        }
+
+        // After `restore`, which drops held frames: the presented frame stays until the result has loaded.
+        hideFloating(restored.length > 0);
+      }
+
+      if (result.selection) {
+        changeSelection(result.selection);
+      }
+
+      return result.reply;
+    };
     const background = (action: () => Promise<unknown>) => {
-      void attempt(action).then(reportResult);
+      void attempt(action).then((result) => {
+        if (!result.ok) failure(result.error, false, undefined, true);
+      });
     };
     let presentedAt = performance.now();
     const draw = async (exact = false) => {
@@ -130,7 +353,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       presentedAt = performance.now();
       if (!exact) {
         clearTimeout(selectionTimer);
-        if (selectionPoints.length >= 3 && selectionAnimate && !lost) selectionTimer = setTimeout(scheduleDraw, 33);
+        if (renderer?.showsSelection() && selectionAnimate && !lost) selectionTimer = setTimeout(scheduleDraw, 33);
       }
     };
     const scheduleDraw = () => {
@@ -155,39 +378,73 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       pendingSaves++;
       status();
       try {
-        await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, symmetry));
+        await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData, document.linearBlending()));
         savedVersion = Math.max(savedVersion, version);
         saved = savedVersion === saveVersion && !strokeSession;
-        clearTimeout(collectTimer);
-        collectTimer = setTimeout(() => {
-          if (!strokeSession && !importing && !editingSelection)
-            background(() => tileStore.collect([...document.snapshots(), ...(clipboard?.tiles.values() ?? [])]));
-        }, 5000);
+        scheduleCollect();
+        reportFolder();
       } finally {
         pendingSaves--;
         status();
       }
+    };
+    /** While the drawing's folder is being written, reports its progress every second, and once more when done. */
+    const reportFolder = () => {
+      const folder = tileStore.folder;
+      if (!folder?.status()?.writing || folderTimer) return;
+      folderTimer = setInterval(status, 1000);
+      void folder.idle().then(() => {
+        clearInterval(folderTimer);
+        folderTimer = undefined;
+        status();
+      });
+    };
+    /** Collects unreachable tile versions after edits settle; strokes, imports and selection edits postpone it. */
+    const scheduleCollect = () => {
+      clearTimeout(collectTimer);
+      collectTimer = setTimeout(() => {
+        if (!strokeSession && !importing && !editingSelection) background(() => tileStore.collect(liveTiles));
+      }, collectDelay);
     };
     const changed = () => {
       saved = false;
       saveVersion++;
       document.persist(tileStore.capture);
       status();
+      scheduleSave();
+      scheduleDraw();
+    };
+    /** Autosaves once input has paused for `saveDelay`; a later change restarts the delay. */
+    const scheduleSave = () => {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
         enqueue(async () => {
           background(save);
         });
+      }, saveDelay);
+    };
+    /** Persists navigation in the small view record, without a full checkpoint or marking the drawing unsaved. */
+    const viewChanged = () => {
+      clearTimeout(viewTimer);
+      viewTimer = setTimeout(() => {
+        enqueue(async () => {
+          if (tileStore) {
+            background(() => tileStore.saveView(camera));
+          }
+        });
       }, 300);
-      scheduleDraw();
+    };
+    /** Drops a stroke whose engine failed; the session already cancelled itself and released its pins. */
+    const abandonStroke = () => {
+      strokeSession = undefined;
+      renderer?.reset();
+      changed();
     };
     const updatePreview = () => {
       try {
         strokeSession?.preview(liveTail);
       } catch (error) {
-        strokeSession = undefined;
-        renderer?.reset();
-        changed();
+        abandonStroke();
         throw error;
       }
     };
@@ -209,10 +466,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         strokeSession?.preview(liveTail);
         scheduleIdle();
       } catch (error) {
-        // The resource session already cancelled the engine and released its pins.
-        strokeSession = undefined;
-        renderer?.reset();
-        changed();
+        abandonStroke();
         throw error;
       }
     };
@@ -235,9 +489,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               scheduleIdle(now);
             } catch (error) {
               stopIdle();
-              strokeSession = undefined;
-              renderer?.reset();
-              changed();
+              abandonStroke();
               throw error;
             }
           });
@@ -274,30 +526,37 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       } finally {
         strokeSession = undefined;
       }
-      if (!saved) {
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => {
-          enqueue(async () => {
-            background(save);
-          });
-        }, 300);
-      }
+      if (!saved) scheduleSave();
       scheduleDraw();
+    };
+    /** Captures pixels of a large edit, flushing about every 8 MiB so RAM does not grow with the edit's area. */
+    const stage = async (pixels: Uint8Array) => {
+      const ref = tileStore.capture(pixels);
+      if (tileStore.stats().dirtyBytes >= stagedFlushBytes) await tileStore.flush();
+      return ref;
     };
     const startRenderer = async () => {
       renderer?.destroy();
+      // A failed restart must not leave the destroyed renderer reachable by draw, recover or cleanup.
+      renderer = undefined;
       renderer = await modules.renderer(
         canvas,
-        (message) => {
+        (message, error) => {
           if (lost) return;
           lost = true;
           stopIdle();
-          const abandoned = strokeSession;
-          strokeSession = undefined;
-          if (abandoned) background(async () => abandoned.cancel());
+          // A paint command may be suspended inside the session. Cancelling here would release its
+          // renderer stroke mid-await, so the abandoned session is cancelled after that command ends.
+          enqueue(async () => {
+            const abandoned = strokeSession;
+            strokeSession = undefined;
+            abandoned?.cancel();
+          });
+          const code = error?.code ?? 'lost';
           failure(
-            new Error(`${message} Your completed strokes are preserved. Restore the renderer to continue.`),
-            true
+            new Error(`${rendererFailureMessage(code, message)} Your completed strokes are preserved. Restore the renderer to continue.`),
+            true,
+            code
           );
         },
         {
@@ -314,17 +573,25 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         }
       );
       lost = false;
-      renderer.setSelection(selectionPoints, selectionAnimate);
+      renderer.setSelection(selection, selectionAnimate);
+      renderer.previewSelection(selectionPreview);
+      renderer.setFloating(floating);
+      rendererLinear = false;
+      syncBlending();
+      // A new renderer starts smooth and without a grid.
+      if (!pixelView.smooth || pixelView.grid) renderer.setPixelView(pixelView);
       await renderer.prepareOverview(document.layers);
-      await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, symmetry));
+      await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData, document.linearBlending()));
     };
     onCleanup(() => {
       active = false;
+      storageLock?.release();
       stopIdle();
       clearTimeout(selectionTimer);
       clearTimeout(collectTimer);
       clearTimeout(renderTimer);
       clearTimeout(saveTimer);
+      clearTimeout(viewTimer);
       try {
         strokeSession?.cancel();
       } finally {
@@ -339,25 +606,24 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     const send = (command: PaintRuntimeCommand) => {
       if (!active) return;
       if (command.type === 'selection-view') {
-        selectionPoints = command.points;
         selectionAnimate = command.animate;
-        renderer?.setSelection(selectionPoints, selectionAnimate);
+        selectionPreview = command.preview;
+        renderer?.setSelection(selection, selectionAnimate);
+        renderer?.previewSelection(selectionPreview);
         clearTimeout(selectionTimer);
         scheduleDraw();
+        return;
+      }
+      if (command.type === 'watch-regions') {
+        watched = { regions: command.regions, revision: -1, layers: {} };
+        status();
         return;
       }
       if (command.type === 'view' && renderer) {
         camera = command.camera;
         size = command.size;
         dpr = command.dpr;
-        saveVersion++;
-        saved = false;
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => {
-          enqueue(async () => {
-            background(save);
-          });
-        }, 300);
+        viewChanged();
         scheduleDraw();
         return;
       }
@@ -373,6 +639,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         for (const sample of command.samples) pendingSamples.samples.push(sample);
         return;
       }
+      // Later packets append to this batch, so it must not share the caller's array.
+      if (command.type === 'samples') command = { ...command, samples: [...command.samples] };
       pendingSamples = command.type === 'samples' ? command : undefined;
       enqueue(async () => {
         if (pendingSamples === command) pendingSamples = undefined;
@@ -383,12 +651,29 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             storageName = command.storageName ?? 'paint-studio';
             size = command.size;
             dpr = command.dpr;
-            tileStore = await modules.storage(storageName);
+            storageLock = await lockStorage(storageName, {
+              waitMs: storageLockWaitMs,
+              takeOver: command.takeOver ?? false,
+              onLost() {
+                // Another engine has the drawing now; this one stops writing it.
+                clearTimeout(saveTimer);
+                clearTimeout(viewTimer);
+                clearTimeout(collectTimer);
+                post({ type: 'storage-lock', state: 'lost' });
+              }
+            });
+            if (!storageLock) {
+              post({ type: 'storage-lock', state: 'busy' });
+              break;
+            }
+
+            const lock = storageLock;
+            tileStore = lockedStorage(await modules.storage(storageName), lock.held);
             const previous = await tileStore.load();
             if (previous) {
-              document.replace(previous.layers, previous.activeId);
+              document.replace(previous.layers, previous.activeId, previous.linearBlending);
               camera = previous.camera;
-              symmetry = previous.symmetry ?? defaultPaintSymmetry();
+              featureData = restoreFeatureData(modules.features, previous.features);
               document.persist(tileStore.capture);
             }
             await startRenderer();
@@ -440,10 +725,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             });
             break;
           }
-          case 'symmetry': {
-            const next = paintSymmetrySchema.parse(command.settings);
+          case 'feature': {
+            const feature = modules.features.find((candidate) => candidate.id === command.feature);
+            if (!feature?.apply) throw new Error(`Document feature "${command.feature}" does not accept commands.`);
+            const next = feature.apply(featureData[feature.id], command.command);
             await end();
-            symmetry = next;
+            featureData = { ...featureData, [feature.id]: next };
             changed();
             break;
           }
@@ -460,6 +747,16 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'adaptive-quality':
             adaptiveQuality = command.enabled;
             break;
+          case 'blending':
+            document.setLinearBlending(command.linear);
+            syncBlending();
+            changed();
+            break;
+          case 'pixel-view':
+            pixelView = { smooth: command.smooth, grid: command.grid };
+            renderer?.setPixelView(pixelView);
+            scheduleDraw();
+            break;
           case 'live-tail':
             liveTail = command.enabled;
             updatePreview();
@@ -470,8 +767,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             camera = command.camera;
             size = command.size;
             dpr = command.dpr;
-            if (moved) changed();
-            else scheduleDraw();
+            if (moved) viewChanged();
+            scheduleDraw();
             break;
           }
           case 'begin': {
@@ -486,9 +783,14 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               : undefined;
             if (!engine) throw new Error(`Brush engine "${engineId}" is not registered.`);
             if (!processor) throw new Error(`Stroke processor "${processorId}" is not registered.`);
-            const strokeRenderer = supportsPaintSymmetry(command.brush)
-              ? symmetryRenderer(renderer, symmetry)
-              : renderer;
+            // A stroke paints only inside the selection, when there is one.
+            renderer.clipStroke(isSelected(selection) ? selection : undefined);
+            const strokeRenderer = modules.features.reduce(
+              (decorated, feature) =>
+                feature.decorateStroke?.({ data: featureData[feature.id], brush: command.brush, renderer: decorated }) ??
+                decorated,
+              renderer
+            );
             strokeSession = createResourceSession(resources, (resources) =>
               engine({
                 resources,
@@ -526,28 +828,37 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             cancel();
             break;
           case 'undo':
+          case 'redo': {
             cancel();
-            document.undo();
-            renderer?.reset();
-            await renderer?.prepareOverview(document.layers);
+            const restored = command.type === 'undo' ? document.undo() : document.redo();
+            if (restored) {
+              renderer?.restore(restored, document.layers);
+              await renderer?.prepareOverview(document.layers);
+            }
+
             changed();
             break;
-          case 'redo':
-            cancel();
-            document.redo();
-            renderer?.reset();
-            await renderer?.prepareOverview(document.layers);
-            changed();
-            break;
-          case 'layer':
+          }
+          case 'layer': {
             await end();
-            document.changeLayer(command.action);
-            renderer?.reset();
-            await renderer?.prepareOverview(document.layers);
+            const before = [...document.layers];
+            const merged = command.action.type === 'merge-down' ? await mergeDown(command.action.id) : undefined;
+            if (command.action.type !== 'merge-down') document.changeLayer(command.action);
+            // Selection changes no pixels or composition. Other actions recomposite; only a deleted
+            // layer's resident tiles are released, and every other layer's GPU cache survives.
+            if (command.action.type !== 'select' && renderer) {
+              for (const layer of before) {
+                if (!document.layers.includes(layer)) renderer.releaseLayer(layer.id);
+              }
+              if (merged) renderer.restore(merged, document.layers);
+              renderer.recomposite();
+              await renderer.prepareOverview(document.layers);
+            }
             changed();
             break;
+          }
           case 'selection': {
-            let points = command.points;
+            let next = selection;
             editingSelection = true;
             clearTimeout(collectTimer);
             try {
@@ -556,16 +867,9 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               if (document.active.id !== command.layerId || document.revision !== command.revision)
                 throw new Error('The layer changed. Select the pixels again.');
               if (!document.active.visible) throw new Error('Show the active layer before editing its pixels.');
-              const storage = {
-                read: tileStore.read,
-                write: async (pixels: Uint8Array) => {
-                  const ref = tileStore.capture(pixels);
-                  if (tileStore.stats().dirtyBytes >= 8 * 1048576) await tileStore.flush();
-                  return ref;
-                }
-              };
+              const storage = { read: tileStore.read, write: stage };
               const selected =
-                command.action === 'paste' ? clipboard : await captureSelection(document.active, points, storage);
+                command.action === 'paste' ? clipboard : await captureSelection(document.active, selection, storage);
               if (!selected) throw new Error('Copy or cut a selection before pasting.');
               if (command.action === 'copy') {
                 await tileStore.flush();
@@ -591,24 +895,20 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               const addedInfo = added ? { ...properties, id: added.id, name: added.name } : undefined;
               document.commit(changes, addedInfo);
               if (command.action === 'cut') clipboard = selected;
-              points =
+              next =
                 command.action === 'cut' || command.action === 'delete'
-                  ? []
+                  ? emptySelection
                   : command.action === 'move'
-                    ? translateSelection(selected.points, command.offset ?? { x: 0, y: 0 })
-                    : selected.points;
-              renderer.reset();
+                    ? translateSelection(selected.mask, command.offset ?? { x: 0, y: 0 })
+                    : selected.mask;
+              renderer.restore(changes, document.layers);
               // Mark the committed edit dirty even if preparing derived GPU pages fails.
               changed();
               await renderer.prepareOverview(document.layers);
             } finally {
               editingSelection = false;
-              clearTimeout(collectTimer);
-              collectTimer = setTimeout(() => {
-                if (!strokeSession && !importing && !editingSelection)
-                  background(() => tileStore.collect([...document.snapshots(), ...(clipboard?.tiles.values() ?? [])]));
-              }, 5000);
-              post({ type: 'selection', points, hasClipboard: !!clipboard });
+              scheduleCollect();
+              changeSelection(next);
             }
             break;
           }
@@ -633,51 +933,162 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             post({
               type: 'download',
               blob: await writePaintFile(
-                snapshotDocument(document.layers, document.active.id, camera, symmetry),
+                snapshotDocument(document.layers, document.active.id, camera, featureData, document.linearBlending()),
                 tileStore.read
               ),
-              name: 'drawing.paint'
+              name: 'drawing.paint',
+              requestId: command.requestId
             });
             break;
+          case 'live-list': {
+            const result = await attempt(async () => {
+              const listed = listLiveTiles(
+                { layers: document.layers, activeId: document.active.id, linearBlending: document.linearBlending() },
+                command.region,
+                tileStore.capture,
+                command.limit
+              );
+              liveVersions = listed.versions;
+              return listed.listing;
+            });
+            post({
+              type: 'live-listed',
+              requestId: command.requestId,
+              result: result.ok ? result : { ok: false, error: result.error.message }
+            });
+            break;
+          }
+          case 'live-read': {
+            const result = await attempt(() => readLiveTiles(liveVersions, command.versions, tileStore.read));
+            post({
+              type: 'live-tiles',
+              requestId: command.requestId,
+              result: result.ok ? result : { ok: false, error: result.error.message }
+            });
+            break;
+          }
+          case 'live-apply': {
+            await end();
+            const applied = await applyLiveState(document.layers, command.state);
+            document.replace(applied.layers, command.state.activeId, command.state.linearBlending);
+            syncBlending();
+            if (renderer && !lost) {
+              for (const id of applied.removed) renderer.releaseLayer(id);
+              renderer.restore(applied.changes, document.layers);
+              await renderer.prepareOverview(document.layers);
+            }
+
+            changed();
+            break;
+          }
+          case 'pick-color': {
+            const sample = command.sample ?? defaultColorSample;
+            const result = await attempt(async (): Promise<PickedColor> => {
+              if (!primaryAttached || !renderer || lost) throw new Error('The drawing engine is not ready.');
+              if (sample.exact) await end();
+              if (sample.exact && sample.source === 'view') await draw(true);
+              const color =
+                sample.source === 'layer'
+                  ? await sampleLayer(document.active, screenToWorld(command.point, camera, size), sample.size, (pixels) =>
+                      pixels instanceof Uint8Array ? Promise.resolve(pixels) : tileStore.read(pixels)
+                    )
+                  : averageOpaque(await renderer.readPresentedArea(command.point, size, sample.size));
+              if (!sample.loupe) return { color };
+              const pixels = await renderer.readPresentedArea(command.point, size, sample.loupe);
+              return { color, loupe: { side: Math.round(Math.sqrt(pixels.length / 4)), pixels } };
+            });
+            post({
+              type: 'picked-color',
+              requestId: command.requestId,
+              result: result.ok ? result : { ok: false, error: result.error.message }
+            });
+            break;
+          }
           case 'png':
             if (!primaryAttached) throw new Error('Attach a primary canvas before exporting the view.');
             await end();
+            if (command.region) {
+              post({
+                type: 'download',
+                blob: await regionPng(renderer!, document.layers, command.region),
+                name: command.name ?? 'drawing-region.png',
+                requestId: command.requestId
+              });
+              break;
+            }
             await draw(true);
-            post({ type: 'download', blob: await canvasPng(canvas), name: 'drawing-view.png' });
+            post({
+              type: 'download',
+              blob: await presentedPng(renderer!),
+              name: 'drawing-view.png',
+              requestId: command.requestId
+            });
             break;
+          case 'psd':
+            await end();
+            post({
+              type: 'download',
+              blob: await writePsdFile(document.layers, tileStore.read, command.region, document.linearBlending()),
+              name: command.name ?? 'drawing.psd',
+              requestId: command.requestId
+            });
+            break;
+          case 'edit': {
+            const result = await attempt(() => runEdit(command));
+            if (command.requestId !== undefined) {
+              post({
+                type: 'edited',
+                requestId: command.requestId,
+                result: result.ok ? result : { ok: false, error: result.error.message }
+              });
+            } else if (!result.ok) {
+              throw result.error;
+            }
+
+            break;
+          }
           case 'import': {
             importing = true;
             clearTimeout(collectTimer);
             try {
               const next =
                 'file' in command
-                  ? await readPaintFile(command.file, async (pixels) => {
-                      const ref = tileStore.capture(pixels);
-                      if (tileStore.stats().dirtyBytes >= 8 * 1048576) await tileStore.flush();
-                      return ref;
-                    })
+                  ? (await isPsdFile(command.file))
+                    ? await readPsdFile(command.file, size, stage)
+                    : await readPaintFile(command.file, stage)
                   : decodeDocument(command.text);
               await tileStore.flush();
-              cancel();
-              document.replace(next.layers, next.activeId);
-              camera = next.camera;
-              symmetry = next.symmetry;
-              document.persist(tileStore.capture);
-              renderer?.reset();
-              await renderer?.prepareOverview(document.layers);
-              post({ type: 'restored', camera, symmetry });
-              changed();
+              // The opened drawing is not the one kept in a folder, if any.
+              tileStore.folder?.detach();
+              await replaceDrawing(next);
             } finally {
               importing = false;
-              if (!saved) {
-                clearTimeout(saveTimer);
-                saveTimer = setTimeout(() => {
-                  enqueue(async () => {
-                    background(save);
-                  });
-                }, 300);
-              }
+              if (!saved) scheduleSave();
             }
+            break;
+          }
+          case 'folder': {
+            const folder = tileStore.folder;
+            if (!folder) throw new Error('This storage cannot keep drawings in folders.');
+            if (command.action === 'save') {
+              await folder.save(command.directory);
+              changed();
+            } else if (command.action === 'open') {
+              importing = true;
+              clearTimeout(collectTimer);
+              try {
+                await replaceDrawing(await folder.open(command.directory));
+              } finally {
+                importing = false;
+                if (!saved) scheduleSave();
+              }
+            } else if (command.action === 'unlink') {
+              await folder.unlink(liveTiles);
+            } else {
+              await folder.access();
+            }
+
+            scheduleDraw();
             break;
           }
           case 'recover':
@@ -687,10 +1098,15 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             post({ type: 'ready' });
             break;
           case 'dispose':
-            await end();
-            await save();
-            dispose();
-            unwrapResult(await tileStore.close());
+            // An engine that never got its storage has nothing to save.
+            if (tileStore) {
+              await end();
+              await save();
+              dispose();
+              unwrapResult(await tileStore.close());
+            }
+
+            storageLock?.release();
             post({ type: 'disposed' });
             close();
             break;
@@ -718,7 +1134,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               camera = target.camera;
               size = target.size;
               dpr = target.dpr;
-              if (moved && tileStore) changed();
+              if (moved && tileStore) viewChanged();
             }
           } else {
             const previous = targets.get(id);
@@ -743,13 +1159,59 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
   });
 }
 
-/** Exports the presented canvas without introducing an offscreen surface in main-thread mode. */
-async function canvasPng(canvas: OffscreenCanvas | HTMLCanvasElement): Promise<Blob> {
-  if ('convertToBlob' in canvas) return canvas.convertToBlob({ type: 'image/png' });
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not export the canvas.'))), 'image/png');
-  });
+/** Encodes the presented view as PNG from a GPU readback; the WebGPU canvas itself cannot be read after presenting. */
+/** Renders a document rectangle at 100% into its own target and encodes it as a PNG. */
+async function regionPng(renderer: PaintRenderer, layers: Layer[], region: DocumentRect): Promise<Blob> {
+  const target = new OffscreenCanvas(1, 1);
+  const camera = { x: region.left + region.width / 2, y: region.top + region.height / 2, zoom: 1, angle: 0, mirrored: false };
+  try {
+    await renderer.render(layers, camera, { width: region.width, height: region.height }, 1, true, target);
+    return await presentedPng(renderer, target);
+  } finally {
+    renderer.releaseTarget(target);
+  }
+}
+
+async function presentedPng(renderer: PaintRenderer, target?: OffscreenCanvas): Promise<Blob> {
+  const { width, height, data } = await renderer.readPresented(target);
+  const image = new OffscreenCanvas(width, height);
+  const context = image.getContext('2d');
+  if (!context) throw new Error('Could not export the canvas.');
+  context.putImageData(new ImageData(data, width, height), 0, 0);
+  return image.convertToBlob({ type: 'image/png' });
+}
+
+/**
+ * The GPU code of a renderer failure, which carries its `GpuError` as the Error's `cause`, so the editor can tell a
+ * browser that cannot open a GPU adapter from a failed command.
+ */
+function rendererErrorCode(error: unknown): GpuError['code'] | undefined {
+  const cause = error instanceof Error ? error.cause : undefined;
+  return typeof cause === 'object' && cause !== null && 'kind' in cause && cause.kind === 'gpu' && 'code' in cause
+    ? (cause.code as GpuError['code'])
+    : undefined;
+}
+
+/** Names the failure class so a validation bug is not reported to the user as a disconnected device. */
+function rendererFailureMessage(code: GpuError['code'], message: string) {
+  if (code === 'validation') {
+    return `The renderer stopped after a graphics validation error: ${message}`;
+  }
+
+  return message;
 }
 
 /** At most 60 intermediate redraws per second; first contact and packet completion still present immediately. */
 const progressFrameInterval = 16;
+
+/** Autosave waits for this pause after a change, so consecutive strokes share one checkpoint. */
+const saveDelay = 300;
+
+/** Garbage collection of old tile versions waits this long after a save or selection edit. */
+const collectDelay = 5000;
+
+/** How long a starting engine waits for the storage, while an engine replaced by a reload saves and closes. */
+const storageLockWaitMs = 5000;
+
+/** Selection edits and imports flush captured tiles to IndexedDB once this many bytes are pending. */
+const stagedFlushBytes = 8 * 1048576;

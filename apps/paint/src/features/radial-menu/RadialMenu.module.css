@@ -1,0 +1,69 @@
+/* A zero-size anchor at the puck's center; actions are placed around it. */
+.ring {
+  position: absolute;
+  z-index: 71;
+  width: 0;
+  height: 0;
+
+  &[data-hidden='true'] {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+/* `.ring .item` outranks the puck overlay's reset of its buttons. */
+.ring .item {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border: 1px solid #0000001a;
+  border-radius: 50%;
+  background: #fbfaf8;
+  color: #3d4850;
+  box-shadow: 0 2px 8px #0003;
+  cursor: pointer;
+  touch-action: none;
+
+  &:hover:not(:disabled, [data-pointer='touch'] *),
+  &[data-highlighted='true'] {
+    background: #237aab;
+    color: #fff;
+  }
+
+  &[aria-current='true'] {
+    box-shadow:
+      0 0 0 2px #237aab,
+      0 2px 8px #0003;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+.text {
+  max-width: 36px;
+  overflow: hidden;
+  font:
+    600 12px/1 Arial,
+    sans-serif;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.caption {
+  position: absolute;
+  left: 0;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #2b3338e6;
+  color: #fff;
+  font:
+    12px/1.3 Arial,
+    sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}

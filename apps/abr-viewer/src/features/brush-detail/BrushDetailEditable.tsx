@@ -39,17 +39,22 @@ export function BrushDetailEditable(props: {
 }) {
   const colors = useColorProfile();
   let inspector!: HTMLDivElement;
+  let settingsBody!: HTMLDivElement;
   const [requestedHeight, setRequestedHeight] = createSignal(260);
   const [maximumHeight, setMaximumHeight] = createSignal(600);
   const previewHeight = () => Math.min(requestedHeight(), maximumHeight());
   const resizePreview = (height: number) =>
     setRequestedHeight(Math.round(Math.max(120, Math.min(maximumHeight(), height))));
   let dragStart = { y: 0, height: 260 };
+  // The preview may grow only into space the settings list can spare, whatever the toolbar wraps to.
   onSettled(() => {
-    const observer = new ResizeObserver(() =>
-      setMaximumHeight(Math.max(120, Math.min(700, inspector.clientHeight - 220)))
-    );
+    const observer = new ResizeObserver(() => {
+      const spare = untrack(previewHeight) + settingsBody.clientHeight - MinimumSettingsHeight;
+      setMaximumHeight(Math.max(120, Math.min(700, spare)));
+    });
+    // The list also resizes when an oversized preview first overflows the inspector.
     observer.observe(inspector);
+    observer.observe(settingsBody);
     return () => observer.disconnect();
   });
   const [foreground, setForeground] = createSignal('#dedede');
@@ -142,7 +147,7 @@ export function BrushDetailEditable(props: {
           {error()}
         </p>
       </Show>
-      <div class={styles.settingsBody}>
+      <div ref={settingsBody} class={styles.settingsBody}>
         <nav class={styles.categories} aria-label="Settings categories">
           <For each={categories}>
             {(item) => (
@@ -388,6 +393,9 @@ export function BrushDetailEditable(props: {
     </div>
   );
 }
+
+/** Height, in pixels, the settings list keeps when the stroke preview is enlarged or the panel is short. */
+const MinimumSettingsHeight = 160;
 
 /** Feature switches supported by the existing descriptor editor. */
 type FeatureField = {

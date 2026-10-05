@@ -7,7 +7,7 @@ import {
   MenubarTrigger
 } from '@app-game/components/ui/menubar';
 
-import { storePath, StoreSetter } from 'solid-js';
+import { StoreSetter } from 'solid-js';
 import { SVGNode } from '../svg-node';
 import { useSvgSelect } from '../use-svg-select';
 import { Wrapped } from '../use-virtual-tree';
@@ -42,7 +42,9 @@ export function Toolbar(props: {
                 for (const item of Array.from(props?.select.selectedElementsIdsMap.keys())) {
                   const node = props?.map.get(item);
                   if (node) {
-                    node.update(storePath('fill', 'red'));
+                    node.update((draft) => {
+                      draft.fill = 'red';
+                    });
                   }
                 }
               }

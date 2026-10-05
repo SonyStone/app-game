@@ -1,0 +1,113 @@
+.frames {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px !important;
+  border-bottom: 1px solid var(--line);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 6px;
+}
+
+/* `.frames .row > button` outranks the studio's reset of buttons. */
+.frames .row > button {
+  flex: 1 0 auto;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.choice {
+  display: grid;
+  flex: 1 1 60%;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+
+  select {
+    width: 100%;
+    min-height: 32px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink);
+  }
+}
+
+.name {
+  flex: 1 1 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.guides {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+
+  polygon {
+    fill: none;
+    stroke: #6f7d86;
+    stroke-width: 1;
+    stroke-dasharray: 6 4;
+  }
+
+  text {
+    fill: #6f7d86;
+    font:
+      12px Arial,
+      sans-serif;
+  }
+
+  [data-active='true'] polygon {
+    stroke: var(--accent);
+    stroke-width: 1.5;
+    stroke-dasharray: none;
+  }
+
+  [data-active='true'] text {
+    fill: var(--accent);
+    font-weight: 600;
+  }
+}
+
+/* Chromium takes touch-action from the <svg>, not from its shapes, so a drag on a handle is not cancelled. */
+.editor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.editorBody {
+  fill: #237aab14;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  pointer-events: all;
+  cursor: move;
+}
+
+.editorHandle {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  pointer-events: all;
+  cursor: crosshair;
+}

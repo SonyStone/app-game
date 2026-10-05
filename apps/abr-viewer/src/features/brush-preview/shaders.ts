@@ -3,7 +3,7 @@ import { linearSourceOver } from '@app-game/abr-brush/effects';
 import { paintBlend } from '@app-game/abr-brush/paintBlend';
 import { pencilCoverage } from '@app-game/abr-brush/pencil';
 import { common, d, std, tgpu } from 'typegpu';
-import { dualCoverage, grain, textureCoverage, textureTone } from './effects';
+import { brushNoise, dualCoverage, grain, textureCoverage, textureTone, wetEdgesCoverage } from './effects';
 import { eraserPreviewColor } from './eraser';
 
 /** One instanced quad per stamp. Colors and texture depth vary independently per tip. */
@@ -142,13 +142,14 @@ function stampEffects(source: number, position: d.v4f, dynamics: d.v4f): number 
   'use gpu';
   let coverage = source;
   const p = brushLayout.$.params;
+  // Photoshop applies Noise to the rasterized tip, before texture.
+  if (p.flags.w > 0) coverage = brushNoise(coverage, grain(position.x, position.y, dynamics.w));
   if (p.flags.x > 0 && p.flags.y > 0) {
     // Each tip changes depth, while the pattern stays anchored to the canvas.
     const sample = std.textureLoad(brushLayout.$.pattern, d.vec2i(position.xy), 0).r;
     const tone = textureTone(sample, p.tone.x, p.tone.y, p.tone.z);
     coverage = textureCoverage(coverage, tone, p.texture.w, dynamics.z);
   }
-  if (p.flags.w > 0) coverage *= 0.35 + 0.65 * grain(position.x, position.y, dynamics.w);
   if (p.tone.w > 0) coverage = pencilCoverage(coverage);
   return coverage;
 }
@@ -178,27 +179,10 @@ export function previewCoverage(position: d.v4f) {
   }
   if (p.flags.z > 0)
     coverage = dualCoverage(coverage, std.textureLoad(compositeLayout.$.dual, xy, 0).r, p.extra.y);
-  if (p.extra.z > 0) {
-    const limit = std.sub(d.vec2i(p.viewport.xy), d.vec2i(1));
-    const up = std.textureLoad(compositeLayout.$.paint, std.clamp(std.add(xy, d.vec2i(0, -1)), d.vec2i(0), limit), 0).a;
-    const down = std.textureLoad(
-      compositeLayout.$.paint,
-      std.clamp(std.add(xy, d.vec2i(0, 1)), d.vec2i(0), limit),
-      0
-    ).a;
-    const left = std.textureLoad(
-      compositeLayout.$.paint,
-      std.clamp(std.add(xy, d.vec2i(-1, 0)), d.vec2i(0), limit),
-      0
-    ).a;
-    const right = std.textureLoad(
-      compositeLayout.$.paint,
-      std.clamp(std.add(xy, d.vec2i(1, 0)), d.vec2i(0), limit),
-      0
-    ).a;
-    coverage = std.min(1, coverage * 0.65 + std.max(0, paint.a - std.min(std.min(up, down), std.min(left, right))) * 2);
-  }
-  if (p.tone.w > 0) coverage = std.min(pencilCoverage(coverage), mask.a);
+  if (p.tone.w > 0) coverage = pencilCoverage(coverage);
+  // Photoshop maps the completed mask through its Wet Edges table before stroke opacity, except for Dissolve.
+  if (p.extra.z > 0 && p.extra.w !== 1) coverage = wetEdgesCoverage(coverage);
+  if (p.tone.w > 0) coverage = std.min(coverage, mask.a);
   if (p.flags.z > 0 && p.maskAccumulation === 0) coverage = std.min(coverage, std.select(mask.a, mask.g, p.extra.y === 7));
   return coverage * p.compositeOpacity;
 }

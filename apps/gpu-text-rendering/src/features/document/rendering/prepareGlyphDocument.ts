@@ -1,7 +1,6 @@
+import type { GpuDevice, KeepGpuResource } from '@app-game/solid-gpu/gpu';
 import { err, ok } from 'neverthrow';
 import { d, type TgpuBindGroup } from 'typegpu';
-import type { GpuDevice } from '../../../shared/gpu/context';
-import type { KeepGpuResource } from '../../../shared/gpu/resources';
 import type { TextDocument } from '../document';
 import { compactGlyphs } from '../format/compactGlyphs';
 import { GlyphInstance, glyphInstanceLayout } from './bindings';
@@ -54,6 +53,12 @@ export async function prepareGlyphDocument(
   };
 
   const { atlasGroup, rasterSize, resourceBytes: atlasBytes } = await createGlyphAtlas(gpu, document, blend, keep);
+  // On screen, glyph edges must not lower the coverage of paper already drawn: a cached view composited over the
+  // scene, such as the motion cache, would otherwise show the scene's background through anti-aliased text.
+  const screenBlend: GPUBlendState = {
+    ...blend,
+    alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
+  };
 
   const active = gpu.checkActive();
   if (active.isErr()) {
@@ -64,7 +69,7 @@ export async function prepareGlyphDocument(
     .createRenderPipeline({
       vertex: glyphInstanceVertex,
       fragment: glyphFragment,
-      targets: { format, blend },
+      targets: { format, blend: screenBlend },
       primitive: { topology: 'triangle-list' }
     })
     .with(background.group)

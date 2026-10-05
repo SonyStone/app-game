@@ -30,7 +30,7 @@ const routes: Routes[] = [
   },
   {
     path: '/docking',
-    name: '[WIP] Docking Example',
+    name: 'Docking (solid-dock)',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./docking'))
   },
@@ -69,6 +69,18 @@ const routes: Routes[] = [
     name: 'Cursor Emulation',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./cursor-emulation'))
+  },
+  {
+    path: '/number-scrubber',
+    name: 'Number Scrubber',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./number-scrubber'))
+  },
+  {
+    path: '/number-scrubber-benchmark',
+    name: 'Number Scrubber Benchmark',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./number-scrubber/benchmark'))
   }
 ];
 

@@ -1,6 +1,6 @@
+import type { GpuContext } from '@app-game/solid-gpu/gpu';
 import { ok } from 'neverthrow';
 import { vi } from 'vitest';
-import type { GpuContext } from '../../src/shared/gpu/context';
 
 /** A command-recording GPU double; rendering and JSX lifetime tests share the real submission path. */
 export function gpuFixture(signal = new AbortController().signal) {
@@ -14,6 +14,7 @@ export function gpuFixture(signal = new AbortController().signal) {
     checkActive: vi.fn(() => ok()),
     device: {
       limits: { maxTextureDimension2D: 8192 },
+      features: new Set<string>(),
       createCommandEncoder: vi.fn(() => encoder),
       queue: { submit: vi.fn(), onSubmittedWorkDone: vi.fn(async () => {}) }
     },

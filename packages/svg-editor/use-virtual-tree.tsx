@@ -1,5 +1,5 @@
 import { ReactiveMap } from '@solid-primitives/map';
-import { createMemo, For, onCleanup, storePath, StoreSetter, untrack } from 'solid-js';
+import { createMemo, For, onCleanup, StoreSetter, untrack } from 'solid-js';
 import { SVGNode } from './svg-node';
 
 const CHILDREN_KEY = 'children';
@@ -23,20 +23,16 @@ export function useVirtualTree(rootProps: { state: SVGNode; setState: StoreSette
     map.set(props.node, {
       path: path,
       update: (update) => {
-        rootProps.setState(dynamicStorePath([...untrack(path), update]));
+        rootProps.setState(updateAtPath(untrack(path), update));
       },
       updateParent: (update) => {
-        rootProps.setState(dynamicStorePath([...props.path, CHILDREN_KEY, update]));
+        rootProps.setState(updateAtPath([...props.path, CHILDREN_KEY], update));
       },
       remove: () => {
         rootProps.setState(
-          dynamicStorePath([
-            ...props.path,
-            CHILDREN_KEY,
-            (children: SVGNode[]) => {
-              children.splice(props.key as number, 1);
-            }
-          ])
+          updateAtPath([...props.path, CHILDREN_KEY], (children: SVGNode[]) => {
+            children.splice(props.key as number, 1);
+          })
         );
       }
     });
@@ -57,6 +53,29 @@ export function useVirtualTree(rootProps: { state: SVGNode; setState: StoreSette
   return map;
 }
 
-function dynamicStorePath(parts: readonly unknown[]): (state: SVGNode) => SVGNode | void {
-  return (storePath as unknown as (...path: readonly unknown[]) => (state: SVGNode) => SVGNode | void)(...parts);
+/**
+ * Creates a root store setter that applies `update` to the draft value at `path`.
+ * Draft edits made by `update` apply in place; a different value it returns replaces the value at `path`.
+ */
+function updateAtPath<T>(
+  path: readonly (string | number)[],
+  update: (value: T) => T | void
+): (root: SVGNode) => SVGNode | void {
+  return (root) => {
+    if (path.length === 0) {
+      return update(root as unknown as T) as SVGNode | void;
+    }
+
+    const parent = path
+      .slice(0, -1)
+      .reduce<DraftRecord>((node, key) => node[key] as DraftRecord, root as unknown as DraftRecord);
+    const key = path[path.length - 1];
+    const value = parent[key] as T;
+    const next = update(value);
+    if (next !== undefined && next !== value) {
+      parent[key] = next;
+    }
+  };
 }
+
+type DraftRecord = Record<string | number, unknown>;

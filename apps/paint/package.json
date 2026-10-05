@@ -8,33 +8,42 @@
     "build": "vite build",
     "preview": "vite preview --port 4030",
     "test": "vitest run",
-    "test:ui": "vitest run --config vitest.ui.config.ts",
-    "test:performance": "pnpm --filter @app-game/abr-paint test && vitest run src/performance/brushWorkBudget.test.ts src/gpu/readbackQueue.test.ts src/workerLatency.test.ts src/pressureSpacing.test.ts src/virtualPages.test.ts && node --test scripts/compare-brush-performance.test.mjs",
+    "test:browser": "node tests/browser/verifications.browser.mjs",
+    "test:ui": "node tests/browser/studio.browser.mjs",
+    "test:safari": "node tests/browser/safari.browser.mjs",
+    "test:performance": "node --test scripts/compare-brush-performance.test.mjs",
     "bench:brushes": "node scripts/brush-performance.mjs",
-    "typecheck": "tsc -p tsconfig.json",
-    "build:studio": "pnpm build",
-    "test:studio": "pnpm test",
-    "test:studio-ui": "pnpm test:ui",
-    "typecheck:studio": "pnpm typecheck"
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@app-game/abr-brush": "workspace:*",
+    "@app-game/abr-paint": "workspace:*",
     "@app-game/abr-parser": "workspace:*",
     "@app-game/abr-viewer": "workspace:*",
     "@app-game/navigation-puck": "workspace:*",
+    "@app-game/paint-core": "workspace:*",
+    "@app-game/paint-live": "workspace:*",
+    "@app-game/solid-gpu": "workspace:*",
+    "@solid-primitives/drag-drop": "catalog:",
     "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/fullscreen": "catalog:",
+    "@solid-primitives/media": "catalog:",
+    "@solid-primitives/page-utilities": "catalog:",
+    "@solid-primitives/resize-observer": "catalog:",
     "@solid-primitives/timer": "catalog:",
-    "@solidjs/web": "2.0.0-rc.4",
+    "@solidjs/web": "catalog:",
+    "neverthrow": "catalog:",
     "solid-js": "catalog:",
     "typegpu": "^0.11.4",
-    "zod": "^4.4.3",
-    "@app-game/abr-paint": "workspace:*",
-    "@app-game/paint-core": "workspace:*"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@testing-library/jest-dom": "catalog:",
+    "@types/node": "catalog:",
     "@unocss/vite": "catalog:",
     "@webgpu/types": "^0.1.70",
+    "fake-indexeddb": "catalog:",
     "jsdom": "catalog:",
     "typescript": "catalog:",
     "unplugin-typegpu": "^0.11.3",
@@ -45,9 +54,6 @@
     "workbox-window": "catalog:"
   },
   "exports": {
-    "./editor": "./src/PaintStudio.tsx",
-    "./studio/composition": "./src/composition/index.ts",
-    "./studio/*": "./src/*",
-    "./tests/*": "./tests/*.ts"
+    "./editor": "./src/features/studio/PaintStudio.tsx"
   }
 }

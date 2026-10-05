@@ -10,10 +10,18 @@ export function createNavigationPuck(params: {
   transform: (gesture: PuckTransform) => void;
   /** Orbit deltas match Grease's 0.006/0.005 radian-per-pixel convention. Called only in 3D. */
   orbit: (dx: number, dy: number) => void;
+  /** Largest puck diameter in CSS pixels; smaller viewports shrink it. Defaults to 260. */
+  size?: number;
+  /**
+   * Distance from the center, in CSS pixels, that stays inside the viewport, for controls placed around the puck
+   * such as a menu ring. Defaults to half the diameter.
+   */
+  reach?: number;
 }) {
   const [position, setPosition] = createSignal<Point | undefined>(undefined, { ownedWrite: true });
   const [activeAction, setActiveAction] = createSignal<PuckAction | undefined>(undefined, { ownedWrite: true });
-  const diameter = () => Math.max(1, Math.min(260, params.viewport().width - 16, params.viewport().height - 16));
+  const diameter = () =>
+    Math.max(1, Math.min(params.size ?? 260, params.viewport().width - 16, params.viewport().height - 16));
   const viewportCenter = () => ({
     x: params.viewport().left + params.viewport().width / 2,
     y: params.viewport().top + params.viewport().height / 2
@@ -21,19 +29,18 @@ export function createNavigationPuck(params: {
   const center = () => {
     const point = position();
     if (!point) return;
-    const inset = diameter() / 2 + 8;
-    return {
-      x: Math.max(
-        params.viewport().left + inset,
-        Math.min(params.viewport().left + params.viewport().width - inset, point.x)
-      ),
-      y: Math.max(
-        params.viewport().top + inset,
-        Math.min(params.viewport().top + params.viewport().height - inset, point.y)
-      )
-    };
+    const { left, top, width, height } = params.viewport();
+    const inset = Math.max(diameter() / 2, params.reach ?? 0) + 8;
+    // A viewport narrower than the reach keeps the puck centered on that axis.
+    const clamp = (value: number, start: number, length: number) =>
+      inset * 2 > length ? start + length / 2 : Math.max(start + inset, Math.min(start + length - inset, value));
+    return { x: clamp(point.x, left, width), y: clamp(point.y, top, height) };
   };
-  let invocation: 'held' | 'once' = 'once';
+  /**
+   * How the puck was opened: `held` (Space) and `pinned` (a pen's side button) follow the release point after each
+   * operation, `held` until Space is released and `pinned` until it is closed; `once` closes after one.
+   */
+  let invocation: 'held' | 'once' | 'pinned' = 'once';
   let drag:
     | {
         pointerId: number;
@@ -59,12 +66,17 @@ export function createNavigationPuck(params: {
     diameter,
     activeAction,
     close,
-    /** A held Space invocation returns to the release point after each operation. */
-    open(point: Point = viewportCenter(), source: 'held' | 'once' = 'once') {
+    /**
+     * A held Space invocation and a pinned one move to the release point after each operation, so the puck is under
+     * the pointer again; a pinned one stays open until it is closed; a `once` invocation closes after one operation.
+     */
+    open(point: Point = viewportCenter(), source: 'held' | 'once' | 'pinned' = 'once') {
       close();
       invocation = source;
       setPosition(point);
     },
+    /** Whether the open puck stays open until it is closed; see `open`. */
+    pinned: () => center() !== undefined && invocation === 'pinned',
     releaseHotkey() {
       if (invocation !== 'held') return;
       invocation = 'once';
@@ -154,7 +166,7 @@ export function createNavigationPuck(params: {
       const point = drag.previous;
       drag = undefined;
       setActiveAction(undefined);
-      if (invocation === 'held') {
+      if (invocation === 'held' || invocation === 'pinned') {
         setPosition(point);
         return false;
       }

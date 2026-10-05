@@ -35,9 +35,8 @@ src/
     graphics/            Independent graphics, currently Rectangle
     performance/         GPU frame-cost panel and window/dev-server reports for agents
   shared/
-    gpu/                 Device/root and canvas lifetimes, owned resource cleanup
     jsx/                 Token-preserving Solid context support
-    errors.ts            Shared typed error contract
+    errors.ts            Viewer error contract (document and fullscreen kinds)
   main.tsx               Standalone entry
   standalone.css         Standalone document styles
 rust/document-format/    Native container/profile library, WASM exports and migration CLI
@@ -56,7 +55,7 @@ Unit tests live beside the feature they exercise. Browser fixtures remain outsid
 - `features/camera` owns camera state (`createDocumentCamera`), gestures, the tour, `DocumentSpace` and camera math. Camera motion does not require UI state updates.
 - `features/scene` owns one frame loop and one shared color pass for all graphics, plus coordinate spaces and per-frame uniforms. It does not load documents or allocate their buffers.
 - `features/viewport` measures the canvas and bounds its framebuffer. `features/graphics` and `features/minimap` show drawables added without modifying the document renderer.
-- `shared/gpu` owns the device and configured canvas; feature renderers borrow them. `shared/jsx/TokenContext.tsx` preserves draw tokens through native Solid context ownership. Shared implementation imports no feature modules.
+- [`@app-game/solid-gpu`](../../packages/solid-gpu/README.md) supplies the app-agnostic infrastructure: `/gpu` owns the device and configured canvas, which feature renderers borrow; `/worker` provides the worker transport used by the document workers; `/errors` defines `GpuError`, `AbortedError` and their helpers. `shared/jsx/TokenContext.tsx` preserves draw tokens through native Solid context ownership. Shared implementation imports no feature modules.
 
 Each feature folder's `index.ts` lists its public API; consumers such as the layout import from the folder, while files inside a feature import each other directly. Keep feature-specific shaders, styles and tests with their feature. Move code into `shared` only when it represents infrastructure used by multiple features.
 
@@ -340,8 +339,10 @@ adb reverse --remove tcp:3180
 
 The curve-quality regression compares normal drawing with the unspecialized exact-curve
 path on dense text, images and transparency groups. It checks multiple scales,
-rotation, close views and zoom return, with a mean channel-error budget of 0.05/255 for the
-integral-table approximation; magnified views retain exact path parity. The test covers both ordinary page bundles
+rotation, close views and zoom return. Views that read coverage tables, including the magnified tables built on
+demand, keep a mean channel error below 0.15/255 (at most about 22/255 at glyph edges). Multi-page overviews draw
+whole-page tiles and allow 12/255, set by the fixture's one-texel image checkerboard; text stays near 1.5/255 there.
+The test covers both ordinary page bundles
 and transparency compositing. `GPU_TEXT_COMPARE_EXACT=1` adds the same pixel comparison
 and `normal.png`/`exact.png` captures to a single-file performance run after image uploads
 settle. No source PDF is required by the synthetic browser test.
@@ -364,7 +365,7 @@ GPU initialization publishes a discriminated `GpuRootState`: `loading`, `ready` 
 
 Document loading and renderer preparation retain `neverthrow` results; frame submission returns a synchronous `Result`. These imperative APIs remain usable outside JSX. There is no custom Result implementation. A missing context provider is a programming error handled by Solid's context API, separate from expected GPU failures.
 
-`errors.ts` defines discriminated errors for document transport/decoding, GPU capability/validation/device loss and cancellation. Stable `kind` and `code` fields support programmatic handling; `message` is for display and `cause` preserves external diagnostics. Fullscreen failures have their own type and do not invalidate the renderer.
+`shared/errors.ts` defines discriminated errors for document transport/decoding and combines them with the GPU capability/validation/device-loss and cancellation errors from `@app-game/solid-gpu/errors` into `ViewerError`. Stable `kind` and `code` fields support programmatic handling; `message` is for display and `cause` preserves external diagnostics. Fullscreen failures have their own type and do not invalidate the renderer.
 
 `Result.fromThrowable` and `ResultAsync.fromThrowable` capture exceptions at the remaining browser/TypeGPU boundaries. Expected validation failures return `err(...)` directly. Cancellation returns `AbortedError`, never an error message from a rejected fetch. Partial initialization still releases devices and bitmaps. Document decoding terminates its Worker on completion or cancellation, releasing the WASM heap. The Solid viewer retains the typed error in its error state.
 
@@ -494,7 +495,7 @@ The default demo retains all 1,273 pages and its golden byte-parity check.
 
 ### Live frame costs
 
-The Performance item in the ⋯ menu, or `?performance` in the URL, mounts a GPU-drawn `PerformanceMonitor` in each pane. It records every presented frame, including single on-demand frames during a drag: main-thread milliseconds from frame start to submission (`cpuMs`), and milliseconds from submission until the GPU finished its queue (`gpuMs`, which includes queueing and is not a timestamp-query measurement). Frame rate is reported only for frames drawn back to back. Each monitor keeps its latest 3,600 frames.
+The Performance item in the ⋯ menu, or `?performance` in the URL, mounts a GPU-drawn `PerformanceMonitor` in each pane. It records every presented frame, including single on-demand frames during a drag: main-thread milliseconds from frame start to submission (`cpuMs`), and milliseconds from submission until the GPU finished its queue (`gpuMs`, which includes queueing and presentation). Reports also carry `passMs`, the GPU's own time for the frame's render passes from timestamp queries where the device has them, and `scale`, the frame's render resolution relative to the canvas. Compare `passMs` when judging rendering work: `gpuMs` has a floor of several milliseconds on every device, about 9 ms on the Android tablet, however little a frame draws. Frame rate is reported only for frames drawn back to back. Each monitor keeps its latest 3,600 frames.
 
 Agents and scripts can read the same data without screenshots:
 
@@ -506,7 +507,7 @@ curl localhost:3180/__performance                 # summaries per tab and pane
 curl 'localhost:3180/__performance?samples'       # plus per-frame records
 ```
 
-The endpoint exists only during `vite dev` in this app; it relays requests over Vite's HMR websocket to every open tab and waits at most one second for answers. In a page driven by Playwright or another browser tool, `window.gpuPerformance.reset()` and `window.gpuPerformance.report({ samples: true })` return the same report directly, in any build. Each monitor reports `label` (`pane 1`, `pane 2`), canvas size, `idle`, `frames`, `spanMs`, `fps`, mean/p50/p95/max of `cpuMs`, `gpuMs` and `totalMs`, and `overBudget` frames above 16.7 ms. Absent statistics are `null`. See `src/features/performance/performanceReports.ts` for the types.
+The endpoint exists only during `vite dev` in this app; it relays requests over Vite's HMR websocket to every open tab and waits at most one second for answers. In a page driven by Playwright or another browser tool, `window.gpuPerformance.reset()` and `window.gpuPerformance.report({ samples: true })` return the same report directly, in any build. Each monitor reports `label` (`pane 1`, `pane 2`), canvas size, `idle`, `frames`, `spanMs`, `fps`, mean/p50/p95/max of `cpuMs`, `gpuMs`, `passMs` and `totalMs`, and `overBudget` frames above 16.7 ms. Absent statistics are `null`. See `src/features/performance/performanceReports.ts` for the types.
 
 ### Lossless instance packing and worker preparation
 
@@ -514,7 +515,21 @@ The full 1,273-page demo stays intact. The vertex shader reads compact records f
 
 PDF/GDOC loading Workers also prepare paint runs, trees, composition plans, spatial bounds and curve lookup rows. GPU preparation consumes that staging data. Programmatic scenes without staging data still build the plans locally; custom page placement rebuilds spatial bounds. Large glyph, curve, instance, clip, bin and coverage buffers upload in writes of at most 4 MiB, yielding between chunks and checking cancellation before each write. This reduces uninterrupted main-thread work, but does not make PDF interpretation or geometry residency page-streamed.
 
-No persistent document cache, predictive prefetch, reduced motion resolution or new approximate text rendering is enabled.
+No persistent document cache or predictive prefetch is enabled.
+
+### Moving frames and the GPU's clock
+
+`FrameLoop` draws moving frames below the canvas resolution only when they would miss 60 frames per second
+(`createDynamicResolution`), and stretches them over the canvas. It judges frames by the GPU's own time for their
+render passes (`gpuFrameTimer`, 13 ms budget), which needs the `timestamp-query` feature the viewer requests where
+available; other devices fall back to the time until the GPU finished its queue. Offscreen passes drawn for a frame,
+such as transparency compositing, count towards it.
+
+Mobile GPUs lower their clock within about 200 ms without work and need roughly eight loaded frames to raise it again;
+the same frame costs up to 2.75 times more meanwhile. The first twelve frames after idle are therefore not judged as
+steady: the controller learns how much slower each of them runs and draws only those at a smaller scale, when they
+would otherwise miss the budget. Policies that ask whether direct drawing keeps up (`createCompositionBudget`,
+`createDirectDrawPressure`) skip the same frames. See [PERFORMANCE.md](PERFORMANCE.md) for the measurements.
 
 ### Interface languages
 

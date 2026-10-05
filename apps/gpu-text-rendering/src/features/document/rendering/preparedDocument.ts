@@ -1,4 +1,4 @@
-import type { GpuError } from '../../../shared/errors';
+import type { GpuError } from '@app-game/solid-gpu/errors';
 import type { SceneFrame } from './createFrame';
 
 /**

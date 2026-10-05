@@ -1,0 +1,22 @@
+/* A line in the Drawing menu: the folder, then what is happening there. */
+.status {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f1f4f6;
+  font-size: 13px;
+
+  > span {
+    color: var(--muted);
+    font-size: 12px;
+  }
+}
+
+/* Outranks the `FloatingBar` icon button size. */
+[role='toolbar'] > button.text:is(button) {
+  width: auto;
+  padding: 0 12px;
+  font-size: 13px;
+}

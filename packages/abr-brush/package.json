@@ -9,6 +9,7 @@
     "./pencil": "./src/pencil.ts",
     "./form": "./src/form.ts",
     "./settings-fields": "./src/settings-fields.ts",
+    "./sliderCurves": "./src/sliderCurves.ts",
     "./stroke": "./src/stroke.ts",
     "./effects": "./src/effects.ts",
     "./resources": "./src/resources.ts",
@@ -28,12 +29,26 @@
     "./patternPyramid": "./src/patternPyramid.ts",
     "./patternRaster": "./src/patternRaster.ts",
     "./patternRasterGpu": "./src/patternRasterGpu.ts",
-    "./library": "./src/library.ts"
+    "./library": "./src/library.ts",
+    "./testing/abrFixture": "./tests/abrFixture.ts",
+    "./testing/adobeBrushes": "./tests/adobeBrushes.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@app-game/abr-parser": "workspace:*",
     "@app-game/chroma": "workspace:*",
     "typegpu": "^0.11.4",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "25.8.0",
+    "@webgpu/types": "^0.1.70",
+    "typescript": "catalog:",
+    "unplugin-typegpu": "^0.11.3",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

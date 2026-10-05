@@ -16,6 +16,16 @@ export const roundBrush = defineBrushEngine({
     const sampler = createStrokeSampler(brush, brushQualityAtLod(adaptiveQuality ?? false, lod)?.minimumSpacing);
     renderer.begin(layer, brush);
     return {
+      // A processor that keeps moving while the pen holds still, such as the stabilizer, paints from the idle clock.
+      ...(processor.idle
+        ? {
+            async idle(elapsedMs: number) {
+              const points = processor.idle!(elapsedMs);
+              await renderer.paint(sampler.add(points));
+              return points.length > 0;
+            }
+          }
+        : {}),
       async add(samples) {
         await renderer.paint(sampler.add(processor.add(samples)));
       },

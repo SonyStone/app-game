@@ -71,6 +71,11 @@ export type MonitorReport = {
   cpuMs: Distribution | null;
   /** Milliseconds from submission to GPU completion, over frames whose GPU work has finished. */
   gpuMs: Distribution | null;
+  /**
+   * Milliseconds the GPU spent executing each frame's render passes, excluding queueing and presentation; null on
+   * devices without timestamp queries.
+   */
+  passMs: Distribution | null;
   /** CPU plus GPU milliseconds per frame. */
   totalMs: Distribution | null;
   /** Frames whose total exceeded `budgetMs`. */
@@ -97,6 +102,7 @@ export function describeMonitor(monitor: PerformanceMonitorSource, includeSample
     fps: fps === undefined ? null : round(fps),
     cpuMs: distribution(samples.map((sample) => sample.cpuMs)),
     gpuMs: distribution(samples.flatMap((sample) => (sample.gpuMs === undefined ? [] : [sample.gpuMs]))),
+    passMs: distribution(samples.flatMap((sample) => (sample.passMs === undefined ? [] : [sample.passMs]))),
     totalMs: distribution(totals),
     overBudget: totals.filter((total) => total > budgetMs).length,
     ...(includeSamples ? { samples: samples.map(roundSample) } : {})
@@ -131,11 +137,13 @@ function distribution(values: readonly number[]): Distribution | null {
 }
 
 /** Copies a sample with rounded milliseconds, omitting unknown fields. */
-function roundSample({ timestamp, cpuMs, gpuMs, intervalMs }: FrameCostSample): FrameCostSample {
+function roundSample({ timestamp, cpuMs, gpuMs, passMs, scale, intervalMs }: FrameCostSample): FrameCostSample {
   return {
     timestamp: round(timestamp),
     cpuMs: round(cpuMs),
     ...(gpuMs === undefined ? {} : { gpuMs: round(gpuMs) }),
+    ...(passMs === undefined ? {} : { passMs: round(passMs) }),
+    ...(scale === undefined ? {} : { scale: round(scale) }),
     ...(intervalMs === undefined ? {} : { intervalMs: round(intervalMs) })
   };
 }

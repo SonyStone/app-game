@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { getAttributeNSPatch } from './attribute-ns-patch';
 import { getAttributePatch } from './attribute-patch';
 import { PropsProxy } from './component';
+import { DELEGATED_EVENT_KEY } from './event-listener-patch';
 import { createSpread as createSpreadController } from './spread';
 import type { Cleanup, Props } from './types';
 
@@ -387,7 +388,7 @@ describe('createSpread', () => {
     const originalClick = vi.fn();
     const proxyClick = vi.fn();
     const buttonRecord = button as unknown as Record<string, unknown>;
-    buttonRecord.$$click = originalClick;
+    buttonRecord[`${DELEGATED_EVENT_KEY}click`] = originalClick;
 
     const cleanup = applySpread(button, {
       onClick: proxyClick
@@ -399,8 +400,8 @@ describe('createSpread', () => {
 
     expect(originalClick).toHaveBeenCalledTimes(2);
     expect(proxyClick).toHaveBeenCalledTimes(1);
-    expect(buttonRecord.$$click).toBe(originalClick);
-    expect('$$clickData' in buttonRecord).toBe(false);
+    expect(buttonRecord[`${DELEGATED_EVENT_KEY}click`]).toBe(originalClick);
+    expect(`${DELEGATED_EVENT_KEY}clickData` in buttonRecord).toBe(false);
   });
 
   it('composes delegated onClick tuple handlers with their own data', () => {
@@ -408,8 +409,8 @@ describe('createSpread', () => {
     const originalClick = vi.fn();
     const proxyClick = vi.fn();
     const buttonRecord = button as unknown as Record<string, unknown>;
-    buttonRecord.$$click = originalClick;
-    buttonRecord.$$clickData = 'original-data';
+    buttonRecord[`${DELEGATED_EVENT_KEY}click`] = originalClick;
+    buttonRecord[`${DELEGATED_EVENT_KEY}clickData`] = 'original-data';
 
     const cleanup = applySpread(button, {
       onClick: [proxyClick, 'proxy-data']
@@ -423,8 +424,8 @@ describe('createSpread', () => {
     expect(originalClick).toHaveBeenNthCalledWith(2, 'original-data', expect.any(MouseEvent));
     expect(proxyClick).toHaveBeenCalledTimes(1);
     expect(proxyClick).toHaveBeenCalledWith('proxy-data', expect.any(MouseEvent));
-    expect(buttonRecord.$$click).toBe(originalClick);
-    expect(buttonRecord.$$clickData).toBe('original-data');
+    expect(buttonRecord[`${DELEGATED_EVENT_KEY}click`]).toBe(originalClick);
+    expect(buttonRecord[`${DELEGATED_EVENT_KEY}clickData`]).toBe('original-data');
   });
 
   it('updates nested Solid 2 class values without changing layer order', () => {
@@ -487,8 +488,8 @@ describe('createSpread', () => {
 /** Dispatches a Solid delegated event by invoking the element handler slot directly. */
 function dispatchSolidDelegatedEvent(element: Element, name: string): void {
   const elementRecord = element as unknown as Record<string, unknown>;
-  const handler = elementRecord[`$$${name}`];
-  const data = elementRecord[`$$${name}Data`];
+  const handler = elementRecord[`${DELEGATED_EVENT_KEY}${name}`];
+  const data = elementRecord[`${DELEGATED_EVENT_KEY}${name}Data`];
   const event = new MouseEvent(name, { bubbles: true });
 
   if (typeof handler !== 'function') {

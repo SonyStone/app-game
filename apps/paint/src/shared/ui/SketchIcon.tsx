@@ -1,0 +1,92 @@
+/** Small, consistent line icons for the sketchbook controls. */
+export function SketchIcon(props: { name: SketchIconName; size?: number }) {
+  return (
+    <svg
+      width={props.size ?? 20}
+      height={props.size ?? 20}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.65"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d={paths[props.name]} />
+    </svg>
+  );
+}
+
+/** Names of the available icons. */
+export type SketchIconName = keyof typeof paths;
+
+const paths = {
+  lasso: 'M7 17C2 15 2 9 6 5c4-3 13-2 15 3s-2 9-8 10M8 15c-4 0-5 4-2 5s6-2 4-4c-1-1-2-1-2-1Zm-2 5c-1 2-3 2-4 1',
+  fullscreen: 'M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5',
+  fullscreenExit: 'M3 8h5V3M16 3v5h5M21 16h-5v5M8 21v-5H3',
+  move: 'M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3',
+  zoom: 'M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm5 12 6 6M7 10h6M10 7v6',
+  rotate: 'M20 9a8 8 0 0 0-14-3L3 9m0-6v6h6M4 15a8 8 0 0 0 14 3l3-3m0 6v-6h-6',
+  tools: 'M4 4h5v5H4ZM15 4h5v5h-5ZM4 15h5v5H4ZM15 15h5v5h-5Z',
+  paper: 'M4 3h16v18H4ZM8 8h8M8 12h5',
+  symmetry:
+    'M12 3v18M12 9C9 2 2 2 3 9c0 3 4 4 9 3C5 11 3 16 5 20c3 2 5-2 7-6M12 9c3-7 10-7 9 0 0 3-4 4-9 3 7-1 9 4 7 8-3 2-5-2-7-6',
+  mirror: 'M12 2v20M3 5v14l6-7-6-7Zm18 0v14l-6-7 6-7Z',
+  draw: 'm15 4 5 5M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15l-1 6 5-2',
+  fill: 'm9 3 10 10-7 7a2 2 0 0 1-3 0l-6-6a2 2 0 0 1 0-3l7-7M5 13h14M20 17s-2 2-2 3a2 2 0 0 0 4 0c0-1-2-3-2-3',
+  erase: 'm14 3 7 7a1 1 0 0 1 0 2l-9 9H7l-5-5a1 1 0 0 1 0-2L12 3a1 1 0 0 1 2 0ZM7 9l8 8M12 21h10',
+  select: 'm5 3 14 9-7 2-3 7Z',
+  edit: 'M6 6h12v12H6ZM3 3h6v6H3ZM15 15h6v6h-6Z',
+  pan: 'M8 12V5a2 2 0 0 1 4 0v7-9a2 2 0 0 1 4 0v9-7a2 2 0 0 1 4 0v10c0 4-3 7-7 7h-1c-2 0-4-1-5-3l-4-6a2 2 0 0 1 3-2l2 2',
+  orbit: 'M21 12a9 9 0 1 1-3-7M21 3v6h-6M12 7a5 5 0 0 1 0 10 5 5 0 0 1 0-10Z',
+  layers: 'm12 3 10 5-10 5L2 8Zm-10 9 10 5 10-5M2 16l10 5 10-5',
+  brush: 'm14 3 7 7-9 9-7-7ZM6 13c-4 0-4 5-4 8 3 0 8 0 8-4M12 5l7 7',
+  scene: 'm12 2 9 5v10l-9 5-9-5V7Zm0 10v10M3 7l9 5 9-5M12 2v10',
+  animation: 'M3 5h18v14H3ZM7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4',
+  undo: 'M9 5 3 11l6 6M3 11h11a6 6 0 0 1 6 6',
+  redo: 'm15 5 6 6-6 6m6-6H10a6 6 0 0 0-6 6',
+  gradient: 'M4 4h16v16H4ZM8 4v16M12 4v16M15.5 4v16M18.5 4v16',
+  numbers: 'M10 4 8 20M16 4l-2 16M5 9h15M4 15h15',
+  distort: 'M7 5l11-1 2 15-16 1ZM7 5a1 1 0 1 0 0 .1M18 4a1 1 0 1 0 0 .1M20 19a1 1 0 1 0 0 .1M4 20a1 1 0 1 0 0 .1',
+  warp: 'M4 5c5 3 11-3 16 0M4 12c5 3 11-3 16 0M4 19c5 3 11-3 16 0M4 5v14M12 6v14M20 5v14',
+  perspective: 'M8 5h8l5 14H3ZM12 5v14M5.5 12h13',
+  selectRect: 'M4 6h3M10 6h4M17 6h3v3M20 12v3M20 18v0h-3M14 18h-4M7 18H4v-3M4 12V9',
+  selectEllipse: 'M12 5c4.5 0 8 3 8 7M20 12c0 4-3.5 7-8 7M12 19c-4.5 0-8-3-8-7M4 12c0-4 3.5-7 8-7',
+  selectPolygon: 'M5 19 8 5l9 4 2 10ZM5 19h.01M8 5h.01M17 9h.01M19 19h.01',
+  magicWand: 'M4 20 15 9l-2-2L2 18ZM17 3v4M15 5h4M20 9v3M18.5 10.5h3M11 2v2M10 3h2',
+  selectNew: 'M5 5h14v14H5Z',
+  selectAdd: 'M4 4h10v6h6v10H10v-6H4Z',
+  selectSubtract: 'M4 4h10v6h-4v4H4ZM13 13h7v7h-7Z',
+  selectIntersect: 'M4 4h10v10H4ZM10 10h10v10H10ZM10 13l3-3M10 14h4v-4',
+  selectInvert: 'M3 3h18v18H3ZM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM3 9l6-6M15 21l6-6M3 15 6 12M18 12l3-3',
+  feather: 'M20 4c-8 0-14 6-14 14v2M6 18 16 8M9 14h6M12 10h5',
+  selectAll: 'M4 4h3M10 4h4M17 4h3v3M20 10v4M20 17v3h-3M14 20h-4M7 20H4v-3M4 14v-4M4 7V4M8 8h8v8H8Z',
+  fillSelection: 'M5 5h14v14H5ZM5 9l4-4M5 14l9-9M5 19 19 5M10 19l9-9M15 19l4-4',
+  picker: 'm14 7 3 3M5 19l1-4 9-9 3 3-9 9-4 1Zm9-15 2-1 5 5-1 2-3 1-4-4 1-3Z',
+  close: 'm6 6 12 12M6 18 18 6',
+  more: 'M5 11v2M12 11v2M19 11v2',
+  home: 'm3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9',
+  plus: 'M12 5v14M5 12h14',
+  minus: 'M5 12h14',
+  left: 'm15 5-7 7 7 7',
+  right: 'm9 5 7 7-7 7',
+  eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
+  hidden: 'm3 3 18 18M9 5c7-2 13 7 13 7l-3 4M15 19C8 21 2 12 2 12l3-4',
+  lock: 'M6 10h12v11H6Zm2 0V6a4 4 0 0 1 8 0v4M12 14v3',
+  clip: 'M7 4v9a3 3 0 0 0 3 3h10m-4-4 4 4-4 4',
+  check: 'm5 12 5 5 9-11',
+  cut: 'M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM8.5 7.5 20 19M8.5 16.5 20 5',
+  paste: 'M9 3h6v3H9ZM7 4.5H5V21h14V4.5h-2M9 12h6M9 16h4',
+  newLayer: 'm12 3 10 5-10 5L2 8Zm-10 9 10 5 4-2M19 15v6M16 18h6',
+  flipVertical: 'M2 12h20M5 3v6l7-6H5Zm0 18v-6l7 6H5Zm14-18v6l-7-6h7Zm0 18v-6l-7 6h7Z',
+  proportions: 'M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6M14 4h6v6M10 20H4v-6',
+  pixels: 'M4 4h6v6H4ZM14 4h6v6h-6ZM4 14h6v6H4ZM14 14h6v6h-6Z',
+  reset: 'M4 12a8 8 0 1 0 2.3-5.7M4 4v4h4',
+  unlock: 'M6 10h12v11H6Zm2 0V6a4 4 0 0 1 8 0M12 14v3',
+  trash: 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7',
+  copy: 'M8 8h12v12H8ZM4 16V4h12',
+  grip: 'M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01',
+  up: 'm6 14 6-6 6 6',
+  down: 'm6 10 6 6 6-6',
+  book: 'M4 3h15v18H4ZM8 3v18M2 7h4M2 12h4M2 17h4M12 7h4'
+} as const;

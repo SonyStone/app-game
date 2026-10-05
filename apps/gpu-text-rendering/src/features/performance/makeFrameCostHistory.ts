@@ -13,13 +13,14 @@ export function makeFrameCostHistory(capacity: number) {
     samples: samples as readonly FrameCostSample[],
 
     /**
-     * Records a presented frame with its main-thread cost and returns its sample, whose `gpuMs` the caller fills in once
-     * the GPU finishes. A frame whose `delta` is zero, after idle, resume or an out-of-band redraw, has no interval.
+     * Records a presented frame with its main-thread cost and render scale and returns its sample, whose `gpuMs` and
+     * `passMs` the caller fills in once the GPU finishes. A frame whose `delta` is zero, after idle, resume or an out-of-band redraw, has no interval.
      */
-    record(frame: FrameTime, cpuMs: number) {
+    record(frame: FrameTime, cpuMs: number, scale?: number) {
       const sample: FrameCostSample = {
         timestamp: frame.timestamp,
         cpuMs,
+        scale,
         intervalMs: frame.delta > 0 && previous !== undefined ? frame.timestamp - previous : undefined
       };
 
@@ -49,6 +50,13 @@ export type FrameCostSample = {
   cpuMs: number;
   /** Milliseconds from submission until the GPU finished the queue's work; undefined until then. */
   gpuMs?: number;
+  /**
+   * Milliseconds the GPU spent executing the frame's render passes, on devices with timestamp queries. Unlike `gpuMs`
+   * it excludes queueing and presentation, so it is the figure to compare when judging rendering work.
+   */
+  passMs?: number;
+  /** Framebuffer resolution relative to the canvas; below 1 for moving frames drawn at reduced resolution. */
+  scale?: number;
   /** Milliseconds since the previous frame when the loop ran without pausing in between. */
   intervalMs?: number;
 };

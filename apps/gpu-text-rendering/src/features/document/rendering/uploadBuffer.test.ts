@@ -1,6 +1,6 @@
+import type { GpuContext } from '@app-game/solid-gpu/gpu';
 import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
-import type { GpuContext } from '../../../shared/gpu/context';
 import { uploadBuffer } from './uploadBuffer';
 import { yieldToEventLoop } from './yieldToEventLoop';
 

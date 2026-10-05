@@ -12,6 +12,8 @@ import {
 import { createPaintRuntime } from '../paintRuntime';
 import type { PaintEvent, PaintRuntimeCommand } from '../protocol';
 import type { PaintModules } from './contracts';
+import type { DocumentEdit } from './documentEdit';
+import type { DocumentFeature } from './documentFeature';
 
 /** Installs document ownership for descendants. Each mounted runtime receives its own document. */
 export const [Document, useDocumentFactory] = provider<Pick<PaintModules, 'document'>>('Document');
@@ -28,6 +30,32 @@ export const [BrushEngines, useEngines] = provider<Pick<PaintModules, 'engines' 
 /** Supplies the decoded texture cache. A fresh cache is created for each runtime. */
 export const [BrushResources, useResourcesFactory] = provider<Pick<PaintModules, 'resources'>>('BrushResources');
 
+/**
+ * Installs feature modules for descendants: document data such as paint symmetry (`features`) and pixel edits such
+ * as a bucket fill (`edits`). Optional: a runtime without it has neither, and keeps the feature data of opened
+ * documents unchanged. IDs must be unique within each list.
+ */
+export function DocumentFeatures(props: {
+  features?: readonly DocumentFeature[];
+  edits?: readonly DocumentEdit[];
+  children?: Element;
+}) {
+  for (const list of [props.features ?? [], props.edits ?? []]) {
+    const ids = list.map((module) => module.id);
+    if (new Set(ids).size !== ids.length) throw new Error('Document feature and edit IDs must be unique.');
+  }
+
+  return createComponent(FeaturesContext, {
+    get value() {
+      return { features: props.features ?? [], edits: props.edits ?? [] };
+    },
+    get children() {
+      return props.children;
+    }
+  });
+}
+const FeaturesContext = createContext<Pick<PaintModules, 'features' | 'edits'>>({ features: [], edits: [] });
+
 /** Materializes the configured runtime under these providers, without requiring a DOM renderer. */
 export function PaintRuntime(props: RuntimeBinding & { children?: Element }) {
   const runtime = createPaintRuntime(props.post, props.close, {
@@ -36,7 +64,8 @@ export function PaintRuntime(props: RuntimeBinding & { children?: Element }) {
     ...useRendererFactory(),
     ...useProcessors(),
     ...useEngines(),
-    ...useResourcesFactory()
+    ...useResourcesFactory(),
+    ...useContext(FeaturesContext)
   });
   props.ready(runtime);
   onCleanup(() => runtime.terminate());

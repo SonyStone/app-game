@@ -1,8 +1,7 @@
+import { errorMessage, gpuError, type GpuError } from '@app-game/solid-gpu/errors';
+import type { GpuDevice, KeepGpuResource } from '@app-game/solid-gpu/gpu';
 import { err, ok, ResultAsync } from 'neverthrow';
 import tgpu, { d, std } from 'typegpu';
-import { errorMessage, gpuError, type GpuError } from '../../../../shared/errors';
-import type { GpuDevice } from '../../../../shared/gpu/context';
-import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { TextDocument } from '../../document';
 import type { SceneFrame } from '../createFrame';
 import { deferRefinement } from './deferRefinement';
@@ -24,6 +23,8 @@ export function createPageTileCache(
     render,
     sourcesReady,
     fallbacksReady,
+    expensive = () => false,
+    prepared = () => true,
     changed
   }: {
     document: TextDocument;
@@ -36,6 +37,16 @@ export function createPageTileCache(
     sourcesReady: (page: number) => boolean;
     /** Whether every image fallback of the page is drawable, so a tile has no holes. */
     fallbacksReady: (page: number) => boolean;
+    /**
+     * Whether rendering a tile of `page` may take seconds of GPU time; such tiles are generated alone, one per fence,
+     * so that several of them never form a single job long enough to reset the GPU. Default never.
+     */
+    expensive?: (page: number) => boolean;
+    /**
+     * Whether an expensive page can render into a tile with `frame`'s transform yet, for example once cached coverage
+     * for its dense outlines exists; until then its tiles wait. Default always.
+     */
+    prepared?: (page: number, frame: SceneFrame) => boolean;
     /** Requests a redraw after refined tiles land or while they fade in. Never called after disposal. */
     changed: () => void;
   }
@@ -58,8 +69,12 @@ export function createPageTileCache(
   });
   type Entry = ReturnType<typeof allocate> & { revision: number; used: number };
   const tileSize = fallbackSize(document, pages);
-  // Larger detail tiles reduce per-pass and per-fence overhead at the same texel density.
-  const detailSize = tileSize * 2;
+  // Small pages keep one tile per level until it reaches wholePageTexels, so an overview draws one tile per page
+  // and renders only the resolution it needs; larger views split into quadrants of that size. Expensive pages keep
+  // small tiles, so their cached coverage stays within the largest on-demand table.
+  const wholeSplit = Math.max(0, Math.log2(wholePageTexels / tileSize));
+  const expensiveSplit = Math.max(0, Math.log2(expensivePageTexels / tileSize));
+  const split = (page: number) => (expensive(page) ? expensiveSplit : wholeSplit);
   const entries = new Map<string, Entry>();
   const revisions = new Map<number, number>();
   const pageWorkMs = new Map<number, number>();
@@ -67,6 +82,8 @@ export function createPageTileCache(
   const waiters = new Set<() => void>();
   /** Tiles every view wants, taken from each view's center-first list in turn. */
   let wanted = new Map<string, PageTile>();
+  /** Page fallbacks to build while no view is waiting and the camera is still; never overdue. */
+  let prefetched: PageTile[] = [];
   /** Each drawing view's latest wanted tiles and motion; views draw independently. */
   const views = new Map<object, { wanted: Map<string, PageTile>; lastTransform?: number[] }>();
   let pending = false;
@@ -129,6 +146,21 @@ export function createPageTileCache(
 
       return ok<void>(undefined);
     },
+    /**
+     * Builds the pinned whole-page fallbacks of `pages`, in order, while no requested tile can refine and the camera
+     * is still, so a later view can switch to tiles at once. Replaces any previous prefetch list; `settle` does not
+     * wait for it.
+     */
+    prefetch(pagesToPrepare: Iterable<number>) {
+      prefetched = [...pagesToPrepare]
+        .filter((page) => pages.has(page))
+        .map((page) => ({ page, level: 0, x: 0, y: 0 }));
+      schedule();
+    },
+    /** Whether `page`'s pinned whole-page fallback is resident, possibly from an older image revision. */
+    hasBase(page: number) {
+      return entries.has(pageTileKey({ page, level: 0, x: 0, y: 0 }));
+    },
     /** Keeps old pixels visible while image uploads invalidate only the affected pages; defaults to all pages. */
     invalidate(changedPages: Iterable<number> = pages) {
       for (const page of changedPages) {
@@ -186,11 +218,7 @@ export function createPageTileCache(
           continue;
         }
 
-        const previewTiles = visiblePageTiles(document, index, frame, tileSize);
-        const visibleTiles =
-          previewTiles[0]?.level === 0 ? previewTiles : visiblePageTiles(document, index, frame, detailSize, 1);
-
-        for (const tile of visibleTiles) {
+        for (const tile of visiblePageTiles(document, index, frame, tileSize, 0, split(index))) {
           viewWanted.set(pageTileKey(tile), tile);
         }
       }
@@ -215,7 +243,7 @@ export function createPageTileCache(
       schedule();
 
       function distance(tile: PageTile) {
-        const rect = pageTileRect(document, tile);
+        const rect = pageTileRect(document, tile, split(tile.page));
         const x = (rect.x + rect.width / 2) * frame.mul[0] + frame.add[0];
         const y = (rect.y - rect.height / 2) * frame.mul[1] + frame.add[1];
         return x * x + y * y;
@@ -253,10 +281,18 @@ export function createPageTileCache(
       camera.write({ mul: frame.mul, add: frame.add, rotation: frame.rotation, time: now - epoch });
       const selected = selectPageTiles(viewWanted, entries, revisions, now, fadeMs);
 
-      // Coarse ancestors paint first; ready descendants replace only their own opaque page region.
-      for (const entry of selected) {
+      // Coarse ancestors paint first; ready descendants replace only their own opaque page region. An overview draws
+      // hundreds of tiles: the first applies the pipeline and camera, later ones only swap their own bind group, since
+      // re-applying the full pipeline state per tile dominated the frame's CPU time.
+      for (const [index, entry] of selected.entries()) {
         entry.used = clock;
-        pipeline.with(pass).with(cameraGroup).with(entry.group).draw(4);
+
+        if (index === 0) {
+          pipeline.with(pass).with(cameraGroup).with(entry.group).draw(4);
+        } else {
+          pass.setBindGroup(tileGroupIndex, root.unwrap(entry.group));
+          pass.draw(4);
+        }
       }
 
       if (fadeTimer === undefined && selected.some((entry) => now - entry.readyAt < fadeMs)) {
@@ -302,7 +338,7 @@ export function createPageTileCache(
   }
 
   function next() {
-    return work().find(canRefine);
+    return work().find(canRefine) ?? prefetched.find(canRefine);
   }
 
   function work() {
@@ -325,6 +361,7 @@ export function createPageTileCache(
     return (
       needsRefinement(tile) &&
       fallbacksReady(tile.page) &&
+      (!expensive(tile.page) || prepared(tile.page, pageTileFrame(document, tile, tileSize, split(tile.page)))) &&
       (overdue || (sourcesReady(tile.page) && (!isMoving(now) || (pageWorkMs.get(tile.page) ?? Infinity) <= 8)))
     );
   }
@@ -358,6 +395,12 @@ export function createPageTileCache(
         );
       } else {
         finish();
+
+        // Motion only postpones prefetching; image uploads reschedule pages still waiting for sources.
+        const now = performance.now();
+        if (isMoving(now) && prefetched.some(needsRefinement)) {
+          deferred.schedule(Math.max(16, movedAt + motionSettleMs - now));
+        }
       }
       return;
     }
@@ -365,11 +408,13 @@ export function createPageTileCache(
     pending = true;
     const started = performance.now();
     const moving = isMoving(started);
-    const tiles = work()
-      .filter(canRefine)
+    const planned = work().filter(canRefine);
+    const candidates = (planned.length ? planned : prefetched.filter(canRefine))
       // Fill missing surroundings before repeatedly refreshing a center tile as its images stream in.
-      .sort((a, b) => Number(entries.has(pageTileKey(a))) - Number(entries.has(pageTileKey(b))))
-      .slice(0, moving ? 4 : 8);
+      .sort((a, b) => Number(entries.has(pageTileKey(a))) - Number(entries.has(pageTileKey(b))));
+    const tiles = expensive(candidates[0]!.page)
+      ? candidates.slice(0, 1)
+      : candidates.filter((tile) => !expensive(tile.page)).slice(0, moving ? 4 : 8);
 
     void generate(tiles, moving ? 2 : 4).then((result) => {
       pending = false;
@@ -383,12 +428,21 @@ export function createPageTileCache(
         finish();
       } else {
         evict();
+
+        // Prefetching continues in later batches; requested detail alone decides when settle resolves.
+        if (![...wanted.values()].some(needsRefinement)) {
+          finish();
+        }
+
         // Leave most GPU time to interaction while moving; expensive jobs automatically back off.
         nextBatchAt = performance.now() + (moving ? Math.min(64, (performance.now() - started) * 2) : 0);
         schedule();
       }
 
-      changed();
+      // Prefetched fallbacks are not drawn until a view requests them, so they need no redraw.
+      if (planned.length || result.isErr()) {
+        changed();
+      }
     });
   }
 
@@ -407,7 +461,7 @@ export function createPageTileCache(
           const pass = encoder.beginRenderPass({
             colorAttachments: [{ view: allocation.view, loadOp: 'clear', storeOp: 'store', clearValue: [1, 1, 1, 1] }]
           });
-          render(pass, pageTileFrame(document, tile, tile.level === 0 ? tileSize : detailSize));
+          render(pass, pageTileFrame(document, tile, tileSize, split(tile.page)));
           pass.end();
           device.queue.submit([encoder.finish()]);
           allocation.texture.generateMipmaps();
@@ -455,8 +509,8 @@ export function createPageTileCache(
   }
 
   function allocate(tile: PageTile) {
-    const frame = pageTileFrame(document, tile, tile.level === 0 ? tileSize : detailSize);
-    const rect = pageTileRect(document, tile);
+    const frame = pageTileFrame(document, tile, tileSize, split(tile.page));
+    const rect = pageTileRect(document, tile, split(tile.page));
     const mipLevelCount = Math.floor(Math.log2(Math.max(frame.width, frame.height))) + 1;
     const texture = root
       .createTexture({ size: [frame.width, frame.height], format, mipLevelCount })
@@ -517,6 +571,10 @@ export function createPageTileCache(
  * mip, making composed pages visibly softer than directly drawn ones; this keeps sampling near the stored level.
  */
 const tileLodBias = -1;
+/** Longest side of a whole-page tile before deeper levels split into quadrants. */
+const wholePageTexels = 256;
+/** The same for expensive pages, whose tiles must stay small enough for on-demand coverage tables. */
+const expensivePageTexels = 128;
 /** Duration of a refined tile's fade-in over its coarser ancestor. */
 const fadeMs = 100;
 /** Makes work eligible after this delay; completion still depends on queued CPU/GPU work. */
@@ -526,12 +584,16 @@ const motionSettleMs = 80;
 
 const Camera = d.struct({ mul: d.vec2f, add: d.vec2f, rotation: d.vec4f, time: d.f32 });
 const Placement = d.struct({ rect: d.vec4f, uv: d.vec4f, readyAt: d.f32 });
-const cameraLayout = tgpu.bindGroupLayout({ camera: { uniform: Camera } });
-const tileLayout = tgpu.bindGroupLayout({
-  image: { texture: d.texture2d(d.f32) },
-  sampler: { sampler: 'filtering' },
-  placement: { uniform: Placement }
-});
+/** Bind group index of each tile's resources; the camera's group is zero. */
+const tileGroupIndex = 1;
+const cameraLayout = tgpu.bindGroupLayout({ camera: { uniform: Camera } }).$idx(0);
+const tileLayout = tgpu
+  .bindGroupLayout({
+    image: { texture: d.texture2d(d.f32) },
+    sampler: { sampler: 'filtering' },
+    placement: { uniform: Placement }
+  })
+  .$idx(tileGroupIndex);
 
 const vertex = tgpu.vertexFn({
   in: { index: d.builtin.vertexIndex },

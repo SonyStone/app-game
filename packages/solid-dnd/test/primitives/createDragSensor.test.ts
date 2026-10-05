@@ -338,6 +338,7 @@ describe('createDragSensor', () => {
       fireEscapeKey();
 
       expect(onDragCancel).toHaveBeenCalledOnce();
+      expect(onDragCancel.mock.calls[0][0].reason).toBe('escape');
       expect(sensor.isDragging()).toBe(false);
     });
 

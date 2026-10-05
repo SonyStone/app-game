@@ -49,7 +49,7 @@ export function Dynamic<T extends Record<string, any>>(props: DynamicProps<T>): 
         //   ? getNextElement()
         let el = createElement(component);
 
-        spread(el, others, true);
+        spread<typeof others>(el, others, true);
         return el;
 
       default:

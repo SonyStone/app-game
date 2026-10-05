@@ -1,4 +1,4 @@
-import { useGpuCanvas } from '../../shared/gpu/GpuCanvasProvider';
+import { useGpuCanvas } from '@app-game/solid-gpu/gpu';
 import { useFrame } from '../scene/FrameLoop';
 import type { Camera } from './camera';
 import type { DocumentCamera } from './createDocumentCamera';

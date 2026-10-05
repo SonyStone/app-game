@@ -13,7 +13,7 @@ import { paintBlend, paintModes } from '@app-game/abr-brush/paintBlend';
 import { pencilCoverage, usesPencilCoverage } from '@app-game/abr-brush/pencil';
 import { d } from 'typegpu';
 import type { BrushTipImage } from '../../lib/abr';
-import { blendModeId, dualCoverage, grain, textureCoverage, textureTone } from './effects';
+import { blendModeId, brushNoise, dualCoverage, grainReference, textureCoverage, textureTone, wetEdgesCoverage } from './effects';
 import { eraserPreviewColor } from './eraser';
 import { renderResourcePixels } from './resource-pixels';
 import { preparePreviewResources, type PreviewResources } from './resources';
@@ -81,7 +81,7 @@ export function renderPreviewPixels(
       pixels[i * 4 + 3] = 255;
       continue;
     }
-    if (mode === 1) alpha = grain(i % input.width, Math.floor(i / input.width), 13.75) < alpha ? 1 : 0;
+    if (mode === 1) alpha = grainReference(i % input.width, Math.floor(i / input.width), 13.75) < alpha ? 1 : 0;
     if (mode === 27 || mode === 28) alpha = 0;
     const source = layers.channels ? d.vec3f(layers.channels[0][i]! / 255, layers.channels[1][i]! / 255, layers.channels[2][i]! / 255) : d.vec3f(
       paint[i * 3]! / Math.max(0.00001, flow[i]!),
@@ -125,18 +125,11 @@ function layerCoverage(
   // Photoshop's command combines the persistent masks after stroke-wide texture,
   // rather than applying the secondary mask separately to every primary dab.
   if (dual) alpha = dualCoverage(alpha, dual[i]!, blendModeId(input.values.dualBrush.mode));
-  if (input.values.useWetEdges) {
-    const x = i % input.width,
-      y = Math.floor(i / input.width);
-    const near = Math.min(
-      flow[Math.max(0, y - 1) * input.width + x]!,
-      flow[Math.min(input.height - 1, y + 1) * input.width + x]!,
-      flow[y * input.width + Math.max(0, x - 1)]!,
-      flow[y * input.width + Math.min(input.width - 1, x + 1)]!
-    );
-    alpha = Math.min(1, alpha * 0.65 + Math.max(0, flow[i]! - near) * 2);
-  }
-  if (usesPencilCoverage(input.values.tool)) alpha = Math.min(pencilCoverage(alpha), opacity[i]!);
+  const pencil = usesPencilCoverage(input.values.tool);
+  if (pencil) alpha = pencilCoverage(alpha);
+  // Photoshop maps the completed mask through its Wet Edges table before stroke opacity, except for Dissolve.
+  if (input.values.useWetEdges && input.values.tool.mode !== 'Dslv') alpha = wetEdgesCoverage(alpha);
+  if (pencil) alpha = Math.min(alpha, opacity[i]!);
   if (dual && !maskAccumulation) alpha = Math.min(alpha, input.values.dualBrush.mode === 'hardMix' ? rawOpacity[i]! : opacity[i]!);
   return alpha * strokeCompositeOpacity(input);
 }
@@ -244,12 +237,10 @@ function renderLayers(
           for (let c = 0; c < 3; c++) paint[i * 3 + c] = s[offset + 12 + c]! * accumulated;
           continue;
         }
+        // Photoshop applies Noise to the rasterized tip, before texture.
+        if (v.useNoise) coverage = brushNoise(coverage, grainReference(px, py, s[offset + 11]!));
         if (v.useTexture && v.texture.eachTip && pattern && toneTable)
           coverage = textured(coverage, pattern[i]!, s[offset + 10]!, input, toneTable);
-        if (v.useNoise) {
-          const n = Math.sin(Math.floor(px) * 12.9898 + Math.floor(py) * 78.233 + s[offset + 11]!) * 43758.5453;
-          coverage *= 0.35 + 0.65 * (n - Math.floor(n));
-        }
         if (usesPencilCoverage(v.tool)) coverage = pencilCoverage(coverage);
         if (byteSource) {
           byteSource[i] = Math.max(0, Math.min(255, Math.round(coverage * 255)));

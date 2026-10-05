@@ -16,7 +16,7 @@
     "dev": "vite --config playground.config.ts"
   },
   "peerDependencies": {
-    "@solidjs/web": "2.0.0-rc.4",
+    "@solidjs/web": "catalog:",
     "solid-js": "catalog:"
   },
   "devDependencies": {

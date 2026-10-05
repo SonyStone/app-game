@@ -13,7 +13,7 @@ const viewport = {
   clientToScreen: (point: { x: number; y: number }) => point,
   screenToClip: (point: { x: number; y: number }) => point
 } as Viewport;
-vi.mock('../../shared/gpu/GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
+vi.mock('@app-game/solid-gpu/gpu/GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
 
 let gpu: ReturnType<typeof gpuFixture>['gpu'];
 let events: string[];

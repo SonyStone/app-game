@@ -1,8 +1,9 @@
+import { errorMessage, type AbortedError } from '@app-game/solid-gpu/errors';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
-import { createMemo, createSignal, latest, onCleanup, type Accessor } from 'solid-js';
+import { createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
 import { downloadFile } from '../../shared/downloadFile';
-import { documentError, errorMessage, type AbortedError, type DocumentError } from '../../shared/errors';
+import { documentError, type DocumentError } from '../../shared/errors';
 import { readFileBytes } from '../../shared/readFileBytes';
 import type { PreparedDocument } from '../document/createDocumentSource';
 import { convertDocument } from '../document/documentWorkerProtocol';
@@ -43,6 +44,9 @@ function createPdfExport(file: File, signal: AbortSignal) {
   const [error, setError] = createSignal<string>();
   const controller = new AbortController();
   let download: { url: string; name: string } | undefined;
+  // Duplicate-save guard. Not derived from `pending`: since Solid 2.0.0-rc.9 a write stays invisible to every read,
+  // including `latest()`, until the flush that carries it, so a second save in the same tick would see `false`.
+  let saving = false;
 
   const dispose = () => {
     if (controller.signal.aborted) {
@@ -69,11 +73,11 @@ function createPdfExport(file: File, signal: AbortSignal) {
     dismissError: () => setError(undefined),
     /** Converts and downloads, or reuses the cached URL. Returns typed failures; ignored calls succeed without work. */
     async save() {
-      // `latest` sees a staged setPending(true) from a save started earlier in the same tick.
-      if (controller.signal.aborted || latest(pending)) {
+      if (controller.signal.aborted || saving) {
         return ok();
       }
 
+      saving = true;
       setPending(true);
       setError(undefined);
       const result = await ResultAsync.fromThrowable(
@@ -103,6 +107,7 @@ function createPdfExport(file: File, signal: AbortSignal) {
         },
         (cause) => documentError('load', errorMessage(cause), cause)
       )().andThen((result) => result);
+      saving = false;
       if (!controller.signal.aborted) {
         setPending(false);
         if (result.isErr()) {

@@ -11,7 +11,8 @@ it('preserves subpixel positions for rotated, non-square, offset crops', () => {
     rotation: [0.8, 0.96, -0.375, 0.8],
     visible: [],
     vectorOnly: false,
-    grids: false
+    grids: false,
+    moving: false
   };
   const rect = { x: 187, y: 62, width: 377, height: 182 };
   const crop = croppedView(frame, rect, 384, 192);

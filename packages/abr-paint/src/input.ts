@@ -22,6 +22,8 @@ export type Dab = { x: number; y: number } & {
     secondary: boolean;
     /** Detailed stamp intervals represented by this adaptive stamp; omitted means one. */
     spacingRatio?: number;
+    /** The adaptive step that follows this stamp, in document pixels; set together with `spacingRatio`. */
+    spacingStep?: number;
     /** Double-precision raster geometry in document coordinates.
      * Secondary preset source-rectangle preparation is not yet Photoshop-verified.
      */

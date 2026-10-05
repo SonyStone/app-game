@@ -90,6 +90,14 @@ export function createDisplayCache(
     },
     /** Invalidates an entry, submitting borrowed readers before destroying its texture when requested. */
     remove,
+    /** Invalidates every entry whose id matches, for example all tiles of a deleted layer. Readers must be submitted. */
+    removeWhere(matches: (id: string) => boolean) {
+      for (const id of [...entries.keys()]) {
+        if (matches(id)) {
+          remove(id);
+        }
+      }
+    },
     stats: () => ({ tiles: entries.size, bytes: bytes + (scratch ? 349524 : 0) }),
     clear() {
       for (const id of entries.keys()) remove(id);

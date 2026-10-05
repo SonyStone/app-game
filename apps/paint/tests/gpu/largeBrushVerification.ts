@@ -2,7 +2,7 @@ import { defaultBrush } from '@app-game/paint-core/brush';
 import { defaultCamera } from '@app-game/paint-core/camera';
 import { createDocument } from '@app-game/paint-core/document';
 import { unpackTile } from '@app-game/paint-core/tilePixels';
-import { tileWireframe } from '../../src/CanvasDebug';
+import { tileWireframe } from '../../src/features/canvas/CanvasDebug';
 import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
 
 /** Exercises a 512px active stroke larger than the scratch cache, including repeated redraw and revisits. */

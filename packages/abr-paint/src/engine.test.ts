@@ -58,15 +58,46 @@ it('routes idle Mixer commands without allocating a stroke', () => {
   }
 });
 
+it('Pencil Auto Erase swaps to the background color when the first contact is foreground', async () => {
+  for (const [pixel, expected] of [
+    [[0x12, 0x34, 0x56, 255], [1, 1, 1]],
+    [[0, 0, 0, 0], [0x12 / 255, 0x34 / 255, 0x56 / 255]]
+  ] as const) {
+    const host = createHost({ kind: 'PcTl', autoErase: true }, new Uint8Array(pixel));
+    try {
+      const stroke = createAbrStroke({ ...host.context, brush: { ...host.context.brush, backgroundColor: '#ffffff' } });
+      await stroke.add([{ x: 1, y: 2, pressure: 1, time: 0 }]);
+      const color = [...host.dabs[0]!.abr!.data.subarray(12, 15)];
+      color.forEach((channel, i) => expect(channel).toBeCloseTo(expected[i]!, 5));
+    } finally {
+      host.release();
+    }
+  }
+});
+
+it('reuses the Block Eraser tip resource across strokes', () => {
+  const host = createHost({ kind: 'ErTl', eraserMode: 3 });
+  try {
+    const tips = [0, 1].map(() => {
+      createAbrStroke(host.context).cancel();
+      return host.begin.mock.calls.at(-1)![3].tip;
+    });
+    expect(tips[0].id).toBe('block-eraser-square');
+    expect(tips[1]).toBe(tips[0]);
+  } finally {
+    host.release();
+  }
+});
+
 /** A tiny host without Paint, DOM, workers, or a GPU. Documents/history are deliberately opaque strings. */
-function createHost() {
+function createHost(toolOptions?: { kind: string } & Record<string, unknown>, pixel = new Uint8Array(4)) {
   const preset = prepareAbrBrush({
     id: 'round',
     name: 'Round',
     preset: {
       kind: 'brush',
       sourceId: 'fixture',
-      ...{},
+      ...(toolOptions ? { toolOptions } : {}),
       tip: { kind: 'computed', diameter: pixels(16), spacing: percent(25), hardness: percent(100) }
     },
     resources: [],
@@ -94,7 +125,7 @@ function createHost() {
         dabs.push(...batch);
       },
       finish: async () => ['host-owned-change'],
-      readCommittedPixel: async () => new Uint8Array(4),
+      readCommittedPixel: async () => pixel,
       loadMixerFromCanvas: async () => {}
     }
   };

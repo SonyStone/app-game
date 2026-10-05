@@ -1,0 +1,56 @@
+import { attempt } from '@app-game/paint-core/asyncResult';
+import type { PaintEvent, PaintRuntimeCommand } from '@app-game/paint-core/protocol';
+import type { createStudioRuntime } from '../../src/features/engine/StudioApplication';
+
+/**
+ * Worker-shaped message surface used by the browser checks, so one harness drives both execution modes. The editor
+ * itself uses `openPaintTransport`; this adapter only exists for the harnesses.
+ */
+export type PaintEndpoint = {
+  onmessage: ((event: MessageEvent<PaintEvent>) => void) | null;
+  onerror: ((event: ErrorEvent) => void) | null;
+  postMessage(command: PaintRuntimeCommand): void;
+  postMessage(command: PaintRuntimeCommand, transfer: Transferable[]): void;
+  terminate: () => void;
+};
+
+/** Loads the same engine on demand, without creating a Worker or an OffscreenCanvas.
+ * Snapshot messages like a worker boundary so mutable UI and document state never alias.
+ */
+export function createMainThreadEndpoint(): PaintEndpoint {
+  let runtime: ReturnType<typeof createStudioRuntime> | undefined;
+  let closed = false;
+  const pending: PaintRuntimeCommand[] = [];
+  const endpoint: PaintEndpoint = {
+    onmessage: null,
+    onerror: null,
+    postMessage(command) {
+      if (closed) return;
+      const snapshot =
+        command.type === 'init'
+          ? { ...structuredClone({ ...command, canvas: undefined }), canvas: command.canvas }
+          : structuredClone(command);
+      if (runtime) runtime.send(snapshot);
+      else pending.push(snapshot);
+    },
+    terminate() {
+      closed = true;
+      pending.length = 0;
+      runtime?.terminate();
+    }
+  };
+  void attempt(async () => {
+    const { createStudioRuntime } = await import('../../src/features/engine/StudioApplication');
+    if (closed) return;
+    runtime = createStudioRuntime(
+      (event) => {
+        if (!closed) endpoint.onmessage?.(new MessageEvent('message', { data: structuredClone(event) }));
+      },
+      () => endpoint.terminate()
+    );
+    for (const command of pending.splice(0)) runtime.send(command);
+  }).then((result) => {
+    if (!result.ok && !closed) endpoint.onerror?.(new ErrorEvent('error', { message: result.error.message }));
+  });
+  return endpoint;
+}

@@ -2,6 +2,7 @@ import { defaultBrush } from '@app-game/paint-core/brush';
 import { defaultCamera } from '@app-game/paint-core/camera';
 import { createDocument } from '@app-game/paint-core/document';
 import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
+import { createRefinements, drawUntil } from '../waits';
 
 /** A zero-flow touch must not change existing artwork's filtering, even under strong magnification. */
 export async function verifyStrokeFiltering(report: (message: string) => void) {
@@ -15,8 +16,10 @@ export async function verifyStrokeFiltering(report: (message: string) => void) {
   const canvas = new OffscreenCanvas(320, 256);
   const size = { width: 320, height: 256 };
   const errors: string[] = [];
+  const refinements = createRefinements();
   const renderer = await createPaintRenderer(canvas, (message) => errors.push(message), {
     virtualTexture: true,
+    onRefine: refinements.notify,
     onError: (error) => errors.push(String(error))
   });
   const read = async () => {
@@ -33,14 +36,15 @@ export async function verifyStrokeFiltering(report: (message: string) => void) {
         await renderer.render(document.layers, camera, size, dpr);
         await renderer.submitted();
       };
-      const deadline = performance.now() + 5000;
-      for (;;) {
-        await draw();
-        const pages = renderer.debugPages();
-        if (pages.length && pages.every((page) => page.resident && !page.fallback && page.level === 0)) break;
-        if (performance.now() > deadline) throw new Error('Fine overview pages did not become resident');
-        await new Promise((resolve) => setTimeout(resolve, 16));
-      }
+      await drawUntil(
+        draw,
+        () => {
+          const pages = renderer.debugPages();
+          return pages.length > 0 && pages.every((page) => page.resident && !page.fallback && page.level === 0);
+        },
+        'Fine overview pages did not become resident',
+        { refinements }
+      );
       const before = await read();
       const compare = async (phase: string) => {
         await draw();
@@ -83,8 +87,10 @@ async function verifyConsecutiveStrokes(report: (message: string) => void) {
   }
   const canvas = new OffscreenCanvas(320, 200);
   const errors: string[] = [];
+  const refinements = createRefinements();
   const renderer = await createPaintRenderer(canvas, (message) => errors.push(message), {
     virtualTexture: true,
+    onRefine: refinements.notify,
     onError: (error) => errors.push(String(error))
   });
   const camera = { ...defaultCamera(), x: 256, y: 128, zoom: 1 };
@@ -98,14 +104,15 @@ async function verifyConsecutiveStrokes(report: (message: string) => void) {
   };
   try {
     await renderer.prepareOverview(document.layers);
-    const deadline = performance.now() + 5000;
-    for (;;) {
-      await draw();
-      const pages = renderer.debugPages();
-      if (pages.length && pages.every((page) => page.resident && !page.fallback)) break;
-      if (performance.now() > deadline) throw new Error('Consecutive stroke detail did not become resident');
-      await new Promise((resolve) => setTimeout(resolve, 16));
-    }
+    await drawUntil(
+      draw,
+      () => {
+        const pages = renderer.debugPages();
+        return pages.length > 0 && pages.every((page) => page.resident && !page.fallback);
+      },
+      'Consecutive stroke detail did not become resident',
+      { refinements }
+    );
     for (const [tool, flow] of [['brush', 0], ['brush', 1], ['eraser', 1]] as const) {
       renderer.begin(document.active, { ...defaultBrush(), tool });
       await renderer.paint([{ x: 128, y: 128, radius: 16, flow }]);

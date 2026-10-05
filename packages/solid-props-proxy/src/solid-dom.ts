@@ -11,7 +11,7 @@ import { noop, runCleanupUpdate, withCleanupUpdate } from './utils';
  * Keep dispatch order and property exceptions aligned with the installed runtime.
  * Each branch acquires a prop layer instead of performing an irreversible write.
  * Children and value diffing belong to the spread controller; refs use Solid directly.
- * @see https://github.com/solidjs/solid/blob/solid-js%402.0.0-rc.4/packages/web/src/client.ts
+ * @see https://github.com/solidjs/solid/blob/solid-js%402.0.0-rc.13/packages/web/src/client.ts
  */
 export function assignDOMProp(element: Element, prop: string, value: unknown): Cleanup {
   if (prop === 'style') return setStyle(element, value);

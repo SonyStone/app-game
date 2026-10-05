@@ -1,5 +1,6 @@
 import type { Brush, Sample } from './brush';
 import { createLeonardoProcessor } from './leonardoStroke';
+import { createStabilizerProcessor } from './stabilizerStroke';
 import { interpolateTabletAxes } from './tabletAxes';
 
 /** Per-stroke sample transformation. Preview must not advance committed state; finish flushes once. */
@@ -19,7 +20,8 @@ export const studioProcessors = {
   none: createRawProcessor,
   studio: createStudioProcessor,
   normal: createLeonardoProcessor,
-  smooth: createLeonardoProcessor
+  smooth: createLeonardoProcessor,
+  stabilizer: createStabilizerProcessor
 } satisfies Record<string, StrokeProcessorFactory>;
 
 /** Preserves real input and pressure, with no withheld endpoint or smoothing. */

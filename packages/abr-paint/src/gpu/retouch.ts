@@ -60,7 +60,7 @@ export function createAbrRetouch<Layer extends PickupLayer>(
   let retouchLinear = false;
   let sharedScratch = false;
   let color = '#000000';
-  let previousSmudge: { x: number; y: number } | undefined;
+  let previousSmudge: { x: number; y: number; step?: number } | undefined;
   let smudgeSecondary: Dab[] = [];
   let canvasFilter: ReturnType<typeof createCanvasFilter> | undefined;
   let mixerWells: ReturnType<typeof createMixerWells> | undefined;
@@ -87,8 +87,9 @@ export function createAbrRetouch<Layer extends PickupLayer>(
       if (!smudge && !mixer && !filter) return;
       if (smudge?.strength === 0 || filter?.strength === 0) return;
       smudgeSecondary.push(...dabs.filter((dab) => dab.abr?.secondary));
+      // Smudge and Mixer dabs depend on each other in order, but several can share one submission.
       const batchDabs =
-        !!smudge && sharedScratch && options.batchSmudgePasses !== false && options.batchSmudgeDabs !== false;
+        !!(smudge || mixer) && sharedScratch && options.batchSmudgePasses !== false && options.batchSmudgeDabs !== false;
       const shared = batchDabs ? commandBatch(device) : undefined;
       let pendingDabs = 0;
       let presentedAt = performance.now();
@@ -102,14 +103,15 @@ export function createAbrRetouch<Layer extends PickupLayer>(
             continue;
           }
           const first = !previousSmudge;
-          const previous = previousSmudge ?? dab;
-          previousSmudge = { x: dab.x, y: dab.y };
+          const previous = previousSmudge ?? { x: dab.x, y: dab.y, step: undefined };
+          previousSmudge = { x: dab.x, y: dab.y, step: dab.abr?.spacingStep };
           const radius = Math.max(1, dab.radius);
           const center = dab;
           const region = { x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2 };
           const tool = mixer ?? smudge!;
           const pickupScale = tool.pickupScale;
-          const commands = shared ?? (smudge && options.batchSmudgePasses !== false ? commandBatch(device) : undefined);
+          const commands =
+            shared ?? ((smudge || mixer) && options.batchSmudgePasses !== false ? commandBatch(device) : undefined);
           // Cross-dab batching helps submission-bound small footprints. Large dabs
           // already batch many tile passes and gain little from retaining extra scratch.
           const largeFootprint = radius > TILE_SIZE / 4;
@@ -150,9 +152,29 @@ export function createAbrRetouch<Layer extends PickupLayer>(
                   dab.abr?.mixing?.wet ?? mixer.wet,
                   dab.abr?.mixing?.mix ?? mixer.mix,
                   dab.flow,
-                  first ? 0 : Math.hypot(dab.x - previous.x, dab.y - previous.y) / (radius * 2)
+                  first ? 0 : Math.hypot(dab.x - previous.x, dab.y - previous.y) / (radius * 2),
+                  commands,
+                  first || !dab.abr?.spacingRatio
+                    ? undefined
+                    : {
+                        ratio: dab.abr.spacingRatio,
+                        step: (dab.abr.spacingStep ?? 0) / (radius * 2),
+                        travelled: (previous.step ?? 0) / (radius * 2)
+                      }
                 )
               : carried!;
+            if (mixer) {
+              // The Mixer deposits through ordinary stamp coverage, so a dab placed at adaptive spacing lays the
+              // paint of the dabs it replaces; see spacingCoverage. The reservoir dose above used the dab's own flow.
+              for (const deposited of [...smudgeSecondary, dab]) {
+                const ratio = deposited.abr?.spacingRatio ?? 1;
+                if (ratio > 1) {
+                  deposited.abr!.data[8] = 1 - (1 - Math.min(1, deposited.flow)) ** ratio;
+                  deposited.abr!.data[15] = ratio;
+                }
+              }
+            }
+
             await host.deposit(
               [...smudgeSecondary, dab],
               {
@@ -186,15 +208,25 @@ export function createAbrRetouch<Layer extends PickupLayer>(
       }
       if (shared && options.onPaintProgress) await options.onPaintProgress();
     },
-    /** Commits reservoir consumption only after the host successfully commits its stroke. */
+    /** Commits reservoir consumption only after the host successfully commits its stroke.
+     * Always releases the gesture's settings and borrowed host layers, even if the reservoir update throws.
+     */
     finish() {
-      if (mixer) mixerWells!.finish();
-      clearGesture();
+      try {
+        if (mixer) mixerWells!.finish();
+      } finally {
+        clearGesture();
+      }
     },
-    /** Rolls back reservoir changes and releases carried paint; document rollback belongs to the host. */
+    /** Rolls back reservoir changes and releases carried paint and borrowed host layers, even if rollback throws.
+     * Document rollback belongs to the host.
+     */
     cancel() {
-      mixerWells?.cancel();
-      clearGesture();
+      try {
+        mixerWells?.cancel();
+      } finally {
+        clearGesture();
+      }
     },
     /** Captures device-independent tool paint between gestures, never during document autosave. */
     async snapshot(): Promise<RendererToolState> {
@@ -240,6 +272,7 @@ export function createAbrRetouch<Layer extends PickupLayer>(
     }
   };
 
+  /** Drops per-stroke tool settings (which reference host layers), carried paint and pending secondary dabs. */
   function clearGesture() {
     smudgePickup?.reset();
     previousSmudge = undefined;

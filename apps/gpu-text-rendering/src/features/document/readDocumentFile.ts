@@ -1,5 +1,6 @@
+import { abortedError, checkAborted, errorMessage } from '@app-game/solid-gpu/errors';
 import { err, ok, ResultAsync } from 'neverthrow';
-import { abortedError, checkAborted, documentError, errorMessage } from '../../shared/errors';
+import { documentError } from '../../shared/errors';
 import { readFileBytes } from '../../shared/readFileBytes';
 import type { OnDocumentProgress } from './documentProgress';
 import { documentFileLimitMessage, maxDocumentFileBytes } from './limits';

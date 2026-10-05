@@ -1,4 +1,4 @@
-import type { GpuDevice } from '../../../shared/gpu/context';
+import type { GpuDevice } from '@app-game/solid-gpu/gpu';
 import { yieldToEventLoop } from './yieldToEventLoop';
 
 /**

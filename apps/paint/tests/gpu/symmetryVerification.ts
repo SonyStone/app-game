@@ -37,12 +37,12 @@ export async function verifyPaintSymmetry(report: (message: string) => void) {
       preset: {
         kind: 'brush',
         sourceId: 'fixture',
-        ...{ tip: { kind: 'sampled' }, toolOptions: { kind: 'PbTl', flow: 100, opacity: 100 } },
-        tip: { kind: 'sampled', diameter: pixels(32), spacing: percent(150), ...{ kind: 'sampled' } }
+        toolOptions: { kind: 'PbTl', flow: 100, opacity: 100 },
+        tip: { kind: 'sampled', diameter: pixels(32), spacing: percent(150) }
       },
       resources: [],
       source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() },
-      tipImage: { width: 16, height: 16, data: tip, depth: 8 }
+      tipImage: { width: 16, height: 16, data: tip, depth: 8, sourceDepth: 8 }
     });
     selected.resources.forEach((resource) => resources.put(resource));
     try {

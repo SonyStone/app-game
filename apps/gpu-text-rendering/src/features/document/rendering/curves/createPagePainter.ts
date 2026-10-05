@@ -1,5 +1,5 @@
+import type { KeepGpuResource } from '@app-game/solid-gpu/gpu';
 import { d, type TgpuRoot } from 'typegpu';
-import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { PaintNode } from '../../plan/paintTree';
 import { View, viewLayout } from '../bindings';
 import type { SceneFrame } from '../createFrame';
@@ -7,6 +7,7 @@ import type { createPageBackground } from '../createPageBackground';
 import type { createCurvePipelines, CurvePipeline, PaintMode } from './createCurvePipelines';
 import { croppedView } from './croppedView';
 import type { curveRuns } from './curveRuns';
+import { cellGridShift } from './curveShader';
 import type { createGroupCompositor } from './groupCompositor';
 import type { createPageBundles } from './pageBundles';
 import type { createPaintBounds } from './paintBounds';
@@ -72,6 +73,8 @@ export function createPagePainter({
       const { cacheLevel, exactLevel } = coverageCacheLevel(frame);
       const cacheScale = 2 ** cacheLevel;
       const exactScale = 2 ** exactLevel;
+      // Physical pixels per page size, along the longer screen axis.
+      const pagePixels = Math.max(Math.abs(frame.mul[0]) * frame.width, Math.abs(frame.mul[1]) * frame.height) / 2;
       background.writeView(frame, [2 / frame.width, 2 / frame.height], 0);
 
       const compositePages = frame.visible.filter(({ index }) =>
@@ -119,8 +122,39 @@ export function createPagePainter({
           return;
         }
 
-        for (const span of selectFillBatches(curveBatches.get(`${run.first}:${run.count}`)!, cacheScale, exactScale)) {
-          draw(pipelines.fills[span.kind][mode], span.first, span.count);
+        const batches = curveBatches.get(`${run.first}:${run.count}`)!;
+
+        for (const span of selectFillBatches(batches, cacheScale, exactScale)) {
+          const end = span.first + span.count;
+          let next = span.first;
+
+          // Magnified figures draw as cells between the span's other instances, keeping paint order. Retained
+          // bundles, recorded for small overview pages, never need them.
+          if ('executeBundles' in encoder) {
+            for (const batch of batches) {
+              for (const { index, norm } of batch.large) {
+                if (index < next || index >= end || norm * pagePixels < cellOutlinePixels) {
+                  continue;
+                }
+
+                if (index > next) {
+                  draw(pipelines.fills[span.kind][mode], next, index - next);
+                }
+
+                // About one cell per cellPixels on screen; the first vertex carries the cells per side.
+                const cells = Math.min(maxCells, Math.max(minCells, Math.ceil((norm * pagePixels) / cellPixels)));
+                pipelines.cells[mode]
+                  .with(activeGroup)
+                  .with(encoder)
+                  .draw(6 * cells * cells, 1, cells << cellGridShift, index);
+                next = index + 1;
+              }
+            }
+          }
+
+          if (next < end) {
+            draw(pipelines.fills[span.kind][mode], next, end - next);
+          }
         }
       };
 
@@ -204,3 +238,11 @@ function coverageCacheLevel(frame: SceneFrame) {
     exactLevel: Math.ceil(Math.log2(0.71 / Math.max(minimum, 1e-20)))
   };
 }
+
+/** Screen size, in physical pixels, from which a large ordinary fill draws as cells instead of one quad. */
+const cellOutlinePixels = 256;
+/** Target cell size in physical pixels: small enough that boundary cells cover little, large enough to keep vertices few. */
+const cellPixels = 32;
+/** Fewest and most cells per side; 64² cells of six vertices stay within the first vertex's low 16 bits. */
+const minCells = 8;
+const maxCells = 64;

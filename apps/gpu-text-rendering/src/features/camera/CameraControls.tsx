@@ -1,4 +1,4 @@
-import { useGpuCanvas } from '../../shared/gpu/GpuCanvasProvider';
+import { useGpuCanvas } from '@app-game/solid-gpu/gpu';
 import { useViewport } from '../viewport/createViewport';
 import type { DocumentCamera } from './createDocumentCamera';
 import { makeCameraControls } from './makeCameraControls';

@@ -1,0 +1,6 @@
+.panel {
+  position: absolute;
+  top: max(34px, calc(env(safe-area-inset-top) + 12px));
+  left: max(10px, env(safe-area-inset-left));
+  pointer-events: none;
+}

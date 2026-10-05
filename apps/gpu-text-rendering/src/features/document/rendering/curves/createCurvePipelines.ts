@@ -1,7 +1,7 @@
 import type { TgpuBindGroup, TgpuRoot, WithBinding } from 'typegpu';
 import { shapeOnlySlot } from './curveBindings';
-import { analyticCurveFragment, cachedCurveFragment, simpleCurveFragment } from './curveFillShader';
-import { curveFragment, curveVertex } from './curveShader';
+import { analyticCurveFragment, cachedCurveFragment, cellCurveFragment, simpleCurveFragment } from './curveFillShader';
+import { cellCurveVertex, curveFragment, curveVertex } from './curveShader';
 import { rasterFragment, rasterVertex } from './imageShader';
 
 /**
@@ -45,6 +45,13 @@ export function createCurvePipelines(
     cached: fill(cachedCurveFragment),
     analytic: fill(analyticCurveFragment)
   };
+  const cells = variants((root) =>
+    root
+      .createRenderPipeline({ vertex: cellCurveVertex, fragment: cellCurveFragment, targets })
+      .with(groups.view)
+      .with(groups.geometry)
+      .with(groups.coverage)
+  );
   const image = variants((root) =>
     root
       .createRenderPipeline({ vertex: rasterVertex, fragment: rasterFragment, targets })
@@ -56,6 +63,11 @@ export function createCurvePipelines(
   return {
     /** Outline pipelines by fill kind. */
     fills,
+    /**
+     * Magnified ordinary fills drawn as a grid of `n`² cells; draw `6n²` vertices from first vertex
+     * `n << cellGridShift` with the outline's instance as the first instance, without an index buffer.
+     */
+    cells,
     /** Raster image pipeline; bind the image's group before drawing. */
     image,
     /** Compiles the normal variants; shape variants compile on first knockout use. */

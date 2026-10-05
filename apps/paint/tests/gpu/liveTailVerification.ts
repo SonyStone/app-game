@@ -2,6 +2,7 @@ import { defaultBrush } from '@app-game/paint-core/brush';
 import { defaultCamera } from '@app-game/paint-core/camera';
 import { createDocument } from '@app-game/paint-core/document';
 import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
+import { createRefinements, drawUntil } from '../waits';
 
 /** Checks display-only brush/eraser tails against actual rasterization under scratch eviction. */
 export async function verifyLiveTail(report: (message: string) => void) {
@@ -13,9 +14,11 @@ export async function verifyLiveTail(report: (message: string) => void) {
       for (let x = 0; x < 3; x++) document.active.tiles.set(`${x},0`, base.slice());
       const errors: string[] = [];
       const canvas = new OffscreenCanvas(768, 256);
+      const refinements = createRefinements();
       const renderer = await createPaintRenderer(canvas, (message) => errors.push(message), {
         cacheTiles: 2,
         virtualTexture,
+        onRefine: refinements.notify,
         onError: (error) => errors.push(String(error))
       });
       const camera = { ...defaultCamera(), x: 384, y: 128, zoom: 1 };
@@ -32,14 +35,15 @@ export async function verifyLiveTail(report: (message: string) => void) {
       try {
         await renderer.prepareOverview(document.layers);
         if (virtualTexture) {
-          const deadline = performance.now() + 5000;
-          for (;;) {
-            await draw();
-            const pages = renderer.debugPages();
-            if (pages.length && pages.every((page) => page.resident && !page.fallback)) break;
-            if (performance.now() > deadline) throw new Error('Tail test detail did not become resident');
-            await new Promise((resolve) => setTimeout(resolve, 16));
-          }
+          await drawUntil(
+            draw,
+            () => {
+              const pages = renderer.debugPages();
+              return pages.length > 0 && pages.every((page) => page.resident && !page.fallback);
+            },
+            'Tail test detail did not become resident',
+            { refinements }
+          );
         }
         const brush = { ...defaultBrush(), tool, opacity: 0.4 };
         const first = [{ x: 245, y: 128, radius: 20, flow: 0.4 }];

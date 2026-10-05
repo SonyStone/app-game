@@ -1,8 +1,11 @@
 import { Camera, Orbit, Renderer, Transform, Vec3 } from '@app-game/ogl';
 import { toRadian } from '@app-game/ogl/extras/path/utils';
-import { numberPrecisionDragInput } from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
+import {
+  NumberPrecisionDragButton,
+  numberPrecisionDragInput
+} from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import createRAF from '@solid-primitives/raf';
-import { createStore, createTrackedEffect, For, onCleanup, storePath, untrack } from 'solid-js';
+import { createStore, createTrackedEffect, For, onCleanup, untrack } from 'solid-js';
 
 import { NormalBox } from './camera-projection-webgl2/normal-box.component';
 import { GridHelperComponent } from './grid-helper.component';
@@ -14,6 +17,13 @@ export default function AffineTransformations3D() {
     [0, 0, 1, 0],
     [0, 0, 0, 1]
   ]);
+
+  // The rotation field is uncontrolled: the form reads it on submit, so drags write straight to the element.
+  let rotation!: HTMLInputElement;
+  const readRotation = () => parseFloat(rotation.value);
+  const writeRotation = (value: number) => {
+    rotation.value = value.toString();
+  };
 
   const canvas = (() => {
     const canvas = (<canvas class="w-400px h-400px border-t" />) as HTMLCanvasElement;
@@ -67,26 +77,27 @@ export default function AffineTransformations3D() {
             const m30 = matrix[0][2]; // x
             const m31 = matrix[1][2]; // y
 
-            setMatrix(storePath(0, 0, cos * m10 - sin * m11));
-            setMatrix(storePath(0, 1, sin * m10 + cos * m11));
-            setMatrix(storePath(1, 0, cos * m20 - sin * m21));
-            setMatrix(storePath(1, 1, sin * m20 + cos * m21));
+            setMatrix((draft) => {
+              draft[0][0] = cos * m10 - sin * m11;
+              draft[0][1] = sin * m10 + cos * m11;
+              draft[1][0] = cos * m20 - sin * m21;
+              draft[1][1] = sin * m20 + cos * m21;
+            });
           }}
         >
-          <input
-            id="rotation"
-            name="rotation"
-            value={30}
-            type="number"
-            ref={(ref) => {
-              numberPrecisionDragInput(ref, {
-                value: parseFloat(ref.value),
-                onChange: (value) => {
-                  ref.value = value.toString();
-                }
-              });
-            }}
-          />
+          <div class="flex items-center">
+            <input
+              id="rotation"
+              name="rotation"
+              value={30}
+              type="number"
+              ref={(ref) => {
+                rotation = ref;
+                numberPrecisionDragInput(ref, { value: readRotation, onChange: writeRotation });
+              }}
+            />
+            <NumberPrecisionDragButton value={readRotation} onChange={writeRotation} />
+          </div>
         </form>
         <table>
           <tbody>
@@ -94,27 +105,30 @@ export default function AffineTransformations3D() {
               {(row, rowIndex) => (
                 <tr>
                   <For keyed={false} each={row()}>
-                    {(cell, colIndex) => (
-                      <td class="border-e border-t">
-                        <input
-                          class="w-16"
-                          value={cell()}
-                          type="number"
-                          onInput={(e) => {
-                            const value = parseFloat(e.target.value);
-                            setMatrix(storePath(rowIndex, colIndex, value));
-                          }}
-                          ref={(ref) => {
-                            numberPrecisionDragInput(ref, {
-                              value: cell,
-                              onChange: (value) => {
-                                setMatrix(storePath(rowIndex, colIndex, value));
-                              }
-                            });
-                          }}
-                        />
-                      </td>
-                    )}
+                    {(cell, colIndex) => {
+                      const setCell = (value: number) => {
+                        setMatrix((draft) => {
+                          draft[rowIndex][colIndex] = value;
+                        });
+                      };
+
+                      return (
+                        <td class="border-e border-t">
+                          <div class="flex items-center">
+                            <input
+                              class="w-16"
+                              value={cell()}
+                              type="number"
+                              onInput={(e) => setCell(parseFloat(e.target.value))}
+                              ref={(ref) => {
+                                numberPrecisionDragInput(ref, { value: cell, onChange: setCell });
+                              }}
+                            />
+                            <NumberPrecisionDragButton value={cell} onChange={setCell} />
+                          </div>
+                        </td>
+                      );
+                    }}
                   </For>
                 </tr>
               )}

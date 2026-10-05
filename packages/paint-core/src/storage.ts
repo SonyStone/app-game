@@ -2,20 +2,29 @@ import { z } from 'zod';
 import { TILE_SIZE } from './brush';
 import type { Camera } from './camera';
 import { MAX_DOCUMENT_BYTES, MAX_DOCUMENT_TILES, TILE_BYTES, type Layer } from './document';
-import { defaultPaintSymmetry, paintSymmetrySchema, type PaintSymmetry } from './symmetry';
 import { packTile, unpackTile } from './tilePixels';
 
 /** Versioned on-disk format. Tile pixels remain premultiplied; no lossy image conversion occurs. */
 export type SavedDocument = ReturnType<typeof snapshotDocument>;
 
-/** Copies metadata while sharing immutable committed tile snapshots. */
-export function snapshotDocument(layers: Layer[], activeId: string, camera: Camera, symmetry = defaultPaintSymmetry()) {
+/**
+ * Copies metadata while sharing immutable committed tile snapshots. `features` holds document feature data by feature
+ * ID, including data of features this runtime does not have.
+ */
+export function snapshotDocument(
+  layers: Layer[],
+  activeId: string,
+  camera: Camera,
+  features: Readonly<Record<string, unknown>> = {},
+  linearBlending = true
+) {
   return {
     version: 2 as const,
     tileSize: TILE_SIZE,
     activeId,
+    blending: linearBlending ? ('linear' as const) : ('classic' as const),
     camera: { ...camera },
-    symmetry: { ...symmetry },
+    features: { ...features },
     layers: layers.map(({ tiles, ...layer }) => ({
       ...layer,
       tiles: [...tiles].map(([key, pixels]) => ({ key, pixels }))
@@ -23,12 +32,17 @@ export function snapshotDocument(layers: Layer[], activeId: string, camera: Came
   };
 }
 
-/** Validates imported/local data before replacing the current document. */
+/**
+ * Validates imported/local data before replacing the current document. Feature data is returned unvalidated; each
+ * feature validates its own. Documents saved before features existed store paint symmetry at the top level; it is
+ * returned as the `symmetry` feature's data.
+ */
 export function restoreDocument(value: unknown): {
   layers: Layer[];
   activeId: string;
   camera: Camera;
-  symmetry: PaintSymmetry;
+  features: Record<string, unknown>;
+  linearBlending: boolean;
 } {
   const parsed = savedSchema.parse(value);
   if (
@@ -54,9 +68,37 @@ export function restoreDocument(value: unknown): {
         return [tile.key, pixels] as const;
       })
     );
-    return { ...layer, tiles };
+    // Smooth color layers become Normal ones in a document that blends in linear light.
+    return { ...layer, blend: layer.blend === 'linear' ? ('normal' as const) : layer.blend, tiles };
   });
-  return { layers, activeId: parsed.activeId, camera: parsed.camera, symmetry: parsed.symmetry };
+  const legacy = parsed.symmetry === undefined ? {} : { symmetry: parsed.symmetry };
+  // Documents saved before `blending` blend in linear light, unless no layer used Smooth color and one used Normal.
+  const linearBlending =
+    parsed.blending === undefined
+      ? parsed.layers.some(({ blend }) => blend === 'linear') || !parsed.layers.some(({ blend }) => blend === 'normal')
+      : parsed.blending === 'linear';
+  return {
+    layers,
+    activeId: parsed.activeId,
+    camera: parsed.camera,
+    features: { ...legacy, ...parsed.features },
+    linearBlending
+  };
+}
+
+/**
+ * Camera-only record stored beside the checkpoint under the `view` key. Navigation rewrites only this small record;
+ * a full checkpoint rewrites it too, so it always holds the newest camera. Older databases without it keep using the
+ * checkpoint camera, and the checkpoint format (version 3) is unchanged.
+ */
+export function snapshotView(camera: Camera) {
+  return { camera: { ...camera } };
+}
+
+/** Validates a stored view record. Missing or malformed records return undefined so the checkpoint camera is used. */
+export function restoreView(value: unknown): Camera | undefined {
+  const parsed = viewSchema.safeParse(value);
+  return parsed.success ? parsed.data.camera : undefined;
 }
 
 /** Encodes a portable JSON document. Large tile arrays are stored as base64, not JSON numbers. */
@@ -87,51 +129,6 @@ export function decodeDocument(text: string): ReturnType<typeof restoreDocument>
   return restoreDocument(value);
 }
 
-/** Stores a complete checkpoint in one IndexedDB transaction. A failed write keeps the last checkpoint. */
-export async function saveCheckpoint(document: SavedDocument, databaseName = 'paint-studio'): Promise<void> {
-  const db = await openDatabase(databaseName);
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction('documents', 'readwrite');
-      tx.objectStore('documents').put(document, 'current');
-      tx.oncomplete = () => resolve();
-      tx.onerror = tx.onabort = () => reject(tx.error ?? new Error('Autosave failed.'));
-    });
-  } finally {
-    db.close();
-  }
-}
-
-/** Loads the last committed document. Missing storage yields a new document; corrupt data is surfaced. */
-export async function loadCheckpoint(
-  databaseName = 'paint-studio'
-): Promise<ReturnType<typeof restoreDocument> | undefined> {
-  const db = await openDatabase(databaseName);
-  try {
-    const value = await new Promise<unknown>((resolve, reject) => {
-      const request = db.transaction('documents').objectStore('documents').get('current');
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    return value === undefined ? undefined : restoreDocument(value);
-  } finally {
-    db.close();
-  }
-}
-
-function openDatabase(databaseName: string): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName, 3);
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains('documents')) request.result.createObjectStore('documents');
-      if (!request.result.objectStoreNames.contains('tiles')) request.result.createObjectStore('tiles');
-      if (!request.result.objectStoreNames.contains('overviews')) request.result.createObjectStore('overviews');
-      if (!request.result.objectStoreNames.contains('overviewIndex')) request.result.createObjectStore('overviewIndex');
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
 function toBase64(pixels: Uint8Array): string {
   let text = '';
   for (let i = 0; i < pixels.length; i += 8192) text += String.fromCharCode(...pixels.subarray(i, i + 8192));
@@ -139,12 +136,18 @@ function toBase64(pixels: Uint8Array): string {
 }
 const finite = z.number().finite();
 const unit = finite.min(0).max(1);
+const cameraSchema = z.object({ x: finite, y: finite, zoom: finite.min(0.05).max(32), angle: finite, mirrored: z.boolean() });
+const viewSchema = z.object({ camera: cameraSchema });
 const savedSchema = z.object({
   version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   tileSize: z.literal(TILE_SIZE),
   activeId: z.string(),
-  symmetry: paintSymmetrySchema.default(defaultPaintSymmetry),
-  camera: z.object({ x: finite, y: finite, zoom: finite.min(0.05).max(32), angle: finite, mirrored: z.boolean() }),
+  /** Paint symmetry of documents saved before document features; see `restoreDocument`. */
+  symmetry: z.unknown().optional(),
+  features: z.record(z.string(), z.unknown()).default({}),
+  /** Whether layers blend in linear light or encoded sRGB; see `restoreDocument` for documents without it. */
+  blending: z.enum(['linear', 'classic']).optional(),
+  camera: cameraSchema,
   layers: z
     .array(
       z.object({
@@ -152,7 +155,10 @@ const savedSchema = z.object({
         name: z.string().max(200),
         visible: z.boolean(),
         opacity: unit,
+        /** `linear`, Smooth color, was a blend mode before linear blending became the document's `blending`. */
         blend: z.enum(['normal', 'multiply', 'screen', 'overlay', 'linear']),
+        alphaLock: z.boolean().optional(),
+        clipping: z.boolean().optional(),
         tiles: z
           .array(
             z.object({

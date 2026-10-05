@@ -1,11 +1,16 @@
 import { ResultAsync } from 'neverthrow';
 
 /**
- * Retains composed prefixes after two consecutive direct-draw completion samples
- * exceed 8 ms. Sampling starts after the caller's synchronous submission; queue
- * pressure is included. Decisions last until this document session is disposed.
+ * Retains composed prefixes after two consecutive direct-draw frames cost more than `slowMs`. `cost` is called right
+ * after the caller's synchronous submission and resolves that frame's cost in milliseconds, or undefined for a frame
+ * that says nothing about the device's speed, which is skipped. Decisions last until this document session is disposed.
  */
-export function createCompositionBudget(completed: () => Promise<void>, changed: () => void) {
+export function createCompositionBudget(
+  cost: () => Promise<number | undefined>,
+  changed: () => void,
+  /** Frame cost above which a direct draw counts as slow, in the unit `cost` resolves. */
+  slowMs = 8
+) {
   const retained = new Set<number>();
   const samples = new Map<number, number>();
   let observing = false;
@@ -16,27 +21,26 @@ export function createCompositionBudget(completed: () => Promise<void>, changed:
     get size() {
       return retained.size;
     },
-    /** At most one fence is pending; diagnostic direct rendering must not call this. */
+    /** At most one cost is pending; diagnostic direct rendering must not call this. */
     observe(pages: number[]) {
       if (!active || observing || pages.length === 0) {
         return;
       }
 
       observing = true;
-      const started = performance.now();
       queueMicrotask(() => {
         if (!active) {
           return;
         }
 
-        void ResultAsync.fromThrowable(completed, () => undefined)().then((result) => {
+        void ResultAsync.fromThrowable(cost, () => undefined)().then((result) => {
           observing = false;
-          if (!active || result.isErr()) {
+          if (!active || result.isErr() || result.value === undefined) {
             return;
           }
 
           let updated = false;
-          const slow = performance.now() - started > 8;
+          const slow = result.value > slowMs;
           for (const page of pages) {
             const count = slow ? (samples.get(page) ?? 0) + 1 : 0;
             samples.set(page, count);

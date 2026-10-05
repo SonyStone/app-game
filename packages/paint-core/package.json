@@ -7,29 +7,35 @@
     ".": "./src/composition/index.ts",
     "./*": "./src/*.ts",
     "./composition/CanvasTarget": "./src/composition/CanvasTarget.tsx",
-    "./composition/PaintApplication": "./src/composition/PaintApplication.tsx"
+    "./composition/PaintApplication": "./src/composition/PaintApplication.tsx",
+    "./testing/smoothStroke": "./tests/smoothStroke.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
   "dependencies": {
-    "@app-game/abr-paint": "workspace:*",
     "@app-game/abr-brush": "workspace:*",
+    "@app-game/abr-paint": "workspace:*",
+    "@app-game/navigation-puck": "workspace:*",
+    "@app-game/psd": "workspace:*",
+    "@app-game/solid-gpu": "workspace:*",
     "@solid-primitives/timer": "catalog:",
+    "@solidjs/web": "catalog:",
     "solid-js": "catalog:",
-    "@solidjs/web": "2.0.0-rc.4",
     "typegpu": "^0.11.4",
-    "zod": "^4.4.3",
-    "@app-game/navigation-puck": "workspace:*"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@webgpu/types": "^0.1.70",
+    "@app-game/abr-parser": "workspace:*",
     "@types/node": "25.8.0",
+    "@webgpu/types": "^0.1.70",
+    "fake-indexeddb": "catalog:",
+    "jsdom": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:",
+    "unplugin-typegpu": "^0.11.3",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:",
-    "unplugin-typegpu": "^0.11.3"
+    "vitest": "catalog:"
   }
 }

@@ -8,10 +8,21 @@ export type Layer = {
   visible: boolean;
   opacity: number;
   blend: BlendMode;
+  /** Painting keeps the alpha of the layer's pixels: it recolors them and leaves transparent pixels transparent. */
+  alphaLock?: boolean;
+  /**
+   * The layer shows only where its clipping base, the nearest unclipped layer below, has pixels: its alpha is
+   * multiplied by the base's own pixel alpha, before the base's opacity. A hidden base hides its clipped layers; a
+   * clipped layer with no layer below shows as an ordinary layer.
+   */
+  clipping?: boolean;
   tiles: Map<string, TileData>;
 };
-/** Separable color blend modes; alpha always follows source-over. */
-export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay' | 'linear';
+/**
+ * Separable color blend modes; alpha always follows source-over. Whether they blend encoded sRGB or linear light is
+ * the document's `linearBlending`.
+ */
+export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay';
 /** The serializable user-visible layer properties. */
 export type LayerInfo = Omit<Layer, 'tiles'>;
 /** Before/after tile snapshots for one user action. Undefined means the tile did not exist. */
@@ -35,6 +46,8 @@ type HistoryEntry = {
 export function createDocument(options: { paged?: boolean } = {}) {
   let layers: Layer[] = [newLayer('layer-1', 'Layer 1')];
   let active = 'layer-1';
+  /** Layers blend in linear light ("Smooth color") rather than in encoded sRGB, for every blend mode. */
+  let linearBlending = true;
   let revision = 0;
   let nextHistoryId = 0,
     baseHistoryId = 0;
@@ -141,8 +154,11 @@ export function createDocument(options: { paged?: boolean } = {}) {
           { id: baseHistoryId, label: baseHistoryId === 0 ? 'Opened document' : `State ${baseHistoryId}` },
           ...[...undo, ...[...redo].reverse()].map((entry) => ({ id: entry.id, label: `State ${entry.id}` }))
         ],
-        layers: info(),
+        /** Layers bottom to top; `tileCount` is the number of tiles holding paint, 0 for an empty layer. */
+        layers: layers.map(({ tiles, ...layer }) => ({ ...layer, tileCount: tiles.size })),
         activeId: active,
+        /** Layers blend in linear light ("Smooth color") rather than in encoded sRGB; see `setLinearBlending`. */
+        linearBlending,
         canUndo: undo.length > 0,
         canRedo: redo.length > 0,
         pixelBytes: layers.reduce((n, l) => n + [...l.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0), 0),
@@ -215,6 +231,33 @@ export function createDocument(options: { paged?: boolean } = {}) {
           if (layer) Object.assign(layer, action.patch);
           break;
         }
+        case 'merge-down':
+          throw new Error('Merge layers through the runtime, which reads their pixels.');
+        case 'duplicate': {
+          const index = layers.findIndex((l) => l.id === action.id);
+          if (index < 0) return;
+          if (layers.length >= 128) throw new Error('A drawing can contain at most 128 layers.');
+          const source = layers[index]!;
+          const tileCount = layers.reduce((n, layer) => n + layer.tiles.size, 0) + source.tiles.size;
+          const pixelBytes = layers.reduce(
+            (n, layer) => n + [...layer.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0),
+            0
+          );
+          const sourceBytes = [...source.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0);
+          if ((!options.paged && pixelBytes + sourceBytes > MAX_DOCUMENT_BYTES) || tileCount > MAX_DOCUMENT_TILES)
+            throw new Error('The drawing reached its storage budget. The layer was not duplicated.');
+          // Tile versions are immutable, so the copy shares them until either layer is painted.
+          const layer: Layer = {
+            ...source,
+            id: crypto.randomUUID(),
+            name: `${source.name} copy`,
+            tiles: new Map(source.tiles)
+          };
+          for (const [key, after] of layer.tiles) tiles.push({ layerId: layer.id, key, before: undefined, after });
+          layers.splice(index + 1, 0, layer);
+          active = layer.id;
+          break;
+        }
         case 'move': {
           const index = layers.findIndex((l) => l.id === action.id);
           const next = index + action.direction;
@@ -222,6 +265,14 @@ export function createDocument(options: { paged?: boolean } = {}) {
             const [layer] = layers.splice(index, 1);
             layers.splice(next, 0, layer!);
           }
+          break;
+        }
+        case 'reorder': {
+          const index = layers.findIndex((l) => l.id === action.id);
+          if (index < 0 || index === action.index || !Number.isInteger(action.index)) return;
+          if (action.index < 0 || action.index >= layers.length) return;
+          const [layer] = layers.splice(index, 1);
+          layers.splice(action.index, 0, layer!);
           break;
         }
         case 'delete': {
@@ -236,28 +287,93 @@ export function createDocument(options: { paged?: boolean } = {}) {
       }
       record({ before, after: info(), activeBefore, activeAfter: active, tiles, bytes: tileBytes(tiles) });
     },
-    /** Restores exact snapshots, avoiding nondeterministic GPU replay during undo. */
-    undo() {
+    /**
+     * Merges the layer `upperId` into the layer below it as one undoable change. `merged` holds the lower layer's new
+     * pixels for every tile the upper layer covers (`mergeTilePixels`; `undefined` removes the tile). The lower layer
+     * keeps its name, visibility, opacity and blend mode, and becomes active. Throws for the bottom layer.
+     */
+    mergeDown(upperId: string, merged: ReadonlyMap<string, Uint8Array | undefined>) {
+      const index = layers.findIndex((layer) => layer.id === upperId);
+      if (index <= 0) throw new Error('There is no layer below to merge into.');
+      const upper = layers[index]!,
+        lower = layers[index - 1]!;
+      const before = info(),
+        activeBefore = active;
+      const tiles: TileChange[] = [];
+      for (const [key, pixels] of merged) {
+        tiles.push({ layerId: lower.id, key, before: lower.tiles.get(key), after: pixels && packTile(pixels) });
+      }
+
+      for (const [key, pixels] of upper.tiles) tiles.push({ layerId: upper.id, key, before: pixels, after: undefined });
+      for (const change of tiles) {
+        if (change.layerId !== lower.id) continue;
+        if (change.after) lower.tiles.set(change.key, change.after);
+        else lower.tiles.delete(change.key);
+      }
+
+      layers = layers.filter((layer) => layer.id !== upperId);
+      active = lower.id;
+      record({ before, after: info(), activeBefore, activeAfter: active, tiles, bytes: tileBytes(tiles) });
+    },
+    /** Restores exact snapshots, avoiding nondeterministic GPU replay during undo.
+     * Returns the replaced tiles so pixel caches can reload only those, or undefined when nothing was undone.
+     */
+    undo(): readonly TileChange[] | undefined {
       const entry = undo.pop();
       if (entry) {
         apply(entry, 'before');
         redo.push(entry);
         revision++;
       }
+
+      return entry?.tiles;
     },
-    /** Reapplies the same snapshots that were originally committed. */
-    redo() {
+    /**
+     * Reverts the latest history entry and removes it, without a redo step, so that a following `commit` replaces it:
+     * an edit in progress, such as a transform, updates its single undo step this way. Returns the reverted tile
+     * changes, which the renderer must reload. Throws, changing nothing, when `id` is not the latest entry.
+     */
+    revertLatest(id: number): readonly TileChange[] {
+      const entry = undo.at(-1);
+      if (!entry || entry.id !== id) throw new Error('The drawing changed while this edit was in progress.');
+      undo.pop();
+      historyBytes -= entry.bytes;
+      apply(entry, 'before');
+      revision++;
+      return entry.tiles;
+    },
+    /** Id of the latest undoable entry, or `undefined` when there is none. */
+    get latestHistoryId(): number | undefined {
+      return undo.at(-1)?.id;
+    },
+    /** Reapplies the same snapshots that were originally committed; returns them like {@link undo}. */
+    redo(): readonly TileChange[] | undefined {
       const entry = redo.pop();
       if (entry) {
         apply(entry, 'after');
         undo.push(entry);
         revision++;
       }
+
+      return entry?.tiles;
+    },
+    /** Whether layers blend in linear light ("Smooth color") rather than in encoded sRGB, for every blend mode. */
+    linearBlending: () => linearBlending,
+    /**
+     * Makes every layer blend in linear light, as Photoshop's "Blend RGB colors using gamma 1.0", or in encoded sRGB.
+     * A setting of the document, saved with it, outside the undo history.
+     */
+    setLinearBlending(linear: boolean) {
+      if (linear !== linearBlending) {
+        linearBlending = linear;
+        revision++;
+      }
     },
     /** Replaces a document after validation, clearing its session-only undo history. */
-    replace(next: Layer[], selected: string) {
+    replace(next: Layer[], selected: string, linear = true) {
       layers = next;
       active = selected;
+      linearBlending = linear;
       undo.length = redo.length = 0;
       historyBytes = 0;
       nextHistoryId = baseHistoryId = 0;
@@ -269,13 +385,23 @@ export function createDocument(options: { paged?: boolean } = {}) {
 
 /** Layer commands shared by UI and worker. Layer order runs from bottom to top. */
 export type LayerAction =
-  | { type: 'select' | 'delete'; id: string }
+  /**
+   * `duplicate` inserts a copy above the layer, with the same pixels and properties, and selects it. `merge-down`
+   * needs the layers' pixels, so the runtime computes it and applies it with `mergeDown`; `changeLayer` rejects it.
+   */
+  | { type: 'select' | 'delete' | 'duplicate' | 'merge-down'; id: string }
   | { type: 'add' }
   | { type: 'move'; id: string; direction: -1 | 1 }
-  | { type: 'update'; id: string; patch: Partial<Pick<LayerInfo, 'name' | 'visible' | 'opacity' | 'blend'>> };
+  /** Moves the layer to position `index`, bottom first, shifting the layers in between; out-of-range is ignored. */
+  | { type: 'reorder'; id: string; index: number }
+  | {
+      type: 'update';
+      id: string;
+      patch: Partial<Pick<LayerInfo, 'name' | 'visible' | 'opacity' | 'blend' | 'alphaLock' | 'clipping'>>;
+    };
 
 function newLayer(id: string, name: string): Layer {
-  return { id, name, visible: true, opacity: 1, blend: 'linear', tiles: new Map() };
+  return { id, name, visible: true, opacity: 1, blend: 'normal', tiles: new Map() };
 }
 function tileBytes(changes: TileChange[]): number {
   return changes.reduce((n, c) => n + (c.before?.byteLength ?? 0) + (c.after?.byteLength ?? 0), 0);

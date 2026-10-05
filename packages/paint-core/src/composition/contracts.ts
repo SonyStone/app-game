@@ -5,6 +5,8 @@ import type { createPaintRenderer } from '../gpu/renderer';
 import type { StrokeProcessor, StrokeProcessorFactory } from '../strokeProcessors';
 import type { createTileStore } from '../tileStore';
 import type { BrushResourceReader, BrushResourcesFactory } from '@app-game/abr-paint/resources';
+import type { DocumentEdit } from './documentEdit';
+import type { DocumentFeature } from './documentFeature';
 
 /** Raster document operations shared by tools, persistence, history and selection. */
 export type PaintDocument = ReturnType<typeof createDocument>;
@@ -13,11 +15,16 @@ export type PaintRenderer = Awaited<ReturnType<typeof createPaintRenderer>>;
 /** Renderer creation is scoped to a runtime/device lifetime, never to an individual target or stroke. */
 export type RendererFactory = typeof createPaintRenderer;
 
-/** Immutable tile versions plus atomic checkpoints. Adapters must preserve undo references during collect.
+/** Immutable tile versions plus atomic checkpoints. Adapters must preserve undo references during collect,
+ * reading its `live` callback when collection actually runs rather than when it is requested.
  * Save failures reject and retain staged pixels. close reports its outcome and releases resources.
  * Replication requires a separate ordered document-operation protocol, not just a storage adapter.
  */
-export type PaintStorage = Awaited<ReturnType<typeof createTileStore>>;
+export type PaintStorage = Omit<TileStore, 'folder'> & {
+  /** Keeping the drawing in a folder on disk, where the storage supports it; see the tile store's `folder`. */
+  folder?: TileStore['folder'];
+};
+type TileStore = Awaited<ReturnType<typeof createTileStore>>;
 /** Opens one storage session; its name identifies the document namespace. */
 export type StorageFactory = (name: string) => Promise<PaintStorage>;
 
@@ -78,4 +85,8 @@ export type PaintModules = {
   selectEngine: (brush: Brush) => string;
   /** Studio selects brush.stroke.mode; applications can select custom processor IDs. */
   selectProcessor: (brush: Brush) => string;
+  /** Feature modules owning document data, such as paint symmetry; see `defineDocumentFeature`. */
+  features: readonly DocumentFeature[];
+  /** Pixel edits of feature modules, such as a bucket fill; see `defineDocumentEdit`. */
+  edits: readonly DocumentEdit[];
 };

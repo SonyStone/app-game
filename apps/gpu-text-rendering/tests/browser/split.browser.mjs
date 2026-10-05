@@ -163,8 +163,10 @@ try {
   await page.mouse.move(topBox.x + topBox.width / 2, topBox.y + topBox.height / 2);
   await page.mouse.wheel(0, -400);
   await idle();
+  // The panes share on-demand coverage tables; one sized for the closer pane may shift the other's anti-aliasing by a
+  // level, but nothing else may change.
   assert.ok(
-    (await shots(canvases.nth(0), canvases.nth(1)))[1].equals(bottomBefore),
+    (await largestDifference((await shots(canvases.nth(0), canvases.nth(1)))[1], bottomBefore)) <= 2,
     'streaming for one pane keeps the other'
   );
 
@@ -188,6 +190,31 @@ async function shots(first, second) {
   // The toolbar's shadow reaches about 20 px above its box.
   const height = Math.min(...boxes.map((box) => Math.min(box.height, toolbar.y - 32 - box.y))) - 8;
   return Promise.all(boxes.map((box) => page.screenshot({ clip: { x: box.x + 4, y: box.y + 4, width, height } })));
+}
+
+/** Largest channel difference between two equally sized PNG screenshots, decoded in the page. */
+function largestDifference(first, second) {
+  return page.evaluate(
+    async (sources) => {
+      const [a, b] = await Promise.all(
+        sources.map(async (source) => {
+          const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${source}`)).blob());
+          const context = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d');
+          context.drawImage(bitmap, 0, 0);
+          bitmap.close();
+          return context.getImageData(0, 0, context.canvas.width, context.canvas.height).data;
+        })
+      );
+      let largest = 0;
+
+      for (let i = 0; i < a.length; i++) {
+        largest = Math.max(largest, Math.abs(a[i] - b[i]));
+      }
+
+      return largest;
+    },
+    [first.toString('base64'), second.toString('base64')]
+  );
 }
 
 async function pixel(x, y) {
