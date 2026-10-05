@@ -68,6 +68,11 @@
     color: #1f6f9a;
   }
 
+  /* The item a press dragged from the button points at. */
+  &[data-highlighted='true'] {
+    background: #d6e7f1;
+  }
+
   &:hover:not(:disabled, [data-pointer='touch'] *) {
     background: #e9eff2;
   }

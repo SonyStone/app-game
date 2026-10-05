@@ -51,6 +51,53 @@ try {
     await hint.waitFor({ state: 'detached', timeout: 5_000 });
   });
 
+  await step(
+    'selection menus open on a press or a hover and choose by dragging; page gestures stay in the editor',
+    async () => {
+      await page.keyboard.press('l');
+      const tool = page.getByRole('button', { name: 'Selection tool', exact: true });
+      const menu = page.getByRole('menu', { name: 'Selection tool' });
+      // Press the button, drag onto an item and release: that chooses it.
+      const button = await tool.boundingBox();
+      await page.mouse.move(button.x + button.width / 2, button.y + button.height / 2);
+      await page.mouse.down();
+      await menu.waitFor({ timeout: 5_000 });
+      const ellipse = await menu.getByRole('menuitemradio', { name: 'Ellipse selection' }).boundingBox();
+      await page.mouse.move(ellipse.x + ellipse.width / 2, ellipse.y + ellipse.height / 2, { steps: 6 });
+      await page.mouse.up();
+      await menu.waitFor({ state: 'hidden', timeout: 5_000 });
+      assert.match(await tool.getAttribute('title'), /Ellipse selection/);
+
+      // A press released on the button keeps the menu open; the next press closes it.
+      await tool.click();
+      await menu.waitFor({ timeout: 5_000 });
+      await tool.click();
+      await menu.waitFor({ state: 'hidden', timeout: 5_000 });
+
+      // Hovering opens the mode menu after a moment, and leaving closes it.
+      const mode = page.getByRole('button', { name: 'Selection mode', exact: true });
+      await mode.hover();
+      await page.getByRole('menu', { name: 'Selection mode' }).waitFor({ timeout: 5_000 });
+      const { cx, cy } = await workspaceCenter(page);
+      await page.mouse.move(cx, cy + 200, { steps: 4 });
+      await page.getByRole('menu', { name: 'Selection mode' }).waitFor({ state: 'hidden', timeout: 5_000 });
+      await chooseSelectionTool(page, 'Lasso selection');
+      await page.keyboard.press('b');
+
+      // No pull-to-refresh or swipe navigation, and Back stays on the page.
+      assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).overscrollBehaviorY), 'none');
+      const url = page.url();
+      await page.mouse.click(cx, cy + 300, { button: 'right' });
+      await page.keyboard.press('Escape');
+      assert.equal(await page.evaluate(() => history.state?.paintBackGuard), true);
+      await page.evaluate(() => history.back());
+      await page.waitForTimeout(300);
+      assert.equal(page.url(), url);
+      await page.getByRole('main', { name: 'Drawing workspace' }).waitFor({ timeout: 5_000 });
+      assert.equal(await page.evaluate(() => history.state?.paintBackGuard ?? false), false);
+    }
+  );
+
   await step('zoom buttons change the zoom level', async () => {
     await page.getByRole('button', { name: 'Zoom in' }).click();
     assert.equal(await page.getByRole('button', { name: 'Reset zoom' }).textContent(), '125%');

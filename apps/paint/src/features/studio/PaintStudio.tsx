@@ -8,6 +8,7 @@ import type { JSX } from '@solidjs/web';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintError } from '../../shared/errors';
 import { createContextMenuBlock } from '../../shared/ui/createContextMenuBlock';
+import { createPageGestureGuard } from '../../shared/ui/createPageGestureGuard';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { AbrViewerDialog, clearAbrBrush, createAbrPresets } from '../abr';
 import {
@@ -229,6 +230,7 @@ export function PaintStudio(props: {
   );
   const fullscreen = createFullscreenToggle(editor, setError);
   createContextMenuBlock();
+  createPageGestureGuard();
   const colorWheel = createColorWheelSettings();
   const viewOptions = createViewOptions({ ready: engine.canEdit, send: engine.send });
   const drawingFolder = createDrawingFolder({
