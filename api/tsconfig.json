@@ -1,0 +1,7 @@
+{
+  "extends": "../packages/paint-live/tsconfig.json",
+  "compilerOptions": {
+    "typeRoots": ["../packages/paint-live/node_modules/@types"]
+  },
+  "include": ["."]
+}

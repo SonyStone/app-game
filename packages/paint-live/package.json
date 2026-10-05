@@ -1,0 +1,23 @@
+{
+  "name": "@app-game/paint-live",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Live drawing sessions: the relay that carries an author's drawing to viewers, and its browser client",
+  "exports": {
+    "./client": "./src/client.ts",
+    "./envelope": "./src/envelope.ts",
+    "./relay": "./src/relay.ts"
+  },
+  "scripts": {
+    "dev": "bun src/serve.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "bun": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
