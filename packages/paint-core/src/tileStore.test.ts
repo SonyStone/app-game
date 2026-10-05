@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { expect, it } from 'vitest';
 import { restoreDocument, snapshotDocument } from './storage';
-import type { TileData } from './tilePixels';
+import { unpackTile, type TileData } from './tilePixels';
 import { createTileStore } from './tileStore';
 
 it('keeps tiles captured while collection waits behind earlier saves', async () => {
@@ -28,7 +28,9 @@ it('removes tiles that no live reference or checkpoint uses', async () => {
 
   await store.collect(() => []);
 
-  await expect(store.read(tile)).rejects.toThrow('A saved tile could not be read.');
+  // A tile the drawing still refers to reads as transparent, and is counted as missing.
+  expect(unpackTile(await store.read(tile)).every((byte) => byte === 0)).toBe(true);
+  expect(store.stats().missingTiles).toBe(1);
   await store.close();
 });
 
@@ -46,7 +48,9 @@ it('persists navigation in the view record without rewriting the checkpoint or s
   const loaded = await reopened.load();
   expect(loaded?.camera).toEqual({ x: 40, y: -8, zoom: 2, angle: 0.5, mirrored: true });
   expect(loaded?.layers.map((layer) => layer.id)).toEqual(['layer-1']);
-  await expect(reopened.read(staged)).rejects.toThrow();
+  // Never written: it reads as transparent and counts as missing.
+  expect(unpackTile(await reopened.read(staged)).every((byte) => byte === 0)).toBe(true);
+  expect(reopened.stats().missingTiles).toBe(1);
   await reopened.close();
 });
 
@@ -116,7 +120,7 @@ it('tracks unsaved bytes incrementally across capture and flush', async () => {
   await store.close();
 });
 
-it('rejects corrupt and truncated tile records instead of returning wrong pixels', async () => {
+it('reads corrupt and truncated tile records as transparent instead of returning wrong pixels', async () => {
   const store = await createTileStore('corrupt-tiles', 0);
   const tile = store.capture(new Uint8Array(64).fill(5));
   const other = store.capture(new Uint8Array(64).fill(6));
@@ -128,8 +132,11 @@ it('rejects corrupt and truncated tile records instead of returning wrong pixels
   ]);
 
   const reopened = await createTileStore('corrupt-tiles', 0);
-  await expect(reopened.read(tile)).rejects.toThrow('A saved tile could not be read.');
-  await expect(reopened.read(other)).rejects.toThrow('A saved tile could not be read.');
+  for (const lost of [tile, other]) {
+    expect(unpackTile(await reopened.read(lost)).every((byte) => byte === 0)).toBe(true);
+  }
+
+  expect(reopened.stats().missingTiles).toBe(2);
   await reopened.close();
 });
 

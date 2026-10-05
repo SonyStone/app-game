@@ -40,6 +40,7 @@ import { createPerformanceMonitor, PerformancePanel } from '../performance';
 import { createRadialMenu, RadialMenu, radialLayout, type RadialItem } from '../radial-menu';
 import { createInputRecorder, RecordingControls } from '../recording';
 import { createSelection, createSelectionView, guardEdits, SelectionActions, selectionClipPath } from '../selection';
+import { MissingTilesNotice, StorageLockNotice } from '../storage-lock';
 import { createSymmetry, SymmetryGuide, SymmetryPanel } from '../symmetry';
 import { createTransform, TransformOverlay } from '../transform';
 import { createFullscreenToggle } from './createFullscreenToggle';
@@ -68,6 +69,8 @@ export function PaintStudio(props: {
   const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
   const [error, setError] = createSignal<PaintError>();
   const [cursor, setCursor] = createSignal<Point>();
+  /** The count of lost tiles the user last closed the notice at. */
+  const [missingSeen, setMissingSeen] = createSignal(0);
 
   const developer = createDeveloperSettings();
   const brushStorage = createBrushStorage({ onError: setError });
@@ -747,6 +750,16 @@ export function PaintStudio(props: {
               onDismiss={hiddenLayer.dismiss}
             />
           )}
+        </Show>
+        <Show
+          when={
+            (engine.paging().storage?.missingTiles ?? 0) !== missingSeen() && engine.paging().storage?.missingTiles
+          }
+        >
+          {(count) => <MissingTilesNotice count={count()} size={size()} onDismiss={() => setMissingSeen(count())} />}
+        </Show>
+        <Show when={engine.storageLock()}>
+          {(state) => <StorageLockNotice state={state()} onTakeOver={engine.takeOver} />}
         </Show>
         <div class={styles.doublePuck} aria-label="Brush and color">
           <button

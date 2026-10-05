@@ -28,7 +28,9 @@ const browser = await chromium.launch({
 const pageErrors = [];
 
 try {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  // A context of its own, so that a step can open the drawing in a second tab.
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await context.newPage();
   page.on('pageerror', (error) => pageErrors.push(`pageerror: ${error.stack ?? error.message}`));
   page.on('console', (message) => {
     if (message.type() === 'error') {
@@ -1333,6 +1335,25 @@ try {
     await menu.getByText('Kept in “drawing-folder”').waitFor({ timeout: 10_000 });
     assert.equal(await page.getByRole('alert').count(), 0);
     await page.keyboard.press('Escape');
+    await waitForSaved(page);
+  });
+
+  await step('a second tab waits for the drawing, and either tab can take it over', async () => {
+    const second = await context.newPage();
+    try {
+      await second.goto(page.url());
+      await second.getByText('This drawing is open in another tab').waitFor({ timeout: 20_000 });
+      await second.getByRole('button', { name: 'Draw here' }).click();
+      await page.getByText('This drawing was opened in another tab').waitFor({ timeout: 15_000 });
+      await second.getByRole('alertdialog').waitFor({ state: 'detached', timeout: 20_000 });
+      // This tab takes it back; the other one stops.
+      await page.getByRole('button', { name: 'Draw here' }).click();
+      await second.getByText('This drawing was opened in another tab').waitFor({ timeout: 15_000 });
+      await page.getByRole('alertdialog').waitFor({ state: 'detached', timeout: 20_000 });
+    } finally {
+      await second.close();
+    }
+
     await waitForSaved(page);
   });
 

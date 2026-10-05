@@ -15,6 +15,7 @@ import { isPsdFile, readPsdFile, writePsdFile } from './psdFile';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { mergeTilePixels } from './layerMerge';
 import { captureSelection, editSelection, type SelectionPixels } from './selection';
+import { lockStorage, lockedStorage, type StorageLock } from './storageLock';
 import {
   emptySelection,
   isSelected,
@@ -40,6 +41,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let primaryAttached = true;
     let storageName = 'paint-studio';
     let tileStore: PaintStorage;
+    /** The drawing's storage belongs to this engine while it holds the lock; see `lockStorage`. */
+    let storageLock: StorageLock | undefined;
     let importing = false;
     let clipboard: SelectionPixels | undefined;
     let editingSelection = false;
@@ -574,6 +577,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     };
     onCleanup(() => {
       active = false;
+      storageLock?.release();
       stopIdle();
       clearTimeout(selectionTimer);
       clearTimeout(collectTimer);
@@ -639,7 +643,24 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             storageName = command.storageName ?? 'paint-studio';
             size = command.size;
             dpr = command.dpr;
-            tileStore = await modules.storage(storageName);
+            storageLock = await lockStorage(storageName, {
+              waitMs: storageLockWaitMs,
+              takeOver: command.takeOver ?? false,
+              onLost() {
+                // Another engine has the drawing now; this one stops writing it.
+                clearTimeout(saveTimer);
+                clearTimeout(viewTimer);
+                clearTimeout(collectTimer);
+                post({ type: 'storage-lock', state: 'lost' });
+              }
+            });
+            if (!storageLock) {
+              post({ type: 'storage-lock', state: 'busy' });
+              break;
+            }
+
+            const lock = storageLock;
+            tileStore = lockedStorage(await modules.storage(storageName), lock.held);
             const previous = await tileStore.load();
             if (previous) {
               document.replace(previous.layers, previous.activeId, previous.linearBlending);
@@ -1028,10 +1049,15 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             post({ type: 'ready' });
             break;
           case 'dispose':
-            await end();
-            await save();
-            dispose();
-            unwrapResult(await tileStore.close());
+            // An engine that never got its storage has nothing to save.
+            if (tileStore) {
+              await end();
+              await save();
+              dispose();
+              unwrapResult(await tileStore.close());
+            }
+
+            storageLock?.release();
             post({ type: 'disposed' });
             close();
             break;
@@ -1123,6 +1149,9 @@ const saveDelay = 300;
 
 /** Garbage collection of old tile versions waits this long after a save or selection edit. */
 const collectDelay = 5000;
+
+/** How long a starting engine waits for the storage, while an engine replaced by a reload saves and closes. */
+const storageLockWaitMs = 5000;
 
 /** Selection edits and imports flush captured tiles to IndexedDB once this many bytes are pending. */
 const stagedFlushBytes = 8 * 1048576;

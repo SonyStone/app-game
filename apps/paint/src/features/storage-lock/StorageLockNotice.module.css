@@ -1,0 +1,42 @@
+/* Over the whole canvas, so that nothing is drawn that this tab would not save. */
+.cover {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(250 248 244 / 70%);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.card {
+  display: grid;
+  gap: 12px;
+  max-width: min(420px, calc(100% - 32px));
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8f8f8;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 12%);
+
+  strong {
+    font-size: 15px;
+  }
+
+  p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+.primary:is(button) {
+  justify-self: start;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  background: #419bcf;
+  color: #fff;
+  font-size: 14px;
+}

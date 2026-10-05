@@ -61,6 +61,10 @@ export function createPaintEngine(options: {
   const [saveState, setSaveState] = createSignal<StateEvent['saveState']>('saved');
   const [metrics, setMetrics] = createSignal({ tiles: 0, gpu: 0, ms: 0 });
   const [paging, setPaging] = createSignal<EnginePaging>({});
+  /** Whether the drawing's storage belongs to another engine; see the `storage-lock` event. */
+  const [storageLock, setStorageLock] = createSignal<'busy' | 'lost'>();
+  /** The next engine takes the drawing's storage from the one holding it; see `takeOver`. */
+  let takeOverNext = false;
   /** Tile keys last reported by the engine; toggling the wireframe and `replace` clear them. */
   const [debugTiles, setDebugTiles] = createSignal<string[]>(() => {
     options.settings.debug();
@@ -151,6 +155,11 @@ export function createPaintEngine(options: {
     debugTiles,
     /** Camera and symmetry of a loaded, imported or replaced document; UI state resets from it. */
     restored,
+    /**
+     * `busy` while the drawing is open in another tab, so this engine cannot open it; `lost` once another tab took it
+     * over, after which this engine no longer saves. `takeOver` takes it back.
+     */
+    storageLock,
     /** Ids of the layers with paint in the view, bottom to top, as the engine last reported. */
     layersInView,
     /** For each region named by a `watch-regions` command, the ids of the layers with paint in it, bottom to top. */
@@ -165,6 +174,7 @@ export function createPaintEngine(options: {
     send,
     switchMode,
     restart,
+    takeOver,
     putResources,
     runBrushCommand,
     pickColor,
@@ -186,6 +196,9 @@ export function createPaintEngine(options: {
     resident.clear();
     drawing = false;
     options.onError(undefined);
+    setStorageLock(undefined);
+    const takeOver = takeOverNext;
+    takeOverNext = false;
     let phase: 'active' | 'closing' | 'closed' = 'active';
     let firstState = true;
     let retiring = false;
@@ -195,7 +208,12 @@ export function createPaintEngine(options: {
     const opened = openPaintTransport(
       executionMode,
       canvas,
-      { size: { width: canvas.clientWidth, height: canvas.clientHeight }, dpr: devicePixelRatio, ...handoff },
+      {
+        size: { width: canvas.clientWidth, height: canvas.clientHeight },
+        dpr: devicePixelRatio,
+        ...handoff,
+        ...(takeOver ? { takeOver } : {})
+      },
       { message: receive, error: fail }
     );
     if (opened.isErr()) {
@@ -251,6 +269,15 @@ export function createPaintEngine(options: {
           break;
         case 'selection':
           options.onSelection(event);
+          break;
+        case 'storage-lock':
+          setStorageLock(event.state);
+          if (event.state === 'lost') {
+            // Another tab draws now; edits here would not be saved.
+            readiness++;
+            setReady(false);
+          }
+
           break;
         case 'ready':
           void finishReady();
@@ -504,6 +531,18 @@ export function createPaintEngine(options: {
     options.onSelection(emptySelection);
     setSession({ mode: next });
     return true;
+  }
+
+  /**
+   * Starts a new engine that takes the drawing's storage from the engine holding it, such as Paint in another tab,
+   * which then stops saving; see `storageLock`.
+   */
+  function takeOver() {
+    takeOverNext = true;
+    endSwitchWait();
+    setSwitchTarget(undefined);
+    options.onSelection(emptySelection);
+    setSession({ mode: latest(mode) });
   }
 
   /**

@@ -107,7 +107,8 @@ export function createMemoryStorage(): StorageFactory {
         overviewReads: 0,
         overviewWrites: 0,
         overviewDirty: 0,
-        overviewDirtyBytes: 0
+        overviewDirtyBytes: 0,
+        missingTiles: 0
       }),
       async close() {
         closed = true;

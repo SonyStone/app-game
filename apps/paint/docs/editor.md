@@ -70,6 +70,8 @@ Letter and bracket shortcuts also work on non-Latin keyboard layouts: they fall 
 
 Number fields (`ScrubNumber` in `src/shared/ui`), such as layer opacity, the transform's exact values, symmetry settings, the wand's tolerance and the feather radius, are dragged sideways with the pen, a finger or the mouse; the farther the pointer moves from the field, up or down, the finer the steps. A tap types a number instead.
 
+One drawing is open in one tab at a time: an engine takes the Web Locks lock of the drawing's storage before opening it (`paint-core/src/storageLock.ts`), since two engines on one storage save over each other's drawing and collect each other's tiles. A starting engine waits up to five seconds for one that is closing, as after a reload; if another tab keeps the drawing, the canvas is covered by a notice whose **Draw here** takes the drawing over (`takeOver`), and the other tab stops saving and shows the same choice (`src/features/storage-lock/`). A tile the drawing refers to that storage lost reads as transparent instead of failing the action, and a notice says how many (`missingTiles` in the storage statistics).
+
 The editor keeps page gestures from leaving the drawing (`createPageGestureGuard`): pull-to-refresh and swipe navigation are off for the document, and a Back gesture or button lands on an extra history entry of the same page, which the next press in the page puts back.
 
 Touches are ignored while a pen touches the screen anywhere in the window (drawing, or dragging a transform handle), and a touch starting within 500 ms of pen hover or contact is taken for a resting palm. When the pen lifts, fingers still down navigate on from where they are. This is simple palm rejection, not a tablet contact classifier.

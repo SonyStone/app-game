@@ -3,7 +3,7 @@ import type { Camera } from './camera';
 import { openDrawingFolder, type DrawingFolder } from './drawingFolder';
 import { restoreDocument, restoreView, snapshotView, type SavedDocument } from './storage';
 import { compressTile, restoreTile } from './tileCodec';
-import { type TileData, type TileReference } from './tilePixels';
+import { packTile, TILE_BYTES, type TileData, type TileReference } from './tilePixels';
 
 /** Immutable tile versions in IndexedDB with a bounded RAM cache.
  * Dirty bytes remain pinned until their transaction succeeds. Checkpoints atomically publish their versions.
@@ -39,6 +39,8 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
   const cache = new Map<string, { pixels: Uint8Array; dirty: boolean }>();
   const identities = new WeakMap<Uint8Array, TileReference>();
   const loading = new Map<string, Promise<Uint8Array>>();
+  /** Versions the drawing refers to that are in neither IndexedDB nor the folder; they read as transparent. */
+  const missing = new Set<string>();
   let bytes = 0,
     // Running total of pinned (unsaved) bytes; status reads it every frame.
     dirtyBytes = 0,
@@ -106,9 +108,12 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
     })
       .then(async (record) => {
         const stored = record instanceof Uint8Array ? record : await fromFolder(data.storageId);
-        const pixels = stored ? await restoreTile(stored) : undefined;
+        const pixels = stored ? await restoreTile(stored).catch(() => undefined) : undefined;
         if (!pixels || pixels.byteLength !== data.byteLength) {
-          throw new Error('A saved tile could not be read.');
+          // Lost or damaged, for example by another engine that collected it: the rest of the drawing stays usable,
+          // and the count tells the editor.
+          missing.add(data.storageId);
+          return emptyTile;
         }
 
         reads++;
@@ -557,7 +562,8 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
       overviewReads,
       overviewWrites: overviewSaved,
       overviewDirty: overviewWrites.size,
-      overviewDirtyBytes: overviewPendingBytes
+      overviewDirtyBytes: overviewPendingBytes,
+      missingTiles: missing.size
     }),
     /** Closes after queued work. Returns its final outcome so shutdown can report write failures. */
     async close() {
@@ -635,3 +641,6 @@ async function compressAll(tiles: Uint8Array[]): Promise<Uint8Array[]> {
 
 /** Tiles compressed at once while saving. */
 const compressBatch = 16;
+
+/** What a lost tile reads as: transparent. */
+const emptyTile = packTile(new Uint8Array(TILE_BYTES));

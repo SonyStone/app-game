@@ -22,6 +22,11 @@ export type PaintCommand =
       diagnostics?: boolean;
       tools?: RendererToolState;
       historySource?: HistorySource;
+      /**
+       * Takes the drawing's storage from the engine that holds it, in another tab, which stops saving and gets
+       * `storage-lock` `lost`; without it the engine waits a few seconds for the storage and reports `busy`.
+       */
+      takeOver?: boolean;
     }
   | ({ type: 'brush-resources'; requestId: string } & (
       | { action: 'put'; resource: BrushResource }
@@ -143,6 +148,8 @@ export type PaintEvent =
         overviewWrites: number;
         overviewDirty: number;
         overviewDirtyBytes: number;
+        /** Tiles the drawing refers to that storage lost; they read as transparent. */
+        missingTiles: number;
         /**
          * The folder the drawing is kept in: its name, whether the browser allows using it (`prompt` until the user
          * is asked again), whether it is being written and how many versions are left, and the last failure writing it.
@@ -195,6 +202,12 @@ export type PaintEvent =
   /** The selection changed, or a selection command finished; `selection` summarizes it, see `SelectionSummary`. */
   | { type: 'selection'; selection: SelectionSummary; hasClipboard: boolean }
   | { type: 'disposed' }
+  /**
+   * The drawing's storage belongs to another engine, such as Paint in another tab: `busy` when this engine could not
+   * open it, and never becomes ready; `lost` when another engine took it over, after which this one no longer saves.
+   * See `lockStorage`.
+   */
+  | { type: 'storage-lock'; state: 'busy' | 'lost' }
   /** A document was imported; UI state derived from its camera and feature data resets to them. */
   | { type: 'restored'; camera: Camera; features?: Record<string, unknown> }
   /**
