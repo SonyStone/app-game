@@ -1,10 +1,12 @@
 import { createTaskQueue, unwrapResult } from './asyncResult';
 import type { Camera } from './camera';
 import { restoreDocument, restoreView, snapshotView, type SavedDocument } from './storage';
+import { compressTile, restoreTile } from './tileCodec';
 import { type TileData, type TileReference } from './tilePixels';
 
 /** Immutable tile versions in IndexedDB with a bounded RAM cache.
  * Dirty bytes remain pinned until their transaction succeeds. Checkpoints atomically publish their versions.
+ * Tiles and overviews are stored compressed (`compressTile`); the cache and every reader see packed pixels.
  */
 export async function createTileStore(name: string, budget = 64 * 1048576) {
   const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -72,20 +74,22 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
     }
     const pending = loading.get(data.storageId);
     if (pending) return pending;
-    const promise = new Promise<Uint8Array>((resolve, reject) => {
+    const promise = new Promise<unknown>((resolve, reject) => {
       const request = db.transaction('tiles').objectStore('tiles').get(data.storageId);
-      request.onsuccess = () => {
-        const pixels: unknown = request.result;
-        if (!(pixels instanceof Uint8Array) || pixels.byteLength !== data.byteLength) {
-          reject(new Error('A saved tile could not be read.'));
-          return;
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    })
+      .then(async (stored) => {
+        const pixels = stored instanceof Uint8Array ? await restoreTile(stored) : undefined;
+        if (!pixels || pixels.byteLength !== data.byteLength) {
+          throw new Error('A saved tile could not be read.');
         }
+
         reads++;
         remember(data.storageId, pixels, false);
-        resolve(pixels);
-      };
-      request.onerror = () => reject(request.error);
-    }).finally(() => loading.delete(data.storageId));
+        return pixels;
+      })
+      .finally(() => loading.delete(data.storageId));
     loading.set(data.storageId, promise);
     return promise;
   };
@@ -102,13 +106,17 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
     const task = queue.run(async () => {
       const dirty = [...cache].filter(([, entry]) => entry.dirty);
       const derived = [...overviewWrites];
+      // Compressed before the transaction opens: one left waiting for other work commits early.
+      const storedTiles = await compressAll(dirty.map(([, entry]) => entry.pixels));
+      const storedOverviews = await compressAll(derived.map(([, pixels]) => pixels));
       await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(['tiles', 'documents', 'overviews', 'overviewIndex'], 'readwrite');
-        for (const [id, entry] of dirty) tx.objectStore('tiles').put(entry.pixels, id);
-        for (const [key, pixels] of derived) {
-          tx.objectStore('overviews').put(pixels, key);
-          tx.objectStore('overviewIndex').put({ bytes: pixels.byteLength, touched: Date.now() }, key);
-        }
+        dirty.forEach(([id], index) => tx.objectStore('tiles').put(storedTiles[index], id));
+        derived.forEach(([key], index) => {
+          const stored = storedOverviews[index]!;
+          tx.objectStore('overviews').put(stored, key);
+          tx.objectStore('overviewIndex').put({ bytes: stored.byteLength, touched: Date.now() }, key);
+        });
         if (checkpoint) {
           tx.objectStore('documents').put(checkpoint, 'current');
           tx.objectStore('documents').put(snapshotView(checkpoint.camera), 'view');
@@ -147,17 +155,17 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
         const pending = overviewWrites.get(key);
         if (pending) return pending;
         if (!overviewKeys.has(key)) return undefined;
-        return new Promise((resolve, reject) => {
+        const stored = await new Promise<unknown>((resolve, reject) => {
           const request = db.transaction('overviews').objectStore('overviews').get(key);
-          request.onsuccess = () => {
-            const pixels: unknown = request.result;
-            if (pixels instanceof Uint8Array) {
-              overviewReads++;
-              resolve(pixels);
-            } else resolve(undefined);
-          };
+          request.onsuccess = () => resolve(request.result);
           request.onerror = () => reject(request.error);
         });
+        if (!(stored instanceof Uint8Array)) {
+          return undefined;
+        }
+
+        overviewReads++;
+        return restoreTile(stored);
       },
       write(key: string, pixels: Uint8Array) {
         overviewPendingBytes -= overviewWrites.get(key)?.byteLength ?? 0;
@@ -295,3 +303,16 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
     }
   };
 }
+
+/** Compresses tiles for storage a few at a time, in order. */
+async function compressAll(tiles: Uint8Array[]): Promise<Uint8Array[]> {
+  const stored: Uint8Array[] = [];
+  for (let start = 0; start < tiles.length; start += compressBatch) {
+    stored.push(...(await Promise.all(tiles.slice(start, start + compressBatch).map(compressTile))));
+  }
+
+  return stored;
+}
+
+/** Tiles compressed at once while saving. */
+const compressBatch = 16;

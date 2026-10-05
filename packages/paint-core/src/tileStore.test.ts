@@ -220,3 +220,41 @@ function abortNextWriteTransaction() {
     IDBDatabase.prototype.transaction = transaction;
   };
 }
+
+it('stores tiles compressed and still reads tiles stored before compression', async () => {
+  const name = 'compressed-tiles';
+  const flat = new Uint8Array(256 * 256 * 4).fill(90);
+  const store = await createTileStore(name);
+  const ref = store.capture(flat);
+  if (ref instanceof Uint8Array) throw new Error('expected a reference');
+  await store.flush();
+  await store.close();
+
+  const records = await getRecords(name, 'tiles');
+  expect((records.get(ref.storageId) as Uint8Array).byteLength).toBeLessThan(flat.byteLength / 50);
+
+  const legacy = { storageId: crypto.randomUUID(), byteLength: flat.byteLength };
+  await putRecords(name, 'tiles', [[legacy.storageId, flat]]);
+  const reopened = await createTileStore(name);
+  await expect(reopened.read(ref)).resolves.toEqual(flat);
+  await expect(reopened.read(legacy)).resolves.toEqual(flat);
+  await reopened.close();
+});
+
+/** Reads every record of `store`, bypassing the tile store. */
+async function getRecords(name: string, store: string) {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(name);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const records = await new Promise<Map<IDBValidKey, unknown>>((resolve, reject) => {
+    const tx = db.transaction(store);
+    const keys = tx.objectStore(store).getAllKeys();
+    const values = tx.objectStore(store).getAll();
+    tx.oncomplete = () => resolve(new Map(keys.result.map((key, index) => [key, values.result[index]])));
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+  return records;
+}
