@@ -31,7 +31,7 @@
     background: #419bcf;
     color: #fff;
 
-    &:hover:not(:disabled) {
+    &:hover:not(:disabled, [data-pointer='touch'] *) {
       background: #3588b8;
     }
   }

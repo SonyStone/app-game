@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      viewport-fit=cover makes env(safe-area-inset-*) report the home indicator in a standalone iPad app.
+      maximum-scale=1 stops iOS Safari from zooming the page when a text field smaller than 16px gets focus;
+      it still lets users zoom for accessibility, and the studio blocks page pinch with touch-action instead.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#344b66" />
     <meta name="description" content="An infinite canvas for drawing and painting." />
     <meta name="apple-mobile-web-app-capable" content="yes" />

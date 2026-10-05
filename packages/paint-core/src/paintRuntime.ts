@@ -153,7 +153,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         residentTiles: stats?.residentTiles ?? 0
       });
     };
-    const failure = (error: unknown, recoverable = false, code?: GpuError['code'], background = false) =>
+    const failure = (
+      error: unknown,
+      recoverable = false,
+      code = rendererErrorCode(error),
+      background = false
+    ) =>
       post({
         type: 'error',
         message: errorMessage(error),
@@ -1174,6 +1179,17 @@ async function presentedPng(renderer: PaintRenderer, target?: OffscreenCanvas): 
   if (!context) throw new Error('Could not export the canvas.');
   context.putImageData(new ImageData(data, width, height), 0, 0);
   return image.convertToBlob({ type: 'image/png' });
+}
+
+/**
+ * The GPU code of a renderer failure, which carries its `GpuError` as the Error's `cause`, so the editor can tell a
+ * browser that cannot open a GPU adapter from a failed command.
+ */
+function rendererErrorCode(error: unknown): GpuError['code'] | undefined {
+  const cause = error instanceof Error ? error.cause : undefined;
+  return typeof cause === 'object' && cause !== null && 'kind' in cause && cause.kind === 'gpu' && 'code' in cause
+    ? (cause.code as GpuError['code'])
+    : undefined;
 }
 
 /** Names the failure class so a validation bug is not reported to the user as a disconnected device. */

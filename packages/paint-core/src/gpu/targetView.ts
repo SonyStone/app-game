@@ -60,7 +60,7 @@ export function createTargetViews(
       targets.delete(canvas);
     },
 
-    /** Viewport and fallback texture bytes across targets; selection bytes are counted by the overlay. */
+    /** Viewport, fallback and estimated swap-chain bytes across targets; selection bytes are counted by the overlay. */
     bytes() {
       let sum = 0;
       for (const target of targets.values()) {
@@ -162,9 +162,14 @@ function createTargetView(
       this.hold = this.presented;
     },
 
+    /**
+     * Viewport textures, the fallback, and an estimate of the browser-owned swap chain, which iPad Safari and other
+     * mobile browsers count against the tab's memory limit as well.
+     */
     bytes() {
+      const pixels = this.view ? this.view.width * this.view.height : 0;
       // Two rgba16float composition textures and three rgba8unorm images.
-      return (this.fallback?.bytes() ?? 0) + (this.view ? this.view.width * this.view.height * (8 * 2 + 4 * 3) : 0);
+      return (this.fallback?.bytes() ?? 0) + pixels * (8 * 2 + 4 * 3 + swapChainBytesPerPixel);
     },
 
     /** Releases every GPU resource of this target and unconfigures its context. */
@@ -247,3 +252,6 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
 
 /** Format of the textures layers are blended into. */
 export const compositionFormat = 'rgba16float';
+
+/** Up to three 4-byte canvas buffers in flight, allocated by the browser rather than by the renderer. */
+const swapChainBytesPerPixel = 4 * 3;

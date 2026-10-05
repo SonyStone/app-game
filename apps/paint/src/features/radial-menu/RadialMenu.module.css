@@ -25,7 +25,7 @@
   cursor: pointer;
   touch-action: none;
 
-  &:hover:not(:disabled),
+  &:hover:not(:disabled, [data-pointer='touch'] *),
   &[data-highlighted='true'] {
     background: #237aab;
     color: #fff;

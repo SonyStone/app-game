@@ -14,6 +14,7 @@ pnpm --filter @app-game/paint typecheck
 pnpm --filter @app-game/paint test          # feature tests: engine connection, panels, dialogs, input, PWA
 pnpm --filter @app-game/paint test:browser  # every real-GPU verification in headless Chromium with WebGPU
 pnpm --filter @app-game/paint test:ui       # editor UI smoke test: panels, shortcuts, undo/redo, engine switch
+pnpm --filter @app-game/paint test:safari   # smoke test in the real Safari (WebKit's Metal WebGPU, as on iPad)
 pnpm --filter @app-game/paint build      # apps/paint/dist
 pnpm --filter @app-game/paint preview    # http://localhost:4030
 ```
@@ -100,7 +101,11 @@ To report a bug that depends on real pen, touch or palm input, open **Developer 
 
 ## Install and offline use
 
-PWA support is enabled in production builds. Run `pnpm --filter @app-game/paint build`, then `pnpm --filter @app-game/paint preview` and open http://localhost:4030. Use **Drawing menu → Install Paint** when offered, or the browser's installation menu. On iPad/iPhone, use Safari's **Share → Add to Home Screen**.
+PWA support is enabled in production builds. Run `pnpm --filter @app-game/paint build`, then `pnpm --filter @app-game/paint preview` and open http://localhost:4030. Use **Drawing menu → Install Paint** when offered, or the browser's installation menu. On iPad/iPhone, use Safari's **Share → Add to Home Screen**; the drawing menu suggests it in a Safari tab, because Safari may erase a site's storage after seven days without a visit while a Home Screen app keeps it. The Home Screen app has its own storage, so move drawings into it as `.paint` files.
+
+`test:safari` needs **Safari Settings → Developer → Allow remote automation** (the Developer tab appears after **Advanced → Show features for web developers**). Safari 26 enables WebGPU by default only on macOS 26; on earlier macOS turn on **Develop → Feature Flags → WebGPU**, or set `SAFARIDRIVER` to Safari Technology Preview's `Contents/MacOS/safaridriver`. Playwright's WebKit has no WebGPU, so it cannot replace this run. iPad Safari needs WebGPU, which ships in iPadOS 26; earlier versions show an unsupported-browser notice. The iPadOS Simulator exposes `navigator.gpu` but never returns an adapter, so it shows that notice too; it is still useful for iPad Safari layout and file handling.
+
+To try the dev server on a real iPad, open it over HTTPS: WebGPU, `getCoalescedEvents` and the service worker need a secure context, and `http://<LAN IP>` is not one. A tunnel with a trusted certificate needs no setup on the iPad, for example `cloudflared tunnel --url http://localhost:3030` (add the printed host to Vite's `server.allowedHosts`). Debug the page from the Mac with Safari → Develop → *iPad name* after enabling Settings → Apps → Safari → Advanced → Web Inspector on the iPad.
 
 For deployment, serve `dist` at the root of an HTTPS origin. Plain HTTP on a LAN IP does not enable the service worker; use HTTPS when testing from a tablet. Serve `sw.js`, `index.html` and `manifest.webmanifest` with revalidation rather than a long immutable cache lifetime. Hashed `assets/` files can use immutable caching.
 

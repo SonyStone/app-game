@@ -21,6 +21,12 @@ export function PaintApp() {
               Install Paint
             </button>
           </Show>
+          <Show when={pwa.homeScreenHint}>
+            <p class={styles.panelNote}>
+              Safari may erase drawings after a week without visits. To keep them, tap Share, then Add to Home
+              Screen. The Home Screen app starts empty, so export drawings from here first.
+            </p>
+          </Show>
           <p class={styles.panelNote} role="status">
             {pwa.status()}
           </p>

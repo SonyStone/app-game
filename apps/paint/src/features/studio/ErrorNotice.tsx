@@ -4,7 +4,7 @@ import styles from './PaintStudio.module.css';
 
 /**
  * Alert for the latest failure. A paused renderer offers "Restore renderer"; a stopped engine offers "Restart engine",
- * which reloads the saved drawing; a busy editor asks to retry later; other failures only need dismissing.
+ * which reloads the saved drawing; a browser without the required APIs is named as such; a busy editor asks to retry later; other failures only need dismissing.
  */
 export function ErrorNotice(props: {
   error: PaintError;
@@ -19,6 +19,10 @@ export function ErrorNotice(props: {
 
     if (isRestartable(props.error)) {
       return 'Drawing engine stopped';
+    }
+
+    if (props.error.kind === 'engine' && props.error.code === 'unsupported') {
+      return 'This browser cannot run Paint';
     }
 
     return props.error.kind === 'engine' && props.error.code === 'busy'

@@ -17,8 +17,12 @@ export function openPaintTransport(
   init: EngineInit,
   handlers: EngineHandlers
 ): Result<PaintTransport, EngineError> {
-  if (!navigator.gpu || (mode === 'worker' && !canvas.transferControlToOffscreen)) {
-    return err(engineError('unsupported', unsupportedMessage[mode]));
+  if (!navigator.gpu) {
+    return err(engineError('unsupported', noWebGpuMessage));
+  }
+
+  if (mode === 'worker' && !canvas.transferControlToOffscreen) {
+    return err(engineError('unsupported', noOffscreenCanvasMessage));
   }
 
   return mode === 'worker' ? openPaintWorker(canvas, init, handlers) : ok(openLocalEngine(canvas, init, handlers));
@@ -50,10 +54,12 @@ export type PaintTransport = {
   close: () => void;
 };
 
-const unsupportedMessage: Record<ExecutionMode, string> = {
-  worker: 'Worker mode needs WebGPU and OffscreenCanvas. Try a current browser with hardware acceleration enabled.',
-  main: 'This editor needs WebGPU. Try a browser with hardware acceleration enabled.'
-};
+/** Names browsers that ship WebGPU, since iPad users on an older iPadOS see only a blank canvas otherwise. */
+const noWebGpuMessage =
+  'Paint needs WebGPU: Safari 26 or later (iPadOS 26, macOS), or a current Chrome or Edge with hardware acceleration enabled.';
+
+const noOffscreenCanvasMessage =
+  'Worker mode needs OffscreenCanvas. Turn off the worker in the Developer settings or update the browser.';
 
 /** Starts the Vite module worker and transfers the canvas; the worker protocol only accepts an OffscreenCanvas. */
 function openPaintWorker(

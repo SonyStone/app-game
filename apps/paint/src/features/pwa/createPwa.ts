@@ -82,6 +82,11 @@ export function createPwa(register: typeof registerSW) {
   return {
     /** The browser offered installation and the prompt has not been used. */
     canInstall: () => Boolean(prompt()),
+    /**
+     * Running in a Safari tab on iPhone or iPad, which has no install prompt and may erase the site's saved drawings
+     * after seven days without a visit. An app added to the Home Screen keeps them, but has its own separate storage.
+     */
+    homeScreenHint: isIosBrowserTab(),
     installing,
     /** Offline readiness and update status for the drawing menu. */
     status,
@@ -123,6 +128,11 @@ const updateCheckMs = 60 * 60 * 1000;
 /** Asks the server for a new service worker; a found update is reported through `onNeedRefresh`. Offline is fine. */
 function checkForUpdate(registration: ServiceWorkerRegistration) {
   registration.update().catch(() => {});
+}
+
+/** iOS and iPadOS WebKit expose `navigator.standalone`: false in a browser tab, true in a Home Screen app. */
+function isIosBrowserTab() {
+  return (navigator as Navigator & { standalone?: boolean }).standalone === false;
 }
 
 /** Chromium supplies this event; browsers without it retain their own Add to Home Screen UI. */

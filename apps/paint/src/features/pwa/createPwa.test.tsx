@@ -102,6 +102,16 @@ it('reports install failure and removes listeners on disposal', async () => {
   expect(late.defaultPrevented).toBe(false);
 });
 
+it('suggests the Home Screen only in an iOS Safari tab', () => {
+  expect(mount().state().homeScreenHint).toBe(false);
+  dispose?.();
+  vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { standalone: false }));
+  expect(mount().state().homeScreenHint).toBe(true);
+  dispose?.();
+  vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { standalone: true }));
+  expect(mount().state().homeScreenHint).toBe(false);
+});
+
 function mount() {
   vi.stubEnv('PROD', true);
   vi.stubGlobal('isSecureContext', true);

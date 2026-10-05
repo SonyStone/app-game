@@ -7,6 +7,7 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintError } from '../../shared/errors';
+import { createPointerTypeAttribute } from '../../shared/ui/createPointerTypeAttribute';
 import { createContextMenuBlock } from '../../shared/ui/createContextMenuBlock';
 import { createPageGestureGuard } from '../../shared/ui/createPageGestureGuard';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
@@ -56,6 +57,7 @@ import { createFullscreenToggle } from './createFullscreenToggle';
 import { createPaintShortcuts } from './createPaintShortcuts';
 import { createPanelPins } from './createPanelPins';
 import { DrawingMenu } from './DrawingMenu';
+import { createAutoRestore } from './createAutoRestore';
 import { ErrorNotice } from './ErrorNotice';
 import styles from './PaintStudio.module.css';
 import { panelTitles, StudioPanel, type PanelId } from './StudioPanel';
@@ -247,6 +249,8 @@ export function PaintStudio(props: {
     }
   );
   const fullscreen = createFullscreenToggle(editor, setError);
+  createAutoRestore({ error, restore: restoreRenderer });
+  createPointerTypeAttribute(editor);
   createContextMenuBlock();
   createPageGestureGuard();
   const colorWheel = createColorWheelSettings();
@@ -519,6 +523,12 @@ export function PaintStudio(props: {
       setCursor(undefined);
       camera.navigation.close();
     }
+  }
+
+  /** Clears the failure and restarts the renderer, which repeats the ready handshake and the preset upload. */
+  function restoreRenderer() {
+    setError(undefined);
+    edit({ type: 'recover' });
   }
 
   function togglePanel(next: PanelId, target: HTMLElement) {
@@ -1106,10 +1116,7 @@ export function PaintStudio(props: {
         {(current) => (
           <ErrorNotice
             error={current()}
-            onRestore={() => {
-              setError(undefined);
-              edit({ type: 'recover' });
-            }}
+            onRestore={restoreRenderer}
             onRestart={() => engine.restart()}
             onDismiss={() => setError(undefined)}
           />

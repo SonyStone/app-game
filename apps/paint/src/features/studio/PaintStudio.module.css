@@ -16,6 +16,12 @@
     'Segoe UI',
     sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Panels still scroll, but a pinch or double tap outside the canvas must not zoom the whole page (iPad Safari). */
+  touch-action: pan-x pan-y;
+  /* A long press must not select labels or open the iOS callout and loupe. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 
   *,
   *::before,
@@ -27,6 +33,13 @@
   input,
   select {
     font: inherit;
+  }
+
+  /* iOS Safari will not place a caret in a field whose text cannot be selected. */
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   button {
@@ -52,7 +65,8 @@
     outline-offset: 2px;
   }
 
-  button:hover:not(:disabled) {
+  /* After a finger tap iPad Safari keeps :hover; see createPointerTypeAttribute. */
+  button:hover:not(:disabled, [data-pointer='touch'] *) {
     background-color: #e9eff2;
   }
 
@@ -235,7 +249,7 @@
   color: #fff !important;
   box-shadow: 0 1px 3px #0001;
 
-  &:hover:not(:disabled) {
+  &:hover:not(:disabled, [data-pointer='touch'] *) {
     background: #454545 !important;
   }
 }

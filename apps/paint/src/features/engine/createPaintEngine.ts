@@ -750,8 +750,15 @@ function rememberMode(mode: ExecutionMode) {
   history.replaceState(history.state, '', url.href);
 }
 
-/** Renderer failures carry a GPU code and can be restored; other runtime failures reject a single command. */
+/**
+ * Renderer failures carry a GPU code and can be restored; a browser without WebGPU or a usable adapter cannot run the
+ * editor at all; other runtime failures reject a single command.
+ */
 function runtimeError(event: Extract<PaintEvent, { type: 'error' }>): PaintError {
+  if (!event.recoverable && (event.code === 'unavailable' || event.code === 'adapter')) {
+    return engineError('unsupported', event.message, event);
+  }
+
   if (event.recoverable) {
     return gpuError(event.code ?? 'lost', event.message, event);
   }

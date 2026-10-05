@@ -606,7 +606,11 @@ async function openDevice(borrowed: GPUDevice | undefined, keep: KeepGpuResource
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) {
     throw rendererError(
-      gpuError('adapter', 'A WebGPU device could not be opened. Check hardware acceleration in your browser.')
+      gpuError(
+        'adapter',
+        'WebGPU found no usable GPU adapter. Turn on hardware acceleration, or use a device with a supported GPU; ' +
+          'the iOS Simulator has none.'
+      )
     );
   }
 
