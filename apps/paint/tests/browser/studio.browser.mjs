@@ -520,7 +520,7 @@ try {
     await page.keyboard.press('g');
     assert.equal(await page.getByRole('button', { name: 'Brush', exact: true }).getAttribute('aria-pressed'), 'true');
     await page.keyboard.press('l');
-    await page.getByRole('button', { name: 'Rectangle selection' }).click();
+    await chooseSelectionTool(page, 'Rectangle selection');
     await page.mouse.move(paper.x - 60, paper.y - 60);
     await page.mouse.down();
     await page.mouse.move(paper.x + 60, paper.y + 60, { steps: 4 });
@@ -558,7 +558,7 @@ try {
     // Black to white.
     await page.keyboard.press('d');
     await page.keyboard.press('l');
-    await page.getByRole('button', { name: 'Rectangle selection' }).click();
+    await chooseSelectionTool(page, 'Rectangle selection');
     await page.mouse.move(cx - 300, cy - 220);
     await page.mouse.down();
     await page.mouse.move(cx + 300, cy + 220, { steps: 4 });
@@ -609,13 +609,13 @@ try {
     await page.getByRole('button', { name: 'Lasso', exact: true, pressed: true }).waitFor({ timeout: 5_000 });
 
     // Fill selection paints an ellipse with the color, leaving the corners of the box it was dragged across.
-    await page.getByRole('button', { name: 'Ellipse selection' }).click();
+    await chooseSelectionTool(page, 'Ellipse selection');
     await page.mouse.move(cx - 100, cy - 100);
     await page.mouse.down();
     await page.mouse.move(cx + 100, cy + 100, { steps: 4 });
     await page.mouse.up();
     await setColor(page, '0000FF');
-    await bar.getByRole('button', { name: 'Fill selection' }).click();
+    await selectionMenu(page, 'Edit selected pixels', 'Fill selection');
     await waitForSaved(page);
     // Alt-click picks colors with the brush; with the lasso it is left to selecting.
     await page.keyboard.press('b');
@@ -628,27 +628,24 @@ try {
     await undo(page, 1);
     await page.keyboard.press('Control+d');
     await page.keyboard.press('l');
-    await page.getByRole('button', { name: 'Lasso selection' }).click();
+    await chooseSelectionTool(page, 'Lasso selection');
     await page.getByRole('button', { name: 'Brush', exact: true }).click();
   });
 
   await step('up close, sharp pixels end on whole document pixels, where the pixel grid runs', async () => {
     const { cx, cy } = await workspaceCenter(page);
     await page.keyboard.press('l');
-    await page.getByRole('button', { name: 'Rectangle selection' }).click();
+    await chooseSelectionTool(page, 'Rectangle selection');
     // Above the diagonal stroke of earlier steps, so only the rectangle's edge is in the sampled row.
     await page.mouse.move(cx - 200, cy - 60);
     await page.mouse.down();
     await page.mouse.move(cx + 10, cy - 15, { steps: 4 });
     await page.mouse.up();
     await setColor(page, '000000');
-    await page
-      .getByRole('toolbar', { name: 'Selection actions' })
-      .getByRole('button', { name: 'Fill selection' })
-      .click();
+    await selectionMenu(page, 'Edit selected pixels', 'Fill selection');
     await waitForSaved(page);
     await page.keyboard.press('Control+d');
-    await page.getByRole('button', { name: 'Lasso selection' }).click();
+    await chooseSelectionTool(page, 'Lasso selection');
     // The brush shows no selection hint over the sampled row.
     await page.keyboard.press('b');
     for (let i = 0; i < 10; i++) {
@@ -971,7 +968,7 @@ try {
   await step('the magic wand, Shift, a polygon, Invert and Feather change the selection', async () => {
     const { cx, cy } = await workspaceCenter(page);
     const bar = page.getByRole('toolbar', { name: 'Selection actions' });
-    const options = page.getByRole('toolbar', { name: 'Selection options' });
+    const options = page.getByRole('toolbar', { name: 'Wand options' });
     const drag = async (from, to) => {
       await page.mouse.move(from.x, from.y);
       await page.mouse.down();
@@ -980,7 +977,7 @@ try {
     };
     const fillSelection = async (hex) => {
       await setColor(page, hex);
-      await bar.getByRole('button', { name: 'Fill selection' }).click();
+      await selectionMenu(page, 'Edit selected pixels', 'Fill selection');
       await waitForSaved(page);
     };
     /** The displayed color at (x, y), picked with the brush; the selection tools take Alt for themselves. */
@@ -1002,15 +999,26 @@ try {
     await page.keyboard.press('l');
 
     // A red square, selected again by its color with the wand.
-    await page.getByRole('button', { name: 'Rectangle selection' }).click();
+    await chooseSelectionTool(page, 'Rectangle selection');
     await drag({ x: cx - 250, y: cy - 150 }, { x: cx - 150, y: cy - 50 });
     await fillSelection('FF0000');
     await deselect();
     await page.keyboard.press('w');
-    assert.equal(await page.getByRole('button', { name: 'Magic wand' }).getAttribute('aria-pressed'), 'true');
+    assert.match(await page.getByRole('button', { name: 'Selection tool' }).getAttribute('title'), /Magic wand/);
     await options.getByLabel('Wand tolerance').waitFor({ timeout: 5_000 });
     await page.mouse.click(cx - 200, cy - 100);
     await bar.getByRole('button', { name: 'Transform selection' }).waitFor({ timeout: 5_000 });
+    // Escape closes an open menu of the bar and keeps the selection.
+    await page.getByRole('button', { name: 'Modify selection' }).click();
+    await page.getByRole('menu', { name: 'Modify selection' }).waitFor({ timeout: 5_000 });
+    await page.keyboard.press('Escape');
+    await page.getByRole('menu', { name: 'Modify selection' }).waitFor({ state: 'hidden', timeout: 5_000 });
+    await page.waitForTimeout(300);
+    assert.equal(
+      await bar.getByRole('button', { name: 'Transform selection' }).count(),
+      1,
+      'Escape kept the selection'
+    );
     await fillSelection('0000FF');
     const [, , blue] = await rgbAt(cx - 200, cy - 100);
     assert.ok(blue > 0xe0, 'the wand selected the square');
@@ -1018,7 +1026,7 @@ try {
     assert.ok((await rgbAt(cx - 130, cy - 100))[0] > 0xe0, 'the wand stayed inside the square');
 
     // Shift adds a rectangle beside it; Invert then selects everything else in view.
-    await page.getByRole('button', { name: 'Rectangle selection' }).click();
+    await chooseSelectionTool(page, 'Rectangle selection');
     await page.keyboard.down('Shift');
     await drag({ x: cx - 120, y: cy - 150 }, { x: cx - 60, y: cy - 50 });
     await page.keyboard.up('Shift');
@@ -1029,7 +1037,7 @@ try {
       assert.ok(g > 0xe0 && r < 0x20, `expected green in both shapes, got ${[r, g]}`);
     }
 
-    await options.getByRole('button', { name: 'Invert selection' }).click();
+    await selectionMenu(page, 'Modify selection', 'Invert selection');
     await page.waitForTimeout(300);
     await fillSelection('FFFF00');
     const [r, g, b] = await rgbAt(cx - 300, cy + 100);
@@ -1038,7 +1046,7 @@ try {
     await deselect();
 
     // A polygon of pressed corners, closed on its first corner.
-    await page.getByRole('button', { name: 'Polygon selection' }).click();
+    await chooseSelectionTool(page, 'Polygon selection');
     for (const [x, y] of [
       [cx + 50, cy + 50],
       [cx + 250, cy + 50],
@@ -1055,12 +1063,14 @@ try {
     await deselect();
 
     // Feathering softens the edge of a rectangle.
-    await page.getByRole('button', { name: 'Rectangle selection' }).click();
+    await chooseSelectionTool(page, 'Rectangle selection');
     await drag({ x: cx + 300, y: cy + 50 }, { x: cx + 450, y: cy + 200 });
     await bar.getByRole('button', { name: 'Transform selection' }).waitFor({ timeout: 5_000 });
-    await options.getByLabel('Feather radius').fill('12');
-    await options.getByLabel('Feather radius').dispatchEvent('change');
-    await options.getByRole('button', { name: 'Feather selection' }).click();
+    await page.getByRole('button', { name: 'Modify selection' }).click();
+    const modify = page.getByRole('menu', { name: 'Modify selection' });
+    await modify.getByLabel('Feather radius').fill('12');
+    await modify.getByLabel('Feather radius').dispatchEvent('change');
+    await modify.getByRole('menuitem', { name: 'Feather selection' }).click();
     await page.waitForTimeout(300);
     await fillSelection('000000');
     assert.ok(Math.max(...(await rgbAt(cx + 375, cy + 125))) < 0x20, 'the feathered rectangle was filled');
@@ -1310,6 +1320,20 @@ async function drawLine(page, from, to) {
 
   await page.mouse.up();
   await waitForSaved(page);
+}
+
+/** Chooses a selection tool from the selection bar's tool menu. */
+async function chooseSelectionTool(page, name) {
+  await selectionMenu(page, 'Selection tool', name);
+}
+
+/** Opens the selection bar's menu `menu` and chooses its item `item`. */
+async function selectionMenu(page, menu, item) {
+  await page.getByRole('button', { name: menu, exact: true }).click();
+  await page
+    .getByRole('menu', { name: menu })
+    .getByRole(/^(?:Selection tool|Selection mode)$/.test(menu) ? 'menuitemradio' : 'menuitem', { name: item })
+    .click();
 }
 
 /** Sets the current color through the color panel. */

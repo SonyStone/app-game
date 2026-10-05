@@ -1,6 +1,7 @@
 import type { BlendMode, createDocument, LayerAction, LayerInfo } from '@app-game/paint-core/document';
 import { closestCenter, createDragContext, createDraggable, createDroppable } from '@solid-primitives/drag-drop';
 import { For, Show, untrack } from 'solid-js';
+import { ScrubNumber } from '../../shared/ui/ScrubNumber';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { BlendModePicker } from './BlendModePicker';
 import styles from './LayersPanel.module.css';
@@ -96,27 +97,16 @@ export function LayersPanel(props: {
           linear={props.state.linearBlending}
           onChange={(blend) => props.onAction({ type: 'update', id: props.state.activeId, patch: { blend } })}
         />
-        <input
-          aria-label="Layer opacity"
-          title="Layer opacity"
-          type="number"
-          min="0"
-          max="100"
+        <ScrubNumber
+          label="Layer opacity"
+          min={0}
+          max={100}
+          unit="%"
           value={Math.round(selected().opacity * 100)}
-          onChange={(e) => {
-            const percent = parsePercent(e.currentTarget.value);
-            if (percent === undefined) {
-              // An empty or invalid entry keeps the layer unchanged instead of hiding it at 0%.
-              e.currentTarget.value = String(Math.round(selected().opacity * 100));
-              return;
-            }
-
-            // Show the clamped value: when it equals the current opacity, the bound `value` does not change.
-            e.currentTarget.value = String(Math.round(percent));
-            props.onAction({ type: 'update', id: props.state.activeId, patch: { opacity: percent / 100 } });
-          }}
+          onChange={(percent) =>
+            props.onAction({ type: 'update', id: props.state.activeId, patch: { opacity: percent / 100 } })
+          }
         />
-        <span>%</span>
         <button
           class={styles.layerToggle}
           aria-label="Lock transparent pixels"
@@ -271,16 +261,6 @@ function LayerRow(props: {
       </span>
     </div>
   );
-}
-
-/** Clamps a typed percentage to [0, 100]; returns undefined for an empty or non-numeric entry. */
-function parsePercent(text: string): number | undefined {
-  const value = text.trim() === '' ? Number.NaN : Number(text);
-  if (!Number.isFinite(value)) {
-    return undefined;
-  }
-
-  return Math.max(0, Math.min(100, value));
 }
 
 /** Layers, history and the active layer as reported by the engine. */

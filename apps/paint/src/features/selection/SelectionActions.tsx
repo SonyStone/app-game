@@ -3,19 +3,22 @@ import type { SelectionAction } from '@app-game/paint-core/protocol';
 import type { SelectionMode } from '@app-game/paint-core/selectionMask';
 import { createSignal, For, Show } from 'solid-js';
 import { FloatingBar, FloatingBarSeparator } from '../../shared/ui/FloatingBar';
+import { Flyout, FlyoutItem } from '../../shared/ui/Flyout';
 import { placeBeside } from '../../shared/ui/placeBeside';
+import { ScrubNumber } from '../../shared/ui/ScrubNumber';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import type { SelectionTool, WandSettings } from './createSelection';
 import styles from './Selection.module.css';
 import { maxFeatherRadius } from './selectionEdit';
 
 /**
- * Selection commands as an icon bar next to the selection, with an options row below it. The bar holds the selection
- * tools (lasso, polygon, rectangle, ellipse, magic wand), the fill and gradient tools, which work only inside a
- * selection, filling the whole selection with the color, then transform, copy, cut, paste, move to a new layer, delete
- * and deselect. The options row holds how a new shape combines with the selection, the magic wand's settings, and
- * Select All, Invert and Feather. Without a selection, a hint at the top of the canvas with the tools, Select All and
- * Paste. Keyboard shortcuts run the same commands.
+ * Selection commands as one icon bar next to the selection. Menus hold the choices and rarely used commands: the
+ * selection tool (lasso, polygon, rectangle, ellipse, magic wand) and how a new selection combines (new, add, subtract,
+ * intersect), each showing the current choice; Edit (copy, cut, paste, move to a new layer, delete, fill with the
+ * color) and Modify (invert, feather by a dragged radius, select all). The fill and gradient tools, which work only
+ * inside a selection, transform and deselect stay on the bar. Without a selection, a hint at the top of the canvas with
+ * the tool and mode menus, Select All and Paste. The magic wand's settings show in a row below. Keyboard shortcuts run
+ * the same commands.
  */
 export function SelectionActions(props: {
   /** Corners of the selection's bounds in CSS pixels of the canvas; none for an inverted selection or none at all. */
@@ -55,6 +58,8 @@ export function SelectionActions(props: {
   const unavailable = () => props.disabled || props.busy;
   const placement = () =>
     props.outline ? placeBeside(props.outline, props.size, barSize) : { left: props.size.width / 2, top: hintTop };
+  const current = () => toolChoices.find((item) => item.tool === props.selectionTool)!;
+  const currentMode = () => modeChoices.find((item) => item.mode === props.mode)!;
   const paste = () => (
     <button
       aria-label="Paste"
@@ -65,22 +70,55 @@ export function SelectionActions(props: {
       <SketchIcon name="paste" size={20} />
     </button>
   );
-  const tools = () => (
-    <For each={toolButtons}>
-      {(item) => (
-        <button
-          aria-label={item.label}
-          title={item.title}
-          aria-pressed={props.tool === 'lasso' && props.selectionTool === item.tool ? 'true' : 'false'}
-          onClick={() => {
-            props.onSelectionTool(item.tool);
-            props.onTool('lasso');
-          }}
-        >
-          <SketchIcon name={item.icon} size={20} />
-        </button>
-      )}
-    </For>
+  // How the next selection is drawn and how it combines, chosen from their menus.
+  const choices = () => (
+    <>
+      <Flyout
+        label="Selection tool"
+        title={`Selection tool: ${current().label}`}
+        face={<SketchIcon name={current().icon} size={20} />}
+      >
+        {(close) => (
+          <For each={toolChoices}>
+            {(item) => (
+              <FlyoutItem
+                icon={item.icon}
+                label={item.label}
+                shortcut={item.shortcut}
+                checked={props.tool === 'lasso' && props.selectionTool === item.tool}
+                onClick={() => {
+                  props.onSelectionTool(item.tool);
+                  props.onTool('lasso');
+                  close();
+                }}
+              />
+            )}
+          </For>
+        )}
+      </Flyout>
+      <Flyout
+        label="Selection mode"
+        title={`How a new selection combines: ${currentMode().label}`}
+        face={<SketchIcon name={currentMode().icon} size={20} />}
+      >
+        {(close) => (
+          <For each={modeChoices}>
+            {(item) => (
+              <FlyoutItem
+                icon={item.icon}
+                label={item.label}
+                shortcut={item.shortcut}
+                checked={props.mode === item.mode}
+                onClick={() => {
+                  props.onMode(item.mode);
+                  close();
+                }}
+              />
+            )}
+          </For>
+        )}
+      </Flyout>
+    </>
   );
   const selectAll = () => (
     <button aria-label="Select all" title="Select all · ⌘/Ctrl A" disabled={unavailable()} onClick={props.onSelectAll}>
@@ -94,7 +132,7 @@ export function SelectionActions(props: {
         when={props.selected}
         fallback={
           <FloatingBar placement={placement()} label="Selection actions">
-            {tools()}
+            {choices()}
             <span role="status">{hint(props.busy, props.selectionTool)}</span>
             {selectAll()}
             <Show when={props.hasClipboard}>{paste()}</Show>
@@ -102,7 +140,7 @@ export function SelectionActions(props: {
         }
       >
         <FloatingBar placement={placement()} label="Selection actions">
-          {tools()}
+          {choices()}
           <FloatingBarSeparator />
           <button
             aria-label="Fill tool"
@@ -123,15 +161,6 @@ export function SelectionActions(props: {
             <SketchIcon name="gradient" size={20} />
           </button>
           <button
-            aria-label="Fill selection"
-            title="Fill the whole selection with the color"
-            disabled={unavailable()}
-            onClick={() => props.onFillSelection()}
-          >
-            <SketchIcon name="fillSelection" size={20} />
-          </button>
-          <FloatingBarSeparator />
-          <button
             aria-label="Transform selection"
             title="Transform the selected pixels · ⌘/Ctrl T"
             disabled={unavailable()}
@@ -140,39 +169,83 @@ export function SelectionActions(props: {
             <SketchIcon name="move" size={20} />
           </button>
           <FloatingBarSeparator />
-          <button
-            aria-label="Copy"
-            title="Copy · ⌘/Ctrl C"
+          <Flyout
+            label="Edit selected pixels"
+            title="Copy, cut, paste, move to a new layer, delete or fill the selected pixels"
+            face={<SketchIcon name="copy" size={20} />}
             disabled={unavailable()}
-            onClick={() => props.onAction('copy')}
           >
-            <SketchIcon name="copy" size={20} />
-          </button>
-          <button
-            aria-label="Cut"
-            title="Cut · ⌘/Ctrl X"
+            {(close) => (
+              <For each={editItems}>
+                {(item) => (
+                  <FlyoutItem
+                    icon={item.icon}
+                    label={item.label}
+                    shortcut={item.shortcut}
+                    disabled={item.action === 'paste' && !props.hasClipboard}
+                    onClick={() => {
+                      close();
+                      if (item.action === 'fill') {
+                        props.onFillSelection();
+                      } else {
+                        props.onAction(item.action);
+                      }
+                    }}
+                  />
+                )}
+              </For>
+            )}
+          </Flyout>
+          <Flyout
+            label="Modify selection"
+            title="Invert, feather or select all"
+            face={<SketchIcon name="feather" size={20} />}
             disabled={unavailable()}
-            onClick={() => props.onAction('cut')}
           >
-            <SketchIcon name="cut" size={20} />
-          </button>
-          {paste()}
-          <button
-            aria-label="Move to new layer"
-            title="Move the selected pixels to a new layer"
-            disabled={unavailable()}
-            onClick={() => props.onAction('new-layer')}
-          >
-            <SketchIcon name="newLayer" size={20} />
-          </button>
-          <button
-            aria-label="Delete"
-            title="Delete the selected pixels · Delete"
-            disabled={unavailable()}
-            onClick={() => props.onAction('delete')}
-          >
-            <SketchIcon name="trash" size={20} />
-          </button>
+            {(close) => (
+              <>
+                <FlyoutItem
+                  icon="selectInvert"
+                  label="Invert selection"
+                  shortcut="⌘⇧I"
+                  onClick={() => {
+                    close();
+                    props.onInvert();
+                  }}
+                />
+                <div class={styles.featherRow}>
+                  <span>Radius</span>
+                  <ScrubNumber
+                    label="Feather radius"
+                    min={0.5}
+                    max={maxFeatherRadius}
+                    step={0.5}
+                    scale="log"
+                    unit="px"
+                    value={radius()}
+                    onChange={setRadius}
+                  />
+                </div>
+                <FlyoutItem
+                  icon="feather"
+                  label="Feather selection"
+                  onClick={() => {
+                    close();
+                    props.onFeather(radius());
+                  }}
+                />
+                <FlyoutItem
+                  icon="selectAll"
+                  label="Select all"
+                  shortcut="⌘A"
+                  onClick={() => {
+                    close();
+                    props.onSelectAll();
+                  }}
+                />
+              </>
+            )}
+          </Flyout>
           <FloatingBarSeparator />
           <button
             aria-label="Deselect"
@@ -184,96 +257,45 @@ export function SelectionActions(props: {
           </button>
         </FloatingBar>
       </Show>
-      <Show when={props.tool === 'lasso'}>
+      <Show when={props.tool === 'lasso' && props.selectionTool === 'wand'}>
         <FloatingBar
           placement={{ left: placement().left, top: placement().top + barHeight + optionsGap }}
-          label="Selection options"
+          label="Wand options"
         >
-          <For each={modeButtons}>
-            {(item) => (
-              <button
-                aria-label={item.label}
-                title={item.title}
-                aria-pressed={props.mode === item.mode ? 'true' : 'false'}
-                onClick={() => props.onMode(item.mode)}
-              >
-                <SketchIcon name={item.icon} size={20} />
-              </button>
-            )}
-          </For>
-          <Show when={props.selectionTool === 'wand'}>
-            <FloatingBarSeparator />
-            <label class={styles.field} title="How different a color may be from the pressed one and still be selected">
-              Tolerance
-              <input
-                type="number"
-                aria-label="Wand tolerance"
-                min={0}
-                max={255}
-                value={props.wand.tolerance}
-                onChange={(event) =>
-                  props.onWand({ tolerance: clamp(Math.round(event.currentTarget.valueAsNumber), 0, 255, 32) })
-                }
-              />
-            </label>
-            <button
-              class={styles.textOption}
-              aria-pressed={props.wand.contiguous ? 'true' : 'false'}
-              title="Select only the area connected to the pressed pixel"
-              onClick={() => props.onWand({ contiguous: !props.wand.contiguous })}
-            >
-              Contiguous
-            </button>
-            <button
-              class={styles.textOption}
-              aria-pressed={props.wand.source === 'all' ? 'true' : 'false'}
-              title="Compare the colors of all visible layers rather than the active layer's"
-              onClick={() => props.onWand({ source: props.wand.source === 'all' ? 'layer' : 'all' })}
-            >
-              All layers
-            </button>
-            <button
-              class={styles.textOption}
-              aria-pressed={props.wand.antialias ? 'true' : 'false'}
-              title="Soften the edge of the selected area by a pixel"
-              onClick={() => props.onWand({ antialias: !props.wand.antialias })}
-            >
-              Smooth edges
-            </button>
-          </Show>
-          <Show when={props.selected}>
-            <FloatingBarSeparator />
-            <button
-              aria-label="Invert selection"
-              title="Select what is not selected · ⌘/Ctrl Shift I"
-              disabled={unavailable()}
-              onClick={props.onInvert}
-            >
-              <SketchIcon name="selectInvert" size={20} />
-            </button>
-            <label class={styles.field} title="Soften the selection's edges by this many pixels">
-              <input
-                type="number"
-                aria-label="Feather radius"
-                min={1}
-                max={maxFeatherRadius}
-                value={radius()}
-                onChange={(event) =>
-                  setRadius(clamp(event.currentTarget.valueAsNumber, 0.5, maxFeatherRadius, radius()))
-                }
-              />
-              px
-            </label>
-            <button
-              aria-label="Feather selection"
-              title="Feather: soften the selection's edges by the radius"
-              disabled={unavailable()}
-              onClick={() => props.onFeather(radius())}
-            >
-              <SketchIcon name="feather" size={20} />
-            </button>
-            {selectAll()}
-          </Show>
+          <label class={styles.field} title="How different a color may be from the pressed one and still be selected">
+            Tolerance
+            <ScrubNumber
+              label="Wand tolerance"
+              min={0}
+              max={255}
+              value={props.wand.tolerance}
+              onChange={(tolerance) => props.onWand({ tolerance })}
+            />
+          </label>
+          <button
+            class={styles.textOption}
+            aria-pressed={props.wand.contiguous ? 'true' : 'false'}
+            title="Select only the area connected to the pressed pixel"
+            onClick={() => props.onWand({ contiguous: !props.wand.contiguous })}
+          >
+            Contiguous
+          </button>
+          <button
+            class={styles.textOption}
+            aria-pressed={props.wand.source === 'all' ? 'true' : 'false'}
+            title="Compare the colors of all visible layers rather than the active layer's"
+            onClick={() => props.onWand({ source: props.wand.source === 'all' ? 'layer' : 'all' })}
+          >
+            All layers
+          </button>
+          <button
+            class={styles.textOption}
+            aria-pressed={props.wand.antialias ? 'true' : 'false'}
+            title="Soften the edge of the selected area by a pixel"
+            onClick={() => props.onWand({ antialias: !props.wand.antialias })}
+          >
+            Smooth edges
+          </button>
         </FloatingBar>
       </Show>
     </>
@@ -295,11 +317,6 @@ function hint(busy: boolean, tool: SelectionTool) {
   }[tool];
 }
 
-/** `value` within `min` and `max`, or `fallback` when it is not a number. */
-function clamp(value: number, min: number, max: number, fallback: number) {
-  return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
-}
-
 /** Top of the hint bar, below the view controls. */
 const hintTop = 66;
 
@@ -307,37 +324,37 @@ const hintTop = 66;
 const barHeight = 48;
 const optionsGap = 6;
 
-/** Approximate size of the bar and the options row below it, for placing them. */
-const barSize = { width: 640, height: barHeight * 2 + optionsGap };
+/** Approximate size of the bar and the wand's options row below it, for placing them. */
+const barSize = { width: 440, height: barHeight * 2 + optionsGap };
 
-/** The selection tools, in bar order. */
-const toolButtons: readonly { tool: SelectionTool; label: string; title: string; icon: SketchIconName }[] = [
-  { tool: 'lasso', label: 'Lasso selection', title: 'Lasso · L: draw around the pixels', icon: 'lasso' },
-  {
-    tool: 'polygon',
-    label: 'Polygon selection',
-    title: 'Polygonal lasso: press corners; the first corner, a double press or Enter closes it',
-    icon: 'selectPolygon'
-  },
-  { tool: 'rectangle', label: 'Rectangle selection', title: 'Rectangle: drag across the pixels', icon: 'selectRect' },
-  { tool: 'ellipse', label: 'Ellipse selection', title: 'Ellipse: drag across the pixels', icon: 'selectEllipse' },
-  { tool: 'wand', label: 'Magic wand', title: 'Magic wand · W: press a color to select it', icon: 'magicWand' }
+/** The selection tools, in menu order. */
+const toolChoices: readonly { tool: SelectionTool; label: string; shortcut?: string; icon: SketchIconName }[] = [
+  { tool: 'lasso', label: 'Lasso selection', shortcut: 'L', icon: 'lasso' },
+  { tool: 'polygon', label: 'Polygon selection', icon: 'selectPolygon' },
+  { tool: 'rectangle', label: 'Rectangle selection', icon: 'selectRect' },
+  { tool: 'ellipse', label: 'Ellipse selection', icon: 'selectEllipse' },
+  { tool: 'wand', label: 'Magic wand', shortcut: 'W', icon: 'magicWand' }
 ];
 
-/** How a new shape combines with the selection, in bar order. */
-const modeButtons: readonly { mode: SelectionMode; label: string; title: string; icon: SketchIconName }[] = [
-  { mode: 'replace', label: 'New selection', title: 'New selection', icon: 'selectNew' },
-  { mode: 'add', label: 'Add to selection', title: 'Add to the selection · hold Shift', icon: 'selectAdd' },
-  {
-    mode: 'subtract',
-    label: 'Subtract from selection',
-    title: 'Subtract from the selection · hold Alt/Option',
-    icon: 'selectSubtract'
-  },
-  {
-    mode: 'intersect',
-    label: 'Intersect with selection',
-    title: 'Keep only where it overlaps the selection · hold Shift and Alt/Option',
-    icon: 'selectIntersect'
-  }
+/** How a new shape combines with the selection, in menu order. */
+const modeChoices: readonly { mode: SelectionMode; label: string; shortcut?: string; icon: SketchIconName }[] = [
+  { mode: 'replace', label: 'New selection', icon: 'selectNew' },
+  { mode: 'add', label: 'Add to selection', shortcut: 'Shift', icon: 'selectAdd' },
+  { mode: 'subtract', label: 'Subtract from selection', shortcut: 'Alt', icon: 'selectSubtract' },
+  { mode: 'intersect', label: 'Intersect with selection', shortcut: 'Shift Alt', icon: 'selectIntersect' }
+];
+
+/** Commands on the selected pixels in the Edit menu. */
+const editItems: readonly {
+  action: SelectionAction | 'fill';
+  label: string;
+  shortcut?: string;
+  icon: SketchIconName;
+}[] = [
+  { action: 'copy', label: 'Copy', shortcut: '⌘C', icon: 'copy' },
+  { action: 'cut', label: 'Cut', shortcut: '⌘X', icon: 'cut' },
+  { action: 'paste', label: 'Paste', shortcut: '⌘V', icon: 'paste' },
+  { action: 'new-layer', label: 'Move to new layer', icon: 'newLayer' },
+  { action: 'delete', label: 'Delete', shortcut: 'Del', icon: 'trash' },
+  { action: 'fill', label: 'Fill selection', icon: 'fillSelection' }
 ];

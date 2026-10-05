@@ -1,6 +1,7 @@
 import type { Point } from '@app-game/paint-core/camera';
 import type { PaintSymmetry } from '@app-game/paint-core/symmetry';
 import { For, Show } from 'solid-js';
+import { ScrubNumber } from '../../shared/ui/ScrubNumber';
 import styles from './SymmetryPanel.module.css';
 
 /** Document symmetry controls; changing guides never changes a brush preset or the camera's mirror state. */
@@ -42,53 +43,41 @@ export function SymmetryPanel(props: {
         <Show when={props.symmetry.mode === 'radial' || props.symmetry.mode === 'mandala'}>
           <label>
             Segments
-            <input
-              type="number"
-              aria-label="Symmetry segments"
+            <ScrubNumber
+              label="Symmetry segments"
               min={props.symmetry.mode === 'mandala' ? 3 : 2}
               max={props.symmetry.mode === 'mandala' ? 10 : 12}
-              step="1"
               value={props.symmetry.segments}
-              onChange={(event) => {
-                const input = event.currentTarget;
-                if (input.validity.valid && Number.isFinite(input.valueAsNumber)) {
-                  update({ segments: input.valueAsNumber });
-                }
-              }}
+              onInput={(segments) => update({ segments })}
+              onChange={(segments) => update({ segments })}
             />
           </label>
         </Show>
         <label>
           Angle
-          <input
-            type="number"
-            aria-label="Symmetry angle"
-            min="-180"
-            max="180"
-            step="1"
+          <ScrubNumber
+            label="Symmetry angle"
+            min={-180}
+            max={180}
+            unit="°"
+            wrap
             value={Math.round((props.symmetry.angle * 180) / Math.PI)}
-            onChange={(event) => {
-              const input = event.currentTarget;
-              if (input.validity.valid && Number.isFinite(input.valueAsNumber)) {
-                update({ angle: (input.valueAsNumber * Math.PI) / 180 });
-              }
-            }}
+            onInput={(degrees) => update({ angle: (degrees * Math.PI) / 180 })}
+            onChange={(degrees) => update({ angle: (degrees * Math.PI) / 180 })}
           />
         </label>
         <For each={['x', 'y'] as const}>
           {(axis) => (
             <label>
               Center {axis.toUpperCase()}
-              <input
-                type="number"
-                aria-label={`Symmetry center ${axis.toUpperCase()}`}
-                step="any"
+              <ScrubNumber
+                label={`Symmetry center ${axis.toUpperCase()}`}
+                step={0.5}
+                rate={1}
+                unit="px"
                 value={props.symmetry[axis]}
-                onChange={(event) => {
-                  if (Number.isFinite(event.currentTarget.valueAsNumber)) {
-                    update({ [axis]: event.currentTarget.valueAsNumber });
-                  }
-                }}
+                onInput={(value) => update({ [axis]: value })}
+                onChange={(value) => update({ [axis]: value })}
               />
             </label>
           )}

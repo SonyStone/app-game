@@ -14,17 +14,17 @@
   color: var(--muted);
   white-space: nowrap;
 
-  input[type='number'] {
-    width: 52px;
-    height: 28px;
-    padding: 0 4px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: #fff;
-    color: var(--ink);
-  }
-
   input[type='range'] {
     width: 96px;
   }
+}
+
+/* The feather radius in the Modify menu, above its command. */
+.featherRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 2px 42px;
+  color: var(--muted);
+  font-size: 12px;
 }

@@ -4,8 +4,8 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import type { PaintTool } from '../brush';
 
 /**
- * Editor keyboard shortcuts on `window`. Escape closes an open panel, even from its own controls, and then does nothing
- * else; only an Escape with no panel open cancels work in progress. Shortcuts, including that cancel, are ignored in
+ * Editor keyboard shortcuts on `window`. Escape closes an open menu or panel, even from its own controls, and then
+ * does nothing else; only an Escape with no panel open cancels work in progress. Shortcuts, including that cancel, are ignored in
  * open dialogs and text or form fields. Single-key tool and brush shortcuts ignore presses with Ctrl, Cmd or Alt and
  * IME composition. Letters and brackets typed on non-Latin layouts match by physical key. Ctrl or Cmd with `=`/`+`,
  * `-` and `0` zoom the canvas instead of the page. Must be created within a Solid owner, which removes the listener on
@@ -43,7 +43,8 @@ export function createPaintShortcuts(actions: {
   cancel: () => void;
 }) {
   createEventListener(window, 'keydown', (event) => {
-    if (event.key === 'Escape' && actions.closePanel()) {
+    // The browser closes an open menu, such as a selection bar's, on Escape; nothing else happens then.
+    if (event.key === 'Escape' && (openMenu() || actions.closePanel())) {
       return;
     }
 
@@ -142,6 +143,15 @@ function shortcutKey(event: KeyboardEvent) {
   }
 
   return physicalKeys[event.code] ?? (/^Key[A-Z]$/.test(event.code) ? event.code.slice(3).toLowerCase() : typed);
+}
+
+/** Whether a popover menu is open; environments without popovers have none. */
+function openMenu() {
+  try {
+    return document.querySelector(':popover-open') !== null;
+  } catch {
+    return false;
+  }
 }
 
 /** Tools showing the selection actions, whose shortcuts they enable. */

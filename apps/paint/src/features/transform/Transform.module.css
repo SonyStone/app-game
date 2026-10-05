@@ -86,20 +86,6 @@
   gap: 3px;
   font-size: 11px;
   color: var(--muted);
-
-  input {
-    width: 48px;
-    min-height: 28px;
-    padding: 0 4px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-
-  small {
-    font-size: 10px;
-  }
 }
 
 .pivot {

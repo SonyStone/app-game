@@ -70,9 +70,14 @@ it('ignores an empty opacity entry instead of hiding the layer', () => {
   expect(layer).not.toHaveBeenCalled();
   expect(opacity.value).toBe('100');
 
+  // Clamped to 100%, as it already is.
   opacity.value = '140';
   opacity.dispatchEvent(new Event('change', { bubbles: true }));
-  expect(layer).toHaveBeenLastCalledWith({ type: 'update', id: initial.activeId, patch: { opacity: 1 } });
+  expect(layer).not.toHaveBeenCalled();
+  expect(opacity.value).toBe('100');
+  opacity.value = '40';
+  opacity.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(layer).toHaveBeenLastCalledWith({ type: 'update', id: initial.activeId, patch: { opacity: 0.4 } });
 });
 
 it('renames and duplicates the selected layer, and disables moves past either end', () => {

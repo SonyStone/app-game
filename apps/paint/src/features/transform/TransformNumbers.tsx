@@ -1,10 +1,11 @@
+import { ScrubNumber } from '../../shared/ui/ScrubNumber';
 import type { BoxState, TransformSettings } from './createTransform';
 import styles from './Transform.module.css';
 
 /**
  * Exact values of the transform box: width and height as percentages of the original, the clockwise angle in degrees
- * and the offset in document pixels. A value applies when it is committed, with Enter or by leaving the field; with
- * proportions kept, width and height change together. A distorted or warped box has no such values, so the fields are disabled.
+ * and the offset in document pixels. Each is a `ScrubNumber`: dragged sideways, the box follows; typed, it applies
+ * with Enter or by leaving the field. With proportions kept, width and height change together. A distorted or warped box has no such values, so the fields are disabled.
  */
 export function TransformNumbers(props: {
   /** Where the panel goes: its horizontal center and top, in CSS pixels of the canvas. */
@@ -38,6 +39,8 @@ export function TransformNumbers(props: {
         label="W"
         name="Width"
         unit="%"
+        scale="log"
+        min={0.1}
         value={Math.abs(props.box.scale.x) * 100}
         disabled={disabled()}
         onCommit={(value) => setScale('x', value)}
@@ -46,6 +49,8 @@ export function TransformNumbers(props: {
         label="H"
         name="Height"
         unit="%"
+        scale="log"
+        min={0.1}
         value={Math.abs(props.box.scale.y) * 100}
         disabled={disabled()}
         onCommit={(value) => setScale('y', value)}
@@ -54,6 +59,9 @@ export function TransformNumbers(props: {
         label="∠"
         name="Angle"
         unit="°"
+        min={-180}
+        max={180}
+        wrap
         value={degrees()}
         disabled={disabled()}
         onCommit={(value) => props.onChange({ ...props.box, angle: (normalizeDegrees(value) * Math.PI) / 180 })}
@@ -78,39 +86,37 @@ export function TransformNumbers(props: {
   );
 }
 
-/** One labeled number, shown to a tenth; an invalid entry reverts to the current value. */
+/** One labeled number to a tenth, which the box follows while it is dragged. */
 function Field(props: {
   label: string;
   name: string;
   unit: string;
   value: number;
+  min?: number;
+  max?: number;
+  scale?: 'linear' | 'log';
+  wrap?: boolean;
   disabled: boolean;
   onCommit: (value: number) => void;
 }) {
-  const shown = () => String(Math.round(props.value * 10) / 10);
   return (
     <label class={styles.field} title={props.name}>
       <span>{props.label}</span>
-      <input
-        aria-label={props.name}
-        inputmode="decimal"
-        value={shown()}
+      <ScrubNumber
+        label={props.name}
+        value={Math.round(props.value * 10) / 10}
+        step={0.1}
+        unit={props.unit}
+        min={props.min}
+        max={props.max}
+        scale={props.scale}
+        wrap={props.wrap}
+        // Offsets move a document pixel per CSS pixel dragged.
+        rate={1}
         disabled={props.disabled}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.currentTarget.blur();
-          }
-        }}
-        onChange={(event) => {
-          const value = Number(event.currentTarget.value.replace(',', '.'));
-          if (Number.isFinite(value)) {
-            props.onCommit(value);
-          }
-
-          event.currentTarget.value = shown();
-        }}
+        onInput={props.onCommit}
+        onChange={props.onCommit}
       />
-      <small>{props.unit}</small>
     </label>
   );
 }

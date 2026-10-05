@@ -70,16 +70,6 @@
       color: #1f6f9a;
     }
   }
-
-  input {
-    width: 46px;
-    height: 36px;
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    text-align: right;
-    background: #fff;
-    padding: 3px;
-  }
 }
 
 .layerList {
