@@ -6,13 +6,25 @@ Photoshop brush viewer and editor imported from `SonyStone/ABR-Viewer` into the 
 - Standalone development: `pnpm --filter @app-game/abr-viewer dev` uses port 3020.
 - Validation: `pnpm --filter @app-game/abr-viewer typecheck`, `build`, `test`, and `test:e2e`.
 - Parser and original brush samples: `packages/abr-parser`.
-- Example collections use Git LFS. After cloning, run `git lfs install` and `git lfs pull` before building or opening the gallery. On Vercel, enable **Project Settings → Git → Git Large File Storage (LFS)** and redeploy ([Vercel documentation](https://vercel.com/docs/project-configuration/git-settings)). Both builds check the example headers and stop if unresolved LFS pointers would be published.
+- Example collections link to Adobe downloads. ABR files are not bundled, and Git LFS is not required.
+
+## Vercel deployment
+
+Connect the existing `abr-viewer` Vercel project to `SonyStone/app-game` and set its **Root Directory** to `apps/abr-viewer`. Enable **Include source files outside of the Root Directory in the Build Step** so Vite can read workspace packages, the shared TypeScript and UnoCSS configuration, and styles.
+
+The local `vercel.json` selects Vite, installs workspace dependencies with `pnpm install --frozen-lockfile`, builds with `pnpm build`, and serves `dist`. The standalone editor opens at `/`. The repository's root Vercel configuration belongs to the shared application and is not used for this project.
+
+Use Node.js **22.x** and set `ENABLE_EXPERIMENTAL_COREPACK=1` for Production and Preview to use the pnpm version pinned in the repository's root `package.json`. Set the production branch to `master`. Workspace packages expose their source files, and the parser's WebAssembly binary is committed, so no separate package or Rust build is needed. See [Vercel monorepos](https://vercel.com/docs/monorepos) and [build configuration](https://vercel.com/docs/builds/configure-a-build).
+
+After these changes are pushed, deploy the latest `master` commit from the connected repository. Redeploying an old deployment from the previous repository does not migrate its source code.
+
+## Editor
 
 The viewer uses the workspace versions of Solid 2, UnoCSS, and solid-nest. It processes files locally in the browser. The parser exposes separate Node and browser entry points. Zod's v3 compatibility export preserves the imported schemas while using the workspace's Zod 4 dependency.
 
 The editor uses a persistent Brushes panel beside docked Brush Settings. Import files using the toolbar or drop them anywhere in the workspace. Click a preset to edit it immediately; drag presets and groups to reorder them. Group menus provide rename, sub-group creation, export, and delete. The divider and thumbnail size control adjust the workspace density.
 
-The toolbar's Examples button opens a modal gallery with Watercolor, Spatter Brushes, Manga, Halftones and Screentones, Gouache, Dry Media, Megapack, and Spring Brushes 2024. The cards use artwork from [Adobe's brush collections page](https://www.adobe.com/uk/products/photoshop/photoshop-brushes.html), with a scrollable three-column layout, collection descriptions, and Add brushes buttons. The transparent, borderless dialog sits over a dimmed backdrop and reveals its cards with a short staggered animation, disabled for reduced-motion preferences. The round corner close button, Escape, and clicks outside the cards dismiss the modal. These eight original ABR files are stored in `src/assets/examples`, with 939 presets in total. Vite emits them as separate assets for both standalone and shared-app builds. The browser fetches a collection only when selected; it is imported into the current workspace with the same editing, undo, and export behavior as a local file.
+The toolbar's Examples button opens a modal gallery with Watercolor, Spatter Brushes, Manga, Halftones and Screentones, Gouache, Dry Media, Megapack, and Spring Brushes 2024. The cards use artwork from [Adobe's brush collections page](https://www.adobe.com/uk/products/photoshop/photoshop-brushes.html), with a scrollable three-column layout, collection descriptions, and Adobe download links. The transparent, borderless dialog sits over a dimmed backdrop and reveals its cards with a short staggered animation, disabled for reduced-motion preferences. The round corner close button, Escape, and clicks outside the cards dismiss the modal. The eight collections contain 939 presets in total. Each card opens the original Adobe download in a new tab. Import the downloaded ABR file using the toolbar or drag and drop. Only the cover images are bundled with the application.
 
 Texture has a swatch picker for embedded patterns. Dual Brush shows a scrollable tip grid with sizes and a selected-tip preview. Both load visible thumbnails through the shared worker. The stroke canvas starts at 260 pixels tall; drag its horizontal divider to resize it, use Up/Down while the divider is focused, or double-click to reset.
 
