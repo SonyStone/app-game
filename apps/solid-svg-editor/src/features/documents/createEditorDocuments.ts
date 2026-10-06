@@ -19,9 +19,11 @@ export function createEditorDocuments(options: {
   readonly onSelectionReset: () => void;
   readonly onDocumentOpened: () => void;
   readonly onParseError: () => void;
+  /** Tabs to start with, such as tabs restored from the previous session; defaults to one empty document. */
+  readonly initialTabs?: { readonly tabs: readonly EditorTab[]; readonly activeTabId: string } | undefined;
 }) {
-  const [tabs, setTabs] = createSignal<readonly EditorTab[]>([createInitialTab()]);
-  const [activeTabId, setActiveTabId] = createSignal(untrack(tabs)[0]?.id ?? '');
+  const [tabs, setTabs] = createSignal<readonly EditorTab[]>(options.initialTabs?.tabs ?? [createInitialTab()]);
+  const [activeTabId, setActiveTabId] = createSignal(options.initialTabs?.activeTabId ?? untrack(tabs)[0]?.id ?? '');
   const [historyVersion, setHistoryVersion] = createSignal(0);
   const commandEvents = createEventBus<EditorCommandEvent>();
   const histories = new Map<string, HistoryState>();
@@ -348,8 +350,14 @@ export function createEditorDocuments(options: {
     options.onDocumentOpened();
   }
 
+  /** Closes a tab without asking; closing the active tab selects its right neighbor, or the left one at the end. */
   function closeTab(tabId: string): void {
     const items = tabs();
+    const index = items.findIndex((tab) => tab.id === tabId);
+
+    if (index === -1) {
+      return;
+    }
 
     if (items.length <= 1) {
       createNewTab();
@@ -359,7 +367,7 @@ export function createEditorDocuments(options: {
     histories.delete(tabId);
 
     if (activeTabId() === tabId) {
-      const next = items.find((tab) => tab.id !== tabId);
+      const next = items[index + 1] ?? items[index - 1];
 
       if (next) {
         selectTab(next.id);

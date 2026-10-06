@@ -39,6 +39,7 @@ export function App() {
         selectTab={app.topBar.selectTab}
         activeTabId={app.topBar.activeTabId()}
         closeTab={app.topBar.closeTab}
+        middleClickCloses={app.topBar.middleClickCloses()}
         createNewTab={app.topBar.createNewTab}
         openImportDialog={app.topBar.openImportDialog}
         downloadSvg={app.topBar.downloadSvg}
@@ -156,6 +157,8 @@ export function App() {
         exportText={app.modals.exportText()}
         close={app.modals.close}
         reformatActiveCode={app.modals.reformatActiveCode}
+        pendingCloseTabName={app.modals.pendingCloseTabName()}
+        resolveCloseTab={app.modals.resolveCloseTab}
       />
       <Show when={app.dropOverlay.active()}>
         <SvgDropOverlay />

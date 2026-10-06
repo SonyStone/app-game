@@ -252,6 +252,37 @@ describe('createEditorDocuments command history', () => {
     dispose();
   });
 
+  it('selects the right neighbor after closing the active tab, or the left one at the end', () => {
+    const { dispose, documents } = createRoot((dispose) => ({
+      dispose,
+      documents: createEditorDocuments({
+        formatter: () => prettyFormatter,
+        onSelectionReset: () => undefined,
+        onDocumentOpened: () => undefined,
+        onParseError: () => undefined
+      })
+    }));
+
+    documents.createNewTab();
+    flush();
+    documents.createNewTab();
+    flush();
+    const [first, second, third] = documents.tabs().map((item) => item.id);
+
+    documents.selectTab(second!);
+    flush();
+    documents.closeTab(second!);
+    flush();
+
+    expect(documents.activeTabId()).toBe(third);
+
+    documents.closeTab(third!);
+    flush();
+
+    expect(documents.activeTabId()).toBe(first);
+    dispose();
+  });
+
   it('resets the selection when switching or closing tabs', () => {
     let selectionResets = 0;
     const { dispose, documents } = createRoot((dispose) => ({
