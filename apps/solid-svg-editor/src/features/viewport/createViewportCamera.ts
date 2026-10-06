@@ -1,19 +1,38 @@
-import { createMemo, createSignal, createTrackedEffect, type Accessor } from 'solid-js';
+import { createMemo, createSignal, untrack, type Accessor } from 'solid-js';
 
 import { radiansToDegrees, type Point } from '../../editor/geometry';
 import { clamp } from '../../editor/tree-utils';
 import type { AppSettings, ViewRect } from '../../editor/types';
 import { createRotatedGridRect, rotatePoint, type SvgSize } from './viewport-math';
 
+/**
+ * Owns the viewport camera: center, zoom, and rotation.
+ *
+ * Until the user pans, zooms, or rotates, the camera is derived from the document and viewport sizes, so it frames
+ * the document and follows resizes. The first manual change switches to a stored camera that resizes keep as is.
+ * `centerFrame` returns to the framing camera. Setters accept plain values and compose within one event.
+ */
 export function createViewportCamera(options: {
   readonly rootSize: Accessor<SvgSize>;
   readonly settings: Accessor<AppSettings>;
   readonly canvasSvg: Accessor<SVGSVGElement | undefined>;
 }) {
-  const [cameraCenter, setCameraCenter] = createSignal({ x: 450, y: 450 });
-  const [zoom, setZoom] = createSignal(1);
   const [viewportSize, setViewportSize] = createSignal({ width: 900, height: 700 });
-  const [viewportRotation, setViewportRotation] = createSignal(0);
+  const [manualCamera, setManualCamera] = createSignal<CameraState | undefined>(undefined);
+  const framingCamera = createMemo(() => frameDocument(options.rootSize(), viewportSize()));
+  const camera = createMemo(() => manualCamera() ?? framingCamera());
+  const cameraCenter = createMemo(() => camera().center);
+  const zoom = createMemo(() => camera().zoom);
+  const viewportRotation = createMemo(() => camera().rotation);
+
+  // Updaters see earlier writes from the same event, so a pinch can set zoom, rotation, and center in a row.
+  function updateCamera(change: Partial<CameraState>): void {
+    setManualCamera((current) => ({ ...(current ?? untrack(framingCamera)), ...change }));
+  }
+
+  const setCameraCenter = (center: Point) => updateCamera({ center });
+  const setZoom = (value: number) => updateCamera({ zoom: value });
+  const setViewportRotation = (rotation: number) => updateCamera({ rotation });
 
   const viewRect = createMemo((): ViewRect => {
     const size = viewportSize();
@@ -34,35 +53,14 @@ export function createViewportCamera(options: {
     return `rotate(${radiansToDegrees(viewportRotation())} ${center.x} ${center.y})`;
   });
 
-  createTrackedEffect(() => {
-    const size = options.rootSize();
-    const currentViewport = viewportSize();
-
-    if (currentViewport.width <= 0 || currentViewport.height <= 0) {
-      return;
-    }
-
-    const fitZoom = Math.min(currentViewport.width / size.viewBox[2], currentViewport.height / size.viewBox[3]) * 0.82;
-
-    if (Number.isFinite(fitZoom) && fitZoom > 0) {
-      setZoom(fitZoom);
-      setCameraCenter({ x: size.viewBox[0] + size.viewBox[2] / 2, y: size.viewBox[1] + size.viewBox[3] / 2 });
-      setViewportRotation(0);
-    }
-  });
-
+  /** Frames the active document again; the camera then follows document and viewport size changes. */
   function centerFrame(): void {
-    const size = options.rootSize();
-    const currentViewport = viewportSize();
-    const fitZoom = Math.min(currentViewport.width / size.viewBox[2], currentViewport.height / size.viewBox[3]) * 0.86;
-    setZoom(Number.isFinite(fitZoom) && fitZoom > 0 ? fitZoom : 1);
-    setCameraCenter({ x: size.viewBox[0] + size.viewBox[2] / 2, y: size.viewBox[1] + size.viewBox[3] / 2 });
-    setViewportRotation(0);
+    setManualCamera(undefined);
   }
 
   function zoomBy(factor: number, origin?: { readonly x: number; readonly y: number }): void {
     const currentZoom = zoom();
-    const nextZoom = clamp(currentZoom * factor, 0.125, 512);
+    const nextZoom = clamp(currentZoom * factor, minZoom, maxZoom);
 
     if (!origin) {
       setZoom(nextZoom);
@@ -174,5 +172,26 @@ export function createViewportCamera(options: {
     clientToSvgPoint,
     centerForClientPoint,
     angleFromViewportCenter
+  };
+}
+
+type CameraState = {
+  readonly center: Point;
+  readonly zoom: number;
+  readonly rotation: number;
+};
+
+const minZoom = 0.125;
+const maxZoom = 512;
+const framingMargin = 0.86;
+
+function frameDocument(size: SvgSize, viewport: { readonly width: number; readonly height: number }): CameraState {
+  const [x, y, width, height] = size.viewBox;
+  const fitZoom = Math.min(viewport.width / width, viewport.height / height) * framingMargin;
+
+  return {
+    center: { x: x + width / 2, y: y + height / 2 },
+    zoom: Number.isFinite(fitZoom) && fitZoom > 0 ? clamp(fitZoom, minZoom, maxZoom) : 1,
+    rotation: 0
   };
 }

@@ -19,9 +19,11 @@ export function createEditorDocuments(options: {
   readonly onSelectionReset: () => void;
   readonly onDocumentOpened: () => void;
   readonly onParseError: () => void;
+  /** Tabs to start with, such as tabs restored from the previous session; defaults to one empty document. */
+  readonly initialTabs?: { readonly tabs: readonly EditorTab[]; readonly activeTabId: string } | undefined;
 }) {
-  const [tabs, setTabs] = createSignal<readonly EditorTab[]>([createInitialTab()]);
-  const [activeTabId, setActiveTabId] = createSignal(untrack(tabs)[0]?.id ?? '');
+  const [tabs, setTabs] = createSignal<readonly EditorTab[]>(options.initialTabs?.tabs ?? [createInitialTab()]);
+  const [activeTabId, setActiveTabId] = createSignal(options.initialTabs?.activeTabId ?? untrack(tabs)[0]?.id ?? '');
   const [historyVersion, setHistoryVersion] = createSignal(0);
   const commandEvents = createEventBus<EditorCommandEvent>();
   const histories = new Map<string, HistoryState>();
@@ -32,6 +34,11 @@ export function createEditorDocuments(options: {
         historyPushed: boolean;
       }
     | undefined;
+  /**
+   * Merge key of the command run that owns the latest undo step (see `EditorCommand.mergeKey`). Code-panel typing uses
+   * it too, so undo restores the document from before the run instead of undoing one keystroke.
+   */
+  let historyMergeKey: string | undefined;
 
   const activeTab = createMemo(() => {
     const id = activeTabId();
@@ -89,6 +96,7 @@ export function createEditorDocuments(options: {
     const history = getHistory(tab.id);
     history.past.push(createHistoryEntry(tab.document.root, command));
     history.future.length = 0;
+    historyMergeKey = undefined;
     bumpHistoryVersion();
   }
 
@@ -116,7 +124,9 @@ export function createEditorDocuments(options: {
     }
 
     if (history.type === 'push') {
-      commitRoot(nextRoot, true, command);
+      const mergesIntoLastStep = command.mergeKey !== undefined && command.mergeKey === historyMergeKey;
+      commitRoot(nextRoot, !mergesIntoLastStep, command);
+      historyMergeKey = command.mergeKey;
       commandEvents.emit({
         type: 'command.dispatched',
         tabId: activeTabId(),
@@ -189,6 +199,20 @@ export function createEditorDocuments(options: {
     });
   }
 
+  /** Ends the active transaction by restoring the document from before it and dropping its undo step. */
+  function cancelCommandTransaction(): void {
+    const transaction = activeCommandTransaction;
+    activeCommandTransaction = undefined;
+
+    if (transaction?.historyPushed) {
+      getHistory(activeTabId()).past.pop();
+      bumpHistoryVersion();
+      replaceRootWithoutHistory(transaction.baseRoot, false);
+    }
+
+    commandEvents.emit({ type: 'command.transaction.cancelled', tabId: activeTabId() });
+  }
+
   function replaceRootWithoutHistory(nextRoot: SvgElementNode, syncCode = true): void {
     const document = createSvgDocument(nextRoot);
     updateActiveTab((tab) => ({
@@ -222,6 +246,7 @@ export function createEditorDocuments(options: {
       return;
     }
 
+    historyMergeKey = undefined;
     history.future.push(createHistoryEntry(tab.document.root, undefined));
     const document = createSvgDocument(previous.root);
     updateActiveTab((item) => ({
@@ -249,6 +274,7 @@ export function createEditorDocuments(options: {
       return;
     }
 
+    historyMergeKey = undefined;
     history.past.push(createHistoryEntry(tab.document.root, undefined));
     const document = createSvgDocument(next.root);
     updateActiveTab((item) => ({
@@ -265,20 +291,26 @@ export function createEditorDocuments(options: {
   function applyCode(text: string): void {
     const parsed = parseSvgDocument(text);
 
-    updateActiveTab((tab) => {
-      if (!parsed.ok) {
-        return { ...tab, code: text, parseError: parsed.message, dirty: true };
-      }
+    if (!parsed.ok) {
+      updateActiveTab((tab) => ({ ...tab, code: text, parseError: parsed.message, dirty: true }));
+      return;
+    }
 
-      options.onSelectionReset();
-      return {
-        ...tab,
-        document: parsed.document,
-        code: text,
-        parseError: undefined,
-        dirty: true
-      };
-    });
+    const command = codeEditCommand(parsed.document.root);
+
+    if (historyMergeKey !== command.mergeKey) {
+      pushHistory(command);
+      historyMergeKey = command.mergeKey;
+    }
+
+    updateActiveTab((tab) => ({
+      ...tab,
+      document: parsed.document,
+      code: text,
+      parseError: undefined,
+      dirty: true
+    }));
+    options.onSelectionReset();
   }
 
   function reformatActiveCode(formatter = options.formatter()): void {
@@ -295,14 +327,37 @@ export function createEditorDocuments(options: {
       dirty: false,
       parseError: undefined
     } satisfies EditorTab;
+    openTab(tab);
+  }
+
+  function openTab(tab: EditorTab): void {
     setTabs((items) => [...items, tab]);
     setActiveTabId(tab.id);
+    historyMergeKey = undefined;
     options.onSelectionReset();
     options.onDocumentOpened();
   }
 
+  /** Activates a tab, clears the selection (its node ids belong to the previous tab), and frames the document. */
+  function selectTab(tabId: string): void {
+    if (tabId === activeTabId()) {
+      return;
+    }
+
+    setActiveTabId(tabId);
+    historyMergeKey = undefined;
+    options.onSelectionReset();
+    options.onDocumentOpened();
+  }
+
+  /** Closes a tab without asking; closing the active tab selects its right neighbor, or the left one at the end. */
   function closeTab(tabId: string): void {
     const items = tabs();
+    const index = items.findIndex((tab) => tab.id === tabId);
+
+    if (index === -1) {
+      return;
+    }
 
     if (items.length <= 1) {
       createNewTab();
@@ -312,36 +367,35 @@ export function createEditorDocuments(options: {
     histories.delete(tabId);
 
     if (activeTabId() === tabId) {
-      const next = items.find((tab) => tab.id !== tabId);
+      const next = items[index + 1] ?? items[index - 1];
 
       if (next) {
-        setActiveTabId(next.id);
+        selectTab(next.id);
       }
     }
   }
 
+  /**
+   * Opens SVG text in a new tab. Text that fails to parse still gets its own tab, holding the original code and the
+   * parse error so it can be fixed in the code panel; the active tab is never overwritten.
+   */
   function importSvgText(text: string, name: string): void {
     const parsed = parseSvgDocument(text);
 
     if (!parsed.ok) {
-      updateActiveTab((tab) => ({ ...tab, code: text, parseError: parsed.message }));
+      openTab({ id: createId(), name, document: createEmptySvgDocument(), code: text, dirty: false, parseError: parsed.message });
       options.onParseError();
       return;
     }
 
-    const tab = {
+    openTab({
       id: createId(),
       name,
       document: parsed.document,
       code: serializeSvgDocument(parsed.document, options.formatter()),
       dirty: false,
       parseError: undefined
-    } satisfies EditorTab;
-
-    setTabs((items) => [...items, tab]);
-    setActiveTabId(tab.id);
-    options.onSelectionReset();
-    options.onDocumentOpened();
+    });
   }
 
   function markActiveTabClean(): void {
@@ -351,7 +405,7 @@ export function createEditorDocuments(options: {
   return {
     tabs,
     activeTabId,
-    setActiveTabId,
+    selectTab,
     activeTab,
     activeDocument,
     activeRoot,
@@ -363,6 +417,7 @@ export function createEditorDocuments(options: {
     beginCommandTransaction,
     updateCommandTransaction,
     commitCommandTransaction,
+    cancelCommandTransaction,
     undo,
     redo,
     applyCode,
@@ -372,4 +427,8 @@ export function createEditorDocuments(options: {
     importSvgText,
     markActiveTabClean
   };
+}
+
+function codeEditCommand(root: SvgElementNode): EditorCommand {
+  return { id: 'code.edit', label: 'Edit code', apply: () => root, mergeKey: 'code.edit' };
 }

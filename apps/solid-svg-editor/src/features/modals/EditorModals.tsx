@@ -1,5 +1,6 @@
+import { createEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, onSettled, Show } from 'solid-js';
 
 import { copyExport, exportFile } from '../../editor/export-utils';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
@@ -57,7 +58,7 @@ export function SettingsModal(props: {
               <button
                 type="button"
                 class={[
-                  'h-7.5 cursor-pointer rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] text-left text-[var(--text)] capitalize [&.active]:border-[var(--accent)] [&.active]:bg-[color-mix(in_srgb,var(--accent)_18%,var(--panel-2))]',
+                  'h-7.5 cursor-pointer rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] px-2 text-left text-[var(--text)] capitalize [&.active]:border-[var(--accent)] [&.active]:bg-[color-mix(in_srgb,var(--accent)_18%,var(--panel-2))]',
                   { active: tab() === item }
                 ]}
                 data-testid={`settings-tab-${item}`}
@@ -440,6 +441,35 @@ export function ExportModal(props: {
   );
 }
 
+/** Asks what to do with unsaved changes before a tab closes, like GodSVG's "Save the changes?" dialog. */
+export function CloseTabModal(props: {
+  readonly tabName: string;
+  readonly save: () => void;
+  readonly discard: () => void;
+  readonly close: () => void;
+}) {
+  return (
+    <ModalFrame title="Save the changes?" close={props.close}>
+      <div class="grid gap-3" data-testid="close-tab-dialog">
+        <p class="m-0 leading-normal">
+          <strong>{props.tabName}</strong> has unsaved changes. Save them before closing the tab?
+        </p>
+        <div class="flex justify-end gap-2">
+          <PanelButton type="button" data-testid="close-tab-cancel" onClick={props.close}>
+            Cancel
+          </PanelButton>
+          <PanelButton type="button" data-testid="close-tab-discard" onClick={props.discard}>
+            Don't save
+          </PanelButton>
+          <PanelButton type="button" variant="primary" data-testid="close-tab-save" onClick={props.save}>
+            Save
+          </PanelButton>
+        </div>
+      </div>
+    </ModalFrame>
+  );
+}
+
 export function AboutModal(props: { readonly close: () => void }) {
   return (
     <ModalFrame title="About GodSVG Solid Port" close={props.close}>
@@ -498,8 +528,31 @@ function ShortcutTable() {
   );
 }
 
+/**
+ * Dialog shell: takes keyboard focus when opened and gives it back on close; Escape, the close button, and a press
+ * on the backdrop call `close`.
+ */
 function ModalFrame(props: { readonly title: string; readonly close: () => void; readonly children: JSX.Element }) {
   const modalId = () => `modal-${testIdSegment(props.title)}`;
+  let panel: HTMLElement | undefined;
+
+  onSettled(() => {
+    const previousFocus = document.activeElement;
+    panel?.focus();
+
+    return () => {
+      if (previousFocus instanceof HTMLElement) {
+        previousFocus.focus();
+      }
+    };
+  });
+
+  createEventListener(window, 'keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      props.close();
+    }
+  });
 
   return (
     <div
@@ -508,7 +561,12 @@ function ModalFrame(props: { readonly title: string; readonly close: () => void;
       onPointerDown={props.close}
     >
       <section
-        class="modal-panel grid max-h-[min(760px,calc(100vh-32px))] w-[min(860px,calc(100vw-32px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[7px] border border-[var(--border)] bg-[var(--panel)] shadow-[0_20px_60px_#000a]"
+        ref={(element) => (panel = element)}
+        role="dialog"
+        aria-modal="true"
+        aria-label={props.title}
+        tabindex={-1}
+        class="modal-panel grid max-h-[min(760px,calc(100vh-32px))] w-[min(860px,calc(100vw-32px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[7px] border border-[var(--border)] bg-[var(--panel)] shadow-[0_20px_60px_#000a] outline-none"
         data-testid={modalId()}
         onPointerDown={(event) => event.stopPropagation()}
       >

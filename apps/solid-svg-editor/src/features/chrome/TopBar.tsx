@@ -5,6 +5,7 @@ import { createSignal, For, Show } from 'solid-js';
 import { decorativeIconProps } from '../../editor/svg-icon';
 import type { EditorTab, PanelId } from '../../editor/types';
 import { editorPanels } from '../panels/panelRegistry';
+import { createDismissible } from '../ui/createDismissible';
 import { IconButton } from '../ui/IconButton';
 import CopyIcon from '../ui/icons/Copy.svg';
 import ExportIcon from '../ui/icons/Export.svg';
@@ -28,8 +29,12 @@ export function TopBar(props: {
   readonly fileSize: string;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
-  readonly setActiveTabId: (id: string) => void;
+  /** Activates the tab with this id and clears the selection. */
+  readonly selectTab: (id: string) => void;
+  /** Closes a tab, asking first when it has unsaved changes. */
   readonly closeTab: (id: string) => void;
+  /** Whether a middle click on a tab closes it (the "Middle click closes tab" setting). */
+  readonly middleClickCloses: boolean;
   readonly createNewTab: () => void;
   readonly openImportDialog: () => void;
   readonly downloadSvg: () => void;
@@ -44,13 +49,15 @@ export function TopBar(props: {
   readonly openShortcuts: () => void;
 }) {
   const [moreOpen, setMoreOpen] = createSignal(false);
+  let leftActions: HTMLDivElement | undefined;
+  createDismissible({ open: moreOpen, container: () => leftActions, close: () => setMoreOpen(false) });
 
   return (
     <header
       class="topbar relative z-20 grid h-8 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b-2 border-b-[#20263a] bg-[#0c0e18] px-2 py-0.5"
       data-testid="topbar"
     >
-      <div class="flex min-w-0 items-center gap-1" data-testid="topbar-left-actions">
+      <div ref={(element) => (leftActions = element)} class="flex min-w-0 items-center gap-1" data-testid="topbar-left-actions">
         <IconButton
           icon={MoreIcon}
           label="More"
@@ -136,15 +143,15 @@ export function TopBar(props: {
                 { active: props.activeTabId === tab().id, dirty: tab().dirty }
               ]}
               data-testid={`tab-${tab().id}`}
-              onClick={() => props.setActiveTabId(tab().id)}
+              onClick={() => props.selectTab(tab().id)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
-                  props.setActiveTabId(tab().id);
+                  props.selectTab(tab().id);
                 }
               }}
               onAuxClick={(event) => {
-                if (event.button === 1) {
+                if (event.button === 1 && props.middleClickCloses) {
                   props.closeTab(tab().id);
                 }
               }}

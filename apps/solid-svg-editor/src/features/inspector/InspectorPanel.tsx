@@ -2,9 +2,11 @@ import { Dynamic } from '@solidjs/web';
 import { createMemo, createSignal, createTrackedEffect, For, Show } from 'solid-js';
 
 import { svgCapabilities } from '../../editor/capabilities';
+import type { SvgNodeActions } from '../documents/createSvgNodeActions';
 import { decorativeIconProps } from '../../editor/svg-icon';
 import type { RecognizedElement } from '../../svg-db';
 import { findNode, findParent, nodeLabel, type DropPosition, type SvgElementNode, type SvgNode } from '../../svg-model';
+import { createDismissible } from '../ui/createDismissible';
 import { createRafQueue } from '../ui/createRafQueue';
 import PlusIcon from '../ui/icons/Plus.svg';
 import WarningIcon from '../ui/icons/Warning.svg';
@@ -26,13 +28,15 @@ export function InspectorPanel(props: {
   readonly clearSelection: () => void;
   readonly addElement: (name: RecognizedElement | string) => void;
   readonly addTextNode: (kind: 'text' | 'comment' | 'cdata') => void;
-  readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
+  readonly updateElementAttribute: SvgNodeActions['updateElementAttribute'];
   readonly removeElementAttribute: (nodeId: string, name: string) => void;
-  readonly updateBasicNodeText: (nodeId: string, text: string) => void;
+  readonly updateBasicNodeText: SvgNodeActions['updateBasicNodeText'];
   readonly openContextMenu: (event: MouseEvent, nodeId: string) => void;
   readonly reorderNodes: (nodeIds: readonly string[], targetId: string, position: DropPosition) => void;
 }) {
   const [addOpen, setAddOpen] = createSignal(false);
+  let toolbar: HTMLDivElement | undefined;
+  createDismissible({ open: addOpen, container: () => toolbar, close: () => setAddOpen(false) });
   const [draggingIds, setDraggingIds] = createSignal<readonly string[]>([]);
   const [dropTarget, setDropTarget] = createSignal<InspectorDropTarget>();
   const [dragPreviewPoint, setDragPreviewPoint] = createSignal<{ readonly x: number; readonly y: number }>();
@@ -216,6 +220,7 @@ export function InspectorPanel(props: {
       data-testid="inspector-panel"
     >
       <div
+        ref={(element) => (toolbar = element)}
         class="relative flex items-center gap-1.5 border-b border-[var(--soft-border)] bg-[var(--panel-2)] p-1.5"
         data-testid="inspector-toolbar"
       >
@@ -354,9 +359,9 @@ function ElementCard(props: {
   readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
   readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
   readonly selectNode: (id: string, event?: MouseEvent | PointerEvent) => void;
-  readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
+  readonly updateElementAttribute: SvgNodeActions['updateElementAttribute'];
   readonly removeElementAttribute: (nodeId: string, name: string) => void;
-  readonly updateBasicNodeText: (nodeId: string, text: string) => void;
+  readonly updateBasicNodeText: SvgNodeActions['updateBasicNodeText'];
   readonly openContextMenu: (event: MouseEvent, nodeId: string) => void;
   readonly draggingIds: readonly string[];
   readonly dropTarget: InspectorDropTarget | undefined;
@@ -366,6 +371,8 @@ function ElementCard(props: {
   readonly resetInspectorDrag: () => void;
   readonly renderChildren?: boolean;
 }) {
+  // Each focus of the text node editor counts as one undo step for the typing that follows.
+  let textEditSession = 0;
   const isSelected = () => props.selectedIds.includes(props.node.id);
   const tint = () => `hsl(${268 + props.depth * 18}deg 52% ${props.depth === 0 ? 11 : 14}%)`;
   const dropState = () => (props.dropTarget?.nodeId === props.node.id ? props.dropTarget : undefined);
@@ -443,7 +450,12 @@ function ElementCard(props: {
             class="m-1.5 min-h-16 w-[calc(100%-12px)] min-w-0 resize-y rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel)] font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
             data-testid={`inspector-text-node-editor-${props.node.id}`}
             value={props.node.kind === 'element' ? '' : props.node.text}
-            onInput={(event) => props.updateBasicNodeText(props.node.id, event.currentTarget.value)}
+            onFocus={() => {
+              textEditSession += 1;
+            }}
+            onInput={(event) =>
+              props.updateBasicNodeText(props.node.id, event.currentTarget.value, `text-node:${props.node.id}:${textEditSession}`)
+            }
           />
         }
       >

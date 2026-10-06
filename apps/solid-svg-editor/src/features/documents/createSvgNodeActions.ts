@@ -2,6 +2,7 @@ import type { Accessor } from 'solid-js';
 
 import { svgCapabilities } from '../../editor/capabilities';
 import { createEditorCommand, type EditorCommand } from '../../editor/commands';
+import { convertElement } from '../../editor/element-conversion';
 import { insertPathCommand, optimizeNode } from '../../editor/tree-utils';
 import type { AppSettings } from '../../editor/types';
 import { formatPathData, parsePathData } from '../../path-data';
@@ -14,17 +15,21 @@ import {
   findNode,
   getAttribute,
   insertSibling,
-  moveNode,
+  moveNodesInParent,
   moveNodesTo,
   removeAttribute,
   removeNode,
   setAttribute,
+  topLevelNodeIds,
   updateNode,
   type DropPosition,
   type SvgElementNode,
   type SvgNode
 } from '../../svg-model';
 import type { PathCommandSelection } from '../selection/createEditorSelection';
+
+/** Node actions as returned by `createSvgNodeActions`, for typing the callbacks passed to inspector components. */
+export type SvgNodeActions = ReturnType<typeof createSvgNodeActions>;
 
 export function createSvgNodeActions(options: {
   readonly settings: Accessor<AppSettings>;
@@ -38,8 +43,10 @@ export function createSvgNodeActions(options: {
   readonly clearSelection: () => void;
   readonly dispatchCommand: (command: EditorCommand) => void;
 }) {
+  /** Selected nodes other than the root, without nodes whose ancestor is also selected, in document order. */
   function selectedEditableIds(): readonly string[] {
-    return options.selectedIds().filter((id) => id !== options.activeRoot().id);
+    const root = options.activeRoot();
+    return topLevelNodeIds(root, options.selectedIds()).filter((id) => id !== root.id);
   }
 
   function deleteSelected(): void {
@@ -98,7 +105,7 @@ export function createSvgNodeActions(options: {
       createEditorCommand({
         id: 'svg.move-selection',
         label: direction === -1 ? 'Move selection up' : 'Move selection down',
-        apply: (root) => ids.reduce((next, id) => moveNode(next, id, direction), root)
+        apply: (root) => moveNodesInParent(root, ids, direction)
       })
     );
   }
@@ -152,11 +159,13 @@ export function createSvgNodeActions(options: {
     options.setSelectedIds([child.id]);
   }
 
-  function updateElementAttribute(nodeId: string, name: string, value: string): void {
+  /** Sets an attribute; pass `mergeKey` for continuous input that should undo as one step (see `EditorCommand`). */
+  function updateElementAttribute(nodeId: string, name: string, value: string, mergeKey?: string): void {
     options.dispatchCommand(
       createEditorCommand({
         id: 'svg.set-attribute',
         label: `Set ${name}`,
+        ...(mergeKey === undefined ? {} : { mergeKey }),
         apply: (root) =>
           updateNode(root, nodeId, (node) => {
             if (node.kind !== 'element') {
@@ -186,11 +195,13 @@ export function createSvgNodeActions(options: {
     );
   }
 
-  function updateBasicNodeText(nodeId: string, text: string): void {
+  /** Replaces the text of a text, comment, or CDATA node; `mergeKey` works as in `updateElementAttribute`. */
+  function updateBasicNodeText(nodeId: string, text: string, mergeKey?: string): void {
     options.dispatchCommand(
       createEditorCommand({
         id: 'svg.update-text-node',
         label: 'Update text node',
+        ...(mergeKey === undefined ? {} : { mergeKey }),
         apply: (root) =>
           updateNode(root, nodeId, (node) => {
             if (node.kind === 'text' || node.kind === 'comment' || node.kind === 'cdata') {
@@ -199,6 +210,21 @@ export function createSvgNodeActions(options: {
 
             return node;
           })
+      })
+    );
+  }
+
+  /** Converts an element to another type with the same shape (see `convertElement`); does nothing when it cannot. */
+  function convertNode(nodeId: string, target: string): void {
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.convert-element',
+        label: `Convert to ${target}`,
+        apply: (root) => {
+          const node = findNode(root, nodeId);
+          const converted = node?.kind === 'element' ? convertElement(node, target) : undefined;
+          return converted ? updateNode(root, nodeId, () => converted) : root;
+        }
       })
     );
   }
@@ -251,6 +277,7 @@ export function createSvgNodeActions(options: {
     updateElementAttribute,
     removeElementAttribute,
     updateBasicNodeText,
+    convertNode,
     optimizeActive,
     insertPathCommandFromKey
   };

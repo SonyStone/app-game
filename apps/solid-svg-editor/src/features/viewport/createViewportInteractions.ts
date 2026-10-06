@@ -51,13 +51,14 @@ export function createViewportInteractions(options: {
   readonly beginCommandTransaction: () => void;
   readonly updateCommandTransaction: (command: EditorCommand) => void;
   readonly commitCommandTransaction: () => void;
+  readonly cancelCommandTransaction: () => void;
   readonly canvasSvg: Accessor<SVGSVGElement | undefined>;
   readonly zoom: Accessor<number>;
-  readonly setZoom: Setter<number>;
+  readonly setZoom: (zoom: number) => void;
   readonly viewportSize: Accessor<{ readonly width: number; readonly height: number }>;
   readonly viewportRotation: Accessor<number>;
-  readonly setViewportRotation: Setter<number>;
-  readonly setCameraCenter: Setter<Point>;
+  readonly setViewportRotation: (rotation: number) => void;
+  readonly setCameraCenter: (center: Point) => void;
   readonly clientToSvgPoint: (clientX: number, clientY: number, snapToGrid?: boolean) => Point;
   readonly centerForClientPoint: (
     worldPoint: Point,
@@ -128,7 +129,8 @@ export function createViewportInteractions(options: {
     {
       pointermove: onWindowPointerMove,
       pointerup: onWindowPointerUp,
-      pointercancel: onWindowPointerCancel
+      pointercancel: onWindowPointerCancel,
+      keydown: onWindowKeyDown
     },
     { passive: false }
   );
@@ -149,14 +151,16 @@ export function createViewportInteractions(options: {
 
   function measureSelectionBox(ids: readonly string[]): Rect | undefined {
     const selected = new Set(ids.filter((id) => id !== options.activeRoot().id));
+    const canvas = options.canvasSvg();
 
-    if (selected.size === 0 || options.useRasterPreview()) {
+    if (selected.size === 0 || options.useRasterPreview() || !canvas) {
       return undefined;
     }
 
     const rects: Rect[] = [];
 
-    for (const element of document.querySelectorAll<SVGGraphicsElement>('[data-node-id]')) {
+    // Only the viewport: previews and the export dialog render copies with the same node ids.
+    for (const element of canvas.querySelectorAll<SVGGraphicsElement>('[data-node-id]')) {
       const id = element.getAttribute('data-node-id');
 
       if (!id || !selected.has(id)) {
@@ -278,7 +282,7 @@ export function createViewportInteractions(options: {
 
     event.preventDefault();
     options.keepViewportPreviewAlive();
-    options.zoomBy(event.deltaY < 0 ? Math.SQRT2 : 1 / Math.SQRT2, { x: event.clientX, y: event.clientY });
+    options.zoomBy(wheelZoomFactor(event), { x: event.clientX, y: event.clientY });
     return true;
   }
 
@@ -321,8 +325,15 @@ export function createViewportInteractions(options: {
     toolRegistry.handleWindowPointerCancel(event);
   }
 
+  function onWindowKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && activeDrag()) {
+      event.preventDefault();
+      cancelActiveDrag();
+    }
+  }
+
   function startPanDrag(event: PointerEvent): void {
-    const point = options.clientToSvgPoint(event.clientX, event.clientY);
+    const point = options.clientToSvgPoint(event.clientX, event.clientY, false);
     setActiveDrag({
       type: 'pan',
       pointerId: event.pointerId,
@@ -484,7 +495,9 @@ export function createViewportInteractions(options: {
       return;
     }
 
-    const ids = idsInMarquee(normalizeClientRect(drag.startClientX, drag.startClientY, clientX, clientY), drag.mode);
+    const canvas = options.canvasSvg();
+    const marquee = normalizeClientRect(drag.startClientX, drag.startClientY, clientX, clientY);
+    const ids = canvas ? idsInMarquee(canvas, marquee, drag.mode) : [];
     const nextIds = drag.additive ? mergeSelection(drag.initialSelection, ids) : ids;
     options.setSelectedIds(nextIds);
     options.setSelectionPivot(nextIds[nextIds.length - 1]);
@@ -552,7 +565,7 @@ export function createViewportInteractions(options: {
     }
 
     const centroid = centroidOfPoints(points);
-    const anchor = options.clientToSvgPoint(centroid.x, centroid.y);
+    const anchor = options.clientToSvgPoint(centroid.x, centroid.y, false);
     const pair = firstTwoTouchPoints(points);
     setActiveTouchGesture({
       pointerIds: points.map((point) => point.pointerId),
@@ -611,7 +624,7 @@ export function createViewportInteractions(options: {
   }
 
   function beginElementHandleDrag(event: PointerEvent, handle: HandleDescriptor): boolean {
-    if (event.pointerType === 'touch' || event.button !== 0) {
+    if (event.button !== 0) {
       return false;
     }
 
@@ -642,7 +655,7 @@ export function createViewportInteractions(options: {
   }
 
   function beginTransformBoxDrag(event: PointerEvent, handle: TransformBoxHandleDescriptor): boolean {
-    if (event.pointerType === 'touch' || event.button !== 0) {
+    if (event.button !== 0) {
       return false;
     }
 
@@ -669,12 +682,13 @@ export function createViewportInteractions(options: {
     return true;
   }
 
+  /** Stops the active drag and reverts the document edits it made (pointer cancel or Escape). */
   function cancelActiveDrag(): void {
     panMoveFrame.cancel();
     handleMoveFrame.cancel();
     pendingPanMove = undefined;
     pendingHandleMove = undefined;
-    options.commitCommandTransaction();
+    options.cancelCommandTransaction();
     setMarqueeRect(undefined);
     setActiveDrag(undefined);
   }
@@ -690,4 +704,14 @@ export function createViewportInteractions(options: {
     startHandleDrag,
     startTransformBoxDrag
   };
+}
+
+/**
+ * Zoom factor for one wheel event, proportional to the scroll distance: a 100px mouse-wheel notch zooms by √2, and
+ * the small deltas of trackpad pinches zoom smoothly.
+ */
+function wheelZoomFactor(event: WheelEvent): number {
+  const pixelsPerUnit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 33 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? 800 : 1;
+  const delta = clamp(event.deltaY * pixelsPerUnit, -400, 400);
+  return 2 ** (-delta / 200);
 }

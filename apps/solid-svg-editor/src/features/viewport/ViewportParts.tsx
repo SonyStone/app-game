@@ -9,6 +9,7 @@ import type {
   TransformBoxHandleDescriptor,
   ViewRect
 } from '../../editor/types';
+import { createDismissible } from '../ui/createDismissible';
 import { IconButton } from '../ui/IconButton';
 import ClearIcon from '../ui/icons/Clear.svg';
 import PlusIcon from '../ui/icons/Plus.svg';
@@ -19,8 +20,6 @@ import MinusIcon from './icons/Minus.svg';
 import ReferenceIcon from './icons/Reference.svg';
 import SnapIcon from './icons/Snap.svg';
 import VisualsIcon from './icons/Visuals.svg';
-
-export { SvgNodeView } from './svg-renderer';
 
 export function ViewportToolbar(props: {
   readonly settings: AppSettings;
@@ -42,19 +41,31 @@ export function ViewportToolbar(props: {
 }) {
   const [visualsOpen, setVisualsOpen] = createSignal(false);
   const [referenceOpen, setReferenceOpen] = createSignal(false);
+  let leftTools: HTMLDivElement | undefined;
+  createDismissible({
+    open: () => visualsOpen() || referenceOpen(),
+    container: () => leftTools,
+    close: () => {
+      setVisualsOpen(false);
+      setReferenceOpen(false);
+    }
+  });
 
   return (
     <div
       class="viewport-toolbar relative z-10 flex min-w-0 items-center justify-between bg-[var(--base)] px-1"
       data-testid="viewport-toolbar"
     >
-      <div class="viewport-left-tools flex min-w-0 items-center gap-1" data-testid="viewport-left-tools">
+      <div ref={(element) => (leftTools = element)} class="viewport-left-tools flex min-w-0 items-center gap-1" data-testid="viewport-left-tools">
         <IconButton
           icon={VisualsIcon}
           label="Visuals"
           testId="viewport-visuals-button"
           active={visualsOpen()}
-          onClick={() => setVisualsOpen(!visualsOpen())}
+          onClick={() => {
+            setVisualsOpen(!visualsOpen());
+            setReferenceOpen(false);
+          }}
         />
         <Show when={visualsOpen()}>
           <div
@@ -101,7 +112,10 @@ export function ViewportToolbar(props: {
           label="Reference"
           testId="viewport-reference-button"
           active={referenceOpen()}
-          onClick={() => setReferenceOpen(!referenceOpen())}
+          onClick={() => {
+            setReferenceOpen(!referenceOpen());
+            setVisualsOpen(false);
+          }}
         />
         <Show when={referenceOpen()}>
           <div
@@ -364,7 +378,7 @@ export function HandlesLayer(props: {
               cx={handle.x}
               cy={handle.y}
               r={(handle.small ? 3.2 : 4.6) / props.zoom}
-              stroke-width={1.4 / props.zoom}
+              stroke-width={1.4}
               onPointerDown={(event) => props.onHandlePointerDown(event, handle)}
             />
             <title>{handle.label}</title>
@@ -419,7 +433,7 @@ export function TransformBoxLayer(props: {
             y={box().y}
             width={box().width}
             height={box().height}
-            stroke-width={1.2 / props.zoom}
+            stroke-width={1.2}
           />
           <line
             class="transform-box-rotate-line fill-none stroke-[var(--accent)] [stroke-dasharray:7_5] [vector-effect:non-scaling-stroke]"
@@ -428,7 +442,7 @@ export function TransformBoxLayer(props: {
             y1={box().y}
             x2={box().x + box().width / 2}
             y2={box().y - 28 / props.zoom}
-            stroke-width={1 / props.zoom}
+            stroke-width={1}
           />
           <For each={handles()}>
             {(handle) => (
@@ -451,7 +465,7 @@ export function TransformBoxLayer(props: {
                 width={9.2 / props.zoom}
                 height={9.2 / props.zoom}
                 rx={1.3 / props.zoom}
-                stroke-width={1.2 / props.zoom}
+                stroke-width={1.2}
                 onPointerDown={(event) => props.onHandlePointerDown(event, handle)}
               >
                 <title>{handle.label}</title>

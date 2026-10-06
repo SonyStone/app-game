@@ -1,5 +1,6 @@
 import { attributeNumberRange, getAttributeDefault, getRecognizedAttributes } from "../svg-db";
 import { createCommand, formatPathData, parsePathData, type PathCommand } from "../path-data";
+import { convertElement } from "./element-conversion";
 import { getAttribute, type SvgAttribute, type SvgElementNode, type SvgNode } from "../svg-model";
 
 import type { AppSettings, InspectorRow, OptimizerSettings, ThemePreset } from "./types";
@@ -11,7 +12,7 @@ export function orderedAttributes(node: SvgElementNode): readonly SvgAttribute[]
 
   for (const name of recognized) {
     const attr = existing.find((item) => item.name === name);
-    ordered.push(attr ?? { name, value: getAttributeDefault(name) });
+    ordered.push(attr ?? { name, value: getAttributeDefault(name, node.name) });
   }
 
   for (const attr of existing) {
@@ -138,29 +139,24 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/**
+ * Clamps a numeric attribute to its range (`positive` lengths, `unit` opacities) while keeping any unit suffix such as
+ * `mm` or `em`. Percentages, non-numeric text, and in-range values are returned unchanged.
+ */
 export function clampNumericAttribute(name: string, value: string): string {
   const ranges: Record<string, string> = attributeNumberRange;
   const range = ranges[name];
+  const match = /^\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*([a-zA-Z]*)\s*$/.exec(value);
 
-  if (!range) {
+  if (!range || !match) {
     return value;
   }
 
-  const number = Number.parseFloat(value);
+  const number = Number(match[1]);
+  const unit = match[2] ?? "";
+  const clamped = range === "positive" ? Math.max(0, number) : range === "unit" && unit === "" ? clamp(number, 0, 1) : number;
 
-  if (!Number.isFinite(number) || value.trim().endsWith("%")) {
-    return value;
-  }
-
-  if (range === "positive") {
-    return String(Math.max(0, number));
-  }
-
-  if (range === "unit") {
-    return String(clamp(number, 0, 1));
-  }
-
-  return value;
+  return clamped === number ? value : `${clamped}${unit}`;
 }
 
 export function normalizeColorInput(value: string): string | undefined {
@@ -209,8 +205,35 @@ export function optimizeNode(node: SvgNode, settings: OptimizerSettings): SvgNod
       return attr;
     });
   const children = node.children.map((child) => optimizeNode(child, settings)).filter((child): child is SvgNode => child !== null);
+  const optimized = { ...node, attrs, children };
 
-  return { ...node, attrs, children };
+  return settings.convertShapes ? (convertToSimplerShape(optimized) ?? optimized) : optimized;
+}
+
+/**
+ * The optimizer's shape conversion, as in GodSVG: an ellipse with equal radii becomes a circle; a rect becomes a
+ * circle, an ellipse, or (with square corners) a path; polygons, polylines, and lines become paths.
+ */
+function convertToSimplerShape(element: SvgElementNode): SvgElementNode | undefined {
+  switch (element.name) {
+    case "ellipse":
+      return convertElement(element, "circle");
+    case "rect": {
+      const radius = getAttribute(element, "rx", true) || getAttribute(element, "ry", true);
+      const hasRoundedCorners = radius !== "" && Number.parseFloat(radius) !== 0;
+      return (
+        convertElement(element, "circle") ??
+        convertElement(element, "ellipse") ??
+        (hasRoundedCorners ? undefined : convertElement(element, "path"))
+      );
+    }
+    case "polygon":
+    case "polyline":
+    case "line":
+      return convertElement(element, "path");
+    default:
+      return undefined;
+  }
 }
 
 export function themePresetSettings(preset: ThemePreset, settings: AppSettings): AppSettings {

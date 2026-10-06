@@ -26,9 +26,13 @@ export const prettyFormatter = {
   indentationSpaces: 2
 } as const satisfies FormatterSettings;
 
+/**
+ * Default export formatter. Comments are kept: saving should not drop content, and removing them is the optimizer's
+ * job, as in GodSVG.
+ */
 export const compactFormatter = {
   preset: "compact",
-  removeComments: true,
+  removeComments: false,
   trailingNewline: false,
   shorthandTags: "always",
   shorthandSlashSpace: false,
@@ -53,9 +57,9 @@ function serializeNode(node: SvgNode, formatter: FormatterSettings, depth: numbe
         return "";
       }
 
-      return `${indent(formatter, depth)}<!--${node.text}-->${lineBreak(formatter)}`;
+      return `${indent(formatter, depth)}<!--${escapeComment(node.text)}-->${lineBreak(formatter)}`;
     case "cdata":
-      return `${indent(formatter, depth)}<![CDATA[${node.text}]]>${lineBreak(formatter)}`;
+      return `${indent(formatter, depth)}<![CDATA[${escapeCData(node.text)}]]>${lineBreak(formatter)}`;
     case "text":
       return `${indent(formatter, depth)}${escapeText(node.text)}${lineBreak(formatter)}`;
   }
@@ -104,8 +108,13 @@ function serializeAttributes(attrs: readonly SvgAttribute[], formatter: Formatte
 
 function serializeAttribute(attr: SvgAttribute): string {
   const value = escapeAttribute(attr.value);
-  const quote = value.includes('"') ? "'" : '"';
-  return `${attr.name}=${quote}${value}${quote}`;
+
+  // Single quotes keep values like `font-family='"Noto Sans"'` readable; a value with both quote kinds needs `&quot;`.
+  if (value.includes('"') && !value.includes("'")) {
+    return `${attr.name}='${value}'`;
+  }
+
+  return `${attr.name}="${value.replace(/"/g, "&quot;")}"`;
 }
 
 function indent(formatter: FormatterSettings, depth: number): string {
@@ -126,7 +135,18 @@ function escapeAttribute(value: string): string {
 }
 
 function escapeText(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  // `>` only needs escaping inside `]]>`, but escaping it everywhere is simpler and still valid.
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** XML forbids `--` inside comments and a `-` right before the closing `-->`, so those hyphens get spaces. */
+function escapeComment(value: string): string {
+  return value.replace(/-(?=-)/g, "- ").replace(/-$/, "- ");
+}
+
+/** Splits `]]>` across two CDATA sections, the only way to write it inside CDATA. */
+function escapeCData(value: string): string {
+  return value.replace(/]]>/g, "]]]]><![CDATA[>");
 }
 
 export function humanFileSize(byteCount: number): string {

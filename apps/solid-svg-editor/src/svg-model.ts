@@ -134,7 +134,6 @@ export function parseSvgMarkup(markup: string): ParseResult {
     return { ok: false, error: "not-svg", message: "Doesn't describe an SVG." };
   }
 
-  resetIdCounter();
   const parser = new DOMParser();
   const doc = parser.parseFromString(markup, "image/svg+xml");
   const parserError = doc.querySelector("parsererror");
@@ -186,7 +185,7 @@ function domElementToSvgNode(element: Element): SvgElementNode {
 
 export function getAttribute(node: SvgElementNode, name: string, real = false): string {
   const attr = node.attrs.find((item) => item.name === name);
-  return attr ? attr.value : real ? "" : getAttributeDefault(name);
+  return attr ? attr.value : real ? "" : getAttributeDefault(name, node.name);
 }
 
 export function hasAttribute(node: SvgElementNode, name: string): boolean {
@@ -383,9 +382,37 @@ function insertSiblingInChildren(nodes: readonly SvgNode[], targetId: string, ch
   return changed ? next : nodes;
 }
 
-export function moveNode(root: SvgElementNode, id: string, direction: -1 | 1): SvgElementNode {
-  const children = moveInChildren(root.children, id, direction);
-  return children === root.children ? root : { ...root, children };
+/**
+ * Moves sibling nodes one step up (`-1`) or down (`1`) within their parent as a block: the neighbor next to each run
+ * of moved nodes moves across the run. Descendants of other moved nodes are ignored. Nothing moves when the nodes do
+ * not share one parent, matching GodSVG.
+ */
+export function moveNodesInParent(root: SvgElementNode, ids: readonly string[], direction: -1 | 1): SvgElementNode {
+  const movingIds = new Set(topLevelNodeIds(root, ids).filter((id) => id !== root.id));
+  const [firstId] = movingIds;
+  const parent = firstId === undefined ? undefined : findParent(root, firstId);
+
+  if (!parent || [...movingIds].some((id) => !parent.children.some((child) => child.id === id))) {
+    return root;
+  }
+
+  const children = [...parent.children];
+  let changed = false;
+
+  for (let step = 0; step < children.length - 1; step += 1) {
+    const index = direction === 1 ? children.length - 2 - step : step + 1;
+    const neighborIndex = index + direction;
+    const node = children[index];
+    const neighbor = children[neighborIndex];
+
+    if (node && neighbor && movingIds.has(node.id) && !movingIds.has(neighbor.id)) {
+      children[index] = neighbor;
+      children[neighborIndex] = node;
+      changed = true;
+    }
+  }
+
+  return changed ? updateNode(root, parent.id, (node) => ({ ...node, children })) : root;
 }
 
 export function moveNodesTo(root: SvgElementNode, ids: readonly string[], targetId: string, position: DropPosition): SvgElementNode {
@@ -436,7 +463,8 @@ export function moveNodesTo(root: SvgElementNode, ids: readonly string[], target
   return insertChildrenAt(withoutMoving, targetParent.id, movingNodes, adjustedIndex);
 }
 
-function topLevelNodeIds(root: SvgElementNode, ids: readonly string[]): readonly string[] {
+/** Returns the ids in document order, dropping ids whose ancestor is also listed. */
+export function topLevelNodeIds(root: SvgElementNode, ids: readonly string[]): readonly string[] {
   const selected = new Set(ids);
   const ordered: string[] = [];
 
@@ -484,45 +512,6 @@ function insertChildrenAt(root: SvgElementNode, parentId: string, childrenToInse
   });
 }
 
-function moveInChildren(nodes: readonly SvgNode[], id: string, direction: -1 | 1): readonly SvgNode[] {
-  const index = nodes.findIndex((node) => node.id === id);
-
-  if (index !== -1) {
-    const targetIndex = index + direction;
-
-    if (targetIndex < 0 || targetIndex >= nodes.length) {
-      return nodes;
-    }
-
-    const next = [...nodes];
-    const item = next[index];
-
-    if (!item) {
-      return nodes;
-    }
-
-    next.splice(index, 1);
-    next.splice(targetIndex, 0, item);
-    return next;
-  }
-
-  let changed = false;
-  const next = nodes.map((node) => {
-    if (node.kind === "element") {
-      const children = moveInChildren(node.children, id, direction);
-
-      if (children !== node.children) {
-        changed = true;
-        return { ...node, children };
-      }
-    }
-
-    return node;
-  });
-
-  return changed ? next : nodes;
-}
-
 export function flattenElements(root: SvgElementNode): readonly SvgElementNode[] {
   const result: SvgElementNode[] = [root];
   visitElements(root, result);
@@ -538,18 +527,50 @@ function visitElements(node: SvgElementNode, result: SvgElementNode[]): void {
   }
 }
 
+/**
+ * Resolves the document size and viewBox the way GodSVG does.
+ *
+ * A missing `width` or `height` is derived from the other one and the viewBox aspect ratio, or taken from the viewBox
+ * when both are missing. Percentages count as missing because they depend on the embedding page. Without any usable
+ * size the document falls back to 900×900.
+ */
 export function svgSize(root: SvgElementNode): { readonly width: number; readonly height: number; readonly viewBox: readonly [number, number, number, number] } {
-  const viewBox = parseNumberList(getAttribute(root, "viewBox")).slice(0, 4);
-  const width = parseLength(getAttribute(root, "width")) || viewBox[2] || 900;
-  const height = parseLength(getAttribute(root, "height")) || viewBox[3] || 900;
-  const parsedViewBox = [
-    viewBox[0] ?? 0,
-    viewBox[1] ?? 0,
-    viewBox[2] ?? width,
-    viewBox[3] ?? height
-  ] as const;
+  const viewBox = parseViewBox(getAttribute(root, "viewBox", true));
+  const width = absoluteLength(getAttribute(root, "width", true));
+  const height = absoluteLength(getAttribute(root, "height", true));
 
-  return { width, height, viewBox: parsedViewBox };
+  if (!viewBox) {
+    const resolvedWidth = width ?? height ?? fallbackSvgSize;
+    const resolvedHeight = height ?? width ?? fallbackSvgSize;
+    return { width: resolvedWidth, height: resolvedHeight, viewBox: [0, 0, resolvedWidth, resolvedHeight] };
+  }
+
+  const [, , viewBoxWidth, viewBoxHeight] = viewBox;
+  const resolvedWidth = width ?? (height === undefined ? viewBoxWidth : (height / viewBoxHeight) * viewBoxWidth);
+  const resolvedHeight = height ?? (width === undefined ? viewBoxHeight : (width / viewBoxWidth) * viewBoxHeight);
+
+  return { width: resolvedWidth, height: resolvedHeight, viewBox };
+}
+
+const fallbackSvgSize = 900;
+
+function parseViewBox(value: string): readonly [number, number, number, number] | undefined {
+  const [x, y, width, height] = parseNumberList(value);
+
+  if (x === undefined || y === undefined || width === undefined || height === undefined || width <= 0 || height <= 0) {
+    return undefined;
+  }
+
+  return [x, y, width, height];
+}
+
+function absoluteLength(value: string): number | undefined {
+  if (value.trim().endsWith("%")) {
+    return undefined;
+  }
+
+  const parsed = parseLength(value);
+  return parsed > 0 ? parsed : undefined;
 }
 
 export function parseLength(value: string): number {

@@ -36,9 +36,10 @@ export function App() {
         fileSize={app.topBar.fileSize()}
         canUndo={app.topBar.canUndo()}
         canRedo={app.topBar.canRedo()}
-        setActiveTabId={app.topBar.setActiveTabId}
+        selectTab={app.topBar.selectTab}
         activeTabId={app.topBar.activeTabId()}
         closeTab={app.topBar.closeTab}
+        middleClickCloses={app.topBar.middleClickCloses()}
         createNewTab={app.topBar.createNewTab}
         openImportDialog={app.topBar.openImportDialog}
         downloadSvg={app.topBar.downloadSvg}
@@ -137,7 +138,15 @@ export function App() {
       </div>
 
       <Show when={app.contextMenu.state()}>
-        {(menu) => <EditorContextMenu menu={menu()} runAction={app.contextMenu.runAction} />}
+        {(menu) => (
+          <EditorContextMenu
+            menu={menu()}
+            node={app.contextMenu.node()}
+            runAction={app.contextMenu.runAction}
+            convert={app.contextMenu.convert}
+            close={app.contextMenu.close}
+          />
+        )}
       </Show>
 
       <EditorModalStack
@@ -148,6 +157,8 @@ export function App() {
         exportText={app.modals.exportText()}
         close={app.modals.close}
         reformatActiveCode={app.modals.reformatActiveCode}
+        pendingCloseTabName={app.modals.pendingCloseTabName()}
+        resolveCloseTab={app.modals.resolveCloseTab}
       />
       <Show when={app.dropOverlay.active()}>
         <SvgDropOverlay />

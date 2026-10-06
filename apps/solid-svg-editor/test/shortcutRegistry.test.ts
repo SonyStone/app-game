@@ -100,4 +100,21 @@ describe('createShortcutRegistry', () => {
     expect(allowedRuns).toBe(1);
     expect(allowedEvent.wasPrevented()).toBe(true);
   });
+
+  it('runs nothing while disabled', () => {
+    let enabled = false;
+    let runs = 0;
+    const registry = createShortcutRegistry(
+      [shortcutDescriptor({ id: 'test.delete', bindings: [{ key: 'Delete' }], run: () => (runs += 1) })],
+      { enabled: () => enabled }
+    );
+    const blockedEvent = createTestKeyboardEvent({ key: 'Delete' });
+
+    registry.onKeyDown(blockedEvent);
+    enabled = true;
+    registry.onKeyDown(createTestKeyboardEvent({ key: 'Delete' }));
+
+    expect(blockedEvent.wasPrevented()).toBe(false);
+    expect(runs).toBe(1);
+  });
 });
