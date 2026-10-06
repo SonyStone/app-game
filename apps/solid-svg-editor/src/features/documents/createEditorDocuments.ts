@@ -33,10 +33,10 @@ export function createEditorDocuments(options: {
       }
     | undefined;
   /**
-   * Tab whose current run of code-panel edits already has an undo step. Typing merges into that step until any other
-   * history change, so undo restores the document from before the run instead of undoing one keystroke.
+   * Merge key of the command run that owns the latest undo step (see `EditorCommand.mergeKey`). Code-panel typing uses
+   * it too, so undo restores the document from before the run instead of undoing one keystroke.
    */
-  let codeEditHistoryTabId: string | undefined;
+  let historyMergeKey: string | undefined;
 
   const activeTab = createMemo(() => {
     const id = activeTabId();
@@ -94,7 +94,7 @@ export function createEditorDocuments(options: {
     const history = getHistory(tab.id);
     history.past.push(createHistoryEntry(tab.document.root, command));
     history.future.length = 0;
-    codeEditHistoryTabId = undefined;
+    historyMergeKey = undefined;
     bumpHistoryVersion();
   }
 
@@ -122,7 +122,9 @@ export function createEditorDocuments(options: {
     }
 
     if (history.type === 'push') {
-      commitRoot(nextRoot, true, command);
+      const mergesIntoLastStep = command.mergeKey !== undefined && command.mergeKey === historyMergeKey;
+      commitRoot(nextRoot, !mergesIntoLastStep, command);
+      historyMergeKey = command.mergeKey;
       commandEvents.emit({
         type: 'command.dispatched',
         tabId: activeTabId(),
@@ -195,6 +197,20 @@ export function createEditorDocuments(options: {
     });
   }
 
+  /** Ends the active transaction by restoring the document from before it and dropping its undo step. */
+  function cancelCommandTransaction(): void {
+    const transaction = activeCommandTransaction;
+    activeCommandTransaction = undefined;
+
+    if (transaction?.historyPushed) {
+      getHistory(activeTabId()).past.pop();
+      bumpHistoryVersion();
+      replaceRootWithoutHistory(transaction.baseRoot, false);
+    }
+
+    commandEvents.emit({ type: 'command.transaction.cancelled', tabId: activeTabId() });
+  }
+
   function replaceRootWithoutHistory(nextRoot: SvgElementNode, syncCode = true): void {
     const document = createSvgDocument(nextRoot);
     updateActiveTab((tab) => ({
@@ -228,7 +244,7 @@ export function createEditorDocuments(options: {
       return;
     }
 
-    codeEditHistoryTabId = undefined;
+    historyMergeKey = undefined;
     history.future.push(createHistoryEntry(tab.document.root, undefined));
     const document = createSvgDocument(previous.root);
     updateActiveTab((item) => ({
@@ -256,7 +272,7 @@ export function createEditorDocuments(options: {
       return;
     }
 
-    codeEditHistoryTabId = undefined;
+    historyMergeKey = undefined;
     history.past.push(createHistoryEntry(tab.document.root, undefined));
     const document = createSvgDocument(next.root);
     updateActiveTab((item) => ({
@@ -278,11 +294,11 @@ export function createEditorDocuments(options: {
       return;
     }
 
-    const tabId = activeTabId();
+    const command = codeEditCommand(parsed.document.root);
 
-    if (codeEditHistoryTabId !== tabId) {
-      pushHistory(codeEditCommand(parsed.document.root));
-      codeEditHistoryTabId = tabId;
+    if (historyMergeKey !== command.mergeKey) {
+      pushHistory(command);
+      historyMergeKey = command.mergeKey;
     }
 
     updateActiveTab((tab) => ({
@@ -315,7 +331,7 @@ export function createEditorDocuments(options: {
   function openTab(tab: EditorTab): void {
     setTabs((items) => [...items, tab]);
     setActiveTabId(tab.id);
-    codeEditHistoryTabId = undefined;
+    historyMergeKey = undefined;
     options.onSelectionReset();
     options.onDocumentOpened();
   }
@@ -327,7 +343,7 @@ export function createEditorDocuments(options: {
     }
 
     setActiveTabId(tabId);
-    codeEditHistoryTabId = undefined;
+    historyMergeKey = undefined;
     options.onSelectionReset();
     options.onDocumentOpened();
   }
@@ -393,6 +409,7 @@ export function createEditorDocuments(options: {
     beginCommandTransaction,
     updateCommandTransaction,
     commitCommandTransaction,
+    cancelCommandTransaction,
     undo,
     redo,
     applyCode,
@@ -405,5 +422,5 @@ export function createEditorDocuments(options: {
 }
 
 function codeEditCommand(root: SvgElementNode): EditorCommand {
-  return { id: 'code.edit', label: 'Edit code', apply: () => root };
+  return { id: 'code.edit', label: 'Edit code', apply: () => root, mergeKey: 'code.edit' };
 }

@@ -1,5 +1,6 @@
+import { createEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, onSettled, Show } from 'solid-js';
 
 import { copyExport, exportFile } from '../../editor/export-utils';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
@@ -498,8 +499,31 @@ function ShortcutTable() {
   );
 }
 
+/**
+ * Dialog shell: takes keyboard focus when opened and gives it back on close; Escape, the close button, and a press
+ * on the backdrop call `close`.
+ */
 function ModalFrame(props: { readonly title: string; readonly close: () => void; readonly children: JSX.Element }) {
   const modalId = () => `modal-${testIdSegment(props.title)}`;
+  let panel: HTMLElement | undefined;
+
+  onSettled(() => {
+    const previousFocus = document.activeElement;
+    panel?.focus();
+
+    return () => {
+      if (previousFocus instanceof HTMLElement) {
+        previousFocus.focus();
+      }
+    };
+  });
+
+  createEventListener(window, 'keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      props.close();
+    }
+  });
 
   return (
     <div
@@ -508,7 +532,12 @@ function ModalFrame(props: { readonly title: string; readonly close: () => void;
       onPointerDown={props.close}
     >
       <section
-        class="modal-panel grid max-h-[min(760px,calc(100vh-32px))] w-[min(860px,calc(100vw-32px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[7px] border border-[var(--border)] bg-[var(--panel)] shadow-[0_20px_60px_#000a]"
+        ref={(element) => (panel = element)}
+        role="dialog"
+        aria-modal="true"
+        aria-label={props.title}
+        tabindex={-1}
+        class="modal-panel grid max-h-[min(760px,calc(100vh-32px))] w-[min(860px,calc(100vw-32px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[7px] border border-[var(--border)] bg-[var(--panel)] shadow-[0_20px_60px_#000a] outline-none"
         data-testid={modalId()}
         onPointerDown={(event) => event.stopPropagation()}
       >

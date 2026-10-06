@@ -39,11 +39,21 @@ export const defaultShortcutItems = [
   { category: 'help', action: 'Settings', keys: 'Ctrl+,' }
 ] as const satisfies readonly ShortcutItem[];
 
+/**
+ * Matches keydown events against shortcut descriptors and runs the first match.
+ *
+ * While `enabled` returns false (a dialog is open, a drag is in progress) no shortcut runs. In text fields only
+ * descriptors with `allowInEditable` run, so typing and the field's own undo keep working.
+ */
 export function createShortcutRegistry(
   descriptors: readonly ShortcutDescriptor[],
-  options: { readonly activeElement?: Accessor<Element | null> } = {}
+  options: { readonly activeElement?: Accessor<Element | null>; readonly enabled?: Accessor<boolean> } = {}
 ) {
   function onKeyDown(event: KeyboardEvent): void {
+    if (options.enabled && !options.enabled()) {
+      return;
+    }
+
     const target = event.target ?? options.activeElement?.();
     const editing = isEditableTarget(target);
     const descriptor = descriptors.find((item) =>

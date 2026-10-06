@@ -6,8 +6,11 @@ export interface EditorCommand {
   readonly id: EditorCommandId;
   readonly label: string;
   readonly apply: (root: SvgElementNode) => SvgElementNode;
-  readonly invert?: (before: SvgElementNode, after: SvgElementNode) => EditorCommand | undefined;
-  readonly merge?: (previous: EditorCommand) => EditorCommand | undefined;
+  /**
+   * Commands dispatched in a row with the same key form one undo step, for continuous input such as a color picker
+   * drag or typing. Any other history change ends the run.
+   */
+  readonly mergeKey?: string;
 }
 
 export type CommandHistoryPolicy =
@@ -35,6 +38,10 @@ export type EditorCommandEvent =
       readonly commandId: EditorCommandId;
       readonly label: string;
       readonly historyPushed: boolean;
+    }
+  | {
+      readonly type: 'command.transaction.cancelled';
+      readonly tabId: string;
     }
   | {
       readonly type: 'command.transaction.committed';

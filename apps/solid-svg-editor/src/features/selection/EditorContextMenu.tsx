@@ -4,16 +4,23 @@ import MoveUpIcon from '../../App.icons/MoveUp.svg';
 import type { ContextMenuState } from '../../editor/types';
 import DeleteIcon from '../ui/icons/Delete.svg';
 import InsertAfterIcon from '../ui/icons/InsertAfter.svg';
+import { createDismissible } from '../ui/createDismissible';
 import { MenuButton } from '../ui/MenuItem';
 
 export type EditorContextMenuAction = 'duplicate' | 'delete' | 'move-up' | 'move-down' | 'insert-after';
 
+/** Element actions menu at the pointer; a press outside it or Escape calls `close`. */
 export function EditorContextMenu(props: {
   readonly menu: ContextMenuState;
   readonly runAction: (action: EditorContextMenuAction) => void;
+  readonly close: () => void;
 }) {
+  let menu: HTMLDivElement | undefined;
+  createDismissible({ open: () => true, container: () => menu, close: () => props.close() });
+
   return (
     <div
+      ref={(element) => (menu = element)}
       class="popover context-menu absolute z-50 grid min-w-47.5 gap-0.5 rounded-md border border-[var(--border)] bg-[color-mix(in_srgb,var(--panel)_96%,#000)] p-1.25 shadow-[0_12px_28px_#0008]"
       style={{ left: `${props.menu.x}px`, top: `${props.menu.y}px` }}
       data-testid="context-menu"

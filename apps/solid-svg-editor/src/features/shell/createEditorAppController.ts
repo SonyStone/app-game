@@ -88,6 +88,7 @@ export function createEditorAppController() {
     beginCommandTransaction,
     updateCommandTransaction,
     commitCommandTransaction,
+    cancelCommandTransaction,
     undo,
     redo,
     applyCode,
@@ -201,6 +202,7 @@ export function createEditorAppController() {
     beginCommandTransaction,
     updateCommandTransaction,
     commitCommandTransaction,
+    cancelCommandTransaction,
     canvasSvg,
     zoom,
     setZoom,
@@ -241,6 +243,7 @@ export function createEditorAppController() {
 
   const { onKeyDown } = createEditorShortcuts({
     activeElement,
+    enabled: () => modal() === undefined && activeDrag() === undefined && activeTouchGesture() === undefined,
     redo,
     undo,
     downloadSvg,
@@ -439,7 +442,8 @@ export function createEditorAppController() {
     },
     contextMenu: {
       state: contextMenu,
-      runAction: runContextAction
+      runAction: runContextAction,
+      close: () => setContextMenu(undefined)
     },
     modals: {
       modal,

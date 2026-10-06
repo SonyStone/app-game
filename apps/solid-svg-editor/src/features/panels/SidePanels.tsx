@@ -157,6 +157,10 @@ function formatCommandEvent(event: EditorCommandEvent | undefined): string {
     return "transaction started";
   }
 
+  if (event.type === "command.transaction.cancelled") {
+    return "transaction cancelled";
+  }
+
   if (event.type === "command.transaction.committed") {
     return event.changed ? "transaction committed" : "transaction unchanged";
   }

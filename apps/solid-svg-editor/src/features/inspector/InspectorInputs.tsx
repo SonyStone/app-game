@@ -2,6 +2,7 @@ import { Dynamic } from '@solidjs/web';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 import { svgCapabilities } from '../../editor/capabilities';
+import type { SvgNodeActions } from '../documents/createSvgNodeActions';
 import { parseTransformList } from '../../editor/geometry';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import {
@@ -53,7 +54,7 @@ type TransformItem = {
 
 export function RootElementEditor(props: {
   readonly root: SvgElementNode;
-  readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
+  readonly updateElementAttribute: SvgNodeActions['updateElementAttribute'];
 }) {
   const size = createMemo(() => svgSize(props.root));
   const rootValue = (name: 'width' | 'height') => getAttribute(props.root, name, true) || formatPathNumber(size()[name]);
@@ -92,10 +93,8 @@ export function RootElementEditor(props: {
             data-testid="root-width-input"
             value={rootValue('width')}
             onChange={(event) =>
-              props.updateElementAttribute(
-                props.root.id,
-                'width',
-                clampNumericAttribute('width', event.currentTarget.value)
+              commitInput(event.currentTarget, clampNumericAttribute('width', event.currentTarget.value), (value) =>
+                props.updateElementAttribute(props.root.id, 'width', value)
               )
             }
           />
@@ -112,10 +111,8 @@ export function RootElementEditor(props: {
             data-testid="root-height-input"
             value={rootValue('height')}
             onChange={(event) =>
-              props.updateElementAttribute(
-                props.root.id,
-                'height',
-                clampNumericAttribute('height', event.currentTarget.value)
+              commitInput(event.currentTarget, clampNumericAttribute('height', event.currentTarget.value), (value) =>
+                props.updateElementAttribute(props.root.id, 'height', value)
               )
             }
           />
@@ -126,18 +123,19 @@ export function RootElementEditor(props: {
         >
           <legend class="h-3.75 px-0.5">viewBox</legend>
           <div class="flex gap-0.75" data-testid="root-viewbox-inputs">
-            <For each={viewBoxValues()}>
+            <For each={viewBoxValues()} keyed={false}>
               {(value, index) => (
                 <input
                   class="block h-5.5 min-h-5.5 w-12 min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
-                  name={`${props.root.id}-viewbox-${index()}`}
-                  aria-label={`viewBox ${index() + 1}`}
-                  data-testid={`root-viewbox-input-${index()}`}
-                  value={value}
+                  name={`${props.root.id}-viewbox-${index}`}
+                  aria-label={`viewBox ${index + 1}`}
+                  data-testid={`root-viewbox-input-${index}`}
+                  value={value()}
                   onChange={(event) =>
-                    updateViewBoxPart(
-                      index(),
-                      clampNumericAttribute(index() < 2 ? 'x' : 'width', event.currentTarget.value)
+                    commitInput(
+                      event.currentTarget,
+                      clampNumericAttribute(index < 2 ? 'x' : 'width', event.currentTarget.value),
+                      (part) => updateViewBoxPart(index, part)
                     )
                   }
                 />
@@ -152,7 +150,7 @@ export function RootElementEditor(props: {
 
 export function AttributeGrid(props: {
   readonly node: SvgElementNode;
-  readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
+  readonly updateElementAttribute: SvgNodeActions['updateElementAttribute'];
   readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
   readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
 }) {
@@ -218,11 +216,12 @@ export function AttributeGrid(props: {
 function AttributeControl(props: {
   readonly node: SvgElementNode;
   readonly attr: SvgAttribute;
-  readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
+  readonly updateElementAttribute: SvgNodeActions['updateElementAttribute'];
 }) {
   const capability = () => svgCapabilities.getAttribute(props.attr.name);
   const type = () => capability().type;
-  const update = (value: string) => props.updateElementAttribute(props.node.id, props.attr.name, value);
+  const update = (value: string, mergeKey?: string) =>
+    props.updateElementAttribute(props.node.id, props.attr.name, value, mergeKey);
 
   return (
     <div
@@ -248,7 +247,9 @@ function AttributeControl(props: {
           data-testid={`attribute-input-${props.node.id}-${props.attr.name}`}
           value={props.attr.value}
           placeholder={capability().defaultValue}
-          onChange={(event) => update(clampNumericAttribute(props.attr.name, event.currentTarget.value))}
+          onChange={(event) =>
+            commitInput(event.currentTarget, clampNumericAttribute(props.attr.name, event.currentTarget.value), update)
+          }
         />
       </Show>
       <Show when={type() === 'enum'}>
@@ -287,8 +288,11 @@ function AttributeControl(props: {
 function ColorField(props: {
   readonly nodeId: string;
   readonly attr: SvgAttribute;
-  readonly update: (value: string) => void;
+  readonly update: (value: string, mergeKey?: string) => void;
 }) {
+  // Each time the native picker is opened and closed counts as one undo step.
+  let pickerSession = 0;
+
   const colorValue = () => normalizeColorInput(props.attr.value);
   const swatchValue = () => colorValue() ?? (isCssColorText(props.attr.value) ? props.attr.value : 'transparent');
   const pickerValue = () => colorValue() ?? '#000000';
@@ -328,7 +332,12 @@ function ColorField(props: {
           aria-label={`${props.attr.name} picker`}
           data-testid={`color-picker-${props.nodeId}-${props.attr.name}`}
           value={pickerValue()}
-          onInput={(event) => props.update(event.currentTarget.value)}
+          onInput={(event) =>
+            props.update(event.currentTarget.value, `color-picker:${props.nodeId}:${props.attr.name}:${pickerSession}`)
+          }
+          onChange={() => {
+            pickerSession += 1;
+          }}
         />
       </label>
       <datalist
@@ -374,12 +383,12 @@ function PathDataEditor(props: {
         onChange={(event) => props.update(event.currentTarget.value)}
       />
       <div class="grid gap-px" data-testid={`path-command-list-${props.node.id}`}>
-        <For each={commands()}>
+        <For each={commands()} keyed={false}>
           {(command, index) => (
             <PathCommandRow
               nodeId={props.node.id}
-              command={command}
-              index={index()}
+              command={command()}
+              index={index}
               commands={commands()}
               updateCommands={updateCommands}
               selectedPathCommand={props.selectedPathCommand}
@@ -467,10 +476,10 @@ function PathCommandRow(props: {
         {props.command.command}
       </button>
       <div class="flex min-w-0 flex-[1_1_auto] flex-wrap items-center gap-0.75 overflow-visible">
-        <For each={parameters()}>
-          {(param) => {
-            const value = () => formatPathNumber(props.command.values[param.index] ?? 0);
-            const flag = () => param.name === 'large' || param.name === 'sweep';
+        <For each={parameters()} keyed={false}>
+          {(parameter) => {
+            const value = () => formatPathNumber(props.command.values[parameter().index] ?? 0);
+            const flag = () => parameter().name === 'large' || parameter().name === 'sweep';
 
             return (
               <input
@@ -482,23 +491,19 @@ function PathCommandRow(props: {
                 ]}
                 type="text"
                 inputmode={flag() ? 'numeric' : 'decimal'}
-                name={`${props.nodeId}-command-${props.index}-${param.name}`}
-                aria-label={param.name}
-                title={param.name}
-                data-testid={`path-command-param-${props.nodeId}-${props.index}-${param.name}`}
+                name={`${props.nodeId}-command-${props.index}-${parameter().name}`}
+                aria-label={parameter().name}
+                title={parameter().name}
+                data-testid={`path-command-param-${props.nodeId}-${props.index}-${parameter().name}`}
                 value={value()}
-                style={{ width: pathParamInputWidth(value(), param.name) }}
+                style={{ width: pathParamInputWidth(value(), parameter().name) }}
                 onFocus={selectCurrent}
-                onChange={(event) =>
-                  updateCommands(
-                    updateCommandValue(
-                      props.commands,
-                      props.index,
-                      param.index,
-                      parsePathParamValue(event.currentTarget.value)
-                    )
-                  )
-                }
+                onChange={(event) => {
+                  const parsed = parsePathParamValue(event.currentTarget.value);
+                  commitInput(event.currentTarget, formatPathNumber(parsed), () =>
+                    updateCommands(updateCommandValue(props.commands, props.index, parameter().index, parsed))
+                  );
+                }}
               />
             );
           }}
@@ -577,44 +582,46 @@ function PointsEditor(props: {
         onChange={(event) => props.update(event.currentTarget.value)}
       />
       <div class="grid gap-px" data-testid={`points-list-${props.nodeId}`}>
-        <For each={points()}>
+        <For each={points()} keyed={false}>
           {(point, index) => (
             <div
               class="grid grid-cols-[24px_1fr_1fr_24px] items-center gap-0.75"
-              data-testid={`point-row-${props.nodeId}-${index()}`}
+              data-testid={`point-row-${props.nodeId}-${index}`}
             >
-              <span data-testid={`point-index-${props.nodeId}-${index()}`}>{index() + 1}</span>
+              <span data-testid={`point-index-${props.nodeId}-${index}`}>{index + 1}</span>
               <input
                 class="block h-5.5 min-h-5.5 w-14.5 min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
                 type="number"
-                name={`point-${index()}-x`}
+                name={`point-${index}-x`}
                 aria-label="Point x"
-                data-testid={`point-x-${props.nodeId}-${index()}`}
-                value={point[0]}
-                onChange={(event) =>
-                  props.update(
-                    formatPoints(updatePoint(points(), index(), 0, Number.parseFloat(event.currentTarget.value) || 0))
-                  )
-                }
+                data-testid={`point-x-${props.nodeId}-${index}`}
+                value={point()[0]}
+                onChange={(event) => {
+                  const x = Number.parseFloat(event.currentTarget.value) || 0;
+                  commitInput(event.currentTarget, String(x), () =>
+                    props.update(formatPoints(updatePoint(points(), index, 0, x)))
+                  );
+                }}
               />
               <input
                 class="block h-5.5 min-h-5.5 w-14.5 min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
                 type="number"
-                name={`point-${index()}-y`}
+                name={`point-${index}-y`}
                 aria-label="Point y"
-                data-testid={`point-y-${props.nodeId}-${index()}`}
-                value={point[1]}
-                onChange={(event) =>
-                  props.update(
-                    formatPoints(updatePoint(points(), index(), 1, Number.parseFloat(event.currentTarget.value) || 0))
-                  )
-                }
+                data-testid={`point-y-${props.nodeId}-${index}`}
+                value={point()[1]}
+                onChange={(event) => {
+                  const y = Number.parseFloat(event.currentTarget.value) || 0;
+                  commitInput(event.currentTarget, String(y), () =>
+                    props.update(formatPoints(updatePoint(points(), index, 1, y)))
+                  );
+                }}
               />
               <button
                 class="inline-grid h-5.5 min-w-5.5 cursor-pointer place-items-center rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)]"
                 type="button"
-                data-testid={`point-delete-${props.nodeId}-${index()}`}
-                onClick={() => props.update(formatPoints(deletePoint(points(), index())))}
+                data-testid={`point-delete-${props.nodeId}-${index}`}
+                onClick={() => props.update(formatPoints(deletePoint(points(), index)))}
               >
                 <DeleteIcon {...decorativeIconProps} />
               </button>
@@ -865,6 +872,15 @@ function TransformField(props: {
 
 function isRootEditorAttribute(name: string): boolean {
   return rootEditorAttributes.some((attributeName) => attributeName === name);
+}
+
+/**
+ * Commits an input's value and shows the committed text in the field. The committed value may differ from what was
+ * typed (clamped, normalized) while the model stays the same, and then no reactive update would replace the text.
+ */
+function commitInput(input: HTMLInputElement, value: string, commit: (value: string) => void): void {
+  commit(value);
+  input.value = value;
 }
 
 function listValues(value: string, count: number, fallback: readonly string[] = []): string[] {

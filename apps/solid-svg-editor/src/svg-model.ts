@@ -382,9 +382,37 @@ function insertSiblingInChildren(nodes: readonly SvgNode[], targetId: string, ch
   return changed ? next : nodes;
 }
 
-export function moveNode(root: SvgElementNode, id: string, direction: -1 | 1): SvgElementNode {
-  const children = moveInChildren(root.children, id, direction);
-  return children === root.children ? root : { ...root, children };
+/**
+ * Moves sibling nodes one step up (`-1`) or down (`1`) within their parent as a block: the neighbor next to each run
+ * of moved nodes moves across the run. Descendants of other moved nodes are ignored. Nothing moves when the nodes do
+ * not share one parent, matching GodSVG.
+ */
+export function moveNodesInParent(root: SvgElementNode, ids: readonly string[], direction: -1 | 1): SvgElementNode {
+  const movingIds = new Set(topLevelNodeIds(root, ids).filter((id) => id !== root.id));
+  const [firstId] = movingIds;
+  const parent = firstId === undefined ? undefined : findParent(root, firstId);
+
+  if (!parent || [...movingIds].some((id) => !parent.children.some((child) => child.id === id))) {
+    return root;
+  }
+
+  const children = [...parent.children];
+  let changed = false;
+
+  for (let step = 0; step < children.length - 1; step += 1) {
+    const index = direction === 1 ? children.length - 2 - step : step + 1;
+    const neighborIndex = index + direction;
+    const node = children[index];
+    const neighbor = children[neighborIndex];
+
+    if (node && neighbor && movingIds.has(node.id) && !movingIds.has(neighbor.id)) {
+      children[index] = neighbor;
+      children[neighborIndex] = node;
+      changed = true;
+    }
+  }
+
+  return changed ? updateNode(root, parent.id, (node) => ({ ...node, children })) : root;
 }
 
 export function moveNodesTo(root: SvgElementNode, ids: readonly string[], targetId: string, position: DropPosition): SvgElementNode {
@@ -435,7 +463,8 @@ export function moveNodesTo(root: SvgElementNode, ids: readonly string[], target
   return insertChildrenAt(withoutMoving, targetParent.id, movingNodes, adjustedIndex);
 }
 
-function topLevelNodeIds(root: SvgElementNode, ids: readonly string[]): readonly string[] {
+/** Returns the ids in document order, dropping ids whose ancestor is also listed. */
+export function topLevelNodeIds(root: SvgElementNode, ids: readonly string[]): readonly string[] {
   const selected = new Set(ids);
   const ordered: string[] = [];
 
@@ -481,45 +510,6 @@ function insertChildrenAt(root: SvgElementNode, parentId: string, childrenToInse
     nextChildren.splice(Math.max(0, Math.min(index, nextChildren.length)), 0, ...childrenToInsert);
     return { ...node, children: nextChildren, expanded: true };
   });
-}
-
-function moveInChildren(nodes: readonly SvgNode[], id: string, direction: -1 | 1): readonly SvgNode[] {
-  const index = nodes.findIndex((node) => node.id === id);
-
-  if (index !== -1) {
-    const targetIndex = index + direction;
-
-    if (targetIndex < 0 || targetIndex >= nodes.length) {
-      return nodes;
-    }
-
-    const next = [...nodes];
-    const item = next[index];
-
-    if (!item) {
-      return nodes;
-    }
-
-    next.splice(index, 1);
-    next.splice(targetIndex, 0, item);
-    return next;
-  }
-
-  let changed = false;
-  const next = nodes.map((node) => {
-    if (node.kind === "element") {
-      const children = moveInChildren(node.children, id, direction);
-
-      if (children !== node.children) {
-        changed = true;
-        return { ...node, children };
-      }
-    }
-
-    return node;
-  });
-
-  return changed ? next : nodes;
 }
 
 export function flattenElements(root: SvgElementNode): readonly SvgElementNode[] {

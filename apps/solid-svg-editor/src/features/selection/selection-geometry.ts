@@ -12,10 +12,14 @@ export function normalizeClientRect(startX: number, startY: number, endX: number
   };
 }
 
-export function idsInMarquee(rect: Rect, mode: DragSelectionMode): readonly string[] {
+/**
+ * Returns the ids of shapes inside `container` whose client rects touch (`intersect`) or lie within (`contain`) the
+ * client-space `rect`. Scope `container` to the viewport: previews render copies with the same node ids.
+ */
+export function idsInMarquee(container: ParentNode, rect: Rect, mode: DragSelectionMode): readonly string[] {
   const ids: string[] = [];
 
-  for (const element of document.querySelectorAll<SVGGraphicsElement>('[data-node-id]')) {
+  for (const element of container.querySelectorAll<SVGGraphicsElement>('[data-node-id]')) {
     if (!isMarqueeSelectableElement(element)) {
       continue;
     }

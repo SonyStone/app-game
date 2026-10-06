@@ -86,6 +86,75 @@ describe('createEditorDocuments command history', () => {
     dispose();
   });
 
+  it('reverts a cancelled transaction without leaving an undo step', () => {
+    const { dispose, documents } = createRoot((dispose) => ({
+      dispose,
+      documents: createEditorDocuments({
+        formatter: () => prettyFormatter,
+        onSelectionReset: () => undefined,
+        onDocumentOpened: () => undefined,
+        onParseError: () => undefined
+      })
+    }));
+    const rect = createDefaultElement('rect');
+
+    documents.beginCommandTransaction();
+    documents.updateCommandTransaction(
+      createEditorCommand({ id: 'test.drag-update', label: 'Drag update', apply: (root) => appendChild(root, root.id, rect) })
+    );
+    flush();
+
+    expect(documents.activeRoot().children).toHaveLength(1);
+
+    documents.cancelCommandTransaction();
+    flush();
+
+    expect(documents.activeRoot().children).toHaveLength(0);
+    expect(documents.canUndo()).toBe(false);
+    dispose();
+  });
+
+  it('merges consecutive commands with the same merge key into one undo step', () => {
+    const { dispose, documents } = createRoot((dispose) => ({
+      dispose,
+      documents: createEditorDocuments({
+        formatter: () => prettyFormatter,
+        onSelectionReset: () => undefined,
+        onDocumentOpened: () => undefined,
+        onParseError: () => undefined
+      })
+    }));
+    const setFill = (value: string, mergeKey?: string) => {
+      documents.dispatchCommand(
+        createEditorCommand({
+          id: 'test.fill',
+          label: 'Set fill',
+          apply: (root) => ({ ...root, attrs: [...root.attrs.filter((attr) => attr.name !== 'fill'), { name: 'fill', value }] }),
+          ...(mergeKey === undefined ? {} : { mergeKey })
+        })
+      );
+      flush();
+    };
+    const fill = () => documents.activeRoot().attrs.find((attr) => attr.name === 'fill')?.value;
+
+    setFill('#100', 'picker:1');
+    setFill('#200', 'picker:1');
+    setFill('#300', 'picker:1');
+    setFill('#400', 'picker:2');
+
+    documents.undo();
+    flush();
+
+    expect(fill()).toBe('#300');
+
+    documents.undo();
+    flush();
+
+    expect(fill()).toBeUndefined();
+    expect(documents.canUndo()).toBe(false);
+    dispose();
+  });
+
   it('undoes a run of code edits as one step', () => {
     const { dispose, documents } = createRoot((dispose) => ({
       dispose,

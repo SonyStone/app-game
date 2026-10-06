@@ -53,8 +53,13 @@ export function createEditorSelection(options: { readonly root: Accessor<SvgElem
     setSelectedPathCommand(undefined);
   }
 
+  /** Selects every node except the root, as GodSVG does; the root cannot be moved, duplicated, or deleted. */
   function selectAll(): void {
-    setSelectedIds(flattenAllNodes(options.root()).map((node) => node.id));
+    setSelectedIds(
+      flattenAllNodes(options.root())
+        .slice(1)
+        .map((node) => node.id)
+    );
   }
 
   return {

@@ -138,29 +138,24 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/**
+ * Clamps a numeric attribute to its range (`positive` lengths, `unit` opacities) while keeping any unit suffix such as
+ * `mm` or `em`. Percentages, non-numeric text, and in-range values are returned unchanged.
+ */
 export function clampNumericAttribute(name: string, value: string): string {
   const ranges: Record<string, string> = attributeNumberRange;
   const range = ranges[name];
+  const match = /^\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*([a-zA-Z]*)\s*$/.exec(value);
 
-  if (!range) {
+  if (!range || !match) {
     return value;
   }
 
-  const number = Number.parseFloat(value);
+  const number = Number(match[1]);
+  const unit = match[2] ?? "";
+  const clamped = range === "positive" ? Math.max(0, number) : range === "unit" && unit === "" ? clamp(number, 0, 1) : number;
 
-  if (!Number.isFinite(number) || value.trim().endsWith("%")) {
-    return value;
-  }
-
-  if (range === "positive") {
-    return String(Math.max(0, number));
-  }
-
-  if (range === "unit") {
-    return String(clamp(number, 0, 1));
-  }
-
-  return value;
+  return clamped === number ? value : `${clamped}${unit}`;
 }
 
 export function normalizeColorInput(value: string): string | undefined {

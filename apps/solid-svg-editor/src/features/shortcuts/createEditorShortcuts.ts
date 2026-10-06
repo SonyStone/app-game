@@ -4,6 +4,8 @@ import { createShortcutRegistry, pathCommandBindings, type ShortcutDescriptor } 
 
 export function createEditorShortcuts(options: {
   readonly activeElement: Accessor<Element | null>;
+  /** False while shortcuts must not run, such as when a dialog is open or a drag is in progress. */
+  readonly enabled: Accessor<boolean>;
   readonly redo: () => void;
   readonly undo: () => void;
   readonly downloadSvg: () => void;
@@ -25,8 +27,9 @@ export function createEditorShortcuts(options: {
   readonly insertPathCommandFromKey: (key: string, absolute: boolean) => void;
 }) {
   const shortcuts = [
-    shortcut('edit.undo', 'edit', 'Undo', 'Ctrl+Z', [{ key: 'z', ctrl: true }], options.undo, true),
-    shortcut('edit.redo', 'edit', 'Redo', 'Ctrl+Shift+Z', [{ key: 'z', ctrl: true, shift: true }], options.redo, true),
+    // Undo and redo stay with the text field while one is focused, like GodSVG.
+    shortcut('edit.undo', 'edit', 'Undo', 'Ctrl+Z', [{ key: 'z', ctrl: true }], options.undo),
+    shortcut('edit.redo', 'edit', 'Redo', 'Ctrl+Shift+Z', [{ key: 'z', ctrl: true, shift: true }], options.redo),
     shortcut('file.save-svg', 'file', 'Save SVG', 'Ctrl+S', [{ key: 's', ctrl: true }], options.downloadSvg, true),
     shortcut('edit.copy-svg', 'edit', 'Copy SVG text', 'Ctrl+Shift+C', [{ key: 'c', ctrl: true, shift: true }], options.copySvgText, true),
     shortcut('file.import', 'file', 'Import', 'Ctrl+O', [{ key: 'o', ctrl: true }], options.openImportDialog, true),
@@ -49,7 +52,7 @@ export function createEditorShortcuts(options: {
     )
   ] as const satisfies readonly ShortcutDescriptor[];
 
-  return createShortcutRegistry(shortcuts, { activeElement: options.activeElement });
+  return createShortcutRegistry(shortcuts, { activeElement: options.activeElement, enabled: options.enabled });
 }
 
 function shortcut(

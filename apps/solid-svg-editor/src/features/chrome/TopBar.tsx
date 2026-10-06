@@ -5,6 +5,7 @@ import { createSignal, For, Show } from 'solid-js';
 import { decorativeIconProps } from '../../editor/svg-icon';
 import type { EditorTab, PanelId } from '../../editor/types';
 import { editorPanels } from '../panels/panelRegistry';
+import { createDismissible } from '../ui/createDismissible';
 import { IconButton } from '../ui/IconButton';
 import CopyIcon from '../ui/icons/Copy.svg';
 import ExportIcon from '../ui/icons/Export.svg';
@@ -45,13 +46,15 @@ export function TopBar(props: {
   readonly openShortcuts: () => void;
 }) {
   const [moreOpen, setMoreOpen] = createSignal(false);
+  let leftActions: HTMLDivElement | undefined;
+  createDismissible({ open: moreOpen, container: () => leftActions, close: () => setMoreOpen(false) });
 
   return (
     <header
       class="topbar relative z-20 grid h-8 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b-2 border-b-[#20263a] bg-[#0c0e18] px-2 py-0.5"
       data-testid="topbar"
     >
-      <div class="flex min-w-0 items-center gap-1" data-testid="topbar-left-actions">
+      <div ref={(element) => (leftActions = element)} class="flex min-w-0 items-center gap-1" data-testid="topbar-left-actions">
         <IconButton
           icon={MoreIcon}
           label="More"
