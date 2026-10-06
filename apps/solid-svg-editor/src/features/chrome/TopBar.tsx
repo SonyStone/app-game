@@ -28,7 +28,8 @@ export function TopBar(props: {
   readonly fileSize: string;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
-  readonly setActiveTabId: (id: string) => void;
+  /** Activates the tab with this id and clears the selection. */
+  readonly selectTab: (id: string) => void;
   readonly closeTab: (id: string) => void;
   readonly createNewTab: () => void;
   readonly openImportDialog: () => void;
@@ -136,11 +137,11 @@ export function TopBar(props: {
                 { active: props.activeTabId === tab().id, dirty: tab().dirty }
               ]}
               data-testid={`tab-${tab().id}`}
-              onClick={() => props.setActiveTabId(tab().id)}
+              onClick={() => props.selectTab(tab().id)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
-                  props.setActiveTabId(tab().id);
+                  props.selectTab(tab().id);
                 }
               }}
               onAuxClick={(event) => {

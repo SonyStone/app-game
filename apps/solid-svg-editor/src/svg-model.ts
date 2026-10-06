@@ -134,7 +134,6 @@ export function parseSvgMarkup(markup: string): ParseResult {
     return { ok: false, error: "not-svg", message: "Doesn't describe an SVG." };
   }
 
-  resetIdCounter();
   const parser = new DOMParser();
   const doc = parser.parseFromString(markup, "image/svg+xml");
   const parserError = doc.querySelector("parsererror");

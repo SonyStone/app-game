@@ -1,3 +1,4 @@
+// @unocss-include — UnoCSS skips plain .ts modules; this file defines the app-root utility classes.
 import { cn } from '@app-game/utils/cn';
 
 import type { AppSettings, ThemePreset } from '../../editor/types';
@@ -63,7 +64,7 @@ const themePresetVars = {
 } satisfies Record<ThemePreset, Partial<Record<AppThemeColorVar, string>>>;
 
 export const appRootBaseClass = cn(
-  'app-root box-border grid h-dvh min-h-dvh w-full grid-rows-[32px_minmax(0,1fr)]',
+  'app-root box-border grid h-dvh min-h-dvh w-full grid-rows-[32px_minmax(0,1fr)] text-[13px]',
   'bg-[var(--base)] text-[var(--text)]'
 );
 

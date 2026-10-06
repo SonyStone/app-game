@@ -28,11 +28,6 @@ export default defineConfig({
       configFile: fileURLToPath(new URL("../../uno.config.ts", import.meta.url))
     })
   ],
-  css: {
-    modules: {
-      scopeBehaviour: "global"
-    }
-  },
   server: {
     host: "0.0.0.0"
   }

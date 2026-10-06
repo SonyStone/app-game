@@ -38,58 +38,131 @@ const parameterNames = {
   S: ["x2", "y2", "x", "y"]
 } as const satisfies Record<PathCommandLetter, readonly string[]>;
 
+/**
+ * Parses SVG path data into commands, following the SVG path grammar.
+ *
+ * Arc flags are read as single `0`/`1` characters, so compact data such as `a1 1 0 00 1 1` works.
+ * An implicit repetition of `M`/`m` becomes `L`/`l`. Parsing stops at the first syntax error and
+ * returns the commands read so far, which is how browsers render malformed path data.
+ */
 export function parsePathData(data: string): readonly PathCommand[] {
-  const tokens = tokenizePathData(data);
+  const scanner = createPathScanner(data);
   const commands: PathCommand[] = [];
-  let index = 0;
-  let activeCommand = "";
+  let previousCommand = "";
 
-  while (index < tokens.length) {
-    const token = tokens[index];
+  while (true) {
+    scanner.skipWhitespace();
 
-    if (!token) {
+    if (scanner.done()) {
       break;
     }
 
-    if (isCommandToken(token)) {
-      activeCommand = token;
-      index += 1;
-    } else if (!activeCommand) {
-      index += 1;
-      continue;
-    }
+    let command = scanner.readCommandLetter();
 
-    const commandLetter = normalizeCommand(activeCommand);
-    const count = argCount[commandLetter];
-
-    if (count === 0) {
-      commands.push({ command: activeCommand, values: [] });
-      activeCommand = "";
-      continue;
-    }
-
-    let values = readNumbers(tokens, index, count);
-
-    while (values.length === count) {
-      const command = commands.length > 0 && normalizeCommand(activeCommand) === "M" ? implicitLineCommand(activeCommand) : activeCommand;
-      commands.push({ command, values });
-      index += count;
-
-      const next = tokens[index];
-
-      if (!next || isCommandToken(next)) {
+    if (!command) {
+      if (!previousCommand || normalizeCommand(previousCommand) === "Z") {
         break;
       }
 
-      values = readNumbers(tokens, index, count);
+      command = normalizeCommand(previousCommand) === "M" ? implicitLineCommand(previousCommand) : previousCommand;
     }
+
+    const values = readCommandValues(scanner, normalizeCommand(command));
+
+    if (!values) {
+      break;
+    }
+
+    commands.push({ command, values });
+    previousCommand = command;
+    scanner.skipSeparator();
   }
 
   return commands;
 }
 
-function tokenizePathData(data: string): readonly string[] {
-  return data.match(/[AaCcHhLlMmQqSsTtVvZz]|[-+]?(?:(?:\d*\.\d+)|(?:\d+\.?))(?:[eE][-+]?\d+)?/g) ?? [];
+function readCommandValues(scanner: PathScanner, command: PathCommandLetter): number[] | undefined {
+  const values: number[] = [];
+
+  for (let index = 0; index < argCount[command]; index += 1) {
+    if (index > 0) {
+      scanner.skipSeparator();
+    } else {
+      scanner.skipWhitespace();
+    }
+
+    const isArcFlag = command === "A" && (index === 3 || index === 4);
+    const value = isArcFlag ? scanner.readFlag() : scanner.readNumber();
+
+    if (value === undefined) {
+      return undefined;
+    }
+
+    values.push(value);
+  }
+
+  return values;
+}
+
+type PathScanner = ReturnType<typeof createPathScanner>;
+
+function createPathScanner(data: string) {
+  let position = 0;
+
+  return {
+    done: () => position >= data.length,
+    skipWhitespace() {
+      while (position < data.length && isPathWhitespace(data[position])) {
+        position += 1;
+      }
+    },
+    /** Skips whitespace with at most one comma, the `comma-wsp` production of the path grammar. */
+    skipSeparator() {
+      this.skipWhitespace();
+
+      if (data[position] === ",") {
+        position += 1;
+        this.skipWhitespace();
+      }
+    },
+    readCommandLetter(): string | undefined {
+      const char = data[position];
+
+      if (char === undefined || !isCommandToken(char)) {
+        return undefined;
+      }
+
+      position += 1;
+      return char;
+    },
+    readNumber(): number | undefined {
+      numberPattern.lastIndex = position;
+      const match = numberPattern.exec(data);
+
+      if (!match) {
+        return undefined;
+      }
+
+      position = numberPattern.lastIndex;
+      return Number(match[0]);
+    },
+    readFlag(): number | undefined {
+      const char = data[position];
+
+      if (char !== "0" && char !== "1") {
+        return undefined;
+      }
+
+      position += 1;
+      return Number(char);
+    }
+  };
+}
+
+const numberPattern = /[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/y;
+
+function isPathWhitespace(char: string | undefined): boolean {
+  return char === " " || char === "\t" || char === "\n" || char === "\r" || char === "\f";
 }
 
 function isCommandToken(token: string): boolean {
@@ -99,28 +172,6 @@ function isCommandToken(token: string): boolean {
 function normalizeCommand(command: string): PathCommandLetter {
   const normalized = command.toUpperCase();
   return pathCommandLetters.includes(normalized as PathCommandLetter) ? (normalized as PathCommandLetter) : "M";
-}
-
-function readNumbers(tokens: readonly string[], start: number, count: number): number[] {
-  const values: number[] = [];
-
-  for (let i = 0; i < count; i += 1) {
-    const token = tokens[start + i];
-
-    if (!token || isCommandToken(token)) {
-      return [];
-    }
-
-    const value = Number.parseFloat(token);
-
-    if (!Number.isFinite(value)) {
-      return [];
-    }
-
-    values.push(value);
-  }
-
-  return values;
 }
 
 function implicitLineCommand(command: string): string {

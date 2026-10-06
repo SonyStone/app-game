@@ -36,7 +36,7 @@ export function App() {
         fileSize={app.topBar.fileSize()}
         canUndo={app.topBar.canUndo()}
         canRedo={app.topBar.canRedo()}
-        setActiveTabId={app.topBar.setActiveTabId}
+        selectTab={app.topBar.selectTab}
         activeTabId={app.topBar.activeTabId()}
         closeTab={app.topBar.closeTab}
         createNewTab={app.topBar.createNewTab}

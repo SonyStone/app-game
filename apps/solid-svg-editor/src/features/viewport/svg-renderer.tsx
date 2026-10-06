@@ -4,6 +4,7 @@ import { createMemo, For } from 'solid-js';
 
 import { attrsToObject } from '../../editor/tree-utils';
 import type { SvgNode } from '../../svg-model';
+import { isRenderableElement, renderableAttributes, svgNamespace } from './svg-render-policy';
 
 export interface SvgNodeViewProps {
   readonly node: SvgNode;
@@ -32,17 +33,18 @@ function DefaultSvgNodeView(props: SvgNodeViewProps) {
     return <>{node.text}</>;
   }
 
-  if (node.kind === 'comment' || node.kind === 'cdata') {
+  if (node.kind === 'comment' || node.kind === 'cdata' || !isRenderableElement(node.name)) {
     return null;
   }
 
-  const attrs = createMemo(() => attrsToObject(node.attrs));
+  const attrs = createMemo(() => attrsToObject(renderableAttributes(node.name, node.attrs)));
   const selected = createMemo(() => props.selectedIds.includes(node.id));
 
   return (
     <Dynamic
       component={node.name}
       {...attrs()}
+      xmlns={svgNamespace}
       data-node-id={node.id}
       data-testid={`svg-node-${node.id}`}
       class={{ 'svg-node-selected': selected() }}

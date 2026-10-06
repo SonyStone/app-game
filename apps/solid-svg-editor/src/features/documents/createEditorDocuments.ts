@@ -265,20 +265,19 @@ export function createEditorDocuments(options: {
   function applyCode(text: string): void {
     const parsed = parseSvgDocument(text);
 
-    updateActiveTab((tab) => {
-      if (!parsed.ok) {
-        return { ...tab, code: text, parseError: parsed.message, dirty: true };
-      }
+    if (!parsed.ok) {
+      updateActiveTab((tab) => ({ ...tab, code: text, parseError: parsed.message, dirty: true }));
+      return;
+    }
 
-      options.onSelectionReset();
-      return {
-        ...tab,
-        document: parsed.document,
-        code: text,
-        parseError: undefined,
-        dirty: true
-      };
-    });
+    updateActiveTab((tab) => ({
+      ...tab,
+      document: parsed.document,
+      code: text,
+      parseError: undefined,
+      dirty: true
+    }));
+    options.onSelectionReset();
   }
 
   function reformatActiveCode(formatter = options.formatter()): void {
@@ -301,6 +300,16 @@ export function createEditorDocuments(options: {
     options.onDocumentOpened();
   }
 
+  /** Activates a tab and clears the selection, whose node ids belong to the previous tab. */
+  function selectTab(tabId: string): void {
+    if (tabId === activeTabId()) {
+      return;
+    }
+
+    setActiveTabId(tabId);
+    options.onSelectionReset();
+  }
+
   function closeTab(tabId: string): void {
     const items = tabs();
 
@@ -315,7 +324,7 @@ export function createEditorDocuments(options: {
       const next = items.find((tab) => tab.id !== tabId);
 
       if (next) {
-        setActiveTabId(next.id);
+        selectTab(next.id);
       }
     }
   }
@@ -351,7 +360,7 @@ export function createEditorDocuments(options: {
   return {
     tabs,
     activeTabId,
-    setActiveTabId,
+    selectTab,
     activeTab,
     activeDocument,
     activeRoot,

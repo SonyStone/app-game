@@ -77,7 +77,7 @@ export function createEditorAppController() {
   const {
     tabs,
     activeTabId,
-    setActiveTabId,
+    selectTab,
     activeTab,
     activeRoot,
     activeCode,
@@ -353,7 +353,7 @@ export function createEditorAppController() {
       fileSize,
       canUndo,
       canRedo,
-      setActiveTabId,
+      selectTab,
       activeTabId,
       closeTab,
       createNewTab,
