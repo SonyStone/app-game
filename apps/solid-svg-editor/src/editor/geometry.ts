@@ -97,7 +97,7 @@ export function parseTransformList(value: string): Matrix2D {
 }
 
 export function formatMatrixTransform(matrixValue: Matrix2D): string {
-  return `matrix(${formatMatrixNumber(matrixValue.a)} ${formatMatrixNumber(matrixValue.b)} ${formatMatrixNumber(matrixValue.c)} ${formatMatrixNumber(matrixValue.d)} ${formatMatrixNumber(matrixValue.e)} ${formatMatrixNumber(matrixValue.f)})`;
+  return `matrix(${formatCoordinate(matrixValue.a)} ${formatCoordinate(matrixValue.b)} ${formatCoordinate(matrixValue.c)} ${formatCoordinate(matrixValue.d)} ${formatCoordinate(matrixValue.e)} ${formatCoordinate(matrixValue.f)})`;
 }
 
 export function matrixAround(anchor: Point, transform: Matrix2D): Matrix2D {
@@ -203,7 +203,8 @@ function transformFunctionToMatrix(name: string, values: readonly number[]): Mat
   }
 }
 
-function formatMatrixNumber(value: number): string {
+/** Formats a computed coordinate for an attribute, rounded to 6 decimals to drop floating-point noise. */
+export function formatCoordinate(value: number): string {
   const rounded = Math.round(value * 1000000) / 1000000;
-  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+  return Object.is(rounded, -0) ? "0" : String(rounded);
 }

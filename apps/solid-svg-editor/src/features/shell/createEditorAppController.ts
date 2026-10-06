@@ -11,7 +11,7 @@ import { createEditorCommand, type EditorCommandEvent } from '../../editor/comma
 import { defaultSettings } from '../../editor/defaults';
 import { downloadBlob } from '../../editor/export-utils';
 import type { ContextMenuState, DragSelectionMode, ModalId, PanelId } from '../../editor/types';
-import { createDefaultElement, insertSibling, svgSize } from '../../svg-model';
+import { createDefaultElement, findNode, insertSibling, svgSize } from '../../svg-model';
 import { createEditorDocuments } from '../documents/createEditorDocuments';
 import { createSvgNodeActions } from '../documents/createSvgNodeActions';
 import { createFullscreen } from '../fullscreen/createFullscreen';
@@ -152,6 +152,7 @@ export function createEditorAppController() {
     updateElementAttribute,
     removeElementAttribute,
     updateBasicNodeText,
+    convertNode,
     optimizeActive,
     insertPathCommandFromKey
   } = nodeActions;
@@ -442,7 +443,19 @@ export function createEditorAppController() {
     },
     contextMenu: {
       state: contextMenu,
+      node: createMemo(() => {
+        const menu = contextMenu();
+        return menu ? findNode(activeRoot(), menu.nodeId) : undefined;
+      }),
       runAction: runContextAction,
+      convert: (target: string) => {
+        const menu = contextMenu();
+        setContextMenu(undefined);
+
+        if (menu) {
+          convertNode(menu.nodeId, target);
+        }
+      },
       close: () => setContextMenu(undefined)
     },
     modals: {

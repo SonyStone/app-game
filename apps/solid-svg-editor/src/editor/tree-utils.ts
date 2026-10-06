@@ -1,5 +1,6 @@
 import { attributeNumberRange, getAttributeDefault, getRecognizedAttributes } from "../svg-db";
 import { createCommand, formatPathData, parsePathData, type PathCommand } from "../path-data";
+import { convertElement } from "./element-conversion";
 import { getAttribute, type SvgAttribute, type SvgElementNode, type SvgNode } from "../svg-model";
 
 import type { AppSettings, InspectorRow, OptimizerSettings, ThemePreset } from "./types";
@@ -204,8 +205,35 @@ export function optimizeNode(node: SvgNode, settings: OptimizerSettings): SvgNod
       return attr;
     });
   const children = node.children.map((child) => optimizeNode(child, settings)).filter((child): child is SvgNode => child !== null);
+  const optimized = { ...node, attrs, children };
 
-  return { ...node, attrs, children };
+  return settings.convertShapes ? (convertToSimplerShape(optimized) ?? optimized) : optimized;
+}
+
+/**
+ * The optimizer's shape conversion, as in GodSVG: an ellipse with equal radii becomes a circle; a rect becomes a
+ * circle, an ellipse, or (with square corners) a path; polygons, polylines, and lines become paths.
+ */
+function convertToSimplerShape(element: SvgElementNode): SvgElementNode | undefined {
+  switch (element.name) {
+    case "ellipse":
+      return convertElement(element, "circle");
+    case "rect": {
+      const radius = getAttribute(element, "rx", true) || getAttribute(element, "ry", true);
+      const hasRoundedCorners = radius !== "" && Number.parseFloat(radius) !== 0;
+      return (
+        convertElement(element, "circle") ??
+        convertElement(element, "ellipse") ??
+        (hasRoundedCorners ? undefined : convertElement(element, "path"))
+      );
+    }
+    case "polygon":
+    case "polyline":
+    case "line":
+      return convertElement(element, "path");
+    default:
+      return undefined;
+  }
 }
 
 export function themePresetSettings(preset: ThemePreset, settings: AppSettings): AppSettings {

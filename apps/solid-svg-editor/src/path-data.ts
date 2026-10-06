@@ -406,6 +406,91 @@ function nearlyEqualPoints(a: Point, b: Point): boolean {
   return Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9;
 }
 
+/**
+ * Returns the vertices of a single-subpath path made only of straight segments, and whether it ends with `Z`, or
+ * `undefined` when a segment is curved. Lines, `H`/`V`, zero-radius arcs, and curves whose control points lie on the
+ * segment count as straight, matching GodSVG's exact conversion to lines.
+ */
+export function straightPathVertices(
+  commands: readonly PathCommand[]
+): { readonly points: readonly Point[]; readonly closed: boolean } | undefined {
+  const [first, ...rest] = absoluteSegments(commands);
+
+  if (!first) {
+    return { points: [], closed: false };
+  }
+
+  if (first.source.letter !== "M") {
+    return undefined;
+  }
+
+  const points: Point[] = [first.end];
+  let closed = false;
+
+  for (const [index, segment] of rest.entries()) {
+    if (segment.source.letter === "Z" && index === rest.length - 1) {
+      closed = true;
+      continue;
+    }
+
+    if (!isStraightSegment(segment)) {
+      return undefined;
+    }
+
+    points.push(segment.end);
+  }
+
+  return { points, closed };
+}
+
+function isStraightSegment(segment: AbsoluteSegment): boolean {
+  switch (segment.source.letter) {
+    case "L":
+    case "H":
+    case "V":
+      return true;
+    case "M":
+    case "Z":
+      return false;
+    case "A":
+      return segment.source.values[0] === 0 || segment.source.values[1] === 0;
+    default: {
+      const controls = segment.quadraticControl ? [segment.quadraticControl] : (segment.cubicControls ?? []);
+      return controls.every((control) => isPointOnSegment(control, segment.start, segment.end));
+    }
+  }
+}
+
+/** Whether `point` lies on the segment from `start` to `end`, within floating-point tolerance (GodSVG's check). */
+export function isPointOnSegment(point: Point, start: Point, end: Point): boolean {
+  const startToPoint = squaredDistance(start, point);
+  const endToPoint = squaredDistance(end, point);
+  const startToEnd = squaredDistance(start, end);
+
+  if (startToPoint < 1e-12 || endToPoint < 1e-12) {
+    return true;
+  }
+
+  if (startToEnd < startToPoint || startToEnd < endToPoint) {
+    return false;
+  }
+
+  const cross = (end.x - start.x) * (point.y - start.y) - (end.y - start.y) * (point.x - start.x);
+  return Math.abs(cross) <= 1e-9 * startToEnd;
+}
+
+function squaredDistance(a: Point, b: Point): number {
+  return (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+}
+
+/** Rewrites every command after the first as relative, keeping the geometry. */
+export function toRelativeCommands(commands: readonly PathCommand[]): readonly PathCommand[] {
+  return commands.reduce<readonly PathCommand[]>((next, command, index) => {
+    const isAbsolute = command.command !== command.command.toLowerCase();
+    return index > 0 && isAbsolute ? toggleRelative(next, index) : next;
+  }, commands);
+}
+
 export function toggleRelative(commands: readonly PathCommand[], commandIndex: number): readonly PathCommand[] {
   const start = commandStartPoints(commands)[commandIndex] ?? { x: 0, y: 0 };
 

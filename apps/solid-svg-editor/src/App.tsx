@@ -137,7 +137,15 @@ export function App() {
       </div>
 
       <Show when={app.contextMenu.state()}>
-        {(menu) => <EditorContextMenu menu={menu()} runAction={app.contextMenu.runAction} close={app.contextMenu.close} />}
+        {(menu) => (
+          <EditorContextMenu
+            menu={menu()}
+            node={app.contextMenu.node()}
+            runAction={app.contextMenu.runAction}
+            convert={app.contextMenu.convert}
+            close={app.contextMenu.close}
+          />
+        )}
       </Show>
 
       <EditorModalStack
