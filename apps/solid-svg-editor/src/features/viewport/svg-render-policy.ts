@@ -43,5 +43,18 @@ export function renderableAttributes(elementName: string, attrs: readonly SvgAtt
 function isJavascriptUrl(value: string): boolean {
   // Browsers ignore ASCII whitespace and control characters inside the URL scheme.
   // eslint-disable-next-line no-control-regex
-  return /^javascript:/i.test(value.replace(/[\u0000- ]/g, ''));
+  return /^javascript:/i.test(value.replace(/[\u0000-\u0020]/g, ''));
 }
+
+/**
+ * Returns the document root attributes that the live view applies to a wrapper `<g>`.
+ *
+ * The editor draws the document's children inside its own viewport `<svg>`, so inheritable attributes on the document
+ * root, such as `fill="none" stroke="currentColor"` on icon sets, must be carried over. Sizing, namespace, and id
+ * attributes describe the root element itself and stay off the wrapper.
+ */
+export function rootPresentationAttributes(attrs: readonly SvgAttribute[]): readonly SvgAttribute[] {
+  return renderableAttributes('svg', attrs).filter((attr) => !rootOnlyAttributes.has(attr.name) && !attr.name.startsWith('xmlns'));
+}
+
+const rootOnlyAttributes = new Set(['id', 'width', 'height', 'x', 'y', 'viewBox', 'preserveAspectRatio', 'version', 'baseProfile', 'zoomAndPan']);

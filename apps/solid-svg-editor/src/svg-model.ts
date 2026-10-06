@@ -185,7 +185,7 @@ function domElementToSvgNode(element: Element): SvgElementNode {
 
 export function getAttribute(node: SvgElementNode, name: string, real = false): string {
   const attr = node.attrs.find((item) => item.name === name);
-  return attr ? attr.value : real ? "" : getAttributeDefault(name);
+  return attr ? attr.value : real ? "" : getAttributeDefault(name, node.name);
 }
 
 export function hasAttribute(node: SvgElementNode, name: string): boolean {
@@ -537,18 +537,50 @@ function visitElements(node: SvgElementNode, result: SvgElementNode[]): void {
   }
 }
 
+/**
+ * Resolves the document size and viewBox the way GodSVG does.
+ *
+ * A missing `width` or `height` is derived from the other one and the viewBox aspect ratio, or taken from the viewBox
+ * when both are missing. Percentages count as missing because they depend on the embedding page. Without any usable
+ * size the document falls back to 900×900.
+ */
 export function svgSize(root: SvgElementNode): { readonly width: number; readonly height: number; readonly viewBox: readonly [number, number, number, number] } {
-  const viewBox = parseNumberList(getAttribute(root, "viewBox")).slice(0, 4);
-  const width = parseLength(getAttribute(root, "width")) || viewBox[2] || 900;
-  const height = parseLength(getAttribute(root, "height")) || viewBox[3] || 900;
-  const parsedViewBox = [
-    viewBox[0] ?? 0,
-    viewBox[1] ?? 0,
-    viewBox[2] ?? width,
-    viewBox[3] ?? height
-  ] as const;
+  const viewBox = parseViewBox(getAttribute(root, "viewBox", true));
+  const width = absoluteLength(getAttribute(root, "width", true));
+  const height = absoluteLength(getAttribute(root, "height", true));
 
-  return { width, height, viewBox: parsedViewBox };
+  if (!viewBox) {
+    const resolvedWidth = width ?? height ?? fallbackSvgSize;
+    const resolvedHeight = height ?? width ?? fallbackSvgSize;
+    return { width: resolvedWidth, height: resolvedHeight, viewBox: [0, 0, resolvedWidth, resolvedHeight] };
+  }
+
+  const [, , viewBoxWidth, viewBoxHeight] = viewBox;
+  const resolvedWidth = width ?? (height === undefined ? viewBoxWidth : (height / viewBoxHeight) * viewBoxWidth);
+  const resolvedHeight = height ?? (width === undefined ? viewBoxHeight : (width / viewBoxWidth) * viewBoxHeight);
+
+  return { width: resolvedWidth, height: resolvedHeight, viewBox };
+}
+
+const fallbackSvgSize = 900;
+
+function parseViewBox(value: string): readonly [number, number, number, number] | undefined {
+  const [x, y, width, height] = parseNumberList(value);
+
+  if (x === undefined || y === undefined || width === undefined || height === undefined || width <= 0 || height <= 0) {
+    return undefined;
+  }
+
+  return [x, y, width, height];
+}
+
+function absoluteLength(value: string): number | undefined {
+  if (value.trim().endsWith("%")) {
+    return undefined;
+  }
+
+  const parsed = parseLength(value);
+  return parsed > 0 ? parsed : undefined;
 }
 
 export function parseLength(value: string): number {

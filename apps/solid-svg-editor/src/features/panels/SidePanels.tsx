@@ -8,7 +8,7 @@ import { nodeLabel, svgSize, type SvgElementNode, type SvgNode } from "../../svg
 import CopyIcon from "../ui/icons/Copy.svg";
 import WarningIcon from "../ui/icons/Warning.svg";
 import { PanelButton } from "../ui/PanelButton";
-import { SvgNodeView } from "../viewport/ViewportParts";
+import { SvgNodeList, SvgNodeView, SvgRootPresentation } from "../viewport/svg-renderer";
 
 export function CodePanel(props: {
   readonly code: string;
@@ -70,7 +70,9 @@ export function PreviewsPanel(props: {
             <div class="preview-tile grid min-h-29 grid-rows-[auto_minmax(0,1fr)] gap-1 rounded-md border border-[var(--soft-border)] bg-[var(--panel-2)] p-1.5 [&>svg]:h-full [&>svg]:min-h-0 [&>svg]:w-full" data-testid={`selected-preview-tile-${node.id}`}>
               <span data-testid={`selected-preview-label-${node.id}`}>{nodeLabel(node)}</span>
               <svg viewBox={svgSize(props.root).viewBox.join(" ")} preserveAspectRatio="xMidYMid meet" data-testid={`selected-preview-svg-${node.id}`}>
-                <SvgNodeView node={node} selectedIds={[]} onNodePointerDown={() => undefined} openContextMenu={() => undefined} />
+                <SvgRootPresentation root={props.root}>
+                  <SvgNodeView node={node} selectedIds={[]} onNodePointerDown={() => undefined} openContextMenu={() => undefined} />
+                </SvgRootPresentation>
               </svg>
             </div>
           )}
@@ -95,7 +97,9 @@ export function PreviewSvg(props: { readonly root: SvgElementNode; readonly test
           <rect x="20" y="20" width="20" height="20" fill="#aeb4bf" opacity="0.45" />
         </pattern>
       </defs>
-      <For each={props.root.children}>{(node) => <SvgNodeView node={node} selectedIds={[]} onNodePointerDown={() => undefined} openContextMenu={() => undefined} />}</For>
+      <SvgRootPresentation root={props.root}>
+        <SvgNodeList nodes={props.root.children} selectedIds={[]} onNodePointerDown={() => undefined} openContextMenu={() => undefined} />
+      </SvgRootPresentation>
     </svg>
   );
 }

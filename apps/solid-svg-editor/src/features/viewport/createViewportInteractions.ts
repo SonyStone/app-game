@@ -53,11 +53,11 @@ export function createViewportInteractions(options: {
   readonly commitCommandTransaction: () => void;
   readonly canvasSvg: Accessor<SVGSVGElement | undefined>;
   readonly zoom: Accessor<number>;
-  readonly setZoom: Setter<number>;
+  readonly setZoom: (zoom: number) => void;
   readonly viewportSize: Accessor<{ readonly width: number; readonly height: number }>;
   readonly viewportRotation: Accessor<number>;
-  readonly setViewportRotation: Setter<number>;
-  readonly setCameraCenter: Setter<Point>;
+  readonly setViewportRotation: (rotation: number) => void;
+  readonly setCameraCenter: (center: Point) => void;
   readonly clientToSvgPoint: (clientX: number, clientY: number, snapToGrid?: boolean) => Point;
   readonly centerForClientPoint: (
     worldPoint: Point,

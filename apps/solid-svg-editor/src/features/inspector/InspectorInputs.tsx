@@ -28,7 +28,7 @@ import {
   updatePoint,
   type PathCommand
 } from '../../path-data';
-import { getAttribute, type SvgAttribute, type SvgElementNode } from '../../svg-model';
+import { getAttribute, svgSize, type SvgAttribute, type SvgElementNode } from '../../svg-model';
 import DeleteIcon from '../ui/icons/Delete.svg';
 import InsertAfterIcon from '../ui/icons/InsertAfter.svg';
 import PlusIcon from '../ui/icons/Plus.svg';
@@ -55,9 +55,10 @@ export function RootElementEditor(props: {
   readonly root: SvgElementNode;
   readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
 }) {
-  const rootValue = (name: string) => getAttribute(props.root, name, true) || svgCapabilities.getAttributeDefault(name);
+  const size = createMemo(() => svgSize(props.root));
+  const rootValue = (name: 'width' | 'height') => getAttribute(props.root, name, true) || formatPathNumber(size()[name]);
   const viewBoxValues = createMemo(() =>
-    listValues(rootValue('viewBox'), 4, listValues(svgCapabilities.getAttributeDefault('viewBox'), 4))
+    listValues(getAttribute(props.root, 'viewBox', true), 4, size().viewBox.map(formatPathNumber))
   );
   const unknownAttrs = createMemo(() => props.root.attrs.filter((attr) => !isRootEditorAttribute(attr.name)));
 

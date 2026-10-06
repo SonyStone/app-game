@@ -1,5 +1,5 @@
 import type { Setter } from 'solid-js';
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 
 import type { Rect } from '../../editor/geometry';
 import type {
@@ -10,7 +10,8 @@ import type {
   ViewRect
 } from '../../editor/types';
 import type { SvgElementNode } from '../../svg-model';
-import { GridLayer, HandlesLayer, SvgNodeView, TransformBoxLayer, ViewportToolbar } from './ViewportParts';
+import { GridLayer, HandlesLayer, TransformBoxLayer, ViewportToolbar } from './ViewportParts';
+import { SvgNodeList, SvgRootPresentation } from './svg-renderer';
 import type { SvgSize } from './viewport-math';
 
 export function EditorViewport(props: {
@@ -138,16 +139,14 @@ export function EditorViewport(props: {
               when={props.useRasterPreview ? props.rasterPreviewUrl : undefined}
               fallback={
                 <g class={{ rasterized: props.settings.viewRasterized }} data-testid="viewport-vector-layer">
-                  <For each={props.root.children}>
-                    {(node) => (
-                      <SvgNodeView
-                        node={node}
-                        selectedIds={props.selectedIds}
-                        onNodePointerDown={props.onNodePointerDown}
-                        openContextMenu={props.openContextMenu}
-                      />
-                    )}
-                  </For>
+                  <SvgRootPresentation root={props.root}>
+                    <SvgNodeList
+                      nodes={props.root.children}
+                      selectedIds={props.selectedIds}
+                      onNodePointerDown={props.onNodePointerDown}
+                      openContextMenu={props.openContextMenu}
+                    />
+                  </SvgRootPresentation>
                 </g>
               }
             >

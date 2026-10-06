@@ -265,13 +265,18 @@ export const colorAttributesWithNoneAllowed = ["fill", "stroke"] as const;
 export const colorAttributesWithUrlAllowed = ["fill", "stroke"] as const;
 export const colorAttributesWithCurrentColorAllowed = ["fill", "stroke", "stop-color"] as const;
 
+/**
+ * Values SVG uses when an attribute is missing, the initial values from the SVG specification.
+ *
+ * Templates for newly created elements live in `defaultElements`; these values describe what an existing element
+ * without the attribute renders as. Element-specific values are in `elementAttributeDefaults`.
+ */
 export const defaultAttributeValues = {
   xmlns: "http://www.w3.org/2000/svg",
   x: "0",
   y: "0",
-  width: "900",
-  height: "900",
-  viewBox: "0 0 900 900",
+  width: "0",
+  height: "0",
   opacity: "1",
   fill: "black",
   "fill-opacity": "1",
@@ -285,17 +290,13 @@ export const defaultAttributeValues = {
   gradientTransform: "",
   d: "",
   points: "",
-  cx: "450",
-  cy: "450",
-  r: "120",
-  rx: "160",
-  ry: "100",
-  x1: "250",
-  y1: "250",
-  x2: "650",
-  y2: "650",
-  fx: "450",
-  fy: "450",
+  cx: "0",
+  cy: "0",
+  r: "0",
+  x1: "0",
+  y1: "0",
+  x2: "0",
+  y2: "0",
   offset: "0",
   "stop-color": "black",
   "stop-opacity": "1",
@@ -303,6 +304,12 @@ export const defaultAttributeValues = {
   spreadMethod: "pad",
   href: ""
 } as const satisfies Record<string, string>;
+
+/** Missing-attribute values that differ by element, following GodSVG's per-element defaults. */
+const elementAttributeDefaults: Partial<Record<RecognizedElement, Readonly<Record<string, string>>>> = {
+  linearGradient: { x1: "0%", y1: "0%", x2: "100%", y2: "0%" },
+  radialGradient: { cx: "50%", cy: "50%", r: "50%" }
+};
 
 export const defaultElements = {
   svg: {
@@ -350,9 +357,15 @@ export function isValidChild(parentName: string, childName: string): boolean {
   return (validChildren[parentName] as readonly string[]).includes(childName);
 }
 
-export function getAttributeDefault(attributeName: string): string {
+/**
+ * Returns the value a missing attribute renders as, or `""` when there is none (such as `rx` meaning "auto").
+ *
+ * Pass `elementName` for element-specific values such as gradient coordinates; without it the generic value is used.
+ */
+export function getAttributeDefault(attributeName: string, elementName?: string): string {
+  const elementDefaults = elementName && isRecognizedElement(elementName) ? elementAttributeDefaults[elementName] : undefined;
   const defaults: Record<string, string> = defaultAttributeValues;
-  return defaults[attributeName] ?? "";
+  return elementDefaults?.[attributeName] ?? defaults[attributeName] ?? "";
 }
 
 export function iconForElement(name: string): SvgIcon {

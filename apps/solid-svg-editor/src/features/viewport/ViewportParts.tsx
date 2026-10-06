@@ -20,8 +20,6 @@ import ReferenceIcon from './icons/Reference.svg';
 import SnapIcon from './icons/Snap.svg';
 import VisualsIcon from './icons/Visuals.svg';
 
-export { SvgNodeView } from './svg-renderer';
-
 export function ViewportToolbar(props: {
   readonly settings: AppSettings;
   readonly setSettings: (setter: (settings: AppSettings) => AppSettings) => void;

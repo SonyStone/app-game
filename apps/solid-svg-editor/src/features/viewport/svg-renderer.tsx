@@ -1,81 +1,100 @@
 import type { JSX } from '@solidjs/web';
 import { Dynamic } from '@solidjs/web';
-import { createMemo, For } from 'solid-js';
+import { createMemo, For, Show, untrack } from 'solid-js';
 
 import { attrsToObject } from '../../editor/tree-utils';
-import type { SvgNode } from '../../svg-model';
-import { isRenderableElement, renderableAttributes, svgNamespace } from './svg-render-policy';
+import type { SvgElementNode, SvgNode } from '../../svg-model';
+import { isRenderableElement, renderableAttributes, rootPresentationAttributes, svgNamespace } from './svg-render-policy';
 
-export interface SvgNodeViewProps {
-  readonly node: SvgNode;
+/** Selection state and pointer callbacks shared by every rendered document node. */
+export interface SvgNodeViewOptions {
   readonly selectedIds: readonly string[];
   readonly onNodePointerDown: (id: string, event: PointerEvent) => void;
   readonly openContextMenu: (event: MouseEvent, nodeId: string) => void;
-  readonly renderer?: SvgRendererAdapter;
 }
 
-export interface SvgRendererAdapter {
-  readonly renderNode: (props: SvgNodeViewProps) => JSX.Element;
+/** Wraps document content in a `<g>` that carries the inheritable attributes of the document root. */
+export function SvgRootPresentation(props: { readonly root: SvgElementNode; readonly children: JSX.Element }) {
+  const attrs = createMemo(() => attrsToObject(rootPresentationAttributes(props.root.attrs)));
+
+  return <g {...attrs()}>{props.children}</g>;
 }
 
-export const defaultSvgRendererAdapter = {
-  renderNode: (props) => <DefaultSvgNodeView {...props} />
-} satisfies SvgRendererAdapter;
-
-export function SvgNodeView(props: SvgNodeViewProps) {
-  return (props.renderer ?? defaultSvgRendererAdapter).renderNode(props);
+/**
+ * Renders document nodes into the page.
+ *
+ * Rows are keyed by node id rather than object identity. The model is immutable, so an edit replaces every ancestor of
+ * the edited node; keying by id updates those elements in place instead of rebuilding their subtrees.
+ */
+export function SvgNodeList(props: SvgNodeViewOptions & { readonly nodes: readonly SvgNode[] }) {
+  return (
+    <For each={props.nodes} keyed={(node) => node.id}>
+      {(node) => (
+        <SvgNodeView
+          node={node()}
+          selectedIds={props.selectedIds}
+          onNodePointerDown={props.onNodePointerDown}
+          openContextMenu={props.openContextMenu}
+        />
+      )}
+    </For>
+  );
 }
 
-function DefaultSvgNodeView(props: SvgNodeViewProps) {
-  const node = props.node;
+/** Renders one document node and its children; comments, CDATA, and blocked elements render nothing. */
+export function SvgNodeView(props: SvgNodeViewOptions & { readonly node: SvgNode }) {
+  // A node id never changes kind, and lists key rows by id, so the branch is chosen once.
+  const kind = untrack(() => props.node.kind);
 
-  if (node.kind === 'text') {
-    return <>{node.text}</>;
+  if (kind === 'text') {
+    return <>{textContent(props.node)}</>;
   }
 
-  if (node.kind === 'comment' || node.kind === 'cdata' || !isRenderableElement(node.name)) {
+  if (kind !== 'element') {
     return null;
   }
 
-  const attrs = createMemo(() => attrsToObject(renderableAttributes(node.name, node.attrs)));
-  const selected = createMemo(() => props.selectedIds.includes(node.id));
+  const element = () => props.node as SvgElementNode;
+  const attrs = createMemo(() => attrsToObject(renderableAttributes(element().name, element().attrs)));
+  const selected = createMemo(() => props.selectedIds.includes(element().id));
 
   return (
-    <Dynamic
-      component={node.name}
-      {...attrs()}
-      xmlns={svgNamespace}
-      data-node-id={node.id}
-      data-testid={`svg-node-${node.id}`}
-      class={{ 'svg-node-selected': selected() }}
-      onPointerDown={(event: PointerEvent) => {
-        if (event.pointerType === 'touch' || event.button === 1 || event.altKey) {
-          return;
-        }
+    <Show when={isRenderableElement(element().name)}>
+      <Dynamic
+        component={element().name}
+        {...attrs()}
+        xmlns={svgNamespace}
+        data-node-id={element().id}
+        data-testid={`svg-node-${element().id}`}
+        class={[attrs().class, { 'svg-node-selected': selected() }]}
+        onPointerDown={(event: PointerEvent) => {
+          if (event.pointerType === 'touch' || event.button === 1 || event.altKey) {
+            return;
+          }
 
-        event.stopPropagation();
-        props.onNodePointerDown(node.id, event);
-      }}
-      onContextMenu={(event: MouseEvent) => {
-        if (event.altKey) {
-          event.preventDefault();
-          return;
-        }
+          event.stopPropagation();
+          props.onNodePointerDown(element().id, event);
+        }}
+        onContextMenu={(event: MouseEvent) => {
+          if (event.altKey) {
+            event.preventDefault();
+            return;
+          }
 
-        props.openContextMenu(event, node.id);
-      }}
-    >
-      <For each={node.children}>
-        {(child) => (
-          <SvgNodeView
-            node={child}
-            selectedIds={props.selectedIds}
-            onNodePointerDown={props.onNodePointerDown}
-            openContextMenu={props.openContextMenu}
-            {...(props.renderer ? { renderer: props.renderer } : {})}
-          />
-        )}
-      </For>
-    </Dynamic>
+          props.openContextMenu(event, element().id);
+        }}
+      >
+        <SvgNodeList
+          nodes={element().children}
+          selectedIds={props.selectedIds}
+          onNodePointerDown={props.onNodePointerDown}
+          openContextMenu={props.openContextMenu}
+        />
+      </Dynamic>
+    </Show>
   );
+}
+
+function textContent(node: SvgNode): string {
+  return node.kind === 'text' ? node.text : '';
 }

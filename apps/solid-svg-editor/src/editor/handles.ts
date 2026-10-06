@@ -64,8 +64,11 @@ function handlesForElement(node: SvgElementNode): readonly HandleDescriptor[] {
     case "ellipse": {
       const cx = parseLength(getAttribute(node, "cx"));
       const cy = parseLength(getAttribute(node, "cy"));
-      const rx = parseLength(getAttribute(node, "rx"));
-      const ry = parseLength(getAttribute(node, "ry"));
+      // A missing radius is "auto" and takes the other one.
+      const rxValue = getAttribute(node, "rx", true);
+      const ryValue = getAttribute(node, "ry", true);
+      const rx = parseLength(rxValue || ryValue);
+      const ry = parseLength(ryValue || rxValue);
       return [
         numericHandle(node.id, "center", cx, cy, "center", (root, x, y) => updateNumericAttrs(root, node.id, { cx: x, cy: y })),
         numericHandle(node.id, "rx", cx + rx, cy, "rx", (root, x) => updateNumericAttrs(root, node.id, { rx: Math.max(0, x - cx) })),

@@ -11,7 +11,7 @@ export function orderedAttributes(node: SvgElementNode): readonly SvgAttribute[]
 
   for (const name of recognized) {
     const attr = existing.find((item) => item.name === name);
-    ordered.push(attr ?? { name, value: getAttributeDefault(name) });
+    ordered.push(attr ?? { name, value: getAttributeDefault(name, node.name) });
   }
 
   for (const attr of existing) {

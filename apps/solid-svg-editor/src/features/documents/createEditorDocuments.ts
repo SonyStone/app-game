@@ -32,6 +32,11 @@ export function createEditorDocuments(options: {
         historyPushed: boolean;
       }
     | undefined;
+  /**
+   * Tab whose current run of code-panel edits already has an undo step. Typing merges into that step until any other
+   * history change, so undo restores the document from before the run instead of undoing one keystroke.
+   */
+  let codeEditHistoryTabId: string | undefined;
 
   const activeTab = createMemo(() => {
     const id = activeTabId();
@@ -89,6 +94,7 @@ export function createEditorDocuments(options: {
     const history = getHistory(tab.id);
     history.past.push(createHistoryEntry(tab.document.root, command));
     history.future.length = 0;
+    codeEditHistoryTabId = undefined;
     bumpHistoryVersion();
   }
 
@@ -222,6 +228,7 @@ export function createEditorDocuments(options: {
       return;
     }
 
+    codeEditHistoryTabId = undefined;
     history.future.push(createHistoryEntry(tab.document.root, undefined));
     const document = createSvgDocument(previous.root);
     updateActiveTab((item) => ({
@@ -249,6 +256,7 @@ export function createEditorDocuments(options: {
       return;
     }
 
+    codeEditHistoryTabId = undefined;
     history.past.push(createHistoryEntry(tab.document.root, undefined));
     const document = createSvgDocument(next.root);
     updateActiveTab((item) => ({
@@ -268,6 +276,13 @@ export function createEditorDocuments(options: {
     if (!parsed.ok) {
       updateActiveTab((tab) => ({ ...tab, code: text, parseError: parsed.message, dirty: true }));
       return;
+    }
+
+    const tabId = activeTabId();
+
+    if (codeEditHistoryTabId !== tabId) {
+      pushHistory(codeEditCommand(parsed.document.root));
+      codeEditHistoryTabId = tabId;
     }
 
     updateActiveTab((tab) => ({
@@ -294,20 +309,27 @@ export function createEditorDocuments(options: {
       dirty: false,
       parseError: undefined
     } satisfies EditorTab;
+    openTab(tab);
+  }
+
+  function openTab(tab: EditorTab): void {
     setTabs((items) => [...items, tab]);
     setActiveTabId(tab.id);
+    codeEditHistoryTabId = undefined;
     options.onSelectionReset();
     options.onDocumentOpened();
   }
 
-  /** Activates a tab and clears the selection, whose node ids belong to the previous tab. */
+  /** Activates a tab, clears the selection (its node ids belong to the previous tab), and frames the document. */
   function selectTab(tabId: string): void {
     if (tabId === activeTabId()) {
       return;
     }
 
     setActiveTabId(tabId);
+    codeEditHistoryTabId = undefined;
     options.onSelectionReset();
+    options.onDocumentOpened();
   }
 
   function closeTab(tabId: string): void {
@@ -329,28 +351,27 @@ export function createEditorDocuments(options: {
     }
   }
 
+  /**
+   * Opens SVG text in a new tab. Text that fails to parse still gets its own tab, holding the original code and the
+   * parse error so it can be fixed in the code panel; the active tab is never overwritten.
+   */
   function importSvgText(text: string, name: string): void {
     const parsed = parseSvgDocument(text);
 
     if (!parsed.ok) {
-      updateActiveTab((tab) => ({ ...tab, code: text, parseError: parsed.message }));
+      openTab({ id: createId(), name, document: createEmptySvgDocument(), code: text, dirty: false, parseError: parsed.message });
       options.onParseError();
       return;
     }
 
-    const tab = {
+    openTab({
       id: createId(),
       name,
       document: parsed.document,
       code: serializeSvgDocument(parsed.document, options.formatter()),
       dirty: false,
       parseError: undefined
-    } satisfies EditorTab;
-
-    setTabs((items) => [...items, tab]);
-    setActiveTabId(tab.id);
-    options.onSelectionReset();
-    options.onDocumentOpened();
+    });
   }
 
   function markActiveTabClean(): void {
@@ -381,4 +402,8 @@ export function createEditorDocuments(options: {
     importSvgText,
     markActiveTabClean
   };
+}
+
+function codeEditCommand(root: SvgElementNode): EditorCommand {
+  return { id: 'code.edit', label: 'Edit code', apply: () => root };
 }

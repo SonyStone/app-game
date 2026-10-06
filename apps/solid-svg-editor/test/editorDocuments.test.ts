@@ -86,6 +86,54 @@ describe('createEditorDocuments command history', () => {
     dispose();
   });
 
+  it('undoes a run of code edits as one step', () => {
+    const { dispose, documents } = createRoot((dispose) => ({
+      dispose,
+      documents: createEditorDocuments({
+        formatter: () => prettyFormatter,
+        onSelectionReset: () => undefined,
+        onDocumentOpened: () => undefined,
+        onParseError: () => undefined
+      })
+    }));
+    const rect = createDefaultElement('rect');
+
+    documents.dispatchCommand(
+      createEditorCommand({ id: 'test.add-rect', label: 'Add rectangle', apply: (root) => appendChild(root, root.id, rect) })
+    );
+    flush();
+
+    for (const code of [
+      '<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>',
+      '<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/><circle r="2"/></svg>',
+      '<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/><circle r="2"/'
+    ]) {
+      documents.applyCode(code);
+      flush();
+    }
+
+    expect(documents.activeTab()?.parseError).toBeDefined();
+    expect(documents.activeRoot().children).toHaveLength(2);
+
+    documents.undo();
+    flush();
+
+    expect(documents.activeRoot().children.map((node) => node.id)).toEqual([rect.id]);
+
+    documents.undo();
+    flush();
+
+    expect(documents.activeRoot().children).toHaveLength(0);
+
+    documents.redo();
+    flush();
+    documents.redo();
+    flush();
+
+    expect(documents.activeRoot().children).toHaveLength(2);
+    dispose();
+  });
+
   it('gives every node and tab a unique id across imports', () => {
     const { dispose, documents } = createRoot((dispose) => ({
       dispose,
@@ -107,6 +155,31 @@ describe('createEditorDocuments command history', () => {
 
     expect(documents.tabs()).toHaveLength(3);
     expect(new Set([...nodeIds, ...tabIds]).size).toBe(nodeIds.length + tabIds.length);
+    dispose();
+  });
+
+  it('opens text that fails to parse in its own tab', () => {
+    let parseErrors = 0;
+    const { dispose, documents } = createRoot((dispose) => ({
+      dispose,
+      documents: createEditorDocuments({
+        formatter: () => prettyFormatter,
+        onSelectionReset: () => undefined,
+        onDocumentOpened: () => undefined,
+        onParseError: () => {
+          parseErrors += 1;
+        }
+      })
+    }));
+    const firstTab = documents.activeTab();
+
+    documents.importSvgText('<svg><g></svg>', 'broken.svg');
+    flush();
+
+    expect(documents.tabs()[0]).toBe(firstTab);
+    expect(documents.activeTab()).toMatchObject({ name: 'broken.svg', code: '<svg><g></svg>' });
+    expect(documents.activeTab()?.parseError).toBeDefined();
+    expect(parseErrors).toBe(1);
     dispose();
   });
 
