@@ -1,3 +1,16 @@
+## Parallel Agents & Worktrees
+
+Several agent sessions work in this repository at once. Each session works in its own git worktree on its own branch, never in a checkout another session uses.
+
+- T3 Code creates the worktree for a new thread (`t3.json` sets this default and runs the setup). Elsewhere, create one with `git worktree add ../app-game-<task> -b <branch>` and run `pnpm worktree:setup` in it.
+- `pnpm worktree:setup` installs dependencies from the shared pnpm store, symlinks local data such as `apps/paint/recordings` to the main checkout, and copies gitignored build outputs. Rerun it after the lockfile changes.
+- In the main checkout, do not switch branches, stash, reset, or stage files: other sessions may have uncommitted work there.
+- Commit only your own changes. Before merging, rebase on `master`; resolve `pnpm-lock.yaml` conflicts by running `pnpm install`, not by hand.
+- Dev servers from other worktrees may hold an app's usual port, and Vite then picks the next free one: read the URL from Vite's output. Stop only processes you started.
+- Data linked from the main checkout is shared by every worktree: add to it, but do not delete or rewrite other sessions' files.
+- Use the one worktree your session started in. Do not create more (subagents with worktree isolation, scratch checkouts for verification) unless the task cannot be done otherwise; remove any you create with `git worktree remove` before finishing.
+- Build Rust only when you change Rust: the WASM modules are committed. In worktrees, Cargo keeps intermediates in the main checkout's `apps/gpu-text-rendering/rust/document-format/target` (`.cargo/config.toml` from the setup), so a build recompiles only the crate itself. Use `cargo +1.92.0`, as the package scripts do: older Cargo ignores the shared directory and rebuilds everything in the worktree. Do not delete the main checkout's `target`.
+
 ## Coding Style & Conventions
 
 ### SolidJS skills

@@ -14,3 +14,6 @@ website/public
 # Added by cargo
 
 /target
+
+# Worktree-only Cargo config written by scripts/worktree-setup.mjs
+/.cargo/
