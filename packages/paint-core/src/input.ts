@@ -6,10 +6,8 @@ import { panCamera, screenToWorld, transformAt, type Camera, type Point, type Vi
 import type { PaintCommand } from './protocol';
 
 /**
- * Connects real pointer input to ordered worker commands; touch navigates and pen/mouse draw. While a pen touches the
- * screen anywhere in the window, for example dragging a transform handle over the canvas, touches neither start nor
- * continue navigation, and a touch starting within {@link palmWindowMs} of pen hover or contact is ignored, so a
- * resting palm cannot move the view.
+ * Connects real pointer input to ordered worker commands; touch navigates and pen/mouse draw. Touches landing during a
+ * stroke, selection or canvas action are ignored; telling palms from fingers is left to the device.
  */
 export function attachInput(
   canvas: HTMLCanvasElement,
@@ -100,38 +98,6 @@ export function attachInput(
     holdDrag = undefined;
     drag?.end(cancelled);
   };
-  /** Pens in contact anywhere in the window; their palms must not navigate. */
-  const pens = new Set<number>();
-  /** Time of the latest pen hover or contact event anywhere in the window. */
-  let penSeenAt = -Infinity;
-  window.addEventListener(
-    'pointerdown',
-    (event) => {
-      if (event.pointerType === 'pen') {
-        pens.add(event.pointerId);
-        penSeenAt = event.timeStamp;
-        stopHold();
-      }
-    },
-    { signal, capture: true }
-  );
-  window.addEventListener(
-    'pointermove',
-    (event) => {
-      if (event.pointerType === 'pen') {
-        penSeenAt = event.timeStamp;
-      }
-    },
-    { signal, capture: true, passive: true }
-  );
-  const penLifted = (event: PointerEvent) => {
-    if (pens.delete(event.pointerId) && !pens.size) {
-      // Fingers still down continue from where they are now, without a jump.
-      resetTouch();
-    }
-  };
-  window.addEventListener('pointerup', penLifted, { signal, capture: true });
-  window.addEventListener('pointercancel', penLifted, { signal, capture: true });
   const stopHold = () => {
     clearHold?.();
     clearHold = undefined;
@@ -238,9 +204,7 @@ export function attachInput(
         return;
       }
       if (event.pointerType === 'touch') {
-        if (gesture?.kind === 'draw' || gesture?.kind === 'select' || gesture?.kind === 'action' || pens.size) return;
-        // A palm lands while the pen hovers.
-        if (event.timeStamp - penSeenAt < palmWindowMs) return;
+        if (gesture?.kind === 'draw' || gesture?.kind === 'select' || gesture?.kind === 'action') return;
         canvas.setPointerCapture(event.pointerId);
         if (!touches.size) {
           stopHold();
@@ -344,7 +308,7 @@ export function attachInput(
           stopHold();
         }
         if (holdDrag?.id === event.pointerId) holdDrag.move(screenToWorld(point, options.camera(), options.size()));
-        if (touchSession?.held || pens.size) return;
+        if (touchSession?.held) return;
         const metrics = touchMetrics();
         if (!metrics || !touchStart) return;
         const zoom =
@@ -493,9 +457,6 @@ export function attachInput(
 
 /** A drag that continues a touch hold, such as sampling colors under the held finger. */
 export type TouchHoldDrag = { move: (point: Point) => void; end: (cancelled: boolean) => void };
-
-/** Touches starting this many milliseconds after pen hover or contact are taken for a resting palm. */
-const palmWindowMs = 500;
 
 /** Longest touch, in milliseconds, that still counts as a tap. */
 const touchTapMs = 350;
