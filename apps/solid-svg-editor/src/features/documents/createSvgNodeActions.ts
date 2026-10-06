@@ -2,6 +2,7 @@ import type { Accessor } from 'solid-js';
 
 import { svgCapabilities } from '../../editor/capabilities';
 import { createEditorCommand, type EditorCommand } from '../../editor/commands';
+import { convertElement } from '../../editor/element-conversion';
 import { insertPathCommand, optimizeNode } from '../../editor/tree-utils';
 import type { AppSettings } from '../../editor/types';
 import { formatPathData, parsePathData } from '../../path-data';
@@ -213,6 +214,21 @@ export function createSvgNodeActions(options: {
     );
   }
 
+  /** Converts an element to another type with the same shape (see `convertElement`); does nothing when it cannot. */
+  function convertNode(nodeId: string, target: string): void {
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.convert-element',
+        label: `Convert to ${target}`,
+        apply: (root) => {
+          const node = findNode(root, nodeId);
+          const converted = node?.kind === 'element' ? convertElement(node, target) : undefined;
+          return converted ? updateNode(root, nodeId, () => converted) : root;
+        }
+      })
+    );
+  }
+
   function optimizeActive(): void {
     const settings = options.settings();
     options.dispatchCommand(
@@ -261,6 +277,7 @@ export function createSvgNodeActions(options: {
     updateElementAttribute,
     removeElementAttribute,
     updateBasicNodeText,
+    convertNode,
     optimizeActive,
     insertPathCommandFromKey
   };

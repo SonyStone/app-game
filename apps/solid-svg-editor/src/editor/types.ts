@@ -5,7 +5,7 @@ import type { SvgElementNode, SvgNode } from "../svg-model";
 import type { EditorCommandId } from "./commands";
 
 export type PanelId = "inspector" | "code" | "previews" | "debug";
-export type ModalId = "settings" | "export" | "about" | "donate" | "shortcuts" | undefined;
+export type ModalId = "settings" | "export" | "about" | "donate" | "shortcuts" | "close-tab" | undefined;
 export type ThemePreset = "dark" | "light" | "black" | "gray";
 export type ExportFormat = "svg" | "png" | "jpeg" | "webp";
 export type DragSelectionMode = "intersect" | "contain";

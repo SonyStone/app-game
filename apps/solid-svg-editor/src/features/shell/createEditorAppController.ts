@@ -10,9 +10,11 @@ import { createMemo, createSignal, createTrackedEffect, untrack } from 'solid-js
 import { createEditorCommand, type EditorCommandEvent } from '../../editor/commands';
 import { defaultSettings } from '../../editor/defaults';
 import { downloadBlob } from '../../editor/export-utils';
+import { serializeSvgDocument } from '../../editor/svg-document';
 import type { ContextMenuState, DragSelectionMode, ModalId, PanelId } from '../../editor/types';
-import { createDefaultElement, insertSibling, svgSize } from '../../svg-model';
+import { createDefaultElement, findNode, insertSibling, svgSize } from '../../svg-model';
 import { createEditorDocuments } from '../documents/createEditorDocuments';
+import { createTabPersistence, restorePersistedTabs } from '../documents/tab-persistence';
 import { createSvgNodeActions } from '../documents/createSvgNodeActions';
 import { createFullscreen } from '../fullscreen/createFullscreen';
 import { createSvgImport } from '../import/createSvgImport';
@@ -72,7 +74,8 @@ export function createEditorAppController() {
     formatter: () => settings().formatter,
     onSelectionReset: () => resetDocumentSelection(),
     onDocumentOpened: () => centerOpenedDocument(),
-    onParseError: () => setActivePanel('code')
+    onParseError: () => setActivePanel('code'),
+    initialTabs: restorePersistedTabs()
   });
   const {
     tabs,
@@ -152,6 +155,7 @@ export function createEditorAppController() {
     updateElementAttribute,
     removeElementAttribute,
     updateBasicNodeText,
+    convertNode,
     optimizeActive,
     insertPathCommandFromKey
   } = nodeActions;
@@ -235,6 +239,37 @@ export function createEditorAppController() {
   function downloadSvg(): void {
     downloadBlob(exportText(), activeTab()?.name ?? 'image.svg', 'image/svg+xml');
     markActiveTabClean();
+  }
+
+  createTabPersistence({ tabs, activeTabId });
+  const [pendingCloseTabId, setPendingCloseTabId] = createSignal<string>();
+  const pendingCloseTab = createMemo(() => tabs().find((tab) => tab.id === pendingCloseTabId()));
+
+  /** Closes a tab, first asking to save when it has unsaved changes. */
+  function requestCloseTab(tabId: string): void {
+    if (tabs().find((tab) => tab.id === tabId)?.dirty) {
+      setPendingCloseTabId(tabId);
+      setModal('close-tab');
+      return;
+    }
+
+    closeTab(tabId);
+  }
+
+  function resolveCloseTab(choice: 'save' | 'discard' | 'cancel'): void {
+    const tab = pendingCloseTab();
+    setPendingCloseTabId(undefined);
+    setModal(undefined);
+
+    if (!tab || choice === 'cancel') {
+      return;
+    }
+
+    if (choice === 'save') {
+      downloadBlob(serializeSvgDocument(tab.document, settings().exportFormatter), tab.name, 'image/svg+xml');
+    }
+
+    closeTab(tab.id);
   }
 
   async function copySvgText(): Promise<void> {
@@ -358,7 +393,8 @@ export function createEditorAppController() {
       canRedo,
       selectTab,
       activeTabId,
-      closeTab,
+      closeTab: requestCloseTab,
+      middleClickCloses: () => settings().tabMiddleClickClose,
       createNewTab,
       openImportDialog,
       downloadSvg,
@@ -442,7 +478,19 @@ export function createEditorAppController() {
     },
     contextMenu: {
       state: contextMenu,
+      node: createMemo(() => {
+        const menu = contextMenu();
+        return menu ? findNode(activeRoot(), menu.nodeId) : undefined;
+      }),
       runAction: runContextAction,
+      convert: (target: string) => {
+        const menu = contextMenu();
+        setContextMenu(undefined);
+
+        if (menu) {
+          convertNode(menu.nodeId, target);
+        }
+      },
       close: () => setContextMenu(undefined)
     },
     modals: {
@@ -452,7 +500,9 @@ export function createEditorAppController() {
       activeRoot,
       exportText,
       close: closeModal,
-      reformatActiveCode
+      reformatActiveCode,
+      pendingCloseTabName: () => pendingCloseTab()?.name,
+      resolveCloseTab
     },
     dropOverlay: {
       active: isSvgDropActive

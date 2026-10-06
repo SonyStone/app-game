@@ -441,6 +441,35 @@ export function ExportModal(props: {
   );
 }
 
+/** Asks what to do with unsaved changes before a tab closes, like GodSVG's "Save the changes?" dialog. */
+export function CloseTabModal(props: {
+  readonly tabName: string;
+  readonly save: () => void;
+  readonly discard: () => void;
+  readonly close: () => void;
+}) {
+  return (
+    <ModalFrame title="Save the changes?" close={props.close}>
+      <div class="grid gap-3" data-testid="close-tab-dialog">
+        <p class="m-0 leading-normal">
+          <strong>{props.tabName}</strong> has unsaved changes. Save them before closing the tab?
+        </p>
+        <div class="flex justify-end gap-2">
+          <PanelButton type="button" data-testid="close-tab-cancel" onClick={props.close}>
+            Cancel
+          </PanelButton>
+          <PanelButton type="button" data-testid="close-tab-discard" onClick={props.discard}>
+            Don't save
+          </PanelButton>
+          <PanelButton type="button" variant="primary" data-testid="close-tab-save" onClick={props.save}>
+            Save
+          </PanelButton>
+        </div>
+      </div>
+    </ModalFrame>
+  );
+}
+
 export function AboutModal(props: { readonly close: () => void }) {
   return (
     <ModalFrame title="About GodSVG Solid Port" close={props.close}>

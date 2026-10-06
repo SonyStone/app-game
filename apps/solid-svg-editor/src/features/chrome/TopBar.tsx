@@ -31,7 +31,10 @@ export function TopBar(props: {
   readonly canRedo: boolean;
   /** Activates the tab with this id and clears the selection. */
   readonly selectTab: (id: string) => void;
+  /** Closes a tab, asking first when it has unsaved changes. */
   readonly closeTab: (id: string) => void;
+  /** Whether a middle click on a tab closes it (the "Middle click closes tab" setting). */
+  readonly middleClickCloses: boolean;
   readonly createNewTab: () => void;
   readonly openImportDialog: () => void;
   readonly downloadSvg: () => void;
@@ -148,7 +151,7 @@ export function TopBar(props: {
                 }
               }}
               onAuxClick={(event) => {
-                if (event.button === 1) {
+                if (event.button === 1 && props.middleClickCloses) {
                   props.closeTab(tab().id);
                 }
               }}
