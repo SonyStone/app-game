@@ -46,8 +46,23 @@ export function createPanelSections(options: { readonly layout: Accessor<PanelLa
     setChosen((current) => ({ ...current, [section]: panel }));
   }
 
-  /** "View debug information": shows the Debug tab, or hides it again. */
-  function toggleDebug(): void {
+  const [advancedDebug, setAdvancedDebug] = createSignal(false);
+
+  /**
+   * GodSVG's "View debug information" (`advanced` false) and "View advanced debug information": shows the Debug tab
+   * or hides it again; the advanced variant shows it with the extra measurements, switching to them if it was open.
+   */
+  function toggleDebug(advanced = false): void {
+    if (advanced && !advancedDebug()) {
+      setAdvancedDebug(true);
+      activate('debug');
+      return;
+    }
+
+    if (!advanced) {
+      setAdvancedDebug(false);
+    }
+
     if (debugVisible()) {
       setDebugVisible(false);
     } else {
@@ -55,5 +70,5 @@ export function createPanelSections(options: { readonly layout: Accessor<PanelLa
     }
   }
 
-  return { sections, activate, toggleDebug };
+  return { sections, activate, toggleDebug, advancedDebug };
 }

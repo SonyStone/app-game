@@ -107,6 +107,7 @@ export function App() {
               viewportPointer={app.workspace.viewportPointer()}
               recentCommandEvent={app.workspace.recentCommandEvent()}
               reveal={app.workspace.reveal()}
+              advancedDebug={app.workspace.advancedDebug()}
             />
           </ColorSourcesProvider>
           <button

@@ -12,6 +12,7 @@ import { CodeEditor } from "../code-editor/CodeEditor";
 import { IconPreviews } from "./IconPreviews";
 import { SvgNodeList, SvgNodeView, SvgRootPresentation } from "../viewport/svg-renderer";
 import { useI18n } from '../../i18n/I18nProvider';
+import { createDebugMeter } from './createDebugMeter';
 
 export function CodePanel(props: {
   readonly code: string;
@@ -112,7 +113,11 @@ export function DebugPanel(props: {
   readonly heldKeys: readonly string[];
   readonly viewportPointer: PointerStateWithActive;
   readonly recentCommandEvent: EditorCommandEvent | undefined;
+  /** GodSVG's advanced debug information (Ctrl+F3) adds memory limits and DOM details. */
+  readonly advanced: boolean;
 }) {
+  const meter = createDebugMeter();
+
   return (
     <section class="panel debug-panel h-full min-h-0 overflow-auto rounded-md border border-[var(--soft-border)] bg-[var(--panel)] p-1.25" data-testid="debug-panel">
       <dl class="m-0 mb-2.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5" data-testid="debug-summary">
@@ -130,10 +135,33 @@ export function DebugPanel(props: {
         <dd data-testid="debug-pointer-state">{formatPointerState(props.viewportPointer)}</dd>
         <dt class="text-[var(--muted)]">Last command</dt>
         <dd data-testid="debug-last-command">{formatCommandEvent(props.recentCommandEvent)}</dd>
+        <dt class="text-[var(--muted)]">FPS</dt>
+        <dd data-testid="debug-fps">{meter.reading().fps}</dd>
+        <dt class="text-[var(--muted)]">JS heap</dt>
+        <dd data-testid="debug-heap">{formatBytes(meter.reading().heapUsed)}</dd>
+        <dt class="text-[var(--muted)]">DOM nodes</dt>
+        <dd data-testid="debug-dom-nodes">{meter.reading().domNodes}</dd>
+        <Show when={props.advanced}>
+          <dt class="text-[var(--muted)]">JS heap total</dt>
+          <dd data-testid="debug-heap-total">{formatBytes(meter.reading().heapTotal)}</dd>
+          <dt class="text-[var(--muted)]">JS heap limit</dt>
+          <dd data-testid="debug-heap-limit">{formatBytes(meter.reading().heapLimit)}</dd>
+          <dt class="text-[var(--muted)]">Pixel ratio</dt>
+          <dd data-testid="debug-pixel-ratio">{globalThis.devicePixelRatio}</dd>
+          <dt class="text-[var(--muted)]">Viewport size</dt>
+          <dd data-testid="debug-window-size">{`${globalThis.innerWidth}×${globalThis.innerHeight}`}</dd>
+        </Show>
       </dl>
+      <pre class="m-0 mb-2.5 min-h-12 rounded-md border border-[var(--soft-border)] bg-[#080b12] p-2 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] in-[.theme-light]:bg-[#f8fbff]" data-testid="debug-input-log">
+        {meter.inputs().join('\n')}
+      </pre>
       <pre class="m-0 overflow-auto rounded-md border border-[var(--soft-border)] bg-[#080b12] p-2 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px]" data-testid="debug-selected-json">{JSON.stringify(props.selectedNodes, null, 2)}</pre>
     </section>
   );
+}
+
+function formatBytes(bytes: number | undefined): string {
+  return bytes === undefined ? 'n/a' : humanFileSize(bytes);
 }
 
 function formatPointerState(pointer: PointerStateWithActive): string {
