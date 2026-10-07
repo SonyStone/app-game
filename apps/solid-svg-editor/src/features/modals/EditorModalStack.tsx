@@ -11,6 +11,8 @@ export function EditorModalStack(props: {
   readonly setSettings: Setter<AppSettings>;
   readonly root: SvgElementNode;
   readonly exportText: string;
+  /** Name of the active tab, used for export file names. */
+  readonly tabName: string;
   readonly close: () => void;
   readonly reformatActiveCode: (formatter?: FormatterSettings) => void;
   /** Name of the unsaved tab waiting to close, shown by the `close-tab` dialog. */
@@ -28,7 +30,7 @@ export function EditorModalStack(props: {
         />
       </Show>
       <Show when={props.modal === 'export'}>
-        <ExportModal root={props.root} exportText={props.exportText} close={props.close} />
+        <ExportModal root={props.root} exportText={props.exportText} tabName={props.tabName} close={props.close} />
       </Show>
       <Show when={props.modal === 'about'}>
         <AboutModal close={props.close} />

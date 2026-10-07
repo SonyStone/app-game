@@ -5,6 +5,9 @@ import { defaultPalettes, restorePalettes } from './palettes';
 import type { AppSettings, EditorTab } from './types';
 import { createEmptySvgDocument, serializeSvgDocument } from './svg-document';
 
+/** GodSVG's default icon preview sizes. */
+export const defaultPreviewSizes: readonly number[] = [16, 24, 32, 48, 64];
+
 export function defaultSettings(): AppSettings {
   return {
     themePreset: 'dark',
@@ -25,6 +28,7 @@ export function defaultSettings(): AppSettings {
       simplifyPathParameters: true
     },
     palettes: defaultPalettes(),
+    previewSizes: defaultPreviewSizes,
     tabMiddleClickClose: true,
     useCtrlForZoom: false,
     rasterPreviewDuringInteraction: false,
@@ -52,7 +56,11 @@ export function restoreSettings(data: string): AppSettings {
     formatter: restoreFormatter(stored.formatter, defaults.formatter),
     exportFormatter: restoreFormatter(stored.exportFormatter, defaults.exportFormatter),
     optimizer: { ...defaults.optimizer, ...stored.optimizer },
-    palettes: restorePalettes(stored.palettes)
+    palettes: restorePalettes(stored.palettes),
+    previewSizes:
+      Array.isArray(stored.previewSizes) && stored.previewSizes.every((size) => Number.isInteger(size) && size > 0)
+        ? stored.previewSizes
+        : defaults.previewSizes
   };
 }
 
