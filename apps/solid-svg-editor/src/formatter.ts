@@ -1,3 +1,5 @@
+import { formatPathData, formatPathNumber, tryParsePathData, type PathDataFormat } from "./path-data";
+import { getAttributeType } from "./svg-db";
 import { type SvgAttribute, type SvgElementNode, type SvgNode } from "./svg-model";
 
 export type FormatterPreset = "compact" | "pretty";
@@ -13,33 +15,49 @@ export interface FormatterSettings {
   readonly formattingStyle: FormattingStyle;
   readonly indentWithSpaces: boolean;
   readonly indentationSpaces: number;
+  /** Numeric attributes: `0.5` → `.5`. */
+  readonly numberRemoveLeadingZero: boolean;
+  /** Numeric attributes: `5000` → `5e3` and `0.0001` → `1e-4` when shorter. */
+  readonly numberUseExponentIfShorter: boolean;
+  /** Path data: `0.5` → `.5`. */
+  readonly pathdataCompressNumbers: boolean;
+  /** Path data: no spaces after command letters or before numbers that start with `-` or `.`. */
+  readonly pathdataMinimizeSpacing: boolean;
+  /** Path data: arc flags written without separators. */
+  readonly pathdataRemoveSpacingAfterFlags: boolean;
+  /** Path data: a command letter that repeats the previous one is omitted. */
+  readonly pathdataRemoveConsecutiveCommands: boolean;
 }
 
-export const prettyFormatter = {
-  preset: "pretty",
-  removeComments: false,
-  trailingNewline: false,
-  shorthandTags: "all-except-containers",
-  shorthandSlashSpace: true,
-  formattingStyle: "pretty",
-  indentWithSpaces: false,
-  indentationSpaces: 2
-} as const satisfies FormatterSettings;
-
 /**
- * Default export formatter. Comments are kept: saving should not drop content, and removing them is the optimizer's
- * job, as in GodSVG.
+ * Formatter settings for a preset, with GodSVG's defaults: `pretty` for reading in the editor, `compact` for small
+ * files. Comments are kept by both; removing them is the optimizer's job, as in GodSVG.
  */
-export const compactFormatter = {
-  preset: "compact",
-  removeComments: false,
-  trailingNewline: false,
-  shorthandTags: "always",
-  shorthandSlashSpace: false,
-  formattingStyle: "compact",
-  indentWithSpaces: false,
-  indentationSpaces: 2
-} as const satisfies FormatterSettings;
+export function formatterPreset(preset: FormatterPreset): FormatterSettings {
+  const compact = preset === "compact";
+  return {
+    preset,
+    removeComments: false,
+    trailingNewline: false,
+    shorthandTags: compact ? "always" : "all-except-containers",
+    shorthandSlashSpace: !compact,
+    formattingStyle: compact ? "compact" : "pretty",
+    indentWithSpaces: false,
+    indentationSpaces: 2,
+    numberRemoveLeadingZero: compact,
+    numberUseExponentIfShorter: compact,
+    pathdataCompressNumbers: true,
+    pathdataMinimizeSpacing: true,
+    pathdataRemoveSpacingAfterFlags: compact,
+    pathdataRemoveConsecutiveCommands: true
+  };
+}
+
+/** Default editor formatter. */
+export const prettyFormatter = formatterPreset("pretty");
+
+/** Default export formatter, used when saving. */
+export const compactFormatter = formatterPreset("compact");
 
 const containerElements = new Set(["svg", "g", "linearGradient", "radialGradient"]);
 
@@ -100,14 +118,14 @@ function serializeAttributes(attrs: readonly SvgAttribute[], formatter: Formatte
   if (formatter.formattingStyle === "spacious") {
     const attributeIndent = `\n${indent(formatter, depth + 1)}`;
     const closingIndent = `\n${indent(formatter, depth)}`;
-    return `${attrs.map((attr) => `${attributeIndent}${serializeAttribute(attr)}`).join("")}${closingIndent}`;
+    return `${attrs.map((attr) => `${attributeIndent}${serializeAttribute(attr, formatter)}`).join("")}${closingIndent}`;
   }
 
-  return attrs.map((attr) => ` ${serializeAttribute(attr)}`).join("");
+  return attrs.map((attr) => ` ${serializeAttribute(attr, formatter)}`).join("");
 }
 
-function serializeAttribute(attr: SvgAttribute): string {
-  const value = escapeAttribute(attr.value);
+function serializeAttribute(attr: SvgAttribute, formatter: FormatterSettings): string {
+  const value = escapeAttribute(formatAttributeValue(attr, formatter));
 
   // Single quotes keep values like `font-family='"Noto Sans"'` readable; a value with both quote kinds needs `&quot;`.
   if (value.includes('"') && !value.includes("'")) {
@@ -165,3 +183,70 @@ export function humanFileSize(byteCount: number): string {
 
   return `${size.toFixed(size >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
+
+/**
+ * Rewrites path data and plain numeric values with the formatter's number and path options, as GodSVG re-emits
+ * attributes. Values that do not parse completely (units, percentages, malformed path data) are written unchanged.
+ */
+export function formatAttributeValue(attr: SvgAttribute, formatter: FormatterSettings): string {
+  if (attr.name === "d") {
+    const commands = tryParsePathData(attr.value);
+    return commands ? formatPathData(commands, pathDataFormat(formatter)) : attr.value;
+  }
+
+  if (getAttributeType(attr.name) === "numeric" && plainNumberPattern.test(attr.value)) {
+    return formatNumber(Number(attr.value), formatter);
+  }
+
+  return attr.value;
+}
+
+const plainNumberPattern = /^\s*[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?\s*$/;
+
+function pathDataFormat(formatter: FormatterSettings): PathDataFormat {
+  return {
+    compressNumbers: formatter.pathdataCompressNumbers,
+    minimizeSpacing: formatter.pathdataMinimizeSpacing,
+    removeSpacingAfterFlags: formatter.pathdataRemoveSpacingAfterFlags,
+    removeConsecutiveCommands: formatter.pathdataRemoveConsecutiveCommands
+  };
+}
+
+/**
+ * Formats a numeric attribute value with up to 6 decimals, then applies the formatter's leading-zero and exponent
+ * options; the exponent form is used only when it is shorter.
+ */
+export function formatNumber(
+  value: number,
+  options: Pick<FormatterSettings, "numberRemoveLeadingZero" | "numberUseExponentIfShorter">
+): string {
+  const plain = formatPathNumber(value);
+  const short = options.numberRemoveLeadingZero ? plain.replace(/^(-?)0\./, "$1.") : plain;
+
+  if (!options.numberUseExponentIfShorter) {
+    return short;
+  }
+
+  const exponent = exponentForm(plain);
+  return exponent && exponent.length < short.length ? exponent : short;
+}
+
+/** `5000` → `5e3`, `-0.0012` → `-12e-4`; `undefined` when there are no zeros to fold. */
+function exponentForm(text: string): string | undefined {
+  const sign = text.startsWith("-") ? "-" : "";
+  const digits = text.replace(/^-/, "");
+  const trailingZeros = /^(\d*[1-9])(0+)$/.exec(digits);
+
+  if (trailingZeros?.[1] && trailingZeros[2]) {
+    return `${sign}${trailingZeros[1]}e${trailingZeros[2].length}`;
+  }
+
+  const fraction = /^0\.(0*)(\d+)$/.exec(digits);
+
+  if (fraction?.[1] && fraction[2]) {
+    return `${sign}${fraction[2]}e-${fraction[1].length + fraction[2].length}`;
+  }
+
+  return undefined;
+}
+

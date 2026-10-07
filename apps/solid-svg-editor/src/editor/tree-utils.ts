@@ -1,5 +1,5 @@
 import { attributeNumberRange, getAttributeDefault, getRecognizedAttributes } from "../svg-db";
-import { createCommand, formatPathData, parsePathData, type PathCommand } from "../path-data";
+import { createCommand, formatPathData, simplifyPathCommands, tryParsePathData, type PathCommand } from "../path-data";
 import { convertElement } from "./element-conversion";
 import { getAttribute, type SvgAttribute, type SvgElementNode, type SvgNode } from "../svg-model";
 
@@ -199,7 +199,8 @@ export function optimizeNode(node: SvgNode, settings: OptimizerSettings): SvgNod
     .filter((attr) => attr.value !== "")
     .map((attr) => {
       if (settings.simplifyPathParameters && attr.name === "d") {
-        return { ...attr, value: formatPathData(parsePathData(attr.value), true) };
+        const commands = tryParsePathData(attr.value);
+        return commands ? { ...attr, value: formatPathData(simplifyPathCommands(commands)) } : attr;
       }
 
       return attr;

@@ -7,6 +7,7 @@ import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import { clamp, themePresetSettings } from '../../editor/tree-utils';
 import type { AppSettings, ExportFormat, ThemePreset } from '../../editor/types';
 import {
+  formatterPreset,
   humanFileSize,
   type FormatterPreset,
   type FormatterSettings,
@@ -38,10 +39,11 @@ export function SettingsModal(props: {
     exportFormatter = false
   ) => {
     props.setSettings((settings) => {
-      const formatter = {
-        ...(exportFormatter ? settings.exportFormatter : settings.formatter),
-        [key]: value
-      } satisfies FormatterSettings;
+      // Choosing a preset applies its defaults, like GodSVG's preset picker.
+      const formatter: FormatterSettings =
+        key === 'preset'
+          ? formatterPreset(value as FormatterPreset)
+          : { ...(exportFormatter ? settings.exportFormatter : settings.formatter), [key]: value };
       return exportFormatter ? { ...settings, exportFormatter: formatter } : { ...settings, formatter };
     });
   };
@@ -130,7 +132,7 @@ export function SettingsModal(props: {
                   }))
                 }
               />
-              Simplify path parameters
+              Simplify paths
             </CheckboxField>
           </Show>
           <Show when={tab() === 'palettes'}>
@@ -338,14 +340,58 @@ function FormatterSettingsView(props: {
           max="16"
           data-testid={`${testId()}-indentation-spaces`}
           value={props.formatter.indentationSpaces}
-          onChange={(event) =>
-            props.update('indentationSpaces', clamp(Number.parseInt(event.currentTarget.value, 10) || 2, 0, 16))
-          }
+          onChange={(event) => {
+            const spaces = Number.parseInt(event.currentTarget.value, 10);
+            props.update('indentationSpaces', Number.isNaN(spaces) ? 2 : clamp(spaces, 0, 16));
+          }}
         />
       </SettingsField>
+      <For each={formatterToggleGroups}>
+        {(group) => (
+          <>
+            <div class="mt-1 text-[11px] text-[var(--muted)]">{group.title}</div>
+            <For each={group.toggles}>
+              {(toggle) => (
+                <CheckboxField>
+                  <FormInput
+                    type="checkbox"
+                    data-testid={`${testId()}-${toggle.key}`}
+                    checked={props.formatter[toggle.key]}
+                    onChange={(event) => props.update(toggle.key, event.currentTarget.checked)}
+                  />
+                  {toggle.label}
+                </CheckboxField>
+              )}
+            </For>
+          </>
+        )}
+      </For>
     </fieldset>
   );
 }
+
+/** GodSVG's number and path data formatter options, shown as checkboxes. */
+const formatterToggleGroups = [
+  {
+    title: 'Numbers',
+    toggles: [
+      { key: 'numberRemoveLeadingZero', label: 'Remove leading zero' },
+      { key: 'numberUseExponentIfShorter', label: 'Use exponent when shorter' }
+    ]
+  },
+  {
+    title: 'Path data',
+    toggles: [
+      { key: 'pathdataCompressNumbers', label: 'Compress numbers' },
+      { key: 'pathdataMinimizeSpacing', label: 'Minimize spacing' },
+      { key: 'pathdataRemoveSpacingAfterFlags', label: 'Remove spacing after arc flags' },
+      { key: 'pathdataRemoveConsecutiveCommands', label: 'Remove repeated commands' }
+    ]
+  }
+] as const satisfies readonly {
+  readonly title: string;
+  readonly toggles: readonly { readonly key: keyof FormatterSettings; readonly label: string }[];
+}[];
 
 export function ExportModal(props: {
   readonly root: SvgElementNode;

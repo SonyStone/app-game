@@ -40,6 +40,7 @@ export interface ShortcutItem {
 export interface OptimizerSettings {
   readonly removeComments: boolean;
   readonly convertShapes: boolean;
+  /** "Simplify paths": rewrite path commands as the shortest exact command types, like GodSVG. */
   readonly simplifyPathParameters: boolean;
 }
 
