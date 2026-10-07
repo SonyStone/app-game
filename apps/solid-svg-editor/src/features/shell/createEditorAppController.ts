@@ -21,6 +21,7 @@ import { createEditorDocuments } from '../documents/createEditorDocuments';
 import { createTabPersistence, restorePersistedTabs } from '../documents/tab-persistence';
 import { createSvgNodeActions } from '../documents/createSvgNodeActions';
 import { createFullscreen } from '../fullscreen/createFullscreen';
+import { createImportReview } from '../import/createImportReview';
 import { createSvgImport } from '../import/createSvgImport';
 import { createReferenceImage } from '../reference/createReferenceImage';
 import type { EditorContextMenuAction } from '../selection/EditorContextMenu';
@@ -110,7 +111,12 @@ export function createEditorAppController() {
   } = documents;
   commandEvents.listen((event) => setRecentCommandEvent(event));
 
-  const svgImport = createSvgImport({ importSvgText });
+  const importReview = createImportReview({
+    importSvgText,
+    openDialog: () => setModal('import-problems'),
+    closeDialog: () => setModal(undefined)
+  });
+  const svgImport = createSvgImport({ importSvgText: importReview.requestImport });
   const { isSvgDropActive, setImportInputRef, openImportDialog, onImportFile } = svgImport;
 
   const reference = createReferenceImage();
@@ -417,6 +423,11 @@ export function createEditorAppController() {
   }
 
   function closeModal(): void {
+    if (modal() === 'import-problems') {
+      importReview.resolve(false);
+      return;
+    }
+
     setModal(undefined);
   }
 
@@ -629,6 +640,8 @@ export function createEditorAppController() {
       close: closeModal,
       reformatActiveCode,
       pendingCloseTabName: () => pendingCloseTab()?.name,
+      pendingImport: importReview.pending,
+      resolveImport: importReview.resolve,
       resolveCloseTab,
       shortcuts: shortcutDescriptors,
       setShortcutBindings: (id: string, bindings: readonly ShortcutBinding[] | undefined) =>

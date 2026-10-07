@@ -16,6 +16,7 @@ import WarningIcon from '../ui/icons/Warning.svg';
 import { AttributeGrid, RootElementEditor } from './InspectorInputs';
 import { createInspectorVirtualScroll, nodeContainsId, VirtualInspectorRowShell } from './InspectorVirtualScroll';
 import { useI18n } from '../../i18n/I18nProvider';
+import { elementWarnings } from '../../editor/element-warnings';
 
 type InspectorDropTarget = {
   readonly nodeId: string;
@@ -386,7 +387,15 @@ function ElementCard(props: {
 }) {
   // Each focus of the text node editor counts as one undo step for the typing that follows.
   let textEditSession = 0;
+  const { t } = useI18n();
   const ancestors = createMemo(() => ancestorElements(props.root, props.node.id));
+  const warningText = createMemo(() =>
+    props.node.kind === 'element'
+      ? elementWarnings(props.node, ancestors()[0])
+          .map((warning) => warning.map((message) => t(message.text, message.values)).join(' '))
+          .join('\n')
+      : ''
+  );
   const isSelected = () => props.selectedIds.includes(props.node.id);
   const isHovered = () => props.hovered?.nodeId === props.node.id;
   const tint = () => `hsl(${268 + props.depth * 18}deg 52% ${props.depth === 0 ? 11 : 14}%)`;
@@ -453,12 +462,19 @@ function ElementCard(props: {
         <span>{inspectorTitle(props.node)}</span>
         <Show
           when={
-            props.node.kind === 'element' &&
-            props.node.name !== 'svg' &&
-            svgCapabilities.isRecognizedElement(props.node.name) === false
+            warningText() !== '' ||
+            (props.node.kind === 'element' &&
+              props.node.name !== 'svg' &&
+              svgCapabilities.isRecognizedElement(props.node.name) === false)
           }
         >
-          <WarningIcon {...decorativeIconProps} />
+          <span
+            class="grid place-items-center text-[var(--warning)]"
+            title={warningText() || t('Unrecognized element')}
+            data-testid={`inspector-node-warning-${props.node.id}`}
+          >
+            <WarningIcon {...decorativeIconProps} />
+          </span>
         </Show>
       </button>
 

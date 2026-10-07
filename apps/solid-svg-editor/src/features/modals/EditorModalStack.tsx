@@ -4,7 +4,8 @@ import type { AppSettings, ModalId } from '../../editor/types';
 import type { ShortcutDescriptor } from '../shortcuts/shortcutRegistry';
 import type { FormatterSettings } from '../../formatter';
 import type { SvgElementNode } from '../../svg-model';
-import { AboutModal, CloseTabModal, DonateModal, ExportModal, SettingsModal, ShortcutsModal } from './EditorModals';
+import type { ImportReview } from '../import/createImportReview';
+import { AboutModal, CloseTabModal, DonateModal, ExportModal, ImportProblemsModal, SettingsModal, ShortcutsModal } from './EditorModals';
 
 export function EditorModalStack(props: {
   readonly modal: ModalId;
@@ -19,6 +20,10 @@ export function EditorModalStack(props: {
   /** Name of the unsaved tab waiting to close, shown by the `close-tab` dialog. */
   readonly pendingCloseTabName: string | undefined;
   readonly resolveCloseTab: (choice: 'save' | 'discard' | 'cancel') => void;
+  /** The import held for review by the `import-problems` dialog. */
+  readonly pendingImport: ImportReview | undefined;
+  /** Imports the held text (`true`) or drops it. */
+  readonly resolveImport: (accept: boolean) => void;
   /** Editor shortcut actions, shown and edited by the Settings tab and the Shortcuts dialog. */
   readonly shortcuts: readonly ShortcutDescriptor[];
   readonly setShortcutBindings: Parameters<typeof SettingsModal>[0]['shortcuts']['setBindings'];
@@ -53,6 +58,9 @@ export function EditorModalStack(props: {
             close={() => props.resolveCloseTab('cancel')}
           />
         )}
+      </Show>
+      <Show when={props.modal === 'import-problems' ? props.pendingImport : undefined}>
+        {(review) => <ImportProblemsModal review={review()} resolve={props.resolveImport} />}
       </Show>
       <Show when={props.modal === 'shortcuts'}>
         <ShortcutsModal close={props.close} shortcuts={{ descriptors: props.shortcuts, setBindings: props.setShortcutBindings }} />

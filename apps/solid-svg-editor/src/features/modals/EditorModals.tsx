@@ -24,6 +24,7 @@ import CopyIcon from '../ui/icons/Copy.svg';
 import ExportIcon from '../ui/icons/Export.svg';
 import GodSvgIcon from '../ui/icons/GodSvg.svg';
 import HeartIcon from '../ui/icons/Heart.svg';
+import type { ImportReview } from '../import/createImportReview';
 import { PanelButton } from '../ui/PanelButton';
 import { useI18n } from '../../i18n/I18nProvider';
 import { LanguageSelect } from '../../i18n/LanguageSelect';
@@ -516,10 +517,10 @@ export function ExportModal(props: {
         data-testid="export-modal-body"
       >
         <div
-          class="export-preview min-h-90 rounded-md border border-[var(--soft-border)] bg-[var(--panel-2)] p-2.5 [&>svg]:h-full [&>svg]:w-full"
+          class="export-preview h-90 rounded-md border border-[var(--soft-border)] bg-[var(--panel-2)] p-2.5"
           data-testid="export-preview"
         >
-          <PreviewSvg root={props.root} testId="export-preview-svg" />
+          <PreviewSvg root={props.root} testId="export-preview-svg" class="block h-full w-full" />
         </div>
         <div class="export-controls grid content-start gap-2.5" data-testid="export-controls">
           <SettingsField>
@@ -672,6 +673,64 @@ export function CloseTabModal(props: {
           </PanelButton>
           <PanelButton type="button" variant="primary" data-testid="close-tab-save" onClick={props.save}>
             {t('Save')}
+          </PanelButton>
+        </div>
+      </div>
+    </ModalFrame>
+  );
+}
+
+/**
+ * GodSVG's "Import Problems" dialog: a preview of the SVG as the editor will show it, and either the syntax error or
+ * the element and attribute names GodSVG doesn't recognize. Import opens it anyway; Cancel, Escape, and the backdrop
+ * drop it.
+ */
+export function ImportProblemsModal(props: { readonly review: ImportReview; readonly resolve: (accept: boolean) => void }) {
+  const { t } = useI18n();
+
+  return (
+    <ModalFrame title="Import Problems" close={() => props.resolve(false)}>
+      <div class="grid gap-3" data-testid="import-problems">
+        <Show when={props.review.root}>
+          {(root) => (
+            <div class="h-40 rounded-md border border-[var(--soft-border)] bg-[var(--panel-2)] p-2">
+              <PreviewSvg root={root()} testId="import-problems-preview" class="block h-full w-full" />
+            </div>
+          )}
+        </Show>
+        <Show
+          when={props.review.syntaxError}
+          fallback={
+            <ul class="m-0 grid list-none gap-1 p-0 text-[var(--warning)]" data-testid="import-problems-list">
+              <For each={props.review.unrecognizedElements}>
+                {(name) => (
+                  <li>
+                    {t('Unrecognized element')}: <code class="font-['GodSVG_Mono',ui-monospace,monospace]">{name}</code>
+                  </li>
+                )}
+              </For>
+              <For each={props.review.unrecognizedAttributes}>
+                {(name) => (
+                  <li>
+                    {t('Unrecognized attribute')}: <code class="font-['GodSVG_Mono',ui-monospace,monospace]">{name}</code>
+                  </li>
+                )}
+              </For>
+            </ul>
+          }
+        >
+          {(error) => (
+            <p class="m-0 text-center text-[var(--danger)]" data-testid="import-problems-syntax-error">
+              {t('Syntax error')}: {t(error())}
+            </p>
+          )}
+        </Show>
+        <div class="flex justify-end gap-2">
+          <PanelButton type="button" data-testid="import-problems-cancel" onClick={() => props.resolve(false)}>
+            {t('Cancel')}
+          </PanelButton>
+          <PanelButton type="button" variant="primary" data-testid="import-problems-import" onClick={() => props.resolve(true)}>
+            {t('Import')}
           </PanelButton>
         </div>
       </div>
