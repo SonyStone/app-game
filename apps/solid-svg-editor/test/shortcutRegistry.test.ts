@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { restoreSettings } from '../src/editor/defaults';
+import type { AppSettings } from '../src/editor/types';
+import { createEditorShortcuts } from '../src/features/shortcuts/createEditorShortcuts';
 import {
+  bindingFromEvent,
   createShortcutRegistry,
+  formatBinding,
+  sameBinding,
   type ShortcutDescriptor
 } from '../src/features/shortcuts/shortcutRegistry';
 
@@ -45,6 +51,8 @@ function shortcutDescriptor(
     category: 'test',
     action: 'Run',
     keys: 'Ctrl+R',
+    defaultBindings: overrides.bindings,
+    editable: true,
     ...overrides
   };
 }
@@ -127,5 +135,66 @@ describe('createShortcutRegistry', () => {
     registry.onKeyDown(event);
 
     expect(runs).toBe(0);
+  });
+});
+
+describe('shortcut bindings', () => {
+  it('formats, reads, and compares bindings', () => {
+    expect(formatBinding({ key: 'z', ctrl: true, shift: true })).toBe('Ctrl+Shift+Z');
+    expect(formatBinding({ key: 'ArrowUp', alt: true })).toBe('Alt+ArrowUp');
+    expect(bindingFromEvent(createTestKeyboardEvent({ key: 'K', meta: true, shift: true }))).toEqual({ key: 'k', ctrl: true, shift: true });
+    expect(bindingFromEvent(createTestKeyboardEvent({ key: 'Shift', shift: true }))).toBeUndefined();
+    expect(sameBinding({ key: 'K', ctrl: true }, { key: 'k', ctrl: true, shift: false })).toBe(true);
+    expect(sameBinding({ key: 'k', ctrl: true }, { key: 'k' })).toBe(false);
+  });
+
+  it('runs editor actions from the user bindings, read on each key press', () => {
+    let overrides: AppSettings['shortcutOverrides'] = {};
+    let undos = 0;
+    const noop = () => undefined;
+    const shortcuts = createEditorShortcuts({
+      activeElement: () => null,
+      enabled: () => true,
+      overrides: () => overrides,
+      undo: () => (undos += 1),
+      redo: noop,
+      downloadSvg: noop,
+      copySvgText: noop,
+      openImportDialog: noop,
+      openExport: noop,
+      openSettings: noop,
+      createNewTab: noop,
+      optimizeActive: noop,
+      zoomIn: noop,
+      zoomOut: noop,
+      centerFrame: noop,
+      toggleGrid: noop,
+      toggleHandles: noop,
+      selectAll: noop,
+      clearSelection: noop,
+      duplicateSelected: noop,
+      deleteSelected: noop,
+      moveSelected: noop,
+      insertPathCommandFromKey: noop
+    });
+    const undo = shortcuts.descriptors.find((item) => item.id === 'edit.undo');
+
+    shortcuts.onKeyDown(createTestKeyboardEvent({ key: 'z', ctrl: true }));
+    overrides = { 'edit.undo': [{ key: 'u' }] };
+    shortcuts.onKeyDown(createTestKeyboardEvent({ key: 'z', ctrl: true }));
+    shortcuts.onKeyDown(createTestKeyboardEvent({ key: 'u' }));
+
+    expect(undos).toBe(2);
+    expect(undo?.keys).toBe('U');
+    expect(undo?.defaultBindings).toEqual([{ key: 'z', ctrl: true }]);
+    expect(shortcuts.descriptors.find((item) => item.id === 'tool.insert-path-command')?.editable).toBe(false);
+  });
+
+  it('restores valid stored overrides and drops malformed ones', () => {
+    const valid = { 'edit.undo': [{ key: 'u', ctrl: true }] };
+
+    expect(restoreSettings(JSON.stringify({ shortcutOverrides: valid })).shortcutOverrides).toEqual(valid);
+    expect(restoreSettings(JSON.stringify({ shortcutOverrides: { 'edit.undo': 'u' } })).shortcutOverrides).toEqual({});
+    expect(restoreSettings(JSON.stringify({ shortcutOverrides: [] })).shortcutOverrides).toEqual({});
   });
 });

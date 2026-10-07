@@ -1,11 +1,14 @@
 import type { Accessor } from 'solid-js';
 
-import { createShortcutRegistry, pathCommandBindings, type ShortcutDescriptor } from './shortcutRegistry';
+import type { AppSettings } from '../../editor/types';
+import { createShortcutRegistry, formatBinding, pathCommandBindings, type ShortcutDescriptor } from './shortcutRegistry';
 
 export function createEditorShortcuts(options: {
   readonly activeElement: Accessor<Element | null>;
   /** False while shortcuts must not run, such as when a dialog is open or a drag is in progress. */
   readonly enabled: Accessor<boolean>;
+  /** User-edited bindings by action id, from the settings. */
+  readonly overrides: Accessor<AppSettings['shortcutOverrides']>;
   readonly redo: () => void;
   readonly undo: () => void;
   readonly downloadSvg: () => void;
@@ -30,46 +33,60 @@ export function createEditorShortcuts(options: {
 }) {
   const shortcuts = [
     // Undo and redo stay with the text field while one is focused, like GodSVG.
-    shortcut('edit.undo', 'edit', 'Undo', 'Ctrl+Z', [{ key: 'z', ctrl: true }], options.undo),
-    shortcut('edit.redo', 'edit', 'Redo', 'Ctrl+Shift+Z', [{ key: 'z', ctrl: true, shift: true }], options.redo),
-    shortcut('file.save-svg', 'file', 'Save SVG', 'Ctrl+S', [{ key: 's', ctrl: true }], options.downloadSvg, true),
-    shortcut('edit.copy-svg', 'edit', 'Copy SVG text', 'Ctrl+Shift+C', [{ key: 'c', ctrl: true, shift: true }], options.copySvgText, true),
-    shortcut('file.import', 'file', 'Import', 'Ctrl+O', [{ key: 'o', ctrl: true }], options.openImportDialog, true),
-    shortcut('file.export', 'file', 'Export', 'Ctrl+E', [{ key: 'e', ctrl: true }], options.openExport, true),
-    shortcut('file.new-tab', 'file', 'New tab', 'Ctrl+N', [{ key: 'n', ctrl: true }], options.createNewTab, true),
-    shortcut('file.optimize', 'file', 'Optimize', 'Ctrl+Shift+O', [{ key: 'o', ctrl: true, shift: true }], options.optimizeActive, true),
-    shortcut('help.settings', 'help', 'Settings', 'Ctrl+,', [{ key: ',', ctrl: true }], options.openSettings, true),
-    shortcut('view.zoom-in', 'view', 'Zoom in', 'Ctrl+=', [{ key: '=', ctrl: true }], options.zoomIn, true),
-    shortcut('view.zoom-out', 'view', 'Zoom out', 'Ctrl+-', [{ key: '-', ctrl: true }], options.zoomOut, true),
-    shortcut('view.reset-zoom', 'view', 'Reset zoom', 'Ctrl+0', [{ key: '0', ctrl: true }], options.centerFrame, true),
-    shortcut('view.toggle-grid', 'view', 'Toggle grid', 'Ctrl+G', [{ key: 'g', ctrl: true }], options.toggleGrid, true),
-    shortcut('view.toggle-handles', 'view', 'Toggle handles', 'Ctrl+H', [{ key: 'h', ctrl: true }], options.toggleHandles, true),
-    shortcut('edit.select-all', 'edit', 'Select all', 'Ctrl+A', [{ key: 'a', ctrl: true }], options.selectAll),
-    shortcut('edit.clear-selection', 'edit', 'Clear selection', 'Escape', [{ key: 'Escape' }], options.clearSelection),
-    shortcut('edit.duplicate', 'edit', 'Duplicate', 'Ctrl+D', [{ key: 'd', ctrl: true }], options.duplicateSelected),
-    shortcut('edit.delete', 'edit', 'Delete', 'Delete', [{ key: 'Delete' }, { key: 'Backspace' }], options.deleteSelected),
-    shortcut('edit.move-up', 'edit', 'Move up', 'Alt+ArrowUp', [{ key: 'ArrowUp', alt: true }], () => options.moveSelected(-1)),
-    shortcut('edit.move-down', 'edit', 'Move down', 'Alt+ArrowDown', [{ key: 'ArrowDown', alt: true }], () => options.moveSelected(1)),
-    shortcut('tool.insert-path-command', 'tool', 'Insert path command', 'M L H V Z A Q T C S', pathCommandBindings(), (event) =>
+    shortcut('edit.undo', 'edit', 'Undo', [{ key: 'z', ctrl: true }], options.undo),
+    shortcut('edit.redo', 'edit', 'Redo', [{ key: 'z', ctrl: true, shift: true }], options.redo),
+    shortcut('file.save-svg', 'file', 'Save SVG', [{ key: 's', ctrl: true }], options.downloadSvg, true),
+    shortcut('edit.copy-svg', 'edit', 'Copy SVG text', [{ key: 'c', ctrl: true, shift: true }], options.copySvgText, true),
+    shortcut('file.import', 'file', 'Import', [{ key: 'o', ctrl: true }], options.openImportDialog, true),
+    shortcut('file.export', 'file', 'Export', [{ key: 'e', ctrl: true }], options.openExport, true),
+    shortcut('file.new-tab', 'file', 'New tab', [{ key: 'n', ctrl: true }], options.createNewTab, true),
+    shortcut('file.optimize', 'file', 'Optimize', [{ key: 'o', ctrl: true, shift: true }], options.optimizeActive, true),
+    shortcut('help.settings', 'help', 'Settings', [{ key: ',', ctrl: true }], options.openSettings, true),
+    shortcut('view.zoom-in', 'view', 'Zoom in', [{ key: '=', ctrl: true }], options.zoomIn, true),
+    shortcut('view.zoom-out', 'view', 'Zoom out', [{ key: '-', ctrl: true }], options.zoomOut, true),
+    shortcut('view.reset-zoom', 'view', 'Reset zoom', [{ key: '0', ctrl: true }], options.centerFrame, true),
+    shortcut('view.toggle-grid', 'view', 'Toggle grid', [{ key: 'g', ctrl: true }], options.toggleGrid, true),
+    shortcut('view.toggle-handles', 'view', 'Toggle handles', [{ key: 'h', ctrl: true }], options.toggleHandles, true),
+    shortcut('edit.select-all', 'edit', 'Select all', [{ key: 'a', ctrl: true }], options.selectAll),
+    shortcut('edit.clear-selection', 'edit', 'Clear selection', [{ key: 'Escape' }], options.clearSelection),
+    shortcut('edit.duplicate', 'edit', 'Duplicate', [{ key: 'd', ctrl: true }], options.duplicateSelected),
+    shortcut('edit.delete', 'edit', 'Delete', [{ key: 'Delete' }, { key: 'Backspace' }], options.deleteSelected),
+    shortcut('edit.move-up', 'edit', 'Move up', [{ key: 'ArrowUp', alt: true }], () => options.moveSelected(-1)),
+    shortcut('edit.move-down', 'edit', 'Move down', [{ key: 'ArrowDown', alt: true }], () => options.moveSelected(1)),
+    shortcut('tool.insert-path-command', 'tool', 'Insert path command', pathCommandBindings(), (event) =>
       options.insertPathCommandFromKey(event.key, event.shiftKey)
     )
-  ] as const satisfies readonly ShortcutDescriptor[];
+  ];
+  const descriptors = shortcuts.map((item) => withOverrides(item, options.overrides));
+  const registry = createShortcutRegistry(descriptors, { activeElement: options.activeElement, enabled: options.enabled });
 
-  return createShortcutRegistry(shortcuts, { activeElement: options.activeElement, enabled: options.enabled });
+  return { onKeyDown: registry.onKeyDown, descriptors };
 }
+
+type BaseShortcut = Omit<ShortcutDescriptor, 'bindings' | 'keys'>;
 
 function shortcut(
   id: string,
   category: string,
   action: string,
-  keys: string,
   bindings: ShortcutDescriptor['bindings'],
   run: (event: KeyboardEvent) => void,
   allowInEditable?: boolean
-): ShortcutDescriptor {
-  if (allowInEditable === undefined) {
-    return { id, category, action, keys, bindings, run };
-  }
+): BaseShortcut {
+  const base = { id, category, action, defaultBindings: bindings, editable: id !== 'tool.insert-path-command', run };
+  return allowInEditable === undefined ? base : { ...base, allowInEditable };
+}
 
-  return { id, category, action, keys, bindings, run, allowInEditable };
+/** Adds the current bindings (the user's edits, else the defaults) and their label, read on access. */
+function withOverrides(base: BaseShortcut, overrides: Accessor<AppSettings['shortcutOverrides']>): ShortcutDescriptor {
+  const bindings = () => (base.editable ? (overrides()[base.id] ?? base.defaultBindings) : base.defaultBindings);
+  return {
+    ...base,
+    get bindings() {
+      return bindings();
+    },
+    get keys() {
+      return base.editable ? bindings().map(formatBinding).join(', ') : 'M L H V Z A Q T C S';
+    }
+  };
 }

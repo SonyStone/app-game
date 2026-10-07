@@ -12,7 +12,7 @@ import type { newShapeNames } from '../../editor/new-shape';
 import { defaultSettings, restoreSettings } from '../../editor/defaults';
 import { downloadBlob } from '../../editor/export-utils';
 import { serializeSvgDocument } from '../../editor/svg-document';
-import type { ContextMenuState, DragSelectionMode, ModalId, PanelId } from '../../editor/types';
+import type { ContextMenuState, DragSelectionMode, ModalId, PanelId, ShortcutBinding } from '../../editor/types';
 import { createDefaultElement, findNode, getAttribute, insertSibling, svgSize } from '../../svg-model';
 import { commandSelectionActions, subpathSelection } from '../../editor/path-selection';
 import type { HandleDescriptor } from '../../editor/types';
@@ -313,8 +313,9 @@ export function createEditorAppController() {
     await writeClipboard(exportText());
   }
 
-  const { onKeyDown } = createEditorShortcuts({
+  const { onKeyDown, descriptors: shortcutDescriptors } = createEditorShortcuts({
     activeElement,
+    overrides: () => settings().shortcutOverrides,
     enabled: () => modal() === undefined && activeDrag() === undefined && activeTouchGesture() === undefined,
     redo,
     undo,
@@ -628,7 +629,18 @@ export function createEditorAppController() {
       close: closeModal,
       reformatActiveCode,
       pendingCloseTabName: () => pendingCloseTab()?.name,
-      resolveCloseTab
+      resolveCloseTab,
+      shortcuts: shortcutDescriptors,
+      setShortcutBindings: (id: string, bindings: readonly ShortcutBinding[] | undefined) =>
+        setSettings((current) => {
+          const shortcutOverrides = { ...current.shortcutOverrides, [id]: bindings ?? [] };
+
+          if (!bindings) {
+            delete shortcutOverrides[id];
+          }
+
+          return { ...current, shortcutOverrides };
+        })
     },
     dropOverlay: {
       active: isSvgDropActive

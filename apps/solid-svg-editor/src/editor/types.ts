@@ -38,6 +38,14 @@ export interface ShortcutItem {
   readonly keys: string;
 }
 
+/** A key with modifiers; `ctrl` also matches Cmd on macOS. */
+export interface ShortcutBinding {
+  readonly key: string;
+  readonly ctrl?: boolean;
+  readonly shift?: boolean;
+  readonly alt?: boolean;
+}
+
 export interface OptimizerSettings {
   readonly removeComments: boolean;
   readonly convertShapes: boolean;
@@ -59,6 +67,8 @@ export interface AppSettings {
   readonly formatter: FormatterSettings;
   readonly exportFormatter: FormatterSettings;
   readonly optimizer: OptimizerSettings;
+  /** User-edited shortcut bindings by action id; actions not listed use their defaults. */
+  readonly shortcutOverrides: Readonly<Record<string, readonly ShortcutBinding[]>>;
   /** Pixel sizes of the icon previews (GodSVG default: 16, 24, 32, 48, 64). */
   readonly previewSizes: readonly number[];
   /** Named color palettes listed in the color picker. */

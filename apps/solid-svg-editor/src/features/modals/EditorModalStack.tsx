@@ -1,6 +1,7 @@
 import { Show, type Setter } from 'solid-js';
 
 import type { AppSettings, ModalId } from '../../editor/types';
+import type { ShortcutDescriptor } from '../shortcuts/shortcutRegistry';
 import type { FormatterSettings } from '../../formatter';
 import type { SvgElementNode } from '../../svg-model';
 import { AboutModal, CloseTabModal, DonateModal, ExportModal, SettingsModal, ShortcutsModal } from './EditorModals';
@@ -18,7 +19,11 @@ export function EditorModalStack(props: {
   /** Name of the unsaved tab waiting to close, shown by the `close-tab` dialog. */
   readonly pendingCloseTabName: string | undefined;
   readonly resolveCloseTab: (choice: 'save' | 'discard' | 'cancel') => void;
+  /** Editor shortcut actions, shown and edited by the Settings tab and the Shortcuts dialog. */
+  readonly shortcuts: readonly ShortcutDescriptor[];
+  readonly setShortcutBindings: Parameters<typeof SettingsModal>[0]['shortcuts']['setBindings'];
 }) {
+
   return (
     <>
       <Show when={props.modal === 'settings'}>
@@ -27,6 +32,7 @@ export function EditorModalStack(props: {
           setSettings={props.setSettings}
           close={props.close}
           reformatActiveCode={props.reformatActiveCode}
+          shortcuts={{ descriptors: props.shortcuts, setBindings: props.setShortcutBindings }}
         />
       </Show>
       <Show when={props.modal === 'export'}>
@@ -49,7 +55,7 @@ export function EditorModalStack(props: {
         )}
       </Show>
       <Show when={props.modal === 'shortcuts'}>
-        <ShortcutsModal close={props.close} />
+        <ShortcutsModal close={props.close} shortcuts={{ descriptors: props.shortcuts, setBindings: props.setShortcutBindings }} />
       </Show>
     </>
   );

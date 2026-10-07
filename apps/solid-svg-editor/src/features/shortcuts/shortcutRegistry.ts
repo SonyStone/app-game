@@ -1,44 +1,17 @@
 import { pathCommandLetters } from '../../path-data';
-import type { ShortcutItem } from '../../editor/types';
+import type { ShortcutBinding, ShortcutItem } from '../../editor/types';
 import type { Accessor } from 'solid-js';
-
-export interface ShortcutBinding {
-  readonly key: string;
-  readonly ctrl?: boolean;
-  readonly shift?: boolean;
-  readonly alt?: boolean;
-}
 
 export interface ShortcutDescriptor extends ShortcutItem {
   readonly id: string;
+  /** Current bindings: the user's edits, else the defaults. Read when a key is pressed. */
   readonly bindings: readonly ShortcutBinding[];
+  readonly defaultBindings: readonly ShortcutBinding[];
+  /** False for multi-key families such as the path command letters, which are not rebound. */
+  readonly editable: boolean;
   readonly allowInEditable?: boolean;
   readonly run: (event: KeyboardEvent) => void;
 }
-
-export const defaultShortcutItems = [
-  { category: 'file', action: 'Import', keys: 'Ctrl+O' },
-  { category: 'file', action: 'Export', keys: 'Ctrl+E' },
-  { category: 'file', action: 'Save SVG', keys: 'Ctrl+S' },
-  { category: 'file', action: 'New tab', keys: 'Ctrl+N' },
-  { category: 'file', action: 'Optimize', keys: 'Ctrl+Shift+O' },
-  { category: 'edit', action: 'Undo', keys: 'Ctrl+Z' },
-  { category: 'edit', action: 'Redo', keys: 'Ctrl+Shift+Z' },
-  { category: 'edit', action: 'Copy SVG text', keys: 'Ctrl+Shift+C' },
-  { category: 'edit', action: 'Duplicate', keys: 'Ctrl+D' },
-  { category: 'edit', action: 'Delete', keys: 'Delete' },
-  { category: 'edit', action: 'Move up', keys: 'Alt+ArrowUp' },
-  { category: 'edit', action: 'Move down', keys: 'Alt+ArrowDown' },
-  { category: 'edit', action: 'Select all', keys: 'Ctrl+A' },
-  { category: 'edit', action: 'Clear selection', keys: 'Escape' },
-  { category: 'view', action: 'Zoom in', keys: 'Ctrl+=' },
-  { category: 'view', action: 'Zoom out', keys: 'Ctrl+-' },
-  { category: 'view', action: 'Reset zoom', keys: 'Ctrl+0' },
-  { category: 'view', action: 'Toggle grid', keys: 'Ctrl+G' },
-  { category: 'view', action: 'Toggle handles', keys: 'Ctrl+H' },
-  { category: 'tool', action: 'Insert path command', keys: 'M L H V Z A Q T C S' },
-  { category: 'help', action: 'Settings', keys: 'Ctrl+,' }
-] as const satisfies readonly ShortcutItem[];
 
 /**
  * Matches keydown events against shortcut descriptors and runs the first match.
@@ -111,4 +84,31 @@ function isEditableTarget(target: EventTarget | Element | null | undefined): boo
 
 function isMatchableTarget(target: unknown): target is { matches: (selector: string) => boolean } {
   return typeof target === 'object' && target !== null && 'matches' in target && typeof target.matches === 'function';
+}
+
+/** Writes a binding as text, such as `Ctrl+Shift+Z`. */
+export function formatBinding(binding: ShortcutBinding): string {
+  const key = binding.key.length === 1 ? binding.key.toUpperCase() : binding.key;
+  return [binding.ctrl && 'Ctrl', binding.shift && 'Shift', binding.alt && 'Alt', key].filter(Boolean).join('+');
+}
+
+/** The binding a key press describes, or `undefined` for a lone modifier key. */
+export function bindingFromEvent(event: KeyboardEvent): ShortcutBinding | undefined {
+  if (['Control', 'Shift', 'Alt', 'Meta', 'CapsLock'].includes(event.key)) {
+    return undefined;
+  }
+
+  return {
+    key: event.key.length === 1 ? event.key.toLowerCase() : event.key,
+    ...(event.ctrlKey || event.metaKey ? { ctrl: true } : {}),
+    ...(event.shiftKey ? { shift: true } : {}),
+    ...(event.altKey ? { alt: true } : {})
+  };
+}
+
+/** Whether two bindings describe the same key press. */
+export function sameBinding(a: ShortcutBinding, b: ShortcutBinding): boolean {
+  return (
+    sameKey(a.key, b.key) && Boolean(a.ctrl) === Boolean(b.ctrl) && Boolean(a.shift) === Boolean(b.shift) && Boolean(a.alt) === Boolean(b.alt)
+  );
 }
