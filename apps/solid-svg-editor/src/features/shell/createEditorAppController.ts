@@ -28,6 +28,8 @@ import type { EditorContextMenuAction } from '../selection/EditorContextMenu';
 import { createEditorSelection } from '../selection/createEditorSelection';
 import { createEditorShortcuts } from '../shortcuts/createEditorShortcuts';
 import { createPanelSections } from '../layout/createPanelSections';
+import { createCustomFonts, type FontRole } from '../appearance/createCustomFonts';
+import { createWakeLock } from '../appearance/createWakeLock';
 import type { PanelLayout } from '../layout/panel-layout';
 import { evaluateFocusedField, focusSearchField } from '../shortcuts/focusedFieldActions';
 import { tabsToClose, type TabCloseGroup } from '../documents/tab-groups';
@@ -62,6 +64,8 @@ export function createEditorAppController() {
     })
   );
   const panelSections = createPanelSections({ layout: () => settings().panelLayout });
+  const customFonts = createCustomFonts(() => settings().fonts);
+  createWakeLock(() => settings().keepScreenOn);
   const [modal, setModal] = createSignal<ModalId>();
   const [contextMenu, setContextMenu] = createSignal<ContextMenuState | undefined>();
   const [canvasSvg, setCanvasSvg] = createSignal<SVGSVGElement>();
@@ -208,6 +212,7 @@ export function createEditorAppController() {
   const rootSize = createMemo(() => svgSize(activeRoot()), { equals: sameSvgSize });
   const viewport = createViewportCamera({ rootSize, settings, canvasSvg });
   const {
+    cameraCenter,
     setCameraCenter,
     zoom,
     setZoom,
@@ -267,6 +272,10 @@ export function createEditorAppController() {
     rotateViewportBy,
     dragSelectionMode: () => settings().dragSelectionMode,
     useCtrlForZoom: () => settings().useCtrlForZoom,
+    invertZoom: () => settings().invertZoom,
+    panningSpeed: () => settings().panningSpeed,
+    panWithLmb: () => settings().panWithLmb,
+    cameraCenter,
     useRasterPreview: () => rasterPreviewActive(),
     keepViewportPreviewAlive
   });
@@ -275,6 +284,7 @@ export function createEditorAppController() {
     activeTouchGesture,
     selectionBox,
     marqueeRect,
+    selectedElementBoxes,
     onCanvasWheel,
     onCanvasPointerDown,
     onNodePointerDown,
@@ -656,6 +666,7 @@ export function createEditorAppController() {
       commandSelection,
       selectionBox,
       marqueeRect,
+    selectedElementBoxes,
       onCanvasWheel,
       onCanvasPointerDown,
       onNodePointerDown,
@@ -727,6 +738,10 @@ export function createEditorAppController() {
       pendingCloseTabName: () => pendingCloseTab()?.name,
       pendingImport: importReview.pending,
       alertMessages,
+      fonts: {
+        choose: customFonts.chooseFont,
+        reset: (role: FontRole) => void customFonts.resetFont(role)
+      },
       resolveImport: importReview.resolve,
       resolveCloseTab,
       shortcuts: shortcutDescriptors,

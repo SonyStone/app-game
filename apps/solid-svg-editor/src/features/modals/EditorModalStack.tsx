@@ -6,6 +6,7 @@ import type { FormatterSettings } from '../../formatter';
 import type { SvgElementNode } from '../../svg-model';
 import type { ImportReview } from '../import/createImportReview';
 import type { AlertMessage } from '../files/createFileBinding';
+import type { FontActions } from './AppearanceSettings';
 import {
   AboutModal,
   AlertModal,
@@ -33,6 +34,8 @@ export function EditorModalStack(props: {
   readonly resolveCloseTab: (choice: 'save' | 'discard' | 'cancel') => void;
   /** The import held for review by the `import-problems` dialog. */
   readonly pendingImport: ImportReview | undefined;
+  /** Custom font storage for the Theming settings. */
+  readonly fonts: FontActions;
   /** Paragraphs of the `alert` dialog. */
   readonly alertMessages: readonly AlertMessage[];
   /** Imports the held text (`true`) or drops it. */
@@ -51,6 +54,7 @@ export function EditorModalStack(props: {
           close={props.close}
           reformatActiveCode={props.reformatActiveCode}
           shortcuts={{ descriptors: props.shortcuts, setBindings: props.setShortcutBindings }}
+          fonts={props.fonts}
         />
       </Show>
       <Show when={props.modal === 'export'}>

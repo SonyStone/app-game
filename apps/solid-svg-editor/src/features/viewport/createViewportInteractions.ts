@@ -73,6 +73,12 @@ export function createViewportInteractions(options: {
   readonly rotateViewportBy: (delta: number, origin?: { readonly x: number; readonly y: number }) => void;
   readonly dragSelectionMode: Accessor<DragSelectionMode>;
   readonly useCtrlForZoom: Accessor<boolean>;
+  readonly invertZoom: Accessor<boolean>;
+  /** GodSVG's panning speed for scrolling (20 moves one screen pixel per wheel pixel). */
+  readonly panningSpeed: Accessor<number>;
+  /** Dragging the empty canvas with the left button pans; Shift+drag still draws a marquee. */
+  readonly panWithLmb: Accessor<boolean>;
+  readonly cameraCenter: Accessor<Point>;
   readonly useRasterPreview: Accessor<boolean>;
   readonly keepViewportPreviewAlive: (delay?: number) => void;
 }) {
@@ -93,7 +99,11 @@ export function createViewportInteractions(options: {
     | undefined;
   const panMoveFrame = createRafQueue(flushPendingPanMove);
   const handleMoveFrame = createRafQueue(flushPendingHandleMove);
-  const selectionBoxFrame = createRafQueue(() => setSelectionBox(measureSelectionBox(options.selectedIds())));
+  const [selectedElementBoxes, setSelectedElementBoxes] = createSignal<readonly ElementBox[]>([]);
+  const selectionBoxFrame = createRafQueue(() => {
+    setSelectionBox(measureSelectionBox(options.selectedIds()));
+    setSelectedElementBoxes(measureElementBoxes(options.selectedIds()));
+  });
   const toolRegistry = createViewportToolRegistry(
     createDefaultViewportTools({
       activeDrag,
@@ -182,6 +192,41 @@ export function createViewportInteractions(options: {
     }
 
     return unionRects(rects);
+  }
+
+  /**
+   * Each selected element's own bounding box and its transform into document coordinates, for GodSVG's selection
+   * rectangle (which follows rotated and skewed elements).
+   */
+  function measureElementBoxes(ids: readonly string[]): readonly ElementBox[] {
+    const rootId = options.activeRoot().id;
+    const selected = new Set(ids.filter((id) => id !== rootId));
+    const canvas = options.canvasSvg();
+    // The overlays share the coordinates of the viewport's content group.
+    const content = canvas?.querySelector<SVGGraphicsElement>('[data-testid="viewport-content"]');
+    const toRoot = content?.getCTM()?.inverse();
+
+    if (selected.size === 0 || options.useRasterPreview() || !canvas || !toRoot) {
+      return [];
+    }
+
+    return Array.from(canvas.querySelectorAll<SVGGraphicsElement>('[data-node-id]')).flatMap((element) => {
+      const id = element.getAttribute('data-node-id');
+      const matrix = element.getCTM();
+
+      if (!id || !selected.has(id) || !matrix || typeof element.getBBox !== 'function') {
+        return [];
+      }
+
+      const box = element.getBBox();
+
+      if (box.width <= 0 && box.height <= 0) {
+        return [];
+      }
+
+      const m = toRoot.multiply(matrix);
+      return [{ id, x: box.x, y: box.y, width: box.width, height: box.height, matrix: [m.a, m.b, m.c, m.d, m.e, m.f] as const }];
+    });
   }
 
   function clientRectToWorldRect(clientRect: DOMRectReadOnly): Rect | undefined {
@@ -278,13 +323,27 @@ export function createViewportInteractions(options: {
     }
 
     if (options.useCtrlForZoom() && !event.ctrlKey && !event.metaKey) {
-      return false;
+      // Like GodSVG: when zooming needs Ctrl, scrolling pans.
+      event.preventDefault();
+      options.keepViewportPreviewAlive();
+      const scale = wheelPixels(event) * (options.panningSpeed() / 20);
+      panByScreen(event.deltaX * scale, event.deltaY * scale);
+      return true;
     }
 
     event.preventDefault();
     options.keepViewportPreviewAlive();
-    options.zoomBy(wheelZoomFactor(event), { x: event.clientX, y: event.clientY });
+    const factor = wheelZoomFactor(event);
+    options.zoomBy(options.invertZoom() ? 1 / factor : factor, { x: event.clientX, y: event.clientY });
     return true;
+  }
+
+  /** Moves the view by a distance in screen pixels, whatever the zoom and rotation. */
+  function panByScreen(dx: number, dy: number): void {
+    const from = options.clientToSvgPoint(0, 0, false);
+    const to = options.clientToSvgPoint(dx, dy, false);
+    const center = options.cameraCenter();
+    options.setCameraCenter({ x: center.x + to.x - from.x, y: center.y + to.y - from.y });
   }
 
   function onCanvasPointerDown(event: PointerEvent): void {
@@ -306,7 +365,13 @@ export function createViewportInteractions(options: {
 
     if (event.button === 0) {
       clearContextMenu();
-      startMarqueeDrag(event);
+
+      if (options.panWithLmb() && !event.shiftKey) {
+        startPanDrag(event);
+      } else {
+        startMarqueeDrag(event);
+      }
+
       setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
       return true;
     }
@@ -726,6 +791,7 @@ export function createViewportInteractions(options: {
     activeTouchGesture,
     selectionBox,
     marqueeRect,
+    selectedElementBoxes,
     onCanvasWheel,
     onCanvasPointerDown,
     onNodePointerDown,
@@ -739,7 +805,21 @@ export function createViewportInteractions(options: {
  * the small deltas of trackpad pinches zoom smoothly.
  */
 function wheelZoomFactor(event: WheelEvent): number {
-  const pixelsPerUnit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 33 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? 800 : 1;
-  const delta = clamp(event.deltaY * pixelsPerUnit, -400, 400);
+  const delta = clamp(event.deltaY * wheelPixels(event), -400, 400);
   return 2 ** (-delta / 200);
+}
+
+/** A selected element's bounding box in its own coordinates, and the matrix into document coordinates. */
+export type ElementBox = {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly matrix: readonly [number, number, number, number, number, number];
+};
+
+/** Pixels per unit of a wheel event's deltas (lines and pages are converted). */
+function wheelPixels(event: WheelEvent): number {
+  return event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 33 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? 800 : 1;
 }

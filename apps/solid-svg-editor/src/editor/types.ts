@@ -1,4 +1,5 @@
 import type { PanelLayout } from "../features/layout/panel-layout";
+import type { BasicColors, HandleSettings, HighlighterColors, HighlighterPreset, SelectionRectangleSettings } from "./appearance";
 import type { ColorPalette } from './palettes';
 import type { FormatterSettings } from "../formatter";
 import type { Matrix2D, Point, Rect } from "./geometry";
@@ -89,6 +90,25 @@ export interface AppSettings {
   readonly previewSizes: readonly number[];
   /** Named color palettes listed in the color picker. */
   readonly palettes: readonly ColorPalette[];
+  /** GodSVG's SVG text colors and the preset they started from. */
+  readonly highlighterPreset: HighlighterPreset;
+  readonly highlighter: HighlighterColors;
+  readonly handles: HandleSettings;
+  readonly selectionRectangle: SelectionRectangleSettings;
+  /** Grid lines between labelled major lines; 0 draws no major lines. */
+  readonly gridTickInterval: number;
+  readonly basicColors: BasicColors;
+  /** Font files chosen for the interface, by role; their data lives in IndexedDB (`fontStore`). */
+  readonly fonts: { readonly main?: string; readonly bold?: string; readonly mono?: string };
+  readonly invertZoom: boolean;
+  /** Dragging the empty canvas with the left button pans instead of drawing a selection marquee. */
+  readonly panWithLmb: boolean;
+  /** Scroll panning distance, GodSVG's units (20 scrolls one CSS pixel per wheel pixel). */
+  readonly panningSpeed: number;
+  /** Interface scale factor, or `auto` (the browser's zoom). */
+  readonly uiScale: number | "auto";
+  /** Keeps the screen awake with the Screen Wake Lock API while the editor is visible. */
+  readonly keepScreenOn: boolean;
   readonly tabMiddleClickClose: boolean;
   /** GodSVG's "Sync window title to file name": the page title shows the active tab's bound file. */
   readonly useFilenameForWindowTitle: boolean;

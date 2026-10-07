@@ -3,10 +3,15 @@ import { cn } from '@app-game/utils/cn';
 
 import type { AppSettings, ThemePreset } from '../../editor/types';
 
-export type AppThemeVars = Record<'--base' | '--accent' | '--canvas' | '--grid' | AppThemeColorVar, string> & {
+export type AppThemeVars = Record<'--base' | '--accent' | '--canvas' | '--grid' | AppThemeColorVar | SettingColorVar, string> & {
   readonly 'color-scheme': 'dark' | 'light';
   readonly 'font-family': string;
+  /** GodSVG's UI scale; `undefined` leaves the browser's zoom alone. */
+  readonly zoom: string | undefined;
 };
+
+/** Colors from the settings: highlighter (`--hl-*`) and handle (`--handle-*`) colors. */
+type SettingColorVar = `--hl-${keyof AppSettings['highlighter']}` | `--handle-${Exclude<keyof AppSettings['handles'], 'size'>}`;
 
 type AppThemeColorVar =
   | '--border'
@@ -84,6 +89,26 @@ export function createAppThemeVars(settings: AppSettings): AppThemeVars {
     '--base': settings.baseColor,
     '--accent': settings.accentColor,
     '--canvas': settings.canvasColor,
-    '--grid': settings.gridColor
+    '--grid': settings.gridColor,
+    // GodSVG's basic colors drive the valid, error, and warning accents.
+    '--ok': settings.basicColors.valid,
+    '--danger': settings.basicColors.error,
+    '--warning': settings.basicColors.warning,
+    ...prefixed('--hl-', settings.highlighter),
+    ...prefixed('--handle-', {
+      inside: settings.handles.inside,
+      normal: settings.handles.normal,
+      hovered: settings.handles.hovered,
+      selected: settings.handles.selected,
+      hoveredSelected: settings.handles.hoveredSelected
+    }),
+    zoom: settings.uiScale === 'auto' ? undefined : String(settings.uiScale)
   };
+}
+
+function prefixed<P extends string, T extends Record<string, string>>(prefix: P, colors: T): Record<`${P}${keyof T & string}`, string> {
+  return Object.fromEntries(Object.entries(colors).map(([key, value]) => [`${prefix}${key}`, value])) as Record<
+    `${P}${keyof T & string}`,
+    string
+  >;
 }

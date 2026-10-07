@@ -4,9 +4,9 @@ import { createEffect, createMemo, createSignal, For, onSettled, Show } from 'so
 
 import { copyExport, exportFile, exportFileName, rasterSize, renderExport, type ExportOptions } from '../../editor/export-utils';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
-import { clamp, themePresetSettings } from '../../editor/tree-utils';
+import { clamp } from '../../editor/tree-utils';
 import { shortcutPanelSlotCount } from '../../editor/defaults';
-import type { AppSettings, ExportFormat, ShortcutBinding, ShortcutPanelSettings, ThemePreset } from '../../editor/types';
+import type { AppSettings, ExportFormat, ShortcutBinding, ShortcutPanelSettings } from '../../editor/types';
 import {
   formatterPreset,
   humanFileSize,
@@ -29,6 +29,8 @@ import type { AlertMessage } from '../files/createFileBinding';
 import { actionIcon } from '../shortcut-panel/action-icons';
 import type { ImportReview } from '../import/createImportReview';
 import { PanelButton } from '../ui/PanelButton';
+import { OtherSettings, ThemingSettings, type FontActions } from './AppearanceSettings';
+import { CheckboxField, FormInput, FormSelect, SettingsField } from './settings-fields';
 import { useI18n } from '../../i18n/I18nProvider';
 import { LanguageSelect } from '../../i18n/LanguageSelect';
 import { godSvgRepositoryUrl, godSvgWebsiteUrl } from '../../editor/links';
@@ -39,6 +41,8 @@ export function SettingsModal(props: {
   readonly close: () => void;
   readonly reformatActiveCode: (formatter?: FormatterSettings) => void;
   readonly shortcuts: ShortcutEditorProps;
+  /** Stores or forgets the custom font file for a role (see `createCustomFonts`). */
+  readonly fonts: FontActions;
 }) {
   const { t } = useI18n();
   const [tab, setTab] = createSignal<
@@ -65,7 +69,7 @@ export function SettingsModal(props: {
         class="settings-body grid min-h-120 grid-cols-[150px_minmax(0,1fr)] gap-3 [@media(max-width:820px)]:grid-cols-1"
         data-testid="settings-body"
       >
-        <nav class="settings-tabs grid content-start gap-1" data-testid="settings-tabs">
+        <nav class="settings-tabs sticky top-0 grid content-start gap-1 self-start" data-testid="settings-tabs">
           <LanguageSelect
             value={props.settings.language}
             onChange={(language) => props.setSettings((settings) => ({ ...settings, language }))}
@@ -160,56 +164,7 @@ export function SettingsModal(props: {
             <ShortcutEditor {...props.shortcuts} />
           </Show>
           <Show when={tab() === 'theming'}>
-            <SettingsField>
-              {t('Theme preset')}
-              <FormSelect
-                value={props.settings.themePreset}
-                data-testid="settings-theme-select"
-                onChange={(event) =>
-                  props.setSettings((settings) =>
-                    themePresetSettings(event.currentTarget.value as ThemePreset, settings)
-                  )
-                }
-              >
-                <option value="dark">{t('Dark')}</option>
-                <option value="light">{t('Light')}</option>
-                <option value="black">{t('Black (OLED)')}</option>
-                <option value="gray">{t('Gray')}</option>
-              </FormSelect>
-            </SettingsField>
-            <SettingsField>
-              {t('Accent color')}
-              <FormInput
-                type="color"
-                data-testid="settings-accent-color"
-                value={props.settings.accentColor}
-                onInput={(event) =>
-                  props.setSettings((settings) => ({ ...settings, accentColor: event.currentTarget.value }))
-                }
-              />
-            </SettingsField>
-            <SettingsField>
-              {t('Canvas color')}
-              <FormInput
-                type="color"
-                data-testid="settings-canvas-color"
-                value={props.settings.canvasColor}
-                onInput={(event) =>
-                  props.setSettings((settings) => ({ ...settings, canvasColor: event.currentTarget.value }))
-                }
-              />
-            </SettingsField>
-            <SettingsField>
-              {t('Grid color')}
-              <FormInput
-                type="color"
-                data-testid="settings-grid-color"
-                value={props.settings.gridColor}
-                onInput={(event) =>
-                  props.setSettings((settings) => ({ ...settings, gridColor: event.currentTarget.value }))
-                }
-              />
-            </SettingsField>
+            <ThemingSettings settings={props.settings} setSettings={props.setSettings} fonts={props.fonts} />
           </Show>
           <Show when={tab() === 'tabbar'}>
             <CheckboxField>
@@ -225,56 +180,7 @@ export function SettingsModal(props: {
             </CheckboxField>
           </Show>
           <Show when={tab() === 'other'}>
-            <CheckboxField>
-              <FormInput
-                type="checkbox"
-                data-testid="settings-use-ctrl-for-zoom"
-                checked={props.settings.useCtrlForZoom}
-                onChange={(event) =>
-                  props.setSettings((settings) => ({ ...settings, useCtrlForZoom: event.currentTarget.checked }))
-                }
-              />
-              {t('Use CTRL for zooming')}
-            </CheckboxField>
-            <CheckboxField>
-              <FormInput
-                type="checkbox"
-                data-testid="settings-raster-preview-during-interaction"
-                checked={props.settings.rasterPreviewDuringInteraction}
-                onChange={(event) =>
-                  props.setSettings((settings) => ({
-                    ...settings,
-                    rasterPreviewDuringInteraction: event.currentTarget.checked
-                  }))
-                }
-              />
-              Raster preview while panning or zooming
-            </CheckboxField>
-            <CheckboxField>
-              <FormInput
-                type="checkbox"
-                data-testid="settings-sync-window-title"
-                checked={props.settings.useFilenameForWindowTitle}
-                onChange={(event) =>
-                  props.setSettings((settings) => ({ ...settings, useFilenameForWindowTitle: event.currentTarget.checked }))
-                }
-              />
-              {t('Sync window title to file name')}
-            </CheckboxField>
-            <CheckboxField>
-              <FormInput
-                type="checkbox"
-                data-testid="settings-show-shortcut-panel"
-                checked={props.settings.shortcutPanel.visible}
-                onChange={(event) =>
-                  props.setSettings((settings) => ({
-                    ...settings,
-                    shortcutPanel: { ...settings.shortcutPanel, visible: event.currentTarget.checked }
-                  }))
-                }
-              />
-              Show shortcut panel
-            </CheckboxField>
+            <OtherSettings settings={props.settings} setSettings={props.setSettings} />
           </Show>
         </div>
       </div>
@@ -987,34 +893,6 @@ function ModalFrame(props: { readonly title: string; readonly close: () => void;
         </div>
       </section>
     </div>
-  );
-}
-
-function SettingsField(props: { readonly children: JSX.Element }) {
-  return <label class="grid grid-cols-[minmax(120px,auto)_minmax(0,1fr)] items-center gap-2.5">{props.children}</label>;
-}
-
-function CheckboxField(props: { readonly children: JSX.Element }) {
-  return <label class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2.5">{props.children}</label>;
-}
-
-function FormInput(props: JSX.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      class="block h-5.5 min-h-5.5 min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
-    />
-  );
-}
-
-function FormSelect(props: JSX.SelectHTMLAttributes<HTMLSelectElement> & { readonly children: JSX.Element }) {
-  return (
-    <select
-      {...props}
-      class="block h-5.5 min-h-5.5 min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
-    >
-      {props.children}
-    </select>
   );
 }
 

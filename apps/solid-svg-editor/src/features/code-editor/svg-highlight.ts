@@ -17,19 +17,22 @@ export type HighlightKind =
 
 export type HighlightToken = { readonly kind: HighlightKind; readonly text: string };
 
-/** GodSVG's default highlighter colors; unrecognized elements and attributes are 30% fainter. */
+/**
+ * The color of each token kind: the highlighter colors from the settings (`--hl-*`, set on the app root);
+ * unrecognized elements and attributes are 30% fainter, like GodSVG.
+ */
 export const highlightColors = {
-  symbol: '#abc9ff',
-  element: '#ff8ccc',
-  'unknown-element': '#ff8cccb3',
-  attribute: '#bce0ff',
-  'unknown-attribute': '#bce0ffb3',
-  string: '#a1ffe0',
-  comment: '#d4d6d980',
-  text: '#ffffb3cc',
-  entity: '#f2ba91dd',
-  cdata: '#bfac73dd',
-  error: '#ff5555',
+  symbol: 'var(--hl-symbol)',
+  element: 'var(--hl-element)',
+  'unknown-element': 'color-mix(in srgb, var(--hl-element) 70%, transparent)',
+  attribute: 'var(--hl-attribute)',
+  'unknown-attribute': 'color-mix(in srgb, var(--hl-attribute) 70%, transparent)',
+  string: 'var(--hl-string)',
+  comment: 'var(--hl-comment)',
+  text: 'var(--hl-text)',
+  entity: 'var(--hl-entity)',
+  cdata: 'var(--hl-cdata)',
+  error: 'var(--hl-error)',
   plain: 'inherit'
 } as const satisfies Record<HighlightKind, string>;
 
