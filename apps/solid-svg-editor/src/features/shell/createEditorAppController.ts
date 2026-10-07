@@ -735,6 +735,11 @@ export function createEditorAppController() {
           return { ...current, shortcutOverrides };
         })
     },
+    shortcutPanel: {
+      settings: () => settings().shortcutPanel,
+      descriptors: shortcutDescriptors,
+      openConfig: () => setModal('shortcut-panel-config')
+    },
     dropOverlay: {
       active: isSvgDropActive
     }

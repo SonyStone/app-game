@@ -32,6 +32,7 @@ export function defaultSettings(): AppSettings {
     palettes: defaultPalettes(),
     previewSizes: defaultPreviewSizes,
     shortcutOverrides: {},
+    shortcutPanel: defaultShortcutPanel(),
     tabMiddleClickClose: true,
     useFilenameForWindowTitle: true,
     useCtrlForZoom: false,
@@ -66,7 +67,29 @@ export function restoreSettings(data: string): AppSettings {
         ? stored.previewSizes
         : defaults.previewSizes,
     shortcutOverrides: isShortcutOverrides(stored.shortcutOverrides) ? stored.shortcutOverrides : {},
-    language: resolveLocale(stored.language)
+    language: resolveLocale(stored.language),
+    shortcutPanel: restoreShortcutPanel(stored.shortcutPanel)
+  };
+}
+
+/** GodSVG's shortcut panel has six slots. */
+export const shortcutPanelSlotCount = 6;
+
+function defaultShortcutPanel(): AppSettings['shortcutPanel'] {
+  const touch = typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(pointer: coarse)').matches;
+  return { visible: touch, layout: 'horizontal-strip', slots: ['edit.undo', 'edit.redo'] };
+}
+
+function restoreShortcutPanel(stored: Partial<AppSettings['shortcutPanel']> | undefined): AppSettings['shortcutPanel'] {
+  const defaults = defaultShortcutPanel();
+  const layouts: readonly string[] = ['horizontal-strip', 'horizontal-two-rows', 'vertical-strip'];
+
+  return {
+    visible: typeof stored?.visible === 'boolean' ? stored.visible : defaults.visible,
+    layout: stored?.layout && layouts.includes(stored.layout) ? stored.layout : defaults.layout,
+    slots: Array.isArray(stored?.slots)
+      ? stored.slots.slice(0, shortcutPanelSlotCount).map((slot) => (typeof slot === 'string' ? slot : null))
+      : defaults.slots
   };
 }
 

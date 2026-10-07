@@ -6,7 +6,7 @@ import type { SvgElementNode, SvgNode } from "../svg-model";
 import type { EditorCommandId } from "./commands";
 
 export type PanelId = "inspector" | "code" | "previews" | "debug";
-export type ModalId = "settings" | "export" | "about" | "donate" | "shortcuts" | "close-tab" | "import-problems" | "alert" | undefined;
+export type ModalId = "settings" | "export" | "about" | "donate" | "shortcuts" | "close-tab" | "import-problems" | "alert" | "shortcut-panel-config" | undefined;
 export type ThemePreset = "dark" | "light" | "black" | "gray";
 export type ExportFormat = "svg" | "png" | "jpeg" | "webp";
 export type DragSelectionMode = "intersect" | "contain";
@@ -36,6 +36,15 @@ export interface ShortcutItem {
   readonly category: string;
   readonly action: string;
   readonly keys: string;
+}
+
+/** GodSVG's shortcut panel: whether it shows, how its buttons are laid out, and the action in each of its slots. */
+export interface ShortcutPanelSettings {
+  /** Shown by default on touch screens, where GodSVG shows it (Android). */
+  readonly visible: boolean;
+  readonly layout: "horizontal-strip" | "horizontal-two-rows" | "vertical-strip";
+  /** Action ids by slot; `null` for an empty slot. At most `shortcutPanelSlotCount` slots. */
+  readonly slots: readonly (string | null)[];
 }
 
 /** A key with modifiers; `ctrl` also matches Cmd on macOS. */
@@ -69,6 +78,8 @@ export interface AppSettings {
   readonly formatter: FormatterSettings;
   readonly exportFormatter: FormatterSettings;
   readonly optimizer: OptimizerSettings;
+  /** GodSVG's floating shortcut panel. */
+  readonly shortcutPanel: ShortcutPanelSettings;
   /** User-edited shortcut bindings by action id; actions not listed use their defaults. */
   readonly shortcutOverrides: Readonly<Record<string, readonly ShortcutBinding[]>>;
   /** Pixel sizes of the icon previews (GodSVG default: 16, 24, 32, 48, 64). */

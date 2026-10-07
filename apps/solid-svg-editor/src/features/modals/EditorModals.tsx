@@ -1,11 +1,12 @@
 import { createEventListener } from '@solid-primitives/event-listener';
-import type { JSX } from '@solidjs/web';
+import { Dynamic, type JSX } from '@solidjs/web';
 import { createEffect, createMemo, createSignal, For, onSettled, Show } from 'solid-js';
 
 import { copyExport, exportFile, exportFileName, rasterSize, renderExport, type ExportOptions } from '../../editor/export-utils';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import { clamp, themePresetSettings } from '../../editor/tree-utils';
-import type { AppSettings, ExportFormat, ShortcutBinding, ThemePreset } from '../../editor/types';
+import { shortcutPanelSlotCount } from '../../editor/defaults';
+import type { AppSettings, ExportFormat, ShortcutBinding, ShortcutPanelSettings, ThemePreset } from '../../editor/types';
 import {
   formatterPreset,
   humanFileSize,
@@ -25,6 +26,7 @@ import ExportIcon from '../ui/icons/Export.svg';
 import GodSvgIcon from '../ui/icons/GodSvg.svg';
 import HeartIcon from '../ui/icons/Heart.svg';
 import type { AlertMessage } from '../files/createFileBinding';
+import { actionIcon } from '../shortcut-panel/action-icons';
 import type { ImportReview } from '../import/createImportReview';
 import { PanelButton } from '../ui/PanelButton';
 import { useI18n } from '../../i18n/I18nProvider';
@@ -258,6 +260,20 @@ export function SettingsModal(props: {
                 }
               />
               {t('Sync window title to file name')}
+            </CheckboxField>
+            <CheckboxField>
+              <FormInput
+                type="checkbox"
+                data-testid="settings-show-shortcut-panel"
+                checked={props.settings.shortcutPanel.visible}
+                onChange={(event) =>
+                  props.setSettings((settings) => ({
+                    ...settings,
+                    shortcutPanel: { ...settings.shortcutPanel, visible: event.currentTarget.checked }
+                  }))
+                }
+              />
+              Show shortcut panel
             </CheckboxField>
           </Show>
         </div>
@@ -768,6 +784,91 @@ export function AlertModal(props: { readonly messages: readonly AlertMessage[]; 
         <div class="flex justify-end">
           <PanelButton type="button" variant="primary" data-testid="alert-ok" onClick={props.close}>
             {t('OK')}
+          </PanelButton>
+        </div>
+      </div>
+    </ModalFrame>
+  );
+}
+
+/**
+ * GodSVG's "Configure Shortcut Panel": the layout, and an action for each of the six slots (an action can fill only
+ * one slot). Edits apply immediately.
+ */
+export function ShortcutPanelConfigModal(props: {
+  readonly panel: ShortcutPanelSettings;
+  readonly setPanel: (update: (panel: ShortcutPanelSettings) => ShortcutPanelSettings) => void;
+  readonly descriptors: readonly ShortcutDescriptor[];
+  readonly close: () => void;
+}) {
+  const { t } = useI18n();
+  const actions = () => props.descriptors.filter((item) => item.editable);
+  const slots = () => Array.from({ length: shortcutPanelSlotCount }, (_, index) => props.panel.slots[index] ?? null);
+  const setSlot = (index: number, id: string | null) =>
+    props.setPanel((panel) => ({
+      ...panel,
+      slots: Array.from({ length: shortcutPanelSlotCount }, (_, slot) => (slot === index ? id : (panel.slots[slot] ?? null)))
+    }));
+
+  return (
+    <ModalFrame title="Configure Shortcut Panel" close={props.close}>
+      <div class="grid max-w-110 gap-2.5" data-testid="shortcut-panel-config-dialog">
+        <SettingsField>
+          {t('Layout')}
+          <FormSelect
+            value={props.panel.layout}
+            data-testid="shortcut-panel-layout"
+            onChange={(event) =>
+              props.setPanel((panel) => ({ ...panel, layout: event.currentTarget.value as ShortcutPanelSettings['layout'] }))
+            }
+          >
+            <option value="horizontal-strip">{t('Horizontal strip')}</option>
+            <option value="vertical-strip">{t('Vertical strip')}</option>
+            <option value="horizontal-two-rows">{t('Horizontal with two rows')}</option>
+          </FormSelect>
+        </SettingsField>
+        <For each={slots()}>
+          {(slot, index) => (
+            <div class="grid grid-cols-[28px_minmax(0,1fr)_28px] items-center gap-1.5" data-testid={`shortcut-panel-slot-${index()}`}>
+              <span
+                class={[
+                  'grid h-7 w-7 place-items-center rounded border',
+                  slot ? 'border-[var(--soft-border)]' : 'border-[color-mix(in_srgb,var(--soft-border)_50%,transparent)]'
+                ]}
+              >
+                <Show when={slot}>{(id) => <Dynamic component={actionIcon(id())} {...decorativeIconProps} />}</Show>
+              </span>
+              <FormSelect
+                value={slot ?? ''}
+                data-testid={`shortcut-panel-slot-select-${index()}`}
+                onChange={(event) => setSlot(index(), event.currentTarget.value || null)}
+              >
+                <option value="" />
+                <For each={actions()}>
+                  {(action) => (
+                    <option value={action.id} disabled={action.id !== slot && slots().includes(action.id)}>
+                      {t(action.action)}
+                    </option>
+                  )}
+                </For>
+              </FormSelect>
+              <Show when={slot}>
+                <button
+                  type="button"
+                  class="grid h-7 w-7 cursor-pointer place-items-center rounded border-0 bg-transparent hover:bg-[var(--panel-2)]"
+                  aria-label={t('Clear')}
+                  data-testid={`shortcut-panel-slot-clear-${index()}`}
+                  onClick={() => setSlot(index(), null)}
+                >
+                  <ClearIcon {...decorativeIconProps} />
+                </button>
+              </Show>
+            </div>
+          )}
+        </For>
+        <div class="flex justify-end">
+          <PanelButton type="button" data-testid="shortcut-panel-config-close" onClick={props.close}>
+            {t('Close')}
           </PanelButton>
         </div>
       </div>
