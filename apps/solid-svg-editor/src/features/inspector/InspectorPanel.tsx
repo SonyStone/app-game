@@ -4,6 +4,7 @@ import { createMemo, createSignal, createTrackedEffect, For, Show } from 'solid-
 import { svgCapabilities } from '../../editor/capabilities';
 import type { SvgNodeActions } from '../documents/createSvgNodeActions';
 import { decorativeIconProps } from '../../editor/svg-icon';
+import { ancestorElements, inheritedAttributeValue } from '../../editor/tree-utils';
 import type { RecognizedElement } from '../../svg-db';
 import { findNode, findParent, nodeLabel, type DropPosition, type SvgElementNode, type SvgNode } from '../../svg-model';
 import { createDismissible } from '../ui/createDismissible';
@@ -373,6 +374,7 @@ function ElementCard(props: {
 }) {
   // Each focus of the text node editor counts as one undo step for the typing that follows.
   let textEditSession = 0;
+  const ancestors = createMemo(() => ancestorElements(props.root, props.node.id));
   const isSelected = () => props.selectedIds.includes(props.node.id);
   const tint = () => `hsl(${268 + props.depth * 18}deg 52% ${props.depth === 0 ? 11 : 14}%)`;
   const dropState = () => (props.dropTarget?.nodeId === props.node.id ? props.dropTarget : undefined);
@@ -463,6 +465,7 @@ function ElementCard(props: {
           <>
             <AttributeGrid
               node={node()}
+              inheritedValue={(name) => inheritedAttributeValue(node(), ancestors(), name)}
               updateElementAttribute={props.updateElementAttribute}
               selectedPathCommand={props.selectedPathCommand}
               setSelectedPathCommand={props.setSelectedPathCommand}

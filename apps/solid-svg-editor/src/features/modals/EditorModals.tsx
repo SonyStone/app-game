@@ -15,6 +15,7 @@ import {
   type ShorthandTags
 } from '../../formatter';
 import { svgSize, type SvgElementNode } from '../../svg-model';
+import { PaletteSettings } from '../color-picker/PaletteSettings';
 import { PreviewSvg } from '../panels/SidePanels';
 import { defaultShortcutItems } from '../shortcuts/shortcutRegistry';
 import ClearIcon from '../ui/icons/Clear.svg';
@@ -136,25 +137,10 @@ export function SettingsModal(props: {
             </CheckboxField>
           </Show>
           <Show when={tab() === 'palettes'}>
-            <div class="palette-list flex flex-wrap gap-2" data-testid="settings-palette-list">
-              <For each={props.settings.palettes}>
-                {(color, index) => (
-                  <FormInput
-                    type="color"
-                    data-testid={`settings-palette-color-${index()}`}
-                    value={color}
-                    onInput={(event) =>
-                      props.setSettings((settings) => ({
-                        ...settings,
-                        palettes: settings.palettes.map((item, itemIndex) =>
-                          itemIndex === index() ? event.currentTarget.value : item
-                        )
-                      }))
-                    }
-                  />
-                )}
-              </For>
-            </div>
+            <PaletteSettings
+              palettes={props.settings.palettes}
+              setPalettes={(update) => props.setSettings((settings) => ({ ...settings, palettes: update(settings.palettes) }))}
+            />
           </Show>
           <Show when={tab() === 'shortcuts'}>
             <ShortcutTable />
