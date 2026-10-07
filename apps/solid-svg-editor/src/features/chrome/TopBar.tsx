@@ -41,6 +41,12 @@ export function TopBar(props: {
   readonly moveTab: (id: string, toIndex: number) => void;
   /** Downloads a tab's SVG and marks it saved. */
   readonly saveTab: (id: string) => void;
+  /** GodSVG's "Save SVG as" for a tab: picks a new file and binds the tab to it. */
+  readonly saveTabAs: (id: string) => void;
+  /** GodSVG's "Reset SVG": reloads the active tab from its file. */
+  readonly resetSvg: () => void;
+  /** The file a tab is bound to, or `undefined`. */
+  readonly fileName: (id: string) => string | undefined;
   /** Whether a middle click on a tab closes it (the "Middle click closes tab" setting). */
   readonly middleClickCloses: boolean;
   readonly createNewTab: () => void;
@@ -226,7 +232,11 @@ export function TopBar(props: {
                 }
               }}
             >
-              <span class="overflow-hidden text-ellipsis whitespace-nowrap" data-testid={`tab-label-${tab().id}`}>
+              <span
+                class="overflow-hidden text-ellipsis whitespace-nowrap"
+                title={props.fileName(tab().id) ?? t('This SVG is not bound to a file location yet.')}
+                data-testid={`tab-label-${tab().id}`}
+              >
                 {tab().name}
               </span>
               <button
@@ -255,6 +265,9 @@ export function TopBar(props: {
             createNewTab={props.createNewTab}
             closeTabs={props.closeTabs}
             saveTab={props.saveTab}
+            saveTabAs={props.saveTabAs}
+            resetSvg={props.resetSvg}
+            canReset={menu().tabId === props.activeTabId && props.fileName(props.activeTabId) !== undefined}
             close={() => setTabMenu(undefined)}
           />
         )}
@@ -325,6 +338,10 @@ function TabMenu(props: {
   readonly createNewTab: () => void;
   readonly closeTabs: (ids: readonly string[]) => void;
   readonly saveTab: (id: string) => void;
+  readonly saveTabAs: (id: string) => void;
+  readonly resetSvg: () => void;
+  /** Reset needs the menu's tab to be the active one and bound to a file. */
+  readonly canReset: boolean;
   readonly close: () => void;
 }) {
   const { t } = useI18n();
@@ -368,7 +385,13 @@ function TabMenu(props: {
               )}
             </For>
             <MenuButton type="button" icon={SaveIcon} data-testid="tab-menu-save" onClick={() => run(() => props.saveTab(tabId()))}>
-              {t('Save')}
+              {t('Save SVG')}
+            </MenuButton>
+            <MenuButton type="button" data-testid="tab-menu-save-as" onClick={() => run(() => props.saveTabAs(tabId()))}>
+              {t('Save SVG as…')}
+            </MenuButton>
+            <MenuButton type="button" disabled={!props.canReset} data-testid="tab-menu-reset" onClick={() => run(props.resetSvg)}>
+              {t('Reset SVG')}
             </MenuButton>
           </>
         )}

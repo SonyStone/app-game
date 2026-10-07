@@ -33,6 +33,7 @@ export function defaultSettings(): AppSettings {
     previewSizes: defaultPreviewSizes,
     shortcutOverrides: {},
     tabMiddleClickClose: true,
+    useFilenameForWindowTitle: true,
     useCtrlForZoom: false,
     rasterPreviewDuringInteraction: false,
     dragSelectionMode: 'contain'

@@ -5,7 +5,8 @@ import type { ShortcutDescriptor } from '../shortcuts/shortcutRegistry';
 import type { FormatterSettings } from '../../formatter';
 import type { SvgElementNode } from '../../svg-model';
 import type { ImportReview } from '../import/createImportReview';
-import { AboutModal, CloseTabModal, DonateModal, ExportModal, ImportProblemsModal, SettingsModal, ShortcutsModal } from './EditorModals';
+import type { AlertMessage } from '../files/createFileBinding';
+import { AboutModal, AlertModal, CloseTabModal, DonateModal, ExportModal, ImportProblemsModal, SettingsModal, ShortcutsModal } from './EditorModals';
 
 export function EditorModalStack(props: {
   readonly modal: ModalId;
@@ -22,6 +23,8 @@ export function EditorModalStack(props: {
   readonly resolveCloseTab: (choice: 'save' | 'discard' | 'cancel') => void;
   /** The import held for review by the `import-problems` dialog. */
   readonly pendingImport: ImportReview | undefined;
+  /** Paragraphs of the `alert` dialog. */
+  readonly alertMessages: readonly AlertMessage[];
   /** Imports the held text (`true`) or drops it. */
   readonly resolveImport: (accept: boolean) => void;
   /** Editor shortcut actions, shown and edited by the Settings tab and the Shortcuts dialog. */
@@ -61,6 +64,9 @@ export function EditorModalStack(props: {
       </Show>
       <Show when={props.modal === 'import-problems' ? props.pendingImport : undefined}>
         {(review) => <ImportProblemsModal review={review()} resolve={props.resolveImport} />}
+      </Show>
+      <Show when={props.modal === 'alert'}>
+        <AlertModal messages={props.alertMessages} close={props.close} />
       </Show>
       <Show when={props.modal === 'shortcuts'}>
         <ShortcutsModal close={props.close} shortcuts={{ descriptors: props.shortcuts, setBindings: props.setShortcutBindings }} />

@@ -330,8 +330,17 @@ export function createEditorDocuments(options: {
     openTab(tab);
   }
 
-  function openTab(tab: EditorTab): void {
-    setTabs((items) => [...items, tab]);
+  /** Adds and activates a tab; with `replaceTabId`, it takes that tab's place instead (in the same update). */
+  function openTab(tab: EditorTab, replaceTabId?: string): void {
+    setTabs((items) => {
+      const index = replaceTabId === undefined ? -1 : items.findIndex((item) => item.id === replaceTabId);
+      return index === -1 ? [...items, tab] : items.map((item, itemIndex) => (itemIndex === index ? tab : item));
+    });
+
+    if (replaceTabId !== undefined) {
+      histories.delete(replaceTabId);
+    }
+
     setActiveTabId(tab.id);
     historyMergeKey = undefined;
     options.onSelectionReset();
@@ -405,30 +414,34 @@ export function createEditorDocuments(options: {
   }
 
   /**
-   * Opens SVG text in a new tab. Text that fails to parse still gets its own tab, holding the original code and the
-   * parse error so it can be fixed in the code panel; the active tab is never overwritten.
+   * Opens SVG text in a new tab and returns its id; with `replaceTabId` the new tab takes that tab's place (GodSVG
+   * replaces an empty, unsaved tab). Text that fails to parse still gets its own tab, holding the original code and
+   * the parse error so it can be fixed in the code panel.
    */
-  function importSvgText(text: string, name: string): void {
+  function importSvgText(text: string, name: string, replaceTabId?: string): string {
     const parsed = parseSvgDocument(text);
+    const id = createId();
 
     if (!parsed.ok) {
-      openTab({ id: createId(), name, document: createEmptySvgDocument(), code: text, dirty: false, parseError: parsed.message });
+      openTab({ id, name, document: createEmptySvgDocument(), code: text, dirty: false, parseError: parsed.message }, replaceTabId);
       options.onParseError();
-      return;
+      return id;
     }
 
     openTab({
-      id: createId(),
+      id,
       name,
       document: parsed.document,
       code: serializeSvgDocument(parsed.document, options.formatter()),
       dirty: false,
       parseError: undefined
-    });
+    }, replaceTabId);
+    return id;
   }
 
-  function markActiveTabClean(): void {
-    updateActiveTab((tab) => ({ ...tab, dirty: false }));
+  /** Renames a tab, such as after "Save SVG as" picked a new file. */
+  function renameTab(tabId: string, name: string): void {
+    setTabs((items) => items.map((tab) => (tab.id === tabId ? { ...tab, name } : tab)));
   }
 
   /** Marks a tab as saved, such as after downloading it from the tab menu. */
@@ -462,7 +475,7 @@ export function createEditorDocuments(options: {
     moveTab,
     markTabClean,
     importSvgText,
-    markActiveTabClean
+    renameTab
   };
 }
 

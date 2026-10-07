@@ -2,7 +2,15 @@ import { createSignal } from 'solid-js';
 
 import { hasSvgDrag } from '../../editor/tree-utils';
 
-export function createSvgImport(options: { readonly importSvgText: (text: string, name: string) => void }) {
+/**
+ * SVG import through the file input and drag and drop. Dropped SVG files are opened with their file handles where the
+ * browser provides them (so tabs stay bound to the files), otherwise as text; dropped SVG markup opens as `Dropped.svg`.
+ */
+export function createSvgImport(options: {
+  readonly importSvgText: (text: string, name: string) => void;
+  /** Opens dropped files that come with File System Access handles. */
+  readonly openHandles: (handles: readonly FileSystemFileHandle[]) => Promise<void>;
+}) {
   const [isSvgDropActive, setIsSvgDropActive] = createSignal(false);
   let importInputRef: HTMLInputElement | undefined;
 
@@ -16,10 +24,12 @@ export function createSvgImport(options: { readonly importSvgText: (text: string
 
   async function onImportFile(event: Event): Promise<void> {
     const input = event.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
+    const files = Array.from(input.files ?? []);
     input.value = '';
 
-    await importSvgFile(file);
+    for (const file of files) {
+      await importSvgFile(file);
+    }
   }
 
   async function onDrop(event: DragEvent): Promise<void> {
@@ -28,9 +38,21 @@ export function createSvgImport(options: { readonly importSvgText: (text: string
 
     const transfer = event.dataTransfer;
 
-    if (transfer) {
-      await importDroppedSvg(transfer);
+    if (!transfer) {
+      return;
     }
+
+    // Handles must be requested during the drop event, before anything is awaited.
+    const svgItems = Array.from(transfer.items).filter((item) => item.kind === 'file' && isSvgFile(item.getAsFile()));
+    const handleRequests = svgItems.map((item) => (item as HandleDataTransferItem).getAsFileSystemHandle?.());
+
+    if (svgItems.length > 0 && handleRequests.every((request) => request !== undefined)) {
+      const handles = (await Promise.all(handleRequests)).filter((handle): handle is FileSystemFileHandle => handle?.kind === 'file');
+      await options.openHandles(handles);
+      return;
+    }
+
+    await importDroppedSvg(transfer);
   }
 
   function onDragEnter(event: DragEvent): void {
@@ -72,12 +94,13 @@ export function createSvgImport(options: { readonly importSvgText: (text: string
   }
 
   async function importDroppedSvg(dataTransfer: DataTransfer): Promise<void> {
-    const file = Array.from(dataTransfer.files).find(
-      (item) => item.type === 'image/svg+xml' || item.name.toLowerCase().endsWith('.svg')
-    );
+    const files = Array.from(dataTransfer.files).filter(isSvgFile);
 
-    if (file) {
-      await importSvgFile(file);
+    if (files.length > 0) {
+      for (const file of files) {
+        await importSvgFile(file);
+      }
+
       return;
     }
 
@@ -99,3 +122,10 @@ export function createSvgImport(options: { readonly importSvgText: (text: string
     onDrop
   };
 }
+
+function isSvgFile(file: File | null): file is File {
+  return file !== null && (file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg'));
+}
+
+/** Chromium's drag item with File System Access support. */
+type HandleDataTransferItem = DataTransferItem & { getAsFileSystemHandle?: () => Promise<FileSystemHandle | null> };

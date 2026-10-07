@@ -24,6 +24,7 @@ import CopyIcon from '../ui/icons/Copy.svg';
 import ExportIcon from '../ui/icons/Export.svg';
 import GodSvgIcon from '../ui/icons/GodSvg.svg';
 import HeartIcon from '../ui/icons/Heart.svg';
+import type { AlertMessage } from '../files/createFileBinding';
 import type { ImportReview } from '../import/createImportReview';
 import { PanelButton } from '../ui/PanelButton';
 import { useI18n } from '../../i18n/I18nProvider';
@@ -246,6 +247,17 @@ export function SettingsModal(props: {
                 }
               />
               Raster preview while panning or zooming
+            </CheckboxField>
+            <CheckboxField>
+              <FormInput
+                type="checkbox"
+                data-testid="settings-sync-window-title"
+                checked={props.settings.useFilenameForWindowTitle}
+                onChange={(event) =>
+                  props.setSettings((settings) => ({ ...settings, useFilenameForWindowTitle: event.currentTarget.checked }))
+                }
+              />
+              {t('Sync window title to file name')}
             </CheckboxField>
           </Show>
         </div>
@@ -732,6 +744,30 @@ export function ImportProblemsModal(props: { readonly review: ImportReview; read
           </PanelButton>
           <PanelButton type="button" variant="primary" data-testid="import-problems-import" onClick={() => props.resolve(true)}>
             {t('Import')}
+          </PanelButton>
+        </div>
+      </div>
+    </ModalFrame>
+  );
+}
+
+/** GodSVG's alert: translated paragraphs and OK. */
+export function AlertModal(props: { readonly messages: readonly AlertMessage[]; readonly close: () => void }) {
+  const { t } = useI18n();
+  const paragraph = (message: AlertMessage) => {
+    const values = message.values && message.translateValues
+      ? Object.fromEntries(Object.entries(message.values).map(([key, value]) => [key, t(value)]))
+      : message.values;
+    return t(message.text, values);
+  };
+
+  return (
+    <ModalFrame title="Alert!" close={props.close}>
+      <div class="grid max-w-120 gap-3" data-testid="alert-dialog">
+        <For each={props.messages}>{(message) => <p class="m-0 leading-normal">{paragraph(message)}</p>}</For>
+        <div class="flex justify-end">
+          <PanelButton type="button" variant="primary" data-testid="alert-ok" onClick={props.close}>
+            {t('OK')}
           </PanelButton>
         </div>
       </div>
