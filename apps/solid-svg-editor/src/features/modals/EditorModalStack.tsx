@@ -6,7 +6,17 @@ import type { FormatterSettings } from '../../formatter';
 import type { SvgElementNode } from '../../svg-model';
 import type { ImportReview } from '../import/createImportReview';
 import type { AlertMessage } from '../files/createFileBinding';
-import { AboutModal, AlertModal, CloseTabModal, DonateModal, ExportModal, ImportProblemsModal, SettingsModal, ShortcutsModal } from './EditorModals';
+import {
+  AboutModal,
+  AlertModal,
+  CloseTabModal,
+  DonateModal,
+  ExportModal,
+  ImportProblemsModal,
+  SettingsModal,
+  ShortcutPanelConfigModal,
+  ShortcutsModal
+} from './EditorModals';
 
 export function EditorModalStack(props: {
   readonly modal: ModalId;
@@ -67,6 +77,14 @@ export function EditorModalStack(props: {
       </Show>
       <Show when={props.modal === 'alert'}>
         <AlertModal messages={props.alertMessages} close={props.close} />
+      </Show>
+      <Show when={props.modal === 'shortcut-panel-config'}>
+        <ShortcutPanelConfigModal
+          panel={props.settings.shortcutPanel}
+          setPanel={(update) => props.setSettings((settings) => ({ ...settings, shortcutPanel: update(settings.shortcutPanel) }))}
+          descriptors={props.shortcuts}
+          close={props.close}
+        />
       </Show>
       <Show when={props.modal === 'shortcuts'}>
         <ShortcutsModal close={props.close} shortcuts={{ descriptors: props.shortcuts, setBindings: props.setShortcutBindings }} />

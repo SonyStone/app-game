@@ -12,6 +12,7 @@ import { EditorContextMenu } from './features/selection/EditorContextMenu';
 import { EditorFileInputs } from './features/shell/EditorFileInputs';
 import { EditorViewport } from './features/viewport/EditorViewport';
 import { I18nProvider } from './i18n/I18nProvider';
+import { ShortcutPanel } from './features/shortcut-panel/ShortcutPanel';
 
 export function App() {
   const app = createEditorAppController();
@@ -194,6 +195,13 @@ export function App() {
           shortcuts={app.modals.shortcuts}
           setShortcutBindings={app.modals.setShortcutBindings}
         />
+        <Show when={app.shortcutPanel.settings().visible}>
+          <ShortcutPanel
+            settings={app.shortcutPanel.settings()}
+            descriptors={app.shortcutPanel.descriptors}
+            openConfig={app.shortcutPanel.openConfig}
+          />
+        </Show>
         <Show when={app.dropOverlay.active()}>
           <SvgDropOverlay />
         </Show>
