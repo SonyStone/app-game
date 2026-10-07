@@ -159,19 +159,6 @@ export function clampNumericAttribute(name: string, value: string): string {
   return clamped === number ? value : `${clamped}${unit}`;
 }
 
-export function normalizeColorInput(value: string): string | undefined {
-  if (/^#[0-9a-f]{6}$/i.test(value)) {
-    return value;
-  }
-
-  if (/^#[0-9a-f]{3}$/i.test(value)) {
-    const [, r, g, b] = value;
-    return r && g && b ? `#${r}${r}${g}${g}${b}${b}` : undefined;
-  }
-
-  return undefined;
-}
-
 export function hasSvgDrag(event: DragEvent): boolean {
   const types = Array.from(event.dataTransfer?.types ?? []);
 

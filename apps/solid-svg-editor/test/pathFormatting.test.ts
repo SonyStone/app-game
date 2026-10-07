@@ -58,7 +58,7 @@ describe('attribute value formatting', () => {
     expect(formatAttributeValue({ name: 'd', value: 'M 0 0 L 1' }, compactFormatter)).toBe('M 0 0 L 1');
     expect(formatAttributeValue({ name: 'opacity', value: '0.50' }, compactFormatter)).toBe('.5');
     expect(formatAttributeValue({ name: 'width', value: '10mm' }, compactFormatter)).toBe('10mm');
-    expect(formatAttributeValue({ name: 'fill', value: '#FF0000' }, compactFormatter)).toBe('#FF0000');
+    expect(formatAttributeValue({ name: 'id', value: '0.50' }, compactFormatter)).toBe('0.50');
   });
 
   it('serializes documents with the formatter applied to attribute values', () => {

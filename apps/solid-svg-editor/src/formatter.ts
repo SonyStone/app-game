@@ -1,3 +1,5 @@
+import { formatColor, type ColorFormat } from "./editor/colors";
+import { formatTransformFunctions, parseTransformFunctions } from "./editor/transform-list";
 import { formatPathData, formatPathNumber, tryParsePathData, type PathDataFormat } from "./path-data";
 import { getAttributeType } from "./svg-db";
 import { type SvgAttribute, type SvgElementNode, type SvgNode } from "./svg-model";
@@ -27,6 +29,18 @@ export interface FormatterSettings {
   readonly pathdataRemoveSpacingAfterFlags: boolean;
   /** Path data: a command letter that repeats the previous one is omitted. */
   readonly pathdataRemoveConsecutiveCommands: boolean;
+  /** Colors: when to write a keyword such as `red` instead of hex. */
+  readonly colorUseNamedColors: ColorFormat["useNamedColors"];
+  /** Colors: 3-digit hex when possible, always 6 digits, or `rgb()`. */
+  readonly colorPrimarySyntax: ColorFormat["primarySyntax"];
+  /** Colors: upper-case hex digits. */
+  readonly colorCapitalHex: boolean;
+  /** Transform lists: `0.5` → `.5`. */
+  readonly transformListCompressNumbers: boolean;
+  /** Transform lists: no spaces before numbers that start with `-` or `.`. */
+  readonly transformListMinimizeSpacing: boolean;
+  /** Transform lists: omit default parameters, such as `translate(5)` for `translate(5 0)`. */
+  readonly transformListRemoveUnnecessaryParams: boolean;
 }
 
 /**
@@ -49,7 +63,13 @@ export function formatterPreset(preset: FormatterPreset): FormatterSettings {
     pathdataCompressNumbers: true,
     pathdataMinimizeSpacing: true,
     pathdataRemoveSpacingAfterFlags: compact,
-    pathdataRemoveConsecutiveCommands: true
+    pathdataRemoveConsecutiveCommands: true,
+    colorUseNamedColors: compact ? "when-shorter" : "always",
+    colorPrimarySyntax: "three-or-six-digit-hex",
+    colorCapitalHex: false,
+    transformListCompressNumbers: compact,
+    transformListMinimizeSpacing: compact,
+    transformListRemoveUnnecessaryParams: compact
   };
 }
 
@@ -185,8 +205,8 @@ export function humanFileSize(byteCount: number): string {
 }
 
 /**
- * Rewrites path data and plain numeric values with the formatter's number and path options, as GodSVG re-emits
- * attributes. Values that do not parse completely (units, percentages, malformed path data) are written unchanged.
+ * Rewrites path data, plain numbers, colors, and transform lists with the formatter's options, as GodSVG re-emits
+ * attributes. Values that do not parse completely (units, percentages, malformed data) are written unchanged.
  */
 export function formatAttributeValue(attr: SvgAttribute, formatter: FormatterSettings): string {
   if (attr.name === "d") {
@@ -194,11 +214,28 @@ export function formatAttributeValue(attr: SvgAttribute, formatter: FormatterSet
     return commands ? formatPathData(commands, pathDataFormat(formatter)) : attr.value;
   }
 
-  if (getAttributeType(attr.name) === "numeric" && plainNumberPattern.test(attr.value)) {
-    return formatNumber(Number(attr.value), formatter);
+  switch (getAttributeType(attr.name)) {
+    case "numeric":
+      return plainNumberPattern.test(attr.value) ? formatNumber(Number(attr.value), formatter) : attr.value;
+    case "color":
+      return formatColor(attr.value, {
+        useNamedColors: formatter.colorUseNamedColors,
+        primarySyntax: formatter.colorPrimarySyntax,
+        capitalHex: formatter.colorCapitalHex
+      });
+    case "transform-list": {
+      const functions = parseTransformFunctions(attr.value);
+      return functions
+        ? formatTransformFunctions(functions, {
+            compressNumbers: formatter.transformListCompressNumbers,
+            minimizeSpacing: formatter.transformListMinimizeSpacing,
+            removeUnnecessaryParams: formatter.transformListRemoveUnnecessaryParams
+          })
+        : attr.value;
+    }
+    default:
+      return attr.value;
   }
-
-  return attr.value;
 }
 
 const plainNumberPattern = /^\s*[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?\s*$/;

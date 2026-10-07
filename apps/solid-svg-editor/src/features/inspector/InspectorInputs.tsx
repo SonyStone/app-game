@@ -2,13 +2,13 @@ import { Dynamic } from '@solidjs/web';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 import { svgCapabilities } from '../../editor/capabilities';
+import { colorToHex } from '../../editor/colors';
 import type { SvgNodeActions } from '../documents/createSvgNodeActions';
 import { parseTransformList } from '../../editor/geometry';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import {
   clampNumericAttribute,
   insertPathCommand,
-  normalizeColorInput,
   orderedAttributes
 } from '../../editor/tree-utils';
 import {
@@ -293,7 +293,7 @@ function ColorField(props: {
   // Each time the native picker is opened and closed counts as one undo step.
   let pickerSession = 0;
 
-  const colorValue = () => normalizeColorInput(props.attr.value);
+  const colorValue = () => colorToHex(props.attr.value);
   const swatchValue = () => colorValue() ?? (isCssColorText(props.attr.value) ? props.attr.value : 'transparent');
   const pickerValue = () => colorValue() ?? '#000000';
 
