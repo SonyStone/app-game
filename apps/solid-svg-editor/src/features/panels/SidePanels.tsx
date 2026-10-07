@@ -8,6 +8,8 @@ import { nodeLabel, svgSize, type SvgElementNode, type SvgNode } from "../../svg
 import CopyIcon from "../ui/icons/Copy.svg";
 import WarningIcon from "../ui/icons/Warning.svg";
 import { PanelButton } from "../ui/PanelButton";
+import { CodeEditor } from "../code-editor/CodeEditor";
+import { IconPreviews } from "./IconPreviews";
 import { SvgNodeList, SvgNodeView, SvgRootPresentation } from "../viewport/svg-renderer";
 
 export function CodePanel(props: {
@@ -31,15 +33,7 @@ export function CodePanel(props: {
           Compact
         </PanelButton>
       </div>
-      <textarea
-        class="code-textarea h-full w-full min-w-0 resize-none rounded-none border-0 bg-[#080b12] p-2.5 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-[1.45] text-[var(--text)] [tab-size:2] in-[.theme-light]:bg-[#f8fbff]"
-        name="svg-code"
-        aria-label="SVG code"
-        data-testid="svg-code-textarea"
-        value={props.code}
-        spellcheck={false}
-        onInput={(event) => props.applyCode(event.currentTarget.value)}
-      />
+      <CodeEditor value={props.code} onInput={props.applyCode} testId="svg-code-textarea" label="SVG code" />
       <Show when={props.parseError}>
         {(message) => (
           <div class="error-bar flex items-center gap-1.75 border-t border-t-[color-mix(in_srgb,var(--danger)_36%,var(--soft-border))] bg-[color-mix(in_srgb,var(--danger)_10%,var(--panel-2))] px-2.5 py-1.75 text-[var(--danger)]" data-testid="code-error-bar">
@@ -56,11 +50,14 @@ export function PreviewsPanel(props: {
   readonly root: SvgElementNode;
   readonly selectedNodes: readonly SvgNode[];
   readonly exportText: string;
+  readonly previewSizes: readonly number[];
+  readonly setPreviewSizes: (sizes: readonly number[]) => void;
 }) {
   const selectedElements = createMemo(() => props.selectedNodes.filter((node): node is SvgElementNode => node.kind === "element"));
 
   return (
-    <section class="panel previews-panel grid h-full min-h-0 grid-rows-[minmax(180px,42%)_minmax(0,1fr)_auto] gap-2 overflow-auto rounded-md border border-[var(--soft-border)] bg-[var(--panel)] p-1.25" data-testid="previews-panel">
+    <section class="panel previews-panel grid h-full min-h-0 grid-rows-[auto_minmax(180px,42%)_minmax(0,1fr)_auto] gap-2 overflow-auto rounded-md border border-[var(--soft-border)] bg-[var(--panel)] p-1.25" data-testid="previews-panel">
+      <IconPreviews svgText={props.exportText} sizes={props.previewSizes} setSizes={props.setPreviewSizes} />
       <div class="preview-tile large grid min-h-29 !grid-rows-[minmax(0,1fr)] gap-1 rounded-md border border-[var(--soft-border)] bg-[var(--panel-2)] p-1.5 [&>svg]:h-full [&>svg]:min-h-0 [&>svg]:w-full" data-testid="full-preview-tile">
         <PreviewSvg root={props.root} testId="full-preview-svg" />
       </div>

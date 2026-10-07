@@ -487,6 +487,8 @@ export function createEditorAppController() {
       selectedNodes,
       elementCount,
       exportText,
+      previewSizes: () => settings().previewSizes,
+      setPreviewSizes: (sizes: readonly number[]) => setSettings((current) => ({ ...current, previewSizes: sizes })),
       heldKeys,
       viewportPointer,
       recentCommandEvent
@@ -592,6 +594,7 @@ export function createEditorAppController() {
       setSettings,
       activeRoot,
       exportText,
+      tabName: () => activeTab()?.name ?? 'image.svg',
       close: closeModal,
       reformatActiveCode,
       pendingCloseTabName: () => pendingCloseTab()?.name,

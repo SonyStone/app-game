@@ -88,6 +88,8 @@ export function App() {
             selectedNodes={app.workspace.selectedNodes()}
             elementCount={app.workspace.elementCount()}
             exportText={app.workspace.exportText()}
+            previewSizes={app.workspace.previewSizes()}
+            setPreviewSizes={app.workspace.setPreviewSizes}
             heldKeys={app.workspace.heldKeys()}
             viewportPointer={app.workspace.viewportPointer()}
             recentCommandEvent={app.workspace.recentCommandEvent()}
@@ -169,6 +171,7 @@ export function App() {
         setSettings={app.modals.setSettings}
         root={app.modals.activeRoot()}
         exportText={app.modals.exportText()}
+        tabName={app.modals.tabName()}
         close={app.modals.close}
         reformatActiveCode={app.modals.reformatActiveCode}
         pendingCloseTabName={app.modals.pendingCloseTabName()}

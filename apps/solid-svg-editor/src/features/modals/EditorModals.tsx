@@ -1,8 +1,8 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
-import { createMemo, createSignal, For, onSettled, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, onSettled, Show } from 'solid-js';
 
-import { copyExport, exportFile } from '../../editor/export-utils';
+import { copyExport, exportFile, exportFileName, rasterSize, renderExport, type ExportOptions } from '../../editor/export-utils';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import { clamp, themePresetSettings } from '../../editor/tree-utils';
 import type { AppSettings, ExportFormat, ThemePreset } from '../../editor/types';
@@ -426,22 +426,66 @@ const formatterToggleGroups = [
   readonly toggles: readonly { readonly key: keyof FormatterSettings; readonly label: string }[];
 }[];
 
+/**
+ * GodSVG's export dialog: SVG or PNG/JPG/WebP at a scale (or explicit width/height), with an optional raster
+ * background, JPG/WebP quality, and lossless or lossy WebP. Shows the real file size, encoded shortly after the
+ * options change, and saves under the tab's name.
+ */
 export function ExportModal(props: {
   readonly root: SvgElementNode;
   readonly exportText: string;
+  /** Name of the exported tab, used for the file name. */
+  readonly tabName: string;
   readonly close: () => void;
 }) {
   const [format, setFormat] = createSignal<ExportFormat>('svg');
   const [scale, setScale] = createSignal(1);
+  const [useBackground, setUseBackground] = createSignal(false);
   const [background, setBackground] = createSignal('#ffffff');
+  const [quality, setQuality] = createSignal(0.75);
+  const [lossyWebp, setLossyWebp] = createSignal(false);
+  const [fileSize, setFileSize] = createSignal<string>();
   const dimensions = createMemo(() => svgSize(props.root));
-  const estimatedSize = createMemo(() => {
-    if (format() === 'svg') {
-      return humanFileSize(new Blob([props.exportText]).size);
+  const pixels = createMemo(() => rasterSize(dimensions(), scale()));
+  const options = createMemo(
+    (): ExportOptions => ({
+      format: format(),
+      scale: scale(),
+      background: useBackground() || format() === 'jpeg' ? background() : undefined,
+      quality: quality(),
+      lossyWebp: lossyWebp()
+    })
+  );
+  const fileName = () => exportFileName(props.tabName, format());
+  const hasQuality = () => format() === 'jpeg' || (format() === 'webp' && lossyWebp());
+  const setPixelSize = (axis: 'width' | 'height', value: number) => {
+    if (Number.isFinite(value) && value > 0) {
+      setScale(value / dimensions()[axis]);
     }
+  };
 
-    return humanFileSize(Math.round(dimensions().width * dimensions().height * scale() * scale() * 0.6));
-  });
+  // Encode shortly after the options settle for the real size; a newer run discards older results.
+  createEffect(
+    () => ({ text: props.exportText, settings: options(), size: dimensions() }),
+    ({ text, settings, size }) => {
+      let cancelled = false;
+      setFileSize(undefined);
+      const timer = setTimeout(() => {
+        void renderExport(text, size, settings)
+          .then((blob) => {
+            if (!cancelled) {
+              setFileSize(humanFileSize(blob.size));
+            }
+          })
+          .catch(() => undefined);
+      }, 300);
+
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
+    }
+  );
 
   return (
     <ModalFrame title="Export Configuration" close={props.close}>
@@ -469,40 +513,102 @@ export function ExportModal(props: {
               <option value="webp">webp</option>
             </FormSelect>
           </SettingsField>
-          <SettingsField>
-            Scale
-            <FormInput
-              type="number"
-              min="0.1"
-              step="0.1"
-              data-testid="export-scale-input"
-              value={scale()}
-              onChange={(event) => setScale(Math.max(0.1, Number.parseFloat(event.currentTarget.value) || 1))}
-            />
-          </SettingsField>
           <Show when={format() !== 'svg'}>
             <SettingsField>
-              Background
+              Scale
               <FormInput
-                type="color"
-                data-testid="export-background-color"
-                value={background()}
-                onInput={(event) => setBackground(event.currentTarget.value)}
+                type="number"
+                min="0.01"
+                step="0.1"
+                data-testid="export-scale-input"
+                value={Number(scale().toFixed(4))}
+                onChange={(event) => setScale(Math.max(0.01, Number.parseFloat(event.currentTarget.value) || 1))}
               />
             </SettingsField>
+            <SettingsField>
+              Size
+              <div class="flex items-center gap-1">
+                <FormInput
+                  type="number"
+                  min="1"
+                  aria-label="Width in pixels"
+                  data-testid="export-width-input"
+                  value={pixels().width}
+                  onChange={(event) => setPixelSize('width', Number(event.currentTarget.value))}
+                />
+                ×
+                <FormInput
+                  type="number"
+                  min="1"
+                  aria-label="Height in pixels"
+                  data-testid="export-height-input"
+                  value={pixels().height}
+                  onChange={(event) => setPixelSize('height', Number(event.currentTarget.value))}
+                />
+              </div>
+            </SettingsField>
+            <CheckboxField>
+              <FormInput
+                type="checkbox"
+                data-testid="export-background-toggle"
+                checked={useBackground() || format() === 'jpeg'}
+                disabled={format() === 'jpeg'}
+                onChange={(event) => setUseBackground(event.currentTarget.checked)}
+              />
+              Background
+            </CheckboxField>
+            <Show when={useBackground() || format() === 'jpeg'}>
+              <SettingsField>
+                Color
+                <FormInput
+                  type="color"
+                  data-testid="export-background-color"
+                  value={background()}
+                  onInput={(event) => setBackground(event.currentTarget.value)}
+                />
+              </SettingsField>
+            </Show>
+            <Show when={format() === 'webp'}>
+              <CheckboxField>
+                <FormInput
+                  type="checkbox"
+                  data-testid="export-webp-lossy"
+                  checked={lossyWebp()}
+                  onChange={(event) => setLossyWebp(event.currentTarget.checked)}
+                />
+                Lossy
+              </CheckboxField>
+            </Show>
+            <Show when={hasQuality()}>
+              <SettingsField>
+                Quality
+                <FormInput
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  data-testid="export-quality"
+                  value={quality()}
+                  onInput={(event) => setQuality(Number(event.currentTarget.value))}
+                />
+              </SettingsField>
+            </Show>
           </Show>
           <div class="export-meta flex justify-between gap-2.5 text-[var(--muted)]" data-testid="export-meta">
             <span data-testid="export-dimensions">
-              {dimensions().width}×{dimensions().height}
+              {format() === 'svg' ? `${dimensions().width}×${dimensions().height}` : `${pixels().width}×${pixels().height} px`}
             </span>
-            <span data-testid="export-estimated-size">{estimatedSize()}</span>
+            <span data-testid="export-estimated-size">{fileSize() ?? '…'}</span>
+          </div>
+          <div class="truncate text-[11px] text-[var(--muted)]" data-testid="export-file-name">
+            {fileName()}
           </div>
           <PanelButton
             type="button"
             variant="primary"
             icon={ExportIcon}
             data-testid="export-confirm-button"
-            onClick={() => void exportFile(format(), props.exportText, dimensions(), scale(), background())}
+            onClick={() => void exportFile(props.exportText, dimensions(), options(), fileName())}
           >
             Export
           </PanelButton>
@@ -510,7 +616,7 @@ export function ExportModal(props: {
             type="button"
             icon={CopyIcon}
             data-testid="export-copy-button"
-            onClick={() => void copyExport(format(), props.exportText, dimensions(), scale(), background())}
+            onClick={() => void copyExport(props.exportText, dimensions(), options())}
           >
             Copy
           </PanelButton>

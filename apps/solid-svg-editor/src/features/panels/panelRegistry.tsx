@@ -41,6 +41,8 @@ export interface EditorPanelContext {
   readonly selectedNodes: readonly SvgNode[];
   readonly elementCount: number;
   readonly exportText: string;
+  readonly previewSizes: readonly number[];
+  readonly setPreviewSizes: (sizes: readonly number[]) => void;
   readonly heldKeys: readonly string[];
   readonly viewportPointer: PointerStateWithActive;
   readonly recentCommandEvent: EditorCommandEvent | undefined;
@@ -98,7 +100,13 @@ export const editorPanels = [
     label: 'Previews',
     icon: PreviewsIcon,
     render: (context) => (
-      <PreviewsPanel root={context.root} selectedNodes={context.selectedNodes} exportText={context.exportText} />
+      <PreviewsPanel
+        root={context.root}
+        selectedNodes={context.selectedNodes}
+        exportText={context.exportText}
+        previewSizes={context.previewSizes}
+        setPreviewSizes={context.setPreviewSizes}
+      />
     )
   },
   {

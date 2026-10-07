@@ -59,6 +59,8 @@ export interface AppSettings {
   readonly formatter: FormatterSettings;
   readonly exportFormatter: FormatterSettings;
   readonly optimizer: OptimizerSettings;
+  /** Pixel sizes of the icon previews (GodSVG default: 16, 24, 32, 48, 64). */
+  readonly previewSizes: readonly number[];
   /** Named color palettes listed in the color picker. */
   readonly palettes: readonly ColorPalette[];
   readonly tabMiddleClickClose: boolean;
