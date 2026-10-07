@@ -5,6 +5,7 @@ import { createEditorAppController } from './features/shell/createEditorAppContr
 
 import { TopBar } from './features/chrome/TopBar';
 import { SvgDropOverlay } from './features/import/SvgDropOverlay';
+import { ColorSourcesProvider } from './features/color-picker/color-sources';
 import { EditorModalStack } from './features/modals/EditorModalStack';
 import { EditorSidebar } from './features/panels/EditorSidebar';
 import { EditorContextMenu } from './features/selection/EditorContextMenu';
@@ -58,36 +59,38 @@ export function App() {
         class="workspace grid min-h-0 grid-cols-[auto_8px_minmax(0,1fr)] bg-[var(--base)] [@media(max-width:820px)]:grid-rows-[minmax(320px,44%)_8px_minmax(0,1fr)]"
         data-testid="editor-workspace"
       >
-        <EditorSidebar
-          width={app.workspace.sidebar.width()}
-          activePanel={app.workspace.activePanel()}
-          setActivePanel={app.workspace.setActivePanel}
-          root={app.workspace.activeRoot()}
-          selectedIds={app.workspace.selectedIds()}
-          selectedPathCommand={app.workspace.selectedPathCommand()}
-          setSelectedPathCommand={app.workspace.setSelectedPathCommand}
-          selectNode={app.workspace.selectNode}
-          clearSelection={app.workspace.clearSelection}
-          addElement={app.workspace.addElement}
-          addTextNode={app.workspace.addTextNode}
-          updateElementAttribute={app.workspace.updateElementAttribute}
-          removeElementAttribute={app.workspace.removeElementAttribute}
-          updateBasicNodeText={app.workspace.updateBasicNodeText}
-          openContextMenu={app.workspace.openContextMenu}
-          reorderNodes={app.workspace.reorderInspectorNodes}
-          code={app.workspace.activeCode()}
-          parseError={app.workspace.parseError()}
-          applyCode={app.workspace.applyCode}
-          reformatPretty={app.workspace.reformatPretty}
-          reformatCompact={app.workspace.reformatCompact}
-          copySvgText={() => void app.topBar.copySvgText()}
-          selectedNodes={app.workspace.selectedNodes()}
-          elementCount={app.workspace.elementCount()}
-          exportText={app.workspace.exportText()}
-          heldKeys={app.workspace.heldKeys()}
-          viewportPointer={app.workspace.viewportPointer()}
-          recentCommandEvent={app.workspace.recentCommandEvent()}
-        />
+        <ColorSourcesProvider palettes={app.modals.settings().palettes} root={app.modals.activeRoot()}>
+          <EditorSidebar
+            width={app.workspace.sidebar.width()}
+            activePanel={app.workspace.activePanel()}
+            setActivePanel={app.workspace.setActivePanel}
+            root={app.workspace.activeRoot()}
+            selectedIds={app.workspace.selectedIds()}
+            selectedPathCommand={app.workspace.selectedPathCommand()}
+            setSelectedPathCommand={app.workspace.setSelectedPathCommand}
+            selectNode={app.workspace.selectNode}
+            clearSelection={app.workspace.clearSelection}
+            addElement={app.workspace.addElement}
+            addTextNode={app.workspace.addTextNode}
+            updateElementAttribute={app.workspace.updateElementAttribute}
+            removeElementAttribute={app.workspace.removeElementAttribute}
+            updateBasicNodeText={app.workspace.updateBasicNodeText}
+            openContextMenu={app.workspace.openContextMenu}
+            reorderNodes={app.workspace.reorderInspectorNodes}
+            code={app.workspace.activeCode()}
+            parseError={app.workspace.parseError()}
+            applyCode={app.workspace.applyCode}
+            reformatPretty={app.workspace.reformatPretty}
+            reformatCompact={app.workspace.reformatCompact}
+            copySvgText={() => void app.topBar.copySvgText()}
+            selectedNodes={app.workspace.selectedNodes()}
+            elementCount={app.workspace.elementCount()}
+            exportText={app.workspace.exportText()}
+            heldKeys={app.workspace.heldKeys()}
+            viewportPointer={app.workspace.viewportPointer()}
+            recentCommandEvent={app.workspace.recentCommandEvent()}
+          />
+        </ColorSourcesProvider>
         <button
           class="splitter w-2 cursor-col-resize border-0 bg-transparent hover:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)] [@media(max-width:820px)]:h-2 [@media(max-width:820px)]:cursor-row-resize"
           type="button"

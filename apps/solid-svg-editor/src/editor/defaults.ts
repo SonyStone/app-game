@@ -1,5 +1,6 @@
 import { compactFormatter, formatterPreset, prettyFormatter, type FormatterSettings } from '../formatter';
 import { createId } from '../svg-model';
+import { defaultPalettes, restorePalettes } from './palettes';
 
 import type { AppSettings, EditorTab } from './types';
 import { createEmptySvgDocument, serializeSvgDocument } from './svg-document';
@@ -23,7 +24,7 @@ export function defaultSettings(): AppSettings {
       convertShapes: true,
       simplifyPathParameters: true
     },
-    palettes: ['#000000', '#ffffff', '#ff6666', '#66cc88', '#6699ff', '#f6c85f'],
+    palettes: defaultPalettes(),
     tabMiddleClickClose: true,
     useCtrlForZoom: false,
     rasterPreviewDuringInteraction: false,
@@ -50,7 +51,8 @@ export function restoreSettings(data: string): AppSettings {
     ...stored,
     formatter: restoreFormatter(stored.formatter, defaults.formatter),
     exportFormatter: restoreFormatter(stored.exportFormatter, defaults.exportFormatter),
-    optimizer: { ...defaults.optimizer, ...stored.optimizer }
+    optimizer: { ...defaults.optimizer, ...stored.optimizer },
+    palettes: restorePalettes(stored.palettes)
   };
 }
 

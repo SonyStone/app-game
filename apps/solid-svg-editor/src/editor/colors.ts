@@ -83,7 +83,7 @@ export function colorToHex(value: string): string | undefined {
       return undefined;
     }
 
-    return hexFromChannels(hslToRgb(hue, saturation / 100, lightness / 100));
+    return hexFromChannels(hslChannels(hue, saturation / 100, lightness / 100).map(Math.round));
   }
 
   return undefined;
@@ -118,8 +118,70 @@ function hexFromChannels(channels: readonly number[]): string {
   return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
 }
 
-/** CSS hsl() to RGB channels; saturation and lightness are 0–1 and clamped. */
-function hslToRgb(hue: number, saturation: number, lightness: number): number[] {
+/** RGB channels 0–255. */
+export type Rgb = { readonly r: number; readonly g: number; readonly b: number };
+
+/** Hue in degrees 0–360; saturation, value, and lightness 0–1. */
+export type Hsv = { readonly h: number; readonly s: number; readonly v: number };
+export type Hsl = { readonly h: number; readonly s: number; readonly l: number };
+
+/** `#rrggbb` (or `#rgb`) to channels; `undefined` for other text. */
+export function hexToRgb(hex: string): Rgb | undefined {
+  const normalized = colorToHex(hex);
+
+  if (!normalized?.startsWith('#')) {
+    return undefined;
+  }
+
+  const [r = 0, g = 0, b = 0] = [1, 3, 5].map((start) => Number.parseInt(normalized.slice(start, start + 2), 16));
+  return { r, g, b };
+}
+
+/** Channels to lower-case `#rrggbb`, rounding and clamping each channel. */
+export function rgbToHex(rgb: Rgb): string {
+  return hexFromChannels([rgb.r, rgb.g, rgb.b].map((channel) => Math.round(Math.min(255, Math.max(0, channel)))));
+}
+
+export function rgbToHsv({ r, g, b }: Rgb): Hsv {
+  const [red, green, blue] = [r / 255, g / 255, b / 255];
+  const max = Math.max(red, green, blue);
+  const delta = max - Math.min(red, green, blue);
+  return { h: hueOf(red, green, blue, max, delta), s: max === 0 ? 0 : delta / max, v: max };
+}
+
+export function hsvToRgb({ h, s, v }: Hsv): Rgb {
+  const channel = (n: number) => {
+    const k = (n + h / 60) % 6;
+    return (v - v * s * Math.max(0, Math.min(k, 4 - k, 1))) * 255;
+  };
+  return { r: channel(5), g: channel(3), b: channel(1) };
+}
+
+export function rgbToHsl({ r, g, b }: Rgb): Hsl {
+  const [red, green, blue] = [r / 255, g / 255, b / 255];
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+  const l = (max + min) / 2;
+  return { h: hueOf(red, green, blue, max, delta), s: delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1)), l };
+}
+
+export function hslToRgb({ h, s, l }: Hsl): Rgb {
+  const [r = 0, g = 0, b = 0] = hslChannels(h, s, l);
+  return { r, g, b };
+}
+
+function hueOf(red: number, green: number, blue: number, max: number, delta: number): number {
+  if (delta === 0) {
+    return 0;
+  }
+
+  const sector = max === red ? ((green - blue) / delta) % 6 : max === green ? (blue - red) / delta + 2 : (red - green) / delta + 4;
+  return (sector * 60 + 360) % 360;
+}
+
+/** CSS hsl() to RGB channels (unrounded); saturation and lightness are 0–1 and clamped. */
+function hslChannels(hue: number, saturation: number, lightness: number): number[] {
   const s = Math.min(1, Math.max(0, saturation));
   const l = Math.min(1, Math.max(0, lightness));
   const h = ((hue % 360) + 360) % 360;
@@ -127,7 +189,7 @@ function hslToRgb(hue: number, saturation: number, lightness: number): number[] 
 
   return [0, 8, 4].map((n) => {
     const k = (n + h / 30) % 12;
-    return Math.round((l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) * 255);
+    return (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) * 255;
   });
 }
 
