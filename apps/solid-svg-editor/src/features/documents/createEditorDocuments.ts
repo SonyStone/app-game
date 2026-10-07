@@ -352,27 +352,56 @@ export function createEditorDocuments(options: {
 
   /** Closes a tab without asking; closing the active tab selects its right neighbor, or the left one at the end. */
   function closeTab(tabId: string): void {
-    const items = tabs();
-    const index = items.findIndex((tab) => tab.id === tabId);
+    closeTabs([tabId]);
+  }
 
-    if (index === -1) {
+  /**
+   * Closes several tabs at once without asking. When the active tab closes, the nearest remaining tab to its right
+   * (else to its left) becomes active; closing every tab leaves one new empty tab.
+   */
+  function closeTabs(tabIds: readonly string[]): void {
+    const closing = new Set(tabIds);
+    const items = tabs();
+    const remaining = items.filter((tab) => !closing.has(tab.id));
+
+    if (remaining.length === items.length) {
       return;
     }
 
-    if (items.length <= 1) {
+    if (remaining.length === 0) {
       createNewTab();
     }
 
-    setTabs((current) => current.filter((tab) => tab.id !== tabId));
-    histories.delete(tabId);
+    setTabs((current) => current.filter((tab) => !closing.has(tab.id)));
 
-    if (activeTabId() === tabId) {
-      const next = items[index + 1] ?? items[index - 1];
+    for (const id of closing) {
+      histories.delete(id);
+    }
+
+    const activeIndex = items.findIndex((tab) => tab.id === activeTabId());
+
+    if (closing.has(activeTabId()) && remaining.length > 0) {
+      const next = items.slice(activeIndex + 1).find((tab) => !closing.has(tab.id)) ?? [...items.slice(0, activeIndex)].reverse().find((tab) => !closing.has(tab.id));
 
       if (next) {
         selectTab(next.id);
       }
     }
+  }
+
+  /** Moves a tab to another position in the tab bar (tab dragging). */
+  function moveTab(tabId: string, toIndex: number): void {
+    setTabs((current) => {
+      const from = current.findIndex((tab) => tab.id === tabId);
+      const moving = current[from];
+
+      if (!moving || from === toIndex) {
+        return current;
+      }
+
+      const without = current.filter((tab) => tab.id !== tabId);
+      return [...without.slice(0, toIndex), moving, ...without.slice(toIndex)];
+    });
   }
 
   /**
@@ -402,6 +431,11 @@ export function createEditorDocuments(options: {
     updateActiveTab((tab) => ({ ...tab, dirty: false }));
   }
 
+  /** Marks a tab as saved, such as after downloading it from the tab menu. */
+  function markTabClean(tabId: string): void {
+    setTabs((items) => items.map((tab) => (tab.id === tabId ? { ...tab, dirty: false } : tab)));
+  }
+
   return {
     tabs,
     activeTabId,
@@ -424,6 +458,9 @@ export function createEditorDocuments(options: {
     reformatActiveCode,
     createNewTab,
     closeTab,
+    closeTabs,
+    moveTab,
+    markTabClean,
     importSvgText,
     markActiveTabClean
   };

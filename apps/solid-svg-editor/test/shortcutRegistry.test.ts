@@ -117,4 +117,15 @@ describe('createShortcutRegistry', () => {
     expect(blockedEvent.wasPrevented()).toBe(false);
     expect(runs).toBe(1);
   });
+
+  it('ignores events another handler already handled', () => {
+    let runs = 0;
+    const registry = createShortcutRegistry([shortcutDescriptor({ id: 'test.escape', bindings: [{ key: 'Escape' }], run: () => (runs += 1) })]);
+    const event = createTestKeyboardEvent({ key: 'Escape' });
+    Object.defineProperty(event, 'defaultPrevented', { value: true });
+
+    registry.onKeyDown(event);
+
+    expect(runs).toBe(0);
+  });
 });

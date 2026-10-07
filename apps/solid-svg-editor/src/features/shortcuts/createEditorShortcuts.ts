@@ -21,6 +21,8 @@ export function createEditorShortcuts(options: {
   readonly toggleGrid: () => void;
   readonly toggleHandles: () => void;
   readonly selectAll: () => void;
+  /** Escape: clears the selected path commands, or the selected nodes when there are none. */
+  readonly clearSelection: () => void;
   readonly duplicateSelected: () => void;
   readonly deleteSelected: () => void;
   readonly moveSelected: (direction: -1 | 1) => void;
@@ -43,6 +45,7 @@ export function createEditorShortcuts(options: {
     shortcut('view.toggle-grid', 'view', 'Toggle grid', 'Ctrl+G', [{ key: 'g', ctrl: true }], options.toggleGrid, true),
     shortcut('view.toggle-handles', 'view', 'Toggle handles', 'Ctrl+H', [{ key: 'h', ctrl: true }], options.toggleHandles, true),
     shortcut('edit.select-all', 'edit', 'Select all', 'Ctrl+A', [{ key: 'a', ctrl: true }], options.selectAll),
+    shortcut('edit.clear-selection', 'edit', 'Clear selection', 'Escape', [{ key: 'Escape' }], options.clearSelection),
     shortcut('edit.duplicate', 'edit', 'Duplicate', 'Ctrl+D', [{ key: 'd', ctrl: true }], options.duplicateSelected),
     shortcut('edit.delete', 'edit', 'Delete', 'Delete', [{ key: 'Delete' }, { key: 'Backspace' }], options.deleteSelected),
     shortcut('edit.move-up', 'edit', 'Move up', 'Alt+ArrowUp', [{ key: 'ArrowUp', alt: true }], () => options.moveSelected(-1)),
