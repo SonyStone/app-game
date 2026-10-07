@@ -1,4 +1,5 @@
 import { parsePathData, pathSegmentOutlines } from '../path-data';
+import type { CommandSelection } from './path-selection';
 import { getAttribute, parseLength, type SvgElementNode } from '../svg-model';
 import { formatMatrixTransform, identityMatrix, multiplyMatrices, parseTransformList, type Matrix2D, type Point } from './geometry';
 
@@ -31,7 +32,7 @@ export function collectContours(
   options: {
     readonly selectedIds: readonly string[];
     readonly hovered: HoverTarget | undefined;
-    readonly selectedCommand: { readonly nodeId: string; readonly index: number } | undefined;
+    readonly selectedCommand: CommandSelection | undefined;
   }
 ): readonly Contour[] {
   const selected = new Set(options.selectedIds);
@@ -113,7 +114,7 @@ function elementContours(
     case 'path':
       return pathSegmentOutlines(parsePathData(getAttribute(element, 'd', true))).flatMap((segment) => {
         const commandHovered = options.hovered?.nodeId === element.id && options.hovered.commandIndex === segment.index;
-        const commandSelected = options.selectedCommand?.nodeId === element.id && options.selectedCommand.index === segment.index;
+        const commandSelected = options.selectedCommand?.nodeId === element.id && options.selectedCommand.indices.includes(segment.index);
         const segmentState = stateOf(state === 'hovered' || state === 'hovered-selected' || commandHovered, state === 'selected' || state === 'hovered-selected' || commandSelected);
 
         return [

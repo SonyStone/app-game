@@ -13,7 +13,10 @@ import { defaultSettings, restoreSettings } from '../../editor/defaults';
 import { downloadBlob } from '../../editor/export-utils';
 import { serializeSvgDocument } from '../../editor/svg-document';
 import type { ContextMenuState, DragSelectionMode, ModalId, PanelId } from '../../editor/types';
-import { createDefaultElement, findNode, insertSibling, svgSize } from '../../svg-model';
+import { createDefaultElement, findNode, getAttribute, insertSibling, svgSize } from '../../svg-model';
+import { commandSelectionActions, subpathSelection } from '../../editor/path-selection';
+import type { HandleDescriptor } from '../../editor/types';
+import { parsePathData } from '../../path-data';
 import { createEditorDocuments } from '../documents/createEditorDocuments';
 import { createTabPersistence, restorePersistedTabs } from '../documents/tab-persistence';
 import { createSvgNodeActions } from '../documents/createSvgNodeActions';
@@ -126,8 +129,8 @@ export function createEditorAppController() {
     selectedIds,
     setSelectedIds,
     setSelectionPivot,
-    selectedPathCommand,
-    setSelectedPathCommand,
+    commandSelection,
+    setCommandSelection,
     hovered,
     setHovered,
     selectedNodes,
@@ -142,10 +145,10 @@ export function createEditorAppController() {
     activeRoot,
     selectedIds,
     selectedNodes,
-    selectedPathCommand,
+    commandSelection,
     setSelectedIds,
     setSelectionPivot,
-    setSelectedPathCommand,
+    setCommandSelection,
     clearSelection,
     dispatchCommand
   });
@@ -153,6 +156,8 @@ export function createEditorAppController() {
     deleteSelected,
     duplicateSelected,
     moveSelected,
+    reverseSelectedSubpaths,
+    setSelectedAsOrigin,
     reorderInspectorNodes,
     addElement,
     addTextNode,
@@ -204,7 +209,8 @@ export function createEditorAppController() {
     selectedIds,
     setSelectedIds,
     setSelectionPivot,
-    setSelectedPathCommand,
+    commandSelection,
+    setCommandSelection,
     selectNode,
     clearSelection,
     setContextMenu,
@@ -311,7 +317,7 @@ export function createEditorAppController() {
     activeRoot,
     selectedIds,
     hovered,
-    selectedPathCommand,
+    commandSelection,
     activeDrag,
     activeTouchGesture,
     transientViewportPreview,
@@ -342,6 +348,34 @@ export function createEditorAppController() {
     event.preventDefault();
     selectNode(nodeId, event);
     setContextMenu({ kind: 'node', x: event.clientX, y: event.clientY, nodeId });
+  }
+
+  /** Double-clicking a path handle selects its whole subpath, as in GodSVG. */
+  function selectHandleSubpath(handle: HandleDescriptor): void {
+    const node = findNode(activeRoot(), handle.nodeId);
+
+    if (handle.commandIndex === undefined || !handle.id.startsWith('cmd-') || node?.kind !== 'element') {
+      return;
+    }
+
+    setCommandSelection(subpathSelection(parsePathData(getAttribute(node, 'd', true)), handle.nodeId, handle.commandIndex));
+  }
+
+  /** Right-clicking a path handle selects its command (unless already selected) and opens the command menu. */
+  function openCommandMenu(event: MouseEvent, handle: HandleDescriptor): void {
+    event.preventDefault();
+
+    if (handle.commandIndex === undefined || !handle.id.startsWith('cmd-')) {
+      return;
+    }
+
+    const current = commandSelection();
+
+    if (current?.nodeId !== handle.nodeId || !current.indices.includes(handle.commandIndex)) {
+      setCommandSelection({ nodeId: handle.nodeId, indices: [handle.commandIndex], pivot: handle.commandIndex });
+    }
+
+    setContextMenu({ kind: 'commands', x: event.clientX, y: event.clientY, nodeId: handle.nodeId });
   }
 
   /** Opens the "New shape" menu on an empty canvas spot; node menus have already handled their own events. */
@@ -432,8 +466,8 @@ export function createEditorAppController() {
       setActivePanel,
       activeRoot,
       selectedIds,
-      selectedPathCommand,
-      setSelectedPathCommand,
+      commandSelection,
+      setCommandSelection,
       hovered,
       setHovered,
       selectNode,
@@ -490,7 +524,7 @@ export function createEditorAppController() {
       contours,
       hovered,
       setHovered,
-      selectedPathCommand,
+      commandSelection,
       selectionBox,
       marqueeRect,
       onCanvasWheel,
@@ -499,6 +533,8 @@ export function createEditorAppController() {
       startHandleDrag,
       startTransformBoxDrag,
       openCanvasContextMenu,
+      selectHandleSubpath,
+      openCommandMenu,
       heldKeys
     },
     contextMenu: {
@@ -522,6 +558,30 @@ export function createEditorAppController() {
 
         if (menu?.kind === 'canvas') {
           addShapeAt(name, menu.point);
+        }
+      },
+      commandActions: createMemo(() => {
+        const menu = contextMenu();
+        const selection = commandSelection();
+        const node = menu?.kind === 'commands' ? findNode(activeRoot(), menu.nodeId) : undefined;
+
+        if (!selection || node?.kind !== 'element') {
+          return undefined;
+        }
+
+        return commandSelectionActions(parsePathData(getAttribute(node, 'd', true)), selection.indices);
+      }),
+      runCommandAction: (action: 'move-up' | 'move-down' | 'reverse' | 'set-origin' | 'delete') => {
+        setContextMenu(undefined);
+
+        if (action === 'move-up' || action === 'move-down') {
+          moveSelected(action === 'move-up' ? -1 : 1);
+        } else if (action === 'reverse') {
+          reverseSelectedSubpaths();
+        } else if (action === 'set-origin') {
+          setSelectedAsOrigin();
+        } else {
+          deleteSelected();
         }
       },
       close: () => setContextMenu(undefined)

@@ -3,6 +3,17 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 
 import { svgCapabilities } from '../../editor/capabilities';
 import { colorToHex } from '../../editor/colors';
+import {
+  commandSelectionActions,
+  deleteCommands,
+  insertCommandAfter,
+  moveSubpaths,
+  nextCommandSelection,
+  reverseSubpaths,
+  setSubpathOrigins,
+  type CommandSelection,
+  type CommandsEdit
+} from '../../editor/path-selection';
 import type { HoverTarget } from '../../editor/contours';
 import { ColorPopup } from '../color-picker/ColorPopup';
 import { useColorSources } from '../color-picker/color-sources';
@@ -13,7 +24,6 @@ import { parseTransformList } from '../../editor/geometry';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import {
   clampNumericAttribute,
-  insertPathCommand,
   orderedAttributes
 } from '../../editor/tree-utils';
 import {
@@ -21,7 +31,6 @@ import {
   commandParameters,
   convertCommand,
   createCommand,
-  deleteCommand,
   deletePoint,
   formatPathData,
   formatPathNumber,
@@ -159,11 +168,11 @@ export function AttributeGrid(props: {
   /** The value the element renders for an attribute it does not set, shown as the field's placeholder. */
   readonly inheritedValue: (name: string) => string;
   readonly updateElementAttribute: SvgNodeActions['updateElementAttribute'];
-  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  readonly commandSelection: CommandSelection | undefined;
   /** What the pointer is over in the viewport or inspector, highlighted in both. */
   readonly hovered: HoverTarget | undefined;
   readonly setHovered: (target: HoverTarget | undefined) => void;
-  readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
+  readonly setCommandSelection: (selection: CommandSelection | undefined) => void;
 }) {
   const attrs = createMemo(() => orderedAttributes(props.node));
   const unknownAttrs = createMemo(() =>
@@ -227,10 +236,10 @@ export function AttributeGrid(props: {
             node={props.node}
             value={attr().value}
             update={(value) => props.updateElementAttribute(props.node.id, attr().name, value)}
-            selectedPathCommand={props.selectedPathCommand}
+            commandSelection={props.commandSelection}
             hovered={props.hovered}
             setHovered={props.setHovered}
-            setSelectedPathCommand={props.setSelectedPathCommand}
+            setCommandSelection={props.setCommandSelection}
           />
         )}
       </Show>
@@ -549,11 +558,11 @@ function PathDataEditor(props: {
   readonly node: SvgElementNode;
   readonly value: string;
   readonly update: (value: string) => void;
-  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  readonly commandSelection: CommandSelection | undefined;
   /** What the pointer is over in the viewport or inspector, highlighted in both. */
   readonly hovered: HoverTarget | undefined;
   readonly setHovered: (target: HoverTarget | undefined) => void;
-  readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
+  readonly setCommandSelection: (selection: CommandSelection | undefined) => void;
 }) {
   const commands = createMemo(() => parsePathData(props.value));
 
@@ -581,10 +590,10 @@ function PathDataEditor(props: {
               index={index}
               commands={commands()}
               updateCommands={updateCommands}
-              selectedPathCommand={props.selectedPathCommand}
+              commandSelection={props.commandSelection}
               hovered={props.hovered}
               setHovered={props.setHovered}
-              setSelectedPathCommand={props.setSelectedPathCommand}
+              setCommandSelection={props.setCommandSelection}
             />
           )}
         </For>
@@ -608,18 +617,18 @@ function PathCommandRow(props: {
   readonly index: number;
   readonly commands: readonly PathCommand[];
   readonly updateCommands: (next: readonly PathCommand[]) => void;
-  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  readonly commandSelection: CommandSelection | undefined;
   /** What the pointer is over in the viewport or inspector, highlighted in both. */
   readonly hovered: HoverTarget | undefined;
   readonly setHovered: (target: HoverTarget | undefined) => void;
-  readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
+  readonly setCommandSelection: (selection: CommandSelection | undefined) => void;
 }) {
   const [menuOpen, setMenuOpen] = createSignal(false);
   const isRelative = () => props.command.command === props.command.command.toLowerCase();
   const parameters = createMemo(() => commandParameters(props.command.command));
   const selected = () => {
-    const current = props.selectedPathCommand;
-    return current?.nodeId === props.nodeId && current.index === props.index;
+    const current = props.commandSelection;
+    return current?.nodeId === props.nodeId && current.indices.includes(props.index);
   };
   const hovered = () => props.hovered?.nodeId === props.nodeId && props.hovered.commandIndex === props.index;
 
@@ -628,8 +637,27 @@ function PathCommandRow(props: {
     setMenuOpen(false);
   }
 
-  function selectCurrent(): void {
-    props.setSelectedPathCommand({ nodeId: props.nodeId, index: props.index });
+  /** Applies an edit of the selected commands and moves the selection with them. */
+  function applyEdit(edit: CommandsEdit): void {
+    updateCommands(edit.commands);
+    props.setCommandSelection(
+      edit.indices.length > 0 ? { nodeId: props.nodeId, indices: edit.indices, pivot: edit.indices[0] ?? 0 } : undefined
+    );
+  }
+
+  /** The selected commands this row's menu acts on: the selection when it includes the row, else the row alone. */
+  const menuIndices = () => (selected() ? (props.commandSelection?.indices ?? [props.index]) : [props.index]);
+  const actions = createMemo(() => (menuOpen() ? commandSelectionActions(props.commands, menuIndices()) : undefined));
+
+  /** Selects this command like GodSVG: plain replaces, Ctrl/Cmd toggles, Shift extends from the pivot. */
+  function selectCurrent(event?: MouseEvent | PointerEvent): void {
+    const modifiers = { ctrl: Boolean(event?.ctrlKey || event?.metaKey), shift: Boolean(event?.shiftKey) };
+
+    if (!event && selected()) {
+      return;
+    }
+
+    props.setCommandSelection(nextCommandSelection(props.commandSelection, props.nodeId, props.index, modifiers));
   }
 
   return (
@@ -645,6 +673,11 @@ function PathCommandRow(props: {
       data-hovered={hovered() ? 'true' : undefined}
       onPointerEnter={() => props.setHovered({ nodeId: props.nodeId, commandIndex: props.index })}
       onPointerLeave={() => props.setHovered({ nodeId: props.nodeId })}
+      onPointerDown={(event) => {
+        if (!(event.target as Element).closest('input, button')) {
+          selectCurrent(event);
+        }
+      }}
       onFocusOut={(event) => {
         const nextFocus = event.relatedTarget;
 
@@ -668,8 +701,8 @@ function PathCommandRow(props: {
         ]}
         title={pathCommandDescription(props.command.command)}
         data-testid={`path-command-toggle-${props.nodeId}-${props.index}`}
-        onClick={() => {
-          selectCurrent();
+        onClick={(event) => {
+          selectCurrent(event);
           props.updateCommands(toggleRelative(props.commands, props.index));
         }}
       >
@@ -697,7 +730,7 @@ function PathCommandRow(props: {
                 data-testid={`path-command-param-${props.nodeId}-${props.index}-${parameter().name}`}
                 value={value()}
                 style={{ width: pathParamInputWidth(value(), parameter().name) }}
-                onFocus={selectCurrent}
+                onFocus={() => selectCurrent()}
                 onChange={(event) => {
                   const parsed = parsePathParamValue(event.currentTarget.value);
                   commitInput(event.currentTarget, formatPathNumber(parsed), () =>
@@ -727,7 +760,7 @@ function PathCommandRow(props: {
             class="flex min-h-5.5 w-full cursor-pointer items-center justify-start gap-1.5 rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] px-1.5 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] text-[var(--text)]"
             type="button"
             data-testid={`path-command-insert-after-${props.nodeId}-${props.index}`}
-            onClick={() => updateCommands(insertPathCommand(props.commands, props.index, props.command.command))}
+            onClick={() => applyEdit(insertCommandAfter(props.commands, props.index, props.command.command))}
           >
             <InsertAfterIcon {...decorativeIconProps} /> Insert after
           </button>
@@ -754,10 +787,29 @@ function PathCommandRow(props: {
             class="flex min-h-5.5 w-full cursor-pointer items-center justify-start gap-1.5 rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] px-1.5 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] text-[var(--text)]"
             type="button"
             data-testid={`path-command-delete-${props.nodeId}-${props.index}`}
-            onClick={() => updateCommands(deleteCommand(props.commands, props.index))}
+            onClick={() => applyEdit({ commands: deleteCommands(props.commands, menuIndices()), indices: [] })}
           >
-            <DeleteIcon {...decorativeIconProps} /> Delete
+            <DeleteIcon {...decorativeIconProps} /> {menuIndices().length > 1 ? `Delete ${menuIndices().length} commands` : 'Delete'}
           </button>
+          <For
+            each={[
+              { key: 'move-up', label: 'Move subpaths up', show: actions()?.moveUp, run: () => moveSubpaths(props.commands, menuIndices(), -1) },
+              { key: 'move-down', label: 'Move subpaths down', show: actions()?.moveDown, run: () => moveSubpaths(props.commands, menuIndices(), 1) },
+              { key: 'reverse', label: 'Reverse order', show: actions()?.reverse, run: () => reverseSubpaths(props.commands, menuIndices()) },
+              { key: 'set-origin', label: 'Set as origin', show: actions()?.setOrigin, run: () => setSubpathOrigins(props.commands, menuIndices()) }
+            ].filter((action) => action.show)}
+          >
+            {(action) => (
+              <button
+                class="flex min-h-5.5 w-full cursor-pointer items-center justify-start gap-1.5 rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] px-1.5 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] text-[var(--text)]"
+                type="button"
+                data-testid={`path-command-${action.key}-${props.nodeId}-${props.index}`}
+                onClick={() => applyEdit(action.run())}
+              >
+                {action.label}
+              </button>
+            )}
+          </For>
         </div>
       </Show>
     </div>

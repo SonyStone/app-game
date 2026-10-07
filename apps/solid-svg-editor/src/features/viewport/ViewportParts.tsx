@@ -2,6 +2,7 @@ import { Dynamic } from '@solidjs/web';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 
 import type { Contour, HoverTarget, InteractionState } from '../../editor/contours';
+import type { CommandSelection } from '../../editor/path-selection';
 
 import { createGridLines } from '../../editor/handles';
 import { decorativeIconProps } from '../../editor/svg-icon';
@@ -370,9 +371,13 @@ export function HandlesLayer(props: {
   readonly handles: readonly HandleDescriptor[];
   readonly zoom: number;
   readonly selectedIds: readonly string[];
-  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  readonly commandSelection: CommandSelection | undefined;
   readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly onHandlePointerDown: (event: PointerEvent, handle: HandleDescriptor) => void;
+  /** Double-clicking a path handle selects its whole subpath. */
+  readonly onHandleDoubleClick: (handle: HandleDescriptor) => void;
+  /** Right-clicking a handle opens the menu for the selected commands. */
+  readonly onHandleContextMenu: (event: MouseEvent, handle: HandleDescriptor) => void;
 }) {
   const [hoveredKey, setHoveredKey] = createSignal<string>();
   const keyOf = (handle: HandleDescriptor) => `${handle.nodeId}:${handle.id}`;
@@ -380,7 +385,7 @@ export function HandlesLayer(props: {
     const selected =
       handle.commandIndex === undefined
         ? props.selectedIds.includes(handle.nodeId)
-        : props.selectedPathCommand?.nodeId === handle.nodeId && props.selectedPathCommand.index === handle.commandIndex;
+        : props.commandSelection?.nodeId === handle.nodeId && props.commandSelection.indices.includes(handle.commandIndex);
     const hovered = hoveredKey() === keyOf(handle);
     return hovered && selected ? 'hovered-selected' : hovered ? 'hovered' : selected ? 'selected' : 'normal';
   };
@@ -408,6 +413,8 @@ export function HandlesLayer(props: {
                 props.setHovered(undefined);
               }}
               onPointerDown={(event) => props.onHandlePointerDown(event, handle())}
+              onDblClick={() => props.onHandleDoubleClick(handle())}
+              onContextMenu={(event) => props.onHandleContextMenu(event, handle())}
             />
             <title>{handle().label}</title>
           </g>

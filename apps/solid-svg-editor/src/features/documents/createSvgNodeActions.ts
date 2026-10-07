@@ -5,9 +5,9 @@ import { createEditorCommand, type EditorCommand } from '../../editor/commands';
 import { convertElement } from '../../editor/element-conversion';
 import type { Point } from '../../editor/geometry';
 import { createShapeAt, newShapeUnit, type newShapeNames } from '../../editor/new-shape';
-import { insertPathCommand, optimizeNode } from '../../editor/tree-utils';
+import { optimizeNode } from '../../editor/tree-utils';
 import type { AppSettings } from '../../editor/types';
-import { formatPathData, parsePathData } from '../../path-data';
+import { formatPathData, parsePathData, type PathCommand } from '../../path-data';
 import type { RecognizedElement } from '../../svg-db';
 import {
   appendChild,
@@ -29,7 +29,16 @@ import {
   type SvgElementNode,
   type SvgNode
 } from '../../svg-model';
-import type { PathCommandSelection } from '../selection/createEditorSelection';
+import {
+  deleteCommands,
+  insertCommandAfter,
+  isWholeSubpaths,
+  moveSubpaths,
+  reverseSubpaths,
+  setSubpathOrigins,
+  type CommandSelection,
+  type CommandsEdit
+} from '../../editor/path-selection';
 
 /** Node actions as returned by `createSvgNodeActions`, for typing the callbacks passed to inspector components. */
 export type SvgNodeActions = ReturnType<typeof createSvgNodeActions>;
@@ -39,10 +48,10 @@ export function createSvgNodeActions(options: {
   readonly activeRoot: Accessor<SvgElementNode>;
   readonly selectedIds: Accessor<readonly string[]>;
   readonly selectedNodes: Accessor<readonly SvgNode[]>;
-  readonly selectedPathCommand: Accessor<PathCommandSelection | undefined>;
+  readonly commandSelection: Accessor<CommandSelection | undefined>;
   readonly setSelectedIds: (ids: readonly string[]) => void;
   readonly setSelectionPivot: (id: string | undefined) => void;
-  readonly setSelectedPathCommand: (selection: PathCommandSelection | undefined) => void;
+  readonly setCommandSelection: (selection: CommandSelection | undefined) => void;
   readonly clearSelection: () => void;
   readonly dispatchCommand: (command: EditorCommand) => void;
 }) {
@@ -52,7 +61,18 @@ export function createSvgNodeActions(options: {
     return topLevelNodeIds(root, options.selectedIds()).filter((id) => id !== root.id);
   }
 
+  /** Deletes the selected path commands when there are any, otherwise the selected nodes. */
   function deleteSelected(): void {
+    const commands = options.commandSelection();
+
+    if (commands && commands.indices.length > 0) {
+      editSelectedCommands('svg.delete-path-commands', 'Delete path commands', (items) => ({
+        commands: deleteCommands(items, commands.indices),
+        indices: []
+      }));
+      return;
+    }
+
     const ids = selectedEditableIds();
 
     if (ids.length === 0) {
@@ -97,7 +117,17 @@ export function createSvgNodeActions(options: {
     );
   }
 
+  /** Moves selected whole subpaths among the path's subpaths, otherwise the selected nodes among their siblings. */
   function moveSelected(direction: -1 | 1): void {
+    const commands = options.commandSelection();
+
+    if (commands && commands.indices.length > 0) {
+      editSelectedCommands('svg.move-subpaths', direction === -1 ? 'Move subpaths up' : 'Move subpaths down', (items) =>
+        isWholeSubpaths(items, commands.indices) ? moveSubpaths(items, commands.indices, direction) : undefined
+      );
+      return;
+    }
+
     const ids = selectedEditableIds();
 
     if (ids.length === 0) {
@@ -129,7 +159,7 @@ export function createSvgNodeActions(options: {
     );
     options.setSelectedIds(ids);
     options.setSelectionPivot(ids[ids.length - 1]);
-    options.setSelectedPathCommand(undefined);
+    options.setCommandSelection(undefined);
   }
 
   function addElement(name: RecognizedElement | string): void {
@@ -254,37 +284,81 @@ export function createSvgNodeActions(options: {
     );
   }
 
-  function insertPathCommandFromKey(key: string, absolute: boolean): void {
-    const selected = options.selectedPathCommand();
+  /** Reverses the direction of the selected whole subpaths (GodSVG "Reverse order"). */
+  function reverseSelectedSubpaths(): void {
+    const commands = options.commandSelection();
 
-    if (!selected) {
+    if (commands) {
+      editSelectedCommands('svg.reverse-subpaths', 'Reverse subpaths', (items) =>
+        isWholeSubpaths(items, commands.indices) ? reverseSubpaths(items, commands.indices) : undefined
+      );
+    }
+  }
+
+  /** Starts each closed subpath at its selected command's end point (GodSVG "Set as origin"). */
+  function setSelectedAsOrigin(): void {
+    const commands = options.commandSelection();
+
+    if (commands) {
+      editSelectedCommands('svg.set-path-origin', 'Set as origin', (items) => setSubpathOrigins(items, commands.indices));
+    }
+  }
+
+  /**
+   * Rewrites the `d` of the path whose commands are selected and moves the selection to the edited commands. An
+   * edit that returns `undefined` does not apply.
+   */
+  function editSelectedCommands(id: `svg.${string}`, label: string, edit: (commands: readonly PathCommand[]) => CommandsEdit | undefined): void {
+    const selection = options.commandSelection();
+    const node = selection ? findNode(options.activeRoot(), selection.nodeId) : undefined;
+
+    if (!selection || node?.kind !== 'element') {
+      return;
+    }
+
+    const result = edit(parsePathData(getAttribute(node, 'd', true)));
+
+    if (!result) {
+      return;
+    }
+
+    options.dispatchCommand(
+      createEditorCommand({
+        id,
+        label,
+        apply: (root) =>
+          updateNode(root, selection.nodeId, (item) =>
+            item.kind === 'element' ? setAttribute(item, 'd', formatPathData(result.commands)) : item
+          )
+      })
+    );
+    options.setCommandSelection(
+      result.indices.length > 0 ? { nodeId: selection.nodeId, indices: result.indices, pivot: result.indices[0] ?? 0 } : undefined
+    );
+  }
+
+  /**
+   * Inserts a command after the last selected one, as GodSVG's command keys do, and selects it. The new command
+   * starts at zero length, so the rest of the path keeps its geometry.
+   */
+  function insertPathCommandFromKey(key: string, absolute: boolean): void {
+    const selected = options.commandSelection();
+
+    if (!selected || selected.indices.length === 0) {
       return;
     }
 
     const command = absolute ? key.toUpperCase() : key.toLowerCase();
-    options.dispatchCommand(
-      createEditorCommand({
-        id: 'svg.insert-path-command',
-        label: `Insert ${command} path command`,
-        apply: (root) =>
-          updateNode(root, selected.nodeId, (node) => {
-            if (node.kind !== 'element') {
-              return node;
-            }
-
-            const commands = parsePathData(getAttribute(node, 'd', true));
-            const nextCommands = insertPathCommand(commands, selected.index, command);
-            return setAttribute(node, 'd', formatPathData(nextCommands));
-          })
-      })
-    );
-    options.setSelectedPathCommand({ nodeId: selected.nodeId, index: selected.index + 1 });
+    const after = Math.max(...selected.indices);
+    editSelectedCommands('svg.insert-path-command', `Insert ${command} path command`, (items) => insertCommandAfter(items, after, command));
   }
 
   return {
     deleteSelected,
     duplicateSelected,
     moveSelected,
+    reverseSelectedSubpaths,
+    setSelectedAsOrigin,
     reorderInspectorNodes,
     addElement,
     addTextNode,

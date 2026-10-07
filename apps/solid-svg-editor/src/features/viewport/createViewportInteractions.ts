@@ -19,7 +19,7 @@ import type {
   TransformBoxHandleDescriptor
 } from '../../editor/types';
 import type { SvgElementNode } from '../../svg-model';
-import type { PathCommandSelection } from '../selection/createEditorSelection';
+import { nextCommandSelection, type CommandSelection } from '../../editor/path-selection';
 import { idsInMarquee, mergeSelection, normalizeClientRect } from '../selection/selection-geometry';
 import {
   applyGlobalTransformToSelected,
@@ -44,7 +44,8 @@ export function createViewportInteractions(options: {
   readonly selectedIds: Accessor<readonly string[]>;
   readonly setSelectedIds: (ids: readonly string[]) => void;
   readonly setSelectionPivot: (id: string | undefined) => void;
-  readonly setSelectedPathCommand: (selection: PathCommandSelection | undefined) => void;
+  readonly commandSelection: Accessor<CommandSelection | undefined>;
+  readonly setCommandSelection: (selection: CommandSelection | undefined) => void;
   readonly selectNode: (nodeId: string, event?: MouseEvent | PointerEvent) => void;
   readonly clearSelection: () => void;
   readonly setContextMenu: Setter<ContextMenuState | undefined>;
@@ -397,7 +398,7 @@ export function createViewportInteractions(options: {
 
     options.setSelectedIds([nodeId]);
     options.setSelectionPivot(nodeId);
-    options.setSelectedPathCommand(undefined);
+    options.setCommandSelection(undefined);
     startMoveSelectionDrag(event, [nodeId]);
     return true;
   }
@@ -501,7 +502,7 @@ export function createViewportInteractions(options: {
     const nextIds = drag.additive ? mergeSelection(drag.initialSelection, ids) : ids;
     options.setSelectedIds(nextIds);
     options.setSelectionPivot(nextIds[nextIds.length - 1]);
-    options.setSelectedPathCommand(undefined);
+    options.setCommandSelection(undefined);
     setActiveDrag(undefined);
   }
 
@@ -629,7 +630,7 @@ export function createViewportInteractions(options: {
     }
 
     event.stopPropagation();
-    selectHandleOwner(handle);
+    selectHandleOwner(handle, event);
     options.beginCommandTransaction();
     setActiveDrag({
       type: 'handle',
@@ -640,15 +641,30 @@ export function createViewportInteractions(options: {
     return true;
   }
 
-  /** Pressing a handle selects its element, and for path handles also its command, as in GodSVG. */
-  function selectHandleOwner(handle: HandleDescriptor): void {
+  /**
+   * Pressing a handle selects its element and, for path handles, its command as in GodSVG (Ctrl/Cmd toggles, Shift
+   * extends). Pressing an already selected command without modifiers keeps the selection.
+   */
+  function selectHandleOwner(handle: HandleDescriptor, event: PointerEvent): void {
     if (!options.selectedIds().includes(handle.nodeId)) {
       options.setSelectedIds([handle.nodeId]);
       options.setSelectionPivot(handle.nodeId);
     }
 
-    const isPathCommand = handle.commandIndex !== undefined && handle.id.startsWith('cmd-');
-    options.setSelectedPathCommand(isPathCommand ? { nodeId: handle.nodeId, index: handle.commandIndex ?? 0 } : undefined);
+    const commandIndex = handle.id.startsWith('cmd-') ? handle.commandIndex : undefined;
+
+    if (commandIndex === undefined) {
+      options.setCommandSelection(undefined);
+      return;
+    }
+
+    const current = options.commandSelection();
+    const modifiers = { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey };
+    const alreadySelected = current?.nodeId === handle.nodeId && current.indices.includes(commandIndex);
+
+    if (!alreadySelected || modifiers.ctrl || modifiers.shift) {
+      options.setCommandSelection(nextCommandSelection(current, handle.nodeId, commandIndex, modifiers));
+    }
   }
 
   function updateElementHandleDrag(drag: ActiveHandleDrag, event: PointerEvent): void {

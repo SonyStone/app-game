@@ -11,6 +11,7 @@ import type {
 } from '../../editor/types';
 import type { SvgElementNode } from '../../svg-model';
 import type { Contour, HoverTarget } from '../../editor/contours';
+import type { CommandSelection } from '../../editor/path-selection';
 import { ContoursLayer, GridLayer, HandlesLayer, TransformBoxLayer, ViewportToolbar } from './ViewportParts';
 import { SvgNodeList, SvgRootPresentation } from './svg-renderer';
 import type { SvgSize } from './viewport-math';
@@ -45,7 +46,7 @@ export function EditorViewport(props: {
   readonly rasterPreviewRect: ViewRect;
   readonly handles: readonly HandleDescriptor[];
   readonly contours: readonly Contour[];
-  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  readonly commandSelection: CommandSelection | undefined;
   /** Reports what the pointer is over in the document, shared with the inspector. */
   readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly selectionBox: Rect | undefined;
@@ -58,6 +59,8 @@ export function EditorViewport(props: {
   readonly startTransformBoxDrag: (event: PointerEvent, handle: TransformBoxHandleDescriptor) => void;
   /** Opens the "New shape" menu when the context menu was not taken by a node. */
   readonly openCanvasContextMenu: (event: MouseEvent) => void;
+  readonly selectHandleSubpath: (handle: HandleDescriptor) => void;
+  readonly openCommandMenu: (event: MouseEvent, handle: HandleDescriptor) => void;
 }) {
   return (
     <main
@@ -196,9 +199,11 @@ export function EditorViewport(props: {
                 handles={props.handles}
                 zoom={props.zoom}
                 selectedIds={props.selectedIds}
-                selectedPathCommand={props.selectedPathCommand}
+                commandSelection={props.commandSelection}
                 setHovered={props.setHovered}
                 onHandlePointerDown={props.startHandleDrag}
+                onHandleDoubleClick={props.selectHandleSubpath}
+                onHandleContextMenu={props.openCommandMenu}
               />
               <TransformBoxLayer
                 box={props.selectionBox}

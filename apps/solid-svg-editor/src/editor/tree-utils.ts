@@ -1,5 +1,5 @@
 import { attributeNumberRange, getAttributeDefault, getRecognizedAttributes, propagatedAttributes } from "../svg-db";
-import { createCommand, formatPathData, simplifyPathCommands, tryParsePathData, type PathCommand } from "../path-data";
+import { formatPathData, simplifyPathCommands, tryParsePathData } from "../path-data";
 import { convertElement } from "./element-conversion";
 import { getAttribute, type SvgAttribute, type SvgElementNode, type SvgNode } from "../svg-model";
 
@@ -285,8 +285,3 @@ export function themePresetSettings(preset: ThemePreset, settings: AppSettings):
   }
 }
 
-export function insertPathCommand(commands: readonly PathCommand[], index: number, command: string): readonly PathCommand[] {
-  const next = [...commands];
-  next.splice(index + 1, 0, createCommand(command));
-  return next;
-}
