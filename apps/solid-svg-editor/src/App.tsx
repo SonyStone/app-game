@@ -181,6 +181,8 @@ export function App() {
         reformatActiveCode={app.modals.reformatActiveCode}
         pendingCloseTabName={app.modals.pendingCloseTabName()}
         resolveCloseTab={app.modals.resolveCloseTab}
+        shortcuts={app.modals.shortcuts}
+        setShortcutBindings={app.modals.setShortcutBindings}
       />
       <Show when={app.dropOverlay.active()}>
         <SvgDropOverlay />

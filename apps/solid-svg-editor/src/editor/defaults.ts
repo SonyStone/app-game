@@ -29,6 +29,7 @@ export function defaultSettings(): AppSettings {
     },
     palettes: defaultPalettes(),
     previewSizes: defaultPreviewSizes,
+    shortcutOverrides: {},
     tabMiddleClickClose: true,
     useCtrlForZoom: false,
     rasterPreviewDuringInteraction: false,
@@ -60,8 +61,22 @@ export function restoreSettings(data: string): AppSettings {
     previewSizes:
       Array.isArray(stored.previewSizes) && stored.previewSizes.every((size) => Number.isInteger(size) && size > 0)
         ? stored.previewSizes
-        : defaults.previewSizes
+        : defaults.previewSizes,
+    shortcutOverrides: isShortcutOverrides(stored.shortcutOverrides) ? stored.shortcutOverrides : {}
   };
+}
+
+function isShortcutOverrides(value: unknown): value is AppSettings['shortcutOverrides'] {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every(
+      (bindings: unknown) =>
+        Array.isArray(bindings) &&
+        bindings.every((binding: unknown) => typeof binding === 'object' && binding !== null && 'key' in binding && typeof binding.key === 'string')
+    )
+  );
 }
 
 function restoreFormatter(stored: Partial<FormatterSettings> | undefined, fallback: FormatterSettings): FormatterSettings {

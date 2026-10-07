@@ -5,7 +5,7 @@ import { createEffect, createMemo, createSignal, For, onSettled, Show } from 'so
 import { copyExport, exportFile, exportFileName, rasterSize, renderExport, type ExportOptions } from '../../editor/export-utils';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import { clamp, themePresetSettings } from '../../editor/tree-utils';
-import type { AppSettings, ExportFormat, ThemePreset } from '../../editor/types';
+import type { AppSettings, ExportFormat, ShortcutBinding, ThemePreset } from '../../editor/types';
 import {
   formatterPreset,
   humanFileSize,
@@ -17,7 +17,8 @@ import {
 import { svgSize, type SvgElementNode } from '../../svg-model';
 import { PaletteSettings } from '../color-picker/PaletteSettings';
 import { PreviewSvg } from '../panels/SidePanels';
-import { defaultShortcutItems } from '../shortcuts/shortcutRegistry';
+import { ShortcutEditor } from '../shortcuts/ShortcutEditor';
+import type { ShortcutDescriptor } from '../shortcuts/shortcutRegistry';
 import ClearIcon from '../ui/icons/Clear.svg';
 import CopyIcon from '../ui/icons/Copy.svg';
 import ExportIcon from '../ui/icons/Export.svg';
@@ -30,6 +31,7 @@ export function SettingsModal(props: {
   readonly setSettings: (setter: (settings: AppSettings) => AppSettings) => void;
   readonly close: () => void;
   readonly reformatActiveCode: (formatter?: FormatterSettings) => void;
+  readonly shortcuts: ShortcutEditorProps;
 }) {
   const [tab, setTab] = createSignal<
     'formatting' | 'optimizer' | 'palettes' | 'shortcuts' | 'theming' | 'tabbar' | 'other'
@@ -143,7 +145,7 @@ export function SettingsModal(props: {
             />
           </Show>
           <Show when={tab() === 'shortcuts'}>
-            <ShortcutTable />
+            <ShortcutEditor {...props.shortcuts} />
           </Show>
           <Show when={tab() === 'theming'}>
             <SettingsField>
@@ -685,33 +687,20 @@ export function DonateModal(props: { readonly close: () => void }) {
   );
 }
 
-export function ShortcutsModal(props: { readonly close: () => void }) {
+/** The shortcut list from the Help menu; bindings can be edited here as in the Settings tab. */
+export function ShortcutsModal(props: { readonly close: () => void; readonly shortcuts: ShortcutEditorProps }) {
   return (
     <ModalFrame title="Shortcuts" close={props.close}>
-      <ShortcutTable />
+      <ShortcutEditor {...props.shortcuts} />
     </ModalFrame>
   );
 }
 
-function ShortcutTable() {
-  return (
-    <table class="shortcut-table w-full border-collapse" data-testid="shortcut-table">
-      <tbody>
-        <For each={defaultShortcutItems}>
-          {(item) => (
-            <tr data-testid={`shortcut-row-${testIdSegment(item.category)}-${testIdSegment(item.action)}`}>
-              <ShortcutCell>{item.category}</ShortcutCell>
-              <ShortcutCell>{item.action}</ShortcutCell>
-              <ShortcutCell>
-                <Keycap>{item.keys}</Keycap>
-              </ShortcutCell>
-            </tr>
-          )}
-        </For>
-      </tbody>
-    </table>
-  );
-}
+/** The editor's shortcut actions and the setter for user bindings (`undefined` restores the defaults). */
+type ShortcutEditorProps = {
+  readonly descriptors: readonly ShortcutDescriptor[];
+  readonly setBindings: (id: string, bindings: readonly ShortcutBinding[] | undefined) => void;
+};
 
 /**
  * Dialog shell: takes keyboard focus when opened and gives it back on close; Escape, the close button, and a press
@@ -804,18 +793,6 @@ function FormSelect(props: JSX.SelectHTMLAttributes<HTMLSelectElement> & { reado
     >
       {props.children}
     </select>
-  );
-}
-
-function ShortcutCell(props: { readonly children: JSX.Element }) {
-  return <td class="border-b border-b-[var(--soft-border)] px-2 py-1.5">{props.children}</td>;
-}
-
-function Keycap(props: { readonly children: JSX.Element }) {
-  return (
-    <kbd class="inline-block rounded border border-[var(--soft-border)] bg-[#080b12] px-1.5 py-0.5 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px]">
-      {props.children}
-    </kbd>
   );
 }
 
