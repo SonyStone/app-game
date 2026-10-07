@@ -15,6 +15,7 @@ import {
   type ShorthandTags
 } from '../../formatter';
 import { svgSize, type SvgElementNode } from '../../svg-model';
+import { PaletteSettings } from '../color-picker/PaletteSettings';
 import { PreviewSvg } from '../panels/SidePanels';
 import { defaultShortcutItems } from '../shortcuts/shortcutRegistry';
 import ClearIcon from '../ui/icons/Clear.svg';
@@ -136,25 +137,10 @@ export function SettingsModal(props: {
             </CheckboxField>
           </Show>
           <Show when={tab() === 'palettes'}>
-            <div class="palette-list flex flex-wrap gap-2" data-testid="settings-palette-list">
-              <For each={props.settings.palettes}>
-                {(color, index) => (
-                  <FormInput
-                    type="color"
-                    data-testid={`settings-palette-color-${index()}`}
-                    value={color}
-                    onInput={(event) =>
-                      props.setSettings((settings) => ({
-                        ...settings,
-                        palettes: settings.palettes.map((item, itemIndex) =>
-                          itemIndex === index() ? event.currentTarget.value : item
-                        )
-                      }))
-                    }
-                  />
-                )}
-              </For>
-            </div>
+            <PaletteSettings
+              palettes={props.settings.palettes}
+              setPalettes={(update) => props.setSettings((settings) => ({ ...settings, palettes: update(settings.palettes) }))}
+            />
           </Show>
           <Show when={tab() === 'shortcuts'}>
             <ShortcutTable />
@@ -346,6 +332,45 @@ function FormatterSettingsView(props: {
           }}
         />
       </SettingsField>
+      <div class="mt-1 text-[11px] text-[var(--muted)]">Colors</div>
+      <SettingsField>
+        Named colors
+        <FormSelect
+          value={props.formatter.colorUseNamedColors}
+          data-testid={`${testId()}-color-named`}
+          onChange={(event) =>
+            props.update('colorUseNamedColors', event.currentTarget.value as FormatterSettings['colorUseNamedColors'])
+          }
+        >
+          <option value="always">Always</option>
+          <option value="when-shorter-or-equal">When shorter or equal</option>
+          <option value="when-shorter">When shorter</option>
+          <option value="never">Never</option>
+        </FormSelect>
+      </SettingsField>
+      <SettingsField>
+        Color syntax
+        <FormSelect
+          value={props.formatter.colorPrimarySyntax}
+          data-testid={`${testId()}-color-syntax`}
+          onChange={(event) =>
+            props.update('colorPrimarySyntax', event.currentTarget.value as FormatterSettings['colorPrimarySyntax'])
+          }
+        >
+          <option value="three-or-six-digit-hex">3 or 6 digit hex</option>
+          <option value="six-digit-hex">6 digit hex</option>
+          <option value="rgb">rgb()</option>
+        </FormSelect>
+      </SettingsField>
+      <CheckboxField>
+        <FormInput
+          type="checkbox"
+          data-testid={`${testId()}-colorCapitalHex`}
+          checked={props.formatter.colorCapitalHex}
+          onChange={(event) => props.update('colorCapitalHex', event.currentTarget.checked)}
+        />
+        Capital hex
+      </CheckboxField>
       <For each={formatterToggleGroups}>
         {(group) => (
           <>
@@ -386,6 +411,14 @@ const formatterToggleGroups = [
       { key: 'pathdataMinimizeSpacing', label: 'Minimize spacing' },
       { key: 'pathdataRemoveSpacingAfterFlags', label: 'Remove spacing after arc flags' },
       { key: 'pathdataRemoveConsecutiveCommands', label: 'Remove repeated commands' }
+    ]
+  },
+  {
+    title: 'Transform lists',
+    toggles: [
+      { key: 'transformListCompressNumbers', label: 'Compress numbers' },
+      { key: 'transformListMinimizeSpacing', label: 'Minimize spacing' },
+      { key: 'transformListRemoveUnnecessaryParams', label: 'Remove unnecessary parameters' }
     ]
   }
 ] as const satisfies readonly {
