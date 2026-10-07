@@ -609,6 +609,49 @@ function nearlyEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b));
 }
 
+/** One drawn command of a path in absolute coordinates, for outlines in the viewport. */
+export type PathSegmentOutline = {
+  readonly index: number;
+  /** A standalone path drawing just this command, starting with `M` at its start point. */
+  readonly d: string;
+  /** Control-point tangents (start → first control, second control → end) of curve commands. */
+  readonly tangents: readonly (readonly [Point, Point])[];
+};
+
+/**
+ * Splits a path into per-command outlines so each command can be highlighted on its own, like GodSVG's contours.
+ * `M` draws nothing; shorthand curves use their implied control points; `Z` becomes the closing line.
+ */
+export function pathSegmentOutlines(commands: readonly PathCommand[]): readonly PathSegmentOutline[] {
+  return absoluteSegments(commands).flatMap((segment, index): PathSegmentOutline[] => {
+    const { start, end } = segment;
+    const move = `M ${start.x} ${start.y}`;
+    const cubic = segment.cubicControls;
+    const quadratic = segment.quadraticControl;
+
+    switch (segment.source.letter) {
+      case "M":
+        return [];
+      case "C":
+      case "S":
+        return cubic
+          ? [{ index, d: `${move} C ${cubic[0].x} ${cubic[0].y} ${cubic[1].x} ${cubic[1].y} ${end.x} ${end.y}`, tangents: [[start, cubic[0]], [cubic[1], end]] }]
+          : [];
+      case "Q":
+      case "T":
+        return quadratic
+          ? [{ index, d: `${move} Q ${quadratic.x} ${quadratic.y} ${end.x} ${end.y}`, tangents: [[start, quadratic], [quadratic, end]] }]
+          : [];
+      case "A": {
+        const [rx = 0, ry = 0, rotation = 0, large = 0, sweep = 0] = segment.source.values;
+        return [{ index, d: `${move} A ${rx} ${ry} ${rotation} ${large} ${sweep} ${end.x} ${end.y}`, tangents: [] }];
+      }
+      default:
+        return [{ index, d: `${move} L ${end.x} ${end.y}`, tangents: [] }];
+    }
+  });
+}
+
 /**
  * Returns the vertices of a single-subpath path made only of straight segments, and whether it ends with `Z`, or
  * `undefined` when a segment is curved. Lines, `H`/`V`, zero-radius arcs, and curves whose control points lie on the

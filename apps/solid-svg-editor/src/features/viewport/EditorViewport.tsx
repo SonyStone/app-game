@@ -10,7 +10,8 @@ import type {
   ViewRect
 } from '../../editor/types';
 import type { SvgElementNode } from '../../svg-model';
-import { GridLayer, HandlesLayer, TransformBoxLayer, ViewportToolbar } from './ViewportParts';
+import type { Contour, HoverTarget } from '../../editor/contours';
+import { ContoursLayer, GridLayer, HandlesLayer, TransformBoxLayer, ViewportToolbar } from './ViewportParts';
 import { SvgNodeList, SvgRootPresentation } from './svg-renderer';
 import type { SvgSize } from './viewport-math';
 
@@ -43,6 +44,10 @@ export function EditorViewport(props: {
   readonly rasterPreviewUrl: string | undefined;
   readonly rasterPreviewRect: ViewRect;
   readonly handles: readonly HandleDescriptor[];
+  readonly contours: readonly Contour[];
+  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  /** Reports what the pointer is over in the document, shared with the inspector. */
+  readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly selectionBox: Rect | undefined;
   readonly marqueeRect: Rect | undefined;
   readonly onCanvasWheel: (event: WheelEvent) => void;
@@ -51,6 +56,8 @@ export function EditorViewport(props: {
   readonly openContextMenu: (event: MouseEvent, nodeId: string) => void;
   readonly startHandleDrag: (event: PointerEvent, handle: HandleDescriptor) => void;
   readonly startTransformBoxDrag: (event: PointerEvent, handle: TransformBoxHandleDescriptor) => void;
+  /** Opens the "New shape" menu when the context menu was not taken by a node. */
+  readonly openCanvasContextMenu: (event: MouseEvent) => void;
 }) {
   return (
     <main
@@ -87,7 +94,7 @@ export function EditorViewport(props: {
           data-testid="viewport-svg"
           onWheel={props.onCanvasWheel}
           onPointerDown={props.onCanvasPointerDown}
-          onContextMenu={(event) => event.preventDefault()}
+          onContextMenu={(event) => props.openCanvasContextMenu(event)}
         >
           <defs>
             <pattern id="checkerboard" patternUnits="userSpaceOnUse" width="96" height="96">
@@ -138,7 +145,15 @@ export function EditorViewport(props: {
             <Show
               when={props.useRasterPreview ? props.rasterPreviewUrl : undefined}
               fallback={
-                <g class={{ rasterized: props.settings.viewRasterized }} data-testid="viewport-vector-layer">
+                <g
+                  class={{ rasterized: props.settings.viewRasterized }}
+                  data-testid="viewport-vector-layer"
+                  onPointerOver={(event) => {
+                    const nodeId = (event.target as Element).closest('[data-node-id]')?.getAttribute('data-node-id');
+                    props.setHovered(nodeId ? { nodeId } : undefined);
+                  }}
+                  onPointerLeave={() => props.setHovered(undefined)}
+                >
                   <SvgRootPresentation root={props.root}>
                     <SvgNodeList
                       nodes={props.root.children}
@@ -176,7 +191,15 @@ export function EditorViewport(props: {
               />
             </Show>
             <Show when={props.settings.showHandles}>
-              <HandlesLayer handles={props.handles} zoom={props.zoom} onHandlePointerDown={props.startHandleDrag} />
+              <ContoursLayer contours={props.contours} />
+              <HandlesLayer
+                handles={props.handles}
+                zoom={props.zoom}
+                selectedIds={props.selectedIds}
+                selectedPathCommand={props.selectedPathCommand}
+                setHovered={props.setHovered}
+                onHandlePointerDown={props.startHandleDrag}
+              />
               <TransformBoxLayer
                 box={props.selectionBox}
                 zoom={props.zoom}

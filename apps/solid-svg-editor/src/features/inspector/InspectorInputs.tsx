@@ -3,6 +3,7 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 
 import { svgCapabilities } from '../../editor/capabilities';
 import { colorToHex } from '../../editor/colors';
+import type { HoverTarget } from '../../editor/contours';
 import { ColorPopup } from '../color-picker/ColorPopup';
 import { useColorSources } from '../color-picker/color-sources';
 import { idValidity } from '../../editor/id-validity';
@@ -159,6 +160,9 @@ export function AttributeGrid(props: {
   readonly inheritedValue: (name: string) => string;
   readonly updateElementAttribute: SvgNodeActions['updateElementAttribute'];
   readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  /** What the pointer is over in the viewport or inspector, highlighted in both. */
+  readonly hovered: HoverTarget | undefined;
+  readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
 }) {
   const attrs = createMemo(() => orderedAttributes(props.node));
@@ -224,6 +228,8 @@ export function AttributeGrid(props: {
             value={attr().value}
             update={(value) => props.updateElementAttribute(props.node.id, attr().name, value)}
             selectedPathCommand={props.selectedPathCommand}
+            hovered={props.hovered}
+            setHovered={props.setHovered}
             setSelectedPathCommand={props.setSelectedPathCommand}
           />
         )}
@@ -544,6 +550,9 @@ function PathDataEditor(props: {
   readonly value: string;
   readonly update: (value: string) => void;
   readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  /** What the pointer is over in the viewport or inspector, highlighted in both. */
+  readonly hovered: HoverTarget | undefined;
+  readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
 }) {
   const commands = createMemo(() => parsePathData(props.value));
@@ -573,6 +582,8 @@ function PathDataEditor(props: {
               commands={commands()}
               updateCommands={updateCommands}
               selectedPathCommand={props.selectedPathCommand}
+              hovered={props.hovered}
+              setHovered={props.setHovered}
               setSelectedPathCommand={props.setSelectedPathCommand}
             />
           )}
@@ -598,6 +609,9 @@ function PathCommandRow(props: {
   readonly commands: readonly PathCommand[];
   readonly updateCommands: (next: readonly PathCommand[]) => void;
   readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  /** What the pointer is over in the viewport or inspector, highlighted in both. */
+  readonly hovered: HoverTarget | undefined;
+  readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
 }) {
   const [menuOpen, setMenuOpen] = createSignal(false);
@@ -607,6 +621,7 @@ function PathCommandRow(props: {
     const current = props.selectedPathCommand;
     return current?.nodeId === props.nodeId && current.index === props.index;
   };
+  const hovered = () => props.hovered?.nodeId === props.nodeId && props.hovered.commandIndex === props.index;
 
   function updateCommands(next: readonly PathCommand[]): void {
     props.updateCommands(next);
@@ -622,10 +637,14 @@ function PathCommandRow(props: {
       class={[
         'relative flex min-h-5.5 items-start gap-0.75 overflow-visible rounded-[3px] bg-transparent px-0.75 py-0.5',
         {
-          'border-[var(--accent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_68%,transparent)]': selected()
+          'border-[var(--accent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_68%,transparent)]': selected(),
+          'bg-[color-mix(in_srgb,#aaaaaa_18%,transparent)]': hovered()
         }
       ]}
       data-testid={`path-command-row-${props.nodeId}-${props.index}`}
+      data-hovered={hovered() ? 'true' : undefined}
+      onPointerEnter={() => props.setHovered({ nodeId: props.nodeId, commandIndex: props.index })}
+      onPointerLeave={() => props.setHovered({ nodeId: props.nodeId })}
       onFocusOut={(event) => {
         const nextFocus = event.relatedTarget;
 

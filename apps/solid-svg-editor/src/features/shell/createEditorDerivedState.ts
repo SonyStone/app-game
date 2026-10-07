@@ -2,9 +2,11 @@ import { createMemoCache } from '@solid-primitives/memo';
 import { createMemo, type Accessor } from 'solid-js';
 
 import { svgCapabilities } from '../../editor/capabilities';
+import { collectContours, type HoverTarget } from '../../editor/contours';
 import type { ActiveDrag, AppSettings } from '../../editor/types';
 import { humanFileSize, serializeRoot } from '../../formatter';
 import { flattenElements, type SvgElementNode } from '../../svg-model';
+import type { PathCommandSelection } from '../selection/createEditorSelection';
 import { createRasterPreview } from '../viewport/createRasterPreview';
 import type { TouchGesture } from '../viewport/touch-gesture';
 import { createRasterPreviewRect, createRasterPreviewRoot, type SvgSize } from '../viewport/viewport-math';
@@ -13,6 +15,8 @@ export function createEditorDerivedState(options: {
   readonly settings: Accessor<AppSettings>;
   readonly activeRoot: Accessor<SvgElementNode>;
   readonly selectedIds: Accessor<readonly string[]>;
+  readonly hovered: Accessor<HoverTarget | undefined>;
+  readonly selectedPathCommand: Accessor<PathCommandSelection | undefined>;
   readonly activeDrag: Accessor<ActiveDrag | undefined>;
   readonly activeTouchGesture: Accessor<TouchGesture | undefined>;
   readonly transientViewportPreview: Accessor<boolean>;
@@ -38,14 +42,30 @@ export function createEditorDerivedState(options: {
 
   const fileSize = createMemo(() => humanFileSize(new Blob([exportText()]).size));
   const elementCount = createMemo(() => flattenElements(options.activeRoot()).length);
-  const handlesForSelection = createMemoCache(
-    () => {
-      const selectedIds = options.selectedIds();
-      return selectedIds.length <= 1 ? svgCapabilities.getHandles(options.activeRoot(), selectedIds) : [];
-    },
+  // Handles of a single selected element and of the hovered element; multi-selections use the transform box.
+  const handleOwnerIds = createMemo(() => {
+    const selected = options.selectedIds();
+    const ids = new Set(selected.length <= 1 ? selected : []);
+    const hovered = options.hovered()?.nodeId;
+
+    if (hovered && !handleDragActive()) {
+      ids.add(hovered);
+    }
+
+    return [...ids].join('\u001f');
+  });
+  const handlesForOwners = createMemoCache(
+    (key: string) => svgCapabilities.getHandles(options.activeRoot(), key === '' ? [] : key.split('\u001f')),
     { size: 64 }
   );
-  const handles = createMemo(() => handlesForSelection(options.selectedIds().join('\u001f')));
+  const handles = createMemo(() => handlesForOwners(handleOwnerIds()));
+  const contours = createMemo(() =>
+    collectContours(options.activeRoot(), {
+      selectedIds: options.selectedIds(),
+      hovered: options.hovered(),
+      selectedCommand: options.selectedPathCommand()
+    })
+  );
 
   const viewportIsMoving = createMemo(
     () =>
@@ -74,6 +94,7 @@ export function createEditorDerivedState(options: {
     fileSize,
     elementCount,
     handles,
+    contours,
     viewportIsMoving,
     useRasterPreview,
     rasterPreviewRect,

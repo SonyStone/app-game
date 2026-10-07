@@ -1,6 +1,6 @@
 import type { ColorPalette } from './palettes';
 import type { FormatterSettings } from "../formatter";
-import type { Matrix2D, Rect } from "./geometry";
+import type { Matrix2D, Point, Rect } from "./geometry";
 import type { SvgDocument } from "./svg-document";
 import type { SvgElementNode, SvgNode } from "../svg-model";
 import type { EditorCommandId } from "./commands";
@@ -81,14 +81,16 @@ export interface HandleDescriptor {
   readonly y: number;
   readonly label: string;
   readonly small: boolean;
+  /** The path command or polygon/polyline point this handle moves; absent for whole-shape handles. */
+  readonly commandIndex?: number;
   readonly update: (root: SvgElementNode, x: number, y: number) => SvgElementNode;
 }
 
-export interface ContextMenuState {
-  readonly x: number;
-  readonly y: number;
-  readonly nodeId: string;
-}
+/** The element menu opened on a node, or GodSVG's "New shape" menu opened on an empty canvas point. */
+export type ContextMenuState = { readonly x: number; readonly y: number } & (
+  | { readonly kind: "node"; readonly nodeId: string }
+  | { readonly kind: "canvas"; readonly point: Point }
+);
 
 export interface ActivePanDrag {
   readonly type: "pan";

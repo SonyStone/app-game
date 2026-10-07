@@ -629,6 +629,7 @@ export function createViewportInteractions(options: {
     }
 
     event.stopPropagation();
+    selectHandleOwner(handle);
     options.beginCommandTransaction();
     setActiveDrag({
       type: 'handle',
@@ -637,6 +638,17 @@ export function createViewportInteractions(options: {
     });
     setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
     return true;
+  }
+
+  /** Pressing a handle selects its element, and for path handles also its command, as in GodSVG. */
+  function selectHandleOwner(handle: HandleDescriptor): void {
+    if (!options.selectedIds().includes(handle.nodeId)) {
+      options.setSelectedIds([handle.nodeId]);
+      options.setSelectionPivot(handle.nodeId);
+    }
+
+    const isPathCommand = handle.commandIndex !== undefined && handle.id.startsWith('cmd-');
+    options.setSelectedPathCommand(isPathCommand ? { nodeId: handle.nodeId, index: handle.commandIndex ?? 0 } : undefined);
   }
 
   function updateElementHandleDrag(drag: ActiveHandleDrag, event: PointerEvent): void {
