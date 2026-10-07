@@ -48,6 +48,8 @@ export interface EditorPanelContext {
   readonly recentCommandEvent: EditorCommandEvent | undefined;
   /** "View in Inspector": scroll the inspector to this node (a new `version` repeats the request). */
   readonly reveal: { readonly nodeId: string; readonly version: number } | undefined;
+  /** Whether the Debug panel shows GodSVG's advanced debug information. */
+  readonly advancedDebug: boolean;
 }
 
 export interface EditorPanelDescriptor {
@@ -125,6 +127,7 @@ export const editorPanels = [
         heldKeys={context.heldKeys}
         viewportPointer={context.viewportPointer}
         recentCommandEvent={context.recentCommandEvent}
+        advanced={context.advancedDebug}
       />
     )
   }

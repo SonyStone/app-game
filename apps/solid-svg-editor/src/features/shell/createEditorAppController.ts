@@ -415,7 +415,8 @@ export function createEditorAppController() {
       'view.zoom-out': () => zoomBy(1 / Math.SQRT2),
       'view.reset-zoom': centerFrame,
       'view.toggle-fullscreen': toggleFullscreen,
-      'view.debug': panelSections.toggleDebug,
+      'view.debug': () => panelSections.toggleDebug(),
+      'view.advanced-debug': () => panelSections.toggleDebug(true),
       'view.toggle-grid': toggleSetting('showGrid'),
       'view.toggle-handles': toggleSetting('showHandles'),
       'view.show-rasterized': toggleSetting('viewRasterized'),
@@ -643,7 +644,8 @@ export function createEditorAppController() {
       heldKeys,
       viewportPointer,
       recentCommandEvent,
-      reveal: revealRequest
+      reveal: revealRequest,
+      advancedDebug: panelSections.advancedDebug
     },
     viewport: {
       settings,

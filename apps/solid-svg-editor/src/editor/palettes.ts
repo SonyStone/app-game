@@ -1,3 +1,5 @@
+import { colorToHex } from './colors';
+
 /** A titled list of named colors shown in the color picker, like GodSVG's palettes. */
 export type ColorPalette = {
   readonly title: string;
@@ -74,4 +76,57 @@ function isColorPalette(value: unknown): value is ColorPalette {
         typeof color.name === 'string'
     )
   );
+}
+
+/** A palette as GodSVG's XML: `<palette title="…">` with one `<color value="…" name="…"/>` per color. */
+export function paletteToXml(palette: ColorPalette): string {
+  const colors = palette.colors.map(
+    (color) => `\t<color value="${escapeXml(color.value)}"${color.name ? ` name="${escapeXml(color.name)}"` : ''}/>\n`
+  );
+  return `<palette title="${escapeXml(palette.title)}">\n${colors.join('')}</palette>`;
+}
+
+/** Reads every `<palette>` in GodSVG's palette XML; colors that aren't valid are skipped, like GodSVG. */
+export function palettesFromXml(text: string): readonly ColorPalette[] {
+  const document = new DOMParser().parseFromString(`<palettes>${text.replace(/<\?xml[^>]*\?>/, '')}</palettes>`, 'application/xml');
+
+  if (document.querySelector('parsererror')) {
+    return [];
+  }
+
+  return Array.from(document.getElementsByTagName('palette')).map((palette) => ({
+    title: (palette.getAttribute('title') ?? '').trim(),
+    colors: Array.from(palette.getElementsByTagName('color')).flatMap((color) => {
+      const value = (color.getAttribute('value') ?? '').trim();
+      return colorToHex(value) ? [{ value, name: (color.getAttribute('name') ?? '').trim() }] : [];
+    })
+  }));
+}
+
+/** Whether text starts with a `<palette>` element (comments and whitespace aside), as GodSVG checks pasted text. */
+export function isPaletteXml(text: string): boolean {
+  return /^\s*(?:<\?xml[^>]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<palette[\s>]/.test(text);
+}
+
+/** GodSVG's palette warnings: no title, a title used by another palette, or a color defined twice with one name. */
+export function paletteWarnings(palette: ColorPalette, palettes: readonly ColorPalette[]): readonly string[] {
+  const warnings: string[] = [];
+
+  if (palette.title === '') {
+    warnings.push("Unnamed palettes won't be shown.");
+  } else if (palettes.filter((item) => item.title === palette.title).length > 1) {
+    warnings.push("Multiple palettes can't have the same name.");
+  }
+
+  const definitions = palette.colors.map((color) => `${colorToHex(color.value) ?? color.value}\u0000${color.name}`);
+
+  if (new Set(definitions).size !== definitions.length) {
+    warnings.push('This palette has identically defined colors.');
+  }
+
+  return warnings;
+}
+
+function escapeXml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }

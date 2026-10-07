@@ -27,7 +27,7 @@ export function createEditorShortcuts(options: {
         category: action.category,
         action: action.label,
         defaultBindings: action.bindings,
-        editable: action.id !== 'tool.insert-path-command',
+        editable: !('fixed' in action),
         ...('allowInEditable' in action ? { allowInEditable: action.allowInEditable } : {}),
         run: (event) => options.handlers[action.id](event)
       },
@@ -47,6 +47,8 @@ type EditorActionDefinition = {
   readonly bindings: readonly ShortcutBinding[];
   /** Runs while a text field has focus (most file and view actions); editing actions leave the field's keys alone. */
   readonly allowInEditable?: boolean;
+  /** Bindings GodSVG doesn't let users change (the debug views, the path command letters). */
+  readonly fixed?: true;
 };
 
 /**
@@ -99,7 +101,15 @@ export const editorActions = [
   { id: 'view.zoom-out', category: 'view', label: 'Zoom out', bindings: [{ key: '-', ctrl: true }], allowInEditable: true },
   { id: 'view.reset-zoom', category: 'view', label: 'Zoom reset', bindings: [{ key: '0', ctrl: true }], allowInEditable: true },
   { id: 'view.toggle-fullscreen', category: 'view', label: 'Toggle fullscreen', bindings: [{ key: 'F11' }, { key: 'Enter', alt: true }], allowInEditable: true },
-  { id: 'view.debug', category: 'view', label: 'View debug information', bindings: [{ key: 'F3' }], allowInEditable: true },
+  { id: 'view.debug', category: 'view', label: 'View debug information', bindings: [{ key: 'F3' }], allowInEditable: true, fixed: true },
+  {
+    id: 'view.advanced-debug',
+    category: 'view',
+    label: 'View advanced debug information',
+    bindings: [{ key: 'F3', ctrl: true }],
+    allowInEditable: true,
+    fixed: true
+  },
   { id: 'view.toggle-grid', category: 'view', label: 'Show grid', bindings: [{ key: 'g', ctrl: true, shift: true }], allowInEditable: true },
   { id: 'view.toggle-handles', category: 'view', label: 'Show handles', bindings: [{ key: 'h', ctrl: true, shift: true }], allowInEditable: true },
   { id: 'view.show-rasterized', category: 'view', label: 'Show rasterized SVG', bindings: [{ key: 'r', ctrl: true, shift: true }], allowInEditable: true },
@@ -107,7 +117,7 @@ export const editorActions = [
   { id: 'view.show-reference', category: 'view', label: 'Show reference image', bindings: [], allowInEditable: true },
   { id: 'view.overlay-reference', category: 'view', label: 'Overlay reference image', bindings: [], allowInEditable: true },
   { id: 'tool.toggle-snap', category: 'tool', label: 'Toggle snapping', bindings: [{ key: 's', alt: true }], allowInEditable: true },
-  { id: 'tool.insert-path-command', category: 'tool', label: 'Insert path command', bindings: pathCommandBindings() },
+  { id: 'tool.insert-path-command', category: 'tool', label: 'Insert path command', bindings: pathCommandBindings(), fixed: true },
   { id: 'help.settings', category: 'help', label: 'Settings', bindings: [{ key: ',', ctrl: true }], allowInEditable: true },
   { id: 'help.about', category: 'help', label: 'About…', bindings: [], allowInEditable: true },
   { id: 'help.donate', category: 'help', label: 'Donate…', bindings: [], allowInEditable: true },
@@ -130,7 +140,7 @@ function withOverrides(
       return bindings();
     },
     get keys() {
-      return base.editable ? bindings().map(formatBinding).join(', ') : 'M L H V Z A Q T C S';
+      return base.id === 'tool.insert-path-command' ? 'M L H V Z A Q T C S' : bindings().map(formatBinding).join(', ');
     }
   };
 }

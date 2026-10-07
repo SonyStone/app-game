@@ -29,6 +29,7 @@ import type { AlertMessage } from '../files/createFileBinding';
 import { actionIcon } from '../shortcut-panel/action-icons';
 import type { ImportReview } from '../import/createImportReview';
 import { PanelButton } from '../ui/PanelButton';
+import { AboutContent } from './AboutContent';
 import { OtherSettings, ThemingSettings, type FontActions } from './AppearanceSettings';
 import { CheckboxField, FormInput, FormSelect, SettingsField } from './settings-fields';
 import { useI18n } from '../../i18n/I18nProvider';
@@ -795,6 +796,9 @@ export function AboutModal(props: { readonly close: () => void }) {
           Repository
         </a>
       </InfoPanel>
+      <div class="mt-3">
+        <AboutContent />
+      </div>
     </ModalFrame>
   );
 }
