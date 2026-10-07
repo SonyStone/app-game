@@ -4,9 +4,13 @@ import { findNode, getAttribute, parseLength, setAttribute, updateNode, type Svg
 import { identityMatrix, invertMatrix, multiplyMatrices, parseTransformList, transformPoint, type Matrix2D } from "./geometry";
 import type { HandleDescriptor, ViewRect } from "./types";
 
-export function createGridLines(viewRect: ViewRect, zoom: number, targetSpacing = 64) {
+/**
+ * Grid lines covering the view: minor lines about `targetSpacing` screen pixels apart (a power of two in document
+ * units), and every `tickInterval`th one major, as GodSVG's grid tick interval (0 makes every line minor).
+ */
+export function createGridLines(viewRect: ViewRect, zoom: number, targetSpacing = 64, tickInterval = 4) {
   const step = Math.max(1, 2 ** Math.ceil(Math.log2(targetSpacing / Math.max(zoom, 0.001))));
-  const majorStep = step * 4;
+  const majorStep = tickInterval > 0 ? step * tickInterval : Number.POSITIVE_INFINITY;
   const minorVertical: number[] = [];
   const minorHorizontal: number[] = [];
   const majorVertical: number[] = [];

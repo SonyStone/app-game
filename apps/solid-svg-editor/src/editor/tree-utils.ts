@@ -1,3 +1,4 @@
+import { themeDependentDefaults } from "./appearance";
 import { attributeNumberRange, getAttributeDefault, getRecognizedAttributes, propagatedAttributes } from "../svg-db";
 import { formatPathData, simplifyPathCommands, tryParsePathData } from "../path-data";
 import { convertElement } from "./element-conversion";
@@ -272,16 +273,20 @@ function convertToSimplerShape(element: SvgElementNode): SvgElementNode | undefi
   }
 }
 
+/**
+ * Applies a theme preset like GodSVG: its base, accent, canvas, and grid colors, and the theme-dependent highlighter,
+ * handle, and basic colors.
+ */
 export function themePresetSettings(preset: ThemePreset, settings: AppSettings): AppSettings {
   switch (preset) {
     case "light":
-      return { ...settings, themePreset: preset, baseColor: "#e6f0ff", accentColor: "#0053a6", canvasColor: "#ffffff", gridColor: "#666666" };
+      return { ...settings, ...themeDependentDefaults(preset), themePreset: preset, baseColor: "#e6f0ff", accentColor: "#0053a6", canvasColor: "#ffffff", gridColor: "#666666" };
     case "black":
-      return { ...settings, themePreset: preset, baseColor: "#000000", accentColor: "#7c8dbf", canvasColor: "#000000", gridColor: "#808080" };
+      return { ...settings, ...themeDependentDefaults(preset), themePreset: preset, baseColor: "#000000", accentColor: "#7c8dbf", canvasColor: "#000000", gridColor: "#808080" };
     case "gray":
-      return { ...settings, themePreset: preset, baseColor: "#262626", accentColor: "#80aaff", canvasColor: "#404040", gridColor: "#999999" };
+      return { ...settings, ...themeDependentDefaults(preset), themePreset: preset, baseColor: "#262626", accentColor: "#80aaff", canvasColor: "#404040", gridColor: "#999999" };
     case "dark":
-      return { ...settings, themePreset: preset, baseColor: "#10121d", accentColor: "#6699ff", canvasColor: "#1f2233", gridColor: "#808080" };
+      return { ...settings, ...themeDependentDefaults(preset), themePreset: preset, baseColor: "#10121d", accentColor: "#6699ff", canvasColor: "#1f2233", gridColor: "#808080" };
   }
 }
 

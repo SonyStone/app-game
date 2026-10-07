@@ -1,6 +1,7 @@
 import { compactFormatter, formatterPreset, prettyFormatter, type FormatterSettings } from '../formatter';
 import { createId } from '../svg-model';
 import { defaultPanelLayout, restorePanelLayout } from '../features/layout/panel-layout';
+import { defaultSelectionRectangle, isHexColor, themeDependentDefaults } from './appearance';
 import { resolveLocale, sourceLocale } from '../i18n/locales';
 import { defaultPalettes, restorePalettes } from './palettes';
 
@@ -35,6 +36,15 @@ export function defaultSettings(): AppSettings {
     shortcutOverrides: {},
     shortcutPanel: defaultShortcutPanel(),
     panelLayout: defaultPanelLayout(),
+    ...themeDependentDefaults('dark'),
+    selectionRectangle: defaultSelectionRectangle,
+    gridTickInterval: 4,
+    fonts: {},
+    invertZoom: false,
+    panWithLmb: false,
+    panningSpeed: 20,
+    uiScale: 'auto',
+    keepScreenOn: false,
     tabMiddleClickClose: true,
     useFilenameForWindowTitle: true,
     useCtrlForZoom: false,
@@ -71,8 +81,47 @@ export function restoreSettings(data: string): AppSettings {
     shortcutOverrides: isShortcutOverrides(stored.shortcutOverrides) ? stored.shortcutOverrides : {},
     language: resolveLocale(stored.language),
     shortcutPanel: restoreShortcutPanel(stored.shortcutPanel),
-    panelLayout: restorePanelLayout(stored.panelLayout)
+    panelLayout: restorePanelLayout(stored.panelLayout),
+    ...restoreAppearance(stored, defaults)
   };
+}
+
+/**
+ * Restores the appearance and input settings added with GodSVG's settings menu: colors must be hex, numbers within
+ * GodSVG's ranges; anything else falls back to the defaults (theme-dependent ones follow the stored theme).
+ */
+function restoreAppearance(stored: Partial<AppSettings>, defaults: AppSettings) {
+  const themed = themeDependentDefaults(stored.themePreset ?? defaults.themePreset);
+  const colors = <T extends Record<string, string>>(value: unknown, fallback: T): T =>
+    Object.fromEntries(
+      Object.entries(fallback).map(([key, color]) => {
+        const candidate = (value as Record<string, unknown> | undefined)?.[key];
+        return [key, isHexColor(candidate) ? candidate : color];
+      })
+    ) as T;
+  const number = (value: unknown, fallback: number, min: number, max: number) =>
+    typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max ? value : fallback;
+  const handles = stored.handles as Partial<AppSettings['handles']> | undefined;
+  const { inside, normal, hovered, selected, hoveredSelected } = themed.handles;
+  const rectangle = stored.selectionRectangle as Partial<AppSettings['selectionRectangle']> | undefined;
+  const fonts = stored.fonts && typeof stored.fonts === 'object' ? stored.fonts : {};
+
+  return {
+    highlighterPreset: stored.highlighterPreset === 'default-light' || stored.highlighterPreset === 'default-dark' ? stored.highlighterPreset : themed.highlighterPreset,
+    highlighter: colors(stored.highlighter, themed.highlighter),
+    handles: { ...colors(handles, { inside, normal, hovered, selected, hoveredSelected }), size: number(handles?.size, 1, 0.5, 4) },
+    selectionRectangle: {
+      ...colors(rectangle, { color1: defaultSelectionRectangle.color1, color2: defaultSelectionRectangle.color2 }),
+      speed: number(rectangle?.speed, defaultSelectionRectangle.speed, 0, 500),
+      width: number(rectangle?.width, defaultSelectionRectangle.width, 1, 8),
+      dashLength: number(rectangle?.dashLength, defaultSelectionRectangle.dashLength, 1, 100)
+    },
+    gridTickInterval: number(stored.gridTickInterval, defaults.gridTickInterval, 0, 16),
+    basicColors: colors(stored.basicColors, themed.basicColors),
+    fonts: Object.fromEntries(Object.entries(fonts).filter(([key, name]) => ['main', 'bold', 'mono'].includes(key) && typeof name === 'string')),
+    panningSpeed: number(stored.panningSpeed, defaults.panningSpeed, 1, 200),
+    uiScale: typeof stored.uiScale === 'number' ? number(stored.uiScale, 1, 0.5, 4) : 'auto'
+  } satisfies Partial<AppSettings>;
 }
 
 /** GodSVG's shortcut panel has six slots. */

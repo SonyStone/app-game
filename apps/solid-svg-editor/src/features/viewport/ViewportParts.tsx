@@ -26,6 +26,8 @@ import ReferenceIcon from './icons/Reference.svg';
 import SnapIcon from './icons/Snap.svg';
 import VisualsIcon from './icons/Visuals.svg';
 import { useI18n } from '../../i18n/I18nProvider';
+import type { SelectionRectangleSettings } from '../../editor/appearance';
+import type { ElementBox } from './createViewportInteractions';
 
 export function ViewportToolbar(props: {
   readonly settings: AppSettings;
@@ -263,8 +265,10 @@ export function GridLayer(props: {
   readonly zoom: number;
   readonly color: string;
   readonly moving: boolean;
+  /** GodSVG's grid tick interval: lines between labelled major lines (0 = none). */
+  readonly tickInterval: number;
 }) {
-  const lines = createMemo(() => createGridLines(props.viewRect, props.zoom, props.moving ? 128 : 64));
+  const lines = createMemo(() => createGridLines(props.viewRect, props.zoom, props.moving ? 128 : 64, props.tickInterval));
   const showLabels = createMemo(() => !props.moving);
 
   return (
@@ -377,6 +381,8 @@ export function GridLayer(props: {
 export function HandlesLayer(props: {
   readonly handles: readonly HandleDescriptor[];
   readonly zoom: number;
+  /** GodSVG's handle size factor (1 = default). */
+  readonly size: number;
   readonly selectedIds: readonly string[];
   readonly commandSelection: CommandSelection | undefined;
   readonly setHovered: (target: HoverTarget | undefined) => void;
@@ -403,14 +409,14 @@ export function HandlesLayer(props: {
         {(handle) => (
           <g data-testid={`selection-handle-group-${handle().nodeId}-${handle().id}`}>
             <circle
-              class="handle cursor-grab fill-white [vector-effect:non-scaling-stroke]"
+              class="handle cursor-grab fill-[var(--handle-inside)] [vector-effect:non-scaling-stroke]"
               data-testid={`selection-handle-${handle().nodeId}-${handle().id}`}
               data-state={stateOf(handle())}
               cx={handle().x}
               cy={handle().y}
-              r={(handle().small ? 3.2 : 4.6) / props.zoom}
+              r={((handle().small ? 3.2 : 4.6) * props.size) / props.zoom}
               stroke={interactionColors[stateOf(handle())]}
-              stroke-width={handle().small ? 1.6 : 2}
+              stroke-width={(handle().small ? 1.6 : 2) * props.size}
               onPointerEnter={() => {
                 setHoveredKey(keyOf(handle()));
                 props.setHovered({ nodeId: handle().nodeId, ...commandOf(handle()) });
@@ -435,12 +441,12 @@ function commandOf(handle: HandleDescriptor): { readonly commandIndex?: number }
   return handle.commandIndex === undefined ? {} : { commandIndex: handle.commandIndex };
 }
 
-/** GodSVG's default contour and handle colors per interaction state. */
+/** Contour and handle colors per interaction state, from the handle settings (`--handle-*` on the app root). */
 const interactionColors = {
-  normal: '#111111',
-  hovered: '#aaaaaa',
-  selected: '#4466ff',
-  'hovered-selected': '#ff4444'
+  normal: 'var(--handle-normal)',
+  hovered: 'var(--handle-hovered)',
+  selected: 'var(--handle-selected)',
+  'hovered-selected': 'var(--handle-hoveredSelected)'
 } as const satisfies Record<InteractionState, string>;
 
 /**
@@ -588,5 +594,60 @@ export function TransformBoxLayer(props: {
         </g>
       )}
     </Show>
+  );
+}
+
+/**
+ * GodSVG's selection rectangle: marching ants around each selected element's bounding box, following its transform.
+ * The box grows by the stroke width plus 2 screen pixels; ants alternate the two colors and move at `speed` pixels
+ * per second (0 stops them).
+ */
+export function SelectionRectangleLayer(props: {
+  readonly boxes: readonly ElementBox[];
+  readonly zoom: number;
+  readonly settings: SelectionRectangleSettings;
+}) {
+  return (
+    <g class="pointer-events-none" fill="none" data-testid="selection-rectangle-layer">
+      <For each={props.boxes} keyed={(box) => box.id}>
+        {(box) => {
+          const [a, b, c, d] = box().matrix;
+          // Grow in screen pixels, undoing the element's own scale.
+          const grow = () => (2 + props.settings.width) / props.zoom;
+          const growX = () => grow() / (Math.hypot(a, b) || 1);
+          const growY = () => grow() / (Math.hypot(c, d) || 1);
+          const rect = (stroke: string, dashed: boolean) => (
+            <rect
+              x={box().x - growX()}
+              y={box().y - growY()}
+              width={box().width + 2 * growX()}
+              height={box().height + 2 * growY()}
+              transform={`matrix(${box().matrix.join(' ')})`}
+              stroke={stroke}
+              stroke-width={props.settings.width}
+              stroke-dasharray={dashed ? `${props.settings.dashLength} ${props.settings.dashLength}` : undefined}
+              vector-effect="non-scaling-stroke"
+            >
+              <Show when={dashed && props.settings.speed > 0}>
+                <animate
+                  attributeName="stroke-dashoffset"
+                  from="0"
+                  to={String(-2 * props.settings.dashLength)}
+                  dur={`${(2 * props.settings.dashLength) / props.settings.speed}s`}
+                  repeatCount="indefinite"
+                />
+              </Show>
+            </rect>
+          );
+
+          return (
+            <g data-testid={`selection-rectangle-${box().id}`}>
+              {rect(props.settings.color2, false)}
+              {rect(props.settings.color1, true)}
+            </g>
+          );
+        }}
+      </For>
+    </g>
   );
 }

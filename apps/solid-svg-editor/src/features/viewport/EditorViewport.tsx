@@ -12,7 +12,8 @@ import type {
 import type { SvgElementNode } from '../../svg-model';
 import type { Contour, HoverTarget } from '../../editor/contours';
 import type { CommandSelection } from '../../editor/path-selection';
-import { ContoursLayer, GridLayer, HandlesLayer, TransformBoxLayer, ViewportToolbar } from './ViewportParts';
+import type { ElementBox } from './createViewportInteractions';
+import { ContoursLayer, GridLayer, HandlesLayer, SelectionRectangleLayer, TransformBoxLayer, ViewportToolbar } from './ViewportParts';
 import { SvgNodeList, SvgRootPresentation } from './svg-renderer';
 import type { SvgSize } from './viewport-math';
 
@@ -52,6 +53,8 @@ export function EditorViewport(props: {
   readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly selectionBox: Rect | undefined;
   readonly marqueeRect: Rect | undefined;
+  /** Bounding boxes of the selected elements, for GodSVG's selection rectangle. */
+  readonly selectedElementBoxes: readonly ElementBox[];
   readonly onCanvasWheel: (event: WheelEvent) => void;
   readonly onCanvasPointerDown: (event: PointerEvent) => void;
   readonly onNodePointerDown: (id: string, event: PointerEvent) => void;
@@ -123,6 +126,7 @@ export function EditorViewport(props: {
                 zoom={props.zoom}
                 color={props.settings.gridColor}
                 moving={props.viewportIsMoving}
+                tickInterval={props.settings.gridTickInterval}
               />
             </Show>
             <rect
@@ -196,10 +200,12 @@ export function EditorViewport(props: {
               />
             </Show>
             <Show when={props.settings.showHandles}>
+              <SelectionRectangleLayer boxes={props.selectedElementBoxes} zoom={props.zoom} settings={props.settings.selectionRectangle} />
               <ContoursLayer contours={props.contours} />
               <HandlesLayer
                 handles={props.handles}
                 zoom={props.zoom}
+                size={props.settings.handles.size}
                 selectedIds={props.selectedIds}
                 commandSelection={props.commandSelection}
                 setHovered={props.setHovered}

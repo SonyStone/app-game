@@ -157,6 +157,7 @@ export function App() {
             setHovered={app.viewport.setHovered}
             selectionBox={app.viewport.selectionBox()}
             marqueeRect={app.viewport.marqueeRect()}
+            selectedElementBoxes={app.viewport.selectedElementBoxes()}
             onCanvasWheel={app.viewport.onCanvasWheel}
             onCanvasPointerDown={app.viewport.onCanvasPointerDown}
             onNodePointerDown={app.viewport.onNodePointerDown}
@@ -194,6 +195,7 @@ export function App() {
           resolveCloseTab={app.modals.resolveCloseTab}
           pendingImport={app.modals.pendingImport()}
           alertMessages={app.modals.alertMessages()}
+          fonts={app.modals.fonts}
           resolveImport={app.modals.resolveImport}
           shortcuts={app.modals.shortcuts}
           setShortcutBindings={app.modals.setShortcutBindings}
