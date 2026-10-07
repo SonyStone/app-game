@@ -283,6 +283,44 @@ describe('createEditorDocuments command history', () => {
     dispose();
   });
 
+  it('closes several tabs at once and moves tabs', () => {
+    const { dispose, documents } = createRoot((dispose) => ({
+      dispose,
+      documents: createEditorDocuments({
+        formatter: () => prettyFormatter,
+        onSelectionReset: () => undefined,
+        onDocumentOpened: () => undefined,
+        onParseError: () => undefined
+      })
+    }));
+
+    for (let count = 0; count < 3; count += 1) {
+      documents.createNewTab();
+      flush();
+    }
+
+    const [a, b, c, d] = documents.tabs().map((tab) => tab.id);
+    documents.selectTab(b!);
+    flush();
+    documents.moveTab(d!, 0);
+    flush();
+
+    expect(documents.tabs().map((tab) => tab.id)).toEqual([d, a, b, c]);
+
+    documents.closeTabs([a!, b!]);
+    flush();
+
+    expect(documents.tabs().map((tab) => tab.id)).toEqual([d, c]);
+    expect(documents.activeTabId()).toBe(c);
+
+    documents.closeTabs([c!, d!]);
+    flush();
+
+    expect(documents.tabs()).toHaveLength(1);
+    expect([c, d]).not.toContain(documents.activeTabId());
+    dispose();
+  });
+
   it('resets the selection when switching or closing tabs', () => {
     let selectionResets = 0;
     const { dispose, documents } = createRoot((dispose) => ({

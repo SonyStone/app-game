@@ -40,6 +40,9 @@ export function App() {
         selectTab={app.topBar.selectTab}
         activeTabId={app.topBar.activeTabId()}
         closeTab={app.topBar.closeTab}
+        closeTabs={app.topBar.closeTabs}
+        moveTab={app.topBar.moveTab}
+        saveTab={app.topBar.saveTab}
         middleClickCloses={app.topBar.middleClickCloses()}
         createNewTab={app.topBar.createNewTab}
         openImportDialog={app.topBar.openImportDialog}
@@ -103,6 +106,8 @@ export function App() {
           onPointerDown={app.workspace.sidebar.onPointerDown}
           onPointerMove={app.workspace.sidebar.onPointerMove}
           onPointerUp={app.workspace.sidebar.onPointerUp}
+          onPointerCancel={app.workspace.sidebar.onPointerUp}
+          onLostPointerCapture={app.workspace.sidebar.onPointerUp}
         />
         <EditorViewport
           settings={app.viewport.settings()}

@@ -102,7 +102,9 @@ export function createEditorAppController() {
     applyCode,
     reformatActiveCode,
     createNewTab,
-    closeTab,
+    closeTabs,
+    moveTab,
+    markTabClean,
     importSvgText,
     markActiveTabClean
   } = documents;
@@ -253,34 +255,58 @@ export function createEditorAppController() {
   }
 
   createTabPersistence({ tabs, activeTabId });
-  const [pendingCloseTabId, setPendingCloseTabId] = createSignal<string>();
-  const pendingCloseTab = createMemo(() => tabs().find((tab) => tab.id === pendingCloseTabId()));
+  /** Unsaved tabs waiting for the "Save the changes?" dialog, asked about one at a time. */
+  const [closeQueue, setCloseQueue] = createSignal<readonly string[]>([]);
+  const pendingCloseTab = createMemo(() => tabs().find((tab) => tab.id === closeQueue()[0]));
 
   /** Closes a tab, first asking to save when it has unsaved changes. */
   function requestCloseTab(tabId: string): void {
-    if (tabs().find((tab) => tab.id === tabId)?.dirty) {
-      setPendingCloseTabId(tabId);
-      setModal('close-tab');
-      return;
-    }
+    requestCloseTabs([tabId]);
+  }
 
-    closeTab(tabId);
+  /**
+   * Closes tabs: saved ones right away, then asks about each unsaved one in turn, like GodSVG. Cancel stops the
+   * remaining questions and keeps those tabs open.
+   */
+  function requestCloseTabs(tabIds: readonly string[]): void {
+    const closing = tabs().filter((tab) => tabIds.includes(tab.id));
+    const unsaved = closing.filter((tab) => tab.dirty).map((tab) => tab.id);
+    closeTabs(closing.filter((tab) => !tab.dirty).map((tab) => tab.id));
+
+    if (unsaved.length > 0) {
+      setCloseQueue(unsaved);
+      setModal('close-tab');
+    }
   }
 
   function resolveCloseTab(choice: 'save' | 'discard' | 'cancel'): void {
     const tab = pendingCloseTab();
-    setPendingCloseTabId(undefined);
-    setModal(undefined);
+    const rest = choice === 'cancel' ? [] : closeQueue().slice(1);
+    setCloseQueue(rest);
+
+    if (rest.length === 0) {
+      setModal(undefined);
+    }
 
     if (!tab || choice === 'cancel') {
       return;
     }
 
     if (choice === 'save') {
-      downloadBlob(serializeSvgDocument(tab.document, settings().exportFormatter), tab.name, 'image/svg+xml');
+      saveTab(tab.id);
     }
 
-    closeTab(tab.id);
+    closeTabs([tab.id]);
+  }
+
+  /** Downloads a tab's SVG with the export formatter and marks it saved. */
+  function saveTab(tabId: string): void {
+    const tab = tabs().find((item) => item.id === tabId);
+
+    if (tab) {
+      downloadBlob(serializeSvgDocument(tab.document, settings().exportFormatter), tab.name, 'image/svg+xml');
+      markTabClean(tab.id);
+    }
   }
 
   async function copySvgText(): Promise<void> {
@@ -305,6 +331,7 @@ export function createEditorAppController() {
     toggleGrid: () => setSettings((current) => ({ ...current, showGrid: !current.showGrid })),
     toggleHandles: () => setSettings((current) => ({ ...current, showHandles: !current.showHandles })),
     selectAll,
+    clearSelection: () => (commandSelection() ? setCommandSelection(undefined) : clearSelection()),
     duplicateSelected,
     deleteSelected,
     moveSelected,
@@ -446,6 +473,9 @@ export function createEditorAppController() {
       selectTab,
       activeTabId,
       closeTab: requestCloseTab,
+      closeTabs: requestCloseTabs,
+      moveTab,
+      saveTab,
       middleClickCloses: () => settings().tabMiddleClickClose,
       createNewTab,
       openImportDialog,

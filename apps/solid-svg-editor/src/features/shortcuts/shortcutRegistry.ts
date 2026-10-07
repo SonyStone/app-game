@@ -30,6 +30,7 @@ export const defaultShortcutItems = [
   { category: 'edit', action: 'Move up', keys: 'Alt+ArrowUp' },
   { category: 'edit', action: 'Move down', keys: 'Alt+ArrowDown' },
   { category: 'edit', action: 'Select all', keys: 'Ctrl+A' },
+  { category: 'edit', action: 'Clear selection', keys: 'Escape' },
   { category: 'view', action: 'Zoom in', keys: 'Ctrl+=' },
   { category: 'view', action: 'Zoom out', keys: 'Ctrl+-' },
   { category: 'view', action: 'Reset zoom', keys: 'Ctrl+0' },
@@ -50,7 +51,8 @@ export function createShortcutRegistry(
   options: { readonly activeElement?: Accessor<Element | null>; readonly enabled?: Accessor<boolean> } = {}
 ) {
   function onKeyDown(event: KeyboardEvent): void {
-    if (options.enabled && !options.enabled()) {
+    // Disabled, or already handled (a popover closing on Escape).
+    if ((options.enabled && !options.enabled()) || event.defaultPrevented) {
       return;
     }
 
