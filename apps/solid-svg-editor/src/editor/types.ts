@@ -109,6 +109,10 @@ export interface AppSettings {
   readonly uiScale: number | "auto";
   /** Keeps the screen awake with the Screen Wake Lock API while the editor is visible. */
   readonly keepScreenOn: boolean;
+  /** The path command picker inserts relative commands. */
+  readonly pathCommandInsertRelative: boolean;
+  /** The path command picker stays open after a pick. */
+  readonly pathCommandInsertKeepOpen: boolean;
   readonly tabMiddleClickClose: boolean;
   /** GodSVG's "Sync window title to file name": the page title shows the active tab's bound file. */
   readonly useFilenameForWindowTitle: boolean;
@@ -138,9 +142,14 @@ export interface HandleDescriptor {
 
 /** The element menu opened on a node, or GodSVG's "New shape" menu opened on an empty canvas point. */
 export type ContextMenuState = { readonly x: number; readonly y: number } & (
-  | { readonly kind: "node"; readonly nodeId: string }
+  /** `fromCanvas`: opened on the canvas, so it offers "View in Inspector". */
+  | { readonly kind: "node"; readonly nodeId: string; readonly fromCanvas?: boolean }
   | { readonly kind: "canvas"; readonly point: Point }
   | { readonly kind: "commands"; readonly nodeId: string }
+  /** GodSVG's command picker for "Insert after" on a selected path command. */
+  | { readonly kind: "path-insert"; readonly nodeId: string }
+  /** GodSVG's point count prompt for "Insert multiple after" on a selected polygon or polyline point. */
+  | { readonly kind: "insert-points"; readonly nodeId: string }
 );
 
 export interface ActivePanDrag {

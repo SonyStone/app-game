@@ -7,7 +7,6 @@ import MoveUpIcon from '../../App.icons/MoveUp.svg';
 import { svgCapabilities } from '../../editor/capabilities';
 import { convertElement, possibleConversions } from '../../editor/element-conversion';
 import { newShapeNames } from '../../editor/new-shape';
-import type { commandSelectionActions } from '../../editor/path-selection';
 import { decorativeIconProps } from '../../editor/svg-icon';
 import type { ContextMenuState } from '../../editor/types';
 import type { SvgNode } from '../../svg-model';
@@ -16,8 +15,34 @@ import InsertAfterIcon from '../ui/icons/InsertAfter.svg';
 import { createDismissible } from '../ui/createDismissible';
 import { MenuButton } from '../ui/MenuItem';
 import { useI18n } from '../../i18n/I18nProvider';
+import InspectorIcon from '../chrome/icons/Inspector.svg';
+import PlusIcon from '../ui/icons/Plus.svg';
+import { InsertPointsPopup } from './InsertPointsPopup';
+import { PathInsertPopup } from './PathInsertPopup';
 
 export type EditorContextMenuAction = 'duplicate' | 'delete' | 'move-up' | 'move-down' | 'insert-after';
+
+/** What the "commands" menu offers for the selected path commands or polygon/polyline points. */
+export type SelectionMenuActions = {
+  readonly moveUp: boolean;
+  readonly moveDown: boolean;
+  readonly reverse: boolean;
+  readonly setOrigin: boolean;
+  /** "Set as initial" is shown but disabled when the first point is the one selected. */
+  readonly setOriginEnabled: boolean;
+  readonly insertAfter: boolean;
+  readonly insertMultiple: boolean;
+};
+
+export type SelectionMenuAction =
+  | 'move-up'
+  | 'move-down'
+  | 'reverse'
+  | 'set-origin'
+  | 'delete'
+  | 'insert-after'
+  | 'insert-multiple'
+  | 'view-in-inspector';
 
 /**
  * Element actions menu at the pointer; a press outside it or Escape calls `close`.
@@ -32,9 +57,16 @@ export function EditorContextMenu(props: {
   readonly convert: (target: string) => void;
   /** Adds a shape at the canvas point of a "New shape" menu. */
   readonly addShape: (name: (typeof newShapeNames)[number]) => void;
-  /** Which operations apply to the selected path commands, for the "commands" menu. */
-  readonly commandActions: ReturnType<typeof commandSelectionActions> | undefined;
-  readonly runCommandAction: (action: 'move-up' | 'move-down' | 'reverse' | 'set-origin' | 'delete') => void;
+  /** Which operations apply to the selected path commands or polygon points, for the "commands" menu. */
+  readonly commandActions: SelectionMenuActions | undefined;
+  readonly runCommandAction: (action: SelectionMenuAction) => void;
+  /** The path command picker of the "path-insert" menu. */
+  readonly pathInsert: Omit<Parameters<typeof PathInsertPopup>[0], 'previous' | 'next'> & {
+    readonly previous: string | undefined;
+    readonly next: string | undefined;
+  };
+  /** Inserts points after the selected one, for the "insert-points" menu. */
+  readonly insertPoints: (count: number) => void;
   readonly close: () => void;
 }) {
   const { t } = useI18n();
@@ -68,7 +100,26 @@ export function EditorContextMenu(props: {
           )}
         </For>
       </Show>
+      <Show when={props.menu.kind === 'path-insert'}>
+        <PathInsertPopup {...props.pathInsert} />
+      </Show>
+      <Show when={props.menu.kind === 'insert-points'}>
+        <InsertPointsPopup insert={props.insertPoints} cancel={props.close} />
+      </Show>
       <Show when={props.menu.kind === 'commands'}>
+        <MenuButton type="button" icon={InspectorIcon} data-testid="context-menu-view-in-inspector" onClick={() => props.runCommandAction('view-in-inspector')}>
+          {t('View in Inspector')}
+        </MenuButton>
+        <Show when={props.commandActions?.insertAfter}>
+          <MenuButton type="button" icon={PlusIcon} data-testid="context-menu-commands-insert-after" onClick={() => props.runCommandAction('insert-after')}>
+            {t('Insert after')}
+          </MenuButton>
+        </Show>
+        <Show when={props.commandActions?.insertMultiple}>
+          <MenuButton type="button" icon={PlusIcon} data-testid="context-menu-commands-insert-multiple" onClick={() => props.runCommandAction('insert-multiple')}>
+            {t('Insert multiple after')}
+          </MenuButton>
+        </Show>
         <Show when={props.commandActions?.moveUp}>
           <MenuButton type="button" icon={MoveUpIcon} data-testid="context-menu-commands-move-up" onClick={() => props.runCommandAction('move-up')}>
             Move subpaths up
@@ -85,12 +136,22 @@ export function EditorContextMenu(props: {
           </MenuButton>
         </Show>
         <Show when={props.commandActions?.setOrigin}>
-          <MenuButton type="button" data-testid="context-menu-commands-set-origin" onClick={() => props.runCommandAction('set-origin')}>
+          <MenuButton
+            type="button"
+            disabled={!props.commandActions?.setOriginEnabled}
+            data-testid="context-menu-commands-set-origin"
+            onClick={() => props.runCommandAction('set-origin')}
+          >
             {t('Set as initial')}
           </MenuButton>
         </Show>
         <MenuButton type="button" icon={DeleteIcon} data-testid="context-menu-commands-delete" onClick={() => props.runCommandAction('delete')}>
           {t('Delete')}
+        </MenuButton>
+      </Show>
+      <Show when={props.menu.kind === 'node' && props.menu.fromCanvas}>
+        <MenuButton type="button" icon={InspectorIcon} data-testid="context-menu-view-in-inspector" onClick={() => props.runCommandAction('view-in-inspector')}>
+          {t('View in Inspector')}
         </MenuButton>
       </Show>
       <Show when={props.menu.kind === 'node'}>
