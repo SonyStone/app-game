@@ -1,10 +1,14 @@
-import { attributeNumberRange, getAttributeDefault, getRecognizedAttributes } from "../svg-db";
-import { createCommand, formatPathData, parsePathData, type PathCommand } from "../path-data";
+import { attributeNumberRange, getAttributeDefault, getRecognizedAttributes, propagatedAttributes } from "../svg-db";
+import { createCommand, formatPathData, simplifyPathCommands, tryParsePathData, type PathCommand } from "../path-data";
 import { convertElement } from "./element-conversion";
 import { getAttribute, type SvgAttribute, type SvgElementNode, type SvgNode } from "../svg-model";
 
 import type { AppSettings, InspectorRow, OptimizerSettings, ThemePreset } from "./types";
 
+/**
+ * The element's recognized attributes in GodSVG order, then its other attributes. Recognized attributes the element
+ * does not set have an empty value; show `inheritedAttributeValue` as their placeholder.
+ */
 export function orderedAttributes(node: SvgElementNode): readonly SvgAttribute[] {
   const recognized = getRecognizedAttributes(node.name);
   const existing = node.attrs;
@@ -12,7 +16,7 @@ export function orderedAttributes(node: SvgElementNode): readonly SvgAttribute[]
 
   for (const name of recognized) {
     const attr = existing.find((item) => item.name === name);
-    ordered.push(attr ?? { name, value: getAttributeDefault(name, node.name) });
+    ordered.push(attr ?? { name, value: "" });
   }
 
   for (const attr of existing) {
@@ -22,6 +26,50 @@ export function orderedAttributes(node: SvgElementNode): readonly SvgAttribute[]
   }
 
   return ordered;
+}
+
+/**
+ * The value an element renders for an attribute it does not set, like GodSVG's `get_default`: propagated presentation
+ * attributes (fill, stroke, …) come from the nearest ancestor that sets them, others from the element's own default.
+ * `ancestors` runs from the parent up to the root, as returned by `ancestorElements`.
+ */
+export function inheritedAttributeValue(element: SvgElementNode, ancestors: readonly SvgElementNode[], name: string): string {
+  if ((propagatedAttributes as readonly string[]).includes(name)) {
+    for (const ancestor of ancestors) {
+      const value = getAttribute(ancestor, name, true);
+
+      if (value !== "") {
+        return value;
+      }
+    }
+
+    return getAttributeDefault(name, "svg");
+  }
+
+  return getAttributeDefault(name, element.name);
+}
+
+/** Ancestors of a node from its parent up to the root; empty for the root or an unknown id. */
+export function ancestorElements(root: SvgElementNode, id: string): readonly SvgElementNode[] {
+  if (root.id === id) {
+    return [];
+  }
+
+  for (const child of root.children) {
+    if (child.id === id) {
+      return [root];
+    }
+
+    if (child.kind === "element") {
+      const path = ancestorElements(child, id);
+
+      if (path.length > 0) {
+        return [...path, root];
+      }
+    }
+  }
+
+  return [];
 }
 
 export function attrsToObject(attrs: readonly SvgAttribute[]): Record<string, string> {
@@ -159,19 +207,6 @@ export function clampNumericAttribute(name: string, value: string): string {
   return clamped === number ? value : `${clamped}${unit}`;
 }
 
-export function normalizeColorInput(value: string): string | undefined {
-  if (/^#[0-9a-f]{6}$/i.test(value)) {
-    return value;
-  }
-
-  if (/^#[0-9a-f]{3}$/i.test(value)) {
-    const [, r, g, b] = value;
-    return r && g && b ? `#${r}${r}${g}${g}${b}${b}` : undefined;
-  }
-
-  return undefined;
-}
-
 export function hasSvgDrag(event: DragEvent): boolean {
   const types = Array.from(event.dataTransfer?.types ?? []);
 
@@ -199,7 +234,8 @@ export function optimizeNode(node: SvgNode, settings: OptimizerSettings): SvgNod
     .filter((attr) => attr.value !== "")
     .map((attr) => {
       if (settings.simplifyPathParameters && attr.name === "d") {
-        return { ...attr, value: formatPathData(parsePathData(attr.value), true) };
+        const commands = tryParsePathData(attr.value);
+        return commands ? { ...attr, value: formatPathData(simplifyPathCommands(commands)) } : attr;
       }
 
       return attr;

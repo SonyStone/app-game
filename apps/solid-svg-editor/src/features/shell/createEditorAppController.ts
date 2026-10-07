@@ -8,7 +8,7 @@ import { makePersisted } from '@solid-primitives/storage';
 import { createMemo, createSignal, createTrackedEffect, untrack } from 'solid-js';
 
 import { createEditorCommand, type EditorCommandEvent } from '../../editor/commands';
-import { defaultSettings } from '../../editor/defaults';
+import { defaultSettings, restoreSettings } from '../../editor/defaults';
 import { downloadBlob } from '../../editor/export-utils';
 import { serializeSvgDocument } from '../../editor/svg-document';
 import type { ContextMenuState, DragSelectionMode, ModalId, PanelId } from '../../editor/types';
@@ -47,7 +47,8 @@ const inactivePointerState = {
 export function createEditorAppController() {
   const [settings, setSettings] = untrack(() =>
     makePersisted(createSignal(defaultSettings(), { ownedWrite: true }), {
-      name: 'solid-svg-editor-settings-v1'
+      name: 'solid-svg-editor-settings-v1',
+      deserialize: restoreSettings
     })
   );
   const [activePanel, setActivePanel] = createSignal<PanelId>('inspector');

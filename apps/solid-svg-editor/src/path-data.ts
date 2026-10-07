@@ -46,6 +46,19 @@ const parameterNames = {
  * returns the commands read so far, which is how browsers render malformed path data.
  */
 export function parsePathData(data: string): readonly PathCommand[] {
+  return scanPathData(data).commands;
+}
+
+/**
+ * Parses path data only when all of it is valid; returns `undefined` on a syntax error. Use it before rewriting a
+ * value, so malformed data is kept as written instead of being cut at the error.
+ */
+export function tryParsePathData(data: string): readonly PathCommand[] | undefined {
+  const { commands, complete } = scanPathData(data);
+  return complete ? commands : undefined;
+}
+
+function scanPathData(data: string): { readonly commands: readonly PathCommand[]; readonly complete: boolean } {
   const scanner = createPathScanner(data);
   const commands: PathCommand[] = [];
   let previousCommand = "";
@@ -54,14 +67,14 @@ export function parsePathData(data: string): readonly PathCommand[] {
     scanner.skipWhitespace();
 
     if (scanner.done()) {
-      break;
+      return { commands, complete: true };
     }
 
     let command = scanner.readCommandLetter();
 
     if (!command) {
       if (!previousCommand || normalizeCommand(previousCommand) === "Z") {
-        break;
+        return { commands, complete: false };
       }
 
       command = normalizeCommand(previousCommand) === "M" ? implicitLineCommand(previousCommand) : previousCommand;
@@ -70,15 +83,13 @@ export function parsePathData(data: string): readonly PathCommand[] {
     const values = readCommandValues(scanner, normalizeCommand(command));
 
     if (!values) {
-      break;
+      return { commands, complete: false };
     }
 
     commands.push({ command, values });
     previousCommand = command;
     scanner.skipSeparator();
   }
-
-  return commands;
 }
 
 function readCommandValues(scanner: PathScanner, command: PathCommandLetter): number[] | undefined {
@@ -178,27 +189,109 @@ function implicitLineCommand(command: string): string {
   return command === command.toLowerCase() ? "l" : "L";
 }
 
-export function formatPathData(commands: readonly PathCommand[], compact = false): string {
-  const separator = compact ? " " : " ";
-  return commands
-    .map((command) => {
-      const values = command.values.map(formatPathNumber).join(separator);
-      return values ? `${command.command}${compact ? "" : " "}${values}` : command.command;
-    })
-    .join(compact ? "" : " ");
+/** Path data output options, named after GodSVG's formatter settings. */
+export type PathDataFormat = {
+  /** Drop the leading zero of fractions: `0.5` → `.5`. */
+  readonly compressNumbers: boolean;
+  /** Omit spaces after command letters and before numbers that start with `-` or `.`. */
+  readonly minimizeSpacing: boolean;
+  /** Write arc flags without separators: `a5 5 0 0110 10`. */
+  readonly removeSpacingAfterFlags: boolean;
+  /** Omit a command letter that repeats the previous one (and `L` after `M`). */
+  readonly removeConsecutiveCommands: boolean;
+};
+
+/** Spaced-out output with every command letter, used for values the editor writes itself. */
+export const readablePathFormat = {
+  compressNumbers: false,
+  minimizeSpacing: false,
+  removeSpacingAfterFlags: false,
+  removeConsecutiveCommands: false
+} as const satisfies PathDataFormat;
+
+/**
+ * Writes path commands as text, following GodSVG's path data output. Numbers keep up to 6 decimals (arc rotation 4),
+ * the precision GodSVG uses.
+ */
+export function formatPathData(commands: readonly PathCommand[], format: PathDataFormat = readablePathFormat): string {
+  let output = "";
+  let previousLetter = "";
+  let previousNumber = "";
+
+  for (const command of commands) {
+    const letter = command.command;
+    const numbers = commandNumberTexts(command, format.compressNumbers);
+    const first = numbers[0] ?? "";
+
+    if (isRepeatedCommand(previousLetter, letter, format)) {
+      output += numberSeparator(previousNumber, first, format.minimizeSpacing);
+    } else {
+      output += `${output && !format.minimizeSpacing ? " " : ""}${letter}${numbers.length > 0 && !format.minimizeSpacing ? " " : ""}`;
+    }
+
+    output += normalizeCommand(letter) === "A" ? arcText(numbers, format) : joinNumbers(numbers, format.minimizeSpacing);
+    previousLetter = letter;
+    previousNumber = numbers[numbers.length - 1] ?? previousNumber;
+  }
+
+  return output;
 }
 
-export function formatPathNumber(value: number): string {
+function isRepeatedCommand(previous: string, letter: string, format: PathDataFormat): boolean {
+  if (!format.removeConsecutiveCommands || previous === "" || normalizeCommand(letter) === "Z") {
+    return false;
+  }
+
+  return (letter === previous && normalizeCommand(letter) !== "M") || (previous === "M" && letter === "L") || (previous === "m" && letter === "l");
+}
+
+function commandNumberTexts(command: PathCommand, compress: boolean): string[] {
+  const isArc = normalizeCommand(command.command) === "A";
+  return command.values.map((value, index) => {
+    const text = formatPathNumber(value, isArc && index === 2 ? angleDecimals : numberDecimals);
+    return compress ? text.replace(/^(-?)0\./, "$1.") : text;
+  });
+}
+
+/** Arc numbers: radii and rotation, the two single-character flags, then the end point. */
+function arcText(numbers: readonly string[], format: PathDataFormat): string {
+  const [rx = "0", ry = "0", rotation = "0", large = "0", sweep = "0", x = "0", y = "0"] = numbers;
+  const head = joinNumbers([rx, ry, rotation], format.minimizeSpacing);
+
+  if (format.removeSpacingAfterFlags) {
+    return `${head} ${large}${sweep}${x}${numberSeparator(x, y, format.minimizeSpacing)}${y}`;
+  }
+
+  return `${head} ${large} ${sweep}${x.startsWith("-") && format.minimizeSpacing ? "" : " "}${joinNumbers([x, y], format.minimizeSpacing)}`;
+}
+
+function joinNumbers(numbers: readonly string[], minimizeSpacing: boolean): string {
+  return numbers.reduce((output, number, index) => {
+    const previous = numbers[index - 1];
+    return previous === undefined ? number : output + numberSeparator(previous, number, minimizeSpacing) + number;
+  }, "");
+}
+
+/** A space is needed unless the next number starts with a sign, or with `.` after a number that has one (GodSVG). */
+function numberSeparator(previous: string, next: string, minimizeSpacing: boolean): string {
+  if (!minimizeSpacing) {
+    return " ";
+  }
+
+  return next.startsWith("-") || next.startsWith("+") || (previous.includes(".") && next.startsWith(".")) ? "" : " ";
+}
+
+const numberDecimals = 6;
+const angleDecimals = 4;
+
+/** Formats a path number with at most `decimals` decimals and no trailing zeros; `-0` and non-finite give `0`. */
+export function formatPathNumber(value: number, decimals = numberDecimals): string {
   if (!Number.isFinite(value)) {
     return "0";
   }
 
-  if (Object.is(value, -0)) {
-    return "0";
-  }
-
-  const rounded = Math.round(value * 1000) / 1000;
-  return Number.isInteger(rounded) ? String(rounded) : String(rounded).replace(/0+$/, "").replace(/\.$/, "");
+  const rounded = Number(value.toFixed(decimals));
+  return Object.is(rounded, -0) ? "0" : String(rounded);
 }
 
 export function commandParameters(command: string): readonly PathParameter[] {
@@ -236,19 +329,121 @@ export function deleteCommand(commands: readonly PathCommand[], commandIndex: nu
  * straight curves with evenly spaced control points. The case of `command` selects absolute or relative output.
  */
 export function convertCommand(commands: readonly PathCommand[], commandIndex: number, command: string): readonly PathCommand[] {
-  const segment = absoluteSegments(commands)[commandIndex];
+  return convertCommands(commands, new Map([[commandIndex, command]]));
+}
 
-  if (!segment) {
-    return commands;
+/**
+ * Converts several commands at once (index → target letter) like `convertCommand`, measuring every command on the
+ * original geometry. Meant for exact conversions, which keep the geometry of the commands around them.
+ */
+function convertCommands(commands: readonly PathCommand[], targets: ReadonlyMap<number, string>): readonly PathCommand[] {
+  const segments = absoluteSegments(commands);
+
+  return commands.map((item, index) => {
+    const command = targets.get(index);
+    const segment = segments[index];
+
+    if (command === undefined || !segment) {
+      return item;
+    }
+
+    const target = normalizeCommand(command);
+    const relative = command === command.toLowerCase();
+    const absoluteValues = convertedSegmentValues(segment, target);
+    const values = relative ? toRelativeValues(target, absoluteValues, segment.start) : absoluteValues;
+    return { command: relative ? target.toLowerCase() : target, values };
+  });
+}
+
+/**
+ * The optimizer's path simplification, following GodSVG: each command becomes the shortest command type that draws
+ * exactly the same segment. Flat curves and arcs become `L`, `H`, or `V`; lines become `H` or `V`; curves whose
+ * control points are implied become `T` or `S`; cubics equal to a quadratic become `Q`; circular arcs lose their
+ * rotation. Absolute or relative form is kept. Conversions that would change how a following `S`/`T` is drawn are
+ * skipped.
+ */
+export function simplifyPathCommands(commands: readonly PathCommand[]): readonly PathCommand[] {
+  const segments = absoluteSegments(commands);
+  const targets = new Map<number, string>();
+  let next: readonly PathCommand[] = commands;
+
+  segments.forEach((segment, index) => {
+    const following = segments[index + 1]?.source.letter;
+    const target = simplerCommand(segment, following);
+
+    if (target) {
+      const original = commands[index]?.command ?? target;
+      targets.set(index, original === original.toLowerCase() ? target.toLowerCase() : target);
+    }
+
+    if (!target && segment.source.letter === "A" && segment.source.values[0] === segment.source.values[1] && segment.source.values[2] !== 0) {
+      next = updateCommandValue(next, index, 2, 0);
+    }
+  });
+
+  return targets.size > 0 ? convertCommands(next, targets) : next;
+}
+
+function simplerCommand(segment: AbsoluteSegment, following: PathCommandLetter | undefined): PathCommandLetter | undefined {
+  const letter = segment.source.letter;
+  const followedByT = following === "T";
+  const followedByS = following === "S";
+  const straight = straightLetter(segment);
+
+  switch (letter) {
+    case "L":
+      return straight === "L" ? undefined : straight;
+    case "A": {
+      const [rx, ry] = segment.source.values;
+      const flat = rx === 0 || ry === 0 || nearlyEqualPoints(segment.start, segment.end);
+      return flat ? straight : undefined;
+    }
+    case "Q":
+    case "T": {
+      const control = segment.quadraticControl;
+
+      if (control && !followedByT && isPointOnSegment(control, segment.start, segment.end)) {
+        return straight;
+      }
+
+      return letter === "Q" && control && nearlyEqualPoints(control, segment.impliedQuadraticControl) ? "T" : undefined;
+    }
+    case "C":
+    case "S": {
+      const controls = segment.cubicControls;
+
+      if (!controls) {
+        return undefined;
+      }
+
+      if (!followedByS && controls.every((control) => isPointOnSegment(control, segment.start, segment.end))) {
+        return straight;
+      }
+
+      const quadratic = exactQuadraticFromCubic(segment);
+
+      if (quadratic && !followedByS && !followedByT && nearlyEqualPoints(quadratic, segment.impliedQuadraticControl)) {
+        return "T";
+      }
+
+      if (letter === "C" && nearlyEqualPoints(controls[0], segment.impliedCubicControl)) {
+        return "S";
+      }
+
+      return letter === "C" && quadratic && !followedByS && !followedByT ? "Q" : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** The line command that draws a straight segment: `H` or `V` when axis-aligned, otherwise `L`. */
+function straightLetter(segment: AbsoluteSegment): PathCommandLetter {
+  if (segment.end.y === segment.start.y) {
+    return "H";
   }
 
-  const target = normalizeCommand(command);
-  const relative = command === command.toLowerCase();
-  const absoluteValues = convertedSegmentValues(segment, target);
-  const values = relative ? toRelativeValues(target, absoluteValues, segment.start) : absoluteValues;
-  const converted = { command: relative ? target.toLowerCase() : target, values };
-
-  return commands.map((item, index) => (index === commandIndex ? converted : item));
+  return segment.end.x === segment.start.x ? "V" : "L";
 }
 
 function convertedSegmentValues(segment: AbsoluteSegment, target: PathCommandLetter): number[] {
@@ -348,6 +543,8 @@ type AbsoluteSegment = {
   readonly cubicControls: readonly [Point, Point] | undefined;
   /** First control point an `S` at this position would get: the reflection of the previous cubic's second control. */
   readonly impliedCubicControl: Point;
+  /** Control point a `T` at this position would get: the reflection of the previous quadratic's control. */
+  readonly impliedQuadraticControl: Point;
 };
 
 function absoluteSegments(commands: readonly PathCommand[]): readonly AbsoluteSegment[] {
@@ -379,7 +576,8 @@ function absoluteSegments(commands: readonly PathCommand[]): readonly AbsoluteSe
       end,
       quadraticControl: letter === "Q" ? point(0) : letter === "T" ? reflectedQuadratic : undefined,
       cubicControls: letter === "C" ? [point(0), point(2)] : letter === "S" ? [impliedCubicControl, point(0)] : undefined,
-      impliedCubicControl
+      impliedCubicControl,
+      impliedQuadraticControl: reflectedQuadratic
     };
 
     segments.push(segment);
@@ -402,8 +600,13 @@ function lerpPoint(from: Point, to: Point, t: number): Point {
   return { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
 }
 
+/** Equal within the 6-decimal output precision, relative to the magnitude of the coordinates. */
 function nearlyEqualPoints(a: Point, b: Point): boolean {
-  return Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9;
+  return nearlyEqual(a.x, b.x) && nearlyEqual(a.y, b.y);
+}
+
+function nearlyEqual(a: number, b: number): boolean {
+  return Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b));
 }
 
 /**

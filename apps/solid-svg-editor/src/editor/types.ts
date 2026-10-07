@@ -1,3 +1,4 @@
+import type { ColorPalette } from './palettes';
 import type { FormatterSettings } from "../formatter";
 import type { Matrix2D, Rect } from "./geometry";
 import type { SvgDocument } from "./svg-document";
@@ -40,6 +41,7 @@ export interface ShortcutItem {
 export interface OptimizerSettings {
   readonly removeComments: boolean;
   readonly convertShapes: boolean;
+  /** "Simplify paths": rewrite path commands as the shortest exact command types, like GodSVG. */
   readonly simplifyPathParameters: boolean;
 }
 
@@ -57,7 +59,8 @@ export interface AppSettings {
   readonly formatter: FormatterSettings;
   readonly exportFormatter: FormatterSettings;
   readonly optimizer: OptimizerSettings;
-  readonly palettes: readonly string[];
+  /** Named color palettes listed in the color picker. */
+  readonly palettes: readonly ColorPalette[];
   readonly tabMiddleClickClose: boolean;
   readonly useCtrlForZoom: boolean;
   readonly rasterPreviewDuringInteraction: boolean;

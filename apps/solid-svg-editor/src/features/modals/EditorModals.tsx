@@ -7,6 +7,7 @@ import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import { clamp, themePresetSettings } from '../../editor/tree-utils';
 import type { AppSettings, ExportFormat, ThemePreset } from '../../editor/types';
 import {
+  formatterPreset,
   humanFileSize,
   type FormatterPreset,
   type FormatterSettings,
@@ -14,6 +15,7 @@ import {
   type ShorthandTags
 } from '../../formatter';
 import { svgSize, type SvgElementNode } from '../../svg-model';
+import { PaletteSettings } from '../color-picker/PaletteSettings';
 import { PreviewSvg } from '../panels/SidePanels';
 import { defaultShortcutItems } from '../shortcuts/shortcutRegistry';
 import ClearIcon from '../ui/icons/Clear.svg';
@@ -38,10 +40,11 @@ export function SettingsModal(props: {
     exportFormatter = false
   ) => {
     props.setSettings((settings) => {
-      const formatter = {
-        ...(exportFormatter ? settings.exportFormatter : settings.formatter),
-        [key]: value
-      } satisfies FormatterSettings;
+      // Choosing a preset applies its defaults, like GodSVG's preset picker.
+      const formatter: FormatterSettings =
+        key === 'preset'
+          ? formatterPreset(value as FormatterPreset)
+          : { ...(exportFormatter ? settings.exportFormatter : settings.formatter), [key]: value };
       return exportFormatter ? { ...settings, exportFormatter: formatter } : { ...settings, formatter };
     });
   };
@@ -130,29 +133,14 @@ export function SettingsModal(props: {
                   }))
                 }
               />
-              Simplify path parameters
+              Simplify paths
             </CheckboxField>
           </Show>
           <Show when={tab() === 'palettes'}>
-            <div class="palette-list flex flex-wrap gap-2" data-testid="settings-palette-list">
-              <For each={props.settings.palettes}>
-                {(color, index) => (
-                  <FormInput
-                    type="color"
-                    data-testid={`settings-palette-color-${index()}`}
-                    value={color}
-                    onInput={(event) =>
-                      props.setSettings((settings) => ({
-                        ...settings,
-                        palettes: settings.palettes.map((item, itemIndex) =>
-                          itemIndex === index() ? event.currentTarget.value : item
-                        )
-                      }))
-                    }
-                  />
-                )}
-              </For>
-            </div>
+            <PaletteSettings
+              palettes={props.settings.palettes}
+              setPalettes={(update) => props.setSettings((settings) => ({ ...settings, palettes: update(settings.palettes) }))}
+            />
           </Show>
           <Show when={tab() === 'shortcuts'}>
             <ShortcutTable />
@@ -338,14 +326,105 @@ function FormatterSettingsView(props: {
           max="16"
           data-testid={`${testId()}-indentation-spaces`}
           value={props.formatter.indentationSpaces}
-          onChange={(event) =>
-            props.update('indentationSpaces', clamp(Number.parseInt(event.currentTarget.value, 10) || 2, 0, 16))
-          }
+          onChange={(event) => {
+            const spaces = Number.parseInt(event.currentTarget.value, 10);
+            props.update('indentationSpaces', Number.isNaN(spaces) ? 2 : clamp(spaces, 0, 16));
+          }}
         />
       </SettingsField>
+      <div class="mt-1 text-[11px] text-[var(--muted)]">Colors</div>
+      <SettingsField>
+        Named colors
+        <FormSelect
+          value={props.formatter.colorUseNamedColors}
+          data-testid={`${testId()}-color-named`}
+          onChange={(event) =>
+            props.update('colorUseNamedColors', event.currentTarget.value as FormatterSettings['colorUseNamedColors'])
+          }
+        >
+          <option value="always">Always</option>
+          <option value="when-shorter-or-equal">When shorter or equal</option>
+          <option value="when-shorter">When shorter</option>
+          <option value="never">Never</option>
+        </FormSelect>
+      </SettingsField>
+      <SettingsField>
+        Color syntax
+        <FormSelect
+          value={props.formatter.colorPrimarySyntax}
+          data-testid={`${testId()}-color-syntax`}
+          onChange={(event) =>
+            props.update('colorPrimarySyntax', event.currentTarget.value as FormatterSettings['colorPrimarySyntax'])
+          }
+        >
+          <option value="three-or-six-digit-hex">3 or 6 digit hex</option>
+          <option value="six-digit-hex">6 digit hex</option>
+          <option value="rgb">rgb()</option>
+        </FormSelect>
+      </SettingsField>
+      <CheckboxField>
+        <FormInput
+          type="checkbox"
+          data-testid={`${testId()}-colorCapitalHex`}
+          checked={props.formatter.colorCapitalHex}
+          onChange={(event) => props.update('colorCapitalHex', event.currentTarget.checked)}
+        />
+        Capital hex
+      </CheckboxField>
+      <For each={formatterToggleGroups}>
+        {(group) => (
+          <>
+            <div class="mt-1 text-[11px] text-[var(--muted)]">{group.title}</div>
+            <For each={group.toggles}>
+              {(toggle) => (
+                <CheckboxField>
+                  <FormInput
+                    type="checkbox"
+                    data-testid={`${testId()}-${toggle.key}`}
+                    checked={props.formatter[toggle.key]}
+                    onChange={(event) => props.update(toggle.key, event.currentTarget.checked)}
+                  />
+                  {toggle.label}
+                </CheckboxField>
+              )}
+            </For>
+          </>
+        )}
+      </For>
     </fieldset>
   );
 }
+
+/** GodSVG's number and path data formatter options, shown as checkboxes. */
+const formatterToggleGroups = [
+  {
+    title: 'Numbers',
+    toggles: [
+      { key: 'numberRemoveLeadingZero', label: 'Remove leading zero' },
+      { key: 'numberUseExponentIfShorter', label: 'Use exponent when shorter' }
+    ]
+  },
+  {
+    title: 'Path data',
+    toggles: [
+      { key: 'pathdataCompressNumbers', label: 'Compress numbers' },
+      { key: 'pathdataMinimizeSpacing', label: 'Minimize spacing' },
+      { key: 'pathdataRemoveSpacingAfterFlags', label: 'Remove spacing after arc flags' },
+      { key: 'pathdataRemoveConsecutiveCommands', label: 'Remove repeated commands' }
+    ]
+  },
+  {
+    title: 'Transform lists',
+    toggles: [
+      { key: 'transformListCompressNumbers', label: 'Compress numbers' },
+      { key: 'transformListMinimizeSpacing', label: 'Minimize spacing' },
+      { key: 'transformListRemoveUnnecessaryParams', label: 'Remove unnecessary parameters' }
+    ]
+  }
+] as const satisfies readonly {
+  readonly title: string;
+  readonly toggles: readonly { readonly key: keyof FormatterSettings; readonly label: string }[];
+}[];
 
 export function ExportModal(props: {
   readonly root: SvgElementNode;
