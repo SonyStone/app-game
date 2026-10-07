@@ -3,5 +3,6 @@
   "rewrites": [
     { "source": "/fullscreen", "destination": "/index.html" },
     { "source": "/fullscreen/", "destination": "/index.html" }
-  ]
+  ],
+  "git": { "deploymentEnabled": { "**": false, "master": true } }
 }

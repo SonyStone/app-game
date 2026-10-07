@@ -3,5 +3,6 @@
   "buildCommand": "pnpm build",
   "outputDirectory": "dist",
   "bunVersion": "1.4.x",
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "git": { "deploymentEnabled": { "**": false, "master": true } }
 }
