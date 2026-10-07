@@ -1,4 +1,3 @@
-import { Key } from '@solid-primitives/keyed';
 import { Dynamic } from '@solidjs/web';
 import { createSignal, For, Show } from 'solid-js';
 
@@ -22,6 +21,8 @@ import SaveIcon from './icons/Save.svg';
 import ShortcutPanelIcon from './icons/ShortcutPanel.svg';
 import UndoIcon from './icons/Undo.svg';
 import { useI18n } from '../../i18n/I18nProvider';
+import { tabsToClose, type TabCloseGroup } from '../documents/tab-groups';
+import { godSvgRepositoryUrl, godSvgWebsiteUrl } from '../../editor/links';
 
 export function TopBar(props: {
   readonly activeTab: EditorTab | undefined;
@@ -112,7 +113,7 @@ export function TopBar(props: {
             </MenuButton>
             <MenuLink
               icon={LinkIcon}
-              href="https://github.com/MewPurPur/GodSVG"
+              href={godSvgRepositoryUrl}
               target="_blank"
               rel="noreferrer"
               data-testid="topbar-menu-repository"
@@ -121,7 +122,7 @@ export function TopBar(props: {
             </MenuLink>
             <MenuLink
               icon={LinkIcon}
-              href="https://godsvg.com"
+              href={godSvgWebsiteUrl}
               target="_blank"
               rel="noreferrer"
               data-testid="topbar-menu-website"
@@ -170,7 +171,7 @@ export function TopBar(props: {
           }
         }}
       >
-        <Key each={props.tabs} by="id">
+        <For each={props.tabs} keyed={(tab) => tab.id}>
           {(tab) => (
             <div
               role="tab"
@@ -179,6 +180,7 @@ export function TopBar(props: {
                 "tab-button relative flex h-6.5 max-w-52.5 data-[drop=after]:shadow-[inset_-2px_0_0_var(--accent)] data-[drop=before]:shadow-[inset_2px_0_0_var(--accent)] cursor-pointer items-center gap-1.5 rounded-t-[5px] border border-[#22283d] bg-[#151928] py-0 pr-1.5 pl-2.5 text-[var(--muted)] [&.active]:border-[#415177] [&.active]:bg-[#24304d] [&.active]:text-[#f4f7ff] [&.dirty>span::after]:text-[var(--warning)] [&.dirty>span::after]:content-['*']",
                 { active: props.activeTabId === tab().id, dirty: tab().dirty }
               ]}
+              aria-selected={props.activeTabId === tab().id ? 'true' : 'false'}
               data-testid={`tab-${tab().id}`}
               data-drop={dropTarget()?.tabId === tab().id ? (dropTarget()?.after ? 'after' : 'before') : undefined}
               draggable="true"
@@ -240,7 +242,7 @@ export function TopBar(props: {
               </button>
             </div>
           )}
-        </Key>
+        </For>
         <IconButton icon={CreateTabIcon} label={t('Create a new tab')} testId="new-tab-button" onClick={props.createNewTab} />
       </div>
       <Show when={tabMenu()}>
@@ -299,6 +301,15 @@ export function PanelTabs(props: { readonly activePanel: PanelId; readonly setAc
   );
 }
 
+const tabMenuGroups = [
+  { key: 'close', label: 'Close tab' },
+  { key: 'close-others', label: 'Close all other tabs' },
+  { key: 'close-left', label: 'Close tabs to the left' },
+  { key: 'close-right', label: 'Close tabs to the right' },
+  { key: 'close-empty', label: 'Close empty tabs' },
+  { key: 'close-saved', label: 'Close saved tabs' }
+] as const satisfies readonly { readonly key: TabCloseGroup; readonly label: string }[];
+
 /** Drag data type for tabs, so dropping a tab is never mistaken for dropping SVG text to import. */
 const tabDragType = 'application/x-solid-svg-editor-tab';
 
@@ -320,23 +331,12 @@ function TabMenu(props: {
   let menu: HTMLDivElement | undefined;
   createDismissible({ open: () => true, container: () => menu, close: () => props.close() });
   const index = () => props.tabs.findIndex((tab) => tab.id === props.tabId);
-  const ids = (tabs: readonly EditorTab[]) => tabs.map((tab) => tab.id);
   const run = (action: () => void) => {
     props.close();
     action();
   };
-  const groups = () => {
-    const tabs = props.tabs;
-    const current = index();
-    return [
-      { key: 'close', label: 'Close tab', ids: ids(tabs.slice(current, current + 1)) },
-      { key: 'close-others', label: 'Close all other tabs', ids: ids(tabs.filter((_, item) => item !== current)) },
-      { key: 'close-left', label: 'Close tabs to the left', ids: ids(tabs.slice(0, current)) },
-      { key: 'close-right', label: 'Close tabs to the right', ids: ids(tabs.slice(current + 1)) },
-      { key: 'close-empty', label: 'Close empty tabs', ids: ids(tabs.filter((tab) => tab.document.root.children.length === 0)) },
-      { key: 'close-saved', label: 'Close saved tabs', ids: ids(tabs.filter((tab) => !tab.dirty)) }
-    ];
-  };
+  const groups = () =>
+    tabMenuGroups.map((group) => ({ ...group, ids: tabsToClose(props.tabs, index(), group.key) }));
 
   return (
     <div

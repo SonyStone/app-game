@@ -27,6 +27,9 @@ import { createReferenceImage } from '../reference/createReferenceImage';
 import type { EditorContextMenuAction } from '../selection/EditorContextMenu';
 import { createEditorSelection } from '../selection/createEditorSelection';
 import { createEditorShortcuts } from '../shortcuts/createEditorShortcuts';
+import { evaluateFocusedField, focusSearchField } from '../shortcuts/focusedFieldActions';
+import { tabsToClose, type TabCloseGroup } from '../documents/tab-groups';
+import { godSvgRepositoryUrl, godSvgWebsiteUrl } from '../../editor/links';
 import { createTransientViewportPreview } from '../viewport/createTransientViewportPreview';
 import { createViewportCamera } from '../viewport/createViewportCamera';
 import { createViewportInteractions } from '../viewport/createViewportInteractions';
@@ -319,30 +322,78 @@ export function createEditorAppController() {
     await writeClipboard(exportText());
   }
 
+  const activeTabIndex = () => tabs().findIndex((tab) => tab.id === activeTabId());
+  const closeGroup = (group: TabCloseGroup) => () => {
+    const ids = tabsToClose(tabs(), activeTabIndex(), group);
+
+    if (ids.length > 0) {
+      requestCloseTabs(ids);
+    }
+  };
+  const selectTabBy = (step: number) => () => {
+    const list = tabs();
+    const next = list[(activeTabIndex() + step + list.length) % list.length];
+
+    if (next) {
+      selectTab(next.id);
+    }
+  };
+  const toggleSetting = (key: 'showGrid' | 'showHandles' | 'viewRasterized' | 'snapEnabled') => () =>
+    void setSettings((current) => ({ ...current, [key]: !current[key] }));
   const { onKeyDown, descriptors: shortcutDescriptors } = createEditorShortcuts({
     activeElement,
     overrides: () => settings().shortcutOverrides,
     enabled: () => modal() === undefined && activeDrag() === undefined && activeTouchGesture() === undefined,
-    redo,
-    undo,
-    downloadSvg,
-    copySvgText: () => void copySvgText(),
-    openImportDialog,
-    openExport: () => setModal('export'),
-    createNewTab,
-    openSettings: () => setModal('settings'),
-    optimizeActive,
-    zoomIn: () => zoomBy(Math.SQRT2),
-    zoomOut: () => zoomBy(1 / Math.SQRT2),
-    centerFrame,
-    toggleGrid: () => setSettings((current) => ({ ...current, showGrid: !current.showGrid })),
-    toggleHandles: () => setSettings((current) => ({ ...current, showHandles: !current.showHandles })),
-    selectAll,
-    clearSelection: () => (commandSelection() ? setCommandSelection(undefined) : clearSelection()),
-    duplicateSelected,
-    deleteSelected,
-    moveSelected,
-    insertPathCommandFromKey
+    handlers: {
+      'file.import': openImportDialog,
+      'file.export': () => void setModal('export'),
+      'file.save-svg': downloadSvg,
+      'file.close-tab': closeGroup('close'),
+      'file.close-other-tabs': closeGroup('close-others'),
+      'file.close-tabs-left': closeGroup('close-left'),
+      'file.close-tabs-right': closeGroup('close-right'),
+      'file.close-empty-tabs': closeGroup('close-empty'),
+      'file.close-saved-tabs': closeGroup('close-saved'),
+      'file.new-tab': createNewTab,
+      'file.next-tab': selectTabBy(1),
+      'file.previous-tab': selectTabBy(-1),
+      'file.optimize': optimizeActive,
+      'edit.copy-svg': () => void copySvgText(),
+      'edit.undo': undo,
+      'edit.redo': redo,
+      'edit.select-all': selectAll,
+      'edit.duplicate': duplicateSelected,
+      'edit.move-up': () => moveSelected(-1),
+      'edit.move-down': () => moveSelected(1),
+      'edit.set-as-initial': setSelectedAsOrigin,
+      'edit.reverse-order': reverseSelectedSubpaths,
+      'edit.delete': deleteSelected,
+      'edit.clear-selection': () => void (commandSelection() ? setCommandSelection(undefined) : clearSelection()),
+      'edit.find': focusSearchField,
+      'edit.evaluate': evaluateFocusedField,
+      'view.zoom-in': () => zoomBy(Math.SQRT2),
+      'view.zoom-out': () => zoomBy(1 / Math.SQRT2),
+      'view.reset-zoom': centerFrame,
+      'view.toggle-fullscreen': toggleFullscreen,
+      'view.debug': () => void setActivePanel(activePanel() === 'debug' ? 'inspector' : 'debug'),
+      'view.toggle-grid': toggleSetting('showGrid'),
+      'view.toggle-handles': toggleSetting('showHandles'),
+      'view.show-rasterized': toggleSetting('viewRasterized'),
+      'view.load-reference': openReferenceDialog,
+      'view.show-reference': () => void setShowReference(!showReference()),
+      'view.overlay-reference': () => void setOverlayReference(!overlayReference()),
+      'tool.toggle-snap': toggleSetting('snapEnabled'),
+      'tool.insert-path-command': (event) => {
+        if (event) {
+          insertPathCommandFromKey(event.key, event.shiftKey);
+        }
+      },
+      'help.settings': () => void setModal('settings'),
+      'help.about': () => void setModal('about'),
+      'help.donate': () => void setModal('donate'),
+      'help.repository': () => void window.open(godSvgRepositoryUrl, '_blank', 'noopener'),
+      'help.website': () => void window.open(godSvgWebsiteUrl, '_blank', 'noopener')
+    }
   });
   createEventListener(window, 'keydown', onKeyDown);
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { restoreSettings } from '../src/editor/defaults';
 import type { AppSettings } from '../src/editor/types';
-import { createEditorShortcuts } from '../src/features/shortcuts/createEditorShortcuts';
+import { createEditorShortcuts, editorActions, type EditorActionId } from '../src/features/shortcuts/createEditorShortcuts';
 import {
   bindingFromEvent,
   createShortcutRegistry,
@@ -21,6 +21,7 @@ function createTestKeyboardEvent(options: {
   readonly meta?: boolean;
   readonly shift?: boolean;
   readonly alt?: boolean;
+  readonly code?: string;
   readonly editable?: boolean;
 }): TestKeyboardEvent {
   let prevented = false;
@@ -32,6 +33,7 @@ function createTestKeyboardEvent(options: {
 
   return {
     key: options.key,
+    code: options.code ?? '',
     ctrlKey: options.ctrl ?? false,
     metaKey: options.meta ?? false,
     shiftKey: options.shift ?? false,
@@ -126,6 +128,33 @@ describe('createShortcutRegistry', () => {
     expect(runs).toBe(1);
   });
 
+  it('falls back to the physical key, preferring the typed one', () => {
+    const runs: string[] = [];
+    const registry = createShortcutRegistry([
+      shortcutDescriptor({ id: 'test.snap', bindings: [{ key: 's', alt: true }], run: () => void runs.push('snap') }),
+      shortcutDescriptor({ id: 'test.undo', bindings: [{ key: 'z', ctrl: true }], run: () => void runs.push('undo') }),
+      shortcutDescriptor({ id: 'test.quit', bindings: [{ key: 'q', ctrl: true }], run: () => void runs.push('quit') })
+    ]);
+
+    // macOS types "ß" for Alt+S; a Russian layout types "я" for Ctrl+Z.
+    registry.onKeyDown(createTestKeyboardEvent({ key: 'ß', code: 'KeyS', alt: true }));
+    registry.onKeyDown(createTestKeyboardEvent({ key: 'я', code: 'KeyZ', ctrl: true }));
+    // AZERTY: the key labelled Q sits where QWERTY has A, and Ctrl+Q means Q.
+    registry.onKeyDown(createTestKeyboardEvent({ key: 'q', code: 'KeyA', ctrl: true }));
+
+    expect(runs).toEqual(['snap', 'undo', 'quit']);
+    expect(bindingFromEvent(createTestKeyboardEvent({ key: 'ß', code: 'KeyS', alt: true }))).toEqual({ key: 's', alt: true });
+  });
+
+  it('leaves the key press to the browser when the action does not apply', () => {
+    const registry = createShortcutRegistry([shortcutDescriptor({ id: 'test.find', bindings: [{ key: 'f', ctrl: true }], run: () => false })]);
+    const event = createTestKeyboardEvent({ key: 'f', ctrl: true });
+
+    registry.onKeyDown(event);
+
+    expect(event.wasPrevented()).toBe(false);
+  });
+
   it('ignores events another handler already handled', () => {
     let runs = 0;
     const registry = createShortcutRegistry([shortcutDescriptor({ id: 'test.escape', bindings: [{ key: 'Escape' }], run: () => (runs += 1) })]);
@@ -151,31 +180,15 @@ describe('shortcut bindings', () => {
   it('runs editor actions from the user bindings, read on each key press', () => {
     let overrides: AppSettings['shortcutOverrides'] = {};
     let undos = 0;
-    const noop = () => undefined;
+    const handlers = Object.fromEntries(editorActions.map((action) => [action.id, () => undefined])) as Record<
+      EditorActionId,
+      () => boolean | void
+    >;
     const shortcuts = createEditorShortcuts({
       activeElement: () => null,
       enabled: () => true,
       overrides: () => overrides,
-      undo: () => (undos += 1),
-      redo: noop,
-      downloadSvg: noop,
-      copySvgText: noop,
-      openImportDialog: noop,
-      openExport: noop,
-      openSettings: noop,
-      createNewTab: noop,
-      optimizeActive: noop,
-      zoomIn: noop,
-      zoomOut: noop,
-      centerFrame: noop,
-      toggleGrid: noop,
-      toggleHandles: noop,
-      selectAll: noop,
-      clearSelection: noop,
-      duplicateSelected: noop,
-      deleteSelected: noop,
-      moveSelected: noop,
-      insertPathCommandFromKey: noop
+      handlers: { ...handlers, 'edit.undo': () => void (undos += 1) }
     });
     const undo = shortcuts.descriptors.find((item) => item.id === 'edit.undo');
 
