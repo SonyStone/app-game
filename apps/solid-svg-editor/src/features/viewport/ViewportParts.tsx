@@ -1,4 +1,7 @@
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { Dynamic } from '@solidjs/web';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
+
+import type { Contour, HoverTarget, InteractionState } from '../../editor/contours';
 
 import { createGridLines } from '../../editor/handles';
 import { decorativeIconProps } from '../../editor/svg-icon';
@@ -358,31 +361,127 @@ export function GridLayer(props: {
   );
 }
 
+/**
+ * Handles of the selected and hovered elements, colored by GodSVG's interaction states: a handle is selected when
+ * its path command (or its whole element, for shape handles) is selected, and hovered while the pointer is on it.
+ * Entering a handle reports its element and command as hovered, so the inspector highlights them too.
+ */
 export function HandlesLayer(props: {
   readonly handles: readonly HandleDescriptor[];
   readonly zoom: number;
+  readonly selectedIds: readonly string[];
+  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly onHandlePointerDown: (event: PointerEvent, handle: HandleDescriptor) => void;
 }) {
+  const [hoveredKey, setHoveredKey] = createSignal<string>();
+  const keyOf = (handle: HandleDescriptor) => `${handle.nodeId}:${handle.id}`;
+  const stateOf = (handle: HandleDescriptor): InteractionState => {
+    const selected =
+      handle.commandIndex === undefined
+        ? props.selectedIds.includes(handle.nodeId)
+        : props.selectedPathCommand?.nodeId === handle.nodeId && props.selectedPathCommand.index === handle.commandIndex;
+    const hovered = hoveredKey() === keyOf(handle);
+    return hovered && selected ? 'hovered-selected' : hovered ? 'hovered' : selected ? 'selected' : 'normal';
+  };
+
   return (
     <g data-testid="handles-layer">
-      <For each={props.handles}>
+      <For each={props.handles} keyed={keyOf}>
         {(handle) => (
-          <g data-testid={`selection-handle-group-${handle.nodeId}-${handle.id}`}>
+          <g data-testid={`selection-handle-group-${handle().nodeId}-${handle().id}`}>
             <circle
-              class={
-                handle.small
-                  ? 'handle small cursor-grab fill-[#d8e7ff] stroke-[#23314f] [vector-effect:non-scaling-stroke] hover:fill-[var(--accent)]'
-                  : 'handle cursor-grab fill-[#f8fafc] stroke-[#111827] [vector-effect:non-scaling-stroke] hover:fill-[var(--accent)]'
-              }
-              data-testid={`selection-handle-${handle.nodeId}-${handle.id}`}
-              cx={handle.x}
-              cy={handle.y}
-              r={(handle.small ? 3.2 : 4.6) / props.zoom}
-              stroke-width={1.4}
-              onPointerDown={(event) => props.onHandlePointerDown(event, handle)}
+              class="handle cursor-grab fill-white [vector-effect:non-scaling-stroke]"
+              data-testid={`selection-handle-${handle().nodeId}-${handle().id}`}
+              data-state={stateOf(handle())}
+              cx={handle().x}
+              cy={handle().y}
+              r={(handle().small ? 3.2 : 4.6) / props.zoom}
+              stroke={interactionColors[stateOf(handle())]}
+              stroke-width={handle().small ? 1.6 : 2}
+              onPointerEnter={() => {
+                setHoveredKey(keyOf(handle()));
+                props.setHovered({ nodeId: handle().nodeId, ...commandOf(handle()) });
+              }}
+              onPointerLeave={() => {
+                setHoveredKey(undefined);
+                props.setHovered(undefined);
+              }}
+              onPointerDown={(event) => props.onHandlePointerDown(event, handle())}
             />
-            <title>{handle.label}</title>
+            <title>{handle().label}</title>
           </g>
+        )}
+      </For>
+    </g>
+  );
+}
+
+function commandOf(handle: HandleDescriptor): { readonly commandIndex?: number } {
+  return handle.commandIndex === undefined ? {} : { commandIndex: handle.commandIndex };
+}
+
+/** GodSVG's default contour and handle colors per interaction state. */
+const interactionColors = {
+  normal: '#111111',
+  hovered: '#aaaaaa',
+  selected: '#4466ff',
+  'hovered-selected': '#ff4444'
+} as const satisfies Record<InteractionState, string>;
+
+/**
+ * Outlines of the selected and hovered elements (see `collectContours`): shape outlines and per-command path
+ * segments drawn 2px wide, helper lines (tangents, radii) thinner and translucent. Ignores the pointer.
+ */
+export function ContoursLayer(props: { readonly contours: readonly Contour[] }) {
+  return (
+    <g class="pointer-events-none" fill="none" data-testid="contours-layer">
+      <For each={props.contours} keyed={(contour) => contour.key}>
+        {(contour) => (
+          <Switch>
+            <Match when={contour().kind === 'helper' ? (contour() as Extract<Contour, { kind: 'helper' }>) : undefined}>
+              {(line) => (
+                <line
+                  x1={line().from.x}
+                  y1={line().from.y}
+                  x2={line().to.x}
+                  y2={line().to.y}
+                  transform={line().transform}
+                  stroke={interactionColors[line().state]}
+                  stroke-width={1.25}
+                  opacity={0.8}
+                  vector-effect="non-scaling-stroke"
+                />
+              )}
+            </Match>
+            <Match when={contour().kind === 'path' ? (contour() as Extract<Contour, { kind: 'path' }>) : undefined}>
+              {(segment) => (
+                <path
+                  d={segment().d}
+                  transform={segment().transform}
+                  stroke={interactionColors[segment().state]}
+                  stroke-width={2}
+                  vector-effect="non-scaling-stroke"
+                  data-testid={`contour-${segment().nodeId}-${segment().commandIndex}`}
+                  data-state={segment().state}
+                />
+              )}
+            </Match>
+            <Match when={contour().kind === 'shape' ? (contour() as Extract<Contour, { kind: 'shape' }>) : undefined}>
+              {(shape) => (
+                <Dynamic
+                  component={shape().name}
+                  {...shape().attrs}
+                  transform={shape().transform}
+                  stroke={interactionColors[shape().state]}
+                  stroke-width={2}
+                  vector-effect="non-scaling-stroke"
+                  data-testid={`contour-${shape().nodeId}`}
+                  data-state={shape().state}
+                />
+              )}
+            </Match>
+          </Switch>
         )}
       </For>
     </g>

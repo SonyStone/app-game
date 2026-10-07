@@ -1,5 +1,6 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 
+import type { HoverTarget } from '../../editor/contours';
 import { flattenAllNodes } from '../../editor/tree-utils';
 import { findNode, type SvgElementNode, type SvgNode } from '../../svg-model';
 
@@ -9,6 +10,8 @@ export function createEditorSelection(options: { readonly root: Accessor<SvgElem
   const [selectedIds, setSelectedIds] = createSignal<readonly string[]>([]);
   const [selectionPivot, setSelectionPivot] = createSignal<string | undefined>();
   const [selectedPathCommand, setSelectedPathCommand] = createSignal<PathCommandSelection | undefined>();
+  /** What the pointer is over, in the viewport or the inspector; both highlight it, like GodSVG's hover. */
+  const [hovered, setHovered] = createSignal<HoverTarget | undefined>();
 
   const selectedNodes = createMemo(() =>
     selectedIds()
@@ -69,6 +72,8 @@ export function createEditorSelection(options: { readonly root: Accessor<SvgElem
     setSelectionPivot,
     selectedPathCommand,
     setSelectedPathCommand,
+    hovered,
+    setHovered,
     selectedNodes,
     selectNode,
     clearSelection,

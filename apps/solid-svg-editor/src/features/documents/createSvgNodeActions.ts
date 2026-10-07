@@ -3,6 +3,8 @@ import type { Accessor } from 'solid-js';
 import { svgCapabilities } from '../../editor/capabilities';
 import { createEditorCommand, type EditorCommand } from '../../editor/commands';
 import { convertElement } from '../../editor/element-conversion';
+import type { Point } from '../../editor/geometry';
+import { createShapeAt, newShapeUnit, type newShapeNames } from '../../editor/new-shape';
 import { insertPathCommand, optimizeNode } from '../../editor/tree-utils';
 import type { AppSettings } from '../../editor/types';
 import { formatPathData, parsePathData } from '../../path-data';
@@ -20,6 +22,7 @@ import {
   removeAttribute,
   removeNode,
   setAttribute,
+  svgSize,
   topLevelNodeIds,
   updateNode,
   type DropPosition,
@@ -229,6 +232,17 @@ export function createSvgNodeActions(options: {
     );
   }
 
+  /** Adds a GodSVG "New shape" at a canvas point, at the end of the document, and selects it. */
+  function addShapeAt(name: (typeof newShapeNames)[number], point: Point): void {
+    const root = options.activeRoot();
+    const shape = createShapeAt(name, point, newShapeUnit(svgSize(root).viewBox));
+    options.dispatchCommand(
+      createEditorCommand({ id: 'svg.add-shape', label: `Add ${name}`, apply: (item) => appendChild(item, item.id, shape) })
+    );
+    options.setSelectedIds([shape.id]);
+    options.setSelectionPivot(shape.id);
+  }
+
   function optimizeActive(): void {
     const settings = options.settings();
     options.dispatchCommand(
@@ -278,6 +292,7 @@ export function createSvgNodeActions(options: {
     removeElementAttribute,
     updateBasicNodeText,
     convertNode,
+    addShapeAt,
     optimizeActive,
     insertPathCommandFromKey
   };

@@ -67,6 +67,8 @@ export function App() {
             root={app.workspace.activeRoot()}
             selectedIds={app.workspace.selectedIds()}
             selectedPathCommand={app.workspace.selectedPathCommand()}
+            hovered={app.workspace.hovered()}
+            setHovered={app.workspace.setHovered}
             setSelectedPathCommand={app.workspace.setSelectedPathCommand}
             selectNode={app.workspace.selectNode}
             clearSelection={app.workspace.clearSelection}
@@ -129,6 +131,10 @@ export function App() {
           rasterPreviewUrl={app.viewport.rasterPreviewUrl()}
           rasterPreviewRect={app.viewport.rasterPreviewRect()}
           handles={app.viewport.handles()}
+          openCanvasContextMenu={app.viewport.openCanvasContextMenu}
+          contours={app.viewport.contours()}
+          selectedPathCommand={app.viewport.selectedPathCommand()}
+          setHovered={app.viewport.setHovered}
           selectionBox={app.viewport.selectionBox()}
           marqueeRect={app.viewport.marqueeRect()}
           onCanvasWheel={app.viewport.onCanvasWheel}
@@ -147,6 +153,7 @@ export function App() {
             node={app.contextMenu.node()}
             runAction={app.contextMenu.runAction}
             convert={app.contextMenu.convert}
+            addShape={app.contextMenu.addShape}
             close={app.contextMenu.close}
           />
         )}

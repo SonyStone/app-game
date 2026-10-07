@@ -98,7 +98,7 @@ function handlesForElement(node: SvgElementNode): readonly HandleDescriptor[] {
     case "polygon":
     case "polyline":
       return parsePoints(getAttribute(node, "points", true)).map(([x, y], index) =>
-        numericHandle(node.id, `point-${index}`, x, y, `point ${index + 1}`, (root, nextX, nextY) => {
+        withCommandIndex(index, numericHandle(node.id, `point-${index}`, x, y, `point ${index + 1}`, (root, nextX, nextY) => {
           const current = findNode(root, node.id);
 
           if (!current || current.kind !== "element") {
@@ -108,7 +108,7 @@ function handlesForElement(node: SvgElementNode): readonly HandleDescriptor[] {
           const points = parsePoints(getAttribute(current, "points", true));
           const updated = formatPoints(updatePoint(updatePoint(points, index, 0, nextX), index, 1, nextY));
           return updateNumericAttrAsText(root, node.id, "points", updated);
-        })
+        }))
       );
     case "path":
       return pathHandles(node);
@@ -150,25 +150,25 @@ function pathHandles(node: SvgElementNode): readonly HandleDescriptor[] {
       const absoluteY = relative ? startY + rawY : rawY;
 
       handles.push(
-        numericHandle(node.id, `cmd-${commandIndex}-${pair[0]}`, absoluteX, absoluteY, `${command.command} ${pair[0]}/${pair[1]}`, (root, x, y) =>
+        withCommandIndex(commandIndex, numericHandle(node.id, `cmd-${commandIndex}-${pair[0]}`, absoluteX, absoluteY, `${command.command} ${pair[0]}/${pair[1]}`, (root, x, y) =>
           updatePathCommand(root, node.id, commandIndex, (items) => {
             const nextX = relative ? x - startX : x;
             const nextY = relative ? y - startY : y;
             return updateCommandValue(updateCommandValue(items, commandIndex, xParam.index, nextX), commandIndex, yParam.index, nextY);
           })
-        , pair[2])
+        , pair[2]))
       );
     }
 
     if (upper === "H") {
       const x = command.values[0] ?? 0;
       const absoluteX = relative ? currentX + x : x;
-      handles.push(numericHandle(node.id, `cmd-${commandIndex}-h`, absoluteX, currentY, `${command.command} x`, (root, xValue) => updatePathCommand(root, node.id, commandIndex, (items) => updateCommandValue(items, commandIndex, 0, relative ? xValue - startX : xValue))));
+      handles.push(withCommandIndex(commandIndex, numericHandle(node.id, `cmd-${commandIndex}-h`, absoluteX, currentY, `${command.command} x`, (root, xValue) => updatePathCommand(root, node.id, commandIndex, (items) => updateCommandValue(items, commandIndex, 0, relative ? xValue - startX : xValue)))));
       currentX = absoluteX;
     } else if (upper === "V") {
       const y = command.values[0] ?? 0;
       const absoluteY = relative ? currentY + y : y;
-      handles.push(numericHandle(node.id, `cmd-${commandIndex}-v`, currentX, absoluteY, `${command.command} y`, (root, _x, yValue) => updatePathCommand(root, node.id, commandIndex, (items) => updateCommandValue(items, commandIndex, 0, relative ? yValue - startY : yValue))));
+      handles.push(withCommandIndex(commandIndex, numericHandle(node.id, `cmd-${commandIndex}-v`, currentX, absoluteY, `${command.command} y`, (root, _x, yValue) => updatePathCommand(root, node.id, commandIndex, (items) => updateCommandValue(items, commandIndex, 0, relative ? yValue - startY : yValue)))));
       currentY = absoluteY;
     } else if (upper === "Z") {
       currentX = subpathX;
@@ -205,6 +205,11 @@ function numericHandle(
   small = false
 ): HandleDescriptor {
   return { id, nodeId, x, y, label, small, update };
+}
+
+/** Tags a handle with the path command (or polygon point) it moves, for command selection and hover. */
+function withCommandIndex(commandIndex: number, handle: HandleDescriptor): HandleDescriptor {
+  return { ...handle, commandIndex };
 }
 
 function updateNumericAttrs(root: SvgElementNode, nodeId: string, attrs: Record<string, number>): SvgElementNode {

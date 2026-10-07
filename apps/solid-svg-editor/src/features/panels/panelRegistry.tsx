@@ -4,6 +4,7 @@ import type { PointerStateWithActive } from '@solid-primitives/pointer';
 import type { EditorCommandEvent } from '../../editor/commands';
 import type { SvgIcon } from '../../editor/svg-icon';
 import type { PanelId } from '../../editor/types';
+import type { HoverTarget } from '../../editor/contours';
 import type { SvgNodeActions } from '../documents/createSvgNodeActions';
 import type { RecognizedElement } from '../../svg-db';
 import type { DropPosition, SvgElementNode, SvgNode } from '../../svg-model';
@@ -19,6 +20,8 @@ export interface EditorPanelContext {
   readonly root: SvgElementNode;
   readonly selectedIds: readonly string[];
   readonly selectedPathCommand: PathCommandSelection | undefined;
+  readonly hovered: HoverTarget | undefined;
+  readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly setSelectedPathCommand: (selection: PathCommandSelection | undefined) => void;
   readonly selectNode: (id: string, event?: MouseEvent | PointerEvent) => void;
   readonly clearSelection: () => void;
@@ -60,6 +63,8 @@ export const editorPanels = [
         root={context.root}
         selectedIds={context.selectedIds}
         selectedPathCommand={context.selectedPathCommand}
+        hovered={context.hovered}
+        setHovered={context.setHovered}
         setSelectedPathCommand={context.setSelectedPathCommand}
         selectNode={context.selectNode}
         clearSelection={context.clearSelection}

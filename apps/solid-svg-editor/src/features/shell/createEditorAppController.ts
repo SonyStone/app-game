@@ -8,6 +8,7 @@ import { makePersisted } from '@solid-primitives/storage';
 import { createMemo, createSignal, createTrackedEffect, untrack } from 'solid-js';
 
 import { createEditorCommand, type EditorCommandEvent } from '../../editor/commands';
+import type { newShapeNames } from '../../editor/new-shape';
 import { defaultSettings, restoreSettings } from '../../editor/defaults';
 import { downloadBlob } from '../../editor/export-utils';
 import { serializeSvgDocument } from '../../editor/svg-document';
@@ -127,6 +128,8 @@ export function createEditorAppController() {
     setSelectionPivot,
     selectedPathCommand,
     setSelectedPathCommand,
+    hovered,
+    setHovered,
     selectedNodes,
     selectNode,
     clearSelection,
@@ -157,6 +160,7 @@ export function createEditorAppController() {
     removeElementAttribute,
     updateBasicNodeText,
     convertNode,
+    addShapeAt,
     optimizeActive,
     insertPathCommandFromKey
   } = nodeActions;
@@ -306,6 +310,8 @@ export function createEditorAppController() {
     settings,
     activeRoot,
     selectedIds,
+    hovered,
+    selectedPathCommand,
     activeDrag,
     activeTouchGesture,
     transientViewportPreview,
@@ -316,6 +322,7 @@ export function createEditorAppController() {
     fileSize,
     elementCount,
     handles,
+    contours,
     viewportIsMoving,
     useRasterPreview,
     rasterPreviewRect,
@@ -334,7 +341,17 @@ export function createEditorAppController() {
   function openContextMenu(event: MouseEvent, nodeId: string): void {
     event.preventDefault();
     selectNode(nodeId, event);
-    setContextMenu({ x: event.clientX, y: event.clientY, nodeId });
+    setContextMenu({ kind: 'node', x: event.clientX, y: event.clientY, nodeId });
+  }
+
+  /** Opens the "New shape" menu on an empty canvas spot; node menus have already handled their own events. */
+  function openCanvasContextMenu(event: MouseEvent): void {
+    if (event.defaultPrevented) {
+      return;
+    }
+
+    event.preventDefault();
+    setContextMenu({ kind: 'canvas', x: event.clientX, y: event.clientY, point: clientToSvgPoint(event.clientX, event.clientY) });
   }
 
   function closeModal(): void {
@@ -344,7 +361,7 @@ export function createEditorAppController() {
   function runContextAction(action: EditorContextMenuAction): void {
     const menu = contextMenu();
 
-    if (!menu) {
+    if (menu?.kind !== 'node') {
       return;
     }
 
@@ -417,6 +434,8 @@ export function createEditorAppController() {
       selectedIds,
       selectedPathCommand,
       setSelectedPathCommand,
+      hovered,
+      setHovered,
       selectNode,
       clearSelection,
       addElement,
@@ -468,6 +487,10 @@ export function createEditorAppController() {
       rasterPreviewUrl,
       rasterPreviewRect,
       handles,
+      contours,
+      hovered,
+      setHovered,
+      selectedPathCommand,
       selectionBox,
       marqueeRect,
       onCanvasWheel,
@@ -475,21 +498,30 @@ export function createEditorAppController() {
       onNodePointerDown,
       startHandleDrag,
       startTransformBoxDrag,
+      openCanvasContextMenu,
       heldKeys
     },
     contextMenu: {
       state: contextMenu,
       node: createMemo(() => {
         const menu = contextMenu();
-        return menu ? findNode(activeRoot(), menu.nodeId) : undefined;
+        return menu?.kind === 'node' ? findNode(activeRoot(), menu.nodeId) : undefined;
       }),
       runAction: runContextAction,
       convert: (target: string) => {
         const menu = contextMenu();
         setContextMenu(undefined);
 
-        if (menu) {
+        if (menu?.kind === 'node') {
           convertNode(menu.nodeId, target);
+        }
+      },
+      addShape: (name: (typeof newShapeNames)[number]) => {
+        const menu = contextMenu();
+        setContextMenu(undefined);
+
+        if (menu?.kind === 'canvas') {
+          addShapeAt(name, menu.point);
         }
       },
       close: () => setContextMenu(undefined)

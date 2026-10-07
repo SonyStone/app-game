@@ -4,6 +4,7 @@ import { createMemo, createSignal, createTrackedEffect, For, Show } from 'solid-
 import { svgCapabilities } from '../../editor/capabilities';
 import type { SvgNodeActions } from '../documents/createSvgNodeActions';
 import { decorativeIconProps } from '../../editor/svg-icon';
+import type { HoverTarget } from '../../editor/contours';
 import { ancestorElements, inheritedAttributeValue } from '../../editor/tree-utils';
 import type { RecognizedElement } from '../../svg-db';
 import { findNode, findParent, nodeLabel, type DropPosition, type SvgElementNode, type SvgNode } from '../../svg-model';
@@ -24,6 +25,9 @@ export function InspectorPanel(props: {
   readonly root: SvgElementNode;
   readonly selectedIds: readonly string[];
   readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  /** What the pointer is over in the viewport or inspector, highlighted in both. */
+  readonly hovered: HoverTarget | undefined;
+  readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
   readonly selectNode: (id: string, event?: MouseEvent | PointerEvent) => void;
   readonly clearSelection: () => void;
@@ -299,6 +303,8 @@ export function InspectorPanel(props: {
                     root={props.root}
                     selectedIds={props.selectedIds}
                     selectedPathCommand={props.selectedPathCommand}
+                    hovered={props.hovered}
+                    setHovered={props.setHovered}
                     setSelectedPathCommand={props.setSelectedPathCommand}
                     selectNode={selectNodeFromInspector}
                     updateElementAttribute={props.updateElementAttribute}
@@ -358,6 +364,9 @@ function ElementCard(props: {
   readonly root: SvgElementNode;
   readonly selectedIds: readonly string[];
   readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  /** What the pointer is over in the viewport or inspector, highlighted in both. */
+  readonly hovered: HoverTarget | undefined;
+  readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
   readonly selectNode: (id: string, event?: MouseEvent | PointerEvent) => void;
   readonly updateElementAttribute: SvgNodeActions['updateElementAttribute'];
@@ -376,6 +385,7 @@ function ElementCard(props: {
   let textEditSession = 0;
   const ancestors = createMemo(() => ancestorElements(props.root, props.node.id));
   const isSelected = () => props.selectedIds.includes(props.node.id);
+  const isHovered = () => props.hovered?.nodeId === props.node.id;
   const tint = () => `hsl(${268 + props.depth * 18}deg 52% ${props.depth === 0 ? 11 : 14}%)`;
   const dropState = () => (props.dropTarget?.nodeId === props.node.id ? props.dropTarget : undefined);
   const isDragging = () => props.draggingIds.includes(props.node.id);
@@ -388,10 +398,14 @@ function ElementCard(props: {
           'cursor-grab': props.node.id !== props.root.id,
           'border-[var(--accent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_68%,transparent)]':
             isSelected(),
-          'opacity-[0.55]': isDragging()
+          'opacity-[0.55]': isDragging(),
+          'shadow-[inset_0_0_0_1px_#aaaaaa]': isHovered() && !isSelected()
         }
       ]}
       data-inspector-node-id={props.node.id}
+      data-hovered={isHovered() ? 'true' : undefined}
+      onPointerEnter={() => props.setHovered({ nodeId: props.node.id })}
+      onPointerLeave={() => props.setHovered(undefined)}
       data-testid={`inspector-node-${props.node.id}`}
       style={{ '--card-tint': tint() }}
       draggable={props.node.id !== props.root.id ? 'true' : 'false'}
@@ -468,6 +482,8 @@ function ElementCard(props: {
               inheritedValue={(name) => inheritedAttributeValue(node(), ancestors(), name)}
               updateElementAttribute={props.updateElementAttribute}
               selectedPathCommand={props.selectedPathCommand}
+              hovered={props.hovered}
+              setHovered={props.setHovered}
               setSelectedPathCommand={props.setSelectedPathCommand}
             />
             <Show when={props.renderChildren !== false && node().children.length > 0}>
@@ -480,6 +496,8 @@ function ElementCard(props: {
                       root={props.root}
                       selectedIds={props.selectedIds}
                       selectedPathCommand={props.selectedPathCommand}
+                      hovered={props.hovered}
+                      setHovered={props.setHovered}
                       setSelectedPathCommand={props.setSelectedPathCommand}
                       selectNode={props.selectNode}
                       updateElementAttribute={props.updateElementAttribute}

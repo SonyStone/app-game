@@ -6,6 +6,7 @@ import MoveDownIcon from '../../App.icons/MoveDown.svg';
 import MoveUpIcon from '../../App.icons/MoveUp.svg';
 import { svgCapabilities } from '../../editor/capabilities';
 import { convertElement, possibleConversions } from '../../editor/element-conversion';
+import { newShapeNames } from '../../editor/new-shape';
 import { decorativeIconProps } from '../../editor/svg-icon';
 import type { ContextMenuState } from '../../editor/types';
 import type { SvgNode } from '../../svg-model';
@@ -27,6 +28,8 @@ export function EditorContextMenu(props: {
   readonly node: SvgNode | undefined;
   readonly runAction: (action: EditorContextMenuAction) => void;
   readonly convert: (target: string) => void;
+  /** Adds a shape at the canvas point of a "New shape" menu. */
+  readonly addShape: (name: (typeof newShapeNames)[number]) => void;
   readonly close: () => void;
 }) {
   let menu: HTMLDivElement | undefined;
@@ -46,6 +49,20 @@ export function EditorContextMenu(props: {
       style={{ left: `${props.menu.x}px`, top: `${props.menu.y}px` }}
       data-testid="context-menu"
     >
+      <Show when={props.menu.kind === 'canvas'}>
+        <div class="px-2 pt-0.5 pb-1 text-[11px] text-[var(--muted)]" data-testid="context-menu-new-shape-label">
+          New shape
+        </div>
+        <For each={newShapeNames}>
+          {(name) => (
+            <MenuButton type="button" data-testid={`context-menu-new-${name}`} onClick={() => props.addShape(name)}>
+              <Dynamic class="h-4 w-4" component={svgCapabilities.iconForElement(name)} {...decorativeIconProps} />
+              {name}
+            </MenuButton>
+          )}
+        </For>
+      </Show>
+      <Show when={props.menu.kind === 'node'}>
       <MenuButton
         type="button"
         icon={DuplicateIcon}
@@ -107,6 +124,7 @@ export function EditorContextMenu(props: {
             </MenuButton>
           )}
         </For>
+      </Show>
       </Show>
     </div>
   );
