@@ -1,3 +1,4 @@
+import type { PanelLayout } from "../features/layout/panel-layout";
 import type { ColorPalette } from './palettes';
 import type { FormatterSettings } from "../formatter";
 import type { Matrix2D, Point, Rect } from "./geometry";
@@ -78,6 +79,8 @@ export interface AppSettings {
   readonly formatter: FormatterSettings;
   readonly exportFormatter: FormatterSettings;
   readonly optimizer: OptimizerSettings;
+  /** GodSVG's layout of the left column: which panels show in its top and bottom sections. */
+  readonly panelLayout: PanelLayout;
   /** GodSVG's floating shortcut panel. */
   readonly shortcutPanel: ShortcutPanelSettings;
   /** User-edited shortcut bindings by action id; actions not listed use their defaults. */
