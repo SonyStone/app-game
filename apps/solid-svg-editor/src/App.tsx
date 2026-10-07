@@ -184,6 +184,8 @@ export function App() {
           reformatActiveCode={app.modals.reformatActiveCode}
           pendingCloseTabName={app.modals.pendingCloseTabName()}
           resolveCloseTab={app.modals.resolveCloseTab}
+          pendingImport={app.modals.pendingImport()}
+          resolveImport={app.modals.resolveImport}
           shortcuts={app.modals.shortcuts}
           setShortcutBindings={app.modals.setShortcutBindings}
         />

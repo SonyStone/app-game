@@ -139,7 +139,9 @@ export function parseSvgMarkup(markup: string): ParseResult {
   const parserError = doc.querySelector("parsererror");
 
   if (parserError) {
-    return { ok: false, error: "invalid-xml", message: parserError.textContent?.trim() || "Improper nesting." };
+    // Chromium wraps the message in page-level headings; its <div> holds just "error on line … at column …: …".
+    const detail = parserError.querySelector("div")?.textContent ?? parserError.textContent;
+    return { ok: false, error: "invalid-xml", message: detail?.trim() || "Improper nesting." };
   }
 
   const svgElement = doc.querySelector("svg");

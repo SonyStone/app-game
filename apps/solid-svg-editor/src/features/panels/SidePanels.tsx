@@ -85,9 +85,10 @@ export function PreviewsPanel(props: {
   );
 }
 
-export function PreviewSvg(props: { readonly root: SvgElementNode; readonly testId?: string }) {
+/** The document over a checkerboard, scaled to fit; `class` sizes the `<svg>` element. */
+export function PreviewSvg(props: { readonly root: SvgElementNode; readonly testId?: string; readonly class?: string }) {
   return (
-    <svg viewBox={svgSize(props.root).viewBox.join(" ")} preserveAspectRatio="xMidYMid meet" data-testid={props.testId ?? "preview-svg"}>
+    <svg class={props.class} viewBox={svgSize(props.root).viewBox.join(" ")} preserveAspectRatio="xMidYMid meet" data-testid={props.testId ?? "preview-svg"}>
       <rect x={svgSize(props.root).viewBox[0]} y={svgSize(props.root).viewBox[1]} width={svgSize(props.root).viewBox[2]} height={svgSize(props.root).viewBox[3]} fill="url(#checker-preview)" />
       <defs>
         <pattern id="checker-preview" width="40" height="40" patternUnits="userSpaceOnUse">
