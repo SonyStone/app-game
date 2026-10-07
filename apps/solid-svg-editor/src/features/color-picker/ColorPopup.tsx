@@ -456,6 +456,7 @@ function ColorUtilities(props: {
       <input
         class="h-6 rounded border border-[var(--soft-border)] bg-[#080b12] px-1.5 text-[12px] in-[.theme-light]:bg-[#f8fbff]"
         placeholder={t('Search color')}
+        data-search-field
         aria-label={t('Search color')}
         data-testid="color-utilities-search"
         value={search()}

@@ -28,6 +28,7 @@ import type { ImportReview } from '../import/createImportReview';
 import { PanelButton } from '../ui/PanelButton';
 import { useI18n } from '../../i18n/I18nProvider';
 import { LanguageSelect } from '../../i18n/LanguageSelect';
+import { godSvgRepositoryUrl, godSvgWebsiteUrl } from '../../editor/links';
 
 export function SettingsModal(props: {
   readonly settings: AppSettings;
@@ -747,7 +748,7 @@ export function AboutModal(props: { readonly close: () => void }) {
           edit SVG elements directly, edit code directly, and keep the output clean.
         </p>
         <p class="m-0 leading-normal">Original project assets and source are MIT licensed.</p>
-        <a class="text-[var(--accent)]" href="https://github.com/MewPurPur/GodSVG" target="_blank" rel="noreferrer">
+        <a class="text-[var(--accent)]" href={godSvgRepositoryUrl} target="_blank" rel="noreferrer">
           Repository
         </a>
       </InfoPanel>
@@ -762,7 +763,7 @@ export function DonateModal(props: { readonly close: () => void }) {
     <ModalFrame title="Donate…" close={props.close}>
       <InfoPanel icon={HeartIcon}>
         <p class="m-0 leading-normal">Support the original GodSVG project and its ongoing development.</p>
-        <a class="text-[var(--accent)]" href="https://godsvg.com" target="_blank" rel="noreferrer">
+        <a class="text-[var(--accent)]" href={godSvgWebsiteUrl} target="_blank" rel="noreferrer">
           {t('GodSVG website')}
         </a>
       </InfoPanel>

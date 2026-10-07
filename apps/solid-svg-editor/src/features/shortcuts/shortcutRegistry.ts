@@ -10,7 +10,11 @@ export interface ShortcutDescriptor extends ShortcutItem {
   /** False for multi-key families such as the path command letters, which are not rebound. */
   readonly editable: boolean;
   readonly allowInEditable?: boolean;
-  readonly run: (event: KeyboardEvent) => void;
+  /**
+   * Performs the action; `event` is the key press, or `undefined` when a button runs it. Returning `false` means the
+   * action did not apply, and the key press is left to the browser.
+   */
+  readonly run: (event: KeyboardEvent | undefined) => boolean | void;
 }
 
 /**
@@ -31,16 +35,19 @@ export function createShortcutRegistry(
 
     const target = event.target ?? options.activeElement?.();
     const editing = isEditableTarget(target);
-    const descriptor = descriptors.find((item) =>
-      (!editing || item.allowInEditable === true) && item.bindings.some((binding) => matchesBinding(event, binding))
-    );
+    const usable = descriptors.filter((item) => !editing || item.allowInEditable === true);
+    // The typed key wins; the physical key covers Alt on macOS and non-Latin layouts (Ctrl+Я is Ctrl+Z).
+    const descriptor =
+      usable.find((item) => item.bindings.some((binding) => matchesBinding(event, binding, event.key))) ??
+      usable.find((item) => item.bindings.some((binding) => matchesBinding(event, binding, keyFromCode(event))));
 
     if (!descriptor) {
       return;
     }
 
-    event.preventDefault();
-    descriptor.run(event);
+    if (descriptor.run(event) !== false) {
+      event.preventDefault();
+    }
   }
 
   return { onKeyDown };
@@ -50,8 +57,8 @@ export function pathCommandBindings(): readonly ShortcutBinding[] {
   return pathCommandLetters.flatMap((letter) => [{ key: letter }, { key: letter, shift: true }]);
 }
 
-function matchesBinding(event: KeyboardEvent, binding: ShortcutBinding): boolean {
-  if (!sameKey(event.key, binding.key)) {
+function matchesBinding(event: KeyboardEvent, binding: ShortcutBinding, key: string | undefined): boolean {
+  if (key === undefined || !sameKey(key, binding.key)) {
     return false;
   }
 
@@ -98,12 +105,21 @@ export function bindingFromEvent(event: KeyboardEvent): ShortcutBinding | undefi
     return undefined;
   }
 
+  // With Alt, macOS types a symbol (Alt+S gives "ß"); the physical key is what the user means.
+  const key = (event.altKey ? keyFromCode(event) : undefined) ?? event.key;
+
   return {
-    key: event.key.length === 1 ? event.key.toLowerCase() : event.key,
+    key: key.length === 1 ? key.toLowerCase() : key,
     ...(event.ctrlKey || event.metaKey ? { ctrl: true } : {}),
     ...(event.shiftKey ? { shift: true } : {}),
     ...(event.altKey ? { alt: true } : {})
   };
+}
+
+/** The letter or digit of the physical key (`KeyS` → `s`), or `undefined` for other keys. */
+function keyFromCode(event: KeyboardEvent): string | undefined {
+  const match = /^(?:Key([A-Z])|Digit(\d))$/.exec(event.code ?? '');
+  return match ? (match[1] ?? match[2] ?? '').toLowerCase() : undefined;
 }
 
 /** Whether two bindings describe the same key press. */
