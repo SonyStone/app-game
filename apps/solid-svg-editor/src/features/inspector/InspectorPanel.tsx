@@ -1,5 +1,5 @@
 import { Dynamic } from '@solidjs/web';
-import { createMemo, createSignal, createTrackedEffect, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, createTrackedEffect, For, Show } from 'solid-js';
 
 import { svgCapabilities } from '../../editor/capabilities';
 import type { SvgNodeActions } from '../documents/createSvgNodeActions';
@@ -41,6 +41,8 @@ export function InspectorPanel(props: {
   readonly updateBasicNodeText: SvgNodeActions['updateBasicNodeText'];
   readonly openContextMenu: (event: MouseEvent, nodeId: string) => void;
   readonly reorderNodes: (nodeIds: readonly string[], targetId: string, position: DropPosition) => void;
+  /** "View in Inspector": scroll to this node (a new `version` repeats the request). */
+  readonly reveal: { readonly nodeId: string; readonly version: number } | undefined;
 }) {
   const { t } = useI18n();
   const [addOpen, setAddOpen] = createSignal(false);
@@ -96,6 +98,19 @@ export function InspectorPanel(props: {
       alignSelectedRowOnNextFrame.schedule();
     });
   });
+
+  createEffect(
+    () => props.reveal,
+    (request) => {
+      if (request) {
+        queueMicrotask(() => {
+          pendingSelectionScrollId = request.nodeId;
+          virtualScroll.scrollRowToTop(request.nodeId);
+          alignSelectedRowOnNextFrame.schedule();
+        });
+      }
+    }
+  );
 
   function selectNodeFromInspector(id: string, event?: MouseEvent | PointerEvent): void {
     suppressNextSelectionScroll = true;

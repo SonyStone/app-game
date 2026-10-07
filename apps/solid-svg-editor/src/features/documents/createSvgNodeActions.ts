@@ -7,7 +7,16 @@ import type { Point } from '../../editor/geometry';
 import { createShapeAt, newShapeUnit, type newShapeNames } from '../../editor/new-shape';
 import { optimizeNode } from '../../editor/tree-utils';
 import type { AppSettings } from '../../editor/types';
-import { formatPathData, parsePathData, type PathCommand } from '../../path-data';
+import { formatPathData, formatPoints, parsePathData, parsePoints, type PathCommand } from '../../path-data';
+import {
+  deletePoints,
+  insertPointsAfter,
+  pointSelectionActions,
+  reversePoints,
+  setPointsOrigin,
+  type PointList,
+  type PointsEdit
+} from '../../editor/point-selection';
 import type { RecognizedElement } from '../../svg-db';
 import {
   appendChild,
@@ -64,6 +73,11 @@ export function createSvgNodeActions(options: {
   /** Deletes the selected path commands when there are any, otherwise the selected nodes. */
   function deleteSelected(): void {
     const commands = options.commandSelection();
+
+    if (commands && commands.indices.length > 0 && isPointShape(selectedShapeName())) {
+      editSelectedPoints('svg.delete-points', 'Delete points', (points) => deletePoints(points, commands.indices));
+      return;
+    }
 
     if (commands && commands.indices.length > 0) {
       editSelectedCommands('svg.delete-path-commands', 'Delete path commands', (items) => ({
@@ -287,6 +301,14 @@ export function createSvgNodeActions(options: {
   /** Reverses the direction of the selected whole subpaths (GodSVG "Reverse order"). */
   function reverseSelectedSubpaths(): void {
     const commands = options.commandSelection();
+    const name = selectedShapeName();
+
+    if (commands && isPointShape(name)) {
+      editSelectedPoints('svg.reverse-points', 'Reverse points', (points) =>
+        pointSelectionActions(name, points.length, commands.indices).reverse ? reversePoints(points) : undefined
+      );
+      return;
+    }
 
     if (commands) {
       editSelectedCommands('svg.reverse-subpaths', 'Reverse subpaths', (items) =>
@@ -298,6 +320,15 @@ export function createSvgNodeActions(options: {
   /** Starts each closed subpath at its selected command's end point (GodSVG "Set as origin"). */
   function setSelectedAsOrigin(): void {
     const commands = options.commandSelection();
+    const name = selectedShapeName();
+
+    if (commands && isPointShape(name)) {
+      editSelectedPoints('svg.set-point-origin', 'Set as initial', (points) => {
+        const actions = pointSelectionActions(name, points.length, commands.indices);
+        return actions.setOrigin && actions.setOriginEnabled ? setPointsOrigin(points, commands.indices[0] ?? 0) : undefined;
+      });
+      return;
+    }
 
     if (commands) {
       editSelectedCommands('svg.set-path-origin', 'Set as origin', (items) => setSubpathOrigins(items, commands.indices));
@@ -312,7 +343,8 @@ export function createSvgNodeActions(options: {
     const selection = options.commandSelection();
     const node = selection ? findNode(options.activeRoot(), selection.nodeId) : undefined;
 
-    if (!selection || node?.kind !== 'element') {
+    // Point selections of polygons and polylines go through `editSelectedPoints`.
+    if (!selection || node?.kind !== 'element' || node.name !== 'path') {
       return;
     }
 
@@ -335,6 +367,55 @@ export function createSvgNodeActions(options: {
     options.setCommandSelection(
       result.indices.length > 0 ? { nodeId: selection.nodeId, indices: result.indices, pivot: result.indices[0] ?? 0 } : undefined
     );
+  }
+
+  /** The element name of the shape whose commands or points are selected. */
+  function selectedShapeName(): string | undefined {
+    const selection = options.commandSelection();
+    const node = selection ? findNode(options.activeRoot(), selection.nodeId) : undefined;
+    return node?.kind === 'element' ? node.name : undefined;
+  }
+
+  /** Rewrites the `points` of the polygon or polyline whose points are selected; `undefined` edits don't apply. */
+  function editSelectedPoints(id: `svg.${string}`, label: string, edit: (points: PointList) => PointsEdit | undefined): void {
+    const selection = options.commandSelection();
+    const node = selection ? findNode(options.activeRoot(), selection.nodeId) : undefined;
+
+    if (!selection || node?.kind !== 'element' || !isPointShape(node.name)) {
+      return;
+    }
+
+    const result = edit(parsePoints(getAttribute(node, 'points', true)));
+
+    if (!result) {
+      return;
+    }
+
+    options.dispatchCommand(
+      createEditorCommand({
+        id,
+        label,
+        apply: (root) =>
+          updateNode(root, selection.nodeId, (item) =>
+            item.kind === 'element' ? setAttribute(item, 'points', formatPoints(result.points.map(([x, y]) => [x, y]))) : item
+          )
+      })
+    );
+    options.setCommandSelection(
+      result.indices.length > 0 ? { nodeId: selection.nodeId, indices: result.indices, pivot: result.indices[0] ?? 0 } : undefined
+    );
+  }
+
+  /** GodSVG's "Insert after" / "Insert multiple after" for a selected polygon or polyline point. */
+  function insertPointsAfterSelection(count: number): void {
+    const selection = options.commandSelection();
+
+    if (selection?.indices.length === 1 && count > 0) {
+      const index = selection.indices[0] ?? 0;
+      editSelectedPoints('svg.insert-points', count === 1 ? 'Insert point' : `Insert ${count} points`, (points) =>
+        insertPointsAfter(points, index, count)
+      );
+    }
   }
 
   /**
@@ -368,11 +449,16 @@ export function createSvgNodeActions(options: {
     convertNode,
     addShapeAt,
     optimizeActive,
-    insertPathCommandFromKey
+    insertPathCommandFromKey,
+    insertPointsAfterSelection
   };
 }
 
 function optimizeRoot(root: SvgElementNode, settings: AppSettings): SvgElementNode {
   const optimized = optimizeNode(root, settings.optimizer);
   return optimized?.kind === 'element' ? optimized : root;
+}
+
+function isPointShape(name: string | undefined): name is 'polygon' | 'polyline' {
+  return name === 'polygon' || name === 'polyline';
 }

@@ -15,7 +15,8 @@ import type { ContextMenuState, DragSelectionMode, ModalId, ShortcutBinding } fr
 import { createDefaultElement, findNode, getAttribute, insertSibling, svgSize } from '../../svg-model';
 import { commandSelectionActions, subpathSelection } from '../../editor/path-selection';
 import type { HandleDescriptor } from '../../editor/types';
-import { parsePathData } from '../../path-data';
+import { parsePathData, parsePoints } from '../../path-data';
+import { pointSelectionActions } from '../../editor/point-selection';
 import { createEditorDocuments } from '../documents/createEditorDocuments';
 import { createTabPersistence, restorePersistedTabs } from '../documents/tab-persistence';
 import { createSvgNodeActions } from '../documents/createSvgNodeActions';
@@ -24,7 +25,7 @@ import { createImportReview } from '../import/createImportReview';
 import { createSvgImport } from '../import/createSvgImport';
 import { createFileBinding, type AlertMessage } from '../files/createFileBinding';
 import { createReferenceImage } from '../reference/createReferenceImage';
-import type { EditorContextMenuAction } from '../selection/EditorContextMenu';
+import type { EditorContextMenuAction, SelectionMenuAction, SelectionMenuActions } from '../selection/EditorContextMenu';
 import { createEditorSelection } from '../selection/createEditorSelection';
 import { createEditorShortcuts } from '../shortcuts/createEditorShortcuts';
 import { createPanelSections } from '../layout/createPanelSections';
@@ -64,6 +65,8 @@ export function createEditorAppController() {
     })
   );
   const panelSections = createPanelSections({ layout: () => settings().panelLayout });
+  /** Asks the inspector to scroll to a node; the version repeats the request for the same node. */
+  const [revealRequest, setRevealRequest] = createSignal<{ readonly nodeId: string; readonly version: number }>();
   const customFonts = createCustomFonts(() => settings().fonts);
   createWakeLock(() => settings().keepScreenOn);
   const [modal, setModal] = createSignal<ModalId>();
@@ -206,7 +209,8 @@ export function createEditorAppController() {
     convertNode,
     addShapeAt,
     optimizeActive,
-    insertPathCommandFromKey
+    insertPathCommandFromKey,
+    insertPointsAfterSelection
   } = nodeActions;
 
   const rootSize = createMemo(() => svgSize(activeRoot()), { equals: sameSvgSize });
@@ -468,7 +472,18 @@ export function createEditorAppController() {
   function openContextMenu(event: MouseEvent, nodeId: string): void {
     event.preventDefault();
     selectNode(nodeId, event);
-    setContextMenu({ kind: 'node', x: event.clientX, y: event.clientY, nodeId });
+    const fromCanvas = event.target instanceof Node && canvasSvg()?.contains(event.target) === true;
+    setContextMenu({ kind: 'node', x: event.clientX, y: event.clientY, nodeId, fromCanvas });
+  }
+
+  /** GodSVG's "View in Inspector": shows the inspector and scrolls it to the node. */
+  function viewInInspector(nodeId: string): void {
+    if (!selectedIds().includes(nodeId)) {
+      selectNode(nodeId);
+    }
+
+    panelSections.activate('inspector');
+    setRevealRequest((current) => ({ nodeId, version: (current?.version ?? 0) + 1 }));
   }
 
   /** Double-clicking a path handle selects its whole subpath, as in GodSVG. */
@@ -486,7 +501,7 @@ export function createEditorAppController() {
   function openCommandMenu(event: MouseEvent, handle: HandleDescriptor): void {
     event.preventDefault();
 
-    if (handle.commandIndex === undefined || !handle.id.startsWith('cmd-')) {
+    if (handle.commandIndex === undefined || !(handle.id.startsWith('cmd-') || handle.id.startsWith('point-'))) {
       return;
     }
 
@@ -627,7 +642,8 @@ export function createEditorAppController() {
       setPreviewSizes: (sizes: readonly number[]) => setSettings((current) => ({ ...current, previewSizes: sizes })),
       heldKeys,
       viewportPointer,
-      recentCommandEvent
+      recentCommandEvent,
+      reveal: revealRequest
     },
     viewport: {
       settings,
@@ -700,7 +716,7 @@ export function createEditorAppController() {
           addShapeAt(name, menu.point);
         }
       },
-      commandActions: createMemo(() => {
+      commandActions: createMemo((): SelectionMenuActions | undefined => {
         const menu = contextMenu();
         const selection = commandSelection();
         const node = menu?.kind === 'commands' ? findNode(activeRoot(), menu.nodeId) : undefined;
@@ -709,9 +725,17 @@ export function createEditorAppController() {
           return undefined;
         }
 
-        return commandSelectionActions(parsePathData(getAttribute(node, 'd', true)), selection.indices);
+        if (node.name === 'polygon' || node.name === 'polyline') {
+          const points = pointSelectionActions(node.name, parsePoints(getAttribute(node, 'points', true)).length, selection.indices);
+          return { ...points, moveUp: false, moveDown: false, insertMultiple: points.insertAfter };
+        }
+
+        const commands = commandSelectionActions(parsePathData(getAttribute(node, 'd', true)), selection.indices);
+        return { ...commands, setOriginEnabled: true, insertAfter: selection.indices.length === 1, insertMultiple: false };
       }),
-      runCommandAction: (action: 'move-up' | 'move-down' | 'reverse' | 'set-origin' | 'delete') => {
+      runCommandAction: (action: SelectionMenuAction) => {
+        const menu = contextMenu();
+        const node = menu && 'nodeId' in menu ? findNode(activeRoot(), menu.nodeId) : undefined;
         setContextMenu(undefined);
 
         if (action === 'move-up' || action === 'move-down') {
@@ -720,9 +744,49 @@ export function createEditorAppController() {
           reverseSelectedSubpaths();
         } else if (action === 'set-origin') {
           setSelectedAsOrigin();
-        } else {
+        } else if (action === 'view-in-inspector') {
+          if (menu && 'nodeId' in menu) {
+            viewInInspector(menu.nodeId);
+          }
+        } else if (action === 'insert-after' && node?.kind === 'element' && node.name === 'path' && menu) {
+          setContextMenu({ kind: 'path-insert', x: menu.x, y: menu.y, nodeId: node.id });
+        } else if (action === 'insert-after') {
+          insertPointsAfterSelection(1);
+        } else if (action === 'insert-multiple' && menu && node) {
+          setContextMenu({ kind: 'insert-points', x: menu.x, y: menu.y, nodeId: node.id });
+        } else if (action === 'delete') {
           deleteSelected();
         }
+      },
+      pathInsert: {
+        neighbours: createMemo(() => {
+          const menu = contextMenu();
+          const selection = commandSelection();
+          const node = menu?.kind === 'path-insert' ? findNode(activeRoot(), menu.nodeId) : undefined;
+
+          if (!selection || node?.kind !== 'element') {
+            return { previous: undefined, next: undefined };
+          }
+
+          const commands = parsePathData(getAttribute(node, 'd', true));
+          const index = Math.max(...selection.indices);
+          return { previous: commands[index]?.command, next: commands[index + 1]?.command };
+        }),
+        relative: () => settings().pathCommandInsertRelative,
+        setRelative: (pathCommandInsertRelative: boolean) => void setSettings((current) => ({ ...current, pathCommandInsertRelative })),
+        keepOpen: () => settings().pathCommandInsertKeepOpen,
+        setKeepOpen: (pathCommandInsertKeepOpen: boolean) => void setSettings((current) => ({ ...current, pathCommandInsertKeepOpen })),
+        pick: (letter: string, stayOpen: boolean) => {
+          insertPathCommandFromKey(letter, letter === letter.toUpperCase());
+
+          if (!stayOpen) {
+            setContextMenu(undefined);
+          }
+        }
+      },
+      insertPoints: (count: number) => {
+        setContextMenu(undefined);
+        insertPointsAfterSelection(count);
       },
       close: () => setContextMenu(undefined)
     },

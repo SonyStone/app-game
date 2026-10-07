@@ -106,6 +106,7 @@ export function App() {
               heldKeys={app.workspace.heldKeys()}
               viewportPointer={app.workspace.viewportPointer()}
               recentCommandEvent={app.workspace.recentCommandEvent()}
+              reveal={app.workspace.reveal()}
             />
           </ColorSourcesProvider>
           <button
@@ -177,6 +178,16 @@ export function App() {
               addShape={app.contextMenu.addShape}
               commandActions={app.contextMenu.commandActions()}
               runCommandAction={app.contextMenu.runCommandAction}
+              pathInsert={{
+                previous: app.contextMenu.pathInsert.neighbours().previous,
+                next: app.contextMenu.pathInsert.neighbours().next,
+                relative: app.contextMenu.pathInsert.relative(),
+                setRelative: app.contextMenu.pathInsert.setRelative,
+                keepOpen: app.contextMenu.pathInsert.keepOpen(),
+                setKeepOpen: app.contextMenu.pathInsert.setKeepOpen,
+                pick: app.contextMenu.pathInsert.pick
+              }}
+              insertPoints={app.contextMenu.insertPoints}
               close={app.contextMenu.close}
             />
           )}

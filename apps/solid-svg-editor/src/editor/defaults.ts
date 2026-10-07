@@ -45,6 +45,8 @@ export function defaultSettings(): AppSettings {
     panningSpeed: 20,
     uiScale: 'auto',
     keepScreenOn: false,
+    pathCommandInsertRelative: false,
+    pathCommandInsertKeepOpen: false,
     tabMiddleClickClose: true,
     useFilenameForWindowTitle: true,
     useCtrlForZoom: false,

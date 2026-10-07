@@ -46,6 +46,8 @@ export interface EditorPanelContext {
   readonly heldKeys: readonly string[];
   readonly viewportPointer: PointerStateWithActive;
   readonly recentCommandEvent: EditorCommandEvent | undefined;
+  /** "View in Inspector": scroll the inspector to this node (a new `version` repeats the request). */
+  readonly reveal: { readonly nodeId: string; readonly version: number } | undefined;
 }
 
 export interface EditorPanelDescriptor {
@@ -77,6 +79,7 @@ export const editorPanels = [
         updateBasicNodeText={context.updateBasicNodeText}
         openContextMenu={context.openContextMenu}
         reorderNodes={context.reorderNodes}
+        reveal={context.reveal}
       />
     )
   },

@@ -20,7 +20,7 @@ import { useColorSources } from '../color-picker/color-sources';
 import { idValidity } from '../../editor/id-validity';
 import { evaluateNumberExpression } from '../../editor/number-expression';
 import type { SvgNodeActions } from '../documents/createSvgNodeActions';
-import { parseTransformList } from '../../editor/geometry';
+import { formatMatrixTransform, parseTransformList } from '../../editor/geometry';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import {
   clampNumericAttribute,
@@ -58,6 +58,7 @@ import SkewYIcon from './icons/SkewY.svg';
 import SmallMoreIcon from './icons/SmallMore.svg';
 import TranslateIcon from './icons/Translate.svg';
 import { useI18n } from '../../i18n/I18nProvider';
+import ApplyMatrixIcon from '../../icons/ApplyMatrix.svg';
 
 const rootEditorAttributes = ['width', 'height', 'viewBox', 'xmlns'] as const;
 const transformTypes = ['matrix', 'translate', 'rotate', 'scale', 'skewX', 'skewY'] as const;
@@ -1121,6 +1122,16 @@ function TransformField(props: {
               data-testid={`transform-matrix-f-${props.nodeId}-${props.attrName}`}
             />
           </div>
+          <button
+            type="button"
+            class="grid h-6 w-6 cursor-pointer place-items-center self-end rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] hover:border-[var(--accent)]"
+            title={t('Apply the matrix')}
+            aria-label={t('Apply the matrix')}
+            data-testid={`transform-apply-matrix-${props.nodeId}-${props.attrName}`}
+            onClick={() => props.update(formatMatrixTransform(finalMatrix()))}
+          >
+            <ApplyMatrixIcon {...decorativeIconProps} />
+          </button>
         </div>
       </Show>
     </div>
