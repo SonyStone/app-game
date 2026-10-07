@@ -21,6 +21,7 @@ import RedoIcon from './icons/Redo.svg';
 import SaveIcon from './icons/Save.svg';
 import ShortcutPanelIcon from './icons/ShortcutPanel.svg';
 import UndoIcon from './icons/Undo.svg';
+import { useI18n } from '../../i18n/I18nProvider';
 
 export function TopBar(props: {
   readonly activeTab: EditorTab | undefined;
@@ -54,6 +55,7 @@ export function TopBar(props: {
   readonly openDonate: () => void;
   readonly openShortcuts: () => void;
 }) {
+  const { t } = useI18n();
   const [moreOpen, setMoreOpen] = createSignal(false);
   let leftActions: HTMLDivElement | undefined;
   const [tabMenu, setTabMenu] = createSignal<{ readonly x: number; readonly y: number; readonly tabId?: string }>();
@@ -100,13 +102,13 @@ export function TopBar(props: {
               data-testid="topbar-menu-shortcuts"
               onClick={props.openShortcuts}
             >
-              Shortcuts
+              {t('Shortcuts')}
             </MenuButton>
             <MenuButton type="button" icon={GodSvgIcon} data-testid="topbar-menu-about" onClick={props.openAbout}>
-              About
+              {t('About…')}
             </MenuButton>
             <MenuButton type="button" icon={HeartIcon} data-testid="topbar-menu-donate" onClick={props.openDonate}>
-              Donate
+              {t('Donate…')}
             </MenuButton>
             <MenuLink
               icon={LinkIcon}
@@ -115,7 +117,7 @@ export function TopBar(props: {
               rel="noreferrer"
               data-testid="topbar-menu-repository"
             >
-              Repository
+              {t('GodSVG repository')}
             </MenuLink>
             <MenuLink
               icon={LinkIcon}
@@ -124,21 +126,21 @@ export function TopBar(props: {
               rel="noreferrer"
               data-testid="topbar-menu-website"
             >
-              Website
+              {t('GodSVG website')}
             </MenuLink>
           </div>
         </Show>
-        <IconButton icon={GearIcon} label="Settings" testId="topbar-settings-button" onClick={props.openSettings} />
+        <IconButton icon={GearIcon} label={t('Settings')} testId="topbar-settings-button" onClick={props.openSettings} />
         <IconButton
           icon={UndoIcon}
-          label="Undo"
+          label={t('Undo')}
           testId="topbar-undo-button"
           onClick={props.undo}
           disabled={!props.canUndo}
         />
         <IconButton
           icon={RedoIcon}
-          label="Redo"
+          label={t('Redo')}
           testId="topbar-redo-button"
           onClick={props.redo}
           disabled={!props.canRedo}
@@ -147,7 +149,7 @@ export function TopBar(props: {
           class="size-button h-6.5 cursor-pointer rounded-[5px] border border-[color-mix(in_srgb,var(--warning)_50%,var(--soft-border))] bg-[var(--panel-2)] px-2 py-0 text-[var(--warning)]"
           type="button"
           onClick={props.optimizeActive}
-          title="Optimize"
+          title={t('Optimize')}
           data-testid="topbar-optimize-button"
         >
           {props.fileSize}
@@ -239,7 +241,7 @@ export function TopBar(props: {
             </div>
           )}
         </Key>
-        <IconButton icon={CreateTabIcon} label="New tab" testId="new-tab-button" onClick={props.createNewTab} />
+        <IconButton icon={CreateTabIcon} label={t('Create a new tab')} testId="new-tab-button" onClick={props.createNewTab} />
       </div>
       <Show when={tabMenu()}>
         {(menu) => (
@@ -262,19 +264,21 @@ export function TopBar(props: {
           data-testid="import-button"
           onClick={props.openImportDialog}
         >
-          <ImportIcon {...decorativeIconProps} /> Import
+          <ImportIcon {...decorativeIconProps} /> {t('Import')}
         </button>
-        <IconButton icon={SaveIcon} label="Save SVG" testId="save-svg-button" onClick={props.downloadSvg} />
-        <IconButton icon={CopyIcon} label="Copy SVG text" testId="copy-svg-button" onClick={props.copySvgText} />
-        <IconButton icon={ExportIcon} label="Export" testId="export-button" onClick={props.openExport} />
+        <IconButton icon={SaveIcon} label={t('Save SVG')} testId="save-svg-button" onClick={props.downloadSvg} />
+        <IconButton icon={CopyIcon} label={t('Copy the SVG text')} testId="copy-svg-button" onClick={props.copySvgText} />
+        <IconButton icon={ExportIcon} label={t('Export')} testId="export-button" onClick={props.openExport} />
       </div>
     </header>
   );
 }
 
 export function PanelTabs(props: { readonly activePanel: PanelId; readonly setActivePanel: (panel: PanelId) => void }) {
+  const { t } = useI18n();
+
   return (
-    <div class="panel-tabs flex min-w-0 items-center justify-center gap-1.5" data-testid="panel-tabs">
+    <div class="panel-tabs flex min-w-0 items-center justify-[safe_center] gap-1.5 overflow-x-auto [scrollbar-width:none]" data-testid="panel-tabs">
       <For each={editorPanels}>
         {(panel) => (
           <button
@@ -287,7 +291,7 @@ export function PanelTabs(props: { readonly activePanel: PanelId; readonly setAc
             onClick={() => props.setActivePanel(panel.id)}
           >
             <Dynamic component={panel.icon} {...decorativeIconProps} />
-            <span class="whitespace-nowrap">{panel.label}</span>
+            <span class="whitespace-nowrap">{t(panel.label)}</span>
           </button>
         )}
       </For>
@@ -312,6 +316,7 @@ function TabMenu(props: {
   readonly saveTab: (id: string) => void;
   readonly close: () => void;
 }) {
+  const { t } = useI18n();
   let menu: HTMLDivElement | undefined;
   createDismissible({ open: () => true, container: () => menu, close: () => props.close() });
   const index = () => props.tabs.findIndex((tab) => tab.id === props.tabId);
@@ -325,7 +330,7 @@ function TabMenu(props: {
     const current = index();
     return [
       { key: 'close', label: 'Close tab', ids: ids(tabs.slice(current, current + 1)) },
-      { key: 'close-others', label: 'Close other tabs', ids: ids(tabs.filter((_, item) => item !== current)) },
+      { key: 'close-others', label: 'Close all other tabs', ids: ids(tabs.filter((_, item) => item !== current)) },
       { key: 'close-left', label: 'Close tabs to the left', ids: ids(tabs.slice(0, current)) },
       { key: 'close-right', label: 'Close tabs to the right', ids: ids(tabs.slice(current + 1)) },
       { key: 'close-empty', label: 'Close empty tabs', ids: ids(tabs.filter((tab) => tab.document.root.children.length === 0)) },
@@ -344,7 +349,7 @@ function TabMenu(props: {
         when={props.tabId}
         fallback={
           <MenuButton type="button" icon={CreateTabIcon} data-testid="tab-menu-new" onClick={() => run(props.createNewTab)}>
-            New tab
+            {t('Create tab')}
           </MenuButton>
         }
       >
@@ -358,12 +363,12 @@ function TabMenu(props: {
                   data-testid={`tab-menu-${group.key}`}
                   onClick={() => run(() => props.closeTabs(group.ids))}
                 >
-                  {group.label}
+                  {t(group.label)}
                 </MenuButton>
               )}
             </For>
             <MenuButton type="button" icon={SaveIcon} data-testid="tab-menu-save" onClick={() => run(() => props.saveTab(tabId()))}>
-              Save
+              {t('Save')}
             </MenuButton>
           </>
         )}

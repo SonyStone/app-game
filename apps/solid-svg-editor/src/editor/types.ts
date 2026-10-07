@@ -54,6 +54,8 @@ export interface OptimizerSettings {
 }
 
 export interface AppSettings {
+  /** UI language: `en` or a GodSVG translation's locale code such as `ru` or `pt_BR`. */
+  readonly language: string;
   readonly themePreset: ThemePreset;
   readonly baseColor: string;
   readonly accentColor: string;

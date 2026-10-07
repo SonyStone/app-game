@@ -25,6 +25,8 @@ import ExportIcon from '../ui/icons/Export.svg';
 import GodSvgIcon from '../ui/icons/GodSvg.svg';
 import HeartIcon from '../ui/icons/Heart.svg';
 import { PanelButton } from '../ui/PanelButton';
+import { useI18n } from '../../i18n/I18nProvider';
+import { LanguageSelect } from '../../i18n/LanguageSelect';
 
 export function SettingsModal(props: {
   readonly settings: AppSettings;
@@ -33,6 +35,7 @@ export function SettingsModal(props: {
   readonly reformatActiveCode: (formatter?: FormatterSettings) => void;
   readonly shortcuts: ShortcutEditorProps;
 }) {
+  const { t } = useI18n();
   const [tab, setTab] = createSignal<
     'formatting' | 'optimizer' | 'palettes' | 'shortcuts' | 'theming' | 'tabbar' | 'other'
   >('formatting');
@@ -58,18 +61,22 @@ export function SettingsModal(props: {
         data-testid="settings-body"
       >
         <nav class="settings-tabs grid content-start gap-1" data-testid="settings-tabs">
+          <LanguageSelect
+            value={props.settings.language}
+            onChange={(language) => props.setSettings((settings) => ({ ...settings, language }))}
+          />
           <For each={['formatting', 'optimizer', 'palettes', 'shortcuts', 'theming', 'tabbar', 'other'] as const}>
             {(item) => (
               <button
                 type="button"
                 class={[
-                  'h-7.5 cursor-pointer rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] px-2 text-left text-[var(--text)] capitalize [&.active]:border-[var(--accent)] [&.active]:bg-[color-mix(in_srgb,var(--accent)_18%,var(--panel-2))]',
+                  'h-7.5 cursor-pointer rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] px-2 text-left text-[var(--text)] [&.active]:border-[var(--accent)] [&.active]:bg-[color-mix(in_srgb,var(--accent)_18%,var(--panel-2))]',
                   { active: tab() === item }
                 ]}
                 data-testid={`settings-tab-${item}`}
                 onClick={() => setTab(item)}
               >
-                {item}
+                {t(settingsTabLabels[item])}
               </button>
             )}
           </For>
@@ -107,7 +114,7 @@ export function SettingsModal(props: {
                   }))
                 }
               />
-              Remove comments
+              {t('Remove comments')}
             </CheckboxField>
             <CheckboxField>
               <FormInput
@@ -121,7 +128,7 @@ export function SettingsModal(props: {
                   }))
                 }
               />
-              Convert shapes
+              {t('Convert shapes')}
             </CheckboxField>
             <CheckboxField>
               <FormInput
@@ -135,7 +142,7 @@ export function SettingsModal(props: {
                   }))
                 }
               />
-              Simplify paths
+              {t('Simplify paths')}
             </CheckboxField>
           </Show>
           <Show when={tab() === 'palettes'}>
@@ -149,7 +156,7 @@ export function SettingsModal(props: {
           </Show>
           <Show when={tab() === 'theming'}>
             <SettingsField>
-              Theme
+              {t('Theme preset')}
               <FormSelect
                 value={props.settings.themePreset}
                 data-testid="settings-theme-select"
@@ -159,14 +166,14 @@ export function SettingsModal(props: {
                   )
                 }
               >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-                <option value="black">Black (OLED)</option>
-                <option value="gray">Gray</option>
+                <option value="dark">{t('Dark')}</option>
+                <option value="light">{t('Light')}</option>
+                <option value="black">{t('Black (OLED)')}</option>
+                <option value="gray">{t('Gray')}</option>
               </FormSelect>
             </SettingsField>
             <SettingsField>
-              Accent
+              {t('Accent color')}
               <FormInput
                 type="color"
                 data-testid="settings-accent-color"
@@ -177,7 +184,7 @@ export function SettingsModal(props: {
               />
             </SettingsField>
             <SettingsField>
-              Canvas
+              {t('Canvas color')}
               <FormInput
                 type="color"
                 data-testid="settings-canvas-color"
@@ -188,7 +195,7 @@ export function SettingsModal(props: {
               />
             </SettingsField>
             <SettingsField>
-              Grid
+              {t('Grid color')}
               <FormInput
                 type="color"
                 data-testid="settings-grid-color"
@@ -209,7 +216,7 @@ export function SettingsModal(props: {
                   props.setSettings((settings) => ({ ...settings, tabMiddleClickClose: event.currentTarget.checked }))
                 }
               />
-              Middle click closes tab
+              {t('Close tabs with middle mouse button')}
             </CheckboxField>
           </Show>
           <Show when={tab() === 'other'}>
@@ -222,7 +229,7 @@ export function SettingsModal(props: {
                   props.setSettings((settings) => ({ ...settings, useCtrlForZoom: event.currentTarget.checked }))
                 }
               />
-              Ctrl wheel zoom
+              {t('Use CTRL for zooming')}
             </CheckboxField>
             <CheckboxField>
               <FormInput
@@ -245,11 +252,23 @@ export function SettingsModal(props: {
   );
 }
 
+/** GodSVG's names for the settings tabs. */
+const settingsTabLabels = {
+  formatting: 'Formatting',
+  optimizer: 'Optimizer',
+  palettes: 'Palettes',
+  shortcuts: 'Shortcuts',
+  theming: 'Theming',
+  tabbar: 'Tab bar',
+  other: 'Other'
+} as const;
+
 function FormatterSettingsView(props: {
   readonly label: string;
   readonly formatter: FormatterSettings;
   readonly update: (key: keyof FormatterSettings, value: FormatterSettings[keyof FormatterSettings]) => void;
 }) {
+  const { t } = useI18n();
   const testId = () => `formatter-${testIdSegment(props.label)}`;
 
   return (
@@ -257,40 +276,40 @@ function FormatterSettingsView(props: {
       class="settings-fieldset grid gap-2 rounded-md border border-[var(--soft-border)] p-2.5"
       data-testid={testId()}
     >
-      <legend>{props.label}</legend>
+      <legend>{t(props.label)}</legend>
       <SettingsField>
-        Preset
+        {t('Preset')}
         <FormSelect
           value={props.formatter.preset}
           data-testid={`${testId()}-preset`}
           onChange={(event) => props.update('preset', event.currentTarget.value as FormatterPreset)}
         >
-          <option value="compact">Compact</option>
-          <option value="pretty">Pretty</option>
+          <option value="compact">{t('Compact')}</option>
+          <option value="pretty">{t('Pretty')}</option>
         </FormSelect>
       </SettingsField>
       <SettingsField>
-        Formatting
+        {t('Formatting style')}
         <FormSelect
           value={props.formatter.formattingStyle}
           data-testid={`${testId()}-formatting-style`}
           onChange={(event) => props.update('formattingStyle', event.currentTarget.value as FormattingStyle)}
         >
-          <option value="compact">Compact</option>
-          <option value="pretty">Pretty</option>
+          <option value="compact">{t('Compact')}</option>
+          <option value="pretty">{t('Pretty')}</option>
           <option value="spacious">Spacious</option>
         </FormSelect>
       </SettingsField>
       <SettingsField>
-        Shorthand
+        {t('Use shorthand tag syntax')}
         <FormSelect
           value={props.formatter.shorthandTags}
           data-testid={`${testId()}-shorthand-tags`}
           onChange={(event) => props.update('shorthandTags', event.currentTarget.value as ShorthandTags)}
         >
-          <option value="always">Always</option>
-          <option value="all-except-containers">All except containers</option>
-          <option value="never">Never</option>
+          <option value="always">{t('Always')}</option>
+          <option value="all-except-containers">{t('All except containers')}</option>
+          <option value="never">{t('Never')}</option>
         </FormSelect>
       </SettingsField>
       <CheckboxField>
@@ -300,7 +319,7 @@ function FormatterSettingsView(props: {
           checked={props.formatter.removeComments}
           onChange={(event) => props.update('removeComments', event.currentTarget.checked)}
         />
-        Remove comments
+        {t('Remove comments')}
       </CheckboxField>
       <CheckboxField>
         <FormInput
@@ -309,7 +328,7 @@ function FormatterSettingsView(props: {
           checked={props.formatter.trailingNewline}
           onChange={(event) => props.update('trailingNewline', event.currentTarget.checked)}
         />
-        Trailing newline
+        {t('Add trailing newline')}
       </CheckboxField>
       <CheckboxField>
         <FormInput
@@ -318,10 +337,10 @@ function FormatterSettingsView(props: {
           checked={props.formatter.indentWithSpaces}
           onChange={(event) => props.update('indentWithSpaces', event.currentTarget.checked)}
         />
-        Spaces
+        {t('Use spaces instead of tabs')}
       </CheckboxField>
       <SettingsField>
-        Indent
+        {t('Number of indentation spaces')}
         <FormInput
           type="number"
           min="0"
@@ -334,9 +353,9 @@ function FormatterSettingsView(props: {
           }}
         />
       </SettingsField>
-      <div class="mt-1 text-[11px] text-[var(--muted)]">Colors</div>
+      <div class="mt-1 text-[11px] text-[var(--muted)]">{t('Colors')}</div>
       <SettingsField>
-        Named colors
+        {t('Use named colors')}
         <FormSelect
           value={props.formatter.colorUseNamedColors}
           data-testid={`${testId()}-color-named`}
@@ -344,14 +363,14 @@ function FormatterSettingsView(props: {
             props.update('colorUseNamedColors', event.currentTarget.value as FormatterSettings['colorUseNamedColors'])
           }
         >
-          <option value="always">Always</option>
-          <option value="when-shorter-or-equal">When shorter or equal</option>
-          <option value="when-shorter">When shorter</option>
-          <option value="never">Never</option>
+          <option value="always">{t('Always')}</option>
+          <option value="when-shorter-or-equal">{t('When shorter or equal')}</option>
+          <option value="when-shorter">{t('When shorter')}</option>
+          <option value="never">{t('Never')}</option>
         </FormSelect>
       </SettingsField>
       <SettingsField>
-        Color syntax
+        {t('Primary syntax')}
         <FormSelect
           value={props.formatter.colorPrimarySyntax}
           data-testid={`${testId()}-color-syntax`}
@@ -359,8 +378,8 @@ function FormatterSettingsView(props: {
             props.update('colorPrimarySyntax', event.currentTarget.value as FormatterSettings['colorPrimarySyntax'])
           }
         >
-          <option value="three-or-six-digit-hex">3 or 6 digit hex</option>
-          <option value="six-digit-hex">6 digit hex</option>
+          <option value="three-or-six-digit-hex">{t('3-digit or 6-digit hex')}</option>
+          <option value="six-digit-hex">{t('6-digit hex')}</option>
           <option value="rgb">rgb()</option>
         </FormSelect>
       </SettingsField>
@@ -371,12 +390,12 @@ function FormatterSettingsView(props: {
           checked={props.formatter.colorCapitalHex}
           onChange={(event) => props.update('colorCapitalHex', event.currentTarget.checked)}
         />
-        Capital hex
+        {t('Capitalize hexadecimal letters')}
       </CheckboxField>
       <For each={formatterToggleGroups}>
         {(group) => (
           <>
-            <div class="mt-1 text-[11px] text-[var(--muted)]">{group.title}</div>
+            <div class="mt-1 text-[11px] text-[var(--muted)]">{t(group.title)}</div>
             <For each={group.toggles}>
               {(toggle) => (
                 <CheckboxField>
@@ -386,7 +405,7 @@ function FormatterSettingsView(props: {
                     checked={props.formatter[toggle.key]}
                     onChange={(event) => props.update(toggle.key, event.currentTarget.checked)}
                   />
-                  {toggle.label}
+                  {t(toggle.label)}
                 </CheckboxField>
               )}
             </For>
@@ -403,16 +422,16 @@ const formatterToggleGroups = [
     title: 'Numbers',
     toggles: [
       { key: 'numberRemoveLeadingZero', label: 'Remove leading zero' },
-      { key: 'numberUseExponentIfShorter', label: 'Use exponent when shorter' }
+      { key: 'numberUseExponentIfShorter', label: 'Use exponential when shorter' }
     ]
   },
   {
-    title: 'Path data',
+    title: 'Pathdata',
     toggles: [
       { key: 'pathdataCompressNumbers', label: 'Compress numbers' },
       { key: 'pathdataMinimizeSpacing', label: 'Minimize spacing' },
-      { key: 'pathdataRemoveSpacingAfterFlags', label: 'Remove spacing after arc flags' },
-      { key: 'pathdataRemoveConsecutiveCommands', label: 'Remove repeated commands' }
+      { key: 'pathdataRemoveSpacingAfterFlags', label: 'Remove spacing after flags' },
+      { key: 'pathdataRemoveConsecutiveCommands', label: 'Remove consecutive commands' }
     ]
   },
   {
@@ -440,6 +459,7 @@ export function ExportModal(props: {
   readonly tabName: string;
   readonly close: () => void;
 }) {
+  const { t } = useI18n();
   const [format, setFormat] = createSignal<ExportFormat>('svg');
   const [scale, setScale] = createSignal(1);
   const [useBackground, setUseBackground] = createSignal(false);
@@ -503,7 +523,7 @@ export function ExportModal(props: {
         </div>
         <div class="export-controls grid content-start gap-2.5" data-testid="export-controls">
           <SettingsField>
-            Format
+            {t('Format')}
             <FormSelect
               value={format()}
               data-testid="export-format-select"
@@ -517,7 +537,7 @@ export function ExportModal(props: {
           </SettingsField>
           <Show when={format() !== 'svg'}>
             <SettingsField>
-              Scale
+              {t('Scale')}
               <FormInput
                 type="number"
                 min="0.01"
@@ -528,12 +548,12 @@ export function ExportModal(props: {
               />
             </SettingsField>
             <SettingsField>
-              Size
+              {t('Size')}
               <div class="flex items-center gap-1">
                 <FormInput
                   type="number"
                   min="1"
-                  aria-label="Width in pixels"
+                  aria-label={t('Width')}
                   data-testid="export-width-input"
                   value={pixels().width}
                   onChange={(event) => setPixelSize('width', Number(event.currentTarget.value))}
@@ -542,7 +562,7 @@ export function ExportModal(props: {
                 <FormInput
                   type="number"
                   min="1"
-                  aria-label="Height in pixels"
+                  aria-label={t('Height')}
                   data-testid="export-height-input"
                   value={pixels().height}
                   onChange={(event) => setPixelSize('height', Number(event.currentTarget.value))}
@@ -557,7 +577,7 @@ export function ExportModal(props: {
                 disabled={format() === 'jpeg'}
                 onChange={(event) => setUseBackground(event.currentTarget.checked)}
               />
-              Background
+              {t('Background')}
             </CheckboxField>
             <Show when={useBackground() || format() === 'jpeg'}>
               <SettingsField>
@@ -578,12 +598,12 @@ export function ExportModal(props: {
                   checked={lossyWebp()}
                   onChange={(event) => setLossyWebp(event.currentTarget.checked)}
                 />
-                Lossy
+                {t('Lossy')}
               </CheckboxField>
             </Show>
             <Show when={hasQuality()}>
               <SettingsField>
-                Quality
+                {t('Quality')}
                 <FormInput
                   type="range"
                   min="0"
@@ -600,7 +620,7 @@ export function ExportModal(props: {
             <span data-testid="export-dimensions">
               {format() === 'svg' ? `${dimensions().width}×${dimensions().height}` : `${pixels().width}×${pixels().height} px`}
             </span>
-            <span data-testid="export-estimated-size">{fileSize() ?? '…'}</span>
+            <span title={t('Estimated size')} data-testid="export-estimated-size">{fileSize() ?? '…'}</span>
           </div>
           <div class="truncate text-[11px] text-[var(--muted)]" data-testid="export-file-name">
             {fileName()}
@@ -612,7 +632,7 @@ export function ExportModal(props: {
             data-testid="export-confirm-button"
             onClick={() => void exportFile(props.exportText, dimensions(), options(), fileName())}
           >
-            Export
+            {t('Export')}
           </PanelButton>
           <PanelButton
             type="button"
@@ -620,7 +640,7 @@ export function ExportModal(props: {
             data-testid="export-copy-button"
             onClick={() => void copyExport(props.exportText, dimensions(), options())}
           >
-            Copy
+            {t('Copy')}
           </PanelButton>
         </div>
       </div>
@@ -635,21 +655,23 @@ export function CloseTabModal(props: {
   readonly discard: () => void;
   readonly close: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <ModalFrame title="Save the changes?" close={props.close}>
       <div class="grid gap-3" data-testid="close-tab-dialog">
         <p class="m-0 leading-normal">
-          <strong>{props.tabName}</strong> has unsaved changes. Save them before closing the tab?
+          {t('Do you want to save the changes made to {file_name}?', { file_name: props.tabName })}{' '}
+          {t("Your changes will be lost if you don't save them.")}
         </p>
         <div class="flex justify-end gap-2">
           <PanelButton type="button" data-testid="close-tab-cancel" onClick={props.close}>
-            Cancel
+            {t('Cancel')}
           </PanelButton>
           <PanelButton type="button" data-testid="close-tab-discard" onClick={props.discard}>
-            Don't save
+            {t('Don\'t save')}
           </PanelButton>
           <PanelButton type="button" variant="primary" data-testid="close-tab-save" onClick={props.save}>
-            Save
+            {t('Save')}
           </PanelButton>
         </div>
       </div>
@@ -675,12 +697,14 @@ export function AboutModal(props: { readonly close: () => void }) {
 }
 
 export function DonateModal(props: { readonly close: () => void }) {
+  const { t } = useI18n();
+
   return (
-    <ModalFrame title="Donate" close={props.close}>
+    <ModalFrame title="Donate…" close={props.close}>
       <InfoPanel icon={HeartIcon}>
         <p class="m-0 leading-normal">Support the original GodSVG project and its ongoing development.</p>
         <a class="text-[var(--accent)]" href="https://godsvg.com" target="_blank" rel="noreferrer">
-          GodSVG website
+          {t('GodSVG website')}
         </a>
       </InfoPanel>
     </ModalFrame>
@@ -707,6 +731,7 @@ type ShortcutEditorProps = {
  * on the backdrop call `close`.
  */
 function ModalFrame(props: { readonly title: string; readonly close: () => void; readonly children: JSX.Element }) {
+  const { t } = useI18n();
   const modalId = () => `modal-${testIdSegment(props.title)}`;
   let panel: HTMLElement | undefined;
 
@@ -738,7 +763,7 @@ function ModalFrame(props: { readonly title: string; readonly close: () => void;
         ref={(element) => (panel = element)}
         role="dialog"
         aria-modal="true"
-        aria-label={props.title}
+        aria-label={t(props.title)}
         tabindex={-1}
         class="modal-panel grid max-h-[min(760px,calc(100vh-32px))] w-[min(860px,calc(100vw-32px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[7px] border border-[var(--border)] bg-[var(--panel)] shadow-[0_20px_60px_#000a] outline-none"
         data-testid={modalId()}
@@ -749,7 +774,7 @@ function ModalFrame(props: { readonly title: string; readonly close: () => void;
           data-testid={`${modalId()}-header`}
         >
           <h2 class="m-0 text-[15px]" data-testid={`${modalId()}-title`}>
-            {props.title}
+            {t(props.title)}
           </h2>
           <button
             class="grid h-6.5 w-6.5 place-items-center rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel)]"
@@ -789,7 +814,7 @@ function FormSelect(props: JSX.SelectHTMLAttributes<HTMLSelectElement> & { reado
   return (
     <select
       {...props}
-      class="block h-5.5 min-h-5.5 min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
+      class="block h-5.5 min-h-5.5 min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
     >
       {props.children}
     </select>

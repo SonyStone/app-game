@@ -3,6 +3,7 @@ import { createSignal, For, Show } from 'solid-js';
 
 import type { ShortcutBinding } from '../../editor/types';
 import { bindingFromEvent, formatBinding, sameBinding, type ShortcutDescriptor } from './shortcutRegistry';
+import { useI18n } from '../../i18n/I18nProvider';
 
 /** Most bindings one action can have, as in GodSVG's shortcut settings. */
 export const maxBindingsPerAction = 3;
@@ -17,6 +18,7 @@ export function ShortcutEditor(props: {
   readonly descriptors: readonly ShortcutDescriptor[];
   readonly setBindings: (id: string, bindings: readonly ShortcutBinding[] | undefined) => void;
 }) {
+  const { t } = useI18n();
   const categories = () => [...new Set(props.descriptors.map((item) => item.category))].sort((a, b) => categoryRank(a) - categoryRank(b));
   const [category, setCategory] = createSignal(categories()[0] ?? '');
   const [listening, setListening] = createSignal<{ readonly id: string; readonly index: number }>();
@@ -84,11 +86,11 @@ export function ShortcutEditor(props: {
               type="button"
               role="tab"
               aria-selected={category() === item ? 'true' : 'false'}
-              class="cursor-pointer rounded border border-[var(--soft-border)] px-2 py-0.5 capitalize aria-selected:border-[var(--accent)] aria-selected:text-[var(--accent)]"
+              class="cursor-pointer rounded border border-[var(--soft-border)] px-2 py-0.5 aria-selected:border-[var(--accent)] aria-selected:text-[var(--accent)]"
               data-testid={`shortcut-category-${item}`}
               onClick={() => setCategory(item)}
             >
-              {item}
+              {t(`${item.charAt(0).toUpperCase()}${item.slice(1)}`)}
             </button>
           )}
         </For>
@@ -98,7 +100,7 @@ export function ShortcutEditor(props: {
           <For each={props.descriptors.filter((item) => item.category === category())}>
             {(descriptor) => (
               <tr data-testid={`shortcut-row-${descriptor.id}`}>
-                <td class="border-b border-b-[var(--soft-border)] px-2 py-1.5">{descriptor.action}</td>
+                <td class="border-b border-b-[var(--soft-border)] px-2 py-1.5">{t(descriptor.action)}</td>
                 <td class="border-b border-b-[var(--soft-border)] px-2 py-1.5">
                   <Show when={descriptor.editable} fallback={<span class={keycap}>{descriptor.keys}</span>}>
                     <div class="flex flex-wrap items-center gap-1">
@@ -120,12 +122,18 @@ export function ShortcutEditor(props: {
                                     'text-[var(--muted)]': !binding && !isListening()
                                   }
                                 ]}
-                                title={shared().length > 0 ? `Also used by: ${shared().join(', ')}` : undefined}
+                                title={
+                                  shared().length > 0
+                                    ? `${t('Also used by')}: ${shared().map((action) => t(action)).join(', ')}`
+                                    : binding
+                                      ? undefined
+                                      : t('Add shortcut')
+                                }
                                 data-testid={`shortcut-binding-${descriptor.id}-${index()}`}
                                 onClick={() => setListening(isListening() ? undefined : { id: descriptor.id, index: index() })}
                                 onBlur={() => isListening() && setListening(undefined)}
                               >
-                                {isListening() ? 'Press keys…' : binding ? formatBinding(binding) : '+'}
+                                {isListening() ? t('Press keys…') : binding ? formatBinding(binding) : '+'}
                               </button>
                               <Show when={binding}>
                                 <button
@@ -149,7 +157,7 @@ export function ShortcutEditor(props: {
                           data-testid={`shortcut-reset-${descriptor.id}`}
                           onClick={() => props.setBindings(descriptor.id, undefined)}
                         >
-                          Reset
+                          {t('Reset to default')}
                         </button>
                       </Show>
                     </div>

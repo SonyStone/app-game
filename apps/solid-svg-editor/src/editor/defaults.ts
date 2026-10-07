@@ -1,5 +1,6 @@
 import { compactFormatter, formatterPreset, prettyFormatter, type FormatterSettings } from '../formatter';
 import { createId } from '../svg-model';
+import { resolveLocale, sourceLocale } from '../i18n/locales';
 import { defaultPalettes, restorePalettes } from './palettes';
 
 import type { AppSettings, EditorTab } from './types';
@@ -10,6 +11,7 @@ export const defaultPreviewSizes: readonly number[] = [16, 24, 32, 48, 64];
 
 export function defaultSettings(): AppSettings {
   return {
+    language: sourceLocale,
     themePreset: 'dark',
     baseColor: '#10121d',
     accentColor: '#6699ff',
@@ -62,7 +64,8 @@ export function restoreSettings(data: string): AppSettings {
       Array.isArray(stored.previewSizes) && stored.previewSizes.every((size) => Number.isInteger(size) && size > 0)
         ? stored.previewSizes
         : defaults.previewSizes,
-    shortcutOverrides: isShortcutOverrides(stored.shortcutOverrides) ? stored.shortcutOverrides : {}
+    shortcutOverrides: isShortcutOverrides(stored.shortcutOverrides) ? stored.shortcutOverrides : {},
+    language: resolveLocale(stored.language)
   };
 }
 
