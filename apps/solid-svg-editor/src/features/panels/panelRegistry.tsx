@@ -13,16 +13,16 @@ import InspectorIcon from '../chrome/icons/Inspector.svg';
 import PreviewsIcon from '../chrome/icons/Previews.svg';
 import TextFileIcon from '../chrome/icons/TextFile.svg';
 import { InspectorPanel } from '../inspector/InspectorPanel';
-import type { PathCommandSelection } from '../selection/createEditorSelection';
+import type { CommandSelection } from '../../editor/path-selection';
 import { CodePanel, DebugPanel, PreviewsPanel } from './SidePanels';
 
 export interface EditorPanelContext {
   readonly root: SvgElementNode;
   readonly selectedIds: readonly string[];
-  readonly selectedPathCommand: PathCommandSelection | undefined;
+  readonly commandSelection: CommandSelection | undefined;
   readonly hovered: HoverTarget | undefined;
   readonly setHovered: (target: HoverTarget | undefined) => void;
-  readonly setSelectedPathCommand: (selection: PathCommandSelection | undefined) => void;
+  readonly setCommandSelection: (selection: CommandSelection | undefined) => void;
   readonly selectNode: (id: string, event?: MouseEvent | PointerEvent) => void;
   readonly clearSelection: () => void;
   readonly addElement: (name: RecognizedElement | string) => void;
@@ -62,10 +62,10 @@ export const editorPanels = [
       <InspectorPanel
         root={context.root}
         selectedIds={context.selectedIds}
-        selectedPathCommand={context.selectedPathCommand}
+        commandSelection={context.commandSelection}
         hovered={context.hovered}
         setHovered={context.setHovered}
-        setSelectedPathCommand={context.setSelectedPathCommand}
+        setCommandSelection={context.setCommandSelection}
         selectNode={context.selectNode}
         clearSelection={context.clearSelection}
         addElement={context.addElement}

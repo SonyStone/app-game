@@ -1,15 +1,14 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 
 import type { HoverTarget } from '../../editor/contours';
+import type { CommandSelection } from '../../editor/path-selection';
 import { flattenAllNodes } from '../../editor/tree-utils';
 import { findNode, type SvgElementNode, type SvgNode } from '../../svg-model';
-
-export type PathCommandSelection = { readonly nodeId: string; readonly index: number };
 
 export function createEditorSelection(options: { readonly root: Accessor<SvgElementNode> }) {
   const [selectedIds, setSelectedIds] = createSignal<readonly string[]>([]);
   const [selectionPivot, setSelectionPivot] = createSignal<string | undefined>();
-  const [selectedPathCommand, setSelectedPathCommand] = createSignal<PathCommandSelection | undefined>();
+  const [commandSelection, setCommandSelection] = createSignal<CommandSelection | undefined>();
   /** What the pointer is over, in the viewport or the inspector; both highlight it, like GodSVG's hover. */
   const [hovered, setHovered] = createSignal<HoverTarget | undefined>();
 
@@ -47,13 +46,13 @@ export function createEditorSelection(options: { readonly root: Accessor<SvgElem
 
     setSelectedIds([nodeId]);
     setSelectionPivot(nodeId);
-    setSelectedPathCommand(undefined);
+    setCommandSelection(undefined);
   }
 
   function clearSelection(): void {
     setSelectedIds([]);
     setSelectionPivot(undefined);
-    setSelectedPathCommand(undefined);
+    setCommandSelection(undefined);
   }
 
   /** Selects every node except the root, as GodSVG does; the root cannot be moved, duplicated, or deleted. */
@@ -70,8 +69,8 @@ export function createEditorSelection(options: { readonly root: Accessor<SvgElem
     setSelectedIds,
     selectionPivot,
     setSelectionPivot,
-    selectedPathCommand,
-    setSelectedPathCommand,
+    commandSelection,
+    setCommandSelection,
     hovered,
     setHovered,
     selectedNodes,

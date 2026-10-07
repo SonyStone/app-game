@@ -90,6 +90,7 @@ export interface HandleDescriptor {
 export type ContextMenuState = { readonly x: number; readonly y: number } & (
   | { readonly kind: "node"; readonly nodeId: string }
   | { readonly kind: "canvas"; readonly point: Point }
+  | { readonly kind: "commands"; readonly nodeId: string }
 );
 
 export interface ActivePanDrag {

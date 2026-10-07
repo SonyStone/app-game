@@ -47,7 +47,7 @@ describe('collectContours', () => {
     const contours = collectContours(root, {
       selectedIds: [path!.id],
       hovered: { nodeId: path!.id, commandIndex: 2 },
-      selectedCommand: { nodeId: path!.id, index: 1 }
+      selectedCommand: { nodeId: path!.id, indices: [1], pivot: 1 }
     });
 
     expect(contours.map((contour) => contour.state)).toEqual(['selected', 'hovered-selected']);

@@ -6,7 +6,7 @@ import { collectContours, type HoverTarget } from '../../editor/contours';
 import type { ActiveDrag, AppSettings } from '../../editor/types';
 import { humanFileSize, serializeRoot } from '../../formatter';
 import { flattenElements, type SvgElementNode } from '../../svg-model';
-import type { PathCommandSelection } from '../selection/createEditorSelection';
+import type { CommandSelection } from '../../editor/path-selection';
 import { createRasterPreview } from '../viewport/createRasterPreview';
 import type { TouchGesture } from '../viewport/touch-gesture';
 import { createRasterPreviewRect, createRasterPreviewRoot, type SvgSize } from '../viewport/viewport-math';
@@ -16,7 +16,7 @@ export function createEditorDerivedState(options: {
   readonly activeRoot: Accessor<SvgElementNode>;
   readonly selectedIds: Accessor<readonly string[]>;
   readonly hovered: Accessor<HoverTarget | undefined>;
-  readonly selectedPathCommand: Accessor<PathCommandSelection | undefined>;
+  readonly commandSelection: Accessor<CommandSelection | undefined>;
   readonly activeDrag: Accessor<ActiveDrag | undefined>;
   readonly activeTouchGesture: Accessor<TouchGesture | undefined>;
   readonly transientViewportPreview: Accessor<boolean>;
@@ -63,7 +63,7 @@ export function createEditorDerivedState(options: {
     collectContours(options.activeRoot(), {
       selectedIds: options.selectedIds(),
       hovered: options.hovered(),
-      selectedCommand: options.selectedPathCommand()
+      selectedCommand: options.commandSelection()
     })
   );
 

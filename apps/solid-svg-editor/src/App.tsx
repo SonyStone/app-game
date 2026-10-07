@@ -66,10 +66,10 @@ export function App() {
             setActivePanel={app.workspace.setActivePanel}
             root={app.workspace.activeRoot()}
             selectedIds={app.workspace.selectedIds()}
-            selectedPathCommand={app.workspace.selectedPathCommand()}
+            commandSelection={app.workspace.commandSelection()}
             hovered={app.workspace.hovered()}
             setHovered={app.workspace.setHovered}
-            setSelectedPathCommand={app.workspace.setSelectedPathCommand}
+            setCommandSelection={app.workspace.setCommandSelection}
             selectNode={app.workspace.selectNode}
             clearSelection={app.workspace.clearSelection}
             addElement={app.workspace.addElement}
@@ -132,8 +132,10 @@ export function App() {
           rasterPreviewRect={app.viewport.rasterPreviewRect()}
           handles={app.viewport.handles()}
           openCanvasContextMenu={app.viewport.openCanvasContextMenu}
+          selectHandleSubpath={app.viewport.selectHandleSubpath}
+          openCommandMenu={app.viewport.openCommandMenu}
           contours={app.viewport.contours()}
-          selectedPathCommand={app.viewport.selectedPathCommand()}
+          commandSelection={app.viewport.commandSelection()}
           setHovered={app.viewport.setHovered}
           selectionBox={app.viewport.selectionBox()}
           marqueeRect={app.viewport.marqueeRect()}
@@ -154,6 +156,8 @@ export function App() {
             runAction={app.contextMenu.runAction}
             convert={app.contextMenu.convert}
             addShape={app.contextMenu.addShape}
+            commandActions={app.contextMenu.commandActions()}
+            runCommandAction={app.contextMenu.runCommandAction}
             close={app.contextMenu.close}
           />
         )}

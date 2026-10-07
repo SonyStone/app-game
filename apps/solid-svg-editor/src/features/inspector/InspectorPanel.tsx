@@ -4,6 +4,7 @@ import { createMemo, createSignal, createTrackedEffect, For, Show } from 'solid-
 import { svgCapabilities } from '../../editor/capabilities';
 import type { SvgNodeActions } from '../documents/createSvgNodeActions';
 import { decorativeIconProps } from '../../editor/svg-icon';
+import type { CommandSelection } from '../../editor/path-selection';
 import type { HoverTarget } from '../../editor/contours';
 import { ancestorElements, inheritedAttributeValue } from '../../editor/tree-utils';
 import type { RecognizedElement } from '../../svg-db';
@@ -24,11 +25,11 @@ type InspectorDropTarget = {
 export function InspectorPanel(props: {
   readonly root: SvgElementNode;
   readonly selectedIds: readonly string[];
-  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  readonly commandSelection: CommandSelection | undefined;
   /** What the pointer is over in the viewport or inspector, highlighted in both. */
   readonly hovered: HoverTarget | undefined;
   readonly setHovered: (target: HoverTarget | undefined) => void;
-  readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
+  readonly setCommandSelection: (selection: CommandSelection | undefined) => void;
   readonly selectNode: (id: string, event?: MouseEvent | PointerEvent) => void;
   readonly clearSelection: () => void;
   readonly addElement: (name: RecognizedElement | string) => void;
@@ -302,10 +303,10 @@ export function InspectorPanel(props: {
                     depth={row().depth}
                     root={props.root}
                     selectedIds={props.selectedIds}
-                    selectedPathCommand={props.selectedPathCommand}
+                    commandSelection={props.commandSelection}
                     hovered={props.hovered}
                     setHovered={props.setHovered}
-                    setSelectedPathCommand={props.setSelectedPathCommand}
+                    setCommandSelection={props.setCommandSelection}
                     selectNode={selectNodeFromInspector}
                     updateElementAttribute={props.updateElementAttribute}
                     removeElementAttribute={props.removeElementAttribute}
@@ -363,11 +364,11 @@ function ElementCard(props: {
   readonly depth: number;
   readonly root: SvgElementNode;
   readonly selectedIds: readonly string[];
-  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  readonly commandSelection: CommandSelection | undefined;
   /** What the pointer is over in the viewport or inspector, highlighted in both. */
   readonly hovered: HoverTarget | undefined;
   readonly setHovered: (target: HoverTarget | undefined) => void;
-  readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
+  readonly setCommandSelection: (selection: CommandSelection | undefined) => void;
   readonly selectNode: (id: string, event?: MouseEvent | PointerEvent) => void;
   readonly updateElementAttribute: SvgNodeActions['updateElementAttribute'];
   readonly removeElementAttribute: (nodeId: string, name: string) => void;
@@ -481,10 +482,10 @@ function ElementCard(props: {
               node={node()}
               inheritedValue={(name) => inheritedAttributeValue(node(), ancestors(), name)}
               updateElementAttribute={props.updateElementAttribute}
-              selectedPathCommand={props.selectedPathCommand}
+              commandSelection={props.commandSelection}
               hovered={props.hovered}
               setHovered={props.setHovered}
-              setSelectedPathCommand={props.setSelectedPathCommand}
+              setCommandSelection={props.setCommandSelection}
             />
             <Show when={props.renderChildren !== false && node().children.length > 0}>
               <div class="px-1.25 pb-1.25" data-testid={`inspector-node-children-${node().id}`}>
@@ -495,10 +496,10 @@ function ElementCard(props: {
                       depth={props.depth + 1}
                       root={props.root}
                       selectedIds={props.selectedIds}
-                      selectedPathCommand={props.selectedPathCommand}
+                      commandSelection={props.commandSelection}
                       hovered={props.hovered}
                       setHovered={props.setHovered}
-                      setSelectedPathCommand={props.setSelectedPathCommand}
+                      setCommandSelection={props.setCommandSelection}
                       selectNode={props.selectNode}
                       updateElementAttribute={props.updateElementAttribute}
                       removeElementAttribute={props.removeElementAttribute}

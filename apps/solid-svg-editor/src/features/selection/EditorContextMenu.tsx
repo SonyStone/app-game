@@ -7,6 +7,7 @@ import MoveUpIcon from '../../App.icons/MoveUp.svg';
 import { svgCapabilities } from '../../editor/capabilities';
 import { convertElement, possibleConversions } from '../../editor/element-conversion';
 import { newShapeNames } from '../../editor/new-shape';
+import type { commandSelectionActions } from '../../editor/path-selection';
 import { decorativeIconProps } from '../../editor/svg-icon';
 import type { ContextMenuState } from '../../editor/types';
 import type { SvgNode } from '../../svg-model';
@@ -30,6 +31,9 @@ export function EditorContextMenu(props: {
   readonly convert: (target: string) => void;
   /** Adds a shape at the canvas point of a "New shape" menu. */
   readonly addShape: (name: (typeof newShapeNames)[number]) => void;
+  /** Which operations apply to the selected path commands, for the "commands" menu. */
+  readonly commandActions: ReturnType<typeof commandSelectionActions> | undefined;
+  readonly runCommandAction: (action: 'move-up' | 'move-down' | 'reverse' | 'set-origin' | 'delete') => void;
   readonly close: () => void;
 }) {
   let menu: HTMLDivElement | undefined;
@@ -61,6 +65,31 @@ export function EditorContextMenu(props: {
             </MenuButton>
           )}
         </For>
+      </Show>
+      <Show when={props.menu.kind === 'commands'}>
+        <Show when={props.commandActions?.moveUp}>
+          <MenuButton type="button" icon={MoveUpIcon} data-testid="context-menu-commands-move-up" onClick={() => props.runCommandAction('move-up')}>
+            Move subpaths up
+          </MenuButton>
+        </Show>
+        <Show when={props.commandActions?.moveDown}>
+          <MenuButton type="button" icon={MoveDownIcon} data-testid="context-menu-commands-move-down" onClick={() => props.runCommandAction('move-down')}>
+            Move subpaths down
+          </MenuButton>
+        </Show>
+        <Show when={props.commandActions?.reverse}>
+          <MenuButton type="button" data-testid="context-menu-commands-reverse" onClick={() => props.runCommandAction('reverse')}>
+            Reverse order
+          </MenuButton>
+        </Show>
+        <Show when={props.commandActions?.setOrigin}>
+          <MenuButton type="button" data-testid="context-menu-commands-set-origin" onClick={() => props.runCommandAction('set-origin')}>
+            Set as origin
+          </MenuButton>
+        </Show>
+        <MenuButton type="button" icon={DeleteIcon} data-testid="context-menu-commands-delete" onClick={() => props.runCommandAction('delete')}>
+          Delete
+        </MenuButton>
       </Show>
       <Show when={props.menu.kind === 'node'}>
       <MenuButton

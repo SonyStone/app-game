@@ -310,18 +310,6 @@ export function updateCommandValue(commands: readonly PathCommand[], commandInde
   });
 }
 
-export function insertCommand(commands: readonly PathCommand[], afterIndex: number, command: string): readonly PathCommand[] {
-  const nextCommand = createCommand(command);
-  const next = [...commands];
-  const insertIndex = Math.max(0, Math.min(afterIndex + 1, next.length));
-  next.splice(insertIndex, 0, nextCommand);
-  return next;
-}
-
-export function deleteCommand(commands: readonly PathCommand[], commandIndex: number): readonly PathCommand[] {
-  return commands.filter((_, index) => index !== commandIndex);
-}
-
 /**
  * Converts one command to another type, keeping its end point and, where possible, its shape, following GodSVG.
  *
@@ -607,6 +595,54 @@ function nearlyEqualPoints(a: Point, b: Point): boolean {
 
 function nearlyEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b));
+}
+
+/** A command with absolute coordinates and a flag for whether it is written relative. */
+export type AbsoluteCommand = {
+  readonly letter: PathCommandLetter;
+  readonly relative: boolean;
+  readonly values: readonly number[];
+};
+
+/** Commands in absolute coordinates, keeping each command's relative flag; see `fromAbsoluteCommands`. */
+export function toAbsoluteCommands(commands: readonly PathCommand[]): readonly AbsoluteCommand[] {
+  return absoluteSegments(commands).map((segment, index) => ({
+    letter: segment.source.letter,
+    relative: isRelativeCommand(commands[index]?.command ?? ""),
+    values: segment.source.values
+  }));
+}
+
+/**
+ * Writes absolute commands back, making relative ones relative to their new start point. Restructuring a path
+ * (deleting, reordering, reversing) in absolute form keeps every other command's geometry, as in GodSVG.
+ */
+export function fromAbsoluteCommands(commands: readonly AbsoluteCommand[]): readonly PathCommand[] {
+  let current: Point = { x: 0, y: 0 };
+  let subpathStart: Point = { x: 0, y: 0 };
+
+  return commands.map((command) => {
+    const values = command.relative ? toRelativeValues(command.letter, command.values, current) : [...command.values];
+    const names: readonly string[] = parameterNames[command.letter];
+    const xIndex = names.lastIndexOf("x");
+    const yIndex = names.lastIndexOf("y");
+
+    if (command.letter === "Z") {
+      current = subpathStart;
+    } else {
+      current = { x: xIndex === -1 ? current.x : command.values[xIndex] ?? current.x, y: yIndex === -1 ? current.y : command.values[yIndex] ?? current.y };
+    }
+
+    if (command.letter === "M") {
+      subpathStart = current;
+    }
+
+    return { command: command.relative ? command.letter.toLowerCase() : command.letter, values };
+  });
+}
+
+function isRelativeCommand(command: string): boolean {
+  return command !== "" && command === command.toLowerCase();
 }
 
 /** One drawn command of a path in absolute coordinates, for outlines in the viewport. */
