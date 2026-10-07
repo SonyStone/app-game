@@ -11,7 +11,7 @@ import { createEditorCommand, type EditorCommandEvent } from '../../editor/comma
 import type { newShapeNames } from '../../editor/new-shape';
 import { defaultSettings, restoreSettings } from '../../editor/defaults';
 import { serializeSvgDocument } from '../../editor/svg-document';
-import type { ContextMenuState, DragSelectionMode, ModalId, PanelId, ShortcutBinding } from '../../editor/types';
+import type { ContextMenuState, DragSelectionMode, ModalId, ShortcutBinding } from '../../editor/types';
 import { createDefaultElement, findNode, getAttribute, insertSibling, svgSize } from '../../svg-model';
 import { commandSelectionActions, subpathSelection } from '../../editor/path-selection';
 import type { HandleDescriptor } from '../../editor/types';
@@ -27,6 +27,8 @@ import { createReferenceImage } from '../reference/createReferenceImage';
 import type { EditorContextMenuAction } from '../selection/EditorContextMenu';
 import { createEditorSelection } from '../selection/createEditorSelection';
 import { createEditorShortcuts } from '../shortcuts/createEditorShortcuts';
+import { createPanelSections } from '../layout/createPanelSections';
+import type { PanelLayout } from '../layout/panel-layout';
 import { evaluateFocusedField, focusSearchField } from '../shortcuts/focusedFieldActions';
 import { tabsToClose, type TabCloseGroup } from '../documents/tab-groups';
 import { godSvgRepositoryUrl, godSvgWebsiteUrl } from '../../editor/links';
@@ -59,7 +61,7 @@ export function createEditorAppController() {
       deserialize: restoreSettings
     })
   );
-  const [activePanel, setActivePanel] = createSignal<PanelId>('inspector');
+  const panelSections = createPanelSections({ layout: () => settings().panelLayout });
   const [modal, setModal] = createSignal<ModalId>();
   const [contextMenu, setContextMenu] = createSignal<ContextMenuState | undefined>();
   const [canvasSvg, setCanvasSvg] = createSignal<SVGSVGElement>();
@@ -83,7 +85,7 @@ export function createEditorAppController() {
     formatter: () => settings().formatter,
     onSelectionReset: () => resetDocumentSelection(),
     onDocumentOpened: () => centerOpenedDocument(),
-    onParseError: () => setActivePanel('code'),
+    onParseError: () => panelSections.activate('code'),
     initialTabs: restorePersistedTabs()
   });
   const {
@@ -399,7 +401,7 @@ export function createEditorAppController() {
       'view.zoom-out': () => zoomBy(1 / Math.SQRT2),
       'view.reset-zoom': centerFrame,
       'view.toggle-fullscreen': toggleFullscreen,
-      'view.debug': () => void setActivePanel(activePanel() === 'debug' ? 'inspector' : 'debug'),
+      'view.debug': panelSections.toggleDebug,
       'view.toggle-grid': toggleSetting('showGrid'),
       'view.toggle-handles': toggleSetting('showHandles'),
       'view.show-rasterized': toggleSetting('viewRasterized'),
@@ -564,6 +566,8 @@ export function createEditorAppController() {
       moveTab,
       saveTab,
       saveTabAs: (tabId: string) => void files.saveAs(tabId),
+      panelLayout: () => settings().panelLayout,
+      setPanelLayout: (panelLayout: PanelLayout) => void setSettings((current) => ({ ...current, panelLayout })),
       resetSvg: () => void files.resetSvg(),
       fileName: files.fileName,
       middleClickCloses: () => settings().tabMiddleClickClose,
@@ -582,8 +586,10 @@ export function createEditorAppController() {
     },
     workspace: {
       sidebar,
-      activePanel,
-      setActivePanel,
+      panelSections: panelSections.sections,
+      panelSplit: () => settings().panelLayout.split,
+      setPanelSplit: (split: number) =>
+        setSettings((current) => ({ ...current, panelLayout: { ...current.panelLayout, split } })),
       activeRoot,
       selectedIds,
       commandSelection,

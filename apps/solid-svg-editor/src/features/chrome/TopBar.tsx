@@ -3,7 +3,7 @@ import { createSignal, For, Show } from 'solid-js';
 
 import { decorativeIconProps } from '../../editor/svg-icon';
 import type { EditorTab, PanelId } from '../../editor/types';
-import { editorPanels } from '../panels/panelRegistry';
+import { getEditorPanel } from '../panels/panelRegistry';
 import { createDismissible } from '../ui/createDismissible';
 import { IconButton } from '../ui/IconButton';
 import CopyIcon from '../ui/icons/Copy.svg';
@@ -21,6 +21,9 @@ import SaveIcon from './icons/Save.svg';
 import ShortcutPanelIcon from './icons/ShortcutPanel.svg';
 import UndoIcon from './icons/Undo.svg';
 import { useI18n } from '../../i18n/I18nProvider';
+import LayoutsIcon from '../../icons/Layouts.svg';
+import { LayoutPopup } from '../layout/LayoutPopup';
+import type { PanelLayout } from '../layout/panel-layout';
 import { tabsToClose, type TabCloseGroup } from '../documents/tab-groups';
 import { godSvgRepositoryUrl, godSvgWebsiteUrl } from '../../editor/links';
 
@@ -41,6 +44,9 @@ export function TopBar(props: {
   readonly moveTab: (id: string, toIndex: number) => void;
   /** Downloads a tab's SVG and marks it saved. */
   readonly saveTab: (id: string) => void;
+  /** GodSVG's layout of the left column, edited in the layout popup. */
+  readonly panelLayout: PanelLayout;
+  readonly setPanelLayout: (layout: PanelLayout) => void;
   /** GodSVG's "Save SVG as" for a tab: picks a new file and binds the tab to it. */
   readonly saveTabAs: (id: string) => void;
   /** GodSVG's "Reset SVG": reloads the active tab from its file. */
@@ -64,6 +70,7 @@ export function TopBar(props: {
 }) {
   const { t } = useI18n();
   const [moreOpen, setMoreOpen] = createSignal(false);
+  const [layoutAnchor, setLayoutAnchor] = createSignal<{ readonly left: number; readonly top: number }>();
   let leftActions: HTMLDivElement | undefined;
   const [tabMenu, setTabMenu] = createSignal<{ readonly x: number; readonly y: number; readonly tabId?: string }>();
   const [draggedTabId, setDraggedTabId] = createSignal<string>();
@@ -138,6 +145,26 @@ export function TopBar(props: {
           </div>
         </Show>
         <IconButton icon={GearIcon} label={t('Settings')} testId="topbar-settings-button" onClick={props.openSettings} />
+        <IconButton
+          icon={LayoutsIcon}
+          label={t('Layout')}
+          testId="topbar-layout-button"
+          active={layoutAnchor() !== undefined}
+          onClick={() => {
+            const box = document.querySelector('[data-testid="topbar-layout-button"]')?.getBoundingClientRect();
+            setLayoutAnchor(layoutAnchor() || !box ? undefined : { left: box.left, top: box.bottom + 4 });
+          }}
+        />
+        <Show when={layoutAnchor()}>
+          {(anchor) => (
+            <LayoutPopup
+              layout={props.panelLayout}
+              setLayout={props.setPanelLayout}
+              anchor={anchor()}
+              close={() => setLayoutAnchor(undefined)}
+            />
+          )}
+        </Show>
         <IconButton
           icon={UndoIcon}
           label={t('Undo')}
@@ -289,12 +316,17 @@ export function TopBar(props: {
   );
 }
 
-export function PanelTabs(props: { readonly activePanel: PanelId; readonly setActivePanel: (panel: PanelId) => void }) {
+/** The tabs of one sidebar section: its panels, in layout order. */
+export function PanelTabs(props: {
+  readonly panels: readonly PanelId[];
+  readonly activePanel: PanelId | undefined;
+  readonly setActivePanel: (panel: PanelId) => void;
+}) {
   const { t } = useI18n();
 
   return (
     <div class="panel-tabs flex min-w-0 items-center justify-[safe_center] gap-1.5 overflow-x-auto [scrollbar-width:none]" data-testid="panel-tabs">
-      <For each={editorPanels}>
+      <For each={props.panels.map((id) => getEditorPanel(id))}>
         {(panel) => (
           <button
             type="button"

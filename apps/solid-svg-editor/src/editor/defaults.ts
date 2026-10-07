@@ -1,5 +1,6 @@
 import { compactFormatter, formatterPreset, prettyFormatter, type FormatterSettings } from '../formatter';
 import { createId } from '../svg-model';
+import { defaultPanelLayout, restorePanelLayout } from '../features/layout/panel-layout';
 import { resolveLocale, sourceLocale } from '../i18n/locales';
 import { defaultPalettes, restorePalettes } from './palettes';
 
@@ -33,6 +34,7 @@ export function defaultSettings(): AppSettings {
     previewSizes: defaultPreviewSizes,
     shortcutOverrides: {},
     shortcutPanel: defaultShortcutPanel(),
+    panelLayout: defaultPanelLayout(),
     tabMiddleClickClose: true,
     useFilenameForWindowTitle: true,
     useCtrlForZoom: false,
@@ -68,7 +70,8 @@ export function restoreSettings(data: string): AppSettings {
         : defaults.previewSizes,
     shortcutOverrides: isShortcutOverrides(stored.shortcutOverrides) ? stored.shortcutOverrides : {},
     language: resolveLocale(stored.language),
-    shortcutPanel: restoreShortcutPanel(stored.shortcutPanel)
+    shortcutPanel: restoreShortcutPanel(stored.shortcutPanel),
+    panelLayout: restorePanelLayout(stored.panelLayout)
   };
 }
 

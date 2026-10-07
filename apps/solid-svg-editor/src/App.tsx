@@ -48,6 +48,8 @@ export function App() {
           moveTab={app.topBar.moveTab}
           saveTab={app.topBar.saveTab}
           saveTabAs={app.topBar.saveTabAs}
+          panelLayout={app.topBar.panelLayout()}
+          setPanelLayout={app.topBar.setPanelLayout}
           resetSvg={app.topBar.resetSvg}
           fileName={app.topBar.fileName}
           middleClickCloses={app.topBar.middleClickCloses()}
@@ -72,8 +74,9 @@ export function App() {
           <ColorSourcesProvider palettes={app.modals.settings().palettes} root={app.modals.activeRoot()}>
             <EditorSidebar
               width={app.workspace.sidebar.width()}
-              activePanel={app.workspace.activePanel()}
-              setActivePanel={app.workspace.setActivePanel}
+              sections={app.workspace.panelSections()}
+              split={app.workspace.panelSplit()}
+              setSplit={app.workspace.setPanelSplit}
               root={app.workspace.activeRoot()}
               selectedIds={app.workspace.selectedIds()}
               commandSelection={app.workspace.commandSelection()}
