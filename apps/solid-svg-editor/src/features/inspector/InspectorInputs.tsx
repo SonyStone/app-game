@@ -3,6 +3,8 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 
 import { svgCapabilities } from '../../editor/capabilities';
 import { colorToHex } from '../../editor/colors';
+import { ColorPopup } from '../color-picker/ColorPopup';
+import { useColorSources } from '../color-picker/color-sources';
 import { idValidity } from '../../editor/id-validity';
 import { evaluateNumberExpression } from '../../editor/number-expression';
 import type { SvgNodeActions } from '../documents/createSvgNodeActions';
@@ -458,6 +460,10 @@ function IdField(props: { readonly nodeId: string; readonly value: string; reado
   );
 }
 
+/**
+ * A color attribute: a text field plus a swatch that opens the color popup. A popup session (open to close) is one
+ * undo step. Unset attributes show the inherited color; `url(#id)` swatches show the referenced gradient.
+ */
 function ColorField(props: {
   readonly nodeId: string;
   readonly attr: SvgAttribute;
@@ -465,14 +471,19 @@ function ColorField(props: {
   readonly placeholder: string;
   readonly update: (value: string, mergeKey?: string) => void;
 }) {
-  // Each time the native picker is opened and closed counts as one undo step.
-  let pickerSession = 0;
-
+  const sources = useColorSources();
+  const [popupAnchor, setPopupAnchor] = createSignal<HTMLElement>();
+  let popupSession = 0;
+  let swatchButton: HTMLButtonElement | undefined;
+  const color = () => svgCapabilities.getAttribute(props.attr.name).color;
   const shown = () => props.attr.value || props.placeholder;
-  const colorValue = () => colorToHex(shown());
-  // `none`, url() references, and unknown text show the checkerboard.
-  const swatchValue = () => colorValue() ?? (shown() === 'currentColor' ? 'currentColor' : 'transparent');
-  const pickerValue = () => colorValue() ?? '#000000';
+  const gradient = () => {
+    const id = /^url\(\s*#(.*?)\s*\)$/.exec(shown())?.[1];
+    return id === undefined ? undefined : sources.gradients().find((item) => item.id === id);
+  };
+  // `none`, unknown references, and unknown text show the checkerboard.
+  const swatchBackground = () =>
+    gradient()?.preview ?? `linear-gradient(${colorToHex(shown()) ?? (shown() === 'currentColor' ? 'currentColor' : 'transparent')} 0 0)`;
 
   return (
     <div
@@ -487,50 +498,43 @@ function ColorField(props: {
         value={props.attr.value}
         placeholder={props.placeholder}
         onChange={(event) => props.update(event.currentTarget.value)}
-        list={`color-options-${props.nodeId}-${props.attr.name}`}
       />
-      <label
+      <button
+        ref={(element) => (swatchButton = element)}
+        type="button"
         class="relative grid h-5.5 w-5.5 min-w-5.5 cursor-pointer place-items-center overflow-hidden rounded-r-[5px] border border-l-0 border-[var(--soft-border)] bg-[var(--panel-2)] hover:border-[var(--accent)] focus-visible:border-[var(--accent)]"
         title={`${props.attr.name} color`}
+        aria-label={`${props.attr.name} color picker`}
+        aria-expanded={popupAnchor() ? 'true' : 'false'}
         data-testid={`color-picker-label-${props.nodeId}-${props.attr.name}`}
+        onClick={() => setPopupAnchor(popupAnchor() ? undefined : swatchButton)}
       >
         <span
-          class="relative h-4.5 w-3.5 rounded-xs border border-[color-mix(in_srgb,var(--soft-border)_70%,#fff)] [background:linear-gradient(var(--swatch-color),var(--swatch-color)),linear-gradient(45deg,#8b93a7_25%,transparent_25%_75%,#8b93a7_75%)_0_0/8px_8px,linear-gradient(45deg,transparent_25%,#303747_25%_75%,transparent_75%)_4px_4px/8px_8px]"
-          style={{ '--swatch-color': swatchValue() }}
+          class="relative h-4.5 w-3.5 rounded-xs border border-[color-mix(in_srgb,var(--soft-border)_70%,#fff)] [background:var(--swatch),linear-gradient(45deg,#8b93a7_25%,transparent_25%_75%,#8b93a7_75%)_0_0/8px_8px,linear-gradient(45deg,transparent_25%,#303747_25%_75%,transparent_75%)_4px_4px/8px_8px]"
+          style={{ '--swatch': swatchBackground() }}
         >
           <Show when={shown() === 'none'}>
             <span class="absolute top-2 -left-0.75 w-5 rotate-[-42deg] border-t-2 border-white" />
           </Show>
         </span>
-        <input
-          class="absolute inset-0 h-full w-full cursor-pointer border-0 p-0 opacity-0"
-          type="color"
-          name={`${props.nodeId}-${props.attr.name}-picker`}
-          aria-label={`${props.attr.name} picker`}
-          data-testid={`color-picker-${props.nodeId}-${props.attr.name}`}
-          value={pickerValue()}
-          onInput={(event) =>
-            props.update(event.currentTarget.value, `color-picker:${props.nodeId}:${props.attr.name}:${pickerSession}`)
-          }
-          onChange={() => {
-            pickerSession += 1;
-          }}
-        />
-      </label>
-      <datalist
-        id={`color-options-${props.nodeId}-${props.attr.name}`}
-        data-testid={`color-options-${props.nodeId}-${props.attr.name}`}
-      >
-        <Show when={svgCapabilities.getAttribute(props.attr.name).color.allowNone}>
-          <option value="none" />
-        </Show>
-        <Show when={svgCapabilities.getAttribute(props.attr.name).color.allowUrl}>
-          <option value="url(#linearGradient1)" />
-        </Show>
-        <Show when={svgCapabilities.getAttribute(props.attr.name).color.allowCurrentColor}>
-          <option value="currentColor" />
-        </Show>
-      </datalist>
+      </button>
+      <Show when={popupAnchor()}>
+        {(anchor) => (
+          <ColorPopup
+            value={props.attr.value}
+            fallback={props.placeholder}
+            allowNone={color().allowNone}
+            allowCurrentColor={color().allowCurrentColor}
+            allowUrl={color().allowUrl}
+            anchor={anchor()}
+            onChange={(value) => props.update(value, `color-popup:${props.nodeId}:${props.attr.name}:${popupSession}`)}
+            onClose={() => {
+              popupSession += 1;
+              setPopupAnchor(undefined);
+            }}
+          />
+        )}
+      </Show>
     </div>
   );
 }
