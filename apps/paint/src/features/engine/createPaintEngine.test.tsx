@@ -140,7 +140,9 @@ it.each([false, true])(
     expect(engine.switching()).toBe(true);
     const second = transports.opened[1]!;
     expect(second).toMatchObject({ mode: 'main', canvas: replacement });
-    expect(second.init).toMatchObject({ tools: tools2, historySource });
+    // Identity, not toMatchObject: comparing the 1.5 MiB Mixer pixels element by element times out on CI runners.
+    expect(second.init).toMatchObject({ historySource });
+    expect(second.init?.tools).toBe(tools2);
 
     reply(second, { type: 'ready' });
     if (withTip) {

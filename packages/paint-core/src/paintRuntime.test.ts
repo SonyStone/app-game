@@ -442,8 +442,11 @@ async function start(
     () => {},
     modules
   );
+  // Tile codecs run on real (De)CompressionStream I/O that fake timers do not advance, so the budget is wall time:
+  // a fixed tick count runs out before that I/O finishes on a busy CI runner.
   const waitFor = async (condition: () => boolean) => {
-    for (let i = 0; i < 100 && !condition(); i++) {
+    const deadline = vi.getRealSystemTime() + 2000;
+    while (!condition() && vi.getRealSystemTime() < deadline) {
       await vi.advanceTimersByTimeAsync(10);
     }
 

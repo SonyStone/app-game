@@ -3,7 +3,11 @@ import { rendererToolState } from './toolState';
 
 it('accepts a bounded structured-cloneable Mixer handoff, including a cleaned reservoir', () => {
   const state = { version: 1, mixer: mixer() };
-  expect(rendererToolState.parse(structuredClone(state))).toEqual(state);
+  const handoff = structuredClone(state);
+  // Matchers compare typed arrays element by element, which takes seconds for 1.5 MiB on a CI runner.
+  const parsed = rendererToolState.parse(handoff);
+  expect(parsed).toEqual({ ...state, mixer: { ...state.mixer, pixels: expect.any(Uint8Array) } });
+  expect(parsed.mixer?.pixels).toBe(handoff.mixer.pixels);
   expect(rendererToolState.parse({ version: 1 })).toEqual({ version: 1 });
 });
 
