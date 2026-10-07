@@ -9,6 +9,7 @@ import GoBackIcon from '../../icons/GoBack.svg';
 import NoneColorIcon from '../../icons/NoneColor.svg';
 import { createDismissible } from '../ui/createDismissible';
 import { useColorSources } from './color-sources';
+import { useI18n } from '../../i18n/I18nProvider';
 
 /**
  * GodSVG's color popup, opened from a color field. The picker page edits the color in RGB, HSV, or HSL with a
@@ -31,6 +32,7 @@ export function ColorPopup(props: {
   readonly onChange: (value: string) => void;
   readonly onClose: () => void;
 }) {
+  const { t } = useI18n();
   let popup: HTMLDivElement | undefined;
   createDismissible({ open: () => true, container: () => popup, alsoInside: () => props.anchor, close: () => props.onClose() });
 
@@ -107,7 +109,7 @@ export function ColorPopup(props: {
           <Show when={page() === 'picker'} fallback={<GoBackIcon {...decorativeIconProps} />}>
             <ConfigIcon {...decorativeIconProps} />
           </Show>
-          {page() === 'picker' ? 'Color utilities' : 'Back to color picker'}
+          {page() === 'picker' ? t('Color utilities') : t('Back to color picker')}
         </button>
       </div>
     </Portal>
@@ -146,6 +148,7 @@ function ColorPickerPage(props: {
   readonly pickHsv: (hsv: Hsv) => void;
   readonly pickPaint: (paint: string) => void;
 }) {
+  const { t } = useI18n();
   const [model, setModel] = createSignal(lastModel);
   const hex = createMemo(() => rgbToHex(hsvToRgb(props.hsv)));
   const isColor = () => colorToHex(props.paint) !== undefined;
@@ -155,7 +158,7 @@ function ColorPickerPage(props: {
     <div class="grid gap-2" data-testid="color-picker-page">
       <SaturationValueArea hsv={props.hsv} pick={props.pickHsv} />
       <HueBar hsv={props.hsv} pick={props.pickHsv} />
-      <div class="flex gap-1" role="tablist" aria-label="Color model">
+      <div class="flex gap-1" role="tablist" aria-label={t('Color models')}>
         <For each={['rgb', 'hsv', 'hsl'] as const}>
           {(item) => (
             <button
@@ -427,6 +430,7 @@ function ColorUtilities(props: {
   readonly allowUrl: boolean;
   readonly pick: (paint: string) => void;
 }) {
+  const { t } = useI18n();
   const sources = useColorSources();
   const [search, setSearch] = createSignal('');
   const reserved = createMemo(() => [
@@ -451,8 +455,8 @@ function ColorUtilities(props: {
     <div class="grid max-h-80 gap-2 overflow-auto" data-testid="color-utilities-page">
       <input
         class="h-6 rounded border border-[var(--soft-border)] bg-[#080b12] px-1.5 text-[12px] in-[.theme-light]:bg-[#f8fbff]"
-        placeholder="Search color"
-        aria-label="Search color"
+        placeholder={t('Search color')}
+        aria-label={t('Search color')}
         data-testid="color-utilities-search"
         value={search()}
         onInput={(event) => setSearch(event.currentTarget.value)}

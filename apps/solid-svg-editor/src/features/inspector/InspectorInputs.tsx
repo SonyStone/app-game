@@ -57,6 +57,7 @@ import SkewXIcon from './icons/SkewX.svg';
 import SkewYIcon from './icons/SkewY.svg';
 import SmallMoreIcon from './icons/SmallMore.svg';
 import TranslateIcon from './icons/Translate.svg';
+import { useI18n } from '../../i18n/I18nProvider';
 
 const rootEditorAttributes = ['width', 'height', 'viewBox', 'xmlns'] as const;
 const transformTypes = ['matrix', 'translate', 'rotate', 'scale', 'skewX', 'skewY'] as const;
@@ -445,6 +446,7 @@ function UnitSlider(props: {
  * not committed; characters outside XML name tokens are allowed but shown as a warning.
  */
 function IdField(props: { readonly nodeId: string; readonly value: string; readonly update: (value: string) => void }) {
+  const { t } = useI18n();
   const [draft, setDraft] = createSignal<string>();
   const validity = () => idValidity(draft() ?? props.value);
 
@@ -459,7 +461,7 @@ function IdField(props: { readonly nodeId: string; readonly value: string; reado
       aria-invalid={validity() === 'invalid' ? 'true' : 'false'}
       data-testid={`attribute-input-${props.nodeId}-id`}
       value={props.value}
-      placeholder="No ID"
+      placeholder={t('No ID')}
       onInput={(event) => setDraft(event.currentTarget.value)}
       onChange={(event) => {
         setDraft(undefined);
@@ -564,6 +566,7 @@ function PathDataEditor(props: {
   readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly setCommandSelection: (selection: CommandSelection | undefined) => void;
 }) {
+  const { t } = useI18n();
   const commands = createMemo(() => parsePathData(props.value));
 
   function updateCommands(next: readonly PathCommand[]): void {
@@ -578,7 +581,7 @@ function PathDataEditor(props: {
         aria-label="Path data"
         data-testid={`path-data-input-${props.node.id}`}
         value={props.value}
-        placeholder="No path data"
+        placeholder={t('No path data')}
         onChange={(event) => props.update(event.currentTarget.value)}
       />
       <div class="grid gap-px" data-testid={`path-command-list-${props.node.id}`}>
@@ -623,6 +626,7 @@ function PathCommandRow(props: {
   readonly setHovered: (target: HoverTarget | undefined) => void;
   readonly setCommandSelection: (selection: CommandSelection | undefined) => void;
 }) {
+  const { t } = useI18n();
   const [menuOpen, setMenuOpen] = createSignal(false);
   const isRelative = () => props.command.command === props.command.command.toLowerCase();
   const parameters = createMemo(() => commandParameters(props.command.command));
@@ -699,7 +703,7 @@ function PathCommandRow(props: {
               !isRelative()
           }
         ]}
-        title={pathCommandDescription(props.command.command)}
+        title={pathCommandDescription(props.command.command, t)}
         data-testid={`path-command-toggle-${props.nodeId}-${props.index}`}
         onClick={(event) => {
           selectCurrent(event);
@@ -762,7 +766,7 @@ function PathCommandRow(props: {
             data-testid={`path-command-insert-after-${props.nodeId}-${props.index}`}
             onClick={() => applyEdit(insertCommandAfter(props.commands, props.index, props.command.command))}
           >
-            <InsertAfterIcon {...decorativeIconProps} /> Insert after
+            <InsertAfterIcon {...decorativeIconProps} /> {t('Insert after')}
           </button>
           <div class="grid grid-cols-5 gap-0.75">
             <For each={pathCommandLetters}>
@@ -770,7 +774,7 @@ function PathCommandRow(props: {
                 <button
                   class="grid h-5.5 w-full place-items-center justify-center rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] p-0 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] text-[var(--text)]"
                   type="button"
-                  title={pathCommandDescription(letter)}
+                  title={pathCommandDescription(letter, t)}
                   data-testid={`path-command-convert-${props.nodeId}-${props.index}-${letter}`}
                   onClick={() =>
                     updateCommands(
@@ -789,14 +793,14 @@ function PathCommandRow(props: {
             data-testid={`path-command-delete-${props.nodeId}-${props.index}`}
             onClick={() => applyEdit({ commands: deleteCommands(props.commands, menuIndices()), indices: [] })}
           >
-            <DeleteIcon {...decorativeIconProps} /> {menuIndices().length > 1 ? `Delete ${menuIndices().length} commands` : 'Delete'}
+            <DeleteIcon {...decorativeIconProps} /> {menuIndices().length > 1 ? `Delete ${menuIndices().length} commands` : t('Delete')}
           </button>
           <For
             each={[
               { key: 'move-up', label: 'Move subpaths up', show: actions()?.moveUp, run: () => moveSubpaths(props.commands, menuIndices(), -1) },
               { key: 'move-down', label: 'Move subpaths down', show: actions()?.moveDown, run: () => moveSubpaths(props.commands, menuIndices(), 1) },
               { key: 'reverse', label: 'Reverse order', show: actions()?.reverse, run: () => reverseSubpaths(props.commands, menuIndices()) },
-              { key: 'set-origin', label: 'Set as origin', show: actions()?.setOrigin, run: () => setSubpathOrigins(props.commands, menuIndices()) }
+              { key: 'set-origin', label: 'Set as initial', show: actions()?.setOrigin, run: () => setSubpathOrigins(props.commands, menuIndices()) }
             ].filter((action) => action.show)}
           >
             {(action) => (
@@ -806,7 +810,7 @@ function PathCommandRow(props: {
                 data-testid={`path-command-${action.key}-${props.nodeId}-${props.index}`}
                 onClick={() => applyEdit(action.run())}
               >
-                {action.label}
+                {t(action.label)}
               </button>
             )}
           </For>
@@ -899,6 +903,7 @@ function TransformField(props: {
   readonly value: string;
   readonly update: (value: string) => void;
 }) {
+  const { t } = useI18n();
   const [popupOpen, setPopupOpen] = createSignal(false);
   const [activeTransformMenu, setActiveTransformMenu] = createSignal<number>();
   const [insertMenu, setInsertMenu] = createSignal<number>();
@@ -937,7 +942,7 @@ function TransformField(props: {
         name="transform"
         aria-label="Transform"
         data-testid={`transform-input-${props.nodeId}-${props.attrName}`}
-        placeholder="No transforms"
+        placeholder={t('No transforms')}
         value={props.value}
         onChange={(event) => props.update(event.currentTarget.value)}
       />
@@ -1010,7 +1015,7 @@ function TransformField(props: {
                           data-testid={`transform-insert-after-${props.nodeId}-${index()}`}
                           onClick={() => setInsertMenu(index() + 1)}
                         >
-                          <InsertAfterIcon {...decorativeIconProps} /> Insert after
+                          <InsertAfterIcon {...decorativeIconProps} /> {t('Insert after')}
                         </button>
                         <button
                           class="flex min-h-5.5 w-full cursor-pointer items-center justify-start gap-1.5 rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] px-1.5 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] text-[var(--text)]"
@@ -1018,7 +1023,7 @@ function TransformField(props: {
                           data-testid={`transform-insert-before-${props.nodeId}-${index()}`}
                           onClick={() => setInsertMenu(index())}
                         >
-                          <InsertBeforeIcon {...decorativeIconProps} /> Insert before
+                          <InsertBeforeIcon {...decorativeIconProps} /> {t('Insert before')}
                         </button>
                         <button
                           class="flex min-h-5.5 w-full cursor-pointer items-center justify-start gap-1.5 rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] px-1.5 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] text-[var(--text)]"
@@ -1026,7 +1031,7 @@ function TransformField(props: {
                           data-testid={`transform-delete-${props.nodeId}-${index()}`}
                           onClick={() => deleteTransform(index())}
                         >
-                          <DeleteIcon {...decorativeIconProps} /> Delete
+                          <DeleteIcon {...decorativeIconProps} /> {t('Delete')}
                         </button>
                       </div>
                     </Show>
@@ -1048,7 +1053,7 @@ function TransformField(props: {
               class="static grid min-w-0 gap-0.75 rounded-[5px] border border-[var(--border)] bg-[var(--panel)] p-1"
               data-testid={`transform-insert-menu-${props.nodeId}-${props.attrName}`}
             >
-              <div class="px-1.5 py-0.5 text-[11px] text-[var(--muted)]">New transform</div>
+              <div class="px-1.5 py-0.5 text-[11px] text-[var(--muted)]">{t('New transform')}</div>
               <For each={transformTypes}>
                 {(type) => (
                   <button
@@ -1155,7 +1160,8 @@ function pathParamInputWidth(value: string, paramName: string): string {
   return `${width}px`;
 }
 
-function pathCommandDescription(command: string): string {
+/** GodSVG's name of a path command with its coordinate mode, such as "Move to (Absolute)", translated by `t`. */
+function pathCommandDescription(command: string, t: (message: string) => string): string {
   const descriptions: Record<string, string> = {
     A: 'Elliptical Arc to',
     C: 'Cubic Bezier to',
@@ -1170,7 +1176,9 @@ function pathCommandDescription(command: string): string {
   };
   const relation = command === command.toLowerCase() ? 'Relative' : 'Absolute';
 
-  return `${descriptions[command.toUpperCase()] ?? command} (${relation})`;
+  const description = descriptions[command.toUpperCase()];
+
+  return `${description ? t(description) : command} (${t(relation)})`;
 }
 
 function parseTransformItems(value: string): readonly TransformItem[] {

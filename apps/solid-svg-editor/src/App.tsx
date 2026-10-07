@@ -11,183 +11,187 @@ import { EditorSidebar } from './features/panels/EditorSidebar';
 import { EditorContextMenu } from './features/selection/EditorContextMenu';
 import { EditorFileInputs } from './features/shell/EditorFileInputs';
 import { EditorViewport } from './features/viewport/EditorViewport';
+import { I18nProvider } from './i18n/I18nProvider';
 
 export function App() {
   const app = createEditorAppController();
   return (
-    <div
-      ref={app.root.setAppRootRef}
-      class={app.root.className()}
-      style={app.root.themeVars()}
-      data-testid="solid-svg-editor"
-      onDragEnter={app.root.onDragEnter}
-      onDragOver={app.root.onDragOver}
-      onDragLeave={app.root.onDragLeave}
-      onDrop={(event) => void app.root.onDrop(event)}
-    >
-      <EditorFileInputs
-        setImportInputRef={app.fileInputs.setImportInputRef}
-        onImportFile={(event) => void app.fileInputs.onImportFile(event)}
-        setReferenceInputRef={app.fileInputs.setReferenceInputRef}
-        onReferenceFile={app.fileInputs.onReferenceFile}
-      />
-      <TopBar
-        activeTab={app.topBar.activeTab()}
-        tabs={app.topBar.tabs()}
-        fileSize={app.topBar.fileSize()}
-        canUndo={app.topBar.canUndo()}
-        canRedo={app.topBar.canRedo()}
-        selectTab={app.topBar.selectTab}
-        activeTabId={app.topBar.activeTabId()}
-        closeTab={app.topBar.closeTab}
-        closeTabs={app.topBar.closeTabs}
-        moveTab={app.topBar.moveTab}
-        saveTab={app.topBar.saveTab}
-        middleClickCloses={app.topBar.middleClickCloses()}
-        createNewTab={app.topBar.createNewTab}
-        openImportDialog={app.topBar.openImportDialog}
-        downloadSvg={app.topBar.downloadSvg}
-        copySvgText={() => void app.topBar.copySvgText()}
-        undo={app.topBar.undo}
-        redo={app.topBar.redo}
-        optimizeActive={app.topBar.optimizeActive}
-        openExport={app.topBar.openExport}
-        openSettings={app.topBar.openSettings}
-        openAbout={app.topBar.openAbout}
-        openDonate={app.topBar.openDonate}
-        openShortcuts={app.topBar.openShortcuts}
-      />
-
+    <I18nProvider locale={app.modals.settings().language}>
       <div
-        class="workspace grid min-h-0 grid-cols-[auto_8px_minmax(0,1fr)] bg-[var(--base)] [@media(max-width:820px)]:grid-rows-[minmax(320px,44%)_8px_minmax(0,1fr)]"
-        data-testid="editor-workspace"
+        ref={app.root.setAppRootRef}
+        class={app.root.className()}
+        style={app.root.themeVars()}
+        lang={app.modals.settings().language.replace('_', '-')}
+        data-testid="solid-svg-editor"
+        onDragEnter={app.root.onDragEnter}
+        onDragOver={app.root.onDragOver}
+        onDragLeave={app.root.onDragLeave}
+        onDrop={(event) => void app.root.onDrop(event)}
       >
-        <ColorSourcesProvider palettes={app.modals.settings().palettes} root={app.modals.activeRoot()}>
-          <EditorSidebar
-            width={app.workspace.sidebar.width()}
-            activePanel={app.workspace.activePanel()}
-            setActivePanel={app.workspace.setActivePanel}
-            root={app.workspace.activeRoot()}
-            selectedIds={app.workspace.selectedIds()}
-            commandSelection={app.workspace.commandSelection()}
-            hovered={app.workspace.hovered()}
-            setHovered={app.workspace.setHovered}
-            setCommandSelection={app.workspace.setCommandSelection}
-            selectNode={app.workspace.selectNode}
-            clearSelection={app.workspace.clearSelection}
-            addElement={app.workspace.addElement}
-            addTextNode={app.workspace.addTextNode}
-            updateElementAttribute={app.workspace.updateElementAttribute}
-            removeElementAttribute={app.workspace.removeElementAttribute}
-            updateBasicNodeText={app.workspace.updateBasicNodeText}
+        <EditorFileInputs
+          setImportInputRef={app.fileInputs.setImportInputRef}
+          onImportFile={(event) => void app.fileInputs.onImportFile(event)}
+          setReferenceInputRef={app.fileInputs.setReferenceInputRef}
+          onReferenceFile={app.fileInputs.onReferenceFile}
+        />
+        <TopBar
+          activeTab={app.topBar.activeTab()}
+          tabs={app.topBar.tabs()}
+          fileSize={app.topBar.fileSize()}
+          canUndo={app.topBar.canUndo()}
+          canRedo={app.topBar.canRedo()}
+          selectTab={app.topBar.selectTab}
+          activeTabId={app.topBar.activeTabId()}
+          closeTab={app.topBar.closeTab}
+          closeTabs={app.topBar.closeTabs}
+          moveTab={app.topBar.moveTab}
+          saveTab={app.topBar.saveTab}
+          middleClickCloses={app.topBar.middleClickCloses()}
+          createNewTab={app.topBar.createNewTab}
+          openImportDialog={app.topBar.openImportDialog}
+          downloadSvg={app.topBar.downloadSvg}
+          copySvgText={() => void app.topBar.copySvgText()}
+          undo={app.topBar.undo}
+          redo={app.topBar.redo}
+          optimizeActive={app.topBar.optimizeActive}
+          openExport={app.topBar.openExport}
+          openSettings={app.topBar.openSettings}
+          openAbout={app.topBar.openAbout}
+          openDonate={app.topBar.openDonate}
+          openShortcuts={app.topBar.openShortcuts}
+        />
+
+        <div
+          class="workspace grid min-h-0 grid-cols-[auto_8px_minmax(0,1fr)] bg-[var(--base)] [@media(max-width:820px)]:grid-rows-[minmax(320px,44%)_8px_minmax(0,1fr)]"
+          data-testid="editor-workspace"
+        >
+          <ColorSourcesProvider palettes={app.modals.settings().palettes} root={app.modals.activeRoot()}>
+            <EditorSidebar
+              width={app.workspace.sidebar.width()}
+              activePanel={app.workspace.activePanel()}
+              setActivePanel={app.workspace.setActivePanel}
+              root={app.workspace.activeRoot()}
+              selectedIds={app.workspace.selectedIds()}
+              commandSelection={app.workspace.commandSelection()}
+              hovered={app.workspace.hovered()}
+              setHovered={app.workspace.setHovered}
+              setCommandSelection={app.workspace.setCommandSelection}
+              selectNode={app.workspace.selectNode}
+              clearSelection={app.workspace.clearSelection}
+              addElement={app.workspace.addElement}
+              addTextNode={app.workspace.addTextNode}
+              updateElementAttribute={app.workspace.updateElementAttribute}
+              removeElementAttribute={app.workspace.removeElementAttribute}
+              updateBasicNodeText={app.workspace.updateBasicNodeText}
+              openContextMenu={app.workspace.openContextMenu}
+              reorderNodes={app.workspace.reorderInspectorNodes}
+              code={app.workspace.activeCode()}
+              parseError={app.workspace.parseError()}
+              applyCode={app.workspace.applyCode}
+              reformatPretty={app.workspace.reformatPretty}
+              reformatCompact={app.workspace.reformatCompact}
+              copySvgText={() => void app.topBar.copySvgText()}
+              selectedNodes={app.workspace.selectedNodes()}
+              elementCount={app.workspace.elementCount()}
+              exportText={app.workspace.exportText()}
+              previewSizes={app.workspace.previewSizes()}
+              setPreviewSizes={app.workspace.setPreviewSizes}
+              heldKeys={app.workspace.heldKeys()}
+              viewportPointer={app.workspace.viewportPointer()}
+              recentCommandEvent={app.workspace.recentCommandEvent()}
+            />
+          </ColorSourcesProvider>
+          <button
+            class="splitter w-2 cursor-col-resize border-0 bg-transparent hover:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)] [@media(max-width:820px)]:h-2 [@media(max-width:820px)]:cursor-row-resize"
+            type="button"
+            aria-label="Resize sidebar"
+            data-testid="workspace-splitter"
+            onPointerDown={app.workspace.sidebar.onPointerDown}
+            onPointerMove={app.workspace.sidebar.onPointerMove}
+            onPointerUp={app.workspace.sidebar.onPointerUp}
+            onPointerCancel={app.workspace.sidebar.onPointerUp}
+            onLostPointerCapture={app.workspace.sidebar.onPointerUp}
+          />
+          <EditorViewport
+            settings={app.viewport.settings()}
+            setSettings={app.viewport.setSettings}
+            zoom={app.viewport.zoom()}
+            zoomBy={app.viewport.zoomBy}
+            centerFrame={app.viewport.centerFrame}
+            isFullscreen={app.viewport.isFullscreen()}
+            toggleFullscreen={app.viewport.toggleFullscreen}
+            openReferenceDialog={app.viewport.openReferenceDialog}
+            referenceImage={app.viewport.referenceImage()}
+            showReference={app.viewport.showReference()}
+            setShowReference={app.viewport.setShowReference}
+            overlayReference={app.viewport.overlayReference()}
+            setOverlayReference={app.viewport.setOverlayReference}
+            clearReference={app.viewport.clearReference}
+            setDragSelectionMode={app.viewport.setDragSelectionMode}
+            setViewportShell={app.viewport.setViewportShell}
+            setCanvasSvg={app.viewport.setCanvasSvg}
+            viewRect={app.viewport.viewRect()}
+            viewportTransform={app.viewport.viewportTransform()}
+            gridViewRect={app.viewport.gridViewRect()}
+            rootSize={app.viewport.rootSize()}
+            root={app.viewport.activeRoot()}
+            selectedIds={app.viewport.selectedIds()}
+            viewportIsMoving={app.viewport.viewportIsMoving()}
+            useRasterPreview={app.viewport.useRasterPreview()}
+            rasterPreviewUrl={app.viewport.rasterPreviewUrl()}
+            rasterPreviewRect={app.viewport.rasterPreviewRect()}
+            handles={app.viewport.handles()}
+            openCanvasContextMenu={app.viewport.openCanvasContextMenu}
+            selectHandleSubpath={app.viewport.selectHandleSubpath}
+            openCommandMenu={app.viewport.openCommandMenu}
+            contours={app.viewport.contours()}
+            commandSelection={app.viewport.commandSelection()}
+            setHovered={app.viewport.setHovered}
+            selectionBox={app.viewport.selectionBox()}
+            marqueeRect={app.viewport.marqueeRect()}
+            onCanvasWheel={app.viewport.onCanvasWheel}
+            onCanvasPointerDown={app.viewport.onCanvasPointerDown}
+            onNodePointerDown={app.viewport.onNodePointerDown}
             openContextMenu={app.workspace.openContextMenu}
-            reorderNodes={app.workspace.reorderInspectorNodes}
-            code={app.workspace.activeCode()}
-            parseError={app.workspace.parseError()}
-            applyCode={app.workspace.applyCode}
-            reformatPretty={app.workspace.reformatPretty}
-            reformatCompact={app.workspace.reformatCompact}
-            copySvgText={() => void app.topBar.copySvgText()}
-            selectedNodes={app.workspace.selectedNodes()}
-            elementCount={app.workspace.elementCount()}
-            exportText={app.workspace.exportText()}
-            previewSizes={app.workspace.previewSizes()}
-            setPreviewSizes={app.workspace.setPreviewSizes}
-            heldKeys={app.workspace.heldKeys()}
-            viewportPointer={app.workspace.viewportPointer()}
-            recentCommandEvent={app.workspace.recentCommandEvent()}
+            startHandleDrag={app.viewport.startHandleDrag}
+            startTransformBoxDrag={app.viewport.startTransformBoxDrag}
           />
-        </ColorSourcesProvider>
-        <button
-          class="splitter w-2 cursor-col-resize border-0 bg-transparent hover:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)] [@media(max-width:820px)]:h-2 [@media(max-width:820px)]:cursor-row-resize"
-          type="button"
-          aria-label="Resize sidebar"
-          data-testid="workspace-splitter"
-          onPointerDown={app.workspace.sidebar.onPointerDown}
-          onPointerMove={app.workspace.sidebar.onPointerMove}
-          onPointerUp={app.workspace.sidebar.onPointerUp}
-          onPointerCancel={app.workspace.sidebar.onPointerUp}
-          onLostPointerCapture={app.workspace.sidebar.onPointerUp}
+        </div>
+
+        <Show when={app.contextMenu.state()}>
+          {(menu) => (
+            <EditorContextMenu
+              menu={menu()}
+              node={app.contextMenu.node()}
+              runAction={app.contextMenu.runAction}
+              convert={app.contextMenu.convert}
+              addShape={app.contextMenu.addShape}
+              commandActions={app.contextMenu.commandActions()}
+              runCommandAction={app.contextMenu.runCommandAction}
+              close={app.contextMenu.close}
+            />
+          )}
+        </Show>
+
+        <EditorModalStack
+          modal={app.modals.modal()}
+          settings={app.modals.settings()}
+          setSettings={app.modals.setSettings}
+          root={app.modals.activeRoot()}
+          exportText={app.modals.exportText()}
+          tabName={app.modals.tabName()}
+          close={app.modals.close}
+          reformatActiveCode={app.modals.reformatActiveCode}
+          pendingCloseTabName={app.modals.pendingCloseTabName()}
+          resolveCloseTab={app.modals.resolveCloseTab}
+          shortcuts={app.modals.shortcuts}
+          setShortcutBindings={app.modals.setShortcutBindings}
         />
-        <EditorViewport
-          settings={app.viewport.settings()}
-          setSettings={app.viewport.setSettings}
-          zoom={app.viewport.zoom()}
-          zoomBy={app.viewport.zoomBy}
-          centerFrame={app.viewport.centerFrame}
-          isFullscreen={app.viewport.isFullscreen()}
-          toggleFullscreen={app.viewport.toggleFullscreen}
-          openReferenceDialog={app.viewport.openReferenceDialog}
-          referenceImage={app.viewport.referenceImage()}
-          showReference={app.viewport.showReference()}
-          setShowReference={app.viewport.setShowReference}
-          overlayReference={app.viewport.overlayReference()}
-          setOverlayReference={app.viewport.setOverlayReference}
-          clearReference={app.viewport.clearReference}
-          setDragSelectionMode={app.viewport.setDragSelectionMode}
-          setViewportShell={app.viewport.setViewportShell}
-          setCanvasSvg={app.viewport.setCanvasSvg}
-          viewRect={app.viewport.viewRect()}
-          viewportTransform={app.viewport.viewportTransform()}
-          gridViewRect={app.viewport.gridViewRect()}
-          rootSize={app.viewport.rootSize()}
-          root={app.viewport.activeRoot()}
-          selectedIds={app.viewport.selectedIds()}
-          viewportIsMoving={app.viewport.viewportIsMoving()}
-          useRasterPreview={app.viewport.useRasterPreview()}
-          rasterPreviewUrl={app.viewport.rasterPreviewUrl()}
-          rasterPreviewRect={app.viewport.rasterPreviewRect()}
-          handles={app.viewport.handles()}
-          openCanvasContextMenu={app.viewport.openCanvasContextMenu}
-          selectHandleSubpath={app.viewport.selectHandleSubpath}
-          openCommandMenu={app.viewport.openCommandMenu}
-          contours={app.viewport.contours()}
-          commandSelection={app.viewport.commandSelection()}
-          setHovered={app.viewport.setHovered}
-          selectionBox={app.viewport.selectionBox()}
-          marqueeRect={app.viewport.marqueeRect()}
-          onCanvasWheel={app.viewport.onCanvasWheel}
-          onCanvasPointerDown={app.viewport.onCanvasPointerDown}
-          onNodePointerDown={app.viewport.onNodePointerDown}
-          openContextMenu={app.workspace.openContextMenu}
-          startHandleDrag={app.viewport.startHandleDrag}
-          startTransformBoxDrag={app.viewport.startTransformBoxDrag}
-        />
+        <Show when={app.dropOverlay.active()}>
+          <SvgDropOverlay />
+        </Show>
       </div>
-
-      <Show when={app.contextMenu.state()}>
-        {(menu) => (
-          <EditorContextMenu
-            menu={menu()}
-            node={app.contextMenu.node()}
-            runAction={app.contextMenu.runAction}
-            convert={app.contextMenu.convert}
-            addShape={app.contextMenu.addShape}
-            commandActions={app.contextMenu.commandActions()}
-            runCommandAction={app.contextMenu.runCommandAction}
-            close={app.contextMenu.close}
-          />
-        )}
-      </Show>
-
-      <EditorModalStack
-        modal={app.modals.modal()}
-        settings={app.modals.settings()}
-        setSettings={app.modals.setSettings}
-        root={app.modals.activeRoot()}
-        exportText={app.modals.exportText()}
-        tabName={app.modals.tabName()}
-        close={app.modals.close}
-        reformatActiveCode={app.modals.reformatActiveCode}
-        pendingCloseTabName={app.modals.pendingCloseTabName()}
-        resolveCloseTab={app.modals.resolveCloseTab}
-        shortcuts={app.modals.shortcuts}
-        setShortcutBindings={app.modals.setShortcutBindings}
-      />
-      <Show when={app.dropOverlay.active()}>
-        <SvgDropOverlay />
-      </Show>
-    </div>
+    </I18nProvider>
   );
 }
 

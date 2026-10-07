@@ -4,6 +4,7 @@ import { defaultPreviewSizes } from '../../editor/defaults';
 import { decorativeIconProps } from '../../editor/svg-icon';
 import DeleteIcon from '../ui/icons/Delete.svg';
 import PlusIcon from '../ui/icons/Plus.svg';
+import { useI18n } from '../../i18n/I18nProvider';
 
 /**
  * GodSVG's icon previews: the exported SVG rasterized at each pixel size, shown pixel for pixel (scaled up without
@@ -15,6 +16,7 @@ export function IconPreviews(props: {
   readonly sizes: readonly number[];
   readonly setSizes: (sizes: readonly number[]) => void;
 }) {
+  const { t } = useI18n();
   const [newSize, setNewSize] = createSignal('');
   const image = createDecodedImage(() => props.svgText);
   const sorted = () => props.sizes.every((size, index) => index === 0 || (props.sizes[index - 1] ?? 0) <= size);
@@ -54,7 +56,7 @@ export function IconPreviews(props: {
         <input
           class="h-5.5 w-14 rounded border border-[var(--soft-border)] bg-[#080b12] px-1 in-[.theme-light]:bg-[#f8fbff]"
           inputmode="numeric"
-          placeholder="Size"
+          placeholder={t('Size')}
           aria-label="New preview size"
           data-testid="icon-preview-new-size"
           value={newSize()}
@@ -66,7 +68,7 @@ export function IconPreviews(props: {
           }}
         />
         <button type="button" class={smallButton} data-testid="icon-preview-add" onClick={addSize}>
-          <PlusIcon {...decorativeIconProps} /> Add
+          <PlusIcon {...decorativeIconProps} /> {t('Add preview')}
         </button>
         <button
           type="button"
@@ -75,10 +77,10 @@ export function IconPreviews(props: {
           data-testid="icon-preview-sort"
           onClick={() => props.setSizes([...props.sizes].sort((a, b) => a - b))}
         >
-          Sort
+          {t('Sort')}
         </button>
         <button type="button" class={smallButton} disabled={isDefault()} data-testid="icon-preview-reset" onClick={() => props.setSizes(defaultPreviewSizes)}>
-          Reset
+          {t('Reset to default')}
         </button>
       </div>
     </div>

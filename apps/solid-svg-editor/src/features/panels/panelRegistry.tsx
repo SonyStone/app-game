@@ -82,7 +82,7 @@ export const editorPanels = [
   },
   {
     id: 'code',
-    label: 'Code editor',
+    label: 'Code Editor',
     icon: TextFileIcon,
     render: (context) => (
       <CodePanel

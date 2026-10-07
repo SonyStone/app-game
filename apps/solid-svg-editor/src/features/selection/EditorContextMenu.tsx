@@ -15,6 +15,7 @@ import DeleteIcon from '../ui/icons/Delete.svg';
 import InsertAfterIcon from '../ui/icons/InsertAfter.svg';
 import { createDismissible } from '../ui/createDismissible';
 import { MenuButton } from '../ui/MenuItem';
+import { useI18n } from '../../i18n/I18nProvider';
 
 export type EditorContextMenuAction = 'duplicate' | 'delete' | 'move-up' | 'move-down' | 'insert-after';
 
@@ -36,6 +37,7 @@ export function EditorContextMenu(props: {
   readonly runCommandAction: (action: 'move-up' | 'move-down' | 'reverse' | 'set-origin' | 'delete') => void;
   readonly close: () => void;
 }) {
+  const { t } = useI18n();
   let menu: HTMLDivElement | undefined;
   createDismissible({ open: () => true, container: () => menu, close: () => props.close() });
 
@@ -55,7 +57,7 @@ export function EditorContextMenu(props: {
     >
       <Show when={props.menu.kind === 'canvas'}>
         <div class="px-2 pt-0.5 pb-1 text-[11px] text-[var(--muted)]" data-testid="context-menu-new-shape-label">
-          New shape
+          {t('New shape')}
         </div>
         <For each={newShapeNames}>
           {(name) => (
@@ -79,16 +81,16 @@ export function EditorContextMenu(props: {
         </Show>
         <Show when={props.commandActions?.reverse}>
           <MenuButton type="button" data-testid="context-menu-commands-reverse" onClick={() => props.runCommandAction('reverse')}>
-            Reverse order
+            {t('Reverse order')}
           </MenuButton>
         </Show>
         <Show when={props.commandActions?.setOrigin}>
           <MenuButton type="button" data-testid="context-menu-commands-set-origin" onClick={() => props.runCommandAction('set-origin')}>
-            Set as origin
+            {t('Set as initial')}
           </MenuButton>
         </Show>
         <MenuButton type="button" icon={DeleteIcon} data-testid="context-menu-commands-delete" onClick={() => props.runCommandAction('delete')}>
-          Delete
+          {t('Delete')}
         </MenuButton>
       </Show>
       <Show when={props.menu.kind === 'node'}>
@@ -98,7 +100,7 @@ export function EditorContextMenu(props: {
         data-testid="context-menu-duplicate"
         onClick={() => props.runAction('duplicate')}
       >
-        Duplicate
+        {t('Duplicate')}
       </MenuButton>
       <MenuButton
         type="button"
@@ -106,7 +108,7 @@ export function EditorContextMenu(props: {
         data-testid="context-menu-move-up"
         onClick={() => props.runAction('move-up')}
       >
-        Move up
+        {t('Move up')}
       </MenuButton>
       <MenuButton
         type="button"
@@ -114,7 +116,7 @@ export function EditorContextMenu(props: {
         data-testid="context-menu-move-down"
         onClick={() => props.runAction('move-down')}
       >
-        Move down
+        {t('Move down')}
       </MenuButton>
       <MenuButton
         type="button"
@@ -130,14 +132,14 @@ export function EditorContextMenu(props: {
         data-testid="context-menu-delete"
         onClick={() => props.runAction('delete')}
       >
-        Delete
+        {t('Delete')}
       </MenuButton>
       <Show when={conversions().length > 0}>
         <div
           class="mt-0.5 border-t border-[var(--soft-border)] px-2 pt-1.25 pb-0.5 text-[11px] text-[var(--muted)]"
           data-testid="context-menu-convert-label"
         >
-          Convert to
+          {t('Convert to')}
         </div>
         <For each={conversions()}>
           {(conversion) => (

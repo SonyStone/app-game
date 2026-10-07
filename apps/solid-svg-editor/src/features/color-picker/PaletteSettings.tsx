@@ -7,6 +7,7 @@ import { decorativeIconProps } from '../../editor/svg-icon';
 import DeleteIcon from '../ui/icons/Delete.svg';
 import PlusIcon from '../ui/icons/Plus.svg';
 import { ColorPopup } from './ColorPopup';
+import { useI18n } from '../../i18n/I18nProvider';
 
 /**
  * The Palettes settings page, like GodSVG's: rename palettes, edit, add, or remove their named colors, remove
@@ -16,6 +17,7 @@ export function PaletteSettings(props: {
   readonly palettes: readonly ColorPalette[];
   readonly setPalettes: (update: (palettes: readonly ColorPalette[]) => readonly ColorPalette[]) => void;
 }) {
+  const { t } = useI18n();
   const updatePalette = (index: number, update: (palette: ColorPalette) => ColorPalette) =>
     props.setPalettes((palettes) => palettes.map((palette, itemIndex) => (itemIndex === index ? update(palette) : palette)));
   const updateColor = (paletteIndex: number, colorIndex: number, change: Partial<ColorPalette['colors'][number]>) =>
@@ -70,7 +72,7 @@ export function PaletteSettings(props: {
                     onChange={(event) => updateColor(paletteIndex(), colorIndex(), { name: event.currentTarget.value })}
                   />
                   <IconAction
-                    label="Delete color"
+                    label={t('Delete color')}
                     testId={`palette-color-delete-${paletteIndex()}-${colorIndex()}`}
                     onClick={() =>
                       updatePalette(paletteIndex(), (item) => ({
@@ -103,11 +105,11 @@ export function PaletteSettings(props: {
           {([key, preset]) => (
             <button
               type="button"
-              class="h-6 cursor-pointer rounded border border-[var(--soft-border)] bg-[var(--panel-2)] px-2 text-[12px] capitalize hover:border-[var(--accent)]"
+              class="h-6 cursor-pointer rounded border border-[var(--soft-border)] bg-[var(--panel-2)] px-2 text-[12px] hover:border-[var(--accent)]"
               data-testid={`palette-add-${key}`}
               onClick={() => props.setPalettes((palettes) => [...palettes, uniqueTitle(preset, palettes)])}
             >
-              {key}
+              {t(`${key.charAt(0).toUpperCase()}${key.slice(1)}`)}
             </button>
           )}
         </For>

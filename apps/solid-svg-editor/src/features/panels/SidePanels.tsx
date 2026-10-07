@@ -11,6 +11,7 @@ import { PanelButton } from "../ui/PanelButton";
 import { CodeEditor } from "../code-editor/CodeEditor";
 import { IconPreviews } from "./IconPreviews";
 import { SvgNodeList, SvgNodeView, SvgRootPresentation } from "../viewport/svg-renderer";
+import { useI18n } from '../../i18n/I18nProvider';
 
 export function CodePanel(props: {
   readonly code: string;
@@ -20,17 +21,18 @@ export function CodePanel(props: {
   readonly reformatCompact: () => void;
   readonly copySvgText: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <section class="panel code-panel grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-md border border-[var(--soft-border)] bg-[var(--panel)]" data-testid="code-panel">
       <div class="code-toolbar flex gap-1.5 border-b border-[var(--soft-border)] bg-[var(--panel-2)] p-1.5" data-testid="code-toolbar">
         <PanelButton type="button" icon={CopyIcon} data-testid="code-copy-button" onClick={props.copySvgText}>
-          Copy
+          {t('Copy')}
         </PanelButton>
         <PanelButton type="button" data-testid="code-format-pretty-button" onClick={props.reformatPretty}>
-          Pretty
+          {t('Pretty')}
         </PanelButton>
         <PanelButton type="button" data-testid="code-format-compact-button" onClick={props.reformatCompact}>
-          Compact
+          {t('Compact')}
         </PanelButton>
       </div>
       <CodeEditor value={props.code} onInput={props.applyCode} testId="svg-code-textarea" label="SVG code" />

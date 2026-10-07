@@ -15,6 +15,7 @@ import PlusIcon from '../ui/icons/Plus.svg';
 import WarningIcon from '../ui/icons/Warning.svg';
 import { AttributeGrid, RootElementEditor } from './InspectorInputs';
 import { createInspectorVirtualScroll, nodeContainsId, VirtualInspectorRowShell } from './InspectorVirtualScroll';
+import { useI18n } from '../../i18n/I18nProvider';
 
 type InspectorDropTarget = {
   readonly nodeId: string;
@@ -40,6 +41,7 @@ export function InspectorPanel(props: {
   readonly openContextMenu: (event: MouseEvent, nodeId: string) => void;
   readonly reorderNodes: (nodeIds: readonly string[], targetId: string, position: DropPosition) => void;
 }) {
+  const { t } = useI18n();
   const [addOpen, setAddOpen] = createSignal(false);
   let toolbar: HTMLDivElement | undefined;
   createDismissible({ open: addOpen, container: () => toolbar, close: () => setAddOpen(false) });
@@ -236,7 +238,7 @@ export function InspectorPanel(props: {
           data-testid="add-element-button"
           onClick={() => setAddOpen(!addOpen())}
         >
-          <PlusIcon {...decorativeIconProps} /> Add element
+          <PlusIcon {...decorativeIconProps} /> {t('Add element')}
         </button>
         <Show when={addOpen()}>
           <div

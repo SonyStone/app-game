@@ -24,6 +24,7 @@ import MinusIcon from './icons/Minus.svg';
 import ReferenceIcon from './icons/Reference.svg';
 import SnapIcon from './icons/Snap.svg';
 import VisualsIcon from './icons/Visuals.svg';
+import { useI18n } from '../../i18n/I18nProvider';
 
 export function ViewportToolbar(props: {
   readonly settings: AppSettings;
@@ -43,6 +44,7 @@ export function ViewportToolbar(props: {
   readonly dragSelectionMode: DragSelectionMode;
   readonly setDragSelectionMode: (mode: DragSelectionMode) => void;
 }) {
+  const { t } = useI18n();
   const [visualsOpen, setVisualsOpen] = createSignal(false);
   const [referenceOpen, setReferenceOpen] = createSignal(false);
   let leftTools: HTMLDivElement | undefined;
@@ -63,7 +65,7 @@ export function ViewportToolbar(props: {
       <div ref={(element) => (leftTools = element)} class="viewport-left-tools flex min-w-0 items-center gap-1" data-testid="viewport-left-tools">
         <IconButton
           icon={VisualsIcon}
-          label="Visuals"
+          label={t('Visuals')}
           testId="viewport-visuals-button"
           active={visualsOpen()}
           onClick={() => {
@@ -85,7 +87,7 @@ export function ViewportToolbar(props: {
                   props.setSettings((settings) => ({ ...settings, showGrid: event.currentTarget.checked }))
                 }
               />
-              Grid
+              {t('Show grid')}
             </MenuLabel>
             <MenuLabel data-testid="show-handles-toggle">
               <input
@@ -96,7 +98,7 @@ export function ViewportToolbar(props: {
                   props.setSettings((settings) => ({ ...settings, showHandles: event.currentTarget.checked }))
                 }
               />
-              Handles
+              {t('Show handles')}
             </MenuLabel>
             <MenuLabel data-testid="view-rasterized-toggle">
               <input
@@ -107,7 +109,7 @@ export function ViewportToolbar(props: {
                   props.setSettings((settings) => ({ ...settings, viewRasterized: event.currentTarget.checked }))
                 }
               />
-              Rasterized
+              {t('Show rasterized SVG')}
             </MenuLabel>
           </div>
         </Show>
@@ -132,7 +134,7 @@ export function ViewportToolbar(props: {
               data-testid="load-reference-button"
               onClick={props.openReferenceDialog}
             >
-              Load reference
+              {t('Load reference image')}
             </MenuButton>
             <MenuButton
               type="button"
@@ -141,7 +143,7 @@ export function ViewportToolbar(props: {
               disabled={!props.hasReference}
               onClick={props.clearReference}
             >
-              Clear reference
+              {t('Clear reference image')}
             </MenuButton>
             <MenuLabel disabled={!props.hasReference} data-testid="show-reference-toggle">
               <input
@@ -151,7 +153,7 @@ export function ViewportToolbar(props: {
                 disabled={!props.hasReference}
                 onChange={(event) => props.setShowReference(event.currentTarget.checked)}
               />
-              Show
+              {t('Show reference image')}
             </MenuLabel>
             <MenuLabel disabled={!props.hasReference} data-testid="overlay-reference-toggle">
               <input
@@ -161,7 +163,7 @@ export function ViewportToolbar(props: {
                 disabled={!props.hasReference}
                 onChange={(event) => props.setOverlayReference(event.currentTarget.checked)}
               />
-              Overlay
+              {t('Overlay reference image')}
             </MenuLabel>
           </div>
         </Show>
@@ -182,7 +184,7 @@ export function ViewportToolbar(props: {
           min="0.001"
           step="1"
           name="snap-size"
-          aria-label="Snap size"
+          aria-label={t('Snap size')}
           data-testid="snap-size-input"
           value={props.settings.snapSize}
           disabled={!props.settings.snapEnabled}
@@ -226,14 +228,14 @@ export function ViewportToolbar(props: {
       <div class="zoom-widget flex min-w-0 items-center gap-1" data-testid="zoom-widget">
         <IconButton
           icon={ExpandIcon}
-          label={props.isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+          label={t('Toggle fullscreen')}
           testId="fullscreen-toggle-button"
           active={props.isFullscreen}
           onClick={props.toggleFullscreen}
         />
         <IconButton
           icon={MinusIcon}
-          label="Zoom out"
+          label={t('Zoom out')}
           testId="zoom-out-button"
           onClick={() => props.zoomBy(1 / Math.SQRT2)}
         />
@@ -245,7 +247,7 @@ export function ViewportToolbar(props: {
         >
           {Math.round(props.zoom * 100)}%
         </button>
-        <IconButton icon={PlusIcon} label="Zoom in" testId="zoom-in-button" onClick={() => props.zoomBy(Math.SQRT2)} />
+        <IconButton icon={PlusIcon} label={t('Zoom in')} testId="zoom-in-button" onClick={() => props.zoomBy(Math.SQRT2)} />
       </div>
     </div>
   );
