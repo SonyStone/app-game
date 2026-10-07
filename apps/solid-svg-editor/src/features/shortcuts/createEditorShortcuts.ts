@@ -57,6 +57,7 @@ export const editorActions = [
   { id: 'file.import', category: 'file', label: 'Import', bindings: [{ key: 'i', ctrl: true }, { key: 'o', ctrl: true }], allowInEditable: true },
   { id: 'file.export', category: 'file', label: 'Export', bindings: [{ key: 'e', ctrl: true }], allowInEditable: true },
   { id: 'file.save-svg', category: 'file', label: 'Save SVG', bindings: [{ key: 's', ctrl: true }], allowInEditable: true },
+  { id: 'file.save-as', category: 'file', label: 'Save SVG as', bindings: [{ key: 's', ctrl: true, shift: true }], allowInEditable: true },
   { id: 'file.close-tab', category: 'file', label: 'Close tab', bindings: [{ key: 'w', ctrl: true }, { key: 'w', alt: true }], allowInEditable: true },
   { id: 'file.close-other-tabs', category: 'file', label: 'Close all other tabs', bindings: [], allowInEditable: true },
   { id: 'file.close-tabs-left', category: 'file', label: 'Close tabs to the left', bindings: [], allowInEditable: true },
@@ -79,6 +80,7 @@ export const editorActions = [
     allowInEditable: true
   },
   { id: 'file.optimize', category: 'file', label: 'Optimize', bindings: [{ key: 'o', ctrl: true, shift: true }], allowInEditable: true },
+  { id: 'file.reset-svg', category: 'file', label: 'Reset SVG', bindings: [], allowInEditable: true },
   { id: 'edit.copy-svg', category: 'file', label: 'Copy the SVG text', bindings: [{ key: 'c', ctrl: true, shift: true }], allowInEditable: true },
   // Undo and redo stay with the text field while one is focused, like GodSVG.
   { id: 'edit.undo', category: 'edit', label: 'Undo', bindings: [{ key: 'z', ctrl: true }] },

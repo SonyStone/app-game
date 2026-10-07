@@ -6,7 +6,7 @@ import type { SvgElementNode, SvgNode } from "../svg-model";
 import type { EditorCommandId } from "./commands";
 
 export type PanelId = "inspector" | "code" | "previews" | "debug";
-export type ModalId = "settings" | "export" | "about" | "donate" | "shortcuts" | "close-tab" | "import-problems" | undefined;
+export type ModalId = "settings" | "export" | "about" | "donate" | "shortcuts" | "close-tab" | "import-problems" | "alert" | undefined;
 export type ThemePreset = "dark" | "light" | "black" | "gray";
 export type ExportFormat = "svg" | "png" | "jpeg" | "webp";
 export type DragSelectionMode = "intersect" | "contain";
@@ -76,6 +76,8 @@ export interface AppSettings {
   /** Named color palettes listed in the color picker. */
   readonly palettes: readonly ColorPalette[];
   readonly tabMiddleClickClose: boolean;
+  /** GodSVG's "Sync window title to file name": the page title shows the active tab's bound file. */
+  readonly useFilenameForWindowTitle: boolean;
   readonly useCtrlForZoom: boolean;
   readonly rasterPreviewDuringInteraction: boolean;
   readonly dragSelectionMode: DragSelectionMode;

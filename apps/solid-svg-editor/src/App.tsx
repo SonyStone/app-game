@@ -46,6 +46,9 @@ export function App() {
           closeTabs={app.topBar.closeTabs}
           moveTab={app.topBar.moveTab}
           saveTab={app.topBar.saveTab}
+          saveTabAs={app.topBar.saveTabAs}
+          resetSvg={app.topBar.resetSvg}
+          fileName={app.topBar.fileName}
           middleClickCloses={app.topBar.middleClickCloses()}
           createNewTab={app.topBar.createNewTab}
           openImportDialog={app.topBar.openImportDialog}
@@ -121,6 +124,7 @@ export function App() {
             isFullscreen={app.viewport.isFullscreen()}
             toggleFullscreen={app.viewport.toggleFullscreen}
             openReferenceDialog={app.viewport.openReferenceDialog}
+            pasteReferenceImage={app.viewport.pasteReferenceImage}
             referenceImage={app.viewport.referenceImage()}
             showReference={app.viewport.showReference()}
             setShowReference={app.viewport.setShowReference}
@@ -185,6 +189,7 @@ export function App() {
           pendingCloseTabName={app.modals.pendingCloseTabName()}
           resolveCloseTab={app.modals.resolveCloseTab}
           pendingImport={app.modals.pendingImport()}
+          alertMessages={app.modals.alertMessages()}
           resolveImport={app.modals.resolveImport}
           shortcuts={app.modals.shortcuts}
           setShortcutBindings={app.modals.setShortcutBindings}

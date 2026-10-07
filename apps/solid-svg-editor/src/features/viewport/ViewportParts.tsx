@@ -20,6 +20,7 @@ import PlusIcon from '../ui/icons/Plus.svg';
 import { MenuButton, MenuLabel } from '../ui/MenuItem';
 import ExpandIcon from './icons/Expand.svg';
 import FileBrowseIcon from './icons/FileBrowse.svg';
+import PasteIcon from './icons/Paste.svg';
 import MinusIcon from './icons/Minus.svg';
 import ReferenceIcon from './icons/Reference.svg';
 import SnapIcon from './icons/Snap.svg';
@@ -35,6 +36,7 @@ export function ViewportToolbar(props: {
   readonly isFullscreen: boolean;
   readonly toggleFullscreen: () => void;
   readonly openReferenceDialog: () => void;
+  readonly pasteReferenceImage: () => void;
   readonly hasReference: boolean;
   readonly showReference: boolean;
   readonly setShowReference: (show: boolean) => void;
@@ -135,6 +137,9 @@ export function ViewportToolbar(props: {
               onClick={props.openReferenceDialog}
             >
               {t('Load reference image')}
+            </MenuButton>
+            <MenuButton type="button" icon={PasteIcon} data-testid="paste-reference-button" onClick={props.pasteReferenceImage}>
+              {t('Paste reference image')}
             </MenuButton>
             <MenuButton
               type="button"

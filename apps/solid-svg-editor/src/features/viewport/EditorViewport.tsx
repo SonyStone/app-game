@@ -25,6 +25,7 @@ export function EditorViewport(props: {
   readonly isFullscreen: boolean;
   readonly toggleFullscreen: () => void;
   readonly openReferenceDialog: () => void;
+  readonly pasteReferenceImage: () => void;
   readonly referenceImage: string | undefined;
   readonly showReference: boolean;
   readonly setShowReference: (show: boolean) => void;
@@ -76,6 +77,7 @@ export function EditorViewport(props: {
         isFullscreen={props.isFullscreen}
         toggleFullscreen={props.toggleFullscreen}
         openReferenceDialog={props.openReferenceDialog}
+        pasteReferenceImage={props.pasteReferenceImage}
         hasReference={Boolean(props.referenceImage)}
         showReference={props.showReference}
         setShowReference={props.setShowReference}

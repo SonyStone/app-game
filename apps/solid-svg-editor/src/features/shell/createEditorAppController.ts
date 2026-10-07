@@ -10,7 +10,6 @@ import { createMemo, createSignal, createTrackedEffect, untrack } from 'solid-js
 import { createEditorCommand, type EditorCommandEvent } from '../../editor/commands';
 import type { newShapeNames } from '../../editor/new-shape';
 import { defaultSettings, restoreSettings } from '../../editor/defaults';
-import { downloadBlob } from '../../editor/export-utils';
 import { serializeSvgDocument } from '../../editor/svg-document';
 import type { ContextMenuState, DragSelectionMode, ModalId, PanelId, ShortcutBinding } from '../../editor/types';
 import { createDefaultElement, findNode, getAttribute, insertSibling, svgSize } from '../../svg-model';
@@ -23,6 +22,7 @@ import { createSvgNodeActions } from '../documents/createSvgNodeActions';
 import { createFullscreen } from '../fullscreen/createFullscreen';
 import { createImportReview } from '../import/createImportReview';
 import { createSvgImport } from '../import/createSvgImport';
+import { createFileBinding, type AlertMessage } from '../files/createFileBinding';
 import { createReferenceImage } from '../reference/createReferenceImage';
 import type { EditorContextMenuAction } from '../selection/EditorContextMenu';
 import { createEditorSelection } from '../selection/createEditorSelection';
@@ -110,7 +110,7 @@ export function createEditorAppController() {
     moveTab,
     markTabClean,
     importSvgText,
-    markActiveTabClean
+    renameTab
   } = documents;
   commandEvents.listen((event) => setRecentCommandEvent(event));
 
@@ -119,8 +119,30 @@ export function createEditorAppController() {
     openDialog: () => setModal('import-problems'),
     closeDialog: () => setModal(undefined)
   });
-  const svgImport = createSvgImport({ importSvgText: importReview.requestImport });
-  const { isSvgDropActive, setImportInputRef, openImportDialog, onImportFile } = svgImport;
+  const svgImport = createSvgImport({
+    importSvgText: (text, name) => files.importText(text, name),
+    openHandles: (handles) => files.openHandles(handles)
+  });
+  const { isSvgDropActive, setImportInputRef, onImportFile } = svgImport;
+  /** GodSVG's alert dialog: one or more translated paragraphs and OK. */
+  const [alertMessages, setAlertMessages] = createSignal<readonly AlertMessage[]>([]);
+  const files = createFileBinding({
+    tabs,
+    activeTabId,
+    selectTab,
+    exportTextOf: (tab) => serializeSvgDocument(tab.document, settings().exportFormatter),
+    markTabClean,
+    renameTab,
+    replaceActiveText: applyCode,
+    requestImport: importReview.requestImport,
+    openFallbackDialog: svgImport.openImportDialog,
+    alert: (messages) => {
+      setAlertMessages(messages);
+      setModal('alert');
+    },
+    syncWindowTitle: () => settings().useFilenameForWindowTitle
+  });
+  const openImportDialog = () => void files.openFiles();
 
   const reference = createReferenceImage();
   const {
@@ -259,8 +281,7 @@ export function createEditorAppController() {
   } = viewportInteractions;
 
   function downloadSvg(): void {
-    downloadBlob(exportText(), activeTab()?.name ?? 'image.svg', 'image/svg+xml');
-    markActiveTabClean();
+    void files.save(activeTabId());
   }
 
   createTabPersistence({ tabs, activeTabId });
@@ -301,21 +322,22 @@ export function createEditorAppController() {
       return;
     }
 
-    if (choice === 'save') {
-      saveTab(tab.id);
+    if (choice === 'discard') {
+      closeTabs([tab.id]);
+      return;
     }
 
-    closeTabs([tab.id]);
+    // A cancelled "Save as" keeps the tab open.
+    void files.save(tab.id).then((saved) => {
+      if (saved) {
+        closeTabs([tab.id]);
+      }
+    });
   }
 
-  /** Downloads a tab's SVG with the export formatter and marks it saved. */
+  /** GodSVG's Save for a tab: writes it to its bound file, or asks where to save it. */
   function saveTab(tabId: string): void {
-    const tab = tabs().find((item) => item.id === tabId);
-
-    if (tab) {
-      downloadBlob(serializeSvgDocument(tab.document, settings().exportFormatter), tab.name, 'image/svg+xml');
-      markTabClean(tab.id);
-    }
+    void files.save(tabId);
   }
 
   async function copySvgText(): Promise<void> {
@@ -348,6 +370,8 @@ export function createEditorAppController() {
       'file.import': openImportDialog,
       'file.export': () => void setModal('export'),
       'file.save-svg': downloadSvg,
+      'file.save-as': () => void files.saveAs(activeTabId()),
+      'file.reset-svg': () => void files.resetSvg(),
       'file.close-tab': closeGroup('close'),
       'file.close-other-tabs': closeGroup('close-others'),
       'file.close-tabs-left': closeGroup('close-left'),
@@ -539,6 +563,9 @@ export function createEditorAppController() {
       closeTabs: requestCloseTabs,
       moveTab,
       saveTab,
+      saveTabAs: (tabId: string) => void files.saveAs(tabId),
+      resetSvg: () => void files.resetSvg(),
+      fileName: files.fileName,
       middleClickCloses: () => settings().tabMiddleClickClose,
       createNewTab,
       openImportDialog,
@@ -595,6 +622,7 @@ export function createEditorAppController() {
       isFullscreen,
       toggleFullscreen,
       openReferenceDialog,
+      pasteReferenceImage: () => void reference.pasteReferenceImage(),
       referenceImage,
       showReference,
       setShowReference,
@@ -692,6 +720,7 @@ export function createEditorAppController() {
       reformatActiveCode,
       pendingCloseTabName: () => pendingCloseTab()?.name,
       pendingImport: importReview.pending,
+      alertMessages,
       resolveImport: importReview.resolve,
       resolveCloseTab,
       shortcuts: shortcutDescriptors,

@@ -38,6 +38,29 @@ export function createReferenceImage() {
     setShowReference(true);
   }
 
+  /**
+   * GodSVG's "Paste reference image": uses the first image on the clipboard. Resolves `false` when the clipboard has
+   * none or can't be read.
+   */
+  async function pasteReferenceImage(): Promise<boolean> {
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((candidate) => candidate.startsWith('image/'));
+
+        if (type) {
+          clearReference();
+          setReferenceImage(URL.createObjectURL(await item.getType(type)));
+          setShowReference(true);
+          return true;
+        }
+      }
+    } catch {
+      // Permission denied or no clipboard access.
+    }
+
+    return false;
+  }
+
   onCleanup(clearReference);
 
   return {
@@ -49,6 +72,7 @@ export function createReferenceImage() {
     setReferenceInputRef,
     openReferenceDialog,
     onReferenceFile,
+    pasteReferenceImage,
     clearReference
   };
 }

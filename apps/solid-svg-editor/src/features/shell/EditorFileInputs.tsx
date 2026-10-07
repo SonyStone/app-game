@@ -14,6 +14,7 @@ export function EditorFileInputs(props: {
         aria-label="Import SVG"
         data-testid="svg-import-input"
         accept=".svg,image/svg+xml,text/xml"
+        multiple
         onChange={props.onImportFile}
       />
       <input
