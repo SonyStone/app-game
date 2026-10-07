@@ -3,6 +3,8 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 
 import { svgCapabilities } from '../../editor/capabilities';
 import { colorToHex } from '../../editor/colors';
+import { idValidity } from '../../editor/id-validity';
+import { evaluateNumberExpression } from '../../editor/number-expression';
 import type { SvgNodeActions } from '../documents/createSvgNodeActions';
 import { parseTransformList } from '../../editor/geometry';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
@@ -29,6 +31,7 @@ import {
   updatePoint,
   type PathCommand
 } from '../../path-data';
+import { attributeNumberRange } from '../../svg-db';
 import { getAttribute, svgSize, type SvgAttribute, type SvgElementNode } from '../../svg-model';
 import DeleteIcon from '../ui/icons/Delete.svg';
 import InsertAfterIcon from '../ui/icons/InsertAfter.svg';
@@ -75,7 +78,7 @@ export function RootElementEditor(props: {
         <div class="flex min-w-0 flex-wrap items-center gap-0.75 pb-0.5" data-testid="root-unknown-attributes">
           <For each={unknownAttrs()}>
             {(attr) => (
-              <AttributeControl node={props.root} attr={attr} updateElementAttribute={props.updateElementAttribute} />
+              <AttributeControl node={props.root} attr={attr} placeholder="" updateElementAttribute={props.updateElementAttribute} />
             )}
           </For>
         </div>
@@ -150,6 +153,8 @@ export function RootElementEditor(props: {
 
 export function AttributeGrid(props: {
   readonly node: SvgElementNode;
+  /** The value the element renders for an attribute it does not set, shown as the field's placeholder. */
+  readonly inheritedValue: (name: string) => string;
   readonly updateElementAttribute: SvgNodeActions['updateElementAttribute'];
   readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
   readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
@@ -175,17 +180,29 @@ export function AttributeGrid(props: {
           class="flex min-w-0 flex-wrap items-center gap-0.75 pb-0.5"
           data-testid={`unknown-attributes-${props.node.id}`}
         >
-          <For each={unknownAttrs()}>
+          <For each={unknownAttrs()} keyed={(attr) => attr.name}>
             {(attr) => (
-              <AttributeControl node={props.node} attr={attr} updateElementAttribute={props.updateElementAttribute} />
+              <AttributeControl
+                node={props.node}
+                attr={attr()}
+                placeholder={props.inheritedValue(attr().name)}
+                updateElementAttribute={props.updateElementAttribute}
+              />
             )}
           </For>
         </div>
       </Show>
       <div class="flex min-w-0 flex-wrap items-center gap-0.75" data-testid={`compact-attributes-${props.node.id}`}>
-        <For each={compactAttrs()}>
+        {/* Keyed by name: attribute objects are rebuilt on every edit, and rebuilding the field would drop focus and
+            pointer capture (slider drags). */}
+        <For each={compactAttrs()} keyed={(attr) => attr.name}>
           {(attr) => (
-            <AttributeControl node={props.node} attr={attr} updateElementAttribute={props.updateElementAttribute} />
+            <AttributeControl
+              node={props.node}
+              attr={attr()}
+              placeholder={props.inheritedValue(attr().name)}
+              updateElementAttribute={props.updateElementAttribute}
+            />
           )}
         </For>
       </div>
@@ -213,15 +230,22 @@ export function AttributeGrid(props: {
   );
 }
 
+/**
+ * Field for one attribute, chosen by its type. An unset attribute shows `placeholder` (the inherited or default
+ * value); a set value equal to it is shown in the warning color because it has no effect, as in GodSVG.
+ */
 function AttributeControl(props: {
   readonly node: SvgElementNode;
   readonly attr: SvgAttribute;
+  readonly placeholder: string;
   readonly updateElementAttribute: SvgNodeActions['updateElementAttribute'];
 }) {
   const capability = () => svgCapabilities.getAttribute(props.attr.name);
   const type = () => capability().type;
   const update = (value: string, mergeKey?: string) =>
     props.updateElementAttribute(props.node.id, props.attr.name, value, mergeKey);
+  const redundant = () => props.attr.value !== '' && props.attr.value === props.placeholder;
+  const hasSlider = () => type() === 'numeric' && numberRange(props.attr.name) === 'unit';
 
   return (
     <div
@@ -231,14 +255,15 @@ function AttributeControl(props: {
           'w-20.5': type() === 'color',
           'w-20.25': type() === 'enum',
           'w-28': type() === 'href' || type() === 'id' || type() === 'unknown',
-          'w-13.5': type() === 'list' || type() === 'numeric',
+          'w-13.5': type() === 'list' || (type() === 'numeric' && !hasSlider()),
+          'w-17': hasSlider(),
           'w-40.5': type() === 'transform-list'
         }
       ]}
       title={props.attr.name}
       data-testid={`attribute-control-${props.node.id}-${props.attr.name}`}
     >
-      <Show when={type() === 'numeric' || (type() === 'list' && props.attr.name !== 'points')}>
+      <Show when={type() === 'list' && props.attr.name !== 'points'}>
         <input
           class="block h-5.5 min-h-5.5 w-full min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
           type="text"
@@ -246,11 +271,34 @@ function AttributeControl(props: {
           aria-label={props.attr.name}
           data-testid={`attribute-input-${props.node.id}-${props.attr.name}`}
           value={props.attr.value}
-          placeholder={capability().defaultValue}
-          onChange={(event) =>
-            commitInput(event.currentTarget, clampNumericAttribute(props.attr.name, event.currentTarget.value), update)
-          }
+          placeholder={props.placeholder}
+          onChange={(event) => commitInput(event.currentTarget, event.currentTarget.value, update)}
         />
+      </Show>
+      <Show when={type() === 'numeric'}>
+        <div class="flex h-5.5 min-w-0">
+          <input
+            class={[
+              "block h-5.5 min-h-5.5 w-full min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]",
+              { 'rounded-r-none': hasSlider(), 'text-[var(--warning)]': redundant() }
+            ]}
+            type="text"
+            name={`${props.node.id}-${props.attr.name}`}
+            aria-label={props.attr.name}
+            data-testid={`attribute-input-${props.node.id}-${props.attr.name}`}
+            value={props.attr.value}
+            placeholder={props.placeholder}
+            onChange={(event) => commitNumberField(event.currentTarget, props.attr, update)}
+          />
+          <Show when={hasSlider()}>
+            <UnitSlider
+              nodeId={props.node.id}
+              attrName={props.attr.name}
+              value={Number.parseFloat(props.attr.value || props.placeholder) || 0}
+              update={update}
+            />
+          </Show>
+        </div>
       </Show>
       <Show when={type() === 'enum'}>
         <select
@@ -261,23 +309,27 @@ function AttributeControl(props: {
           value={props.attr.value}
           onChange={(event) => update(event.currentTarget.value)}
         >
+          <option value="">{props.placeholder} (default)</option>
           <For each={capability().enumValues}>{(value) => <option value={value}>{value}</option>}</For>
         </select>
       </Show>
       <Show when={type() === 'color'}>
-        <ColorField nodeId={props.node.id} attr={props.attr} update={update} />
+        <ColorField nodeId={props.node.id} attr={props.attr} placeholder={props.placeholder} update={update} />
       </Show>
       <Show when={type() === 'transform-list'}>
         <TransformField nodeId={props.node.id} attrName={props.attr.name} value={props.attr.value} update={update} />
       </Show>
-      <Show when={['id', 'href', 'unknown'].includes(type())}>
+      <Show when={type() === 'id'}>
+        <IdField nodeId={props.node.id} value={props.attr.value} update={update} />
+      </Show>
+      <Show when={type() === 'href' || type() === 'unknown'}>
         <input
           class="block h-5.5 min-h-5.5 w-full min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
           name={`${props.node.id}-${props.attr.name}`}
           aria-label={props.attr.name}
           data-testid={`attribute-input-${props.node.id}-${props.attr.name}`}
           value={props.attr.value}
-          placeholder={props.attr.name}
+          placeholder={props.placeholder || props.attr.name}
           onChange={(event) => update(event.currentTarget.value)}
         />
       </Show>
@@ -285,16 +337,141 @@ function AttributeControl(props: {
   );
 }
 
+/**
+ * Commits a number field like GodSVG: an empty field removes the attribute, values with a unit or percentage are kept
+ * (clamped to the attribute's range), and anything else is evaluated as an expression and clamped. Text that does
+ * not evaluate puts the previous value back.
+ */
+function commitNumberField(input: HTMLInputElement, attr: SvgAttribute, update: (value: string) => void): void {
+  const text = input.value.trim();
+
+  if (text === '' || /^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?\s*(?:%|[a-zA-Z]+)$/.test(text)) {
+    commitInput(input, clampNumericAttribute(attr.name, text), update);
+    return;
+  }
+
+  const value = evaluateNumberExpression(text);
+
+  if (Number.isNaN(value)) {
+    input.value = attr.value;
+    return;
+  }
+
+  commitInput(input, clampNumericAttribute(attr.name, formatPathNumber(value)), update);
+}
+
+function numberRange(name: string): string | undefined {
+  const ranges: Readonly<Record<string, string>> = attributeNumberRange;
+  return ranges[name];
+}
+
+/**
+ * GodSVG's slider for 0–1 attributes such as opacity: a gauge beside the field that fills with the value. Dragging
+ * vertically sets the value in 0.01 steps (one undo step per drag); arrow keys step by 0.01, or 0.1 with Shift.
+ */
+function UnitSlider(props: {
+  readonly nodeId: string;
+  readonly attrName: string;
+  readonly value: number;
+  readonly update: (value: string, mergeKey?: string) => void;
+}) {
+  let dragSession = 0;
+  const fill = () => `${Math.min(1, Math.max(0, props.value)) * 100}%`;
+  const setValue = (value: number, mergeKey?: string) =>
+    props.update(formatPathNumber(Math.round(Math.min(1, Math.max(0, value)) * 100) / 100), mergeKey);
+  const valueAt = (element: HTMLElement, clientY: number) => {
+    const rect = element.getBoundingClientRect();
+    return 1 - (clientY - rect.top) / rect.height;
+  };
+
+  return (
+    <div
+      class="relative h-5.5 w-3 min-w-3 cursor-ns-resize touch-none overflow-hidden rounded-r-[5px] border border-l-0 border-[var(--soft-border)] bg-[#080b12] outline-none hover:border-[var(--accent)] focus-visible:border-[var(--accent)] in-[.theme-light]:bg-[#f8fbff]"
+      role="slider"
+      tabindex={0}
+      aria-label={`${props.attrName} slider`}
+      aria-valuemin={0}
+      aria-valuemax={1}
+      aria-valuenow={props.value}
+      data-testid={`attribute-slider-${props.nodeId}-${props.attrName}`}
+      onPointerDown={(event) => {
+        // The inspector card is draggable; without this the gesture would start a card drag and steal the pointer.
+        event.preventDefault();
+        dragSession += 1;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setValue(valueAt(event.currentTarget, event.clientY), `slider:${props.nodeId}:${props.attrName}:${dragSession}`);
+      }}
+      onPointerMove={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          setValue(valueAt(event.currentTarget, event.clientY), `slider:${props.nodeId}:${props.attrName}:${dragSession}`);
+        }
+      }}
+      onKeyDown={(event) => {
+        const step = event.shiftKey ? 0.1 : 0.01;
+
+        if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
+          event.preventDefault();
+          setValue(props.value + step);
+        } else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
+          event.preventDefault();
+          setValue(props.value - step);
+        }
+      }}
+    >
+      <div class="pointer-events-none absolute inset-x-0 bottom-0 bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]" style={{ height: fill() }} />
+    </div>
+  );
+}
+
+/**
+ * The id field, colored by GodSVG's validity rules while typing: whitespace or a leading `#` is invalid (red) and is
+ * not committed; characters outside XML name tokens are allowed but shown as a warning.
+ */
+function IdField(props: { readonly nodeId: string; readonly value: string; readonly update: (value: string) => void }) {
+  const [draft, setDraft] = createSignal<string>();
+  const validity = () => idValidity(draft() ?? props.value);
+
+  return (
+    <input
+      class={[
+        "block h-5.5 min-h-5.5 w-full min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]",
+        { 'text-[var(--danger)]': validity() === 'invalid', 'text-[var(--warning)]': validity() === 'warning' }
+      ]}
+      name={`${props.nodeId}-id`}
+      aria-label="id"
+      aria-invalid={validity() === 'invalid' ? 'true' : 'false'}
+      data-testid={`attribute-input-${props.nodeId}-id`}
+      value={props.value}
+      placeholder="No ID"
+      onInput={(event) => setDraft(event.currentTarget.value)}
+      onChange={(event) => {
+        setDraft(undefined);
+
+        if (idValidity(event.currentTarget.value) === 'invalid') {
+          event.currentTarget.value = props.value;
+          return;
+        }
+
+        commitInput(event.currentTarget, event.currentTarget.value, props.update);
+      }}
+    />
+  );
+}
+
 function ColorField(props: {
   readonly nodeId: string;
   readonly attr: SvgAttribute;
+  /** Inherited or default color, shown when the attribute is unset. */
+  readonly placeholder: string;
   readonly update: (value: string, mergeKey?: string) => void;
 }) {
   // Each time the native picker is opened and closed counts as one undo step.
   let pickerSession = 0;
 
-  const colorValue = () => colorToHex(props.attr.value);
-  const swatchValue = () => colorValue() ?? (isCssColorText(props.attr.value) ? props.attr.value : 'transparent');
+  const shown = () => props.attr.value || props.placeholder;
+  const colorValue = () => colorToHex(shown());
+  // `none`, url() references, and unknown text show the checkerboard.
+  const swatchValue = () => colorValue() ?? (shown() === 'currentColor' ? 'currentColor' : 'transparent');
   const pickerValue = () => colorValue() ?? '#000000';
 
   return (
@@ -308,7 +485,7 @@ function ColorField(props: {
         aria-label={props.attr.name}
         data-testid={`color-input-${props.nodeId}-${props.attr.name}`}
         value={props.attr.value}
-        placeholder={svgCapabilities.getAttributeDefault(props.attr.name)}
+        placeholder={props.placeholder}
         onChange={(event) => props.update(event.currentTarget.value)}
         list={`color-options-${props.nodeId}-${props.attr.name}`}
       />
@@ -318,10 +495,10 @@ function ColorField(props: {
         data-testid={`color-picker-label-${props.nodeId}-${props.attr.name}`}
       >
         <span
-          class="relative h-4.5 w-3.5 rounded-xs border border-[color-mix(in_srgb,var(--soft-border)_70%,#fff)] [background:var(--swatch-color),linear-gradient(45deg,#8b93a7_25%,transparent_25%_75%,#8b93a7_75%)_0_0/8px_8px,linear-gradient(45deg,transparent_25%,#303747_25%_75%,transparent_75%)_4px_4px/8px_8px]"
+          class="relative h-4.5 w-3.5 rounded-xs border border-[color-mix(in_srgb,var(--soft-border)_70%,#fff)] [background:linear-gradient(var(--swatch-color),var(--swatch-color)),linear-gradient(45deg,#8b93a7_25%,transparent_25%_75%,#8b93a7_75%)_0_0/8px_8px,linear-gradient(45deg,transparent_25%,#303747_25%_75%,transparent_75%)_4px_4px/8px_8px]"
           style={{ '--swatch-color': swatchValue() }}
         >
-          <Show when={props.attr.value === 'none'}>
+          <Show when={shown() === 'none'}>
             <span class="absolute top-2 -left-0.75 w-5 rotate-[-42deg] border-t-2 border-white" />
           </Show>
         </span>
@@ -887,10 +1064,6 @@ function listValues(value: string, count: number, fallback: readonly string[] = 
   const values = value.split(/[\s,]+/).filter(Boolean);
 
   return Array.from({ length: count }, (_, index) => values[index] ?? fallback[index] ?? '0');
-}
-
-function isCssColorText(value: string): boolean {
-  return value !== '' && !value.startsWith('url(') && value !== 'currentColor';
 }
 
 function parsePathParamValue(value: string): number {
