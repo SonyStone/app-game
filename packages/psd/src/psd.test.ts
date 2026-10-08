@@ -45,10 +45,16 @@ it('writes canvases over 30000 pixels as PSB', async () => {
   expect((await readPsd(file)).layers[0]!.pixels).toEqual(layer('A', {}).pixels);
 });
 
+it('reads the other color modes as one sRGB layer of their flattened image', async () => {
+  // A 1×1 CMYK header, three empty sections and a raw image of unprinted paper (CMYK is stored inverted).
+  const cmyk = Uint8Array.from([56, 66, 80, 83, 0, 1, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 0, 4, ...Array(14).fill(0), 255, 255, 255, 255]);
+  const read = await readPsd(cmyk);
+  expect(read).toMatchObject({ width: 1, height: 1 });
+  expect(read.layers).toHaveLength(1);
+  expect(read.layers[0]!.pixels[3]).toBe(255);
+});
+
 it('refuses other formats and canvases too large for a PSB', async () => {
   await expect(readPsd(new Uint8Array(40))).rejects.toThrow('not a Photoshop document');
-  // A header, three empty sections and an empty raw image.
-  const cmyk = Uint8Array.from([56, 66, 80, 83, 0, 1, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 0, 4, ...Array(14).fill(0)]);
-  await expect(readPsd(cmyk)).rejects.toThrow('color mode 4');
   await expect(writePsd({ width: 400000, height: 1, layers: [] }, new Uint8Array(0))).rejects.toThrow('300000');
 });

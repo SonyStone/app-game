@@ -1,0 +1,35 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_psddocumenthandle_free: (a: number, b: number) => void;
+export const psddocumenthandle_open: (a: number, b: number) => [number, number, number];
+export const psddocumenthandle_info: (a: number) => any;
+export const psddocumenthandle_layers: (a: number) => [number, number, number];
+export const psddocumenthandle_layerDetail: (a: number, b: number) => [number, number, number];
+export const psddocumenthandle_layerPixels: (a: number, b: number) => [number, number, number];
+export const psddocumenthandle_render: (a: number, b: any, c: number) => [number, number, number];
+export const psddocumenthandle_documentFonts: (a: number, b: number) => any;
+export const psddocumenthandle_textSupport: (a: number, b: number, c: number) => [number, number, number];
+export const psddocumenthandle_merged: (a: number) => [number, number, number];
+export const psddocumenthandle_difference: (a: number, b: number) => [number, number, number];
+export const __wbg_psdfontlibrary_free: (a: number, b: number) => void;
+export const psdfontlibrary_new: () => number;
+export const psdfontlibrary_add: (a: number, b: number, c: number) => [number, number, number];
+export const psdfontlibrary_fonts: (a: number) => any;
+export const psdfontlibrary_setHyphenationDictionary: (a: number, b: number, c: number) => [number, number];
+export const __wbg_renderedimage_free: (a: number, b: number) => void;
+export const renderedimage_width: (a: number) => number;
+export const renderedimage_height: (a: number) => number;
+export const renderedimage_depth: (a: number) => number;
+export const renderedimage_rgba8: (a: number) => any;
+export const renderedimage_approximations: (a: number) => any;
+export const readPsd: (a: number, b: number) => [number, number, number];
+export const writePsd: (a: any, b: number, c: number) => [number, number, number, number];
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_export_2: WebAssembly.Table;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __externref_table_dealloc: (a: number) => void;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __wbindgen_start: () => void;
