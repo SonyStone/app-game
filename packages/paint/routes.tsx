@@ -109,16 +109,18 @@ export const restRoutes: Routes[] = [
     component: lazy(() => import('./offscreen-canvas-paint/offscreen-canvas-paint'))
   },
   {
-    path: '/ui-example',
-    name: 'Paint UI Example',
+    path: '/tile-cluster',
+    name: 'Paint · Tile cluster mockup',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./ui-example/ui-example'))
+    component: lazy(() =>
+      import('@app-game/paint/tile-cluster-mockup').then(({ TileClusterMockup }) => ({ default: TileClusterMockup }))
+    )
   },
   {
     path: '/trigonometry',
     name: 'Trigonometry Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./ui-example/trigonometry'))
+    component: lazy(() => import('./trigonometry'))
   },
   {
     path: '/tile-based-canvas',

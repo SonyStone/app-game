@@ -1,13 +1,16 @@
-/* A number field that fills with its value and drags sideways. */
+/*
+ * A number field that fills with its value and drags sideways. Hosts theme it with --scrub-width, --scrub-height,
+ * --scrub-radius, --scrub-track (the empty part), --scrub-fill (the filled part) and --scrub-focus (the typing outline).
+ */
 .scrub {
   position: relative;
   display: inline-flex;
   align-items: center;
-  width: 84px;
-  height: 30px;
+  width: var(--scrub-width, 84px);
+  height: var(--scrub-height, 30px);
   border: 1px solid var(--line, #dedede);
-  border-radius: 7px;
-  background: linear-gradient(to right, #d9ebf5 var(--fill), #fff var(--fill));
+  border-radius: var(--scrub-radius, 7px);
+  background: linear-gradient(to right, var(--scrub-fill, #d9ebf5) var(--fill), var(--scrub-track, #fff) var(--fill));
   cursor: ew-resize;
   touch-action: none;
   user-select: none;
@@ -34,9 +37,9 @@
   }
 
   &[data-editing='true'] {
-    background: #fff;
+    background: var(--scrub-track, #fff);
     cursor: text;
-    outline: 2px solid #419bcf;
+    outline: 2px solid var(--scrub-focus, #419bcf);
     outline-offset: -1px;
 
     input {
