@@ -1,0 +1,351 @@
+/* Layers as channel strips: 64 px strips, a long fader at the bottom of each, the console's buttons at the end. */
+.mixer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.silk {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 5px 1px;
+  font: 600 8.5px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--silk);
+  white-space: nowrap;
+}
+
+.keys {
+  font: 7.5px/1 var(--mono);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: #555;
+}
+
+.row {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  min-height: 0;
+}
+
+.strips {
+  position: relative;
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  overflow-x: auto;
+  scrollbar-width: none;
+  touch-action: none;
+}
+
+.strips::-webkit-scrollbar {
+  display: none;
+}
+
+.channel {
+  display: flex;
+  flex: 0 0 64px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0 4px;
+  border: 1px solid #000;
+  border-radius: 4px;
+  background: #171717;
+  box-shadow: inset 0 1px 0 #222;
+}
+
+.selected {
+  background: #222120;
+  box-shadow:
+    inset 0 2px 0 var(--lit),
+    0 0 0 1px #3b3832;
+}
+
+.blend {
+  position: relative;
+  display: flex;
+  height: 26px;
+  margin: 0 2px;
+  border: 1px solid #000;
+  border-radius: 3px;
+  background: var(--lcd);
+  overflow: hidden;
+}
+
+/* The stepper's halves are its arrows' targets, 29 px each across the whole small screen. */
+.blend button {
+  /* Ties with the gallery's button reset and wins by coming later. */
+  flex: 1;
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+  font: 12px/1 var(--mono);
+  color: #6d675b;
+  text-align: left;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.blend button:last-child {
+  text-align: right;
+}
+
+.blend button:active {
+  background: #1c1a16;
+}
+
+.blend span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 500 9.5px/1 var(--mono);
+  color: var(--lcd-ink);
+  text-shadow: var(--lcd-glow);
+  pointer-events: none;
+}
+
+.head {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 0 3px;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.thumb {
+  border: 1px solid #000;
+  border-radius: 2px;
+}
+
+.number {
+  position: absolute;
+  top: 2px;
+  left: 6px;
+  z-index: 1;
+  padding: 1px 2px;
+  border-radius: 2px;
+  background: rgb(0 0 0 / 0.65);
+  font: 7.5px/1 var(--mono);
+  color: #bdbdbd;
+}
+
+.name {
+  width: 100%;
+  overflow: hidden;
+  font: 600 9px/1.1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.03em;
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #a8a8a8;
+}
+
+.selected .name {
+  color: #f0e8d8;
+}
+
+.buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin: 0 2px;
+}
+
+button.small,
+button.lock {
+  height: 28px;
+  padding: 0;
+  border: 1px solid #000;
+  border-radius: 3px;
+  background: var(--pad);
+  box-shadow: inset 0 1px 0 #303030;
+  font: 700 10px/1 var(--condensed);
+  font-stretch: condensed;
+  color: #a5a5a5;
+  touch-action: none;
+  cursor: pointer;
+}
+
+button.lock {
+  display: grid;
+  place-items: center;
+  margin: 0 2px;
+}
+
+button.on {
+  background: var(--lit);
+  color: var(--lit-ink);
+  box-shadow:
+    0 0 8px var(--glow),
+    inset 0 0 0 1px var(--lit-edge);
+}
+
+@media (hover: hover) {
+  .small:not(.on):hover,
+  .lock:not(.on):hover,
+  .head:hover {
+    background: var(--pad-hover);
+  }
+
+  .head:hover {
+    border-radius: 3px;
+  }
+}
+
+.level {
+  font: 500 10px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--lcd-ink);
+  text-shadow: var(--lcd-glow);
+}
+
+/* The fader well: tick scale on the left, slot in the middle, the cap rides on --level (0–1). */
+.fader {
+  position: relative;
+  flex: 1;
+  min-height: 110px;
+  margin: 0 3px;
+  touch-action: none;
+  cursor: ns-resize;
+}
+
+.scale {
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: 5px;
+  width: 6px;
+  background: repeating-linear-gradient(to bottom, #4a4a4a 0 1px, transparent 1px 25%) top / 100% calc(100% + 1px);
+  opacity: 0.8;
+}
+
+.slot {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 50%;
+  width: 4px;
+  translate: -50% 0;
+  border-radius: 2px;
+  background:
+    linear-gradient(to top, var(--lit) 0 calc(var(--level) * 100%), transparent 0) bottom / 100% 100% no-repeat,
+    #050505;
+  box-shadow: 0 0 0 1px #000;
+  opacity: 0.9;
+}
+
+.slot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  background: rgb(0 0 0 / 0.55);
+}
+
+.cap {
+  position: absolute;
+  left: 50%;
+  top: calc(6px + (1 - var(--level)) * (100% - 32px));
+  width: 40px;
+  height: 20px;
+  translate: -50% 0;
+  border: 1px solid #000;
+  border-radius: 3px;
+  background: linear-gradient(to bottom, #3a3a3a, #2a2a2a 45%, #2a2a2a 55%, #343434);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.5);
+}
+
+.cap::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  height: 2px;
+  translate: 0 -50%;
+  background: #d8d0c0;
+}
+
+.cursor .cap,
+.selected .cap {
+  border-color: #000;
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.5),
+    0 0 0 1px #5a5448;
+}
+
+.cursor .cap::after {
+  background: var(--lit);
+  box-shadow: 0 0 6px var(--glow);
+}
+
+.tail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+button.tailButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #000;
+  border-radius: 3px;
+  background: var(--pad);
+  box-shadow: inset 0 1px 0 #303030;
+  color: #bdbdbd;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.tailButton span {
+  font: 600 8px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a8a8a;
+}
+
+@media (hover: hover) {
+  .tailButton:hover {
+    background: var(--pad-hover);
+  }
+}
+
+.tailButton:active {
+  background: #34322e;
+}
+
+.scrollbar {
+  position: relative;
+  height: 3px;
+  margin: 5px 46px 0 0;
+  border-radius: 2px;
+  background: #1c1c1c;
+}
+
+.scrollbar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  background: #5a5a5a;
+}

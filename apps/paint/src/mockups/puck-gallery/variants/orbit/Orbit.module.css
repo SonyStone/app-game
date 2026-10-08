@@ -1,0 +1,802 @@
+/*
+ * Orbit: Krita's Breeze Dark. Panels #31363b, deeper wells #232629, text #eff0f1, muted #7f8c8d, thin dark lines,
+ * and Krita blue only for what is active or selected. Everything is positioned from the disc's center: the root is
+ * a zero-size box there.
+ */
+.root {
+  --panel: #31363b;
+  --deep: #232629;
+  --edge: #16181a;
+  --line: #4d5359;
+  --text: #eff0f1;
+  --soft: #bdc3c7;
+  --muted: #7f8c8d;
+  --dim: #5b636a;
+  --blue: #3daee9;
+  --shadow: 0 3px 10px rgb(0 0 0 / 0.45);
+
+  position: absolute;
+  z-index: 20;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  color: var(--text);
+  font:
+    11px/1.2 'Noto Sans',
+    Inter,
+    system-ui,
+    -apple-system,
+    sans-serif;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    left 120ms ease-out,
+    top 120ms ease-out;
+
+  button {
+    font: inherit;
+    color: inherit;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+.stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  animation: open 110ms ease-out;
+}
+
+@keyframes open {
+  from {
+    opacity: 0;
+    scale: 0.94;
+  }
+}
+
+/* Navigation drags leave only the control in use, so the canvas shows. */
+.root [data-part] {
+  transition: opacity 90ms ease-out;
+}
+
+.root[data-nav='pan'] [data-part]:not([data-part='pan']),
+.root[data-nav='zoom'] [data-part]:not([data-part='zoom']),
+.root[data-nav='rotate'] [data-part]:not([data-part='rim']) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------- The SVG scene: disc, rim, settings arcs ---------- */
+
+.scene {
+  position: absolute;
+  left: -560px;
+  top: -380px;
+  width: 1120px;
+  height: 760px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.discBody {
+  fill: var(--panel);
+  stroke: var(--edge);
+  stroke-width: 1;
+  pointer-events: visiblePainted;
+  filter: drop-shadow(0 10px 26px rgb(0 0 0 / 0.5));
+}
+
+.groove {
+  fill: none;
+  stroke: #2b2f34;
+}
+
+.rimEdge {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1;
+}
+
+.rimBand {
+  fill: none;
+  stroke: var(--deep);
+}
+
+.rimTrack {
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 1;
+}
+
+.tick {
+  stroke: var(--dim);
+  stroke-width: 1;
+}
+
+.majorTick {
+  stroke: #9aa3a9;
+  stroke-width: 1.5;
+}
+
+.status {
+  fill: var(--muted);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  pointer-events: none;
+}
+
+.rimHit {
+  fill: none;
+  stroke: transparent;
+  pointer-events: stroke;
+  cursor: grab;
+}
+
+.rimNeedle {
+  stroke: var(--text);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.rimHandle {
+  fill: var(--text);
+  stroke: var(--edge);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.rimReadout {
+  fill: var(--soft);
+  font-size: 9.5px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.root:not([data-input='touch']) .rim:hover .rimHandle,
+.rotating .rimHandle {
+  fill: var(--blue);
+}
+
+.rotating .rimNeedle {
+  stroke: var(--blue);
+}
+
+.rotating .rimHit {
+  cursor: grabbing;
+}
+
+.gauge,
+.segments,
+.pager {
+  filter: drop-shadow(0 2px 5px rgb(0 0 0 / 0.45));
+}
+
+.band,
+.segmentBand,
+.labelBand {
+  fill: var(--deep);
+  stroke: var(--edge);
+  stroke-width: 1;
+  pointer-events: visiblePainted;
+}
+
+.band,
+.segmentBand {
+  cursor: pointer;
+}
+
+.root:not([data-input='touch']) .gauge:hover .band,
+.root:not([data-input='touch']) .segment:not(.on):hover .segmentBand {
+  fill: #2c3135;
+}
+
+.fill {
+  fill: var(--line);
+  pointer-events: none;
+}
+
+.dragging .fill {
+  fill: color-mix(in srgb, var(--blue) 45%, var(--deep));
+}
+
+.edge {
+  stroke: var(--text);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.dragging .edge {
+  stroke: var(--blue);
+}
+
+.arcText {
+  fill: var(--text);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  /* A thin dark halo keeps the text legible where the value's edge or fill runs under it. */
+  paint-order: stroke;
+  stroke: var(--deep);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.arcLabel {
+  fill: #a4adb3;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.segmentText {
+  fill: var(--soft);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.on .segmentBand {
+  fill: color-mix(in srgb, var(--blue) 40%, var(--deep));
+  stroke: var(--blue);
+}
+
+.on .segmentText {
+  fill: #fff;
+}
+
+.pager {
+  cursor: pointer;
+
+  circle {
+    fill: var(--panel);
+    stroke: var(--edge);
+    pointer-events: visiblePainted;
+  }
+
+  text {
+    fill: var(--text);
+    font-size: 9.5px;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+  }
+}
+
+.root:not([data-input='touch']) .pager:hover circle {
+  fill: #3b4248;
+}
+
+/* ---------- Color: hue ring, square, current/previous, recent ---------- */
+
+.core {
+  position: absolute;
+  left: -80px;
+  top: -80px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  cursor: crosshair;
+  touch-action: none;
+
+  /* The ring's outer and inner outlines. */
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  &::before {
+    inset: 0;
+    box-shadow: inset 0 0 0 1px var(--edge);
+  }
+
+  &::after {
+    inset: 16px;
+    box-shadow: 0 0 0 1px var(--edge);
+  }
+}
+
+.hueRing {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  mask: radial-gradient(circle, transparent 63.5px, #000 64.5px);
+}
+
+.square {
+  position: absolute;
+  z-index: 2;
+  left: 36px;
+  top: 36px;
+  width: 88px;
+  height: 88px;
+  box-shadow: 0 0 0 1px var(--edge);
+}
+
+.svMarker {
+  position: absolute;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  translate: -50% -50%;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #000c;
+  pointer-events: none;
+}
+
+.hueMarker {
+  position: absolute;
+  z-index: 3;
+  box-sizing: border-box;
+  left: 77px;
+  top: 70px;
+  width: 6px;
+  height: 20px;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px #000c;
+  pointer-events: none;
+}
+
+.split {
+  position: absolute;
+  display: flex;
+  width: 32px;
+  height: 32px;
+  translate: -50% -50%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px var(--edge),
+    0 0 0 2.5px var(--dim);
+  cursor: pointer;
+
+  span {
+    flex: 1;
+  }
+
+  span + span {
+    box-shadow: inset 1px 0 0 var(--edge);
+  }
+}
+
+.recent {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  translate: -50% -50%;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+
+  span {
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 1px var(--edge),
+      0 0 0 2px rgb(255 255 255 / 0.12);
+    transition: scale 80ms ease-out;
+  }
+}
+
+.root:not([data-input='touch']) .recent:hover span {
+  scale: 1.18;
+}
+
+.socket {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: var(--deep);
+  box-shadow: inset 0 0 0 1px var(--edge);
+  pointer-events: none;
+}
+
+.recent.current span {
+  box-shadow:
+    0 0 0 1.5px var(--edge),
+    0 0 0 3px var(--blue);
+}
+
+/* ---------- Brush presets ---------- */
+
+.slot {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  translate: -50% -50%;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  box-shadow:
+    0 0 0 1px var(--edge),
+    0 2px 6px rgb(0 0 0 / 0.35);
+  cursor: pointer;
+  transition: scale 80ms ease-out;
+}
+
+.root:not([data-input='touch']) .slot:hover {
+  box-shadow:
+    0 0 0 1px var(--edge),
+    0 0 0 2.5px #9aa3a9;
+}
+
+.slot.active {
+  box-shadow:
+    0 0 0 1px var(--edge),
+    0 0 0 3px var(--blue),
+    0 0 0 4px var(--edge);
+}
+
+.slot:active {
+  scale: 0.95;
+}
+
+.dab {
+  display: block;
+  width: 44px;
+  height: 44px;
+}
+
+/* ---------- Satellite orbs ---------- */
+
+.orb {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  translate: -50% -50%;
+  padding: 0;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  background: var(--panel);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.05),
+    var(--shadow);
+  cursor: pointer;
+  transition:
+    background 80ms ease-out,
+    opacity 90ms ease-out;
+}
+
+.root:not([data-input='touch']) .orb:hover {
+  background: #3b4248;
+}
+
+.orb.active {
+  background: color-mix(in srgb, var(--blue) 24%, var(--panel));
+  box-shadow:
+    inset 0 0 0 1.5px var(--blue),
+    var(--shadow);
+  color: #fff;
+}
+
+.orb.disabled {
+  color: var(--dim);
+}
+
+.orb:active {
+  scale: 0.94;
+}
+
+.badge {
+  position: absolute;
+  min-width: 13px;
+  height: 13px;
+  translate: -50% -50%;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: var(--deep);
+  color: var(--muted);
+  font-size: 8.5px;
+  line-height: 13px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.active .badge {
+  color: var(--blue);
+}
+
+.readout {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  translate: -50% 0;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--deep);
+  color: var(--text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Caption ---------- */
+
+.caption {
+  position: absolute;
+  z-index: 5;
+  translate: -50% -50%;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--deep);
+  color: var(--text);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.4);
+  pointer-events: none;
+
+  kbd {
+    margin-left: 6px;
+    color: var(--muted);
+    font: inherit;
+  }
+}
+
+/* ---------- Layers crescent ---------- */
+
+.crescent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.crescentShape {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+
+  path {
+    fill: var(--panel);
+    stroke: var(--edge);
+    stroke-width: 1;
+    stroke-linejoin: round;
+    pointer-events: visiblePainted;
+    filter: drop-shadow(0 8px 20px rgb(0 0 0 / 0.45));
+  }
+}
+
+.line {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 196px;
+  height: 30px;
+  pointer-events: auto;
+}
+
+.header {
+  gap: 0;
+}
+
+.headerTitle {
+  flex: 1;
+  padding-left: 6px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.layerButton {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--soft);
+  cursor: pointer;
+}
+
+.layerButton.disabled {
+  color: var(--dim);
+}
+
+.root:not([data-input='touch']) .layerButton:not(.disabled):hover,
+.root:not([data-input='touch']) .layerToggle:hover {
+  background: #3b4248;
+  color: var(--text);
+}
+
+.layer {
+  gap: 0;
+  border-radius: 6px;
+}
+
+.layer.active {
+  background: color-mix(in srgb, var(--blue) 22%, var(--panel));
+  box-shadow: inset 2px 0 0 var(--blue);
+}
+
+.layerToggle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--soft);
+  cursor: pointer;
+}
+
+.layerToggle.off {
+  color: var(--dim);
+}
+
+.layerPick {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.root:not([data-input='touch']) .layer:not(.active) .layerPick:hover {
+  background: #383e44;
+}
+
+.thumb {
+  flex: none;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--edge);
+}
+
+.layerText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  b,
+  small {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  b {
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  small {
+    color: var(--muted);
+    font-size: 9.5px;
+  }
+}
+
+.slider {
+  position: relative;
+  flex: 1;
+  height: 24px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--deep);
+  box-shadow: inset 0 0 0 1px var(--edge);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.sliderFill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--line);
+}
+
+.sliderText {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+  padding: 0 8px;
+  font-variant-numeric: tabular-nums;
+
+  span {
+    color: #a4adb3;
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+}
+
+.blendButton {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 6px 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--deep);
+  box-shadow: inset 0 0 0 1px var(--edge);
+  cursor: pointer;
+
+  span {
+    color: #a4adb3;
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  b {
+    flex: 1;
+    font-weight: 500;
+    text-align: left;
+  }
+}
+
+.blendButton.open {
+  box-shadow: inset 0 0 0 1px var(--blue);
+}
+
+.blendLine {
+  gap: 3px;
+}
+
+.blendMode {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  overflow: hidden;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--deep);
+  color: var(--soft);
+  font-size: 10px !important;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.root:not([data-input='touch']) .blendMode:not(.active):hover {
+  background: #2c3135;
+  color: var(--text);
+}
+
+.blendMode.active {
+  background: var(--blue);
+  color: #fff;
+}

@@ -1,0 +1,697 @@
+/*
+ * Blender's look: dark rounded buttons with a hairline outline and a shadow, Inter at 12 px, and Blender's selection
+ * blue only on what the pointer chooses. Item boxes take no presses: the catcher behind them reads directions, so the
+ * whole wedge is the target; widgets (fields, wheel, swatches) take their own presses.
+ */
+.root {
+  --blue: #4772b3;
+  --item: rgb(40 40 40 / 0.97);
+  --item-line: rgb(0 0 0 / 0.65);
+  --widget: #545454;
+  --widget-dark: #3a3a3a;
+  --text: #e6e6e6;
+  --muted: #a3a3a3;
+
+  font:
+    12px/1.2 Inter,
+    system-ui,
+    -apple-system,
+    sans-serif;
+  color: var(--text);
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+
+  button {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+.hidden {
+  visibility: hidden;
+}
+
+.catcher {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  touch-action: none;
+}
+
+.dragging {
+  cursor: grabbing;
+}
+
+.pie {
+  position: fixed;
+  width: 0;
+  height: 0;
+  z-index: 21;
+  pointer-events: none;
+  animation: pie-in 90ms ease-out;
+}
+
+@keyframes pie-in {
+  from {
+    opacity: 0;
+    scale: 0.92;
+  }
+}
+
+.ring {
+  position: absolute;
+  overflow: visible;
+}
+
+.ringTrack {
+  fill: rgb(24 24 24 / 0.85);
+  stroke: rgb(70 70 70 / 0.9);
+  stroke-width: 5;
+}
+
+.ringLit {
+  fill: none;
+  stroke: #dcdcdc;
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+/* The mark: Maya's marking-menu trail from the middle toward the pointer. */
+.mark {
+  stroke: rgb(255 255 255 / 0.55);
+  stroke-width: 2;
+  stroke-dasharray: 3 4;
+}
+
+.centerWidget {
+  position: absolute;
+  translate: -50% -50%;
+  pointer-events: auto;
+}
+
+.panHint {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.title {
+  position: absolute;
+  left: 0;
+  translate: -50% 0;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgb(24 24 24 / 0.75);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.item {
+  position: absolute;
+  display: grid;
+  min-width: 96px;
+  padding: 0 8px;
+  border: 1px solid var(--item-line);
+  border-radius: 6px;
+  background: var(--item);
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.45);
+  white-space: nowrap;
+  transition:
+    background 60ms,
+    scale 60ms;
+}
+
+.itemRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+}
+
+.label {
+  flex: 1;
+}
+
+.detail {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chevron {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.key {
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.07);
+  color: #8a8a8a;
+  font:
+    10px/14px Inter,
+    system-ui,
+    sans-serif;
+  text-align: center;
+}
+
+.lit {
+  background: var(--blue) !important;
+  color: #fff;
+  scale: 1.04;
+
+  .detail,
+  .chevron,
+  .key {
+    color: rgb(255 255 255 / 0.8);
+  }
+}
+
+/* The current tool, preset or value: Blender's pressed state. */
+.active {
+  background: #5a5a5a;
+}
+
+.disabled {
+  opacity: 0.45;
+}
+
+.flash {
+  animation: flash-a 260ms ease-out;
+}
+
+.flashAgain {
+  animation: flash-b 260ms ease-out;
+}
+
+@keyframes flash-a {
+  from {
+    background: #8fb0e0;
+  }
+}
+
+@keyframes flash-b {
+  from {
+    background: #8fb0e0;
+  }
+}
+
+.wide {
+  width: 150px;
+  padding-top: 4px;
+}
+
+.stroke {
+  margin: 0 -2px;
+}
+
+.swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
+}
+
+.dotBox {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+}
+
+.dot {
+  border-radius: 50%;
+  background: currentColor;
+}
+
+[data-touch] {
+  .itemRow {
+    height: 38px;
+    font-size: 13px;
+  }
+
+  .item {
+    min-width: 112px;
+  }
+}
+
+/* Extras: Blender's extra pie items, a block under the bottom item. */
+.extras {
+  position: absolute;
+  left: 0;
+  translate: -50% 0;
+  pointer-events: auto;
+}
+
+.viewRow {
+  display: flex;
+  gap: 1px;
+  padding: 3px;
+  border: 1px solid var(--item-line);
+  border-radius: 6px;
+  background: var(--item);
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.45);
+}
+
+.viewButton {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--widget-dark);
+  cursor: pointer;
+
+  &:hover {
+    background: #4a4a4a;
+  }
+
+  &.active {
+    background: var(--blue);
+  }
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 160px);
+  gap: 2px 4px;
+  padding: 4px;
+  border: 1px solid var(--item-line);
+  border-radius: 6px;
+  background: var(--item);
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.45);
+}
+
+/* Blender's slider: the fill shows where the value lies; drag sideways. */
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: linear-gradient(to right, var(--blue) var(--fill, 0%), var(--widget) var(--fill, 0%));
+  cursor: ew-resize;
+  touch-action: none;
+
+  span {
+    color: #e0e0e0;
+  }
+
+  b {
+    font-weight: 500;
+  }
+
+  small {
+    margin-left: 1px;
+    color: rgb(255 255 255 / 0.7);
+    font-weight: 400;
+  }
+
+  &:hover {
+    filter: brightness(1.1);
+  }
+}
+
+.choice {
+  background: var(--widget-dark);
+  cursor: pointer;
+
+  i {
+    color: var(--muted);
+    font-style: normal;
+  }
+}
+
+.toggle {
+  justify-content: flex-start;
+  background: transparent;
+  cursor: pointer;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.05);
+  }
+}
+
+.check {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  background: var(--widget);
+  color: #fff;
+  font:
+    700 11px/1 Inter,
+    sans-serif;
+}
+
+[data-touch] {
+  .field {
+    height: 34px;
+  }
+
+  .settingsGrid {
+    grid-template-columns: repeat(2, 176px);
+  }
+}
+
+/* Blender's menu, for dropdowns. */
+.menu {
+  position: fixed;
+  z-index: 28;
+  padding: 4px 0;
+  border: 1px solid #000;
+  border-radius: 6px;
+  background: rgb(24 24 24 / 0.98);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.6);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.menuRow {
+  height: 26px;
+  padding: 0 12px;
+  line-height: 26px;
+  white-space: nowrap;
+
+  &.active {
+    background: transparent;
+    font-weight: 600;
+  }
+
+  &.lit {
+    background: var(--blue) !important;
+    scale: none;
+  }
+}
+
+/* The color pie: a wheel in the middle, the palette below. */
+.wheelBox {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  translate: 10px 0;
+}
+
+.wheel {
+  position: relative;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle closest-side, #fff, rgb(255 255 255 / 0) 100%),
+    conic-gradient(from 90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  box-shadow:
+    0 0 0 1px #000,
+    0 4px 12px rgb(0 0 0 / 0.5);
+  touch-action: none;
+  cursor: crosshair;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: #000;
+    opacity: var(--darken, 0);
+    pointer-events: none;
+  }
+}
+
+.wheelThumb {
+  position: absolute;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  translate: -50% -50%;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #000;
+  pointer-events: none;
+}
+
+.valueBar {
+  position: relative;
+  width: 14px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px #000;
+  touch-action: none;
+  cursor: ns-resize;
+}
+
+.valueThumb {
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  height: 4px;
+  translate: 0 -50%;
+  border: 1px solid #000;
+  border-radius: 2px;
+  background: #fff;
+  pointer-events: none;
+}
+
+.colorExtras {
+  display: grid;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--item-line);
+  border-radius: 6px;
+  background: var(--item);
+  box-shadow: 0 3px 8px rgb(0 0 0 / 0.45);
+}
+
+.swapRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bigSwatch {
+  flex: 1;
+  height: 26px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2);
+}
+
+.textButton {
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--widget-dark);
+  cursor: pointer;
+
+  kbd {
+    margin-left: 4px;
+    color: var(--muted);
+    font: inherit;
+    font-size: 10px;
+  }
+
+  &:hover {
+    background: #4a4a4a;
+  }
+}
+
+.palette {
+  display: grid;
+  grid-template-columns: repeat(12, 24px);
+  gap: 2px;
+}
+
+.paletteSwatch {
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+  cursor: pointer;
+
+  &:hover {
+    box-shadow: inset 0 0 0 2px #fff;
+  }
+}
+
+[data-touch] {
+  .palette {
+    grid-template-columns: repeat(12, 30px);
+  }
+
+  .paletteSwatch {
+    height: 30px;
+  }
+}
+
+.valueCenter {
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 600;
+
+  small {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 400;
+  }
+}
+
+/* Navigation feedback, as Blender prints it in the header while an operator runs. */
+.hud {
+  position: fixed;
+  z-index: 22;
+  display: grid;
+  gap: 1px;
+  padding: 5px 9px;
+  border: 1px solid #000;
+  border-radius: 5px;
+  background: rgb(24 24 24 / 0.88);
+  pointer-events: none;
+
+  span {
+    color: var(--muted);
+    font-size: 10px;
+  }
+}
+
+/* Blender's popover with a UI list. */
+.panel {
+  position: fixed;
+  z-index: 24;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid #000;
+  border-radius: 7px;
+  background: rgb(36 36 36 / 0.98);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.6);
+  touch-action: none;
+  animation: pie-in 90ms ease-out;
+}
+
+.panelHeader {
+  padding: 2px 4px 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.panelRow {
+  display: grid;
+}
+
+.listBox {
+  display: grid;
+  grid-template-columns: 1fr 28px;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.list {
+  display: grid;
+  gap: 1px;
+  padding: 2px;
+  border-radius: 4px;
+  background: #1d1d1d;
+}
+
+.listRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #2b2b2b;
+  cursor: pointer;
+
+  &:hover {
+    background: #333;
+  }
+}
+
+.activeRow {
+  background: #334d80 !important;
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #cfcfcf;
+  cursor: pointer;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.08);
+  }
+}
+
+.thumb {
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px #000;
+}
+
+.layerName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layerMeta {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.sideButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sideButton {
+  display: grid;
+  place-items: center;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--widget-dark);
+  cursor: pointer;
+
+  &:hover {
+    background: #4a4a4a;
+  }
+}
+
+.sideGap {
+  height: 4px;
+}
+
+[data-touch] {
+  .iconButton {
+    width: 30px;
+    height: 30px;
+  }
+
+  .sideButton {
+    height: 32px;
+  }
+}
+
+.panel[data-touch] {
+  .listBox {
+    grid-template-columns: 1fr 34px;
+  }
+}

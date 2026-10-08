@@ -1,0 +1,275 @@
+/*
+ * Encoders and their screen. Columns match the pad grid below (4 × 58 px, 6 px apart), so knobs, screen cells, soft
+ * keys and pads line up as on a controller.
+ */
+.encoders {
+  display: grid;
+  gap: 3px;
+  width: var(--grid-width);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(4, var(--pad-size));
+  gap: var(--grid-gap);
+}
+
+.knobCell {
+  display: grid;
+  place-items: center;
+  height: 48px;
+  border-radius: 4px;
+  touch-action: none;
+  cursor: ns-resize;
+}
+
+@media (hover: hover) {
+  .knobCell:hover {
+    background: #181818;
+  }
+}
+
+.screen {
+  display: grid;
+  border: 1px solid #000;
+  border-radius: 3px;
+  background: var(--lcd);
+  box-shadow:
+    inset 0 0 0 1px #1a1916,
+    0 1px 0 #1f1f1f;
+  overflow: hidden;
+}
+
+.cells {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 31px;
+  min-width: 0;
+  border-left: 1px solid #1d1b17;
+  touch-action: none;
+  cursor: ns-resize;
+}
+
+.cell:first-child {
+  border-left: 0;
+}
+
+/* The lower row's labels face the lower knobs. */
+.below {
+  flex-direction: column-reverse;
+}
+
+.label {
+  max-width: 100%;
+  overflow: hidden;
+  font: 600 8.5px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: clip;
+  color: var(--lcd-dim);
+}
+
+.value {
+  font: 500 12px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--lcd-ink);
+  text-shadow: var(--lcd-glow);
+  white-space: nowrap;
+}
+
+/* Choice names, which are longer than numbers. */
+.word {
+  max-width: calc(100% - 4px);
+  overflow: hidden;
+  font-size: 9px;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+}
+
+.unit {
+  margin-left: 1px;
+  font-size: 8.5px;
+  color: var(--lcd-dim);
+  text-shadow: none;
+}
+
+.cursor {
+  background: #1a1813;
+  box-shadow: inset 0 -1px 0 #3d382d;
+}
+
+.below.cursor {
+  box-shadow: inset 0 1px 0 #3d382d;
+}
+
+.cursor .label {
+  color: var(--lcd-ink);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 16px;
+  padding: 0 7px;
+  border-block: 1px solid #1d1b17;
+  background: #0e0d0b;
+  font: 600 9px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #d9ccb2;
+  text-shadow: var(--lcd-glow);
+  white-space: nowrap;
+}
+
+.legend {
+  font: 8px/1 var(--mono);
+  letter-spacing: 0.05em;
+  color: #5d574c;
+  text-shadow: none;
+}
+
+/* Soft keys */
+
+.soft {
+  display: grid;
+  grid-template-columns: repeat(4, var(--pad-size));
+  gap: var(--grid-gap);
+  margin-top: 5px;
+}
+
+.toggle,
+.blank,
+.stepper,
+.choiceValue {
+  height: 32px;
+  border: 1px solid #000;
+  border-radius: 3px;
+  background: var(--pad);
+  box-shadow: inset 0 1px 0 #303030;
+  touch-action: none;
+}
+
+.blank {
+  background: #1a1a1a;
+  box-shadow: none;
+}
+
+button.toggle {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 2px;
+  font: 600 8.5px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #b8b8b8;
+  cursor: pointer;
+}
+
+.toggle kbd,
+.choiceValue kbd {
+  font: 7.5px/1 var(--mono);
+  color: #5f5f5f;
+}
+
+.toggle kbd {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+}
+
+.led {
+  width: 12px;
+  height: 3px;
+  border-radius: 1px;
+  background: #3a3a3a;
+}
+
+button.on {
+  color: #ece4d4;
+}
+
+.on .led {
+  background: var(--lit);
+  box-shadow: 0 0 6px var(--glow);
+}
+
+.choice {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: 28px 1fr 28px;
+  gap: 2px;
+}
+
+button.stepper {
+  font: 15px/1 var(--mono);
+  color: #9a9a9a;
+  cursor: pointer;
+}
+
+.choiceValue {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 2px;
+  background: var(--lcd);
+  box-shadow: inset 0 0 0 1px #1a1916;
+  cursor: pointer;
+}
+
+.choiceValue small {
+  display: flex;
+  gap: 4px;
+  font: 600 8px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--lcd-dim);
+}
+
+.choiceValue b {
+  max-width: 100%;
+  overflow: hidden;
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: -0.02em;
+  color: var(--lcd-ink);
+  text-shadow: var(--lcd-glow);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@media (hover: hover) {
+  .toggle:hover,
+  .stepper:hover {
+    background: var(--pad-hover);
+  }
+
+  .choiceValue:hover {
+    background: #121110;
+  }
+}
+
+.toggle:active,
+.stepper:active {
+  background: #34322e;
+}

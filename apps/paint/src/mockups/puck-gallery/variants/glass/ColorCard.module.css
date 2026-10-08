@@ -1,0 +1,126 @@
+/* Colors in Disc mode: a hue ring, a saturation-and-brightness disc, recent colors and a palette. */
+.card {
+  gap: 10px;
+
+  header {
+    margin-bottom: -2px;
+  }
+}
+
+.swatch {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.16),
+    0 1px 3px rgb(0 0 0 / 0.4);
+}
+
+.previous {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  transition: scale 100ms;
+
+  [data-hover] &:hover {
+    scale: 1.1;
+  }
+}
+
+.disc {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 184px;
+  height: 184px;
+  border-radius: 50%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  mask: radial-gradient(circle closest-side, transparent calc(100% - 22px), #000 calc(100% - 21.5px));
+  pointer-events: none;
+}
+
+.inner {
+  position: absolute;
+  inset: 28px;
+  overflow: hidden;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0.5px rgb(255 255 255 / 0.2);
+  pointer-events: none;
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.thumb {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 3px #fff,
+    0 1px 6px 3px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+
+.discThumb {
+  width: 20px;
+  height: 20px;
+}
+
+.row {
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+}
+
+.recent {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14);
+  transition: scale 100ms;
+
+  [data-hover] &:hover {
+    scale: 1.12;
+  }
+}
+
+.palette {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(8, 28px);
+  justify-content: space-between;
+  row-gap: 4px;
+}
+
+.chip {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+  transition: scale 100ms;
+
+  [data-hover] &:hover {
+    scale: 1.12;
+  }
+}
+
+.on {
+  box-shadow:
+    0 0 0 2px rgb(28 28 30),
+    0 0 0 4px #fff;
+}

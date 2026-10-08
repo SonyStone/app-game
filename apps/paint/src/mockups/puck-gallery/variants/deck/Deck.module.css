@@ -1,0 +1,1138 @@
+/*
+ * Deck: dark digital cards. Every card is drawn at its full size (336 px wide) and scaled down in the fans, so the
+ * face's type is set large; `--deck-scale` is the card's current scale, which keeps borders and shadows one screen
+ * pixel thick at any size.
+ */
+
+@property --deck-scale {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+.table {
+  --ease: cubic-bezier(0.2, 0.8, 0.25, 1);
+  --line: rgb(255 255 255 / 0.065);
+  --well: #1c1c1f;
+  --well-hover: #242428;
+  --text: #e8e8eb;
+  --text-dim: #9d9da4;
+  --text-faint: #6c6c73;
+
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  color: var(--text);
+  font:
+    12px/1.3 Inter,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+
+.hidden {
+  visibility: hidden;
+}
+
+/* The card */
+
+.card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 336px;
+  border-radius: 14px;
+  background: #262628;
+  box-shadow:
+    0 calc(2px / var(--deck-scale)) calc(5px / var(--deck-scale)) rgb(0 0 0 / 0.35),
+    0 calc(12px / var(--deck-scale)) calc(34px / var(--deck-scale)) rgb(0 0 0 / 0.45);
+  overflow: hidden;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  transition:
+    translate 140ms var(--ease),
+    rotate 140ms var(--ease),
+    scale 140ms var(--ease),
+    height 140ms var(--ease),
+    --deck-scale 140ms var(--ease),
+    opacity 110ms linear;
+
+  /* The light inner edge, above the content so that wells at the edge do not cover it. */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 calc(1px / var(--deck-scale)) rgb(255 255 255 / 0.11);
+    pointer-events: none;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+.raised {
+  background: #2a2a2d;
+  box-shadow:
+    0 calc(3px / var(--deck-scale)) calc(8px / var(--deck-scale)) rgb(0 0 0 / 0.4),
+    0 calc(18px / var(--deck-scale)) calc(44px / var(--deck-scale)) rgb(0 0 0 / 0.55);
+
+  &::after {
+    box-shadow: inset 0 0 0 calc(1.5px / var(--deck-scale)) color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+}
+
+.activeCard {
+  cursor: grab;
+}
+
+.dragging {
+  transition: none;
+  cursor: grabbing;
+}
+
+/* The corner index: the suit pip over the short label, as on playing cards */
+
+.index {
+  display: inline-grid;
+  flex: none;
+  justify-items: center;
+  gap: 2px;
+  line-height: 1;
+
+  b {
+    font-size: 8.5px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    margin-right: -0.12em;
+  }
+}
+
+.indexPip {
+  width: 15px;
+  height: 15px;
+}
+
+.turned {
+  rotate: 180deg;
+}
+
+/* The face, as the card lies in a fan: set at the full size, read at a third of it */
+
+.face {
+  position: absolute;
+  inset: 0;
+  transition: opacity 90ms linear;
+}
+
+.faceHidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.faceGlyph {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 290px;
+  height: 290px;
+  translate: -50% -50%;
+  color: var(--accent);
+  opacity: 0.075;
+}
+
+.index.faceCorner {
+  position: absolute;
+  top: 22px;
+  left: 22px;
+  gap: 8px;
+
+  .indexPip {
+    width: 60px;
+    height: 60px;
+  }
+
+  b {
+    font-size: 36px;
+  }
+
+  &.turned {
+    top: auto;
+    left: auto;
+    bottom: 22px;
+    right: 22px;
+  }
+}
+
+.faceKey {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  display: grid;
+  place-items: center;
+  min-width: 54px;
+  height: 54px;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 3px rgb(255 255 255 / 0.14);
+  color: #a3a3aa;
+  font:
+    600 30px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.faceStat {
+  position: absolute;
+  left: 34px;
+  right: 34px;
+  top: 150px;
+  bottom: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #f1f1f3;
+  text-align: center;
+}
+
+.faceBig {
+  font-size: 76px;
+  font-weight: 750;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.faceLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  color: #b9b9c0;
+  font-size: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.faceTitle {
+  position: absolute;
+  left: 26px;
+  bottom: 24px;
+  color: #f4f4f6;
+  font-size: 38px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+}
+
+.faceStroke {
+  align-self: stretch;
+}
+
+.faceSwatches {
+  position: relative;
+  width: 230px;
+  height: 160px;
+
+  i {
+    position: absolute;
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 6px #262628,
+      0 0 0 9px rgb(255 255 255 / 0.12);
+  }
+
+  i:first-child {
+    left: 6px;
+    top: 4px;
+    width: 116px;
+    height: 116px;
+  }
+
+  i:last-child {
+    right: 6px;
+    bottom: 0;
+    width: 146px;
+    height: 146px;
+  }
+}
+
+.faceThumb {
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 0.14);
+}
+
+/* The full card */
+
+.front {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  width: 336px;
+  padding: 0 12px;
+  animation: front-in 130ms ease-out;
+}
+
+@keyframes front-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.frontGlyph {
+  position: absolute;
+  right: -46px;
+  bottom: -40px;
+  width: 230px;
+  height: 230px;
+  color: var(--accent);
+  opacity: 0.05;
+  pointer-events: none;
+}
+
+.head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.summary {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.foot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.footHints {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.kbd {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.17);
+  color: #9b9ba3;
+  font:
+    600 9px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.body {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+
+.section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 3px 2px -3px;
+  color: #8f8f96;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--text-faint);
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+}
+
+/* Controls */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: #dcdce0;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 80ms linear;
+
+  &:hover {
+    background: #2b2b30;
+  }
+
+  &:active {
+    background: #34343a;
+  }
+}
+
+.on {
+  background: #323238;
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: #fff;
+
+  &:hover {
+    background: #36363d;
+  }
+}
+
+.disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+.chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 34px;
+  border-radius: 7px;
+  background: #1a1a1d;
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+  cursor: ew-resize;
+  touch-action: none;
+  font-variant-numeric: tabular-nums;
+
+  &:hover .chipStep {
+    opacity: 0.6;
+  }
+}
+
+.chipFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--fraction);
+  background: linear-gradient(#37373d, #313136);
+  box-shadow: 1px 0 0 color-mix(in srgb, var(--accent) 75%, transparent);
+}
+
+.chipStep {
+  position: relative;
+  flex: none;
+  width: 20px;
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+  opacity: 0.22;
+}
+
+.chipLabel {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #b6b6bc;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chipValue {
+  position: relative;
+  color: #f5f5f7;
+  font-weight: 650;
+
+  small {
+    margin-left: 1px;
+    color: #8c8c93;
+    font-size: 10px;
+    font-weight: 500;
+  }
+}
+
+.scrubbing {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: #1a1a1d;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.segmentedLabel {
+  padding: 0 6px 0 7px;
+  color: #8f8f96;
+  font-size: 11px;
+}
+
+.button.segment {
+  flex: 1 1 auto;
+  min-height: 30px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: #b4b4ba;
+  font-size: 11px;
+
+  &:hover {
+    background: #26262a;
+  }
+
+  &.on {
+    background: #3b3b42;
+    box-shadow: inset 0 -2px 0 var(--accent);
+    color: #fff;
+  }
+}
+
+.button.toggle {
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 0 8px 0 10px;
+  border-radius: 7px;
+  background: #1a1a1d;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.toggleLabel {
+  overflow: hidden;
+  color: #b6b6bc;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 26px;
+  height: 15px;
+  border-radius: 8px;
+  background: #3a3a40;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #8d8d94;
+    transition: translate 90ms var(--ease);
+  }
+}
+
+.toggle.on {
+  .toggleLabel {
+    color: #f0f0f2;
+  }
+
+  .switch {
+    background: var(--accent);
+  }
+
+  .switch::after {
+    translate: 11px 0;
+    background: #fff;
+  }
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.settingsColumn {
+  display: grid;
+  gap: 5px;
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+/* Navigate */
+
+.navigate {
+  position: relative;
+  display: grid;
+  gap: 7px;
+}
+
+.zones {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.zone {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  justify-items: center;
+  height: 128px;
+  box-sizing: border-box;
+  padding: 7px 4px 7px;
+  border-radius: 10px;
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: grab;
+  touch-action: none;
+
+  &:hover {
+    background: var(--well-hover);
+  }
+
+  &:active {
+    background: #2a2a2f;
+    cursor: grabbing;
+  }
+}
+
+.zoneLabel {
+  justify-self: start;
+  padding-left: 4px;
+  color: #a2a2a9;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.zonePicture {
+  display: grid;
+  place-items: center;
+  color: #d4d4d9;
+}
+
+.zoneReadout {
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.zoneHint {
+  color: var(--text-faint);
+  font-size: 9.5px;
+}
+
+.panMark {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+
+.ladder {
+  width: 40px;
+  height: 60px;
+  overflow: visible;
+}
+
+.ladderTick {
+  stroke: #5d5d64;
+  stroke-width: 1.2;
+}
+
+.ladderMain {
+  stroke: var(--accent);
+  stroke-width: 1.8;
+}
+
+.ladderMarker {
+  fill: #f2f2f4;
+}
+
+.dial {
+  width: 58px;
+  height: 58px;
+}
+
+.dialRing {
+  fill: none;
+  stroke: #4a4a51;
+  stroke-width: 1.3;
+}
+
+.dialNeedle {
+  line {
+    stroke: #f2f2f4;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+  }
+
+  circle {
+    fill: #f2f2f4;
+  }
+}
+
+.history {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  height: 52px;
+  box-sizing: border-box;
+  padding: 0 14px 6px;
+  border-radius: 10px;
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: ew-resize;
+  touch-action: none;
+
+  &:hover {
+    background: var(--well-hover);
+  }
+}
+
+.historyHalf {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  b {
+    font-size: 13px;
+    font-weight: 650;
+  }
+
+  small {
+    min-width: 14px;
+    color: #8d8d94;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.redo {
+  justify-self: end;
+}
+
+.historyScrub {
+  color: #5f5f66;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.history.scrubbing .historyScrub {
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.historyTicks {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 7px;
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+
+  i {
+    width: 5px;
+    height: 3px;
+    border-radius: 1px;
+    background: #3c3c43;
+  }
+
+  .tickDone {
+    background: #8c8c94;
+  }
+}
+
+.viewRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.3fr;
+  gap: 6px;
+}
+
+.button.viewButton {
+  min-height: 40px;
+  padding: 0 6px;
+  gap: 5px;
+  font-size: 12px;
+
+  .kbd {
+    margin-left: 1px;
+  }
+}
+
+/* Tools */
+
+.toolGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.button.toolButton {
+  position: relative;
+  flex-direction: column;
+  gap: 6px;
+  height: 72px;
+  padding: 8px 2px 6px;
+}
+
+.toolName {
+  color: #c4c4ca;
+  font-size: 10.5px;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.toolButton.on .toolName {
+  color: #fff;
+}
+
+.kbd.toolKey {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 13px;
+  height: 13px;
+  font-size: 8px;
+}
+
+/* Brush */
+
+.presets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.preset {
+  display: grid;
+  gap: 1px;
+  padding: 4px 7px 5px;
+  border-radius: 8px;
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: pointer;
+  touch-action: none;
+
+  &:hover {
+    background: var(--well-hover);
+  }
+
+  &.on {
+    background: #303036;
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+}
+
+.presetName {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  color: #d8d8dc;
+  font-size: 11px;
+
+  small {
+    color: #76767d;
+    font-size: 8.5px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+}
+
+/* Color */
+
+.picker {
+  display: grid;
+  grid-template-columns: 1fr 24px 56px;
+  gap: 8px;
+  height: 170px;
+}
+
+.field {
+  position: relative;
+  border-radius: 8px;
+  background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, var(--hue));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.fieldMarker {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+
+.hueStrip {
+  position: relative;
+  border-radius: 8px;
+  background: linear-gradient(red, #ff0 16.67%, lime 33.33%, cyan 50%, blue 66.67%, #f0f 83.33%, red);
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.hueMarker {
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  height: 6px;
+  margin-top: -5px;
+  border: 2px solid #fff;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.45);
+  pointer-events: none;
+}
+
+.swatchColumn {
+  display: grid;
+  grid-template-rows: 1fr 56px auto;
+  gap: 3px;
+}
+
+.current {
+  border-radius: 8px 8px 2px 2px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+
+.previous {
+  position: relative;
+  border-radius: 2px 2px 8px 8px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+  cursor: pointer;
+  touch-action: none;
+
+  .kbd {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    background: rgb(0 0 0 / 0.5);
+  }
+}
+
+.hex {
+  padding-top: 4px;
+  color: #9d9da4;
+  font:
+    600 10px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.recent {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+}
+
+.palette {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+
+.swatch {
+  height: 28px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  cursor: pointer;
+  touch-action: none;
+
+  &:hover {
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.55);
+  }
+
+  &.on {
+    box-shadow:
+      0 0 0 2px #262628,
+      0 0 0 3px #f2f2f4;
+  }
+}
+
+/* Layers */
+
+.layerList {
+  display: grid;
+  gap: 3px;
+  max-height: 312px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  touch-action: pan-y;
+}
+
+.layerRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 3px 0 6px;
+  border-radius: 8px;
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.04);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--well-hover);
+  }
+
+  &.on {
+    background: #303036;
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+}
+
+.dim .layerThumb,
+.dim .layerText {
+  opacity: 0.42;
+}
+
+.layerThumb {
+  border-radius: 4px;
+}
+
+.layerText {
+  display: grid;
+  min-width: 0;
+
+  b {
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  small {
+    color: #87878e;
+    font-size: 10px;
+  }
+}
+
+.button.layerIcon {
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #a6a6ad;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.06);
+  }
+
+  &.on {
+    color: var(--accent);
+  }
+}
+
+.layerActions {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+}
+
+/* The overlay during navigation drags */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.overlayRing {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.6);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 5;
+}
+
+.overlayLine {
+  stroke: rgb(255 255 255 / 0.75);
+  stroke-width: 1.5;
+}
+
+.overlayPivot {
+  fill: #fff;
+  stroke: rgb(0 0 0 / 0.5);
+}
+
+.readout {
+  position: absolute;
+  translate: 18px -130%;
+  padding: 4px 9px;
+  border-radius: 7px;
+  background: rgb(30 30 32 / 0.9);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.1),
+    0 4px 14px rgb(0 0 0 / 0.4);
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

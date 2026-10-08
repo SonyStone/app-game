@@ -1,0 +1,1053 @@
+/*
+ * Dial: flat, dark and concentric. Neutral greys, fine ticks, monospace numerals and one warm white for what is lit
+ * (the indicator, the current mode, the dial's target). Rules sit under `.root` so that they outrank the gallery's
+ * `button { font: inherit; color: inherit }`.
+ */
+.root,
+.mini {
+  --warm: #f4ead5;
+  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.root {
+  display: contents;
+
+  /* The dial */
+
+  .dial {
+    position: absolute;
+    z-index: 23;
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 1px #000,
+      0 14px 40px rgb(0 0 0 / 0.6);
+    cursor: grab;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    animation: dial-in 120ms ease-out;
+  }
+
+  .face {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+  }
+
+  .disc {
+    fill: #19191c;
+  }
+
+  .modeSector {
+    fill: #232327;
+  }
+
+  .modeRim {
+    fill: none;
+    stroke: var(--warm);
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .separators {
+    stroke: #29292e;
+    stroke-width: 1;
+  }
+
+  .trackBand {
+    fill: #111113;
+    stroke: #000;
+    stroke-width: 1;
+  }
+
+  .knob {
+    opacity: 0.5;
+
+    path {
+      stroke: #6a6a72;
+      stroke-width: 1;
+    }
+  }
+
+  .rail {
+    fill: none;
+    stroke: #27272c;
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+
+  .segment {
+    fill: none;
+    stroke-width: 5;
+  }
+
+  .level {
+    fill: none;
+    stroke: #b4ad9f;
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+
+  .ticks {
+    stroke: #55555d;
+    stroke-width: 1;
+  }
+
+  .majors {
+    stroke: #9a9aa2;
+    stroke-width: 1.25;
+  }
+
+  .indicatorGlow {
+    stroke: rgb(244 234 213 / 0.22);
+    stroke-width: 7;
+    stroke-linecap: round;
+  }
+
+  .indicator {
+    stroke: var(--warm);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+  }
+
+  .flash {
+    fill: var(--warm);
+    opacity: 0;
+    transform-box: fill-box;
+    transform-origin: center;
+    pointer-events: none;
+  }
+
+  .hubDisc {
+    fill: #1e1e22;
+    stroke: #000;
+    stroke-width: 1;
+  }
+
+  .mode {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    color: #8e8e96;
+    cursor: pointer;
+    transition: color 80ms;
+
+    &:hover {
+      color: #ececee;
+      background: rgb(255 255 255 / 0.05);
+    }
+
+    &.lit {
+      color: var(--warm);
+    }
+
+    &.off {
+      color: #3f3f45;
+      cursor: default;
+      background: none;
+    }
+  }
+
+  .modeKey {
+    fill: #5a5a62;
+    font: 7.5px var(--mono);
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+  }
+
+  .hub {
+    position: absolute;
+    left: 66px;
+    top: 66px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    width: 112px;
+    height: 112px;
+    padding-top: 2px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    text-align: center;
+    cursor: move;
+  }
+
+  .label,
+  .note {
+    max-width: 86px;
+    overflow: hidden;
+    font: 8.5px/11px var(--mono);
+    letter-spacing: 0.08em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .label {
+    color: #8e8e96;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .note {
+    min-height: 11px;
+    color: #66666e;
+    letter-spacing: 0.02em;
+  }
+
+  .preview {
+    display: grid;
+    place-items: center;
+    width: 92px;
+    height: 30px;
+  }
+
+  .value {
+    max-width: 98px;
+    overflow: hidden;
+    color: #efeff1;
+    font: 500 21px/24px var(--mono);
+    letter-spacing: -0.03em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    small {
+      margin-left: 2px;
+      color: #8e8e96;
+      font-size: 10px;
+      letter-spacing: 0;
+    }
+
+    &.long {
+      font-size: 12.5px;
+      letter-spacing: -0.01em;
+    }
+
+    /* Names such as "Current layer" wrap to two lines instead of being cut. */
+    &.longer {
+      display: -webkit-box;
+      font-size: 11px;
+      line-height: 12px;
+      white-space: normal;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+  }
+
+  .chevron {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    color: #5c5c64;
+    font: 11px/1 var(--mono);
+    pointer-events: none;
+  }
+
+  .chip {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid #000;
+    border-radius: 50%;
+    background: #26262b;
+    color: #c8c8cc;
+    cursor: pointer;
+    touch-action: none;
+
+    &:hover {
+      background: #313137;
+      color: #fff;
+    }
+
+    &:active {
+      background: var(--warm);
+      color: #141414;
+    }
+  }
+
+  .footprint {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    pointer-events: none;
+
+    circle {
+      fill: none;
+      stroke: rgb(244 234 213 / 0.3);
+      stroke-width: 1;
+      stroke-dasharray: 3 3;
+      transition: stroke 150ms;
+    }
+
+    &.vivid circle {
+      stroke: rgb(244 234 213 / 0.9);
+    }
+  }
+
+  /* While the dial zooms or turns the view, only its track and readout stay, so that the drawing shows. */
+  .ghostView,
+  .ghostPan {
+    box-shadow: none;
+    cursor: grabbing;
+
+    .disc,
+    .modeSector,
+    .modeRim,
+    .separators,
+    .mode,
+    .modeKey,
+    .chevron,
+    .chip,
+    .footprint {
+      opacity: 0;
+    }
+
+    .trackBand {
+      fill: none;
+      stroke: rgb(0 0 0 / 0.35);
+    }
+
+    .rail {
+      stroke: rgb(17 17 19 / 0.75);
+      stroke-width: 5;
+    }
+
+    .hubDisc {
+      fill: rgb(22 22 25 / 0.85);
+    }
+  }
+
+  .ghostPan {
+    .trackBand,
+    .knob,
+    .rail,
+    .segment,
+    .level,
+    .ticks,
+    .majors,
+    .indicator,
+    .indicatorGlow {
+      opacity: 0;
+    }
+  }
+
+  /* Hub previews */
+
+  .dot {
+    display: block;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.2);
+  }
+
+  .eraserDot {
+    box-shadow: inset 0 0 0 1px #c8c8cc;
+  }
+
+  .checker {
+    display: block;
+    width: 40px;
+    height: 18px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: repeating-conic-gradient(#3c3c42 0 25%, #222226 0 50%) 0 0 / 8px 8px;
+    box-shadow: 0 0 0 1px #000;
+
+    span {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  }
+
+  .swatches {
+    display: flex;
+    width: 50px;
+    height: 22px;
+    overflow: hidden;
+    border-radius: 5px;
+    box-shadow: 0 0 0 1px #000;
+
+    span {
+      flex: 1;
+    }
+
+    span:first-child {
+      flex: 0.6;
+    }
+  }
+
+  .stroke {
+    display: block;
+    width: 88px;
+  }
+
+  .thumb canvas {
+    border-radius: 3px;
+    box-shadow: 0 0 0 1px #000;
+  }
+
+  .history {
+    display: flex;
+    gap: 12px;
+    color: #c8c8cc;
+
+    .off {
+      color: #3f3f45;
+    }
+  }
+
+  .sheet {
+    display: block;
+    width: 24px;
+    height: 17px;
+    box-sizing: border-box;
+    border: 1.5px solid #b8b8be;
+    border-radius: 2px;
+  }
+
+  .oriented {
+    border-top: 3px solid var(--warm);
+  }
+
+  .bar {
+    display: block;
+    width: 60px;
+    height: 4px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: #2c2c31;
+
+    i {
+      display: block;
+      height: 100%;
+      background: var(--warm);
+    }
+  }
+
+  .options {
+    display: flex;
+    gap: 5px;
+
+    i {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #3e3e45;
+    }
+
+    i.on {
+      background: var(--warm);
+    }
+  }
+
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 24px;
+    height: 13px;
+    border-radius: 7px;
+    background: #303036;
+
+    i {
+      position: absolute;
+      left: 2px;
+      top: 2px;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #8e8e96;
+      transition: left 80ms;
+    }
+
+    &.on {
+      background: #4c483f;
+    }
+
+    &.on i {
+      left: 13px;
+      background: var(--warm);
+    }
+  }
+
+  /* The orbit */
+
+  .orbitBands {
+    position: absolute;
+    z-index: 20;
+    overflow: visible;
+    pointer-events: none;
+    animation: fade-in 120ms ease-out;
+  }
+
+  .bandEdge {
+    fill: none;
+    stroke: #000;
+    stroke-width: 42;
+    stroke-linecap: round;
+    filter: drop-shadow(0 8px 16px rgb(0 0 0 / 0.5));
+  }
+
+  .band {
+    fill: none;
+    stroke: #19191c;
+    stroke-width: 40;
+    stroke-linecap: round;
+    pointer-events: stroke;
+  }
+
+  .bead {
+    position: absolute;
+    z-index: 21;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #a2a2aa;
+    cursor: pointer;
+    touch-action: none;
+    animation: fade-in 120ms ease-out;
+
+    &:hover {
+      background: #2a2a2f;
+      color: #fff;
+    }
+
+    &.lit {
+      color: var(--warm);
+      box-shadow: inset 0 0 0 1.5px var(--warm);
+    }
+
+    &.off {
+      color: #45454b;
+    }
+  }
+
+  .beadKey {
+    position: absolute;
+    right: 1px;
+    bottom: 0;
+    color: #66666e;
+    font: 8px/1 var(--mono);
+  }
+
+  .swatch {
+    position: absolute;
+    z-index: 21;
+    padding: 0;
+    border: 1px solid #000;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+    cursor: pointer;
+    touch-action: none;
+    animation: fade-in 120ms ease-out;
+
+    &:hover {
+      box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.6);
+    }
+
+    &.lit {
+      outline: 1.5px solid var(--warm);
+      outline-offset: 2px;
+    }
+  }
+
+  /* The current color reads as the pair's front swatch. */
+  .current {
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.22),
+      0 0 0 3px #19191c,
+      0 0 0 4px #000;
+  }
+
+  /* The card */
+
+  .card {
+    position: absolute;
+    z-index: 21;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    box-sizing: border-box;
+    max-height: calc(100vh - 16px);
+    overflow: hidden;
+    padding: 4px 6px 6px;
+    border: 1px solid #000;
+    border-radius: 10px;
+    background: #1b1b1e;
+    box-shadow: 0 14px 36px rgb(0 0 0 / 0.55);
+    color: #e2e2e4;
+    touch-action: none;
+    animation: card-in 120ms ease-out;
+
+    button {
+      font:
+        12px/1.2 Inter,
+        system-ui,
+        sans-serif;
+      color: #c8c8cc;
+      touch-action: none;
+    }
+  }
+
+  .cardHeader {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 2px 0 6px;
+    color: #8e8e96;
+
+    b {
+      color: #e6e6e8;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    > span {
+      margin-left: auto;
+      min-width: 0;
+      overflow: hidden;
+      color: #8e8e96;
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .mono {
+    font-family: var(--mono);
+  }
+
+  .row {
+    position: relative;
+    display: grid;
+    grid-template-columns: 26px 1fr auto;
+    align-items: center;
+    height: 28px;
+    padding: 0 8px 0 6px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+
+    > small {
+      color: #6a6a72;
+      font: 9px/1 var(--mono);
+    }
+
+    &:hover {
+      background: #242428;
+    }
+
+    &.lit {
+      background: #27272c;
+      box-shadow: inset 2px 0 0 var(--warm);
+    }
+  }
+
+  .rowLabel {
+    overflow: hidden;
+    color: #c8c8cc;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rowValue {
+    color: #ececee;
+    font: 11.5px/1 var(--mono);
+
+    small {
+      margin-left: 1px;
+      color: #7e7e86;
+      font-size: 9.5px;
+    }
+  }
+
+  .rowLevel {
+    position: absolute;
+    left: 32px;
+    right: 8px;
+    bottom: 3px;
+    height: 2px;
+    overflow: hidden;
+    border-radius: 1px;
+    background: #242428;
+
+    i {
+      display: block;
+      height: 100%;
+      background: #4a4a52;
+    }
+
+    .lit & i {
+      background: var(--warm);
+    }
+  }
+
+  .field {
+    position: relative;
+    height: 112px;
+    margin-top: 2px;
+    border: 1px solid #000;
+    border-radius: 6px;
+    cursor: crosshair;
+    touch-action: none;
+
+    i {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      margin: -7px 0 0 -7px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 0 0 1px #000;
+      pointer-events: none;
+    }
+  }
+
+  .hueStrip {
+    position: relative;
+    height: 14px;
+    margin-top: 5px;
+    border: 1px solid #000;
+    border-radius: 7px;
+    background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+    cursor: ew-resize;
+    touch-action: none;
+
+    i {
+      position: absolute;
+      top: -3px;
+      bottom: -3px;
+      width: 4px;
+      margin-left: -3px;
+      border: 1px solid #000;
+      border-radius: 2px;
+      background: #fff;
+      pointer-events: none;
+    }
+  }
+
+  .segmented {
+    display: grid;
+    grid-auto-columns: 1fr;
+    grid-auto-flow: column;
+    gap: 2px;
+    margin-top: 5px;
+    padding: 2px;
+    border-radius: 7px;
+    background: #121214;
+
+    button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      min-width: 0;
+      height: 28px;
+      padding: 0 4px;
+      overflow: hidden;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      font: 11px/1 var(--mono);
+      white-space: nowrap;
+      cursor: pointer;
+
+      small {
+        color: #6a6a72;
+        font-size: 9px;
+      }
+
+      &:hover {
+        background: #242428;
+      }
+
+      &.lit {
+        background: #2c2c31;
+        color: var(--warm);
+        box-shadow: inset 0 0 0 1px rgb(244 234 213 / 0.35);
+      }
+    }
+  }
+
+  .presets {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px;
+  }
+
+  .preset {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    height: 44px;
+    padding: 4px 6px 1px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 6px;
+    background: #222226;
+    text-align: left;
+    cursor: pointer;
+
+    span {
+      overflow: hidden;
+      font-size: 10.5px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &:hover {
+      background: #2a2a2f;
+    }
+
+    &.lit {
+      background: #2c2c31;
+      box-shadow: inset 0 0 0 1px var(--warm);
+
+      span {
+        color: var(--warm);
+      }
+    }
+  }
+
+  .actions {
+    display: flex;
+    gap: 1px;
+  }
+
+  .iconButton {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    cursor: pointer;
+
+    &:hover {
+      background: #2a2a2f;
+      color: #fff;
+    }
+
+    &.off {
+      color: #55555c;
+    }
+  }
+
+  .layerRow {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    align-items: center;
+    gap: 2px;
+    height: 34px;
+    padding: 0 2px;
+    border-radius: 6px;
+
+    &.lit {
+      background: #27272c;
+      box-shadow: inset 2px 0 0 var(--warm);
+    }
+  }
+
+  .layerPick {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 32px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+
+    canvas {
+      flex: none;
+      border-radius: 3px;
+      box-shadow: 0 0 0 1px #000;
+    }
+
+    span {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+    }
+
+    b {
+      overflow: hidden;
+      color: #e2e2e4;
+      font-size: 11.5px;
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    small {
+      overflow: hidden;
+      color: #7a7a82;
+      font-size: 9.5px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &:hover {
+      background: #2a2a2f;
+    }
+  }
+
+  .stops {
+    display: grid;
+    grid-auto-columns: 1fr;
+    grid-auto-flow: column;
+    gap: 2px;
+    margin-top: 3px;
+
+    button {
+      display: grid;
+      place-items: center;
+      height: 30px;
+      padding: 0;
+      border: 0;
+      border-radius: 5px;
+      background: #222226;
+      font: 11px/1 var(--mono);
+      cursor: pointer;
+
+      &:hover {
+        background: #2a2a2f;
+      }
+
+      &.lit {
+        color: var(--warm);
+        box-shadow: inset 0 0 0 1px rgb(244 234 213 / 0.4);
+      }
+    }
+  }
+}
+
+.hidden {
+  visibility: hidden;
+}
+
+/* The mini-dial */
+
+.mini {
+  position: absolute;
+  z-index: 23;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px #000,
+    0 6px 18px rgb(0 0 0 / 0.55);
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  animation: dial-in 120ms ease-out;
+
+  svg {
+    position: absolute;
+    inset: 0;
+  }
+
+  &:hover .miniDisc {
+    fill: #222226;
+  }
+}
+
+.miniDisc {
+  fill: #19191c;
+}
+
+.miniKnob path {
+  stroke: #4a4a52;
+  stroke-width: 1;
+}
+
+.miniRail {
+  fill: none;
+  stroke: #2a2a30;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.miniLevel {
+  fill: none;
+  stroke: #b4ad9f;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.miniIndicator {
+  stroke: var(--warm);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.miniIcon {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  display: grid;
+  translate: -50% 0;
+  color: #c8c8cc;
+  pointer-events: none;
+}
+
+.miniValue {
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  top: 29px;
+  overflow: hidden;
+  color: #e6e6e8;
+  font: 9px/11px var(--mono);
+  letter-spacing: -0.02em;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+
+  small {
+    color: #8e8e96;
+    font-size: 7.5px;
+  }
+}
+
+@keyframes dial-in {
+  from {
+    opacity: 0;
+    scale: 0.94;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}

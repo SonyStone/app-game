@@ -1,0 +1,280 @@
+/*
+ * The Hive: dark neutral hexagons with 1.5 px seams (each cell's stroke in the seam colour covers half a seam on
+ * either side), white outlines for what is on, colour only in the colour group.
+ */
+.hive {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+
+.hidden {
+  visibility: hidden;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  animation: bloom 120ms ease-out;
+}
+
+@keyframes bloom {
+  from {
+    opacity: 0;
+    scale: 0.94;
+  }
+}
+
+.dimmed {
+  opacity: 0.32;
+  transition: opacity 100ms;
+}
+
+/* Elements that take presses; everything else lets them through to the drawing. */
+.live {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: default;
+}
+
+.halo {
+  opacity: 0.6;
+  fill: #000;
+}
+
+.cell {
+  stroke: #121212;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  transition: fill 70ms;
+}
+
+.socket {
+  fill: #171717;
+  stroke: #121212;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.away {
+  opacity: 0;
+  transition: opacity 90ms;
+}
+
+.content {
+  pointer-events: none;
+}
+
+.icon {
+  color: #d9d9d9;
+}
+
+.dim {
+  opacity: 0.3;
+}
+
+.faint {
+  opacity: 0.45;
+}
+
+.key {
+  fill: #7d7d7d;
+  font-size: 8px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.label {
+  fill: #9a9a9a;
+  font-size: 9px;
+  font-weight: 500;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  letter-spacing: 0.02em;
+}
+
+.value {
+  fill: #f0f0f0;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+.off {
+  fill: #8a8a8a;
+  font-weight: 500;
+}
+
+.unit {
+  fill: #9a9a9a;
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.option {
+  fill: #e6e6e6;
+  font-size: 9.5px;
+  font-weight: 500;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.tiny {
+  fill: #b0b0b0;
+  font-size: 8px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+.puckValue {
+  fill: #e6e6e6;
+  font-size: 10px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+.dot {
+  fill: #e6e6e6;
+}
+
+.gauge {
+  fill: #363636;
+}
+
+.level {
+  stroke: #5c5c5c;
+  stroke-width: 1;
+}
+
+/* Outlines sit above the canvases: on cells, the hovered colour, the keyboard focus. */
+.outline {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.hoverOutline {
+  fill: none;
+  stroke: #ffffffb0;
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.focusRing {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+  stroke-linejoin: round;
+}
+
+.badge {
+  color: #fff;
+}
+
+.sizeRing {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1;
+}
+
+.sizeRingShadow {
+  fill: none;
+  stroke: #000a;
+  stroke-width: 3;
+}
+
+/* Canvases (layer thumbnails, stroke samples), clipped to their hexagon. */
+.canvasCell {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  transform-origin: 50% 50%;
+  transition: opacity 90ms;
+}
+
+.stroke {
+  width: 40px;
+}
+
+.layerHidden {
+  opacity: 0.35;
+}
+
+.caption {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -100%;
+  padding: 3px 7px;
+  border: 1px solid #000;
+  border-radius: 4px;
+  background: #161616ee;
+  color: #e8e8e8;
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 8px #0008;
+
+  small {
+    margin-left: 6px;
+    color: #8f8f8f;
+    font-size: 10px;
+  }
+}
+
+/* The colour wheel's plate: a flat-top hexagon around the app's hue triangle, rimmed like the cells. */
+.wheel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 272px;
+  height: 236px;
+  margin-top: 18px;
+  padding: 2px;
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+  background: #000;
+  pointer-events: auto;
+  touch-action: none;
+  animation: bloom 120ms ease-out;
+}
+
+.wheelPlate {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+  background: #1d1d1d;
+
+  > * {
+    width: 196px;
+    margin: 0;
+  }
+}

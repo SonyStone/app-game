@@ -1,0 +1,404 @@
+/*
+ * The Pads gear: a matte near-black controller drawn flat. Pads light up warm white; screens are dark LCDs with a
+ * faint warm glow; the only color is on the color pads. Section grooves are a black line beside a lighter one.
+ */
+.device {
+  --pad-size: 58px;
+  --grid-gap: 6px;
+  --grid-width: calc(var(--pad-size) * 4 + var(--grid-gap) * 3);
+  --body: #121212;
+  --pad: #262626;
+  --pad-hover: #2f2f2f;
+  --silk: #7a7a7a;
+  --ink: #d4d4d4;
+  --lit: #f5ead6;
+  --lit-edge: #fff9ee;
+  --lit-ink: #18150f;
+  --glow: rgb(255 228 186 / 0.42);
+  --lcd: #0a0a09;
+  --lcd-ink: #f0e2c6;
+  --lcd-dim: #857c6b;
+  --lcd-glow: 0 0 6px rgb(255 210 140 / 0.35);
+  --groove: #1f1f1f;
+  --condensed: 'Avenir Next Condensed', 'Roboto Condensed', sans-serif-condensed, 'Arial Narrow', system-ui, sans-serif;
+  --mono: 'SF Mono', ui-monospace, Menlo, 'Roboto Mono', 'Droid Sans Mono', monospace;
+
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: auto auto auto;
+  grid-template-areas:
+    'head head head'
+    'color center mixer'
+    'bank bank bank';
+  border: 1px solid #000;
+  border-radius: 6px;
+  background: var(--body);
+  box-shadow:
+    inset 0 1px 0 #222,
+    0 18px 50px rgb(0 0 0 / 0.6),
+    0 2px 8px rgb(0 0 0 / 0.4);
+  color: var(--ink);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  animation: appear 90ms ease-out;
+
+  /*
+   * The gallery's ".gallery button { font: inherit; color: inherit }" ties with "button.x" selectors, which come later,
+   * so button rules here and in the sibling modules are written as "button.x" to win.
+   */
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  kbd {
+    font-family: var(--mono);
+  }
+}
+
+.device,
+.device *,
+.device *::before,
+.device *::after {
+  box-sizing: border-box;
+}
+
+.device[data-hand='right'] {
+  grid-template-areas:
+    'head head head'
+    'mixer center color'
+    'bank bank bank';
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}
+
+/* While a pad navigates or scrubs, only the held pad stays: the drawing shows through. */
+.moving {
+  visibility: hidden;
+}
+
+.moving .held {
+  visibility: visible;
+}
+
+.hidden,
+.hidden * {
+  visibility: hidden !important;
+}
+
+/* Header */
+
+.head {
+  grid-area: head;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 6px 0 14px;
+  box-shadow:
+    inset 0 -1px 0 #000,
+    inset 0 -2px 0 var(--groove);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: 700 12px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: #a3a3a3;
+}
+
+.brand small {
+  font: 8px/1 var(--mono);
+  letter-spacing: 0.08em;
+  color: #575757;
+}
+
+.mode {
+  margin-left: auto;
+  padding: 3px 6px;
+  border: 1px solid #000;
+  border-radius: 2px;
+  background: var(--lcd);
+  font: 8px/1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lcd-dim);
+}
+
+button.latch,
+button.close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  border: 1px solid #000;
+  border-radius: 3px;
+  background: var(--pad);
+  box-shadow: inset 0 1px 0 #303030;
+  touch-action: none;
+  cursor: pointer;
+}
+
+button.latch {
+  padding: 0 9px;
+  font: 600 9px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #a8a8a8;
+}
+
+.latch i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3a3a3a;
+}
+
+.latch kbd {
+  font-size: 7.5px;
+  color: #5f5f5f;
+}
+
+button.latch.on {
+  color: #ece4d4;
+}
+
+.latch.on i {
+  background: var(--lit);
+  box-shadow: 0 0 6px var(--glow);
+}
+
+button.close {
+  width: 28px;
+  padding: 0;
+  color: #9a9a9a;
+}
+
+@media (hover: hover) {
+  .latch:hover,
+  .close:hover {
+    background: var(--pad-hover);
+  }
+}
+
+/* Sections */
+
+.colorArea,
+.center,
+.mixerArea,
+.bankArea {
+  padding: 12px;
+}
+
+.colorArea {
+  grid-area: color;
+  display: flex;
+}
+
+.center {
+  grid-area: center;
+  box-shadow:
+    inset 1px 0 0 #000,
+    inset 2px 0 0 var(--groove),
+    inset -1px 0 0 #000,
+    inset -2px 0 0 var(--groove);
+  padding-inline: 14px;
+}
+
+.mixerArea {
+  grid-area: mixer;
+  display: flex;
+  flex-direction: column;
+  /* Five 64 px channels, their gaps, and the end buttons. */
+  width: calc(5 * 64px + 4 * 4px + 6px + 40px + 24px);
+  min-width: 0;
+}
+
+.mixerArea > * {
+  flex: 1;
+}
+
+.bankArea {
+  grid-area: bank;
+  box-shadow:
+    inset 0 1px 0 #000,
+    inset 0 2px 0 var(--groove);
+}
+
+@media (max-width: 979px) {
+  .device {
+    grid-template-columns: auto auto;
+    grid-template-areas:
+      'head head'
+      'color center'
+      'mixer mixer'
+      'bank bank';
+  }
+
+  .device[data-hand='right'] {
+    grid-template-areas:
+      'head head'
+      'center color'
+      'mixer mixer'
+      'bank bank';
+  }
+
+  .center {
+    box-shadow:
+      inset 1px 0 0 #000,
+      inset 2px 0 0 var(--groove);
+  }
+
+  .device[data-hand='right'] .center {
+    box-shadow:
+      inset -1px 0 0 #000,
+      inset -2px 0 0 var(--groove);
+  }
+
+  .mixerArea {
+    width: auto;
+    height: 330px;
+    box-shadow:
+      inset 0 1px 0 #000,
+      inset 0 2px 0 var(--groove);
+  }
+}
+
+/* Pads */
+
+.pads {
+  display: grid;
+  grid-template-columns: repeat(4, var(--pad-size));
+  grid-auto-rows: var(--pad-size);
+  gap: var(--grid-gap);
+  margin-top: 12px;
+}
+
+button.pad {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 0 0;
+  border: 1px solid #000;
+  border-radius: 4px;
+  background: var(--pad);
+  box-shadow: inset 0 1px 0 #323232;
+  color: #c6c6c6;
+  touch-action: none;
+  cursor: pointer;
+  transition:
+    background-color 70ms,
+    color 70ms,
+    box-shadow 70ms,
+    scale 70ms;
+}
+
+.padKey,
+.padReadout {
+  position: absolute;
+  top: 4px;
+  font: 8px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.padKey {
+  left: 5px;
+  color: #626262;
+}
+
+.padReadout {
+  right: 5px;
+  color: #a39983;
+}
+
+.padLabel {
+  font: 600 8.5px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8e8e8e;
+}
+
+@media (hover: hover) {
+  .pad:not(.lit):hover {
+    background: var(--pad-hover);
+    color: #e2e2e2;
+  }
+}
+
+button.lit {
+  background: radial-gradient(circle at 50% 42%, #fffbf3, #efe3cc 72%);
+  color: var(--lit-ink);
+  box-shadow:
+    0 0 16px var(--glow),
+    inset 0 0 0 1px var(--lit-edge);
+}
+
+.lit .padKey,
+.lit .padLabel,
+.lit .padReadout {
+  color: rgb(24 21 15 / 0.62);
+}
+
+.pressed {
+  scale: 0.97;
+}
+
+button.dim {
+  color: #505050;
+}
+
+.dim .padLabel {
+  color: #4c4c4c;
+}
+
+/* The point Zoom and Rotate turn around, while they move. */
+.pivot {
+  position: absolute;
+  z-index: 21;
+  width: 26px;
+  height: 26px;
+  translate: -50% -50%;
+  border: 1.5px solid #f5ead6;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px #000,
+    inset 0 0 0 1px #000;
+  pointer-events: none;
+}
+
+.pivot::before,
+.pivot::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: #f5ead6;
+  box-shadow: 0 0 0 1px #000;
+  translate: -50% -50%;
+}
+
+.pivot::before {
+  width: 8px;
+  height: 1.5px;
+}
+
+.pivot::after {
+  width: 1.5px;
+  height: 8px;
+}

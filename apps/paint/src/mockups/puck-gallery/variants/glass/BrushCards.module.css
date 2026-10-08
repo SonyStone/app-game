@@ -1,0 +1,104 @@
+/* The Brush Library and the Brush Studio. */
+.columns {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-height: 0;
+}
+
+.sets {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+  width: 86px;
+}
+
+.set {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 8px 0 10px;
+  border-radius: 10px;
+  color: var(--secondary) !important;
+  font-size: 13px !important;
+  transition: background 100ms;
+
+  [data-hover] &:hover {
+    background: var(--raised);
+  }
+
+  &.on {
+    background: rgb(255 255 255 / 0.12);
+    color: var(--label) !important;
+    font-weight: 600 !important;
+  }
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+}
+
+.brushes {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden auto;
+  scrollbar-width: none;
+}
+
+.brush {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 1px;
+  height: 43px;
+  padding: 4px 8px 0 10px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.04);
+  transition: background 100ms;
+
+  [data-hover] &:hover {
+    background: var(--raised-hover);
+  }
+
+  &.on,
+  [data-hover] &.on:hover {
+    background: var(--blue);
+  }
+}
+
+.brushName {
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.studio {
+  height: auto;
+}
+
+.toolIcon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.08);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow: hidden auto;
+  scrollbar-width: none;
+}
