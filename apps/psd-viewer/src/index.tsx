@@ -1,0 +1,14 @@
+import { render } from '@solidjs/web';
+import 'uno.css';
+import reset from '../../../packages/styles/reset.module.css';
+import { App } from './App';
+
+const root = document.getElementById('root');
+if (!root) {
+  throw new Error('PSD Viewer root element is missing.');
+}
+
+render(() => <App />, root);
+
+// Scope the utility baseline to this standalone document.
+document.body.classList.add(reset.root, 'app-utilities');

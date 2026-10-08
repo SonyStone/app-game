@@ -1,0 +1,34 @@
+{
+  "name": "@app-game/psd-viewer",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./routes": "./src/routes.tsx"
+  },
+  "scripts": {
+    "dev": "vite --port 3070",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --port 4070",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/psd": "workspace:*",
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/resize-observer": "catalog:",
+    "@solidjs/web": "catalog:",
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "@playwright/test": "catalog:",
+    "@unocss/vite": "catalog:",
+    "jsdom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vitest": "catalog:"
+  }
+}

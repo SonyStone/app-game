@@ -1,0 +1,110 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid #1d1d1d;
+  background: #2c2c2c;
+  font-size: 11px;
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+
+    span {
+      color: #9c9c9c;
+    }
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #cfcfcf;
+  }
+}
+
+.fonts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.available {
+  color: #8fc98f;
+}
+
+.missing {
+  color: #e0a050;
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+
+  button {
+    border: 1px solid #4c4c4c;
+    background: #363636;
+    color: #dedede;
+    padding: 2px 8px;
+    font-size: 11px;
+    border-radius: 2px;
+
+    &:hover:not(:disabled) {
+      background: #464646;
+    }
+  }
+}
+
+.refusals {
+  margin: 0;
+  padding: 4px 8px 4px 20px;
+  border-left: 2px solid #c98a1f;
+  background: #3a3020;
+  color: #f0d7a4;
+  overflow-wrap: anywhere;
+}
+
+.support {
+  padding: 0 10px 12px;
+  font-size: 11px;
+
+  h3 {
+    margin: 0 0 4px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #3a3a3a;
+    font-size: 11px;
+    font-weight: 600;
+    color: #e2e2e2;
+  }
+
+  p {
+    margin: 0 0 3px;
+    overflow-wrap: anywhere;
+  }
+
+  &[data-text-support='refused'] p:first-of-type {
+    color: #f0d7a4;
+  }
+}

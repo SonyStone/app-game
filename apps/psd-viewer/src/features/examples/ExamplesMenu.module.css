@@ -1,0 +1,74 @@
+.dialog {
+  width: min(520px, calc(100vw - 48px));
+  padding: 0;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  background: #2b2b2b;
+  color: #ddd;
+  box-shadow: 0 8px 32px #000a;
+
+  &::backdrop {
+    background: #000a;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid #1d1d1d;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  header button {
+    border: 0;
+    background: none;
+    color: #ccc;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  ul {
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+  }
+}
+
+.example {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  text-align: left;
+
+  strong {
+    font-size: 12px;
+  }
+
+  span {
+    font-size: 11px;
+    color: #bbb;
+  }
+
+  small {
+    font-size: 10px;
+    color: #888;
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: #3a85b7;
+    background: #333;
+  }
+}

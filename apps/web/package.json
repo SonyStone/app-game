@@ -31,6 +31,7 @@
     "@app-game/piecs-examles": "workspace:*",
     "@app-game/pixijs-examples": "workspace:*",
     "@app-game/pixijs-research": "workspace:*",
+    "@app-game/psd-viewer": "workspace:*",
     "@app-game/solid-dnd-playground": "workspace:*",
     "@app-game/solid-svg-editor": "workspace:*",
     "@app-game/solid-utils": "workspace:*",

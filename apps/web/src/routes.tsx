@@ -12,6 +12,7 @@ import { oglRoutes } from '@app-game/ogl-examples/routes';
 import { paintRoutes } from '@app-game/paint-examples/routes';
 import { phaserRoutes } from '@app-game/phaser-examples/routes';
 import { pixijsRoutes } from '@app-game/pixijs-examples/routes';
+import { psdViewerRoutes } from '@app-game/psd-viewer/routes';
 import { routes as solidDndPlaygroundRoutes } from '@app-game/solid-dnd-playground/routes';
 import { routes as solidSvgEditorRoutes } from '@app-game/solid-svg-editor/routes';
 import { solidVirtualRoutes } from '@app-game/solid-virtual/routes';
@@ -65,6 +66,7 @@ export const routes: Routes[] = [
   cardStackRoutes,
   notebookRoute,
   abrViewerRoutes,
+  psdViewerRoutes,
   nightDefenseRoutes,
   {
     path: '/dnd-playground',

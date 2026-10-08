@@ -1,0 +1,44 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid #1d1d1d;
+  background: #2c2c2c;
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: #cfcfcf;
+  }
+}
+
+.select {
+  justify-content: space-between;
+
+  select {
+    flex: 1;
+    max-width: 170px;
+    background: #1f1f1f;
+    color: #ddd;
+    border: 1px solid #4a4a4a;
+    border-radius: 2px;
+    font-size: 11px;
+    padding: 2px 4px;
+  }
+}

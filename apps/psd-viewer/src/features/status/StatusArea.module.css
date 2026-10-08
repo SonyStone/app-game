@@ -1,0 +1,43 @@
+.status {
+  max-height: 132px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-top: 1px solid #1a1a1a;
+  background: #262626;
+  font-size: 11px;
+
+  p,
+  ul {
+    margin: 0 0 4px;
+  }
+
+  ul {
+    padding-left: 16px;
+  }
+}
+
+.error {
+  color: #ff9b8f;
+}
+
+.approximate {
+  color: #f2c879;
+}
+
+.notes {
+  color: #d9c08f;
+
+  button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #8fc8ff;
+    text-decoration: underline;
+    cursor: pointer;
+    font: inherit;
+  }
+}
+
+.clean {
+  color: #7fcf9c;
+}
