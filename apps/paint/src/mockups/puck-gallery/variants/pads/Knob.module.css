@@ -1,0 +1,59 @@
+/* An encoder ring: dark track, warm value arc with a faint glow, flat cap. Colors come from the device's tokens. */
+.knob {
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.track {
+  fill: none;
+  stroke: #2c2c2c;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+}
+
+.detent {
+  stroke: #6a6457;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.value {
+  fill: none;
+  stroke: var(--lit);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 2.5px var(--glow));
+}
+
+.cap {
+  fill: #1d1d1d;
+  stroke: #000;
+  stroke-width: 1;
+}
+
+.pointer {
+  stroke: #d9d2c4;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.selected .track {
+  stroke: #3a3833;
+}
+
+.selected .cap {
+  fill: #262524;
+}
+
+.dead .track {
+  stroke: #1d1d1d;
+}
+
+.dead .cap {
+  fill: #171717;
+}
+
+.dead .pointer {
+  stroke: #2a2a2a;
+}

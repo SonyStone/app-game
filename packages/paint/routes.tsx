@@ -117,6 +117,14 @@ export const restRoutes: Routes[] = [
     )
   },
   {
+    path: '/puck-gallery',
+    name: 'Paint · Puck gallery',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() =>
+      import('@app-game/paint/puck-gallery').then(({ PuckGallery }) => ({ default: PuckGallery }))
+    )
+  },
+  {
     path: '/trigonometry',
     name: 'Trigonometry Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,

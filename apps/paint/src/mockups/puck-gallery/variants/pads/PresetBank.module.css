@@ -1,0 +1,150 @@
+/* The preset bank: a strip of stroke-sample pads between bank arrows; three by two in the narrow layout. */
+.bank {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.silk {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 5px 1px;
+  font: 600 8.5px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--silk);
+}
+
+.page {
+  font: 8px/1 var(--mono);
+  letter-spacing: 0.04em;
+  color: #6a6458;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  gap: 6px;
+}
+
+button.arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0;
+  border: 1px solid #000;
+  border-radius: 3px;
+  background: var(--pad);
+  box-shadow: inset 0 1px 0 #303030;
+  font: 16px/1 var(--mono);
+  color: #a5a5a5;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.arrow kbd,
+.card kbd {
+  font: 7.5px/1 var(--mono);
+  color: #5f5f5f;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 3px;
+  border: 1px solid #000;
+  border-radius: 4px;
+  background: var(--pad);
+  box-shadow: inset 0 1px 0 #303030;
+  touch-action: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.card kbd {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  z-index: 1;
+}
+
+.stroke {
+  border-radius: 2px;
+  background: #1b1b1b;
+}
+
+.name {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 3px 5px;
+  border-radius: 2px;
+  background: var(--lcd);
+  box-shadow: inset 0 0 0 1px #1a1916;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.name b {
+  overflow: hidden;
+  font: 500 9.5px/1 var(--mono);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  color: #bdb4a2;
+}
+
+.name small {
+  font: 600 7.5px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5d574c;
+}
+
+.chosen {
+  background: #2c2a26;
+  box-shadow:
+    0 0 0 1px var(--lit),
+    0 0 12px var(--glow);
+}
+
+.chosen .name b {
+  color: var(--lcd-ink);
+  text-shadow: var(--lcd-glow);
+}
+
+.chosen kbd {
+  color: #9a917f;
+}
+
+@media (hover: hover) {
+  .card:not(.chosen):hover,
+  .arrow:hover {
+    background: var(--pad-hover);
+  }
+}
+
+.card:active,
+.arrow:active {
+  background: #34322e;
+}
+
+@media (max-width: 979px) {
+  .cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

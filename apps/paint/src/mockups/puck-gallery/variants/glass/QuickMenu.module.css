@@ -1,0 +1,134 @@
+/*
+ * The QuickMenu: a glass disc with six round buttons and an empty center. The root of the cluster sets
+ * `data-hover` (hover feedback for the mouse and a hovering pen), `data-nav` (a navigation drag: everything but the
+ * dragged button fades) and `data-sizing` (a bar drag: the buttons dim under the brush preview).
+ */
+.menu {
+  position: absolute;
+  border-radius: 50%;
+  animation: appear 140ms ease-out both;
+}
+
+.disc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.55),
+    inset 0 0 0 0.5px rgb(255 255 255 / 0.1),
+    0 14px 40px rgb(0 0 0 / 0.4);
+  transition: opacity 120ms;
+}
+
+.slot {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.1);
+  color: rgb(255 255 255 / 0.94) !important;
+  cursor: pointer;
+  transition:
+    background 100ms,
+    opacity 120ms,
+    scale 100ms;
+}
+
+[data-hover] .slot:hover {
+  background: rgb(255 255 255 / 0.16);
+}
+
+.slot:active {
+  scale: 0.94;
+}
+
+.hot,
+.live,
+[data-hover] .hot:hover,
+[data-hover] .live:hover {
+  background: var(--blue);
+  color: #fff !important;
+}
+
+.off {
+  opacity: 0.32;
+}
+
+.key {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  display: grid;
+  place-items: center;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 8px;
+  background: rgb(58 58 60);
+  box-shadow: 0 0 0 1px rgb(28 28 30);
+  color: rgb(235 235 245 / 0.7);
+  font:
+    600 9px/1 var(--font),
+    sans-serif;
+}
+
+.center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  cursor: pointer;
+  transition:
+    background 100ms,
+    box-shadow 120ms;
+}
+
+[data-hover] .center:hover {
+  background: rgb(255 255 255 / 0.06);
+}
+
+.label {
+  padding: 3px 8px;
+  border-radius: 9px;
+  background: rgb(28 28 30 / 0.92);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Navigating: only the dragged button and the readout stay over the drawing. */
+[data-nav] .disc,
+[data-nav] .slot:not(.live) {
+  opacity: 0;
+}
+
+[data-nav] .center {
+  box-shadow: none;
+}
+
+[data-sizing] .disc,
+[data-sizing] .slot,
+[data-sizing] .center {
+  opacity: 0.18;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    scale: 0.94;
+  }
+}

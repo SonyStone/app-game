@@ -1,0 +1,336 @@
+/*
+ * The gallery's own chrome stays small and neutral: a bar at the top, the variant list, the help card and notices.
+ * Variants style themselves; the stage only provides the drawing.
+ */
+.gallery {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #1f1f1f;
+  color: #e6e6e6;
+  font:
+    12px/1.3 Inter,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  /* Android Chrome's translucent tap highlight looks like a stray square over pressed buttons. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Zero specificity, so that any class a variant gives its buttons wins. */
+:where(.gallery) :where(button) {
+  font: inherit;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sheet {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  transform-origin: center;
+  /* Layers blend only with each other, not with the stage behind the sheet. */
+  isolation: isolate;
+  box-shadow:
+    0 0 0 1px #0007,
+    0 12px 48px #0009;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+
+  canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+/* Inherited visibility hides the whole variant while a press draws through it. */
+.variantLayer {
+  display: contents;
+}
+
+.hidden {
+  visibility: hidden;
+}
+
+.crash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  display: grid;
+  gap: 6px;
+  max-width: 420px;
+  padding: 14px 16px;
+  border: 1px solid #5a2a2a;
+  border-radius: 8px;
+  background: rgb(40 28 28 / 0.95);
+
+  span {
+    color: #d9b0b0;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+  }
+}
+
+.longPress {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(rgb(255 255 255 / 0.8) var(--progress, 0%), rgb(255 255 255 / 0.12) 0);
+  mask: radial-gradient(circle, transparent 26px, #000 27px);
+  animation: long-press 330ms linear forwards;
+}
+
+@property --progress {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+
+@keyframes long-press {
+  to {
+    --progress: 100%;
+  }
+}
+
+.bar {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top));
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100vw - 16px);
+  padding: 3px;
+  border: 1px solid #111;
+  border-radius: 8px;
+  background: rgb(44 44 44 / 0.92);
+  box-shadow: 0 4px 16px #0006;
+  z-index: 50;
+}
+
+.barButton {
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 14px !important;
+  cursor: pointer;
+
+  &:hover {
+    background: #3c3c3c;
+  }
+}
+
+.on {
+  background: #5a5a5a !important;
+}
+
+.title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: #232323;
+  cursor: pointer;
+  white-space: nowrap;
+
+  b {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  span {
+    overflow: hidden;
+    color: #9a9a9a;
+    text-overflow: ellipsis;
+  }
+}
+
+.separator {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: #4a4a4a;
+}
+
+.list {
+  position: absolute;
+  top: calc(max(8px, env(safe-area-inset-top)) + 44px);
+  left: 50%;
+  translate: -50% 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 4px;
+  width: min(720px, calc(100vw - 16px));
+  max-height: calc(100vh - 80px);
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid #111;
+  border-radius: 8px;
+  background: rgb(40 40 40 / 0.97);
+  box-shadow: 0 10px 30px #0008;
+  z-index: 50;
+}
+
+.listItem {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: #303030;
+  text-align: left;
+  cursor: pointer;
+
+  small {
+    grid-row: span 2;
+    color: #8a8a8a;
+    font-size: 11px;
+  }
+
+  b {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  span {
+    color: #9a9a9a;
+    font-size: 11px;
+  }
+
+  &:hover {
+    background: #3a3a3a;
+  }
+}
+
+.listAction {
+  grid-column: 1 / -1;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: #262626;
+  color: #b0b0b0 !important;
+  cursor: pointer;
+
+  &:hover {
+    background: #333;
+  }
+}
+
+.help {
+  position: absolute;
+  left: max(10px, env(safe-area-inset-left));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  width: min(340px, calc(100vw - 20px));
+  max-height: 46vh;
+  overflow: auto;
+  padding: 12px 14px 10px;
+  border: 1px solid #111;
+  border-radius: 8px;
+  background: rgb(38 38 38 / 0.95);
+  box-shadow: 0 8px 24px #0007;
+  z-index: 40;
+
+  h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: #cfcfcf;
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: 46px 1fr;
+    gap: 4px 8px;
+    margin: 10px 0 0;
+  }
+
+  dt {
+    color: #8c8c8c;
+  }
+
+  dd {
+    margin: 0;
+    color: #dcdcdc;
+  }
+}
+
+.inspired {
+  color: #9a9a9a !important;
+  font-size: 11px;
+}
+
+.common {
+  padding-top: 8px;
+  border-top: 1px solid #3a3a3a;
+  color: #8c8c8c !important;
+  font-size: 11px;
+}
+
+.helpClose {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 18px !important;
+  cursor: pointer;
+
+  &:hover {
+    background: #3a3a3a;
+  }
+}
+
+.notice {
+  position: absolute;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  translate: -50% 0;
+  padding: 7px 12px;
+  border-radius: 6px;
+  background: rgb(20 20 20 / 0.9);
+  color: #e8e8e8;
+  pointer-events: none;
+  z-index: 60;
+  animation: notice-in 120ms ease-out;
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    translate: -50% 6px;
+  }
+}

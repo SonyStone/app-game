@@ -1,0 +1,184 @@
+/* The color section: colored pads on the matte body, a swap pad, and H/S/V encoders under a small screen. */
+.color {
+  display: flex;
+  flex-direction: column;
+  width: 156px;
+}
+
+.silk {
+  margin: 0 0 5px 1px;
+  font: 600 8.5px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--silk);
+}
+
+.swap {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr 28px;
+  height: 44px;
+  margin-bottom: 10px;
+  padding: 0;
+  border: 1px solid #000;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--pad);
+  touch-action: none;
+  cursor: pointer;
+}
+
+.current,
+.previous {
+  display: flex;
+  align-items: flex-end;
+  padding: 0 0 4px 6px;
+  font: 600 8px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.previous {
+  border-left: 1px solid #000;
+}
+
+.swapMark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-left: 1px solid #000;
+  font: 14px/1 var(--mono);
+  color: #bdbdbd;
+}
+
+.swapMark kbd {
+  font: 7.5px/1 var(--mono);
+  color: #5f5f5f;
+}
+
+@media (hover: hover) {
+  .swap:hover .swapMark {
+    background: var(--pad-hover);
+  }
+}
+
+.swap:active .swapMark {
+  background: #34322e;
+}
+
+/* The catalog lists the palette in rows of six; flowing it down columns turns each row into a ramp. */
+.palette {
+  display: grid;
+  grid-template-rows: repeat(6, 36px);
+  grid-auto-columns: 36px;
+  grid-auto-flow: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.swatch {
+  height: 36px;
+  padding: 0;
+  border: 1px solid #000;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07);
+  touch-action: none;
+  cursor: pointer;
+  transition: transform 80ms;
+}
+
+.swatch:active {
+  transform: scale(0.94);
+}
+
+.small {
+  height: 28px;
+}
+
+/* The chosen color's pad gets a warm ring, as a lit pad would. */
+.chosen {
+  box-shadow:
+    0 0 0 1px #000,
+    0 0 0 3px var(--lit),
+    0 0 10px var(--glow);
+}
+
+.recent {
+  display: grid;
+  grid-template-columns: repeat(4, 36px);
+  gap: 4px;
+}
+
+.hsv {
+  display: grid;
+  gap: 3px;
+  margin-top: auto;
+}
+
+.screen {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid #000;
+  border-radius: 3px;
+  background: var(--lcd);
+  box-shadow: inset 0 0 0 1px #1a1916;
+  overflow: hidden;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 31px;
+  border-left: 1px solid #1d1b17;
+  touch-action: none;
+  cursor: ns-resize;
+}
+
+.cell:first-child {
+  border-left: 0;
+}
+
+.cursor {
+  background: #1a1813;
+  box-shadow: inset 0 1px 0 #3d382d;
+}
+
+.label {
+  font: 600 8.5px/1 var(--condensed);
+  font-stretch: condensed;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lcd-dim);
+}
+
+.cursor .label {
+  color: var(--lcd-ink);
+}
+
+.knobs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.knobCell {
+  display: grid;
+  place-items: center;
+  height: 48px;
+  border-radius: 4px;
+  touch-action: none;
+  cursor: ns-resize;
+}
+
+@media (hover: hover) {
+  .knobCell:hover {
+    background: #181818;
+  }
+}

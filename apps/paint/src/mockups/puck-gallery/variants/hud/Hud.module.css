@@ -1,0 +1,857 @@
+/*
+ * HUD: a heads-up display drawn on the drawing. Thin white lines over a dark outline, tiny labels on a soft dark
+ * backdrop, translucent dark capsules for strips; one quiet accent marks what the pen points at.
+ */
+.hud {
+  --hud-accent: #5aaaff;
+  --hud-line: rgb(255 255 255 / 0.92);
+  --hud-shadow: rgb(0 0 0 / 0.55);
+  --hud-glass: rgb(20 20 20 / 0.8);
+  --hud-edge: rgb(255 255 255 / 0.13);
+
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  color: #f1f1f1;
+  font:
+    10.5px/1.25 Inter,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  kbd {
+    display: inline-block;
+    min-width: 14px;
+    padding: 0 3px;
+    border-radius: 3px;
+    background: rgb(255 255 255 / 0.12);
+    color: rgb(255 255 255 / 0.75);
+    font: inherit;
+    font-size: 9px;
+    line-height: 14px;
+    text-align: center;
+  }
+}
+
+/* The ring's press target: a circle, with the labels inside it as children so presses on them land here too. */
+.surface {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: none;
+  transition: opacity 120ms ease-out;
+}
+
+/* While a strip follows the pen or the drawing moves, the ring vanishes but keeps the press. */
+.faded {
+  opacity: 0;
+}
+
+/* While a tap-mode strip is open, the labels step back behind it; the ring stays usable. */
+.receded {
+  .label {
+    opacity: 0.16;
+  }
+
+  .ring {
+    opacity: 0.75;
+  }
+}
+
+.ring {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.under {
+  fill: none;
+  stroke: var(--hud-shadow);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+}
+
+.over {
+  fill: none;
+  stroke: var(--hud-line);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+}
+
+.core {
+  stroke: rgb(0 0 0 / 0.6);
+  stroke-width: 1;
+}
+
+.glyph {
+  fill: none;
+  stroke: var(--hud-line);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 1px #000);
+}
+
+.spoke {
+  line {
+    transition: all 90ms ease-out;
+  }
+
+  &.lit .over {
+    stroke: var(--hud-accent);
+    stroke-width: 2;
+  }
+
+  &.lit .under {
+    stroke-width: 4.5;
+  }
+}
+
+.label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgb(12 12 12 / 0.58);
+  color: rgb(255 255 255 / 0.9);
+  white-space: nowrap;
+  text-shadow: 0 0 2px #000;
+  transition:
+    background 90ms ease-out,
+    box-shadow 90ms ease-out;
+
+  b {
+    font-weight: 600;
+  }
+
+  &.lit {
+    background: rgb(12 12 12 / 0.86);
+    box-shadow: inset 0 0 0 1px rgb(90 170 255 / 0.65);
+    color: #fff;
+  }
+
+  &.off {
+    opacity: 0.45;
+  }
+
+  &.chip {
+    gap: 6px;
+    height: 30px;
+    padding: 0 10px;
+    border-radius: 7px;
+    background: rgb(26 26 26 / 0.9);
+    box-shadow:
+      inset 0 0 0 1px var(--hud-edge),
+      0 2px 8px rgb(0 0 0 / 0.35);
+    font-size: 11px;
+
+    &.lit {
+      box-shadow:
+        inset 0 0 0 1px rgb(90 170 255 / 0.8),
+        0 2px 8px rgb(0 0 0 / 0.35);
+    }
+  }
+}
+
+.labelName {
+  color: rgb(255 255 255 / 0.58);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+
+  .chip & {
+    font-size: 9px;
+  }
+}
+
+.labelSwatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.7),
+    0 0 0 2px rgb(0 0 0 / 0.5);
+
+  .chip & {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.hint {
+  position: absolute;
+  translate: -50% 0;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgb(12 12 12 / 0.55);
+  color: rgb(255 255 255 / 0.62);
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+/* The brush at its real size: an outline in the brush color that reads over light and dark paint. */
+.brush {
+  position: absolute;
+  translate: -50% -50%;
+  border: 1.5px solid var(--hud-color);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.5),
+    inset 0 0 0 1px rgb(255 255 255 / 0.3);
+  pointer-events: none;
+
+  &.filled {
+    background: radial-gradient(
+      circle closest-side,
+      color-mix(in srgb, var(--hud-color) var(--opacity), transparent) var(--hardness),
+      transparent 100%
+    );
+  }
+}
+
+.rotate {
+  position: absolute;
+  translate: -50% -50%;
+  display: grid;
+  place-items: center;
+
+  svg {
+    overflow: visible;
+  }
+
+  b {
+    position: absolute;
+    top: -14px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgb(12 12 12 / 0.7);
+  }
+}
+
+.needle {
+  stroke: var(--hud-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* Strips: translucent capsules right at the pen. */
+.strip {
+  position: absolute;
+  border-radius: 17px;
+  background: var(--hud-glass);
+  box-shadow:
+    inset 0 0 0 1px var(--hud-edge),
+    0 6px 18px rgb(0 0 0 / 0.35);
+  pointer-events: auto;
+  touch-action: none;
+  animation: strip-in 110ms ease-out;
+}
+
+.column {
+  border-radius: 9px;
+}
+
+/* A strip that follows the press that opened it never takes presses itself. */
+.passive {
+  pointer-events: none !important;
+}
+
+@keyframes strip-in {
+  from {
+    opacity: 0;
+    scale: 0.97;
+  }
+}
+
+.marks {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.dot {
+  fill: rgb(255 255 255 / 0.82);
+  stroke: rgb(0 0 0 / 0.6);
+  stroke-width: 1;
+}
+
+.tick {
+  stroke: rgb(255 255 255 / 0.55);
+  stroke-width: 1;
+
+  &.major {
+    stroke: rgb(255 255 255 / 0.85);
+  }
+
+  &.future {
+    stroke: rgb(255 255 255 / 0.25);
+  }
+}
+
+.tickLabel {
+  fill: rgb(255 255 255 / 0.6);
+  font-size: 8px;
+}
+
+.thumbLine {
+  stroke: var(--hud-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.thumbRing {
+  fill: none;
+  stroke: var(--hud-accent);
+  stroke-width: 1.75;
+  filter: drop-shadow(0 0 1.5px #000);
+}
+
+.homeMark {
+  fill: rgb(255 255 255 / 0.7);
+}
+
+.opacityTrack {
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  border-radius: 6px;
+  background:
+    linear-gradient(to top, transparent, var(--hud-color)),
+    repeating-conic-gradient(#8a8a8a 0 25%, #c9c9c9 0 50%) 0 0 / 8px 8px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.5);
+}
+
+.readout {
+  position: absolute;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgb(12 12 12 / 0.82);
+  white-space: nowrap;
+  pointer-events: none;
+
+  span {
+    color: rgb(255 255 255 / 0.58);
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  b {
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+
+  kbd {
+    align-self: center;
+  }
+}
+
+.buttonRow,
+.buttonColumn {
+  position: absolute;
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--hud-glass);
+  box-shadow:
+    inset 0 0 0 1px var(--hud-edge),
+    0 4px 12px rgb(0 0 0 / 0.3);
+  pointer-events: auto;
+}
+
+.buttonRow {
+  align-items: center;
+}
+
+.buttonColumn {
+  flex-direction: column;
+}
+
+.button {
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  height: 32px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 0.06);
+  color: rgb(255 255 255 / 0.9);
+  touch-action: none;
+  cursor: pointer;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.14);
+  }
+
+  &:active {
+    background: rgb(90 170 255 / 0.35);
+  }
+
+  &.wide {
+    min-width: 50px;
+    font-size: 10.5px;
+  }
+
+  &.on {
+    box-shadow: inset 0 0 0 1px var(--hud-accent);
+    color: #fff;
+  }
+}
+
+.buttonReadout {
+  min-width: 70px;
+  padding: 0 6px;
+  text-align: center;
+
+  b {
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+}
+
+/* Color: Photoshop's HUD picker. */
+.panel {
+  position: absolute;
+  border-radius: 10px;
+  background: var(--hud-glass);
+  box-shadow:
+    inset 0 0 0 1px var(--hud-edge),
+    0 6px 18px rgb(0 0 0 / 0.35);
+  pointer-events: auto;
+  touch-action: none;
+  animation: strip-in 110ms ease-out;
+}
+
+.square {
+  position: absolute;
+  border-radius: 3px;
+  background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(var(--hud-hue) 100% 50%));
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6);
+}
+
+.svMarker,
+.homeDot {
+  position: absolute;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.svMarker {
+  width: 14px;
+  height: 14px;
+  box-shadow:
+    0 0 0 1.5px #fff,
+    0 0 0 3px rgb(0 0 0 / 0.55);
+}
+
+.homeDot {
+  width: 5px;
+  height: 5px;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.85),
+    0 0 0 2px rgb(0 0 0 / 0.45);
+}
+
+.hueStrip {
+  position: absolute;
+  border-radius: 3px;
+  background: linear-gradient(to bottom, red, #ff0, lime, cyan, blue, #f0f, red);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6);
+}
+
+.hueMarker {
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  height: 5px;
+  translate: 0 -50%;
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1.5px #fff,
+    0 0 0 3px rgb(0 0 0 / 0.55);
+}
+
+.hot {
+  &.square,
+  &.hueStrip {
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 0.6),
+      0 0 0 2.5px rgb(90 170 255 / 0.6);
+  }
+}
+
+.swatch {
+  position: absolute;
+  border-radius: 5px;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.18),
+    0 0 0 1px rgb(0 0 0 / 0.5);
+  transition: scale 80ms ease-out;
+
+  &.hot {
+    scale: 1.15;
+    box-shadow:
+      0 0 0 1.5px #fff,
+      0 0 0 3px rgb(0 0 0 / 0.5);
+  }
+
+  &.previous {
+    border-radius: 50%;
+  }
+}
+
+.colorInfo {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgb(255 255 255 / 0.72);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.beforeAfter {
+  display: flex;
+  overflow: hidden;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.25);
+
+  span {
+    width: 14px;
+    height: 12px;
+  }
+}
+
+/* Tools. */
+.toolCell {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  color: rgb(255 255 255 / 0.82);
+  transition: background 80ms ease-out;
+
+  &.current::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    width: 12px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--hud-accent);
+  }
+
+  &.hot {
+    background: rgb(255 255 255 / 0.16);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.5);
+    color: #fff;
+  }
+}
+
+.settings {
+  position: absolute;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: start;
+  gap: 4px 8px;
+  padding: 6px 8px;
+  border-radius: 9px;
+  background: var(--hud-glass);
+  box-shadow:
+    inset 0 0 0 1px var(--hud-edge),
+    0 6px 18px rgb(0 0 0 / 0.35);
+  pointer-events: auto;
+  touch-action: none;
+  animation: strip-in 110ms ease-out;
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  min-width: 0;
+}
+
+.settingLabel {
+  flex: 0 0 52px;
+  overflow: hidden;
+  color: rgb(255 255 255 / 0.62);
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.08);
+  color: rgb(255 255 255 / 0.92);
+  font-size: 10.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  touch-action: none;
+  cursor: pointer;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.14);
+  }
+
+  &.on {
+    background: rgb(90 170 255 / 0.32);
+    color: #fff;
+  }
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: rgb(255 255 255 / 0.7);
+  font-size: 9.5px;
+
+  i {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.5);
+  }
+
+  &.on i {
+    background: var(--hud-accent);
+    box-shadow: none;
+  }
+}
+
+.bar {
+  cursor: ew-resize;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--fill);
+    background: rgb(255 255 255 / 0.2);
+    box-shadow: inset -1.5px 0 0 var(--hud-accent);
+  }
+
+  span {
+    position: relative;
+  }
+
+  small {
+    margin-left: 2px;
+    color: rgb(255 255 255 / 0.5);
+    font-size: 9px;
+  }
+}
+
+/* Presets. */
+.card {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px 0 6px;
+  border-radius: 6px;
+  transition: background 80ms ease-out;
+
+  &.mirrored {
+    flex-direction: row-reverse;
+    padding: 0 6px 0 8px;
+  }
+
+  &.current {
+    box-shadow: inset 2px 0 0 var(--hud-accent);
+  }
+
+  &.mirrored.current {
+    box-shadow: inset -2px 0 0 var(--hud-accent);
+  }
+
+  &.hot {
+    background: rgb(255 255 255 / 0.15);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.5);
+  }
+}
+
+.cardStroke {
+  flex: 0 0 96px;
+}
+
+.cardName {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  .mirrored & {
+    align-items: flex-end;
+  }
+
+  b {
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  small {
+    color: rgb(255 255 255 / 0.48);
+    font-size: 8.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+}
+
+/* Layers. */
+.layerRow {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 4px;
+  border-radius: 6px;
+  pointer-events: auto;
+  touch-action: none;
+  transition: background 80ms ease-out;
+
+  &.mirrored {
+    flex-direction: row-reverse;
+    padding: 0 4px 0 8px;
+    text-align: right;
+  }
+
+  &.current {
+    background: rgb(90 170 255 / 0.16);
+    box-shadow: inset 2px 0 0 var(--hud-accent);
+  }
+
+  &.mirrored.current {
+    box-shadow: inset -2px 0 0 var(--hud-accent);
+  }
+
+  &.hot {
+    background: rgb(255 255 255 / 0.15);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.5);
+  }
+
+  &.dim .layerText {
+    opacity: 0.45;
+  }
+}
+
+.layerThumb {
+  flex: none;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6);
+}
+
+.layerText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  b {
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  small {
+    color: rgb(255 255 255 / 0.5);
+    font-size: 9px;
+    white-space: nowrap;
+  }
+}
+
+.tierCell {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--hud-glass);
+  box-shadow: inset 0 0 0 1px var(--hud-edge);
+  color: rgb(255 255 255 / 0.88);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: pointer;
+  animation: strip-in 90ms ease-out;
+
+  b {
+    position: relative;
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+
+  &.hot {
+    background: rgb(40 40 40 / 0.92);
+    box-shadow: inset 0 0 0 1.5px var(--hud-accent);
+    color: #fff;
+  }
+}
+
+.tierFill {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: var(--fill);
+  background: rgb(255 255 255 / 0.13);
+}
+
+.scrubHint {
+  position: absolute;
+  right: 3px;
+  top: 2px;
+  color: var(--hud-accent);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.actions {
+  position: absolute;
+  display: flex;
+  justify-content: space-between;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--hud-glass);
+  box-shadow:
+    inset 0 0 0 1px var(--hud-edge),
+    0 4px 12px rgb(0 0 0 / 0.3);
+  pointer-events: auto;
+}

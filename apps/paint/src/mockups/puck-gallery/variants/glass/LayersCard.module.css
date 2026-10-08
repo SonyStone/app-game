@@ -1,0 +1,267 @@
+/* Layers: Procreate's layer cards, with swipe-left actions and a blend sheet. */
+.card {
+  padding-bottom: 8px;
+}
+
+.list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.row {
+  position: relative;
+  flex: none;
+  height: 44px;
+  transition: translate 120ms ease-out;
+}
+
+.lifted {
+  z-index: 2;
+  transition: none;
+
+  .content {
+    box-shadow: 0 8px 22px rgb(0 0 0 / 0.5);
+    scale: 1.02;
+  }
+}
+
+/* The actions behind a row: exactly as wide as the row has slid, so nothing shows through the glass at rest. */
+.actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.action {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 58px;
+  background: rgb(72 72 74);
+  font-size: 10px !important;
+  font-weight: 500 !important;
+
+  [data-hover] &:hover {
+    background: rgb(88 88 92);
+  }
+
+  & + & {
+    box-shadow: inset 1px 0 0 rgb(0 0 0 / 0.25);
+  }
+}
+
+.danger {
+  background: #ff453a;
+
+  [data-hover] &:hover {
+    background: #ff5f55;
+  }
+}
+
+.unavailable {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding: 0 4px 0 2px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: rgb(44 44 46);
+  cursor: pointer;
+  touch-action: none;
+  transition:
+    translate 140ms ease-out,
+    background 100ms;
+
+  [data-hover] &:hover {
+    background: rgb(54 54 56);
+  }
+
+  &.active,
+  [data-hover] &.active:hover {
+    background: var(--blue);
+  }
+}
+
+.sliding {
+  transition: background 100ms;
+}
+
+.grip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 36px;
+  color: var(--tertiary);
+  cursor: grab;
+
+  .active & {
+    color: rgb(255 255 255 / 0.6);
+  }
+}
+
+.thumb {
+  flex: none;
+  border-radius: 4px;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.6);
+}
+
+.text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+
+  .active & {
+    color: rgb(255 255 255 / 0.75);
+  }
+}
+
+.hiddenLayer {
+  .thumb,
+  .text {
+    opacity: 0.45;
+  }
+}
+
+.blend {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  transition: background 100ms;
+
+  [data-hover] &:hover {
+    background: rgb(255 255 255 / 0.12);
+  }
+}
+
+.check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.box {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 1.5px solid rgb(255 255 255 / 0.55);
+  border-radius: 6px;
+  color: rgb(28 28 30);
+}
+
+.checked {
+  border: 0;
+  background: #fff;
+
+  .active & {
+    color: var(--blue);
+  }
+}
+
+/* The blend sheet, in place of the list. */
+.sheet {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -4px;
+
+  b {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  small {
+    margin-left: auto;
+    padding-right: 6px;
+    color: var(--secondary);
+    font-size: 12px;
+  }
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+}
+
+.mode {
+  height: 30px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.05);
+  font-size: 12px !important;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 100ms;
+
+  [data-hover] &:hover {
+    background: rgb(255 255 255 / 0.12);
+  }
+
+  &.on,
+  [data-hover] &.on:hover {
+    background: var(--blue);
+    font-weight: 600 !important;
+  }
+}
