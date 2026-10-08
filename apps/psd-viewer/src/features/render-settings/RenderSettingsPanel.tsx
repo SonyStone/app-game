@@ -1,13 +1,15 @@
 import type { PsdInterpolation, PsdRenderSettings } from '@app-game/psd/viewer';
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import styles from './RenderSettingsPanel.module.css';
 
 /**
  * Photoshop's rendering preferences as controls. Changes go to `onChange` as patches; the panel shows `settings`,
  * which callers should read with `latest` so a toggle shows at once while the render it starts is in flight.
+ * `detected` says which of the two gamma blending options shown were detected from the document's merged image.
  */
 export function RenderSettingsPanel(props: {
   settings: PsdRenderSettings;
+  detected: { linearBlending: boolean; textGamma: boolean };
   onChange: (patch: Partial<PsdRenderSettings>) => void;
   onReset: () => void;
 }) {
@@ -27,6 +29,9 @@ export function RenderSettingsPanel(props: {
         />
         Blend RGB colors using gamma 1.0
       </label>
+      <Show when={props.detected.linearBlending}>
+        <p class={styles.note}>Detected from Photoshop's merged image</p>
+      </Show>
       <label>
         <input
           type="checkbox"
@@ -35,6 +40,9 @@ export function RenderSettingsPanel(props: {
         />
         Blend text colors using gamma {textGamma}
       </label>
+      <Show when={props.detected.textGamma}>
+        <p class={styles.note}>Detected from Photoshop's merged image</p>
+      </Show>
       <label>
         <input
           type="checkbox"

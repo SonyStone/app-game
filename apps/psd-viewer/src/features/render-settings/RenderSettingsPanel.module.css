@@ -28,6 +28,12 @@
   }
 }
 
+.note {
+  margin: -3px 0 2px 21px;
+  font-size: 10px;
+  color: #8fb08f;
+}
+
 .select {
   justify-content: space-between;
 

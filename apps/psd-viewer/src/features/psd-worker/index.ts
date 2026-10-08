@@ -6,4 +6,4 @@ export {
   type PsdClient,
   type PsdWorkerPort
 } from './makePsdClient';
-export type { PsdResultOf, RenderedPixels, WorkerFailure } from './protocol';
+export type { BlendingDetection, PsdResultOf, RenderedPixels, WorkerFailure } from './protocol';

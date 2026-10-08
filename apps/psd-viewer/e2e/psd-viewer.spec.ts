@@ -60,6 +60,28 @@ test('opens a file from the picker and inspects a type layer', async ({ page }) 
   await expect(page.getByRole('region', { name: 'Image resources' })).toContainText('ICC');
 });
 
+test('detects gamma 1.0 blending from the merged image of an opened file', async ({ page }) => {
+  await page.goto('/');
+  const gamma = page.getByRole('checkbox', { name: 'Blend RGB colors using gamma 1.0' });
+  await expect(gamma).not.toBeChecked();
+  // Captured with gamma 1.0 blending; opened from the picker, without the example's settings.
+  await page
+    .locator('input[accept=".psd,.psb"]')
+    .setInputFiles(fileURLToPath(new URL('pass-through-groups.psd', assets)));
+  await settled(page);
+  await expect(gamma).toBeChecked();
+  const settings = page.getByRole('region', { name: 'Render settings' });
+  await expect(settings).toContainText("Detected from Photoshop's merged image");
+  await page.getByRole('button', { name: 'Difference', exact: true }).click();
+  const statistics = page.getByRole('region', { name: 'Difference statistics' });
+  await expect(statistics).toHaveAttribute('data-mismatches', '0');
+
+  // A choice overrides the detection for this document.
+  await gamma.uncheck();
+  await expect(settings).not.toContainText('Detected');
+  await expect(statistics).not.toHaveAttribute('data-mismatches', '0');
+});
+
 test('a dropped CMYK document composites exactly in its CMYK channels', async ({ page }) => {
   await page.goto('/');
   const bytes = [...(await readFile(new URL('cmyk-levels.psd', assets)))];

@@ -116,6 +116,31 @@ it('coalesces renders: only the newest waiting render runs after the one in flig
   expect(value(await client.difference(document, last.render)).differingSamples).toBe(0);
 });
 
+it('detects the gamma blending options a document was saved with, and reuses its render', async () => {
+  const { client } = connect();
+  // Captured with gamma 1.0 blending.
+  const gammaOne = value(await client.open(await example('pass-through-groups.psd')));
+  const detected = value(await client.detectBlending(gammaOne.document, settings, []));
+  expect(detected).toMatchObject({ linearBlending: true, differing: { linear: 0 } });
+  expect(detected.differing.encoded).toBeGreaterThan(0);
+  const render = value(await client.render(gammaOne.document, { ...settings, linearBlending: true }, []));
+  expect(value(await client.difference(gammaOne.document, render.render)).differingSamples).toBe(0);
+
+  // Captured with Photoshop's default Color Settings.
+  const encoded = value(await client.open(await example('type-with-layer-styles.psd')));
+  expect(value(await client.detectBlending(encoded.document, settings, []))).toMatchObject({
+    linearBlending: false,
+    textGamma: null,
+    differing: { encoded: 0, otherTextGamma: null }
+  });
+
+  // Its type layer was blended with text gamma: with the option off, the detection turns it back on.
+  const withoutTextGamma = value(await client.detectBlending(encoded.document, { ...settings, textGamma: null }, []));
+  expect(withoutTextGamma).toMatchObject({ linearBlending: false, textGamma: true, differing: { otherTextGamma: 0 } });
+  const reused = value(await client.render(encoded.document, settings, []));
+  expect(value(await client.difference(encoded.document, reused.render)).differingSamples).toBe(0);
+});
+
 it('reports unreadable files, unsupported settings and approximations as typed failures', async () => {
   const { client } = connect();
   expect(await client.open(new Uint8Array(64).buffer)).toEqual({

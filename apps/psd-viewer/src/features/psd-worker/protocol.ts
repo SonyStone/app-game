@@ -30,6 +30,14 @@ export type PsdRequest =
     }
   | { id: number; type: 'merged'; document: number }
   | { id: number; type: 'difference'; document: number; render: number }
+  | {
+      id: number;
+      type: 'detectBlending';
+      document: number;
+      /** The settings to render with; `linearBlending` is ignored, both values are tried. */
+      settings: PsdRenderSettings;
+      visibility: [number, boolean][];
+    }
   | { id: number; type: 'layer'; document: number; index: number }
   | { id: number; type: 'addFonts'; fonts: ArrayBuffer[] }
   | { id: number; type: 'listFonts' }
@@ -43,6 +51,7 @@ export type PsdReply =
   | { id: number; type: 'rendered'; render: RenderedPixels }
   | { id: number; type: 'merged'; image: PsdImage }
   | { id: number; type: 'difference'; difference: PsdDifference }
+  | { id: number; type: 'blending'; detection: BlendingDetection }
   | { id: number; type: 'layer'; detail: PsdLayerDetail; pixels: PsdResultOf<PsdLayerPixels> }
   | {
       id: number;
@@ -57,6 +66,19 @@ export type PsdReply =
   | { id: number; type: 'textSupport'; support: PsdTextSupport | null }
   | { id: number; type: 'closed' }
   | { id: number; type: 'failed'; error: WorkerFailure };
+
+/**
+ * Which of Photoshop's blending preferences, which documents do not record, reproduce the merged image Photoshop saved.
+ * `linearBlending` is the "Blend RGB Colors Using Gamma 1.0" setting whose render differs in fewer samples; `textGamma`
+ * whether "Blend Text Colors Using Gamma" is on, tried only for documents with type layers whose best render still
+ * differs. Each is `null` when undecided: no merged image, no render, or both settings equally close (nothing the
+ * setting affects). `differing` holds each tried render's differing samples, `null` where it did not render.
+ */
+export type BlendingDetection = {
+  linearBlending: boolean | null;
+  textGamma: boolean | null;
+  differing: { encoded: number | null; linear: number | null; otherTextGamma: number | null };
+};
 
 /** A render as it crosses to the UI: its id names it in `difference` requests. */
 export type RenderedPixels = PsdImage & {

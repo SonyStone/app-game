@@ -10,7 +10,7 @@ import type {
   PsdRenderSettings,
   PsdTextSupport
 } from '@app-game/psd/viewer';
-import type { PsdReply, PsdRequest, PsdResultOf, RenderedPixels, WorkerFailure } from './protocol';
+import type { BlendingDetection, PsdReply, PsdRequest, PsdResultOf, RenderedPixels, WorkerFailure } from './protocol';
 
 /**
  * Talks to a PSD worker: each call posts one request and resolves with its reply as a typed result. Renders are
@@ -72,6 +72,19 @@ export function makePsdClient(worker: PsdWorkerPort) {
   async function difference(document: number, render: number): Promise<PsdResultOf<PsdDifference>> {
     const reply = await send({ type: 'difference', document, render });
     return reply.type === 'difference' ? { ok: true, value: reply.difference } : failure(reply);
+  }
+
+  /**
+   * Which gamma blending setting reproduces the document's merged image, rendering with `settings` both ways. The
+   * worker keeps both renders, so a following `render` with either setting and the same visibility reuses one.
+   */
+  async function detectBlending(
+    document: number,
+    settings: PsdRenderSettings,
+    visibility: [number, boolean][]
+  ): Promise<PsdResultOf<BlendingDetection>> {
+    const reply = await send({ type: 'detectBlending', document, settings: { ...settings }, visibility });
+    return reply.type === 'blending' ? { ok: true, value: reply.detection } : failure(reply);
   }
 
   /** One layer's detail and, where it has any, its own pixels. */
@@ -164,7 +177,19 @@ export function makePsdClient(worker: PsdWorkerPort) {
     queued = undefined;
   }
 
-  return { open, render, merged, difference, layer, addFonts, fonts, documentFonts, textSupport, dispose };
+  return {
+    open,
+    render,
+    merged,
+    difference,
+    detectBlending,
+    layer,
+    addFonts,
+    fonts,
+    documentFonts,
+    textSupport,
+    dispose
+  };
 }
 
 /** The client's API, for features that take it as a dependency. */

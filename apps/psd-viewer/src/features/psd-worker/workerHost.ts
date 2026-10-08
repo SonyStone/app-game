@@ -3,22 +3,27 @@ import {
   openPsd,
   type PsdFailure,
   type PsdFontLibrary,
+  type PsdLayerNode,
   type PsdRender,
+  type PsdRenderSettings,
   type PsdViewerDocument
 } from '@app-game/psd/viewer';
-import type { PsdReply, PsdRequest } from './protocol';
+import type { BlendingDetection, PsdReply, PsdRequest } from './protocol';
 
 /**
  * The worker side of the protocol, independent of the worker global so tests can drive it directly. It holds one open
  * document and the full-depth composites of its two latest renders, so the UI can still compare the render it shows
- * while the next one is already running; opening another document closes the previous one. It also holds the font
- * library, created on first use and kept across documents, which renders with `typeLayers` use. Requests run one at a
- * time in arrival order. `post` sends a reply with the buffers to transfer.
+ * while the next one is already running; opening another document closes the previous one. The renders a blending
+ * detection made wait for the next render request, which takes the one with its settings and visibility instead of
+ * compositing again; the others are freed then. It also holds the font library, created on first use and kept across
+ * documents, which renders with `typeLayers` use. Requests run one at a time in arrival order. `post` sends a reply with the buffers to transfer.
  */
 export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable[]) => void) {
   let document: { id: number; viewer: PsdViewerDocument } | undefined;
   let fonts: PsdFontLibrary | undefined;
   const renders = new Map<number, PsdRender>();
+  // Detection renders by `renderKey`, until the next render request.
+  const prepared = new Map<string, PsdRender>();
   let nextDocument = 0;
   let nextRender = 0;
   let queue = Promise.resolve();
@@ -82,7 +87,13 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
     const viewer = document.viewer;
     switch (request.type) {
       case 'render': {
-        const rendered = viewer.render(request.settings, request.visibility, fonts);
+        const key = renderKey(request.settings, request.visibility);
+        const reused = prepared.get(key);
+        prepared.delete(key);
+        releasePrepared();
+        const rendered = reused
+          ? { ok: true as const, value: reused }
+          : viewer.render(request.settings, request.visibility, fonts);
         if (!rendered.ok) {
           post({ id: request.id, type: 'failed', error: rendered.error }, []);
           return;
@@ -142,6 +153,13 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
         return;
       }
 
+      case 'detectBlending': {
+        releasePrepared();
+        const detection = detectBlending(viewer, request.settings, request.visibility);
+        post({ id: request.id, type: 'blending', detection }, []);
+        return;
+      }
+
       case 'documentFonts': {
         const report = viewer.fonts(fonts);
         post(
@@ -178,7 +196,65 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
     }
   }
 
+  /**
+   * Renders the document with gamma blending off and on and compares each with the merged image, keeping the renders
+   * in `prepared`. A document with type layers whose closer render still differs is rendered once more with "Blend Text
+   * Colors Using Gamma" toggled, which Photoshop before CS6 did not offer. Settings the exact path refuses are tried
+   * again with `approximate`, whose renders of what the exact path does render are identical.
+   */
+  function detectBlending(
+    viewer: PsdViewerDocument,
+    settings: PsdRenderSettings,
+    visibility: [number, boolean][]
+  ): BlendingDetection {
+    const undecided = { encoded: null, linear: null, otherTextGamma: null };
+    if (!viewer.info.mergedImage) {
+      return { linearBlending: null, textGamma: null, differing: undecided };
+    }
+
+    let approximate = settings.approximate;
+    const differing = (patch: Partial<PsdRenderSettings>) => {
+      const tried = { ...settings, ...patch, approximate };
+      const rendered = viewer.render(tried, visibility, fonts);
+      if (!rendered.ok) {
+        return null;
+      }
+
+      prepared.set(renderKey(tried, visibility), rendered.value);
+      const difference = viewer.difference(rendered.value);
+      return difference.ok ? difference.value.differingSamples : null;
+    };
+    let encoded = differing({ linearBlending: false });
+    let linear = differing({ linearBlending: true });
+    if (encoded === null && linear === null && !approximate) {
+      approximate = true;
+      encoded = differing({ linearBlending: false });
+      linear = differing({ linearBlending: true });
+    }
+
+    const linearBlending = closer(encoded, linear);
+    const chosen = linearBlending ?? settings.linearBlending;
+    const best = chosen ? linear : encoded;
+    if (!best || !hasTypeLayers(viewer.layers)) {
+      return { linearBlending, textGamma: null, differing: { encoded, linear, otherTextGamma: null } };
+    }
+
+    const otherTextGamma = differing({ linearBlending: chosen, textGamma: settings.textGamma === null ? 1.45 : null });
+    const toggled = closer(best, otherTextGamma);
+    const textGamma = toggled === null ? null : toggled === (settings.textGamma === null);
+    return { linearBlending, textGamma, differing: { encoded, linear, otherTextGamma } };
+  }
+
+  function releasePrepared() {
+    for (const render of prepared.values()) {
+      render.dispose();
+    }
+
+    prepared.clear();
+  }
+
   function close() {
+    releasePrepared();
     renders.clear();
     document?.viewer.close();
     document = undefined;
@@ -190,6 +266,21 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
 /** The failed reply to `request`. */
 function failed(request: PsdRequest, error: PsdFailure): PsdReply {
   return { id: request.id, type: 'failed', error };
+}
+
+/** Identifies a render request by its settings and visibility overrides, whatever the order of the settings' fields. */
+function renderKey(settings: PsdRenderSettings, visibility: [number, boolean][]): string {
+  return JSON.stringify([settings, visibility], [...Object.keys(settings)].sort());
+}
+
+/** Whether the second of two differing-sample counts is smaller: `null` when either is missing or they are equal. */
+function closer(first: number | null, second: number | null): boolean | null {
+  return first === null || second === null || first === second ? null : second < first;
+}
+
+/** Whether a layer tree holds a type layer. */
+function hasTypeLayers(layers: readonly PsdLayerNode[]): boolean {
+  return layers.some((layer) => layer.kind === 'text' || hasTypeLayers(layer.children ?? []));
 }
 
 /** Renders whose full-depth composites stay available for comparisons. */

@@ -1,6 +1,7 @@
 import type { PsdImage } from '@app-game/psd/viewer';
 import { createMemo, createSignal, Errored, isPending, latest, onCleanup, Show } from 'solid-js';
 import styles from './App.module.css';
+import { createBlendingDetection } from './features/blending-detection';
 import { createComparison, DifferenceSummary, ViewSwitch, type ViewMode } from './features/comparison';
 import { createPsdDocument, createPsdRender, type PsdSource } from './features/document';
 import { ExamplesMenu } from './features/examples';
@@ -17,16 +18,18 @@ import { createViewport, RgbaCanvas } from './features/viewport';
 /**
  * PSD Viewer: opens a Photoshop document in a worker, renders it with the Rust compositor and compares the result with
  * the merged image Photoshop saved. The screen is assembled here from independent features: the worker client and
- * document session, layer visibility, render settings, the fonts for re-rendering text, the zoomable viewport, the
- * comparison views, the inspector and the renderer status.
+ * document session, layer visibility, render settings with the gamma blending options detected per document, the fonts for
+ * re-rendering text, the zoomable viewport, the comparison views, the inspector and the renderer status.
  */
 export function App() {
   const client = makePsdClient(createPsdWorker());
   onCleanup(client.dispose);
 
   const { source, opened, open } = createPsdDocument(client);
-  const { settings, update, replace, reset } = createRenderSettings();
+  const { settings: stored, update, replace, reset } = createRenderSettings();
   const { overrides, pairs, setVisible } = createLayerVisibility(source);
+  const blending = createBlendingDetection(client, opened, stored, pairs);
+  const settings = blending.settings;
   const [selected, setSelected] = createSignal<number | undefined>(() => {
     source();
     return undefined;
@@ -246,7 +249,28 @@ export function App() {
             </Show>
           </section>
           <aside class={styles.inspector} aria-label="Inspector">
-            <RenderSettingsPanel settings={latest(settings)} onChange={update} onReset={reset} />
+            <RenderSettingsPanel
+              settings={latest(settings)}
+              detected={{
+                linearBlending: latest(blending.detected).linearBlending !== null,
+                textGamma: latest(blending.detected).textGamma !== null
+              }}
+              onChange={(patch) => {
+                if ('linearBlending' in patch) {
+                  blending.choose({ linearBlending: patch.linearBlending });
+                }
+
+                if ('textGamma' in patch) {
+                  blending.choose({ textGamma: patch.textGamma });
+                }
+
+                update(patch);
+              }}
+              onReset={() => {
+                blending.choose({ linearBlending: undefined, textGamma: undefined });
+                reset();
+              }}
+            />
             <Show when={documentFonts()?.layers.length ? documentFonts() : undefined}>
               {(report) => (
                 <FontsPanel
