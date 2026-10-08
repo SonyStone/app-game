@@ -54,6 +54,7 @@
     "workbox-window": "catalog:"
   },
   "exports": {
-    "./editor": "./src/features/studio/PaintStudio.tsx"
+    "./editor": "./src/features/studio/PaintStudio.tsx",
+    "./tile-cluster-mockup": "./src/mockups/tile-cluster/TileClusterMockup.tsx"
   }
 }

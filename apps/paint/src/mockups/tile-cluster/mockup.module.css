@@ -1,0 +1,717 @@
+/*
+ * Blender-like neutral dark theme: grey tiles, lighter widgets, no color accents, so the drawing keeps the focus.
+ * --nav is the ring's diameter, set by the cluster; --tools follows from it; --side is the side columns' width.
+ */
+.stage {
+  --tile: rgb(42 42 42 / 0.5);
+  --tile-line: rgb(25 25 25 / 0.6);
+  --widget: rgb(61 61 61 / 0.55);
+  --widget-hover: rgb(72 72 72 / 0.7);
+  --widget-on: rgb(106 106 106 / 0.85);
+  --ink: #e4e4e4;
+  --muted: #9b9b9b;
+  --line: #1c1c1c;
+  --nav: 164px;
+  --gap: 6px;
+  --side: 220px;
+  /* Four squares where the ring's height holds three, as `toolsWidth` computes it. */
+  --tools: calc((var(--nav) - 14px) / 3 * 4 + 17px);
+
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #1d1d1d;
+  color: var(--ink);
+  font:
+    12px/1.25 Inter,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  /* Android Chrome's translucent tap highlight looked like a stray square over pressed buttons. */
+  -webkit-tap-highlight-color: transparent;
+
+  button {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+.sheet {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  background: #f4f2ee;
+  box-shadow:
+    0 0 0 1px #0006,
+    0 10px 40px #0008;
+  transform-origin: center;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* A zero-size anchor at the Puck's center; tiles are placed around it. */
+.cluster {
+  position: absolute;
+  width: 0;
+  height: 0;
+
+  /* During a continuous action only the popup in use stays visible. */
+  &.hidden {
+    visibility: hidden;
+  }
+
+  > * {
+    position: absolute;
+  }
+}
+
+/* Tiles and their buttons are half transparent, so the drawing shows through; text and icons stay opaque. */
+.tile {
+  box-sizing: border-box;
+  padding: 3px;
+  border: 1px solid var(--tile-line);
+  border-radius: 6px;
+  background: var(--tile);
+}
+
+/*
+ * Slots around the Puck (left hand; mirrored swaps them). The middle row holds the tools and the ring; the color
+ * above and the settings below span both. The presets stand beyond the tools, the layers on the other side.
+ */
+.toolsSlot {
+  left: calc(var(--nav) / -2 - var(--gap) - var(--tools));
+  top: calc(var(--nav) / -2);
+  width: var(--tools);
+  height: var(--nav);
+}
+
+.colorSlot,
+.settingsSlot {
+  left: calc(var(--nav) / -2 - var(--gap) - var(--tools));
+  width: calc(var(--tools) + var(--gap) + var(--nav));
+}
+
+.colorSlot {
+  bottom: calc(var(--nav) / 2 + var(--gap));
+  max-height: var(--room-above);
+  overflow: auto;
+}
+
+.settingsSlot {
+  display: grid;
+  gap: var(--gap);
+  top: calc(var(--nav) / 2 + var(--gap));
+  max-height: var(--room-below);
+  overflow: auto;
+}
+
+.stacked {
+  position: static;
+}
+
+.presetsSlot {
+  left: calc(var(--nav) / -2 - 2 * var(--gap) - var(--tools) - var(--side));
+  top: calc(var(--nav) / -2);
+  width: var(--side);
+  max-height: var(--room-side);
+  overflow: auto;
+}
+
+.layersSlot {
+  left: calc(var(--nav) / 2 + var(--gap));
+  top: calc(var(--nav) / -2);
+  width: var(--side);
+  max-height: var(--room-side);
+}
+
+.mirrored {
+  .toolsSlot {
+    left: calc(var(--nav) / 2 + var(--gap));
+  }
+
+  .colorSlot,
+  .settingsSlot {
+    left: calc(var(--nav) / -2);
+  }
+
+  .presetsSlot {
+    left: calc(var(--nav) / 2 + 2 * var(--gap) + var(--tools));
+  }
+
+  .layersSlot {
+    left: calc(var(--nav) / -2 - var(--gap) - var(--side));
+  }
+}
+
+/* Square buttons */
+.square {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--widget);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--widget-hover);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.on {
+  background: var(--widget-on) !important;
+  color: #fff;
+}
+
+.selected {
+  box-shadow: inset 0 0 0 1px #b8b8b8;
+}
+
+/* The Puck ring, centered on its position. */
+.ring {
+  position: absolute;
+  translate: -50% -50%;
+  pointer-events: none;
+
+  svg {
+    display: block;
+    overflow: visible;
+  }
+}
+
+.ringInteractive {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* --lit (0–1) brightens the sector the pointer points at. */
+.ringSector {
+  --lit: 0;
+
+  fill: rgb(
+    calc(47 + 50 * var(--lit)) calc(47 + 50 * var(--lit)) calc(47 + 50 * var(--lit)) / calc(0.5 + 0.4 * var(--lit))
+  );
+  stroke: #19191999;
+  stroke-width: 1;
+}
+
+/* Two classes with the same flash, so that every run of an instant function restarts it. */
+.ringFlash {
+  animation: ring-flash 260ms ease-out;
+}
+
+.ringFlashAgain {
+  animation: ring-flash-again 260ms ease-out;
+}
+
+@keyframes ring-flash {
+  from {
+    fill: #9a9a9a;
+  }
+}
+
+@keyframes ring-flash-again {
+  from {
+    fill: #9a9a9a;
+  }
+}
+
+.ringDead {
+  fill: none;
+  stroke: #ffffff40;
+  stroke-dasharray: 3 3;
+}
+
+.ringDot {
+  fill: #fff;
+}
+
+.ringLabel {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  translate: -50% -50%;
+  color: var(--ink);
+  pointer-events: none;
+
+  small {
+    color: var(--muted);
+    font-size: 10px;
+  }
+}
+
+/* The ring editor: the function list on the left, a large ring in the middle. */
+.ringEditor {
+  position: absolute;
+  inset: 0 280px 0 0;
+  z-index: 15;
+  display: flex;
+  background: #141414e6;
+}
+
+.ringEditorPanel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  width: 240px;
+  padding: 16px;
+
+  h3 {
+    margin: 0;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 0;
+    color: var(--muted);
+  }
+}
+
+.ringPalette {
+  display: grid;
+  gap: 4px;
+}
+
+.ringChip {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: #3d3d3d;
+  text-align: left;
+  cursor: grab;
+  touch-action: none;
+
+  small {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  /* Functions already on the ring. */
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+.ringEditorActions {
+  display: flex;
+  gap: 6px;
+
+  button {
+    flex: 1;
+    height: 30px;
+    border: 0;
+    border-radius: 4px;
+    background: #3d3d3d;
+    cursor: pointer;
+  }
+}
+
+.ringEditorStage {
+  display: grid;
+  flex: 1;
+  place-items: center;
+}
+
+.ringEditorRing {
+  position: relative;
+  width: 400px;
+  height: 400px;
+
+  > .ring {
+    left: 50%;
+    top: 50%;
+  }
+
+  /* Only the sectors: the icons inside the ring are paths too. */
+  .ringSector {
+    fill: #3a3a3a;
+    stroke: #141414;
+    cursor: grab;
+  }
+}
+
+.ringHandle {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #4a4a4a;
+  translate: -50% -50%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.ringGhost {
+  position: fixed;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #5a5a5a;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+
+/* The tools: a 4×3 grid of squares, as tall as the ring. */
+.toolGrid {
+  display: grid;
+  grid-template: repeat(3, minmax(0, 1fr)) / repeat(4, minmax(0, 1fr));
+  gap: 3px;
+}
+
+/* Color: the triangle beside a column of swatches, hex and HSV, recent colors below. */
+.colorTile {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 4px 6px;
+  padding: 5px;
+}
+
+.triangleBox {
+  width: 150px;
+
+  > div {
+    margin: 0;
+  }
+}
+
+.colorSide {
+  display: grid;
+  gap: 3px;
+  align-content: center;
+}
+
+.swatches {
+  display: flex;
+}
+
+.swatch {
+  flex: 2;
+  height: 24px;
+  border: 1px solid var(--line);
+  padding: 0;
+  border-radius: 4px 0 0 4px;
+
+  & + & {
+    flex: 1;
+    border-left: 0;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+}
+
+.text {
+  width: 100%;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #1f1f1f;
+  color: var(--ink);
+  font: inherit;
+  font-family: ui-monospace, Menlo, monospace;
+  outline: none;
+
+  &:focus {
+    outline: 1px solid #8a8a8a;
+  }
+}
+
+.recent {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 2px;
+}
+
+.recentSwatch {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+/* Presets: cards with the name above a stroke across the card, two to a row. */
+.presetGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+}
+
+.presetCard {
+  display: grid;
+  min-width: 0;
+  padding: 3px 0 0;
+  border: 0;
+  border-radius: 4px;
+  background: #333;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: #3b3b3b;
+  }
+}
+
+.presetName {
+  overflow: hidden;
+  padding: 0 6px;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.strokePreview {
+  width: 100%;
+  height: 30px;
+  overflow: visible;
+}
+
+/* Selection actions */
+.actionGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+}
+
+/* Layers */
+.layersTile {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 3px;
+}
+
+.layerHeader {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 3px;
+}
+
+.layerList {
+  display: grid;
+  align-content: start;
+  gap: 1px;
+  overflow: auto;
+  border-radius: 4px;
+  background: #222;
+}
+
+.layerRow {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  height: 32px;
+  padding: 0 3px;
+  background: #303030;
+  cursor: pointer;
+
+  &.selected {
+    background: #4a4a4a;
+    box-shadow: none;
+  }
+
+  &.dim .thumb,
+  &.dim .layerName {
+    opacity: 0.45;
+  }
+}
+
+.thumb {
+  flex: none;
+  width: 36px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+
+.layerName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layerMeta {
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.layerActions {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+
+  .square {
+    aspect-ratio: auto;
+    height: 28px;
+  }
+}
+
+.iconToggle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+
+  &:not(.on) svg {
+    opacity: 0.35;
+  }
+
+  &.on {
+    background: transparent !important;
+    color: var(--ink);
+  }
+}
+
+/* Settings: groups of compact controls, four to a row. */
+.settingsTile {
+  padding: 4px;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+
+  & + & {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid #1f1f1f;
+  }
+}
+
+.toggle {
+  svg {
+    flex: none;
+  }
+
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 36px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--widget);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--widget-hover);
+  }
+}
+
+.wide {
+  grid-column: span 2;
+}
+
+/* A touch ignored as the palm, while testing palm rejection. */
+.palmMark {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border: 2px dashed #0005;
+  border-radius: 50%;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+
+/* The shortcut button, centered on its point. */
+.launcher {
+  position: absolute;
+  translate: -50% -50%;
+  border: 1px solid var(--tile-line);
+  background: var(--tile);
+  box-shadow: 0 4px 14px #0007;
+  touch-action: none;
+}
+
+.zoneCircle {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid;
+  border-radius: 50%;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+
+/* The shortcut button's safe triangle, drawn over the whole window. */
+.aimTriangle {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Where touches count as the palm while the pen is near. */
+.palmZone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(45deg, #ff3b3014 0 12px, #ff3b3026 12px 24px);
+  border-inline: 1px dashed #ff3b3080;
+  pointer-events: none;
+}
+
+/* Notices */
+
+.notice {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  translate: -50% 0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: #000a;
+  color: #ccc;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.notice {
+  bottom: 48px;
+  color: #fff;
+}

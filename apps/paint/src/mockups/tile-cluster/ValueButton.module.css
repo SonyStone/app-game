@@ -1,0 +1,183 @@
+/* A number or choice as a compact button; stacked puts the label above the value. */
+.button {
+  display: flex;
+  min-width: 0;
+  border: 0;
+  border-radius: 4px;
+  background: #3d3d3d;
+  color: #e4e4e4;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  touch-action: none;
+
+  &:hover {
+    background: #484848;
+  }
+
+  &:focus-visible {
+    outline: 1px solid #8a8a8a;
+  }
+
+  small {
+    margin-left: 1px;
+    color: #9b9b9b;
+    font-size: 10px;
+  }
+}
+
+.stacked {
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  height: 36px;
+  padding: 0 6px;
+  text-align: left;
+}
+
+.inline {
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  height: 26px;
+  padding: 0 7px;
+}
+
+.active {
+  background: #6a6a6a !important;
+}
+
+.label {
+  overflow: hidden;
+  color: #a8a8a8;
+  font-size: 10px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.value {
+  overflow: hidden;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The popup stays visible while the cluster hides during a press. */
+/* The grid of presets: rows strung on lines, so they read as sliders. */
+.popup {
+  position: fixed;
+  z-index: 10;
+  box-sizing: border-box;
+  padding: 4px;
+  border: 1px solid #191919;
+  border-radius: 6px;
+  background: #262626;
+  box-shadow: 0 8px 28px #000a;
+  color: #e4e4e4;
+  font-variant-numeric: tabular-nums;
+  touch-action: none;
+  visibility: visible;
+}
+
+.header {
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+  justify-content: center;
+  height: 24px;
+  color: #9b9b9b;
+  font-size: 12px;
+
+  b {
+    color: #fff;
+    font-size: 14px;
+  }
+
+  small {
+    font-size: 10px;
+  }
+}
+
+.cells {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, 40px);
+  grid-auto-rows: 44px;
+}
+
+.strings {
+  position: absolute;
+  inset: 0;
+
+  line {
+    stroke: #4a4a4a;
+  }
+}
+
+.cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 4px;
+
+  &[data-current] {
+    background: #3a3a3a;
+  }
+
+  &[data-exact] {
+    background: #6a6a6a;
+    color: #fff;
+  }
+}
+
+.mark {
+  display: flex;
+  align-items: center;
+}
+
+.dot {
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.cellLabel {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.thumb {
+  position: absolute;
+  width: 2px;
+  height: 28px;
+  border-radius: 1px;
+  background: #fff;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* A list of choices, the current one level with the press. */
+.list {
+  display: grid;
+  grid-auto-rows: 32px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+
+  &[data-current] {
+    background: #3a3a3a;
+  }
+
+  &[data-hover] {
+    background: #6a6a6a;
+    color: #fff;
+  }
+}
