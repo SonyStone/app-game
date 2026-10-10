@@ -1,0 +1,108 @@
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  border-top: 1px solid var(--sheet-line);
+
+  &[data-active] {
+    background: var(--sheet-raised);
+  }
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 56px;
+  padding: 0 8px;
+
+  &[data-hidden] .name {
+    opacity: 0.5;
+  }
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  min-height: 52px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+
+  &[aria-current='true'] > :first-child {
+    font-weight: 600;
+  }
+}
+
+.settings {
+  display: grid;
+  gap: 6px;
+  padding: 0 0 10px;
+}
+
+.rename {
+  margin: 0 16px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--sheet-line);
+  border-radius: 8px;
+  background: #1c1c1e;
+  color: var(--sheet-text);
+  font: inherit;
+}
+
+.opacity {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  margin: 0 16px;
+  color: var(--sheet-muted);
+
+  > :last-child {
+    height: 40px;
+  }
+}
+
+.commands {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 0 16px;
+
+  /* Seven commands fill two rows of four. */
+  > :last-child {
+    grid-column: span 2;
+  }
+}
+
+.command {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 3px;
+  min-height: 56px;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 8px;
+  background: #1c1c1e;
+  font-size: 11px !important;
+  color: var(--sheet-text);
+
+  &[aria-pressed='true'] {
+    background: var(--sheet-active);
+    box-shadow: inset 0 0 0 1px #8a8a8f;
+  }
+
+  &:not(:disabled):active {
+    background: var(--sheet-active);
+  }
+}

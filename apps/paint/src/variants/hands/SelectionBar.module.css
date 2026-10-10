@@ -1,0 +1,47 @@
+.bar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 15;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  translate: -50% 0;
+  border-radius: 10px;
+  background: rgb(38 38 40 / 0.94);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+}
+
+.group {
+  display: flex;
+  gap: 2px;
+
+  & + & {
+    padding-left: 4px;
+    border-left: 1px solid rgb(255 255 255 / 0.1);
+  }
+}
+
+.button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #e6e6e6;
+
+  &[aria-checked='true'] {
+    background: #4a4a4e;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+  }
+
+  &:not(:disabled):active {
+    background: #3a3a3d;
+  }
+}
