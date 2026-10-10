@@ -21,6 +21,26 @@ export class PsdDocumentHandle {
    */
   static open(bytes: Uint8Array): PsdDocumentHandle;
   /**
+   * Opens a PSD or PSB as Photoshop 26 does, keeping the strict reading of [`Self::open`] where it is Photoshop's
+   * document or Photoshop refuses a file the strict reader reads (see the `opening` module). `answers` holds the
+   * answers to Photoshop's prompts: `corruptLayers` (`ok`, `flatten` or `cancel`) and `layerDataProblem`
+   * (`readComposite` or `cancel`), each absent until the prompt was shown. Returns one of
+   *
+   * - `{ outcome: 'opened', document, opening }`: `document` is a handle like [`Self::open`]'s; `opening` says
+   *   whether the document is Photoshop's interpretation (`reader`: `strict` or `photoshop`), the prompts and alerts
+   *   Photoshop shows with their answers (`alerts`: `kind`, `message`, `answer` as the button's label), what the
+   *   interpretation changed from the strict reading (`repairs`, in words), why the strict reader failed
+   *   (`strictError`) and Photoshop's refusal of a file the strict reader reads (`photoshopRefuses`);
+   * - `{ outcome: 'refused', message }`: Photoshop does not open the file (and the strict reader cannot), or a prompt
+   *   was answered Cancel; the message names Photoshop's behavior;
+   * - `{ outcome: 'needsAnswer', prompt }`: Photoshop asks before opening and `answers` holds no answer:
+   *   `prompt` has its `id` (the answers' key), its verbatim `message` and its `buttons` (`answer`, `label`,
+   *   `default` for Photoshop's default button), in Photoshop's order.
+   *
+   * Throws a `TypeError` for answers that are not one of their prompt's.
+   */
+  static openLikePhotoshop(bytes: Uint8Array, answers: any): any;
+  /**
    * Size, depth, color mode, channels, format, image resources, document-level tagged blocks and the merged
    * image's layout.
    */
@@ -159,6 +179,7 @@ export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly __wbg_psddocumenthandle_free: (a: number, b: number) => void;
   readonly psddocumenthandle_open: (a: number, b: number) => [number, number, number];
+  readonly psddocumenthandle_openLikePhotoshop: (a: number, b: number, c: any) => [number, number, number];
   readonly psddocumenthandle_info: (a: number) => any;
   readonly psddocumenthandle_layers: (a: number) => [number, number, number];
   readonly psddocumenthandle_layerDetail: (a: number, b: number) => [number, number, number];

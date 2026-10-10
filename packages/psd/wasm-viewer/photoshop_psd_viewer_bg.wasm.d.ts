@@ -3,6 +3,7 @@
 export const memory: WebAssembly.Memory;
 export const __wbg_psddocumenthandle_free: (a: number, b: number) => void;
 export const psddocumenthandle_open: (a: number, b: number) => [number, number, number];
+export const psddocumenthandle_openLikePhotoshop: (a: number, b: number, c: any) => [number, number, number];
 export const psddocumenthandle_info: (a: number) => any;
 export const psddocumenthandle_layers: (a: number) => [number, number, number];
 export const psddocumenthandle_layerDetail: (a: number, b: number) => [number, number, number];

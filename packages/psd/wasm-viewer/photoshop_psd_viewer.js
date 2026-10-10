@@ -201,6 +201,37 @@ export class PsdDocumentHandle {
         return PsdDocumentHandle.__wrap(ret[0]);
     }
     /**
+     * Opens a PSD or PSB as Photoshop 26 does, keeping the strict reading of [`Self::open`] where it is Photoshop's
+     * document or Photoshop refuses a file the strict reader reads (see the `opening` module). `answers` holds the
+     * answers to Photoshop's prompts: `corruptLayers` (`ok`, `flatten` or `cancel`) and `layerDataProblem`
+     * (`readComposite` or `cancel`), each absent until the prompt was shown. Returns one of
+     *
+     * - `{ outcome: 'opened', document, opening }`: `document` is a handle like [`Self::open`]'s; `opening` says
+     *   whether the document is Photoshop's interpretation (`reader`: `strict` or `photoshop`), the prompts and alerts
+     *   Photoshop shows with their answers (`alerts`: `kind`, `message`, `answer` as the button's label), what the
+     *   interpretation changed from the strict reading (`repairs`, in words), why the strict reader failed
+     *   (`strictError`) and Photoshop's refusal of a file the strict reader reads (`photoshopRefuses`);
+     * - `{ outcome: 'refused', message }`: Photoshop does not open the file (and the strict reader cannot), or a prompt
+     *   was answered Cancel; the message names Photoshop's behavior;
+     * - `{ outcome: 'needsAnswer', prompt }`: Photoshop asks before opening and `answers` holds no answer:
+     *   `prompt` has its `id` (the answers' key), its verbatim `message` and its `buttons` (`answer`, `label`,
+     *   `default` for Photoshop's default button), in Photoshop's order.
+     *
+     * Throws a `TypeError` for answers that are not one of their prompt's.
+     * @param {Uint8Array} bytes
+     * @param {any} answers
+     * @returns {any}
+     */
+    static openLikePhotoshop(bytes, answers) {
+        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.psddocumenthandle_openLikePhotoshop(ptr0, len0, answers);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * Size, depth, color mode, channels, format, image resources, document-level tagged blocks and the merged
      * image's layout.
      * @returns {any}
@@ -570,6 +601,10 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbg_newwithbyteoffsetandlength_d97e637ebe145a9a = function(arg0, arg1, arg2) {
         const ret = new Uint8Array(arg0, arg1 >>> 0, arg2 >>> 0);
+        return ret;
+    };
+    imports.wbg.__wbg_psddocumenthandle_new = function(arg0) {
+        const ret = PsdDocumentHandle.__wrap(arg0);
         return ret;
     };
     imports.wbg.__wbg_push_737cfc8c1432c2c6 = function(arg0, arg1) {

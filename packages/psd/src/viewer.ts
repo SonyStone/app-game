@@ -26,7 +26,108 @@ export async function openPsd(bytes: Uint8Array | ArrayBuffer): Promise<PsdResul
     return layers;
   }
 
-  return { ok: true, value: makeViewerDocument(codec, handle, handle.info() as PsdInfo, layers.value) };
+  return { ok: true, value: makeViewerDocument(codec, handle, layers.value, strictOpening()) };
+}
+
+/**
+ * Opens a PSD or PSB as Photoshop 26 opens it, loading the viewer module on first use. The strict reading of
+ * {@link openPsd} is kept where it is Photoshop's document, and where Photoshop refuses a file the strict reader reads
+ * ({@link PsdOpening.photoshopRefuses}); the strict reader accepts damaged channel streams as they are, so both readings
+ * are made and compared. Otherwise the document is Photoshop's interpretation: damaged channels decoded as Photoshop
+ * decodes them, group markers and blend modes repaired, or the stored composite instead of the layers, as
+ * {@link PsdViewerDocument.opening} reports.
+ *
+ * Photoshop's prompts are answered by `answers`. A prompt Photoshop shows that `answers` leaves unanswered fails with
+ * `kind: 'needsAnswer'` and the prompt; open again with its answer. Files Photoshop refuses and the strict reader
+ * cannot read, and Cancel answers, fail with `kind: 'refused'` and Photoshop's behavior as the message.
+ */
+export async function openPsdLikePhotoshop(
+  bytes: Uint8Array | ArrayBuffer,
+  answers: PsdOpenAnswers = {}
+): Promise<PsdResult<PsdViewerDocument>> {
+  const codec = await loadPsdViewer();
+  const outcome = attempt(() => codec.PsdDocumentHandle.openLikePhotoshop(asBytes(bytes), answers) as OpenOutcome);
+  if (!outcome.ok) {
+    return outcome;
+  }
+
+  const result = outcome.value;
+  if (result.outcome === 'refused') {
+    return { ok: false, error: { kind: 'refused', message: result.message } };
+  }
+
+  if (result.outcome === 'needsAnswer') {
+    return { ok: false, error: { kind: 'needsAnswer', message: result.prompt.message, prompt: result.prompt } };
+  }
+
+  const layers = attempt(() => result.document.layers() as PsdLayerNode[]);
+  if (!layers.ok) {
+    result.document.free();
+    return layers;
+  }
+
+  return { ok: true, value: makeViewerDocument(codec, result.document, layers.value, result.opening) };
+}
+
+/** What `PsdDocumentHandle.openLikePhotoshop` returns. */
+type OpenOutcome =
+  | { outcome: 'opened'; document: PsdDocumentHandle; opening: PsdOpening }
+  | { outcome: 'refused'; message: string }
+  | { outcome: 'needsAnswer'; prompt: PsdOpenPrompt };
+
+/**
+ * Answers to the prompts Photoshop shows while opening, each absent until its prompt was shown. `corruptLayers`
+ * answers "This file contains one or more layers which appear to be corrupt. Continue reading layers?": `ok` keeps
+ * every layer with each damaged channel as Photoshop decodes it, `flatten` opens the stored composite instead of the
+ * layers, `cancel` opens nothing. `layerDataProblem` answers "There was a problem reading the layer data. Read the
+ * composite data instead?", shown for more than 8,000 layers: `readComposite` opens the stored composite (inferred;
+ * Photoshop was only seen to Cancel), `cancel` opens nothing.
+ */
+export type PsdOpenAnswers = {
+  corruptLayers?: 'ok' | 'flatten' | 'cancel';
+  layerDataProblem?: 'readComposite' | 'cancel';
+};
+
+/**
+ * A prompt Photoshop shows before opening a file: `id` is the {@link PsdOpenAnswers} key its answer goes under,
+ * `message` its verbatim text, `buttons` its buttons in Photoshop's order, `default` marking Photoshop's default button
+ * where the evidence names one.
+ */
+export type PsdOpenPrompt = {
+  [Id in keyof PsdOpenAnswers]-?: {
+    id: Id;
+    message: string;
+    buttons: { answer: NonNullable<PsdOpenAnswers[Id]>; label: string; default: boolean }[];
+  };
+}[keyof PsdOpenAnswers];
+
+/** How a document was read. Documents of {@link openPsd} are strict readings without alerts or repairs. */
+export type PsdOpening = {
+  /** `photoshop` when the document is Photoshop's interpretation, `strict` for the lossless reading. */
+  reader: 'strict' | 'photoshop';
+  /** The prompts and alerts Photoshop shows while opening, in order, each with the label of the button answering it. */
+  alerts: PsdOpenAlert[];
+  /** What Photoshop's interpretation changed from the strict reading, in words. */
+  repairs: string[];
+  /** Why the strict reader could not read the file, when it could not. */
+  strictError?: string;
+  /**
+   * Photoshop's refusal of a file the strict reader reads, naming Photoshop's behavior; the document is then the strict
+   * reading.
+   */
+  photoshopRefuses?: string;
+};
+
+/** A prompt or alert Photoshop shows while opening, with its verbatim `message` and the `answer` button's label. */
+export type PsdOpenAlert = {
+  kind: 'corruptLayers' | 'layerDataProblem' | 'unsupportedBlendMode' | 'groupsRepaired';
+  message: string;
+  answer: string;
+};
+
+/** The opening report of a strict reading Photoshop opens alike. */
+function strictOpening(): PsdOpening {
+  return { reader: 'strict', alerts: [], repairs: [] };
 }
 
 /**
@@ -64,14 +165,21 @@ export type PsdResult<T> = { ok: true; value: T } | { ok: false; error: PsdFailu
 
 /**
  * Why an operation failed: `unsupported` when the renderer meets a setting it does not reproduce exactly (the message
- * names it, for example `layer "Logo": a non-parallelogram smart-object quad`), `invalid` for unreadable input.
+ * names it, for example `layer "Logo": a non-parallelogram smart-object quad`), `invalid` for unreadable input. Opening
+ * as Photoshop does ({@link openPsdLikePhotoshop}) fails with `refused` when Photoshop does not open the file, the
+ * message naming Photoshop's behavior, and with `needsAnswer` when Photoshop asks `prompt` first, the message being the
+ * prompt's text.
  */
-export type PsdFailure = { kind: 'unsupported' | 'invalid'; message: string };
+export type PsdFailure =
+  | { kind: 'unsupported' | 'invalid' | 'refused'; message: string }
+  | { kind: 'needsAnswer'; message: string; prompt: PsdOpenPrompt };
 
 /** An open document. Every call is synchronous; run it in a worker for large files. */
 export type PsdViewerDocument = {
   /** Header, resources, document-level blocks and the merged image's layout. */
   readonly info: PsdInfo;
+  /** How the file was read: strictly, or as Photoshop interprets it, with Photoshop's alerts and repairs. */
+  readonly opening: PsdOpening;
   /** The layer tree, bottom to top as stored; group children are bottom to top as well. */
   readonly layers: readonly PsdLayerNode[];
   /**
@@ -511,8 +619,8 @@ let emptyLibrary: FontLibraryHandle | undefined;
 function makeViewerDocument(
   codec: ViewerCodec,
   handle: PsdDocumentHandle,
-  info: PsdInfo,
-  layers: PsdLayerNode[]
+  layers: PsdLayerNode[],
+  opening: PsdOpening
 ): PsdViewerDocument {
   const images = new Map<PsdRender, RenderedImage>();
   let open = true;
@@ -521,7 +629,8 @@ function makeViewerDocument(
     (fonts && libraryHandles.get(fonts)) ?? (emptyLibrary ??= new codec.PsdFontLibrary());
 
   return {
-    info,
+    info: handle.info() as PsdInfo,
+    opening,
     layers,
     render(settings, visibility = [], fonts) {
       if (!open) {

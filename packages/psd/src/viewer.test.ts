@@ -1,6 +1,14 @@
 import { expect, it } from 'vitest';
 import { writePsd, type PsdLayer } from './index';
-import { createFontLibrary, openPsd, photoshopDefaultSettings, type PsdResult, type PsdViewerDocument } from './viewer';
+import {
+  createFontLibrary,
+  openPsd,
+  openPsdLikePhotoshop,
+  photoshopDefaultSettings,
+  type PsdOpenAnswers,
+  type PsdResult,
+  type PsdViewerDocument
+} from './viewer';
 
 /** A layer of one straight RGBA color filling `width` × `height`. */
 function solid(name: string, color: number[], patch: Partial<PsdLayer> = {}): PsdLayer {
@@ -280,3 +288,99 @@ it('reports no fonts or text support for a document without type layers, and ren
   expect(render.approximations).toEqual([]);
   opened.close();
 });
+
+it('opens like Photoshop: strict files unchanged, prompts answered on request, refusals named', async () => {
+  const layers = [solid('Paper', [255, 0, 0, 255]), solid('Ink', [0, 0, 255, 255])];
+  const bytes = await writePsd({ width: 4, height: 3, layers }, new Uint8Array(4 * 3 * 4).fill(255));
+  const intact = value(await openPsdLikePhotoshop(bytes));
+  expect(intact.opening).toEqual({ reader: 'strict', alerts: [], repairs: [] });
+  expect(intact.layers.map((layer) => layer.name)).toEqual(['Paper', 'Ink']);
+  intact.close();
+
+  // The top layer's first channel stream, its transparency, gets compression code 4, which no format defines.
+  const corrupt = bytes.slice();
+  corrupt.set(u16(4), channelStreams(corrupt)[1]![0]!);
+  const strict = value(await openPsd(corrupt));
+  expect(strict.opening.reader).toBe('strict');
+  expect(strict.render(photoshopDefaultSettings)).toMatchObject({ ok: false, error: { kind: 'invalid' } });
+  strict.close();
+
+  const asked = await openPsdLikePhotoshop(corrupt);
+  const message = 'This file contains one or more layers which appear to be corrupt.  Continue reading layers?';
+  expect(asked).toEqual({
+    ok: false,
+    error: {
+      kind: 'needsAnswer',
+      message,
+      prompt: {
+        id: 'corruptLayers',
+        message,
+        buttons: [
+          { answer: 'ok', label: 'OK', default: true },
+          { answer: 'flatten', label: 'Flatten', default: false },
+          { answer: 'cancel', label: 'Cancel', default: false }
+        ]
+      }
+    }
+  });
+
+  const continued = value(await openPsdLikePhotoshop(corrupt, { corruptLayers: 'ok' }));
+  expect(continued.opening).toEqual({
+    reader: 'photoshop',
+    alerts: [{ kind: 'corruptLayers', message, answer: 'OK' }],
+    repairs: ['Channels read as Photoshop decodes them in "Ink"'],
+    strictError: undefined,
+    photoshopRefuses: undefined
+  });
+  // The damaged stream is Ink's transparency, which Photoshop reads as 0: Ink disappears.
+  expect(pixel(value(continued.render(photoshopDefaultSettings)).pixels, 0, 0)).toEqual([255, 0, 0, 255]);
+  continued.close();
+
+  const flattened = value(await openPsdLikePhotoshop(corrupt, { corruptLayers: 'flatten' }));
+  expect(flattened.layers.map((layer) => layer.name)).toEqual(['Layer 0']);
+  expect(flattened.opening.repairs).toEqual([
+    'The stored composite opened as one transparent layer, "Layer 0", instead of the layers'
+  ]);
+  expect(value(flattened.difference(value(flattened.render(photoshopDefaultSettings)))).differingSamples).toBe(0);
+  flattened.close();
+
+  const cancelled = await openPsdLikePhotoshop(corrupt, { corruptLayers: 'cancel' });
+  expect(cancelled).toMatchObject({ ok: false, error: { kind: 'refused' } });
+  expect(!cancelled.ok && cancelled.error.message).toContain('Cancel opens nothing');
+
+  const cut = await openPsdLikePhotoshop(bytes.slice(0, bytes.length / 2));
+  expect(cut).toMatchObject({ ok: false, error: { kind: 'refused' } });
+  expect(!cut.ok && cut.error.message).toMatch(/^Photoshop 26 does not open this file: /);
+
+  const wrong = await openPsdLikePhotoshop(corrupt, { corruptLayers: 'maybe' } as unknown as PsdOpenAnswers);
+  expect(wrong).toMatchObject({ ok: false, error: { kind: 'invalid' } });
+});
+
+/**
+ * The offsets of each layer record's channel streams in a PSD (not PSB), bottom to top: where each stream's compression
+ * code starts.
+ */
+function channelStreams(bytes: Uint8Array): number[][] {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let at = 26;
+  at += 4 + view.getUint32(at);
+  at += 4 + view.getUint32(at);
+  at += 8;
+  const count = Math.abs(view.getInt16(at));
+  at += 2;
+  const lengths: number[][] = [];
+  for (let record = 0; record < count; record++) {
+    const channels = view.getUint16(at + 16);
+    lengths.push(Array.from({ length: channels }, (_, channel) => view.getUint32(at + 18 + channel * 6 + 2)));
+    at += 18 + channels * 6 + 12;
+    at += 4 + view.getUint32(at);
+  }
+
+  return lengths.map((streams) =>
+    streams.map((length) => {
+      const start = at;
+      at += length;
+      return start;
+    })
+  );
+}
