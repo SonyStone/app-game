@@ -1,0 +1,104 @@
+.column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  padding: 4px 0;
+  background: var(--bg-2);
+  overflow: hidden auto;
+}
+
+.tool {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  color: var(--ink);
+
+  &[aria-pressed='true'] {
+    background: var(--bg-5);
+    color: var(--ink-strong);
+  }
+}
+
+.tool:not([aria-pressed='true'], [data-pointer='touch'] *):hover {
+  background: var(--bg-3);
+}
+
+/* The foreground swatch over the background one, Swap at the top right and Default colors at the bottom left. */
+.colors {
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 42px;
+  margin: auto 0 4px;
+}
+
+.swatch {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #000;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px #fff3;
+
+  &[aria-pressed='true'] {
+    outline: 1px solid var(--ink-strong);
+    outline-offset: 1px;
+  }
+}
+
+.foreground {
+  top: 2px;
+  left: 2px;
+  z-index: 1;
+}
+
+.background {
+  top: 14px;
+  left: 14px;
+}
+
+.swap,
+.reset {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: var(--ink);
+}
+
+.swap {
+  top: 0;
+  right: -1px;
+}
+
+.reset {
+  bottom: -1px;
+  left: 0;
+
+  span {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border: 1px solid #000;
+  }
+
+  span:first-child {
+    top: 2px;
+    left: 2px;
+    z-index: 1;
+    background: #000;
+    border-color: #888;
+  }
+
+  span:last-child {
+    top: 5px;
+    left: 5px;
+    background: #fff;
+  }
+}

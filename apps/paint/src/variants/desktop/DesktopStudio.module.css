@@ -1,9 +1,133 @@
+/*
+ * Neutral dark greys after Blender's interface; the only color is paint. Rows: menu bar, options bar, the work area
+ * (tool column, canvas, sash, dock) and the status bar.
+ */
 .editor {
-  background: #faf8f4;
-  font: 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --bg-0: #161616;
+  --bg-1: #1e1e1e;
+  --bg-2: #282828;
+  --bg-3: #333333;
+  --bg-4: #3d3d3d;
+  --bg-5: #4b4b4b;
+  --line: #111111;
+  --line-soft: #3a3a3a;
+  --line-strong: #0b0b0b;
+  --ink: #cfcfcf;
+  --ink-strong: #f2f2f2;
+  --muted: #8d8d8d;
+  --disabled: #5c5c5c;
+  /* ScrubNumber */
+  --scrub-height: 24px;
+  --scrub-radius: 3px;
+  --scrub-track: var(--bg-1);
+  --scrub-fill: var(--bg-5);
+  --scrub-focus: var(--ink);
+  --dock-width: 284px;
+
+  display: grid;
+  grid-template-rows: 28px auto minmax(0, 1fr) 22px;
+  grid-template-areas: 'menu' 'options' 'main' 'status';
+  background: var(--bg-0);
+  color: var(--ink);
+  color-scheme: dark;
+  font:
+    12px/1.3 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
 }
 
-.ui {
+/* A reset without specificity, so that every component's own class wins. */
+:where(.editor button) {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+}
+
+:where(.editor button:focus-visible) {
+  outline: 1px solid var(--ink);
+  outline-offset: -1px;
+}
+
+.menuRow {
+  grid-area: menu;
+  position: relative;
+  z-index: 30;
+  min-width: 0;
+}
+
+.optionsRow {
+  grid-area: options;
+  position: relative;
+  z-index: 20;
+  height: 34px;
+  min-width: 0;
+}
+
+.main {
+  grid-area: main;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 3px var(--dock-width);
+  grid-template-areas: 'tools canvas sash dock';
+  min-height: 0;
+}
+
+.main[data-dock='left'] {
+  grid-template-columns: var(--dock-width) 3px minmax(0, 1fr) 44px;
+  grid-template-areas: 'dock sash canvas tools';
+}
+
+.main[data-panels='false'] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'canvas';
+}
+
+.toolsCell {
+  grid-area: tools;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+}
+
+.main[data-dock='left'] .toolsCell {
+  border-right: 0;
+  border-left: 1px solid var(--line);
+}
+
+.canvasCell {
+  position: relative;
+  grid-area: canvas;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+
+  /* The canvas takes focus for its keys; a ring around the whole drawing would only distract. */
+  canvas:focus {
+    outline: none;
+  }
+}
+
+.sashCell {
+  grid-area: sash;
+  min-height: 0;
+}
+
+.dockCell {
+  grid-area: dock;
+  min-width: 0;
+  min-height: 0;
+}
+
+.statusRow {
+  grid-area: status;
+  min-width: 0;
+}
+
+/* Session notices sit over the canvas without taking its presses. */
+.notices {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -11,4 +135,28 @@
   > * {
     pointer-events: auto;
   }
+}
+
+.viewLayer {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &[data-mode='zoom'] {
+    cursor: zoom-in;
+  }
+
+  &[data-mode='rotate'] {
+    cursor: alias;
+  }
+}
+
+.failed {
+  margin: 12px;
+  color: var(--muted);
 }

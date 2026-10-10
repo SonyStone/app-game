@@ -1,0 +1,71 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  padding: 0 6px 0 10px;
+  background: var(--bg-1);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item {
+  flex: none;
+  max-width: 160px;
+  height: 18px;
+  padding: 0 8px;
+  border-left: 1px solid var(--line-soft);
+  color: var(--muted);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+button.item:not(:disabled) {
+  color: var(--ink);
+}
+
+.zoom {
+  flex: none;
+  padding: 0 6px;
+  border-left: 1px solid var(--line-soft);
+  --scrub-width: 64px;
+  --scrub-height: 18px;
+}
+
+.save {
+  display: inline-flex;
+  flex: none;
+  min-width: 74px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 4px 0 8px;
+  border-left: 1px solid var(--line-soft);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.save[data-state='saved'] .dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+
+.save[data-state='unsaved'] .dot {
+  background: var(--ink-strong);
+}

@@ -1,0 +1,277 @@
+.caption {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Color */
+
+.color {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  padding: 6px 8px 8px;
+  overflow: hidden auto;
+}
+
+.colorRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.targets {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  padding: 1px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+
+  button {
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 3px;
+    color: var(--muted);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  button[aria-checked='true'] {
+    background: var(--bg-5);
+    color: var(--ink-strong);
+  }
+}
+
+.chip {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px #000,
+    inset 0 0 0 1px #fff2;
+}
+
+.hex {
+  flex: none;
+  width: 70px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg-1);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+
+  &:focus {
+    outline: 1px solid var(--ink);
+    outline-offset: -1px;
+  }
+}
+
+.triangle {
+  flex: none;
+  width: min(100%, 204px);
+  margin: 0 auto;
+}
+
+.hsv {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-height: 16px;
+}
+
+.swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px #000,
+    inset 0 0 0 1px #fff2;
+}
+
+/* Brushes */
+
+.brushes {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.brushBar,
+.layerBar,
+.layerFooter {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 6px 0 8px;
+
+  > select {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.brushBar,
+.layerBar {
+  border-bottom: 1px solid var(--line);
+}
+
+.brushList,
+.layerList {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden auto;
+  background: var(--bg-1);
+  overscroll-behavior: contain;
+}
+
+.brush {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 34px;
+  padding: 0 6px 0 8px;
+  border-bottom: 1px solid var(--bg-2);
+  color: var(--ink);
+  text-align: left;
+
+  &[aria-selected='true'] {
+    background: var(--bg-5);
+    color: var(--ink-strong);
+  }
+
+  &:disabled {
+    color: var(--disabled);
+  }
+}
+
+.brush:not([aria-selected='true'], [data-pointer='touch'] *):hover {
+  background: var(--bg-3);
+}
+
+.brushName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brushStroke {
+  min-width: 0;
+}
+
+/* Layers */
+
+.layers {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.layer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px 0 0;
+  border-bottom: 1px solid var(--bg-2);
+  background: var(--bg-1);
+  color: var(--ink);
+  cursor: default;
+  touch-action: none;
+
+  &[aria-selected='true'] {
+    background: var(--bg-5);
+    color: var(--ink-strong);
+  }
+
+  &[data-hidden='true'] .layerName {
+    color: var(--muted);
+  }
+
+  &[data-dragged='true'] {
+    z-index: 1;
+    box-shadow: 0 2px 10px #000a;
+  }
+}
+
+.eye {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 100%;
+  border-right: 1px solid var(--bg-2);
+  color: var(--ink);
+
+  [data-hidden='true'] > & {
+    color: var(--disabled);
+  }
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--muted);
+}
+
+.layerName {
+  flex: 1;
+  min-width: 0;
+  padding-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rename {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: var(--bg-0);
+  color: var(--ink-strong);
+  font: inherit;
+  outline: none;
+}
+
+.layerInfo {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.layerFooter {
+  justify-content: flex-end;
+  gap: 2px;
+  border-top: 1px solid var(--line);
+
+  > .caption {
+    margin-right: auto;
+  }
+}

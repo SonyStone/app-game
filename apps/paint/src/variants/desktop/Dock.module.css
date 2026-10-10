@@ -1,0 +1,103 @@
+.dock {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-0);
+  overflow: hidden;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-2);
+
+  &[data-collapsed='false'] {
+    min-height: 96px;
+  }
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 4px 0 2px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line);
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  padding: 0 8px 0 2px;
+  border-radius: 3px;
+  color: var(--ink-strong);
+  font-weight: 600;
+}
+
+.title:not([data-pointer='touch'] *):hover {
+  background: var(--bg-3);
+}
+
+.chevron {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  color: var(--muted);
+}
+
+.headerControls {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+
+.body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Between panels; a taller invisible band takes the press. */
+.sash {
+  position: relative;
+  flex: none;
+  height: 3px;
+  background: var(--bg-0);
+  cursor: row-resize;
+  touch-action: none;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -5px 0;
+  }
+
+  &[data-inert='true'] {
+    cursor: default;
+  }
+}
+
+.widthSash {
+  position: relative;
+  height: 100%;
+  background: var(--bg-0);
+  cursor: col-resize;
+  touch-action: none;
+
+  &::before {
+    content: '';
+    position: absolute;
+    z-index: 5;
+    inset: 0 -5px;
+  }
+}
