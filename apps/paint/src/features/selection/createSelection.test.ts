@@ -227,7 +227,9 @@ function setup() {
             linearBlending: false,
             selection: mask,
             state: { get: () => undefined, set: () => {} },
-            floating: { show: () => {}, move: () => {}, clear: async () => {} }
+            floating: { show: () => {}, move: () => {}, clear: async () => {} },
+            history: [],
+            preview: { show: () => {}, clear: () => {} }
           },
           parsed
         )

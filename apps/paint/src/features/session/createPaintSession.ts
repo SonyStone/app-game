@@ -33,6 +33,7 @@ import { createHiddenLayerGuard } from '../hidden-layer';
 import { createInkTrail } from '../ink-trail';
 import { createImagePlacement, createLayerFilter } from '../layers';
 import { createLiveBroadcast, liveRelayUrl } from '../live';
+import { createLocalUndo } from '../local-undo';
 import { createPalmRejection, createPalmRejectionSettings } from '../palm-rejection';
 import { createPenHover } from '../pen-hover';
 import { createPerformanceMonitor } from '../performance';
@@ -120,11 +121,17 @@ export function createPaintSession(options: {
   /** Sends document commands, respecting a pending selection edit and clearing the outline where needed. */
   const guarded = guardEdits(selection, engine.send);
   /**
-   * Sends document commands. While transforming, Undo cancels the transform and other document changes wait for it
-   * to be applied or cancelled, so the transform stays one undo step.
+   * Sends document commands. Undo during a local undo session cancels the session instead. While transforming, Undo
+   * cancels the transform and other document changes wait for it to be applied or cancelled, so the transform stays
+   * one undo step.
    */
   const edit: typeof guarded = (command) => {
     recorder.command(command);
+    if (localUndo.open() && command.type === 'undo') {
+      void localUndo.cancel();
+      return;
+    }
+
     if (transform.active()) {
       if (command.type === 'undo') {
         void transform.cancel();
@@ -228,6 +235,16 @@ export function createPaintSession(options: {
     canStart: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
     onError: setError
   });
+  const localUndo = createLocalUndo({
+    active: () => tools.tool() === 'local-undo',
+    run: engine.runEdit,
+    canStart: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
+    document: () => ({
+      top: engine.state().canUndo ? engine.state().historyCurrentId : undefined,
+      activeId: engine.state().activeId
+    }),
+    onError: setError
+  });
   createEffect(
     () => (tools.tool() === 'fill' || tools.tool() === 'gradient') && !selection.selected() && !transform.active(),
     (unselected) => {
@@ -328,7 +345,9 @@ export function createPaintSession(options: {
   });
   const freshTab = createFreshTab({
     lostContacts: penHover.lostContacts,
-    idle: () => engine.canEdit() && !engine.isDrawing() && !transform.active() && !selection.drawing(),
+    // A transform or local undo in progress lives in this engine only.
+    idle: () =>
+      engine.canEdit() && !engine.isDrawing() && !transform.active() && !localUndo.open() && !selection.drawing(),
     moveOut: engine.moveOut
   });
   const inkTrail = createInkTrail({ canvas, enabled: developer.inkTrail, zoom: () => camera.current().zoom });
@@ -395,6 +414,8 @@ export function createPaintSession(options: {
     gradient,
     hiddenLayer,
     transform,
+    /** The local undo tool's settings and session; see `createLocalUndo`. */
+    localUndo,
     fullscreen,
     colorWheel,
     viewOptions,
@@ -442,6 +463,7 @@ export function createPaintSession(options: {
     paintsColor,
     paintsWithBrush,
     supportsSymmetry,
+    masksWithBrush,
     blockCursor,
     cursorSize,
     visibleArea,
@@ -482,6 +504,7 @@ export function createPaintSession(options: {
         transform.canvasAction,
         hiddenLayer.canvasAction,
         mixer.canvasAction,
+        localUndo.canvasAction,
         fill.canvasAction,
         gradient.canvasAction
       ),
@@ -533,6 +556,11 @@ export function createPaintSession(options: {
       resetZoom: camera.resetZoom,
       transform: toggleTransform,
       confirm() {
+        if (localUndo.open()) {
+          void localUndo.apply();
+          return true;
+        }
+
         if (transform.active()) {
           void transform.end();
           return true;
@@ -547,6 +575,12 @@ export function createPaintSession(options: {
       },
       cancel() {
         quickShape.cancel();
+        // Escape ends a local undo session without deselecting.
+        if (localUndo.open()) {
+          void localUndo.cancel();
+          return;
+        }
+
         void transform.cancel();
         mixer.cancelPick();
         colorPicker.cancel();
@@ -727,6 +761,11 @@ export function createPaintSession(options: {
   /** The active tool paints with a brush: the brush or the eraser. */
   function paintsWithBrush() {
     return tool() === 'brush' || tool() === 'eraser';
+  }
+
+  /** The local undo marks its area with the mask brush, which shows its own cursor. */
+  function masksWithBrush() {
+    return tool() === 'local-undo' && localUndo.settings().mode === 'brush';
   }
 
   /** The current tool paints symmetric copies. */

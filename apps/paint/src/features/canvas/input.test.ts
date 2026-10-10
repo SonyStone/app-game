@@ -38,7 +38,8 @@ describe('input to worker contract', () => {
     const { pointer, commands } = setup(undefined, defaultBrush, { enabled: (event) => event.altKey, run }, camera);
     pointer('pointerdown', 420, 330, { altKey: true, pointerType: 'pen' });
     expect(run).toHaveBeenCalledExactlyOnceWith(
-      screenToWorld({ x: 420, y: 330 }, camera(), { width: 800, height: 600 })
+      screenToWorld({ x: 420, y: 330 }, camera(), { width: 800, height: 600 }),
+      { pressure: 1, altKey: true, shiftKey: false }
     );
     pointer('pointermove', 470, 350, { pointerType: 'pen' });
     pointer('pointerup', 480, 350, { pointerType: 'pen' });
@@ -54,9 +55,14 @@ describe('input to worker contract', () => {
     const { pointer, commands } = setup(undefined, defaultBrush, action);
     const world = (x: number, y: number) => screenToWorld({ x, y }, defaultCamera(), { width: 800, height: 600 });
     pointer('pointerdown', 400, 300, { pointerType: 'pen' });
-    pointer('pointermove', 420, 310, { pointerType: 'pen' });
+    pointer('pointermove', 420, 310, { pointerType: 'pen', pressure: 0.25, shiftKey: true });
     pointer('pointerup', 420, 310, { pointerType: 'pen' });
-    expect(action.move).toHaveBeenCalledExactlyOnceWith(world(420, 310));
+    // The drag carries the pen pressure and modifier keys of each movement.
+    expect(action.move).toHaveBeenCalledExactlyOnceWith(world(420, 310), {
+      pressure: 0.25,
+      altKey: false,
+      shiftKey: true
+    });
     expect(action.end).toHaveBeenLastCalledWith(false);
     pointer('pointerdown', 400, 300, { pointerType: 'pen' });
     pointer('pointercancel', 400, 300, { pointerType: 'pen' });

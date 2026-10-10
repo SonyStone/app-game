@@ -6,6 +6,7 @@ import { BrushCursor, CanvasDebug, PaintCanvas } from '../canvas';
 import { ColorPickerLoupe } from '../color';
 import { FrameGuides } from '../frames';
 import { GradientPreview } from '../gradient';
+import { LocalUndoOverlay } from '../local-undo';
 import { PalmRejectionDebug } from '../palm-rejection';
 import { PerformancePanel } from '../performance';
 import { QuickShapeHint } from '../quickshape';
@@ -58,7 +59,12 @@ export function PaintStage(props: {
           <PaintCanvas
             connect={(element) => engine.connect(element, running.mode)}
             input={input}
-            crosshair={tool() === 'lasso' || tool() === 'fill' || tool() === 'gradient'}
+            crosshair={
+              tool() === 'lasso' ||
+              tool() === 'fill' ||
+              tool() === 'gradient' ||
+              (tool() === 'local-undo' && !session.masksWithBrush())
+            }
             ref={session.setCanvas}
           />
         )}
@@ -92,8 +98,8 @@ export function StageGuides(props: { session: PaintSession }) {
 
 /**
  * Overlays of work in progress on the canvas: the brush size and opacity HUD while adjusting, the transform box, the
- * brush cursor, the color picker loupe, the gradient preview, the Mixer Brush pick hint and the name of the shape a
- * held stroke became.
+ * brush cursor, the local undo's area and mask brush cursor, the color picker loupe, the gradient preview, the Mixer
+ * Brush pick hint and the name of the shape a held stroke became.
  */
 export function StageOverlays(props: {
   session: PaintSession;
@@ -101,7 +107,7 @@ export function StageOverlays(props: {
   cursor?: boolean;
 }) {
   const session = untrack(() => props.session);
-  const { camera, size, brush, transform, colorPicker, gradient, selection, mixer, quickShape } = session;
+  const { camera, size, brush, transform, colorPicker, gradient, selection, mixer, quickShape, localUndo } = session;
   const toScreen = (point: { x: number; y: number }) => worldToScreen(point, camera.camera(), size());
   const toDocument = (point: { x: number; y: number }) => screenToWorld(point, camera.current(), size());
 
@@ -151,6 +157,24 @@ export function StageOverlays(props: {
         }
       >
         {(point) => <BrushCursor point={point()} size={session.cursorSize()} square={session.blockCursor()} />}
+      </Show>
+      <Show when={(props.cursor ?? true) && session.ready() && session.masksWithBrush() && session.cursor()}>
+        {(point) => (
+          <BrushCursor
+            point={point()}
+            size={Math.max(2, localUndo.settings().size * camera.camera().zoom)}
+            square={false}
+          />
+        )}
+      </Show>
+      <Show when={session.tool() === 'local-undo'}>
+        <LocalUndoOverlay
+          outline={localUndo.shown()?.outline}
+          gesture={localUndo.gesture()}
+          toScreen={toScreen}
+          zoom={camera.camera().zoom}
+          size={size()}
+        />
       </Show>
       <Show when={colorPicker.preview()}>{(preview) => <ColorPickerLoupe preview={preview()} />}</Show>
       <Show when={gradient.preview()}>

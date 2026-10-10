@@ -26,6 +26,19 @@ export const toolHints = {
     description: 'Select pixels with a lasso, rectangle or ellipse; brushes, the fill and the gradient then stay inside.',
     demo: () => <path class={hintDemo.dashed} d="M30 18c20-12 62-8 66 12s-26 32-50 26-36-26-16-38Z" />
   },
+  'local-undo': {
+    title: 'Local undo',
+    shortcut: 'Y',
+    description: 'Returns a part of the layer to an earlier state: brush or outline it, or tap strokes away.',
+    demo: () => (
+      <>
+        <path class={hintDemo.outline} d="M10 56h100" />
+        <path class={hintDemo.ink} d="M42 22c12 24 28 24 40 0" />
+        <path class={hintDemo.erase} d="M42 22c12 24 28 24 40 0" />
+        <path class={hintDemo.dashed} d="M34 10h56v54H34Z" />
+      </>
+    )
+  },
   transform: {
     title: 'Transform',
     shortcut: '⌘/Ctrl T',

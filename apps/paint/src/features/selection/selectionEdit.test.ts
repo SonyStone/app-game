@@ -112,7 +112,9 @@ function context(layer: Layer, selection: SelectionMask): DocumentEditContext {
     linearBlending: false,
     selection,
     state: { get: () => undefined, set: () => {} },
-    floating: { show: () => {}, move: () => {}, clear: async () => {} }
+    floating: { show: () => {}, move: () => {}, clear: async () => {} },
+    history: [],
+    preview: { show: () => {}, clear: () => {} }
   };
 }
 

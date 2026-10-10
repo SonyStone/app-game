@@ -109,20 +109,21 @@ it('runs the first canvas action enabled at contact, and gives it the drag and r
   const picker = { enabled: vi.fn(() => true), run: vi.fn(), move: vi.fn(), end: vi.fn() };
   const action = firstCanvasAction(mixer, picker);
   expect(action.enabled({ altKey: true, pointerType: 'pen' })).toBe(true);
-  action.run({ x: 1, y: 2 });
-  action.move!({ x: 2, y: 2 });
+  const contact = { pressure: 0.5, altKey: true, shiftKey: false };
+  action.run({ x: 1, y: 2 }, contact);
+  action.move!({ x: 2, y: 2 }, contact);
   action.end!(false);
-  expect(picker.run).toHaveBeenCalledWith({ x: 1, y: 2 });
-  expect(picker.move).toHaveBeenCalledWith({ x: 2, y: 2 });
+  expect(picker.run).toHaveBeenCalledWith({ x: 1, y: 2 }, contact);
+  expect(picker.move).toHaveBeenCalledWith({ x: 2, y: 2 }, contact);
   expect(picker.end).toHaveBeenCalledWith(false);
   expect(mixer.run).not.toHaveBeenCalled();
 
   mixer.enabled.mockReturnValue(true);
   action.enabled({ altKey: true, pointerType: 'pen' });
-  action.run({ x: 3, y: 4 });
-  action.move!({ x: 5, y: 4 });
+  action.run({ x: 3, y: 4 }, contact);
+  action.move!({ x: 5, y: 4 }, contact);
   action.end!(true);
-  expect(mixer.run).toHaveBeenCalledWith({ x: 3, y: 4 });
+  expect(mixer.run).toHaveBeenCalledWith({ x: 3, y: 4 }, contact);
   expect(picker.move).toHaveBeenCalledTimes(1);
 });
 

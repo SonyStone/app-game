@@ -164,7 +164,9 @@ async function run(command: GradientCommand, target = layer(), selection: Select
     linearBlending: false,
     selection,
     state: { get: () => undefined, set: () => {} },
-    floating: { show: () => {}, move: () => {}, clear: async () => {} }
+    floating: { show: () => {}, move: () => {}, clear: async () => {} },
+    history: [],
+    preview: { show: () => {}, clear: () => {} }
   };
   return gradientEdit.run(context, command);
 }

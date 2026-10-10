@@ -44,6 +44,7 @@ const paths = {
   scene: 'm12 2 9 5v10l-9 5-9-5V7Zm0 10v10M3 7l9 5 9-5M12 2v10',
   animation: 'M3 5h18v14H3ZM7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4',
   undo: 'M9 5 3 11l6 6M3 11h11a6 6 0 0 1 6 6',
+  localUndo: 'M10 7 6 11l4 4M6 11h7a4 4 0 0 1 0 8h-2M3 4h2M8 4h2M13 4h2M18 4h2M21 7v2M21 12v2',
   redo: 'm15 5 6 6-6 6m6-6H10a6 6 0 0 0-6 6',
   gradient: 'M4 4h16v16H4ZM8 4v16M12 4v16M15.5 4v16M18.5 4v16',
   numbers: 'M10 4 8 20M16 4l-2 16M5 9h15M4 15h15',

@@ -100,7 +100,16 @@ export function createDesktopTools(session: PaintSession) {
 }
 
 /** The tools of the tool column. */
-export type DesktopTool = 'brush' | 'eraser' | 'select' | 'fill' | 'gradient' | 'transform' | 'eyedropper' | 'view';
+export type DesktopTool =
+  | 'brush'
+  | 'eraser'
+  | 'select'
+  | 'fill'
+  | 'gradient'
+  | 'local-undo'
+  | 'transform'
+  | 'eyedropper'
+  | 'view';
 
 /** The variant's tools; see `createDesktopTools`. */
 export type DesktopTools = ReturnType<typeof createDesktopTools>;

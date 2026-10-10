@@ -71,6 +71,7 @@ const hints: Record<DesktopTool, string> = {
   select: 'Draw a selection · Shift adds, Alt subtracts · Enter closes a polygon · Ctrl+D deselects',
   fill: 'Click to fill inside the selection · Alt picks a color',
   gradient: 'Drag to draw a gradient inside the selection',
+  'local-undo': 'Mark part of the layer to return it to an earlier state · Enter applies, Esc cancels',
   transform: 'Drag inside to move, handles to scale and rotate · Enter applies, Esc cancels',
   eyedropper: 'Press the canvas to pick a color; the tool returns afterwards',
   view: 'Drag to move the view · Z zooms, R rotates, H pans · wheel zooms'

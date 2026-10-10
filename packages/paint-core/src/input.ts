@@ -47,12 +47,12 @@ export function attachInput(
     /**
      * Optional contact action, e.g. sampling canvas paint. Consumes the contact without a stroke or touch pan: `run`
      * receives the document point of the contact, `move` the points it is dragged to and `end` its release, or a
-     * cancellation with `cancelled` set.
+     * cancellation with `cancelled` set. Both receive the pen pressure and modifier keys; see `CanvasContact`.
      */
     canvasAction?: {
       enabled: (event: Pick<PointerEvent, 'altKey' | 'pointerType'>) => boolean;
-      run: (point: Point) => void;
-      move?: (point: Point) => void;
+      run: (point: Point, contact: CanvasContact) => void;
+      move?: (point: Point, contact: CanvasContact) => void;
       end?: (cancelled: boolean) => void;
     };
     /**
@@ -343,7 +343,7 @@ export function attachInput(
       if (!gesture && !touches.size && event.button === 0 && options.canvasAction?.enabled(event)) {
         canvas.setPointerCapture(event.pointerId);
         gesture = { kind: 'action', id: event.pointerId };
-        options.canvasAction.run(screenToWorld(point, options.camera(), options.size()));
+        options.canvasAction.run(screenToWorld(point, options.camera(), options.size()), canvasContact(event));
         event.preventDefault();
         return;
       }
@@ -494,7 +494,7 @@ export function attachInput(
       }
       if (!gesture || gesture.id !== event.pointerId) return;
       if (gesture.kind === 'action') {
-        options.canvasAction?.move?.(screenToWorld(point, options.camera(), options.size()));
+        options.canvasAction?.move?.(screenToWorld(point, options.camera(), options.size()), canvasContact(event));
         return;
       }
       if (gesture.kind === 'adjust') {
@@ -654,6 +654,17 @@ export type StrokeHoldDrag = {
 
 /** Distance in CSS pixels a drawing pen may move and still count as resting, for a stroke hold. */
 export const strokeHoldSlop = 4;
+
+/** A canvas action's contact as pressed or dragged: pen pressure from 0 to 1, 1 for a mouse, and modifier keys. */
+export type CanvasContact = { pressure: number; altKey: boolean; shiftKey: boolean };
+
+function canvasContact(event: PointerEvent): CanvasContact {
+  return {
+    pressure: event.pointerType === 'pen' ? event.pressure : 1,
+    altKey: event.altKey,
+    shiftKey: event.shiftKey
+  };
+}
 
 /** Longest touch, in milliseconds, that still counts as a tap. */
 const touchTapMs = 350;

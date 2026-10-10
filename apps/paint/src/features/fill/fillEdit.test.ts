@@ -87,9 +87,10 @@ it('fills the active layer by the active layer or all visible layers, over its e
   const read = async (pixels: unknown) => pixels as Uint8Array;
   const state = { get: () => undefined, set: () => {} };
   const floating = { show: () => {}, move: () => {}, clear: async () => {} };
+  const edits = { history: [], preview: { show: () => {}, clear: () => {} } };
   const fill = (command: Partial<FillCommand>) =>
     fillEdit.run(
-      { layers: [paint, lines], active: paint, readTile: read, linearBlending: false, selection: emptySelection, state, floating },
+      { layers: [paint, lines], active: paint, readTile: read, linearBlending: false, selection: emptySelection, state, floating, ...edits },
       { ...fillCommand(), ...command }
     );
 
@@ -106,7 +107,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
 
   await expect(
     fillEdit.run(
-      { layers: [paint], active: { ...paint, visible: false }, readTile: read, linearBlending: false, selection: emptySelection, state, floating },
+      { layers: [paint], active: { ...paint, visible: false }, readTile: read, linearBlending: false, selection: emptySelection, state, floating, ...edits },
       fillCommand()
     )
   ).rejects.toThrow('Show the active layer');
@@ -117,7 +118,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
     clipping: true
   };
   const clippedFill = await fillEdit.run(
-    { layers: [paint, lines, solid], active: paint, readTile: read, linearBlending: false, selection: emptySelection, state, floating },
+    { layers: [paint, lines, solid], active: paint, readTile: read, linearBlending: false, selection: emptySelection, state, floating, ...edits },
     { ...fillCommand(), source: 'all' }
   );
   expect(count(alphaMask(clippedFill.changes[0]!.after as Uint8Array))).toBe(18 * 18);
@@ -125,7 +126,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
   // With alpha lock, only the layer's own pixels change color, keeping their alpha.
   const line = layer('line', outline(0, 0, 20, 20, [0, 0, 0, 128]));
   const locked = await fillEdit.run(
-    { layers: [{ ...line, alphaLock: true }], active: { ...line, alphaLock: true }, readTile: read, linearBlending: false, selection: emptySelection, state, floating },
+    { layers: [{ ...line, alphaLock: true }], active: { ...line, alphaLock: true }, readTile: read, linearBlending: false, selection: emptySelection, state, floating, ...edits },
     { ...fillCommand(), point: { x: 0, y: 0 }, tolerance: 0, source: 'layer' }
   );
   const recolored = locked.changes[0]!.after as Uint8Array;
@@ -150,7 +151,9 @@ it('stays inside the selection, also when it grows under edges, fades across a f
         linearBlending: false,
         selection,
         state: { get: () => undefined, set: () => {} },
-        floating: { show: () => {}, move: () => {}, clear: async () => {} }
+        floating: { show: () => {}, move: () => {}, clear: async () => {} },
+        history: [],
+        preview: { show: () => {}, clear: () => {} }
       },
       { ...fillCommand(), source: 'layer', expand: 4, ...command }
     );

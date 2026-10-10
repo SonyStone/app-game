@@ -288,7 +288,7 @@ try {
   });
 
   await step('a mouse stroke can be undone and redone', async () => {
-    const undo = page.getByRole('button', { name: 'Undo' });
+    const undo = page.getByRole('button', { name: 'Undo', exact: true });
     const redo = page.getByRole('button', { name: 'Redo' });
     assert.equal(await undo.isDisabled(), true);
     await stroke(page);
@@ -445,7 +445,7 @@ try {
       await page.waitForTimeout(60);
       await touch('touchEnd', []);
     };
-    const undo = page.getByRole('button', { name: 'Undo' });
+    const undo = page.getByRole('button', { name: 'Undo', exact: true });
     const redo = page.getByRole('button', { name: 'Redo' });
     await stroke(page);
     await waitEnabled(undo);
@@ -700,7 +700,7 @@ try {
     await page.keyboard.press('Escape');
     assert.equal(await pick('FF0000'), '00C040');
 
-    await page.getByRole('button', { name: 'Undo' }).click();
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
     await waitForSaved(page);
     const restored = await pick('00C040');
     const channels = [0, 2, 4].map((index) => parseInt(restored.slice(index, index + 2), 16));
@@ -1242,6 +1242,42 @@ try {
     await undo(page, 7);
   });
 
+  await step('the local undo returns a brushed area to an earlier state and applies it as one undo step', async () => {
+    const { cx, cy } = await workspaceCenter(page);
+    const cross = { x: cx - 150, y: cy + 150 };
+    await page.keyboard.press('b');
+    await page.getByRole('button', { name: 'Layers' }).click();
+    await page.getByRole('button', { name: 'Add layer' }).click();
+    await waitForSaved(page);
+    await page.keyboard.press('Escape');
+    await setColor(page, 'ff0000');
+    await drawLine(page, { x: cross.x - 60, y: cross.y }, { x: cross.x + 60, y: cross.y });
+    await setColor(page, '0000ff');
+    await drawLine(page, { x: cross.x, y: cross.y - 60 }, { x: cross.x, y: cross.y + 60 });
+
+    await page.keyboard.press('y');
+    await page.getByRole('button', { name: 'Brush settings' }).click();
+    await page.getByRole('group', { name: 'Mark the area with' }).getByRole('button', { name: 'Brush' }).click();
+    const status = page.locator('#paint-panel p[role="status"]');
+    await page.keyboard.press('Escape');
+    await page.mouse.move(cross.x - 10, cross.y - 10);
+    await page.mouse.down();
+    await page.mouse.move(cross.x + 10, cross.y + 10, { steps: 6 });
+    await page.mouse.up();
+    await page.getByRole('button', { name: 'Brush settings' }).click();
+    await status.filter({ hasText: 'Step 1 of 2' }).waitFor({ timeout: 10_000 });
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Enter');
+    await waitForSaved(page);
+
+    await page.keyboard.press('b');
+    const [red, green, blue] = await pickRgb(page, cross, '0000ff');
+    assert.ok(red > 0xc0 && green < 0x40 && blue < 0x40, `expected the red stroke at the crossing, got ${[red, green, blue]}`);
+    await undo(page, 1);
+    const back = await pickRgb(page, cross, 'ff0000');
+    assert.ok(back[2] > 0xc0 && back[0] < 0x40, `expected the blue stroke again after Undo, got ${back}`);
+  });
+
   await step('the visible canvas exports as PNG', async () => {
     await page.getByRole('button', { name: 'Drawing menu' }).click();
     const [download] = await Promise.all([
@@ -1333,7 +1369,7 @@ try {
     await page.getByRole('button', { name: 'Close developer tools' }).click();
     // Undo history belongs to one engine session, so a disabled Undo shows that the replacement engine has reported
     // its own document state; until then the editor still shows the previous engine's state.
-    const undo = page.getByRole('button', { name: 'Undo' });
+    const undo = page.getByRole('button', { name: 'Undo', exact: true });
     await undo.and(page.locator(':disabled')).waitFor({ timeout: 30_000 });
     await waitForSaved(page);
     // The replacement restored the saved drawing, so the empty-canvas hint stays hidden.
@@ -1669,7 +1705,7 @@ async function pickRgb(page, point, previous) {
 /** Undoes `count` steps, waiting for each to be saved. */
 async function undo(page, count) {
   for (let i = 0; i < count; i++) {
-    await page.getByRole('button', { name: 'Undo' }).click();
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
     await waitForSaved(page);
   }
 }

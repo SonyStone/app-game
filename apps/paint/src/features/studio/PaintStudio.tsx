@@ -15,6 +15,7 @@ import { FillPanel } from '../fill';
 import { FrameEditor, FramesSection } from '../frames';
 import { FreshTabControls } from '../fresh-tab';
 import { GradientPanel } from '../gradient';
+import { LocalUndoPanel } from '../local-undo';
 import { HueTriangle } from '../hue-triangle';
 import { HistorySourceControl, LayersPanel } from '../layers';
 import { LiveBadge, LiveControls, LiveViewer, liveRelayUrl, watchedRoom, watchLink } from '../live';
@@ -83,6 +84,7 @@ export function PaintStudio(props: {
     fill,
     gradient,
     transform,
+    localUndo,
     fullscreen,
     colorWheel,
     viewOptions,
@@ -167,10 +169,13 @@ export function PaintStudio(props: {
     launcher?.focus({ preventScroll: true });
   }
 
-  /** Opens the settings of the active tool: the fill panel for the fill, otherwise the brush panel and its presets. */
+  /**
+   * Opens the settings of the active tool: the panel of the fill, the gradient or the local undo for them, otherwise
+   * the brush panel and its presets.
+   */
   function openBrushSettings(target: HTMLElement) {
-    if (tool() === 'fill' || tool() === 'gradient') {
-      togglePanel(tool() as 'fill' | 'gradient', target);
+    if (tool() === 'fill' || tool() === 'gradient' || tool() === 'local-undo') {
+      togglePanel(tool() as 'fill' | 'gradient' | 'local-undo', target);
       return;
     }
 
@@ -293,7 +298,11 @@ export function PaintStudio(props: {
           <button
             aria-label="Brush settings"
             title="Brush settings"
-            aria-expanded={panel() === 'brush' || panel() === 'fill' || panel() === 'gradient' ? 'true' : 'false'}
+            aria-expanded={
+              panel() === 'brush' || panel() === 'fill' || panel() === 'gradient' || panel() === 'local-undo'
+                ? 'true'
+                : 'false'
+            }
             aria-controls="paint-panel"
             onClick={(event) => openBrushSettings(event.currentTarget)}
           >
@@ -301,15 +310,23 @@ export function PaintStudio(props: {
               name={
                 tool() === 'fill' || tool() === 'gradient'
                   ? tool() as 'fill' | 'gradient'
-                  : tool() === 'eraser'
-                    ? 'erase'
-                    : brush().engine?.id === 'abr'
-                      ? 'brush'
-                      : 'draw'
+                  : tool() === 'local-undo'
+                    ? 'localUndo'
+                    : tool() === 'eraser'
+                      ? 'erase'
+                      : brush().engine?.id === 'abr'
+                        ? 'brush'
+                        : 'draw'
               }
               size={22}
             />
-            <small>{blockCursor() ? 'Block' : Math.round(brush().size)}</small>
+            <small>
+              {tool() === 'local-undo'
+                ? Math.round(localUndo.settings().size)
+                : blockCursor()
+                  ? 'Block'
+                  : Math.round(brush().size)}
+            </small>
           </button>
           <BrushSizeGrid
             size={brush().size}
@@ -441,6 +458,18 @@ export function PaintStudio(props: {
                 </Match>
                 <Match when={id === 'fill'}>
                   <FillPanel settings={fill.settings()} onChange={fill.update} />
+                </Match>
+                <Match when={id === 'local-undo'}>
+                  <LocalUndoPanel
+                    settings={localUndo.settings()}
+                    onChange={localUndo.update}
+                    depth={localUndo.depth()}
+                    onDepth={localUndo.setDepth}
+                    open={localUndo.open()}
+                    shown={localUndo.shown()}
+                    onApply={() => void localUndo.apply()}
+                    onCancel={() => void localUndo.cancel()}
+                  />
                 </Match>
                 <Match when={id === 'gradient'}>
                   <GradientPanel
@@ -665,6 +694,7 @@ export function PaintStudio(props: {
     return [
       toolItem('brush', 'Brush', 'draw', 0),
       toolItem('eraser', 'Eraser', 'erase', 1),
+      toolItem('local-undo', 'Local undo', 'localUndo', 2),
       {
         id: 'redo',
         label: 'Redo',

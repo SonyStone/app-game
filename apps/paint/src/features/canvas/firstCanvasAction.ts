@@ -16,13 +16,13 @@ export function firstCanvasAction(...actions: CanvasAction[]): CanvasAction {
       chosen = actions.find((action) => action.enabled(event));
       return chosen !== undefined;
     },
-    run(point) {
+    run(point, contact) {
       active = chosen;
       chosen = undefined;
-      active?.run(point);
+      active?.run(point, contact);
     },
-    move(point) {
-      active?.move?.(point);
+    move(point, contact) {
+      active?.move?.(point, contact);
     },
     end(cancelled) {
       const ended = active;

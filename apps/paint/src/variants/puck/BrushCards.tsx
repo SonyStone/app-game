@@ -434,6 +434,7 @@ const headings: Record<PaintTool | 'transform', { title: string; icon: SketchIco
   lasso: { title: 'Selection', icon: 'lasso' },
   fill: { title: 'Fill', icon: 'fill' },
   gradient: { title: 'Gradient', icon: 'gradient' },
+  'local-undo': { title: 'Local undo', icon: 'localUndo' },
   transform: { title: 'Transform', icon: 'move' }
 };
 

@@ -319,7 +319,7 @@ export function maxBrushSize(brush: Brush) {
 }
 
 /** Canvas tools. `brush` and `eraser` also name the round brush's own `tool`. */
-export type PaintTool = Brush['tool'] | 'lasso' | 'fill' | 'gradient';
+export type PaintTool = Brush['tool'] | 'lasso' | 'fill' | 'gradient' | 'local-undo';
 
 /** Tools that paint with a brush preset. */
 export type BrushSlot = Brush['tool'];
@@ -427,7 +427,8 @@ function restoredState(stored: unknown, find: (id: string) => BrushPreset | unde
   }
 
   const tool =
-    brushSlots.includes(stored.tool as BrushSlot) || ['lasso', 'fill', 'gradient'].includes(stored.tool as string)
+    brushSlots.includes(stored.tool as BrushSlot) ||
+    ['lasso', 'fill', 'gradient', 'local-undo'].includes(stored.tool as string)
       ? (stored.tool as PaintTool)
       : 'brush';
   const slot = brushSlots.includes(stored.slot as BrushSlot) ? (stored.slot as BrushSlot) : 'brush';

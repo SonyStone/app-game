@@ -182,7 +182,9 @@ function setup(tiles: Map<string, Uint8Array>, selection: SelectionMask = emptyS
     linearBlending: false,
     selection,
     state: { get: () => state, set: (value) => (state = value) },
-    floating
+    floating,
+    history: [],
+    preview: { show: () => {}, clear: () => {} }
   };
   return { tiles, floating, run: (command: TransformCommand) => transformEdit.run(context, command) };
 }

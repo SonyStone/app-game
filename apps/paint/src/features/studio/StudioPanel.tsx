@@ -48,6 +48,7 @@ export const panelTitles = {
   brush: 'Brush',
   fill: 'Fill',
   gradient: 'Gradient',
+  'local-undo': 'Local undo',
   color: 'Color',
   layers: 'Layers'
 } as const;

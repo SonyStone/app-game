@@ -1,0 +1,114 @@
+.panel {
+  display: grid;
+  gap: 10px;
+}
+
+/* Doubled to outrank the studio's reset of button borders and backgrounds. */
+.segments.segments {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+
+  > button {
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #fff;
+    font-size: 11px;
+
+    &[aria-pressed='true'] {
+      border-color: #419bcf;
+      background: #e3f0f7;
+      color: #1f6f9a;
+    }
+  }
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.status {
+  margin: 0;
+  min-height: 2.6em;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.actions.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+
+  > button {
+    height: 34px;
+    padding: 0 14px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #fff;
+  }
+
+  > .apply {
+    border-color: #419bcf;
+    background: #419bcf;
+    color: #fff;
+  }
+
+  > button:disabled {
+    opacity: 0.45;
+  }
+}
+
+.note {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+/* Over the canvas, under the studio controls; never takes pointer input. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+
+  canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: 0 0;
+    image-rendering: pixelated;
+  }
+
+  svg {
+    position: absolute;
+    inset: 0;
+  }
+}
+
+.trail {
+  fill: none;
+  stroke: rgb(65 155 207 / 35%);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+
+  &[data-remove] {
+    stroke: rgb(220 70 60 / 35%);
+  }
+}
+
+.lasso {
+  fill: rgb(65 155 207 / 8%);
+  stroke: #419bcf;
+  stroke-dasharray: 4 3;
+
+  &[data-remove] {
+    stroke: #dc463c;
+  }
+}

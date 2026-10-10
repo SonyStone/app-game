@@ -60,6 +60,7 @@ const toolNames = {
   select: 'Selection',
   fill: 'Fill',
   gradient: 'Gradient',
+  'local-undo': 'Local undo',
   transform: 'Transform',
   eyedropper: 'Eyedropper',
   view: 'View'
