@@ -30,6 +30,9 @@ export function createPageRequests<Page>() {
         use(key) {
           state.used.add(key);
         },
+        has(key) {
+          return state.wanted.has(key);
+        },
         release() {
           demands.delete(state);
         }
@@ -123,6 +126,8 @@ export type PageDemand<Page> = {
   request(key: string, page: Page, priority: number): void;
   /** Records that this frame displays the resident atlas entry `key`. */
   use(key: string): void;
+  /** Whether this frame already wants `key`, by `want`, `request` or the pinned coverage. */
+  has(key: string): boolean;
   /** Unregisters this target; its requests no longer keep loads valid. */
   release(): void;
 };

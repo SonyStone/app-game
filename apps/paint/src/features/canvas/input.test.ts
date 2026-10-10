@@ -128,6 +128,64 @@ describe('input to worker contract', () => {
     ).toEqual([0.4, 0.7]);
     expect(rawUpdate).toHaveBeenCalledOnce();
   });
+  it('sends predicted pen points with each move, after raw updates alone, and reports sent events', () => {
+    const drawn = vi.fn();
+    let predict = true;
+    const more = { predict: () => predict, drawn };
+    const { commands, pointer } = setup(undefined, defaultBrush, undefined, defaultCamera, ...noOptions, more);
+    const world = (x: number, y: number) => screenToWorld({ x, y }, defaultCamera(), { width: 800, height: 600 });
+    const predicted = { getPredictedEvents: () => [{ clientX: 40, clientY: 30, pressure: 0, timeStamp: 30 }] };
+    pointer('pointerdown', 10, 10, { pointerType: 'pen', pressure: 0.5 });
+    pointer('pointermove', 20, 20, { pointerType: 'pen', pressure: 0.6, timeStamp: 20, ...predicted });
+    expect(commands.at(-1)).toMatchObject({
+      type: 'samples',
+      samples: [{ ...world(20, 20), pressure: 0.6 }],
+      predicted: [{ ...world(40, 30), time: 30 }]
+    });
+    expect(drawn).toHaveBeenCalledTimes(2);
+    expect(drawn.mock.calls.map(([event]) => event.type)).toEqual(['pointerdown', 'pointermove']);
+
+    predict = false;
+    pointer('pointermove', 25, 25, { pointerType: 'pen', pressure: 0.6, ...predicted });
+    expect(commands.at(-1)).not.toHaveProperty('predicted');
+    pointer('pointerup', 25, 25, { pointerType: 'pen' });
+  });
+  it('after raw pen updates, sends only the predicted points of the pointermove', () => {
+    vi.stubGlobal('isSecureContext', true);
+    vi.stubGlobal('onpointerrawupdate', null);
+    vi.stubGlobal('PointerEvent', MouseEvent);
+    const drawn = vi.fn();
+    const more = { predict: () => true, drawn };
+    const { commands, pointer } = setup(undefined, defaultBrush, undefined, defaultCamera, ...noOptions, more);
+    const world = (x: number, y: number) => screenToWorld({ x, y }, defaultCamera(), { width: 800, height: 600 });
+    pointer('pointerdown', 0, 0, { pointerType: 'pen', pressure: 0.2 });
+    pointer('pointerrawupdate', 20, 20, { pointerType: 'pen', pressure: 0.4 });
+    expect(commands.at(-1)).not.toHaveProperty('predicted');
+    pointer('pointermove', 20, 20, {
+      pointerType: 'pen',
+      getPredictedEvents: () => [{ clientX: 30, clientY: 20, pressure: 0, timeStamp: 9 }]
+    });
+    expect(commands.at(-1)).toMatchObject({ type: 'samples', samples: [], predicted: [world(30, 20)] });
+    // The pointermove sent no real samples, so it starts no ink trail.
+    expect(drawn).toHaveBeenCalledTimes(2);
+    // A move without predictions clears the one shown, once.
+    pointer('pointermove', 21, 20, { pointerType: 'pen' });
+    expect(commands.at(-1)).toEqual({ type: 'samples', samples: [], predicted: [] });
+    pointer('pointermove', 22, 20, { pointerType: 'pen' });
+    expect(commands.filter((command) => command.type === 'samples')).toHaveLength(3);
+  });
+  it('reports a pen hovering without contact, but not a mouse or a pen that draws', () => {
+    const hover = vi.fn();
+    const { pointer } = setup(undefined, defaultBrush, undefined, defaultCamera, ...noOptions, { hover });
+    pointer('pointermove', 10, 10, { pointerType: 'mouse', buttons: 0 });
+    pointer('pointermove', 10, 10, { pointerType: 'pen', buttons: 0 });
+    expect(hover).toHaveBeenCalledOnce();
+    pointer('pointerdown', 10, 10, { pointerType: 'pen' });
+    pointer('pointermove', 20, 10, { pointerType: 'pen' });
+    pointer('pointerup', 20, 10, { pointerType: 'pen', buttons: 0 });
+    pointer('pointermove', 30, 10, { pointerType: 'pen', buttons: 0 });
+    expect(hover).toHaveBeenCalledTimes(2);
+  });
   it('preserves tilt, wheel and barrel rotation on the first and coalesced samples', () => {
     const { commands, pointer } = setup();
     pointer('pointerdown', 10, 10, { pointerType: 'pen', tiltX: 30, tiltY: -10, twist: 350, tangentialPressure: 0.4 });
@@ -461,7 +519,8 @@ function setup(
   camera = defaultCamera,
   eraser?: Parameters<typeof attachInput>[1]['eraser'],
   adjust?: Parameters<typeof attachInput>[1]['adjust'],
-  touchGestures?: Parameters<typeof attachInput>[1]['touchGestures']
+  touchGestures?: Parameters<typeof attachInput>[1]['touchGestures'],
+  more: Partial<Parameters<typeof attachInput>[1]> = {}
 ) {
   vi.stubGlobal(
     'requestAnimationFrame',
@@ -499,7 +558,8 @@ function setup(
       canvasAction,
       selection,
       touchGestures,
-      puck
+      puck,
+      ...more
     })
   );
   // jsdom stamps events created in the same millisecond alike; browser input samples have increasing times.
@@ -514,3 +574,6 @@ function setup(
   };
   return { canvas, commands, navigate, pointer, puck, cursor, rawUpdate };
 }
+
+/** No eraser, drag adjustment or touch gestures, for `setup` calls that pass later options. */
+const noOptions = [undefined, undefined, undefined] as const;

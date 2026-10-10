@@ -1,6 +1,7 @@
 import type { Brush, Sample } from './brush';
 import { createLeonardoProcessor } from './leonardoStroke';
 import { createStabilizerProcessor } from './stabilizerStroke';
+import { predictedTail } from './strokePrediction';
 import { interpolateTabletAxes } from './tabletAxes';
 
 /** Per-stroke sample transformation. Preview must not advance committed state; finish flushes once. */
@@ -10,6 +11,12 @@ export type StrokeProcessor = {
   finish(): Sample[];
   /** Optional catch-up while contact is held still. Empty output suspends the idle clock until new input. */
   idle?(elapsedMs: number): Sample[];
+  /**
+   * Continues `preview` along points the browser predicts the pen will reach next, for display only; see
+   * `withPrediction`. Absent for processors whose output trails the pen on purpose, such as the stabilizer, where
+   * running ahead of the drawn line would show a jump.
+   */
+  predict?(predicted: readonly Sample[]): Sample[];
 };
 
 /** Creates independent filter/curve state at pen-down. Zoom is document-to-CSS scale. */
@@ -27,12 +34,21 @@ export const studioProcessors = {
 /** Preserves real input and pressure, with no withheld endpoint or smoothing. */
 export function createRawProcessor(): StrokeProcessor {
   let finished = false;
+  let latest: Sample | undefined;
   return {
-    add: (samples) =>
-      finished
-        ? []
-        : samples.filter((sample) => [sample.x, sample.y, sample.pressure, sample.time].every(Number.isFinite)),
+    add(samples) {
+      if (finished) {
+        return [];
+      }
+
+      const valid = samples.filter((sample) =>
+        [sample.x, sample.y, sample.pressure, sample.time].every(Number.isFinite)
+      );
+      latest = valid.at(-1) ?? latest;
+      return valid;
+    },
     preview: () => [],
+    predict: (predicted) => (finished ? [] : predictedTail(latest, predicted)),
     finish() {
       finished = true;
       return [];
@@ -81,6 +97,8 @@ export function createStudioProcessor(brush: Brush, zoom = 1): StrokeProcessor {
       flatten(start, control, endpoint, tolerance, points);
       return points;
     },
+    /** Continues the preview, which ends at the latest real point, with the pen's predicted points. */
+    predict: (predicted) => (finished ? [] : predictedTail(endpoint, predicted)),
     /** Flushes the curve tail to the last real position, without duplicating a stationary tap. */
     finish(): Sample[] {
       if (finished || !endpoint) return [];

@@ -60,3 +60,18 @@ it('prefers a reserved request and drops a released target', () => {
   expect(requests.wanted('detail')).toBe(false);
   expect(requests.take()).toBeUndefined();
 });
+
+it("tells whether one target's frame already wants a page, for loading ahead without demoting it", () => {
+  const requests = createPageRequests<string>();
+  const first = requests.demand();
+  const second = requests.demand();
+  first.begin(['pinned']);
+  first.want('visible');
+  first.request('missing', 'page', 0);
+  second.begin([]);
+  second.request('other', 'page', 0);
+
+  expect(['pinned', 'visible', 'missing', 'other'].map((key) => first.has(key))).toEqual([true, true, true, false]);
+  first.begin([]);
+  expect(first.has('visible')).toBe(false);
+});

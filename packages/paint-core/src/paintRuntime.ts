@@ -27,6 +27,8 @@ import {
 } from './selectionMask';
 import { decodeDocument, snapshotDocument, type EngineHandoff, type restoreDocument } from './storage';
 import { unpackTile, type TileData } from './tilePixels';
+import { withPrediction } from './strokePrediction';
+import type { Sample } from './brush';
 import { errorMessage, type GpuError } from '@app-game/solid-gpu/errors';
 
 /** Owns document, persistence and GPU resources in either execution mode. Commands stay ordered.
@@ -99,6 +101,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let processedInputTime: number | undefined;
     let receivedInputTime: number | undefined;
     let pendingSamples: Extract<PaintRuntimeCommand, { type: 'samples' }> | undefined;
+    /** Where the browser predicts the pen of the current stroke goes next; see `withPrediction`. */
+    let prediction: readonly Sample[] = [];
     let clearIdle: (() => void) | undefined;
     let idleGeneration = 0;
     const stopIdle = () => {
@@ -383,6 +387,39 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         });
       }, 0);
     };
+    /** Until when pen hover keeps the GPU busy, in `performance.now()` time; see `warmGpu`. */
+    let warmUntil = 0;
+    let warmTimer: ReturnType<typeof setTimeout> | undefined;
+    let warming = false;
+    /**
+     * Redraws the whole view about once a display frame until `warmWindowMs` after the latest call, while no stroke
+     * draws frames itself. Mobile GPUs such as the MovinkPad's Adreno lower their clock after about 200 ms idle and
+     * need several loaded frames to raise it, which made the first frames of a stroke two to three times slower.
+     */
+    const warmGpu = () => {
+      warmUntil = performance.now() + warmWindowMs;
+      if (warming) return;
+      warming = true;
+      const tick = () => {
+        warmTimer = undefined;
+        if (!active || performance.now() >= warmUntil) {
+          warming = false;
+          return;
+        }
+
+        enqueue(async () => {
+          try {
+            if (!strokeSession && renderer && !lost) {
+              renderer.invalidateView();
+              await draw();
+            }
+          } finally {
+            warmTimer = setTimeout(tick, warmIntervalMs);
+          }
+        });
+      };
+      tick();
+    };
     /** Writes a checkpoint, with a `handoff` for the next engine when this one hands the drawing over. */
     const save = async (handoff?: () => Promise<EngineHandoff>) => {
       if (strokeSession || importing) return;
@@ -608,6 +645,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       clearTimeout(renderTimer);
       clearTimeout(saveTimer);
       clearTimeout(viewTimer);
+      clearTimeout(warmTimer);
       try {
         strokeSession?.cancel();
       } finally {
@@ -630,6 +668,10 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         scheduleDraw();
         return;
       }
+      if (command.type === 'warm') {
+        warmGpu();
+        return;
+      }
       if (command.type === 'watch-regions') {
         watched = { regions: command.regions, revision: -1, layers: {} };
         status();
@@ -650,9 +692,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         diagnostics = command.enabled;
         return;
       }
-      if (command.type === 'begin' || command.type === 'samples') receivedInputTime = command.samples.at(-1)?.time;
+      if ((command.type === 'begin' || command.type === 'samples') && command.samples.length)
+        receivedInputTime = command.samples.at(-1)?.time;
       if (command.type === 'samples' && pendingSamples) {
         for (const sample of command.samples) pendingSamples.samples.push(sample);
+        if (command.predicted) pendingSamples.predicted = command.predicted;
         return;
       }
       // Later packets append to this batch, so it must not share the caller's array.
@@ -791,6 +835,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           }
           case 'begin': {
             processedInputTime = undefined;
+            prediction = [];
             if (!renderer || lost || !document.active.visible) return;
             await end();
             const engineId = command.brush.engine?.id ?? modules.selectEngine(command.brush);
@@ -822,7 +867,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                 adaptiveQuality,
                 lod: renderer!.brushLod?.(document.layers, document.active, camera, size, dpr) ?? 0,
                 renderer: strokeRenderer,
-                processor: processor(command.brush, command.zoom ?? camera.zoom)
+                processor: withPrediction(processor(command.brush, command.zoom ?? camera.zoom), () => prediction)
               })
             );
             saved = false;
@@ -834,6 +879,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             break;
           }
           case 'samples':
+            if (command.predicted) prediction = command.predicted;
             if (strokeSession && renderer && !lost) {
               await addSamples(command.samples);
               await draw();
@@ -1230,6 +1276,12 @@ function rendererFailureMessage(code: GpuError['code'], message: string) {
 
 /** At most 60 intermediate redraws per second; first contact and packet completion still present immediately. */
 const progressFrameInterval = 16;
+
+/** How long one pen hover report keeps the GPU warm, in milliseconds; see `warmGpu`. */
+const warmWindowMs = 400;
+
+/** Pause between warming frames, in milliseconds: about one 60 Hz display frame. */
+const warmIntervalMs = 16;
 
 /** Autosave waits for this pause after a change, so consecutive strokes share one checkpoint. */
 const saveDelay = 300;

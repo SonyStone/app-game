@@ -27,6 +27,18 @@ export function attachInput(
     /** Called when real raw pen updates are received, rather than merely supported by the browser. */
     rawUpdate?: () => void;
     /**
+     * Whether strokes also send the points the browser predicts the pen will reach next (`getPredictedEvents`), which
+     * the engine shows ahead of the line; off when absent.
+     */
+    predict?: () => boolean;
+    /** Called for each move of a pen hovering over the canvas without touching it, such as to prepare for a stroke. */
+    hover?: (event: PointerEvent) => void;
+    /**
+     * Called with every pointer event whose samples a stroke sent to the engine, after sending them, for example to
+     * draw a provisional ink trail from it; receives the stroke's brush too.
+     */
+    drawn?: (event: PointerEvent, brush: Brush) => void;
+    /**
      * Optional contact action, e.g. sampling canvas paint. Consumes the contact without a stroke or touch pan: `run`
      * receives the document point of the contact, `move` the points it is dragged to and `end` its release, or a
      * cancellation with `cancelled` set.
@@ -81,7 +93,18 @@ export function attachInput(
   const touches = new Map<number, Point>();
   /** A stroke's `inputTime` is the event time of its newest sample sent; build-up samples do not advance it. */
   let gesture:
-    | { kind: 'draw'; id: number; camera: Camera; size: ViewSize; latest: Sample; raw: boolean; inputTime: number }
+    | {
+        kind: 'draw';
+        id: number;
+        camera: Camera;
+        size: ViewSize;
+        latest: Sample;
+        raw: boolean;
+        inputTime: number;
+        brush: Brush;
+        /** The engine shows a prediction sent for this stroke. */
+        predicting: boolean;
+      }
     | { kind: 'select'; id: number; camera: Camera; size: ViewSize }
     | { kind: 'pan'; id: number; previous: Point }
     | { kind: 'action'; id: number }
@@ -120,35 +143,45 @@ export function attachInput(
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
   let stopBuildUp: (() => void) | undefined;
-  const collect = (event: PointerEvent) => {
+  /** Sends a stroke's samples from `event`; with `samples` false, only the points predicted after it. */
+  const collect = (event: PointerEvent, samples = true) => {
     if (gesture?.kind !== 'draw' || gesture.id !== event.pointerId) return;
-    const coalesced = event.getCoalescedEvents?.() ?? [];
-    const samples: Sample[] = [];
+    const draw = gesture;
     const rect = canvas.getBoundingClientRect();
-    // iPad Safari repeats Apple Pencil samples of earlier moves in the coalesced list (WebKit bug 316105). Replaying
-    // them would retrace the stroke, so only samples newer than the previous batch count.
-    const sent = gesture.inputTime;
-    for (const sample of coalesced.length ? coalesced : [event]) {
-      if (sample.timeStamp <= sent) {
-        continue;
+    const sample = (input: PointerEvent): Sample => ({
+      ...screenToWorld({ x: input.clientX - rect.left, y: input.clientY - rect.top }, draw.camera, draw.size),
+      ...tabletAxes(input),
+      pressure: event.pointerType === 'pen' ? input.pressure : 1,
+      time: input.timeStamp
+    });
+    const real: Sample[] = [];
+    if (samples) {
+      // iPad Safari repeats Apple Pencil samples of earlier moves in the coalesced list (WebKit bug 316105).
+      // Replaying them would retrace the stroke, so only samples newer than the previous batch count.
+      const sent = draw.inputTime;
+      const coalesced = event.getCoalescedEvents?.() ?? [];
+      for (const input of coalesced.length ? coalesced : [event]) {
+        if (input.timeStamp <= sent) {
+          continue;
+        }
+
+        draw.inputTime = Math.max(draw.inputTime, input.timeStamp);
+        draw.latest = sample(input);
+        real.push(draw.latest);
       }
-
-      gesture.inputTime = Math.max(gesture.inputTime, sample.timeStamp);
-      gesture.latest = {
-        ...screenToWorld({ x: sample.clientX - rect.left, y: sample.clientY - rect.top }, gesture.camera, gesture.size),
-        ...tabletAxes(sample),
-        pressure: event.pointerType === 'pen' ? sample.pressure : 1,
-        time: sample.timeStamp
-      };
-      samples.push(gesture.latest);
     }
 
-    if (!samples.length) {
-      return;
-    }
-
+    // Raw updates carry no predictions; the pointermove after them does.
+    const predicted =
+      event.type === 'pointermove' && options.predict?.()
+        ? (event.getPredictedEvents?.() ?? []).map(sample)
+        : undefined;
+    // An empty prediction is sent only to clear one shown before.
+    if (!real.length && !predicted?.length && !draw.predicting) return;
+    if (predicted) draw.predicting = predicted.length > 0;
     // Forward immediately, including raw updates. The worker batches while its GPU frame is in flight.
-    options.send({ type: 'samples', samples });
+    options.send({ type: 'samples', samples: real, ...(predicted ? { predicted } : {}) });
+    if (real.length) options.drawn?.(event, draw.brush);
   };
   const cursorAt = (event: PointerEvent) =>
     options.cursor(
@@ -281,6 +314,7 @@ export function attachInput(
         pressure,
         time: event.timeStamp
       };
+      const brush = eraser ? eraser() : options.brush();
       gesture = {
         kind: 'draw',
         id: event.pointerId,
@@ -288,10 +322,11 @@ export function attachInput(
         size: { ...options.size() },
         latest,
         raw: false,
-        inputTime: event.timeStamp
+        inputTime: event.timeStamp,
+        brush,
+        predicting: false
       };
       cursorAt(event);
-      const brush = eraser ? eraser() : options.brush();
       options.send({
         type: 'begin',
         brush,
@@ -299,6 +334,7 @@ export function attachInput(
         zoom: camera.zoom,
         samples: [latest]
       });
+      options.drawn?.(event, brush);
       if (usesBuildUp(brush)) {
         stopBuildUp?.();
         const startedAt = performance.now(),
@@ -323,6 +359,7 @@ export function attachInput(
     (event) => {
       const point = local(event);
       cursorAt(event);
+      if (event.pointerType === 'pen' && event.buttons === 0 && !gesture) options.hover?.(event);
       if (touches.has(event.pointerId)) {
         touches.set(event.pointerId, point);
         const origin = touchSession?.origins.get(event.pointerId);
@@ -378,7 +415,7 @@ export function attachInput(
         return;
       }
       // Raw updates and pointermove contain the same physical samples. Never feed both to the filter.
-      if (!gesture.raw) collect(event);
+      collect(event, !gesture.raw);
     },
     { signal }
   );

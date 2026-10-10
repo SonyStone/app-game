@@ -75,7 +75,20 @@ export type PaintCommand =
       /** Captured at contact and fixed for this stroke; never persisted with the preset. */
       modifiers?: Parameters<BrushEngine>[0]['modifiers'];
     }
-  | { type: 'samples'; samples: Sample[] }
+  | {
+      type: 'samples';
+      samples: Sample[];
+      /**
+       * Where the browser predicts the pen goes after these samples, shown ahead of the line until real samples
+       * replace it and never committed; see `withPrediction`. Absent keeps the previous prediction, empty clears it.
+       */
+      predicted?: Sample[];
+    }
+  /**
+   * The pen hovers over the canvas and is likely to touch it soon: keeps the GPU busy for a short while so its clock
+   * is up for the first stroke frames; see the runtime's `warmGpu`.
+   */
+  | { type: 'warm' }
   | { type: 'checkpoint'; includeTools?: boolean }
   | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'recover' }
   /**

@@ -32,6 +32,7 @@ export function DeveloperDialog(props: {
 }) {
   let dialog!: HTMLDialogElement;
   const rawSupported = supportsRawPointerUpdates();
+  const inkSupported = 'ink' in navigator;
   onSettled(() => {
     dialog.showModal();
     return () => dialog.close();
@@ -71,6 +72,30 @@ export function DeveloperDialog(props: {
             onChange={(event) => props.settings.setLiveTail(event.currentTarget.checked)}
           />
           Live stroke tail
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={props.settings.predictStrokes()}
+            onChange={(event) => props.settings.setPredictStrokes(event.currentTarget.checked)}
+          />
+          Predict the pen ahead of the stroke
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={props.settings.inkTrail()}
+            onChange={(event) => props.settings.setInkTrail(event.currentTarget.checked)}
+          />
+          Browser ink trail between frames{inkSupported ? '' : ' (unavailable)'}
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={props.settings.warmGpu()}
+            onChange={(event) => props.settings.setWarmGpu(event.currentTarget.checked)}
+          />
+          Warm the GPU while the pen hovers
         </label>
         <label>
           <input

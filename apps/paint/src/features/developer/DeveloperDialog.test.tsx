@@ -40,6 +40,9 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   const [adaptiveQuality, setAdaptiveQuality] = createSignal(false);
   const [liveTail, setLiveTail] = createSignal(true);
   const [showPenCursor, setShowPenCursor] = createSignal(false);
+  const [predictStrokes, setPredictStrokes] = createSignal(true);
+  const [inkTrail, setInkTrail] = createSignal(true);
+  const [warmGpu, setWarmGpu] = createSignal(true);
   const [rawReceived, setRawReceived] = createSignal(false);
   const [performanceMonitor, setPerformanceMonitor] = createSignal(false);
   const close = vi.fn();
@@ -53,6 +56,12 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
     setLiveTail,
     showPenCursor,
     setShowPenCursor,
+    predictStrokes,
+    setPredictStrokes,
+    inkTrail,
+    setInkTrail,
+    warmGpu,
+    setWarmGpu,
     performanceMonitor,
     setPerformanceMonitor,
     rawReceived,
@@ -79,14 +88,18 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   setRawReceived(true);
   flush();
   expect(dialog.textContent).toContain(supported ? 'Receiving pen events' : 'Unavailable · using pointermove');
-  const [wireframe, tail, cursor, worker, quality, monitor] = [...dialog.querySelectorAll('input')];
+  const [wireframe, tail, predict, ink, warm, cursor, worker, quality, monitor] = [...dialog.querySelectorAll('input')];
   wireframe!.click();
   tail!.click();
+  predict!.click();
+  ink!.click();
+  warm!.click();
   cursor!.click();
   worker!.click();
   quality!.click();
   monitor!.click();
   flush();
+  expect([predictStrokes(), inkTrail(), warmGpu()]).toEqual([false, false, false]);
   expect(adaptiveQuality()).toBe(true);
   expect(onWorkerEnabledChange).toHaveBeenCalledWith(false);
   expect(dialog.textContent).toContain('Undo history and the selection clipboard reset');

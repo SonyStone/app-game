@@ -1,5 +1,6 @@
 import { createStrokeSampler, type Brush, type Dab, type Sample } from './brush';
 import { createCubicStroke } from './cubicStroke';
+import { predictedTail } from './strokePrediction';
 import type { StrokeProcessor } from './strokeProcessors';
 import { normalizeStrokeSettings, type StrokeSettings } from './strokeSettings';
 
@@ -22,6 +23,8 @@ export function createLeonardoProcessor(brush: Brush, zoom = 1): StrokeProcessor
   let latest: Sample | undefined;
   const settings = normalizeStrokeSettings(brush.stroke);
   const draw = (samples: readonly Sample[]) => curve.add(samples);
+  const calibrated = (raw: number) =>
+    Math.max(0, Math.min(1, (raw - settings.minimum) / (settings.maximum - settings.minimum))) ** settings.firmness;
   return {
     /** Every real sample participates, independent of animation-frame or event batching. */
     add(samples: readonly Sample[]): Sample[] {
@@ -33,10 +36,12 @@ export function createLeonardoProcessor(brush: Brush, zoom = 1): StrokeProcessor
     /** Extends the filtered curve to real input only in the disposable display tail. */
     preview(): Sample[] {
       if (finished || !latest) return [];
-      const pressure =
-        Math.max(0, Math.min(1, (latest.pressure - settings.minimum) / (settings.maximum - settings.minimum))) **
-        settings.firmness;
-      return [...curve.preview(), { ...latest, pressure }];
+      return [...curve.preview(), { ...latest, pressure: calibrated(latest.pressure) }];
+    },
+    /** Continues the preview, which ends at the latest real point, with the pen's predicted points. */
+    predict(predicted) {
+      if (finished || !latest) return [];
+      return predictedTail(latest, predicted, calibrated(latest.pressure));
     },
     /** Catches up when enabled, then flushes the curve once without adding an endpoint stamp. */
     finish(): Sample[] {

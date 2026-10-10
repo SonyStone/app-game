@@ -7,6 +7,7 @@ import { pageCrop, pageFallback } from './pageFallback';
 import { createPageWork, ObsoletePageError } from '../pageWork';
 import { createPageRequests, type PageDemand } from './pageRequests';
 import { sharpTexel } from './shaders';
+import { createCameraMotion } from './cameraMotion';
 
 /** Software virtual texture with a shared array-page pool, CPU page selection and instanced draws.
  * Loading is asynchronous and reprioritized per viewport. Resident parents provide coarse fallback.
@@ -168,8 +169,41 @@ export function createVirtualTexture(
       cursor = 0,
       cameraWritten = false;
     let selected: (VirtualPage & { resident: boolean; fallback: boolean })[] = [];
+    /** Where a pan or zoom in progress heads, and what this frame planned, for loading ahead in `end`. */
+    const motion = createCameraMotion();
+    let planned: { layers: Layer[]; camera: Camera; size: ViewSize; scale: number } | undefined;
     // Actual source pages from the last frame, including cropped fallback sources.
     const displayed = new Map<string, VirtualPage>();
+    /**
+     * While the camera pans or zooms, requests the pages of the view it will reach shortly, after everything visible
+     * and the coarse coverage, at most `aheadPages` per frame. Such a page then usually loads before it scrolls in,
+     * instead of showing a blurry parent first.
+     */
+    const loadAhead = () => {
+      if (!planned) {
+        return;
+      }
+
+      const ahead = motion.update(planned.camera, performance.now());
+      if (!ahead) {
+        return;
+      }
+
+      let requested = 0;
+      for (const layer of planned.layers) {
+        for (const page of pages.visible(layer.id, ahead, planned.size, planned.scale, maxPages)) {
+          const key = id(page);
+          if (pageDemand.has(key) || entries.get(key)?.token === pages.token(page)) {
+            continue;
+          }
+
+          pageDemand.request(key, page, aheadPriority);
+          if (++requested >= aheadPages) {
+            return;
+          }
+        }
+      }
+    };
     const view = {
       displayed,
       get draws() {
@@ -189,6 +223,7 @@ export function createVirtualTexture(
         cameraWritten = false;
         selected = [];
         displayed.clear();
+        planned = undefined;
       },
       /** Selects committed pages without waiting for reads and uploads their instances into this frame's next
        * range. `covered` is true only when every occupied part of the selection has resident coverage; empty
@@ -197,6 +232,7 @@ export function createVirtualTexture(
        * instance range is exhausted, `flush` must submit every encoded draw before the range is reused.
        */
       plan(layer: Layer, camera: Camera, size: ViewSize, scale: number, flush: () => void) {
+        planned = { layers: [...(planned?.layers ?? []), layer], camera, size, scale };
         const visible = pages.visible(layer.id, camera, size, scale, maxPages);
         const batch: { source: NonNullable<ReturnType<typeof entries.get>>; region: VirtualPage }[] = [];
         let resident: NonNullable<ReturnType<typeof entries.get>>[] | undefined;
@@ -280,6 +316,7 @@ export function createVirtualTexture(
           const key = id(page);
           if (entries.get(key)?.token !== pages.token(page)) pageDemand.request(key, page, 1);
         }
+        loadAhead();
         pump();
       },
       /** Pages selected by this target's latest frame, with residency and fallback flags. */
@@ -445,3 +482,9 @@ const samplePage = tgpu.fn(
   'use gpu';
   return std.textureSampleLevel(layout.$.image, layout.$.sampler, uv, d.i32(slot), 0);
 });
+
+/** Load priority of pages ahead of a moving view: after visible pages (0 and 2) and coarse coverage (1). */
+const aheadPriority = 3;
+
+/** Most pages one frame requests ahead of a moving view. */
+const aheadPages = 8;

@@ -27,8 +27,10 @@ import { createPaintEngine } from '../engine';
 import { createFill } from '../fill';
 import { createFrames, frameRegion } from '../frames';
 import { arrivalStorageWaitMs, createFreshTab } from '../fresh-tab';
+import { createGpuWarmup } from '../gpu-warmup';
 import { createGradient } from '../gradient';
 import { createHiddenLayerGuard } from '../hidden-layer';
+import { createInkTrail } from '../ink-trail';
 import { createImagePlacement, createLayerFilter } from '../layers';
 import { createLiveBroadcast, liveRelayUrl } from '../live';
 import { createPalmRejection, createPalmRejectionSettings } from '../palm-rejection';
@@ -326,6 +328,11 @@ export function createPaintSession(options: {
     idle: () => engine.canEdit() && !engine.isDrawing() && !transform.active() && !selection.drawing(),
     moveOut: engine.moveOut
   });
+  const inkTrail = createInkTrail({ canvas, enabled: developer.inkTrail, zoom: () => camera.current().zoom });
+  const warmup = createGpuWarmup({
+    enabled: () => developer.warmGpu() && engine.canEdit(),
+    send: engine.send
+  });
   /** The view when each touch still down landed, in landing order, for `onRetract`. */
   const touchCameras = new Map<number, ReturnType<typeof camera.current>>();
   createEventListener(
@@ -427,8 +434,9 @@ export function createPaintSession(options: {
   };
 
   /**
-   * The canvas input of this session for `PaintCanvas`. Two- and three-finger taps undo and redo unless `extra`
-   * replaces the touch gestures; `extra.puckPicker` adds controls chosen around the navigation puck.
+   * The canvas input of this session for `PaintCanvas`, with the pen latency switches of Developer applied. Two- and
+   * three-finger taps undo and redo unless `extra` replaces the touch gestures; `extra.puckPicker` adds controls
+   * chosen around the navigation puck.
    */
   function canvasInput(extra: Pick<CanvasInput, 'touchGestures' | 'puckPicker'> = {}): CanvasInput {
     return {
@@ -447,6 +455,9 @@ export function createPaintSession(options: {
       cursor: setCursor,
       showPenCursor: developer.showPenCursor,
       rawUpdate: developer.markRawReceived,
+      predict: developer.predictStrokes,
+      hover: warmup.hover,
+      drawn: inkTrail.drawn,
       // The Mixer Brush loads paint with Alt/Option; other painting tools pick a color.
       canvasAction: firstCanvasAction(
         // Alt/Option picks colors even while transforming; the transform then consumes other contacts.
