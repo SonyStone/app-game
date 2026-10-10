@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
-import type { createFullscreenToggle } from './createFullscreenToggle';
+import type { createFullscreenToggle } from '../session/createFullscreenToggle';
 import styles from './PaintStudio.module.css';
 
 /** Top-center view strip: fullscreen, zoom steps and the zoom level, and a rotation reset while the view is rotated. */

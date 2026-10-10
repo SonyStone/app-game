@@ -15,7 +15,7 @@ import { createBrushTools } from '../brush';
 import { createBrushLibrary, createPresetUploads } from '../brush-library';
 import { PaintCanvas } from '../canvas';
 import { createDeveloperSettings } from '../developer';
-import { createPaintShortcuts } from '../studio/createPaintShortcuts';
+import { createPaintShortcuts } from '../session/createPaintShortcuts';
 import { createSymmetry } from '../symmetry';
 import { createPaintEngine } from './createPaintEngine';
 import type { EngineCommand, EngineHandlers, EngineInit, ExecutionMode } from './openPaintTransport';

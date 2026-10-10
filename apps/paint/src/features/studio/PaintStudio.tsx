@@ -1,83 +1,51 @@
-import { blockEraserSize, isBlockEraser } from '@app-game/abr-brush/blockEraser';
-import { record } from '@app-game/abr-brush/form';
 import { NavigationPuck } from '@app-game/navigation-puck';
-import { screenToWorld, worldToScreen, type Point } from '@app-game/paint-core/camera';
-import { supportsPaintSymmetry } from '@app-game/paint-core/symmetry';
+import { screenToWorld, worldToScreen } from '@app-game/paint-core/camera';
 import { createEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
-import type { PaintError } from '../../shared/errors';
-import { createPointerTypeAttribute } from '../../shared/ui/createPointerTypeAttribute';
-import { createContextMenuBlock } from '../../shared/ui/createContextMenuBlock';
-import { createPageGestureGuard } from '../../shared/ui/createPageGestureGuard';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
-import { AbrViewerDialog, clearAbrBrush, createAbrPresets } from '../abr';
-import {
-  BrushAdjustHud,
-  BrushLibraryPanel,
-  clearRoundBrush,
-  createBrushAdjust,
-  createBrushTools,
-  createMixerBrush,
-  maxBrushSize,
-  MixerActions,
-  type PaintTool
-} from '../brush';
+import { AbrViewerDialog } from '../abr';
+import { BrushLibraryPanel, maxBrushSize, MixerActions, type PaintTool } from '../brush';
 import { BrushSizeGrid } from '../brush-size';
-import { createBrushLibrary, createBrushStorage, createPresetUploads, createRecentPresets } from '../brush-library';
-import { createPaintCamera, createViewSize } from '../camera';
-import { BrushCursor, CanvasDebug, firstCanvasAction, PaintCanvas, type CanvasInput } from '../canvas';
-import { ColorPanel, ColorPickerLoupe, ColorPickerSettings, createCanvasColorPicker } from '../color';
-import { ColorWheel, createColorWheelSettings } from '../color-wheel';
+import { ColorPanel, ColorPickerSettings } from '../color';
+import { ColorWheel } from '../color-wheel';
+import { DeveloperDialog } from '../developer';
+import { DrawingFolderControls } from '../drawing-folder';
+import { FillPanel } from '../fill';
+import { FrameEditor, FramesSection } from '../frames';
+import { FreshTabControls } from '../fresh-tab';
+import { GradientPanel } from '../gradient';
 import { HueTriangle } from '../hue-triangle';
-import { createViewOptions, ViewOptionsControls } from '../view-options';
-import { createDeveloperSettings, DeveloperDialog } from '../developer';
-import { createPaintEngine } from '../engine';
+import { HistorySourceControl, LayersPanel } from '../layers';
+import { LiveBadge, LiveControls, LiveViewer, liveRelayUrl, watchedRoom, watchLink } from '../live';
+import { PalmRejectionControls } from '../palm-rejection';
+import { createRadialMenu, RadialMenu, type RadialItem } from '../radial-menu';
+import { RecordingControls } from '../recording';
+import { SelectionActions } from '../selection';
 import {
-  createPalmRejection,
-  createPalmRejectionSettings,
-  PalmRejectionControls,
-  PalmRejectionDebug
-} from '../palm-rejection';
-import { arrivalStorageWaitMs, createFreshTab, FreshTabControls, FreshTabNotice } from '../fresh-tab';
-import { createPenHover } from '../pen-hover';
-import { createFill, FillPanel } from '../fill';
-import { createFrames, FrameEditor, FrameGuides, frameRegion, FramesSection } from '../frames';
-import { createDrawingFolder, DrawingFolderControls, FolderAccessNotice } from '../drawing-folder';
-import { createGradient, GradientPanel, GradientPreview } from '../gradient';
-import { createHiddenLayerGuard, HiddenLayerNotice } from '../hidden-layer';
-import { createImagePlacement, createLayerFilter, HistorySourceControl, LayersPanel } from '../layers';
-import {
-  createLiveBroadcast,
-  LiveBadge,
-  LiveControls,
-  LiveViewer,
-  liveRelayUrl,
-  watchedRoom,
-  watchLink
-} from '../live';
-import { createPerformanceMonitor, PerformancePanel } from '../performance';
-import { createRadialMenu, RadialMenu, radialLayout, type RadialItem } from '../radial-menu';
-import { createInputRecorder, RecordingControls } from '../recording';
-import { createSelection, createSelectionView, guardEdits, SelectionActions, selectionClipPath } from '../selection';
-import { MissingTilesNotice, StorageLockNotice } from '../storage-lock';
-import { createSymmetry, SymmetryGuide, SymmetryPanel } from '../symmetry';
-import { createTransform, TransformOverlay } from '../transform';
-import { createFullscreenToggle } from './createFullscreenToggle';
-import { createPaintShortcuts } from './createPaintShortcuts';
+  createPaintSession,
+  PaintEditor,
+  PaintStage,
+  SessionNotices,
+  StageDiagnostics,
+  StageGuides,
+  StageHint,
+  StageOverlays
+} from '../session';
+import { SymmetryPanel } from '../symmetry';
+import { ViewOptionsControls } from '../view-options';
 import { createPanelPins } from './createPanelPins';
 import { DrawingMenu } from './DrawingMenu';
-import { createAutoRestore } from './createAutoRestore';
-import { ErrorNotice } from './ErrorNotice';
 import styles from './PaintStudio.module.css';
 import { panelTitles, StudioPanel, type PanelId } from './StudioPanel';
 import { ToolBar } from './ToolBar';
 import { ViewControls } from './ViewControls';
 
 /**
- * Paint Studio: a full-window infinite canvas with on-demand controls; opening panels never resizes the drawing
- * surface. This is the editor's layout: it creates the engine, camera, tools and selection once and passes each part
- * of the UI the state it works on. Switching between worker and main-thread execution replaces only the canvas.
+ * Paint Studio, the Classic variant: a full-window infinite canvas with on-demand controls; opening panels never
+ * resizes the drawing surface. The drawing session supplies the engine, tools and feature controllers; this layout
+ * adds the toolbar, the brush and color puck, side panels, the radial menu around the navigation puck and the
+ * developer tools.
  */
 export function PaintStudio(props: {
   /** Link back to the embedding playground; omitted in the standalone app. */
@@ -91,203 +59,53 @@ export function PaintStudio(props: {
     return <LiveViewer room={room} url={liveRelayUrl(location, import.meta.env.DEV)} />;
   }
 
-  const [editor, setEditor] = createSignal<HTMLDivElement>();
-  const [stage, setStage] = createSignal<HTMLElement>();
-  const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
-  const [error, setError] = createSignal<PaintError>();
-  const [cursor, setCursor] = createSignal<Point>();
-  /** The count of lost tiles the user last closed the notice at. */
-  const [missingSeen, setMissingSeen] = createSignal(0);
-
-  const developer = createDeveloperSettings();
-  const brushStorage = createBrushStorage({ onError: setError });
-  const library = createBrushLibrary({ storage: brushStorage });
-  const tools = createBrushTools({
+  const [panel, setPanel] = createSignal<PanelId>();
+  const session = createPaintSession({ panel });
+  const {
     library,
-    storage: brushStorage,
-    clear: (brush) => (brush.engine?.id === 'abr' ? clearAbrBrush(brush) : clearRoundBrush(brush))
-  });
-  const engine = createPaintEngine({
-    settings: developer,
-    onError: setError,
-    onSelection: (event) => selection.receive(event),
-    prepare: () => uploads.restore(),
-    frames: { enabled: developer.performanceMonitor, receive: (event) => monitor.record(event) },
-    storageWaitMs: arrivalStorageWaitMs()
-  });
-  const selection = createSelection({
-    send: engine.send,
-    run: engine.runEdit,
-    document: engine.state,
-    ready: engine.canEdit,
-    area: visibleArea,
-    // A press this close to a polygon's first corner on screen closes it.
-    closeDistance: () => 10 / camera.camera().zoom,
-    onError: setError
-  });
-  // An open polygon's next edge follows the hovering pointer.
-  createEffect(
-    () => (selection.tool() === 'polygon' && selection.drawing() ? cursor() : undefined),
-    (point) => {
-      if (point) {
-        selection.hover(screenToWorld(point, camera.current(), size()));
-      }
-    }
-  );
-  createSelectionView({
-    preview: selection.preview,
-    hidden: () => transform.active(),
-    ready: engine.canEdit,
-    send: engine.send
-  });
-  /** Sends document commands, respecting a pending selection edit and clearing the outline where needed. */
-  const guarded = guardEdits(selection, engine.send);
-  /**
-   * Sends document commands. While transforming, Undo cancels the transform and other document changes wait for it
-   * to be applied or cancelled, so the transform stays one undo step.
-   */
-  const edit: typeof guarded = (command) => {
-    recorder.command(command);
-    if (transform.active()) {
-      if (command.type === 'undo') {
-        void transform.cancel();
-      }
-
-      if (!allowedWhileTransforming.has(command.type)) {
-        return;
-      }
-    }
-
-    guarded(command);
-  };
-  const size = createViewSize(stage);
-  const monitor = createPerformanceMonitor({ enabled: developer.performanceMonitor, label: engine.mode, size });
-  const camera = createPaintCamera({
-    restored: () => engine.restored()?.camera,
+    tools,
+    brush,
+    tool,
+    engine,
+    ready,
+    selection,
+    edit,
     size,
-    ready: engine.canEdit,
-    send: engine.send,
-    bounds: () => canvas()?.getBoundingClientRect(),
-    puck: { size: radialLayout.puck, reach: radialLayout.reach }
-  });
-  const symmetry = createSymmetry({
-    restored: () => engine.restored()?.features,
-    canUpdate: canUpdateSymmetry,
-    send: engine.send
-  });
-  const mixer = createMixerBrush({
-    brush: tools.brush,
-    tool: tools.tool,
-    run: engine.runBrushCommand,
-    canRun: () => canChangeBrush() && !uploads.isBusy(),
-    onError: setError
-  });
-  const uploads = createPresetUploads({
-    resources: library.resources,
-    upload: engine.putResources,
-    canChange: canChangeBrush,
-    select: tools.selectPreset,
-    inUse: tools.presets,
-    onUnavailable(preset, error) {
-      tools.abandonPreset(preset.id);
-      setError(error);
-    },
-    loaded: tools.loaded
-  });
-  const presets = createAbrPresets({
-    library,
-    choose: (preset) => uploads.choose(preset, tools.slot()),
-    canChange: () => canChangeBrush() && !uploads.isBusy()
-  });
-  const brushAdjust = createBrushAdjust({
-    brush: tools.brush,
-    update: tools.updateBrush,
-    available: () => paintsWithBrush() && !transform.active() && canChangeBrush()
-  });
-  const colorPicker = createCanvasColorPicker({
-    paints: () => paintsColor(),
-    toScreen: (point) => worldToScreen(point, camera.current(), size()),
-    pick: engine.pickColor,
-    // A stroke in progress also moves the cursor; Alt pressed during it does not preview.
-    hovered: () => (engine.isDrawing() ? undefined : cursor()),
-    current: () => brush().color,
-    apply: (color) => tools.updateBrush({ color }),
-    onError: setError
-  });
-  const images = createImagePlacement({
-    canPlace: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
-    view: () => {
-      const view = size();
-      const current = camera.current();
-      // Leave a margin, so an image larger than the view does not touch its edges.
-      return {
-        center: screenToWorld({ x: view.width / 2, y: view.height / 2 }, current, view),
-        fit: { width: (view.width * 0.9) / current.zoom, height: (view.height * 0.9) / current.zoom }
-      };
-    },
-    send: edit
-  });
-  const fill = createFill({
-    active: () => tools.tool() === 'fill',
-    color: () => tools.brush().color,
-    area: visibleArea,
-    canFill: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
-    send: edit
-  });
-  const gradient = createGradient({
-    active: () => tools.tool() === 'gradient',
-    colors: () => ({ foreground: tools.brush().color, background: tools.brush().backgroundColor ?? '#ffffff' }),
-    area: visibleArea,
-    selected: selection.selected,
-    canDraw: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
-    send: edit
-  });
-  const hiddenLayer = createHiddenLayerGuard({
-    paints: () => tools.tool() === 'brush' || tools.tool() === 'eraser',
-    layer: () => engine.state().layers.find((layer) => layer.id === engine.state().activeId)
-  });
-  const transform = createTransform({
-    run: engine.runEdit,
-    canStart: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
-    onError: setError
-  });
-  createEffect(
-    () => (tools.tool() === 'fill' || tools.tool() === 'gradient') && !selection.selected() && !transform.active(),
-    (unselected) => {
-      if (unselected) {
-        tools.chooseTool('lasso');
-      }
-    }
-  );
-  const fullscreen = createFullscreenToggle(editor, setError);
-  createAutoRestore({ error, restore: restoreRenderer });
-  createPointerTypeAttribute(editor);
-  createContextMenuBlock();
-  createPageGestureGuard();
-  const colorWheel = createColorWheelSettings();
-  const viewOptions = createViewOptions({ ready: engine.canEdit, send: engine.send });
-  const drawingFolder = createDrawingFolder({
-    status: () => engine.paging().storage?.folder,
-    send: edit,
-    onError: setError
-  });
-  const frames = createFrames({
-    restored: () => engine.restored()?.features,
-    canUpdate: canUpdateSymmetry,
-    send: engine.send,
-    navigate: camera.navigate,
-    camera: camera.camera,
-    size,
-    selection: () => boundsCorners(selection.summary().bounds) ?? []
-  });
-  const layerFilter = createLayerFilter({
-    layers: () => engine.state().layers,
-    activeId: () => engine.state().activeId,
-    // In a frame, the layers with paint in it; otherwise those in view.
-    inView: () => (frames.activeFrame() ? (engine.layersInRegions()[frameRegion] ?? []) : engine.layersInView()),
-    camera: camera.camera
-  });
-  const recentPresets = createRecentPresets({ current: tools.preset, exists: (id) => library.find(id) !== undefined });
+    camera,
+    symmetry,
+    mixer,
+    uploads,
+    presets,
+    colorPicker,
+    images,
+    fill,
+    gradient,
+    transform,
+    fullscreen,
+    colorWheel,
+    viewOptions,
+    drawingFolder,
+    frames,
+    layerFilter,
+    recentPresets,
+    live,
+    recorder,
+    developer,
+    palmSettings,
+    penHover,
+    freshTab,
+    chooseTool,
+    toggleTransform,
+    choosePreset,
+    usePreset,
+    canUpdateSymmetry,
+    canChangeBrush,
+    selectionTool,
+    paintsWithBrush,
+    supportsSymmetry,
+    blockCursor,
+    boundsCorners
+  } = session;
   const radial = createRadialMenu({
     center: camera.navigation.center,
     items: radialItems,
@@ -302,94 +120,11 @@ export function PaintStudio(props: {
       }
     }
   );
-  const live = createLiveBroadcast({
-    url: liveRelayUrl(location, import.meta.env.DEV),
-    list: engine.liveList,
-    read: engine.liveRead,
-    revision: () => engine.state().revision,
-    camera: camera.camera,
-    size,
-    pointer: () => {
-      const point = cursor();
-      return point && { point: screenToWorld(point, camera.current(), size()), contact: engine.isDrawing() };
-    },
-    brushSize: () => tools.brush().size,
-    ready: engine.canEdit
-  });
-  const recorder = createInputRecorder({
-    exportFile: engine.exportFile,
-    observe: () => ({
-      ready: ready(),
-      tool: tool(),
-      brush: { preset: tools.preset(), size: brush().size, opacity: brush().opacity, color: brush().color },
-      panel: panel(),
-      camera: camera.camera(),
-      transforming: transform.active(),
-      selection: { selected: selection.selected(), busy: selection.busy(), drawing: selection.drawing() },
-      document: {
-        layers: engine.state().layers.length,
-        activeId: engine.state().activeId,
-        canUndo: engine.state().canUndo,
-        canRedo: engine.state().canRedo
-      },
-      error: error()?.message,
-      palmRejection: palmSettings.settings(),
-      penHovers: penHover.hovers() ?? null
-    })
-  });
-  const palmSettings = createPalmRejectionSettings();
-  // After the recorder, so that recordings keep ignored touches, and before the other window listeners, so that
-  // nothing else sees them.
-  // Before palm rejection, so that the press that finds the pen without hover is guarded as such.
-  const penHover = createPenHover();
-  const palmOptions = palmSettings.settings;
-  const hoverless = () => {
-    const mode = palmOptions().hoverless;
-    return mode === 'on' || (mode === 'auto' && penHover.hovers() === false);
-  };
-  const palm = createPalmRejection({
-    enabled: () => palmOptions().enabled,
-    hand: () => palmOptions().hand,
-    tolerance: () => palmOptions().tolerance,
-    linger: () => (hoverless() ? palmOptions().liftLinger : palmOptions().linger),
-    before: () => (hoverless() ? palmOptions().before : 0),
-    // A palm taken back puts the view back where it was when the earliest of them landed.
-    onRetract: (pointerIds) => {
-      const cameras = pointerIds.flatMap((id) => touchCameras.get(id) ?? []);
-      if (cameras[0]) {
-        camera.navigate(cameras[0]);
-      }
-    }
-  });
-  const freshTab = createFreshTab({
-    lostContacts: penHover.lostContacts,
-    idle: () => engine.canEdit() && !engine.isDrawing() && !transform.active() && !selection.drawing(),
-    moveOut: engine.moveOut
-  });
-  /** The view when each touch still down landed, in landing order, for `onRetract`. */
-  const touchCameras = new Map<number, ReturnType<typeof camera.current>>();
-  createEventListener(
-    window,
-    'pointerdown',
-    (event) => {
-      if (event.pointerType === 'touch') {
-        touchCameras.set(event.pointerId, camera.current());
-      }
-    },
-    { capture: true, passive: true }
-  );
-  createEventListener(window, ['pointerup', 'pointercancel'], (event) => touchCameras.delete(event.pointerId), {
-    capture: true,
-    passive: true
-  });
 
-  const { brush, tool } = tools;
-  const { ready } = engine;
-  const [panel, setPanel] = createSignal<PanelId>();
   const panelPins = createPanelPins();
   // Panels leave the canvas usable: a contact on it closes an unpinned panel and still draws or navigates.
   createEventListener(
-    stage,
+    session.stage,
     'pointerdown',
     (event) => {
       const open = panel();
@@ -408,55 +143,7 @@ export function PaintStudio(props: {
   /** The control that opened the current panel or dialog; focus returns to it on close. */
   let launcher: HTMLElement | undefined;
 
-  const blockCursor = () =>
-    brush().engine?.id === 'abr' && isBlockEraser(record(record(brush().engine?.settings).values).tool);
-  const cursorSize = () => (blockCursor() ? blockEraserSize : Math.max(2, brush().size * camera.camera().zoom));
-  const input: CanvasInput = {
-    camera: camera.current,
-    size,
-    brush,
-    eraser: tools.eraser,
-    ready: () => engine.canEdit() && !selection.isBusy() && !uploads.isBusy(),
-    navigate: camera.navigate,
-    send(command) {
-      // Input never starts an engine; `init` belongs to the transport.
-      if (command.type !== 'init') {
-        edit(command);
-      }
-    },
-    cursor: setCursor,
-    showPenCursor: developer.showPenCursor,
-    rawUpdate: developer.markRawReceived,
-    // The Mixer Brush loads paint with Alt/Option; other painting tools pick a color.
-    canvasAction: firstCanvasAction(
-      // Alt/Option picks colors even while transforming; the transform then consumes other contacts.
-      colorPicker.canvasAction,
-      transform.canvasAction,
-      hiddenLayer.canvasAction,
-      mixer.canvasAction,
-      fill.canvasAction,
-      gradient.canvasAction
-    ),
-    adjust: brushAdjust.adjust,
-    touchGestures: {
-      tap(fingers) {
-        if (fingers === 2 && engine.state().canUndo) {
-          edit({ type: 'undo' });
-        }
-
-        if (fingers === 3 && engine.state().canRedo) {
-          edit({ type: 'redo' });
-        }
-      }
-    },
-    puck: camera.navigation,
-    puckPicker: radial.picker,
-    // Overlays such as the transform box sit over the canvas; the puck opens over them too.
-    puckSurface: stage,
-    selection: { ...selection, enabled: () => tool() === 'lasso' }
-  };
-
-  createPaintShortcuts({
+  session.createShortcuts({
     closePanel() {
       if (!panel()) {
         return false;
@@ -464,130 +151,8 @@ export function PaintStudio(props: {
 
       closePanel();
       return true;
-    },
-    tool,
-    chooseTool,
-    selectionAction: selection.action,
-    deselect: selection.clear,
-    selectAll: selection.selectAll,
-    invertSelection: selection.invert,
-    chooseWand() {
-      selection.setTool('wand');
-      chooseTool('lasso');
-    },
-    undo: () => edit({ type: 'undo' }),
-    redo: () => edit({ type: 'redo' }),
-    save: () => edit({ type: 'download' }),
-    swapColors: tools.swapColors,
-    resetColors: tools.resetColors,
-    scaleBrush: tools.scaleSize,
-    zoomBy: camera.zoomBy,
-    resetZoom: camera.resetZoom,
-    transform: toggleTransform,
-    confirm() {
-      if (transform.active()) {
-        void transform.end();
-        return true;
-      }
-
-      if (selection.drawing()) {
-        selection.finish();
-        return true;
-      }
-
-      return false;
-    },
-    cancel() {
-      void transform.cancel();
-      mixer.cancelPick();
-      colorPicker.cancel();
-      camera.navigation.close();
-      // Escape ends a selection gesture, and otherwise deselects.
-      if (selection.drawing()) {
-        selection.cancel();
-      } else {
-        selection.clear();
-      }
-
-      edit({ type: 'cancel' });
     }
   });
-
-  /** Symmetry may change: the engine accepts commands and no selection edit is waiting for it. */
-  function canUpdateSymmetry() {
-    return engine.canEdit() && !selection.busy();
-  }
-
-  /** Brush settings may change: no stroke, selection edit, brush command or preset upload is running. */
-  function canChangeBrush() {
-    return engine.canEdit() && !selection.isBusy() && !engine.isDrawing() && !engine.isCommandBusy();
-  }
-
-  /** The active tool when it works with the selection: the lasso, or the fill or gradient inside the selection. */
-  function selectionTool() {
-    const current = tool();
-    return current === 'lasso' || current === 'fill' || current === 'gradient' ? current : undefined;
-  }
-
-  /**
-   * Switches tools, applying a transform in progress. The selection stays, so brushes, the fill and the gradient work
-   * inside it; a lasso gesture in progress is cancelled. The fill and the gradient work only inside a selection, so
-   * without one they are refused.
-   */
-  function chooseTool(next: PaintTool) {
-    if (transform.active()) {
-      void transform.end();
-    }
-
-    if (selection.isBusy() || next === tools.tool()) {
-      return;
-    }
-
-    if ((next === 'fill' || next === 'gradient') && !selection.selected()) {
-      return;
-    }
-
-    mixer.cancelPick();
-    colorPicker.cancel();
-    selection.cancel();
-    tools.chooseTool(next);
-  }
-
-  /** Starts transforming the selection or the active layer, or applies the transform in progress. */
-  function toggleTransform() {
-    if (transform.active()) {
-      void transform.end();
-      return;
-    }
-
-    mixer.cancelPick();
-    colorPicker.cancel();
-    void transform.start();
-  }
-
-  /**
-   * Switches the execution mode unless a selection edit, preset upload or brush command must finish first. An engine
-   * that is not ready cannot checkpoint, so it is restarted in the other mode from the saved document instead.
-   */
-  function setWorkerEnabled(enabled: boolean) {
-    if (selection.isBusy() || uploads.isBusy() || engine.isCommandBusy()) {
-      return;
-    }
-
-    const next = enabled ? 'worker' : 'main';
-    if (engine.switchMode(next) || engine.restart(next)) {
-      mixer.cancelPick();
-      colorPicker.cancel();
-      setCursor(undefined);
-      camera.navigation.close();
-    }
-  }
-
-  /** Clears the failure and restarts the renderer, which repeats the ready handshake and the preset upload. */
-  function restoreRenderer() {
-    setError(undefined);
-    edit({ type: 'recover' });
-  }
 
   function togglePanel(next: PanelId, target: HTMLElement) {
     launcher = target;
@@ -619,45 +184,10 @@ export function PaintStudio(props: {
     setAbrOpen(true);
   }
 
-  /** Uploads a preset's images if needed and makes the brush tool `slot`, the active one by default, use it. */
-  async function choosePreset(id: string, slot = tools.slot()) {
-    const preset = library.find(id);
-    if (!preset) {
-      return;
-    }
-
-    mixer.cancelPick();
-    colorPicker.cancel();
-    const chosen = await uploads.choose(preset, slot);
-    if (chosen.isErr() && chosen.error.kind !== 'aborted') {
-      setError(chosen.error);
-    }
-  }
-
   return (
-    <div ref={setEditor} class={styles.studio}>
-      <main
-        ref={[setStage, images.ref]}
-        class={styles.stage}
-        aria-label="Drawing workspace"
-        data-picking={mixer.picking() || colorPicker.armed()}
-        data-dropping={images.isOver()}
-      >
-        <Show when={engine.session()} keyed>
-          {(session) => (
-            <PaintCanvas
-              connect={(element) => engine.connect(element, session.mode)}
-              input={input}
-              crosshair={tool() === 'lasso' || tool() === 'fill' || tool() === 'gradient'}
-              ref={setCanvas}
-            />
-          )}
-        </Show>
-        <FrameGuides
-          frames={frames.frames()}
-          activeId={frames.activeFrame()?.id}
-          toScreen={(point) => worldToScreen(point, camera.camera(), size())}
-        />
+    <PaintEditor session={session} class={styles.studio}>
+      <PaintStage session={session} input={{ puckPicker: radial.picker }}>
+        <StageGuides session={session} />
         <Show when={frames.activeFrame()?.id === adjustingFrame() && frames.activeFrame()} keyed>
           {(frame) => (
             <FrameEditor
@@ -670,85 +200,14 @@ export function PaintStudio(props: {
             />
           )}
         </Show>
-        <SymmetryGuide
-          symmetry={symmetry.symmetry()}
-          camera={camera.camera()}
-          size={size()}
-          active={supportsSymmetry()}
-        />
-        <Show when={developer.debug()}>
-          <PalmRejectionDebug palm={palm} />
-          <CanvasDebug
-            tiles={engine.debugTiles()}
-            paging={engine.paging()}
-            camera={camera.camera()}
-            size={size()}
-            document={engine.state()}
-            gpuBytes={engine.metrics().gpu}
-          />
-        </Show>
-        <Show when={developer.performanceMonitor()}>
-          <PerformancePanel samples={monitor.samples()} idle={monitor.idle()} />
-        </Show>
+        <StageDiagnostics session={session} />
         <Show when={ready() && engine.state().tileCount === 0}>
-          <div class={styles.welcome}>
-            <p>Pen to draw. Touch to move.</p>
-          </div>
+          <StageHint>Pen to draw. Touch to move.</StageHint>
         </Show>
-        <Show when={brushAdjust.anchor()}>
-          {(anchor) => (
-            <BrushAdjustHud
-              anchor={anchor()}
-              size={brush().size}
-              opacity={brush().opacity}
-              color={brush().color}
-              zoom={camera.camera().zoom}
-            />
-          )}
-        </Show>
-        <Show when={transform.bounds()}>
-          {(bounds) => (
-            <TransformOverlay
-              bounds={bounds()}
-              box={transform.box()}
-              settings={transform.settings()}
-              size={size()}
-              toScreen={(point) => worldToScreen(point, camera.camera(), size())}
-              toDocument={(point) => screenToWorld(point, camera.current(), size())}
-              onChange={transform.setBox}
-              onSettings={transform.setSettings}
-              onFlip={transform.flip}
-              onRotate={transform.rotate}
-              onDistort={transform.distort}
-              onWarp={transform.warp}
-              onWarpGrid={transform.warpGrid}
-              onReset={transform.reset}
-              onCancel={() => void transform.cancel()}
-              onDone={() => void transform.end()}
-            />
-          )}
-        </Show>
-        <Show when={ready() && paintsWithBrush() && !transform.active() && !colorPicker.preview() && cursor()}>
-          {(point) => <BrushCursor point={point()} size={cursorSize()} square={blockCursor()} />}
-        </Show>
-        <Show when={colorPicker.preview()}>{(preview) => <ColorPickerLoupe preview={preview()} />}</Show>
-        <Show when={gradient.preview()}>
-          {(command) => (
-            <GradientPreview
-              command={command()}
-              toScreen={(point) => worldToScreen(point, camera.camera(), size())}
-              size={size()}
-              clip={selectionClipPath(
-                selection.summary(),
-                (point) => worldToScreen(point, camera.camera(), size()),
-                size()
-              )}
-            />
-          )}
-        </Show>
+        <StageOverlays session={session} />
         <Show when={camera.navigation.center()}>
           {(center) => (
-            <NavigationPuck navigation={camera.navigation} focusTarget={() => canvas()!}>
+            <NavigationPuck navigation={camera.navigation} focusTarget={() => session.canvas()!}>
               <RadialMenu
                 center={center()}
                 items={radialItems()}
@@ -759,12 +218,7 @@ export function PaintStudio(props: {
             </NavigationPuck>
           )}
         </Show>
-        <Show when={mixer.picking()}>
-          <div class={styles.welcome} role="status">
-            <p>Tap the canvas to load paint. Escape to cancel.</p>
-          </div>
-        </Show>
-      </main>
+      </PaintStage>
       <Show when={abrMounted()}>
         <AbrViewerDialog
           open={abrOpen()}
@@ -831,45 +285,8 @@ export function PaintStudio(props: {
             onFillSelection={gradient.fillSelection}
           />
         </Show>
-        <Show when={drawingFolder.status()?.access === 'prompt' ? drawingFolder.status() : undefined}>
-          {(status) => (
-            <FolderAccessNotice name={status().name} size={size()} onAllow={() => void drawingFolder.allow()} />
-          )}
-        </Show>
-        <Show when={hiddenLayer.notice()}>
-          {(notice) => (
-            <HiddenLayerNotice
-              name={notice().name}
-              size={size()}
-              onShow={() => {
-                edit({ type: 'layer', action: { type: 'update', id: notice().id, patch: { visible: true } } });
-                hiddenLayer.dismiss();
-              }}
-              onDismiss={hiddenLayer.dismiss}
-            />
-          )}
-        </Show>
-        <Show
-          when={
-            (engine.paging().storage?.missingTiles ?? 0) !== missingSeen() && engine.paging().storage?.missingTiles
-          }
-        >
-          {(count) => <MissingTilesNotice count={count()} size={size()} onDismiss={() => setMissingSeen(count())} />}
-        </Show>
+        <SessionNotices session={session} />
         <LiveBadge live={live} />
-        <Show when={freshTab.offered()}>
-          <FreshTabNotice
-            size={size()}
-            blocked={freshTab.blocked()}
-            auto={freshTab.auto()}
-            onMove={freshTab.move}
-            onAutoChange={freshTab.setAuto}
-            onDismiss={freshTab.dismiss}
-          />
-        </Show>
-        <Show when={engine.storageLock()}>
-          {(state) => <StorageLockNotice state={state()} onTakeOver={engine.takeOver} />}
-        </Show>
         <div class={styles.doublePuck} aria-label="Brush and color">
           <button
             aria-label="Brush settings"
@@ -1173,15 +590,14 @@ export function PaintStudio(props: {
             </StudioPanel>
           )}
         </Show>
-      </div>
-      <Show when={developerOpen()}>
+      </div>      <Show when={developerOpen()}>
         <DeveloperDialog
           settings={developer}
           ready={ready()}
           workerEnabled={engine.mode() === 'worker'}
           switching={engine.switching()}
           metrics={engine.metrics()}
-          onWorkerEnabledChange={setWorkerEnabled}
+          onWorkerEnabledChange={session.setWorkerEnabled}
           onRecordInput={
             import.meta.env.DEV
               ? () => {
@@ -1196,35 +612,8 @@ export function PaintStudio(props: {
           }}
         />
       </Show>
-      <Show when={error()}>
-        {(current) => (
-          <ErrorNotice
-            error={current()}
-            onRestore={restoreRenderer}
-            onRestart={() => engine.restart()}
-            onDismiss={() => setError(undefined)}
-          />
-        )}
-      </Show>
-    </div>
+    </PaintEditor>
   );
-
-  /**
-   * The tool paints color, so Alt/Option-click picks a color: the fill, and round and textured presets and ABR Brush
-   * or Pencil presets. ABR erasers keep Alt for erasing to history, and the Mixer Brush for loading paint.
-   */
-  function paintsColor() {
-    if (tool() === 'fill' || tool() === 'gradient') {
-      return true;
-    }
-
-    if (tool() !== 'brush') {
-      return false;
-    }
-
-    const abrTool = record(record(record(brush().engine?.settings).values).tool).type;
-    return brush().engine?.id !== 'abr' || abrTool === 'PbTl' || abrTool === 'PcTl';
-  }
 
   /**
    * Actions of the radial menu around the navigation puck, by clock position: tools along the top, undo and redo at
@@ -1284,43 +673,6 @@ export function PaintStudio(props: {
       toolItem('lasso', 'Lasso', 'lasso', 11)
     ];
   }
-
-  /** Paints with preset `id`: the eraser keeps erasing with it, other tools switch to the brush. */
-  function usePreset(id: string) {
-    const slot = tool() === 'eraser' ? 'eraser' : 'brush';
-    if (tool() !== slot) {
-      chooseTool(slot);
-    }
-
-    void choosePreset(id, slot);
-  }
-
-  /** The view's bounds in document pixels, for tools that cover the view, such as the fill and the gradient. */
-  function visibleArea() {
-    const view = size();
-    const current = camera.current();
-    const corners = [
-      { x: 0, y: 0 },
-      { x: view.width, y: 0 },
-      { x: 0, y: view.height },
-      { x: view.width, y: view.height }
-    ].map((corner) => screenToWorld(corner, current, view));
-    const xs = corners.map(({ x }) => x),
-      ys = corners.map(({ y }) => y);
-    const left = Math.min(...xs),
-      top = Math.min(...ys);
-    return { left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
-  }
-
-  /** The current tool paints symmetric copies. */
-  function supportsSymmetry() {
-    return supportsPaintSymmetry(brush()) && paintsWithBrush();
-  }
-
-  /** The active tool paints with a brush: the brush or the eraser. */
-  function paintsWithBrush() {
-    return tool() === 'brush' || tool() === 'eraser';
-  }
 }
 
 /** Up to three letters naming a preset in the radial menu: the initials of its words, or the start of one word. */
@@ -1329,34 +681,9 @@ function initials(name: string) {
   return (words.length > 1 ? words.map((word) => word[0]).join('') : (words[0] ?? '')).slice(0, 3).toUpperCase();
 }
 
-/** Commands that pass while a transform is in progress: view, settings and the transform's own edits. */
-const allowedWhileTransforming = new Set<Parameters<ReturnType<typeof guardEdits>>[0]['type']>([
-  'view',
-  'selection-view',
-  'debug',
-  'live-tail',
-  'adaptive-quality',
-  'diagnostics',
-  'download',
-  'png',
-  'cancel'
-]);
-
 /** Save indicator text for each engine save state. */
 const saveStatus = {
   saved: { label: 'Saved', title: 'Saved on this device' },
   saving: { label: 'Saving…', title: 'Writing completed changes to this device' },
   unsaved: { label: 'Unsaved changes', title: 'Changes are saved automatically after the stroke finishes' }
 } as const;
-
-/** The corners of `bounds`, clockwise from the top-left, as points; none without bounds. */
-function boundsCorners(bounds: { left: number; top: number; right: number; bottom: number } | undefined) {
-  return (
-    bounds && [
-      { x: bounds.left, y: bounds.top },
-      { x: bounds.right, y: bounds.top },
-      { x: bounds.right, y: bounds.bottom },
-      { x: bounds.left, y: bounds.bottom }
-    ]
-  );
-}

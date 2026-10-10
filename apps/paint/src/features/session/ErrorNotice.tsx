@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
 import { isRestartable, isRestorable, type PaintError } from '../../shared/errors';
-import styles from './PaintStudio.module.css';
+import styles from './ErrorNotice.module.css';
 
 /**
  * Alert for the latest failure. A paused renderer offers "Restore renderer"; a stopped engine offers "Restart engine",

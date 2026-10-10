@@ -4,9 +4,6 @@
   --line: #dedede;
   --accent: #237aab;
   --surface: #f8f8f8;
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
   background: #faf8f4;
   color: var(--ink);
   font:
@@ -16,30 +13,11 @@
     'Segoe UI',
     sans-serif;
   -webkit-font-smoothing: antialiased;
-  /* Panels still scroll, but a pinch or double tap outside the canvas must not zoom the whole page (iPad Safari). */
-  touch-action: pan-x pan-y;
-  /* A long press must not select labels or open the iOS callout and loupe. */
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-
-  *,
-  *::before,
-  *::after {
-    box-sizing: border-box;
-  }
 
   button,
   input,
   select {
     font: inherit;
-  }
-
-  /* iOS Safari will not place a caret in a field whose text cannot be selected. */
-  input,
-  textarea {
-    user-select: text;
-    -webkit-user-select: text;
   }
 
   button {
@@ -48,8 +26,6 @@
     border: 0;
     background: transparent;
     padding: 0;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
 
     &:disabled {
       opacity: 0.35;
@@ -73,28 +49,6 @@
   svg {
     flex: 0 0 auto;
   }
-}
-
-.stage {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-
-  canvas {
-    width: 100%;
-    height: 100%;
-    display: block;
-    touch-action: none;
-    cursor: none;
-  }
-}
-
-.welcome {
-  position: absolute;
-  inset: 45% 50px auto;
-  text-align: center;
-  color: #999;
-  pointer-events: none;
 }
 
 .ui {
@@ -428,36 +382,3 @@
   color: var(--muted);
 }
 
-.error {
-  position: absolute;
-  z-index: 80;
-  top: 76px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(440px, calc(100% - 32px));
-  padding: 18px;
-  background: #fff;
-  border: 1px solid #d5b49a;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px #0002;
-
-  button {
-    padding: 10px;
-    background: #eee;
-    border-radius: 4px;
-    margin-right: 8px;
-  }
-}
-
-.stage[data-picking='true'] canvas {
-  cursor: crosshair;
-}
-
-.stage[data-dropping='true']::after {
-  content: '';
-  position: absolute;
-  inset: 8px;
-  border: 2px dashed #2b8fd6;
-  border-radius: 8px;
-  pointer-events: none;
-}
