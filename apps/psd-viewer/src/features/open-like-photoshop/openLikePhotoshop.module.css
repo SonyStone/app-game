@@ -1,0 +1,77 @@
+.prompt {
+  width: min(440px, calc(100vw - 48px));
+  padding: 14px 16px 12px;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  background: #2b2b2b;
+  color: #ddd;
+  box-shadow: 0 8px 32px #000a;
+  font-size: 12px;
+
+  &::backdrop {
+    background: #000a;
+  }
+
+  h2 {
+    margin: 0 0 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #9a9a9a;
+  }
+
+  p {
+    margin: 0 0 14px;
+    white-space: pre-wrap;
+  }
+}
+
+.buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+
+  button {
+    min-width: 72px;
+    padding: 3px 10px;
+    border: 1px solid #4c4c4c;
+    border-radius: 2px;
+    background: #363636;
+    color: #dedede;
+    font-size: 11px;
+
+    &:hover {
+      background: #464646;
+    }
+  }
+
+  button[data-default] {
+    border-color: #2d9cdb;
+  }
+}
+
+.report {
+  max-height: 96px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-top: 1px solid #1a1a1a;
+  background: #262626;
+  color: #c9c3e6;
+  font-size: 11px;
+
+  p,
+  ul {
+    margin: 0 0 4px;
+  }
+
+  ul {
+    padding-left: 16px;
+  }
+}
+
+.refusal {
+  color: #f2c879;
+}
+
+.strict {
+  color: #a8a8a8;
+}

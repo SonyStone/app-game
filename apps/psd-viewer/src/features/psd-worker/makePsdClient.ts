@@ -7,6 +7,8 @@ import type {
   PsdLayerDetail,
   PsdLayerNode,
   PsdLayerPixels,
+  PsdOpenAnswers,
+  PsdOpening,
   PsdRenderSettings,
   PsdTextSupport
 } from '@app-game/psd/viewer';
@@ -41,11 +43,18 @@ export function makePsdClient(worker: PsdWorkerPort) {
   };
   worker.onmessageerror = () => fail(new Error('A PSD worker message could not be read'));
 
-  /** Opens `bytes`, which are transferred to the worker; the worker closes the document it held before. */
-  async function open(bytes: ArrayBuffer): Promise<PsdResultOf<OpenedPsd>> {
-    const reply = await send({ type: 'open', bytes }, [bytes]);
+  /**
+   * Opens `bytes` as Photoshop does, with `answers` to its prompts; the bytes are transferred to the worker, which
+   * closes the document it held before. A prompt Photoshop shows that `answers` leaves unanswered fails as
+   * `needsAnswer` with the prompt: open again with its answer.
+   */
+  async function open(bytes: ArrayBuffer, answers: PsdOpenAnswers = {}): Promise<PsdResultOf<OpenedPsd>> {
+    const reply = await send({ type: 'open', bytes, answers }, [bytes]);
     return reply.type === 'opened'
-      ? { ok: true, value: { document: reply.document, info: reply.info, layers: reply.layers } }
+      ? {
+          ok: true,
+          value: { document: reply.document, info: reply.info, layers: reply.layers, opening: reply.opening }
+        }
       : failure(reply);
   }
 
@@ -204,8 +213,8 @@ export type PsdWorkerPort = {
   onmessageerror: (() => void) | null;
 };
 
-/** A document the worker opened: its id for later requests, and its structure. */
-export type OpenedPsd = { document: number; info: PsdInfo; layers: PsdLayerNode[] };
+/** A document the worker opened: its id for later requests, its structure, and how the file was read. */
+export type OpenedPsd = { document: number; info: PsdInfo; layers: PsdLayerNode[]; opening: PsdOpening };
 
 /** A layer's detail, and its pixels or why it has none. */
 export type LayerContents = { detail: PsdLayerDetail; pixels: PsdResultOf<PsdLayerPixels> };

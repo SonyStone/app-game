@@ -1,19 +1,25 @@
-import type { PsdRenderSettings } from '@app-game/psd/viewer';
+import type { PsdOpenAnswers, PsdRenderSettings } from '@app-game/psd/viewer';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 import type { OpenedPsd, PsdClient, PsdResultOf } from '../psd-worker';
 
-/** A file to open: its name for display, how to read its bytes, and rendering settings it was captured with. */
+/**
+ * A file to open: its name for display, how to read its bytes, rendering settings it was captured with, and the
+ * answers to Photoshop's prompts it is opened with.
+ */
 export type PsdSource = {
   name: string;
   read: () => Promise<ArrayBuffer>;
   /** Settings to apply with the document, such as the Color Settings an example was saved under. */
   settings?: PsdRenderSettings;
+  /** Answers to the prompts Photoshop shows while opening the file; none until a prompt was shown. */
+  answers?: PsdOpenAnswers;
 };
 
 /**
  * Owns which document is open. `open` replaces the source; every call reopens, even for the same file. `opened` is
  * async: while a new document loads, the previous one stays committed and `isPending(opened)` is true, and it settles
- * to the worker's structure or a failure such as "not a Photoshop document". `undefined` before the first file.
+ * to the worker's structure or a failure: Photoshop's refusal, or a prompt Photoshop shows that the source's answers
+ * leave unanswered. `undefined` before the first file.
  */
 export function createPsdDocument(client: PsdClient) {
   const [source, setSource] = createSignal<PsdSource>();
@@ -53,5 +59,5 @@ async function readAndOpen(client: PsdClient, source: PsdSource): Promise<PsdRes
     return { ok: false, error: { kind: 'invalid', message: `${source.name} could not be read: ${String(error)}` } };
   }
 
-  return client.open(bytes);
+  return client.open(bytes, source.answers);
 }

@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest';
 import { makePsdClient, type PsdResultOf, type PsdWorkerPort } from '../src/features/psd-worker';
 import type { PsdReply, PsdRequest } from '../src/features/psd-worker/protocol';
 import { makePsdWorkerHost } from '../src/features/psd-worker/workerHost';
+import { truncated, withChannelCompression } from './damagedPsd';
 
 /** A client wired to a host in this thread, as the worker would be; messages are cloned like `postMessage` does. */
 function connect() {
@@ -145,7 +146,11 @@ it('reports unreadable files, unsupported settings and approximations as typed f
   const { client } = connect();
   expect(await client.open(new Uint8Array(64).buffer)).toEqual({
     ok: false,
-    error: { kind: 'invalid', message: 'not a Photoshop document' }
+    error: {
+      kind: 'refused',
+      message:
+        'Photoshop 26 does not open this file: not a Photoshop document, "Cannot open the file because the open options are incorrect" (error 8000)'
+    }
   });
 
   // Photoshop offers blend modes on adjustment layers; the CMYK channel compositor does not reproduce them.
@@ -318,4 +323,66 @@ it('fails every pending and later request once the worker crashes', async () => 
   await expect(client.layer(1, 0)).rejects.toThrow('out of memory');
   client.dispose();
   expect(port.terminate).toHaveBeenCalledOnce();
+});
+
+it('opens like Photoshop: strict files as before, prompts sent back for an answer, refusals named', async () => {
+  const { client, sent } = connect();
+  const intact = value(await client.open(await example('pass-through-groups.psd')));
+  expect(intact.opening).toEqual({ reader: 'strict', alerts: [], repairs: [] });
+
+  // "probe top"'s red channel gets compression code 4: Photoshop asks, and OK reads the channel as 255.
+  const corrupt = withChannelCompression(await example('pass-through-groups.psd'), 4, 1);
+  const message = 'This file contains one or more layers which appear to be corrupt.  Continue reading layers?';
+  expect(await client.open(corrupt.slice(0))).toEqual({
+    ok: false,
+    error: {
+      kind: 'needsAnswer',
+      message,
+      prompt: {
+        id: 'corruptLayers',
+        message,
+        buttons: [
+          { answer: 'ok', label: 'OK', default: true },
+          { answer: 'flatten', label: 'Flatten', default: false },
+          { answer: 'cancel', label: 'Cancel', default: false }
+        ]
+      }
+    }
+  });
+
+  const continued = value(await client.open(corrupt.slice(0), { corruptLayers: 'ok' }));
+  expect(sent.at(-1)).toMatchObject({ type: 'open', answers: { corruptLayers: 'ok' } });
+  expect(continued.layers.map((layer) => layer.name)).toEqual(intact.layers.map((layer) => layer.name));
+  expect(continued.opening).toEqual({
+    reader: 'photoshop',
+    alerts: [{ kind: 'corruptLayers', message, answer: 'OK' }],
+    repairs: ['Channels read as Photoshop decodes them in "probe top"']
+  });
+  // Recovered documents render, compare and detect their blending options like any other.
+  // The example was captured with gamma 1.0 blending, which still reproduces the merged image more closely.
+  expect(value(await client.detectBlending(continued.document, settings, []))).toMatchObject({
+    linearBlending: true,
+    differing: { encoded: 624, linear: 207 }
+  });
+  const render = value(await client.render(continued.document, { ...settings, linearBlending: true }, []));
+  expect(value(await client.difference(continued.document, render.render)).differingSamples).toBe(207);
+
+  const flattened = value(await client.open(corrupt.slice(0), { corruptLayers: 'flatten' }));
+  expect(flattened.layers).toEqual([]);
+  expect(flattened.opening.repairs).toEqual(['The stored composite opened as the Background instead of the layers']);
+  const flat = value(await client.render(flattened.document, settings, []));
+  expect(value(await client.difference(flattened.document, flat.render)).differingSamples).toBe(0);
+
+  const cancelled = await client.open(corrupt.slice(0), { corruptLayers: 'cancel' });
+  expect(cancelled).toEqual({
+    ok: false,
+    error: {
+      kind: 'refused',
+      message: `Photoshop 26 does not open this file: Photoshop asks "${message.replace('  ', ' ')}" and Cancel opens nothing`
+    }
+  });
+
+  const cut = await client.open(truncated(await example('pass-through-groups.psd'), 20_000));
+  expect(cut).toMatchObject({ ok: false, error: { kind: 'refused' } });
+  expect(!cut.ok && cut.error.message).toContain('extends past its container');
 });

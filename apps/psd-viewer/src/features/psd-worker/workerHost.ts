@@ -1,6 +1,6 @@
 import {
   createFontLibrary,
-  openPsd,
+  openPsdLikePhotoshop,
   type PsdFailure,
   type PsdFontLibrary,
   type PsdLayerNode,
@@ -13,7 +13,9 @@ import type { BlendingDetection, PsdReply, PsdRequest } from './protocol';
 /**
  * The worker side of the protocol, independent of the worker global so tests can drive it directly. It holds one open
  * document and the full-depth composites of its two latest renders, so the UI can still compare the render it shows
- * while the next one is already running; opening another document closes the previous one. The renders a blending
+ * while the next one is already running; opening another document closes the previous one, even when the new one
+ * fails or waits for an answer to a Photoshop prompt. Documents open as Photoshop opens them (`openPsdLikePhotoshop`).
+ * The renders a blending
  * detection made wait for the next render request, which takes the one with its settings and visibility instead of
  * compositing again; the others are freed then. It also holds the font library, created on first use and kept across
  * documents, which renders with `typeLayers` use. Requests run one at a time in arrival order. `post` sends a reply with the buffers to transfer.
@@ -41,7 +43,7 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
   async function handle(request: PsdRequest) {
     if (request.type === 'open') {
       close();
-      const opened = await openPsd(request.bytes);
+      const opened = await openPsdLikePhotoshop(request.bytes, request.answers);
       if (!opened.ok) {
         post({ id: request.id, type: 'failed', error: opened.error }, []);
         return;
@@ -54,7 +56,8 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
           type: 'opened',
           document: document.id,
           info: opened.value.info,
-          layers: [...opened.value.layers]
+          layers: [...opened.value.layers],
+          opening: opened.value.opening
         },
         []
       );

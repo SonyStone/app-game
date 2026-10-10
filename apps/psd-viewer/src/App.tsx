@@ -9,6 +9,7 @@ import { createFonts, FontsPanel, TextSupportSection } from './features/fonts';
 import { DocumentInspector, LayerInspector } from './features/inspector';
 import { collectNotes, createLayerVisibility, LayersPanel } from './features/layers';
 import { createFileDrop, fileSource, firstPsd, urlSource } from './features/open-file';
+import { createOpenPrompt, OpeningReport, OpenPromptDialog } from './features/open-like-photoshop';
 import { createPsdWorker, makePsdClient, type PsdResultOf, type WorkerFailure } from './features/psd-worker';
 import { createRenderSettings, RenderSettingsPanel } from './features/render-settings';
 import { ariaState } from './features/shared/format';
@@ -18,7 +19,7 @@ import { createViewport, RgbaCanvas } from './features/viewport';
 /**
  * PSD Viewer: opens a Photoshop document in a worker, renders it with the Rust compositor and compares the result with
  * the merged image Photoshop saved. The screen is assembled here from independent features: the worker client and
- * document session, layer visibility, render settings with the gamma blending options detected per document, the fonts for
+ * document session, opening files as Photoshop does with its prompts, layer visibility, render settings with the gamma blending options detected per document, the fonts for
  * re-rendering text, the zoomable viewport, the comparison views, the inspector and the renderer status.
  */
 export function App() {
@@ -26,6 +27,7 @@ export function App() {
   onCleanup(client.dispose);
 
   const { source, opened, open } = createPsdDocument(client);
+  const { prompt, answer } = createOpenPrompt(source, opened, open);
   const { settings: stored, update, replace, reset } = createRenderSettings();
   const { overrides, pairs, setVisible } = createLayerVisibility(source);
   const blending = createBlendingDetection(client, opened, stored, pairs);
@@ -50,7 +52,11 @@ export function App() {
   };
 
   const document = () => valueOf(opened());
-  const openFailure = () => failureOf(opened());
+  // An unanswered prompt shows as the prompt dialog, not as a failure.
+  const openFailure = () => {
+    const failure = failureOf(opened());
+    return failure?.kind === 'needsAnswer' ? undefined : failure;
+  };
   const layerContents = () => valueOf(layer());
   const documentFonts = () => valueOf(fonts.report());
   const layerTextSupport = () => valueOf(fonts.layerSupport());
@@ -214,8 +220,10 @@ export function App() {
               </Show>
               <Show when={openFailure()}>
                 {(failure) => (
-                  <div class={styles.message} role="alert">
-                    {source()?.name} could not be opened: {failure().message}
+                  <div class={styles.message} role="alert" data-failure={failure().kind}>
+                    {source()?.name}
+                    {failure().kind === 'refused' ? ': ' : ' could not be opened: '}
+                    {failure().message}
                   </div>
                 )}
               </Show>
@@ -239,12 +247,15 @@ export function App() {
             </div>
             <Show when={document()}>
               {(current) => (
-                <StatusArea
-                  render={render()}
-                  layerNotes={layerNotes()}
-                  documentNotes={current().info.notes}
-                  onSelect={selectLayer}
-                />
+                <>
+                  <OpeningReport opening={current().opening} />
+                  <StatusArea
+                    render={render()}
+                    layerNotes={layerNotes()}
+                    documentNotes={current().info.notes}
+                    onSelect={selectLayer}
+                  />
+                </>
               )}
             </Show>
           </section>
@@ -338,6 +349,15 @@ export function App() {
       </footer>
       <Show when={drop.dragging()}>
         <div class={styles.dropIndicator}>Drop to open</div>
+      </Show>
+      <Show when={prompt()}>
+        {(asked) => (
+          <OpenPromptDialog
+            prompt={asked()}
+            name={latest(source)?.name ?? ''}
+            onAnswer={(choice) => answer(asked(), choice)}
+          />
+        )}
       </Show>
     </div>
   );

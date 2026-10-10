@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { truncated, withChannelCompression } from '../tests/damagedPsd';
 
 const assets = new URL('../src/features/examples/assets/', import.meta.url);
 
@@ -142,5 +143,87 @@ test('re-renders text with a font file the user adds and matches the merged imag
   await page.getByRole('button', { name: 'Difference', exact: true }).click();
   const statistics = page.getByRole('region', { name: 'Difference statistics' });
   await expect(statistics).toHaveAttribute('data-mismatches', '0');
+  expect(errors).toEqual([]);
+});
+
+/** Opens `bytes` through the file picker as `name`. */
+async function pick(page: Page, name: string, bytes: ArrayBuffer) {
+  await page
+    .locator('input[accept=".psd,.psb"]')
+    .setInputFiles({ name, mimeType: 'image/vnd.adobe.photoshop', buffer: Buffer.from(bytes) });
+}
+
+/** The example `name`'s bytes. */
+async function example(name: string): Promise<ArrayBuffer> {
+  const bytes = await readFile(new URL(name, assets));
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+test('opens damaged files as Photoshop does, asking its prompt first', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/');
+  const report = page.getByRole('region', { name: 'Opened like Photoshop' });
+  const gamma = page.getByRole('checkbox', { name: 'Blend RGB colors using gamma 1.0' });
+
+  // A file Photoshop opens as the strict reader reads it opens without a report.
+  await pick(page, 'pass-through-groups.psd', await example('pass-through-groups.psd'));
+  await settled(page);
+  await expect(page.getByRole('img', { name: 'Our render' })).toBeVisible();
+  await expect(report).toHaveCount(0);
+
+  // "probe top"'s red channel gets compression code 4, which no format defines.
+  const corrupt = withChannelCompression(await example('pass-through-groups.psd'), 4, 1);
+  const prompt = page.getByRole('alertdialog');
+  const message = 'This file contains one or more layers which appear to be corrupt. Continue reading layers?';
+  await pick(page, 'corrupt.psd', corrupt);
+  await expect(prompt).toBeVisible();
+  await expect(prompt).toContainText(message);
+  await expect(prompt.getByRole('button')).toHaveText(['OK', 'Flatten', 'Cancel']);
+  await expect(prompt.getByRole('button', { name: 'OK' })).toBeFocused();
+
+  await prompt.getByRole('button', { name: 'OK' }).click();
+  await expect(prompt).toHaveCount(0);
+  await settled(page);
+  await expect(page.getByRole('img', { name: 'Our render' })).toBeVisible();
+  await expect(report.getByRole('list', { name: 'Photoshop alerts' })).toContainText(`${message} Answered OK.`);
+  await expect(report.getByRole('list', { name: 'Repairs' })).toContainText(
+    'Channels read as Photoshop decodes them in "probe top"'
+  );
+  // Gamma detection runs on the recovered document as on any other.
+  await expect(gamma).toBeChecked();
+  await expect(page.getByRole('tree', { name: 'Layers' })).toContainText('probe top');
+
+  await pick(page, 'corrupt.psd', corrupt);
+  await prompt.getByRole('button', { name: 'Flatten' }).click();
+  await expect(prompt).toHaveCount(0);
+  await settled(page);
+  await expect(report.getByRole('list', { name: 'Repairs' })).toContainText(
+    'The stored composite opened as the Background instead of the layers'
+  );
+  await page.getByRole('button', { name: 'Difference', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Difference statistics' })).toHaveAttribute('data-mismatches', '0');
+  await page.getByRole('button', { name: 'Our render', exact: true }).click();
+
+  await pick(page, 'corrupt.psd', corrupt);
+  await prompt.getByRole('button', { name: 'Cancel' }).click();
+  await expect(prompt).toHaveCount(0);
+  const refusal = page.locator('[data-failure="refused"]');
+  await expect(refusal).toContainText('corrupt.psd: Photoshop 26 does not open this file');
+  await expect(refusal).toContainText('and Cancel opens nothing');
+  await expect(page.getByRole('img', { name: 'Our render' })).toHaveCount(0);
+
+  // Escape answers Cancel.
+  await pick(page, 'corrupt.psd', corrupt);
+  await expect(prompt).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(prompt).toHaveCount(0);
+  await expect(refusal).toContainText('and Cancel opens nothing');
+
+  // A file cut inside its layer section: neither Photoshop nor the strict reader opens it.
+  await pick(page, 'cut.psd', truncated(await example('pass-through-groups.psd'), 20_000));
+  await expect(refusal).toContainText('cut.psd: Photoshop 26 does not open this file');
+  await expect(refusal).toContainText('extends past its container');
+  await expect(prompt).toHaveCount(0);
   expect(errors).toEqual([]);
 });

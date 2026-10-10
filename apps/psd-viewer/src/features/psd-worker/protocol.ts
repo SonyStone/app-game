@@ -8,18 +8,22 @@ import type {
   PsdLayerDetail,
   PsdLayerNode,
   PsdLayerPixels,
+  PsdOpenAnswers,
+  PsdOpening,
   PsdRenderSettings,
   PsdTextSupport
 } from '@app-game/psd/viewer';
 
 /**
- * A request to the PSD worker. `id` pairs it with its reply. Requests about a document name it by the `document` id its
+ * A request to the PSD worker. `id` pairs it with its reply. `open` opens as Photoshop does, with `answers` to the
+ * prompts Photoshop shows; a prompt left unanswered fails the request with a `needsAnswer` failure carrying it, and a
+ * file Photoshop refuses with a `refused` one. Requests about a document name it by the `document` id its
  * `opened` reply gave; the worker refuses requests for a document it no longer holds with a `stale` failure. The
  * worker keeps one font library for its lifetime, across documents: `addFonts` adds font files to it (their buffers
  * transferred), and renders with `typeLayers` re-render type layers with it.
  */
 export type PsdRequest =
-  | { id: number; type: 'open'; bytes: ArrayBuffer }
+  | { id: number; type: 'open'; bytes: ArrayBuffer; answers?: PsdOpenAnswers }
   | {
       id: number;
       type: 'render';
@@ -47,7 +51,7 @@ export type PsdRequest =
 
 /** The worker's answer to the request with the same `id`. Pixel buffers are transferred, never copied. */
 export type PsdReply =
-  | { id: number; type: 'opened'; document: number; info: PsdInfo; layers: PsdLayerNode[] }
+  | { id: number; type: 'opened'; document: number; info: PsdInfo; layers: PsdLayerNode[]; opening: PsdOpening }
   | { id: number; type: 'rendered'; render: RenderedPixels }
   | { id: number; type: 'merged'; image: PsdImage }
   | { id: number; type: 'difference'; difference: PsdDifference }
