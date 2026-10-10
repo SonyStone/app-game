@@ -7,7 +7,7 @@ import { defineDocumentEdit, type DocumentEdit } from './composition/documentEdi
 import type { DocumentFeature } from './composition/documentFeature';
 import { createMemoryStorage } from './composition/memoryStorage';
 import { symmetryFeature } from './composition/symmetryFeature';
-import { createDocument } from './document';
+import { createDocument, type Layer, type TileChange } from './document';
 import { createPaintRuntime } from './paintRuntime';
 import type { PaintEvent } from './protocol';
 import { polygonSelection, selectionBounds, type SelectionMask } from './selectionMask';
@@ -266,6 +266,91 @@ it('shows floating pixels of an edit and clears them after its result, keeping t
   expect(renderer.setFloating).toHaveBeenCalledTimes(7);
   expect(renderer.holdPresented).toHaveBeenCalledOnce();
 });
+
+it('shows an edit preview in place of layer tiles without changing the document, and drops it when the document changes', async () => {
+  const red = new Uint8Array(TILE_BYTES).fill(255);
+  const blue = new Uint8Array(TILE_BYTES).fill(128);
+  /** History ids each `peek` command saw. */
+  const seen: number[][] = [];
+  // `paint` commits red into tile 0,0; `show` previews blue there and a transparent 1,0; `apply` commits blue.
+  const peek = defineDocumentEdit({
+    id: 'peek',
+    parse: (input: unknown) => input as 'paint' | 'show' | 'clear' | 'apply',
+    async run({ active, history, preview }, command) {
+      seen.push(history.map(({ id }) => id));
+      if (command === 'paint') {
+        return { changes: [{ layerId: active.id, key: '0,0', before: active.tiles.get('0,0'), after: red }] };
+      }
+
+      if (command === 'show') {
+        preview.show([
+          { layerId: active.id, key: '0,0', pixels: blue },
+          { layerId: active.id, key: '1,0', pixels: undefined }
+        ]);
+        return { changes: [] };
+      }
+
+      preview.clear();
+      return command === 'apply'
+        ? { changes: [{ layerId: active.id, key: '0,0', before: active.tiles.get('0,0'), after: blue }] }
+        : { changes: [] };
+    }
+  });
+  const { runtime, renderer, document, events, storage, waitFor } = await start({ edits: [peek] });
+  const replies = () => events.filter((event) => event.type === 'edited').length;
+  const shownTile = () => (renderer.render.mock.lastCall![0] as Layer[])[0]!.tiles.get('0,0');
+  const restoredKeys = () => (renderer.restore.mock.lastCall![0] as TileChange[]).map(({ key }) => key).sort();
+  runtime.send(peek.command('paint', 'a'));
+  runtime.send(peek.command('show', 'b'));
+  await waitFor(() => replies() === 2 && shownTile() === blue);
+  expect(seen.at(-1)).toEqual([1]);
+  expect(restoredKeys()).toEqual(['0,0', '1,0']);
+
+  // The document, its history and its autosave keep the committed pixels.
+  const committed = async () => {
+    const data = document.active.tiles.get('0,0')!;
+    return unpackTile(data instanceof Uint8Array ? data : await storage.read(data))[0];
+  };
+  expect(await committed()).toBe(255);
+  expect(document.undoSteps()).toHaveLength(1);
+  runtime.send({ type: 'save' });
+  await waitFor(() => storage.save.mock.calls.length > 0);
+  const saved = await readSavedTile(storage, document.active.id, '0,0');
+  expect(saved[0]).toBe(255);
+
+  // A command of the same edit that clears the preview reloads its tiles and leaves the document alone.
+  runtime.send(peek.command('clear', 'c'));
+  await waitFor(() => replies() === 3);
+  expect(restoredKeys()).toEqual(['0,0', '1,0']);
+  expect(document.undoSteps()).toHaveLength(1);
+
+  // Anything else that changes the document ends the preview: here, selecting the layer again.
+  runtime.send(peek.command('show', 'd'));
+  await waitFor(() => replies() === 4 && shownTile() === blue);
+  runtime.send({ type: 'layer', action: { type: 'select', id: document.active.id } });
+  await waitFor(() => shownTile() !== blue);
+  expect(renderer.render.mock.lastCall![0]).toBe(document.layers);
+
+  // Committing the result with the preview cleared is one undo step, which replaces the preview without a blank frame.
+  runtime.send(peek.command('show', 'e'));
+  runtime.send(peek.command('apply', 'f'));
+  await waitFor(() => replies() === 6);
+  expect(document.undoSteps()).toHaveLength(2);
+  expect(restoredKeys()).toEqual(['0,0', '0,0', '1,0']);
+  expect(renderer.holdPresented).toHaveBeenCalledOnce();
+  expect(await committed()).toBe(128);
+  runtime.send({ type: 'undo' });
+  await waitFor(() => document.undoSteps().length === 1);
+  expect(await committed()).toBe(255);
+});
+
+/** The unpacked pixels of tile `key` of layer `layerId` in the latest checkpoint `storage` saved. */
+async function readSavedTile(storage: PaintStorage & { save: ReturnType<typeof vi.fn> }, layerId: string, key: string) {
+  const snapshot = storage.save.mock.lastCall![0] as ReturnType<typeof snapshotDocument>;
+  const layer = snapshot.layers.find((candidate) => candidate.id === layerId)!;
+  const data = layer.tiles.find((tile) => tile.key === key)!.pixels;
+  return unpackTile(data instanceof Uint8Array ? data : await storage.read(data));
+}
 
 it('reports the layers with paint in the view and in watched regions', async () => {
   const paint = defineDocumentEdit({

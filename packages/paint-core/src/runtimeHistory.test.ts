@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createRendererDouble, createStorageDouble } from '../tests/fixtures/rendererDouble';
 import { startStudioRuntime } from '../tests/fixtures/studioRuntime';
 import { defaultBrush } from './brush';
+import { defineDocumentEdit } from './composition/documentEdit';
 import type { TileChange } from './document';
 import { readPaintFile } from './paintFile';
 import type { PaintEvent, StateEvent } from './protocol';
@@ -92,7 +93,25 @@ it('hands the undo history and tools over to the next engine of the drawing, and
   await first.next((event) => event.type === 'disposed');
 
   const secondRenderer = createRendererDouble();
-  const second = startStudioRuntime({ renderer: secondRenderer, storage: await storage('paint-studio') });
+  // Edits such as the local undo read the handed-over steps and their stored pixels.
+  const peek = defineDocumentEdit({
+    id: 'peek',
+    parse: () => undefined,
+    async run({ history, readTile }) {
+      const reds = await Promise.all(history.map(async ({ changes }) => (await readTile(changes[0]!.after!))[0]));
+      return { changes: [], reply: { ids: history.map(({ id }) => id), reds } };
+    }
+  });
+  const peeked = async (requestId: string) => {
+    second.send(peek.command(undefined, requestId));
+    const event = await second.next((event) => event.type === 'edited' && event.requestId === requestId);
+    return (event as Extract<PaintEvent, { type: 'edited' }>).result;
+  };
+  const second = startStudioRuntime({
+    renderer: secondRenderer,
+    storage: await storage('paint-studio'),
+    edits: [peek]
+  });
   await second.init();
   expect(lastState(second.events).document).toMatchObject({
     canUndo: true,
@@ -101,8 +120,10 @@ it('hands the undo history and tools over to the next engine of the drawing, and
     historyStates: handed.document.historyStates
   });
   expect(secondRenderer.restoreTools).toHaveBeenCalledWith({ version: 1, marker: 'tools' });
+  expect(await peeked('handed')).toEqual({ ok: true, value: { ids: [1], reds: [100] } });
   second.send({ type: 'redo' });
   await second.next((event) => event.type === 'state' && !event.document.canRedo);
+  expect(await peeked('redone')).toEqual({ ok: true, value: { ids: [2, 1], reds: [150, 100] } });
   second.send({ type: 'undo' });
   second.send({ type: 'undo' });
   const undone = (await second.next((event) => event.type === 'state' && !event.document.canUndo)) as StateEvent;

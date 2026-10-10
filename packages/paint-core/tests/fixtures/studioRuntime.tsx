@@ -3,6 +3,7 @@ import { onTestFinished } from 'vitest';
 import { abrBrush } from '../../src/composition/abrBrushEngine';
 import { createAbrProcessor } from '../../src/composition/abrStrokeProcessor';
 import type { PaintStorage, RendererFactory } from '../../src/composition/contracts';
+import type { DocumentEdit } from '../../src/composition/documentEdit';
 import {
   BrushEngines,
   BrushResources,
@@ -25,12 +26,14 @@ import { studioProcessors } from '../../src/strokeProcessors';
  * Mounts the same recipe as Paint Studio (paged document, stroke processors, every brush engine and the symmetry
  * feature) with a renderer
  * and storage supplied by the test, and records the events it posts. The runtime is terminated when the test ends.
+ * `edits` installs document edits, none by default.
  *
  * `renderer` is either a ready double or a factory that also receives the device-loss callback and renderer options.
  */
 export function startStudioRuntime(options: {
   renderer: object | ((...args: Parameters<RendererFactory>) => Promise<object>);
   storage: object;
+  edits?: DocumentEdit[];
 }) {
   const events = createEventLog();
   const createRenderer = (
@@ -58,7 +61,7 @@ export function startStudioRuntime(options: {
                 selectEngine={(brush) => (brush.tool === 'eraser' ? 'eraser' : 'round')}
               >
                 <BrushResources resources={createBrushResources}>
-                  <DocumentFeatures features={[symmetryFeature]}>
+                  <DocumentFeatures features={[symmetryFeature]} edits={options.edits}>
                     <PaintRuntime {...binding} />
                   </DocumentFeatures>
                 </BrushResources>

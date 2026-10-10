@@ -108,6 +108,123 @@ export function areaSelection(
   return { outside: 0, tiles };
 }
 
+/**
+ * The pixels a soft round brush covers when dragged along `points`, in document pixels, with the radius of each point
+ * changing linearly between them; a single point covers one round dab. Coverage is full within `hardness` (0 to 1) of
+ * the radius and falls smoothly to nothing at the radius, over at least a pixel; overlapping dabs keep the larger
+ * coverage. Throws for no points, or for non-finite or negative values.
+ */
+export function strokeSelection(points: readonly StrokePoint[], hardness: number): SelectionMask {
+  if (
+    !points.length ||
+    !(hardness >= 0 && hardness <= 1) ||
+    points.some(({ x, y, radius }) => !Number.isFinite(x) || !Number.isFinite(y) || !(radius >= 0 && radius < 1e6))
+  ) {
+    throw new Error('A brushed area needs points with finite positions and radii.');
+  }
+
+  const tiles = new Map<string, Uint8Array>();
+  const dab = (cx: number, cy: number, radius: number) => {
+    const inner = Math.max(0, Math.min(radius * hardness, radius - 1));
+    const left = Math.floor(cx - radius),
+      right = Math.ceil(cx + radius),
+      top = Math.floor(cy - radius),
+      bottom = Math.ceil(cy + radius);
+    for (let ty = Math.floor(top / TILE_SIZE); ty * TILE_SIZE < bottom; ty++) {
+      for (let tx = Math.floor(left / TILE_SIZE); tx * TILE_SIZE < right; tx++) {
+        const key = `${tx},${ty}`;
+        const tile = tiles.get(key) ?? new Uint8Array(TILE_PIXELS);
+        tiles.set(key, tile);
+        for (let y = Math.max(top, ty * TILE_SIZE); y < Math.min(bottom, (ty + 1) * TILE_SIZE); y++) {
+          for (let x = Math.max(left, tx * TILE_SIZE); x < Math.min(right, (tx + 1) * TILE_SIZE); x++) {
+            const distance = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+            if (distance >= radius) {
+              continue;
+            }
+
+            const t = distance <= inner ? 0 : (distance - inner) / (radius - inner);
+            const coverage = Math.round(255 * (1 - t * t * (3 - 2 * t)));
+            const index = (y - ty * TILE_SIZE) * TILE_SIZE + x - tx * TILE_SIZE;
+            if (coverage > tile[index]!) {
+              tile[index] = coverage;
+            }
+          }
+        }
+      }
+    }
+  };
+
+  dab(points[0]!.x, points[0]!.y, points[0]!.radius);
+  for (let index = 1; index < points.length; index++) {
+    const from = points[index - 1]!,
+      to = points[index]!;
+    const spacing = Math.max(0.5, Math.min(from.radius, to.radius) / 4);
+    const steps = Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / spacing);
+    for (let step = 1; step <= steps; step++) {
+      const t = step / steps;
+      dab(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t, from.radius + (to.radius - from.radius) * t);
+    }
+  }
+
+  const kept = new Map<string, Uint8Array>();
+  for (const [key, tile] of tiles) {
+    keep(kept, key, tile, 0);
+  }
+
+  return { outside: 0, tiles: kept };
+}
+
+/** A point of a brushed area: its position and the brush radius there, in document pixels. */
+export type StrokePoint = { x: number; y: number; radius: number };
+
+/** The selection grown by `pixels` whole pixels in every direction, diagonals included, keeping its coverage. */
+export function expandSelection(mask: SelectionMask, pixels: number): SelectionMask {
+  let expanded = mask;
+  for (let step = 0; step < pixels; step++) {
+    const targets = new Set<string>();
+    for (const key of expanded.tiles.keys()) {
+      const [tx, ty] = tileOf(key);
+      for (let y = ty - 1; y <= ty + 1; y++) {
+        for (let x = tx - 1; x <= tx + 1; x++) {
+          targets.add(`${x},${y}`);
+        }
+      }
+    }
+
+    const tiles = new Map<string, Uint8Array>();
+    const rows = Array.from({ length: TILE_SIZE + 2 }, () => new Uint8Array(TILE_SIZE + 2));
+    for (const key of targets) {
+      const [tx, ty] = tileOf(key);
+      rows.forEach((row, y) => readRow(expanded, tx * TILE_SIZE - 1, ty * TILE_SIZE + y - 1, row));
+      const tile = new Uint8Array(TILE_PIXELS);
+      for (let y = 0; y < TILE_SIZE; y++) {
+        const above = rows[y]!,
+          row = rows[y + 1]!,
+          below = rows[y + 2]!;
+        for (let x = 0; x < TILE_SIZE; x++) {
+          tile[y * TILE_SIZE + x] = Math.max(
+            above[x]!,
+            above[x + 1]!,
+            above[x + 2]!,
+            row[x]!,
+            row[x + 1]!,
+            row[x + 2]!,
+            below[x]!,
+            below[x + 1]!,
+            below[x + 2]!
+          );
+        }
+      }
+
+      keep(tiles, key, tile, expanded.outside);
+    }
+
+    expanded = { outside: expanded.outside, tiles };
+  }
+
+  return expanded;
+}
+
 /** `shape` combined into `base` by `mode`: per pixel, the shape's coverage, the larger, `base` less the shape, or the smaller. */
 export function combineSelections(base: SelectionMask, shape: SelectionMask, mode: SelectionMode): SelectionMask {
   if (mode === 'replace') {

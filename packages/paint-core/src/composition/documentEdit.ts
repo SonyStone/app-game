@@ -1,4 +1,4 @@
-import type { Layer, LayerInfo, TileChange } from '../document';
+import type { HistoryStep, Layer, LayerInfo, TileChange } from '../document';
 import type { FloatingPixels } from '../gpu/floatingPixels';
 import type { SelectionMask } from '../selectionMask';
 import type { TileData } from '../tilePixels';
@@ -12,7 +12,8 @@ import type { TileData } from '../tilePixels';
  *
  * Interactive edits keep data between commands in `context.state`. They can update their own undo step with `amend`,
  * so the finished edit is one undo step however often it changed, or, like a transform, show their progress with
- * `context.floating` and commit only the result.
+ * `context.floating` and commit only the result. An edit that changes pixels in place, such as returning part of a
+ * layer to an earlier state, shows its progress with `context.preview` and reads past states from `context.history`.
  *
  * Edits run in the engine's realm, a worker or the main thread, so they must not use the DOM.
  */
@@ -85,7 +86,30 @@ export type DocumentEditContext = {
      */
     clear(): Promise<void>;
   };
+  /**
+   * The undoable steps, newest first, with their tile changes; see `HistoryStep`. Read their pixels with `readTile`.
+   * Read only: an edit changes the document through its result.
+   */
+  history: readonly HistoryStep[];
+  /**
+   * Tiles shown in place of a layer's own while the edit is in progress, such as a layer part returned to an earlier
+   * state. Unlike `floating`, they replace the layer's pixels, transparent ones included. Display only: they never
+   * enter the document, its history, autosaves or exports, and tools that read the document see its own pixels.
+   *
+   * The preview describes the document it was made for: the runtime drops it when anything other than this edit's
+   * commands changes the document (a stroke, Undo, a layer command, another edit or an opened drawing), and before a
+   * stroke begins. A replacement renderer shows it again.
+   */
+  preview: {
+    /** Shows `tiles` instead of the same tiles of their layers, replacing any shown before, and redraws. */
+    show(tiles: readonly PreviewTile[]): void;
+    /** Stops showing the preview; committed changes of the same command replace it without a blank interim. */
+    clear(): void;
+  };
 };
+
+/** A tile shown by `DocumentEditContext.preview`: unpacked RGBA8 pixels, or `undefined` for a transparent tile. */
+export type PreviewTile = { layerId: string; key: string; pixels: Uint8Array | undefined };
 
 /**
  * The changes of an edit. `layer` adds a new layer above the active one and selects it; changes may then refer to its

@@ -32,6 +32,8 @@ export type TileChange = {
   before: TileData | undefined;
   after: TileData | undefined;
 };
+/** One undoable step as edits read it; see `undoSteps` of {@link createDocument}. */
+export type HistoryStep = { readonly id: number; readonly changes: readonly Readonly<TileChange>[] };
 type HistoryEntry = {
   id: number;
   before: LayerInfo[];
@@ -345,6 +347,13 @@ export function createDocument(options: { paged?: boolean } = {}) {
     /** Id of the latest undoable entry, or `undefined` when there is none. */
     get latestHistoryId(): number | undefined {
       return undo.at(-1)?.id;
+    },
+    /**
+     * The undoable steps, newest first, as read-only views of their tile changes; redo steps are not included. A step
+     * that changed only layer properties or order has no changes. Tile data may be paged out: read it through storage.
+     */
+    undoSteps(): readonly HistoryStep[] {
+      return undo.map((entry) => ({ id: entry.id, changes: entry.tiles })).reverse();
     },
     /** Reapplies the same snapshots that were originally committed; returns them like {@link undo}. */
     redo(): readonly TileChange[] | undefined {

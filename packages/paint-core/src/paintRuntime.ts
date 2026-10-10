@@ -6,6 +6,7 @@ import { averageOpaque, defaultColorSample, sampleLayer, type PickedColor } from
 import { layersInRect, layersInView, type DocumentRect } from './layersInView';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushEngine, BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
+import type { PreviewTile } from './composition/documentEdit';
 import { createReplacementProcessor, type StrokeProcessor } from './strokeProcessors';
 import type { Layer, TileChange } from './document';
 import type { FloatingPixels } from './gpu/floatingPixels';
@@ -204,6 +205,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       lastEdit = undefined;
       floating = undefined;
       renderer?.setFloating(undefined);
+      tilePreview = undefined;
       document.persist(tileStore.capture);
       renderer?.reset();
       await renderer?.prepareOverview(document.layers);
@@ -265,6 +267,69 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let lastEdit: { edit: string; historyId: number } | undefined;
     /** Pixels an edit in progress shows moved; a replacement renderer shows them again. */
     let floating: FloatingPixels | undefined;
+    /**
+     * Tiles an edit in progress shows in place of the layers' own, by `previewId`, and the document revision they were
+     * made for; see `DocumentEditContext.preview`. A replacement renderer shows them again.
+     */
+    let tilePreview: { tiles: Map<string, PreviewTile>; revision: number } | undefined;
+    /** Exports draw the document's own tiles while this is set; see `withoutPreview`. */
+    let previewHidden = false;
+    /** The latest `shownLayers` result and what it was made from. */
+    let shown: { layers: Layer[]; revision: number; preview: typeof tilePreview; result: Layer[] } | undefined;
+    /** The layers as the views show them: the document's, with the tiles of the edit preview in place of their own. */
+    const shownLayers = (): Layer[] => {
+      if (!tilePreview || previewHidden) return document.layers;
+      if (
+        shown?.layers === document.layers &&
+        shown.revision === document.revision &&
+        shown.preview === tilePreview
+      ) {
+        return shown.result;
+      }
+
+      const byLayer = new Map<string, PreviewTile[]>();
+      for (const tile of tilePreview.tiles.values()) {
+        const tiles = byLayer.get(tile.layerId);
+        if (tiles) tiles.push(tile);
+        else byLayer.set(tile.layerId, [tile]);
+      }
+
+      const result = document.layers.map((layer) => {
+        const tiles = byLayer.get(layer.id);
+        if (!tiles) return layer;
+        const replaced = new Map(layer.tiles);
+        for (const tile of tiles) {
+          if (tile.pixels) replaced.set(tile.key, tile.pixels);
+          else replaced.delete(tile.key);
+        }
+
+        return { ...layer, tiles: replaced };
+      });
+      shown = { layers: document.layers, revision: document.revision, preview: tilePreview, result };
+      return result;
+    };
+    /** Stops showing the edit preview and reloads the document's own tiles in its place. */
+    const dropPreview = () => {
+      if (!tilePreview) return;
+      const tiles = [...tilePreview.tiles.values()].map(previewChange);
+      tilePreview = undefined;
+      renderer?.restore(tiles, document.layers);
+      scheduleDraw();
+    };
+    /** Runs an export with the document's own tiles in place of the edit preview, which shows again afterwards. */
+    const withoutPreview = async (action: () => Promise<void>) => {
+      const tiles = tilePreview && [...tilePreview.tiles.values()].map(previewChange);
+      if (!tiles?.length) return action();
+      previewHidden = true;
+      renderer?.restore(tiles, document.layers);
+      try {
+        await action();
+      } finally {
+        previewHidden = false;
+        renderer?.restore(tiles, document.layers);
+        scheduleDraw();
+      }
+    };
     /** Runs a module edit, committing or amending its undo step; returns the edit's reply. */
     const runEdit = async (command: Extract<PaintRuntimeCommand, { type: 'edit' }>) => {
       const edit = modules.edits.find((candidate) => candidate.id === command.edit);
@@ -273,6 +338,9 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       if (lost || !renderer) throw new Error('Restore the renderer before editing the drawing.');
       /** The edit asked to stop showing its floating pixels once its changes are committed. */
       let clearFloating = false;
+      /** The edit showed a preview, or asked to stop showing it once its changes are committed. */
+      let showedPreview = false,
+        clearPreview = false;
       const hideFloating = (hold: boolean) => {
         if (!clearFloating || !floating) return;
         floating = undefined;
@@ -308,6 +376,26 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                 if (floating && redraw) await draw();
                 clearFloating = true;
               }
+            },
+            history: document.undoSteps(),
+            preview: {
+              show(tiles) {
+                const previous = tilePreview?.tiles ?? new Map<string, PreviewTile>();
+                const next = new Map(tiles.map((tile) => [previewId(tile), { ...tile }]));
+                tilePreview = { tiles: next, revision: document.revision };
+                showedPreview = true;
+                clearPreview = false;
+                // Only tiles whose shown pixels changed reload.
+                const changed = [
+                  ...[...next].filter(([id, tile]) => previous.get(id)?.pixels !== tile.pixels || !previous.has(id)),
+                  ...[...previous].filter(([id]) => !next.has(id))
+                ].map(([, tile]) => previewChange(tile));
+                renderer?.restore(changed, document.layers);
+                scheduleDraw();
+              },
+              clear() {
+                clearPreview = true;
+              }
             }
           },
           command.command
@@ -315,8 +403,13 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       } catch (error) {
         // A failed result leaves the document unchanged; floating pixels must not stay on screen for it.
         hideFloating(false);
+        if (clearPreview) dropPreview();
         throw error;
       }
+
+      /** The tiles of a preview the edit stopped showing, which reload with the committed changes. */
+      const previewed = clearPreview && tilePreview ? [...tilePreview.tiles.values()].map(previewChange) : [];
+      if (clearPreview) tilePreview = undefined;
 
       let reverted: readonly TileChange[] = [];
       if (result.amend) {
@@ -332,15 +425,24 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         }
       } finally {
         const restored = [...reverted, ...result.changes];
+        if (restored.length || result.layer || previewed.length) {
+          renderer.restore([...restored, ...previewed], document.layers);
+        }
+
         if (restored.length || result.layer) {
-          renderer.restore(restored, document.layers);
           changed();
           await renderer.prepareOverview(document.layers);
+        } else if (previewed.length) {
+          scheduleDraw();
         }
 
         // After `restore`, which drops held frames: the presented frame stays until the result has loaded.
         hideFloating(restored.length > 0);
+        if (previewed.length && restored.length) renderer.holdPresented();
       }
+
+      // A preview shown by a command that also committed describes the document after its changes.
+      if (showedPreview && tilePreview) tilePreview.revision = document.revision;
 
       if (result.selection) {
         changeSelection(result.selection);
@@ -356,12 +458,15 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let presentedAt = performance.now();
     const draw = async (exact = false) => {
       if (!renderer || lost) return;
+      // An edit preview describes the document it was made for; anything else that changed the document ends it.
+      if (tilePreview && tilePreview.revision !== document.revision) dropPreview();
+      const layers = shownLayers();
       const start = performance.now();
       // Primary comes last so export and runtime diagnostics describe the editing view.
       if (!exact)
         for (const target of targets.values())
-          await renderer.render(document.layers, target.camera, target.size, target.dpr, false, target.canvas);
-      if (primaryAttached) await renderer.render(document.layers, camera, size, dpr, exact, canvas);
+          await renderer.render(layers, target.camera, target.size, target.dpr, false, target.canvas);
+      if (primaryAttached) await renderer.render(layers, camera, size, dpr, exact, canvas);
       renderMs = performance.now() - start;
       status();
       const waitStart = performance.now();
@@ -883,6 +988,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             prediction = [];
             if (!renderer || lost || !document.active.visible) return;
             await end();
+            // Strokes paint over the layer's own resident tiles.
+            dropPreview();
             const engineId = command.brush.engine?.id ?? modules.selectEngine(command.brush);
             const processorId = modules.selectProcessor(command.brush);
             const engine = Object.hasOwn(modules.engines, engineId) ? modules.engines[engineId] : undefined;
@@ -1130,21 +1237,25 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'png':
             if (!primaryAttached) throw new Error('Attach a primary canvas before exporting the view.');
             await end();
-            if (command.region) {
+            // An edit preview is not part of the drawing.
+            await withoutPreview(async () => {
+              if (command.region) {
+                post({
+                  type: 'download',
+                  blob: await regionPng(renderer!, document.layers, command.region),
+                  name: command.name ?? 'drawing-region.png',
+                  requestId: command.requestId
+                });
+                return;
+              }
+
+              await draw(true);
               post({
                 type: 'download',
-                blob: await regionPng(renderer!, document.layers, command.region),
-                name: command.name ?? 'drawing-region.png',
+                blob: await presentedPng(renderer!),
+                name: 'drawing-view.png',
                 requestId: command.requestId
               });
-              break;
-            }
-            await draw(true);
-            post({
-              type: 'download',
-              blob: await presentedPng(renderer!),
-              name: 'drawing-view.png',
-              requestId: command.requestId
             });
             break;
           case 'psd':
@@ -1293,6 +1404,16 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
 
 /** Encodes the presented view as PNG from a GPU readback; the WebGPU canvas itself cannot be read after presenting. */
 /** Renders a document rectangle at 100% into its own target and encodes it as a PNG. */
+/** Identifies a preview tile by its layer and key; tile keys never contain '/'. */
+function previewId(tile: Pick<PreviewTile, 'layerId' | 'key'>) {
+  return `${tile.layerId}/${tile.key}`;
+}
+
+/** A preview tile as the tile change that `renderer.restore` reloads by layer and key. */
+function previewChange(tile: PreviewTile): TileChange {
+  return { layerId: tile.layerId, key: tile.key, before: undefined, after: undefined };
+}
+
 async function regionPng(renderer: PaintRenderer, layers: Layer[], region: DocumentRect): Promise<Blob> {
   const target = new OffscreenCanvas(1, 1);
   const camera = { x: region.left + region.width / 2, y: region.top + region.height / 2, zoom: 1, angle: 0, mirrored: false };
