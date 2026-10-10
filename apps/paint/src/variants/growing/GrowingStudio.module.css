@@ -1,8 +1,45 @@
+/*
+ * The Growing variant: one compact dark-grey dock at the edge of the free hand, which extends as controls arrive.
+ * Neutral greys only; the only color is paint. The variables are shared by the dock and the panels.
+ */
 .editor {
-  background: #faf8f4;
-  font: 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --g-dock: rgb(36 36 36 / 0.97);
+  --g-panel: rgb(42 42 42 / 0.98);
+  --g-field: #1c1c1c;
+  --g-line: #3a3a3a;
+  --g-hover: #333;
+  --g-active: #4b4b4b;
+  --g-active-line: #626262;
+  --g-icon: #cfcfcf;
+  --g-text: #dedede;
+  --g-strong: #f4f4f4;
+  --g-muted: #8d8d8d;
+  --g-disabled: #575757;
+
+  background: #3b3b3b;
+  color: var(--g-text);
+  font:
+    12px/1.4 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    system-ui,
+    sans-serif;
+
+  :where(button, a) {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :where(button, a):focus-visible {
+    outline: 2px solid #bdbdbd;
+    outline-offset: -2px;
+  }
+
+  canvas:focus {
+    outline: none;
+  }
 }
 
+/* The layer over the drawing holding the dock, its cards and the notices; only its children take presses. */
 .ui {
   position: absolute;
   inset: 0;
@@ -11,4 +48,272 @@
   > * {
     pointer-events: auto;
   }
+}
+
+.dock {
+  --arrive-x: 14px;
+
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  display: flex;
+  flex-direction: column;
+  width: 96px;
+  padding: 2px 4px 0;
+  border: 1px solid var(--g-line);
+  border-radius: 10px;
+  background: var(--g-dock);
+  box-shadow: 0 4px 18px rgb(0 0 0 / 0.35);
+
+  &[data-side='right'] {
+    right: max(10px, env(safe-area-inset-right));
+  }
+
+  &[data-side='left'] {
+    --arrive-x: -14px;
+
+    left: max(10px, env(safe-area-inset-left));
+  }
+}
+
+.menuButton {
+  display: grid;
+  place-items: center;
+  height: 22px;
+  margin-bottom: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--g-muted);
+  cursor: pointer;
+
+  &[aria-expanded='true'] {
+    background: var(--g-active);
+    color: var(--g-strong);
+  }
+}
+
+/* A group of controls: two columns of 40 px cells, divided from the group above by a hairline. */
+.group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  padding: 4px 0;
+  border-top: 1px solid var(--g-line);
+}
+
+.button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--g-icon);
+  cursor: pointer;
+
+  &[aria-pressed='true'] {
+    background: var(--g-active);
+    color: var(--g-strong);
+    box-shadow: inset 0 0 0 1px var(--g-active-line);
+  }
+
+  /* A small corner mark: the button opens something. */
+  &[aria-expanded]::after {
+    content: '';
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    border: 3px solid transparent;
+    border-right-color: currentColor;
+    border-bottom-color: currentColor;
+    opacity: 0.55;
+  }
+
+  &[aria-expanded='true'] {
+    background: var(--g-hover);
+  }
+
+  &:disabled {
+    color: var(--g-disabled);
+    cursor: default;
+  }
+}
+
+@media (hover: hover) {
+  .button:not(:disabled):hover,
+  .menuButton:hover,
+  .zoom:hover {
+    background: var(--g-hover);
+  }
+
+  .button[aria-pressed='true']:hover {
+    background: var(--g-active);
+  }
+}
+
+.badge {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  color: var(--g-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* The current color, with the second color behind it. */
+.current {
+  position: relative;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  cursor: pointer;
+
+  &[aria-expanded='true'] {
+    background: var(--g-hover);
+  }
+}
+
+.primary,
+.secondary {
+  position: absolute;
+  border-radius: 5px;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.18),
+    0 0 0 1.5px var(--g-dock);
+}
+
+.primary {
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+}
+
+.secondary {
+  right: 6px;
+  bottom: 6px;
+  width: 16px;
+  height: 16px;
+}
+
+.swatches {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 0 2px 2px;
+}
+
+.swatch {
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14);
+  cursor: pointer;
+
+  &[data-current] {
+    box-shadow:
+      0 0 0 2px var(--g-dock),
+      0 0 0 3.5px #e4e4e4;
+  }
+}
+
+/* Size and opacity: scrub fields across the dock, themed grey. */
+.number {
+  --scrub-width: 100%;
+  --scrub-height: 30px;
+  --scrub-radius: 7px;
+  --scrub-track: var(--g-field);
+  --scrub-fill: #4a4a4a;
+  --scrub-focus: #a0a0a0;
+  --line: var(--g-line);
+  --ink: var(--g-strong);
+  --muted: var(--g-muted);
+
+  grid-column: 1 / -1;
+  display: flex;
+}
+
+.zoom {
+  grid-column: 1 / -1;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--g-line);
+  border-radius: 7px;
+  background: var(--g-field);
+  color: var(--g-strong);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+/* A control that arrives slides in from the screen's edge where it will live, and glows once. */
+.group[data-arriving] {
+  overflow: clip;
+  animation:
+    arrive-group 460ms cubic-bezier(0.2, 0.8, 0.2, 1) both,
+    glow 1800ms ease-out 460ms;
+}
+
+.button[data-arriving] {
+  animation:
+    arrive-button 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both,
+    glow 1800ms ease-out 380ms;
+}
+
+@keyframes arrive-group {
+  from {
+    max-height: 0;
+    padding-block: 0;
+    opacity: 0;
+    translate: var(--arrive-x) 0;
+  }
+
+  60% {
+    opacity: 1;
+  }
+
+  to {
+    max-height: 240px;
+    translate: 0 0;
+  }
+}
+
+@keyframes arrive-button {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+}
+
+@keyframes glow {
+  from {
+    background-color: rgb(255 255 255 / 0.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group[data-arriving],
+  .button[data-arriving] {
+    animation: none;
+  }
+}
+
+.failed {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  margin: 0;
+  padding: 10px 14px;
+  translate: -50% 0;
+  border-radius: 8px;
+  background: var(--g-panel);
 }
