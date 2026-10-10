@@ -7,7 +7,8 @@ import type { PaintCommand } from './protocol';
 
 /**
  * Connects real pointer input to ordered worker commands; touch navigates and pen/mouse draw. Touches landing during a
- * stroke, selection or canvas action are ignored; telling palms from fingers is left to the device.
+ * stroke, selection or canvas action are ignored; telling palms from fingers is left to the device. Cancels the
+ * canvas's `touchstart` events, so that its contacts never start browser gestures or clicks.
  */
 export function attachInput(
   canvas: HTMLCanvasElement,
@@ -78,8 +79,9 @@ export function attachInput(
   const abort = new AbortController(),
     signal = abort.signal;
   const touches = new Map<number, Point>();
+  /** A stroke's `inputTime` is the event time of its newest sample sent; build-up samples do not advance it. */
   let gesture:
-    | { kind: 'draw'; id: number; camera: Camera; size: ViewSize; latest: Sample; raw: boolean }
+    | { kind: 'draw'; id: number; camera: Camera; size: ViewSize; latest: Sample; raw: boolean; inputTime: number }
     | { kind: 'select'; id: number; camera: Camera; size: ViewSize }
     | { kind: 'pan'; id: number; previous: Point }
     | { kind: 'action'; id: number }
@@ -123,7 +125,15 @@ export function attachInput(
     const coalesced = event.getCoalescedEvents?.() ?? [];
     const samples: Sample[] = [];
     const rect = canvas.getBoundingClientRect();
+    // iPad Safari repeats Apple Pencil samples of earlier moves in the coalesced list (WebKit bug 316105). Replaying
+    // them would retrace the stroke, so only samples newer than the previous batch count.
+    const sent = gesture.inputTime;
     for (const sample of coalesced.length ? coalesced : [event]) {
+      if (sample.timeStamp <= sent) {
+        continue;
+      }
+
+      gesture.inputTime = Math.max(gesture.inputTime, sample.timeStamp);
       gesture.latest = {
         ...screenToWorld({ x: sample.clientX - rect.left, y: sample.clientY - rect.top }, gesture.camera, gesture.size),
         ...tabletAxes(sample),
@@ -132,6 +142,11 @@ export function attachInput(
       };
       samples.push(gesture.latest);
     }
+
+    if (!samples.length) {
+      return;
+    }
+
     // Forward immediately, including raw updates. The worker batches while its GPU frame is in flight.
     options.send({ type: 'samples', samples });
   };
@@ -266,7 +281,15 @@ export function attachInput(
         pressure,
         time: event.timeStamp
       };
-      gesture = { kind: 'draw', id: event.pointerId, camera, size: { ...options.size() }, latest, raw: false };
+      gesture = {
+        kind: 'draw',
+        id: event.pointerId,
+        camera,
+        size: { ...options.size() },
+        latest,
+        raw: false,
+        inputTime: event.timeStamp
+      };
       cursorAt(event);
       const brush = eraser ? eraser() : options.brush();
       options.send({
@@ -429,6 +452,18 @@ export function attachInput(
           options.camera().zoom * Math.exp(-event.deltaY * 0.002)
         )
       );
+    },
+    { signal, passive: false }
+  );
+  // Unless its touch events are cancelled, iPadOS also hands a contact to its own gestures: Scribble, text selection
+  // and the loupe. A quick series of Apple Pencil taps can then select the whole page. Pointer events still arrive, and
+  // the canvas needs no clicks.
+  canvas.addEventListener(
+    'touchstart',
+    (event) => {
+      if (event.cancelable) {
+        event.preventDefault();
+      }
     },
     { signal, passive: false }
   );
