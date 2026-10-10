@@ -1,0 +1,445 @@
+/*
+ * The command palette: a dense, neutral dark panel at the top center, after Raycast and VS Code's command palette.
+ * Only paint colors are colored; selection and hover are lighter greys. Rows and chips grow to finger size on touch
+ * screens.
+ */
+.palette {
+  --text: #e9e9eb;
+  --dim: #9b9ba1;
+  --line: rgb(255 255 255 / 0.08);
+  --fill: rgb(255 255 255 / 0.06);
+  --hover: rgb(255 255 255 / 0.09);
+  --selected: rgb(255 255 255 / 0.14);
+  --row: 34px;
+  --chip: 36px;
+
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100% - 24px));
+  /* Clear of the toast at the bottom. */
+  max-height: calc(100% - 76px);
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgb(34 34 36 / 0.97);
+  color: var(--text);
+  font:
+    13px/1.35 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.6),
+    inset 0 0 0 0.5px rgb(255 255 255 / 0.08),
+    0 18px 48px rgb(0 0 0 / 0.38);
+  animation: appear 120ms ease-out both;
+
+  :where(button) {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  :where(button):focus-visible {
+    outline: 1px solid rgb(255 255 255 / 0.5);
+    outline-offset: -1px;
+  }
+}
+
+@media (pointer: coarse) {
+  .palette {
+    --row: 44px;
+    --chip: 44px;
+  }
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    translate: -50% -6px;
+  }
+}
+
+/* The command line. */
+.line {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 48px;
+  padding: 0 6px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.prompt {
+  width: 14px;
+  color: var(--dim);
+  font:
+    500 16px/1 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 6px;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text);
+  /* 16 px keeps iOS from zooming the page into the field. */
+  font: 16px/1 inherit;
+  font-family: inherit;
+
+  &::placeholder {
+    color: rgb(255 255 255 / 0.32);
+  }
+}
+
+.iconButton {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
+  color: var(--dim);
+
+  &:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  &[aria-pressed='true'] {
+    background: var(--selected);
+    color: var(--text);
+  }
+}
+
+/* What Enter runs, or what the microphone hears. */
+.preview {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  margin: 0;
+  padding: 4px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+}
+
+.previewTitle {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.enter,
+.shortcut {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+  color: var(--dim);
+  font:
+    11px/1.4 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+}
+
+.dim {
+  color: var(--dim);
+}
+
+.pulse {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text);
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  to {
+    opacity: 0.25;
+  }
+}
+
+/* The current state: brush, color, layer, view. */
+.status {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.statusPart {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  white-space: pre;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--fill);
+  color: var(--dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+
+  &:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .dot {
+    width: 10px;
+    height: 10px;
+    margin-right: 6px;
+  }
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.section {
+  padding: 2px 4px 8px;
+
+  h3 {
+    margin: 6px 4px 6px;
+    color: var(--dim);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--chip);
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--fill);
+  white-space: nowrap;
+
+  &:hover {
+    background: var(--hover);
+  }
+
+  &:active,
+  &[aria-current='true'] {
+    background: var(--selected);
+  }
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--chip), 1fr));
+  gap: 6px;
+  padding: 4px;
+}
+
+.swatch {
+  aspect-ratio: 1;
+  min-height: var(--chip);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+
+  &[aria-selected='true'],
+  &[aria-current='true'],
+  &:hover {
+    box-shadow:
+      inset 0 0 0 1px rgb(0 0 0 / 0.5),
+      0 0 0 2px var(--text);
+  }
+}
+
+.section .swatches {
+  padding: 0;
+}
+
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
+}
+
+/* A result row: icon, title with detail, group, shortcut, and an optional switch. */
+.row {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+
+  &[aria-selected='true'] {
+    background: var(--selected);
+  }
+
+  /* The row's switch shows its state by its icon alone. */
+  .iconButton {
+    width: var(--row);
+    height: var(--row);
+
+    &[aria-pressed='true'] {
+      background: none;
+      color: var(--dim);
+    }
+
+    &[aria-pressed='false'] {
+      color: var(--text);
+    }
+
+    &:hover {
+      background: var(--hover);
+    }
+  }
+}
+
+.rowMain {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: var(--row);
+  padding: 0 10px;
+  text-align: left;
+}
+
+.row:not([aria-selected='true']) .rowMain:hover {
+  border-radius: 6px;
+  background: var(--hover);
+}
+
+.icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  color: var(--dim);
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.detail {
+  margin-left: 8px;
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.group {
+  flex: none;
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--dim);
+}
+
+.help {
+  padding-bottom: 4px;
+}
+
+.gestures {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0 4px;
+
+  dt {
+    color: var(--text);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--dim);
+  }
+}
+
+.footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  height: 32px;
+  padding: 0 6px 0 14px;
+  border-top: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.keys {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.link {
+  color: var(--dim);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--text);
+  }
+}
+
+.closeButton {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 5px;
+  color: var(--dim);
+
+  &:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+}
