@@ -1,8 +1,32 @@
 .editor {
+  --zen-surface: rgb(250 250 250 / 0.96);
+  --zen-line: rgb(60 60 67 / 0.14);
+  --zen-ink: #3a3a3c;
+  --zen-quiet: #8e8e93;
+  --zen-faint: #c7c7cc;
+  --zen-pressed: #e6e6e8;
+  --zen-shadow: 0 1px 2px rgb(0 0 0 / 0.1), 0 6px 18px rgb(0 0 0 / 0.08);
+
   background: #faf8f4;
-  font: 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--zen-ink);
+  font:
+    13px/1.4 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+
+  /* The canvas takes the keyboard back whenever something closes; a focus ring around the whole page says nothing. */
+  canvas:focus {
+    outline: none;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+  }
 }
 
+/* The layer over the drawing; only its children take presses. */
 .ui {
   position: absolute;
   inset: 0;
@@ -11,4 +35,511 @@
   > * {
     pointer-events: auto;
   }
+}
+
+.hint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none !important;
+  transition: opacity 200ms;
+}
+
+.ui[data-drawing] .hint {
+  opacity: 0;
+}
+
+.failed {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  translate: -50% 0;
+  margin: 0;
+  color: var(--zen-quiet);
+}
+
+/* The pebble */
+
+.pebble {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: var(--zen-surface);
+  box-shadow:
+    0 0 0 0.5px var(--zen-line),
+    var(--zen-shadow);
+  cursor: pointer;
+  touch-action: none;
+  transition:
+    left 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    top 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 280ms 140ms,
+    scale 160ms;
+}
+
+.pebble[data-open] {
+  background: var(--zen-pressed);
+}
+
+.pebble[data-lifted] {
+  scale: 1.14;
+  transition:
+    opacity 280ms,
+    scale 160ms;
+  box-shadow:
+    0 0 0 0.5px var(--zen-line),
+    0 10px 28px rgb(0 0 0 / 0.18);
+}
+
+.pebble[data-hidden] {
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    left 260ms,
+    top 260ms,
+    opacity 100ms;
+}
+
+.dot {
+  display: block;
+  border-radius: 50%;
+  background: var(--dot-color);
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.22);
+  pointer-events: none;
+}
+
+.dot[data-erasing],
+.dab[data-erasing] {
+  background: transparent;
+  box-shadow: none;
+  border: 1.5px dashed var(--zen-quiet);
+}
+
+.counter {
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--zen-ink);
+  pointer-events: none;
+}
+
+/* The live preview of a size or opacity drag. */
+.preview {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  translate: -50% -50%;
+  pointer-events: none !important;
+}
+
+.dab {
+  display: block;
+  border-radius: 50%;
+  background: var(--dot-color);
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.18);
+}
+
+.readout {
+  display: flex;
+  gap: 10px;
+  padding: 2px 9px;
+  border-radius: 10px;
+  background: var(--zen-surface);
+  box-shadow: 0 0 0 0.5px var(--zen-line);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--zen-quiet);
+  white-space: nowrap;
+
+  [data-on] {
+    color: #1c1c1e;
+    font-weight: 600;
+  }
+}
+
+/* The fan */
+
+.fan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none !important;
+}
+
+.item {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: pointer;
+  animation: fan-out 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes fan-out {
+  from {
+    transform: translate(var(--from-x), var(--from-y)) scale(0.3);
+    opacity: 0;
+  }
+}
+
+.round {
+  width: 44px;
+  height: 44px;
+  background: var(--zen-surface);
+  box-shadow:
+    0 0 0 0.5px var(--zen-line),
+    var(--zen-shadow);
+  color: var(--zen-ink);
+
+  &:disabled {
+    color: var(--zen-faint);
+    cursor: default;
+  }
+
+  &:active:not(:disabled),
+  &[aria-expanded='true'] {
+    background: var(--zen-pressed);
+  }
+}
+
+.tool {
+  --zen-tool-body: #fdfdfd;
+  --zen-tool-wood: #e4e4e6;
+
+  width: 52px;
+  height: 52px;
+  background: var(--zen-surface);
+  box-shadow:
+    0 0 0 0.5px var(--zen-line),
+    var(--zen-shadow);
+  color: #636366;
+
+  > span {
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+  }
+
+  &[aria-pressed='true'] {
+    background: var(--zen-pressed);
+    color: #1c1c1e;
+    box-shadow:
+      0 0 0 1.5px #636366,
+      var(--zen-shadow);
+  }
+}
+
+.swatch {
+  width: 30px;
+  height: 30px;
+  background: var(--swatch);
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.25),
+    0 2px 6px rgb(0 0 0 / 0.12);
+
+  &[data-current] {
+    width: 36px;
+    height: 36px;
+    box-shadow:
+      0 0 0 0.5px rgb(0 0 0 / 0.25),
+      0 0 0 3px #fff,
+      0 0 0 3.5px var(--zen-faint),
+      0 2px 8px rgb(0 0 0 / 0.14);
+  }
+}
+
+/* Sheets beside the fan */
+
+.sheet {
+  position: absolute;
+  padding: 6px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: 14px;
+  background: var(--zen-surface);
+  box-shadow:
+    0 0 0 0.5px var(--zen-line),
+    0 2px 4px rgb(0 0 0 / 0.06),
+    0 12px 32px rgb(0 0 0 / 0.12);
+  animation: sheet-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+}
+
+.layers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.layer {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  border-radius: 8px;
+
+  &[data-active] {
+    background: var(--zen-pressed);
+  }
+}
+
+.layerName {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 10px;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+
+  [data-active] > & {
+    font-weight: 600;
+  }
+}
+
+.iconButton {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #636366;
+  cursor: pointer;
+
+  &:active:not(:disabled) {
+    background: var(--zen-pressed);
+  }
+
+  &:disabled {
+    color: var(--zen-faint);
+    cursor: default;
+  }
+
+  &[aria-checked='false'] {
+    color: var(--zen-faint);
+  }
+}
+
+.layerTools {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0 0;
+}
+
+.rule {
+  height: 1px;
+  margin: 6px 4px;
+  border: 0;
+  background: var(--zen-line);
+}
+
+.chips {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0 4px;
+}
+
+.chip {
+  flex: 1;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(118 118 128 / 0.1);
+  font-size: 12px !important;
+  cursor: pointer;
+
+  &:active:not(:disabled) {
+    background: rgb(118 118 128 / 0.2);
+  }
+
+  &:disabled {
+    color: var(--zen-faint) !important;
+  }
+
+  &[aria-checked='true'] {
+    background: #48484a;
+    color: #fff !important;
+  }
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+
+  &:active:not(:disabled) {
+    background: var(--zen-pressed);
+  }
+
+  &:disabled {
+    color: var(--zen-faint) !important;
+  }
+
+  small {
+    color: var(--zen-quiet);
+    font-size: 11px;
+  }
+}
+
+.presets {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preset {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+
+  &[aria-current='true'] {
+    background: var(--zen-pressed);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+.presetName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #636366;
+}
+
+/* The color disc */
+
+.discHolder {
+  position: absolute;
+  animation: sheet-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.disc {
+  position: relative;
+  width: 216px;
+  height: 216px;
+  border-radius: 50%;
+  background: var(--zen-surface);
+  box-shadow:
+    0 0 0 8px var(--zen-surface),
+    0 0 0 8.5px var(--zen-line),
+    0 12px 32px rgb(0 0 0 / 0.14);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.hueRing {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  mask: radial-gradient(circle closest-side, transparent calc(100% - 22px), #000 calc(100% - 21.5px));
+  pointer-events: none;
+}
+
+.discInner {
+  position: absolute;
+  inset: 29px;
+  overflow: hidden;
+  border-radius: 50%;
+  pointer-events: none;
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.thumb {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 3px #fff,
+    0 1px 6px 3px rgb(0 0 0 / 0.3);
+  pointer-events: none;
+}
+
+.discThumb {
+  width: 22px;
+  height: 22px;
+}
+
+/* The rewind dial */
+
+.rewind {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none !important;
+}
+
+.rewindTrack {
+  fill: none;
+  stroke: rgb(60 60 67 / 0.2);
+  stroke-width: 1;
+}
+
+.rewindTick {
+  stroke: rgb(60 60 67 / 0.4);
+  stroke-width: 1;
+}
+
+.rewindArc {
+  fill: none;
+  stroke: #48484a;
+  stroke-width: 2.5;
+  stroke-linecap: round;
 }
