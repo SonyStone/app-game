@@ -1,0 +1,56 @@
+/* The horizontal slider: a 4 px track with a blue fill and a 24 px white thumb, in a 32 px tall hit area. */
+.slider {
+  position: relative;
+  height: 32px;
+  touch-action: none;
+  cursor: pointer;
+  outline: none;
+
+  &[aria-disabled='true'] {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  &:focus-visible .thumb {
+    box-shadow:
+      0 0 0 3px var(--pc-blue),
+      0 1px 4px rgb(0 0 0 / 0.4);
+  }
+}
+
+.track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  translate: 0 -50%;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--pc-blue) calc(12px + (100% - 24px) * var(--fraction)),
+    rgb(120 120 128 / 0.36) 0
+  );
+
+  [data-custom-track] & {
+    height: 10px;
+    border-radius: 5px;
+    background: var(--track);
+    box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.18);
+  }
+}
+
+.thumb {
+  position: absolute;
+  top: 50%;
+  left: calc((100% - 24px) * var(--fraction));
+  width: 24px;
+  height: 24px;
+  translate: 0 -50%;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.2),
+    0 1px 4px rgb(0 0 0 / 0.4);
+  pointer-events: none;
+}

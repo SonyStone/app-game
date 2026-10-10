@@ -56,6 +56,7 @@
   "exports": {
     "./editor": "./src/features/studio/PaintStudio.tsx",
     "./tile-cluster-mockup": "./src/mockups/tile-cluster/TileClusterMockup.tsx",
-    "./puck-gallery": "./src/mockups/puck-gallery/PuckGallery.tsx"
+    "./puck-gallery": "./src/mockups/puck-gallery/PuckGallery.tsx",
+    "./variants": "./src/variants/index.ts"
   }
 }

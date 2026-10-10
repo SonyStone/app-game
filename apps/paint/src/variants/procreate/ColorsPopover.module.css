@@ -1,0 +1,196 @@
+/* The Colors popover: swatches in the header, the Disc or Classic picker, history, palette and the mode tabs. */
+.swatch {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.18),
+    0 1px 3px rgb(0 0 0 / 0.4);
+}
+
+.secondary {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 16px 14px;
+}
+
+.disc {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 248px;
+  height: 248px;
+  margin: 4px 0;
+  border-radius: 50%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  mask: radial-gradient(circle closest-side, transparent calc(100% - 26px), #000 calc(100% - 25.5px));
+  pointer-events: none;
+}
+
+.inner {
+  position: absolute;
+  inset: 34px;
+  overflow: hidden;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0.5px rgb(255 255 255 / 0.2);
+  pointer-events: none;
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.thumb {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 3px #fff,
+    0 1px 6px 3px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+
+.discThumb {
+  width: 24px;
+  height: 24px;
+}
+
+.classic {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.square {
+  position: relative;
+  height: 190px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, var(--hue));
+  box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.2);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.squareThumb {
+  box-shadow:
+    0 0 0 3px #fff,
+    0 1px 5px 3px rgb(0 0 0 / 0.3);
+
+  &[data-light] {
+    box-shadow:
+      0 0 0 3px #fff,
+      0 0 0 4px rgb(0 0 0 / 0.35),
+      0 1px 5px 3px rgb(0 0 0 / 0.3);
+  }
+}
+
+.sliderRow {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: center;
+  column-gap: 8px;
+
+  > span {
+    color: var(--pc-secondary);
+    font-size: 13px;
+  }
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  h3 {
+    margin: 0;
+    color: var(--pc-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+}
+
+.swatchRow,
+.palette {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 5px;
+}
+
+.empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--pc-tertiary);
+  font-size: 13px;
+  line-height: 26px;
+}
+
+.chip {
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.2);
+  cursor: pointer;
+
+  &[data-current] {
+    box-shadow:
+      0 0 0 2px var(--pc-card-solid),
+      0 0 0 4px #fff;
+  }
+}
+
+.swatchRow .chip {
+  border-radius: 50%;
+}
+
+.tabs {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  border-top: 0.5px solid var(--pc-hairline);
+  background: var(--pc-card-solid);
+
+  button {
+    flex: 1;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--pc-secondary);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+
+    &[aria-pressed='true'] {
+      color: var(--pc-blue);
+    }
+  }
+}

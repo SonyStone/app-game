@@ -1,0 +1,184 @@
+/*
+ * Procreate's sidebar: a narrow translucent strip at the screen's edge with the size slider, the Modify button, the
+ * opacity slider, Undo and Redo, centered in the height under the top bar.
+ */
+.dock {
+  position: absolute;
+  top: var(--pc-bar-height);
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+
+  &[data-side='left'] {
+    left: env(safe-area-inset-left);
+  }
+
+  &[data-side='right'] {
+    right: env(safe-area-inset-right);
+  }
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 46px;
+  padding: 12px 0 8px;
+  background: var(--pc-bar);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: inset 0 0 0 0.5px var(--pc-hairline);
+  pointer-events: auto;
+
+  [data-side='left'] > & {
+    border-radius: 0 14px 14px 0;
+  }
+
+  [data-side='right'] > & {
+    border-radius: 14px 0 0 14px;
+  }
+}
+
+.slider {
+  position: relative;
+  width: 46px;
+  height: clamp(96px, calc((100vh - var(--pc-bar-height) - 200px) / 2), 180px);
+  touch-action: none;
+  cursor: ns-resize;
+  outline: none;
+
+  &[aria-disabled='true'] {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  &:focus-visible .thumb {
+    box-shadow: 0 0 0 2px var(--pc-blue);
+  }
+}
+
+.groove {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 6px;
+  translate: -50% 0;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 0.42);
+  box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.08);
+}
+
+.thumb {
+  position: absolute;
+  left: 50%;
+  bottom: calc((100% - 18px) * var(--fraction));
+  width: 28px;
+  height: 18px;
+  translate: -50% 0;
+  border-radius: 5px;
+  background: rgb(229 229 234);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+  pointer-events: none;
+
+  [data-dragging] > & {
+    background: #fff;
+  }
+}
+
+/* The Modify button between the sliders: an empty square, blue while the eyedropper is armed. */
+.modify {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+
+  span {
+    width: 26px;
+    height: 26px;
+    border: 1.7px solid var(--pc-icon);
+    border-radius: 5px;
+  }
+
+  &[aria-pressed='true'] span {
+    border-color: var(--pc-blue);
+    background: rgb(10 132 255 / 0.25);
+  }
+}
+
+.history {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pc-icon);
+  cursor: pointer;
+
+  &:disabled {
+    color: var(--pc-disabled);
+    cursor: default;
+  }
+}
+
+.preview {
+  position: absolute;
+  bottom: calc((100% - 18px) * var(--fraction) + 9px);
+  translate: 0 50%;
+  pointer-events: none;
+
+  &[data-side='left'] {
+    left: calc(100% + 14px);
+  }
+
+  &[data-side='right'] {
+    right: calc(100% + 14px);
+  }
+}
+
+.bubble {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 124px;
+  padding: 10px 10px 8px;
+  border-radius: 14px;
+  background: var(--pc-card);
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.6),
+    inset 0 0 0 0.5px var(--pc-hairline),
+    0 10px 30px rgb(0 0 0 / 0.35);
+}
+
+.dabArea {
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 100px;
+  border-radius: 8px;
+  background: #f4f2ee;
+
+  [data-checkered] > & {
+    background: repeating-conic-gradient(#d8d8d8 0 25%, #fafafa 0 50%) 0 0 / 14px 14px;
+  }
+}
+
+.dab {
+  border-radius: 50%;
+}
+
+.value {
+  color: var(--pc-label);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

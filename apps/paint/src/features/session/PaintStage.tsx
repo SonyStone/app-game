@@ -91,7 +91,11 @@ export function StageGuides(props: { session: PaintSession }) {
  * Overlays of work in progress on the canvas: the brush size and opacity HUD while adjusting, the transform box, the
  * brush cursor, the color picker loupe, the gradient preview and the Mixer Brush pick hint.
  */
-export function StageOverlays(props: { session: PaintSession }) {
+export function StageOverlays(props: {
+  session: PaintSession;
+  /** Shows the brush cursor where the pointer hovers; true by default. A variant hides it while a press would not draw. */
+  cursor?: boolean;
+}) {
   const session = untrack(() => props.session);
   const { camera, size, brush, transform, colorPicker, gradient, selection, mixer } = session;
   const toScreen = (point: { x: number; y: number }) => worldToScreen(point, camera.camera(), size());
@@ -134,6 +138,7 @@ export function StageOverlays(props: { session: PaintSession }) {
       </Show>
       <Show
         when={
+          (props.cursor ?? true) &&
           session.ready() &&
           session.paintsWithBrush() &&
           !transform.active() &&

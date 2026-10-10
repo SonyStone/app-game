@@ -61,10 +61,10 @@ performance/       Accepted tablet brush baselines
 
 Unit tests live beside the feature they exercise and cover only app code. Runtime, document, storage and renderer tests live in `@app-game/paint-core` (with shared renderer/storage doubles in `packages/paint-core/tests/fixtures`), ABR preset and GPU planning tests in `@app-game/abr-paint`, and preset sampling tests in `@app-game/abr-brush`. Real Adobe brush packs are downloaded once into `.tmp/adobe-brushes`, pinned by SHA-256 in `scripts/adobe-brush-fixtures.json`.
 
-- Start with `features/studio/PaintStudio.tsx`. It is the editor's layout: it creates the engine, camera, tools, selection, symmetry and preset uploads once, then composes the canvas and the UI from feature modules, passing each the values and callbacks it works on.
+- Start with `features/session/createPaintSession.ts`. It creates the engine, camera, tools, selection, symmetry, preset uploads and the other feature controllers once, wired to each other, without any layout. A Paint variant creates one session and composes the canvas (`PaintStage` and its overlays) and its own UI from feature modules, passing each the values and callbacks it works on. The variants are listed in `variants/index.ts`: Classic (`features/studio/PaintStudio.tsx`, also the standalone app), Procreate and Puck; each opens at `/paint/<id>` in the playground and at `/variants.html#<id>` on the Paint dev server. Variants share the saved drawing.
 - `features/engine` owns the drawing engine. `createPaintEngine` opens one connection per mounted canvas and reports document state, save state, metrics and the view stored with a document. The canvas is keyed on `engine.session()`, so switching between worker and main thread checkpoints the document and renderer tools, disposes the engine and replaces only the canvas; brush, symmetry, panels and developer switches stay mounted. `openPaintTransport` starts the worker with `openWorker` from `@app-game/solid-gpu/worker` and transfers an OffscreenCanvas; `openLocalEngine` loads the same recipe on the main thread. Disconnecting sends `dispose`, which saves the document and closes storage before the transport is closed. `createEngineRequests` correlates brush-resource uploads and brush commands with their replies and times out waiting callers without posting duplicate resources.
 - UI state lives outside the engine. Developer switches, the camera and the selection gesture in progress reach the engine through effects gated on readiness, so a replacement engine receives them when it becomes ready. The camera and symmetry reset from `engine.restored()` when a document is loaded, imported or replaced. A write becomes visible to every reader, `latest()` included, only at the next flush; guards that must see a write made earlier in the same event (busy flags, the stroke in progress, the selected preset) use `createImmediateSignal` (`src/shared`).
-- `features/canvas`, `camera`, `selection`, `symmetry`, `layers`, `fill`, `brush`, `abr` and `developer` each provide a factory for their state and components for their UI. `features/studio/createPaintShortcuts.ts` is the single keyboard handler.
+- `features/canvas`, `camera`, `selection`, `symmetry`, `layers`, `fill`, `brush`, `abr` and `developer` each provide a factory for their state and components for their UI. `features/session/createPaintShortcuts.ts` is the single keyboard handler.
 - Expected failures are `PaintError` values (`src/shared/errors.ts`) returned as `neverthrow` results. Renderer failures reuse `GpuError`, and cancelled work `AbortedError`, from `@app-game/solid-gpu/errors`. A paused renderer offers **Restore renderer**; a busy editor asks the user to retry.
 
 Each feature folder's `index.ts` lists its public API; the layout imports from the folder, while files inside a feature import each other directly. The drawing runtime (document, tiles, storage, GPU renderer, input and stroke processing) is `@app-game/paint-core`; ABR brush engines are `@app-game/abr-paint`; the navigation puck is `@app-game/navigation-puck`. Older playground drawing experiments remain in `packages/paint` (`@app-game/paint-examples`).
@@ -72,15 +72,19 @@ Each feature folder's `index.ts` lists its public API; the layout imports from t
 ## Composing the editor
 
 ```tsx
-const engine = createPaintEngine({ settings: developer, onError: setError, onSelection, prepare: () => uploads.restore() });
-const camera = createPaintCamera({ restored: () => engine.restored()?.camera, size, ready: engine.canEdit, send: engine.send, bounds });
+const session = createPaintSession({ panel });
+session.createShortcuts({ closePanel });
 
-<main ref={setStage}>
-  <Show when={engine.session()} keyed>
-    {(session) => <PaintCanvas connect={(canvas) => engine.connect(canvas, session.mode)} input={input} crosshair={tool() === 'lasso'} />}
-  </Show>
-  <SymmetryGuide symmetry={symmetry.symmetry()} camera={camera.camera()} size={size()} active={supportsSymmetry()} />
-</main>
+<PaintEditor session={session} class={styles.studio}>
+  <PaintStage session={session} input={{ puckPicker: radial.picker }}>
+    <StageGuides session={session} />
+    <StageOverlays session={session} />
+  </PaintStage>
+  <div class={styles.ui}>
+    <SessionNotices session={session} />
+    {/* the variant's own controls */}
+  </div>
+</PaintEditor>
 ```
 
 The canvas connects the engine and attaches input from an owned effect once its element exists, and disconnects on cleanup. Side panels are a table of titles rendered through `<Switch>`; each panel receives plain values, for example `<LayersPanel state={engine.state()} ready={ready()} onAction={(action) => edit({ type: 'layer', action })} />`.

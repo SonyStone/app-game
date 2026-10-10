@@ -1,0 +1,60 @@
+.editor {
+  background: #faf8f4;
+  font:
+    12px/1.45 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+
+  /* The canvas takes the keyboard back whenever the cluster closes; a focus ring around the whole screen says nothing. */
+  canvas:focus {
+    outline: none;
+  }
+}
+
+/* The layer over the drawing that holds the cluster and the notices; only its children take presses. */
+.ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+/* A finger resting on the drawing: a ring that fills until the long press opens the cluster. */
+.pressRing {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: conic-gradient(rgb(40 40 44 / 0.55) calc(var(--progress) * 1%), transparent 0);
+  mask: radial-gradient(circle closest-side, transparent calc(100% - 4px), #000 calc(100% - 3.5px));
+  pointer-events: none !important;
+  animation: fill linear both;
+}
+
+@property --progress {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@keyframes fill {
+  to {
+    --progress: 100;
+  }
+}
+
+.crash {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  translate: -50% 0;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgb(30 30 32 / 0.92);
+  color: #fff;
+}

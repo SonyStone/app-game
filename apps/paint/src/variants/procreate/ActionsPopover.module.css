@@ -1,0 +1,31 @@
+/* The symmetry choice in the Canvas tab: an iOS segmented control. */
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  margin: 0 16px 12px;
+  padding: 2px;
+  border-radius: 9px;
+  background: rgb(118 118 128 / 0.24);
+
+  button {
+    height: 30px;
+    padding: 0 2px;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    color: var(--pc-label);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+
+    &[aria-checked='true'] {
+      background: rgb(99 99 102);
+      font-weight: 600;
+    }
+
+    &:disabled {
+      color: var(--pc-disabled);
+    }
+  }
+}

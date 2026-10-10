@@ -77,6 +77,8 @@ export function createNavigationPuck(params: {
     },
     /** Whether the open puck stays open until it is closed; see `open`. */
     pinned: () => center() !== undefined && invocation === 'pinned',
+    /** Whether the open puck was opened by holding Space, and closes when it is released; see `open`. */
+    held: () => center() !== undefined && invocation === 'held',
     releaseHotkey() {
       if (invocation !== 'held') return;
       invocation = 'once';

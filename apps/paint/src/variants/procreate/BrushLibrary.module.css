@@ -1,0 +1,107 @@
+/* The Brush Library: sets on the left, brushes with sample strokes on the right, each column scrolling on its own. */
+.headerButton {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--pc-blue);
+  cursor: pointer;
+
+  &:disabled {
+    color: var(--pc-disabled);
+  }
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  height: min(440px, calc(100vh - var(--pc-bar-height) - 120px));
+  min-height: 200px;
+  border-top: 0.5px solid var(--pc-hairline);
+}
+
+.sets,
+.brushes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sets {
+  border-right: 0.5px solid var(--pc-hairline);
+  background: rgb(0 0 0 / 0.14);
+}
+
+.set,
+.brush {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--pc-label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.set {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: 14px;
+
+  &[aria-pressed='true'] {
+    background: var(--pc-blue);
+  }
+}
+
+.setName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  color: var(--pc-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+
+  [aria-pressed='true'] > & {
+    color: rgb(255 255 255 / 0.8);
+  }
+}
+
+.brush {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px 6px;
+
+  &[aria-selected='true'] {
+    background: var(--pc-blue);
+  }
+
+  &:disabled {
+    cursor: progress;
+  }
+}
+
+.brushName {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

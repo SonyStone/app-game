@@ -1,0 +1,147 @@
+/* Rows of Procreate's menus (Actions, Gallery, layer options): full-width rows with a label, a detail or a switch. */
+.list {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 6px;
+}
+
+.sectionTitle {
+  margin: 0;
+  padding: 14px 16px 6px;
+  color: var(--pc-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  margin: 0;
+  padding: 0 16px;
+  border: 0;
+  border-top: 0.5px solid var(--pc-hairline);
+  background: none;
+  color: var(--pc-label);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+
+  &:disabled,
+  &[aria-disabled='true'] {
+    color: var(--pc-disabled);
+    cursor: default;
+  }
+
+  &:not(:disabled):active {
+    background: rgb(255 255 255 / 0.06);
+  }
+}
+
+.sectionTitle + .row {
+  border-top: 0;
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail {
+  color: var(--pc-secondary);
+  font-size: 13px;
+}
+
+.chevron {
+  display: grid;
+  color: var(--pc-tertiary);
+}
+
+/* An iOS switch; the row it sits in toggles it. */
+.switch {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 28px;
+  border-radius: 14px;
+  background: rgb(120 120 128 / 0.32);
+  transition: background 160ms;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 4px rgb(0 0 0 / 0.3);
+    transition: translate 160ms;
+  }
+
+  [aria-checked='true'] > & {
+    background: #30d158;
+
+    &::after {
+      translate: 18px 0;
+    }
+  }
+}
+
+/* The Actions popover's tab bar: icons with labels under them. */
+.tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 8px 6px;
+  border-bottom: 0.5px solid var(--pc-hairline);
+  background: var(--pc-card-solid);
+
+  button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    width: 62px;
+    padding: 4px 0;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--pc-icon);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+
+    &[aria-selected='true'] {
+      color: var(--pc-blue);
+    }
+  }
+}
+
+.help {
+  display: grid;
+  grid-template-columns: 9.5em 1fr;
+  gap: 10px 14px;
+  margin: 0;
+  padding: 14px 16px 16px;
+  font-size: 14px;
+
+  dt {
+    color: var(--pc-label);
+    font-weight: 600;
+  }
+
+  dd {
+    margin: 0;
+    color: var(--pc-secondary);
+  }
+}

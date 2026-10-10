@@ -1,0 +1,160 @@
+/*
+ * Procreate's dark interface: translucent near-black bars, light grey icons, one blue accent for the active tool and
+ * the system font. The variables are shared by every part of the variant.
+ */
+.editor {
+  --pc-bar: rgb(28 28 30 / 0.9);
+  --pc-card: rgb(32 32 34 / 0.97);
+  --pc-card-solid: rgb(32 32 34);
+  --pc-hairline: rgb(255 255 255 / 0.1);
+  --pc-hairline-strong: rgb(255 255 255 / 0.2);
+  --pc-icon: rgb(235 235 240 / 0.88);
+  --pc-label: rgb(255 255 255 / 0.95);
+  --pc-secondary: rgb(235 235 245 / 0.6);
+  --pc-tertiary: rgb(235 235 245 / 0.32);
+  --pc-disabled: rgb(235 235 245 / 0.28);
+  --pc-blue: #0a84ff;
+  --pc-bar-height: calc(46px + env(safe-area-inset-top));
+
+  background: #3a3a3c;
+  color: var(--pc-label);
+  font:
+    14px/1.3 -apple-system,
+    BlinkMacSystemFont,
+    'SF Pro Text',
+    'Helvetica Neue',
+    system-ui,
+    sans-serif;
+  letter-spacing: -0.01em;
+
+  :where(button, [role='slider'], [role='group']) {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :where(button):focus-visible {
+    outline: 2px solid var(--pc-blue);
+    outline-offset: -2px;
+  }
+}
+
+.ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  height: var(--pc-bar-height);
+  padding: env(safe-area-inset-top) max(6px, env(safe-area-inset-right)) 0 max(6px, env(safe-area-inset-left));
+  background: var(--pc-bar);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: 0 0.5px 0 rgb(0 0 0 / 0.5);
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.gallery {
+  height: 46px;
+  padding: 0 14px 0 10px;
+  border: 0;
+  background: none;
+  color: var(--pc-icon);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &[aria-expanded='true'] {
+    color: var(--pc-blue);
+  }
+}
+
+.barButton {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pc-icon);
+  cursor: pointer;
+
+  &[aria-pressed='true'],
+  &[aria-expanded='true'] {
+    color: var(--pc-blue);
+  }
+}
+
+.colorButton {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+
+  span {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 2px rgb(28 28 30),
+      0 0 0 3.5px rgb(235 235 240 / 0.88);
+  }
+
+  &[aria-expanded='true'] span {
+    box-shadow:
+      0 0 0 2px rgb(28 28 30),
+      0 0 0 3.5px var(--pc-blue);
+  }
+}
+
+/* While the interface is hidden: a small button in the top-left corner brings it back. */
+.showInterface {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  left: calc(10px + env(safe-area-inset-left));
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: var(--pc-bar);
+  color: var(--pc-icon);
+  cursor: pointer;
+}
+
+.eraserMode {
+  border-top: 0.5px solid var(--pc-hairline);
+}
+
+.failed {
+  position: absolute;
+  top: calc(var(--pc-bar-height) + 16px);
+  left: 50%;
+  margin: 0;
+  padding: 10px 14px;
+  translate: -50% 0;
+  border-radius: 10px;
+  background: var(--pc-card);
+}

@@ -1,0 +1,66 @@
+/* A Procreate popover: a dark rounded card hanging from its toolbar button by a small arrow. */
+.popover {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: var(--pc-card);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.6),
+    inset 0 0 0 0.5px var(--pc-hairline),
+    0 16px 44px rgb(0 0 0 / 0.42);
+  color: var(--pc-label);
+  animation: appear 120ms ease-out both;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+}
+
+.arrow {
+  position: absolute;
+  top: -8px;
+  left: var(--arrow);
+  width: 0;
+  height: 0;
+  translate: -50% 0;
+  border: 9px solid transparent;
+  border-top: 0;
+  border-bottom-color: var(--pc-card-solid);
+  pointer-events: none;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  border-radius: inherit;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 10px 0 16px;
+  background: var(--pc-card-solid);
+
+  h2 {
+    flex: 1;
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+}

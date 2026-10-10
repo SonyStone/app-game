@@ -14,6 +14,13 @@ export default function PaintPage(props: Partial<{ children: JSX.Element }>) {
         Back
       </a>
 
+      <div class="flex flex-col gap-2">
+        <span>Paint variants: one drawing, different UIs</span>
+        <Loading>
+          <Navigation class="p-0 py-2" routes={module()?.variantRoutes} parentPath="." />
+        </Loading>
+      </div>
+
       <p>To implement such app we need:</p>
       <Loading>
         <ol class="list-decimal ps-6">

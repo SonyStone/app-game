@@ -1,0 +1,503 @@
+/*
+ * The cluster: dark translucent glass cards after Procreate's popovers, in neutral greys only. The chosen item is
+ * lighter, never colored, so that the drawing keeps the only color on screen. The root is a zero-size anchor at the
+ * QuickMenu's center; every part is placed around it in unscaled pixels.
+ */
+.root {
+  --glass: rgb(30 30 32 / 0.9);
+  --raised: rgb(255 255 255 / 0.07);
+  --raised-hover: rgb(255 255 255 / 0.12);
+  --track: rgb(118 118 128 / 0.24);
+  --fill: rgb(160 160 168 / 0.42);
+  --chosen: rgb(255 255 255 / 0.2);
+  --chosen-strong: rgb(255 255 255 / 0.32);
+  --chosen-edge: inset 0 0 0 1px rgb(255 255 255 / 0.28);
+  --hairline: rgb(255 255 255 / 0.09);
+  --label: rgb(255 255 255 / 0.94);
+  --secondary: rgb(235 235 245 / 0.6);
+  --tertiary: rgb(235 235 245 / 0.32);
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Inter, Roboto, system-ui;
+
+  position: absolute;
+  z-index: 20;
+  width: 0;
+  height: 0;
+  color: var(--label);
+  font:
+    13px/1.25 var(--font),
+    sans-serif;
+  letter-spacing: -0.01em;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Zero specificity, so that every component class overrides it. */
+:where(.root) :where(button) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(.root) :where(kbd) {
+  font-family: inherit;
+}
+
+.scaled {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* A card: dark, blurred, softly rounded glass. */
+.card {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-radius: 18px;
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.55),
+    inset 0 0 0 0.5px var(--hairline),
+    0 14px 40px rgb(0 0 0 / 0.38);
+  animation: appear 140ms ease-out both;
+  transition: opacity 120ms;
+}
+
+/*
+ * A continuous action hides the rest of the cluster: a view drag everything but its button, a capsule drag everything
+ * but the capsule (the QuickMenu dims under the brush preview).
+ */
+.root[data-nav] .card,
+.root[data-nav] .fades,
+.root[data-sizing='capsule'] .card,
+.root[data-sizing='capsule'] .fades:not(.active) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cardHeader {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  margin: 0 2px 6px 4px;
+
+  h3 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  small {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--secondary);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* A round icon button in a card's header, such as Layers' "+". */
+.headerButton {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: background 100ms;
+
+  .root[data-hover] &:hover {
+    background: var(--raised-hover);
+  }
+}
+
+.caption {
+  margin: 0 0 4px 4px;
+  color: var(--secondary);
+  font-size: 11px;
+}
+
+/* Numbers: a wide pill that fills as the value grows. */
+.pill {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  height: 34px;
+  padding: 0 12px;
+  overflow: hidden;
+  border-radius: 17px;
+  background: var(--track);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.pillFill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--fill);
+  pointer-events: none;
+  transition: background 100ms;
+
+  .active & {
+    background: var(--chosen-strong);
+  }
+}
+
+.pillLabel,
+.pillValue {
+  position: relative;
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.pillValue {
+  color: rgb(255 255 255 / 0.78);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Size and opacity: Procreate's sidebar sliders, as short capsules beside the QuickMenu. */
+.capsule {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.55),
+    inset 0 0 0 0.5px var(--hairline),
+    0 10px 28px rgb(0 0 0 / 0.36);
+  cursor: ns-resize;
+  touch-action: none;
+  animation: appear 140ms ease-out both;
+  transition: opacity 120ms;
+}
+
+.capsuleFill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgb(255 255 255 / 0.16);
+  pointer-events: none;
+
+  .active & {
+    background: var(--chosen-strong);
+  }
+}
+
+.capsuleGlyph {
+  position: absolute;
+  bottom: 9px;
+  left: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  color: rgb(255 255 255 / 0.55);
+  pointer-events: none;
+}
+
+.capsuleThumb {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  height: 4px;
+  margin-bottom: -2px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+  pointer-events: none;
+}
+
+.disabled {
+  cursor: default;
+
+  .capsuleFill {
+    visibility: hidden;
+  }
+
+  .capsuleThumb {
+    opacity: 0.2;
+  }
+}
+
+/* A control that does nothing now, such as Fill without a selection. */
+.unavailable {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Toggles: a row with a switch. */
+.switchRow {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  height: 34px;
+  padding: 0 4px 0 12px;
+  border-radius: 17px;
+  font-size: 13px;
+  transition: background 100ms;
+
+  .root[data-hover] &:hover {
+    background: var(--raised);
+  }
+}
+
+.switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  background: rgb(120 120 128 / 0.32);
+  transition: background 140ms;
+
+  &.on {
+    background: rgb(174 174 180);
+  }
+}
+
+.knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 0.35);
+  transition: translate 140ms;
+
+  .on & {
+    translate: 18px 0;
+  }
+}
+
+/* Choices: a segmented control. */
+.segmentedRow {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+}
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  height: 30px;
+  padding: 2px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: var(--track);
+}
+
+.segment {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 4px;
+  overflow: hidden;
+  border-radius: 7px;
+  color: rgb(255 255 255 / 0.85);
+  font-size: 12px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 100ms;
+
+  &.on {
+    background: rgb(99 99 102);
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.3);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  .root[data-hover] &:not(.on):hover {
+    background: rgb(255 255 255 / 0.06);
+  }
+}
+
+/* Commands in a card, such as the selection's: a grid of small labelled buttons. */
+.actions {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 50px;
+  border-radius: 10px;
+  background: var(--raised);
+  font-size: 10px;
+  font-weight: 500;
+  transition: background 100ms;
+
+  .root[data-hover] &:hover {
+    background: var(--raised-hover);
+  }
+}
+
+/* Tools: Procreate's icon row, turned into a vertical pill on the hand's side. */
+.tools {
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border-radius: 26px;
+}
+
+.tool {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 40px;
+  border-radius: 20px;
+  transition:
+    background 100ms,
+    color 100ms;
+
+  .root[data-hover] &:hover {
+    background: var(--raised);
+  }
+
+  &.on,
+  .root[data-hover] &.on:hover {
+    background: var(--chosen);
+    box-shadow: var(--chosen-edge);
+  }
+
+  kbd {
+    position: absolute;
+    right: 3px;
+    bottom: 2px;
+    color: var(--tertiary);
+    font-size: 9px;
+    font-weight: 600;
+  }
+}
+
+/* The pen hand: a letter, quieter than the tools. */
+.hand {
+  color: var(--secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.toolGap {
+  flex: none;
+  width: 24px;
+  height: 1px;
+  margin: 3px 0;
+  background: var(--hairline);
+}
+
+/* View extras: a small pill under the QuickMenu. */
+.view {
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 22px;
+}
+
+.viewButton {
+  display: grid;
+  place-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 36px;
+  border-radius: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background 100ms,
+    color 100ms;
+
+  .root[data-hover] &:hover {
+    background: var(--raised);
+  }
+
+  &.on,
+  .root[data-hover] &.on:hover {
+    background: var(--chosen);
+    box-shadow: var(--chosen-edge);
+  }
+}
+
+/* The brush preview: the stroke's real size on screen, at the QuickMenu's center, while a bar is dragged. */
+.preview {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.previewOutline {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.9),
+    0 0 0 2px rgb(0 0 0 / 0.45);
+}
+
+.previewLabel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  translate: -50% -50%;
+  padding: 4px 10px;
+  border-radius: 11px;
+  background: rgb(30 30 32 / 0.92);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.35);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+}

@@ -1,0 +1,120 @@
+/* The selection toolbar: a dark bar centered at the bottom, with an optional slider row above it. */
+.dock {
+  position: absolute;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  translate: -50% 0;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 4px 6px;
+  overflow-x: auto;
+  border-radius: 14px;
+  background: var(--pc-bar);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.5),
+    inset 0 0 0 0.5px var(--pc-hairline),
+    0 8px 24px rgb(0 0 0 / 0.3);
+  scrollbar-width: none;
+}
+
+.item {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 66px;
+  height: 54px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--pc-icon);
+  font: inherit;
+  cursor: pointer;
+
+  span {
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  &[aria-pressed='true'] {
+    color: var(--pc-blue);
+  }
+
+  &:disabled {
+    color: var(--pc-disabled);
+    cursor: default;
+  }
+}
+
+.separator {
+  flex: none;
+  width: 0.5px;
+  height: 34px;
+  margin: 0 6px;
+  background: var(--pc-hairline-strong);
+}
+
+.options {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: auto 260px auto;
+  align-items: center;
+  gap: 12px;
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: var(--pc-bar);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.5),
+    inset 0 0 0 0.5px var(--pc-hairline);
+  color: var(--pc-label);
+  font-size: 13px;
+
+  > span {
+    color: var(--pc-secondary);
+  }
+
+  output {
+    min-width: 44px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+}
+
+.apply {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--pc-blue);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    background: rgb(118 118 128 / 0.3);
+    color: var(--pc-disabled);
+  }
+}
