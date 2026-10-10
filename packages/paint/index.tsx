@@ -21,6 +21,13 @@ export default function PaintPage(props: Partial<{ children: JSX.Element }>) {
         </Loading>
       </div>
 
+      <div class="flex flex-col gap-2">
+        <span>Feature demos: one feature each, on a drawing of its own</span>
+        <Loading>
+          <Navigation class="p-0 py-2" routes={module()?.demoRoutes} parentPath="." />
+        </Loading>
+      </div>
+
       <p>To implement such app we need:</p>
       <Loading>
         <ol class="list-decimal ps-6">

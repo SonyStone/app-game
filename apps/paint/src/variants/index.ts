@@ -41,20 +41,63 @@ export const paintVariants: PaintVariant[] = [
     load: () => import('./puck').then(({ PuckStudio }) => PuckStudio)
   },
   {
+    id: 'desktop',
+    name: 'Desktop',
+    description: 'A docked desktop workspace after Blender and Photoshop: menus, a tool column and panels, for mouse, keyboard and pen.',
+    load: () => import('./desktop').then(({ DesktopStudio }) => DesktopStudio)
+  },
+  {
+    id: 'zen',
+    name: 'Zen',
+    description: 'An empty page and one pebble; everything else is a gesture.',
+    load: () => import('./zen').then(({ ZenStudio }) => ZenStudio)
+  },
+  {
+    id: 'hands',
+    name: 'Two hands',
+    description: 'The free hand holds tools under its fingers while the pen draws, like a painter holding a palette.',
+    load: () => import('./hands').then(({ HandsStudio }) => HandsStudio)
+  },
+  {
+    id: 'growing',
+    name: 'Growing',
+    description: 'Starts with a brush and an eraser; tools appear once you reach for them.',
+    load: () => import('./growing').then(({ GrowingStudio }) => GrowingStudio)
+  },
+  {
+    id: 'palette',
+    name: 'Palette',
+    description: "A painter's mixing palette beside the drawing: colors come from paint you mix, not from a picker.",
+    load: () => import('./palette').then(({ PaletteStudio }) => PaletteStudio)
+  },
+  {
+    id: 'command',
+    name: 'Command',
+    description: 'No buttons: type, or say, what you want.',
+    load: () => import('./command').then(({ CommandStudio }) => CommandStudio)
+  }
+];
+
+/**
+ * Feature demos: one feature each on a drawing of its own, with only that feature's controls, to show or try the
+ * feature without the rest of an editor around it. Listed apart from the variants, which are whole editors.
+ */
+export const featureDemos: PaintVariant[] = [
+  {
     id: 'demo-fill',
-    name: 'Demo · Fill',
+    name: 'Fill',
     description: 'Only the fill, on prepared line art.',
     load: () => import('./demos').then(({ FillDemo }) => FillDemo)
   },
   {
     id: 'demo-symmetry',
-    name: 'Demo · Symmetry',
+    name: 'Symmetry',
     description: 'Only symmetry: strokes repeated around guides.',
     load: () => import('./demos').then(({ SymmetryDemo }) => SymmetryDemo)
   },
   {
     id: 'demo-gradient',
-    name: 'Demo · Gradient',
+    name: 'Gradient',
     description: 'Only the gradient tool.',
     load: () => import('./demos').then(({ GradientDemo }) => GradientDemo)
   }

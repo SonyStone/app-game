@@ -1,6 +1,6 @@
 import { Thumbnail, type Routes } from '@app-game/app-router';
 import multitouchThumbnail from '@app-game/hammer-examples/thumbnail.png';
-import { paintVariants } from '@app-game/paint/variants';
+import { featureDemos, paintVariants, type PaintVariant } from '@app-game/paint/variants';
 import { Ripple } from '@app-game/ui-components/ripple';
 
 import { lazy } from 'solid-js';
@@ -9,14 +9,10 @@ import texturesViewThumbnail from './thumbnail/chrome_2024-06-13_07-04-13.png?ur
 export const rendererRoutes: Routes[] = [];
 
 /** Complete Paint programs that share one drawing session and differ in UI; see `paintVariants`. */
-export const variantRoutes: Routes[] = paintVariants.map((variant) => ({
-  path: `/${variant.id}`,
-  name: `Paint · ${variant.name}`,
-  Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-  component: lazy(() =>
-    variant.load().then((Variant) => ({ default: () => <Variant experimentsHref="/paint" /> }))
-  )
-}));
+export const variantRoutes: Routes[] = paintVariants.map((variant) => variantRoute(variant, 'Paint'));
+
+/** One Paint feature each, on a drawing of its own; see `featureDemos`. */
+export const demoRoutes: Routes[] = featureDemos.map((demo) => variantRoute(demo, 'Demo'));
 
 export const pointerEventsRoutes: Routes[] = [
   {
@@ -166,8 +162,21 @@ export const paintRoutes: Routes = {
       component: lazy(() => import('./index'))
     },
     ...variantRoutes,
+    ...demoRoutes,
     ...brushEngineRoutes,
     ...restRoutes,
     ...pointerEventsRoutes
   ]
 };
+
+/** The route of a Paint variant or feature demo at `/<id>`, named `<prefix> · <name>`. */
+function variantRoute(variant: PaintVariant, prefix: string): Routes {
+  return {
+    path: `/${variant.id}`,
+    name: `${prefix} · ${variant.name}`,
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() =>
+      variant.load().then((Variant) => ({ default: () => <Variant experimentsHref="/paint" /> }))
+    )
+  };
+}
