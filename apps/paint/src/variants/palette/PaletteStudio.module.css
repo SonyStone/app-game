@@ -1,6 +1,59 @@
+/*
+ * A flat, neutral dark dock beside the canvas: greys only, so that the only colors on screen are paint. The variables
+ * are shared by every part of the variant.
+ */
 .editor {
-  background: #faf8f4;
-  font: 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --pl-bg: #252525;
+  --pl-raised: #2f2f2f;
+  --pl-sunken: #1c1c1c;
+  --pl-line: #3a3a3a;
+  --pl-ink: #d6d6d6;
+  --pl-muted: #8f8f8f;
+  --pl-on: #474747;
+  --pl-on-line: #6b6b6b;
+  --pl-on-ink: #ffffff;
+  --dock: 296px;
+
+  /* ScrubNumber's theme. */
+  --line: var(--pl-line);
+  --ink: var(--pl-ink);
+  --muted: var(--pl-muted);
+  --scrub-track: var(--pl-sunken);
+  --scrub-fill: #3f3f3f;
+  --scrub-focus: #9a9a9a;
+  --scrub-radius: 6px;
+
+  background: #3a3a3a;
+  color: var(--pl-ink);
+  font:
+    12px/1.35 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+
+  :where(button) {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :where(button, a):focus-visible {
+    outline: 2px solid #9a9a9a;
+    outline-offset: -2px;
+  }
+}
+
+.collapsed {
+  --dock: 52px;
+}
+
+/* The canvas leaves the dock its room, so that the view's center stays the visible center. */
+.editor .stage {
+  right: var(--dock);
+}
+
+.editor.left .stage {
+  right: 0;
+  left: var(--dock);
 }
 
 .ui {
@@ -11,4 +64,397 @@
   > * {
     pointer-events: auto;
   }
+}
+
+.dock {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  width: var(--dock);
+  padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) 8px 8px;
+  border-left: 1px solid #111;
+  background: var(--pl-bg);
+  overflow: hidden;
+}
+
+.left .dock {
+  right: auto;
+  left: 0;
+  padding-right: 8px;
+  padding-left: max(8px, env(safe-area-inset-left));
+  border-right: 1px solid #111;
+  border-left: 0;
+}
+
+/* Notices sit over the canvas, not the dock. */
+.ui > .notices {
+  position: absolute;
+  inset: 0 var(--dock) 0 0;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.left .ui > .notices {
+  inset: 0 0 0 var(--dock);
+}
+
+.bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  margin-bottom: 8px;
+}
+
+.collapsed .bar {
+  flex-direction: column;
+  height: auto;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--pl-line);
+}
+
+.spacer {
+  flex: 1;
+
+  .collapsed & {
+    display: none;
+  }
+}
+
+.barButton {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pl-ink);
+  cursor: pointer;
+
+  &[aria-expanded='true'] {
+    border-color: var(--pl-on-line);
+    background: var(--pl-on);
+    color: var(--pl-on-ink);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.panels {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.section {
+  flex: none;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--pl-line);
+}
+
+/* The brush's color and the colors loaded lately. */
+.loaded {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  &[data-vertical] {
+    flex-direction: column;
+  }
+}
+
+.current {
+  flex: none;
+  width: 40px;
+  height: 28px;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 0.3),
+    0 0 0 1px var(--pl-on-line);
+
+  [data-vertical] & {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+.swatches {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+
+  [data-vertical] & {
+    flex-direction: column;
+  }
+}
+
+.swatch {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.3);
+  cursor: pointer;
+
+  [data-vertical] & {
+    width: 34px;
+    height: 30px;
+  }
+}
+
+.mixer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--pl-muted);
+  font-size: 11px;
+
+  button {
+    flex: none;
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--pl-line);
+    border-radius: 6px;
+    background: var(--pl-raised);
+    color: var(--pl-ink);
+    font: inherit;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.4;
+    }
+  }
+}
+
+.values {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  --scrub-width: 100%;
+  --scrub-height: 30px;
+}
+
+.value {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  > span:first-child {
+    padding-left: 2px;
+    color: var(--pl-muted);
+    font-size: 11px;
+  }
+}
+
+/* The rack takes the room left and scrolls when the window is short. */
+.rack {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.rackHeader {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--pl-sunken);
+
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--pl-muted);
+    font: inherit;
+    cursor: pointer;
+
+    &[aria-checked='true'] {
+      background: var(--pl-on);
+      color: var(--pl-on-ink);
+    }
+  }
+}
+
+.textButton {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--pl-line);
+  border-radius: 6px;
+  background: var(--pl-raised);
+  color: var(--pl-ink);
+  font: inherit;
+  cursor: pointer;
+
+  &[aria-expanded='true'] {
+    border-color: var(--pl-on-line);
+    background: var(--pl-on);
+    color: var(--pl-on-ink);
+  }
+}
+
+/* Popovers open beside the dock, over the canvas. */
+.popover {
+  position: absolute;
+  right: calc(var(--dock) + 8px);
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  padding: 8px;
+  border: 1px solid #111;
+  border-radius: 8px;
+  background: var(--pl-bg);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
+  overflow-y: auto;
+
+  &[data-side='left'] {
+    right: auto;
+    left: calc(var(--dock) + 8px);
+  }
+}
+
+.popoverHeader {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  margin-bottom: 6px;
+
+  h2 {
+    margin: 0 0 0 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+
+  hr {
+    width: 100%;
+    margin: 4px 0;
+    border: 0;
+    border-top: 1px solid var(--pl-line);
+  }
+}
+
+.menuRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pl-ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+
+  span {
+    flex: 1;
+  }
+
+  small {
+    color: var(--pl-muted);
+    font-size: 11px;
+  }
+
+  &:hover:not(:disabled, [data-pointer='touch'] *) {
+    background: var(--pl-raised);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+/* A setting's on/off mark. */
+.check {
+  flex: none;
+  width: 28px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--pl-sunken);
+  box-shadow: inset 0 0 0 1px var(--pl-line);
+
+  &::after {
+    content: '';
+    display: block;
+    width: 12px;
+    height: 12px;
+    margin: 2px;
+    border-radius: 50%;
+    background: var(--pl-muted);
+    transition: translate 0.12s;
+  }
+
+  [aria-checked='true'] > & {
+    background: var(--pl-on-line);
+
+    &::after {
+      translate: 12px 0;
+      background: #fff;
+    }
+  }
+}
+
+.library {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.libraryList {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.failed {
+  margin: 0;
+  padding: 10px;
+  color: var(--pl-muted);
 }
