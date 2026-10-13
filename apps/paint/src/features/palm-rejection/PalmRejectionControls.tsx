@@ -6,6 +6,8 @@ import type { PalmRejectionSettings } from './createPalmRejectionSettings';
 /** Palm rejection settings for the Drawing menu; see `createPalmRejection`. */
 export function PalmRejectionControls(props: {
   settings: PalmRejectionSettings;
+  /** Whether the pen is found to hover, for showing what Auto does now; see `createPenHover`. */
+  penHovers?: boolean | undefined;
   onChange: (patch: Partial<PalmRejectionSettings>) => void;
 }) {
   return (
@@ -44,32 +46,36 @@ export function PalmRejectionControls(props: {
             onChange={(tolerance) => props.onChange({ tolerance })}
           />
         </label>
-        <label class={styles.checkbox}>
-          <input
-            type="checkbox"
-            checked={props.settings.hoverless}
-            onChange={(event) => props.onChange({ hoverless: event.currentTarget.checked })}
-          />
+        <label>
           Pen without hover
+          <select
+            aria-label="Pen without hover"
+            value={props.settings.hoverless}
+            onChange={(event) =>
+              props.onChange({ hoverless: event.currentTarget.value as PalmRejectionSettings['hoverless'] })
+            }
+          >
+            <option value="auto">{props.penHovers === false ? 'Auto · no hover now' : 'Auto'}</option>
+            <option value="on">Always</option>
+            <option value="off">Never</option>
+          </select>
         </label>
-        <Show
-          when={props.settings.hoverless}
-          fallback={
-            <label>
-              Pen counts as near for
-              <ScrubNumber
-                label="Pen counts as near for"
-                min={0}
-                max={3000}
-                step={50}
-                unit="ms"
-                value={props.settings.linger}
-                onInput={(linger) => props.onChange({ linger })}
-                onChange={(linger) => props.onChange({ linger })}
-              />
-            </label>
-          }
-        >
+        <Show when={props.settings.hoverless !== 'on'}>
+          <label>
+            Pen counts as near for
+            <ScrubNumber
+              label="Pen counts as near for"
+              min={0}
+              max={3000}
+              step={50}
+              unit="ms"
+              value={props.settings.linger}
+              onInput={(linger) => props.onChange({ linger })}
+              onChange={(linger) => props.onChange({ linger })}
+            />
+          </label>
+        </Show>
+        <Show when={props.settings.hoverless !== 'off'}>
           <label>
             Near after lifting
             <ScrubNumber

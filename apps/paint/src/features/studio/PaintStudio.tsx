@@ -39,6 +39,7 @@ import {
   PalmRejectionControls,
   PalmRejectionDebug
 } from '../palm-rejection';
+import { createPenHover } from '../pen-hover';
 import { createFill, FillPanel } from '../fill';
 import { createFrames, FrameEditor, FrameGuides, frameRegion, FramesSection } from '../frames';
 import { createDrawingFolder, DrawingFolderControls, FolderAccessNotice } from '../drawing-folder';
@@ -330,19 +331,26 @@ export function PaintStudio(props: {
         canRedo: engine.state().canRedo
       },
       error: error()?.message,
-      palmRejection: palmSettings.settings()
+      palmRejection: palmSettings.settings(),
+      penHovers: penHover.hovers() ?? null
     })
   });
   const palmSettings = createPalmRejectionSettings();
   // After the recorder, so that recordings keep ignored touches, and before the other window listeners, so that
   // nothing else sees them.
+  // Before palm rejection, so that the press that finds the pen without hover is guarded as such.
+  const penHover = createPenHover();
   const palmOptions = palmSettings.settings;
+  const hoverless = () => {
+    const mode = palmOptions().hoverless;
+    return mode === 'on' || (mode === 'auto' && penHover.hovers() === false);
+  };
   const palm = createPalmRejection({
     enabled: () => palmOptions().enabled,
     hand: () => palmOptions().hand,
     tolerance: () => palmOptions().tolerance,
-    linger: () => (palmOptions().hoverless ? palmOptions().liftLinger : palmOptions().linger),
-    before: () => (palmOptions().hoverless ? palmOptions().before : 0),
+    linger: () => (hoverless() ? palmOptions().liftLinger : palmOptions().linger),
+    before: () => (hoverless() ? palmOptions().before : 0),
     // A palm taken back puts the view back where it was when the earliest of them landed.
     onRetract: (pointerIds) => {
       const cameras = pointerIds.flatMap((id) => touchCameras.get(id) ?? []);
@@ -1133,7 +1141,11 @@ export function PaintStudio(props: {
                       <ViewOptionsControls settings={viewOptions.settings()} onChange={viewOptions.update} />
                     }
                     palmRejection={
-                      <PalmRejectionControls settings={palmSettings.settings()} onChange={palmSettings.update} />
+                      <PalmRejectionControls
+                        settings={palmSettings.settings()}
+                        penHovers={penHover.hovers()}
+                        onChange={palmSettings.update}
+                      />
                     }
                     applicationControls={props.applicationControls}
                     experimentsHref={props.experimentsHref}

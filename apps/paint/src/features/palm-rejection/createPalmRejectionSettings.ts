@@ -35,11 +35,12 @@ export type PalmRejectionSettings = {
   /** Milliseconds after the pen's last event (or none once it leaves) during which its hand's side is guarded. */
   linger: number;
   /**
-   * The browser reports no pen hovering, as tablets without hover do, or Chrome on Android in a tab moved into or out
-   * of an installed app: the guard then lasts `liftLinger` after each lift instead of `linger`, and the pen touching
-   * down takes back the touches on its hand's side that landed up to `before` milliseconds earlier.
+   * Whether to guard as for a pen without hover: `auto` while the browser is found not to report the pen hovering
+   * (see `createPenHover`), `on` always, `off` never. The guard then lasts `liftLinger` after each lift instead of
+   * `linger`, and the pen touching down takes back the touches on its hand's side that landed up to `before`
+   * milliseconds earlier.
    */
-  hoverless: boolean;
+  hoverless: 'auto' | 'on' | 'off';
   liftLinger: number;
   before: number;
 };
@@ -50,7 +51,7 @@ export const defaultPalmRejection: PalmRejectionSettings = {
   hand: 'left',
   tolerance: -100,
   linger: 200,
-  hoverless: false,
+  hoverless: 'auto',
   // Strokes on the MovinkPad were 300–1000 ms apart.
   liftLinger: 700,
   before: 500
@@ -66,13 +67,22 @@ function read(): PalmRejectionSettings {
       hand: stored.hand === 'left' || stored.hand === 'right' ? stored.hand : defaultPalmRejection.hand,
       tolerance: finite(stored.tolerance) ?? defaultPalmRejection.tolerance,
       linger: finite(stored.linger) ?? defaultPalmRejection.linger,
-      hoverless: typeof stored.hoverless === 'boolean' ? stored.hoverless : defaultPalmRejection.hoverless,
+      hoverless: readHoverless(stored.hoverless),
       liftLinger: finite(stored.liftLinger) ?? defaultPalmRejection.liftLinger,
       before: finite(stored.before) ?? defaultPalmRejection.before
     };
   } catch {
     return defaultPalmRejection;
   }
+}
+
+function readHoverless(value: unknown): PalmRejectionSettings['hoverless'] {
+  // A checkbox stored a boolean before automatic detection; only a checked one was a choice.
+  if (value === true || value === 'on') {
+    return 'on';
+  }
+
+  return value === 'off' ? 'off' : defaultPalmRejection.hoverless;
 }
 
 function finite(value: unknown) {
