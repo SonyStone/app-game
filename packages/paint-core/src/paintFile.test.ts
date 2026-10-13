@@ -76,6 +76,31 @@ describe('portable paged drawings', () => {
       encodeDocument(source)
     );
   });
+  it('reads many tiles in a few file reads', async () => {
+    const document = createDocument();
+    const changes = Array.from({ length: 64 }, (_, index) => {
+      const pixels = new Uint8Array(256 * 256 * 4);
+      pixels.set([index, 40, 80, 255], 4 * index);
+      return { layerId: document.active.id, key: `${index},0`, before: undefined, after: packTile(pixels) };
+    });
+    document.commit(changes);
+    const source = snapshotDocument(document.layers, document.active.id, defaultCamera());
+    const binary = await writePaintFile(source, async (pixels) => pixels as Uint8Array);
+
+    // Every Blob read is slow for a file chosen on Android Chrome; count the slices read from the chosen file.
+    let reads = 0;
+    class CountedBlob extends Blob {
+      override slice(start?: number, end?: number) {
+        reads++;
+        return super.slice(start, end);
+      }
+    }
+    const loaded = await readPaintFile(new CountedBlob([binary]));
+    expect(reads).toBeLessThan(6);
+    expect(encodeDocument(snapshotDocument(loaded.layers, loaded.activeId, loaded.camera))).toBe(
+      encodeDocument(source)
+    );
+  });
   it('passes each validated tile to the storage callback', async () => {
     const binary = await writePaintFile(fixture(), async (pixels) => pixels as Uint8Array);
     const ref = { storageId: crypto.randomUUID(), byteLength: 42 };
