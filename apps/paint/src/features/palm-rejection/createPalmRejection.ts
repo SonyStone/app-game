@@ -7,7 +7,8 @@ import { createSignal, onCleanup, type Accessor } from 'solid-js';
  * pans, opens the cluster nor presses its controls. Touches on the other side, from the free hand, pass at once.
  *
  * The pen counts as near for `linger` milliseconds after its last event (hovering or touching), and no longer once it
- * reports leaving the window or its hover range. It listens on the window in the capture phase and stops ignored
+ * reports leaving the window or its hover range. A pen that reports leaving right at its lift, as on screens that do
+ * not report hovering (Chrome on the Wacom MovinkPad), has only been lifted, and still counts as near for `linger`. It listens on the window in the capture phase and stops ignored
  * touches before any other handler or element sees them, including the click they would cause, so it must be
  * created before other window listeners. Must be created within a Solid owner.
  */
@@ -29,6 +30,8 @@ export function createPalmRejection(options: {
   /** Where and when the last ignored touch lifted, to swallow the click it causes. */
   let lifted: { x: number; y: number; time: number } | undefined;
   let lapse: ReturnType<typeof setTimeout> | undefined;
+  /** The pen was lifted and has not hovered since: its leaving reports the lift, not leaving the hover range. */
+  let justLifted = false;
   const capture = { capture: true };
   onCleanup(() => clearTimeout(lapse));
 
@@ -52,12 +55,13 @@ export function createPalmRejection(options: {
 
     setLastPen({ type: event.type, time: performance.now() });
     setPenX(event.clientX);
+    justLifted = event.type === 'pointerup' || event.type === 'pointercancel';
     clearTimeout(lapse);
     lapse = setTimeout(() => setPenX(undefined), options.linger());
   };
-  /** The pen reported leaving: not near any more. */
+  /** The pen reported leaving: not near any more, unless it was only lifted. */
   const losePen = (event: PointerEvent) => {
-    if (event.pointerType !== 'pen') {
+    if (event.pointerType !== 'pen' || justLifted) {
       return;
     }
 

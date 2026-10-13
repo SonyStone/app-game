@@ -52,6 +52,26 @@ it('passes touches on the free hand side, within the tolerance, and after the pe
   expect(seen).toEqual(['pen pointermove', 'touch pointerdown', 'touch pointerdown', 'touch pointerdown']);
 });
 
+it('keeps the pen near for the linger after a lift that reports leaving, as on screens without hover', () => {
+  pointer('pointerdown', 'pen', 500);
+  pointer('pointerup', 'pen', 500);
+  pointer('pointerout', 'pen', 500);
+  pointer('pointerdown', 'touch', 300, 1);
+  vi.advanceTimersByTime(250);
+  flush();
+  pointer('pointerdown', 'touch', 300, 2);
+
+  expect(seen).toEqual(['pen pointerdown', 'pen pointerup', 'touch pointerdown']);
+});
+
+it('stops guarding at once when a hovering pen leaves', () => {
+  pointer('pointermove', 'pen', 500);
+  pointer('pointerout', 'pen', 500);
+  pointer('pointerdown', 'touch', 300, 1);
+
+  expect(seen).toEqual(['pen pointermove', 'touch pointerdown']);
+});
+
 /**
  * Dispatches a pointer event and settles signals, as the browser's microtask checkpoint does between events. jsdom has
  * no PointerEvent constructor, so a MouseEvent carries `pointerType` and `pointerId`.
