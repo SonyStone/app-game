@@ -240,6 +240,27 @@ describe('input to worker contract', () => {
     expect(batch?.samples.map((s) => s.pressure)).toEqual([0.4, 0.9]);
     expect(batch?.samples.map((s) => s.time)).toEqual([10, 20]);
   });
+  it('skips samples that iPad Safari repeats from an earlier move, so the stroke never doubles back', () => {
+    const { commands, pointer } = setup();
+    const sample = (x: number) => ({ clientX: x, clientY: 0, pressure: x / 1000, timeStamp: x });
+    pointer('pointerdown', 100, 0, { pointerType: 'pen', pressure: 0.1, timeStamp: 100 });
+    // The pattern of WebKit bug 316105: the next move reports 101, 102 and 104 again and a late 103.
+    pointer('pointermove', 104, 0, { pointerType: 'pen', getCoalescedEvents: () => [101, 102, 104].map(sample) });
+    pointer('pointermove', 105, 0, {
+      pointerType: 'pen',
+      getCoalescedEvents: () => [101, 102, 103, 104, 105].map(sample)
+    });
+    pointer('pointermove', 105, 0, { pointerType: 'pen', getCoalescedEvents: () => [104, 105].map(sample) });
+    const sent = commands.filter((command) => command.type === 'samples').map((command) => command.samples);
+    expect(sent.map((samples) => samples.map((sample) => sample.time))).toEqual([[101, 102, 104], [105]]);
+    expect(sent.flat().map((sample) => sample.pressure)).toEqual([0.101, 0.102, 0.104, 0.105]);
+  });
+  it('cancels touchstart on the canvas, so that iPadOS gestures cannot take a contact', () => {
+    const { canvas } = setup();
+    const touch = new Event('touchstart', { bubbles: true, cancelable: true });
+    canvas.dispatchEvent(touch);
+    expect(touch.defaultPrevented).toBe(true);
+  });
   it('preserves pending ink on pointercancel and can start another stroke', () => {
     const { commands, pointer } = setup();
     pointer('pointerdown', 0, 0);
@@ -481,10 +502,13 @@ function setup(
       puck
     })
   );
+  // jsdom stamps events created in the same millisecond alike; browser input samples have increasing times.
+  let time = 0;
   const pointer = (type: string, x: number, y: number, extra: Record<string, unknown> = {}) => {
     // Pointer events bubble, so that window listeners, such as the puck's, see them as in a browser.
     const event = new MouseEvent(type, { clientX: x, clientY: y, button: 0, buttons: 1, bubbles: true });
-    for (const [key, value] of Object.entries({ pointerId: 1, pointerType: 'mouse', pressure: 1, ...extra }))
+    const defaults = { pointerId: 1, pointerType: 'mouse', pressure: 1, timeStamp: time++ };
+    for (const [key, value] of Object.entries({ ...defaults, ...extra }))
       Object.defineProperty(event, key, { value });
     canvas.dispatchEvent(event);
   };

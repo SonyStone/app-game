@@ -15,6 +15,17 @@
     <link rel="icon" href="/icons/paint.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/paint-180.png" />
     <title>Paint Studio</title>
+    <style>
+      /*
+        iPad Safari moves a selection gesture that lands on unselectable content to the nearest selectable node, and
+        the page itself would select the whole editor. Text fields and readable notes opt back in.
+      */
+      html {
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+    </style>
   </head>
   <body style="margin: 0">
     <div id="app"></div>
