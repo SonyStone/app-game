@@ -336,11 +336,36 @@ export function PaintStudio(props: {
   const palmSettings = createPalmRejectionSettings();
   // After the recorder, so that recordings keep ignored touches, and before the other window listeners, so that
   // nothing else sees them.
+  const palmOptions = palmSettings.settings;
   const palm = createPalmRejection({
-    enabled: () => palmSettings.settings().enabled,
-    hand: () => palmSettings.settings().hand,
-    tolerance: () => palmSettings.settings().tolerance,
-    linger: () => palmSettings.settings().linger
+    enabled: () => palmOptions().enabled,
+    hand: () => palmOptions().hand,
+    tolerance: () => palmOptions().tolerance,
+    linger: () => (palmOptions().hoverless ? palmOptions().liftLinger : palmOptions().linger),
+    before: () => (palmOptions().hoverless ? palmOptions().before : 0),
+    // A palm taken back puts the view back where it was when the earliest of them landed.
+    onRetract: (pointerIds) => {
+      const cameras = pointerIds.flatMap((id) => touchCameras.get(id) ?? []);
+      if (cameras[0]) {
+        camera.navigate(cameras[0]);
+      }
+    }
+  });
+  /** The view when each touch still down landed, in landing order, for `onRetract`. */
+  const touchCameras = new Map<number, ReturnType<typeof camera.current>>();
+  createEventListener(
+    window,
+    'pointerdown',
+    (event) => {
+      if (event.pointerType === 'touch') {
+        touchCameras.set(event.pointerId, camera.current());
+      }
+    },
+    { capture: true, passive: true }
+  );
+  createEventListener(window, ['pointerup', 'pointercancel'], (event) => touchCameras.delete(event.pointerId), {
+    capture: true,
+    passive: true
   });
 
   const { brush, tool } = tools;

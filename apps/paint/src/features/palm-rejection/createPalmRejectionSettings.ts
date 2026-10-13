@@ -34,6 +34,14 @@ export type PalmRejectionSettings = {
   tolerance: number;
   /** Milliseconds after the pen's last event (or none once it leaves) during which its hand's side is guarded. */
   linger: number;
+  /**
+   * The browser reports no pen hovering, as tablets without hover do, or Chrome on Android in a tab moved into or out
+   * of an installed app: the guard then lasts `liftLinger` after each lift instead of `linger`, and the pen touching
+   * down takes back the touches on its hand's side that landed up to `before` milliseconds earlier.
+   */
+  hoverless: boolean;
+  liftLinger: number;
+  before: number;
 };
 
 /** The settings before the user changes them, as tuned in the tile cluster mockup. */
@@ -41,7 +49,11 @@ export const defaultPalmRejection: PalmRejectionSettings = {
   enabled: true,
   hand: 'left',
   tolerance: -100,
-  linger: 200
+  linger: 200,
+  hoverless: false,
+  // Strokes on the MovinkPad were 300–1000 ms apart.
+  liftLinger: 700,
+  before: 500
 };
 
 function read(): PalmRejectionSettings {
@@ -53,7 +65,10 @@ function read(): PalmRejectionSettings {
       enabled: typeof stored.enabled === 'boolean' ? stored.enabled : defaultPalmRejection.enabled,
       hand: stored.hand === 'left' || stored.hand === 'right' ? stored.hand : defaultPalmRejection.hand,
       tolerance: finite(stored.tolerance) ?? defaultPalmRejection.tolerance,
-      linger: finite(stored.linger) ?? defaultPalmRejection.linger
+      linger: finite(stored.linger) ?? defaultPalmRejection.linger,
+      hoverless: typeof stored.hoverless === 'boolean' ? stored.hoverless : defaultPalmRejection.hoverless,
+      liftLinger: finite(stored.liftLinger) ?? defaultPalmRejection.liftLinger,
+      before: finite(stored.before) ?? defaultPalmRejection.before
     };
   } catch {
     return defaultPalmRejection;
