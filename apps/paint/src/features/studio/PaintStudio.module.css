@@ -65,8 +65,8 @@
     outline-offset: 2px;
   }
 
-  /* After a finger tap iPad Safari keeps :hover; see createPointerTypeAttribute. */
-  button:hover:not(:disabled, [data-pointer='touch'] *) {
+  /* iPad Safari after a finger tap, and Chrome losing a pen's hover, keep :hover; see createPointerTypeAttribute. */
+  button:hover:not(:disabled, [data-pointer='touch'] *, [data-hover-stale] *) {
     background-color: #e9eff2;
   }
 
@@ -249,7 +249,7 @@
   color: #fff !important;
   box-shadow: 0 1px 3px #0001;
 
-  &:hover:not(:disabled, [data-pointer='touch'] *) {
+  &:hover:not(:disabled, [data-pointer='touch'] *, [data-hover-stale] *) {
     background: #454545 !important;
   }
 }

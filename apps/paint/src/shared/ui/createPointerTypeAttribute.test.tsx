@@ -40,7 +40,36 @@ it('marks the type of the pointer that last entered or pressed, even when a hand
   expect(editor.dataset.pointer).toBe('pen');
 });
 
+it('marks hover stale from a pen or touch press until a pen or mouse hovers again', () => {
+  const host = document.createElement('div');
+  document.body.append(host);
+  let editor!: HTMLDivElement;
+  let button!: HTMLButtonElement;
+  dispose = render(() => {
+    const element = (
+      <div>
+        <button ref={button} />
+      </div>
+    ) as HTMLDivElement;
+    editor = element;
+    createPointerTypeAttribute(() => element);
+    return element;
+  }, host);
+  flush();
+
+  button.dispatchEvent(pointer('pointerdown', 'mouse', 1));
+  expect(editor.dataset.hoverStale).toBeUndefined();
+
+  button.dispatchEvent(pointer('pointerdown', 'pen', 1));
+  button.dispatchEvent(pointer('pointermove', 'pen', 1));
+  button.dispatchEvent(pointer('pointermove', 'touch', 0));
+  expect(editor.dataset.hoverStale).toBe('');
+
+  button.dispatchEvent(pointer('pointermove', 'pen', 0));
+  expect(editor.dataset.hoverStale).toBeUndefined();
+});
+
 /** jsdom has no PointerEvent constructor, so a MouseEvent carries `pointerType`. */
-function pointer(type: string, pointerType: string) {
-  return Object.assign(new MouseEvent(type, { bubbles: true }), { pointerType });
+function pointer(type: string, pointerType: string, buttons = 0) {
+  return Object.assign(new MouseEvent(type, { bubbles: true, buttons }), { pointerType });
 }

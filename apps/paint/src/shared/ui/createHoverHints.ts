@@ -1,8 +1,10 @@
+import { createEventListener } from '@solid-primitives/event-listener';
 import { createSignal, onCleanup } from 'solid-js';
 
 /**
  * Which control's hint shows, for `HintCard`s: a pen or mouse resting 400 ms on a control shows its hint, moving on to
- * the next control within a moment shows that one at once, and leaving or pressing hides it. Touch shows none.
+ * the next control within a moment shows that one at once, and leaving it or pressing anywhere hides it. Touch shows
+ * none. Pressing anywhere matters because Chrome can stop reporting a pen's hover, and with it the leaving.
  * `on(id)` returns a control's pointer handlers; spread them where the control is created, they keep no per-control
  * state. Must be created within a Solid owner.
  */
@@ -19,6 +21,7 @@ export function createHoverHints<Id extends string>() {
     }
   };
   onCleanup(() => clearTimeout(timer));
+  createEventListener(window, 'pointerdown', hide, { capture: true, passive: true });
 
   return {
     /** The control whose hint shows, and its element for placing the card. */
@@ -35,8 +38,7 @@ export function createHoverHints<Id extends string>() {
           clearTimeout(timer);
           timer = setTimeout(() => setShown({ id, element }), performance.now() - hidden < 300 ? 0 : 400);
         },
-        onPointerLeave: hide,
-        onPointerDown: hide
+        onPointerLeave: hide
       };
     }
   };
