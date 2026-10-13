@@ -3,7 +3,7 @@ import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { BrushAdjustHud } from '../../features/brush';
 import { ClusterActions } from './clusterActions';
 import { createMockCanvas } from './createMockCanvas';
-import { createPalmRejection } from './createPalmRejection';
+import { createPalmRejection } from '../../features/palm-rejection/createPalmRejection';
 import { createPuckNavigation } from './createPuckNavigation';
 import { createDebugOptions } from './debugOptions';
 import { DebugSidebar } from './DebugSidebar';

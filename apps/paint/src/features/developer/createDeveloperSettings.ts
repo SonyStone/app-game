@@ -16,7 +16,7 @@ export function createDeveloperSettings() {
   );
 
   return {
-    /** Canvas wireframe with tile, page and cache statistics. */
+    /** Canvas wireframe with tile, page and cache statistics, and the palm rejection zone with ignored touches. */
     debug,
     setDebug,
     /** Disposable preview of the stroke between the last sample and the pen. */

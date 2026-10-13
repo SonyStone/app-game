@@ -44,10 +44,11 @@ export function createInputRecorder(options: {
 
   const recording = () => status() === 'recording';
   const target = () => (recording() ? window : undefined);
+  // Always attached, so that it runs before the palm rejection created after it and records the touches it ignores.
   createEventListener(
-    target,
+    window,
     [...recordedPointerTypes],
-    (event) => outsideRecorder(event) && record(readPointer(event as PointerEvent, time)),
+    (event) => recording() && outsideRecorder(event) && record(readPointer(event as PointerEvent, time)),
     { capture: true, passive: true }
   );
   createEventListener(

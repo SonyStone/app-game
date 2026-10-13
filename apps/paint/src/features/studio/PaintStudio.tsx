@@ -33,6 +33,12 @@ import { HueTriangle } from '../hue-triangle';
 import { createViewOptions, ViewOptionsControls } from '../view-options';
 import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
+import {
+  createPalmRejection,
+  createPalmRejectionSettings,
+  PalmRejectionControls,
+  PalmRejectionDebug
+} from '../palm-rejection';
 import { createFill, FillPanel } from '../fill';
 import { createFrames, FrameEditor, FrameGuides, frameRegion, FramesSection } from '../frames';
 import { createDrawingFolder, DrawingFolderControls, FolderAccessNotice } from '../drawing-folder';
@@ -323,8 +329,18 @@ export function PaintStudio(props: {
         canUndo: engine.state().canUndo,
         canRedo: engine.state().canRedo
       },
-      error: error()?.message
+      error: error()?.message,
+      palmRejection: palmSettings.settings()
     })
+  });
+  const palmSettings = createPalmRejectionSettings();
+  // After the recorder, so that recordings keep ignored touches, and before the other window listeners, so that
+  // nothing else sees them.
+  const palm = createPalmRejection({
+    enabled: () => palmSettings.settings().enabled,
+    hand: () => palmSettings.settings().hand,
+    tolerance: () => palmSettings.settings().tolerance,
+    linger: () => palmSettings.settings().linger
   });
 
   const { brush, tool } = tools;
@@ -621,6 +637,7 @@ export function PaintStudio(props: {
           active={supportsSymmetry()}
         />
         <Show when={developer.debug()}>
+          <PalmRejectionDebug palm={palm} />
           <CanvasDebug
             tiles={engine.debugTiles()}
             paging={engine.paging()}
@@ -1089,6 +1106,9 @@ export function PaintStudio(props: {
                     }
                     viewOptions={
                       <ViewOptionsControls settings={viewOptions.settings()} onChange={viewOptions.update} />
+                    }
+                    palmRejection={
+                      <PalmRejectionControls settings={palmSettings.settings()} onChange={palmSettings.update} />
                     }
                     applicationControls={props.applicationControls}
                     experimentsHref={props.experimentsHref}

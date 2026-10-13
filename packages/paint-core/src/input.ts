@@ -7,8 +7,8 @@ import type { PaintCommand } from './protocol';
 
 /**
  * Connects real pointer input to ordered worker commands; touch navigates and pen/mouse draw. Touches landing during a
- * stroke, selection or canvas action are ignored; telling palms from fingers is left to the device. Cancels the
- * canvas's `touchstart` events, so that its contacts never start browser gestures or clicks.
+ * stroke, selection or canvas action are ignored; telling palms from fingers is left to the device and the app's palm
+ * rejection. Cancels the canvas's `touchstart` events, so that its contacts never start browser gestures or clicks.
  */
 export function attachInput(
   canvas: HTMLCanvasElement,

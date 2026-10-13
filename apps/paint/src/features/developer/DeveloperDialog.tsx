@@ -62,7 +62,7 @@ export function DeveloperDialog(props: {
             disabled={!props.ready}
             onChange={(event) => props.settings.setDebug(event.currentTarget.checked)}
           />
-          Canvas wireframe
+          Canvas wireframe and palm zone
         </label>
         <label>
           <input

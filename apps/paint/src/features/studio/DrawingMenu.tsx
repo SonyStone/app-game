@@ -4,7 +4,7 @@ import styles from './PaintStudio.module.css';
 
 /**
  * Drawing panel: open, save and export the drawing, keep it in a folder, place an image as a new layer, reset the
- * view, developer tools and host controls.
+ * view, developer tools, host controls, and how the canvas shows pixels and rejects palms.
  */
 export function DrawingMenu(props: {
   /** File commands wait for the engine. */
@@ -25,6 +25,8 @@ export function DrawingMenu(props: {
   liveControls?: JSX.Element;
   /** How the canvas shows pixels, below the file actions. */
   viewOptions?: JSX.Element;
+  /** Palm rejection settings, below the view options. */
+  palmRejection?: JSX.Element;
   /** Host-specific controls, such as PWA installation. */
   applicationControls?: JSX.Element;
   /** Link back to the embedding playground. */
@@ -87,6 +89,7 @@ export function DrawingMenu(props: {
         <Show when={props.experimentsHref}>{(href) => <a href={href()}>Paint experiments</a>}</Show>
       </div>
       {props.viewOptions}
+      {props.palmRejection}
       <p class={styles.panelNote}>
         B · Brush &nbsp; E · Eraser &nbsp; L · Lasso
         <br />
