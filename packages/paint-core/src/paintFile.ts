@@ -82,10 +82,11 @@ export async function readPaintFile(
   let expected = 12 + length;
   for (const layer of drawing.layers) for (const pixels of layer.tiles.values()) expected += pixels.byteLength;
   if (expected !== file.size) throw new Error('Truncated or oversized drawing payload.');
+  const readRange = createRangeReader(file, file.size);
   let offset = 12 + length;
   for (const layer of drawing.layers)
     for (const [key, ref] of layer.tiles) {
-      const packed = new Uint8Array(await file.slice(offset, offset + ref.byteLength).arrayBuffer());
+      const packed = await readRange(offset, offset + ref.byteLength);
       offset += ref.byteLength;
       const pixels = packTile(unpackTile(packed));
       layer.tiles.set(key, await capture(pixels));
@@ -126,13 +127,14 @@ async function readVersion4(file: Blob, capture: (pixels: Uint8Array) => Promise
       }))
     }))
   });
+  const readRange = createRangeReader(file, offset);
   const captured = new Map<number, TileData>();
   for (const [index, layer] of drawing.layers.entries())
     for (const { key, tile } of indexed.layers[index]!.tiles) {
       let pixels = captured.get(tile);
       if (!pixels) {
         const { offset: start, length: size, byteLength } = indexed.tiles[tile]!;
-        const packed = await restoreTile(new Uint8Array(await file.slice(start, start + size).arrayBuffer()));
+        const packed = await restoreTile(await readRange(start, start + size));
         if (packed.byteLength !== byteLength) throw new Error('A tile of the drawing is damaged.');
         pixels = await capture(packTile(unpackTile(packed)));
         captured.set(tile, pixels);
@@ -142,6 +144,27 @@ async function readVersion4(file: Blob, capture: (pixels: Uint8Array) => Promise
     }
 
   return drawing;
+}
+
+/**
+ * Reads byte ranges of `file` below `limit` through one window of at least `RANGE_WINDOW_BYTES`, refilled from the
+ * requested start whenever a range falls outside it. Every Blob read has a fixed cost, about 70 ms for a file chosen
+ * on Android Chrome, so reading thousands of tiles one slice at a time took minutes; tiles are written in the order
+ * they are read, so one window serves many of them. Returns a copy, so a kept tile does not retain the window.
+ */
+function createRangeReader(file: Blob, limit: number) {
+  let windowStart = 0;
+  let window = new Uint8Array(0);
+  return async (start: number, end: number) => {
+    if (start < windowStart || end > windowStart + window.byteLength) {
+      windowStart = start;
+      window = new Uint8Array(
+        await file.slice(start, Math.min(limit, Math.max(end, start + RANGE_WINDOW_BYTES))).arrayBuffer()
+      );
+    }
+
+    return window.slice(start - windowStart, end - windowStart);
+  };
 }
 
 /** The version 4 tile index and the layers' references into it; the rest is validated by `restoreDocument`. */
@@ -167,4 +190,5 @@ const MAGIC_V4 = new TextEncoder().encode('PAINT4\r\n');
 const TRAILER_MAGIC = new TextEncoder().encode('P4IX');
 const TRAILER_BYTES = 16;
 const MAX_HEADER = 32 * 1048576;
+const RANGE_WINDOW_BYTES = 8 * 1048576;
 const PLACEHOLDER_ID = '00000000-0000-4000-8000-000000000000';
