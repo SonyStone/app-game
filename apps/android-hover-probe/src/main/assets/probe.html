@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Hover probe</title>
+<style>
+  html, body { margin: 0; height: 100%; font: 14px system-ui, sans-serif; background: #f4f4f4; }
+  header { display: flex; gap: 12px; align-items: center; padding: 8px 12px; background: #ddd; }
+  canvas { display: block; width: 100%; height: calc(100% - 44px); touch-action: none; }
+  #log { position: fixed; top: 52px; right: 8px; width: 380px; font: 12px ui-monospace, monospace; white-space: pre; color: #333; pointer-events: none; }
+</style>
+</head>
+<body>
+<header>
+  <b>Hover probe</b>
+  <span>Hover draws grey, pen contact draws black.</span>
+  <label>File chooser: <input type="file"></label>
+  <button id="clear">Clear</button>
+</header>
+<canvas id="pad"></canvas>
+<div id="log"></div>
+<script>
+  const pad = document.getElementById('pad');
+  const log = document.getElementById('log');
+  const ctx = pad.getContext('2d');
+  const lines = [];
+  let last = null;
+
+  function resize() {
+    pad.width = pad.clientWidth * devicePixelRatio;
+    pad.height = pad.clientHeight * devicePixelRatio;
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+  }
+
+  function note(e) {
+    lines.unshift(`${e.type.padEnd(12)} ${e.pointerType.padEnd(5)} b=${e.buttons} p=${e.pressure.toFixed(2)}`);
+    lines.length = Math.min(lines.length, 24);
+    log.textContent = lines.join('\n');
+  }
+
+  function draw(e) {
+    const point = { x: e.offsetX, y: e.offsetY, hover: e.buttons === 0 };
+    if (last && last.hover === point.hover) {
+      ctx.strokeStyle = point.hover ? '#bbb' : '#111';
+      ctx.lineWidth = point.hover ? 1 : 1 + e.pressure * 6;
+      ctx.beginPath();
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+    }
+    last = point;
+  }
+
+  resize();
+  addEventListener('resize', resize);
+  document.getElementById('clear').onclick = () => ctx.clearRect(0, 0, pad.width, pad.height);
+  for (const type of ['pointerover', 'pointerenter', 'pointerdown', 'pointerup', 'pointercancel', 'pointerout', 'pointerleave']) {
+    pad.addEventListener(type, (e) => { note(e); last = null; });
+  }
+  pad.addEventListener('pointermove', draw);
+</script>
+</body>
+</html>
