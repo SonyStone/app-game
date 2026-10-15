@@ -31,12 +31,7 @@ try {
   // A context of its own, so that a step can open the drawing in a second tab.
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
-  page.on('pageerror', (error) => pageErrors.push(`pageerror: ${error.stack ?? error.message}`));
-  page.on('console', (message) => {
-    if (message.type() === 'error') {
-      pageErrors.push(`console.error: ${message.text()}`);
-    }
-  });
+  watchErrors(page);
   await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }));
   await page.goto(`${baseURL}/`);
   await waitForSaved(page);
@@ -1357,6 +1352,56 @@ try {
     await waitForSaved(page);
   });
 
+  await step(
+    'losing the pen hover moves the drawing into a new tab with its undo history, by itself once chosen',
+    async () => {
+      await stroke(page);
+      await waitForSaved(page);
+      await stroke(page);
+      await waitForSaved(page);
+      await undo(page, 1);
+      await losePenHover(page);
+      await page.getByText('Chrome stopped seeing the pen above the screen.').waitFor({ timeout: 5_000 });
+
+      const started = performance.now();
+      const [moved] = await Promise.all([
+        context.waitForEvent('page'),
+        page.getByRole('button', { name: 'Continue in a new tab' }).click()
+      ]);
+      watchErrors(moved);
+      await waitForSaved(moved);
+      console.log(`  the new tab was ready ${Math.round(performance.now() - started)} ms after the tap`);
+      assert.ok(new URL(moved.url()).searchParams.get('paintMoved') === null, 'The move mark stays in the address.');
+      await waitEnabled(moved.getByRole('button', { name: 'Undo' }));
+      await waitEnabled(moved.getByRole('button', { name: 'Redo' }));
+      // The tab the user opened cannot close itself, so it says where the drawing went.
+      await page.getByText('This drawing moved to a new tab').waitFor({ timeout: 5_000 });
+
+      // Chosen from the notice, the next loss moves by itself at the pen's lift, and a tab opened by a move closes.
+      const at = await losePenHover(moved);
+      await moved.getByRole('checkbox', { name: 'Always' }).check();
+      const [again] = await Promise.all([
+        context.waitForEvent('page'),
+        moved.waitForEvent('close'),
+        penTap(moved, at)
+      ]);
+      watchErrors(again);
+      await waitForSaved(again);
+      await waitEnabled(again.getByRole('button', { name: 'Redo' }));
+      await again.getByRole('button', { name: 'Redo' }).click();
+      await waitForSaved(again);
+      await undo(again, 2);
+      assert.equal(await again.getByRole('button', { name: 'Undo' }).isDisabled(), false, 'Earlier history stays.');
+
+      // The first tab takes the drawing back, as from any other tab.
+      await page.getByRole('button', { name: 'Draw here' }).click();
+      await again.getByText('This drawing was opened in another tab').waitFor({ timeout: 15_000 });
+      await page.getByRole('alertdialog').waitFor({ state: 'detached', timeout: 20_000 });
+      await again.close();
+      await waitForSaved(page);
+    }
+  );
+
   assert.deepEqual(pageErrors, [], 'The page reported errors.');
   console.log('Studio UI smoke test passed.');
 } catch (error) {
@@ -1371,7 +1416,46 @@ try {
   await server?.close();
 }
 
-/** Runs one named check and prefixes its failure with the name. */
+/** Collects the uncaught errors and console errors of `tab` into `pageErrors`. */
+function watchErrors(tab) {
+  tab.on('pageerror', (error) => pageErrors.push(`pageerror: ${error.stack ?? error.message}`));
+  tab.on('console', (message) => {
+    if (message.type() === 'error') {
+      pageErrors.push(`console.error: ${message.text()}`);
+    }
+  });
+}
+
+/**
+ * Makes the page find the pen's hover lost, as when Chrome on Android stops reporting it: the pen hovers, then touches
+ * down twice without hovering in between. Trusted pen input through CDP, on the tool bar's edge beside its buttons, so
+ * that nothing is drawn.
+ */
+async function losePenHover(tab) {
+  const box = await tab.getByRole('navigation', { name: 'Drawing tools' }).boundingBox();
+  const at = { x: box.x + 1, y: box.y + box.height / 2 };
+  const cdp = await tab.context().newCDPSession(tab);
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', pointerType: 'pen', ...at });
+  for (let contact = 0; contact < 3; contact++) {
+    await cdp.send('Input.dispatchMouseEvent', penContact('mousePressed', at));
+    await cdp.send('Input.dispatchMouseEvent', penContact('mouseReleased', at));
+  }
+
+  return at;
+}
+
+/** A pen tap at `at` without hover before it, such as where `losePenHover` touched. */
+async function penTap(tab, at) {
+  const cdp = await tab.context().newCDPSession(tab);
+  await cdp.send('Input.dispatchMouseEvent', penContact('mousePressed', at));
+  await cdp.send('Input.dispatchMouseEvent', penContact('mouseReleased', at));
+}
+
+/** A CDP mouse event of the pen's tip touching down or lifting at `at`. */
+function penContact(type, at) {
+  return { type, pointerType: 'pen', button: 'left', clickCount: 1, ...at };
+}
+
 /** The center of the drawing workspace in page pixels. */
 async function workspaceCenter(page) {
   const box = await page.getByRole('main', { name: 'Drawing workspace' }).boundingBox();
@@ -1436,6 +1520,7 @@ async function undo(page, count) {
   }
 }
 
+/** Runs one named check and prefixes its failure with the name. */
 async function step(name, check) {
   try {
     await check();

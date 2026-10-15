@@ -27,6 +27,8 @@ export function DrawingMenu(props: {
   viewOptions?: JSX.Element;
   /** Palm rejection settings, below the view options. */
   palmRejection?: JSX.Element;
+  /** What to do when the browser loses the pen hover, below palm rejection; see `FreshTabControls`. */
+  penHover?: JSX.Element;
   /** Host-specific controls, such as PWA installation. */
   applicationControls?: JSX.Element;
   /** Link back to the embedding playground. */
@@ -90,6 +92,7 @@ export function DrawingMenu(props: {
       </div>
       {props.viewOptions}
       {props.palmRejection}
+      {props.penHover}
       <p class={styles.panelNote}>
         B · Brush &nbsp; E · Eraser &nbsp; L · Lasso
         <br />

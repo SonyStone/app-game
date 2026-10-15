@@ -10,11 +10,17 @@ import { createImmediateSignal } from '../../shared/createImmediateSignal';
  * since its last lift, and `true` as soon as it hovers again. It is readable at once, also in the same event, so that
  * window listeners created after this one can act on the press that found it out. Listens on the window in the
  * capture phase without stopping anything. Must be created within a Solid owner.
+ *
+ * `lostContacts` counts the pen's touches in a row without hover since it last hovered, once it has hovered in this
+ * page: 0 while the pen hovers, and always 0 for a pen that never did, such as on a tablet without hover.
  */
 export function createPenHover() {
   const [, setHovers, hovers] = createImmediateSignal<boolean | undefined>(undefined);
+  const [, setLostContacts, lostContacts] = createImmediateSignal(0);
   /** The pen hovered since it last lifted, or since this started. */
   let hovered = false;
+  /** The pen hovered at some point in this page. */
+  let everHovered = false;
   const options = { capture: true, passive: true };
 
   createEventListener(
@@ -23,8 +29,13 @@ export function createPenHover() {
     (event) => {
       if (event.pointerType === 'pen' && event.buttons === 0) {
         hovered = true;
+        everHovered = true;
         if (hovers() !== true) {
           setHovers(true);
+        }
+
+        if (lostContacts() !== 0) {
+          setLostContacts(0);
         }
       }
     },
@@ -34,8 +45,16 @@ export function createPenHover() {
     window,
     'pointerdown',
     (event) => {
-      if (event.pointerType === 'pen' && hovers() !== hovered) {
+      if (event.pointerType !== 'pen') {
+        return;
+      }
+
+      if (hovers() !== hovered) {
         setHovers(hovered);
+      }
+
+      if (everHovered && !hovered) {
+        setLostContacts(lostContacts() + 1);
       }
     },
     options
@@ -53,6 +72,8 @@ export function createPenHover() {
 
   return {
     /** Whether the pen hovers: `undefined` while unknown; see {@link createPenHover}. */
-    hovers
+    hovers,
+    /** Touches in a row without hover after the pen hovered in this page; see {@link createPenHover}. */
+    lostContacts
   };
 }

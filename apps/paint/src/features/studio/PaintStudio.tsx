@@ -39,6 +39,7 @@ import {
   PalmRejectionControls,
   PalmRejectionDebug
 } from '../palm-rejection';
+import { arrivalStorageWaitMs, createFreshTab, FreshTabControls, FreshTabNotice } from '../fresh-tab';
 import { createPenHover } from '../pen-hover';
 import { createFill, FillPanel } from '../fill';
 import { createFrames, FrameEditor, FrameGuides, frameRegion, FramesSection } from '../frames';
@@ -111,7 +112,8 @@ export function PaintStudio(props: {
     onError: setError,
     onSelection: (event) => selection.receive(event),
     prepare: () => uploads.restore(),
-    frames: { enabled: developer.performanceMonitor, receive: (event) => monitor.record(event) }
+    frames: { enabled: developer.performanceMonitor, receive: (event) => monitor.record(event) },
+    storageWaitMs: arrivalStorageWaitMs()
   });
   const selection = createSelection({
     send: engine.send,
@@ -358,6 +360,11 @@ export function PaintStudio(props: {
         camera.navigate(cameras[0]);
       }
     }
+  });
+  const freshTab = createFreshTab({
+    lostContacts: penHover.lostContacts,
+    idle: () => engine.canEdit() && !engine.isDrawing() && !transform.active() && !selection.drawing(),
+    moveOut: engine.moveOut
   });
   /** The view when each touch still down landed, in landing order, for `onRetract`. */
   const touchCameras = new Map<number, ReturnType<typeof camera.current>>();
@@ -850,6 +857,16 @@ export function PaintStudio(props: {
           {(count) => <MissingTilesNotice count={count()} size={size()} onDismiss={() => setMissingSeen(count())} />}
         </Show>
         <LiveBadge live={live} />
+        <Show when={freshTab.offered()}>
+          <FreshTabNotice
+            size={size()}
+            blocked={freshTab.blocked()}
+            auto={freshTab.auto()}
+            onMove={freshTab.move}
+            onAutoChange={freshTab.setAuto}
+            onDismiss={freshTab.dismiss}
+          />
+        </Show>
         <Show when={engine.storageLock()}>
           {(state) => <StorageLockNotice state={state()} onTakeOver={engine.takeOver} />}
         </Show>
@@ -1147,6 +1164,7 @@ export function PaintStudio(props: {
                         onChange={palmSettings.update}
                       />
                     }
+                    penHover={<FreshTabControls auto={freshTab.auto()} onChange={freshTab.setAuto} />}
                     applicationControls={props.applicationControls}
                     experimentsHref={props.experimentsHref}
                   />

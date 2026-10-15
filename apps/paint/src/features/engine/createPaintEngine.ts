@@ -55,6 +55,11 @@ export function createPaintEngine(options: {
   frames?: { enabled: Accessor<boolean>; receive: (event: FrameEvent) => void };
   /** The storage engines open, `paint-studio` by default; a live viewer's starts with `live:`, kept in memory. */
   storageName?: string;
+  /**
+   * How long the first engine waits for the drawing's storage while another tab holds it, 5 s by default: longer in a
+   * tab that the drawing is being moved to (see `moveOut`), while the old tab writes the last changes.
+   */
+  storageWaitMs?: number;
 }) {
   /** One mounted engine; a new object, even with the same mode, remounts the canvas and starts a new engine. */
   const [session, setSession] = createSignal<{ mode: ExecutionMode }>({ mode: initialMode() });
@@ -65,8 +70,8 @@ export function createPaintEngine(options: {
   const [saveState, setSaveState] = createSignal<StateEvent['saveState']>('saved');
   const [metrics, setMetrics] = createSignal({ tiles: 0, gpu: 0, ms: 0 });
   const [paging, setPaging] = createSignal<EnginePaging>({});
-  /** Whether the drawing's storage belongs to another engine; see the `storage-lock` event. */
-  const [storageLock, setStorageLock] = createSignal<'busy' | 'lost'>();
+  /** Whether the drawing's storage belongs to another engine; see the `storage-lock` event and `moveOut`. */
+  const [storageLock, setStorageLock] = createSignal<'busy' | 'lost' | 'moved'>();
   /** The next engine takes the drawing's storage from the one holding it; see `takeOver`. */
   let takeOverNext = false;
   /** Tile keys last reported by the engine; toggling the wireframe and `replace` clear them. */
@@ -121,6 +126,10 @@ export function createPaintEngine(options: {
   let handoff: Pick<EngineInit, 'tools' | 'historySource'> = {};
   /** Ends the current connection's stalled switch; set by `connect`. */
   let expireSwitch: (() => void) | undefined;
+  /** Hands the current connection's drawing over; set by `connect`, see `moveOut`. */
+  let handOver: (() => Promise<boolean>) | undefined;
+  /** Only the first engine waits `storageWaitMs`; later ones replace an engine of this tab. */
+  let storageWaitMs = options.storageWaitMs;
   let switchTimer: ReturnType<typeof setTimeout> | undefined;
   let persistenceRequested = false;
   /** Whether a stroke is in progress; read only by synchronous guards, so it needs no signal. */
@@ -169,7 +178,8 @@ export function createPaintEngine(options: {
     restored,
     /**
      * `busy` while the drawing is open in another tab, so this engine cannot open it; `lost` once another tab took it
-     * over, after which this engine no longer saves. `takeOver` takes it back.
+     * over, after which this engine no longer saves; `moved` once `moveOut` started handing it to another tab.
+     * `takeOver` takes it back.
      */
     storageLock,
     /** Ids of the layers with paint in the view, bottom to top, as the engine last reported. */
@@ -187,6 +197,7 @@ export function createPaintEngine(options: {
     switchMode,
     restart,
     takeOver,
+    moveOut,
     putResources,
     runBrushCommand,
     pickColor,
@@ -229,7 +240,8 @@ export function createPaintEngine(options: {
         dpr: devicePixelRatio,
         ...handoff,
         ...(options.storageName ? { storageName: options.storageName } : {}),
-        ...(takeOver ? { takeOver } : {})
+        ...(takeOver ? { takeOver } : {}),
+        ...(storageWaitMs === undefined ? {} : { storageWaitMs })
       },
       { message: receive, error: fail }
     );
@@ -244,6 +256,20 @@ export function createPaintEngine(options: {
     const transport = opened.value;
     connection = transport;
     expireSwitch = stall;
+    storageWaitMs = undefined;
+    /** Settles the promise of a `handOver` in progress with whether the engine disposed. */
+    let closed: ((disposed: boolean) => void) | undefined;
+    handOver = () => {
+      if (phase !== 'active' || connection !== transport) {
+        return Promise.resolve(false);
+      }
+
+      readiness++;
+      setReady(false);
+      const done = new Promise<boolean>((resolve) => (closed = resolve));
+      disconnect(true);
+      return done;
+    };
     // `connect` runs in the canvas's effect callback, where a read must be explicitly untracked.
     if (untrack(requestedSwitch) !== undefined) {
       // The replacement engine of a switch gets the same budget to become ready.
@@ -255,7 +281,7 @@ export function createPaintEngine(options: {
     function receive(event: PaintEvent) {
       if (phase === 'closing') {
         if (event.type === 'disposed' || event.type === 'error') {
-          close();
+          close(event.type === 'disposed');
         }
 
         return;
@@ -475,7 +501,8 @@ export function createPaintEngine(options: {
       options.onError(engineError('stopped', transportFailureMessage(failure), failure));
     }
 
-    function disconnect() {
+    /** With `handoff`, the engine saves its undo history for the next engine; see `moveOut`. */
+    function disconnect(handoff = false) {
       if (connection === transport) {
         connection = undefined;
         resources.disconnect();
@@ -491,14 +518,15 @@ export function createPaintEngine(options: {
       }
 
       phase = 'closing';
-      transport.post({ type: 'dispose' });
+      transport.post(handoff ? { type: 'dispose', handoff } : { type: 'dispose' });
       graceTimer = setTimeout(close, disposeGraceMs);
     }
 
-    function close() {
+    function close(disposed = false) {
       clearTimeout(graceTimer);
       phase = 'closed';
       transport.close();
+      closed?.(disposed);
     }
   }
 
@@ -570,6 +598,26 @@ export function createPaintEngine(options: {
     setSwitchTarget(undefined);
     options.onSelection(emptySelection);
     setSession({ mode: latest(mode) });
+  }
+
+  /**
+   * Hands the drawing to Paint in another tab, such as a new one opened because Chrome stopped reporting pen hover
+   * here: the engine commits a stroke in progress, saves the drawing with its undo history and renderer tools, and
+   * stops, so that the next engine to open the drawing continues them. `storageLock` becomes `moved` at once; `takeOver`
+   * takes the drawing back. Resolves with whether the engine saved and stopped; false when no engine was connected.
+   */
+  function moveOut(): Promise<boolean> {
+    const move = handOver;
+    handOver = undefined;
+    if (!move) {
+      return Promise.resolve(false);
+    }
+
+    endSwitchWait();
+    setSwitchTarget(undefined);
+    options.onSelection(emptySelection);
+    setStorageLock('moved');
+    return move();
   }
 
   /**
