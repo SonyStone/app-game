@@ -379,9 +379,59 @@ export function createDocument(options: { paged?: boolean } = {}) {
       nextHistoryId = baseHistoryId = 0;
       historySource = { id: 0, label: 'Opened document', layers: cloneLayers(layers) };
       revision++;
+    },
+    /**
+     * The session's undo history and Erase to History source, for a document that continues this session elsewhere,
+     * such as Paint in a new tab; see `restoreHistory`. Call `persist` first, so that it refers to stored tile versions
+     * rather than pixels. Structured-cloneable; shares the immutable tile versions.
+     */
+    history(): DocumentHistory {
+      const copy = (entry: HistoryEntry) => ({ ...entry, tiles: entry.tiles.map((tile) => ({ ...tile })) });
+      return {
+        undo: undo.map(copy),
+        redo: redo.map(copy),
+        nextId: nextHistoryId,
+        baseId: baseHistoryId,
+        bytes: historyBytes,
+        source: { ...historySource, layers: cloneLayers(historySource.layers) }
+      };
+    },
+    /**
+     * Continues the session `history` came from, on the document it ended with, as loaded after `replace`. Throws,
+     * changing nothing, when the current layers are not the ones its latest step ended with.
+     */
+    restoreHistory(next: DocumentHistory) {
+      const latest = next.undo.at(-1);
+      const ids = (infos: readonly { id: string }[]) => infos.map((layer) => layer.id).join('\n');
+      if (latest && (ids(latest.after) !== ids(layers) || latest.activeAfter !== active)) {
+        throw new Error('This history belongs to another drawing.');
+      }
+
+      undo.splice(0, undo.length, ...next.undo);
+      redo.splice(0, redo.length, ...next.redo);
+      nextHistoryId = next.nextId;
+      baseHistoryId = next.baseId;
+      historyBytes = next.bytes;
+      historySource = { ...next.source, layers: cloneLayers(next.source.layers) };
+      revision++;
     }
   };
 }
+
+/** Undo history handed from one document to the next of the same session; see `history` of {@link createDocument}. */
+export type DocumentHistory = {
+  /** Undoable steps, oldest first. */
+  undo: HistoryEntry[];
+  /** Redoable steps, the next one to redo last. */
+  redo: HistoryEntry[];
+  /** Id of the latest step recorded; the next one gets a higher id. */
+  nextId: number;
+  /** Id of the state before the oldest undoable step. */
+  baseId: number;
+  /** Tile bytes the steps hold, counted against the history budget. */
+  bytes: number;
+  source: HistorySource;
+};
 
 /** Layer commands shared by UI and worker. Layer order runs from bottom to top. */
 export type LayerAction =

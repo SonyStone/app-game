@@ -90,6 +90,49 @@ describe('document transactions', () => {
     doc.redo();
     expect(doc.active.tiles.get('-1,0')).toEqual(pixels);
   });
+  it('hands its undo history to a document loaded from the same drawing, which undoes and redoes it', () => {
+    const doc = createDocument();
+    const first = new Uint8Array(TILE_BYTES).fill(1),
+      second = new Uint8Array(TILE_BYTES).fill(2);
+    doc.commit([{ layerId: 'layer-1', key: '0,0', before: undefined, after: first }]);
+    doc.changeLayer({ type: 'add' });
+    doc.commit([{ layerId: doc.active.id, key: '1,0', before: undefined, after: second }]);
+    doc.undo();
+    const states = doc.state();
+    // Through a structured clone, as it travels through IndexedDB.
+    const history = structuredClone(doc.history());
+
+    const next = createDocument();
+    next.replace(
+      doc.layers.map((layer) => ({ ...layer, tiles: new Map(layer.tiles) })),
+      doc.active.id
+    );
+    next.restoreHistory(history);
+    expect(next.state()).toMatchObject({
+      canUndo: true,
+      canRedo: true,
+      historyCurrentId: states.historyCurrentId,
+      historyStates: states.historyStates
+    });
+    next.redo();
+    expect(next.active.tiles.get('1,0')).toEqual(second);
+    next.undo();
+    next.undo();
+    next.undo();
+    expect(next.layers).toHaveLength(1);
+    expect(next.active.tiles.size).toBe(0);
+
+    // A new step gets an id after the handed-over ones.
+    next.commit([{ layerId: 'layer-1', key: '2,0', before: undefined, after: first }]);
+    expect(next.state().historyCurrentId).toBeGreaterThan(Math.max(...states.historyStates.map(({ id }) => id)));
+  });
+  it('refuses the undo history of another drawing', () => {
+    const doc = createDocument();
+    doc.changeLayer({ type: 'add' });
+    const other = createDocument();
+    expect(() => other.restoreHistory(doc.history())).toThrow('another drawing');
+    expect(other.state().canUndo).toBe(false);
+  });
   it('restores deleted layer pixels, order, and selection', () => {
     const doc = createDocument();
     doc.changeLayer({ type: 'add' });

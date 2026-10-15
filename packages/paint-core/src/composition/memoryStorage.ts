@@ -1,4 +1,4 @@
-import { restoreDocument, restoreView, snapshotView } from '../storage';
+import { restoreDocument, restoreHandoff, restoreView, snapshotView, type EngineHandoff } from '../storage';
 import type { TileData, TileReference } from '../tilePixels';
 import type { PaintStorage, StorageFactory } from './contracts';
 
@@ -44,13 +44,17 @@ export function createMemoryStorage(): StorageFactory {
         }
 
         const restored = restoreDocument(structuredClone(document.checkpoint));
-        return { ...restored, camera: restoreView(structuredClone(document.view)) ?? restored.camera };
+        return {
+          ...restored,
+          camera: restoreView(structuredClone(document.view)) ?? restored.camera,
+          handoff: restoreHandoff(structuredClone(document.handoff))
+        };
       },
       async saveView(camera) {
         check();
         document.view = snapshotView(camera);
       },
-      async save(snapshot) {
+      async save(snapshot, handoff) {
         check();
         const checkpoint = structuredClone({
           ...snapshot,
@@ -64,6 +68,7 @@ export function createMemoryStorage(): StorageFactory {
         restoreDocument(checkpoint);
         document.checkpoint = checkpoint;
         document.view = snapshotView(checkpoint.camera);
+        document.handoff = structuredClone(handoff);
         document.savedOverviews = new Set(document.retained);
       },
       async flush() {
@@ -126,6 +131,8 @@ function createMemoryDocument() {
     retained: new Set<string>(),
     savedOverviews: new Set<string>(),
     view: undefined as ReturnType<typeof snapshotView> | undefined,
+    /** Written with the checkpoint, removed by any other; see `EngineHandoff`. */
+    handoff: undefined as EngineHandoff | undefined,
     checkpoint: undefined as (Omit<import('../storage').SavedDocument, 'version'> & { version: number }) | undefined
   };
 }

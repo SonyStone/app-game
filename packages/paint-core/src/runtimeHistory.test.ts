@@ -4,7 +4,8 @@ import { startStudioRuntime } from '../tests/fixtures/studioRuntime';
 import { defaultBrush } from './brush';
 import type { TileChange } from './document';
 import { readPaintFile } from './paintFile';
-import type { PaintEvent } from './protocol';
+import type { PaintEvent, StateEvent } from './protocol';
+import { createMemoryStorage } from './composition/memoryStorage';
 import { unpackTile } from './tilePixels';
 
 beforeEach(() => {
@@ -66,3 +67,59 @@ it('undoes and redoes committed strokes through the runtime, and a new stroke di
   expect((state as Extract<PaintEvent, { type: 'state' }>).document).toMatchObject({ canRedo: false });
   expect(await document()).toEqual({ '0,0': 100, '1,0': 200 });
 });
+
+it('hands the undo history and tools over to the next engine of the drawing, and only to the next one', async () => {
+  const storage = createMemoryStorage();
+  let changes: TileChange[] = [];
+  const firstRenderer = createRendererDouble({
+    finish: vi.fn(async () => changes),
+    snapshotTools: vi.fn(async () => ({ version: 1 as const, marker: 'tools' }))
+  });
+  const first = startStudioRuntime({ renderer: firstRenderer, storage: await storage('paint-studio') });
+  await first.init();
+  for (const [red, before] of [[100, undefined], [150, 100]] as const) {
+    const pixels = new Uint8Array(256 * 256 * 4);
+    pixels.set([red, 0, 0, 255]);
+    const previous = before === undefined ? undefined : new Uint8Array(256 * 256 * 4).fill(0);
+    changes = [{ layerId: 'layer-1', key: '0,0', before: previous, after: pixels }];
+    first.send({ type: 'begin', brush: defaultBrush(), samples: [{ x: 10, y: 10, pressure: 1, time: 0 }] });
+    first.send({ type: 'end' });
+    await first.next((event) => event.type === 'state' && event.document.canUndo);
+  }
+  first.send({ type: 'undo' });
+  const handed = (await first.next((event) => event.type === 'state' && event.document.canRedo)) as StateEvent;
+  first.send({ type: 'dispose', handoff: true });
+  await first.next((event) => event.type === 'disposed');
+
+  const secondRenderer = createRendererDouble();
+  const second = startStudioRuntime({ renderer: secondRenderer, storage: await storage('paint-studio') });
+  await second.init();
+  expect(lastState(second.events).document).toMatchObject({
+    canUndo: true,
+    canRedo: true,
+    historyCurrentId: handed.document.historyCurrentId,
+    historyStates: handed.document.historyStates
+  });
+  expect(secondRenderer.restoreTools).toHaveBeenCalledWith({ version: 1, marker: 'tools' });
+  second.send({ type: 'redo' });
+  await second.next((event) => event.type === 'state' && !event.document.canRedo);
+  second.send({ type: 'undo' });
+  second.send({ type: 'undo' });
+  const undone = (await second.next((event) => event.type === 'state' && !event.document.canUndo)) as StateEvent;
+  expect(undone.document.tileCount).toBe(0);
+  second.send({ type: 'dispose' });
+  await second.next((event) => event.type === 'disposed');
+
+  // A plain dispose hands nothing over.
+  const third = startStudioRuntime({ renderer: createRendererDouble(), storage: await storage('paint-studio') });
+  await third.init();
+  expect(lastState(third.events).document).toMatchObject({
+    canUndo: false,
+    canRedo: false
+  });
+});
+
+/** The latest `state` event among `events`. */
+function lastState(events: readonly PaintEvent[]) {
+  return events.filter((event): event is StateEvent => event.type === 'state').at(-1)!;
+}

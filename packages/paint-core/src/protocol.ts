@@ -28,6 +28,11 @@ export type PaintCommand =
        * `storage-lock` `lost`; without it the engine waits a few seconds for the storage and reports `busy`.
        */
       takeOver?: boolean;
+      /**
+       * How long to wait for the engine holding the drawing's storage to close, 5 s by default: longer for an engine
+       * that is handing the drawing over (see `dispose`) while it writes the last changes.
+       */
+      storageWaitMs?: number;
     }
   | ({ type: 'brush-resources'; requestId: string } & (
       | { action: 'put'; resource: BrushResource }
@@ -72,7 +77,12 @@ export type PaintCommand =
     }
   | { type: 'samples'; samples: Sample[] }
   | { type: 'checkpoint'; includeTools?: boolean }
-  | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'recover' | 'dispose' }
+  | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'recover' }
+  /**
+   * Saves and stops the engine, which then posts `disposed`. With `handoff`, the undo history and renderer tools are
+   * saved with the drawing, and the next engine to open it continues them; see `EngineHandoff`.
+   */
+  | { type: 'dispose'; handoff?: boolean }
   /**
    * Exports the document as a `.paint` file (`download`) or the presented view as a PNG (`png`). With a `requestId`,
    * the `download` event carries it back, so the client can keep the file instead of offering it to the user.

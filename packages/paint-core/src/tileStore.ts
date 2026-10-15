@@ -1,7 +1,7 @@
 import { createTaskQueue, unwrapResult } from './asyncResult';
 import type { Camera } from './camera';
 import { openDrawingFolder, type DrawingFolder } from './drawingFolder';
-import { restoreDocument, restoreView, snapshotView, type SavedDocument } from './storage';
+import { restoreDocument, restoreHandoff, restoreView, snapshotView, type EngineHandoff, type SavedDocument } from './storage';
 import { compressTile, restoreTile } from './tileCodec';
 import { packTile, TILE_BYTES, type TileData, type TileReference } from './tilePixels';
 
@@ -133,7 +133,8 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
     remember(ref.storageId, pixels, true);
     return ref;
   };
-  const flush = (checkpoint?: { camera: Camera }) => {
+  /** Writes staged tiles and overviews, and with a `checkpoint` the drawing, its view and its `handoff`, if any. */
+  const flush = (checkpoint?: { camera: Camera }, handoff?: EngineHandoff) => {
     const task = queue.run(async () => {
       const dirty = [...cache].filter(([, entry]) => entry.dirty);
       const derived = [...overviewWrites];
@@ -151,6 +152,13 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
         if (checkpoint) {
           tx.objectStore('documents').put(checkpoint, 'current');
           tx.objectStore('documents').put(snapshotView(checkpoint.camera), 'view');
+          // A handoff continues only the checkpoint it was written with.
+          if (handoff) {
+            tx.objectStore('documents').put(handoff, 'handoff');
+          } else {
+            tx.objectStore('documents').delete('handoff');
+          }
+
           // A checkpoint of a drawing no longer kept in a folder no longer needs it after a restart.
           if (!folder?.mirroring) {
             tx.objectStore('documents').delete('folder');
@@ -326,7 +334,7 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
     /** Serial storage queue is independent from the drawing worker's command queue.
      * Rejects failed transactions; dirty pixels stay pinned for a later retry.
      */
-    save(snapshot: SavedDocument) {
+    save(snapshot: SavedDocument, handoff?: EngineHandoff) {
       const checkpoint = {
         ...snapshot,
         version: 3,
@@ -336,7 +344,7 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
           tiles: layer.tiles.map((tile) => ({ ...tile, pixels: capture(tile.pixels) }))
         }))
       };
-      return flush(checkpoint);
+      return flush(checkpoint, handoff);
     },
     /** Persists staged imports without replacing the current drawing checkpoint. Rejects failed transactions. */
     flush: () => flush(),
@@ -356,12 +364,13 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
 
     /** Restores the checkpoint, with the newer camera from the separate view record when one is valid. */
     async load() {
-      const [value, view] = await new Promise<[unknown, unknown]>((resolve, reject) => {
+      const [value, view, handoff] = await new Promise<[unknown, unknown, unknown]>((resolve, reject) => {
         const store = db.transaction('documents').objectStore('documents');
         const current = store.get('current');
         const view = store.get('view');
-        view.onsuccess = () => resolve([current.result, view.result]);
-        current.onerror = view.onerror = () => reject(current.error ?? view.error);
+        const handoff = store.get('handoff');
+        handoff.onsuccess = () => resolve([current.result, view.result, handoff.result]);
+        current.onerror = view.onerror = handoff.onerror = () => reject(current.error ?? view.error ?? handoff.error);
       });
       if (value && typeof value === 'object' && 'overviewKeys' in value && Array.isArray(value.overviewKeys))
         protectedOverviews = new Set(value.overviewKeys.filter((key): key is string => typeof key === 'string'));
@@ -379,7 +388,7 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
       }
 
       const document = restoreDocument(value);
-      return { ...document, camera: restoreView(view) ?? document.camera };
+      return { ...document, camera: restoreView(view) ?? document.camera, handoff: restoreHandoff(handoff) };
     },
     /** Removes unreachable historical versions after a checkpoint.
      * `live` returns current, undo/redo and clipboard references. It is read when the queued collection

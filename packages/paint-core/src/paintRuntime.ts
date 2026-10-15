@@ -25,7 +25,7 @@ import {
   type SelectionMask,
   type SelectionPreview
 } from './selectionMask';
-import { decodeDocument, snapshotDocument, type restoreDocument } from './storage';
+import { decodeDocument, snapshotDocument, type EngineHandoff, type restoreDocument } from './storage';
 import { unpackTile, type TileData } from './tilePixels';
 import { errorMessage, type GpuError } from '@app-game/solid-gpu/errors';
 
@@ -191,6 +191,18 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       await renderer?.prepareOverview(document.layers);
       post({ type: 'restored', camera, features: reportedFeatures() });
       changed();
+    };
+    /** Continues the undo history a previous engine handed over with the drawing; see `EngineHandoff`. */
+    const continueHistory = (handoff: EngineHandoff | undefined) => {
+      if (!handoff) {
+        return;
+      }
+
+      try {
+        document.restoreHistory(handoff.history);
+      } catch {
+        // It belongs to another drawing; this one opens with an empty history.
+      }
     };
     const reportResult = (result: Awaited<ReturnType<typeof attempt>>) => {
       if (!result.ok) failure(result.error);
@@ -371,14 +383,18 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         });
       }, 0);
     };
-    const save = async () => {
+    /** Writes a checkpoint, with a `handoff` for the next engine when this one hands the drawing over. */
+    const save = async (handoff?: () => Promise<EngineHandoff>) => {
       if (strokeSession || importing) return;
       const version = saveVersion;
       document.persist(tileStore.capture);
       pendingSaves++;
       status();
       try {
-        await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData, document.linearBlending()));
+        await tileStore.save(
+          snapshotDocument(document.layers, document.active.id, camera, featureData, document.linearBlending()),
+          await handoff?.()
+        );
         savedVersion = Math.max(savedVersion, version);
         saved = savedVersion === saveVersion && !strokeSession;
         scheduleCollect();
@@ -652,7 +668,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             size = command.size;
             dpr = command.dpr;
             storageLock = await lockStorage(storageName, {
-              waitMs: storageLockWaitMs,
+              waitMs: command.storageWaitMs ?? storageLockWaitMs,
               takeOver: command.takeOver ?? false,
               onLost() {
                 // Another engine has the drawing now; this one stops writing it.
@@ -675,10 +691,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               camera = previous.camera;
               featureData = restoreFeatureData(modules.features, previous.features);
               document.persist(tileStore.capture);
+              continueHistory(previous.handoff);
             }
             await startRenderer();
             if (command.historySource) document.restoreHistorySource(command.historySource);
-            if (command.tools !== undefined) renderer!.restoreTools(command.tools);
+            const tools = command.tools ?? previous?.handoff?.tools;
+            if (tools !== undefined) renderer!.restoreTools(tools);
             await draw();
             post({ type: 'ready' });
             break;
@@ -1101,7 +1119,16 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             // An engine that never got its storage has nothing to save.
             if (tileStore) {
               await end();
-              await save();
+              clearTimeout(saveTimer);
+              await save(
+                command.handoff
+                  ? async () => ({
+                      version: 1,
+                      history: document.history(),
+                      ...(renderer ? { tools: await renderer.snapshotTools() } : {})
+                    })
+                  : undefined
+              );
               dispose();
               unwrapResult(await tileStore.close());
             }

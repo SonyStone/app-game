@@ -1,7 +1,8 @@
+import type { RendererToolState } from '@app-game/abr-paint/gpu/toolState';
 import { z } from 'zod';
 import { TILE_SIZE } from './brush';
 import type { Camera } from './camera';
-import { MAX_DOCUMENT_BYTES, MAX_DOCUMENT_TILES, TILE_BYTES, type Layer } from './document';
+import { MAX_DOCUMENT_BYTES, MAX_DOCUMENT_TILES, TILE_BYTES, type DocumentHistory, type Layer } from './document';
 import { packTile, unpackTile } from './tilePixels';
 
 /** Versioned on-disk format. Tile pixels remain premultiplied; no lossy image conversion occurs. */
@@ -101,6 +102,22 @@ export function restoreView(value: unknown): Camera | undefined {
   return parsed.success ? parsed.data.camera : undefined;
 }
 
+/**
+ * What a closing engine hands to the next engine of the same drawing, such as Paint in a new tab: the undo history,
+ * referring to stored tile versions, and the renderer's tool state. Stored beside the checkpoint under the `handoff`
+ * key, written in the same transaction; every other checkpoint removes it, so a stored handoff always continues the
+ * stored drawing.
+ */
+export type EngineHandoff = { version: 1; history: DocumentHistory; tools?: RendererToolState };
+
+/**
+ * Validates a stored handoff record. Missing, older or malformed records return undefined, and the drawing opens with
+ * an empty history. The record is this app's own data, so only its shape is checked.
+ */
+export function restoreHandoff(value: unknown): EngineHandoff | undefined {
+  return handoffSchema.safeParse(value).success ? (value as EngineHandoff) : undefined;
+}
+
 /** Encodes a portable JSON document. Large tile arrays are stored as base64, not JSON numbers. */
 export function encodeDocument(document: SavedDocument): string {
   return JSON.stringify({
@@ -138,6 +155,17 @@ const finite = z.number().finite();
 const unit = finite.min(0).max(1);
 const cameraSchema = z.object({ x: finite, y: finite, zoom: finite.min(0.05).max(32), angle: finite, mirrored: z.boolean() });
 const viewSchema = z.object({ camera: cameraSchema });
+const handoffSchema = z.object({
+  version: z.literal(1),
+  history: z.object({
+    undo: z.array(z.object({ id: z.number(), tiles: z.array(z.unknown()) })),
+    redo: z.array(z.object({ id: z.number(), tiles: z.array(z.unknown()) })),
+    nextId: z.number(),
+    baseId: z.number(),
+    bytes: z.number(),
+    source: z.object({ id: z.number(), label: z.string(), layers: z.array(z.object({ tiles: z.instanceof(Map) })) })
+  })
+});
 const savedSchema = z.object({
   version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   tileSize: z.literal(TILE_SIZE),

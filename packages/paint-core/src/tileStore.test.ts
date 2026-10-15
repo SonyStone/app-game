@@ -1,6 +1,8 @@
 import 'fake-indexeddb/auto';
 import { expect, it } from 'vitest';
-import { restoreDocument, snapshotDocument } from './storage';
+import { defaultCamera } from './camera';
+import { createDocument } from './document';
+import { restoreDocument, snapshotDocument, type EngineHandoff } from './storage';
 import { unpackTile, type TileData } from './tilePixels';
 import { createTileStore } from './tileStore';
 
@@ -51,6 +53,33 @@ it('persists navigation in the view record without rewriting the checkpoint or s
   // Never written: it reads as transparent and counts as missing.
   expect(unpackTile(await reopened.read(staged)).every((byte) => byte === 0)).toBe(true);
   expect(reopened.stats().missingTiles).toBe(1);
+  await reopened.close();
+});
+
+it('keeps a handoff with the checkpoint it was saved with, and drops it with the next checkpoint', async () => {
+  const store = await createTileStore('handoff-record', 0);
+  const document = createDocument();
+  const pixels = new Uint8Array(256 * 256 * 4).fill(5);
+  document.commit([{ layerId: 'layer-1', key: '0,0', before: undefined, after: pixels }]);
+  document.undo();
+  document.persist(store.capture);
+  const save = (handoff?: EngineHandoff) =>
+    store.save(snapshotDocument(document.layers, document.active.id, defaultCamera()), handoff);
+  await save({ version: 1, history: document.history(), tools: { version: 1 } });
+  await store.close();
+
+  const reopened = await createTileStore('handoff-record', 0);
+  const loaded = await reopened.load();
+  expect(loaded?.handoff?.tools).toEqual({ version: 1 });
+  const next = createDocument();
+  next.replace(loaded!.layers, loaded!.activeId);
+  next.restoreHistory(loaded!.handoff!.history);
+  next.redo();
+  // The redone stroke reads from IndexedDB: the RAM budget is zero.
+  expect(await reopened.read(next.active.tiles.get('0,0')!)).toEqual(pixels);
+
+  await reopened.save(snapshotDocument(next.layers, next.active.id, defaultCamera()));
+  expect((await reopened.load())?.handoff).toBeUndefined();
   await reopened.close();
 });
 
