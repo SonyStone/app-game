@@ -1355,6 +1355,9 @@ try {
   await step(
     'losing the pen hover moves the drawing into a new tab with its undo history, by itself once chosen',
     async () => {
+      // Earlier steps leave the lasso and a selection; the strokes must paint.
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('b');
       await stroke(page);
       await waitForSaved(page);
       await stroke(page);
