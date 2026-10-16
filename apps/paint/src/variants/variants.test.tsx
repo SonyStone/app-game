@@ -16,7 +16,12 @@ vi.mock('../features/engine/openPaintTransport', () => ({
   }
 }));
 
-type FakeTransport = { init: EngineInit; handlers: EngineHandlers };
+type FakeTransport = {
+  canvas: HTMLCanvasElement;
+  init: EngineInit;
+  handlers: EngineHandlers;
+  post: ReturnType<typeof vi.fn>;
+};
 
 let dispose: (() => void) | undefined;
 /** The pointer types of presses that reached the document, after the window's capture listeners. */
@@ -143,6 +148,56 @@ it.each([...paintVariants, ...featureDemos].map((variant) => [variant.name, vari
     flush();
     expect(document.querySelector('[role="dialog"][aria-label="Pen"]')).toBeNull();
     expect(JSON.parse(localStorage.getItem('paint.windows')!)).toMatchObject({ pen: { open: false } });
+  }
+);
+
+it.each(
+  [...paintVariants, ...featureDemos.filter((demo) => demo.id === 'demo-symmetry')].map(
+    (variant) => [variant.name, variant] as const
+  )
+)(
+  '%s turns a stroke held at its end into a shape',
+  async (_, variant) => {
+    const Variant = await variant.load();
+    dispose = render(() => <Variant />, document.body);
+    flush();
+    await vi.waitFor(() => expect(transports.opened).toHaveLength(1));
+    const transport = transports.opened[0]!;
+    reply(transport, { type: 'ready' });
+    // Ready once the presets are restored, which sends the view.
+    await vi.waitFor(() => expect(transport.post).toHaveBeenCalled());
+    flush();
+    const canvas = transport.canvas;
+    canvas.setPointerCapture = () => {};
+    canvas.hasPointerCapture = () => true;
+
+    vi.useFakeTimers();
+    try {
+      // jsdom stamps events of the same millisecond alike; input samples have increasing times.
+      let time = 0;
+      const at = (type: string, x: number, y: number) => {
+        const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0, buttons: 1 });
+        for (const [key, value] of Object.entries({ pointerType: 'mouse', pointerId: 1, timeStamp: ++time })) {
+          Object.defineProperty(event, key, { value });
+        }
+
+        canvas.dispatchEvent(event);
+        flush();
+      };
+      at('pointerdown', 100, 100);
+      for (let x = 120; x <= 400; x += 20) {
+        at('pointermove', x, 100);
+      }
+
+      vi.advanceTimersByTime(500);
+      flush();
+      const sent = transport.post.mock.calls.map(([command]) => (command as { type: string }).type);
+      expect(sent).toContain('begin');
+      expect(sent).toContain('replace-stroke');
+      expect(document.querySelector('[role="status"] strong')?.textContent).toBe('Line');
+    } finally {
+      vi.useRealTimers();
+    }
   }
 );
 

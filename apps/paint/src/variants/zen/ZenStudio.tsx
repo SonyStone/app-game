@@ -252,6 +252,8 @@ export function ZenStudio(props: PaintVariantProps) {
                         setOpen(undefined);
                         session.windows.open('pen');
                       }}
+                      quickShape={session.quickShape.settings()}
+                      onQuickShape={session.quickShape.update}
                       fullscreen={{ active: fullscreen.isActive(), supported: document.fullscreenEnabled }}
                       onFullscreen={() => void fullscreen.props.onClick()}
                       experimentsHref={props.experimentsHref}

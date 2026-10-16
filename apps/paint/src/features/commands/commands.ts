@@ -1,6 +1,7 @@
 import type { BlendMode } from '@app-game/paint-core/document';
 import type { SelectionAction } from '@app-game/paint-core/protocol';
 import type { PaintSymmetry } from '@app-game/paint-core/symmetry';
+import { maximumDelay, minimumDelay } from '../quickshape';
 import type { SelectionTool } from '../selection';
 import { parseColor } from './colorNames';
 
@@ -35,6 +36,11 @@ export type Intent =
   /** Opens or closes a window of the session: the mixing palette toggles, the Pen and calibration windows open. */
   | { type: 'window'; window: 'palette' | 'pen' | 'pressure' }
   | { type: 'symmetry'; mode: PaintSymmetry['mode']; segments?: number }
+  /**
+   * Switches QuickShape on or off, or toggles it without `enabled`; or sets its hold time `delay` in milliseconds,
+   * which switches it on.
+   */
+  | { type: 'quickshape'; enabled?: boolean; delay?: number }
   | { type: 'history'; action: 'undo' | 'redo'; count: number }
   | { type: 'file'; action: 'png' | 'psd' | 'download' | 'open' | 'insert' | 'abr' }
   | { type: 'mixer'; action: 'load' | 'clean' | 'pick' }
@@ -49,7 +55,8 @@ export type CommandContext = {
 /**
  * Reads a typed or spoken command: one or more clauses joined by commas, `and` or `then` (`dark blue, size 12`), each
  * a phrase such as `size 24`, `bigger`, `opacity 50`, `red`, `#ff8800`, `new layer`, `hide layer 2`,
- * `layer 3 opacity 40`, `zoom 200`, `rotate 0`, `mirror`, `symmetry radial 8`, `undo 5` or `export png`, or a
+ * `layer 3 opacity 40`, `zoom 200`, `rotate 0`, `mirror`, `symmetry radial 8`, `quickshape off`,
+ * `quickshape hold 700`, `undo 5` or `export png`, or a
  * preset's or layer's exact name. Polite and filler words (`please`, `set`, `switch to`, `use`) and number words up
  * to ninety-nine are understood. Returns the intents in order, or `undefined` when any clause is not understood, so
  * a command never runs half of what was asked.
@@ -163,6 +170,12 @@ export function describeIntent(intent: Intent, context: CommandContext): string 
       return intent.mode === 'off'
         ? 'Symmetry off'
         : `Symmetry ${symmetryNames[intent.mode]}${intent.segments === undefined ? '' : ` · ${intent.segments}`}`;
+    case 'quickshape':
+      if (intent.delay !== undefined) {
+        return `QuickShape hold ${formatNumber(intent.delay)} ms`;
+      }
+
+      return intent.enabled === undefined ? 'QuickShape on or off' : `QuickShape ${intent.enabled ? 'on' : 'off'}`;
     case 'history':
       return `${capitalize(intent.action)}${intent.count > 1 ? ` ×${intent.count}` : ''}`;
     case 'file':
@@ -197,6 +210,7 @@ export function groupOf(intent: Intent): string {
     case 'size':
     case 'scale-size':
     case 'brush-value':
+    case 'quickshape':
       return 'Brush';
     case 'color':
     case 'colors':
@@ -516,6 +530,21 @@ const rules: Rule[] = [
   ],
   [/^(\d+)[\s-]*(?:way|fold)(?:\s+symmetry)?$/i, (m) => symmetry('radial', m[1])],
   [/^(?:no|stop|disable)\s+symmetry$/i, () => symmetry('off')],
+  [
+    /^quick\s*shapes?(?:\s+(on|off))?$|^(?:turn\s+)?(on|off)\s+quick\s*shapes?$/i,
+    (m) => {
+      const word = (m[1] ?? m[2])?.toLowerCase();
+      return word === undefined ? { type: 'quickshape' } : { type: 'quickshape', enabled: word === 'on' };
+    }
+  ],
+  [/^(enable|disable|no)\s+quick\s*shapes?$/i, (m) => ({ type: 'quickshape', enabled: /^enable$/i.test(m[1]!) })],
+  [
+    /^quick\s*shapes?\s+(?:hold|delay)(?:\s+to)?\s+(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|secs?|seconds?)?$/i,
+    (m) => {
+      const ms = Number(m[1]) * (m[2] && !/^m/i.test(m[2]) ? 1000 : 1);
+      return { type: 'quickshape', delay: clamp(Math.round(ms), minimumDelay, maximumDelay) };
+    }
+  ],
   [
     /^(?:export|save|download|share)(?:\s+(?:as|to))?(?:\s+an?)?\s+(png|psd|paint|image|photoshop|picture)$/i,
     (m) =>

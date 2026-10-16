@@ -29,3 +29,22 @@
     }
   }
 }
+
+/* QuickShape's delay in the Prefs tab: a label, a slider and the value, as Procreate's gesture controls show it. */
+.delay {
+  display: grid;
+  grid-template-columns: auto 1fr 52px;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 16px;
+  border-top: 0.5px solid var(--pc-hairline);
+  font-size: 15px;
+
+  output {
+    color: var(--pc-secondary);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+}

@@ -174,6 +174,16 @@ export function createCommandRunner(options: {
         return done(session.windows.isOpen('palette') ? 'Mixing palette' : 'Mixing palette closed');
       case 'symmetry':
         return runSymmetry(intent.mode, intent.segments, done, refuse);
+      case 'quickshape': {
+        if (intent.delay !== undefined) {
+          session.quickShape.update({ enabled: true, delay: intent.delay });
+          return done();
+        }
+
+        const enabled = intent.enabled ?? !latest(session.quickShape.settings).enabled;
+        session.quickShape.update({ enabled });
+        return done(enabled ? 'QuickShape on · hold the pen at the end of a stroke' : 'QuickShape off');
+      }
       case 'history': {
         const can = intent.action === 'undo' ? latest(engine.state).canUndo : latest(engine.state).canRedo;
         if (!can) {

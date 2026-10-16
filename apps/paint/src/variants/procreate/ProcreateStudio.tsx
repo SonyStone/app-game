@@ -436,6 +436,8 @@ export function ProcreateStudio(props: PaintVariantProps) {
                         setPopover(undefined);
                         session.windows.open('pen');
                       }}
+                      quickShape={session.quickShape.settings()}
+                      onQuickShape={session.quickShape.update}
                     />
                   </Match>
                   <Match when={open.id === 'brush' || open.id === 'eraser'}>

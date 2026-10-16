@@ -5,6 +5,7 @@ import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { maxBrushSize, type PaintTool } from '../../features/brush';
 import type { BrushPreset } from '../../features/brush-library';
 import { gradientKinds, gradientRepeats } from '../../features/gradient';
+import { maximumDelay, minimumDelay } from '../../features/quickshape';
 import type { PaintSession } from '../../features/session';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import styles from './BrushCards.module.css';
@@ -256,9 +257,12 @@ export function ToolCard(props: {
   );
 }
 
-/** The brush's or the eraser's settings: size, opacity, flow, the round tip's hardness and pressure, smoothing. */
+/**
+ * The brush's or the eraser's settings: size, opacity, flow, the round tip's hardness and pressure, smoothing, and
+ * QuickShape with its hold time, which apply to every brush.
+ */
 function BrushSettings(props: { session: PaintSession; onPreview: (kind: 'size' | 'opacity' | undefined) => void }) {
-  const { tools, brush } = props.session;
+  const { tools, brush, quickShape } = props.session;
   const round = () => brush().engine === undefined;
   const update = (patch: Partial<Brush>) => tools.updateBrush(patch);
   const updateStroke = (patch: Partial<StrokeSettings>) =>
@@ -324,6 +328,17 @@ function BrushSettings(props: { session: PaintSession; onPreview: (kind: 'size' 
         options={smoothingOptions}
         value={brush().stroke.mode}
         onChange={(mode) => updateStroke({ mode })}
+      />
+      <SwitchRow
+        label="QuickShape"
+        on={quickShape.settings().enabled}
+        onToggle={() => quickShape.update({ enabled: !quickShape.settings().enabled })}
+      />
+      <PillScrubber
+        setting={holdSetting}
+        value={quickShape.settings().delay}
+        disabled={!quickShape.settings().enabled}
+        onChange={(delay) => quickShape.update({ delay })}
       />
     </>
   );
@@ -450,6 +465,15 @@ const spacingSetting: NumberSetting = {
   unit: '%',
   scale: 'log',
   presets: [1, 2, 3, 5, 8, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200, 300, 500, 1000]
+};
+
+/** How long the pen rests before QuickShape makes a shape of the stroke. */
+const holdSetting: NumberSetting = {
+  label: 'Hold',
+  min: minimumDelay,
+  max: maximumDelay,
+  unit: 'ms',
+  presets: [250, 300, 400, 500, 600, 750, 1000, 1250, 1500]
 };
 
 const sampleOptions = [

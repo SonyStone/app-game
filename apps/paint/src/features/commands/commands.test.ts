@@ -127,6 +127,17 @@ describe('parseCommand', () => {
     expect(one('pressure')).toEqual({ type: 'window', window: 'pressure' });
   });
 
+  it('reads QuickShape switches and hold times, kept in range', () => {
+    expect(one('quickshape')).toEqual({ type: 'quickshape' });
+    expect(one('quick shape off')).toEqual({ type: 'quickshape', enabled: false });
+    expect(one('turn on quickshape')).toEqual({ type: 'quickshape', enabled: true });
+    expect(one('disable quickshape')).toEqual({ type: 'quickshape', enabled: false });
+    expect(one('quickshape hold 700')).toEqual({ type: 'quickshape', delay: 700 });
+    expect(one('quickshape delay 1.2 seconds')).toEqual({ type: 'quickshape', delay: 1200 });
+    expect(one('quickshape hold 5 s')).toEqual({ type: 'quickshape', delay: 1500 });
+    expect(one('quickshape hold 100 ms')).toEqual({ type: 'quickshape', delay: 250 });
+  });
+
   it('reads symmetry with segment counts kept in range', () => {
     expect(one('symmetry radial 8')).toEqual({ type: 'symmetry', mode: 'radial', segments: 8 });
     expect(one('symmetry off')).toEqual({ type: 'symmetry', mode: 'off' });
@@ -188,6 +199,7 @@ describe('describeIntent', () => {
     expect(describe('zoom 200')).toEqual(['Zoom 200%']);
     expect(describe('rotate 0')).toEqual(['Rotate to 0°']);
     expect(describe('symmetry radial 8')).toEqual(['Symmetry radial · 8']);
+    expect(describe('quickshape off, quickshape hold 700')).toEqual(['QuickShape off', 'QuickShape hold 700 ms']);
     expect(describe('undo 5')).toEqual(['Undo ×5']);
     expect(describe('bigger')).toEqual(['Bigger brush']);
     expect(describe('export png')).toEqual(['Export PNG']);

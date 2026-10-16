@@ -41,7 +41,7 @@ export type PaletteContext = CommandContext & {
  * The palette's rows for `query`. A query the parser fully understands comes first, as what Enter runs (`size 24`,
  * `red, bigger`), followed by every command, preset, layer and color that the query finds, best match first. The query
  * `color` lists every named color, `layers` the layers top first before the layer commands; series of values such as
- * brush sizes show for `size`, `opacity` and `zoom`. An empty query lists everything in catalog order.
+ * brush sizes show for `size`, `opacity`, `zoom` and `quickshape`. An empty query lists everything in catalog order.
  */
 export function searchPalette(query: string, context: PaletteContext): PaletteEntry[] {
   const trimmed = query.trim();
@@ -56,7 +56,7 @@ export function searchPalette(query: string, context: PaletteContext): PaletteEn
   }
 
   const parsed = trimmed ? parseCommand(trimmed, context) : undefined;
-  const steps = /^(?:size|px|opacity|zoom)/i.test(trimmed);
+  const steps = /^(?:size|px|opacity|zoom|quick\s*shape)/i.test(trimmed);
   const found = rankByQuery(
     trimmed,
     all.filter((entry) => steps || !entry.step)
@@ -86,8 +86,8 @@ export function parsedEntry(intents: Intent[], context: CommandContext): Palette
 
 /**
  * Every command the palette offers without typing a value: tools, brush presets, colors, layer and selection
- * commands, view, symmetry, history and file commands, in that order. Presets, layers and Mixer Brush commands come
- * from `context`.
+ * commands, view, symmetry, QuickShape, history and file commands, in that order. Presets, layers and Mixer Brush
+ * commands come from `context`.
  */
 export function catalog(context: PaletteContext): PaletteEntry[] {
   const entry = (
@@ -193,6 +193,11 @@ export function catalog(context: PaletteContext): PaletteEntry[] {
     entry({ type: 'symmetry', mode: 'diagonal' }, { keywords: 'mirror' }),
     entry({ type: 'symmetry', mode: 'radial', segments: 6 }, { keywords: 'rotational' }),
     entry({ type: 'symmetry', mode: 'mandala', segments: 6 }, { keywords: 'kaleidoscope' }),
+    entry({ type: 'quickshape', enabled: true }, { keywords: 'shape line ellipse circle polygon draw and hold' }),
+    entry({ type: 'quickshape', enabled: false }, { keywords: 'shape line ellipse circle polygon draw and hold' }),
+    ...quickShapeHolds.map((delay) =>
+      entry({ type: 'quickshape', delay }, { keywords: 'shape hold delay wait', step: true })
+    ),
     entry({ type: 'history', action: 'undo', count: 1 }, { keywords: 'back revert', shortcut: 'Ctrl Z' }),
     entry({ type: 'history', action: 'redo', count: 1 }, { keywords: 'forward again', shortcut: 'Ctrl ⇧ Z' }),
     entry({ type: 'file', action: 'download' }, { keywords: 'save download file', shortcut: 'Ctrl S' }),
@@ -236,6 +241,9 @@ export function suggestions(state: { tool: string; selected: boolean; canUndo: b
     { type: 'view', action: 'reset' }
   ];
 }
+
+/** QuickShape hold times offered as rows, in milliseconds, like the brush sizes below. */
+const quickShapeHolds = [250, 500, 750, 1000, 1500];
 
 /** Brush sizes, opacities and zoom levels offered as rows, so that a finger chooses one without typing. */
 const brushSizes = [1, 2, 4, 8, 16, 32, 64, 128, 256];

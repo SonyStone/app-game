@@ -1,15 +1,17 @@
 import type { SelectionAction } from '@app-game/paint-core/protocol';
 import type { PaintSymmetry } from '@app-game/paint-core/symmetry';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import { maximumDelay, minimumDelay, type QuickShapePreferences } from '../../features/quickshape';
 import styles from './ActionsPopover.module.css';
 import { ProcreateIcon, type ProcreateIconName } from './icons';
 import menu from './menu.module.css';
+import { Slider } from './Slider';
 
 /**
  * Procreate's Actions popover, with the tabs and items Paint can do. Add: insert a photo as a new layer, cut, copy and
  * paste the selection. Canvas: flip the view horizontally, the symmetry drawing guide and view resets. Share: save
- * as `.paint`, export PSD or PNG. Prefs: which side the sidebar is on, full screen and the Pen window (palm
- * rejection). Help: the touch gestures.
+ * as `.paint`, export PSD or PNG. Prefs: which side the sidebar is on, full screen, the Pen window (palm rejection)
+ * and QuickShape's Draw and Hold with its delay, as in Procreate's gesture controls. Help: the touch gestures.
  * File and share actions close the popover through their callbacks' callers.
  */
 export function ActionsPopover(props: {
@@ -32,8 +34,12 @@ export function ActionsPopover(props: {
   onFullscreen: () => void;
   /** Opens the session's Pen window. */
   onPen: () => void;
+  quickShape: QuickShapePreferences;
+  onQuickShape: (patch: Partial<QuickShapePreferences>) => void;
 }) {
   const [tab, setTab] = createSignal<Tab>('add');
+  // Follows the stored delay, and the drag in between.
+  const [delay, setDelay] = createSignal(() => props.quickShape.delay);
   let photo!: HTMLInputElement;
 
   return (
@@ -161,6 +167,33 @@ export function ActionsPopover(props: {
               <span class={menu.label}>Pen</span>
               <span class={menu.detail}>Palm rejection, pen hover</span>
             </button>
+            <h3 class={menu.sectionTitle}>QuickShape</h3>
+            <button
+              class={menu.row}
+              role="switch"
+              aria-checked={props.quickShape.enabled ? 'true' : 'false'}
+              onClick={() => props.onQuickShape({ enabled: !props.quickShape.enabled })}
+            >
+              <span class={menu.label}>Draw and hold</span>
+              <span class={menu.switch} />
+            </button>
+            <div class={styles.delay}>
+              <span>Delay</span>
+              <Slider
+                label="QuickShape delay"
+                min={minimumDelay}
+                max={maximumDelay}
+                value={delay()}
+                valueText={seconds(delay())}
+                disabled={!props.quickShape.enabled}
+                onInput={setDelay}
+                onChange={(next) => {
+                  setDelay(next);
+                  props.onQuickShape({ delay: next });
+                }}
+              />
+              <output>{seconds(delay())}</output>
+            </div>
           </Match>
           <Match when={tab() === 'help'}>
             <dl class={menu.help}>
@@ -181,6 +214,11 @@ export function ActionsPopover(props: {
 }
 
 type Tab = 'add' | 'canvas' | 'share' | 'prefs' | 'help';
+
+/** A delay in milliseconds as Procreate shows it, in seconds with two decimals. */
+function seconds(ms: number) {
+  return `${(ms / 1000).toFixed(2)} s`;
+}
 
 const tabs: { id: Tab; label: string; icon: ProcreateIconName }[] = [
   { id: 'add', label: 'Add', icon: 'add' },
@@ -207,6 +245,7 @@ const shareFormats: { id: 'download' | 'psd' | 'png'; label: string; detail: str
 /** The gestures of this variant, as Procreate's gesture controls describe them. */
 const gestures = [
   { gesture: 'Pen', action: 'Paint, erase or select with the active tool.' },
+  { gesture: 'Draw and hold', action: 'QuickShape: the stroke becomes a line, arc, ellipse or polygon.' },
   { gesture: 'Two-finger tap', action: 'Undo.' },
   { gesture: 'Three-finger tap', action: 'Redo.' },
   { gesture: 'Four-finger tap', action: 'Hide or show the interface.' },

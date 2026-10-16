@@ -2,6 +2,7 @@ import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-co
 import { Match, Show, Switch } from 'solid-js';
 import { maxBrushSize } from '../../features/brush';
 import { gradientKinds, gradientPresets, gradientRepeats, type GradientSettings } from '../../features/gradient';
+import { maximumDelay, minimumDelay } from '../../features/quickshape';
 import type { PaintSession } from '../../features/session';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { Choice, Divider, Group, IconButton, ScrubField, Segmented, TextButton, Toggle } from './controls';
@@ -66,11 +67,12 @@ const toolNames = {
 
 /**
  * The brush and the eraser: the preset (opens the picker), size, opacity, flow, the round tip's hardness and pressure
- * switches, stroke smoothing, the eraser's mode and the Mixer Brush's commands.
+ * switches, stroke smoothing, QuickShape and its hold time (for every brush), the eraser's mode and the Mixer Brush's
+ * commands.
  */
 function BrushOptions(props: { session: PaintSession; onPresets: (anchor: HTMLElement) => void }) {
   const { session } = props;
-  const { brush, tools, library, mixer, engine } = session;
+  const { brush, tools, library, mixer, engine, quickShape } = session;
   const update = tools.updateBrush;
   const round = () => brush().engine === undefined;
   const pressureShown = () => brush().engine?.id !== 'abr';
@@ -204,6 +206,25 @@ function BrushOptions(props: { session: PaintSession; onPresets: (anchor: HTMLEl
           </Match>
         </Switch>
       </Group>
+      <Divider />
+      <Toggle
+        label="QuickShape"
+        title="Hold the pen still at the end of a stroke to make it a line, arc, ellipse or polygon; for every brush"
+        on={quickShape.settings().enabled}
+        onToggle={() => quickShape.update({ enabled: !quickShape.settings().enabled })}
+      />
+      <ScrubField
+        caption="Hold"
+        label="QuickShape hold time"
+        value={quickShape.settings().delay}
+        min={minimumDelay}
+        max={maximumDelay}
+        step={50}
+        unit="ms"
+        width={64}
+        disabled={!quickShape.settings().enabled}
+        onChange={(delay) => quickShape.update({ delay })}
+      />
       <Show when={session.tool() === 'eraser'}>
         <Divider />
         <Toggle

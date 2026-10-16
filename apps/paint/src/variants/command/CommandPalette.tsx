@@ -366,6 +366,7 @@ const examples = [
   'rotate 0',
   'mirror',
   'symmetry radial 8',
+  'quickshape hold 700',
   'undo 5',
   'export png',
   'red, size 12'

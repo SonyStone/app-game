@@ -1,6 +1,7 @@
 import type { LayerAction } from '@app-game/paint-core/document';
 import { For, Show } from 'solid-js';
 import type { DocumentState } from '../../features/layers';
+import type { QuickShapePreferences } from '../../features/quickshape';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import type { Hand } from './createZenSettings';
 import styles from './ZenStudio.module.css';
@@ -8,8 +9,8 @@ import styles from './ZenStudio.module.css';
 /**
  * What the fan's "more" opens, without titles: the layers, top first, with the active one's commands under them;
  * then the drawing's file commands (export, save, open, insert an image); then brush import and the mixing palette;
- * then the drawing hand, the pen settings, full screen and the way back to the other variants. Layer changes are
- * undoable document commands.
+ * then the drawing hand, the pen settings, QuickShape with a choice of hold times, full screen and the way back to
+ * the other variants. Layer changes are undoable document commands.
  */
 export function MoreSheet(props: {
   state: DocumentState;
@@ -27,6 +28,8 @@ export function MoreSheet(props: {
   onPalette: () => void;
   /** Opens the session's Pen window: palm rejection and the pen hover. */
   onPen: () => void;
+  quickShape: QuickShapePreferences;
+  onQuickShape: (patch: Partial<QuickShapePreferences>) => void;
   hand: Hand;
   onHand: (hand: Hand) => void;
   fullscreen: { active: boolean; supported: boolean };
@@ -189,6 +192,31 @@ export function MoreSheet(props: {
         <span>Pen…</span>
         <small>palm rejection</small>
       </button>
+      <button
+        class={styles.row}
+        role="switch"
+        aria-checked={props.quickShape.enabled ? 'true' : 'false'}
+        onClick={() => props.onQuickShape({ enabled: !props.quickShape.enabled })}
+      >
+        <span>QuickShape</span>
+        <small>{props.quickShape.enabled ? 'hold to make shapes' : 'off'}</small>
+      </button>
+      <Show when={props.quickShape.enabled}>
+        <div class={styles.chips} role="radiogroup" aria-label="QuickShape hold">
+          <For each={holds}>
+            {(hold) => (
+              <button
+                class={styles.chip}
+                role="radio"
+                aria-checked={props.quickShape.delay === hold ? 'true' : 'false'}
+                onClick={() => props.onQuickShape({ delay: hold })}
+              >
+                {hold / 1000} s
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
       <Show when={props.fullscreen.supported}>
         <button
           class={styles.row}
@@ -210,6 +238,9 @@ export function MoreSheet(props: {
     </>
   );
 }
+
+/** QuickShape's hold times offered, in milliseconds; another one set elsewhere shows none chosen. */
+const holds = [250, 500, 1000, 1500];
 
 const hands: { id: Hand; label: string }[] = [
   { id: 'left', label: 'Left hand' },
