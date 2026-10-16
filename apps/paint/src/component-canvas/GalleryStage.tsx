@@ -5,6 +5,8 @@ import { createStudio } from '../mockups/puck-gallery/kit/createStudio';
 import type { Point } from '../mockups/puck-gallery/kit/createSketchCanvas';
 import type { Summon, VariantInfo } from '../mockups/puck-gallery/kit/variant';
 import styles from './ComponentCanvas.module.css';
+import { ScreenFrame } from './Screen';
+import { Snapshot } from './Snapshot';
 
 /**
  * A Puck gallery variant live, full screen, on a mock studio of its own, summoned pinned in the middle as the
@@ -61,5 +63,46 @@ export function GalleryStage(props: { variant: VariantInfo }) {
         />
       </Loading>
     </>
+  );
+}
+
+/**
+ * A still of a Puck gallery variant open in the middle of a screen as large as the window, drawn at `scale`: the
+ * variants lay themselves out for the window, and they listen to its keys and hover, so the canvas keeps a picture
+ * (see `Snapshot`) and opens the live one with `GalleryStage`.
+ */
+export function GalleryStill(props: { variant: VariantInfo; scale: number }) {
+  const size = { width: innerWidth, height: innerHeight };
+
+  return (
+    <div style={{ width: `${size.width * props.scale}px`, height: `${size.height * props.scale}px` }}>
+      <div style={{ transform: `scale(${props.scale})`, 'transform-origin': '0 0' }}>
+        <ScreenFrame width={size.width} height={size.height}>
+          <Snapshot render={() => <OpenVariant variant={props.variant} />} />
+        </ScreenFrame>
+      </div>
+    </div>
+  );
+}
+
+/** A gallery variant summoned pinned in the middle of the window on a mock studio of its own, doing nothing else. */
+function OpenVariant(props: { variant: VariantInfo }) {
+  const Variant = props.variant.component;
+  const middle = { x: innerWidth / 2, y: innerHeight / 2 };
+
+  return (
+    <Loading fallback={null}>
+      <Variant
+        studio={createStudio()}
+        summon={{ serial: 1, at: middle, mode: 'pinned', source: 'gallery', pointerType: 'pen' }}
+        pointer={middle}
+        hand="right"
+        hidden={false}
+        close={() => {}}
+        done={() => {}}
+        open={() => {}}
+        onHoldRelease={() => {}}
+      />
+    </Loading>
   );
 }

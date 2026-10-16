@@ -622,3 +622,15 @@
   border-radius: 8px;
   background: #3a3a3c;
 }
+
+/* A still of a whole UI above its card. */
+.stillCard {
+  display: grid;
+  grid-template-columns: min-content;
+  gap: 8px;
+
+  > div:last-child {
+    width: auto;
+    min-height: 0;
+  }
+}

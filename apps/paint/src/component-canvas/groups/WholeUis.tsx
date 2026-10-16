@@ -4,7 +4,7 @@ import type { VariantInfo } from '../../mockups/puck-gallery/kit/variant';
 import { variants as galleryVariants } from '../../mockups/puck-gallery/variants';
 import { featureDemos, paintVariants, type PaintVariant } from '../../variants';
 import styles from '../ComponentCanvas.module.css';
-import { GalleryStage } from '../GalleryStage';
+import { GalleryStage, GalleryStill } from '../GalleryStage';
 import { TryButton } from '../Screen';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
 
@@ -36,7 +36,7 @@ export function WholeUis() {
         <For each={featureDemos}>{(demo) => <PaintVariantSpecimen variant={demo} group="demos" />}</For>
       </CanvasRow>
 
-      <CanvasRow title="Puck gallery" note="each summoned pinned on a mock studio, as the gallery's Pin does">
+      <CanvasRow title="Puck gallery" note="stills of each open on a mock studio, as the gallery's Pin opens it">
         <For each={galleryVariants}>{(variant) => <GalleryVariantSpecimen variant={variant} />}</For>
       </CanvasRow>
 
@@ -96,7 +96,10 @@ function PaintVariantStage(props: { variant: PaintVariant }) {
   );
 }
 
-/** A Puck gallery variant: its card with the gallery's own description, and the variant live full screen. */
+/**
+ * A Puck gallery variant: a still of it open, its card with the gallery's own description, and the variant live full
+ * screen.
+ */
 function GalleryVariantSpecimen(props: { variant: VariantInfo }) {
   return (
     <Specimen
@@ -110,7 +113,10 @@ function GalleryVariantSpecimen(props: { variant: VariantInfo }) {
         />
       }
     >
-      <UiCard name={props.variant.name} text={props.variant.idea} from={props.variant.inspiredBy} />
+      <div class={styles.stillCard}>
+        <GalleryStill variant={props.variant} scale={0.36} />
+        <UiCard name={props.variant.name} text={props.variant.idea} from={props.variant.inspiredBy} />
+      </div>
     </Specimen>
   );
 }
