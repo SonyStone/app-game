@@ -526,3 +526,30 @@
   padding: 20px;
   border-radius: 8px;
 }
+
+/* A whole UI's card in the Whole UIs group. */
+.uiCard {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  width: 260px;
+  min-height: 150px;
+  padding: 14px;
+  border: 1px solid #d8d8d8;
+  border-radius: 10px;
+  background: #fafafa;
+
+  b {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  small {
+    color: var(--muted);
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: var(--ink);
+  }
+}

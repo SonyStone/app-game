@@ -1,13 +1,9 @@
 import { attachNavigationPuck, createNavigationPuck, NavigationPuck } from '@app-game/navigation-puck';
-import { createEventListener } from '@solid-primitives/event-listener';
 import { createSignal, onSettled, Show, untrack } from 'solid-js';
-import { createPalmRejectionSettings } from '../../features/palm-rejection';
 import { createRadialMenu, RadialMenu, radialLayout, type RadialItem } from '../../features/radial-menu';
-import { createStudio } from '../../mockups/puck-gallery/kit/createStudio';
-import type { Point } from '../../mockups/puck-gallery/kit/createSketchCanvas';
-import type { Summon } from '../../mockups/puck-gallery/kit/variant';
-import { PieVariant } from '../../mockups/puck-gallery/variants/pie/PieVariant';
+import { pie } from '../../mockups/puck-gallery/variants/pie';
 import styles from '../ComponentCanvas.module.css';
+import { GalleryStage } from '../GalleryStage';
 import { ScreenFrame, TryButton } from '../Screen';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
 
@@ -55,7 +51,7 @@ export function Pucks() {
         <Specimen
           id="pucks/gallery/pie"
           label="Pie"
-          below={<TryButton label="Try full screen" title="Pie" render={() => <PieStage />} />}
+          below={<TryButton label="Try full screen" title="Pie" render={() => <GalleryStage variant={pie} />} />}
         >
           <ScreenFrame width={frameSize} height={frameSize}>
             <span class={styles.screenNote}>
@@ -164,62 +160,6 @@ function ringItems(run: (label: string) => void = () => {}): RadialItem[] {
     item({ id: 'transform', label: 'Transform', icon: 'move', slot: 10 }),
     item({ id: 'tool:lasso', label: 'Lasso', icon: 'lasso', slot: 11 })
   ];
-}
-
-/**
- * The Puck gallery's pie live, on a mock studio of its own, summoned pinned in the middle as the gallery's Pin does.
- * Closing it leaves a blank screen; a press there summons it again under the press. The hand is palm rejection's.
- */
-function PieStage() {
-  const studio = createStudio();
-  const hand = createPalmRejectionSettings().settings().hand;
-  const [pointer, setPointer] = createSignal<Point>({ x: innerWidth / 2, y: innerHeight / 2 });
-  const [summon, setSummon] = createSignal<Summon | undefined>({
-    serial: 1,
-    at: { x: innerWidth / 2, y: innerHeight / 2 },
-    mode: 'pinned',
-    source: 'gallery',
-    pointerType: 'pen'
-  });
-  let serial = 1;
-  createEventListener(window, 'pointermove', (event) => setPointer({ x: event.clientX, y: event.clientY }));
-
-  return (
-    <>
-      <div
-        class={styles.stageSurface}
-        onPointerDown={(event) => {
-          if (!summon()) {
-            setSummon({
-              serial: ++serial,
-              at: { x: event.clientX, y: event.clientY },
-              mode: 'toggle',
-              source: 'variant',
-              pointerType: event.pointerType === 'touch' ? 'touch' : event.pointerType === 'pen' ? 'pen' : 'mouse'
-            });
-          }
-        }}
-      />
-      <p class={styles.stageHint}>{summon() ? '' : 'Press anywhere to open the pie again.'}</p>
-      <PieVariant
-        studio={studio}
-        summon={summon()}
-        pointer={pointer()}
-        hand={hand}
-        hidden={false}
-        close={() => setSummon(undefined)}
-        done={() => {
-          if (summon()?.mode === 'toggle') {
-            setSummon(undefined);
-          }
-        }}
-        open={(at, pointerType) =>
-          setSummon({ serial: ++serial, at, mode: 'toggle', source: 'variant', pointerType })
-        }
-        onHoldRelease={() => {}}
-      />
-    </>
-  );
 }
 
 /** Each frame stands for a screen just large enough for the puck's ring and the caption under it. */

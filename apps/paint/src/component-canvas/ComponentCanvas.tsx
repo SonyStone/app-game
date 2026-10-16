@@ -16,6 +16,7 @@ import { LayersPanels } from './groups/LayersPanels';
 import { Numbers } from './groups/Numbers';
 import { Pucks } from './groups/Pucks';
 import { Styles } from './groups/Styles';
+import { WholeUis } from './groups/WholeUis';
 import { HandGhost } from './HandGhost';
 import { CanvasStage, type Stage } from './Screen';
 import { SpecimenChoices } from './Specimen';
@@ -53,8 +54,9 @@ export function ComponentCanvas() {
     const mode = palmOptions().hoverless;
     return mode === 'on' || (mode === 'auto' && penHover.hovers() === false);
   };
+  // A whole UI open over the canvas runs its own guards and gestures; the canvas's step aside.
   createPalmRejection({
-    enabled: () => palmOptions().enabled,
+    enabled: () => palmOptions().enabled && !stage(),
     hand: () => palmOptions().hand,
     tolerance: () => palmOptions().tolerance,
     linger: () => (hoverless() ? palmOptions().liftLinger : palmOptions().linger),
@@ -75,7 +77,7 @@ export function ComponentCanvas() {
     onApply: () => popups.update()
   });
   const popups = createViewportPopups({ world, camera: camera.current });
-  const gestures = createCanvasGestures({ viewport, camera });
+  const gestures = createCanvasGestures({ viewport, camera, paused: () => stage() !== undefined });
   const choices = createChoices();
   const stripDevice = createStripDevice();
 
@@ -120,6 +122,7 @@ export function ComponentCanvas() {
           <CanvasStage value={setStage}>
             <StripDevice value={stripDevice}>
               <SpecimenChoices value={choices}>
+                <WholeUis />
                 <ColorPickers />
                 <BrushCards />
                 <LayersPanels />
@@ -164,7 +167,7 @@ export function ComponentCanvas() {
         <HandGhost hand={palmOptions().hand} />
       </Show>
 
-      <Show when={freshTab.offered()}>
+      <Show when={freshTab.offered() && !stage()}>
         <FreshTabNotice
           size={{ width: innerWidth, height: innerHeight }}
           blocked={freshTab.blocked()}
@@ -196,6 +199,7 @@ function StageView(props: { stage: Stage; onClose: () => void }): JSX.Element {
 
 /** The groups in canvas order, for the panel's list; each group's element carries the same `data-group`. */
 const groups = [
+  { id: 'whole-uis', title: 'Whole UIs' },
   { id: 'color-pickers', title: 'Color pickers' },
   { id: 'brush-cards', title: 'Brushes' },
   { id: 'layers', title: 'Layers' },

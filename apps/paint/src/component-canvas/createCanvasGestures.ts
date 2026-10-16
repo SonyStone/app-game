@@ -16,11 +16,14 @@ import { maxZoom, minZoom, type Camera, type createCanvasCamera } from './create
  *
  * Components are elements inside `data-canvas-content`; the canvas's own controls, inside `data-canvas-ui`, keep their
  * input. Listens on the window in the capture phase, so create it after palm rejection, which must see touches first.
+ * `paused` stops it for whatever covers the canvas, as the wheel only reaches the viewport anyway.
  * Must be created within a Solid owner.
  */
 export function createCanvasGestures(options: {
   viewport: () => HTMLElement | undefined;
   camera: ReturnType<typeof createCanvasCamera>;
+  /** While true, such as while a whole UI is open over the canvas, the canvas takes no presses, wheel or keys. */
+  paused?: () => boolean;
 }) {
   const { camera } = options;
   /** Fingers down on the canvas, in landing order, with the camera when they landed. */
@@ -101,6 +104,10 @@ export function createCanvasGestures(options: {
     window,
     'pointerdown',
     (event) => {
+      if (options.paused?.()) {
+        return;
+      }
+
       const kind = classify(event);
       if (kind === 'outside' || kind === 'ui' || event.pointerType === 'pen') {
         return;
@@ -247,7 +254,7 @@ export function createCanvasGestures(options: {
   );
 
   createEventListener(window, 'keydown', (event) => {
-    if (event.code !== 'Space' || event.repeat || componentHasFocus(options.viewport())) {
+    if (event.code !== 'Space' || event.repeat || options.paused?.() || componentHasFocus(options.viewport())) {
       return;
     }
 
