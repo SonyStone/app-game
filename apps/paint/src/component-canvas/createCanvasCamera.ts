@@ -11,6 +11,8 @@ export function createCanvasCamera(options: {
   world: () => HTMLElement | undefined;
   /** The visible area, in CSS pixels. */
   viewport: () => { width: number; height: number };
+  /** Called after each drawn camera, for what follows it, such as popups kept in window coordinates. */
+  onApply?: () => void;
 }) {
   const stored = read();
   let current: Camera = stored ?? { x: 0, y: 0, zoom: 1 };
@@ -84,6 +86,7 @@ export function createCanvasCamera(options: {
     }
 
     setZoom(current.zoom);
+    options.onApply?.();
   }
 }
 

@@ -1,4 +1,5 @@
-import { createEffect, createSignal, For, Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createEffect, createSignal, For, Show, untrack } from 'solid-js';
 import { createFreshTab, FreshTabNotice } from '../features/fresh-tab';
 import { createPalmRejection, createPalmRejectionSettings } from '../features/palm-rejection';
 import { createPenHover } from '../features/pen-hover';
@@ -7,20 +8,34 @@ import styles from './ComponentCanvas.module.css';
 import { createCanvasCamera } from './createCanvasCamera';
 import { createCanvasGestures } from './createCanvasGestures';
 import { createChoices, type ChoicesStatus } from './createChoices';
+import { createViewportPopups } from './createViewportPopups';
 import { ColorPickers } from './groups/ColorPickers';
+import { CanvasStage, type Stage } from './Screen';
 import { SpecimenChoices } from './Specimen';
 import { createStripDevice, StripDevice } from './TestStrip';
 
 /**
- * The component canvas (spec `apps/paint/docs/component-canvas.md`): Paint's own UI components side by side in their
- * variants and states on a canvas that fingers and the mouse move, so that the user can compare them, star the ones
- * to use and comment on them. The pen always works the components. Palm rejection and the move to a fresh tab when
- * Chrome loses the pen's hover are Paint's own, with Paint's settings.
+ * The component canvas: Paint's own UI components side by side in their variants and states on a canvas that fingers
+ * and the mouse move, so that the user can compare them, star the ones to use and comment on them. Whole UIs are
+ * variant pages; the canvas holds their parts, and what wins here moves into the variants.
+ *
+ * - The canvas mounts the very modules the app uses, never copies, and does not change them; a component that only
+ *   works inside the drawing session is unbound through props, which needs the user's consent. A component the app
+ *   lacks, such as a new color wheel, is built as an ordinary feature module, not as canvas code.
+ * - At 100 % a component is as large as in the app; there is no real-millimetre zoom (the user: "100 % is 100 %").
+ * - The pen always works the components; see `createCanvasGestures` for fingers and the mouse.
+ * - Palm rejection and the move to a fresh tab when Chrome loses the pen's hover are Paint's own, with Paint's
+ *   settings (the Drawing menu). They are wired here directly; once the drawing session owns them, use the session's.
+ * - The canvas keeps only its camera; stars and comments go to the repository through `createChoices`.
+ *
+ * Served at `/paint/components` of the web app, so that `pnpm dev:tablet` opens it on the tablet. Type the address in
+ * a new tab: a tab opened by `adb shell am start` loses the pen's hover.
  */
 export function ComponentCanvas() {
-  // A signal, as the canvas's listeners attach to it once it exists.
+  // Signals, as listeners and observers attach to the elements once they exist.
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
-  let world!: HTMLDivElement;
+  const [world, setWorld] = createSignal<HTMLDivElement>();
+  const [stage, setStage] = createSignal<Stage>();
 
   // Paint's own guards first: palm rejection must see touches before the canvas does, and the pen hover detection
   // before palm rejection, so that the press that finds the pen without hover is guarded as such.
@@ -46,17 +61,25 @@ export function ComponentCanvas() {
   });
 
   const camera = createCanvasCamera({
-    world: () => world,
+    world,
     // The viewport fills the window.
-    viewport: () => ({ width: innerWidth, height: innerHeight })
+    viewport: () => ({ width: innerWidth, height: innerHeight }),
+    onApply: () => popups.update()
   });
+  const popups = createViewportPopups({ world, camera: camera.current });
   const gestures = createCanvasGestures({ viewport, camera });
   const choices = createChoices();
   const stripDevice = createStripDevice();
 
-  const fitAll = () => camera.show({ x: 0, y: 0, width: world.offsetWidth, height: world.offsetHeight });
+  // Both run from handlers and from the mount effect's callback, which must not read signals.
+  const fitAll = () => {
+    const element = untrack(world);
+    if (element) {
+      camera.show({ x: 0, y: 0, width: element.offsetWidth, height: element.offsetHeight });
+    }
+  };
   const showGroup = (id: string) => {
-    const group = world.querySelector<HTMLElement>(`[data-group="${id}"]`);
+    const group = untrack(world)?.querySelector<HTMLElement>(`[data-group="${id}"]`);
     if (group) {
       camera.show({ x: group.offsetLeft, y: group.offsetTop, width: group.offsetWidth, height: group.offsetHeight });
     }
@@ -85,12 +108,14 @@ export function ComponentCanvas() {
   return (
     <div class={styles.page}>
       <div ref={setViewport} class={styles.viewport}>
-        <div ref={world} class={styles.world}>
-          <StripDevice value={stripDevice}>
-            <SpecimenChoices value={choices}>
-              <ColorPickers />
-            </SpecimenChoices>
-          </StripDevice>
+        <div ref={setWorld} class={styles.world}>
+          <CanvasStage value={setStage}>
+            <StripDevice value={stripDevice}>
+              <SpecimenChoices value={choices}>
+                <ColorPickers />
+              </SpecimenChoices>
+            </StripDevice>
+          </CanvasStage>
         </div>
       </div>
 
@@ -109,6 +134,10 @@ export function ComponentCanvas() {
         </span>
       </nav>
 
+      <Show when={stage()}>
+        {(current) => <StageView stage={current()} onClose={() => setStage(undefined)} />}
+      </Show>
+
       <Show when={freshTab.offered()}>
         <FreshTabNotice
           size={{ width: innerWidth, height: innerHeight }}
@@ -123,8 +152,26 @@ export function ComponentCanvas() {
   );
 }
 
+/**
+ * A component opened full screen over the canvas, outside the moving world, where it sees the real window as in the
+ * app. The canvas's gestures leave it alone, as it is outside the canvas's viewport.
+ */
+function StageView(props: { stage: Stage; onClose: () => void }): JSX.Element {
+  return (
+    <div class={styles.stage} role="dialog" aria-label={props.stage.title}>
+      {props.stage.render()}
+      <div class={styles.stageBar}>
+        <span>{props.stage.title}</span>
+        <button onClick={() => props.onClose()}>Back to the canvas</button>
+      </div>
+    </div>
+  );
+}
+
 /** The groups in canvas order, for the panel's list; each group's element carries the same `data-group`. */
-const groups = [{ id: 'color-pickers', title: 'Color pickers' }] as const;
+const groups = [
+  { id: 'color-pickers', title: 'Color pickers' }
+] as const;
 
 const statusText: Record<ChoicesStatus, string> = {
   loading: 'Loading stars…',
