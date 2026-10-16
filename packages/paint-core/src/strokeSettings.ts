@@ -53,6 +53,11 @@ export function normalizeStrokeSettings(settings: StrokeSettings): StrokeSetting
   };
 }
 
+/** Raw pen pressure through the stroke's `minimum`, `maximum` and `firmness`, as smoothing processors map it. */
+export function calibratePressure(settings: StrokeSettings, raw: number): number {
+  return Math.max(0, Math.min(1, (raw - settings.minimum) / (settings.maximum - settings.minimum))) ** settings.firmness;
+}
+
 function bounded(value: number, min: number, max: number, fallback: number): number {
   return Math.max(min, Math.min(max, Number.isFinite(value) ? value : fallback));
 }

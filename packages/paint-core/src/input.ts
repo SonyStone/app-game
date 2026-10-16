@@ -76,6 +76,19 @@ export function attachInput(
       tap: (fingers: number) => void;
       hold?: (point: Point) => TouchHoldDrag | void;
     };
+    /**
+     * Optional hold at the end of a stroke, such as QuickShape's. A pen or mouse drawing that stays within
+     * {@link strokeHoldSlop} CSS pixels for `delay()` milliseconds calls `hold` with the stroke's samples so far, in
+     * document pixels. A hold that returns a drag takes the stroke over: its later points go to `move` instead of the
+     * engine, without predictions, `fingers` reports the touches on the canvas, and `end` runs before the stroke's
+     * `end` is sent, at release or with `cancelled` set when interrupted. A prediction already shown is cleared when
+     * the hold takes over. A hold that returns nothing leaves the stroke drawing; it can fire again after the pen moves
+     * on.
+     */
+    strokeHold?: {
+      delay: () => number;
+      hold: (samples: readonly Sample[]) => StrokeHoldDrag | void;
+    };
     puck?: ReturnType<typeof createNavigationPuck>;
     /** Chooses from controls around the puck with right-drags, such as a radial menu; see `PuckPicker`. */
     puckPicker?: PuckPicker;
@@ -110,6 +123,12 @@ export function attachInput(
         brush: Brush;
         /** The engine shows a prediction sent for this stroke. */
         predicting: boolean;
+        /** Every sample sent for the stroke, for `strokeHold`. */
+        samples: Sample[];
+        /** Where the pen came to rest, in canvas CSS pixels, while a stroke hold is timed. */
+        still?: Point;
+        /** The drag a stroke hold returned; it receives the stroke's later points. */
+        held?: StrokeHoldDrag;
       }
     | { kind: 'select'; id: number; camera: Camera; size: ViewSize }
     | { kind: 'pan'; id: number; previous: Point }
@@ -152,7 +171,52 @@ export function attachInput(
   const pressureOf = (pointerType: string, raw: number) =>
     pointerType === 'pen' ? (options.mapPressure?.(raw) ?? raw) : 1;
   let stopBuildUp: (() => void) | undefined;
-  /** Sends a stroke's samples from `event`; with `samples` false, only the points predicted after it. */
+  let stopStrokeHold: (() => void) | undefined;
+  /** Touches that landed while a stroke hold's drag is active. */
+  const heldFingers = new Set<number>();
+  /** Times a stroke hold from where the pen comes to rest at `point`; moving within the slop keeps the timer. */
+  const watchStrokeHold = (point: Point) => {
+    const draw = gesture;
+    const strokeHold = options.strokeHold;
+    if (!strokeHold || draw?.kind !== 'draw' || draw.held) {
+      return;
+    }
+
+    if (draw.still && Math.hypot(point.x - draw.still.x, point.y - draw.still.y) <= strokeHoldSlop) {
+      return;
+    }
+
+    draw.still = point;
+    stopStrokeHold?.();
+    stopStrokeHold = makeTimer(
+      () => {
+        stopStrokeHold = undefined;
+        if (gesture !== draw || draw.held) {
+          return;
+        }
+
+        const drag = strokeHold.hold(draw.samples);
+        if (!drag) {
+          return;
+        }
+
+        draw.held = drag;
+        // The drag replaces the stroke; paint built up at the rest point would be discarded anyway.
+        stopBuildUp?.();
+        stopBuildUp = undefined;
+        if (draw.predicting) {
+          draw.predicting = false;
+          options.send({ type: 'samples', samples: [], predicted: [] });
+        }
+      },
+      strokeHold.delay(),
+      setTimeout
+    );
+  };
+  /**
+   * Sends a stroke's samples from `event`; with `samples` false, only the points predicted after it. Once a stroke
+   * hold took the stroke over, its drag receives the newest point instead.
+   */
   const collect = (event: PointerEvent, samples = true) => {
     if (gesture?.kind !== 'draw' || gesture.id !== event.pointerId) return;
     const draw = gesture;
@@ -180,6 +244,15 @@ export function attachInput(
       }
     }
 
+    if (draw.held) {
+      const last = real.at(-1);
+      if (last) {
+        draw.held.move(last);
+      }
+
+      return;
+    }
+
     // Raw updates carry no predictions; the pointermove after them does.
     const predicted =
       event.type === 'pointermove' && options.predict?.()
@@ -190,7 +263,11 @@ export function attachInput(
     if (predicted) draw.predicting = predicted.length > 0;
     // Forward immediately, including raw updates. The worker batches while its GPU frame is in flight.
     options.send({ type: 'samples', samples: real, ...(predicted ? { predicted } : {}) });
-    if (real.length) options.drawn?.(event, draw.brush);
+    if (real.length) {
+      options.drawn?.(event, draw.brush);
+      draw.samples.push(...real);
+      watchStrokeHold(local(event));
+    }
   };
   const cursorAt = (event: PointerEvent) =>
     options.cursor(
@@ -231,7 +308,11 @@ export function attachInput(
   const finish = (cancelled = false) => {
     stopBuildUp?.();
     stopBuildUp = undefined;
+    stopStrokeHold?.();
+    stopStrokeHold = undefined;
+    heldFingers.clear();
     if (gesture?.kind === 'draw') {
+      gesture.held?.end(cancelled);
       options.send({ type: 'end' });
     }
     if (gesture?.kind === 'select') options.selection?.end();
@@ -261,6 +342,11 @@ export function attachInput(
         return;
       }
       if (event.pointerType === 'touch') {
+        if (gesture?.kind === 'draw' && gesture.held) {
+          heldFingers.add(event.pointerId);
+          gesture.held.fingers(heldFingers.size);
+        }
+
         if (gesture?.kind === 'draw' || gesture?.kind === 'select' || gesture?.kind === 'action') return;
         canvas.setPointerCapture(event.pointerId);
         if (!touches.size) {
@@ -333,9 +419,11 @@ export function attachInput(
         raw: false,
         inputTime: event.timeStamp,
         brush,
-        predicting: false
+        predicting: false,
+        samples: [latest]
       };
       cursorAt(event);
+      watchStrokeHold(point);
       options.send({
         type: 'begin',
         brush,
@@ -431,6 +519,10 @@ export function attachInput(
   canvas.addEventListener(
     'pointerup',
     (event) => {
+      if (heldFingers.delete(event.pointerId) && gesture?.kind === 'draw') {
+        gesture.held?.fingers(heldFingers.size);
+      }
+
       if (touches.delete(event.pointerId)) {
         if (holdDrag?.id === event.pointerId) endHoldDrag(false);
         resetTouch();
@@ -447,7 +539,7 @@ export function attachInput(
       }
       if (gesture?.id !== event.pointerId) return;
       if (gesture.kind === 'select') options.selection?.move(screenToWorld(local(event), gesture.camera, gesture.size));
-      if (gesture.kind === 'draw') {
+      if (gesture.kind === 'draw' && !gesture.held) {
         const endpoint = screenToWorld(local(event), gesture.camera, gesture.size);
         // Release pressure is usually zero. Keep the last contact pressure, and do not
         // advance a sample-count filter just because a stationary pen was lifted.
@@ -463,6 +555,10 @@ export function attachInput(
     { signal }
   );
   const interrupted = (event: PointerEvent) => {
+    if (heldFingers.delete(event.pointerId) && gesture?.kind === 'draw') {
+      gesture.held?.fingers(heldFingers.size);
+    }
+
     if (touches.delete(event.pointerId)) {
       if (holdDrag?.id === event.pointerId) endHoldDrag(true);
       resetTouch();
@@ -538,6 +634,20 @@ export function attachInput(
 
 /** A drag that continues a touch hold, such as sampling colors under the held finger. */
 export type TouchHoldDrag = { move: (point: Point) => void; end: (cancelled: boolean) => void };
+
+/**
+ * A drag that continues a stroke hold, such as editing the shape QuickShape made of the stroke: `move` receives the
+ * points the pen moves to, in document pixels, `fingers` the count of touches on the canvas whenever it changes, and
+ * `end` the release, or a cancellation with `cancelled` set.
+ */
+export type StrokeHoldDrag = {
+  move: (sample: Sample) => void;
+  fingers: (count: number) => void;
+  end: (cancelled: boolean) => void;
+};
+
+/** Distance in CSS pixels a drawing pen may move and still count as resting, for a stroke hold. */
+export const strokeHoldSlop = 4;
 
 /** Longest touch, in milliseconds, that still counts as a tap. */
 const touchTapMs = 350;

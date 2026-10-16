@@ -31,6 +31,7 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
   let finished = false;
 
   return {
+    calibrate,
     add(samples) {
       if (finished) {
         return [];

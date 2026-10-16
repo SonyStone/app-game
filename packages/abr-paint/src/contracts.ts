@@ -21,6 +21,8 @@ export type AbrStrokeContext<Layer, Change, Brush extends AbrBrushInput> = {
   adaptiveQuality?: boolean;
   /** Integer document LOD captured at contact, excluding temporary loading fallbacks. Defaults to zero. */
   lod?: number;
+  /** Host-chosen random seed of this gesture, kept when the host repaints it; a preset's replay seed takes precedence. */
+  seed?: number;
   processor: AbrStrokeProcessor;
   renderer: AbrStrokeRenderer<Layer, Change, Brush>;
 };

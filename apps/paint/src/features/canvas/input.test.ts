@@ -86,6 +86,67 @@ describe('input to worker contract', () => {
     pointer('pointermove', 450, 330, { pointerType: 'touch' });
     expect(drag.move).toHaveBeenCalledOnce();
   });
+  it('hands a stroke held still to the stroke hold, whose drag then takes the pen, fingers and release', () => {
+    vi.useFakeTimers();
+    const order: string[] = [];
+    const drag = {
+      move: vi.fn(),
+      fingers: vi.fn(),
+      end: vi.fn(() => order.push('drag end'))
+    };
+    const hold = vi.fn(() => drag);
+    const { pointer, commands } = setup(undefined, defaultBrush, undefined, defaultCamera, undefined, undefined, undefined, {
+      strokeHold: { delay: () => 500, hold }
+    });
+    const world = (x: number, y: number) => screenToWorld({ x, y }, defaultCamera(), { width: 800, height: 600 });
+    pointer('pointerdown', 100, 100, { pointerType: 'pen', pressure: 0.5 });
+    pointer('pointermove', 300, 100, { pointerType: 'pen', pressure: 0.5 });
+    vi.advanceTimersByTime(400);
+    // Moving on restarts the wait; trembling within the slop does not.
+    pointer('pointermove', 400, 100, { pointerType: 'pen', pressure: 0.5 });
+    vi.advanceTimersByTime(300);
+    pointer('pointermove', 403, 102, { pointerType: 'pen', pressure: 0.5 });
+    expect(hold).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(200);
+    expect(hold).toHaveBeenCalledOnce();
+    expect((hold.mock.calls[0] as unknown[])[0]).toEqual([
+      expect.objectContaining(world(100, 100)),
+      expect.objectContaining(world(300, 100)),
+      expect.objectContaining(world(400, 100)),
+      expect.objectContaining(world(403, 102))
+    ]);
+
+    const sent = commands.length;
+    pointer('pointermove', 450, 150, { pointerType: 'pen', pressure: 0.7 });
+    expect(drag.move).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ ...world(450, 150), pressure: 0.7 }));
+    pointer('pointerdown', 600, 500, { pointerType: 'touch', pointerId: 7 });
+    expect(drag.fingers).toHaveBeenLastCalledWith(1);
+    pointer('pointerup', 600, 500, { pointerType: 'touch', pointerId: 7 });
+    expect(drag.fingers).toHaveBeenLastCalledWith(0);
+    pointer('pointerup', 460, 160, { pointerType: 'pen' });
+    order.push(...commands.slice(sent).map((command) => command.type));
+    expect(order).toEqual(['drag end', 'end']);
+    expect(drag.end).toHaveBeenCalledExactlyOnceWith(false);
+  });
+  it('keeps drawing when a stroke hold declines, and cancels its drag on interruption', () => {
+    vi.useFakeTimers();
+    const drag = { move: vi.fn(), fingers: vi.fn(), end: vi.fn() };
+    const hold = vi.fn((): typeof drag | undefined => undefined);
+    const { pointer, commands } = setup(undefined, defaultBrush, undefined, defaultCamera, undefined, undefined, undefined, {
+      strokeHold: { delay: () => 300, hold }
+    });
+    pointer('pointerdown', 100, 100, { pointerType: 'pen' });
+    vi.advanceTimersByTime(300);
+    expect(hold).toHaveBeenCalledOnce();
+    pointer('pointermove', 200, 100, { pointerType: 'pen' });
+    expect(commands.at(-1)?.type).toBe('samples');
+    hold.mockReturnValue(drag);
+    vi.advanceTimersByTime(300);
+    expect(hold).toHaveBeenCalledTimes(2);
+    pointer('pointercancel', 200, 100, { pointerType: 'pen' });
+    expect(drag.end).toHaveBeenCalledExactlyOnceWith(true);
+    expect(commands.at(-1)?.type).toBe('end');
+  });
   it('lets an armed touch pick paint without panning and releases the action on cancellation', () => {
     let armed = true;
     const run = vi.fn(() => {

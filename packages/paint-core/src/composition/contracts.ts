@@ -62,6 +62,11 @@ export type BrushEngine = ((context: {
   adaptiveQuality?: boolean;
   /** Target document LOD selected by the renderer, excluding temporary loading fallbacks. Defaults to zero. */
   lod?: number;
+  /**
+   * Random seed of the stroke, for engines with random dynamics such as scatter. The same when the runtime paints the
+   * stroke again after `replace-stroke`, so a replaced stroke keeps its look; absent means choose one.
+   */
+  seed?: number;
   processor: StrokeProcessor;
   renderer: PaintRenderer;
 }) => BrushSession) & {

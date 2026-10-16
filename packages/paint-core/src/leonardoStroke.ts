@@ -2,7 +2,7 @@ import { createStrokeSampler, type Brush, type Dab, type Sample } from './brush'
 import { createCubicStroke } from './cubicStroke';
 import { predictedTail } from './strokePrediction';
 import type { StrokeProcessor } from './strokeProcessors';
-import { normalizeStrokeSettings, type StrokeSettings } from './strokeSettings';
+import { calibratePressure, normalizeStrokeSettings, type StrokeSettings } from './strokeSettings';
 
 /** Compatibility round-brush adapter; the sample processor can also feed other brush engines. */
 export function createLeonardoStroke(brush: Brush, zoom = 1) {
@@ -26,6 +26,7 @@ export function createLeonardoProcessor(brush: Brush, zoom = 1): StrokeProcessor
   const calibrated = (raw: number) =>
     Math.max(0, Math.min(1, (raw - settings.minimum) / (settings.maximum - settings.minimum))) ** settings.firmness;
   return {
+    calibrate: (pressure) => calibratePressure(settings, pressure),
     /** Every real sample participates, independent of animation-frame or event batching. */
     add(samples: readonly Sample[]): Sample[] {
       if (finished) return [];

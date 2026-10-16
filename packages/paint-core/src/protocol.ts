@@ -89,6 +89,15 @@ export type PaintCommand =
    * is up for the first stroke frames; see the runtime's `warmGpu`.
    */
   | { type: 'warm' }
+  /**
+   * Replaces everything the current stroke painted with `samples`: the stroke's pixels so far are discarded and the
+   * same layer, brush, engine, random seed and stroke decorations, such as symmetry, paint `samples` instead. They
+   * bypass the stroke processor's smoothing, keeping only its pressure calibration, and get no idle clock. The stroke
+   * stays one undo step; later `samples` continue it unsmoothed. Ignored without a stroke in progress. Consecutive
+   * replacements waiting in the queue merge into the latest. For example, QuickShape replaces a freehand stroke with
+   * a clean shape.
+   */
+  | { type: 'replace-stroke'; samples: Sample[] }
   | { type: 'checkpoint'; includeTools?: boolean }
   | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'recover' }
   /**

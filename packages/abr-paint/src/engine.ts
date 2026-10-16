@@ -19,7 +19,7 @@ import type { AbrBrushCommand } from './commands';
 import type { BrushResource } from './resources';
 
 /** Creates one ordered ABR gesture using host-owned resources, input processing, and rendering. */
-export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ settings, resources, brush, layer, layers, processor, renderer, view, historySource, modifiers, adaptiveQuality, lod }: AbrStrokeContext<Layer, Change, Brush>): AbrStrokeSession<Change> {
+export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ settings, resources, brush, layer, layers, processor, renderer, view, historySource, modifiers, adaptiveQuality, lod, seed }: AbrStrokeContext<Layer, Change, Brush>): AbrStrokeSession<Change> {
   const restoreHistory =
     settings.values.tool.type === 'ErTl' && (settings.values.tool.eraseToHistory || modifiers?.altKey === true);
   if (restoreHistory && !historySource)
@@ -53,7 +53,7 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
     settings.values.tipKind === 'sampledBrush' ? tip : undefined
   );
   const input = {
-    seed: settings.seed ?? crypto.getRandomValues(new Uint32Array(1))[0]!,
+    seed: settings.seed ?? seed ?? crypto.getRandomValues(new Uint32Array(1))[0]!,
     values: settings.values,
     color: brush.color,
     secondaryColor: brush.backgroundColor ?? settings.secondaryColor,

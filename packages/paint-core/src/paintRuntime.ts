@@ -5,7 +5,8 @@ import { defaultCamera, screenToWorld } from './camera';
 import { averageOpaque, defaultColorSample, sampleLayer, type PickedColor } from './colorSample';
 import { layersInRect, layersInView, type DocumentRect } from './layersInView';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
-import type { BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
+import type { BrushEngine, BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
+import { createReplacementProcessor, type StrokeProcessor } from './strokeProcessors';
 import type { Layer, TileChange } from './document';
 import type { FloatingPixels } from './gpu/floatingPixels';
 import { createResourceSession } from './composition/resourceSession';
@@ -83,6 +84,19 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let size = { width: 1, height: 1 },
       dpr = 1;
     let strokeSession: BrushSession | undefined;
+    /** How the current stroke began, so `replace-stroke` can paint it again from its start. */
+    let strokeStart:
+      | {
+          engine: BrushEngine;
+          context: Omit<Parameters<BrushEngine>[0], 'resources' | 'processor'>;
+          processor: () => StrokeProcessor;
+        }
+      | undefined;
+    /** The current stroke was replaced: its samples are complete, so it has no idle clock. */
+    let strokeReplaced = false;
+    /** A replacement is painting; showing it half done would flash, so it presents only when complete. */
+    let replacing = false;
+    let pendingReplace: Extract<PaintRuntimeCommand, { type: 'replace-stroke' }> | undefined;
     let saved = true,
       lost = false,
       renderMs = 0;
@@ -510,7 +524,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         for (let offset = 0; offset < samples.length; offset += 16) {
           await strokeSession?.add(samples.slice(offset, offset + 16));
           processedInputTime = samples[Math.min(samples.length, offset + 16) - 1]?.time;
-          if (offset + 16 < samples.length && performance.now() - presentedAt >= progressFrameInterval) {
+          if (!replacing && offset + 16 < samples.length && performance.now() - presentedAt >= progressFrameInterval) {
             strokeSession?.preview(liveTail);
             await draw();
             presentedAt = performance.now();
@@ -526,7 +540,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     /** At most one idle operation is queued. Input/end invalidates even a timer already waiting in the GPU queue. */
     const scheduleIdle = (previousTime = performance.now()) => {
       const session = strokeSession;
-      if (!session?.idle || !active || lost) return;
+      if (!session?.idle || strokeReplaced || !active || lost) return;
       const generation = idleGeneration;
       clearIdle = makeTimer(
         () => {
@@ -550,6 +564,27 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         16,
         setTimeout
       );
+    };
+    /**
+     * Discards the current stroke's pixels and paints `samples` with a new session of the same engine and context,
+     * bypassing smoothing; see the `replace-stroke` command. Nothing is presented in between, so the old stroke does
+     * not flash away.
+     */
+    const replaceStroke = async (start: NonNullable<typeof strokeStart>, samples: Parameters<BrushSession['add']>[0]) => {
+      stopIdle();
+      const previous = strokeSession;
+      strokeSession = undefined;
+      previous?.cancel();
+      strokeReplaced = true;
+      replacing = true;
+      try {
+        strokeSession = createResourceSession(resources, (resources) =>
+          start.engine({ ...start.context, resources, processor: createReplacementProcessor(start.processor()) })
+        );
+        await addSamples(samples);
+      } finally {
+        replacing = false;
+      }
     };
     const end = async () => {
       stopIdle();
@@ -620,7 +655,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           onPaintProgress: async () => {
             // One pointer segment can contain hundreds of dependent sampling dabs.
             // Present only after a whole dab, without enqueueing behind the stroke itself.
-            if (strokeSession && active && !lost && performance.now() - presentedAt >= progressFrameInterval) await draw();
+            if (strokeSession && !replacing && active && !lost && performance.now() - presentedAt >= progressFrameInterval)
+              await draw();
           },
           onError: failure
         }
@@ -699,11 +735,19 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         if (command.predicted) pendingSamples.predicted = command.predicted;
         return;
       }
+      // Only the latest of consecutive waiting replacements matters.
+      if (command.type === 'replace-stroke' && pendingReplace) {
+        pendingReplace.samples = command.samples;
+        return;
+      }
+      if (command.type === 'replace-stroke') command = { ...command };
+      pendingReplace = command.type === 'replace-stroke' ? command : undefined;
       // Later packets append to this batch, so it must not share the caller's array.
       if (command.type === 'samples') command = { ...command, samples: [...command.samples] };
       pendingSamples = command.type === 'samples' ? command : undefined;
       enqueue(async () => {
         if (pendingSamples === command) pendingSamples = undefined;
+        if (pendingReplace === command) pendingReplace = undefined;
         switch (command.type) {
           case 'init': {
             diagnostics = command.diagnostics ?? false;
@@ -854,21 +898,29 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                 decorated,
               renderer
             );
-            strokeSession = createResourceSession(resources, (resources) =>
-              engine({
-                resources,
-                settings: command.brush.engine?.settings,
-                brush: command.brush,
+            const brush = command.brush,
+              zoom = command.zoom ?? camera.zoom;
+            strokeStart = {
+              engine,
+              context: {
+                settings: brush.engine?.settings,
+                brush,
                 layer: document.active,
                 layers: document.layers,
                 historySource: document.historySourceLayer(document.active.id),
                 modifiers: command.modifiers,
-                view: { zoom: command.zoom ?? camera.zoom, angle: camera.angle, mirrored: camera.mirrored },
+                view: { zoom, angle: camera.angle, mirrored: camera.mirrored },
                 adaptiveQuality,
-                lod: renderer!.brushLod?.(document.layers, document.active, camera, size, dpr) ?? 0,
-                renderer: strokeRenderer,
-                processor: withPrediction(processor(command.brush, command.zoom ?? camera.zoom), () => prediction)
-              })
+                lod: renderer.brushLod?.(document.layers, document.active, camera, size, dpr) ?? 0,
+                seed: crypto.getRandomValues(new Uint32Array(1))[0]!,
+                renderer: strokeRenderer
+              },
+              processor: () => withPrediction(processor(brush, zoom), () => prediction)
+            };
+            strokeReplaced = false;
+            const start = strokeStart;
+            strokeSession = createResourceSession(resources, (resources) =>
+              start.engine({ ...start.context, resources, processor: start.processor() })
             );
             saved = false;
             saveVersion++;
@@ -882,6 +934,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             if (command.predicted) prediction = command.predicted;
             if (strokeSession && renderer && !lost) {
               await addSamples(command.samples);
+              await draw();
+            }
+            break;
+          case 'replace-stroke':
+            if (strokeSession && strokeStart && renderer && !lost) {
+              await replaceStroke(strokeStart, command.samples);
               await draw();
             }
             break;
