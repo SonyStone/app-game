@@ -6,6 +6,7 @@ import { makePsdClient, type PsdResultOf, type PsdWorkerPort } from '../src/feat
 import type { PsdReply, PsdRequest } from '../src/features/psd-worker/protocol';
 import { makePsdWorkerHost } from '../src/features/psd-worker/workerHost';
 import { truncated, withChannelCompression } from './damagedPsd';
+import { withTopBlendKey } from './patchedPsd';
 
 /** A client wired to a host in this thread, as the worker would be; messages are cloned like `postMessage` does. */
 function connect() {
@@ -50,18 +51,6 @@ const interpolations: PsdInterpolation[] = [
   'bicubicSharper',
   'bicubicAutomatic'
 ];
-
-/**
- * A copy of `bytes` whose last Normal layer record, the topmost, takes the blend-mode key `key`, a four-character
- * code such as `mul `.
- */
-function withTopBlendKey(bytes: ArrayBuffer, key: string): ArrayBuffer {
-  const patched = new Uint8Array(bytes.slice(0));
-  // windows-1252 decodes every byte to one character, so string indices are byte offsets.
-  const at = new TextDecoder('latin1').decode(patched).lastIndexOf('8BIMnorm');
-  patched.set(new TextEncoder().encode(key), at + 4);
-  return patched.buffer;
-}
 
 it('opens, renders and compares an example our renderer reproduces exactly', async () => {
   const { client } = connect();

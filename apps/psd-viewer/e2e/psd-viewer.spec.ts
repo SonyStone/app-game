@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { truncated, withChannelCompression } from '../tests/damagedPsd';
+import { withTopBlendKey } from '../tests/patchedPsd';
 
 const assets = new URL('../src/features/examples/assets/', import.meta.url);
 
@@ -105,6 +106,38 @@ test('a dropped CMYK document composites exactly in its CMYK channels', async ({
   await expect(statistics).toContainText('Exact: 0 of 36,864 samples differ');
   await expect(statistics).toContainText("Compared in the document's CMYK channels");
 });
+
+test('shows a document the exact path refuses approximated, saying what it approximates', async ({ page }) => {
+  await page.goto('/');
+  // Photoshop offers blend modes on adjustment layers; the CMYK channel compositor does not reproduce them.
+  const bytes = [
+    ...new Uint8Array(withTopBlendKey(toArrayBuffer(await readFile(new URL('cmyk-levels.psd', assets))), 'mul '))
+  ];
+  await stage(page).evaluate((element, data) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([new Uint8Array(data)], 'cmyk-multiply-levels.psd'));
+    element.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: transfer }));
+  }, bytes);
+  await settled(page);
+  const status = page.getByRole('region', { name: 'Renderer status' });
+  await expect(status).toHaveAttribute('data-render-state', 'approximate');
+  await expect(status).toContainText('Not exactly as in Photoshop');
+  await expect(status.getByRole('list', { name: 'Approximations' })).toContainText(
+    '8-bit CMYK: layers converted to 8-bit sRGB'
+  );
+  await expect(page.getByRole('img', { name: 'Our render' })).toBeVisible();
+
+  // Exact rendering only: the renderer names what it refuses.
+  await page.getByRole('checkbox', { name: 'Approximate unsupported settings' }).uncheck();
+  await settled(page);
+  await expect(status).toHaveAttribute('data-render-state', 'failed');
+  await expect(status).toContainText('adjustment layers with a blend mode, Fill or effects in 8-bit CMYK');
+});
+
+/** The bytes of a Node buffer as an `ArrayBuffer` of their own. */
+function toArrayBuffer(buffer: Buffer): ArrayBuffer {
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+}
 
 /** The system's Arial Bold, the font of the type example; never copied into the repository. */
 const arialBold = '/System/Library/Fonts/Supplemental/Arial Bold.ttf';

@@ -39,6 +39,10 @@ export function StatusArea(props: {
         )}
       </Show>
       <Show when={approximations().length}>
+        <p class={styles.approximate}>
+          <strong>Not exactly as in Photoshop:</strong> this render approximates what is listed below. Photoshop's own
+          image is in the Photoshop view.
+        </p>
         <ul class={styles.approximate} aria-label="Approximations">
           <For each={approximations()}>
             {(text) => (
