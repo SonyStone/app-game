@@ -63,6 +63,11 @@ beforeEach(() => {
   document.addEventListener('pointerdown', record, { capture: true });
 });
 
+// The first import of a variant's modules is slow under load: done once here, outside the tests' time limit.
+beforeAll(async () => {
+  await Promise.all([...paintVariants, ...featureDemos].map((variant) => variant.load()));
+}, 60_000);
+
 afterEach(() => {
   dispose?.();
   dispose = undefined;
