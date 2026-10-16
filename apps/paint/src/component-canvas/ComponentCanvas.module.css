@@ -634,3 +634,54 @@
     min-height: 0;
   }
 }
+
+/* The tile cluster mockup's dark stage, standing free around its parts (its own class fills the screen). */
+.tileStage {
+  position: relative !important;
+  inset: auto !important;
+  padding: 16px;
+  border-radius: 8px;
+  overflow: visible !important;
+}
+
+/* Tiles as wide as their places around the ring (`.toolsSlot`, `.colorSlot`, `.layersSlot` in `mockup.module.css`). */
+.tileTools {
+  width: var(--tools);
+  height: var(--nav);
+}
+
+.tileWide {
+  width: calc(var(--tools) + var(--gap) + var(--nav));
+}
+
+.tileSide {
+  width: var(--side);
+}
+
+.tileRingBox {
+  width: 220px;
+  height: 220px;
+}
+
+/* The zero-size anchor at the ring's center, as the cluster is in the mockup. */
+.tileRingAnchor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+}
+
+.tileEditor {
+  width: 760px;
+  height: 520px;
+  padding: 0;
+  overflow: hidden !important;
+}
+
+.tileDebug {
+  width: 300px;
+  height: 640px;
+  padding: 0;
+  overflow: hidden !important;
+}

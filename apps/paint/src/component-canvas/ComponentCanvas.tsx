@@ -17,6 +17,7 @@ import { Numbers } from './groups/Numbers';
 import { Panels } from './groups/Panels';
 import { Pucks } from './groups/Pucks';
 import { Styles } from './groups/Styles';
+import { TileCluster } from './groups/TileCluster';
 import { Tools } from './groups/Tools';
 import { WholeUis } from './groups/WholeUis';
 import { HandGhost } from './HandGhost';
@@ -134,6 +135,7 @@ export function ComponentCanvas() {
                 <Panels />
                 <Icons />
                 <Pucks />
+                <TileCluster />
                 <Styles />
               </SpecimenChoices>
             </StripDevice>
@@ -213,6 +215,7 @@ const groups = [
   { id: 'panels', title: 'Panels' },
   { id: 'icons', title: 'Icons' },
   { id: 'pucks', title: 'Pucks' },
+  { id: 'tile-cluster', title: 'Tile cluster' },
   { id: 'styles', title: 'Styles' }
 ] as const;
 
