@@ -387,3 +387,30 @@
     flex: 1;
   }
 }
+
+/* A tile of the tile cluster mockup, the dark ground its value buttons are made for. */
+.darkTile {
+  display: grid;
+  width: 160px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #262626;
+  color: #e4e4e4;
+}
+
+/* Studio's floating controls at the top right, where the brush size grid's button sits. */
+.studioBar {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  background: #fafafaf7;
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: center;
+  gap: 8px;
+}

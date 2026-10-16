@@ -12,6 +12,7 @@ import { createViewportPopups } from './createViewportPopups';
 import { BrushCards } from './groups/BrushCards';
 import { ColorPickers } from './groups/ColorPickers';
 import { LayersPanels } from './groups/LayersPanels';
+import { Numbers } from './groups/Numbers';
 import { CanvasStage, type Stage } from './Screen';
 import { SpecimenChoices } from './Specimen';
 import { createStripDevice, StripDevice } from './TestStrip';
@@ -117,6 +118,7 @@ export function ComponentCanvas() {
                 <ColorPickers />
                 <BrushCards />
                 <LayersPanels />
+                <Numbers />
               </SpecimenChoices>
             </StripDevice>
           </CanvasStage>
@@ -176,7 +178,8 @@ function StageView(props: { stage: Stage; onClose: () => void }): JSX.Element {
 const groups = [
   { id: 'color-pickers', title: 'Color pickers' },
   { id: 'brush-cards', title: 'Brushes' },
-  { id: 'layers', title: 'Layers' }
+  { id: 'layers', title: 'Layers' },
+  { id: 'numbers', title: 'Numbers' }
 ] as const;
 
 const statusText: Record<ChoicesStatus, string> = {
