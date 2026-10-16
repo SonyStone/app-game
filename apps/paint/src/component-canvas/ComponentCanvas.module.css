@@ -520,3 +520,9 @@
   fill: #2a2a2a;
   opacity: 0.35;
 }
+
+/* The Procreate variant's grey behind a popover card that stands free (see `ProcreateFrame`). */
+.procreateGround {
+  padding: 20px;
+  border-radius: 8px;
+}

@@ -10,15 +10,18 @@ import {
   type GamutMask,
   type Harmony
 } from '../../features/color-wheel';
+import { CoolorusWheel, defaultCoolorusSettings, type CoolorusSettings } from '../../features/coolorus-wheel';
 import { HueTriangle } from '../../features/hue-triangle';
+import { ColorsPopover, type ColorMode } from '../../variants/procreate/ColorsPopover';
 import styles from '../ComponentCanvas.module.css';
+import { ProcreateFrame } from '../ProcreateFrame';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
 import { TestStrip } from '../TestStrip';
 
 /**
- * Color pickers (spec 7.1): each picker alone and inside Studio's Color panel, both with test strips, then the OKLCH
- * wheel's gamut masks and harmonies. Every specimen keeps its own color and wheel settings, starting from the same
- * ones, and nothing reaches Paint's own settings.
+ * Color pickers: each picker alone and inside Studio's Color panel, both with test strips, then the OKLCH wheel's
+ * gamut masks and harmonies, where strips would add nothing: those rows compare guides, not colors. Every specimen
+ * keeps its own color and wheel settings, starting from the same ones, and nothing reaches Paint's own settings.
  */
 export function ColorPickers() {
   return (
@@ -28,8 +31,9 @@ export function ColorPickers() {
       omitted={
         <>
           Not here: the square alone (it is part of the Color panel); the panel's background color, hex field and
-          recents (the same for every picker); a custom gamut mask (draw one on any wheel of the mask row). The
-          Procreate disc arrives with the UI variants; the Coolorus-style wheel waits for a decision in the spec.
+          recents (the same for every picker; the panel keeps its recents with Paint's on this address); a custom
+          gamut mask (draw one on any wheel of the mask row). The Procreate disc lives inside its Colors popover, so
+          it comes with it.
         </>
       }
     >
@@ -40,6 +44,10 @@ export function ColorPickers() {
         <PickerSpecimen id="color-pickers/alone/oklch-wheel" label="OKLCH wheel">
           {(color, setColor) => <Wheel color={color()} onChange={setColor} />}
         </PickerSpecimen>
+        <PickerSpecimen id="color-pickers/alone/coolorus" label="Coolorus (RYB, lightness lock)">
+          {(color, setColor) => <Coolorus color={color()} onChange={setColor} />}
+        </PickerSpecimen>
+        <ProcreateSpecimen />
       </CanvasRow>
 
       <CanvasRow title="In the Color panel" note="as Studio shows it; only the picker differs">
@@ -97,7 +105,7 @@ function PickerSpecimen(props: {
 }
 
 /** Studio's Color panel showing `picker`, in Studio's panel frame, with a test strip in the edited color. */
-function PanelSpecimen(props: { id: string; label: string; picker: 'square' | 'triangle' | 'wheel' }) {
+function PanelSpecimen(props: { id: string; label: string; picker: (typeof panelPickers)[number]['id'] }) {
   const [brush, setBrush] = createSignal<Brush>(stripBrush({ backgroundColor: '#ffffff' }));
   const [picker, setPicker] = createSignal<string>(untrack(() => props.picker));
 
@@ -123,6 +131,13 @@ function PanelSpecimen(props: { id: string; label: string; picker: 'square' | 't
                 label: 'Wheel',
                 render: (control) => (
                   <Wheel color={control.color} onChange={control.onChange} onSettle={control.onSettle} />
+                )
+              },
+              {
+                id: 'coolorus',
+                label: 'Coolorus',
+                render: (control) => (
+                  <Coolorus color={control.color} onChange={control.onChange} onSettle={control.onSettle} />
                 )
               }
             ]
@@ -163,6 +178,59 @@ function Wheel(props: {
   );
 }
 
+/** The Coolorus wheel with settings of its own, starting from its defaults. */
+function Coolorus(props: { color: string; onChange: (color: string) => void; onSettle?: () => void }) {
+  const [settings, setSettings] = createSignal<CoolorusSettings>(defaultCoolorusSettings);
+
+  return (
+    <CoolorusWheel
+      color={props.color}
+      onChange={props.onChange}
+      onSettle={() => props.onSettle?.()}
+      settings={settings()}
+      onSettings={(patch) => setSettings((current) => ({ ...current, ...patch }))}
+    />
+  );
+}
+
+/**
+ * The Procreate variant's Colors popover on its Disc, with a test strip in its color. Its recents are this specimen's
+ * own; Mixing, which opens the drawing session's palette window, does nothing here.
+ */
+function ProcreateSpecimen() {
+  const [color, setColor] = createSignal(startColor);
+  const [secondary, setSecondary] = createSignal('#ffffff');
+  const [recent, setRecent] = createSignal<readonly string[]>([]);
+  const [mode, setMode] = createSignal<ColorMode>('disc');
+
+  return (
+    <Specimen
+      id="color-pickers/alone/procreate-disc"
+      label="Procreate disc (in its Colors popover)"
+      below={<TestStrip brush={stripBrush({ color: color() })} width={procreateColorsWidth + 40} />}
+    >
+      <ProcreateFrame width={procreateColorsWidth} label="Colors">
+        <ColorsPopover
+          color={color()}
+          secondary={secondary()}
+          recent={recent()}
+          mode={mode()}
+          onMode={setMode}
+          onInput={setColor}
+          onCommit={(chosen) => setRecent((list) => [chosen, ...list.filter((entry) => entry !== chosen)].slice(0, 10))}
+          onSwap={() => {
+            const current = color();
+            setColor(secondary());
+            setSecondary(current);
+          }}
+          mixing={false}
+          onMixing={() => {}}
+        />
+      </ProcreateFrame>
+    </Specimen>
+  );
+}
+
 /** The Color panel's content width, which pickers fill in Studio. */
 function PickerBox(props: { children: JSX.Element }) {
   return <div class={styles.pickerBox}>{props.children}</div>;
@@ -178,8 +246,12 @@ const startColor = '#c8553d';
 const panelPickers = [
   { id: 'square', label: 'Square' },
   { id: 'triangle', label: 'Triangle' },
-  { id: 'wheel', label: 'Wheel' }
+  { id: 'wheel', label: 'Wheel' },
+  { id: 'coolorus', label: 'Coolorus' }
 ] as const;
+
+/** The Procreate variant's Colors popover width. */
+const procreateColorsWidth = 340;
 
 /** Studio's panel: 284 px wide with 16 px padding. */
 const panelWidth = 284;

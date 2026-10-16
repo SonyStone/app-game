@@ -1,9 +1,12 @@
 import { createDocument, type LayerAction, type LayerInfo } from '@app-game/paint-core/document';
+import type { JSX } from '@solidjs/web';
 import { createSignal, flush, For, onSettled, untrack } from 'solid-js';
-import { LayersPanel } from '../../features/layers';
+import { LayersPanel, type DocumentState } from '../../features/layers';
 import { createStudio } from '../../mockups/puck-gallery/kit/createStudio';
 import { createSolo, Mixer } from '../../mockups/puck-gallery/variants/pads/Mixer';
+import { LayersPopover } from '../../variants/procreate/LayersPopover';
 import styles from '../ComponentCanvas.module.css';
+import { ProcreateFrame } from '../ProcreateFrame';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
 
 /**
@@ -19,15 +22,21 @@ export function LayersPanels() {
       omitted={
         <>
           Not here: groups and masks, which Paint's document does not have (clipping is the nearest); an empty panel,
-          as a drawing always keeps one layer; layer thumbnails, which the engine does not report. The Procreate
-          variant's layers come with the UI variants. The Pads mixer keeps the Puck gallery's own still life, as its
-          thumbnails draw from it.
+          as a drawing always keeps one layer; layer thumbnails, which the engine does not report. The Pads mixer
+          keeps the Puck gallery's own still life, as its thumbnails draw from it.
         </>
       }
     >
       <CanvasRow title="Panels" note="the same four layers">
         <Specimen id="layers/panels/studio" label="Studio">
           <StudioLayers layers={fourLayers} />
+        </Specimen>
+        <Specimen id="layers/panels/procreate" label="Procreate">
+          <ProcreateFrame width={procreateLayersWidth} label="Layers">
+            <SeededLayers layers={fourLayers}>
+              {(layers) => <LayersPopover state={layers.state()} ready onAction={layers.onAction} />}
+            </SeededLayers>
+          </ProcreateFrame>
         </Specimen>
         <Specimen id="layers/panels/pads-mixer" label="Mixer (Puck gallery: Pads)">
           <PadsMixer />
@@ -49,6 +58,34 @@ export function LayersPanels() {
 
 /** Studio's layers panel in its panel frame, editing a document of `layers` (bottom first) of its own. */
 function StudioLayers(props: { layers: readonly LayerSeed[] }) {
+  return (
+    <div class={styles.studioPanel}>
+      <SeededLayers layers={props.layers}>
+        {(layers) => (
+          <LayersPanel
+            state={layers.state()}
+            ready
+            onAction={layers.onAction}
+            onLinearBlending={layers.onLinearBlending}
+          />
+        )}
+      </SeededLayers>
+    </div>
+  );
+}
+
+/**
+ * A paint-core document of `layers` (bottom first) of its own, kept in memory, for a layers panel in `children`: its
+ * state and the commands that edit it, as the engine would apply them.
+ */
+function SeededLayers(props: {
+  layers: readonly LayerSeed[];
+  children: (layers: {
+    state: () => DocumentState;
+    onAction: (action: LayerAction) => void;
+    onLinearBlending: (linear: boolean) => void;
+  }) => JSX.Element;
+}) {
   const drawing = seededDocument(untrack(() => props.layers));
   const [state, setState] = createSignal(drawing.state());
   const run = (change: () => void) => {
@@ -61,15 +98,12 @@ function StudioLayers(props: { layers: readonly LayerSeed[] }) {
     setState(drawing.state());
   };
 
-  return (
-    <div class={styles.studioPanel}>
-      <LayersPanel
-        state={state()}
-        ready
-        onAction={(action: LayerAction) => run(() => drawing.changeLayer(action))}
-        onLinearBlending={(linear) => run(() => drawing.setLinearBlending(linear))}
-      />
-    </div>
+  return untrack(() =>
+    props.children({
+      state,
+      onAction: (action) => run(() => drawing.changeLayer(action)),
+      onLinearBlending: (linear) => run(() => drawing.setLinearBlending(linear))
+    })
   );
 }
 
@@ -119,6 +153,9 @@ function PadsMixer() {
     </div>
   );
 }
+
+/** The Procreate variant's Layers popover width. */
+const procreateLayersWidth = 340;
 
 /** The four layers every panel shows, bottom first. */
 const fourLayers: readonly LayerSeed[] = [
