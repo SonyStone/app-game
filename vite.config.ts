@@ -8,6 +8,7 @@ import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import wasm from 'vite-plugin-wasm';
+import { choicesBridge } from './apps/paint/choicesBridge';
 import { recordingBridge } from './apps/paint/recordingBridge';
 import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
 import { vitePluginMarkdown } from './packages/vite-plugin-markdown/src';
@@ -58,7 +59,9 @@ export default defineConfig({
     // viteFBXPlugin(),
     typegpuPlugin({}),
     // Paint Studio at /paint/studio saves its input recordings through this dev server too.
-    recordingBridge()
+    recordingBridge(),
+    // The component canvas at /paint/components saves its stars and comments through it.
+    choicesBridge()
   ],
   server: {
     port: devServerPort,

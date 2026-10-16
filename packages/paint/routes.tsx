@@ -122,6 +122,14 @@ export const restRoutes: Routes[] = [
     )
   },
   {
+    path: '/components',
+    name: 'Paint · Component canvas',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() =>
+      import('@app-game/paint/component-canvas').then(({ ComponentCanvas }) => ({ default: ComponentCanvas }))
+    )
+  },
+  {
     path: '/trigonometry',
     name: 'Trigonometry Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,

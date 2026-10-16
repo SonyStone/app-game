@@ -6,6 +6,7 @@ import typegpu from 'unplugin-typegpu/vite';
 import { defineConfig, type Plugin } from 'vite';
 import solid from 'vite-plugin-solid';
 import { VitePWA } from 'vite-plugin-pwa';
+import { choicesBridge } from './choicesBridge';
 import { recordingBridge } from './recordingBridge';
 import type { PaintBuild } from './src/features/pwa/buildInfo';
 
@@ -16,6 +17,7 @@ export default defineConfig(({ command }) => ({
     solid(), typegpu(), UnoCSS({ configFile: fileURLToPath(new URL('../../uno.config.ts', import.meta.url)) }),
     performanceBridge(),
     recordingBridge(),
+    choicesBridge(),
     VitePWA({
       registerType: 'prompt',
       injectRegister: null,

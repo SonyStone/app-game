@@ -1,0 +1,282 @@
+/* The tokens Paint's components read, as Studio defines them. */
+.page {
+  --ink: #444;
+  --muted: #777;
+  --line: #dedede;
+  --accent: #237aab;
+  --surface: #f8f8f8;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #f1f1f0;
+  color: var(--ink);
+  font:
+    12px/1.45 Arial,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
+/* The canvas handles every touch itself: one finger from empty space pans, two pinch. */
+.viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+
+  &[data-space-pan] {
+    cursor: grab;
+  }
+}
+
+.world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 160px;
+  width: max-content;
+  max-width: 4000px;
+  padding: 80px;
+  transform-origin: 0 0;
+}
+
+.groupTitle {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.groupFrame {
+  display: grid;
+  gap: 48px;
+  padding: 32px;
+  border: 1px dashed rgb(119 119 119 / 25%);
+  border-radius: 12px;
+}
+
+.row {
+  display: grid;
+  gap: 14px;
+}
+
+.rowTitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rowNote {
+  margin-left: 8px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.rowItems {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 40px;
+}
+
+.specimen {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin: 0;
+}
+
+.caption {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.label {
+  margin-right: 6px;
+}
+
+.captionButton {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #a3a3a3;
+
+  svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linejoin: round;
+  }
+
+  &[aria-pressed='true'] {
+    color: #4a4a4a;
+
+    svg {
+      fill: currentColor;
+    }
+  }
+
+  &:disabled {
+    opacity: 0.4;
+  }
+}
+
+.comment {
+  max-width: 252px;
+  margin: 0;
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+.commentField {
+  width: 252px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  resize: vertical;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.omitted {
+  max-width: 760px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Specimen frames: what the component sits in inside Paint. */
+.pickerBox {
+  width: 252px;
+}
+
+.studioPanel {
+  width: 284px;
+  background: #fafafaf7;
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px #00000017;
+
+  > section {
+    padding: 16px;
+  }
+}
+
+.strip {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  /* Paint's paper (paint-core's paperColor), shown until the engine draws its first frame. */
+  background: #faf8f4;
+  box-shadow: inset 0 0 0 1px #0000001a;
+}
+
+.stripCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.stripClear {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #a3a3a3;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.stripStatus {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* The canvas's own controls, for the free hand: the right hand of a left-handed artist. */
+.panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid #dcdcdc;
+  border-radius: 10px;
+  background: #fafafaf0;
+  box-shadow: 0 2px 12px #0000000f;
+
+  button {
+    min-height: 36px;
+    padding: 0 12px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ink);
+
+    &:active {
+      background: #0000000f;
+    }
+  }
+}
+
+.panelGap {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: #dddddd;
+}
+
+.panelStatus {
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
