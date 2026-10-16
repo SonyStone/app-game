@@ -1,0 +1,222 @@
+/* A stand-in painting behind each set: warm and cool patches with soft edges, as artwork under the UI. */
+.painting {
+  display: grid;
+  place-items: center;
+  width: 300px;
+  height: 300px;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 22% 28%, #d9773ccc 0 18%, transparent 34%),
+    radial-gradient(circle at 74% 34%, #2d5a7bdd 0 20%, transparent 38%),
+    radial-gradient(circle at 46% 78%, #7f9a4ecc 0 16%, transparent 32%),
+    linear-gradient(160deg, #faf8f4, #e9e2d6);
+}
+
+.set {
+  display: grid;
+  gap: 10px;
+  width: 220px;
+}
+
+.line {
+  display: flex;
+  gap: 8px;
+}
+
+.iconButton,
+.valueButton,
+.tabs button {
+  border: 1px solid transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.valueButton {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 1px;
+  height: 44px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+
+  small {
+    font-size: 10px;
+    opacity: 0.7;
+  }
+
+  b {
+    font-size: 15px;
+    font-weight: 600;
+
+    small {
+      margin-left: 2px;
+    }
+  }
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+
+  button {
+    flex: 1;
+    height: 34px;
+    border-radius: 7px;
+  }
+}
+
+.panel {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 10px;
+
+  h4 {
+    margin: 0 0 2px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+}
+
+.panelRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+
+  b {
+    font-weight: 500;
+  }
+}
+
+/* Paint today: light neutral greys, thin borders, the blue of a chosen tool. */
+.neutral {
+  color: #444;
+
+  .iconButton,
+  .valueButton,
+  .tabs,
+  .panel {
+    border: 1px solid #d8d8d8;
+    background: #fafafaf7;
+  }
+
+  .iconButton[aria-pressed='true'] {
+    border-color: #71b3d8;
+    background: #e6f3fa;
+    color: #237aab;
+  }
+
+  .tabs button {
+    background: transparent;
+    color: inherit;
+
+    &[aria-selected='true'] {
+      background: #ececec;
+    }
+  }
+}
+
+/* Frosted glass: translucent white over a blur of the artwork, a light rim and a soft shadow. */
+.glass {
+  color: #2b2b2b;
+
+  .iconButton,
+  .valueButton,
+  .tabs,
+  .panel {
+    border: 1px solid #ffffff8c;
+    background: #ffffff59;
+    box-shadow:
+      inset 0 1px 0 #ffffffb3,
+      0 6px 20px #0000001f;
+    backdrop-filter: blur(14px) saturate(1.4);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  }
+
+  .iconButton[aria-pressed='true'] {
+    background: #ffffffc4;
+  }
+
+  .tabs button {
+    background: transparent;
+    color: inherit;
+
+    &[aria-selected='true'] {
+      background: #ffffffa6;
+      box-shadow: 0 1px 4px #0000001a;
+    }
+  }
+}
+
+/* Flat: solid fills without borders or shadows; the chosen state is a dark fill. */
+.flat {
+  color: #333;
+
+  .iconButton,
+  .valueButton,
+  .tabs,
+  .panel {
+    border-color: transparent;
+    background: #ececec;
+  }
+
+  .iconButton[aria-pressed='true'] {
+    background: #3a3a3a;
+    color: #fff;
+  }
+
+  .tabs button {
+    background: transparent;
+    color: inherit;
+
+    &[aria-selected='true'] {
+      background: #3a3a3a;
+      color: #fff;
+    }
+  }
+}
+
+/* Outline: no fills, dark lines only; the chosen state thickens the line. */
+.outline {
+  color: #2b2b2b;
+
+  .iconButton,
+  .valueButton,
+  .panel {
+    border: 1.5px solid #2b2b2b;
+    background: transparent;
+  }
+
+  .tabs {
+    padding: 0;
+    gap: 6px;
+  }
+
+  .tabs button {
+    border: 1.5px solid #2b2b2b66;
+    background: transparent;
+    color: inherit;
+
+    &[aria-selected='true'] {
+      border-color: #2b2b2b;
+      box-shadow: inset 0 0 0 1px #2b2b2b;
+    }
+  }
+
+  .iconButton[aria-pressed='true'] {
+    box-shadow: inset 0 0 0 1.5px #2b2b2b;
+  }
+}

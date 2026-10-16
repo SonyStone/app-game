@@ -15,6 +15,7 @@ import { Icons } from './groups/Icons';
 import { LayersPanels } from './groups/LayersPanels';
 import { Numbers } from './groups/Numbers';
 import { Pucks } from './groups/Pucks';
+import { Styles } from './groups/Styles';
 import { CanvasStage, type Stage } from './Screen';
 import { SpecimenChoices } from './Specimen';
 import { createStripDevice, StripDevice } from './TestStrip';
@@ -123,6 +124,7 @@ export function ComponentCanvas() {
                 <Numbers />
                 <Icons />
                 <Pucks />
+                <Styles />
               </SpecimenChoices>
             </StripDevice>
           </CanvasStage>
@@ -185,7 +187,8 @@ const groups = [
   { id: 'layers', title: 'Layers' },
   { id: 'numbers', title: 'Numbers' },
   { id: 'icons', title: 'Icons' },
-  { id: 'pucks', title: 'Pucks' }
+  { id: 'pucks', title: 'Pucks' },
+  { id: 'styles', title: 'Styles' }
 ] as const;
 
 const statusText: Record<ChoicesStatus, string> = {
