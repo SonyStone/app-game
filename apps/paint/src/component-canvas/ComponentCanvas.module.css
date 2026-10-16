@@ -352,3 +352,38 @@
     }
   }
 }
+
+/* The Pads controller's body around its mixer, with the tokens the mixer reads (`PadsVariant.module.css`). */
+.padsFrame {
+  --silk: #7a7a7a;
+  --ink: #d4d4d4;
+  --lit: #f5ead6;
+  --lit-edge: #fff9ee;
+  --lit-ink: #18150f;
+  --glow: rgb(255 228 186 / 0.42);
+  --lcd: #0a0a09;
+  --lcd-ink: #f0e2c6;
+  --lcd-dim: #857c6b;
+  --lcd-glow: 0 0 6px rgb(255 210 140 / 0.35);
+  --groove: #1f1f1f;
+  --condensed: 'Avenir Next Condensed', 'Roboto Condensed', sans-serif-condensed, 'Arial Narrow', system-ui, sans-serif;
+  --mono: 'SF Mono', ui-monospace, Menlo, 'Roboto Mono', 'Droid Sans Mono', monospace;
+  --body: #121212;
+  --pad: #262626;
+  --pad-hover: #2f2f2f;
+  display: flex;
+  flex-direction: column;
+  /* The variant's mixer area: five 64 px channels, their gaps, and the end buttons. */
+  width: calc(5 * 64px + 4 * 4px + 6px + 40px + 24px);
+  height: 330px;
+  padding: 12px;
+  border: 1px solid #000;
+  border-radius: 6px;
+  background: var(--body);
+  color: var(--ink);
+  touch-action: none;
+
+  > * {
+    flex: 1;
+  }
+}
