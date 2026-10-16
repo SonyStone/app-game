@@ -32,8 +32,8 @@ export type Intent =
   /** Turns the view to `degrees` clockwise, or by `degrees` when `relative`. */
   | { type: 'rotate'; degrees: number; relative?: boolean }
   | { type: 'view'; action: 'reset' | 'mirror' | 'fullscreen' | 'pixel-grid' }
-  /** Opens or closes a window of the session: the mixing palette toggles, the Pen window opens. */
-  | { type: 'window'; window: 'palette' | 'pen' }
+  /** Opens or closes a window of the session: the mixing palette toggles, the Pen and calibration windows open. */
+  | { type: 'window'; window: 'palette' | 'pen' | 'pressure' }
   | { type: 'symmetry'; mode: PaintSymmetry['mode']; segments?: number }
   | { type: 'history'; action: 'undo' | 'redo'; count: number }
   | { type: 'file'; action: 'png' | 'psd' | 'download' | 'open' | 'insert' | 'abr' }
@@ -154,7 +154,11 @@ export function describeIntent(intent: Intent, context: CommandContext): string 
         'pixel-grid': 'Pixel grid'
       }[intent.action];
     case 'window':
-      return { palette: 'Mixing palette', pen: 'Pen and palm rejection' }[intent.window];
+      return {
+        palette: 'Mixing palette',
+        pen: 'Pen and palm rejection',
+        pressure: 'Calibrate pen pressure'
+      }[intent.window];
     case 'symmetry':
       return intent.mode === 'off'
         ? 'Symmetry off'
@@ -482,6 +486,10 @@ const rules: Rule[] = [
   [
     /^(?:(?:open|show)\s+(?:the\s+)?)?(?:pen\s+settings|palm(?:\s+rejection)?|pen\s+hover)$/i,
     () => ({ type: 'window', window: 'pen' })
+  ],
+  [
+    /^(?:(?:open|show)\s+(?:the\s+)?)?(?:calibrate\s+(?:the\s+)?(?:pen(?:\s+pressure)?|pressure)|(?:pen\s+)?pressure(?:\s+(?:calibration|curve))?)$/i,
+    () => ({ type: 'window', window: 'pressure' })
   ],
   [
     /^(?:symmetry|sym|mirror\s+mode)(?:\s+(off|none|vertical|horizontal|quadrant|dual|4[\s-]*way|diagonal|radial|mandala|kaleidoscope))?(?:\s+(\d+))?$/i,

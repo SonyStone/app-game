@@ -1,0 +1,209 @@
+/*
+ * Light and neutral by default. Hosts theme it with --ink (text, the curve), --muted, --line, --surface (the graph,
+ * buttons), --raised (the step chips), --accent and --warning, as Paint's grey windows do.
+ */
+.calibration {
+  display: grid;
+  gap: 0;
+  padding-bottom: 12px;
+  color: var(--ink, #444);
+  font-size: 13px;
+}
+
+.steps {
+  display: flex;
+  gap: 4px;
+  margin: 10px 14px 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  font-size: 12px;
+  color: var(--muted, #777);
+
+  li {
+    flex: 1;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--raised, #e9e9e9);
+    counter-increment: step;
+
+    &::before {
+      content: counter(step) '. ';
+    }
+
+    &[aria-current='step'] {
+      background: color-mix(in srgb, var(--ink, #444) 16%, var(--raised, #e9e9e9));
+      color: var(--ink, #444);
+    }
+  }
+}
+
+.instruction {
+  margin: 10px 14px 6px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.canvas {
+  margin: 0 14px;
+  font-size: 12px;
+  color: var(--muted, #777);
+
+  canvas {
+    border-radius: 6px;
+    outline: 1px solid var(--line, #dedede);
+  }
+
+  .calibration & button {
+    padding: 4px 10px;
+    border: 1px solid var(--line, #dedede);
+    border-radius: 6px;
+    background: var(--surface, #fff);
+    color: var(--ink, #444);
+  }
+
+  /* A hover of its own, over a host's, such as a lighter one in a dark window. */
+  .calibration & button:not(:disabled):hover {
+    background: color-mix(in srgb, var(--ink, #444) 10%, var(--surface, #fff));
+  }
+}
+
+.progress {
+  display: block;
+  width: calc(100% - 28px);
+  height: 6px;
+  margin: 2px 14px 0;
+  accent-color: var(--ink, #5c5c5c);
+}
+
+.warning {
+  margin: 8px 14px 0;
+  font-size: 12px;
+  color: var(--warning, #8a5a00);
+}
+
+.chart {
+  display: block;
+  width: calc(100% - 28px);
+  margin: 12px 14px 0;
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #dedede);
+  border-radius: 6px;
+}
+
+.bar {
+  fill: color-mix(in srgb, var(--ink, #444) 12%, var(--surface, #fff));
+}
+
+.frame {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink, #444) 35%, var(--surface, #fff));
+}
+
+.identity {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink, #444) 35%, var(--surface, #fff));
+  stroke-dasharray: 3 3;
+}
+
+.curve {
+  fill: none;
+  stroke: var(--ink, #2b3238);
+  stroke-width: 2;
+}
+
+.axis {
+  font-size: 10px;
+  fill: var(--muted, #777);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin: 12px 14px 0;
+
+  /* Beats a host's button reset, such as Paint's, which has the specificity of one class and an element. */
+  .calibration & button {
+    min-height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--line, #dedede);
+    border-radius: 6px;
+    background: var(--surface, #fff);
+    color: inherit;
+
+    &:disabled {
+      opacity: 0.5;
+    }
+  }
+
+  .calibration & button:not(:disabled):hover {
+    background: color-mix(in srgb, var(--ink, #444) 10%, var(--surface, #fff));
+  }
+
+  .calibration & .primary {
+    background: var(--ink, #3b3b3b);
+    border-color: var(--ink, #3b3b3b);
+    color: var(--surface, #fff);
+  }
+
+  .calibration & .primary:not(:disabled):hover {
+    background: color-mix(in srgb, var(--ink, #3b3b3b) 85%, var(--surface, #fff));
+  }
+}
+
+.chart {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: crosshair;
+}
+
+.point {
+  outline: none;
+
+  &:focus-visible .handle,
+  &[data-active='true'] .handle {
+    stroke-width: 3;
+  }
+
+  &:focus-visible .handle {
+    stroke: var(--accent, #237aab);
+  }
+
+  &[data-removing='true'] .handle {
+    fill: #f3d6d6;
+    stroke: #b54545;
+    stroke-dasharray: 2 2;
+  }
+}
+
+.hit {
+  fill: transparent;
+}
+
+.handle {
+  fill: var(--surface, #fff);
+  stroke: var(--ink, #2b3238);
+  stroke-width: 2;
+}
+
+/* The pen pressure dot that runs along the curve while the pen touches the test canvas. */
+.marker {
+  fill: var(--accent, #237aab);
+  stroke: var(--surface, #fff);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.readout {
+  font-size: 12px;
+  fill: var(--ink, #444);
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  margin: 8px 14px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted, #777);
+}

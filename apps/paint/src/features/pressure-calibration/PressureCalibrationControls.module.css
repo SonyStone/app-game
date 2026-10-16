@@ -1,0 +1,38 @@
+/* Laid out as the Pen window's other groups, such as palm rejection. */
+.controls {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px 10px;
+  border: 0;
+  border-top: 1px solid var(--line);
+
+  legend {
+    padding: 8px 0 2px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  font-size: 13px;
+
+  /* Beats the editor's button reset, which has the specificity of one class and an element. */
+  .controls & button {
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--raised);
+    cursor: pointer;
+  }
+
+  /* Over the Classic editor's light hover. */
+  .controls & button:hover:not([data-pointer='touch'] *, [data-hover-stale] *) {
+    background: var(--line);
+  }
+}

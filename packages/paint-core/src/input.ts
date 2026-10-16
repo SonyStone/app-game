@@ -39,6 +39,12 @@ export function attachInput(
      */
     drawn?: (event: PointerEvent, brush: Brush) => void;
     /**
+     * Maps raw pen pressure to the pressure strokes receive, before any stroke processor or brush engine, such as a
+     * device calibration curve; called for every pen sample and must return a value in [0, 1]. Mouse and touch keep
+     * pressure 1. Pressure is left unchanged when absent.
+     */
+    mapPressure?: (raw: number) => number;
+    /**
      * Optional contact action, e.g. sampling canvas paint. Consumes the contact without a stroke or touch pan: `run`
      * receives the document point of the contact, `move` the points it is dragged to and `end` its release, or a
      * cancellation with `cancelled` set.
@@ -142,6 +148,9 @@ export function attachInput(
     const rect = canvas.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
+  /** The pressure a stroke receives from a sample of `pointerType`; every pen sample a stroke gets passes here. */
+  const pressureOf = (pointerType: string, raw: number) =>
+    pointerType === 'pen' ? (options.mapPressure?.(raw) ?? raw) : 1;
   let stopBuildUp: (() => void) | undefined;
   /** Sends a stroke's samples from `event`; with `samples` false, only the points predicted after it. */
   const collect = (event: PointerEvent, samples = true) => {
@@ -151,7 +160,7 @@ export function attachInput(
     const sample = (input: PointerEvent): Sample => ({
       ...screenToWorld({ x: input.clientX - rect.left, y: input.clientY - rect.top }, draw.camera, draw.size),
       ...tabletAxes(input),
-      pressure: event.pointerType === 'pen' ? input.pressure : 1,
+      pressure: pressureOf(event.pointerType, input.pressure),
       time: input.timeStamp
     });
     const real: Sample[] = [];
@@ -307,7 +316,7 @@ export function attachInput(
         });
         return;
       }
-      const pressure = event.pointerType === 'pen' ? event.pressure : 1;
+      const pressure = pressureOf(event.pointerType, event.pressure);
       const latest = {
         ...tabletAxes(event),
         ...screenToWorld(point, camera, options.size()),

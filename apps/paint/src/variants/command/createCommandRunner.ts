@@ -164,8 +164,8 @@ export function createCommandRunner(options: {
       case 'view':
         return runView(intent.action, done, refuse);
       case 'window':
-        if (intent.window === 'pen') {
-          session.windows.open('pen');
+        if (intent.window !== 'palette') {
+          session.windows.open(intent.window);
           return done();
         }
 

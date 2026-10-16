@@ -3,6 +3,7 @@ import { createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { initAbr } from '@app-game/abr-parser';
+import { defaultBrush } from '@app-game/paint-core/brush';
 import type { PaintEvent, PaintRuntimeCommand } from '@app-game/paint-core/protocol';
 import { BrushPreview } from './BrushPreview';
 
@@ -87,3 +88,78 @@ it('disposes during an upload without publishing a late brush or status', async 
   expect(mock.detach).toHaveBeenCalledOnce();
   expect(mock.terminate).toHaveBeenCalledOnce();
 });
+
+it('draws with a brush and its resources and maps pen pressure through the host curve', async () => {
+  const host = document.createElement('div'); document.body.append(host);
+  const brush = { ...defaultBrush(), color: '#202020' };
+  const resource = { id: 'tip', width: 1, height: 1, format: 'r8unorm' as const, pixels: new Uint8Array(1) };
+  const dispose = render(() => <BrushPreview brush={brush} resources={[resource]} mapPressure={(raw) => raw / 2} />, host);
+  try {
+    await vi.waitFor(() => { flush(); expect(mock.input?.ready()).toBe(true); });
+    expect(mock.input?.brush()).toMatchObject({ color: '#202020', size: brush.size });
+    expect(mock.send.mock.calls.filter(([command]) => command.type === 'brush-resources')).toHaveLength(1);
+    mock.input!.send({ type: 'begin', brush: mock.input!.brush(), samples: [pen(0.8), { ...pen(0.8), pointerType: 'mouse', pressure: 1 }] });
+    expect(sent().at(-1)).toMatchObject({ type: 'begin', samples: [{ pressure: 0.4 }, { pressure: 1 }] });
+  } finally { dispose(); }
+});
+
+it('keeps raw strokes and draws them again on a fresh layer whenever the pressure mapping changes', async () => {
+  const host = document.createElement('div'); document.body.append(host);
+  let setHalf!: (value: boolean) => void;
+  const dispose = render(() => {
+    const [half, set] = createSignal(true, { ownedWrite: true }); setHalf = set;
+    return <BrushPreview brush={defaultBrush()} redraw mapPressure={half() ? (raw) => raw / 2 : (raw) => raw} />;
+  }, host);
+  try {
+    await vi.waitFor(() => { flush(); expect(sent().some((command) => command.type === 'layer')).toBe(true); });
+    // Until the engine reports the strokes' layer, nothing draws.
+    expect(mock.input?.ready()).toBe(false);
+    state('background', 1); state('strokes', 2);
+    await vi.waitFor(() => { flush(); expect(mock.input?.ready()).toBe(true); });
+    mock.input!.send({ type: 'begin', brush: mock.input!.brush(), samples: [pen(0.6)] });
+    mock.input!.send({ type: 'samples', samples: [pen(0.8)] });
+    mock.input!.send({ type: 'end' });
+    mock.send.mockClear();
+
+    setHalf(false); flush();
+    // The new layer comes first; its strokes wait for its id, then fill it while transparent and replace the old.
+    expect(sent()).toEqual([{ type: 'layer', action: { type: 'add' } }]);
+    expect(mock.input?.ready()).toBe(false);
+    state('strokes', 2); state('staged', 3);
+    expect(sent().map((command) => command.type === 'layer' ? command.action : command.type)).toEqual([
+      { type: 'add' },
+      { type: 'update', id: 'staged', patch: { opacity: 0 } },
+      'begin', 'samples', 'end',
+      { type: 'update', id: 'staged', patch: { opacity: 1 } },
+      { type: 'delete', id: 'strokes' }
+    ]);
+    expect(sent()[2]).toMatchObject({ samples: [{ pressure: 0.6 }] });
+    expect(sent()[3]).toMatchObject({ samples: [{ pressure: 0.8 }] });
+    expect(mock.input?.ready()).toBe(true);
+
+    // Changes while a redraw waits for its layer run once, after it.
+    mock.send.mockClear();
+    setHalf(true); flush();
+    setHalf(false); flush();
+    setHalf(true); flush();
+    expect(sent()).toEqual([{ type: 'layer', action: { type: 'add' } }]);
+    state('staged', 3); state('third', 3);
+    expect(sent().filter((command) => command.type === 'layer').at(-1)).toEqual(
+      { type: 'layer', action: { type: 'delete', id: 'staged' } });
+    expect(sent().find((command) => command.type === 'samples')).toMatchObject({ samples: [{ pressure: 0.4 }] });
+    expect(sent().filter((command) => command.type === 'layer' && command.action.type === 'add')).toHaveLength(1);
+  } finally { dispose(); }
+});
+
+function sent(): PaintRuntimeCommand[] {
+  return mock.send.mock.calls.map(([command]) => command);
+}
+
+function pen(pressure: number) {
+  return { x: 1, y: 2, pressure, time: 0, pointerType: 'pen' };
+}
+
+/** An engine state whose active layer is `activeId`, among `count` layers. */
+function state(activeId: string, count: number) {
+  mock.post!({ type: 'state', document: { activeId, layers: Array(count).fill({}) } } as unknown as PaintEvent);
+}

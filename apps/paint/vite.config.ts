@@ -53,7 +53,18 @@ export default defineConfig(({ command }) => ({
   ],
   server: { host: '0.0.0.0' },
   worker: { format: 'es', plugins: () => [solid(), typegpu()] },
-  build: { target: 'esnext', outDir: fileURLToPath(new URL('./dist', import.meta.url)), emptyOutDir: true }
+  build: {
+    target: 'esnext',
+    outDir: fileURLToPath(new URL('./dist', import.meta.url)),
+    emptyOutDir: true,
+    // The editor, and pen pressure calibration on a page of its own.
+    rolldownOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        pressure: fileURLToPath(new URL('./pressure.html', import.meta.url))
+      }
+    }
+  }
 }));
 
 /**

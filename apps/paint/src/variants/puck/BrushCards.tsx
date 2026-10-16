@@ -18,7 +18,8 @@ import { percentSetting, sizeSetting, type NumberSetting } from './values';
  * Procreate's Brush Library on the session's presets: sets on the left (recently used, the brushes, imported ABR
  * brushes and erasers), the chosen set's presets as wide stroke cards on the right, the one in use lighter. Choosing
  * a preset paints with it (the eraser keeps erasing with it) and finishes; choosing a set only browses. The header's
- * book opens the ABR viewer to import brushes.
+ * pen opens the session's Pen window (palm rejection, pen hover, pressure calibration) and finishes; its book opens
+ * the ABR viewer to import brushes.
  */
 export function BrushLibrary(props: { session: PaintSession; box: Box; done: () => void; onOpenAbr: () => void }) {
   const { library, tools, recentPresets } = props.session;
@@ -52,6 +53,16 @@ export function BrushLibrary(props: { session: PaintSession; box: Box; done: () 
     <section class={[css.card, styles.library]} style={placed(props.box)}>
       <header class={css.cardHeader}>
         <h3>Brush Library</h3>
+        <TapButton
+          class={css.headerButton}
+          title="Pen: pressure and palm rejection"
+          onTap={() => {
+            props.session.windows.open('pen');
+            props.done();
+          }}
+        >
+          <SketchIcon name="draw" size={18} />
+        </TapButton>
         <TapButton class={css.headerButton} title="ABR brushes: import and edit" onTap={() => props.onOpenAbr()}>
           <SketchIcon name="book" size={18} />
         </TapButton>

@@ -1,0 +1,11 @@
+/* The calibration's own colors that the window's grey theme does not set. */
+.window {
+  --accent: #6cb2dc;
+  --warning: #e3b45c;
+}
+
+.loading {
+  margin: 14px;
+  font-size: 13px;
+  color: var(--muted);
+}

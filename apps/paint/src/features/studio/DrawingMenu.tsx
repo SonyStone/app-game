@@ -3,8 +3,8 @@ import { Show } from 'solid-js';
 import styles from './PaintStudio.module.css';
 
 /**
- * Drawing panel: open, save and export the drawing, keep it in a folder, place an image as a new layer, reset the
- * view, developer tools, host controls, and how the canvas shows pixels and rejects palms.
+ * Drawing panel: open, save and export the drawing, keep it in a folder, place an image as a new layer, calibrate pen
+ * pressure, reset the view, developer tools, host controls, and how the canvas shows pixels and rejects palms.
  */
 export function DrawingMenu(props: {
   /** File commands wait for the engine. */
@@ -23,6 +23,8 @@ export function DrawingMenu(props: {
   folderControls?: JSX.Element;
   /** Live broadcasting, below the folder controls. */
   liveControls?: JSX.Element;
+  /** Opens the pen pressure calibration, below live broadcasting. */
+  pressureCalibration?: JSX.Element;
   /** How the canvas shows pixels, below the file actions. */
   viewOptions?: JSX.Element;
   /** Palm rejection settings, below the view options. */
@@ -85,6 +87,7 @@ export function DrawingMenu(props: {
         </button>
         {props.folderControls}
         {props.liveControls}
+        {props.pressureCalibration}
         <button onClick={() => props.onResetView()}>Reset view</button>
         <button onClick={() => props.onDeveloper()}>Developer</button>
         {props.applicationControls}

@@ -12,10 +12,13 @@ const preset = decodeRuntimeBrush(new Uint8Array(await response.arrayBuffer()));
 <BrushPreview preset={preset} width={1024} height={768} background="colors" />;
 ```
 
-`preset`, `color` and `mixing` are reactive. Changing color does not upload textures again.
-Resource IDs must identify immutable versions. Brush replacement finishes the current gesture and
-waits for resource acknowledgements before allowing new contact. Canvas CSS size may change; logical
-width/height and initial background are fixed at mount. Use a new component instance for a new document.
+`preset`, `brush`, `resources`, `color`, `mixing` and `mapPressure` are reactive. Changing color does not upload
+textures again. Without a `preset`, `brush` draws any brush, with `resources` holding the images its engine needs.
+`recipe` replaces the default processors and engines (raw input with the round brush, or ABR), so an editor can pass
+its own and draw its current brush as its canvas does. `mapPressure` maps raw pen pressure before the brush.
+With `redraw`, the widget keeps its strokes with raw pressure and draws them all again on a fresh layer whenever the
+mapping, brush or color changes, filling it at zero opacity before swapping it in, so the canvas does not flicker;
+Undo, Redo and Clear then edit the kept strokes. Paint's pressure calibration uses it.
 
 The widget retains raw/coalesced pointer input, pressure and tablet axes from Studio's input adapter.
 It uses the same brush sampler, GPU operations and adaptive LOD policy. This first embed runs the runtime

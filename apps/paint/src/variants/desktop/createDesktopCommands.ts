@@ -245,6 +245,7 @@ export function createDesktopCommands(options: {
           checked: () => session.windows.isOpen('palette')
         },
         { label: 'Pen and palm rejection…', run: () => session.windows.open('pen') },
+        { label: 'Calibrate pen pressure…', run: () => session.windows.open('pressure') },
         'separator',
         {
           label: 'Full screen',

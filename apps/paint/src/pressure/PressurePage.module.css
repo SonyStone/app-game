@@ -1,0 +1,28 @@
+.page {
+  --ink: #444;
+  --muted: #777;
+  --line: #dedede;
+  --accent: #237aab;
+
+  box-sizing: border-box;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px 0 32px;
+  color: var(--ink);
+  font-family: system-ui, sans-serif;
+
+  h1 {
+    margin: 0 14px 4px;
+    font-size: 18px;
+  }
+
+  a {
+    color: var(--accent);
+  }
+}
+
+.lead {
+  margin: 0 14px 8px;
+  font-size: 13px;
+  color: var(--muted);
+}

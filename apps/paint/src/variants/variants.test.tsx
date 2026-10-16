@@ -124,6 +124,16 @@ it.each([...paintVariants, ...featureDemos].map((variant) => [variant.name, vari
     expect(pen?.textContent).toContain('Palm rejection');
     expect(pen?.textContent).toContain('continue in a new tab automatically');
 
+    // The Pen window leads to the pen pressure calibration, a window of its own.
+    expect(pen?.textContent).toContain('Not calibrated');
+    [...pen!.querySelectorAll('button')].find((button) => button.textContent === 'Calibrate…')!.click();
+    flush();
+    expect(document.querySelector('[role="dialog"][aria-label="Pen pressure"]')).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem('paint.windows')!)).toMatchObject({ pressure: { open: true } });
+    document.querySelector<HTMLButtonElement>('button[aria-label="Close Pen pressure"]')!.click();
+    flush();
+    expect(document.querySelector('[role="dialog"][aria-label="Pen pressure"]')).toBeNull();
+
     pen!.querySelector<HTMLButtonElement>('button[aria-label="Close Pen"]')!.click();
     flush();
     expect(document.querySelector('[role="dialog"][aria-label="Pen"]')).toBeNull();

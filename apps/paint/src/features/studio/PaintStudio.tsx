@@ -19,6 +19,7 @@ import { HueTriangle } from '../hue-triangle';
 import { HistorySourceControl, LayersPanel } from '../layers';
 import { LiveBadge, LiveControls, LiveViewer, liveRelayUrl, watchedRoom, watchLink } from '../live';
 import { PalmRejectionControls } from '../palm-rejection';
+import { PressureCalibrationButton } from '../pressure-calibration';
 import { createRadialMenu, RadialMenu, type RadialItem } from '../radial-menu';
 import { RecordingControls } from '../recording';
 import { SelectionActions } from '../selection';
@@ -579,6 +580,15 @@ export function PaintStudio(props: {
                     folderControls={<DrawingFolderControls folder={drawingFolder} ready={ready()} />}
                     liveControls={
                       <LiveControls live={live} link={(watched) => watchLink(location, watched)} ready={ready()} />
+                    }
+                    pressureCalibration={
+                      <PressureCalibrationButton
+                        calibrated={!!session.pressureCalibration.calibration()}
+                        onOpen={() => {
+                          closePanel();
+                          session.windows.open('pressure');
+                        }}
+                      />
                     }
                     viewOptions={
                       <ViewOptionsControls settings={viewOptions.settings()} onChange={viewOptions.update} />

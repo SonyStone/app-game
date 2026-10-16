@@ -1395,6 +1395,25 @@ try {
     await waitForSaved(page);
   });
 
+  await step('the pen pressure calibration opens from the Drawing menu as a window with a test canvas', async () => {
+    const menu = page.getByRole('complementary', { name: 'Drawing' });
+    await page.getByRole('button', { name: 'Drawing menu' }).click();
+    await menu.getByRole('button', { name: /Calibrate pen pressure/ }).click();
+    const calibration = page.getByRole('dialog', { name: 'Pen pressure' });
+    await calibration.getByText('Draw as you usually do').waitFor({ timeout: 10_000 });
+    await calibration.getByRole('status').filter({ hasText: 'Ready' }).waitFor({ timeout: 20_000 });
+    // A mouse stroke on the test canvas is drawn but not measured, and the window says so.
+    const box = await calibration.getByLabel('Brush preview canvas').boundingBox();
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.4, { steps: 8 });
+    await page.mouse.up();
+    await calibration.getByText(/Calibration measures a pen; mouse strokes are not counted/).waitFor({ timeout: 5_000 });
+    await page.screenshot({ path: path.join(os.tmpdir(), 'paint-pressure-calibration.png') });
+    await calibration.getByRole('button', { name: 'Cancel' }).click();
+    await calibration.waitFor({ state: 'detached', timeout: 5_000 });
+  });
+
   await step('a second tab waits for the drawing, and either tab can take it over', async () => {
     const second = await context.newPage();
     try {

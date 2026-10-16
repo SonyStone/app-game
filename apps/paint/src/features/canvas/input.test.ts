@@ -319,6 +319,43 @@ describe('input to worker contract', () => {
     canvas.dispatchEvent(touch);
     expect(touch.defaultPrevented).toBe(true);
   });
+  it('maps pen pressure through the device curve once, before the engine, and leaves mouse and touch alone', () => {
+    const mapPressure = vi.fn((raw: number) => raw / 2);
+    const { commands, pointer } = setup(undefined, defaultBrush, undefined, defaultCamera, ...noOptions, {
+      mapPressure,
+      predict: () => true
+    });
+    pointer('pointerdown', 10, 20, { pointerType: 'pen', pressure: 0.2 });
+    pointer('pointermove', 30, 40, {
+      pointerType: 'pen',
+      getCoalescedEvents: () => [
+        { clientX: 20, clientY: 30, pressure: 0.4, timeStamp: 10 },
+        { clientX: 30, clientY: 40, pressure: 0.9, timeStamp: 20 }
+      ],
+      getPredictedEvents: () => [{ clientX: 40, clientY: 40, pressure: 0.8, timeStamp: 30 }]
+    });
+    // The release adds an endpoint with the last contact pressure, already mapped.
+    pointer('pointerup', 40, 40, { pointerType: 'pen', pressure: 0 });
+    const pressures = (from: PaintCommand[]) =>
+      from.flatMap((command) => ('samples' in command ? (command.samples ?? []) : [])).map((sample) => sample.pressure);
+    expect(pressures(commands)).toEqual([0.1, 0.2, 0.45, 0.45]);
+    // Predicted points go through the same curve.
+    expect(commands.find((command) => command.type === 'samples' && command.predicted?.length)).toMatchObject({
+      predicted: [{ pressure: 0.4 }]
+    });
+    expect(mapPressure.mock.calls.map(([raw]) => raw)).toEqual([0.2, 0.4, 0.9, 0.8]);
+
+    commands.length = 0;
+    mapPressure.mockClear();
+    pointer('pointerdown', 10, 20, { pointerType: 'mouse', pressure: 0.5 });
+    pointer('pointermove', 30, 40, { pointerType: 'mouse', pressure: 0.5 });
+    pointer('pointerup', 30, 40, { pointerType: 'mouse', pressure: 0 });
+    pointer('pointerdown', 10, 20, { pointerType: 'touch', pointerId: 2, pressure: 0.5 });
+    pointer('pointermove', 30, 40, { pointerType: 'touch', pointerId: 2, pressure: 0.5 });
+    pointer('pointerup', 30, 40, { pointerType: 'touch', pointerId: 2, pressure: 0 });
+    expect(pressures(commands)).toEqual([1, 1]);
+    expect(mapPressure).not.toHaveBeenCalled();
+  });
   it('preserves pending ink on pointercancel and can start another stroke', () => {
     const { commands, pointer } = setup();
     pointer('pointerdown', 0, 0);

@@ -1,0 +1,29 @@
+{
+  "name": "@app-game/pressure-calibration",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@app-game/abr-paint": "workspace:*",
+    "@app-game/brush-preview": "workspace:*",
+    "@app-game/paint-core": "workspace:*",
+    "@solid-primitives/event-listener": "catalog:",
+    "@solidjs/web": "catalog:",
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.70",
+    "jsdom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vitest": "catalog:"
+  }
+}

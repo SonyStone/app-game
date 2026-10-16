@@ -20,7 +20,11 @@ export type StrokeSettings = {
   firmness: number;
 };
 
-/** Research defaults are ready to try; the existing Studio mode remains selected initially. */
+/**
+ * Research defaults are ready to try; the existing Studio mode remains selected initially. The pressure range, 5% to
+ * 80% with firmness 1, is Leonardo 0.17.70's (`leonardo-analysis/stylus-and-stabilization.md`, `pressure_max` about
+ * 0.80), taken with its normal and smooth modes on 2026-09-06 and not fitted to anyone's hand.
+ */
 export function defaultStrokeSettings(): StrokeSettings {
   return {
     mode: 'studio',

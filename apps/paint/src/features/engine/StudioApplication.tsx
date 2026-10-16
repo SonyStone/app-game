@@ -1,6 +1,4 @@
 import { createBrushResources } from '@app-game/abr-paint/resources';
-import { abrBrush } from '@app-game/paint-core/composition/abrBrushEngine';
-import { createAbrProcessor } from '@app-game/paint-core/composition/abrStrokeProcessor';
 import type { StorageFactory } from '@app-game/paint-core/composition/contracts';
 import { createMemoryStorage } from '@app-game/paint-core/composition/memoryStorage';
 import {
@@ -16,18 +14,16 @@ import {
   type RuntimeBinding
 } from '@app-game/paint-core/composition/PaintApplication';
 import { placeImageEdit } from '@app-game/paint-core/composition/placeImageEdit';
-import { roundBrush } from '@app-game/paint-core/composition/roundBrushEngine';
 import { symmetryFeature } from '@app-game/paint-core/composition/symmetryFeature';
-import { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
 import { createDocument } from '@app-game/paint-core/document';
 import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
-import { studioProcessors } from '@app-game/paint-core/strokeProcessors';
 import { createTileStore } from '@app-game/paint-core/tileStore';
 import { fillEdit } from '../fill/fillEdit';
 import { framesFeature } from '../frames/framesFeature';
 import { gradientEdit } from '../gradient/gradientEdit';
 import { selectionEdit } from '../selection/selectionEdit';
 import { transformEdit } from '../transform/transformEdit';
+import { studioBrushRecipe } from './studioBrushes';
 
 /**
  * Starts the Studio engine: mounts the recipe under its own Solid root and returns the command runtime. `post`
@@ -53,23 +49,10 @@ export function StudioApplication(props: RuntimeBinding) {
       <Storage storage={studioStorage}>
         <Renderer renderer={createPaintRenderer}>
           <StrokeProcessor
-            processors={{ ...studioProcessors, abr: createAbrProcessor }}
-            // ABR presets smooth as their preset says unless the stroke is raw or uses the stabilizer.
-            selectProcessor={(brush) =>
-              brush.engine?.id === 'abr' && brush.stroke.mode !== 'none' && brush.stroke.mode !== 'stabilizer'
-                ? 'abr'
-                : brush.stroke.mode
-            }
+            processors={studioBrushRecipe.processors}
+            selectProcessor={studioBrushRecipe.selectProcessor}
           >
-            <BrushEngines
-              engines={{
-                [roundBrush.id]: roundBrush.engine,
-                eraser: roundBrush.engine,
-                [texturedBrush.id]: texturedBrush.engine,
-                [abrBrush.id]: abrBrush.engine
-              }}
-              selectEngine={(brush) => (brush.tool === 'eraser' ? 'eraser' : 'round')}
-            >
+            <BrushEngines engines={studioBrushRecipe.engines} selectEngine={studioBrushRecipe.selectEngine}>
               <BrushResources resources={createBrushResources}>
                 <DocumentFeatures
                   features={[symmetryFeature, framesFeature]}

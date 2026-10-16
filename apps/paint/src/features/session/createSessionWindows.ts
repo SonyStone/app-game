@@ -37,25 +37,34 @@ export function createSessionWindows() {
 }
 
 /**
- * The session's windows: `palette`, the mixing palette (see `MixingPaletteWindow`), and `pen`, palm rejection and
- * what to do when Chrome loses the pen hover.
+ * The session's windows: `palette`, the mixing palette (see `MixingPaletteWindow`); `pen`, palm rejection, what to do
+ * when Chrome loses the pen hover and the way to `pressure`, the pen pressure calibration (see
+ * `PressureCalibrationWindow`).
  */
-export type SessionWindowId = 'palette' | 'pen';
+export type SessionWindowId = 'palette' | 'pen' | 'pressure';
 
 type WindowState = { open: boolean; position?: { x: number; y: number } };
 
-/** The palette at the top right, below a variant's top bar; the pen settings in the middle. */
+/**
+ * The palette at the top right, below a variant's top bar; the pen settings in the middle; the calibration, a tall
+ * window, at the top left, opposite the side panels most variants open on the right.
+ */
 function defaultPosition(id: SessionWindowId) {
-  return id === 'palette'
-    ? { x: Math.max(8, innerWidth - 336), y: 72 }
-    : { x: Math.max(8, innerWidth / 2 - 160), y: Math.max(8, innerHeight / 2 - 220) };
+  switch (id) {
+    case 'palette':
+      return { x: Math.max(8, innerWidth - 336), y: 72 };
+    case 'pen':
+      return { x: Math.max(8, innerWidth / 2 - 160), y: Math.max(8, innerHeight / 2 - 220) };
+    case 'pressure':
+      return { x: 64, y: 56 };
+  }
 }
 
 function read(): Partial<Record<SessionWindowId, WindowState>> {
   try {
     const stored: unknown = JSON.parse(localStorage.getItem(storageKey) ?? '{}');
     const windows: Partial<Record<SessionWindowId, WindowState>> = {};
-    for (const id of ['palette', 'pen'] as const) {
+    for (const id of ['palette', 'pen', 'pressure'] as const) {
       const value = (stored as Record<string, unknown> | null)?.[id] as Partial<WindowState> | undefined;
       if (typeof value?.open !== 'boolean') {
         continue;

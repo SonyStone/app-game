@@ -122,6 +122,9 @@ describe('parseCommand', () => {
     expect(one('mix paint')).toEqual({ type: 'window', window: 'palette' });
     expect(one('palm rejection')).toEqual({ type: 'window', window: 'pen' });
     expect(one('pen settings')).toEqual({ type: 'window', window: 'pen' });
+    expect(one('calibrate pen pressure')).toEqual({ type: 'window', window: 'pressure' });
+    expect(one('pressure curve')).toEqual({ type: 'window', window: 'pressure' });
+    expect(one('pressure')).toEqual({ type: 'window', window: 'pressure' });
   });
 
   it('reads symmetry with segment counts kept in range', () => {

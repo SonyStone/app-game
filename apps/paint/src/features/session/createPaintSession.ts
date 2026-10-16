@@ -36,6 +36,7 @@ import { createLiveBroadcast, liveRelayUrl } from '../live';
 import { createPalmRejection, createPalmRejectionSettings } from '../palm-rejection';
 import { createPenHover } from '../pen-hover';
 import { createPerformanceMonitor } from '../performance';
+import { createPressureCalibration } from '../pressure-calibration';
 import { radialLayout } from '../radial-menu';
 import { createInputRecorder } from '../recording';
 import { createSelection, createSelectionView, guardEdits } from '../selection';
@@ -241,6 +242,7 @@ export function createPaintSession(options: {
   createPageGestureGuard();
   const colorWheel = createColorWheelSettings();
   const windows = createSessionWindows();
+  const pressureCalibration = createPressureCalibration();
   const viewOptions = createViewOptions({ ready: engine.canEdit, send: engine.send });
   const drawingFolder = createDrawingFolder({
     status: () => engine.paging().storage?.folder,
@@ -408,8 +410,16 @@ export function createPaintSession(options: {
     palm,
     /** Moving the drawing to a new tab once Chrome loses the pen hover; see `SessionNotices`. */
     freshTab,
-    /** The floating windows every variant can open: the mixing palette and the pen settings; see `SessionWindows`. */
+    /**
+     * The floating windows every variant can open: the mixing palette, the pen settings and the pen pressure
+     * calibration; see `SessionWindows`.
+     */
     windows,
+    /**
+     * This device's pen pressure curve, remembered in `localStorage`: `canvasInput` maps every pen sample through it
+     * and widens a brush's default pressure range (`strokeBrush`), so it acts on the strokes of every variant.
+     */
+    pressureCalibration,
     canvasInput,
     createShortcuts,
     chooseTool,
@@ -434,16 +444,16 @@ export function createPaintSession(options: {
   };
 
   /**
-   * The canvas input of this session for `PaintCanvas`, with the pen latency switches of Developer applied. Two- and
-   * three-finger taps undo and redo unless `extra` replaces the touch gestures; `extra.puckPicker` adds controls
-   * chosen around the navigation puck.
+   * The canvas input of this session for `PaintCanvas`, with the pen latency switches of Developer and the device's
+   * pressure calibration applied. Two- and three-finger taps undo and redo unless `extra` replaces the touch gestures;
+   * `extra.puckPicker` adds controls chosen around the navigation puck.
    */
   function canvasInput(extra: Pick<CanvasInput, 'touchGestures' | 'puckPicker'> = {}): CanvasInput {
     return {
       camera: camera.current,
       size,
-      brush,
-      eraser: tools.eraser,
+      brush: () => pressureCalibration.strokeBrush(brush()),
+      eraser: () => pressureCalibration.strokeBrush(tools.eraser()),
       ready: () => engine.canEdit() && !selection.isBusy() && !uploads.isBusy(),
       navigate: camera.navigate,
       send(command) {
@@ -455,6 +465,7 @@ export function createPaintSession(options: {
       cursor: setCursor,
       showPenCursor: developer.showPenCursor,
       rawUpdate: developer.markRawReceived,
+      mapPressure: pressureCalibration.mapPressure,
       predict: developer.predictStrokes,
       hover: warmup.hover,
       drawn: inkTrail.drawn,
