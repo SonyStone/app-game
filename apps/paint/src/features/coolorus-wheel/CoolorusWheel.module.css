@@ -1,0 +1,68 @@
+.coolorus {
+  display: grid;
+  gap: 8px;
+}
+
+/* The ring, the triangle canvas and the overlay for markers and pointers stack in one square. */
+.wheel {
+  position: relative;
+  width: min(100%, 220px);
+  aspect-ratio: 1;
+  margin: 4px auto 0;
+}
+
+.ring,
+.canvas,
+.overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Hue 0 at the top, increasing clockwise, as `hueAt` measures it; 22 of 110 units thick. */
+.ring {
+  border-radius: 50%;
+  mask: radial-gradient(circle closest-side, transparent 79.5%, #000 80.5%);
+}
+
+.overlay {
+  overflow: visible;
+  touch-action: none;
+}
+
+.marker {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 1px #000c);
+  outline: none;
+
+  &:focus-visible {
+    stroke: #237aab;
+  }
+}
+
+.options {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--line, #dedede);
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+
+    &[aria-pressed='true'] {
+      border-color: #71b3d8;
+      background: #e6f3fa;
+      color: #237aab;
+    }
+  }
+}

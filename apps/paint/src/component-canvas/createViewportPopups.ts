@@ -64,7 +64,7 @@ export function createViewportPopups(options: { world: () => HTMLElement | undef
    * observer sees the element's own style writes, and an unchanged pass ends the loop that its own writes start.
    */
   function place(element: HTMLElement) {
-    if (!(element instanceof HTMLElement) || element.hasAttribute('popover') || element.closest('[data-canvas-screen]')) {
+    if (element.hasAttribute('popover') || element.closest('[data-canvas-screen]')) {
       return;
     }
 
@@ -111,7 +111,8 @@ export function counterTransform(
   origin: { x: number; y: number }
 ) {
   const scale = 1 / camera.zoom;
-  // A box point p lands in the world at at + origin + translate + scale·(p − origin), and on screen at camera + zoom·that.
+  // A box point p lands in the world at at + origin + translate + scale·(p − origin), and on screen at
+  // camera + zoom·that.
   const x = (at.left - camera.x) / camera.zoom - at.left - origin.x * (1 - scale);
   const y = (at.top - camera.y) / camera.zoom - at.top - origin.y * (1 - scale);
   return { translate: `${round(x)}px ${round(y)}px`, scale: `${round(scale)}` };
