@@ -1,9 +1,13 @@
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
+import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { BrushLibraryPanel } from '../../features/brush';
 import { applyPreset, builtInPresets, presetChanges } from '../../features/brush-library';
 import { BrushLibrary } from '../../variants/procreate/BrushLibrary';
+import { PresetStroke } from '../../variants/puck/PresetStroke';
+import { PresetChooser } from '../../variants/zen/PresetChooser';
 import styles from '../ComponentCanvas.module.css';
+import { DesktopFrame, ZenFrame } from '../frames';
 import { ProcreateFrame } from '../ProcreateFrame';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
 import { TestStrip } from '../TestStrip';
@@ -30,6 +34,22 @@ export function BrushCards() {
       <CanvasRow title="Brush cards" note="Paint's own presets">
         <StudioBrushPanel />
         <ProcreateLibrary />
+        <ZenChooser />
+      </CanvasRow>
+
+      <CanvasRow title="Stroke previews" note="the sample stroke the Puck and Desktop variants draw for a preset">
+        <Specimen id="brush-cards/strokes/preset-stroke" label="Preset stroke (Puck, Desktop)">
+          <DesktopFrame width={300}>
+            <div class={styles.strokeList}>
+              {builtInPresets.map((preset) => (
+                <div>
+                  <span>{preset.name}</span>
+                  <PresetStroke preset={preset} resources={noResources} color="#e8e8e8" height={34} />
+                </div>
+              ))}
+            </div>
+          </DesktopFrame>
+        </Specimen>
       </CanvasRow>
     </CanvasGroup>
   );
@@ -109,6 +129,31 @@ function ProcreateLibrary() {
     </Specimen>
   );
 }
+
+/** The Zen variant's chooser for a fan slot: its default tool or one of Paint's presets. */
+function ZenChooser() {
+  const [preset, setPreset] = createSignal<string>();
+
+  return (
+    <Specimen id="brush-cards/zen/chooser" label="Zen slot chooser">
+      <ZenFrame width={320}>
+        <PresetChooser
+          shape="brush"
+          presets={builtInPresets}
+          current={preset()}
+          color="#1d1d1f"
+          resources={noResources}
+          disabled={false}
+          onDefault={() => setPreset(undefined)}
+          onChoose={(chosen) => setPreset(chosen.id)}
+        />
+      </ZenFrame>
+    </Specimen>
+  );
+}
+
+/** Paint's built-in presets have no tip images to read. */
+const noResources = async () => ok([]);
 
 /** A preset's brush as a test strip paints it: in black on Paint's paper. */
 function strokeBrush(brush: Brush): Brush {

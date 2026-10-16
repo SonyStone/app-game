@@ -11,6 +11,7 @@ import { createChoices, type ChoicesStatus } from './createChoices';
 import { createViewportPopups } from './createViewportPopups';
 import { BrushCards } from './groups/BrushCards';
 import { ColorPickers } from './groups/ColorPickers';
+import { FeaturePanels } from './groups/FeaturePanels';
 import { Icons } from './groups/Icons';
 import { LayersPanels } from './groups/LayersPanels';
 import { Numbers } from './groups/Numbers';
@@ -133,6 +134,7 @@ export function ComponentCanvas() {
                 <Numbers />
                 <Tools />
                 <Panels />
+                <FeaturePanels />
                 <Icons />
                 <Pucks />
                 <TileCluster />
@@ -213,6 +215,7 @@ const groups = [
   { id: 'numbers', title: 'Numbers' },
   { id: 'tools', title: 'Tools' },
   { id: 'panels', title: 'Panels' },
+  { id: 'feature-panels', title: 'Features' },
   { id: 'icons', title: 'Icons' },
   { id: 'pucks', title: 'Pucks' },
   { id: 'tile-cluster', title: 'Tile cluster' },
