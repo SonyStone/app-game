@@ -554,3 +554,71 @@
     color: var(--ink);
   }
 }
+
+/* Grounds of the variant frames (`frames.tsx`): each variant's own background, as its parts sit on it. */
+.variantGround {
+  position: relative;
+  border-radius: 8px;
+  background: #faf8f4;
+  box-shadow: inset 0 0 0 1px #0000001a;
+}
+
+.desktopGround {
+  padding: 0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.zenGround {
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px #0000001a;
+}
+
+.studioGround {
+  position: relative;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px #0000001a;
+}
+
+/* The Desktop variant's options bar, standing free for its controls. */
+.desktopBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  background: var(--bg-2);
+}
+
+/* The Desktop variant's tool column at its height in the workspace. */
+.desktopColumn {
+  display: flex;
+  height: 520px;
+}
+
+/* A strip as wide as the Procreate variant's screen, for its bars docked at the bottom edge. */
+.procreateScreenStrip {
+  position: relative;
+  width: 900px;
+  height: 200px;
+  border-radius: 8px;
+}
+
+/* The Desktop variant's menu row with room under it for an open menu, in the rows of its workspace grid. */
+.desktopMenus {
+  display: grid;
+  grid-template-rows: 28px minmax(0, 1fr);
+  grid-template-areas: 'menu' 'main';
+  height: 220px;
+  background: var(--bg-0);
+}
+
+/* Room for the Command variant's palette, which places itself at the top middle of its container. */
+.paletteBox {
+  position: relative;
+  width: 680px;
+  height: 520px;
+  border-radius: 8px;
+  background: #3a3a3c;
+}

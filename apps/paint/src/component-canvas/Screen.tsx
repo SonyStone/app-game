@@ -9,12 +9,13 @@ import styles from './ComponentCanvas.module.css';
  *
  * The frame is inert: such components read the pointer in window coordinates, which match the frame's nowhere on a
  * moving canvas. It shows a state; `TryButton` opens a live component full screen. A finger on it moves the canvas.
+ * `class` adds a variant's root class, for its tokens.
  */
-export function ScreenFrame(props: { width: number; height: number; children?: JSX.Element }) {
+export function ScreenFrame(props: { width: number; height: number; class?: string; children?: JSX.Element }) {
   return (
     <div data-canvas-touch-pans>
       <div
-        class={styles.screen}
+        class={[styles.screen, props.class]}
         style={{ width: `${props.width}px`, height: `${props.height}px` }}
         data-canvas-screen
         inert

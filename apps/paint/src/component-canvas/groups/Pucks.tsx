@@ -1,16 +1,29 @@
 import { attachNavigationPuck, createNavigationPuck, NavigationPuck } from '@app-game/navigation-puck';
+import { defaultCamera } from '@app-game/paint-core/camera';
 import { createSignal, onSettled, Show, untrack } from 'solid-js';
 import { createRadialMenu, RadialMenu, radialLayout, type RadialItem } from '../../features/radial-menu';
 import { pie } from '../../mockups/puck-gallery/variants/pie';
+import { Capsule } from '../../variants/puck/controls';
+import { createViewDrag } from '../../variants/puck/createViewDrag';
+import { QuickMenu } from '../../variants/puck/QuickMenu';
+import { percentSetting, sizeSetting } from '../../variants/puck/values';
+import { Fan } from '../../variants/zen/Fan';
+import { Pebble } from '../../variants/zen/Pebble';
+import { inwardAngle } from '../../variants/zen/placement';
+import { RewindRing } from '../../variants/zen/RewindRing';
+import { defaultSlots, starterColors } from '../../variants/zen/tools';
+import zen from '../../variants/zen/ZenStudio.module.css';
 import styles from '../ComponentCanvas.module.css';
+import { PuckFrame, puckBoxes } from '../frames';
 import { GalleryStage } from '../GalleryStage';
 import { ScreenFrame, TryButton } from '../Screen';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
 
 /**
- * Pucks and radial menus: Paint's navigation puck with its ring of actions closed, open and with a sector chosen,
- * and the Puck gallery's pie menu. Both cover the screen and read the pointer in window coordinates, so the canvas
- * shows their states in inert frames and opens a live one full screen.
+ * Pucks and radial menus: Paint's navigation puck with its ring of actions closed, open and with a sector chosen, the
+ * Puck variant's QuickMenu, the Zen pebble with its fan and rewind dial, and the Puck gallery's pie menu. Those that
+ * cover the screen and read the pointer in window coordinates show their states in inert frames, and the canvas opens
+ * a live one full screen.
  */
 export function Pucks() {
   return (
@@ -43,6 +56,40 @@ export function Pucks() {
         <Specimen id="pucks/paint/chosen" label="Sector chosen (a right-drag toward Undo)">
           <ScreenFrame width={frameSize} height={frameSize}>
             <PaintPuck size={{ width: frameSize, height: frameSize }} highlighted="undo" />
+          </ScreenFrame>
+        </Specimen>
+      </CanvasRow>
+
+      <CanvasRow title="Puck variant" note="the QuickMenu with its size and opacity capsules, as the cluster opens">
+        <Specimen id="pucks/puck-variant/quick-menu" label="QuickMenu and capsules">
+          <PuckQuickMenu />
+        </Specimen>
+      </CanvasRow>
+
+      <CanvasRow title="Zen pebble" note="its states in screen frames; open the whole variant from Whole UIs">
+        <Specimen id="pucks/zen/pebble" label="Pebble">
+          <ScreenFrame width={zenScreen.width} height={zenScreen.height} class={zen.editor}>
+            <div class={zen.ui}>
+              <ZenPebble open={false} />
+            </div>
+          </ScreenFrame>
+        </Specimen>
+        <Specimen id="pucks/zen/fan" label="Fan open">
+          <ScreenFrame width={zenScreen.width} height={zenScreen.height} class={zen.editor}>
+            <div class={zen.ui}>
+              <ZenFan />
+              <ZenPebble open />
+            </div>
+          </ScreenFrame>
+        </Specimen>
+        <Specimen id="pucks/zen/rewind" label="Rewind dial (two-finger turn)">
+          <ScreenFrame width={zenScreen.width} height={zenScreen.height} class={zen.editor}>
+            <div class={zen.ui}>
+              <RewindRing
+                dial={{ center: zenPebbleAt, radius: 90, start: -Math.PI / 2, turned: -1.6, steps: -3, step: 0.5 }}
+              />
+              <ZenPebble open={false} counter="−3" />
+            </div>
           </ScreenFrame>
         </Specimen>
       </CanvasRow>
@@ -161,6 +208,125 @@ function ringItems(run: (label: string) => void = () => {}): RadialItem[] {
     item({ id: 'tool:lasso', label: 'Lasso', icon: 'lasso', slot: 11 })
   ];
 }
+
+/**
+ * The Puck variant's QuickMenu between its size and opacity capsules, placed as the variant places them. The view
+ * buttons drag nothing here; the capsules change values of their own.
+ */
+function PuckQuickMenu() {
+  const [size, setSize] = createSignal(32);
+  const [opacity, setOpacity] = createSignal(100);
+  const view = createViewDrag({
+    camera: () => defaultCamera(),
+    navigate: () => {},
+    size: () => ({ width: innerWidth, height: innerHeight }),
+    origin: () => ({ x: 0, y: 0 })
+  });
+  const glyph = (fill: 'dot' | 'half') => (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" stroke-width="1.2" />
+      {fill === 'dot' ? (
+        <circle cx="7" cy="7" r="2.5" fill="currentColor" />
+      ) : (
+        <path d="M7 1a6 6 0 0 1 0 12Z" fill="currentColor" />
+      )}
+    </svg>
+  );
+
+  return (
+    <PuckFrame boxes={[puckBoxes.sizeBar, puckBoxes.ring, puckBoxes.opacityBar]}>
+      <Capsule
+        box={puckBoxes.sizeBar}
+        setting={sizeSetting(512)}
+        value={size()}
+        onChange={setSize}
+        title="Brush size: drag"
+        glyph={glyph('dot')}
+        onActive={() => {}}
+        onDone={() => {}}
+      />
+      <QuickMenu
+        box={puckBoxes.ring}
+        center={{ x: innerWidth / 2, y: innerHeight / 2 }}
+        view={view}
+        onAction={() => {}}
+        canUndo
+        canRedo={false}
+        highlighted={undefined}
+        readout={undefined}
+        showKeys
+        onNavigated={() => {}}
+        close={() => {}}
+      />
+      <Capsule
+        box={puckBoxes.opacityBar}
+        setting={percentSetting('Opacity', 1)}
+        value={opacity()}
+        onChange={setOpacity}
+        title="Opacity: drag"
+        glyph={glyph('half')}
+        onActive={() => {}}
+        onDone={() => {}}
+      />
+    </PuckFrame>
+  );
+}
+
+/** The Zen pebble resting in the frame's lower right, with the starting brush; `open` shows it with its fan. */
+function ZenPebble(props: { open: boolean; counter?: string }) {
+  return (
+    <Pebble
+      center={zenPebbleAt}
+      view={zenScreen}
+      hand="right"
+      hidden={false}
+      open={props.open}
+      lifted={false}
+      brush={{ size: 12, opacity: 1, color: '#1d1d1f' }}
+      erasing={false}
+      zoom={1}
+      maxSize={512}
+      adjustable
+      counter={props.counter}
+      onTap={() => {}}
+      onCarry={() => {}}
+      onDrop={() => {}}
+      onAdjust={() => {}}
+      onAdjusted={() => {}}
+    />
+  );
+}
+
+/** The Zen fan around the pebble: its default brushes, the starter colors and history. */
+function ZenFan() {
+  return (
+    <Fan
+      center={zenPebbleAt}
+      inward={inwardAngle(zenPebbleAt, zenScreen)}
+      view={zenScreen}
+      quiet={false}
+      slots={defaultSlots}
+      active={0}
+      erasing={false}
+      colors={starterColors}
+      canUndo
+      canRedo={false}
+      moreOpen={false}
+      onUndo={() => {}}
+      onRedo={() => {}}
+      onMore={() => {}}
+      onSlot={() => {}}
+      onSlotHold={() => {}}
+      onEraser={() => {}}
+      onColor={() => {}}
+      onColorHold={() => {}}
+    />
+  );
+}
+
+/** A Zen screen: large enough for the fan around a pebble resting near its lower right corner. */
+const zenScreen = { width: 520, height: 520 };
+const zenPebbleAt = { x: 400, y: 400 };
 
 /** Each frame stands for a screen just large enough for the puck's ring and the caption under it. */
 const frameSize = 320;

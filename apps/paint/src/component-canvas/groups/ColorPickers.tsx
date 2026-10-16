@@ -12,8 +12,12 @@ import {
 } from '../../features/color-wheel';
 import { CoolorusWheel, defaultCoolorusSettings, type CoolorusSettings } from '../../features/coolorus-wheel';
 import { HueTriangle } from '../../features/hue-triangle';
+import { ColorPanel as DesktopColorPanel } from '../../variants/desktop/ColorPanel';
 import { ColorsPopover, type ColorMode } from '../../variants/procreate/ColorsPopover';
+import { ColorCard } from '../../variants/puck/ColorCard';
+import { ColorDisc } from '../../variants/zen/ColorDisc';
 import styles from '../ComponentCanvas.module.css';
+import { DesktopFrame, PuckFrame, puckBoxes, ZenFrame } from '../frames';
 import { ProcreateFrame } from '../ProcreateFrame';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
 import { TestStrip } from '../TestStrip';
@@ -56,6 +60,18 @@ export function ColorPickers() {
             <PanelSpecimen id={`color-pickers/panel/${picker.id}`} label={picker.label} picker={picker.id} />
           )}
         </For>
+      </CanvasRow>
+
+      <CanvasRow title="In the variants" note="each in its variant's frame">
+        <PuckColorSpecimen />
+        <DesktopColorSpecimen />
+        <PickerSpecimen id="color-pickers/variants/zen-disc" label="Zen disc">
+          {(color, setColor) => (
+            <ZenFrame>
+              <ColorDisc color={color()} onInput={setColor} onCommit={() => {}} />
+            </ZenFrame>
+          )}
+        </PickerSpecimen>
       </CanvasRow>
 
       <CanvasRow title="OKLCH wheel: gamut mask">
@@ -231,6 +247,64 @@ function ProcreateSpecimen() {
   );
 }
 
+/**
+ * The Puck variant's Color card, with a test strip in its color. Mix, which opens the drawing session's palette
+ * window, does nothing here; the card keeps recent colors with Paint's on this address.
+ */
+function PuckColorSpecimen() {
+  const [color, setColor] = createSignal(startColor);
+  const [background, setBackground] = createSignal('#ffffff');
+
+  return (
+    <Specimen
+      id="color-pickers/variants/puck-card"
+      label="Puck color card"
+      below={<TestStrip brush={stripBrush({ color: color() })} width={puckBoxes.color.width + 32} />}
+    >
+      <PuckFrame boxes={[puckBoxes.color]}>
+        <ColorCard
+          box={puckBoxes.color}
+          color={color()}
+          background={background()}
+          onColor={setColor}
+          onSwap={() => {
+            const current = color();
+            setColor(background());
+            setBackground(current);
+          }}
+          mixing={false}
+          onMixing={() => {}}
+          done={() => {}}
+        />
+      </PuckFrame>
+    </Specimen>
+  );
+}
+
+/** The Desktop variant's Color panel, as wide as its dock, with a test strip in the foreground color. */
+function DesktopColorSpecimen() {
+  const [colors, setColors] = createSignal({ color: startColor, backgroundColor: '#ffffff' });
+  const [target, setTarget] = createSignal<'color' | 'backgroundColor'>('color');
+
+  return (
+    <Specimen
+      id="color-pickers/variants/desktop-panel"
+      label="Desktop color panel"
+      below={<TestStrip brush={stripBrush({ color: colors().color })} width={desktopDockWidth} />}
+    >
+      <DesktopFrame width={desktopDockWidth}>
+        <DesktopColorPanel
+          foreground={colors().color}
+          background={colors().backgroundColor}
+          target={target()}
+          onTarget={setTarget}
+          onChange={(patch) => setColors((current) => ({ ...current, ...patch }))}
+        />
+      </DesktopFrame>
+    </Specimen>
+  );
+}
+
 /** The Color panel's content width, which pickers fill in Studio. */
 function PickerBox(props: { children: JSX.Element }) {
   return <div class={styles.pickerBox}>{props.children}</div>;
@@ -250,6 +324,8 @@ const panelPickers = [
   { id: 'coolorus', label: 'Coolorus' }
 ] as const;
 
+/** The Desktop variant's dock width (`--dock-width`). */
+const desktopDockWidth = 284;
 /** The Procreate variant's Colors popover width. */
 const procreateColorsWidth = 340;
 

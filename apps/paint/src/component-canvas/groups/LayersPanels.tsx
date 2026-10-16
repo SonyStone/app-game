@@ -1,12 +1,14 @@
-import { createDocument, type LayerAction, type LayerInfo } from '@app-game/paint-core/document';
-import type { JSX } from '@solidjs/web';
-import { createSignal, flush, For, onSettled, untrack } from 'solid-js';
-import { LayersPanel, type DocumentState } from '../../features/layers';
+import { createSignal, flush, For, onSettled } from 'solid-js';
+import { LayersPanel } from '../../features/layers';
 import { createStudio } from '../../mockups/puck-gallery/kit/createStudio';
 import { createSolo, Mixer } from '../../mockups/puck-gallery/variants/pads/Mixer';
+import { LayersPanel as DesktopLayersPanel } from '../../variants/desktop/LayersPanel';
 import { LayersPopover } from '../../variants/procreate/LayersPopover';
+import { LayersCard } from '../../variants/puck/LayersCard';
 import styles from '../ComponentCanvas.module.css';
+import { DesktopFrame, PuckFrame, puckBoxes } from '../frames';
 import { ProcreateFrame } from '../ProcreateFrame';
+import { fourLayers, SeededLayers, type LayerSeed } from '../seededLayers';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
 
 /**
@@ -37,6 +39,37 @@ export function LayersPanels() {
               {(layers) => <LayersPopover state={layers.state()} ready onAction={layers.onAction} />}
             </SeededLayers>
           </ProcreateFrame>
+        </Specimen>
+        <Specimen id="layers/panels/puck" label="Puck">
+          <PuckFrame boxes={[puckBoxes.layers]}>
+            <SeededLayers layers={fourLayers}>
+              {(layers) => (
+                <LayersCard
+                  box={puckBoxes.layers}
+                  layers={layers.state().layers}
+                  activeId={layers.state().activeId}
+                  ready
+                  onAction={layers.onAction}
+                  done={() => {}}
+                  onEscape={() => {}}
+                />
+              )}
+            </SeededLayers>
+          </PuckFrame>
+        </Specimen>
+        <Specimen id="layers/panels/desktop" label="Desktop">
+          <DesktopFrame width={284}>
+            <SeededLayers layers={fourLayers}>
+              {(layers) => (
+                <DesktopLayersPanel
+                  layers={layers.state().layers}
+                  activeId={layers.state().activeId}
+                  ready
+                  onAction={layers.onAction}
+                />
+              )}
+            </SeededLayers>
+          </DesktopFrame>
         </Specimen>
         <Specimen id="layers/panels/pads-mixer" label="Mixer (Puck gallery: Pads)">
           <PadsMixer />
@@ -75,57 +108,6 @@ function StudioLayers(props: { layers: readonly LayerSeed[] }) {
 }
 
 /**
- * A paint-core document of `layers` (bottom first) of its own, kept in memory, for a layers panel in `children`: its
- * state and the commands that edit it, as the engine would apply them.
- */
-function SeededLayers(props: {
-  layers: readonly LayerSeed[];
-  children: (layers: {
-    state: () => DocumentState;
-    onAction: (action: LayerAction) => void;
-    onLinearBlending: (linear: boolean) => void;
-  }) => JSX.Element;
-}) {
-  const drawing = seededDocument(untrack(() => props.layers));
-  const [state, setState] = createSignal(drawing.state());
-  const run = (change: () => void) => {
-    try {
-      change();
-    } catch {
-      // Merging needs the engine's pixels; the panel stays as it was.
-    }
-
-    setState(drawing.state());
-  };
-
-  return untrack(() =>
-    props.children({
-      state,
-      onAction: (action) => run(() => drawing.changeLayer(action)),
-      onLinearBlending: (linear) => run(() => drawing.setLinearBlending(linear))
-    })
-  );
-}
-
-/** A layer of the test data, bottom first, as a paint-core layer without its id. */
-type LayerSeed = Pick<LayerInfo, 'name'> & Partial<Pick<LayerInfo, 'visible' | 'alphaLock' | 'clipping'>>;
-
-/** A paint-core document holding `layers`, bottom first, with the top one selected. */
-function seededDocument(layers: readonly LayerSeed[]) {
-  const drawing = createDocument();
-  for (const [index, seed] of layers.entries()) {
-    if (index > 0) {
-      drawing.changeLayer({ type: 'add' });
-    }
-
-    // The seed's properties only: an undefined `visible` would hide the layer.
-    drawing.changeLayer({ type: 'update', id: drawing.state().activeId, patch: { ...seed } });
-  }
-
-  return drawing;
-}
-
-/**
  * The Pads variant's layer mixer on a Puck gallery studio of its own, reduced to four layers like the others: the
  * hidden sketch and the locked paper stay.
  */
@@ -157,13 +139,6 @@ function PadsMixer() {
 /** The Procreate variant's Layers popover width. */
 const procreateLayersWidth = 340;
 
-/** The four layers every panel shows, bottom first. */
-const fourLayers: readonly LayerSeed[] = [
-  { name: 'Flat colors' },
-  { name: 'Shadows', clipping: true },
-  { name: 'Ink', alphaLock: true },
-  { name: 'Sketch', visible: false }
-];
 
 const layerCounts = [
   { id: 'one', label: 'One layer', layers: [{ name: 'Layer 1' }] },
