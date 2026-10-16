@@ -53,18 +53,6 @@ export const paintVariants: PaintVariant[] = [
     load: () => import('./zen').then(({ ZenStudio }) => ZenStudio)
   },
   {
-    id: 'hands',
-    name: 'Two hands',
-    description: 'The free hand holds tools under its fingers while the pen draws, like a painter holding a palette.',
-    load: () => import('./hands').then(({ HandsStudio }) => HandsStudio)
-  },
-  {
-    id: 'growing',
-    name: 'Growing',
-    description: 'Starts with a brush and an eraser; tools appear once you reach for them.',
-    load: () => import('./growing').then(({ GrowingStudio }) => GrowingStudio)
-  },
-  {
     id: 'palette',
     name: 'Palette',
     description: "A painter's mixing palette beside the drawing: colors come from paint you mix, not from a picker.",
