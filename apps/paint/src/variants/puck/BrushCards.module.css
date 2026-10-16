@@ -25,7 +25,7 @@
   font-size: 13px;
   transition: background 100ms;
 
-  [data-hover] &:hover {
+  [data-hover]:not([data-hover-stale] *) &:hover {
     background: var(--raised);
   }
 
@@ -69,12 +69,12 @@
   background: rgb(255 255 255 / 0.04);
   transition: background 100ms;
 
-  [data-hover] &:hover {
+  [data-hover]:not([data-hover-stale] *) &:hover {
     background: var(--raised-hover);
   }
 
   &.on,
-  [data-hover] &.on:hover {
+  [data-hover]:not([data-hover-stale] *) &.on:hover {
     background: var(--chosen);
     box-shadow: var(--chosen-edge);
   }
@@ -124,7 +124,7 @@
   text-align: center;
   transition: background 100ms;
 
-  [data-hover] &:hover {
+  [data-hover]:not([data-hover-stale] *) &:hover {
     background: var(--raised-hover);
   }
 }

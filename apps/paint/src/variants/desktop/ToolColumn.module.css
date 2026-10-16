@@ -24,7 +24,7 @@
   }
 }
 
-.tool:not([aria-pressed='true'], [data-pointer='touch'] *):hover {
+.tool:not([aria-pressed='true'], [data-pointer='touch'] *, [data-hover-stale] *):hover {
   background: var(--bg-3);
 }
 

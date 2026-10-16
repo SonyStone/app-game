@@ -166,7 +166,7 @@
   }
 }
 
-.brush:not([aria-selected='true'], [data-pointer='touch'] *):hover {
+.brush:not([aria-selected='true'], [data-pointer='touch'] *, [data-hover-stale] *):hover {
   background: var(--bg-3);
 }
 

@@ -40,7 +40,7 @@
   font-weight: 600;
 }
 
-.title:not([data-pointer='touch'] *):hover {
+.title:not([data-pointer='touch'] *, [data-hover-stale] *):hover {
   background: var(--bg-3);
 }
 

@@ -23,7 +23,7 @@
   border-radius: 7px;
   transition: scale 100ms;
 
-  [data-hover] &:hover {
+  [data-hover]:not([data-hover-stale] *) &:hover {
     scale: 1.1;
   }
 }
@@ -96,7 +96,7 @@
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14);
   transition: scale 100ms;
 
-  [data-hover] &:hover {
+  [data-hover]:not([data-hover-stale] *) &:hover {
     scale: 1.12;
   }
 }
@@ -124,7 +124,7 @@
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
   transition: scale 100ms;
 
-  [data-hover] &:hover {
+  [data-hover]:not([data-hover-stale] *) &:hover {
     scale: 1.12;
   }
 }

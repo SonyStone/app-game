@@ -115,7 +115,7 @@
   border-radius: 7px;
   color: var(--dim);
 
-  &:hover {
+  &:hover:not([data-pointer='touch'] *, [data-hover-stale] *) {
     background: var(--hover);
     color: var(--text);
   }
@@ -202,7 +202,7 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 
-  &:hover {
+  &:hover:not([data-pointer='touch'] *, [data-hover-stale] *) {
     background: var(--hover);
     color: var(--text);
   }
@@ -257,7 +257,7 @@
   background: var(--fill);
   white-space: nowrap;
 
-  &:hover {
+  &:hover:not([data-pointer='touch'] *, [data-hover-stale] *) {
     background: var(--hover);
   }
 
@@ -282,7 +282,7 @@
 
   &[aria-selected='true'],
   &[aria-current='true'],
-  &:hover {
+  &:hover:not([data-pointer='touch'] *, [data-hover-stale] *) {
     box-shadow:
       inset 0 0 0 1px rgb(0 0 0 / 0.5),
       0 0 0 2px var(--text);
@@ -326,7 +326,7 @@
       color: var(--text);
     }
 
-    &:hover {
+    &:hover:not([data-pointer='touch'] *, [data-hover-stale] *) {
       background: var(--hover);
     }
   }
@@ -343,7 +343,7 @@
   text-align: left;
 }
 
-.row:not([aria-selected='true']) .rowMain:hover {
+.row:not([aria-selected='true']) .rowMain:hover:not([data-pointer='touch'] *, [data-hover-stale] *) {
   border-radius: 6px;
   background: var(--hover);
 }
@@ -427,7 +427,7 @@
   color: var(--dim);
   text-decoration: none;
 
-  &:hover {
+  &:hover:not([data-pointer='touch'] *, [data-hover-stale] *) {
     color: var(--text);
   }
 }
@@ -438,7 +438,7 @@
   border-radius: 5px;
   color: var(--dim);
 
-  &:hover {
+  &:hover:not([data-pointer='touch'] *, [data-hover-stale] *) {
     background: var(--hover);
     color: var(--text);
   }

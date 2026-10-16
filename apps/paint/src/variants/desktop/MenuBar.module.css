@@ -29,7 +29,7 @@
   }
 }
 
-.title:not([aria-expanded='true'], [data-pointer='touch'] *):hover {
+.title:not([aria-expanded='true'], [data-pointer='touch'] *, [data-hover-stale] *):hover {
   background: var(--bg-3);
 }
 
@@ -69,7 +69,7 @@
   }
 }
 
-.item:not(:disabled, [data-pointer='touch'] *):hover {
+.item:not(:disabled, [data-pointer='touch'] *, [data-hover-stale] *):hover {
   background: var(--bg-4);
   color: var(--ink-strong);
 }

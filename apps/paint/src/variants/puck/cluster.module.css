@@ -129,7 +129,7 @@
   border-radius: 50%;
   transition: background 100ms;
 
-  .root[data-hover] &:hover {
+  .root[data-hover]:not([data-hover-stale] *) &:hover {
     background: var(--raised-hover);
   }
 }
@@ -268,7 +268,7 @@
   font-size: 13px;
   transition: background 100ms;
 
-  .root[data-hover] &:hover {
+  .root[data-hover]:not([data-hover-stale] *) &:hover {
     background: var(--raised);
   }
 }
@@ -339,7 +339,7 @@
     font-weight: 600;
   }
 
-  .root[data-hover] &:not(.on):hover {
+  .root[data-hover]:not([data-hover-stale] *) &:not(.on):hover {
     background: rgb(255 255 255 / 0.06);
   }
 }
@@ -365,7 +365,7 @@
   font-weight: 500;
   transition: background 100ms;
 
-  .root[data-hover] &:hover {
+  .root[data-hover]:not([data-hover-stale] *) &:hover {
     background: var(--raised-hover);
   }
 }
@@ -390,12 +390,12 @@
     background 100ms,
     color 100ms;
 
-  .root[data-hover] &:hover {
+  .root[data-hover]:not([data-hover-stale] *) &:hover {
     background: var(--raised);
   }
 
   &.on,
-  .root[data-hover] &.on:hover {
+  .root[data-hover]:not([data-hover-stale] *) &.on:hover {
     background: var(--chosen);
     box-shadow: var(--chosen-edge);
   }
@@ -449,12 +449,12 @@
     background 100ms,
     color 100ms;
 
-  .root[data-hover] &:hover {
+  .root[data-hover]:not([data-hover-stale] *) &:hover {
     background: var(--raised);
   }
 
   &.on,
-  .root[data-hover] &.on:hover {
+  .root[data-hover]:not([data-hover-stale] *) &.on:hover {
     background: var(--chosen);
     box-shadow: var(--chosen-edge);
   }

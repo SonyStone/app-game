@@ -16,7 +16,6 @@ import { ColorPanel } from './ColorPanel';
 import { IconButton } from './controls';
 import { createDesktopCommands } from './createDesktopCommands';
 import { createDesktopTools } from './createDesktopTools';
-import { createPalmGuard } from './createPalmGuard';
 import { createWorkspace } from './createWorkspace';
 import styles from './DesktopStudio.module.css';
 import { Dock, WidthSash } from './Dock';
@@ -37,7 +36,7 @@ import { ViewToolLayer } from './ViewToolLayer';
  * canvas without painting). Tab hides the panels. The layout is remembered.
  *
  * Fingers on the canvas keep the session's gestures (two fingers pan, zoom and rotate, two- and three-finger taps
- * undo and redo); a finger on the interface while the pen is in use counts as a resting palm and is ignored.
+ * undo and redo); the session's palm rejection ignores a palm beside the pen, on the canvas and the interface alike.
  */
 export function DesktopStudio(props: PaintVariantProps) {
   const [popup, setPopup] = createSignal<OpenPopup>();
@@ -76,7 +75,6 @@ export function DesktopStudio(props: PaintVariantProps) {
       return true;
     }
   });
-  createPalmGuard(() => document);
 
   // A press outside the open menu or popup closes it; on the canvas it only closes it, as desktop menus do.
   createEventListener(
@@ -115,7 +113,7 @@ export function DesktopStudio(props: PaintVariantProps) {
 
   return (
     <PaintEditor session={session} class={styles.editor}>
-      <div class={styles.menuRow} data-chrome>
+      <div class={styles.menuRow}>
         <Errored fallback={null}>
           <MenuBar
             menus={commands.menus}
@@ -148,7 +146,7 @@ export function DesktopStudio(props: PaintVariantProps) {
         </Errored>
       </div>
       <Show when={workspace.panelsShown()}>
-        <div class={styles.optionsRow} data-chrome>
+        <div class={styles.optionsRow}>
           <Errored fallback={null}>
             <OptionsBar
               session={session}
@@ -166,7 +164,7 @@ export function DesktopStudio(props: PaintVariantProps) {
         style={{ '--dock-width': `${layout().width}px` }}
       >
         <Show when={workspace.panelsShown()}>
-          <div class={styles.toolsCell} data-chrome>
+          <div class={styles.toolsCell}>
             <Errored fallback={null}>
               <ToolColumn
                 active={tools.active()}
@@ -199,10 +197,10 @@ export function DesktopStudio(props: PaintVariantProps) {
           </div>
         </div>
         <Show when={workspace.panelsShown()}>
-          <div class={styles.sashCell} data-chrome>
+          <div class={styles.sashCell}>
             <WidthSash workspace={workspace} />
           </div>
-          <div class={styles.dockCell} data-chrome>
+          <div class={styles.dockCell}>
             <Errored fallback={<p class={styles.failed}>The panels failed to open.</p>}>
               <Dock
                 workspace={workspace}
@@ -241,7 +239,7 @@ export function DesktopStudio(props: PaintVariantProps) {
           </div>
         </Show>
       </div>
-      <div class={styles.statusRow} data-chrome>
+      <div class={styles.statusRow}>
         <Errored fallback={null}>
           <StatusBar session={session} tool={tools.active()} />
         </Errored>

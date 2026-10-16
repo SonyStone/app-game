@@ -31,9 +31,9 @@
   color: var(--ink-strong);
 }
 
-.iconButton:not(:disabled, [data-pointer='touch'] *):hover,
-.textButton:not(:disabled, [data-pointer='touch'] *):hover,
-.toggle:not(:disabled, [aria-pressed='true'], [data-pointer='touch'] *):hover {
+.iconButton:not(:disabled, [data-pointer='touch'] *, [data-hover-stale] *):hover,
+.textButton:not(:disabled, [data-pointer='touch'] *, [data-hover-stale] *):hover,
+.toggle:not(:disabled, [aria-pressed='true'], [data-pointer='touch'] *, [data-hover-stale] *):hover {
   background: var(--bg-4);
 }
 
@@ -55,7 +55,7 @@
     color: var(--ink-strong);
   }
 
-  button:not(:disabled, [aria-checked='true'], [data-pointer='touch'] *):hover {
+  button:not(:disabled, [aria-checked='true'], [data-pointer='touch'] *, [data-hover-stale] *):hover {
     background: var(--bg-3);
   }
 }

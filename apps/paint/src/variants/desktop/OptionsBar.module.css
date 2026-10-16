@@ -34,7 +34,7 @@
   color: var(--ink);
 }
 
-.preset:not([data-pointer='touch'] *):hover {
+.preset:not([data-pointer='touch'] *, [data-hover-stale] *):hover {
   background: var(--bg-4);
 }
 
