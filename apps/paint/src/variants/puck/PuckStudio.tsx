@@ -10,9 +10,11 @@ import {
   StageHint,
   StageOverlays
 } from '../../features/session';
+import { createStepBack } from '../../features/side-menu';
 import { Cluster } from './Cluster';
 import { createSummon, ringDelay } from './createSummon';
 import { createViewDrag } from './createViewDrag';
+import { DrawingSideMenu } from './DrawingSideMenu';
 import { clusterLayout } from './layout';
 import styles from './PuckStudio.module.css';
 import type { SlotId } from './slots';
@@ -21,9 +23,11 @@ import type { SlotId } from './slots';
  * The Puck variant: by default the screen is only the drawing, and the whole UI opens as one glass cluster under the
  * pen, after Procreate's QuickMenu and popovers (see `Cluster`). It opens where the session's navigation puck opens,
  * with the same triggers (Space held, V, the right button, a pen's barrel or side button), and with a finger's long
- * press; see `createSummon` for how it closes. Two- and three-finger taps undo and redo.
+ * press; see `createSummon` for how it closes. Two- and three-finger taps undo and redo. What is not for drawing, such
+ * as files and the session's windows, is in a side menu that pushes the drawing aside, opened from the pill in the
+ * corner or by pinching three fingers together on the drawing; summoning the cluster closes it.
  */
-export function PuckStudio(_props: PaintVariantProps) {
+export function PuckStudio(props: PaintVariantProps) {
   const session = createPaintSession();
   const { camera, engine, library, tools, brush, mixer, colorPicker, presets } = session;
   const view = createViewDrag({
@@ -41,6 +45,17 @@ export function PuckStudio(_props: PaintVariantProps) {
     const at = summon.at();
     return at && clusterLayout(at, session.size(), summon.hand());
   });
+  const [menuOpen, setMenuOpen] = createSignal(false);
+  const stepBack = createStepBack({
+    target: session.stage,
+    enabled: () => session.ready() && !menuOpen(),
+    // Two of the fingers may have moved the view before the third landed.
+    snapshot: () => {
+      const view = camera.current();
+      return () => camera.navigate(view);
+    },
+    onCommit: () => openMenu(true)
+  });
   const [abrOpen, setAbrOpen] = createSignal(false);
   const [abrMounted, setAbrMounted] = createSignal(false);
 
@@ -54,17 +69,48 @@ export function PuckStudio(_props: PaintVariantProps) {
       }
     }
   );
+  // The cluster is summoned over the drawing, so the drawing comes back for it.
+  createEffect(
+    () => summon.at() !== undefined,
+    (open) => {
+      if (open) {
+        setMenuOpen(false);
+      }
+    }
+  );
 
   return (
     <PaintEditor session={session} class={styles.editor}>
-      <PaintStage session={session} input={{ touchGestures: summon.touchGestures, puckPicker: summon.picker }}>
-        <StageGuides session={session} />
-        <Show when={session.ready() && engine.state().tileCount === 0 && !summon.at()}>
-          <StageHint>Pen to draw. Hold Space, right-click, press the pen button or long-press for tools.</StageHint>
-        </Show>
-        {/* A press outside a toggled cluster only closes it, so the brush cursor would promise a stroke. */}
-        <StageOverlays session={session} cursor={!summon.at() || camera.navigation.held()} />
-      </PaintStage>
+      <DrawingSideMenu
+        session={session}
+        open={menuOpen()}
+        onOpenChange={openMenu}
+        progress={stepBack.progress()}
+        experimentsHref={props.experimentsHref}
+      >
+        <PaintStage
+          session={session}
+          input={{
+            touchGestures: {
+              ...summon.touchGestures,
+              // A quick pinch lifts like a three-finger tap: the canvas saw none of its movement.
+              tap: (fingers) => {
+                if (!stepBack.pinched()) {
+                  summon.touchGestures.tap(fingers);
+                }
+              }
+            },
+            puckPicker: summon.picker
+          }}
+        >
+          <StageGuides session={session} />
+          <Show when={session.ready() && engine.state().tileCount === 0 && !summon.at()}>
+            <StageHint>Pen to draw. Hold Space, right-click, press the pen button or long-press for tools.</StageHint>
+          </Show>
+          {/* A press outside a toggled cluster only closes it, so the brush cursor would promise a stroke. */}
+          <StageOverlays session={session} cursor={!summon.at() || camera.navigation.held()} />
+        </PaintStage>
+      </DrawingSideMenu>
       <Show when={abrMounted()}>
         <AbrViewerDialog
           open={abrOpen()}
@@ -115,6 +161,15 @@ export function PuckStudio(_props: PaintVariantProps) {
       </div>
     </PaintEditor>
   );
+
+  /** Opens or closes the side menu; the cluster gives way to it. */
+  function openMenu(open: boolean) {
+    if (open) {
+      summon.close();
+    }
+
+    setMenuOpen(open);
+  }
 
   /** Runs an instant QuickMenu button: undo and redo keep the cluster open, the eyedropper arms and finishes. */
   function runSlot(slot: SlotId) {

@@ -289,7 +289,15 @@ export function createSummon(options: {
     onCleanup(stop);
 
     makeEventListener(window, 'pointerdown', (event) => {
-      if (finger || event.pointerType !== 'touch' || event.target !== session.canvas() || navigation.center()) {
+      // Only the first finger down long-presses: the third of three fingers, after the second stopped the first's ring,
+      // must not start one.
+      if (
+        finger ||
+        !event.isPrimary ||
+        event.pointerType !== 'touch' ||
+        event.target !== session.canvas() ||
+        navigation.center()
+      ) {
         stop();
         return;
       }
