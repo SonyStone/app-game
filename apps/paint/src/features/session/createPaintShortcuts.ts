@@ -122,6 +122,7 @@ function match(event: KeyboardEvent, lasso: boolean) {
     { when: plain && key === 'e', run: (actions) => actions.chooseTool('eraser') },
     { when: plain && key === 'l', run: (actions) => actions.chooseTool('lasso') },
     { when: plain && key === 'g', run: (actions) => actions.chooseTool('fill') },
+    // Y is Photoshop's History Brush, the nearest relative of the local undo.
     { when: plain && key === 'y', run: (actions) => actions.chooseTool('local-undo') },
     { when: plain && key === 'w', run: (actions) => actions.chooseWand() },
     { when: plain && !event.repeat && key === 'x', run: (actions) => actions.swapColors() },

@@ -42,14 +42,19 @@ it('marks a lasso region, shows the reply, and applies the session when another 
   expect(localUndo.depth()).toBe(1);
 });
 
-it('ends the session without changes when the drawing changes elsewhere, and cancels on request', async () => {
-  const { localUndo, sent, setDocument } = mount();
+it('ends the session without changes when the document changes, and cancels on request', async () => {
+  const { localUndo, sent, setRevision } = mount(6);
   localUndo.update({ mode: 'tap' });
   localUndo.canvasAction.run({ x: 5, y: 5 }, contact);
   await settle();
   expect(localUndo.open()).toBe(true);
 
-  setDocument({ top: 8, activeId: 'layer' });
+  // The engine replied for revision 7; the report of that earlier change may arrive later.
+  setRevision(7);
+  await settle();
+  expect(localUndo.open()).toBe(true);
+
+  setRevision(8);
   await settle();
   expect(localUndo.open()).toBe(false);
   expect(sent().at(-1)).toEqual({ type: 'cancel' });
@@ -76,10 +81,13 @@ it('sends a brush stroke in parts that continue each other, erasing with Alt', a
   expect(localUndo.gesture()).toBeUndefined();
 });
 
-/** Mounts a local undo whose engine replies to every marking command with a region of three steps. */
-function mount() {
+/**
+ * Mounts a local undo whose engine replies to every marking command with a region of three steps at document revision
+ * 7, while the editor has heard of `revision` so far.
+ */
+function mount(revision = 7) {
   const [active, setActive] = createSignal(true);
-  const [documentState, setDocument] = createSignal({ top: 7 as number | undefined, activeId: 'layer' });
+  const [documentRevision, setRevision] = createSignal(revision);
   const commands: LocalUndoCommand[] = [];
   const run = vi.fn(async (command: { command: unknown }) => {
     const sent = command.command as LocalUndoCommand;
@@ -93,8 +101,7 @@ function mount() {
       depth: sent.type === 'depth' ? sent.depth : 1,
       count: 3,
       outline: undefined,
-      layerId: 'layer',
-      top: 7
+      revision: 7
     };
     return ok(reply);
   });
@@ -106,13 +113,13 @@ function mount() {
       active,
       run,
       canStart: () => true,
-      document: documentState,
+      revision: documentRevision,
       onError: () => {}
     });
     return <div />;
   }, host);
   flush();
-  return { localUndo, sent: () => commands, setActive, setDocument };
+  return { localUndo, sent: () => commands, setActive, setRevision };
 }
 
 /** Lets queued commands and their replies run, then flushes Solid. */

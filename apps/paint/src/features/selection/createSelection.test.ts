@@ -229,6 +229,7 @@ function setup() {
             state: { get: () => undefined, set: () => {} },
             floating: { show: () => {}, move: () => {}, clear: async () => {} },
             history: [],
+            revision: 0,
             preview: { show: () => {}, clear: () => {} }
           },
           parsed

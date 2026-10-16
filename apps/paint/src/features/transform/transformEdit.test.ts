@@ -184,6 +184,7 @@ function setup(tiles: Map<string, Uint8Array>, selection: SelectionMask = emptyS
     state: { get: () => state, set: (value) => (state = value) },
     floating,
     history: [],
+    revision: 0,
     preview: { show: () => {}, clear: () => {} }
   };
   return { tiles, floating, run: (command: TransformCommand) => transformEdit.run(context, command) };

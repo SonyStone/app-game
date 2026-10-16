@@ -239,10 +239,7 @@ export function createPaintSession(options: {
     active: () => tools.tool() === 'local-undo',
     run: engine.runEdit,
     canStart: () => engine.canEdit() && !selection.isBusy() && !engine.isDrawing(),
-    document: () => ({
-      top: engine.state().canUndo ? engine.state().historyCurrentId : undefined,
-      activeId: engine.state().activeId
-    }),
+    revision: () => engine.state().revision,
     onError: setError
   });
   createEffect(

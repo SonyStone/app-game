@@ -87,7 +87,7 @@ it('fills the active layer by the active layer or all visible layers, over its e
   const read = async (pixels: unknown) => pixels as Uint8Array;
   const state = { get: () => undefined, set: () => {} };
   const floating = { show: () => {}, move: () => {}, clear: async () => {} };
-  const edits = { history: [], preview: { show: () => {}, clear: () => {} } };
+  const edits = { history: [], revision: 0, preview: { show: () => {}, clear: () => {} } };
   const fill = (command: Partial<FillCommand>) =>
     fillEdit.run(
       { layers: [paint, lines], active: paint, readTile: read, linearBlending: false, selection: emptySelection, state, floating, ...edits },
@@ -153,6 +153,7 @@ it('stays inside the selection, also when it grows under edges, fades across a f
         state: { get: () => undefined, set: () => {} },
         floating: { show: () => {}, move: () => {}, clear: async () => {} },
         history: [],
+        revision: 0,
         preview: { show: () => {}, clear: () => {} }
       },
       { ...fillCommand(), source: 'layer', expand: 4, ...command }

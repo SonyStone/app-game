@@ -272,12 +272,15 @@ it('shows an edit preview in place of layer tiles without changing the document,
   const blue = new Uint8Array(TILE_BYTES).fill(128);
   /** History ids each `peek` command saw. */
   const seen: number[][] = [];
+  /** Document revisions each `peek` command saw. */
+  const revisions: number[] = [];
   // `paint` commits red into tile 0,0; `show` previews blue there and a transparent 1,0; `apply` commits blue.
   const peek = defineDocumentEdit({
     id: 'peek',
     parse: (input: unknown) => input as 'paint' | 'show' | 'clear' | 'apply',
-    async run({ active, history, preview }, command) {
+    async run({ active, history, revision, preview }, command) {
       seen.push(history.map(({ id }) => id));
+      revisions.push(revision);
       if (command === 'paint') {
         return { changes: [{ layerId: active.id, key: '0,0', before: active.tiles.get('0,0'), after: red }] };
       }
@@ -330,11 +333,16 @@ it('shows an edit preview in place of layer tiles without changing the document,
   runtime.send({ type: 'layer', action: { type: 'select', id: document.active.id } });
   await waitFor(() => shownTile() !== blue);
   expect(renderer.render.mock.lastCall![0]).toBe(document.layers);
+  // Edits see that change in the revision, which their own commands without changes leave alone.
+  runtime.send(peek.command('clear', 'e'));
+  await waitFor(() => replies() === 5);
+  expect(revisions.slice(1, 4)).toEqual([revisions[1], revisions[1], revisions[1]]);
+  expect(revisions[4]).toBeGreaterThan(revisions[3]!);
 
   // Committing the result with the preview cleared is one undo step, which replaces the preview without a blank frame.
-  runtime.send(peek.command('show', 'e'));
-  runtime.send(peek.command('apply', 'f'));
-  await waitFor(() => replies() === 6);
+  runtime.send(peek.command('show', 'f'));
+  runtime.send(peek.command('apply', 'g'));
+  await waitFor(() => replies() === 7);
   expect(document.undoSteps()).toHaveLength(2);
   expect(restoredKeys()).toEqual(['0,0', '0,0', '1,0']);
   expect(renderer.holdPresented).toHaveBeenCalledOnce();

@@ -276,7 +276,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let previewHidden = false;
     /** The latest `shownLayers` result and what it was made from. */
     let shown: { layers: Layer[]; revision: number; preview: typeof tilePreview; result: Layer[] } | undefined;
-    /** The layers as the views show them: the document's, with the tiles of the edit preview in place of their own. */
+    /**
+     * The layers as the views show them: the document's, with the tiles of the edit preview in place of their own, as
+     * new maps over the same immutable tiles. Overview pages derived from previewed tiles may stay in the renderer's
+     * page cache, which is content-addressed and pruned like any other derived page.
+     */
     const shownLayers = (): Layer[] => {
       if (!tilePreview || previewHidden) return document.layers;
       if (
@@ -378,6 +382,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               }
             },
             history: document.undoSteps(),
+            revision: document.revision,
             preview: {
               show(tiles) {
                 const previous = tilePreview?.tiles ?? new Map<string, PreviewTile>();

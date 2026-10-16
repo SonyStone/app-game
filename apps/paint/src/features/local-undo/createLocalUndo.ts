@@ -15,9 +15,10 @@ import { localUndoEdit, type LocalUndoCommand, type LocalUndoReply } from './loc
  * taps strokes away; touch keeps navigating. Shift adds a lasso outline, Alt subtracts one or erases with the brush.
  *
  * Commands run one at a time in sending order. Brush dabs reach the engine at most once a frame and once more on
- * release, and depth changes send only the latest. The session ends with `apply`, which keeps the result as one undo
- * step, or `cancel`; choosing another tool applies, and anything else that changes the drawing, its history or the
- * active layer ends it without changes. Must be created within a Solid owner; replies after disposal are dropped.
+ * release, and depth changes send only the latest, while the gesture itself draws at once. The session ends with
+ * `apply`, which keeps the result as one undo step, or `cancel`; choosing another tool applies, and anything else
+ * that changes the document, Redo and a stroke of the pen's eraser end included, ends it without changes, as the
+ * engine then drops the preview. Must be created within a Solid owner; replies after disposal are dropped.
  */
 export function createLocalUndo(options: {
   /** The local undo tool is active. */
@@ -26,8 +27,8 @@ export function createLocalUndo(options: {
   run: (command: Extract<PaintCommand, { type: 'edit' }>) => Promise<Result<unknown, PaintError>>;
   /** Whether a session can start or continue: the engine accepts edits and no stroke or other edit runs. */
   canStart: () => boolean;
-  /** The drawing's newest undo step, `undefined` for none, and active layer, as the engine reports them. */
-  document: () => { top: number | undefined; activeId: string };
+  /** The document's revision as the engine reports it; see `DocumentEditContext.revision`. */
+  revision: () => number;
   onError: (error: PaintError) => void;
 }) {
   const owner = getOwner()!;
@@ -57,10 +58,11 @@ export function createLocalUndo(options: {
       void apply();
     }
   });
-  // Anything else that changed the drawing's history or active layer ended the session in the engine.
-  createEffect(options.document, (document) => {
+  // Anything else that changed the document ended the session in the engine. The reply carries the revision the
+  // engine saw, so a report of an earlier change arriving late does not end a session made after it.
+  createEffect(options.revision, (revision) => {
     const current = shown();
-    if (currentOpen() && current && (document.top !== current.top || document.activeId !== current.layerId)) {
+    if (currentOpen() && current && revision !== current.revision) {
       close();
       send({ type: 'cancel' });
     }
@@ -298,7 +300,8 @@ export type LocalUndoGesture =
 /**
  * Local undo settings: how the region is marked, how a brush stroke or lasso outline combines with it without
  * modifier keys (`new` replaces it with an outline and adds a brush stroke), and the mask brush's diameter in document
- * pixels and hardness from 0 to 1.
+ * pixels and hardness from 0 to 1. The three modes are there to compare them with a pen. `area` stands in for Shift
+ * and Alt on a tablet without a keyboard; held modifier keys win over it.
  */
 export type LocalUndoSettings = {
   mode: 'brush' | 'lasso' | 'tap';
@@ -307,7 +310,10 @@ export type LocalUndoSettings = {
   hardness: number;
 };
 
-/** Brush and lasso both mark a region and can continue each other's session; taps collect strokes. */
+/**
+ * Brush and lasso both mark a region and can continue each other's session; taps collect strokes, a session of another
+ * kind, so switching to or from the tap applies the open session first.
+ */
 function kindOf(mode: LocalUndoSettings['mode']) {
   return mode === 'tap' ? 'taps' : 'region';
 }

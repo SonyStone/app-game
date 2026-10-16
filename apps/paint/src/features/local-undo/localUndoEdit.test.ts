@@ -55,6 +55,25 @@ it('cancels without changes, and refuses to apply after the drawing changed', as
   expect(document.undoSteps()).toHaveLength(2);
 });
 
+it('ends the session when anything else changes the document, outside its history too', async () => {
+  const { document, run, apply, pixel } = drawing();
+  stroke(document, 10, 10, red);
+  stroke(document, 100, 100, blue);
+
+  // Choosing the active layer again adds no step, but the runtime drops the preview, so the session ends with it.
+  await run({ type: 'lasso', points: square(0, 0, 50), mode: 'replace', depth: 1 });
+  document.changeLayer({ type: 'select', id: document.active.id });
+  await expect(apply()).rejects.toThrow('The drawing changed');
+
+  // After Smooth color changes, an added outline starts a new session: it is the whole region.
+  await run({ type: 'lasso', points: square(0, 0, 50), mode: 'replace', depth: 1 });
+  document.setLinearBlending(!document.linearBlending());
+  expect(await run({ type: 'lasso', points: square(90, 90, 20), mode: 'add', depth: 1 })).toMatchObject({ count: 1 });
+  await apply();
+  expect(pixel(10, 10)).toEqual(red);
+  expect(pixel(100, 100)).toEqual([0, 0, 0, 0]);
+});
+
 it('shows the past only in the preview, never in the document or its autosave', async () => {
   const { document, run, shownPixel, pixel } = drawing();
   stroke(document, 10, 10, red);
@@ -187,6 +206,7 @@ function context(
     state,
     floating: { show: () => {}, move: () => {}, clear: async () => {} },
     history: document.undoSteps(),
+    revision: document.revision,
     preview
   };
 }

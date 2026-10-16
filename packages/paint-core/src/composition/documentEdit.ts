@@ -88,17 +88,27 @@ export type DocumentEditContext = {
   };
   /**
    * The undoable steps, newest first, with their tile changes; see `HistoryStep`. Read their pixels with `readTile`.
-   * Read only: an edit changes the document through its result.
+   * Read only: an edit changes the document through its result. Unlike `selectHistorySource`, which picks the state
+   * Erase to History paints from for the whole editor, reading it changes nothing.
    */
   history: readonly HistoryStep[];
   /**
+   * Counts the document's changes: it differs between two commands when anything changed the document in between,
+   * including changes outside the undo history, such as choosing a layer, even the active one again, or Smooth color.
+   * Commands that commit nothing leave it alone.
+   */
+  revision: number;
+  /**
    * Tiles shown in place of a layer's own while the edit is in progress, such as a layer part returned to an earlier
-   * state. Unlike `floating`, they replace the layer's pixels, transparent ones included. Display only: they never
-   * enter the document, its history, autosaves or exports, and tools that read the document see its own pixels.
+   * state. They replace the layer's pixels, transparent ones included, which `floating` cannot: its cut-out removes the
+   * layer only where the floating pixels have alpha, so a transparent past would not hide the current paint. Display
+   * only: they never enter the document, its history, autosaves or exports, and tools that read the document see its
+   * own pixels.
    *
    * The preview describes the document it was made for: the runtime drops it when anything other than this edit's
-   * commands changes the document (a stroke, Undo, a layer command, another edit or an opened drawing), and before a
-   * stroke begins. A replacement renderer shows it again.
+   * commands changes the document (a stroke, Undo, a layer command, another edit or an opened drawing), that is, when
+   * `revision` changes, and before a stroke begins. An edit whose session lives in its preview should end the session
+   * then too. A replacement renderer shows it again.
    */
   preview: {
     /** Shows `tiles` instead of the same tiles of their layers, replacing any shown before, and redraws. */

@@ -17,22 +17,27 @@ import { z } from 'zod';
 
 /**
  * The engine half of the local undo: returns part of the active layer to an earlier state, leaving the rest of the
- * drawing alone. A session marks a region with brush dabs or lasso outlines and shows it as it was before the
- * `depth`-th newest step that touched it (see `createRegionHistory`), or collects taps, each removing the newest step
- * that changed the pixel under it, deeper with every tap on the same place. The canvas shows the result as a preview
- * while the document stays unchanged; `apply` commits it as one undo step and `cancel` drops it.
+ * drawing alone, where Undo undoes the latest step everywhere. A session marks a region with brush dabs or lasso
+ * outlines and shows it as it was before the `depth`-th newest step that touched it (see `createRegionHistory`), or
+ * collects taps, each removing the newest step that changed the pixel under it, deeper with every tap on the same
+ * place. The region belongs to the session alone; the document's selection stays as it was.
  *
- * It returns pixels, not strokes: everything painted in the region after the chosen step returns too. A session ends
- * by itself when anything else changes the drawing; its next command then starts a new one, and `apply` fails.
- * Regions are limited to {@link maxLocalUndoSide} pixels per side. Runs in the drawing engine's realm.
+ * The canvas shows the result with `context.preview` while the document stays unchanged; `apply` commits it as one
+ * ordinary undo step, which Undo reverts and later sessions count like any other, and `cancel` drops it. The preview
+ * describes the document it was made for, so a session ends by itself when anything else changes the document (its
+ * `revision`), as the runtime then drops the preview; its next command starts a new session, and `apply` fails.
+ *
+ * It returns pixels, not strokes: everything painted in the region after the chosen step returns too. The history
+ * keeps tiles, not pen input, so removing an old stroke while keeping newer ones over it would need the strokes
+ * redrawn from recorded input instead. Only the undo history is reachable and only the active layer changes; regions
+ * are limited to {@link maxLocalUndoSide} pixels per side, as the fill is. Runs in the drawing engine's realm.
  */
 export const localUndoEdit = defineDocumentEdit({
   id: 'local-undo',
   parse: (input: unknown) => localUndoCommandSchema.parse(input),
   async run(context, command): Promise<{ changes: TileChange[]; reply?: LocalUndoReply }> {
     const stored = context.state.get() as Session | undefined;
-    const current =
-      stored && stored.layerId === context.active.id && stored.top === context.history[0]?.id ? stored : undefined;
+    const current = stored?.revision === context.revision ? stored : undefined;
     if (command.type === 'cancel' || command.type === 'apply') {
       context.state.set(undefined);
       context.preview.clear();
@@ -81,7 +86,7 @@ export const localUndoEdit = defineDocumentEdit({
 
     context.state.set(session);
     context.preview.show([...session.shown].map(([key, pixels]) => ({ layerId: session.layerId, key, pixels })));
-    return { changes: [], reply: { ...reply, layerId: session.layerId, top: session.top } };
+    return { changes: [], reply: { ...reply, revision: session.revision } };
   }
 });
 
@@ -91,10 +96,10 @@ export type LocalUndoCommand = z.infer<typeof localUndoCommandSchema>;
 /**
  * What a command shows: for a marked region, the step it returns to, `depth` of the `count` steps that touched it,
  * 0 when none did; for taps, how many steps they removed and whether the latest tap found one. `outline` shows where
- * the session works. The session belongs to layer `layerId` and the history whose newest step is `top`, `undefined`
- * for none; it ends when either changes.
+ * the session works. The session belongs to the document at `revision` (see `DocumentEditContext.revision`) and ends
+ * when that changes.
  */
-export type LocalUndoReply = Shown & { layerId: string; top: number | undefined };
+export type LocalUndoReply = Shown & { revision: number };
 
 /** What the preview of a session shows; see {@link LocalUndoReply}. */
 type Shown = (
@@ -156,8 +161,8 @@ const localUndoCommandSchema = z.discriminatedUnion('type', [
 /** An open local undo session on one layer and what its preview shows. */
 type Session = {
   layerId: string;
-  /** Id of the newest step when the session began; the session is over once that changes. */
-  top: number | undefined;
+  /** The document revision the session was made for; the session is over once that changes. */
+  revision: number;
   history: ReturnType<typeof createRegionHistory>;
   /** The tiles the preview replaces and their pixels, `undefined` for transparent; also the result `apply` commits. */
   shown: Map<string, Uint8Array | undefined>;
@@ -182,13 +187,18 @@ type Session = {
 function start(context: DocumentEditContext) {
   return {
     layerId: context.active.id,
-    top: context.history[0]?.id,
+    revision: context.revision,
     history: createRegionHistory(context.readTile),
     shown: new Map<string, Uint8Array | undefined>()
   };
 }
 
-/** Changes a marked region or its depth, updates the steps touching it and the preview. */
+/**
+ * Changes a marked region or its depth, updates the steps touching it and the preview. All the touching steps are
+ * found, not only down to `depth`, so that the panel can tell how many there are. A brush stroke arrives in parts once
+ * a frame and only grows the region, so a grown region keeps the steps touching it and checks the others only in the
+ * tiles it gained, and while it returns to the same step, only those tiles of the preview are computed again.
+ */
 async function mark(
   context: DocumentEditContext,
   session: Extract<Session, { kind: 'region' }>,
@@ -248,7 +258,12 @@ async function mark(
 
 /**
  * Removes, at `point`, the newest step that changed its pixel and is older than every step the session already
- * returns to there, so that a tap removes what the preview shows under it.
+ * returns to there, so that a tap removes what the preview shows under it: another tap anywhere on a removed stroke
+ * goes deeper, with no distance threshold to tell a repeated tap.
+ *
+ * A tap undoes a stroke, and the history keeps a stroke as the pixels its step changed, not as a shape, so the step
+ * goes as a whole: its part is every pixel it changed, grown by one to take the antialiased edge along. Within that
+ * part, everything painted after the step returns too, as in a marked region.
  */
 async function tap(
   context: DocumentEditContext,
