@@ -1,7 +1,7 @@
 import { maxStabilizerLevel } from '@app-game/paint-core/strokeSettings';
 import type { SketchIconName } from '../../shared/ui/SketchIcon';
 
-/** The mockup's tools in the order of the 3×3 tools tile. Only the brush, the mixer and the eraser draw. */
+/** The mockup's tools in the order of the 4×3 tools tile. Only the brush, the mixer and the eraser draw. */
 export const tools = [
   { id: 'brush', label: 'Brush', icon: 'draw' },
   { id: 'mixer', label: 'Mixer brush', icon: 'feather' },

@@ -25,7 +25,7 @@ export function createDebugOptions() {
 
 /**
  * Every option's default. The shortcut button and the ring follow NavigationPuckAddon
- * (github.com/SonyStone/NavigationPuckAddon) where the spec (`apps/paint/docs/tile-cluster.md`) does not differ.
+ * (github.com/SonyStone/NavigationPuckAddon) except where `TileClusterMockup` says they differ.
  */
 export const defaultOptions = {
   /**

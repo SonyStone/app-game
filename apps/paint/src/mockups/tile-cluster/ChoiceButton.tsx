@@ -5,17 +5,22 @@ import styles from './ValueButton.module.css';
 /**
  * A choice among a few options as a compact button, its label above the current option, in place of a dropdown or
  * a segmented control: press it, slide onto another option in the list and lift, or tap it and then tap an option.
- * The list opens with the current option under the pointer, so a short slide reaches its neighbours.
+ * The list opens with the current option under the pointer, so a short slide reaches its neighbours. As with
+ * `ValueButton`, the option pointed at applies at once, and closing without a pick restores the one from before.
  */
 export function ChoiceButton(props: {
   label: string;
   value: string;
   options: readonly string[];
   layout?: 'stacked' | 'inline';
+  /** Receives the option pointed at, and the option from before when the pointer leaves the list or it closes. */
+  onPreview?: (option: string) => void;
   onPick: (option: string) => void;
 }) {
+  let original = '';
   const pick = createPickPopup<string>({
     place(point) {
+      original = props.value;
       const current = Math.max(0, props.options.indexOf(props.value));
       // The current option lies under the pointer.
       return placeAt(point, listWidth, props.options.length * optionHeight + 2 * padding, {
@@ -28,7 +33,7 @@ export function ChoiceButton(props: {
       const inside = x >= popup.left - slack && x <= popup.left + popup.width + slack;
       return inside ? props.options[index] : undefined;
     },
-    onPreview: () => {},
+    onPreview: (option) => props.onPreview?.(option ?? original),
     onPick: props.onPick
   });
 
@@ -62,7 +67,7 @@ export function ChoiceButton(props: {
                   class={styles.option}
                   role="option"
                   aria-selected={option === props.value ? 'true' : 'false'}
-                  data-current={option === props.value || undefined}
+                  data-current={option === original || undefined}
                   data-hover={option === pick.hover() || undefined}
                 >
                   {option}

@@ -5,8 +5,9 @@ import styles from './mockup.module.css';
 
 /**
  * The state of the shortcut button, which sits at an offset from the pointer. It takes presses only above
- * {@link clickOpacity}, and after the puck closes it shows fully right under the pointer, staying there until the
- * pointer leaves it. How it lets the pointer reach it depends on `launcherPlacement`:
+ * {@link clickOpacity}; a finger cannot approach it, so it can press it only while it shows. After navigating it shows
+ * fully right under the pointer, staying there until the pointer leaves it. How it lets the pointer reach it depends
+ * on `launcherPlacement`:
  *
  * - `zone`, NavigationPuckAddon's Shortcut Button (`shortcut_placement.py`, `shortcut_layout.py`): it stays put while
  *   the pointer is within its follow zone and jumps back to the offset once the pointer leaves it; inside the zone it
@@ -108,7 +109,10 @@ export function createShortcutButton(options: Accessor<DebugOptions>) {
 
       setOpacity(Math.max(options().launcherIdleOpacity, proximity(distance(pointer, center()), geometry())));
     },
-    /** Shows the button fully right under the pointer, as the addon does after the puck closes. */
+    /**
+     * Shows the button fully right under the pointer, as the addon does after the puck closes, so that it can be
+     * grabbed again.
+     */
     revealAt(pointer: { x: number; y: number }) {
       setCenter(clamp(pointer));
       setOpacity(1);

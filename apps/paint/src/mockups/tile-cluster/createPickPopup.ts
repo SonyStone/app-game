@@ -1,13 +1,14 @@
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createSignal } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { useClusterActions } from './clusterActions';
 
 /**
  * The press-and-slide gesture of a button that opens a popup of choices right under the pointer, with the current
  * choice where the press is: slide onto another choice and lift; or tap, then tap or slide in the popup. A press
- * elsewhere or Escape closes the popup without a pick. While a press is in progress the cluster hides behind the
- * popup, and it comes back under the pointer where the press ends. Must be created within a component under a
- * `ClusterActions` provider.
+ * elsewhere or Escape closes the popup without a pick, and so does the cluster closing around it, as when a held
+ * Space is released. While a press is in progress the cluster hides behind the popup, and it comes back under the
+ * pointer where the press ends; while the popup waits for taps the cluster shows where it is. Must be created within
+ * a component under a `ClusterActions` provider.
  */
 export function createPickPopup<T>(options: {
   /** Where the popup goes for a press at `point`. */
@@ -81,7 +82,7 @@ export function createPickPopup<T>(options: {
       press = undefined;
       setHover(undefined);
       options.onPreview(undefined);
-      actions.end(at);
+      actions.pause();
     } else {
       close(picked, at);
     }
@@ -98,10 +99,21 @@ export function createPickPopup<T>(options: {
     },
     { capture: true }
   );
-  createEventListener(window, 'keydown', (event) => {
-    if (popup() && event.key === 'Escape') {
-      event.stopPropagation();
-      close(undefined);
+  // In the capture phase, so that Escape closes only the popup and not the cluster around it.
+  createEventListener(
+    window,
+    'keydown',
+    (event) => {
+      if (popup() && event.key === 'Escape') {
+        event.stopPropagation();
+        close(undefined);
+      }
+    },
+    { capture: true }
+  );
+  onCleanup(() => {
+    if (popup()) {
+      options.onPreview(undefined);
     }
   });
 

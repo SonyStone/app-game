@@ -75,7 +75,10 @@
   }
 }
 
-/* Tiles and their buttons are half transparent, so the drawing shows through; text and icons stay opaque. */
+/*
+ * Tiles and their buttons are half transparent, as the addon's, so the drawing shows through; text and icons stay
+ * opaque, and nothing is blurred.
+ */
 .tile {
   box-sizing: border-box;
   padding: 3px;

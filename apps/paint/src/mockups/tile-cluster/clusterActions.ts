@@ -8,6 +8,11 @@ import { createContext, useContext } from 'solid-js';
 export const ClusterActions = createContext<{
   /** Starts an action on `control`, whose place in the cluster may go back under the pointer afterwards. */
   begin: (control?: Element) => void;
+  /**
+   * The press ended but the action has not: a popup opened by a tap waits for a tap in it. The cluster shows again
+   * where it is, neither closing nor moving.
+   */
+  pause: () => void;
   end: (reopenAt?: { x: number; y: number }) => void;
 }>();
 

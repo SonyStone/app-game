@@ -246,6 +246,7 @@ export function LayersTile(props: {
               label="Blend"
               value={layer().blend}
               options={blendModes}
+              onPreview={(blend) => props.onUpdate(layer().id, { blend })}
               onPick={(blend) => props.onUpdate(layer().id, { blend })}
             />
             <ValueButton
@@ -315,8 +316,8 @@ export function SettingsTile(props: {
   sections: readonly Section[];
   values: Record<string, SettingValue>;
   onChange: (key: string, value: SettingValue) => void;
-  /** Shows a value pointed at in a value grid, without committing it. */
-  onPreview: (key: string, value: number) => void;
+  /** Shows a value or an option pointed at in a popup, without committing it. */
+  onPreview: (key: string, value: SettingValue) => void;
 }) {
   return (
     <div class={[styles.tile, styles.settingsTile, props.class]}>
@@ -345,7 +346,7 @@ function FieldControl(props: {
   field: Field;
   values: Record<string, SettingValue>;
   onChange: (key: string, value: SettingValue) => void;
-  onPreview: (key: string, value: number) => void;
+  onPreview: (key: string, value: SettingValue) => void;
 }) {
   const value = () => props.values[props.field.key];
 
@@ -377,6 +378,7 @@ function FieldControl(props: {
               label={field.label}
               value={value() as string}
               options={field.options}
+              onPreview={(option) => props.onPreview(field.key, option)}
               onPick={(option) => props.onChange(field.key, option)}
             />
           );

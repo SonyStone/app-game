@@ -1,9 +1,9 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { BrushAdjustHud } from '../../features/brush';
+import { createPalmRejection } from '../../features/palm-rejection/createPalmRejection';
 import { ClusterActions } from './clusterActions';
 import { createMockCanvas } from './createMockCanvas';
-import { createPalmRejection } from '../../features/palm-rejection/createPalmRejection';
 import { createPuckNavigation } from './createPuckNavigation';
 import { createDebugOptions } from './debugOptions';
 import { DebugSidebar } from './DebugSidebar';
@@ -16,17 +16,23 @@ import { ColorTile, LayersTile, PresetsTile, SelectionTile, SettingsTile, ToolsT
 import { defaultSettings, presets, toolSections, toolTiles, type SettingValue, type ToolId } from './toolSettings';
 
 /**
- * A working mockup of the tile cluster UI, as `apps/paint/docs/tile-cluster.md` specifies it. The screen shows only
- * the drawing until the cluster opens under the pointer: the Puck ring at its center, the tools on the hand's side,
- * the color above, the settings below, the presets beyond the tools and the layers on the other side.
+ * A working mockup of the tile cluster UI. The screen shows only the drawing until the cluster opens with the Puck's
+ * center under the pointer: the Puck ring at its center, the tools on the hand's side, the color above, the settings
+ * below, the presets beyond the tools and the layers on the other side.
  *
- * - Invocation: Space while held (or as a toggle, an experiment), the pen's side button and the right mouse button
- *   as toggles, and the shortcut button: a press opens the ring alone, which acts on hover; lifting it without
- *   leaving the dead circle opens the whole cluster as a toggle.
- * - A toggled cluster closes after any action, and the shortcut button shows under the pointer. A held one shows
- *   again after each action, and a press outside it draws, the cluster hidden meanwhile.
+ * - Invocation: Space while held (or as a toggle, an experiment); the pen's side button and the right mouse button as
+ *   toggles, since holding either down is awkward; and the shortcut button: a press opens the ring alone, which acts
+ *   on hover; lifting it without leaving the dead circle opens the whole cluster as a toggle. Only Space opens it from
+ *   the keyboard, as Alt picks colors; a finger opens nothing, it navigates.
+ * - A toggled cluster closes after any action, and the shortcut button shows under the pointer only after navigating.
+ *   A held one shows again after each action, and a press outside it draws, the cluster hidden meanwhile.
  * - Continuous actions (navigating, brush size, picking a value or an option) hide the cluster, except the popup in
  *   use.
+ *
+ * The ring and the shortcut button follow NavigationPuckAddon (github.com/SonyStone/NavigationPuckAddon), except that
+ * the ring replaces the addon's navigation squares and opens centered under the pointer, the button shows under the
+ * pointer after navigating only (see `finishAfterAction`), it reaches the pointer by intent by default rather than by
+ * the addon's follow zone (see `createShortcutButton`), and its corner lies toward the pen hand.
  *
  * Brush, mixer and eraser draw; other tools, layers, selection actions and presets beyond their settings only
  * demonstrate their controls. The debug panel switches experiments and shows debug drawing.
@@ -64,6 +70,9 @@ export function TileClusterMockup() {
   const clusterActions = {
     begin(control?: Element) {
       beginAction(control);
+    },
+    pause() {
+      setActing(false);
     },
     end(at?: Point) {
       finishAfterAction(at ?? { x: innerWidth / 2, y: innerHeight / 2 });
@@ -375,10 +384,15 @@ export function TileClusterMockup() {
       return;
     }
 
-    const press: RingPress = { id: event.pointerId, fromLauncher, leftDead: false, used: false };
-    setRingPress(press);
     const pointer = point(event);
     const radius = Math.hypot(pointer.x - where.x, pointer.y - where.y);
+    // The ring's square box reaches past its circle, where nothing acts.
+    if (radius > outer()) {
+      return;
+    }
+
+    const press: RingPress = { id: event.pointerId, fromLauncher, leftDead: false, used: false };
+    setRingPress(press);
     if (radius >= dead()) {
       const angle = (Math.atan2(pointer.y - where.y, pointer.x - where.x) * 180) / Math.PI;
       const index = sectorIndexAt(ring.layout(), angle);
@@ -448,7 +462,10 @@ export function TileClusterMockup() {
     );
   }
 
-  /** The press arrives on sector `index`: a continuous function starts; an instant one runs once. */
+  /**
+   * The press arrives on sector `index`: a continuous function starts; an instant one runs once, again at each
+   * arrival, so that moving to and fro over Undo and Redo steps through the history.
+   */
   function enterSector(press: RingPress, index: number, pointer: Point, shift: boolean) {
     const action = ring.layout().sectors[index]?.action;
     if (!action) {
@@ -564,7 +581,7 @@ export function TileClusterMockup() {
 
   /**
    * A press on the shortcut button. A mouse or pen press opens the ring alone, centered on the press, acting on
-   * hover; a finger only taps it, and its tap opens the whole cluster.
+   * hover; a finger, which cannot hover, only taps it, and its tap opens the whole cluster.
    */
   function pressShortcut(event: PointerEvent) {
     if (event.pointerType === 'touch') {

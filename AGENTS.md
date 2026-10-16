@@ -50,3 +50,7 @@ Export each locally defined function, type, class, or constant at its declaratio
 Add concise JSDoc to functions, components, types, and public properties. Document purpose, behavior, defaults, constraints, callback contracts, side effects, thrown errors, and other information a caller needs but the type signature alone does not convey.
 
 Keep JSDoc beside the declaration it describes and update it when behavior changes. Avoid comments that merely restate a name or narrate obvious implementation details; document non-exported code only when its contract or reasoning is non-obvious.
+
+### No specification documents
+
+Do not write specification, plan, or handoff documents into the repository. The code, its tests, and its JSDoc are the only source of truth: a separate document drifts from the code and doubles the upkeep. Ask the user open questions in the conversation, and hand work to a new thread in that thread's first message.
