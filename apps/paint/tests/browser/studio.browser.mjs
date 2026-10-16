@@ -219,7 +219,7 @@ try {
       });
     }
     await cdp.send('Input.dispatchMouseEvent', penContact('mouseReleased', { x: cx + 120, y: cy + 48 }));
-    await waitEnabled(page.getByRole('button', { name: 'Undo' }));
+    await waitEnabled(page.getByRole('button', { name: 'Undo', exact: true }));
     await waitForSaved(page);
     await undo(page, 1);
 
@@ -1544,7 +1544,7 @@ try {
       await waitForSaved(moved);
       console.log(`  the new tab was ready ${Math.round(performance.now() - started)} ms after the tap`);
       assert.ok(new URL(moved.url()).searchParams.get('paintMoved') === null, 'The move mark stays in the address.');
-      await waitEnabled(moved.getByRole('button', { name: 'Undo' }));
+      await waitEnabled(moved.getByRole('button', { name: 'Undo', exact: true }));
       await waitEnabled(moved.getByRole('button', { name: 'Redo' }));
       // The tab the user opened cannot close itself, so it says where the drawing went.
       await page.getByText('This drawing moved to a new tab').waitFor({ timeout: 5_000 });
@@ -1563,7 +1563,7 @@ try {
       await again.getByRole('button', { name: 'Redo' }).click();
       await waitForSaved(again);
       await undo(again, 2);
-      assert.equal(await again.getByRole('button', { name: 'Undo' }).isDisabled(), false, 'Earlier history stays.');
+      assert.equal(await again.getByRole('button', { name: 'Undo', exact: true }).isDisabled(), false, 'Earlier history stays.');
 
       // The first tab takes the drawing back, as from any other tab.
       await page.getByRole('button', { name: 'Draw here' }).click();
