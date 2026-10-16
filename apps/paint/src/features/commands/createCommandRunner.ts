@@ -1,7 +1,8 @@
 import type { PaintSymmetry } from '@app-game/paint-core/symmetry';
-import { latest } from 'solid-js';
-import { maxBrushSize } from '../../features/brush';
-import type { PaintSession } from '../../features/session';
+import { createMemo, latest } from 'solid-js';
+import { maxBrushSize } from '../brush';
+import type { PaintSession } from '../session';
+import type { PaletteContext } from './catalog';
 import { describeIntent, type CommandContext, type Intent } from './commands';
 
 /** What running a command did, in a few words for the toast; `ok` is false when it could not run. */
@@ -385,6 +386,36 @@ export function createCommandRunner(options: {
       requestAnimationFrame(check);
     });
   }
+}
+
+/**
+ * The drawing as the parser and the palette see it, from `session`: the presets, the layers bottom first with their
+ * details, the active layer and whether the Mixer Brush is in use. `playground` tells whether there is a playground
+ * page to return to. Must be created within a Solid owner.
+ */
+export function createPaletteContext(session: PaintSession, playground: boolean) {
+  const { engine, library, mixer } = session;
+  return createMemo((): PaletteContext => {
+    const { layers, activeId } = engine.state();
+    return {
+      presets: library.presets().map(({ id, name }) => ({ id, name })),
+      layers: layers.map(({ name }) => ({ name })),
+      layerDetails: layers.map(({ visible, opacity, blend }) => ({ visible, opacity, blend })),
+      activeLayer: layers.findIndex((layer) => layer.id === activeId) + 1,
+      mixer: mixer.available(),
+      playground
+    };
+  });
+}
+
+/**
+ * One line for what a command did: the first failure, or what every intent did; a spoken command starts with what was
+ * `heard`.
+ */
+export function summarize(outcomes: readonly Outcome[], heard?: string): Outcome {
+  const failed = outcomes.find((outcome) => !outcome.ok);
+  const message = (failed ? [failed] : outcomes).map((outcome) => outcome.message).join(' · ');
+  return { ok: !failed, message: heard ? `“${heard}” → ${message}` : message };
 }
 
 /** Intents after which the next one may address a different layer, once the engine has applied them. */

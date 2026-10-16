@@ -3,6 +3,14 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import { createSignal, Errored, Show } from 'solid-js';
 import type { PaintVariantProps } from '..';
 import { AbrViewerDialog } from '../../features/abr';
+import { createRecentColors } from '../../features/color/createRecentColors';
+import {
+  createCommandRunner,
+  createPaletteContext,
+  createTypeAhead,
+  TypeAhead,
+  type KeyContextId
+} from '../../features/commands';
 import {
   createPaintSession,
   PaintEditor,
@@ -35,6 +43,9 @@ import { ViewToolLayer } from './ViewToolLayer';
  * is the middle cell only; nothing floats over it but the menus and popups, which a press outside closes (on the
  * canvas without painting). Tab hides the panels. The layout is remembered.
  *
+ * Shortcut keys show what goes with them by the pointer, and other letters or Ctrl/Cmd+K type a command there; see
+ * `createTypeAhead`.
+ *
  * Fingers on the canvas keep the session's gestures (two fingers pan, zoom and rotate, two- and three-finger taps
  * undo and redo); the session's palm rejection ignores a palm beside the pen, on the canvas and the interface alike.
  */
@@ -51,10 +62,53 @@ export function DesktopStudio(props: PaintVariantProps) {
   let drawingInput!: HTMLInputElement;
   let imageInput!: HTMLInputElement;
 
+  const recentColors = createRecentColors();
+  const context = createPaletteContext(session, props.experimentsHref !== undefined);
+  // Before the variant's own key listeners, which run the shortcuts it offers commands beside.
+  const typeAhead = createTypeAhead({
+    session,
+    run: createCommandRunner({
+      session,
+      context,
+      ui: {
+        pickFile: (purpose) => (purpose === 'open' ? drawingInput : imageInput).click(),
+        openAbr,
+        showHelp: () => setShortcutsOpen(true),
+        // The panels go to the side of the free hand.
+        setHand: (hand) => workspace.setDock(hand === 'left' ? 'right' : 'left'),
+        rememberColor: recentColors.remember,
+        playground: props.experimentsHref
+      }
+    }).run,
+    context,
+    colors: recentColors.colors,
+    keys: desktopKeys,
+    remember() {
+      const view = tools.viewMode();
+      const picking = colorPicker.armed();
+      return () => {
+        if (view) {
+          tools.chooseView(view);
+        } else {
+          tools.leaveView();
+        }
+
+        if (picking) {
+          colorPicker.arm();
+        }
+      };
+    },
+    enabled: () => popup() === undefined && !shortcutsOpen()
+  });
+
   const commands = createDesktopCommands({
     session,
     workspace,
     tools,
+    findCommand: () => {
+      setPopup(undefined);
+      typeAhead.search();
+    },
     openDrawing: () => drawingInput.click(),
     importImage: () => imageInput.click(),
     openAbr,
@@ -260,6 +314,7 @@ export function DesktopStudio(props: PaintVariantProps) {
           </Popup>
         )}
       </Show>
+      <TypeAhead typeAhead={typeAhead} />
       <Show when={shortcutsOpen()}>
         <ShortcutsSheet
           menus={commands.menus}
@@ -309,6 +364,18 @@ export function DesktopStudio(props: PaintVariantProps) {
     setAbrOpen(true);
   }
 }
+
+/** The variant's single-key shortcuts beyond the session's, by what the type-ahead offers beside them. */
+const desktopKeys: Readonly<Record<string, KeyContextId>> = {
+  i: 'colors',
+  h: 'view',
+  z: 'view',
+  r: 'view',
+  m: 'view',
+  '4': 'view',
+  '5': 'view',
+  '6': 'view'
+};
 
 /** The open menu or popup: a menu of the menu bar, or a popup under the toolbar button or menu that opened it. */
 type OpenPopup = { kind: 'menu'; id: string } | { kind: 'presets' | 'feather'; anchor: HTMLElement };

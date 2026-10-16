@@ -192,6 +192,15 @@ export function createBrushTools(options: {
     scaleSize(factor: number) {
       const current = currentBrush();
       updateBrush({ size: Math.max(1, Math.min(maxBrushSize(current), current.size * factor)) });
+    },
+    /** The whole tool state as it is now, for putting it back with `restoreSnapshot`. */
+    snapshot: (): ToolSnapshot => currentState(),
+    /**
+     * Puts back the tool state of a `snapshot`: the tool, each brush tool's preset and settings, their changes and the
+     * colors. The snapshot's presets must still be resident in the engine; see `createPresetUploads`.
+     */
+    restoreSnapshot(snapshot: ToolSnapshot) {
+      setState(snapshot as ToolState);
     }
   };
 
@@ -317,6 +326,9 @@ export type BrushSlot = Brush['tool'];
 
 /** How the eraser erases: with the brush, through its engine's Clear, or with its own preset. */
 export type EraserMode = 'clear' | 'preset';
+
+/** The tool state at one moment, opaque to callers but for the presets each brush tool uses. */
+export type ToolSnapshot = { readonly slots: Readonly<Record<BrushSlot, { readonly preset: string }>> };
 
 const brushSlots: readonly BrushSlot[] = ['brush', 'eraser'];
 

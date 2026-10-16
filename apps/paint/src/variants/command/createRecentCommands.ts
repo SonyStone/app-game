@@ -1,5 +1,5 @@
+import { intentKey, type Intent } from '../../features/commands';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
-import { intentKey, type Intent } from './commands';
 
 /**
  * Commands run from the palette, newest first and without repeats, kept in `localStorage` so that the palette offers

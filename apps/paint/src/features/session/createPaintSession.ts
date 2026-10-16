@@ -426,6 +426,7 @@ export function createPaintSession(options: {
     toggleTransform,
     choosePreset,
     usePreset,
+    rememberTools,
     loadColor,
     setWorkerEnabled,
     restoreRenderer,
@@ -671,6 +672,32 @@ export function createPaintSession(options: {
     }
 
     void choosePreset(id, slot);
+  }
+
+  /**
+   * Remembers the tools as they are now: the tool and the selection tool, the brush's and the eraser's presets with
+   * their settings, and the colors. The returned function puts them back, first uploading a preset's images again
+   * where a brush tool has changed presets since; it cancels a color or paint pick in progress.
+   */
+  function rememberTools() {
+    const saved = tools.snapshot();
+    const savedSelectionTool = selection.tool();
+    return async () => {
+      for (const slot of ['brush', 'eraser'] as const) {
+        const preset = library.find(saved.slots[slot].preset);
+        if (preset && preset.id !== tools.snapshot().slots[slot].preset) {
+          await uploads.choose(preset, slot);
+        }
+      }
+
+      if (selection.tool() !== savedSelectionTool) {
+        selection.setTool(savedSelectionTool);
+      }
+
+      mixer.cancelPick();
+      colorPicker.cancel();
+      tools.restoreSnapshot(saved);
+    };
   }
 
   /**

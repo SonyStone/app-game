@@ -1,9 +1,8 @@
 import type { JSX } from '@solidjs/web';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import type { Intent, PaletteEntry } from '../../features/commands';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
-import type { PaletteEntry } from './catalog';
 import styles from './CommandPalette.module.css';
-import type { Intent } from './commands';
 
 /** How a palette row was chosen: a tap or click keeps the palette open for repeatable commands such as Undo. */
 export type RunVia = 'enter' | 'tap';

@@ -7,6 +7,23 @@ import type { PaintVariantProps } from '..';
 import { AbrViewerDialog } from '../../features/abr';
 import { createRecentColors } from '../../features/color/createRecentColors';
 import {
+  createCommandRunner,
+  createPaletteContext,
+  createTypeAhead,
+  describeIntent,
+  parseCommand,
+  parsedEntry,
+  repeatable,
+  searchPalette,
+  suggestions,
+  summarize,
+  swatchColors,
+  TypeAhead,
+  type Intent,
+  type Outcome,
+  type PaletteEntry
+} from '../../features/commands';
+import {
   createPaintSession,
   PaintEditor,
   PaintStage,
@@ -15,12 +32,8 @@ import {
   StageOverlays
 } from '../../features/session';
 import { pressHandlers } from '../../shared/ui/pressHandlers';
-import { parsedEntry, searchPalette, suggestions, type PaletteContext, type PaletteEntry } from './catalog';
-import { swatchColors } from './colorNames';
 import { CommandPalette, type RunVia } from './CommandPalette';
-import { describeIntent, parseCommand, type Intent } from './commands';
 import styles from './CommandStudio.module.css';
-import { createCommandRunner, type Outcome } from './createCommandRunner';
 import { createRecentCommands } from './createRecentCommands';
 import { createTwoFingerHold } from './createTwoFingerHold';
 import { createVoice } from './createVoice';
@@ -35,6 +48,9 @@ import { createVoice } from './createVoice';
  * commands, colors and brushes as chips, so a tablet rarely needs the keyboard. A command closes the palette, so that
  * the pen draws next; a tapped repeatable one (undo, a size step, a zoom step) keeps it open. A toast confirms every
  * command. Two- and three-finger taps undo and redo, and a one-finger hold picks a color.
+ *
+ * With a keyboard, the session's shortcut keys also show what goes with them by the pointer, and other letters type a
+ * command right there; see `createTypeAhead`.
  */
 export function CommandStudio(props: PaintVariantProps) {
   /** The open palette; `focus` puts the caret in its command line, for a keyboard. */
@@ -51,17 +67,7 @@ export function CommandStudio(props: PaintVariantProps) {
   const toast = createToast();
   let fileInput!: HTMLInputElement;
 
-  const context = createMemo((): PaletteContext => {
-    const { layers, activeId } = engine.state();
-    return {
-      presets: library.presets().map(({ id, name }) => ({ id, name })),
-      layers: layers.map(({ name }) => ({ name })),
-      layerDetails: layers.map(({ visible, opacity, blend }) => ({ visible, opacity, blend })),
-      activeLayer: layers.findIndex((layer) => layer.id === activeId) + 1,
-      mixer: mixer.available(),
-      playground: props.experimentsHref !== undefined
-    };
-  });
+  const context = createPaletteContext(session, props.experimentsHref !== undefined);
   const runner = createCommandRunner({
     session,
     context,
@@ -75,11 +81,29 @@ export function CommandStudio(props: PaintVariantProps) {
         setAbrMounted(true);
         setAbrOpen(true);
       },
-      showHelp: () => setQuery('help'),
+      showHelp() {
+        if (!palette()) {
+          open(true);
+        }
+
+        setQuery('help');
+      },
       setHand,
       rememberColor: recentColors.remember,
       playground: props.experimentsHref
     }
+  });
+  const typeAhead = createTypeAhead({
+    session,
+    run: runner.run,
+    onRan(intents, outcomes) {
+      if (outcomes.every((outcome) => outcome.ok)) {
+        recents.remember(intents);
+      }
+    },
+    context,
+    colors: recentColors.colors,
+    enabled: () => !palette()
   });
   const voice = createVoice({
     onResult: runSpoken,
@@ -183,6 +207,7 @@ export function CommandStudio(props: PaintVariantProps) {
             </p>
           )}
         </Show>
+        <TypeAhead typeAhead={typeAhead} />
         <SessionNotices session={session} />
       </div>
       <input
@@ -221,6 +246,7 @@ export function CommandStudio(props: PaintVariantProps) {
   );
 
   function open(focus: boolean) {
+    typeAhead.close();
     camera.navigation.close();
     setQuery('');
     setPalette({ focus });
@@ -507,25 +533,6 @@ function CornerButton(props: {
 
 /** How long the corner button must be held to speak, in milliseconds. */
 const holdMs = 350;
-
-/** One toast line for what a command did; a spoken command starts with what was heard. */
-function summarize(outcomes: Outcome[], heard?: string): Outcome {
-  const failed = outcomes.find((outcome) => !outcome.ok);
-  const message = (failed ? [failed] : outcomes).map((outcome) => outcome.message).join(' · ');
-  return { ok: !failed, message: heard ? `“${heard}” → ${message}` : message };
-}
-
-/** Commands worth tapping several times in a row, which keep the palette open when tapped. */
-function repeatable(intent: Intent) {
-  return (
-    intent.type === 'history' ||
-    intent.type === 'scale-size' ||
-    intent.type === 'zoom-by' ||
-    (intent.type === 'rotate' && intent.relative === true) ||
-    (intent.type === 'layer' && (intent.action === 'up' || intent.action === 'down')) ||
-    intent.type === 'layer-flag'
-  );
-}
 
 /** The latest toast, cleared after a moment; a new one replaces it. Must be created within a Solid owner. */
 function createToast() {

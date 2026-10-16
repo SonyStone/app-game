@@ -25,6 +25,8 @@ export function createDesktopCommands(options: {
   openAbr: () => void;
   openFeather: () => void;
   openShortcuts: () => void;
+  /** Opens the type-ahead's command line. */
+  findCommand: () => void;
   /** Link back to the Paint experiments; omitted on standalone pages. */
   experimentsHref?: string;
 }) {
@@ -260,6 +262,7 @@ export function createDesktopCommands(options: {
       id: 'help',
       label: 'Help',
       items: [
+        { label: 'Find a command…', keys: 'Mod+K', run: options.findCommand },
         { label: 'Keyboard shortcuts', keys: 'F1', run: options.openShortcuts },
         ...(options.experimentsHref
           ? [

@@ -1,7 +1,7 @@
 import type { BlendMode } from '@app-game/paint-core/document';
 import type { SelectionAction } from '@app-game/paint-core/protocol';
 import type { PaintSymmetry } from '@app-game/paint-core/symmetry';
-import type { SelectionTool } from '../../features/selection';
+import type { SelectionTool } from '../selection';
 import { parseColor } from './colorNames';
 
 /**
@@ -227,6 +227,21 @@ export function groupOf(intent: Intent): string {
     case 'app':
       return 'Paint';
   }
+}
+
+/**
+ * Commands worth running several times in a row, such as Undo, a size or zoom step or moving a layer, which keep a
+ * palette or the type-ahead open when tapped.
+ */
+export function repeatable(intent: Intent) {
+  return (
+    intent.type === 'history' ||
+    intent.type === 'scale-size' ||
+    intent.type === 'zoom-by' ||
+    (intent.type === 'rotate' && intent.relative === true) ||
+    (intent.type === 'layer' && (intent.action === 'up' || intent.action === 'down')) ||
+    intent.type === 'layer-flag'
+  );
 }
 
 /** A stable key of an intent, for comparing and deduplicating. */
