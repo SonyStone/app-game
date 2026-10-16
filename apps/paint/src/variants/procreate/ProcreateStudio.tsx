@@ -432,6 +432,10 @@ export function ProcreateStudio(props: PaintVariantProps) {
                       }}
                       onSidebar={setSidebar}
                       onFullscreen={() => void fullscreen.props.onClick()}
+                      onPen={() => {
+                        setPopover(undefined);
+                        session.windows.open('pen');
+                      }}
                     />
                   </Match>
                   <Match when={open.id === 'brush' || open.id === 'eraser'}>
@@ -506,6 +510,8 @@ export function ProcreateStudio(props: PaintVariantProps) {
                       onInput={(color) => tools.updateBrush({ color })}
                       onCommit={recentColors.remember}
                       onSwap={tools.swapColors}
+                      mixing={session.windows.isOpen('palette')}
+                      onMixing={() => session.windows.toggle('palette')}
                     />
                   </Match>
                 </Switch>

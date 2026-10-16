@@ -162,6 +162,8 @@ export function Cluster(props: {
           background={brush().backgroundColor ?? '#ffffff'}
           onColor={(color) => tools.updateBrush({ color })}
           onSwap={tools.swapColors}
+          mixing={session.windows.isOpen('palette')}
+          onMixing={() => session.windows.toggle('palette')}
           done={props.summon.done}
         />
         <LayersCard

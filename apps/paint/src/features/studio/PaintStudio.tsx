@@ -483,6 +483,15 @@ export function PaintStudio(props: {
                     size={colorPicker.settings.size()}
                     onChange={colorPicker.settings.update}
                   />
+                  <div class={styles.fileActions}>
+                    <button
+                      aria-pressed={session.windows.isOpen('palette') ? 'true' : 'false'}
+                      onClick={() => session.windows.toggle('palette')}
+                    >
+                      Mixing palette
+                      <span>{session.windows.isOpen('palette') ? 'Close the window' : 'Mix paint in a window'}</span>
+                    </button>
+                  </div>
                   <Show when={mixer.available()}>
                     <MixerActions
                       disabled={!ready() || engine.commandBusy()}

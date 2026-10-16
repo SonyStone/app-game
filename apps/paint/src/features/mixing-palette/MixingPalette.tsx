@@ -2,7 +2,7 @@ import { createSignal, For, Show } from 'solid-js';
 import { ColorPickerLoupe, type PickerPreview } from '../../features/color';
 import { pressHandlers } from '../../shared/ui/pressHandlers';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
-import { paletteHeight, paletteWidth, type MixingPalette as Palette } from './createMixingPalette';
+import { paletteHeight, paletteWidth, type MixingPaletteState as Palette } from './createMixingPalette';
 import styles from './MixingPalette.module.css';
 import { dab, dragKnife, pressKnife, sampleColor, wipe, type Knife } from './paletteSurface';
 import { hexToRgb, rgbToHex, type Rgb } from './pigment';

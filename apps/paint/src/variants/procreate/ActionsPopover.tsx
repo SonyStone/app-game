@@ -8,7 +8,8 @@ import menu from './menu.module.css';
 /**
  * Procreate's Actions popover, with the tabs and items Paint can do. Add: insert a photo as a new layer, cut, copy and
  * paste the selection. Canvas: flip the view horizontally, the symmetry drawing guide and view resets. Share: save
- * as `.paint`, export PSD or PNG. Prefs: which side the sidebar is on and full screen. Help: the touch gestures.
+ * as `.paint`, export PSD or PNG. Prefs: which side the sidebar is on, full screen and the Pen window (palm
+ * rejection). Help: the touch gestures.
  * File and share actions close the popover through their callbacks' callers.
  */
 export function ActionsPopover(props: {
@@ -29,6 +30,8 @@ export function ActionsPopover(props: {
   onShare: (format: 'download' | 'psd' | 'png') => void;
   onSidebar: (side: 'left' | 'right') => void;
   onFullscreen: () => void;
+  /** Opens the session's Pen window. */
+  onPen: () => void;
 }) {
   const [tab, setTab] = createSignal<Tab>('add');
   let photo!: HTMLInputElement;
@@ -153,6 +156,10 @@ export function ActionsPopover(props: {
               <Show when={props.fullscreen.supported} fallback={<span class={menu.detail}>Unavailable</span>}>
                 <span class={menu.switch} />
               </Show>
+            </button>
+            <button class={menu.row} onClick={() => props.onPen()}>
+              <span class={menu.label}>Pen</span>
+              <span class={menu.detail}>Palm rejection, pen hover</span>
             </button>
           </Match>
           <Match when={tab() === 'help'}>

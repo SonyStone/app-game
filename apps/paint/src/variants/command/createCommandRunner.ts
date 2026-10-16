@@ -163,6 +163,14 @@ export function createCommandRunner(options: {
       }
       case 'view':
         return runView(intent.action, done, refuse);
+      case 'window':
+        if (intent.window === 'pen') {
+          session.windows.open('pen');
+          return done();
+        }
+
+        session.windows.toggle('palette');
+        return done(session.windows.isOpen('palette') ? 'Mixing palette' : 'Mixing palette closed');
       case 'symmetry':
         return runSymmetry(intent.mode, intent.segments, done, refuse);
       case 'history': {

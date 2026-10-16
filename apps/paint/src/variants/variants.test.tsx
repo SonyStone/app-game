@@ -109,6 +109,28 @@ it.each([...paintVariants, ...featureDemos].map((variant) => [variant.name, vari
   }
 );
 
+it.each([...paintVariants, ...featureDemos].map((variant) => [variant.name, variant] as const))(
+  '%s shows the session windows over its UI',
+  async (_, variant) => {
+    // Windows opened in another variant stay open.
+    localStorage.setItem('paint.windows', JSON.stringify({ palette: { open: true }, pen: { open: true } }));
+    const Variant = await variant.load();
+    dispose = render(() => <Variant />, document.body);
+    flush();
+
+    const palette = document.querySelector('[role="dialog"][aria-label="Mixing palette"]');
+    expect(palette?.querySelector('canvas[aria-label="Mixing palette"]')).toBeTruthy();
+    const pen = document.querySelector('[role="dialog"][aria-label="Pen"]');
+    expect(pen?.textContent).toContain('Palm rejection');
+    expect(pen?.textContent).toContain('continue in a new tab automatically');
+
+    pen!.querySelector<HTMLButtonElement>('button[aria-label="Close Pen"]')!.click();
+    flush();
+    expect(document.querySelector('[role="dialog"][aria-label="Pen"]')).toBeNull();
+    expect(JSON.parse(localStorage.getItem('paint.windows')!)).toMatchObject({ pen: { open: false } });
+  }
+);
+
 function reply(transport: FakeTransport, event: PaintEvent) {
   transport.handlers.message(event);
   flush();

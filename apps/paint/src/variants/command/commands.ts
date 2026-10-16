@@ -32,6 +32,8 @@ export type Intent =
   /** Turns the view to `degrees` clockwise, or by `degrees` when `relative`. */
   | { type: 'rotate'; degrees: number; relative?: boolean }
   | { type: 'view'; action: 'reset' | 'mirror' | 'fullscreen' | 'pixel-grid' }
+  /** Opens or closes a window of the session: the mixing palette toggles, the Pen window opens. */
+  | { type: 'window'; window: 'palette' | 'pen' }
   | { type: 'symmetry'; mode: PaintSymmetry['mode']; segments?: number }
   | { type: 'history'; action: 'undo' | 'redo'; count: number }
   | { type: 'file'; action: 'png' | 'psd' | 'download' | 'open' | 'insert' | 'abr' }
@@ -151,6 +153,8 @@ export function describeIntent(intent: Intent, context: CommandContext): string 
         fullscreen: 'Full screen',
         'pixel-grid': 'Pixel grid'
       }[intent.action];
+    case 'window':
+      return { palette: 'Mixing palette', pen: 'Pen and palm rejection' }[intent.window];
     case 'symmetry':
       return intent.mode === 'off'
         ? 'Symmetry off'
@@ -215,6 +219,7 @@ export function groupOf(intent: Intent): string {
       return 'File';
     case 'mixer':
       return 'Mixer';
+    case 'window':
     case 'app':
       return 'Paint';
   }
@@ -470,6 +475,14 @@ const rules: Rule[] = [
   ],
   [/^full\s*screen$/i, () => ({ type: 'view', action: 'fullscreen' })],
   [/^pixel\s+grid$/i, () => ({ type: 'view', action: 'pixel-grid' })],
+  [
+    /^(?:(?:open|show|close|hide)\s+(?:the\s+)?)?(?:mixing\s+)?palette$|^mix(?:ing)?(?:\s+paint)?$/i,
+    () => ({ type: 'window', window: 'palette' })
+  ],
+  [
+    /^(?:(?:open|show)\s+(?:the\s+)?)?(?:pen\s+settings|palm(?:\s+rejection)?|pen\s+hover)$/i,
+    () => ({ type: 'window', window: 'pen' })
+  ],
   [
     /^(?:symmetry|sym|mirror\s+mode)(?:\s+(off|none|vertical|horizontal|quadrant|dual|4[\s-]*way|diagonal|radial|mandala|kaleidoscope))?(?:\s+(\d+))?$/i,
     (m) => symmetry(m[1] ?? (m[2] ? 'radial' : 'vertical'), m[2])

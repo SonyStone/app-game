@@ -240,6 +240,13 @@ export function createDesktopCommands(options: {
         { label: 'Reset panel layout', run: workspace.reset },
         'separator',
         {
+          label: 'Mixing palette',
+          run: () => session.windows.toggle('palette'),
+          checked: () => session.windows.isOpen('palette')
+        },
+        { label: 'Pen and palm rejection…', run: () => session.windows.open('pen') },
+        'separator',
+        {
           label: 'Full screen',
           keys: 'Mod+Shift+F',
           run: () => void session.fullscreen.props.onClick(),

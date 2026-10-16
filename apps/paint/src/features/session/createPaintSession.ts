@@ -3,7 +3,7 @@ import { record } from '@app-game/abr-brush/form';
 import { screenToWorld, worldToScreen, type Point } from '@app-game/paint-core/camera';
 import { supportsPaintSymmetry } from '@app-game/paint-core/symmetry';
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createEffect, createSignal } from 'solid-js';
+import { createEffect, createSignal, flush } from 'solid-js';
 import type { PaintError } from '../../shared/errors';
 import { createContextMenuBlock } from '../../shared/ui/createContextMenuBlock';
 import { createPageGestureGuard } from '../../shared/ui/createPageGestureGuard';
@@ -43,6 +43,7 @@ import { createViewOptions } from '../view-options';
 import { createAutoRestore } from './createAutoRestore';
 import { createFullscreenToggle } from './createFullscreenToggle';
 import { createPaintShortcuts } from './createPaintShortcuts';
+import { createSessionWindows } from './createSessionWindows';
 
 /**
  * One open drawing without any layout: the engine, camera, brushes, tools, selection, layers, frames and the other
@@ -237,6 +238,7 @@ export function createPaintSession(options: {
   createContextMenuBlock();
   createPageGestureGuard();
   const colorWheel = createColorWheelSettings();
+  const windows = createSessionWindows();
   const viewOptions = createViewOptions({ ready: engine.canEdit, send: engine.send });
   const drawingFolder = createDrawingFolder({
     status: () => engine.paging().storage?.folder,
@@ -399,12 +401,15 @@ export function createPaintSession(options: {
     palm,
     /** Moving the drawing to a new tab once Chrome loses the pen hover; see `SessionNotices`. */
     freshTab,
+    /** The floating windows every variant can open: the mixing palette and the pen settings; see `SessionWindows`. */
+    windows,
     canvasInput,
     createShortcuts,
     chooseTool,
     toggleTransform,
     choosePreset,
     usePreset,
+    loadColor,
     setWorkerEnabled,
     restoreRenderer,
     undo: () => edit({ type: 'undo' }),
@@ -616,6 +621,23 @@ export function createPaintSession(options: {
     const chosen = await uploads.choose(preset, slot);
     if (chosen.isErr() && chosen.error.kind !== 'aborted') {
       setError(chosen.error);
+    }
+  }
+
+  /**
+   * Loads the brush with `color`, as from a mixing palette: the fill and the gradient keep their tool and use it, other
+   * tools switch to the brush; a Mixer Brush preset also fills its reservoir with it.
+   */
+  function loadColor(color: string) {
+    if (tool() !== 'brush' && tool() !== 'fill' && tool() !== 'gradient') {
+      chooseTool('brush');
+    }
+
+    tools.updateBrush({ color });
+    // The Mixer Brush command reads the brush's color, written just now.
+    flush();
+    if (mixer.available()) {
+      void mixer.command('load');
     }
   }
 

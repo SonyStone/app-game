@@ -53,12 +53,6 @@ export const paintVariants: PaintVariant[] = [
     load: () => import('./zen').then(({ ZenStudio }) => ZenStudio)
   },
   {
-    id: 'palette',
-    name: 'Palette',
-    description: "A painter's mixing palette beside the drawing: colors come from paint you mix, not from a picker.",
-    load: () => import('./palette').then(({ PaletteStudio }) => PaletteStudio)
-  },
-  {
     id: 'command',
     name: 'Command',
     description: 'No buttons: type, or say, what you want.',

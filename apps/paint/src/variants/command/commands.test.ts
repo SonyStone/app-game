@@ -116,6 +116,14 @@ describe('parseCommand', () => {
     expect(one('fullscreen')).toEqual({ type: 'view', action: 'fullscreen' });
   });
 
+  it('reads the session windows', () => {
+    expect(one('palette')).toEqual({ type: 'window', window: 'palette' });
+    expect(one('open the mixing palette')).toEqual({ type: 'window', window: 'palette' });
+    expect(one('mix paint')).toEqual({ type: 'window', window: 'palette' });
+    expect(one('palm rejection')).toEqual({ type: 'window', window: 'pen' });
+    expect(one('pen settings')).toEqual({ type: 'window', window: 'pen' });
+  });
+
   it('reads symmetry with segment counts kept in range', () => {
     expect(one('symmetry radial 8')).toEqual({ type: 'symmetry', mode: 'radial', segments: 8 });
     expect(one('symmetry off')).toEqual({ type: 'symmetry', mode: 'off' });

@@ -134,3 +134,24 @@
     0 0 0 2px rgb(30 30 32),
     0 0 0 4px #fff;
 }
+
+/* Opens the mixing palette window; marked while it is open. */
+.mix {
+  flex: none;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  background: var(--raised);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+
+  [data-hover]:not([data-hover-stale] *) &:hover {
+    background: var(--raised-hover);
+  }
+
+  &.on {
+    background: var(--chosen-strong);
+    box-shadow: none;
+  }
+}

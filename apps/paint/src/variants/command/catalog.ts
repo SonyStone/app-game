@@ -183,6 +183,8 @@ export function catalog(context: PaletteContext): PaletteEntry[] {
     entry({ type: 'view', action: 'mirror' }, { keywords: 'flip horizontally canvas' }),
     entry({ type: 'view', action: 'fullscreen' }, { keywords: 'full screen' }),
     entry({ type: 'view', action: 'pixel-grid' }, { keywords: 'pixels grid' }),
+    entry({ type: 'window', window: 'palette' }, { keywords: 'mix paint tubes knife colors window' }),
+    entry({ type: 'window', window: 'pen' }, { keywords: 'palm rejection hover stylus settings window' }),
     entry({ type: 'symmetry', mode: 'off' }, { keywords: 'mirror none' }),
     entry({ type: 'symmetry', mode: 'vertical' }, { keywords: 'mirror' }),
     entry({ type: 'symmetry', mode: 'horizontal' }, { keywords: 'mirror' }),

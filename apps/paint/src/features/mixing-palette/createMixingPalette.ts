@@ -124,8 +124,8 @@ export function createMixingPalette() {
   }
 }
 
-/** The mixing palette; see `createMixingPalette`. */
-export type MixingPalette = ReturnType<typeof createMixingPalette>;
+/** The mixing palette's paint; see `createMixingPalette`. */
+export type MixingPaletteState = ReturnType<typeof createMixingPalette>;
 
 /** The palette's size in pixels: 3:4, about 1.5 pixels per CSS pixel of the panel. */
 export const paletteWidth = 360;

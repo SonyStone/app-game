@@ -1,5 +1,12 @@
-/* The mixing palette panel. Colors come from the studio's variables; the only colors are paint. */
+/* The mixing palette panel, neutral dark grey: the only colors are paint. */
 .palette {
+  --pl-raised: #2f2f2f;
+  --pl-line: #3a3a3a;
+  --pl-ink: #d6d6d6;
+  --pl-muted: #8f8f8f;
+  --pl-on: #474747;
+  --pl-on-line: #6b6b6b;
+  --pl-on-ink: #ffffff;
   display: flex;
   flex-direction: column;
   gap: 6px;

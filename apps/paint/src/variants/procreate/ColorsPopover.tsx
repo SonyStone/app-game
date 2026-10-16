@@ -11,7 +11,8 @@ import { Slider } from './Slider';
  * one swaps them. The Disc mode edits the color on a hue ring around a saturation and brightness disc, the Classic
  * mode on a saturation and brightness square with hue, saturation and brightness sliders. Under both, the recently
  * used colors and a default palette. Drags change the color live through `onInput`; `onCommit` receives the color
- * a drag ended on or a swatch chose, for the color history.
+ * a drag ended on or a swatch chose, for the color history. Mixing, beside the mode tabs, opens the session's mixing
+ * palette window.
  */
 export function ColorsPopover(props: {
   color: string;
@@ -22,6 +23,10 @@ export function ColorsPopover(props: {
   onInput: (color: string) => void;
   onCommit: (color: string) => void;
   onSwap: () => void;
+  /** Whether the session's mixing palette window is open. */
+  mixing: boolean;
+  /** Opens or closes the mixing palette window. */
+  onMixing: () => void;
 }) {
   // Keeps its own HSV while the color matches it, so that greys and black keep the hue they were dragged from.
   const [hsv, setHsv] = createSignal<Hsv>((previous) =>
@@ -101,6 +106,9 @@ export function ColorsPopover(props: {
             </button>
           )}
         </For>
+        <button aria-pressed={props.mixing ? 'true' : 'false'} onClick={() => props.onMixing()}>
+          Mixing
+        </button>
       </nav>
     </>
   );

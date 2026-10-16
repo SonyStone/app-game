@@ -13,7 +13,7 @@ import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
  * (no numbers), the background and foreground colors at the top right (tap the background color to swap them, as X
  * does), the recent colors (shared with the Classic editor) and a palette. Dragging on the Disc edits the color live
  * and remembers it among the recent colors on lift, keeping the card open; picking a recent or palette color
- * finishes.
+ * finishes. Mix, in the header, opens or closes the session's mixing palette window and finishes.
  */
 export function ColorCard(props: {
   box: Box;
@@ -22,6 +22,9 @@ export function ColorCard(props: {
   background: string;
   onColor: (hex: string) => void;
   onSwap: () => void;
+  /** Whether the session's mixing palette window is open. */
+  mixing: boolean;
+  onMixing: () => void;
   done: () => void;
 }) {
   const recent = createRecentColors();
@@ -35,6 +38,16 @@ export function ColorCard(props: {
     <section class={[css.card, styles.card]} style={placed(props.box)}>
       <header class={css.cardHeader}>
         <h3>Colors</h3>
+        <TapButton
+          class={[styles.mix, { [styles.on!]: props.mixing }]}
+          title="Mixing palette"
+          onTap={() => {
+            props.onMixing();
+            props.done();
+          }}
+        >
+          Mix
+        </TapButton>
         <TapButton
           class={[styles.swatch, styles.previous]}
           style={{ background: props.background }}
