@@ -33,7 +33,8 @@ import { createStripDevice, StripDevice } from './TestStrip';
  * - At 100 % a component is as large as in the app; there is no real-millimetre zoom (the user: "100 % is 100 %").
  * - The pen always works the components; see `createCanvasGestures` for fingers and the mouse.
  * - Palm rejection and the move to a fresh tab when Chrome loses the pen's hover are Paint's own, with Paint's
- *   settings (the Drawing menu). They are wired here directly; once the drawing session owns them, use the session's.
+ *   settings. The canvas wires those modules itself: the drawing session wires them too, but together with its engine
+ *   and the saved drawing, which the canvas has no use for.
  * - The canvas keeps only its camera; stars and comments go to the repository through `createChoices`.
  *
  * Served at `/paint/components` of the web app, so that `pnpm dev:tablet` opens it on the tablet. Type the address in

@@ -48,6 +48,7 @@
   }
 }
 
+/* Groups flow in canvas order at their real size, so a group that grows pushes the others instead of covering them. */
 .world {
   position: absolute;
   top: 0;

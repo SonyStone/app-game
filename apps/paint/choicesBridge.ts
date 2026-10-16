@@ -5,7 +5,7 @@ import type { Plugin } from 'vite';
 
 /**
  * Keeps the stars and comments of the component canvas (`src/component-canvas`) in this app's
- * `docs/component-choices.json` during `vite dev`, so that what the user picks there is committed with the spec. Both
+ * `docs/component-choices.json` during `vite dev`, so that what the user picks there is committed with the code. Both
  * dev servers that serve the canvas register it: this app's own and the web playground's.
  *
  * `GET /__component-choices` answers the file's JSON (`{}` while it does not exist). `PUT /__component-choices` replaces

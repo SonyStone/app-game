@@ -3,8 +3,8 @@ import { createImmediateSignal } from '../shared/createImmediateSignal';
 
 /**
  * The user's stars and comments on the canvas's specimens, kept in the repository's
- * `apps/paint/docs/component-choices.json` through the dev server (see `choicesBridge.ts`), so that they become part
- * of the spec. Loads them once; every change writes the whole file again, in order. Without the dev server, as on a
+ * `apps/paint/docs/component-choices.json` through the dev server (see `choicesBridge.ts`), so that they are committed
+ * with the code and whoever builds the next UI reads them. Loads them once; every change writes the whole file again, in order. Without the dev server, as on a
  * deployment, changes stay in this page and `status` says so. Must be created within a Solid owner.
  */
 export function createChoices() {

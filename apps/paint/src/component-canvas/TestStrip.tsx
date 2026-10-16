@@ -28,6 +28,9 @@ import styles from './ComponentCanvas.module.css';
  *
  * Its size in CSS pixels is fixed at mount; at 100 % zoom one document pixel is one CSS pixel, as in Paint. Needs a
  * `StripDevice` provider.
+ *
+ * Every strip starts its own engine at mount, on the device all strips share. If that proves heavy on the tablet, start
+ * the engine on the strip's first press instead.
  */
 export function TestStrip(props: { brush: Brush; width: number; height?: number }) {
   const width = untrack(() => props.width);
