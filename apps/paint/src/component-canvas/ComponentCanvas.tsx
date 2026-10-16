@@ -9,6 +9,7 @@ import { createCanvasCamera } from './createCanvasCamera';
 import { createCanvasGestures } from './createCanvasGestures';
 import { createChoices, type ChoicesStatus } from './createChoices';
 import { createViewportPopups } from './createViewportPopups';
+import { BrushCards } from './groups/BrushCards';
 import { ColorPickers } from './groups/ColorPickers';
 import { CanvasStage, type Stage } from './Screen';
 import { SpecimenChoices } from './Specimen';
@@ -113,6 +114,7 @@ export function ComponentCanvas() {
             <StripDevice value={stripDevice}>
               <SpecimenChoices value={choices}>
                 <ColorPickers />
+                <BrushCards />
               </SpecimenChoices>
             </StripDevice>
           </CanvasStage>
@@ -170,7 +172,8 @@ function StageView(props: { stage: Stage; onClose: () => void }): JSX.Element {
 
 /** The groups in canvas order, for the panel's list; each group's element carries the same `data-group`. */
 const groups = [
-  { id: 'color-pickers', title: 'Color pickers' }
+  { id: 'color-pickers', title: 'Color pickers' },
+  { id: 'brush-cards', title: 'Brushes' }
 ] as const;
 
 const statusText: Record<ChoicesStatus, string> = {
