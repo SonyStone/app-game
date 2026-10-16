@@ -1,4 +1,5 @@
 import type { Component } from 'solid-js';
+import { layoutVariants } from './layout';
 
 /** Props every Paint variant accepts. */
 export type PaintVariantProps = {
@@ -57,7 +58,9 @@ export const paintVariants: PaintVariant[] = [
     name: 'Command',
     description: 'No buttons: type, or say, what you want.',
     load: () => import('./command').then(({ CommandStudio }) => CommandStudio)
-  }
+  },
+  // Pages built in the component canvas's constructor, one per saved layout.
+  ...layoutVariants
 ];
 
 /**

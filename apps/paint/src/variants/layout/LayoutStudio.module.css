@@ -1,0 +1,16 @@
+/* The page's own look: Paint's paper behind the drawing, the parts over it. */
+.editor {
+  background: #faf8f4;
+}
+
+/* The parts' layer over the drawing; only the parts take input. */
+.parts {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.part {
+  pointer-events: auto;
+}

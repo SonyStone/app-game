@@ -1,0 +1,59 @@
+/* Frames of the page parts (`parts.tsx`): what each part sits in inside its own variant. */
+
+/* Studio's side panel: 284 px wide with 16 px padding, light grey with a thin border. */
+.studioPanel {
+  --ink: #444;
+  --muted: #777;
+  --line: #dedede;
+  --accent: #237aab;
+  --surface: #f8f8f8;
+  width: 284px;
+  background: #fafafaf7;
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px #00000017;
+  color: var(--ink);
+  font:
+    12px/1.45 Arial,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+
+  > section {
+    padding: 16px;
+  }
+}
+
+/* Studio's floating controls at the top right, where the brush size grid's button sits. */
+.studioBar {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  background: #fafafaf7;
+}
+
+/* A box for Studio's tool rail, which places itself at the left edge's middle of its container. */
+.studioRail {
+  position: relative;
+  width: 52px;
+  height: 470px;
+  background: transparent;
+}
+
+/* The Desktop variant's dark panel, as wide as its dock; its root class is a grid of the whole workspace. */
+.desktopPanel {
+  display: block;
+  width: 284px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.zenCard {
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--zen-surface);
+  box-shadow: var(--zen-shadow);
+}
