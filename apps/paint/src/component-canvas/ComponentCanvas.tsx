@@ -11,6 +11,7 @@ import { createChoices, type ChoicesStatus } from './createChoices';
 import { createViewportPopups } from './createViewportPopups';
 import { BrushCards } from './groups/BrushCards';
 import { ColorPickers } from './groups/ColorPickers';
+import { Icons } from './groups/Icons';
 import { LayersPanels } from './groups/LayersPanels';
 import { Numbers } from './groups/Numbers';
 import { CanvasStage, type Stage } from './Screen';
@@ -119,6 +120,7 @@ export function ComponentCanvas() {
                 <BrushCards />
                 <LayersPanels />
                 <Numbers />
+                <Icons />
               </SpecimenChoices>
             </StripDevice>
           </CanvasStage>
@@ -179,7 +181,8 @@ const groups = [
   { id: 'color-pickers', title: 'Color pickers' },
   { id: 'brush-cards', title: 'Brushes' },
   { id: 'layers', title: 'Layers' },
-  { id: 'numbers', title: 'Numbers' }
+  { id: 'numbers', title: 'Numbers' },
+  { id: 'icons', title: 'Icons' }
 ] as const;
 
 const statusText: Record<ChoicesStatus, string> = {

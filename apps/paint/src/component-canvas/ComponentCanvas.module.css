@@ -414,3 +414,53 @@
   align-items: center;
   gap: 8px;
 }
+
+/* Studio's left tool rail (`.tools` in `PaintStudio.module.css`), standing free. */
+.rail {
+  display: flex;
+  flex-direction: column;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #f8f8f8ee;
+  gap: 2px;
+
+  button {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 42px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--ink);
+
+    &[aria-pressed='true'] {
+      color: #237aab;
+      border-color: #71b3d8;
+      background: #e6f3fa;
+    }
+  }
+}
+
+.namedIcons {
+  display: grid;
+  grid-template-columns: repeat(3, 72px);
+  gap: 12px 4px;
+  padding: 12px;
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.namedIcon {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+
+  small {
+    font-size: 10px;
+    color: var(--muted);
+  }
+}
