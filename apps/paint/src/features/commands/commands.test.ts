@@ -66,6 +66,9 @@ describe('parseCommand', () => {
     expect(one('eyedropper')).toEqual({ type: 'colors', action: 'pick' });
     expect(one('swap colors')).toEqual({ type: 'colors', action: 'swap' });
     expect(one('transform')).toEqual({ type: 'transform' });
+    expect(one('local undo')).toEqual({ type: 'tool', tool: 'local-undo' });
+    expect(one('the local undo tool')).toEqual({ type: 'tool', tool: 'local-undo' });
+    expect(one('undo')).toEqual({ type: 'history', action: 'undo', count: 1 });
   });
 
   it('reads layer commands, by number or by name', () => {
@@ -201,6 +204,7 @@ describe('describeIntent', () => {
     expect(describe('symmetry radial 8')).toEqual(['Symmetry radial · 8']);
     expect(describe('quickshape off, quickshape hold 700')).toEqual(['QuickShape off', 'QuickShape hold 700 ms']);
     expect(describe('undo 5')).toEqual(['Undo ×5']);
+    expect(describe('local undo')).toEqual(['Local undo']);
     expect(describe('bigger')).toEqual(['Bigger brush']);
     expect(describe('export png')).toEqual(['Export PNG']);
   });

@@ -11,7 +11,8 @@ import { parseColor } from './colorNames';
  * missing `layer` means the active layer. Values called `value` are fractions from 0 to 1.
  */
 export type Intent =
-  | { type: 'tool'; tool: 'brush' | 'eraser' | 'fill' | 'gradient' }
+  /** Chooses a tool; the local undo also opens its settings window. */
+  | { type: 'tool'; tool: 'brush' | 'eraser' | 'fill' | 'gradient' | 'local-undo' }
   | { type: 'selection-tool'; tool: SelectionTool }
   | { type: 'transform' }
   | { type: 'preset'; id: string; name: string }
@@ -361,6 +362,7 @@ const rules: Rule[] = [
   [/^(?:the\s+)?(?:eraser|erase|rubber)(?:\s+tool)?$/i, () => ({ type: 'tool', tool: 'eraser' })],
   [/^(?:fill(?:\s+tool)?|(?:paint\s+)?bucket)$/i, () => ({ type: 'tool', tool: 'fill' })],
   [/^gradient(?:\s+tool)?$/i, () => ({ type: 'tool', tool: 'gradient' })],
+  [/^(?:the\s+)?local\s+undo(?:\s+tool)?$/i, () => ({ type: 'tool', tool: 'local-undo' })],
   [
     /^(?:free\s*hand|lasso|select|selection)(?:\s+(?:lasso|tool))?$/i,
     () => ({ type: 'selection-tool', tool: 'lasso' })
@@ -695,7 +697,13 @@ function capitalize(text: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-const toolNames = { brush: 'Brush', eraser: 'Eraser', fill: 'Fill', gradient: 'Gradient' } as const;
+const toolNames = {
+  brush: 'Brush',
+  eraser: 'Eraser',
+  fill: 'Fill',
+  gradient: 'Gradient',
+  'local-undo': 'Local undo'
+} as const;
 
 const selectionToolNames: Record<SelectionTool, string> = {
   lasso: 'Lasso',

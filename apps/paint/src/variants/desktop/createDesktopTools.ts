@@ -73,6 +73,11 @@ export function createDesktopTools(session: PaintSession) {
       }
 
       colorPicker.cancel();
+      if (next === 'local-undo') {
+        session.chooseLocalUndo();
+        return;
+      }
+
       const paintTool = next === 'select' ? 'lasso' : next;
       if ((paintTool === 'fill' || paintTool === 'gradient') && !selection.selected()) {
         setPending(paintTool);

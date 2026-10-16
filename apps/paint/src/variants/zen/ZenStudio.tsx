@@ -254,6 +254,15 @@ export function ZenStudio(props: PaintVariantProps) {
                       }}
                       quickShape={session.quickShape.settings()}
                       onQuickShape={session.quickShape.update}
+                      localUndo={session.tool() === 'local-undo'}
+                      onLocalUndo={() => {
+                        setOpen(undefined);
+                        if (session.tool() === 'local-undo') {
+                          session.chooseTool(session.tools.slot());
+                        } else {
+                          session.chooseLocalUndo();
+                        }
+                      }}
                       fullscreen={{ active: fullscreen.isActive(), supported: document.fullscreenEnabled }}
                       onFullscreen={() => void fullscreen.props.onClick()}
                       experimentsHref={props.experimentsHref}

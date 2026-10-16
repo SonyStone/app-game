@@ -148,6 +148,20 @@ export function ProcreateStudio(props: PaintVariantProps) {
     chooseTool(session.selectionTool() ? tools.slot() : 'lasso');
   }
 
+  /**
+   * Local undo, not a Procreate tool: chooses it with its settings window (see `PaintSession.chooseLocalUndo`), or
+   * returns to the last painting tool while it is active, as Selection does.
+   */
+  function toggleLocalUndo() {
+    setPopover(undefined);
+    if (tool() === 'local-undo') {
+      chooseTool(tools.slot());
+      return;
+    }
+
+    session.chooseLocalUndo();
+  }
+
   function toggleEyedropper() {
     setPopover(undefined);
     if (colorPicker.armed()) {
@@ -245,6 +259,12 @@ export function ProcreateStudio(props: PaintVariantProps) {
                 onClick={toggleSelection}
               />
               <BarButton label="Transform" icon="transform" active={transform.active()} onClick={toggleTransform} />
+              <BarButton
+                label="Local undo"
+                icon="localUndo"
+                active={tool() === 'local-undo' && !transform.active()}
+                onClick={toggleLocalUndo}
+              />
             </div>
             <div class={styles.group}>
               <BarButton

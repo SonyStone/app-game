@@ -39,15 +39,16 @@ export function createSessionWindows() {
 /**
  * The session's windows: `palette`, the mixing palette (see `MixingPaletteWindow`); `pen`, palm rejection, what to do
  * when Chrome loses the pen hover and the way to `pressure`, the pen pressure calibration (see
- * `PressureCalibrationWindow`).
+ * `PressureCalibrationWindow`); and `local-undo`, the local undo's settings, shown while that tool is active.
  */
-export type SessionWindowId = 'palette' | 'pen' | 'pressure';
+export type SessionWindowId = 'palette' | 'pen' | 'pressure' | 'local-undo';
 
 type WindowState = { open: boolean; position?: { x: number; y: number } };
 
 /**
  * The palette at the top right, below a variant's top bar; the pen settings in the middle; the calibration, a tall
- * window, at the top left, opposite the side panels most variants open on the right.
+ * window, at the top left, opposite the side panels most variants open on the right; the local undo there too, beside
+ * where tools usually are.
  */
 function defaultPosition(id: SessionWindowId) {
   switch (id) {
@@ -57,6 +58,8 @@ function defaultPosition(id: SessionWindowId) {
       return { x: Math.max(8, innerWidth / 2 - 160), y: Math.max(8, innerHeight / 2 - 220) };
     case 'pressure':
       return { x: 64, y: 56 };
+    case 'local-undo':
+      return { x: 72, y: 72 };
   }
 }
 
@@ -64,7 +67,7 @@ function read(): Partial<Record<SessionWindowId, WindowState>> {
   try {
     const stored: unknown = JSON.parse(localStorage.getItem(storageKey) ?? '{}');
     const windows: Partial<Record<SessionWindowId, WindowState>> = {};
-    for (const id of ['palette', 'pen', 'pressure'] as const) {
+    for (const id of ['palette', 'pen', 'pressure', 'local-undo'] as const) {
       const value = (stored as Record<string, unknown> | null)?.[id] as Partial<WindowState> | undefined;
       if (typeof value?.open !== 'boolean') {
         continue;

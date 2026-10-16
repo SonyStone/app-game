@@ -1,6 +1,7 @@
 /**
  * Line icons of Procreate's own controls that `SketchIcon` has no match for: the toolbar's wrench, Selection ribbon,
- * brush, eraser and layers, and the Actions tabs. Drawn on a 24-unit grid in the current color.
+ * brush, eraser and layers, and the Actions tabs, plus `SketchIcon`'s local undo at the toolbar's stroke width. Drawn
+ * on a 24-unit grid in the current color.
  */
 export function ProcreateIcon(props: { name: ProcreateIconName; size?: number }) {
   return (
@@ -29,6 +30,7 @@ const paths = {
   selection:
     'M17.5 6.2C16.2 4.8 14.3 4 12.2 4 9.2 4 7 5.6 7 8c0 5 10.5 3 10.5 8 0 2.4-2.3 4-5.3 4-2.2 0-4.2-.9-5.6-2.4',
   transform: 'M5.5 3.5 19 12l-6.6 1.8L9.3 20Z',
+  localUndo: 'M10 7 6 11l4 4M6 11h7a4 4 0 0 1 0 8h-2M3 4h2M8 4h2M13 4h2M18 4h2M21 7v2M21 12v2',
   brush:
     'm9.06 11.9 8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02Z',
   eraser: 'm7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21M22 21H7M5 11l9 9',

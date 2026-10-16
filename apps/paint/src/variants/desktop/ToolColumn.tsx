@@ -83,6 +83,7 @@ const toolButtons: readonly { tool: DesktopTool; label: string; icon: SketchIcon
   { tool: 'fill', label: 'Fill', icon: 'fill', keys: 'G' },
   { tool: 'gradient', label: 'Gradient', icon: 'gradient', keys: 'Shift+G' },
   { tool: 'transform', label: 'Transform', icon: 'move', keys: 'Ctrl+T' },
+  { tool: 'local-undo', label: 'Local undo', icon: 'localUndo', keys: 'Y' },
   {
     tool: 'eyedropper',
     label: 'Eyedropper: picks once, then back to the tool',

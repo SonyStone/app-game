@@ -5,7 +5,7 @@ import { swatchColors } from './colorNames';
 import type { Intent } from './commands';
 
 /** What a single-key shortcut is about, so that the type-ahead offers what goes with it. */
-export type KeyContextId = 'brush' | 'eraser' | 'size' | 'selection' | 'fill' | 'colors' | 'view';
+export type KeyContextId = 'brush' | 'eraser' | 'size' | 'selection' | 'fill' | 'local-undo' | 'colors' | 'view';
 
 /** The session's single-key shortcuts (see `createPaintShortcuts`) by the lower-case key they match. */
 export const sessionKeys: Readonly<Record<string, KeyContextId>> = {
@@ -14,6 +14,7 @@ export const sessionKeys: Readonly<Record<string, KeyContextId>> = {
   l: 'selection',
   w: 'selection',
   g: 'fill',
+  y: 'local-undo',
   x: 'colors',
   d: 'colors',
   '[': 'size',
@@ -43,8 +44,8 @@ export type OfferSection = { title?: string; look: 'chips' | 'swatches'; entries
 
 /**
  * What goes with the shortcut key of context `id`, from the session's state now: the brush keys offer smaller and
- * bigger, sizes, the recent brushes and colors; the selection keys the selection tools and commands; the color keys
- * the colors; the view keys zoom, rotation and mirroring. Swatches start with the color in use, then the recent
+ * bigger, sizes, the recent brushes and colors; the selection keys the selection tools and commands; the local undo's
+ * key the way back to the brush; the color keys the colors; the view keys zoom, rotation and mirroring. Swatches start with the color in use, then the recent
  * `colors`, newest first.
  */
 export function keyContext(
@@ -177,6 +178,14 @@ export function keyContext(
         ],
         groups: ['Color', 'Selection'],
         prompt: 'A color: red, #ff8800'
+      };
+    case 'local-undo':
+      return {
+        id,
+        title: 'Local undo',
+        sections: [{ look: 'chips', entries: [entry({ type: 'tool', tool: 'brush' }, { shortcut: 'B' })] }],
+        groups: ['Tool'],
+        prompt: 'A command'
       };
     case 'colors':
       return {

@@ -75,6 +75,14 @@ describe.each(['command', 'desktop'])('the %s variant’s type-ahead', (id) => {
     expect(strip()?.querySelector('header')?.textContent).toMatch(/^\]Brush/);
   });
 
+  it('lets the local undo’s key choose it, instead of typing a command', async () => {
+    await mount(id);
+
+    press('y', 'KeyY');
+    expect(strip()?.querySelector('header')?.textContent).toContain('Local undo');
+    expect(document.activeElement?.getAttribute('aria-label')).not.toBe('Command');
+  });
+
   it('types a size after a brush key', async () => {
     await mount(id);
 

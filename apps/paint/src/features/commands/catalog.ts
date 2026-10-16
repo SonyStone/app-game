@@ -111,6 +111,7 @@ export function catalog(context: PaletteContext): PaletteEntry[] {
     entry({ type: 'selection-tool', tool: 'wand' }, { keywords: 'select automatic auto', shortcut: 'W' }),
     entry({ type: 'tool', tool: 'fill' }, { keywords: 'bucket paint fill selection', shortcut: 'G' }),
     entry({ type: 'tool', tool: 'gradient' }, { keywords: 'blend ramp' }),
+    entry({ type: 'tool', tool: 'local-undo' }, { keywords: 'part area revert restore history brush', shortcut: 'Y' }),
     entry({ type: 'transform' }, { keywords: 'move scale rotate free distort warp', shortcut: 'Ctrl T' }),
     entry({ type: 'colors', action: 'pick' }, { keywords: 'picker pick sample color', shortcut: 'Alt' }),
     entry({ type: 'scale-size', factor: 1.25 }, { keywords: 'size larger increase', shortcut: ']' }),

@@ -3,7 +3,7 @@ import type { CanvasContact } from '@app-game/paint-core/input';
 import type { PaintCommand } from '@app-game/paint-core/protocol';
 import type { StrokePoint } from '@app-game/paint-core/selectionMask';
 import type { Result } from 'neverthrow';
-import { createEffect, createSignal, getOwner, isDisposed, onCleanup } from 'solid-js';
+import { createEffect, createSignal, getOwner, isDisposed, onCleanup, untrack } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import type { PaintError } from '../../shared/errors';
 import { localUndoEdit, type LocalUndoCommand, type LocalUndoReply } from './localUndoEdit';
@@ -55,14 +55,15 @@ export function createLocalUndo(options: {
   // Choosing another tool applies the session.
   createEffect(options.active, (active) => {
     if (!active) {
-      void apply();
+      void untrack(apply);
     }
   });
   // Anything else that changed the document ended the session in the engine. The reply carries the revision the
-  // engine saw, so a report of an earlier change arriving late does not end a session made after it.
+  // engine saw, so a report of an earlier change arriving late does not end a session made after it; the reply is
+  // therefore read, not tracked.
   createEffect(options.revision, (revision) => {
-    const current = shown();
-    if (currentOpen() && current && revision !== current.revision) {
+    const current = untrack(shown);
+    if (untrack(currentOpen) && current && revision !== current.revision) {
       close();
       send({ type: 'cancel' });
     }

@@ -280,6 +280,7 @@ export function createDesktopCommands(options: {
     { label: 'Eraser', keys: 'E', session: true, run: () => tools.choose('eraser') },
     { label: 'Fill', keys: 'G', session: true, run: () => tools.choose('fill') },
     { label: 'Gradient', keys: 'Shift+G', run: () => tools.choose('gradient') },
+    { label: 'Local undo', keys: 'Y', session: true, run: () => tools.choose('local-undo') },
     { label: 'Eyedropper', keys: 'I', run: () => tools.choose('eyedropper') },
     { label: 'Hand', keys: 'H', run: () => tools.chooseView('hand') },
     { label: 'Zoom tool', keys: 'Z', run: () => tools.chooseView('zoom') },
@@ -306,7 +307,7 @@ export function createDesktopCommands(options: {
       }
 
       // The session's tool letters leave the view tools.
-      if (!event.ctrlKey && !event.metaKey && !event.altKey && /^Key[BELGW]$/.test(event.code)) {
+      if (!event.ctrlKey && !event.metaKey && !event.altKey && /^Key[BELGWY]$/.test(event.code)) {
         tools.leaveView();
       }
 

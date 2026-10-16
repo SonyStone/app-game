@@ -51,6 +51,11 @@ describe('searchPalette', () => {
     expect(rows.filter((row) => row.title === 'Eraser')).toHaveLength(1);
   });
 
+  it('finds the local undo by name, and Undo still first for `undo`', () => {
+    expect(searchPalette('local', context)[0]).toMatchObject({ title: 'Local undo', shortcut: 'Y' });
+    expect(searchPalette('undo', context)[0]!.intents).toEqual([{ type: 'history', action: 'undo', count: 1 }]);
+  });
+
   it('lists a combined command as one row', () => {
     const [first] = searchPalette('red, size 12', context);
     expect(first).toMatchObject({ title: 'Color red · Brush 12 px', group: 'Commands' });

@@ -133,8 +133,9 @@ function setOf(preset: BrushPreset): SetId {
 /**
  * The active tool's settings, a simplified Brush Studio for the brush and the eraser: numbers as pill scrubbers,
  * toggles as switches, choices as segmented controls. The lasso shows its shape, mode and commands, the fill and the
- * gradient their settings, and a transform in progress Apply and Cancel. Settings apply at once and keep the card
- * open; commands finish. `onPreview` reports drags of size and opacity, so that the cluster can show the brush.
+ * gradient their settings, and a transform in progress Apply and Cancel. The local undo shows Apply and Cancel and
+ * opens its settings window, which holds the rest. Settings apply at once and keep the card open; commands finish.
+ * `onPreview` reports drags of size and opacity, so that the cluster can show the brush.
  */
 export function ToolCard(props: {
   session: PaintSession;
@@ -143,7 +144,7 @@ export function ToolCard(props: {
   onPreview: (kind: 'size' | 'opacity' | undefined) => void;
 }) {
   const { session } = props;
-  const { tools, fill, gradient, selection, transform } = session;
+  const { tools, fill, gradient, selection, transform, localUndo } = session;
   const kind = () => (transform.active() ? 'transform' : session.tool());
   const heading = () => headings[kind()];
   const presetName = () => session.library.find(tools.preset())?.name;
@@ -180,6 +181,39 @@ export function ToolCard(props: {
                 }}
               >
                 Cancel
+              </TapButton>
+            </div>
+          </Match>
+          <Match when={kind() === 'local-undo'}>
+            <div class={styles.commands}>
+              <TapButton
+                class={styles.command}
+                disabled={!localUndo.open()}
+                onTap={() => {
+                  void localUndo.apply();
+                  props.done();
+                }}
+              >
+                Apply
+              </TapButton>
+              <TapButton
+                class={styles.command}
+                disabled={!localUndo.open()}
+                onTap={() => {
+                  void localUndo.cancel();
+                  props.done();
+                }}
+              >
+                Cancel
+              </TapButton>
+              <TapButton
+                class={styles.command}
+                onTap={() => {
+                  session.windows.open('local-undo');
+                  props.done();
+                }}
+              >
+                Settings
               </TapButton>
             </div>
           </Match>

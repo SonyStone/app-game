@@ -159,6 +159,8 @@ function ZenMore() {
             onImportBrushes={() => {}}
             paletteOpen={false}
             onPalette={() => {}}
+            localUndo={false}
+            onLocalUndo={() => {}}
             onPen={() => {}}
             hand={hand()}
             onHand={setHand}

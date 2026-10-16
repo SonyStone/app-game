@@ -5,6 +5,7 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createMemo, createSignal, Errored, onCleanup, Show } from 'solid-js';
 import type { PaintVariantProps } from '..';
 import { AbrViewerDialog } from '../../features/abr';
+import type { PaintTool } from '../../features/brush';
 import { createRecentColors } from '../../features/color/createRecentColors';
 import {
   createCommandRunner,
@@ -351,7 +352,7 @@ export function CommandStudio(props: PaintVariantProps) {
     const toolName = describeIntent(
       tool() === 'lasso'
         ? { type: 'selection-tool', tool: selection.tool() }
-        : { type: 'tool', tool: tool() as 'brush' },
+        : { type: 'tool', tool: tool() as Exclude<PaintTool, 'lasso'> },
       context()
     );
     const preset = session.paintsWithBrush() ? library.find(tools.preset())?.name : undefined;

@@ -2,6 +2,7 @@ import { ok } from 'neverthrow';
 import { Show, untrack } from 'solid-js';
 import { FloatingWindow } from '../../shared/ui/FloatingWindow';
 import { FreshTabControls } from '../fresh-tab';
+import { LocalUndoWindow } from '../local-undo';
 import { MixingPaletteWindow } from '../mixing-palette';
 import { PalmRejectionControls } from '../palm-rejection';
 import { PressureCalibrationControls, PressureCalibrationWindow } from '../pressure-calibration';
@@ -11,11 +12,23 @@ import type { PaintSession } from './createPaintSession';
  * The session's floating windows that are open, over the variant's UI: `PaintEditor` shows them in every variant, so
  * a variant only opens them (see `PaintSession.windows`). The mixing palette loads the brush with paint mixed from
  * tubes; the Pen window holds palm rejection, what to do when Chrome loses the pen hover and the way to the pen
- * pressure calibration, whose window draws with the current brush.
+ * pressure calibration, whose window draws with the current brush; the Local undo window holds that tool's settings,
+ * Apply and Cancel, and shows only while the tool is active.
  */
 export function SessionWindows(props: { session: PaintSession }) {
-  const { windows, palmSettings, penHover, freshTab, brush, loadColor, pressureCalibration, tools, library } =
-    untrack(() => props.session);
+  const {
+    windows,
+    palmSettings,
+    penHover,
+    freshTab,
+    brush,
+    loadColor,
+    pressureCalibration,
+    tools,
+    library,
+    localUndo,
+    tool
+  } = untrack(() => props.session);
 
   return (
     <>
@@ -60,6 +73,14 @@ export function SessionWindows(props: { session: PaintSession }) {
             const preset = id === undefined ? undefined : library.find(id);
             return preset ? library.resources(preset) : ok([]);
           }}
+        />
+      </Show>
+      <Show when={windows.isOpen('local-undo') && tool() === 'local-undo'}>
+        <LocalUndoWindow
+          localUndo={localUndo}
+          position={windows.position('local-undo')}
+          onMove={(position, done) => windows.move('local-undo', position, done)}
+          onClose={() => windows.close('local-undo')}
         />
       </Show>
     </>

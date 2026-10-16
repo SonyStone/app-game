@@ -243,8 +243,9 @@ const opacitySetting = percentSetting('Opacity', 1);
 
 /**
  * The tools as Procreate's icon row turned into a vertical pill: the brush tools, then the tools that work with the
- * selection and the transform, the chosen one lighter. Choosing a tool finishes. The Fill and the Gradient need a
- * selection. The last button switches the pen hand, whose side the tools and the brush cards take.
+ * selection and the transform, then the local undo, the chosen one lighter. Choosing a tool finishes; the local undo
+ * also opens its settings window (see `PaintSession.chooseLocalUndo`). The Fill and the Gradient need a selection. The
+ * last button switches the pen hand, whose side the tools and the brush cards take.
  */
 function ToolsPill(props: { session: PaintSession; box: Box; showKeys: boolean; summon: Summon }) {
   const { session } = props;
@@ -254,6 +255,8 @@ function ToolsPill(props: { session: PaintSession; box: Box; showKeys: boolean; 
   const choose = (id: ToolId) => {
     if (id === 'transform') {
       session.toggleTransform();
+    } else if (id === 'local-undo') {
+      session.chooseLocalUndo();
     } else {
       session.chooseTool(id);
     }
@@ -307,7 +310,8 @@ const toolItems: readonly { id: ToolId; label: string; icon: SketchIconName; key
   { id: 'lasso', label: 'Selection', icon: 'lasso', key: 'L' },
   { id: 'fill', label: 'Fill', icon: 'fill', key: 'G' },
   { id: 'gradient', label: 'Gradient', icon: 'gradient' },
-  { id: 'transform', label: 'Transform', icon: 'move' }
+  { id: 'transform', label: 'Transform', icon: 'move' },
+  { id: 'local-undo', label: 'Local undo', icon: 'localUndo', key: 'Y' }
 ];
 
 /**

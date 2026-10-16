@@ -59,7 +59,12 @@ export function createCommandRunner(options: {
           return refuse(`Select an area first: the ${intent.tool} works inside a selection.`);
         }
 
-        session.chooseTool(intent.tool);
+        if (intent.tool === 'local-undo') {
+          session.chooseLocalUndo();
+        } else {
+          session.chooseTool(intent.tool);
+        }
+
         return done();
       }
       case 'selection-tool':

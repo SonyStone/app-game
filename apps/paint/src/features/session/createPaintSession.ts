@@ -445,6 +445,7 @@ export function createPaintSession(options: {
     canvasInput,
     createShortcuts,
     chooseTool,
+    chooseLocalUndo,
     toggleTransform,
     choosePreset,
     usePreset,
@@ -632,6 +633,15 @@ export function createPaintSession(options: {
     colorPicker.cancel();
     selection.cancel();
     tools.chooseTool(next);
+  }
+
+  /**
+   * Chooses the local undo and opens its window, which holds the tool's settings, Apply and Cancel: the one control
+   * a variant without a place for them needs; see `SessionWindows`.
+   */
+  function chooseLocalUndo() {
+    chooseTool('local-undo');
+    windows.open('local-undo');
   }
 
   /** Starts transforming the selection or the active layer, or applies the transform in progress. */

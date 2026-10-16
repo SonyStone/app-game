@@ -43,6 +43,9 @@ export function OptionsBar(props: {
         <Match when={active() === 'transform'}>
           <TransformOptions session={props.session} />
         </Match>
+        <Match when={active() === 'local-undo'}>
+          <LocalUndoOptions session={props.session} />
+        </Match>
         <Match when={active() === 'eyedropper'}>
           <PickerOptions session={props.session} />
         </Match>
@@ -535,6 +538,34 @@ function TransformOptions(props: { session: PaintSession }) {
       <Divider />
       <TextButton label="Cancel" title="Cancel the transform (Esc)" onClick={() => void transform.cancel()} />
       <TextButton label="Apply" title="Apply the transform (Enter)" onClick={() => void transform.end()} />
+    </>
+  );
+}
+
+/** The local undo: its settings window, which holds the mode, steps back and mask brush, and Cancel and Apply. */
+function LocalUndoOptions(props: { session: PaintSession }) {
+  const { localUndo, windows } = props.session;
+
+  return (
+    <>
+      <TextButton
+        label="Settings…"
+        title="How to mark the area, how far back and the mask brush"
+        onClick={() => windows.open('local-undo')}
+      />
+      <Divider />
+      <TextButton
+        label="Cancel"
+        title="Cancel the local undo (Esc)"
+        disabled={!localUndo.open()}
+        onClick={() => void localUndo.cancel()}
+      />
+      <TextButton
+        label="Apply"
+        title="Apply the local undo (Enter)"
+        disabled={!localUndo.open()}
+        onClick={() => void localUndo.apply()}
+      />
     </>
   );
 }

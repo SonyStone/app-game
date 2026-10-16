@@ -3,6 +3,11 @@
   gap: 10px;
 }
 
+/* The panel in a floating window, which has no padding of its own. */
+.window {
+  padding: 10px 12px 12px;
+}
+
 /* Doubled to outrank the studio's reset of button borders and backgrounds. */
 .segments.segments {
   display: grid;
@@ -15,13 +20,13 @@
     padding: 0;
     border: 1px solid var(--line);
     border-radius: 4px;
-    background: #fff;
+    /* `--raised` is set in dark windows; light panels keep white. */
+    background: var(--raised, #fff);
     font-size: 11px;
 
     &[aria-pressed='true'] {
       border-color: #419bcf;
-      background: #e3f0f7;
-      color: #1f6f9a;
+      background: rgb(65 155 207 / 18%);
     }
   }
 }
@@ -50,7 +55,7 @@
     padding: 0 14px;
     border: 1px solid var(--line);
     border-radius: 4px;
-    background: #fff;
+    background: var(--raised, #fff);
   }
 
   > .apply {

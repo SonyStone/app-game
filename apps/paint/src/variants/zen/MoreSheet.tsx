@@ -8,9 +8,9 @@ import styles from './ZenStudio.module.css';
 
 /**
  * What the fan's "more" opens, without titles: the layers, top first, with the active one's commands under them;
- * then the drawing's file commands (export, save, open, insert an image); then brush import and the mixing palette;
- * then the drawing hand, the pen settings, QuickShape with a choice of hold times, full screen and the way back to
- * the other variants. Layer changes are undoable document commands.
+ * then the drawing's file commands (export, save, open, insert an image); then brush import, the mixing palette and
+ * the local undo, a tool the fan has no place for; then the drawing hand, the pen settings, QuickShape with a choice
+ * of hold times, full screen and the way back to the other variants. Layer changes are undoable document commands.
  */
 export function MoreSheet(props: {
   state: DocumentState;
@@ -26,6 +26,10 @@ export function MoreSheet(props: {
   paletteOpen: boolean;
   /** Shows or hides the mixing palette window. */
   onPalette: () => void;
+  /** The local undo is the active tool. */
+  localUndo: boolean;
+  /** Chooses the local undo with its settings window, or leaves it for the brush. */
+  onLocalUndo: () => void;
   /** Opens the session's Pen window: palm rejection and the pen hover. */
   onPen: () => void;
   quickShape: QuickShapePreferences;
@@ -172,6 +176,15 @@ export function MoreSheet(props: {
       >
         <span>Mixing palette</span>
         <small>{props.paletteOpen ? 'on' : 'off'}</small>
+      </button>
+      <button
+        class={styles.row}
+        role="switch"
+        aria-checked={props.localUndo ? 'true' : 'false'}
+        onClick={() => props.onLocalUndo()}
+      >
+        <span>Local undo</span>
+        <small>{props.localUndo ? 'on' : 'off'}</small>
       </button>
       <hr class={styles.rule} />
       <div class={styles.chips} role="radiogroup" aria-label="Drawing hand">

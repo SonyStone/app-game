@@ -201,6 +201,73 @@ it.each(
   }
 );
 
+// Puck's cluster, which holds its tools, does not open under jsdom; its opener is checked in a browser.
+it.each(paintVariants.filter(({ id }) => id !== 'puck').map((variant) => [variant.name, variant] as const))(
+  '%s offers the local undo, with its settings, Apply and Cancel',
+  async (_, variant) => {
+    const Variant = await variant.load();
+    dispose = render(() => <Variant />, document.body);
+    flush();
+    await vi.waitFor(() => expect(transports.opened).toHaveLength(1));
+    reply(transports.opened[0]!, { type: 'ready' });
+
+    await localUndoOpeners[variant.id]!();
+    flush();
+    // Classic shows the settings in its tool panel, the other variants in the session's Local undo window.
+    if (variant.id === 'studio') {
+      click('button[aria-label="Brush settings"]');
+    }
+
+    const settings = document.querySelector('[role="group"][aria-label="Mark the area with"]')?.parentElement;
+    expect(settings?.textContent).toContain('Steps back');
+    expect(settings?.querySelector('button[title="Apply · Enter"]')).toBeTruthy();
+    expect(Boolean(document.querySelector('[role="dialog"][aria-label="Local undo"]'))).toBe(variant.id !== 'studio');
+  }
+);
+
+/** How each variant opens the local undo: its own button, menu row or command. */
+const localUndoOpeners: Record<string, () => void | Promise<void>> = {
+  studio: () => click('nav[aria-label="Drawing tools"] button[aria-label="Local undo"]'),
+  procreate: () => click('button[aria-label="Local undo"]'),
+  desktop: () => click('nav[aria-label="Tools"] button[aria-label="Local undo"]'),
+  zen() {
+    const pebble = document.querySelector<HTMLElement>('[aria-label^="Tools · drag to move"]')!;
+    for (const type of ['pointerdown', 'pointerup']) {
+      pebble.dispatchEvent(
+        Object.assign(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }), {
+          pointerType: 'mouse',
+          pointerId: 7
+        })
+      );
+    }
+
+    flush();
+    click('button[aria-label="Layers and export"]');
+    const row = [...document.querySelectorAll<HTMLButtonElement>('button[role="switch"]')].find((button) =>
+      button.textContent?.startsWith('Local undo')
+    );
+    row!.click();
+  },
+  async command() {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }));
+    flush();
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Command"]')!;
+    input.value = 'local undo';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    flush();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"][aria-label="Local undo"]')).toBeTruthy());
+  }
+};
+
+/** Clicks the element matching `selector`, which must exist, and flushes. */
+function click(selector: string) {
+  const element = document.querySelector<HTMLElement>(selector);
+  expect(element, selector).toBeTruthy();
+  element!.click();
+  flush();
+}
+
 function reply(transport: FakeTransport, event: PaintEvent) {
   transport.handlers.message(event);
   flush();
