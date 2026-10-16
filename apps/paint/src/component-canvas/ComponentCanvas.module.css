@@ -485,3 +485,38 @@
   color: var(--muted);
   pointer-events: none;
 }
+
+.panel button[aria-pressed='true'] {
+  background: #0000000f;
+}
+
+/* The hand ghost: a zero-size anchor at the pen tip, above the canvas and its stage, never taking input. */
+.handGhost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 950;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transform-origin: 0 0;
+
+  &[data-shown='false'] {
+    display: none;
+  }
+
+  svg {
+    position: absolute;
+    overflow: visible;
+  }
+}
+
+.handPalm {
+  fill: #3a3a3a;
+  opacity: 0.22;
+}
+
+.handPen {
+  fill: #2a2a2a;
+  opacity: 0.35;
+}

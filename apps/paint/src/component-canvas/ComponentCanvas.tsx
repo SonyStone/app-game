@@ -16,6 +16,7 @@ import { LayersPanels } from './groups/LayersPanels';
 import { Numbers } from './groups/Numbers';
 import { Pucks } from './groups/Pucks';
 import { Styles } from './groups/Styles';
+import { HandGhost } from './HandGhost';
 import { CanvasStage, type Stage } from './Screen';
 import { SpecimenChoices } from './Specimen';
 import { createStripDevice, StripDevice } from './TestStrip';
@@ -42,6 +43,7 @@ export function ComponentCanvas() {
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const [world, setWorld] = createSignal<HTMLDivElement>();
   const [stage, setStage] = createSignal<Stage>();
+  const [ghost, setGhost] = createSignal(false);
 
   // Paint's own guards first: palm rejection must see touches before the canvas does, and the pen hover detection
   // before palm rejection, so that the press that finds the pen without hover is guarded as such.
@@ -141,6 +143,14 @@ export function ComponentCanvas() {
         </button>
         <span class={styles.panelGap} />
         <For each={groups}>{(group) => <button onClick={() => showGroup(group.id)}>{group.title}</button>}</For>
+        <span class={styles.panelGap} />
+        <button
+          title="A hand with a pen follows the pen's hover, to show what the palm covers"
+          aria-pressed={ghost() ? 'true' : 'false'}
+          onClick={() => setGhost((shown) => !shown)}
+        >
+          Hand
+        </button>
         <span class={styles.panelStatus} role="status">
           {statusText[choices.status()]}
         </span>
@@ -148,6 +158,10 @@ export function ComponentCanvas() {
 
       <Show when={stage()}>
         {(current) => <StageView stage={current()} onClose={() => setStage(undefined)} />}
+      </Show>
+
+      <Show when={ghost()}>
+        <HandGhost hand={palmOptions().hand} />
       </Show>
 
       <Show when={freshTab.offered()}>
