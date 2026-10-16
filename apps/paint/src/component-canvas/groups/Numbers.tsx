@@ -78,7 +78,7 @@ function SizeValue(props: { layout: 'stacked' | 'inline' }) {
   );
 }
 
-const loneCluster = { begin: () => {}, end: () => {} };
+const loneCluster = { begin: () => {}, pause: () => {}, end: () => {} };
 
 /** Studio's brush size grid. */
 function SizeGrid() {
