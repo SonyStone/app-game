@@ -22,6 +22,13 @@ export default function PaintPage(props: Partial<{ children: JSX.Element }>) {
       </div>
 
       <div class="flex flex-col gap-2">
+        <span>Component canvas: Paint's UI parts side by side, to compare and choose</span>
+        <Loading>
+          <Navigation class="p-0 py-2" routes={module()?.componentCanvasRoutes} parentPath="." />
+        </Loading>
+      </div>
+
+      <div class="flex flex-col gap-2">
         <span>Feature demos: one feature each, on a drawing of its own</span>
         <Loading>
           <Navigation class="p-0 py-2" routes={module()?.demoRoutes} parentPath="." />

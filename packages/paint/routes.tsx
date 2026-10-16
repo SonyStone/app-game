@@ -14,6 +14,18 @@ export const variantRoutes: Routes[] = paintVariants.map((variant) => variantRou
 /** One Paint feature each, on a drawing of its own; see `featureDemos`. */
 export const demoRoutes: Routes[] = featureDemos.map((demo) => variantRoute(demo, 'Demo'));
 
+/** Paint's UI parts side by side in their variants and states, to compare and star; see `ComponentCanvas`. */
+export const componentCanvasRoutes: Routes[] = [
+  {
+    path: '/components',
+    name: 'Paint · Component canvas',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() =>
+      import('@app-game/paint/component-canvas').then(({ ComponentCanvas }) => ({ default: ComponentCanvas }))
+    )
+  }
+];
+
 export const pointerEventsRoutes: Routes[] = [
   {
     path: '/hammer-multitouch',
@@ -122,14 +134,6 @@ export const restRoutes: Routes[] = [
     )
   },
   {
-    path: '/components',
-    name: 'Paint · Component canvas',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() =>
-      import('@app-game/paint/component-canvas').then(({ ComponentCanvas }) => ({ default: ComponentCanvas }))
-    )
-  },
-  {
     path: '/trigonometry',
     name: 'Trigonometry Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
@@ -170,6 +174,7 @@ export const paintRoutes: Routes = {
       component: lazy(() => import('./index'))
     },
     ...variantRoutes,
+    ...componentCanvasRoutes,
     ...demoRoutes,
     ...brushEngineRoutes,
     ...restRoutes,
