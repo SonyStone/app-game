@@ -1,0 +1,37 @@
+/* The MovinkPad's screen, the side menu's positioned parent. */
+.box {
+  position: relative;
+  width: 1646px;
+  height: 909px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.full {
+  position: absolute;
+  inset: 0;
+}
+
+/* A stand-in painting on Paint's paper: warm and cool patches with soft edges. */
+.painting {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  background:
+    radial-gradient(circle at 22% 30%, #d9773ccc 0 14%, transparent 28%),
+    radial-gradient(circle at 70% 38%, #2d5a7bdd 0 16%, transparent 32%),
+    radial-gradient(circle at 46% 76%, #7f9a4ecc 0 12%, transparent 26%), linear-gradient(160deg, #faf8f4, #e9e2d6);
+}
+
+.hint {
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #ffffffcc;
+  color: #333;
+  font:
+    14px/1.4 system-ui,
+    sans-serif;
+}

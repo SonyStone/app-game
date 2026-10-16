@@ -20,6 +20,7 @@ import { LayersPanels } from './groups/LayersPanels';
 import { Numbers } from './groups/Numbers';
 import { Panels } from './groups/Panels';
 import { Pucks } from './groups/Pucks';
+import { SideMenus } from './groups/SideMenus';
 import { Styles } from './groups/Styles';
 import { TileCluster } from './groups/TileCluster';
 import { Tools } from './groups/Tools';
@@ -142,6 +143,7 @@ export function ComponentCanvas() {
                   <Numbers />
                   <Tools />
                   <Panels />
+                  <SideMenus />
                   <FeaturePanels />
                   <Icons />
                   <Pucks />
@@ -233,6 +235,7 @@ const groups = [
   { id: 'numbers', title: 'Numbers' },
   { id: 'tools', title: 'Tools' },
   { id: 'panels', title: 'Panels' },
+  { id: 'side-menu', title: 'Side menu' },
   { id: 'feature-panels', title: 'Features' },
   { id: 'icons', title: 'Icons' },
   { id: 'pucks', title: 'Pucks' },
