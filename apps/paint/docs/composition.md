@@ -91,6 +91,14 @@ To catch up with a stationary pen, a processor may implement `idle(elapsedMs)`, 
 
 For a decoded ABR tip there is `texturedBrush`, which rasterizes coverage into Studio tiles. **Brush settings → ABR brushes…** opens the shared ABR viewer for importing and selecting a preset; it becomes a preset of the brush library, and the full preset is passed to the `abrBrush` engine, including supported dynamics and Tool Options. Currently `PaintRenderer` describes Studio's existing raster backend; there is no contract for arbitrary vector documents here.
 
+## Replacing a stroke
+
+`{ type: 'replace-stroke', samples }` replaces what the stroke in progress painted: the runtime cancels the stroke's engine session, which discards its pixels, and starts a new session of the same engine with the context the stroke began with: layer, brush, modifiers, view, LOD, the stroke's decorated renderer (so symmetry applies) and its random `seed`. The new samples bypass the stroke processor's smoothing through `createReplacementProcessor`, which keeps only the processor's optional `calibrate` pressure mapping (Leonardo and the stabilizer have one), and the replaced stroke runs no idle clock, so an ABR Build-up brush does not keep depositing at the resting pen. Nothing is presented between the cancel and the new paint, so the old stroke does not flash away; `end` commits the replaced stroke as one undo step and `cancel` discards it. Consecutive replacements still waiting in the queue merge into the latest. Without a stroke in progress the command is ignored.
+
+Engines receive `seed` in their context; ABR uses it unless the preset has a replay seed, so the scatter and jitter of a replaced stroke do not change between replacements. An engine with its own random dynamics should do the same. QuickShape (`apps/paint/src/features/quickshape/`) is the first user; a future "redraw stroke" can use the same command. `runtimeReplace.test.ts` checks one undo step without the old dabs, cancellation, symmetry, the kept seed and context, calibrated unsmoothed pressure and merging.
+
+On the input side, `attachInput`'s optional `strokeHold` (`delay`, `hold`) reports a pen or mouse that rests within `strokeHoldSlop` CSS pixels while drawing; a returned `StrokeHoldDrag` receives the contact's later points, the count of touches on the canvas and the release, before the stroke's `end` is sent.
+
 ## Typed engine settings
 
 `defineBrushEngine` binds an ID, settings validation, and a stroke factory. The `settings` type is inferred from the result of `parse`, so no casts from `unknown` are needed inside the engine. `select` validates and copies settings on the caller side; the receiver validates them again before creating GPU state. This applies to both the local runtime and the worker. A settings error is sent as a regular `error` event, without starting a new stroke and without marking an unchanged document as dirty.

@@ -37,6 +37,7 @@ import { createPalmRejection, createPalmRejectionSettings } from '../palm-reject
 import { createPenHover } from '../pen-hover';
 import { createPerformanceMonitor } from '../performance';
 import { createPressureCalibration } from '../pressure-calibration';
+import { createQuickShape } from '../quickshape';
 import { radialLayout } from '../radial-menu';
 import { createInputRecorder } from '../recording';
 import { createSelection, createSelectionView, guardEdits } from '../selection';
@@ -331,6 +332,7 @@ export function createPaintSession(options: {
     moveOut: engine.moveOut
   });
   const inkTrail = createInkTrail({ canvas, enabled: developer.inkTrail, zoom: () => camera.current().zoom });
+  const quickShape = createQuickShape({ send: edit, camera: camera.current });
   const warmup = createGpuWarmup({
     enabled: () => developer.warmGpu() && engine.canEdit(),
     send: engine.send
@@ -420,6 +422,8 @@ export function createPaintSession(options: {
      * and widens a brush's default pressure range (`strokeBrush`), so it acts on the strokes of every variant.
      */
     pressureCalibration,
+    /** Held strokes becoming shapes, with their settings; see `QuickShapeSettings` and the hint in `StageOverlays`. */
+    quickShape,
     canvasInput,
     createShortcuts,
     chooseTool,
@@ -481,6 +485,7 @@ export function createPaintSession(options: {
         gradient.canvasAction
       ),
       adjust: brushAdjust.adjust,
+      strokeHold: quickShape.strokeHold,
       touchGestures: extra.touchGestures ?? {
         tap(fingers) {
           if (fingers === 2 && engine.state().canUndo) {
@@ -540,6 +545,7 @@ export function createPaintSession(options: {
         return false;
       },
       cancel() {
+        quickShape.cancel();
         void transform.cancel();
         mixer.cancelPick();
         colorPicker.cancel();

@@ -8,6 +8,7 @@ import { FrameGuides } from '../frames';
 import { GradientPreview } from '../gradient';
 import { PalmRejectionDebug } from '../palm-rejection';
 import { PerformancePanel } from '../performance';
+import { QuickShapeHint } from '../quickshape';
 import { selectionClipPath } from '../selection';
 import { SymmetryGuide } from '../symmetry';
 import { TransformOverlay } from '../transform';
@@ -91,7 +92,8 @@ export function StageGuides(props: { session: PaintSession }) {
 
 /**
  * Overlays of work in progress on the canvas: the brush size and opacity HUD while adjusting, the transform box, the
- * brush cursor, the color picker loupe, the gradient preview and the Mixer Brush pick hint.
+ * brush cursor, the color picker loupe, the gradient preview, the Mixer Brush pick hint and the name of the shape a
+ * held stroke became.
  */
 export function StageOverlays(props: {
   session: PaintSession;
@@ -99,7 +101,7 @@ export function StageOverlays(props: {
   cursor?: boolean;
 }) {
   const session = untrack(() => props.session);
-  const { camera, size, brush, transform, colorPicker, gradient, selection, mixer } = session;
+  const { camera, size, brush, transform, colorPicker, gradient, selection, mixer, quickShape } = session;
   const toScreen = (point: { x: number; y: number }) => worldToScreen(point, camera.camera(), size());
   const toDocument = (point: { x: number; y: number }) => screenToWorld(point, camera.current(), size());
 
@@ -164,6 +166,7 @@ export function StageOverlays(props: {
       <Show when={mixer.picking()}>
         <StageHint role="status">Tap the canvas to load paint. Escape to cancel.</StageHint>
       </Show>
+      <Show when={quickShape.hint()}>{(hint) => <QuickShapeHint hint={hint()} />}</Show>
     </>
   );
 }

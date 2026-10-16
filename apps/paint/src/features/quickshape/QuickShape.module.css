@@ -1,0 +1,56 @@
+.settings {
+  display: grid;
+  gap: 4px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: #666;
+  font-size: 11px;
+
+  input {
+    accent-color: #419bcf;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    flex: none;
+  }
+}
+
+.delay {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  color: #666;
+  font-size: 11px;
+}
+
+/* Over the canvas, at the top center, out of the way of the pen. */
+.hint {
+  position: absolute;
+  top: max(64px, env(safe-area-inset-top));
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fbfbfaf2;
+  box-shadow: 0 2px 10px #0002;
+  font-size: 12px;
+  pointer-events: none;
+
+  span {
+    color: var(--muted);
+  }
+
+  span[data-snapping='true'] {
+    color: #2b7bb0;
+  }
+}

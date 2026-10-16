@@ -301,6 +301,58 @@ try {
     assert.equal(await redo.isDisabled(), true);
   });
 
+  await step('a pen stroke held at its end becomes a shape that turns with the pen and undoes in one step', async () => {
+    const { cx, cy } = await workspaceCenter(page);
+    const undo = page.getByRole('button', { name: 'Undo' });
+    const redo = page.getByRole('button', { name: 'Redo' });
+    const cdp = await page.context().newCDPSession(page);
+    const pen = (type, x, y) =>
+      cdp.send('Input.dispatchMouseEvent', {
+        type,
+        x,
+        y,
+        button: 'left',
+        buttons: type === 'mouseReleased' ? 0 : 1,
+        clickCount: 1,
+        pointerType: 'pen',
+        force: 0.6
+      });
+    // A wobbly ellipse 500 × 300 px around the center, starting and resting at its right end.
+    await pen('mousePressed', cx + 250, cy);
+    for (let i = 1; i <= 70; i++) {
+      const angle = (i / 70) * 2 * Math.PI;
+      await pen('mouseMoved', cx + 250 * Math.cos(angle) + 5 * Math.sin(5 * angle), cy + 150 * Math.sin(angle));
+    }
+
+    const hint = page.getByRole('status').filter({ hasText: 'Ellipse' });
+    await hint.waitFor({ timeout: 5_000 });
+    assert.match(await hint.textContent(), /Shift or a finger: Circle/);
+    // Moving the resting point a quarter turn around the center stands the ellipse up.
+    for (let i = 1; i <= 12; i++) {
+      const angle = (-i / 12) * (Math.PI / 2);
+      await pen('mouseMoved', cx + 250 * Math.cos(angle), cy + 250 * Math.sin(angle));
+    }
+
+    await pen('mouseReleased', cx, cy - 250);
+    await hint.waitFor({ state: 'detached', timeout: 5_000 });
+    await waitForSaved(page);
+    await page.mouse.move(cx - 400, cy - 300);
+    await page.waitForTimeout(300);
+    const [top, bottom, right] = await inkAt(page, [
+      { x: cx, y: cy - 250 },
+      { x: cx, y: cy + 250 },
+      { x: cx + 250, y: cy }
+    ]);
+    assert.ok(top && bottom, 'the shape stands up');
+    assert.ok(!right, 'nothing of the freehand stroke is left');
+
+    await undo.click();
+    await waitEnabled(redo);
+    await page.waitForTimeout(300);
+    assert.deepEqual(await inkAt(page, [{ x: cx, y: cy - 250 }, { x: cx + 250, y: cy }]), [false, false]);
+    await cdp.detach();
+  });
+
   await step('painting on a hidden layer is refused with a notice that shows the layer', async () => {
     const panel = page.getByRole('complementary', { name: 'Layers' });
     const notice = page.getByRole('toolbar', { name: 'Hidden layer' });
@@ -1556,6 +1608,24 @@ async function drawLine(page, from, to) {
 
   await page.mouse.up();
   await waitForSaved(page);
+}
+
+/** Whether each page point of a screenshot is darker than the paper, so painted. */
+async function inkAt(page, points) {
+  return page.evaluate(
+    async ({ shot, points }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${shot}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0);
+      return points.map(({ x, y }) => context.getImageData(Math.round(x), Math.round(y), 1, 1).data[1] < 0xc0);
+    },
+    { shot: (await page.screenshot()).toString('base64'), points }
+  );
 }
 
 /** Chooses a selection tool from the selection bar's tool menu. */

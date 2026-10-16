@@ -20,6 +20,7 @@ import { HistorySourceControl, LayersPanel } from '../layers';
 import { LiveBadge, LiveControls, LiveViewer, liveRelayUrl, watchedRoom, watchLink } from '../live';
 import { PalmRejectionControls } from '../palm-rejection';
 import { PressureCalibrationButton } from '../pressure-calibration';
+import { QuickShapeSettings } from '../quickshape';
 import { createRadialMenu, RadialMenu, type RadialItem } from '../radial-menu';
 import { RecordingControls } from '../recording';
 import { SelectionActions } from '../selection';
@@ -436,6 +437,7 @@ export function PaintStudio(props: {
                         : undefined
                     }
                   />
+                  <QuickShapeSettings settings={session.quickShape.settings()} onChange={session.quickShape.update} />
                 </Match>
                 <Match when={id === 'fill'}>
                   <FillPanel settings={fill.settings()} onChange={fill.update} />
