@@ -219,8 +219,8 @@ export type RewindDial = {
 
 /** Angle per history step. */
 const step = (24 * Math.PI) / 180;
-/** How far from the pebble's center a finger may land to start a rewind. */
-const haloRadius = 132;
+/** How far from the pebble's center a finger may land to start a rewind: a band about 100 pixels wide around it. */
+const haloRadius = pebbleRadius + 110;
 /** Touches this soon after a pen was seen, in milliseconds, are taken for the hand holding it. */
 const penQuietMs = 600;
 /** Contacts wider than this, in CSS pixels, are taken for a palm. */

@@ -1,7 +1,8 @@
 /**
  * Press-and-drag values on the pebble: the drag moves a value from where it started, by `pixelsPerUnit`, but never
- * so slowly that the screen's edge cuts the range off. The pebble sits at an edge, so on one side of it there may be
- * only a few pixels; there the same drag covers the rest of the range, so the limit is reachable either way.
+ * so slowly that the screen's edge cuts the range off. The pebble may rest against an edge, so on one side of the
+ * press there may be only a few pixels; there the same drag covers the rest of the range, so the limit is reachable
+ * either way.
  *
  * `travel` is the drag toward more (positive) or less (negative); `room` the pixels between the press and the
  * screen's edge in each direction. Sizes scrub geometrically, so that small brushes get as much travel as large ones.

@@ -1,7 +1,7 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { createSignal } from 'solid-js';
-import { placeSheet } from './fanLayout';
+import { placeSheet, sheetOffset } from './fanLayout';
 import type { Point, ViewSize } from './placement';
 import styles from './ZenStudio.module.css';
 
@@ -21,7 +21,13 @@ export function Sheet(props: {
   // The layout height ignores the opening animation's scale, so the sheet does not drift while it grows.
   const size = createElementSize(element);
   const at = () =>
-    placeSheet(props.center, props.inward, { width: props.width, height: size.clientHeight ?? 0 }, props.view, 104);
+    placeSheet(
+      props.center,
+      props.inward,
+      { width: props.width, height: size.clientHeight ?? 0 },
+      props.view,
+      sheetOffset
+    );
 
   return (
     <div

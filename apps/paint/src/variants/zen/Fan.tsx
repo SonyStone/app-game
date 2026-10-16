@@ -1,7 +1,7 @@
 import type { JSX } from '@solidjs/web';
 import { createMemo, For, Show } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
-import { fanLayout, type FanRing } from './fanLayout';
+import { colorRing, fanLayout, historyRing, toolRing } from './fanLayout';
 import type { Point, ViewSize } from './placement';
 import { tapOrHold } from './tapOrHold';
 import { shapeNames, type ToolSlot } from './tools';
@@ -9,10 +9,11 @@ import { ToolShape } from './ToolShape';
 import styles from './ZenStudio.module.css';
 
 /**
- * What a tap on the pebble fans out, in three arcs around it, opening away from its edge: undo, "more" and redo
- * nearest (undo on the counterclockwise side, as on the rewind dial), then the five brushes and the eraser as tool
- * shapes pointing at the pebble, then a row of colors, the current one first. A long press on a brush chooses its
- * preset, one on a color opens the color disc. `quiet` leaves only the nearest arc, while a sheet is open beside it.
+ * What a tap on the pebble fans out, in three arcs around it, opening toward the open space (see `inwardAngle`):
+ * undo, "more" and redo nearest (undo on the counterclockwise side, as on the rewind dial), then the five brushes and
+ * the eraser as tool shapes pointing at the pebble, then a row of colors, the current one first. A long press on a
+ * brush chooses its preset, one on a color opens the color disc. `quiet` leaves only the nearest arc, while a sheet is
+ * open beside it.
  */
 export function Fan(props: {
   center: Point;
@@ -146,7 +147,3 @@ export function Fan(props: {
     </div>
   );
 }
-
-const historyRing: FanRing = { count: 3, item: 44, spacing: 54, spread: 'full', minRadius: 70, gap: 0 };
-const toolRing: FanRing = { count: 6, item: 52, spacing: 58, spread: 'compact', minRadius: 0, gap: 60 };
-const colorRing: FanRing = { count: 7, item: 32, spacing: 40, spread: 'compact', minRadius: 0, gap: 54 };

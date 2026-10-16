@@ -3,19 +3,20 @@ import { createSignal, onCleanup } from 'solid-js';
 import {
   dodgePlacement,
   pebbleRadius,
+  placementAt,
   placementPoint,
-  snapPlacement,
   type Placement,
   type Point,
   type ViewSize
 } from './placement';
 
 /**
- * Where the pebble is on screen: at its resting place, carried under a finger or pen, or slid aside out of a hovering
- * pen's way. A pen that lingers near the resting place (`near` pixels, for `dwellMs`) without hovering over the
- * pebble itself makes it slide along the screen's edge; a pen heading for the pebble reaches it before then, so it
- * can still be tapped. The pebble returns once the pen moves `far` away or leaves the screen. Must be created within
- * a Solid owner.
+ * Where the pebble is on screen: at its resting place, carried by a finger, the pen or the mouse, or slid aside out of
+ * a hovering pen's way. The resting place may be anywhere on screen; carried, the pebble stays fully on screen too. A
+ * pen that lingers near the resting place (`near` pixels, for `dwellMs`) without hovering over the pebble itself
+ * makes it slide away from the pen, along the edge when it rests against one; a pen heading for the pebble reaches it
+ * before then, so it can still be tapped. The pebble returns once the pen moves `far` away or leaves the screen. Must
+ * be created within a Solid owner.
  */
 export function createPebble(options: {
   /** The resting place. */
@@ -25,7 +26,7 @@ export function createPebble(options: {
   /** The pebble must stay put: it is pressed or its fan is open. */
   still: () => boolean;
 }) {
-  const [carried, setCarried] = createSignal<Point>();
+  const [carried, setCarried] = createSignal<Placement>();
   const [dodged, setDodged] = createSignal<Placement>();
   let dwell: ReturnType<typeof setTimeout> | undefined;
   /** The hovering pen's latest point near the pebble, which the pebble slides away from. */
@@ -59,7 +60,7 @@ export function createPebble(options: {
     { capture: true, passive: true }
   );
 
-  const center = () => carried() ?? placementPoint(dodged() ?? options.placement(), options.view());
+  const center = () => placementPoint(carried() ?? dodged() ?? options.placement(), options.view());
 
   return {
     /** The pebble's center in client pixels. */
@@ -68,16 +69,16 @@ export function createPebble(options: {
     carried: () => carried() !== undefined,
     /** The pebble has slid out of the pen's way. */
     dodged: () => dodged() !== undefined,
-    /** Moves the carried pebble under `point`. */
+    /** Moves the carried pebble's center to `point`, or as near as keeps it on screen. */
     carry(point: Point) {
       stopDwell();
       setDodged(undefined);
-      setCarried(point);
+      setCarried(placementAt(point, options.view()));
     },
-    /** Puts the carried pebble down at the place nearest `point`, which becomes its resting place. */
+    /** Puts the carried pebble down with its center at `point`, or as near as keeps it on screen, and rests it there. */
     drop(point: Point) {
       setCarried(undefined);
-      options.setPlacement(snapPlacement(point, options.view()));
+      options.setPlacement(placementAt(point, options.view()));
     }
   };
 
@@ -120,11 +121,14 @@ export function createPebble(options: {
   }
 }
 
-/** Distance from the resting place, in CSS pixels, within which a lingering pen moves the pebble aside. */
-const near = 72;
+/**
+ * Distance from the resting place's center, in CSS pixels, within which a lingering pen moves the pebble aside: a
+ * band 50 pixels wide around the pebble.
+ */
+const near = pebbleRadius + 50;
 /** Distance from the resting place beyond which the pebble returns. */
-const far = 132;
-/** How far the pebble slides along the edge. */
-const slide = 104;
+const far = near + 60;
+/** How far the pebble slides: its own width and a fingertip more, so the pen is clear of it. */
+const slide = 2 * pebbleRadius + 48;
 /** How long the pen must linger near the pebble, in milliseconds. */
 const dwellMs = 280;

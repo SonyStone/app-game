@@ -20,7 +20,7 @@ import { createPebble } from './createPebble';
 import { createRewind } from './createRewind';
 import { createZenSettings } from './createZenSettings';
 import { Fan } from './Fan';
-import { placeSheet } from './fanLayout';
+import { placeSheet, sheetOffset } from './fanLayout';
 import { MoreSheet } from './MoreSheet';
 import { Pebble } from './Pebble';
 import { inwardAngle } from './placement';
@@ -31,11 +31,13 @@ import { fanColors } from './tools';
 import styles from './ZenStudio.module.css';
 
 /**
- * The Zen variant, after Paper and Tayasui Sketches: the screen is the page, with one pebble resting at its edge.
- * Tapping the pebble fans out a few brushes as tool shapes, the eraser, colors, undo, redo and "more" (layers and
- * export) around it; everything closes as soon as anything touches the drawing. Pressing and dragging the pebble sets
- * the brush size (up and down) and opacity (sideways); holding it still picks it up, to put it at any edge or corner.
- * It slides out of a lingering pen's way and fades while a stroke is drawn.
+ * The Zen variant, after Paper and Tayasui Sketches: the screen is the page, with one pebble on it, a big round button
+ * that starts at the free hand's edge. Tapping the pebble fans out a few brushes as tool shapes, the eraser, colors,
+ * undo, redo and "more" (layers, export, the mixing palette and pen settings) around it, toward the open space;
+ * everything closes as soon as anything touches the drawing. Dragging the pebble moves it: it follows the pen, finger
+ * or mouse and stays wherever it is let go, on screen. Holding it still for a moment wakes the brush controls, shown
+ * by a preview of the dab; dragging on then sets the brush size (up and down) and opacity (sideways). It slides out of
+ * a lingering pen's way and fades while a stroke is drawn.
  *
  * Gestures carry the rest: two fingers tap to undo and three to redo, a held finger picks a color under a loupe,
  * pinch, drag and twist move the view, and one finger circling the pebble rewinds the history like a jog dial (see
@@ -63,7 +65,7 @@ export function ZenStudio(props: PaintVariantProps) {
     view: session.size,
     still: () => open() !== undefined
   });
-  const inward = createMemo(() => inwardAngle(settings.placement()));
+  const inward = createMemo(() => inwardAngle(pebble.center(), session.size()));
   const rewind = createRewind({
     center: pebble.center,
     canvas: session.canvas,
@@ -128,7 +130,7 @@ export function ZenStudio(props: PaintVariantProps) {
   };
   /** Where the color disc opens: beside the fan's nearest arc, like the sheets. */
   const discAt = () =>
-    placeSheet(pebble.center(), inward(), { width: discSize, height: discSize }, session.size(), 114);
+    placeSheet(pebble.center(), inward(), { width: discSize, height: discSize }, session.size(), sheetOffset + 10);
 
   return (
     <PaintEditor session={session} class={styles.editor}>
@@ -170,8 +172,8 @@ export function ZenStudio(props: PaintVariantProps) {
         <Show when={ready() && engine.state().tileCount === 0 && !open()}>
           <div class={styles.hint}>
             <StageHint>
-              Draw with the pen. Tap the pebble for tools, drag it for size and opacity, circle it with a finger to
-              rewind.
+              Draw with the pen. Tap the pebble for tools and drag it anywhere; hold it, then drag, for size and
+              opacity; circle it with a finger to rewind.
             </StageHint>
           </div>
         </Show>
@@ -241,6 +243,15 @@ export function ZenStudio(props: PaintVariantProps) {
                       }}
                       hand={settings.hand()}
                       onHand={settings.setHand}
+                      paletteOpen={session.windows.isOpen('palette')}
+                      onPalette={() => {
+                        setOpen(undefined);
+                        session.windows.toggle('palette');
+                      }}
+                      onPen={() => {
+                        setOpen(undefined);
+                        session.windows.open('pen');
+                      }}
                       fullscreen={{ active: fullscreen.isActive(), supported: document.fullscreenEnabled }}
                       onFullscreen={() => void fullscreen.props.onClick()}
                       experimentsHref={props.experimentsHref}
@@ -312,9 +323,9 @@ export function ZenStudio(props: PaintVariantProps) {
             adjustable={session.paintsWithBrush() && session.canChangeBrush() && !session.blockCursor()}
             counter={counter()}
             onTap={() => setOpen(open() ? undefined : { kind: 'fan' })}
-            onCarry={(point) => {
+            onCarry={(center) => {
               setOpen(undefined);
-              pebble.carry(point);
+              pebble.carry(center);
             }}
             onDrop={pebble.drop}
             onAdjust={(patch) => tools.updateBrush(patch)}

@@ -1,6 +1,6 @@
 import type { Brush } from '@app-game/paint-core/brush';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
-import { defaultPlacement, mirrorPlacement, type Placement } from './placement';
+import { defaultPlacement, mirrorPlacement, parsePlacement, type Placement } from './placement';
 import { defaultSlots, type ToolShape, type ToolSlot } from './tools';
 
 /**
@@ -29,7 +29,7 @@ export function createZenSettings() {
         write({ ...current, hand, placement: mirrorPlacement(current.placement) });
       }
     },
-    /** Where the pebble rests. */
+    /** Where the pebble rests: anywhere on screen, flush with the free hand's side at first. */
     placement: () => state().placement,
     setPlacement(placement: Placement) {
       write({ ...latest(), placement });
@@ -73,7 +73,8 @@ const storageKey = 'paint.zen';
 function read(): ZenState {
   const stored = parse();
   const hand: Hand = stored.hand === 'right' ? 'right' : 'left';
-  const placement = isPlacement(stored.placement) ? stored.placement : defaultPlacement(hand);
+  // Places stored before the pebble could rest anywhere name an edge; they load as the same spot.
+  const placement = parsePlacement(stored.placement) ?? defaultPlacement(hand);
   const slots = defaultSlots.map((fallback, index) => {
     const slot = Array.isArray(stored.slots) ? (stored.slots[index] as Partial<ToolSlot> | undefined) : undefined;
     return slot && typeof slot.preset === 'string' && isShape(slot.shape) && isRecord(slot.settings)
@@ -101,16 +102,6 @@ function parse(): Record<string, unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isPlacement(value: unknown): value is Placement {
-  return (
-    isRecord(value) &&
-    (value.edge === 'top' || value.edge === 'right' || value.edge === 'bottom' || value.edge === 'left') &&
-    typeof value.t === 'number' &&
-    value.t >= 0 &&
-    value.t <= 1
-  );
 }
 
 function isShape(value: unknown): value is ToolShape {

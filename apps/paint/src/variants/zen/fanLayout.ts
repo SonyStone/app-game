@@ -1,4 +1,4 @@
-import type { Point, ViewSize } from './placement';
+import { pebbleRadius, type Point, type ViewSize } from './placement';
 
 /**
  * Places the fan's rings of items around the pebble at `center`, opening toward `inward` (radians, screen angles):
@@ -35,6 +35,25 @@ export type FanRing = {
 
 /** A placed ring: its radius and its items' centers, clockwise. */
 export type FanRingLayout = { radius: number; points: Point[] };
+
+/** The fan's nearest ring: undo, "more" and redo, a fingertip's width clear of the pebble. */
+export const historyRing: FanRing = {
+  count: 3,
+  item: 44,
+  spacing: 54,
+  spread: 'full',
+  minRadius: pebbleRadius + 26 + 22,
+  gap: 0
+};
+
+/** The fan's middle ring: the brushes and the eraser; `count` follows the brushes. */
+export const toolRing: FanRing = { count: 6, item: 52, spacing: 58, spread: 'compact', minRadius: 0, gap: 60 };
+
+/** The fan's outer ring: the colors; `count` follows the colors offered. */
+export const colorRing: FanRing = { count: 7, item: 32, spacing: 40, spread: 'compact', minRadius: 0, gap: 54 };
+
+/** Distance from the pebble's center to the near side of a sheet beside the fan: just beyond the nearest ring. */
+export const sheetOffset = historyRing.minRadius + historyRing.item / 2 + 12;
 
 function placeRing(center: Point, inward: number, view: ViewSize, ring: FanRing, start: number): FanRingLayout {
   const margin = ring.item / 2 + 4;
@@ -101,7 +120,10 @@ function spreadOver(
 
 /**
  * The top-left corner of a sheet of `size` that opens from the pebble at `center` toward `inward`: its near side
- * `offset` pixels from the pebble's center along that direction, kept `margin` pixels inside the view.
+ * `offset` pixels from the pebble's center along that direction, kept `margin` pixels inside the view. When the view
+ * pushes the sheet back over the pebble's `offset` circle, as for a tall sheet below a pebble in the open, it opens
+ * to the side, above or below instead, whichever is nearest `inward` and stays clear of the circle; failing all, it
+ * goes where it covers the circle least.
  */
 export function placeSheet(
   center: Point,
@@ -111,8 +133,35 @@ export function placeSheet(
   offset = 40,
   margin = 12
 ): Point {
-  const dx = Math.cos(inward);
-  const dy = Math.sin(inward);
+  const turn = (angle: number) => Math.abs(Math.atan2(Math.sin(angle - inward), Math.cos(angle - inward)));
+  const sides = [0, Math.PI / 2, Math.PI, -Math.PI / 2].sort((a, b) => turn(a) - turn(b));
+  let best: { at: Point; clearance: number } | undefined;
+  for (const direction of [inward, ...sides]) {
+    const at = sheetToward(center, direction, size, view, offset, margin);
+    const clearance = distanceToBox(center, at, size);
+    if (clearance >= offset - 0.5) {
+      return at;
+    }
+
+    if (!best || clearance > best.clearance) {
+      best = { at, clearance };
+    }
+  }
+
+  return best!.at;
+}
+
+/** The sheet's top-left corner with its near side `offset` from `center` toward `direction`, inside the view. */
+function sheetToward(
+  center: Point,
+  direction: number,
+  size: { width: number; height: number },
+  view: ViewSize,
+  offset: number,
+  margin: number
+): Point {
+  const dx = Math.cos(direction);
+  const dy = Math.sin(direction);
   // How far the sheet's center lies from its near side along the direction.
   const half = (Math.abs(dx) * size.width) / 2 + (Math.abs(dy) * size.height) / 2;
   const x = center.x + dx * (offset + half) - size.width / 2;
@@ -121,6 +170,13 @@ export function placeSheet(
     x: clamp(x, margin, view.width - margin - size.width),
     y: clamp(y, margin, view.height - margin - size.height)
   };
+}
+
+/** Distance from `point` to the nearest point of the box at `at` of `size`; 0 inside it. */
+function distanceToBox(point: Point, at: Point, size: { width: number; height: number }) {
+  const x = clamp(point.x, at.x, at.x + size.width);
+  const y = clamp(point.y, at.y, at.y + size.height);
+  return Math.hypot(point.x - x, point.y - y);
 }
 
 /** `value` within `min`…`max`; `min` wins when the range is empty. */

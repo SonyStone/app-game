@@ -57,14 +57,12 @@
   color: var(--zen-quiet);
 }
 
-/* The pebble */
+/* The pebble: `Pebble` sizes it after `pebbleRadius`. */
 
 .pebble {
   position: absolute;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
   translate: -50% -50%;
   border-radius: 50%;
   background: var(--zen-surface);
@@ -85,13 +83,22 @@
 }
 
 .pebble[data-lifted] {
-  scale: 1.14;
+  scale: 1.1;
   transition:
     opacity 280ms,
     scale 160ms;
   box-shadow:
     0 0 0 0.5px var(--zen-line),
     0 10px 28px rgb(0 0 0 / 0.18);
+}
+
+/* A held press woke the brush controls: the pebble is pressed in, ringed like a chosen tool. */
+.pebble[data-adjusting] {
+  background: var(--zen-pressed);
+  scale: 1.06;
+  box-shadow:
+    0 0 0 1.5px #636366,
+    var(--zen-shadow);
 }
 
 .pebble[data-hidden] {
@@ -119,7 +126,7 @@
 }
 
 .counter {
-  font-size: 12px;
+  font-size: 17px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;

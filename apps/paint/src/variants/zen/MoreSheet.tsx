@@ -7,8 +7,9 @@ import styles from './ZenStudio.module.css';
 
 /**
  * What the fan's "more" opens, without titles: the layers, top first, with the active one's commands under them;
- * then the drawing's file commands (export, save, open, insert an image); then brush import, the drawing hand, full
- * screen and the way back to the other variants. Layer changes are undoable document commands.
+ * then the drawing's file commands (export, save, open, insert an image); then brush import and the mixing palette;
+ * then the drawing hand, the pen settings, full screen and the way back to the other variants. Layer changes are
+ * undoable document commands.
  */
 export function MoreSheet(props: {
   state: DocumentState;
@@ -20,6 +21,12 @@ export function MoreSheet(props: {
   onOpen: (file: File) => void;
   onInsertImage: (file: File) => void;
   onImportBrushes: () => void;
+  /** The session's mixing palette window is open. */
+  paletteOpen: boolean;
+  /** Shows or hides the mixing palette window. */
+  onPalette: () => void;
+  /** Opens the session's Pen window: palm rejection and the pen hover. */
+  onPen: () => void;
   hand: Hand;
   onHand: (hand: Hand) => void;
   fullscreen: { active: boolean; supported: boolean };
@@ -154,6 +161,15 @@ export function MoreSheet(props: {
         <span>Import brushes…</span>
         <small>.abr</small>
       </button>
+      <button
+        class={styles.row}
+        role="switch"
+        aria-checked={props.paletteOpen ? 'true' : 'false'}
+        onClick={() => props.onPalette()}
+      >
+        <span>Mixing palette</span>
+        <small>{props.paletteOpen ? 'on' : 'off'}</small>
+      </button>
       <hr class={styles.rule} />
       <div class={styles.chips} role="radiogroup" aria-label="Drawing hand">
         <For each={hands}>
@@ -169,6 +185,10 @@ export function MoreSheet(props: {
           )}
         </For>
       </div>
+      <button class={styles.row} onClick={() => props.onPen()}>
+        <span>Pen…</span>
+        <small>palm rejection</small>
+      </button>
       <Show when={props.fullscreen.supported}>
         <button
           class={styles.row}

@@ -6,10 +6,11 @@ import { scrubAxis, scrubValue } from './scrub';
 
 /**
  * The pebble: the one thing on the page. It shows the brush as a dot of its color, sized by its size and faded by its
- * opacity (a ring for the eraser), or a short `counter` such as rewind steps. A tap runs `onTap`; a press that drags
- * changes the brush, up and down its size and sideways its opacity, with a live preview of the dab beside the press,
- * clear of the hand and the pebble; a press held still for a moment picks the pebble up, and it follows the pointer
- * until dropped.
+ * opacity (a ring for the eraser), or a short `counter` such as rewind steps. A tap runs `onTap`. A press that moves
+ * past a fingertip's tremble carries the pebble: it follows the pointer, held where it was grabbed, and rests where it
+ * is let go. A press held still for a moment instead wakes the brush controls, with a live preview of the dab beside
+ * the press, clear of the hand and the pebble: dragging on then changes the brush, up and down its size and sideways
+ * its opacity. The same for the pen, a finger and the mouse.
  */
 export function Pebble(props: {
   /** Center in client pixels. */
@@ -28,23 +29,36 @@ export function Pebble(props: {
   /** The view's zoom, for the preview's true on-screen size. */
   zoom: number;
   maxSize: number;
-  /** Size and opacity can change now. */
+  /** Size and opacity can change now; otherwise a held press does nothing until it moves, and then carries. */
   adjustable: boolean;
   /** Replaces the brush dot while set. */
   counter?: string;
   onTap: () => void;
-  onCarry: (point: Point) => void;
-  onDrop: (point: Point) => void;
+  /** The pebble is carried with its center at `center`, unclamped; called for every move. */
+  onCarry: (center: Point) => void;
+  /** The carried pebble is let go with its center at `center`, unclamped. */
+  onDrop: (center: Point) => void;
   /** A drag changed the brush. */
   onAdjust: (patch: { size?: number; opacity?: number }) => void;
   /** A drag that changed the brush lifted; `patch` holds its final values. */
   onAdjusted: (patch: { size?: number; opacity?: number }) => void;
 }) {
-  /** What the press in progress does, once decided. */
-  const [mode, setMode] = createSignal<'size' | 'opacity' | 'carry'>();
-  /** Where the press is while it drags, which the preview follows. */
+  /**
+   * What the press in progress does, once decided: `carry` moves the pebble, `adjust` waits for the drag's axis after
+   * a held press, `size` and `opacity` change the brush. Kept in a plain variable for the handlers, which must see a
+   * change at once, and mirrored in a signal for the view.
+   */
+  let gesture: Gesture | undefined;
+  const [shown, setShown] = createSignal<Gesture>();
+  const enter = (next: Gesture | undefined) => {
+    gesture = next;
+    setShown(next);
+  };
+  /** Where the press is while it adjusts the brush, which the preview follows. */
   const [pointer, setPointer] = createSignal<Point>();
   let hold: ReturnType<typeof setTimeout> | undefined;
+  /** The press's offset from the pebble's center, kept while carrying so the pebble does not jump under the pointer. */
+  let grab: Point = { x: 0, y: 0 };
   /** The brush when the press started, and the latest value the drag set. */
   let from = { size: 0, opacity: 1 };
   let last: { size?: number; opacity?: number } = {};
@@ -54,6 +68,7 @@ export function Pebble(props: {
   };
   onCleanup(stopHold);
 
+  const carried = (press: Press) => ({ x: press.point.x - grab.x, y: press.point.y - grab.y });
   const adjust = (press: Press, axis: 'size' | 'opacity') => {
     const offset = { x: press.point.x - press.start.x, y: press.point.y - press.start.y };
     if (axis === 'size') {
@@ -85,39 +100,45 @@ export function Pebble(props: {
   };
   // Created once: an inline spread would be re-run, and lose the press, whenever another attribute changes.
   const press = pressHandlers({
+    tapDistance: dragSlop,
     start(started) {
-      setMode(undefined);
+      enter(undefined);
+      grab = { x: started.start.x - props.center.x, y: started.start.y - props.center.y };
       from = { size: props.brush.size, opacity: props.brush.opacity };
       last = {};
       hold = setTimeout(() => {
         hold = undefined;
-        if (!started.moved) {
-          setMode('carry');
-          props.onCarry(started.point);
+        if (!started.moved && gesture === undefined && props.adjustable) {
+          enter('adjust');
+          setPointer(started.point);
         }
-      }, carryHoldMs);
+      }, adjustHoldMs);
     },
     move(current) {
-      const now = mode();
-      if (now === 'carry') {
-        props.onCarry(current.point);
+      if (gesture === 'carry') {
+        props.onCarry(carried(current));
         return;
       }
 
-      if (now) {
-        adjust(current, now);
+      if (gesture === 'size' || gesture === 'opacity') {
+        adjust(current, gesture);
         return;
       }
 
-      const axis = scrubAxis({ x: current.point.x - current.start.x, y: current.point.y - current.start.y }, 8);
-      if (axis) {
-        stopHold();
-        if (!props.adjustable) {
-          return;
+      if (gesture === 'adjust') {
+        const axis = scrubAxis({ x: current.point.x - current.start.x, y: current.point.y - current.start.y }, 8);
+        if (axis) {
+          enter(axis);
+          adjust(current, axis);
         }
 
-        setMode(axis);
-        adjust(current, axis);
+        return;
+      }
+
+      if (current.moved) {
+        stopHold();
+        enter('carry');
+        props.onCarry(carried(current));
       }
     },
     end(ended) {
@@ -126,12 +147,12 @@ export function Pebble(props: {
     },
     tap(tapped) {
       stopHold();
-      if (mode() === 'carry') {
+      // A held press, or one whose small drag changed the brush, is no tap.
+      if (gesture !== undefined) {
         finish(tapped);
         return;
       }
 
-      setMode(undefined);
       props.onTap();
     },
     cancel(cancelled) {
@@ -140,14 +161,14 @@ export function Pebble(props: {
     }
   });
 
-  /** Drops a carried pebble or reports the drag's final values. */
+  /** Rests a carried pebble or reports the drag's final values. */
   function finish(ended: Press) {
-    const was = mode();
-    setMode(undefined);
+    const was = gesture;
+    enter(undefined);
     setPointer(undefined);
     if (was === 'carry') {
-      props.onDrop(ended.point);
-    } else if (was && (last.size !== undefined || last.opacity !== undefined)) {
+      props.onDrop(carried(ended));
+    } else if ((was === 'size' || was === 'opacity') && (last.size !== undefined || last.opacity !== undefined)) {
       props.onAdjusted(last);
     }
   }
@@ -155,11 +176,12 @@ export function Pebble(props: {
   /** The dot's diameter: the brush size on a log scale, from a speck to most of the pebble. */
   const dot = () => {
     const share = Math.log2(Math.max(1, props.brush.size)) / Math.log2(Math.max(2, props.maxSize));
-    return 6 + Math.min(1, Math.max(0, share)) * 22;
+    return 8 + Math.min(1, Math.max(0, share)) * (2 * pebbleRadius - 32);
   };
-  const scrubbing = () => {
-    const now = mode();
-    return now === 'size' || now === 'opacity' ? now : undefined;
+  /** The brush controls are awake: the axis a drag adjusts, or `adjust` before it has chosen one. */
+  const adjusting = () => {
+    const now = shown();
+    return now === 'carry' ? undefined : now;
   };
   /** The preview dab's diameter on screen, capped so that a huge brush still fits beside the pebble. */
   const dab = () => Math.min(previewCap, Math.max(2, props.brush.size * props.zoom));
@@ -169,13 +191,19 @@ export function Pebble(props: {
       <div
         class={styles.pebble}
         role="button"
-        aria-label="Tools · press and drag for size and opacity · hold to move"
+        aria-label="Tools · drag to move · hold, then drag for size and opacity"
         aria-expanded={props.open ? 'true' : 'false'}
         data-hidden={props.hidden ? '' : undefined}
         data-open={props.open ? '' : undefined}
-        data-lifted={props.lifted || mode() === 'carry' ? '' : undefined}
+        data-lifted={props.lifted || shown() === 'carry' ? '' : undefined}
+        data-adjusting={adjusting() ? '' : undefined}
         data-zen-ui=""
-        style={{ left: `${props.center.x}px`, top: `${props.center.y}px` }}
+        style={{
+          left: `${props.center.x}px`,
+          top: `${props.center.y}px`,
+          width: `${2 * pebbleRadius}px`,
+          height: `${2 * pebbleRadius}px`
+        }}
         {...press}
       >
         <Show
@@ -196,13 +224,13 @@ export function Pebble(props: {
           {(counter) => <span class={styles.counter}>{counter()}</span>}
         </Show>
       </div>
-      <Show when={scrubbing()}>
+      <Show when={adjusting()}>
         {(axis) => (
           <div
             class={styles.preview}
             style={{ left: `${preview().x}px`, top: `${preview().y}px` }}
             aria-live="polite"
-            data-axis={axis()}
+            data-axis={axis() === 'adjust' ? undefined : axis()}
           >
             <span
               class={styles.dab}
@@ -225,8 +253,13 @@ export function Pebble(props: {
   );
 }
 
-/** How long a still press waits before it picks the pebble up, in milliseconds. */
-const carryHoldMs = 420;
+/** What a press on the pebble does once decided; see `Pebble`. */
+type Gesture = 'carry' | 'adjust' | 'size' | 'opacity';
+
+/** CSS pixels a press may move and still be a tap or a hold; beyond them it carries the pebble. */
+const dragSlop = 10;
+/** How long a still press waits before it wakes the brush controls, in milliseconds. */
+const adjustHoldMs = 380;
 /** The largest preview dab, in CSS pixels. */
 const previewCap = 220;
 
