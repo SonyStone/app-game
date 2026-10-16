@@ -42,13 +42,13 @@ export function ColorPickers() {
       }
     >
       <CanvasRow title="Picker alone" note="in the Color panel's width">
-        <PickerSpecimen id="color-pickers/alone/triangle" label="Triangle">
+        <PickerSpecimen id="color-pickers/alone/triangle" label="Triangle" part="triangle">
           {(color, setColor) => <HueTriangle color={color()} onChange={setColor} onSettle={() => {}} />}
         </PickerSpecimen>
-        <PickerSpecimen id="color-pickers/alone/oklch-wheel" label="OKLCH wheel">
+        <PickerSpecimen id="color-pickers/alone/oklch-wheel" label="OKLCH wheel" part="oklch-wheel">
           {(color, setColor) => <Wheel color={color()} onChange={setColor} />}
         </PickerSpecimen>
-        <PickerSpecimen id="color-pickers/alone/coolorus" label="Coolorus (RYB, lightness lock)">
+        <PickerSpecimen id="color-pickers/alone/coolorus" label="Coolorus (RYB, lightness lock)" part="coolorus">
           {(color, setColor) => <Coolorus color={color()} onChange={setColor} />}
         </PickerSpecimen>
         <ProcreateSpecimen />
@@ -65,7 +65,7 @@ export function ColorPickers() {
       <CanvasRow title="In the variants" note="each in its variant's frame">
         <PuckColorSpecimen />
         <DesktopColorSpecimen />
-        <PickerSpecimen id="color-pickers/variants/zen-disc" label="Zen disc">
+        <PickerSpecimen id="color-pickers/variants/zen-disc" label="Zen disc" part="zen-disc">
           {(color, setColor) => (
             <ZenFrame>
               <ColorDisc color={color()} onInput={setColor} onCommit={() => {}} />
@@ -105,6 +105,8 @@ export function ColorPickers() {
 function PickerSpecimen(props: {
   id: string;
   label: string;
+  /** The page part it is, for the page constructor. */
+  part?: string;
   children: (color: () => string, setColor: (color: string) => void) => JSX.Element;
 }) {
   const [color, setColor] = createSignal(startColor);
@@ -113,6 +115,7 @@ function PickerSpecimen(props: {
     <Specimen
       id={props.id}
       label={props.label}
+      part={props.part}
       below={<TestStrip brush={stripBrush({ color: color() })} width={panelContentWidth} />}
     >
       <PickerBox>{props.children(color, setColor)}</PickerBox>
@@ -126,7 +129,12 @@ function PanelSpecimen(props: { id: string; label: string; picker: (typeof panel
   const [picker, setPicker] = createSignal<string>(untrack(() => props.picker));
 
   return (
-    <Specimen id={props.id} label={props.label} below={<TestStrip brush={brush()} width={panelWidth} />}>
+    <Specimen
+      id={props.id}
+      label={props.label}
+      part="studio-color"
+      below={<TestStrip brush={brush()} width={panelWidth} />}
+    >
       <div class={styles.studioPanel}>
         <ColorPanel
           brush={brush()}
@@ -223,6 +231,7 @@ function ProcreateSpecimen() {
     <Specimen
       id="color-pickers/alone/procreate-disc"
       label="Procreate disc (in its Colors popover)"
+      part="procreate-colors"
       below={<TestStrip brush={stripBrush({ color: color() })} width={procreateColorsWidth + 40} />}
     >
       <ProcreateFrame width={procreateColorsWidth} label="Colors">
@@ -259,6 +268,7 @@ function PuckColorSpecimen() {
     <Specimen
       id="color-pickers/variants/puck-card"
       label="Puck color card"
+      part="puck-color"
       below={<TestStrip brush={stripBrush({ color: color() })} width={puckBoxes.color.width + 32} />}
     >
       <PuckFrame boxes={[puckBoxes.color]}>
@@ -290,6 +300,7 @@ function DesktopColorSpecimen() {
     <Specimen
       id="color-pickers/variants/desktop-panel"
       label="Desktop color panel"
+      part="desktop-color"
       below={<TestStrip brush={stripBrush({ color: colors().color })} width={desktopDockWidth} />}
     >
       <DesktopFrame width={desktopDockWidth}>

@@ -30,17 +30,17 @@ export function LayersPanels() {
       }
     >
       <CanvasRow title="Panels" note="the same four layers">
-        <Specimen id="layers/panels/studio" label="Studio">
+        <Specimen id="layers/panels/studio" label="Studio" part="studio-layers">
           <StudioLayers layers={fourLayers} />
         </Specimen>
-        <Specimen id="layers/panels/procreate" label="Procreate">
+        <Specimen id="layers/panels/procreate" label="Procreate" part="procreate-layers">
           <ProcreateFrame width={procreateLayersWidth} label="Layers">
             <SeededLayers layers={fourLayers}>
               {(layers) => <LayersPopover state={layers.state()} ready onAction={layers.onAction} />}
             </SeededLayers>
           </ProcreateFrame>
         </Specimen>
-        <Specimen id="layers/panels/puck" label="Puck">
+        <Specimen id="layers/panels/puck" label="Puck" part="puck-layers">
           <PuckFrame boxes={[puckBoxes.layers]}>
             <SeededLayers layers={fourLayers}>
               {(layers) => (
@@ -57,7 +57,7 @@ export function LayersPanels() {
             </SeededLayers>
           </PuckFrame>
         </Specimen>
-        <Specimen id="layers/panels/desktop" label="Desktop">
+        <Specimen id="layers/panels/desktop" label="Desktop" part="desktop-layers">
           <DesktopFrame width={284}>
             <SeededLayers layers={fourLayers}>
               {(layers) => (

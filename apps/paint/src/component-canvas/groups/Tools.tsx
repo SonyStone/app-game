@@ -29,7 +29,7 @@ export function Tools() {
       }
     >
       <CanvasRow title="Tool rails" note="a press chooses, as in the app">
-        <Specimen id="tools/rails/studio" label="Studio">
+        <Specimen id="tools/rails/studio" label="Studio" part="studio-tools">
           <StudioRail />
         </Specimen>
         <Specimen id="tools/rails/desktop" label="Desktop">

@@ -40,7 +40,7 @@ export function SeededLayers(props: {
 export type LayerSeed = Pick<LayerInfo, 'name'> & Partial<Pick<LayerInfo, 'visible' | 'alphaLock' | 'clipping'>>;
 
 /** A paint-core document holding `layers`, bottom first, with the top one selected. */
-function seededDocument(layers: readonly LayerSeed[]) {
+export function seededDocument(layers: readonly LayerSeed[]) {
   const drawing = createDocument();
   for (const [index, seed] of layers.entries()) {
     if (index > 0) {

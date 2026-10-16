@@ -2,6 +2,7 @@ import type { JSX } from '@solidjs/web';
 import { createContext, createSignal, Show, useContext } from 'solid-js';
 import styles from './ComponentCanvas.module.css';
 import type { createChoices } from './createChoices';
+import { PageConstructor } from './createPageConstructor';
 
 /**
  * A group of the canvas: every variant of one kind of component under a small title, in a dashed frame. `id` names it
@@ -45,9 +46,17 @@ export function CanvasRow(props: { title: string; note?: string; children: JSX.E
  * One component on the canvas with its caption: `label`, a star and a comment, kept by `createChoices` under `id`,
  * which must stay the same when the label changes. The component goes inside `data-canvas-content`, so that the canvas
  * leaves its input alone; `below` holds what belongs to the specimen but is not the component, such as its test strip.
+ * `part` names the page part (`layoutParts`) it is: a grip in the caption then drags it into the page constructor.
  */
-export function Specimen(props: { id: string; label: string; below?: JSX.Element; children: JSX.Element }) {
+export function Specimen(props: {
+  id: string;
+  label: string;
+  part?: string;
+  below?: JSX.Element;
+  children: JSX.Element;
+}) {
   const choices = useContext(SpecimenChoices);
+  const constructor = useContext(PageConstructor);
   const path = useContext(SpecimenPath);
   const [editing, setEditing] = createSignal(false);
   const fileLabel = () => [...path, props.label].join(' · ');
@@ -64,6 +73,26 @@ export function Specimen(props: { id: string; label: string; below?: JSX.Element
       {props.below}
       <figcaption class={styles.caption}>
         <span class={styles.label}>{props.label}</span>
+        <Show when={constructor && props.part}>
+          {(part) => (
+            <button
+              class={[styles.captionButton, styles.dragGrip]}
+              aria-label={`Drag ${props.label} into the page constructor`}
+              title="Drag into the page constructor"
+              data-canvas-content
+              onPointerDown={(event) => {
+                if (event.pointerType !== 'mouse' || event.button === 0) {
+                  event.preventDefault();
+                  constructor!.startDrag(part(), event);
+                }
+              }}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01" />
+              </svg>
+            </button>
+          )}
+        </Show>
         <button
           class={styles.captionButton}
           aria-label={choice()?.star ? `Unstar ${props.label}` : `Star ${props.label}`}

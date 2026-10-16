@@ -4,13 +4,16 @@ import { createFreshTab, FreshTabNotice } from '../features/fresh-tab';
 import { createPalmRejection, createPalmRejectionSettings } from '../features/palm-rejection';
 import { createPenHover } from '../features/pen-hover';
 import { watchTapTargets } from '../mockups/puck-gallery/kit/watchTapTargets';
+import { layoutParts } from '../variants/layout/parts';
 import styles from './ComponentCanvas.module.css';
 import { createCanvasCamera } from './createCanvasCamera';
 import { createCanvasGestures } from './createCanvasGestures';
 import { createChoices, type ChoicesStatus } from './createChoices';
+import { createPageConstructor, PageConstructor } from './createPageConstructor';
 import { createViewportPopups } from './createViewportPopups';
 import { BrushCards } from './groups/BrushCards';
 import { ColorPickers } from './groups/ColorPickers';
+import { Constructor } from './groups/Constructor';
 import { FeaturePanels } from './groups/FeaturePanels';
 import { Icons } from './groups/Icons';
 import { LayersPanels } from './groups/LayersPanels';
@@ -40,6 +43,8 @@ import { createStripDevice, StripDevice } from './TestStrip';
  *   settings. The canvas wires those modules itself: the drawing session wires them too, but together with its engine
  *   and the saved drawing, which the canvas has no use for.
  * - The canvas keeps only its camera; stars and comments go to the repository through `createChoices`.
+ * - Its page constructor (`Constructor`) places parts on a MovinkPad-sized screen and builds them into a variant page
+ *   on the drawing session (see `variants/layout`); specimens of page parts drag into it.
  *
  * Served at `/paint/components` of the web app, so that `pnpm dev:tablet` opens it on the tablet. Type the address in
  * a new tab: a tab opened by `adb shell am start` loses the pen's hover.
@@ -85,6 +90,7 @@ export function ComponentCanvas() {
   const gestures = createCanvasGestures({ viewport, camera, paused: () => stage() !== undefined });
   const choices = createChoices();
   const stripDevice = createStripDevice();
+  const pageConstructor = createPageConstructor();
 
   // Both run from handlers and from the mount effect's callback, which must not read signals.
   const fitAll = () => {
@@ -127,18 +133,21 @@ export function ComponentCanvas() {
           <CanvasStage value={setStage}>
             <StripDevice value={stripDevice}>
               <SpecimenChoices value={choices}>
-                <WholeUis />
-                <ColorPickers />
-                <BrushCards />
-                <LayersPanels />
-                <Numbers />
-                <Tools />
-                <Panels />
-                <FeaturePanels />
-                <Icons />
-                <Pucks />
-                <TileCluster />
-                <Styles />
+                <PageConstructor value={pageConstructor}>
+                  <Constructor />
+                  <WholeUis />
+                  <ColorPickers />
+                  <BrushCards />
+                  <LayersPanels />
+                  <Numbers />
+                  <Tools />
+                  <Panels />
+                  <FeaturePanels />
+                  <Icons />
+                  <Pucks />
+                  <TileCluster />
+                  <Styles />
+                </PageConstructor>
               </SpecimenChoices>
             </StripDevice>
           </CanvasStage>
@@ -170,6 +179,14 @@ export function ComponentCanvas() {
 
       <Show when={stage()}>
         {(current) => <StageView stage={current()} onClose={() => setStage(undefined)} />}
+      </Show>
+
+      <Show when={pageConstructor.dragging()}>
+        {(drag) => (
+          <div class={styles.dragGhost} style={{ left: `${drag().at.x}px`, top: `${drag().at.y}px` }}>
+            {layoutParts[drag().part]?.name ?? drag().part}
+          </div>
+        )}
       </Show>
 
       <Show when={ghost()}>
@@ -208,6 +225,7 @@ function StageView(props: { stage: Stage; onClose: () => void }): JSX.Element {
 
 /** The groups in canvas order, for the panel's list; each group's element carries the same `data-group`. */
 const groups = [
+  { id: 'constructor', title: 'Page' },
   { id: 'whole-uis', title: 'Whole UIs' },
   { id: 'color-pickers', title: 'Color pickers' },
   { id: 'brush-cards', title: 'Brushes' },

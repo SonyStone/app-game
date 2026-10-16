@@ -111,6 +111,7 @@ function ProcreateLibrary() {
     <Specimen
       id="brush-cards/procreate/library"
       label="Procreate library"
+      part="procreate-brushes"
       below={<TestStrip brush={brush()} width={procreateLibraryWidth + 40} />}
     >
       <ProcreateFrame width={procreateLibraryWidth} label="Brush Library">

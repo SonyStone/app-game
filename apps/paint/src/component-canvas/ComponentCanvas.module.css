@@ -719,3 +719,102 @@
     background: var(--bg-2);
   }
 }
+
+/* The page constructor (`groups/Constructor.tsx`): its controls, the MovinkPad-sized screen and the parts on it. */
+.constructorBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 1646px;
+
+  button,
+  select,
+  input {
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid #d8d8d8;
+    border-radius: 8px;
+    background: #fafafa;
+    color: var(--ink);
+  }
+
+  button[aria-pressed='true'] {
+    background: #ececec;
+  }
+
+  button:disabled {
+    opacity: 0.45;
+  }
+
+  input {
+    width: 180px;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+}
+
+.constructorStatus {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.constructorScreen {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #faf8f4;
+  box-shadow:
+    inset 0 0 0 1px #0000001f,
+    0 2px 12px #0000000f;
+}
+
+.constructorPart {
+  position: absolute;
+  display: grid;
+  gap: 2px;
+}
+
+.constructorHandle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 4px 0 10px;
+  border-radius: 7px;
+  background: #0000000d;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+
+  button {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 15px;
+  }
+}
+
+.dragGrip {
+  cursor: grab;
+  touch-action: none;
+}
+
+/* The part being dragged in from a specimen, beside the pointer, over everything. */
+.dragGhost {
+  position: fixed;
+  z-index: 960;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #3a3a3aee;
+  color: #fff;
+  font-size: 11px;
+  pointer-events: none;
+  translate: 12px 12px;
+}

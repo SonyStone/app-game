@@ -53,7 +53,7 @@ export function Numbers() {
             <SizeValue layout="inline" />
           </div>
         </Specimen>
-        <Specimen id="numbers/size/size-grid" label="Brush size grid (Studio)">
+        <Specimen id="numbers/size/size-grid" label="Brush size grid (Studio)" part="brush-size">
           <div class={styles.studioBar}>
             <SizeGrid />
           </div>
