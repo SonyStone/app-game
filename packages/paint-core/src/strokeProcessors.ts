@@ -60,14 +60,16 @@ export function createRawProcessor(): StrokeProcessor {
 
 /**
  * Paints given samples as they are, for a stroke replaced as a whole (`replace-stroke`): no smoothing, which would
- * round a shape's corners, and no preview tail, since the samples are final, but the pressure calibration of
- * `processor`, the stroke's own processor, so the replaced stroke presses like the one it replaces.
+ * round a shape's corners, and no preview tail or prediction, since the samples are final and the pen no longer draws
+ * them, but the pressure calibration of `processor`, the stroke's own processor, so the replaced stroke presses like
+ * the one it replaces.
  */
 export function createReplacementProcessor(processor: StrokeProcessor): StrokeProcessor {
   const raw = createRawProcessor();
   const calibrate = processor.calibrate?.bind(processor);
   return {
-    ...raw,
+    preview: raw.preview,
+    finish: raw.finish,
     add: (samples) => {
       const kept = raw.add(samples);
       return calibrate ? kept.map((sample) => ({ ...sample, pressure: calibrate(sample.pressure) })) : kept;

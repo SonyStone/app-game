@@ -1,7 +1,7 @@
 import { createBrushResources } from '@app-game/abr-paint/resources';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createRendererDouble, createStorageDouble } from '../tests/fixtures/rendererDouble';
-import { startStudioRuntime } from '../tests/fixtures/studioRuntime';
+import { startStudioRuntime, untilMicrotasks } from '../tests/fixtures/studioRuntime';
 import { defaultBrush, type Dab, type Sample } from './brush';
 import type { BrushEngine, PaintModules } from './composition/contracts';
 import { createMemoryStorage } from './composition/memoryStorage';
@@ -71,6 +71,35 @@ it('records nothing when the stroke is cancelled after a replacement, and ignore
   expect(renderer.finish).not.toHaveBeenCalled();
   expect(state.document.canUndo).toBe(false);
   expect(events.some((event) => event.type === 'error')).toBe(false);
+});
+
+it('clears the prediction shown ahead of a replaced stroke and shows none after it', async () => {
+  const renderer = createRendererDouble();
+  const { send, init } = startStudioRuntime({ renderer, storage: createStorageDouble() });
+  await init();
+  const brush = defaultBrush();
+  brush.stroke.mode = 'none';
+  const previews = () => renderer.preview.mock.calls.map(([dabs], index) => ({
+    dabs: dabs as readonly Dab[],
+    order: renderer.preview.mock.invocationCallOrder[index]!
+  }));
+  const until = (condition: () => boolean) =>
+    untilMicrotasks(condition, () => `${renderer.preview.mock.calls.length} previews`);
+
+  send({ type: 'begin', brush, zoom: 1, samples: [sample(0, 0)] });
+  send({ type: 'samples', samples: [sample(40, 0)], predicted: [sample(80, 0)] });
+  await until(() => previews().some(({ dabs }) => dabs.some((dab) => dab.x > 60)));
+
+  send({ type: 'replace-stroke', samples: [sample(10, 10), sample(30, 10)] });
+  // The pen moves on while the shape is edited; a prediction sent then is not shown either.
+  send({ type: 'samples', samples: [], predicted: [sample(90, 10)] });
+  send({ type: 'end' });
+  await until(() => renderer.finish.mock.calls.length === 1);
+
+  const afterReplace = renderer.cancel.mock.invocationCallOrder[0]!;
+  const shown = previews().filter(({ order }) => order > afterReplace);
+  expect(shown.length).toBeGreaterThan(0);
+  expect(shown.flatMap(({ dabs }) => dabs).every((dab) => dab.x <= 30)).toBe(true);
 });
 
 it('paints a replacement through the stroke decorations, such as symmetry', async () => {

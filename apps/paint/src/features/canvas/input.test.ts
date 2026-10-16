@@ -128,6 +128,39 @@ describe('input to worker contract', () => {
     expect(order).toEqual(['drag end', 'end']);
     expect(drag.end).toHaveBeenCalledExactlyOnceWith(false);
   });
+  it('sends no predictions and starts no ink trail while a stroke hold edits the stroke, clearing the prediction shown', () => {
+    vi.useFakeTimers();
+    const drag = { move: vi.fn(), fingers: vi.fn(), end: vi.fn() };
+    const drawn = vi.fn(),
+      withheld = vi.fn();
+    const { pointer, commands } = setup(undefined, defaultBrush, undefined, defaultCamera, ...noOptions, {
+      predict: () => true,
+      drawn,
+      withheld,
+      strokeHold: { delay: () => 500, hold: () => drag }
+    });
+    const predicted = (x: number, timeStamp: number) => ({
+      getPredictedEvents: () => [{ clientX: x, clientY: 100, pressure: 0, timeStamp }]
+    });
+    pointer('pointerdown', 100, 100, { pointerType: 'pen', pressure: 0.5 });
+    pointer('pointermove', 300, 100, { pointerType: 'pen', pressure: 0.5, timeStamp: 20, ...predicted(320, 30) });
+    expect(commands.at(-1)).toHaveProperty('predicted', [expect.objectContaining({ time: 30 })]);
+    vi.advanceTimersByTime(500);
+    expect(commands.at(-1)).toEqual({ type: 'samples', samples: [], predicted: [] });
+
+    const sent = commands.length;
+    pointer('pointermove', 350, 150, { pointerType: 'pen', pressure: 0.5, timeStamp: 600, ...predicted(370, 610) });
+    pointer('pointermove', 400, 200, { pointerType: 'pen', pressure: 0.5, timeStamp: 620, ...predicted(420, 630) });
+    expect(commands).toHaveLength(sent);
+    expect(drag.move).toHaveBeenCalledTimes(2);
+    expect(drawn.mock.calls.map(([event]) => event.type)).toEqual(['pointerdown', 'pointermove']);
+    expect(withheld.mock.calls.map(([event]) => [event.clientX, event.clientY])).toEqual([
+      [350, 150],
+      [400, 200]
+    ]);
+    pointer('pointerup', 400, 200, { pointerType: 'pen' });
+    expect(commands.slice(sent).map((command) => command.type)).toEqual(['end']);
+  });
   it('keeps drawing when a stroke hold declines, and cancels its drag on interruption', () => {
     vi.useFakeTimers();
     const drag = { move: vi.fn(), fingers: vi.fn(), end: vi.fn() };

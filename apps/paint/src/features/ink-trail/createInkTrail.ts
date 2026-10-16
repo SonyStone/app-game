@@ -58,9 +58,24 @@ export function createInkTrail(options: {
       } catch {
         // A rejected event or style only loses the trail; the stroke itself is unaffected.
       }
+    },
+    /**
+     * Hides the trail from `event` on, a pen or mouse event of a stroke the engine no longer receives, such as one a
+     * QuickShape edit took over; pass it to the canvas input's `withheld`. The Ink API cannot remove a trail, so this
+     * starts an invisible one at the pen.
+     */
+    withheld(event: PointerEvent) {
+      try {
+        presenter?.updateInkTrailStartPoint(event, hiddenTrail);
+      } catch {
+        // A rejected event or style leaves the trail as it was; the stroke is unaffected.
+      }
     }
   };
 }
+
+/** A trail style that draws nothing. */
+const hiddenTrail = { color: 'transparent', diameter: 1 };
 
 /** The parts of the Ink API this module uses; TypeScript's DOM library does not declare it. */
 type InkApi = { requestPresenter(options: { presentationArea: Element }): Promise<InkPresenter> };

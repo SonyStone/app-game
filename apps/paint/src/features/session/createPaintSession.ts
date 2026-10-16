@@ -474,6 +474,7 @@ export function createPaintSession(options: {
       predict: developer.predictStrokes,
       hover: warmup.hover,
       drawn: inkTrail.drawn,
+      withheld: inkTrail.withheld,
       // The Mixer Brush loads paint with Alt/Option; other painting tools pick a color.
       canvasAction: firstCanvasAction(
         // Alt/Option picks colors even while transforming; the transform then consumes other contacts.

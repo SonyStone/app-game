@@ -80,15 +80,20 @@ export function attachInput(
      * Optional hold at the end of a stroke, such as QuickShape's. A pen or mouse drawing that stays within
      * {@link strokeHoldSlop} CSS pixels for `delay()` milliseconds calls `hold` with the stroke's samples so far, in
      * document pixels. A hold that returns a drag takes the stroke over: its later points go to `move` instead of the
-     * engine, without predictions, `fingers` reports the touches on the canvas, and `end` runs before the stroke's
-     * `end` is sent, at release or with `cancelled` set when interrupted. A prediction already shown is cleared when
-     * the hold takes over. A hold that returns nothing leaves the stroke drawing; it can fire again after the pen moves
-     * on.
+     * engine, without predictions, and their events to `withheld` instead of `drawn`; `fingers` reports the touches on
+     * the canvas, and `end` runs before the stroke's `end` is sent, at release or with `cancelled` set when
+     * interrupted. A prediction already shown is cleared when the hold takes over. A hold that returns nothing leaves
+     * the stroke drawing; it can fire again after the pen moves on.
      */
     strokeHold?: {
       delay: () => number;
       hold: (samples: readonly Sample[]) => StrokeHoldDrag | void;
     };
+    /**
+     * Called instead of `drawn` with each pointer event of a stroke a stroke hold took over, whose points reach the
+     * hold's drag rather than the engine; for example to hide an ink trail, which would otherwise follow the pen.
+     */
+    withheld?: (event: PointerEvent) => void;
     puck?: ReturnType<typeof createNavigationPuck>;
     /** Chooses from controls around the puck with right-drags, such as a radial menu; see `PuckPicker`. */
     puckPicker?: PuckPicker;
@@ -248,6 +253,7 @@ export function attachInput(
       const last = real.at(-1);
       if (last) {
         draw.held.move(last);
+        options.withheld?.(event);
       }
 
       return;

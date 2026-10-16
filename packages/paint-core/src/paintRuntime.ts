@@ -567,11 +567,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     };
     /**
      * Discards the current stroke's pixels and paints `samples` with a new session of the same engine and context,
-     * bypassing smoothing; see the `replace-stroke` command. Nothing is presented in between, so the old stroke does
-     * not flash away.
+     * bypassing smoothing; see the `replace-stroke` command. The prediction shown ahead of the old stroke goes with it.
+     * Nothing is presented in between, so the old stroke does not flash away.
      */
     const replaceStroke = async (start: NonNullable<typeof strokeStart>, samples: Parameters<BrushSession['add']>[0]) => {
       stopIdle();
+      prediction = [];
       const previous = strokeSession;
       strokeSession = undefined;
       previous?.cancel();

@@ -8,7 +8,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('starts the trail from drawn events in the brush color, opacity and size, and never for erasers', async () => {
+it('starts the trail from drawn events in the brush color, opacity and size, never for erasers, and hides it for withheld ones', async () => {
   const update = vi.fn();
   const requestPresenter = vi.fn(async () => ({ updateInkTrailStartPoint: update }));
   vi.stubGlobal('navigator', { ...navigator, ink: { requestPresenter } });
@@ -28,13 +28,19 @@ it('starts the trail from drawn events in the brush color, opacity and size, and
   trail.drawn(event, brush);
   expect(update).toHaveBeenCalledExactlyOnceWith(event, { color: '#11223380', diameter: 10 });
 
+  // A stroke the engine no longer receives hides the trail.
+  trail.withheld(event);
+  expect(update).toHaveBeenLastCalledWith(event, { color: 'transparent', diameter: 1 });
+  update.mockClear();
+
   trail.drawn(event, { ...brush, tool: 'eraser' });
   trail.drawn(event, { ...brush, engine: { id: 'abr', settings: { blendMode: 'Cler' } } });
-  expect(update).toHaveBeenCalledOnce();
+  expect(update).not.toHaveBeenCalled();
 
   setEnabled(false);
   flush();
   trail.drawn(event, brush);
-  expect(update).toHaveBeenCalledOnce();
+  trail.withheld(event);
+  expect(update).not.toHaveBeenCalled();
   dispose();
 });
