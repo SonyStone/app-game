@@ -170,6 +170,68 @@ try {
     assert.equal(await size.textContent(), '32');
   });
 
+  await step('pen latency switches start with only the warm-up on, are described and kept', async () => {
+    const developer = async () => {
+      await page.getByRole('button', { name: 'Drawing menu' }).click();
+      await page.getByRole('button', { name: 'Developer' }).click();
+    };
+    const dialog = page.getByRole('dialog');
+    const predict = dialog.getByRole('checkbox', { name: 'Predict the pen ahead of the stroke' });
+    const ink = dialog.getByRole('checkbox', { name: 'Browser ink trail between frames' });
+    const warm = dialog.getByRole('checkbox', { name: 'Warm the GPU while the pen hovers' });
+    const checked = () => Promise.all([predict.isChecked(), ink.isChecked(), warm.isChecked()]);
+    await developer();
+    assert.deepEqual(await checked(), [false, false, true]);
+    const undescribed = await dialog
+      .getByRole('checkbox')
+      .evaluateAll(
+        (inputs) =>
+          inputs.filter(
+            (input) => !document.getElementById(input.getAttribute('aria-describedby'))?.textContent?.trim()
+          ).length
+      );
+    assert.equal(undescribed, 0, 'Every Developer switch has a description.');
+    await predict.check();
+    await ink.check();
+    await page.getByRole('button', { name: 'Close developer tools' }).click();
+
+    // A hovering pen stroke draws with prediction, the ink trail and the warm-up on.
+    const { cx, cy } = await workspaceCenter(page);
+    const cdp = await page.context().newCDPSession(page);
+    for (let i = 0; i < 4; i++) {
+      await cdp.send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        pointerType: 'pen',
+        x: cx - 40 + i * 10,
+        y: cy
+      });
+    }
+    await cdp.send('Input.dispatchMouseEvent', { ...penContact('mousePressed', { x: cx, y: cy }), force: 0.5 });
+    for (let i = 1; i <= 12; i++) {
+      await cdp.send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        pointerType: 'pen',
+        button: 'left',
+        buttons: 1,
+        force: 0.5,
+        x: cx + i * 10,
+        y: cy + i * 4
+      });
+    }
+    await cdp.send('Input.dispatchMouseEvent', penContact('mouseReleased', { x: cx + 120, y: cy + 48 }));
+    await waitEnabled(page.getByRole('button', { name: 'Undo' }));
+    await waitForSaved(page);
+    await undo(page, 1);
+
+    await page.reload();
+    await waitForSaved(page);
+    await developer();
+    assert.deepEqual(await checked(), [true, true, true]);
+    await predict.uncheck();
+    await ink.uncheck();
+    await page.getByRole('button', { name: 'Close developer tools' }).click();
+  });
+
   await step(
     'the brush panel chooses presets, saves changes as a new preset and sets how the eraser erases',
     async () => {

@@ -20,8 +20,21 @@
 
 .developerControls {
   display: grid;
-  gap: 16px;
-  padding: 18px 0;
+  gap: 14px;
+  margin: 0;
+  padding: 0 0 18px;
+  border: 0;
+
+  & + & {
+    padding-top: 4px;
+    border-top: 1px solid var(--line);
+  }
+
+  legend {
+    padding: 16px 0 2px;
+    font-size: 11px;
+    color: var(--muted);
+  }
 
   label {
     display: flex;
@@ -29,6 +42,20 @@
     gap: 10px;
     font-size: 14px;
   }
+}
+
+/* A switch and its description. */
+.option {
+  display: grid;
+  gap: 2px;
+}
+
+/* Lines up under the switch's name, past the checkbox. */
+.optionNote {
+  margin: 0 0 0 23px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
 }
 
 .developer {

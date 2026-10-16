@@ -55,95 +55,89 @@ export function DeveloperDialog(props: {
           <SketchIcon name="close" size={18} />
         </button>
       </div>
-      <div class={styles.developerControls}>
-        <label>
-          <input
-            type="checkbox"
-            checked={props.settings.debug()}
-            disabled={!props.ready}
-            onChange={(event) => props.settings.setDebug(event.currentTarget.checked)}
-          />
-          Canvas wireframe and palm zone
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={props.settings.liveTail()}
-            onChange={(event) => props.settings.setLiveTail(event.currentTarget.checked)}
-          />
-          Live stroke tail
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={props.settings.predictStrokes()}
-            onChange={(event) => props.settings.setPredictStrokes(event.currentTarget.checked)}
-          />
-          Predict the pen ahead of the stroke
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={props.settings.inkTrail()}
-            onChange={(event) => props.settings.setInkTrail(event.currentTarget.checked)}
-          />
-          Browser ink trail between frames{inkSupported ? '' : ' (unavailable)'}
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={props.settings.warmGpu()}
-            onChange={(event) => props.settings.setWarmGpu(event.currentTarget.checked)}
-          />
-          Warm the GPU while the pen hovers
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={props.settings.showPenCursor()}
-            onChange={(event) => props.settings.setShowPenCursor(event.currentTarget.checked)}
-          />
-          Show cursor while drawing with a pen
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={props.workerEnabled}
-            disabled={props.switching}
-            onChange={(event) => {
-              const enabled = event.currentTarget.checked;
-              event.currentTarget.checked = props.workerEnabled;
-              props.onWorkerEnabledChange(enabled);
-            }}
-          />
-          Web Worker + OffscreenCanvas
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={props.settings.adaptiveQuality()}
-            onChange={(event) => props.settings.setAdaptiveQuality(event.currentTarget.checked)}
-          />
-          Adaptive brush quality
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={props.settings.performanceMonitor()}
-            onChange={(event) => props.settings.setPerformanceMonitor(event.currentTarget.checked)}
-          />
-          Performance monitor
-        </label>
-      </div>
-      <p class={styles.panelNote}>
-        On by default for all brushes. Uses the canvas LOD to reduce work. New strokes may keep reduced detail; no
-        detailed replay.
-      </p>
-      <p class={styles.panelNote} role="status">
-        {props.switching
-          ? 'Switching drawing engine…'
-          : 'Switching keeps the drawing and settings. Undo history and the selection clipboard reset.'}
-      </p>
+      <fieldset class={styles.developerControls}>
+        <legend>Pen latency · remembered on this device</legend>
+        <Switch
+          id="paint-developer-predict"
+          checked={props.settings.predictStrokes()}
+          onChange={props.settings.setPredictStrokes}
+          label="Predict the pen ahead of the stroke"
+          description="Draws the line a bit ahead, where the browser expects the pen. Try it if the line lags; it can overshoot on sharp stops."
+        />
+        <Switch
+          id="paint-developer-ink"
+          checked={props.settings.inkTrail()}
+          onChange={props.settings.setInkTrail}
+          label="Browser ink trail between frames"
+          description={
+            inkSupported
+              ? 'The browser draws a plain line to the pen tip between frames. Try it if the line lags on slow devices.'
+              : 'Not available in this browser. Where it is, the browser draws a plain line to the pen tip between frames.'
+          }
+        />
+        <Switch
+          id="paint-developer-warm"
+          checked={props.settings.warmGpu()}
+          onChange={props.settings.setWarmGpu}
+          label="Warm the GPU while the pen hovers"
+          description="Keeps the GPU busy while the pen hovers, so the first stroke starts faster. Off saves a little battery."
+        />
+      </fieldset>
+      <fieldset class={styles.developerControls}>
+        <legend>Engine and debugging</legend>
+        <Switch
+          id="paint-developer-tail"
+          checked={props.settings.liveTail()}
+          onChange={props.settings.setLiveTail}
+          label="Live stroke tail"
+          description="Shows the newest part of the stroke before smoothing settles it. Turn off only to compare; prediction needs it."
+        />
+        <Switch
+          id="paint-developer-cursor"
+          checked={props.settings.showPenCursor()}
+          onChange={props.settings.setShowPenCursor}
+          label="Show cursor while drawing with a pen"
+          description="Keeps the brush outline visible while a pen draws; it is hidden by default so it does not cover the line."
+        />
+        <Switch
+          id="paint-developer-quality"
+          checked={props.settings.adaptiveQuality()}
+          onChange={props.settings.setAdaptiveQuality}
+          label="Adaptive brush quality"
+          description="Zoomed out, brushes paint with less detail to stay fast. Turn off if those strokes look rough up close."
+        />
+        <Switch
+          id="paint-developer-worker"
+          checked={props.workerEnabled}
+          disabled={props.switching}
+          onChange={(enabled, input) => {
+            input.checked = props.workerEnabled;
+            props.onWorkerEnabledChange(enabled);
+          }}
+          label="Web Worker + OffscreenCanvas"
+          description={
+            props.switching
+              ? 'Switching drawing engine…'
+              : 'Draws in a background thread so the page stays responsive. Turn off only to debug; switching resets undo.'
+          }
+          status
+        />
+        <Switch
+          id="paint-developer-wireframe"
+          checked={props.settings.debug()}
+          disabled={!props.ready}
+          onChange={props.settings.setDebug}
+          label="Canvas wireframe and palm zone"
+          description="Shows tiles, cache statistics and the palm rejection area over the canvas, to debug drawing or palms."
+        />
+        <Switch
+          id="paint-developer-monitor"
+          checked={props.settings.performanceMonitor()}
+          onChange={props.settings.setPerformanceMonitor}
+          label="Performance monitor"
+          description="Shows how long each frame takes on the CPU and GPU, to measure speed. ?performance in the address opens it."
+        />
+      </fieldset>
       <dl>
         <div>
           <dt>Drawing engine</dt>
@@ -180,9 +174,42 @@ export function DeveloperDialog(props: {
         )}
       </Show>
       <p class={styles.panelNote}>
-        Submission measures CPU preparation, not pen latency. The performance monitor adds the wait for GPU work; the
-        <code>?performance</code> query opens it. Execution mode stays in the URL; other switches apply to this session.
+        Submission measures CPU preparation, not pen latency. The performance monitor adds the wait for GPU work.
+        Execution mode stays in the URL; the other engine and debugging switches reset on reload.
       </p>
     </dialog>
+  );
+}
+
+/**
+ * A developer checkbox with its name and a one-line description below, which assistive technology reads with it.
+ * `onChange` receives the requested state and the input, which a caller may reset to show a pending change.
+ * `status` announces description changes.
+ */
+function Switch(props: {
+  id: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean, input: HTMLInputElement) => void;
+  label: string;
+  description: string;
+  status?: boolean;
+}) {
+  return (
+    <div class={styles.option}>
+      <label>
+        <input
+          type="checkbox"
+          checked={props.checked}
+          disabled={props.disabled}
+          aria-describedby={`${props.id}-note`}
+          onChange={(event) => props.onChange(event.currentTarget.checked, event.currentTarget)}
+        />
+        {props.label}
+      </label>
+      <p id={`${props.id}-note`} class={styles.optionNote} role={props.status ? 'status' : undefined}>
+        {props.description}
+      </p>
+    </div>
   );
 }

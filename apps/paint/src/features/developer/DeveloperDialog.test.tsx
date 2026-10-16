@@ -40,8 +40,8 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   const [adaptiveQuality, setAdaptiveQuality] = createSignal(false);
   const [liveTail, setLiveTail] = createSignal(true);
   const [showPenCursor, setShowPenCursor] = createSignal(false);
-  const [predictStrokes, setPredictStrokes] = createSignal(true);
-  const [inkTrail, setInkTrail] = createSignal(true);
+  const [predictStrokes, setPredictStrokes] = createSignal(false);
+  const [inkTrail, setInkTrail] = createSignal(false);
   const [warmGpu, setWarmGpu] = createSignal(true);
   const [rawReceived, setRawReceived] = createSignal(false);
   const [performanceMonitor, setPerformanceMonitor] = createSignal(false);
@@ -88,7 +88,14 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   setRawReceived(true);
   flush();
   expect(dialog.textContent).toContain(supported ? 'Receiving pen events' : 'Unavailable · using pointermove');
-  const [wireframe, tail, predict, ink, warm, cursor, worker, quality, monitor] = [...dialog.querySelectorAll('input')];
+  const inputs = [...dialog.querySelectorAll('input')];
+  const [predict, ink, warm, tail, cursor, quality, worker, wireframe, monitor] = inputs;
+  // Every switch is described by its own line.
+  for (const input of inputs) {
+    const note = document.getElementById(input.getAttribute('aria-describedby')!);
+    expect(note?.textContent?.length).toBeGreaterThan(20);
+  }
+  expect(predict!.closest('fieldset')!.textContent).toContain('remembered on this device');
   wireframe!.click();
   tail!.click();
   predict!.click();
@@ -99,10 +106,11 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   quality!.click();
   monitor!.click();
   flush();
-  expect([predictStrokes(), inkTrail(), warmGpu()]).toEqual([false, false, false]);
+  expect([predictStrokes(), inkTrail(), warmGpu()]).toEqual([true, true, false]);
   expect(adaptiveQuality()).toBe(true);
   expect(onWorkerEnabledChange).toHaveBeenCalledWith(false);
-  expect(dialog.textContent).toContain('Undo history and the selection clipboard reset');
+  expect(worker!.checked).toBe(true);
+  expect(dialog.textContent).toContain('switching resets undo');
   flush();
   expect(debug()).toBe(true);
   expect(liveTail()).toBe(false);
