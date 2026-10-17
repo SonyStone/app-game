@@ -1,11 +1,15 @@
-/* A ring 120 px across and 22 px thick, centered on the point; the hole, 76 px across, magnifies the view. */
+/*
+ * A ring `--loupe-size` across around a hole `--loupe-hole` across, which magnifies the view; both are set by the
+ * component, as is the transform that places the ring relative to the point.
+ */
 .loupe {
+  --loupe-ring: calc((var(--loupe-size) - var(--loupe-hole)) / 2);
+
   position: absolute;
   z-index: 40;
-  width: 120px;
-  height: 120px;
+  width: var(--loupe-size);
+  height: var(--loupe-size);
   border-radius: 50%;
-  transform: translate(-50%, -50%);
   box-shadow:
     0 0 0 1px #0005,
     0 4px 16px #0003;
@@ -15,7 +19,7 @@
   &::after {
     content: '';
     position: absolute;
-    inset: 22px;
+    inset: var(--loupe-ring);
     border-radius: 50%;
     box-shadow: 0 0 0 1px #0005;
   }
@@ -26,7 +30,7 @@
   inset: 0;
   overflow: hidden;
   border-radius: 50%;
-  mask: radial-gradient(circle, transparent 38px, #000 38px);
+  mask: radial-gradient(circle, transparent calc(var(--loupe-hole) / 2), #000 calc(var(--loupe-hole) / 2));
 }
 
 .sampled,
@@ -53,9 +57,9 @@
 /* Scoped under the loupe to outrank the stage's own canvas size. */
 .loupe .magnifier {
   position: absolute;
-  inset: 22px;
-  width: 76px;
-  height: 76px;
+  inset: var(--loupe-ring);
+  width: var(--loupe-hole);
+  height: var(--loupe-hole);
   border-radius: 50%;
   opacity: 0;
 

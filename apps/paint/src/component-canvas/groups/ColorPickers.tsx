@@ -1,7 +1,9 @@
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
+import type { Point } from '@app-game/paint-core/camera';
+import { averageOpaque } from '@app-game/paint-core/colorSample';
 import type { JSX } from '@solidjs/web';
-import { createSignal, For, untrack } from 'solid-js';
-import { ColorPanel } from '../../features/color';
+import { createMemo, createSignal, For, untrack } from 'solid-js';
+import { ColorPanel, ColorPickerLoupe, type PickerPreview } from '../../features/color';
 import {
   ColorWheel,
   gamutMasks,
@@ -72,6 +74,19 @@ export function ColorPickers() {
             </ZenFrame>
           )}
         </PickerSpecimen>
+      </CanvasRow>
+
+      <CanvasRow title="Pick from canvas" note="press and drag on the drawing; releasing picks the color">
+        <For each={loupes}>
+          {(loupe) => (
+            <LoupeSpecimen
+              id={`color-pickers/pick/${loupe.id}`}
+              label={loupe.label}
+              size={loupe.size}
+              placement={loupe.placement}
+            />
+          )}
+        </For>
       </CanvasRow>
 
       <CanvasRow title="OKLCH wheel: gamut mask">
@@ -316,6 +331,118 @@ function DesktopColorSpecimen() {
   );
 }
 
+/**
+ * The canvas color picker's loupe over a small drawing of its own, at `size` and `placement` (see
+ * `ColorPickerLoupe`). It always shows a pick: pressing moves it with the pointer, releasing makes the color under it
+ * the current one, and a cancelled press leaves the current color as it was.
+ */
+function LoupeSpecimen(props: Omit<Parameters<typeof ColorPickerLoupe>[0], 'preview'> & { id: string; label: string }) {
+  const drawing = paintDrawing();
+  const [point, setPoint] = createSignal<Point>(loupeStart);
+  const [current, setCurrent] = createSignal('#e8806e');
+  const [pressed, setPressed] = createSignal(false);
+  const preview = createMemo((): PickerPreview => ({
+    point: point(),
+    current: current(),
+    size: 1,
+    loupeSide,
+    ...sampleDrawing(drawing, point())
+  }));
+
+  return (
+    <Specimen id={props.id} label={props.label}>
+      <div
+        class={styles.pickArea}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setPressed(true);
+          setPoint(areaPoint(event));
+        }}
+        onPointerMove={(event) => {
+          if (pressed()) {
+            setPoint(areaPoint(event));
+          }
+        }}
+        onPointerUp={() => {
+          setPressed(false);
+          setCurrent(preview().color ?? current());
+        }}
+        onPointerCancel={() => setPressed(false)}
+      >
+        {drawing}
+        <ColorPickerLoupe preview={preview()} size={props.size} placement={props.placement} />
+      </div>
+    </Specimen>
+  );
+}
+
+/** A pointer's point in CSS pixels of the pick area, inside it, wherever the canvas camera zooms. */
+function areaPoint(event: PointerEvent & { currentTarget: HTMLElement }): Point {
+  const area = event.currentTarget;
+  const bounds = area.getBoundingClientRect();
+  const scale = area.offsetWidth / bounds.width;
+
+  return {
+    x: Math.min(Math.max((event.clientX - bounds.left) * scale, 0), pickAreaSize.width - 1),
+    y: Math.min(Math.max((event.clientY - bounds.top) * scale, 0), pickAreaSize.height - 1)
+  };
+}
+
+/** Soft strokes on paper at the screen's resolution, like a corner of a painting, for the loupe to magnify. */
+function paintDrawing(): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(pickAreaSize.width * devicePixelRatio);
+  canvas.height = Math.round(pickAreaSize.height * devicePixelRatio);
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) {
+    return canvas;
+  }
+
+  context.scale(devicePixelRatio, devicePixelRatio);
+  context.fillStyle = '#f6f4ef';
+  context.fillRect(0, 0, pickAreaSize.width, pickAreaSize.height);
+  context.filter = 'blur(4px)';
+  context.lineCap = 'round';
+  const stroke = (color: string, width: number, path: (context: CanvasRenderingContext2D) => void) => {
+    context.strokeStyle = color;
+    context.lineWidth = width;
+    context.beginPath();
+    path(context);
+    context.stroke();
+  };
+  stroke('#c0532b', 40, (path) => {
+    path.moveTo(-20, 110);
+    path.quadraticCurveTo(170, 360, 360, 140);
+  });
+  stroke('#c0532b', 16, (path) => path.arc(275, 70, 30, Math.PI * 0.9, Math.PI * 2.6));
+  stroke('#2f4b6e', 24, (path) => {
+    path.moveTo(20, 290);
+    path.lineTo(80, 200);
+  });
+
+  return canvas;
+}
+
+/** The color under `point` and the view around it, as the canvas picker's live samples give them. */
+function sampleDrawing(drawing: HTMLCanvasElement, point: Point): Pick<PickerPreview, 'color' | 'loupe'> {
+  const context = drawing.getContext('2d', { willReadFrequently: true });
+  if (!context) {
+    return { color: undefined };
+  }
+
+  const scale = drawing.width / pickAreaSize.width;
+  const side = Math.round(loupeSide * scale);
+  const x = Math.floor(point.x * scale),
+    y = Math.floor(point.y * scale);
+  const left = Math.min(Math.max(x - Math.floor(side / 2), 0), drawing.width - side);
+  const top = Math.min(Math.max(y - Math.floor(side / 2), 0), drawing.height - side);
+
+  return {
+    color: averageOpaque(context.getImageData(x, y, 1, 1).data),
+    loupe: { side, pixels: context.getImageData(left, top, side, side).data }
+  };
+}
+
 /** The Color panel's content width, which pickers fill in Studio. */
 function PickerBox(props: { children: JSX.Element }) {
   return <div class={styles.pickerBox}>{props.children}</div>;
@@ -334,6 +461,21 @@ const panelPickers = [
   { id: 'wheel', label: 'Wheel' },
   { id: 'coolorus', label: 'Coolorus' }
 ] as const;
+
+/** The loupe's variants: the one Paint shows, a larger one, and both above the point for a finger. */
+const loupes = [
+  { id: 'center', label: 'Centered (as in Paint)', size: 120, placement: 'center' },
+  { id: 'center-large', label: 'Centered, larger', size: 180, placement: 'center' },
+  { id: 'above', label: 'Above the finger', size: 120, placement: 'above' },
+  { id: 'above-large', label: 'Above the finger, larger', size: 180, placement: 'above' }
+] as const;
+
+/** The pick area's size in CSS pixels; keep it in step with the stylesheet's `.pickArea`. */
+const pickAreaSize = { width: 340, height: 300 };
+/** Where the loupe starts: on the large stroke's upper edge, low enough for a large ring to fit above it. */
+const loupeStart: Point = { x: 170, y: 224 };
+/** CSS pixels per side of the magnified view, as in the canvas picker. */
+const loupeSide = 11;
 
 /** The Desktop variant's dock width (`--dock-width`). */
 const desktopDockWidth = 284;
