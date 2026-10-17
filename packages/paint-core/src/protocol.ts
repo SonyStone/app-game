@@ -7,6 +7,7 @@ import type { Camera, Point, ViewSize } from './camera';
 import type { ColorSample, PickedColor } from './colorSample';
 import type { BrushEngine } from './composition/contracts';
 import type { HistorySource, LayerAction, createDocument } from './document';
+import type { LayerThumbnailsUpdate } from './layerThumbnails';
 import type { DocumentRect } from './layersInView';
 import type { LiveListing, LiveState, LiveTileBytes } from './liveDrawing';
 import type { SelectionPreview, SelectionSummary } from './selectionMask';
@@ -66,6 +67,12 @@ export type PaintCommand =
    * of a frames module; replaces the regions named before.
    */
   | { type: 'watch-regions'; regions: Record<string, DocumentRect> }
+  /**
+   * Asks for `layer-thumbnails` events with images `size` pixels on their longer side, or stops them without a
+   * `size`. Starting, or changing the size, sends images of every layer; later events only those that changed. They
+   * are made between strokes, never during one; see `createLayerThumbnailer`.
+   */
+  | { type: 'layer-thumbnails'; size?: number }
   | { type: 'view'; camera: Camera; size: ViewSize; dpr: number }
   | {
       type: 'begin';
@@ -242,6 +249,8 @@ export type PaintEvent =
   | { type: 'picked-color'; requestId: string; result: Result<PickedColor, string> }
   | { type: 'live-listed'; requestId: string; result: Result<LiveListing, string> }
   | { type: 'live-tiles'; requestId: string; result: Result<LiveTileBytes[], string> }
+  /** New layer thumbnails while asked for by `layer-thumbnails`; see `LayerThumbnailsUpdate`. */
+  | ({ type: 'layer-thumbnails' } & LayerThumbnailsUpdate)
   | { type: 'checkpointed'; tools?: RendererToolState; historySource?: HistorySource }
   /** The selection changed, or a selection command finished; `selection` summarizes it, see `SelectionSummary`. */
   | { type: 'selection'; selection: SelectionSummary; hasClipboard: boolean }

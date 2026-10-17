@@ -31,6 +31,7 @@ import { createGpuWarmup } from '../gpu-warmup';
 import { createGradient } from '../gradient';
 import { createHiddenLayerGuard } from '../hidden-layer';
 import { createInkTrail } from '../ink-trail';
+import { createLayerThumbnails } from '../layer-thumbnails';
 import { createImagePlacement, createLayerFilter } from '../layers';
 import { createLiveBroadcast, liveRelayUrl } from '../live';
 import { createLocalUndo } from '../local-undo';
@@ -84,12 +85,14 @@ export function createPaintSession(options: {
     storage: brushStorage,
     clear: (brush) => (brush.engine?.id === 'abr' ? clearAbrBrush(brush) : clearRoundBrush(brush))
   });
+  const layerThumbnails = createLayerThumbnails();
   const engine = createPaintEngine({
     settings: developer,
     onError: setError,
     onSelection: (event) => selection.receive(event),
     prepare: () => uploads.restore(),
     frames: { enabled: developer.performanceMonitor, receive: (event) => monitor.record(event) },
+    layerThumbnails: { size: layerThumbnails.size, receive: layerThumbnails.receive },
     storageName: options.storageName,
     storageWaitMs: arrivalStorageWaitMs()
   });
@@ -419,6 +422,8 @@ export function createPaintSession(options: {
     drawingFolder,
     frames,
     layerFilter,
+    /** Images of each layer's pixels for layer panels, made only while one wants them; see `createLayerThumbnails`. */
+    layerThumbnails,
     recentPresets,
     live,
     recorder,

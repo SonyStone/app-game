@@ -18,6 +18,7 @@ import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { mergeTilePixels } from './layerMerge';
 import { captureSelection, editSelection, type SelectionPixels } from './selection';
 import { applyLiveState, listLiveTiles, readLiveTiles } from './liveDrawing';
+import { createLayerThumbnailer } from './layerThumbnails';
 import { lockStorage, lockedStorage, type StorageLock } from './storageLock';
 import {
   emptySelection,
@@ -185,6 +186,22 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         ...(code ? { code } : {}),
         ...(background ? { background } : {})
       });
+    /**
+     * Layer thumbnails while the editor asks for them (`layer-thumbnails`). They are made only while no stroke, import
+     * or selection edit runs and the pen is not hovering (see `warmGpu`), so they never delay the next stroke.
+     */
+    const thumbnails = createLayerThumbnailer({
+      layers: () => document.layers,
+      read: (data) => tileStore.read(data),
+      storage: {
+        read: (key) => tileStore.overviews.read(key),
+        write: (key, pixels) => tileStore.overviews.write(key, pixels)
+      },
+      idle: () =>
+        active && !!tileStore && !strokeSession && !importing && !editingSelection && performance.now() >= warmUntil,
+      post: (update) => post({ type: 'layer-thumbnails', ...update }),
+      onError: (error) => failure(error, false, undefined, true)
+    });
     /** Replaces the selection, outlines it and tells the editor. */
     const changeSelection = (next: SelectionMask) => {
       selection = next;
@@ -590,6 +607,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       status();
       scheduleSave();
       scheduleDraw();
+      thumbnails.changed();
     };
     /** Autosaves once input has paused for `saveDelay`; a later change restarts the delay. */
     const scheduleSave = () => {
@@ -793,6 +811,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       clearTimeout(saveTimer);
       clearTimeout(viewTimer);
       clearTimeout(warmTimer);
+      thumbnails.dispose();
       try {
         strokeSession?.cancel();
       } finally {
@@ -963,6 +982,9 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             break;
           case 'adaptive-quality':
             adaptiveQuality = command.enabled;
+            break;
+          case 'layer-thumbnails':
+            thumbnails.resize(command.size);
             break;
           case 'blending':
             document.setLinearBlending(command.linear);

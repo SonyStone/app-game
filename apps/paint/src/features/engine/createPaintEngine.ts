@@ -53,6 +53,12 @@ export function createPaintEngine(options: {
    * submission time and its wait for submitted GPU work, to `receive` once the frame's GPU work has finished.
    */
   frames?: { enabled: Accessor<boolean>; receive: (event: FrameEvent) => void };
+  /**
+   * Layer thumbnails: while `size` is set, every connection makes thumbnails `size` device pixels on their longer side
+   * between strokes and sends them to `receive`, every layer's once it becomes ready and later those that changed;
+   * `undefined` stops them. See `createLayerThumbnails`.
+   */
+  layerThumbnails?: { size: Accessor<number | undefined>; receive: (event: LayerThumbnailsEvent) => void };
   /** The storage engines open, `paint-studio` by default; a live viewer's starts with `live:`, kept in memory. */
   storageName?: string;
   /**
@@ -142,6 +148,12 @@ export function createPaintEngine(options: {
 
   if (options.frames) {
     syncWhenEditable(options.frames.enabled, (enabled) => ({ type: 'diagnostics', enabled }));
+  }
+
+  if (options.layerThumbnails) {
+    syncWhenEditable(options.layerThumbnails.size, (size) =>
+      size === undefined ? { type: 'layer-thumbnails' } : { type: 'layer-thumbnails', size }
+    );
   }
 
   // Mobile browsers may discard a hidden page without another event, so save as soon as it is hidden.
@@ -369,6 +381,9 @@ export function createPaintEngine(options: {
           break;
         case 'frame':
           options.frames?.receive(event);
+          break;
+        case 'layer-thumbnails':
+          options.layerThumbnails?.receive(event);
           break;
       }
     }
@@ -752,6 +767,9 @@ export type PaintEngine = ReturnType<typeof createPaintEngine>;
 
 /** A frame's engine timing, sent while frame timing is enabled. */
 export type FrameEvent = Extract<PaintEvent, { type: 'frame' }>;
+
+/** New layer thumbnails, sent while they are asked for; see `LayerThumbnailsUpdate`. */
+export type LayerThumbnailsEvent = Extract<PaintEvent, { type: 'layer-thumbnails' }>;
 
 /** Storage, virtual texture and readback statistics from the latest state event. */
 export type EnginePaging = Pick<StateEvent, 'storage' | 'virtual' | 'debugPages' | 'rasterDraws' | 'readback'>;

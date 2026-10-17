@@ -252,6 +252,14 @@ export function createVirtualPages(
       );
     },
     token,
+    /**
+     * The version of a page's own pixels after the latest `sync`: it changes whenever a source tile under the page
+     * changes, unlike `token`, which also follows the neighbors of its gutters. `undefined` for a page without tiles.
+     */
+    pageVersion(page: VirtualPage): number | undefined {
+      const index = layers.get(page.layerId);
+      return index?.counts.has(address(page)) ? index.versions.get(address(page)) : undefined;
+    },
     pagePixels,
     /** Keeps the current coarse roots durable when older derived versions are pruned. */
     async retain(pages: VirtualPage[]) {

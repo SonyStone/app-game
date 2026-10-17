@@ -491,6 +491,59 @@ it('lists and reads the tile versions a live viewer lacks, and a viewer applies 
   await viewer.waitFor(() => !viewer.document.active.tiles.has('0,0'));
 });
 
+it('sends layer thumbnails while asked for, again after edits, and stops when asked to', async () => {
+  // Node has no canvas to encode PNGs with.
+  vi.stubGlobal(
+    'OffscreenCanvas',
+    class {
+      getContext() {
+        return { putImageData() {} };
+      }
+
+      async convertToBlob() {
+        return new Blob(['png']);
+      }
+    }
+  );
+  vi.stubGlobal('ImageData', class {});
+  try {
+    const paint = defineDocumentEdit({
+      id: 'paint-tile',
+      parse: (input: unknown) => input as string,
+      async run({ active }, key) {
+        return {
+          changes: [{ layerId: active.id, key, before: undefined, after: new Uint8Array(TILE_BYTES).fill(200) }]
+        };
+      }
+    });
+    const { runtime, document, events, waitFor } = await start({ edits: [paint] });
+    const thumbnails = () => events.filter((event) => event.type === 'layer-thumbnails');
+    runtime.send({ type: 'layer-thumbnails', size: 48 });
+    await waitFor(() => thumbnails().length === 1);
+    const layerId = document.active.id;
+    expect(thumbnails()[0]).toMatchObject({
+      frame: { left: -128, top: -128, width: 256, height: 256 },
+      layerIds: [layerId],
+      thumbnails: [{ layerId, width: 48, height: 48 }]
+    });
+
+    runtime.send(paint.command('1,0'));
+    await waitFor(() => thumbnails().length === 2);
+    expect(thumbnails()[1]).toMatchObject({
+      frame: { left: 256, top: 0, width: 256, height: 256 },
+      thumbnails: [{ layerId, width: 48, height: 48 }]
+    });
+
+    runtime.send({ type: 'layer-thumbnails' });
+    runtime.send(paint.command('2,0'));
+    await waitFor(() => document.active.tiles.size === 2);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(thumbnails()).toHaveLength(2);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
 /** Disposes a runtime gracefully, saving its document. */
 async function stop({ runtime, events, waitFor }: Awaited<ReturnType<typeof start>>) {
   runtime.send({ type: 'dispose' });
