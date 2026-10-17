@@ -20,13 +20,22 @@ import { SessionWindows } from './SessionWindows';
 /**
  * The element holding a whole Paint variant: a full-window box that keeps browser page gestures, text selection and
  * iOS callouts off the editor. Fullscreen and the pointer type attribute apply to it. The variant adds its own look
- * with `class`. The session's open windows float over the variant's UI; see `SessionWindows`.
+ * with `class`. The session's open windows float over the variant's UI (see `SessionWindows`), unless `windows` is
+ * false: then the variant places them itself, such as inside the card a side menu pushes aside.
  */
-export function PaintEditor(props: { session: PaintSession; class?: string; children: JSX.Element }) {
+export function PaintEditor(props: {
+  session: PaintSession;
+  class?: string;
+  /** Whether the editor shows the session's windows over the variant's UI; true by default. */
+  windows?: boolean;
+  children: JSX.Element;
+}) {
   return (
     <div ref={props.session.setEditor} class={`${styles.editor} ${props.class ?? ''}`}>
       {props.children}
-      <SessionWindows session={props.session} />
+      <Show when={props.windows ?? true}>
+        <SessionWindows session={props.session} />
+      </Show>
     </div>
   );
 }

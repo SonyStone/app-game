@@ -6,6 +6,7 @@ import {
   PaintEditor,
   PaintStage,
   SessionNotices,
+  SessionWindows,
   StageGuides,
   StageHint,
   StageOverlays
@@ -80,7 +81,8 @@ export function PuckStudio(props: PaintVariantProps) {
   );
 
   return (
-    <PaintEditor session={session} class={styles.editor}>
+    // The windows and the cluster step back with the drawing, so the side menu's card holds them too.
+    <PaintEditor session={session} class={styles.editor} windows={false}>
       <DrawingSideMenu
         session={session}
         open={menuOpen()}
@@ -110,6 +112,42 @@ export function PuckStudio(props: PaintVariantProps) {
           {/* A press outside a toggled cluster only closes it, so the brush cursor would promise a stroke. */}
           <StageOverlays session={session} cursor={!summon.at() || camera.navigation.held()} />
         </PaintStage>
+        <div class={styles.ui}>
+          <Show when={layout()}>
+            {(current) => (
+              <Errored
+                fallback={(error) => (
+                  <div class={styles.crash} role="alert">
+                    The cluster failed: {String(error())}
+                  </div>
+                )}
+              >
+                <Cluster
+                  session={session}
+                  layout={current()}
+                  view={view}
+                  summon={summon}
+                  onAction={runSlot}
+                  onOpenAbr={() => {
+                    summon.close();
+                    setAbrMounted(true);
+                    setAbrOpen(true);
+                  }}
+                />
+              </Errored>
+            )}
+          </Show>
+          <Show when={summon.pressRing()}>
+            {(at) => (
+              <span
+                class={styles.pressRing}
+                style={{ left: `${at().x}px`, top: `${at().y}px`, 'animation-duration': `${500 - ringDelay}ms` }}
+              />
+            )}
+          </Show>
+          <SessionNotices session={session} />
+        </div>
+        <SessionWindows session={session} />
       </DrawingSideMenu>
       <Show when={abrMounted()}>
         <AbrViewerDialog
@@ -124,41 +162,6 @@ export function PuckStudio(props: PaintVariantProps) {
           }}
         />
       </Show>
-      <div class={styles.ui}>
-        <Show when={layout()}>
-          {(current) => (
-            <Errored
-              fallback={(error) => (
-                <div class={styles.crash} role="alert">
-                  The cluster failed: {String(error())}
-                </div>
-              )}
-            >
-              <Cluster
-                session={session}
-                layout={current()}
-                view={view}
-                summon={summon}
-                onAction={runSlot}
-                onOpenAbr={() => {
-                  summon.close();
-                  setAbrMounted(true);
-                  setAbrOpen(true);
-                }}
-              />
-            </Errored>
-          )}
-        </Show>
-        <Show when={summon.pressRing()}>
-          {(at) => (
-            <span
-              class={styles.pressRing}
-              style={{ left: `${at().x}px`, top: `${at().y}px`, 'animation-duration': `${500 - ringDelay}ms` }}
-            />
-          )}
-        </Show>
-        <SessionNotices session={session} />
-      </div>
     </PaintEditor>
   );
 

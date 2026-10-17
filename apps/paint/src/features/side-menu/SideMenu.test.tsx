@@ -123,7 +123,8 @@ function mount() {
   return {
     pill: () => host.querySelector<HTMLButtonElement>('button[aria-controls]')!,
     panel: () => host.querySelector('nav')!,
-    content: () => host.querySelector('[data-testid="content"]')!.parentElement!,
+    // The card, around the box that isolates the content's stacking.
+    content: () => host.querySelector('[data-testid="content"]')!.parentElement!.parentElement!,
     back: () => host.querySelector<HTMLButtonElement>('button[aria-label="Back"]'),
     item: (name: string) =>
       [...host.querySelectorAll<HTMLElement>('nav button')].find((button) => button.textContent === name)!,

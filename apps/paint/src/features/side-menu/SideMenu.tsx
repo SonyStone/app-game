@@ -90,7 +90,7 @@ export function SideMenu(props: {
         style={{ transform: frame().transform, 'clip-path': frame().clipPath }}
         inert={props.open || props.progress !== undefined}
       >
-        {props.children}
+        <div class={styles.content}>{props.children}</div>
         <div class={styles.shade} style={{ opacity: shadeOpacity * amount() }} />
       </div>
       <Show when={props.open}>

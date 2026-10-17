@@ -22,6 +22,13 @@
     clip-path var(--duration) var(--ease);
 }
 
+/* Keeps the content's stacking, such as floating windows over the drawing, under the shade. */
+.content {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+}
+
 .shade {
   position: absolute;
   inset: 0;
