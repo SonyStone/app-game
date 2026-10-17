@@ -40,6 +40,12 @@ export const pointerEventsRoutes: Routes[] = [
     component: lazy(() => import('./input-visualizer/input-visualizer'))
   },
   {
+    path: '/safe-triangle',
+    name: 'Safe Triangle Menu (aim guard)',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./safe-triangle-menu/safe-triangle-menu'))
+  },
+  {
     path: '/shortcut-settings',
     name: 'Shortcut Settings',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
