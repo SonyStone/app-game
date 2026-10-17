@@ -624,15 +624,10 @@
 }
 
 /* A still of a whole UI above its card. */
-.stillCard {
-  display: grid;
-  grid-template-columns: min-content;
-  gap: 8px;
-
-  > div:last-child {
-    width: auto;
-    min-height: 0;
-  }
+.liveScreen {
+  position: relative;
+  /* The containing block of the variant's fixed elements, and the stacking context of their layers. */
+  contain: layout;
 }
 
 /* The tile cluster mockup's dark stage, standing free around its parts (its own class fills the screen). */
@@ -835,4 +830,23 @@
     height: 100%;
     border-radius: inherit;
   }
+}
+
+.liveIdea {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+
+  small {
+    font-size: inherit;
+    font-weight: 600;
+  }
+}
+
+.liveError {
+  margin: 0;
+  padding: 12px;
+  font-size: 11px;
+  color: #b3261e;
 }

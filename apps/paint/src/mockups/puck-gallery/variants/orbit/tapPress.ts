@@ -1,4 +1,3 @@
-import type { Point } from '../../kit/createSketchCanvas';
 import { pressHandlers, type Press } from '../../kit/pressHandlers';
 
 /**
@@ -16,7 +15,7 @@ export function tapPress(
     },
     end: (press) => {
       options.onFinish?.();
-      if (isOver(press.target, press.point, 12)) {
+      if (isOver(press, 12)) {
         action(press);
       }
     },
@@ -24,9 +23,9 @@ export function tapPress(
   });
 }
 
-/** Whether `point` (client pixels) lies within the element's box grown by `slack`. */
-function isOver(element: Element, point: Point, slack: number) {
-  const box = element.getBoundingClientRect();
+/** Whether the press's point lies within its target's box grown by `slack`, both on the target's screen. */
+function isOver({ point, target, screen }: Press, slack: number) {
+  const box = screen.rect(target);
   return (
     point.x >= box.left - slack &&
     point.x <= box.right + slack &&

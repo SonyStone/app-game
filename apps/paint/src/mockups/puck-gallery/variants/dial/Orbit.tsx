@@ -20,7 +20,7 @@ import { orbitRadius, orbitReach } from './layout';
 export function Orbit(props: {
   studio: Studio;
   model: DialModel;
-  /** The dial's center in client pixels. */
+  /** The dial's center in screen pixels. */
   center: Point;
   hand: 'left' | 'right';
   /** Shows key hints, for openings by mouse or keyboard. */

@@ -2,6 +2,7 @@ import { createEffect, Show } from 'solid-js';
 import type { Point } from '../../kit/createSketchCanvas';
 import type { Studio } from '../../kit/createStudio';
 import { pressHandlers, type Press } from '../../kit/pressHandlers';
+import { useScreen } from '../../kit/screen';
 import { galleryUi, type Summon } from '../../kit/variant';
 import { modes, type DialModel } from './createDialModel';
 import styles from './Dial.module.css';
@@ -17,7 +18,7 @@ import { makeWheelSteps } from './input';
 export function MiniDial(props: {
   studio: Studio;
   model: DialModel;
-  /** The handle's center in client pixels. */
+  /** The handle's center in screen pixels. */
   at: Point;
   /** The handle is being dragged to `to`. */
   onMove: (to: Point) => void;
@@ -25,6 +26,7 @@ export function MiniDial(props: {
   onPark: () => void;
   onOpen: (at: Point, pointerType: Summon['pointerType']) => void;
 }) {
+  const screen = useScreen();
   let indicator: SVGLineElement | undefined;
   let face: SVGSVGElement | undefined;
   let grabbed: Point = { x: 0, y: 0 };
@@ -84,7 +86,7 @@ export function MiniDial(props: {
       title={`Dial · ${mode().label}: tap to open, drag to move, wheel to turn`}
       onWheel={(event) => {
         event.preventDefault();
-        props.model.step(wheelSteps(event), { x: innerWidth / 2, y: innerHeight / 2 });
+        props.model.step(wheelSteps(event), { x: screen.size().width / 2, y: screen.size().height / 2 });
       }}
     >
       <svg ref={face} viewBox="-28 -28 56 56" width="56" height="56" aria-hidden="true">

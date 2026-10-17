@@ -35,7 +35,7 @@ export function tapProps(action: (event: PointerEvent) => void) {
   return pressHandlers({
     tap: (_press, event) => action(event),
     end: (press, event) => {
-      if (isOver(press.target, press.point)) {
+      if (isOver(press)) {
         action(event);
       }
     }
@@ -190,7 +190,7 @@ function createScrub(options: {
   /** The unrounded fraction during a drag, so that small moves add up and Shift can change without a jump. */
   let current = 0;
   const length = (press: Press) => {
-    const rect = press.target.getBoundingClientRect();
+    const rect = press.screen.rect(press.target);
     return options.axis === 'x' ? rect.width : rect.height;
   };
 
@@ -216,7 +216,7 @@ function createScrub(options: {
     end: () => options.onActive(false),
     tap: (press) => {
       options.onActive(false);
-      const rect = press.target.getBoundingClientRect();
+      const rect = press.screen.rect(press.target);
       const fill = options.fraction();
       const ahead =
         options.axis === 'x'
@@ -269,7 +269,9 @@ export function Segmented(props: {
   );
 }
 
-function isOver(element: Element, point: { x: number; y: number }) {
-  const rect = element.getBoundingClientRect();
+/** Whether the press's point lies over its target. */
+function isOver(press: Press) {
+  const rect = press.screen.rect(press.target);
+  const point = press.point;
   return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
 }

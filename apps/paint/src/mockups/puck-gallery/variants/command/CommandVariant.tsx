@@ -1,4 +1,3 @@
-import { createEventListener } from '@solid-primitives/event-listener';
 import { createMemo, createSignal, For, Match, onCleanup, onSettled, Show, Switch, untrack } from 'solid-js';
 import { SketchIcon, type SketchIconName } from '../../../../shared/ui/SketchIcon';
 import { blendLabel, type Point } from '../../kit/createSketchCanvas';
@@ -6,6 +5,7 @@ import type { Studio } from '../../kit/createStudio';
 import { LayerThumb } from '../../kit/LayerThumb';
 import { navigationDrag, type NavigationKind } from '../../kit/navigationDrag';
 import { pressHandlers } from '../../kit/pressHandlers';
+import { listenOnScreen, useScreen } from '../../kit/screen';
 import { StrokePreview } from '../../kit/StrokePreview';
 import { formatValue } from '../../kit/values';
 import { galleryUi, type Summon, type VariantProps } from '../../kit/variant';
@@ -74,6 +74,7 @@ function Palette(props: {
   const hand = untrack(() => variant.hand);
   const directInput = opened.pointerType === 'pen' || opened.pointerType === 'touch';
   const navigation = navigationDrag(studio);
+  const screen = useScreen();
 
   const [query, setQuery] = createSignal('');
   /** The query came from a chip (a layer's blend chip), so running a result goes back to the full list. */
@@ -85,7 +86,6 @@ function Palette(props: {
   const [cursors, setCursors] = createSignal<Readonly<Record<string, number>>>({});
   const [keyboardUsed, setKeyboardUsed] = createSignal(false);
   const [navigating, setNavigating] = createSignal<{ kind: NavigationKind; at: Point; moved: boolean }>();
-  const [viewport, setViewport] = createSignal({ width: innerWidth, height: innerHeight });
 
   const ui = {
     openQuery(text: string, selectId?: string) {
@@ -102,7 +102,7 @@ function Palette(props: {
   const items = createMemo(() => buildList(studio, query(), props.recent.entries(), ui));
   const rows = createMemo(() => items().filter((item) => item.row));
   const selected = createMemo(() => rows().find((item) => item.id === selectedId()) ?? rows()[0]);
-  const place = createMemo(() => placePanel(opened, viewport(), hand));
+  const place = createMemo(() => placePanel(opened, screen.size(), screen.top, hand));
 
   let input!: HTMLInputElement;
   let list!: HTMLDivElement;
@@ -110,8 +110,7 @@ function Palette(props: {
   let wheelRow: string | undefined;
   let wheelSum = 0;
 
-  createEventListener(window, 'resize', () => setViewport({ width: innerWidth, height: innerHeight }));
-  createEventListener(window, 'keydown', onKeyDown, { capture: true });
+  listenOnScreen('keydown', onKeyDown, { capture: true });
   onSettled(() => {
     if (directInput) {
       return;
@@ -587,11 +586,12 @@ function Palette(props: {
       return;
     }
 
-    if (event.clientX === lastHover.x && event.clientY === lastHover.y) {
+    const at = screen.point(event);
+    if (at.x === lastHover.x && at.y === lastHover.y) {
       return;
     }
 
-    lastHover = { x: event.clientX, y: event.clientY };
+    lastHover = at;
     const id = (event.target as Element).closest<HTMLElement>('[data-row]')?.dataset.row;
     if (id && id !== selected()?.id) {
       setSelectedId(id);
@@ -803,11 +803,17 @@ function Palette(props: {
 }
 
 /**
- * Where the palette goes and how big it may be; `height` is the most it may take, the list shrinks below it. The
- * search field opens at the point (beside it, away from the pen hand), or the whole panel above it when there is no
- * room below; gallery openings are centered.
+ * Where the palette goes on a `viewport`-sized screen and how big it may be; `height` is the most it may take, the
+ * list shrinks below it. The search field opens at the point (beside it, away from the pen hand), or the whole panel
+ * above it when there is no room below; gallery openings are centered. The panel stays below the `barClearance` px
+ * the page keeps at the screen's top.
  */
-function placePanel(summon: Summon, viewport: { width: number; height: number }, hand: 'left' | 'right') {
+function placePanel(
+  summon: Summon,
+  viewport: { width: number; height: number },
+  barClearance: number,
+  hand: 'left' | 'right'
+) {
   const width = Math.min(panelWidth, viewport.width - edge * 2);
   const height = Math.min(panelHeight, viewport.height - barClearance - noticeClearance);
   const { x, y } = summon.at;
@@ -843,8 +849,6 @@ function placePanel(summon: Summon, viewport: { width: number; height: number },
 const panelWidth = 404;
 const panelHeight = 560;
 const edge = 8;
-/** Room for the gallery's bar at the top of the window. */
-const barClearance = 52;
 /** Room for the gallery's notices at the bottom, which confirm typed commands. */
 const noticeClearance = 52;
 

@@ -131,7 +131,7 @@ export function LayersCard(props: {
                       return;
                     }
 
-                    const unit = rowHeight / press.target.getBoundingClientRect().height;
+                    const unit = rowHeight / press.screen.rect(press.target).height;
                     const dx = (press.point.x - press.start.x) * unit;
                     const dy = (press.point.y - press.start.y) * unit;
                     if (!mode) {

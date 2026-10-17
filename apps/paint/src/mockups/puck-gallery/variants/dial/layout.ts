@@ -18,34 +18,34 @@ export const orbitReach = orbitRadius + 22;
 /** The card's distance from the center to its near edge, and its size. */
 export const card = { gap: 188, width: 218, maxHeight: 336 } as const;
 
-/** Space kept free at the top for the gallery's bar, and at the other edges. */
-const topMargin = 52;
+/** Space kept free at the screen's edges, other than the page's room at the top (`top` below). */
 const margin = 8;
 
 /**
  * The dial's center for an opening at `at`: as close to it as the whole cluster allows, so that nothing leaves a
- * `width` × `height` window. The orbit's tools face the pen's `hand`, the card the other side.
+ * `width` × `height` screen or enters the `top` px the page keeps at its top. The orbit's tools face the pen's `hand`,
+ * the card the other side.
  */
-export function clusterCenter(at: Point, hand: 'left' | 'right', width: number, height: number): Point {
+export function clusterCenter(at: Point, hand: 'left' | 'right', width: number, height: number, top: number): Point {
   const far = card.gap + card.width;
   const left = hand === 'left' ? orbitReach : far;
   const right = hand === 'left' ? far : orbitReach;
   return {
     x: clamp(at.x, margin + left, width - margin - right),
-    y: clamp(at.y, topMargin + orbitReach, height - margin - orbitReach)
+    y: clamp(at.y, top + orbitReach, height - margin - orbitReach)
   };
 }
 
-/** The card's top-left corner beside a dial centered at `center`. */
-export function cardCorner(center: Point, hand: 'left' | 'right', height: number): Point {
+/** The card's top-left corner beside a dial centered at `center`, below the screen's `top` px. */
+export function cardCorner(center: Point, hand: 'left' | 'right', height: number, top: number): Point {
   return {
     x: hand === 'left' ? center.x + card.gap : center.x - card.gap - card.width,
-    y: clamp(center.y - 150, topMargin, height - margin - card.maxHeight)
+    y: clamp(center.y - 150, top, height - margin - card.maxHeight)
   };
 }
 
-/** Keeps the mini-dial's center at least half its size plus a margin inside the window. */
-export function clampHandle(at: Point, width: number, height: number): Point {
+/** Keeps the mini-dial's center at least half its size plus a margin inside the screen, below its `top` px. */
+export function clampHandle(at: Point, width: number, height: number, top: number): Point {
   const reach = 28 + margin;
-  return { x: clamp(at.x, reach, width - reach), y: clamp(at.y, topMargin + 28, height - reach) };
+  return { x: clamp(at.x, reach, width - reach), y: clamp(at.y, top + 28, height - reach) };
 }

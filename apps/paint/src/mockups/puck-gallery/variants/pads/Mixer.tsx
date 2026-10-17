@@ -229,7 +229,7 @@ function Fader(props: { studio: Studio; layer: Layer; cursor: boolean; onTouch: 
         props.onTouch();
       }
 
-      const rect = press.target.getBoundingClientRect();
+      const rect = press.screen.rect(press.target);
       geometry = { top: rect.top + faderInset + capHeight / 2, span: rect.height - faderInset * 2 - capHeight };
       const cap = geometry.top + (1 - props.layer.opacity / 100) * geometry.span;
       exact = props.layer.opacity;

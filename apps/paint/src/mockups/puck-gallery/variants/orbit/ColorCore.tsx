@@ -2,7 +2,7 @@ import { createSignal, For, Show } from 'solid-js';
 import { hexToHsv, hsvToHex, type Hsv } from '../../../../features/color/hsv';
 import type { Point } from '../../kit/createSketchCanvas';
 import type { Studio } from '../../kit/createStudio';
-import { pressHandlers } from '../../kit/pressHandlers';
+import { pressHandlers, type Press } from '../../kit/pressHandlers';
 import { galleryUi } from '../../kit/variant';
 import { angleOf, disc, polar, recentAngle } from './geometry';
 import styles from './Orbit.module.css';
@@ -21,8 +21,8 @@ export function ColorCore(props: { studio: Studio }) {
   let part: 'ring' | 'square' | undefined;
 
   const press = pressHandlers({
-    start: (press, event) => {
-      const point = local(event, press.target);
+    start: (press) => {
+      const point = local(press);
       part = partAt(point);
       if (!part) {
         return false;
@@ -30,7 +30,7 @@ export function ColorCore(props: { studio: Studio }) {
 
       edit(point);
     },
-    move: (press, event) => edit(local(event, press.target)),
+    move: (press) => edit(local(press)),
     end: finish,
     cancel: finish
   });
@@ -140,13 +140,13 @@ const sockets = Array.from({ length: 12 }, (_, index) => index);
 const hueMiddle = (disc.hueInner + disc.hueOuter) / 2;
 const half = disc.square / 2;
 
-/** The press relative to the element's center in unscaled pixels; the element is the selector's square box. */
-function local(event: PointerEvent, element: Element): Point {
-  const box = element.getBoundingClientRect();
+/** The press relative to its target's center in unscaled pixels; the target is the selector's square box. */
+function local({ point, target, screen }: Press): Point {
+  const box = screen.rect(target);
   const scale = box.width / (disc.hueOuter * 2);
   return {
-    x: (event.clientX - box.left - box.width / 2) / scale,
-    y: (event.clientY - box.top - box.height / 2) / scale
+    x: (point.x - box.left - box.width / 2) / scale,
+    y: (point.y - box.top - box.height / 2) / scale
   };
 }
 

@@ -1,18 +1,18 @@
-import { createEventListener } from '@solid-primitives/event-listener';
 import type { Point } from '../../kit/createSketchCanvas';
+import { listenOnScreen, useScreen } from '../../kit/screen';
 
 /**
  * Procreate's quick taps with several fingers on the drawing, reported as the number of fingers. A tap counts when
  * every finger went down and up within `quickTap` ms of the first one touching, none moved more than 10 px, and none
- * touched the HUD. Listens on the window in the capture phase and never consumes the events, so the stage's own
- * pinch and pan go on as usual. Must be called within an owner; the listeners go with it.
+ * touched the HUD. Listens to the variant's screen in the capture phase and never consumes the events, so the stage's
+ * own pinch and pan go on as usual. Must be called within the variant's owner; the listeners go with it.
  */
 export function createFingerTaps(tapped: (fingers: number) => void) {
   let gesture: { started: number; at: Map<number, Point>; down: number; most: number; spoiled: boolean } | undefined;
   const capture = { capture: true };
+  const screen = useScreen();
 
-  createEventListener(
-    window,
+  listenOnScreen(
     'pointerdown',
     (event) => {
       if (event.pointerType !== 'touch') {
@@ -23,7 +23,7 @@ export function createFingerTaps(tapped: (fingers: number) => void) {
         gesture = { started: event.timeStamp, at: new Map(), down: 0, most: 0, spoiled: false };
       }
 
-      gesture.at.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      gesture.at.set(event.pointerId, screen.point(event));
       gesture.down += 1;
       gesture.most = Math.max(gesture.most, gesture.down);
       const onUi = event.target instanceof Element && !!event.target.closest('[data-gallery-ui]');
@@ -31,12 +31,16 @@ export function createFingerTaps(tapped: (fingers: number) => void) {
     },
     capture
   );
-  createEventListener(
-    window,
+  listenOnScreen(
     'pointermove',
     (event) => {
       const start = gesture?.at.get(event.pointerId);
-      if (gesture && start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) {
+      if (!gesture || !start) {
+        return;
+      }
+
+      const at = screen.point(event);
+      if (Math.hypot(at.x - start.x, at.y - start.y) > 10) {
         gesture.spoiled = true;
       }
     },
@@ -60,8 +64,8 @@ export function createFingerTaps(tapped: (fingers: number) => void) {
       tapped(ended.most);
     }
   };
-  createEventListener(window, 'pointerup', lift, capture);
-  createEventListener(window, 'pointercancel', lift, capture);
+  listenOnScreen('pointerup', lift, capture);
+  listenOnScreen('pointercancel', lift, capture);
 }
 
 /** How long a multi-finger tap may take from the first touch to the last lift, in ms. */

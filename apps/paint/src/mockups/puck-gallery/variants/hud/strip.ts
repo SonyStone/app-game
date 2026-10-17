@@ -1,6 +1,7 @@
 import type { Point } from '../../kit/createSketchCanvas';
 import type { Studio } from '../../kit/createStudio';
 import { pressHandlers } from '../../kit/pressHandlers';
+import type { VariantScreen } from '../../kit/screen';
 import {
   clearOfCircle,
   distance,
@@ -29,6 +30,8 @@ export type StripVia = 'drag' | 'tap' | 'key';
 export type StripContext = {
   studio: Studio;
   hand: Hand;
+  /** The HUD's screen; every point and rectangle of the strip is in its pixels. */
+  screen: VariantScreen;
   /** The ring's center: the zoom pivot, and the circle that tap-mode strips keep clear of. */
   center: Point;
   /** Where the strip opens; the current value or item lies here. */
@@ -61,13 +64,13 @@ export type StripModel = {
 
 /**
  * Places a strip's bounding box: in tap and key mode it moves away from the ring until it clears it, so that the hub
- * stays reachable, then inside the window. The first of `directions` (unit vectors; by default away from the center,
+ * stays reachable, then inside the screen. The first of `directions` (unit vectors; by default away from the center,
  * then the other seven compass directions) whose result still clears the ring after fitting wins; when none does, the
- * first is used. A drag strip only moves inside the window. Returns the shift to apply to every part of the strip.
+ * first is used. A drag strip only moves inside the screen. Returns the shift to apply to every part of the strip.
  */
 export function placeStrip(context: StripContext, bounds: Rect, directions?: readonly Point[]): Point {
   const fitted = (delta: Point) => {
-    const fit = fitDelta(shiftRect(bounds, delta));
+    const fit = fitDelta(shiftRect(bounds, delta), context.screen);
     return { x: delta.x + fit.x, y: delta.y + fit.y };
   };
   if (context.via === 'drag') {

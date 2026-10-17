@@ -4,6 +4,7 @@ import { blendLabel, type Point } from '../../kit/createSketchCanvas';
 import type { Studio } from '../../kit/createStudio';
 import { LayerThumb } from '../../kit/LayerThumb';
 import { pressHandlers, type Press } from '../../kit/pressHandlers';
+import { useScreen } from '../../kit/screen';
 import { StrokePreview } from '../../kit/StrokePreview';
 import { formatValue, fractionOf } from '../../kit/values';
 import { galleryUi } from '../../kit/variant';
@@ -26,11 +27,12 @@ export function DetailCard(props: {
   model: DialModel;
   /** The dial's center, the pivot for zoom and rotation stops. */
   center: Point;
-  /** The card's top-left corner in client pixels. */
+  /** The card's top-left corner in screen pixels. */
   corner: Point;
   width: number;
   onDone: () => void;
 }) {
+  const screen = useScreen();
   const mode = () => props.model.mode();
 
   return (
@@ -38,7 +40,12 @@ export function DetailCard(props: {
       <section
         {...galleryUi}
         class={styles.card}
-        style={{ left: `${props.corner.x}px`, top: `${props.corner.y}px`, width: `${props.width}px` }}
+        style={{
+          left: `${props.corner.x}px`,
+          top: `${props.corner.y}px`,
+          width: `${props.width}px`,
+          'max-height': `${screen.size().height - 16}px`
+        }}
         onWheel={(event) => event.preventDefault()}
       >
         <Switch>
@@ -395,7 +402,7 @@ function ViewFace(props: { studio: Studio; center: Point }) {
  */
 function dragArea(change: (x: number, y: number) => void, settle: () => void) {
   const at = (press: Press) => {
-    const box = press.target.getBoundingClientRect();
+    const box = press.screen.rect(press.target);
     change(clamp((press.point.x - box.left) / box.width, 0, 1), clamp((press.point.y - box.top) / box.height, 0, 1));
   };
 

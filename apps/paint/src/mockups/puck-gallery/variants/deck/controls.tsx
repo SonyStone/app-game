@@ -249,7 +249,7 @@ export function SettingControl(props: { studio: Studio; setting: Setting }) {
 
 /** −1 for a press on a chip's left step zone, 1 on its right one, 0 in between. */
 function edgeOf(press: Press) {
-  const box = press.target.getBoundingClientRect();
+  const box = press.screen.rect(press.target);
   const x = press.start.x - box.left;
   if (x < stepZone) {
     return -1;

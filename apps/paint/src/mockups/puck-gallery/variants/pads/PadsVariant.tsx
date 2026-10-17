@@ -1,11 +1,11 @@
-import { createEventListener } from '@solid-primitives/event-listener';
-import { createResizeObserver, createWindowSize } from '@solid-primitives/resize-observer';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { createEffect, createMemo, createSignal, Show, untrack } from 'solid-js';
 import { hexToHsv, type Hsv } from '../../../../features/color/hsv';
 import { SketchIcon } from '../../../../shared/ui/SketchIcon';
 import { presets } from '../../kit/catalog';
 import type { Point } from '../../kit/createSketchCanvas';
 import type { Studio } from '../../kit/createStudio';
+import { listenOnScreen, useScreen, type VariantScreen } from '../../kit/screen';
 import type { NumberSetting } from '../../kit/values';
 import { galleryUi, type VariantProps } from '../../kit/variant';
 import { ColorSection } from './ColorSection';
@@ -36,7 +36,11 @@ export function PadsVariant(props: VariantProps) {
       props.done();
     }
   };
-  const motion = createMotion(studio, () => props.summon?.at ?? { x: innerWidth / 2, y: innerHeight / 2 });
+  const screen = useScreen();
+  const motion = createMotion(studio, () => {
+    const { width, height } = screen.size();
+    return props.summon?.at ?? { x: width / 2, y: height / 2 };
+  });
   const bank = createPads(studio, motion, picked);
   const solo = createSolo(studio);
   // Follows the color but keeps the hue (and saturation) of grays, and the dials' exact edits until it changes.
@@ -57,7 +61,8 @@ export function PadsVariant(props: VariantProps) {
       {(summon) => {
         const placement = createPlacement(
           () => summon().at,
-          () => props.hand
+          () => props.hand,
+          screen
         );
 
         return (
@@ -145,8 +150,7 @@ export function PadsVariant(props: VariantProps) {
       bank.setPressed(undefined);
     };
 
-    createEventListener(
-      window,
+    listenOnScreen(
       'keydown',
       (event) => {
         if (!props.summon || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
@@ -159,8 +163,7 @@ export function PadsVariant(props: VariantProps) {
       },
       { capture: true }
     );
-    createEventListener(
-      window,
+    listenOnScreen(
       'keyup',
       (event) => {
         if (event.code === heldCode) {
@@ -170,7 +173,7 @@ export function PadsVariant(props: VariantProps) {
       },
       { capture: true }
     );
-    createEventListener(window, 'pointermove', (event) => {
+    listenOnScreen('pointermove', (event) => {
       if (heldCode === undefined) {
         return;
       }
@@ -180,9 +183,9 @@ export function PadsVariant(props: VariantProps) {
         return;
       }
 
-      motion.move({ x: event.clientX, y: event.clientY }, event.shiftKey, true);
+      motion.move(screen.point(event), event.shiftKey, true);
     });
-    createEventListener(window, 'blur', stopHeld);
+    listenOnScreen('blur', stopHeld);
 
     /** Runs one key; returns whether it was the gear's. */
     function runKey(event: KeyboardEvent) {
@@ -309,21 +312,20 @@ function encoderDials(studio: Studio): readonly (Dial | undefined)[] {
 
 /**
  * Places the gear so that the center of its pad grid lands at `at`, shifted as little as needed to keep the whole
- * gear inside the window (below the gallery's bar). Measures the gear and the grid with a ResizeObserver, and again
- * when `layout` changes (the hand swaps the side sections). Hidden until the first measurement.
+ * gear inside `screen`, below its `top`. Measures the gear and the grid with a ResizeObserver, and again when `layout`
+ * changes (the hand swaps the side sections). Hidden until the first measurement.
  */
-function createPlacement(at: () => Point, layout: () => unknown) {
+function createPlacement(at: () => Point, layout: () => unknown, screen: VariantScreen) {
   const [root, setRoot] = createSignal<HTMLElement>();
   const [pads, setPads] = createSignal<HTMLElement>();
   const [frame, setFrame] = createSignal<{ width: number; height: number; padX: number; padY: number }>();
-  const windowSize = createWindowSize();
   const measure = (box: HTMLElement | undefined, grid: HTMLElement | undefined) => {
     if (!box || !grid) {
       return;
     }
 
-    const outer = box.getBoundingClientRect();
-    const inner = grid.getBoundingClientRect();
+    const outer = screen.rect(box);
+    const inner = screen.rect(grid);
     setFrame({
       width: outer.width,
       height: outer.height,
@@ -337,7 +339,7 @@ function createPlacement(at: () => Point, layout: () => unknown) {
     () => measure(untrack(root), untrack(pads))
   );
   createEffect(
-    () => ({ layout: layout(), width: windowSize.width, height: windowSize.height, box: root(), grid: pads() }),
+    () => ({ layout: layout(), size: screen.size(), box: root(), grid: pads() }),
     ({ box, grid }) => measure(box, grid)
   );
 
@@ -352,20 +354,20 @@ function createPlacement(at: () => Point, layout: () => unknown) {
       }
 
       const point = at();
-      const left = within(point.x - box.padX, edge, windowSize.width - box.width - edge);
-      const top = within(point.y - box.padY, topEdge, windowSize.height - box.height - edge);
+      const { width, height } = screen.size();
+      const left = within(point.x - box.padX, edge, width - box.width - edge);
+      const top = within(point.y - box.padY, screen.top, height - box.height - edge);
       return { left: `${Math.round(left)}px`, top: `${Math.round(top)}px` };
     }
   };
 }
 
-/** Clamps to `[min, max]`, preferring `min` when the range is empty (the gear is larger than the window). */
+/** Clamps to `[min, max]`, preferring `min` when the range is empty (the gear is larger than the screen). */
 function within(value: number, min: number, max: number) {
   return max < min ? min : Math.min(max, Math.max(min, value));
 }
 
-/** Margins the gear keeps from the window's edges; the top one clears the gallery's bar. */
+/** Margin the gear keeps from the screen's edges; at the top it keeps `screen.top`. */
 const edge = 8;
-const topEdge = 52;
 
 const modeLabels = { hold: 'Hold', toggle: 'Toggle', pinned: 'Pinned' } as const;

@@ -11,7 +11,8 @@ import type { Camera } from './createCanvasCamera';
  * properties, which compose with the element's own `transform`), so that it shows at those window coordinates at
  * 100 %, as a portal would put it in Paint. Moving the camera calls `update`. Left alone: popovers and modal dialogs,
  * which the top layer already shows in window coordinates, and everything inside `data-canvas-screen`, a frame that
- * stands in for the window. Must be created within a Solid owner.
+ * stands in for the window, or inside `data-variant-screen`, a Puck gallery variant's screen (see `GalleryLive`).
+ * Must be created within a Solid owner.
  */
 export function createViewportPopups(options: { world: () => HTMLElement | undefined; camera: () => Camera }) {
   const tracked = new Set<HTMLElement>();
@@ -64,7 +65,7 @@ export function createViewportPopups(options: { world: () => HTMLElement | undef
    * observer sees the element's own style writes, and an unchanged pass ends the loop that its own writes start.
    */
   function place(element: HTMLElement) {
-    if (element.hasAttribute('popover') || element.closest('[data-canvas-screen]')) {
+    if (element.hasAttribute('popover') || element.closest('[data-canvas-screen], [data-variant-screen]')) {
       return;
     }
 

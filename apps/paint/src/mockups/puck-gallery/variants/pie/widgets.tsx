@@ -1,8 +1,8 @@
-import { createEventListener } from '@solid-primitives/event-listener';
 import { createSignal, For, Show } from 'solid-js';
 import { hexToHsv, hsvToHex, type Hsv } from '../../../../features/color/hsv';
 import type { Point } from '../../kit/createSketchCanvas';
-import { pressHandlers } from '../../kit/pressHandlers';
+import { pressHandlers, type Press } from '../../kit/pressHandlers';
+import { listenOnScreen, useScreen } from '../../kit/screen';
 import { formatValue, fractionOf, stepPreset, valueAt, type NumberSetting } from '../../kit/values';
 import styles from './pie.module.css';
 
@@ -72,8 +72,8 @@ export function ChoiceField(props: {
   const [menu, setMenu] = createSignal<DOMRect>();
   const name = (option: string) => (props.format ?? ((text: string) => text))(option);
   const handlers = pressHandlers({
-    tap: (press) => setMenu(menu() ? undefined : press.target.getBoundingClientRect()),
-    end: (press) => setMenu(menu() ? undefined : press.target.getBoundingClientRect())
+    tap: (press) => setMenu(menu() ? undefined : press.screen.rect(press.target)),
+    end: (press) => setMenu(menu() ? undefined : press.screen.rect(press.target))
   });
 
   return (
@@ -134,13 +134,14 @@ export function ListMenu(props: {
   onDismiss: () => void;
 }) {
   const [focus, setFocus] = createSignal(Math.max(0, props.options.indexOf(props.value)));
+  const screen = useScreen();
   let element!: HTMLDivElement;
   const rowHeight = 26;
   const height = () => props.options.length * rowHeight + 8;
-  const top = () => Math.min(props.at.y, innerHeight - height() - 8);
-  const left = () => Math.min(props.at.x, innerWidth - props.width - 8);
+  const top = () => Math.min(props.at.y, screen.size().height - height() - 8);
+  const left = () => Math.min(props.at.x, screen.size().width - props.width - 8);
   const optionAt = (point: Point) => {
-    const box = element.getBoundingClientRect();
+    const box = screen.rect(element);
     if (point.x < box.left || point.x > box.right) {
       return undefined;
     }
@@ -148,8 +149,7 @@ export function ListMenu(props: {
     return props.options[Math.floor((point.y - box.top - 4) / rowHeight)];
   };
 
-  createEventListener(
-    window,
+  listenOnScreen(
     'pointerdown',
     (event) => {
       if (!element.contains(event.target as Node)) {
@@ -158,8 +158,7 @@ export function ListMenu(props: {
     },
     { capture: true }
   );
-  createEventListener(
-    window,
+  listenOnScreen(
     'keydown',
     (event) => {
       if (event.key === 'Escape') {
@@ -211,7 +210,7 @@ export function ListMenu(props: {
       })}
       onPointerMove={(event) => {
         if (event.pointerType !== 'touch' && event.buttons === 0) {
-          const option = optionAt({ x: event.clientX, y: event.clientY });
+          const option = optionAt(screen.point(event));
           if (option) {
             setFocus(props.options.indexOf(option));
           }
@@ -268,15 +267,15 @@ export function ColorWheel(props: {
     setHsv(next);
     props.onChange(hsvToHex(next));
   };
-  const wheelAt = (press: { point: Point; target: Element }) => {
-    const box = press.target.getBoundingClientRect();
+  const wheelAt = (press: Press) => {
+    const box = press.screen.rect(press.target);
     const dx = press.point.x - (box.left + box.width / 2);
     const dy = press.point.y - (box.top + box.height / 2);
     const h = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
     edit({ ...hsv(), h, s: Math.min(1, Math.hypot(dx, dy) / (box.width / 2)) });
   };
-  const valueAtPress = (press: { point: Point; target: Element }) => {
-    const box = press.target.getBoundingClientRect();
+  const valueAtPress = (press: Press) => {
+    const box = press.screen.rect(press.target);
     edit({ ...hsv(), v: Math.min(1, Math.max(0, 1 - (press.point.y - box.top) / box.height)) });
   };
   const thumb = () => {

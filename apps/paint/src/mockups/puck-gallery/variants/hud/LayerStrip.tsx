@@ -48,7 +48,7 @@ export function createLayerStrip(context: StripContext) {
   const delta = placeStrip(context, unionRect(...parts));
   const main = shiftRect(main0, delta);
   const tierLeft = tier0.left + delta.x;
-  /** Top of row `index`, in client pixels. */
+  /** Top of row `index`, in screen pixels. */
   const rowTop = (index: number) => main.top + columnInset + index * rowPitch;
   const rowAt = (point: Point) => {
     const list = studio.layers();

@@ -3,7 +3,7 @@ import { SketchIcon, type SketchIconName } from '../../../../shared/ui/SketchIco
 import { blendLabel, blendModes } from '../../kit/createSketchCanvas';
 import type { Studio } from '../../kit/createStudio';
 import { LayerThumb } from '../../kit/LayerThumb';
-import { pressHandlers } from '../../kit/pressHandlers';
+import { pressHandlers, type Press } from '../../kit/pressHandlers';
 import { galleryUi } from '../../kit/variant';
 import { crescent, crescentEdge, crescentHeight, crescentReach } from './geometry';
 import styles from './Orbit.module.css';
@@ -40,8 +40,8 @@ export function LayerCrescent(props: { studio: Studio; side: 1 | -1; done: () =>
   const downPress = tapPress(() => props.studio.moveLayer('down'));
   const blendPress = tapPress(() => setBlending((open) => !open));
   const opacityPress = pressHandlers({
-    start: (press, event) => setOpacity(event, press.target),
-    move: (press, event) => setOpacity(event, press.target)
+    start: setOpacity,
+    move: setOpacity
   });
 
   return (
@@ -187,9 +187,9 @@ export function LayerCrescent(props: { studio: Studio; side: 1 | -1; done: () =>
     </div>
   );
 
-  function setOpacity(event: PointerEvent, element: Element) {
-    const box = element.getBoundingClientRect();
-    const fraction = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+  function setOpacity(press: Press) {
+    const box = press.screen.rect(press.target);
+    const fraction = Math.min(1, Math.max(0, (press.point.x - box.left) / box.width));
     props.studio.updateLayer(props.studio.activeLayer(), { opacity: Math.round(fraction * 100) });
   }
 }

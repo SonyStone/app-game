@@ -28,7 +28,7 @@ import { dialRadius } from './layout';
 export function Dial(props: {
   studio: Studio;
   model: DialModel;
-  /** The dial's center in client pixels. */
+  /** The dial's center in screen pixels. */
   center: Point;
   /** Whether finishing closes the variant (a toggled one), so that the chip offers a check mark. */
   finishable: boolean;

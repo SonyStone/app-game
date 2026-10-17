@@ -22,7 +22,7 @@ export function ColorCard(props: { studio: Studio; done: () => void }) {
   };
   /** Where a press lies in its element, 0–1 on both axes. */
   const local = (press: Press) => {
-    const box = press.target.getBoundingClientRect();
+    const box = press.screen.rect(press.target);
     return {
       x: Math.min(1, Math.max(0, (press.point.x - box.left) / box.width)),
       y: Math.min(1, Math.max(0, (press.point.y - box.top) / box.height))

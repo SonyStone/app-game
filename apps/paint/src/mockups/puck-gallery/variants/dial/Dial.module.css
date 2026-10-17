@@ -578,7 +578,6 @@
     flex-direction: column;
     gap: 1px;
     box-sizing: border-box;
-    max-height: calc(100vh - 16px);
     overflow: hidden;
     padding: 4px 6px 6px;
     border: 1px solid #000;

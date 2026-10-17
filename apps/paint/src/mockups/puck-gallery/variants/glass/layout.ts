@@ -1,15 +1,21 @@
 import type { Point } from '../../kit/createSketchCanvas';
 
 /**
- * Places the Glass cluster around the QuickMenu: the QuickMenu's center as close to `at` as the viewport allows, the
+ * Places the Glass cluster around the QuickMenu: the QuickMenu's center as close to `at` as the viewport (the
+ * variant's screen, below the `top` px that its page keeps for itself) allows, the
  * tools and the brush cards on the hand's side, color and layers on the other side (or above and below the QuickMenu
  * when the viewport is too narrow for three columns), all scaled down when even that does not fit.
  *
  * The QuickMenu moves with `at` vertically; the side columns slide on their own to stay inside the viewport, so the
  * QuickMenu stays under the pen even near the top or the bottom of the screen. Boxes are in unscaled CSS pixels
- * relative to the QuickMenu's center; `center` is in client pixels.
+ * relative to the QuickMenu's center; `center` is in screen pixels.
  */
-export function clusterLayout(at: Point, viewport: { width: number; height: number }, hand: 'left' | 'right') {
+export function clusterLayout(
+  at: Point,
+  viewport: { width: number; height: number },
+  top: number,
+  hand: 'left' | 'right'
+) {
   const candidates = [arrange('wide'), arrange('tall')].map((arrangement) => {
     const extent = extentOf(Object.values(arrangement.boxes));
     const tallest = Math.max(
@@ -18,7 +24,7 @@ export function clusterLayout(at: Point, viewport: { width: number; height: numb
     const scale = Math.min(
       1,
       (viewport.width - margin * 2) / extent.width,
-      (viewport.height - topMargin - margin) / Math.max(tallest, extentOf(puckParts(arrangement)).height)
+      (viewport.height - top - margin) / Math.max(tallest, extentOf(puckParts(arrangement)).height)
     );
     return { arrangement, scale };
   });
@@ -29,15 +35,15 @@ export function clusterLayout(at: Point, viewport: { width: number; height: numb
   const puck = extentOf(arrangement.puck.map((part) => boxes[part]));
   const center = {
     x: clamp(at.x, margin - all.x * scale, viewport.width - margin - (all.x + all.width) * scale),
-    y: clamp(at.y, topMargin - puck.y * scale, viewport.height - margin - (puck.y + puck.height) * scale)
+    y: clamp(at.y, top - puck.y * scale, viewport.height - margin - (puck.y + puck.height) * scale)
   };
 
   // Each side column slides vertically, as one piece, until it is inside the viewport.
   for (const column of arrangement.columns) {
     const extent = extentOf(column.map((part) => boxes[part]));
-    const top = center.y + extent.y * scale;
-    const clampedTop = clamp(top, topMargin, viewport.height - margin - extent.height * scale);
-    const shift = (clampedTop - top) / scale;
+    const columnTop = center.y + extent.y * scale;
+    const clampedTop = clamp(columnTop, top, viewport.height - margin - extent.height * scale);
+    const shift = (clampedTop - columnTop) / scale;
     for (const part of column) {
       boxes[part] = { ...boxes[part], y: boxes[part].y + shift };
     }
@@ -83,8 +89,6 @@ const blockGap = 14;
 /** Space between the bars and the QuickMenu's ring. */
 const capsuleGap = 8;
 const margin = 8;
-/** Keeps the cluster below the gallery's bar. */
-const topMargin = 52;
 
 /** Lays the parts out for the left hand: the wide form has three columns, the tall form stacks color and layers around the QuickMenu. */
 function arrange(kind: 'wide' | 'tall') {

@@ -1,11 +1,11 @@
-import { createEventListener } from '@solid-primitives/event-listener';
-import { createResizeObserver, useWindowSize } from '@solid-primitives/resize-observer';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch, untrack } from 'solid-js';
 import { presets, tools } from '../../kit/catalog';
 import type { Point } from '../../kit/createSketchCanvas';
 import type { Studio } from '../../kit/createStudio';
 import type { Press } from '../../kit/pressHandlers';
+import { listenOnScreen, useScreen } from '../../kit/screen';
 import type { VariantProps } from '../../kit/variant';
 import { BrushCard } from './BrushCard';
 import { CardFace } from './CardFace';
@@ -68,7 +68,7 @@ function Hand(props: VariantProps & { memory: DeckMemory }) {
   const at = opening.at;
   /** Hover counts only after the pointer moves, so that a stale mouse position does not inspect for a finger. */
   const restingPointer = untrack(() => props.pointer);
-  const windowSize = useWindowSize();
+  const screen = useScreen();
   const [active, setActive] = createSignal<CardId | undefined>(untrack(() => props.memory.lastPlayed()));
   const [dealt, setDealt] = createSignal(false);
   const [dealing, setDealing] = createSignal(true);
@@ -87,9 +87,9 @@ function Hand(props: VariantProps & { memory: DeckMemory }) {
 
   const area = (): Box => ({
     left: edge,
-    top: barRoom,
-    right: windowSize.width - edge,
-    bottom: windowSize.height - edge
+    top: screen.top,
+    right: screen.size().width - edge,
+    bottom: screen.size().height - edge
   });
   const handFan = createMemo(() =>
     placeFan(
@@ -112,7 +112,7 @@ function Hand(props: VariantProps & { memory: DeckMemory }) {
     const id = active();
     return id === undefined ? undefined : cardIndex(id);
   };
-  /** Where the active card goes: centered on the summon point, inside the window, with room for the small fan. */
+  /** Where the active card goes: centered on the summon point, inside the screen, with room for the small fan. */
   const activeBox = createMemo(() => {
     const id = active();
     if (id === undefined) {
@@ -152,7 +152,7 @@ function Hand(props: VariantProps & { memory: DeckMemory }) {
       width: cardWidth * miniLayout.scale,
       height
     };
-    // Slides along the card's edge to stay inside the window when the card sits at a side.
+    // Slides along the card's edge to stay inside the screen when the card sits at a side.
     const bounds = fanBounds(fan, miniLayout.raise, miniLayout.grow);
     const shift = shiftInto(bounds.left, bounds.right, area().left, area().right);
     return { ...fan, pivot: { x: fan.pivot.x + shift, y: fan.pivot.y } };
@@ -353,13 +353,12 @@ function Hand(props: VariantProps & { memory: DeckMemory }) {
   );
 
   followHeldPointer(opening.heldPointer);
-  createEventListener(window, 'pointermove', () => {
+  listenOnScreen('pointermove', () => {
     if (keyPick() !== undefined) {
       setKeyPick(undefined);
     }
   });
-  createEventListener(
-    window,
+  listenOnScreen(
     'keydown',
     (event) => {
       if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
@@ -448,12 +447,12 @@ function Hand(props: VariantProps & { memory: DeckMemory }) {
     }
 
     let following = true;
-    createEventListener(window, 'pointermove', (event) => {
+    listenOnScreen('pointermove', (event) => {
       if (!following || event.pointerId !== pointer) {
         return;
       }
 
-      const point = { x: event.clientX, y: event.clientY };
+      const point = screen.point(event);
       if (Math.hypot(point.x - at.x, point.y - at.y) < 12 && sliding === undefined) {
         return;
       }
@@ -474,8 +473,8 @@ function Hand(props: VariantProps & { memory: DeckMemory }) {
         play(target);
       }
     };
-    createEventListener(window, 'pointerup', (event) => finish(event, true));
-    createEventListener(window, 'pointercancel', (event) => finish(event, false));
+    listenOnScreen('pointerup', (event) => finish(event, true));
+    listenOnScreen('pointercancel', (event) => finish(event, false));
   }
 
   /** The deck's keys while it is open; returns whether it used the key. */
@@ -641,9 +640,8 @@ const storageKey = 'puck-gallery:deck:last';
 /** The full card's width, and the height of its face as it lies in a fan; the fans scale the whole card down. */
 const cardWidth = 336;
 const faceHeight = 470;
-/** Room kept free at the window's edges, and above, where the gallery's bar is. */
+/** Room kept free at the screen's sides and bottom; the top keeps the screen's `top` clear instead. */
 const edge = 8;
-const barRoom = 50;
 /**
  * The hand around the pen: card scale, distance from the pen to the cards' centers, degrees between cards, lean away
  * from the drawing hand, and an inspected card's rise (px), growth and how far its neighbours part (degrees).

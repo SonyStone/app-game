@@ -1,7 +1,6 @@
-import { createEventListener } from '@solid-primitives/event-listener';
-import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect, createMemo, createSignal, Show, untrack } from 'solid-js';
 import type { Point } from '../../kit/createSketchCanvas';
+import { listenOnScreen, useScreen } from '../../kit/screen';
 import type { VariantProps } from '../../kit/variant';
 import { createDialModel, modes } from './createDialModel';
 import { DetailCard } from './DetailCard';
@@ -24,20 +23,21 @@ import { Orbit } from './Orbit';
  */
 export function DialVariant(props: VariantProps) {
   const model = createDialModel(props.studio);
-  const windowSize = createWindowSize();
+  const screen = useScreen();
   const [navigating, setNavigating] = createSignal<'pan' | 'view'>();
   /** Where the user parked the mini-dial; `undefined` until they move it. */
   const [parked, setParked] = createSignal<Point | undefined>(loadParked());
   const serial = createMemo(() => props.summon?.serial);
   const handle = createMemo(() =>
     clampHandle(
-      parked() ?? defaultHandle(props.hand, windowSize.width, windowSize.height),
-      windowSize.width,
-      windowSize.height
+      parked() ?? defaultHandle(props.hand, screen.size().width, screen.size().height),
+      screen.size().width,
+      screen.size().height,
+      screen.top
     )
   );
   const center = createMemo(() =>
-    clusterCenter(props.summon?.at ?? handle(), props.hand, windowSize.width, windowSize.height)
+    clusterCenter(props.summon?.at ?? handle(), props.hand, screen.size().width, screen.size().height, screen.top)
   );
   const hints = () => props.summon?.pointerType === 'mouse' || props.summon?.pointerType === 'keyboard';
 
@@ -79,7 +79,7 @@ export function DialVariant(props: VariantProps) {
             studio={props.studio}
             model={model}
             center={center()}
-            corner={cardCorner(center(), props.hand, windowSize.height)}
+            corner={cardCorner(center(), props.hand, screen.size().height, screen.top)}
             width={card.width}
             onDone={props.done}
           />
@@ -100,8 +100,7 @@ export function DialVariant(props: VariantProps) {
 
   /** Keys while open; consumed keys are prevented, so the gallery leaves them alone. */
   function setupKeys() {
-    createEventListener(
-      window,
+    listenOnScreen(
       'keydown',
       (event) => {
         if (!props.summon || props.hidden || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
@@ -147,12 +146,12 @@ export function DialVariant(props: VariantProps) {
     const holding = (event: PointerEvent) =>
       props.summon?.heldPointer === event.pointerId && liftedFor !== props.summon.serial;
 
-    createEventListener(window, 'pointermove', (event) => {
+    listenOnScreen('pointermove', (event) => {
       if (!holding(event)) {
         return;
       }
 
-      const at = { x: event.clientX, y: event.clientY };
+      const at = screen.point(event);
       const pivot = center();
       if (turn?.serial !== props.summon!.serial) {
         turn = { serial: props.summon!.serial, last: undefined, started: false };
@@ -196,8 +195,8 @@ export function DialVariant(props: VariantProps) {
         props.done();
       }
     };
-    createEventListener(window, 'pointerup', (event) => lift(event, true));
-    createEventListener(window, 'pointercancel', (event) => lift(event, false));
+    listenOnScreen('pointerup', (event) => lift(event, true));
+    listenOnScreen('pointercancel', (event) => lift(event, false));
   }
 }
 

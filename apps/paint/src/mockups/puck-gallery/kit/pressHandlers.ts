@@ -1,4 +1,5 @@
 import type { Point } from './createSketchCanvas';
+import { screenOf, type VariantScreen } from './screen';
 
 /**
  * Press-drag-lift handlers for one element, the same for the pen, a finger and the mouse's main button: the press
@@ -35,7 +36,7 @@ export function pressHandlers(options: {
     return press?.id === event.pointerId ? press : undefined;
   };
   const update = (press: Press, event: PointerEvent) => {
-    const point = { x: event.clientX, y: event.clientY };
+    const point = press.screen.point(event);
     press.delta = { x: point.x - press.point.x, y: point.y - press.point.y };
     press.point = point;
     press.moved ||= Math.hypot(point.x - press.start.x, point.y - press.start.y) >= tapDistance;
@@ -72,7 +73,8 @@ export function pressHandlers(options: {
         return;
       }
 
-      const point = { x: event.clientX, y: event.clientY };
+      const screen = screenOf(target);
+      const point = screen.point(event);
       const started: Press = {
         id: event.pointerId,
         pointerType: event.pointerType as Press['pointerType'],
@@ -82,7 +84,8 @@ export function pressHandlers(options: {
         moved: false,
         shift: event.shiftKey,
         time: event.timeStamp,
-        target
+        target,
+        screen
       };
       event.preventDefault();
       if (options.start?.(started, event) === false) {
@@ -105,7 +108,10 @@ export function pressHandlers(options: {
   };
 }
 
-/** A press in progress: where it started, where it is and whether it has moved far enough to be no tap. */
+/**
+ * A press in progress: where it started, where it is and whether it has moved far enough to be no tap. Points are in
+ * the pixels of the target's `screen`; measure elements with `screen.rect`.
+ */
 export type Press = {
   id: number;
   pointerType: 'mouse' | 'pen' | 'touch';
@@ -119,6 +125,8 @@ export type Press = {
   time: number;
   /** The element that captured the press. */
   target: Element;
+  /** The screen the target is on. */
+  screen: VariantScreen;
 };
 
 /** Presses in progress by the element that took them. */

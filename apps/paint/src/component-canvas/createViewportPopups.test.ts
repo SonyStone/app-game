@@ -31,6 +31,7 @@ it('counter-transforms fixed popups that appear in the world, and follows the ca
   const world = document.createElement('div');
   world.innerHTML = `
     <div id="screen" data-canvas-screen><div id="framed" style="position: fixed; left: 10px; top: 10px"></div></div>
+    <div data-variant-screen><div id="variant" style="position: fixed; left: 10px; top: 10px"></div></div>
     <div id="menu" popover style="position: fixed; left: 10px; top: 10px"></div>`;
   document.body.append(world);
   let camera: Camera = { x: 100, y: 50, zoom: 2 };
@@ -51,6 +52,7 @@ it('counter-transforms fixed popups that appear in the world, and follows the ca
   expect(popup.style.scale).toBe('0.5');
   expect(inline.style.translate).toBe('');
   expect(document.getElementById('framed')!.style.translate).toBe('');
+  expect(document.getElementById('variant')!.style.translate).toBe('');
   expect(document.getElementById('menu')!.style.translate).toBe('');
 
   camera = { x: 0, y: 0, zoom: 1 };

@@ -2,7 +2,7 @@ import type { Point } from '../../kit/createSketchCanvas';
 
 /**
  * The Orbit's measurements and polar helpers. Lengths are CSS pixels from the disc's center (before the whole UI
- * scales down to fit a small window). Angles are degrees clockwise from 12 o'clock, as a clock and the canvas
+ * scales down to fit a small screen). Angles are degrees clockwise from 12 o'clock, as a clock and the canvas
  * rotation count them. Layouts are given for a left-handed painter, with the tools on the left (negative angles) and
  * the settings on the right (positive angles); the other hand multiplies every angle by `side`.
  */
@@ -150,7 +150,7 @@ export function settingSlot(index: number, side: 1 | -1): SettingSlot {
   };
 }
 
-/** How far the UI reaches from the disc's center on each side, for keeping it inside the window. */
+/** How far the UI reaches from the disc's center on each side, for keeping it inside the screen. */
 export const reach = {
   /** Toward the hand: the tools' arc with its key badges. */
   hand: 262,

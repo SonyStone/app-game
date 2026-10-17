@@ -1,11 +1,10 @@
-import { createEventListener } from '@solid-primitives/event-listener';
-import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
 import { presets, tools } from '../../kit/catalog';
 import { blendModes, type Point } from '../../kit/createSketchCanvas';
 import type { Studio } from '../../kit/createStudio';
 import { navigationDrag } from '../../kit/navigationDrag';
 import { pressHandlers } from '../../kit/pressHandlers';
+import { listenOnScreen, useScreen } from '../../kit/screen';
 import { stepPreset, type NumberSetting } from '../../kit/values';
 import { galleryUi, type Summon, type VariantProps } from '../../kit/variant';
 import { Caption, createCaption } from './Caption';
@@ -61,8 +60,8 @@ export function OrbitVariant(props: VariantProps) {
 }
 
 /**
- * The open Orbit, centered on the summoning point and shifted (or, on a tiny window, scaled) to stay inside the
- * window. Owns the keyboard (`,` `.` presets, ← → rotation, 1–8 tools, Tab settings page, Esc) and the wheel over
+ * The open Orbit, centered on the summoning point and shifted (or, on a tiny screen, scaled) to stay inside the
+ * screen. Owns the keyboard (`,` `.` presets, ← → rotation, 1–8 tools, Tab settings page, Esc) and the wheel over
  * its parts, which each declare what the wheel does with `data-wheel`. Navigation drags (Pan, Zoom, the rim) hide
  * everything but the control in use.
  */
@@ -78,7 +77,7 @@ function Orbit(props: {
   page: number;
   setPage: (page: number) => void;
 }) {
-  const windowSize = createWindowSize();
+  const screen = useScreen();
   const captions = createCaption();
   const navigation = navigationDrag(props.studio);
   const [nav, setNav] = createSignal<'pan' | 'zoom' | 'rotate'>();
@@ -92,7 +91,8 @@ function Orbit(props: {
     const right = side() > 0 ? far : reach.hand;
     const panel = props.layersOpen ? crescentHeight(Math.max(5, props.studio.layers().length) + 3) / 2 : 0;
     const vertical = Math.max(reach.vertical, panel + 4);
-    const { width, height } = windowSize;
+    const { width, height } = screen.size();
+    const topMargin = Math.max(margin, screen.top - 2);
     const scale = Math.min(1, (width - margin * 2) / (left + right), (height - topMargin - margin) / (vertical * 2));
     return {
       x: clamp(props.summon.at.x, margin + left * scale, width - margin - right * scale),
@@ -100,9 +100,9 @@ function Orbit(props: {
       scale
     };
   });
-  const toLocal = (client: Point): Point => {
+  const toLocal = (point: Point): Point => {
     const { x, y, scale } = frame();
-    return { x: (client.x - x) / scale, y: (client.y - y) / scale };
+    return { x: (point.x - x) / scale, y: (point.y - y) / scale };
   };
   const endNav = () => {
     navigation.end();
@@ -150,8 +150,8 @@ function Orbit(props: {
   };
   let root!: HTMLDivElement;
 
-  createEventListener(window, 'keydown', onKey, { capture: true });
-  createEventListener(window, 'wheel', onWheel, { passive: false, capture: true });
+  listenOnScreen('keydown', onKey, { capture: true });
+  listenOnScreen('wheel', onWheel, { passive: false, capture: true });
 
   return (
     <div
@@ -398,9 +398,8 @@ function Orbit(props: {
   }
 }
 
-/** Space kept clear around the Orbit, and below the gallery's bar at the top. */
+/** Space kept clear around the Orbit; at the top, the page's room (`screen.top`) less 2 px is kept instead, if larger. */
 const margin = 8;
-const topMargin = 50;
 
 /**
  * Turns wheel events into whole notches for one zone at a time: a mouse wheel's notch (|delta| ≥ 50 px) is one step;

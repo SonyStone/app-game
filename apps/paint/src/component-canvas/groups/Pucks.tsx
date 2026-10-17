@@ -15,7 +15,7 @@ import { defaultSlots, starterColors } from '../../variants/zen/tools';
 import zen from '../../variants/zen/ZenStudio.module.css';
 import styles from '../ComponentCanvas.module.css';
 import { PuckFrame, puckBoxes } from '../frames';
-import { GalleryStage } from '../GalleryStage';
+import { GalleryLive, GalleryStage } from '../GalleryStage';
 import { ScreenFrame, TryButton } from '../Screen';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
 
@@ -32,8 +32,7 @@ export function Pucks() {
       title="Pucks"
       omitted={
         <>
-          The pie listens to the whole window for hover and keys, so it is only shown live, full screen, where every
-          state appears as you use it. The ring's presets are Paint's two built-in ones. The Puck variant's own puck
+          The ring's presets are Paint's two built-in ones. The Puck variant's own puck
           comes with the UI variants.
         </>
       }
@@ -94,17 +93,16 @@ export function Pucks() {
         </Specimen>
       </CanvasRow>
 
-      <CanvasRow title="Pie (Puck gallery)" note="after Blender's pie menus and Maya's marking menus">
+      <CanvasRow
+        title="Pie (Puck gallery)"
+        note="after Blender's pie menus and Maya's marking menus; hover a direction and tap, or press, slide and lift"
+      >
         <Specimen
           id="pucks/gallery/pie"
           label="Pie"
           below={<TryButton label="Try full screen" title="Pie" render={() => <GalleryStage variant={pie} />} />}
         >
-          <ScreenFrame width={frameSize} height={frameSize}>
-            <span class={styles.screenNote}>
-              Hover a direction and tap, or press, slide and lift. Tools, Color, Brush and Layers open their own pies.
-            </span>
-          </ScreenFrame>
+          <GalleryLive variant={pie} />
         </Specimen>
       </CanvasRow>
     </CanvasGroup>

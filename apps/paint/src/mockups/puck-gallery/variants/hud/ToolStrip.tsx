@@ -3,10 +3,10 @@ import { SketchIcon } from '../../../../shared/ui/SketchIcon';
 import { tools, type Setting } from '../../kit/catalog';
 import type { Point } from '../../kit/createSketchCanvas';
 import type { Studio } from '../../kit/createStudio';
-import { pressHandlers } from '../../kit/pressHandlers';
+import { pressHandlers, type Press } from '../../kit/pressHandlers';
 import { formatValue, fractionOf, stepPreset, valueAt, type NumberSetting } from '../../kit/values';
 import { galleryUi } from '../../kit/variant';
-import { clamp, openSide, shiftRect, unionRect, windowEdges, type Rect } from './geometry';
+import { clamp, openSide, shiftRect, unionRect, type Rect } from './geometry';
 import styles from './Hud.module.css';
 import { createTrembleGuard, placeStrip, stripPress, type StripContext } from './strip';
 import { createWheelSteps, rectStyle } from './ValueStrip';
@@ -34,7 +34,7 @@ export function createToolStrip(context: StripContext) {
   let settings0: Rect | undefined;
   if (context.via !== 'drag') {
     const height = Math.ceil(studio.settings().length / 2) * settingPitch + 12;
-    const above = row0.top - 8 - height >= windowEdges.top;
+    const above = row0.top - 8 - height >= context.screen.top;
     settings0 = {
       left: row0.left,
       top: above ? row0.top - 8 - height : name0.top + name0.height + 6,
@@ -208,14 +208,14 @@ export function ToolSettings(props: { studio: Studio; rect: Rect }) {
 function NumberBar(props: { studio: Studio; setting: NumberSetting }) {
   let bar!: HTMLButtonElement;
   const value = () => props.studio.number(props.setting.key);
-  const setAt = (point: Point) => {
-    const box = bar.getBoundingClientRect();
-    props.studio.setValue(props.setting.key, valueAt(props.setting, (point.x - box.left) / box.width));
+  const setAt = (press: Press) => {
+    const box = press.screen.rect(bar);
+    props.studio.setValue(props.setting.key, valueAt(props.setting, (press.point.x - box.left) / box.width));
   };
   const wheel = createWheelSteps((by) =>
     props.studio.setValue(props.setting.key, stepPreset(props.setting, value(), by))
   );
-  const press = pressHandlers({ start: (started) => setAt(started.point), move: (moved) => setAt(moved.point) });
+  const press = pressHandlers({ start: setAt, move: setAt });
 
   return (
     <button

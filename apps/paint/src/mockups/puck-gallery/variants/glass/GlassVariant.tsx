@@ -1,9 +1,9 @@
-import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from 'solid-js';
 import { SketchIcon } from '../../../../shared/ui/SketchIcon';
 import { tools, type ToolId } from '../../kit/catalog';
 import type { Point } from '../../kit/createSketchCanvas';
 import type { Studio } from '../../kit/createStudio';
+import { listenOnScreen, useScreen } from '../../kit/screen';
 import { formatValue, stepPreset, type NumberSetting } from '../../kit/values';
 import { galleryUi, type Summon, type VariantProps } from '../../kit/variant';
 import { BrushLibrary, BrushStudio } from './BrushCards';
@@ -46,8 +46,8 @@ export function GlassVariant(props: VariantProps) {
 function Cluster(
   props: Pick<VariantProps, 'studio' | 'pointer' | 'hand' | 'hidden' | 'close' | 'done'> & { summon: Summon }
 ) {
-  const [viewport, setViewport] = createSignal({ width: innerWidth, height: innerHeight });
-  const layout = createMemo(() => clusterLayout(props.summon.at, viewport(), props.hand));
+  const screen = useScreen();
+  const layout = createMemo(() => clusterLayout(props.summon.at, screen.size(), screen.top, props.hand));
   const navigation = createGlassNavigation(
     untrack(() => props.studio),
     () => layout().center
@@ -194,16 +194,15 @@ function Cluster(
   );
 
   /**
-   * Window input while open: the viewport's size, whether a finger is in use, the opening press's flick (a move
-   * toward a button highlights it; a release runs it, and Pan, Zoom and Rotate start navigating once the move reaches
-   * the ring, finishing on release), and the keys: B, E and S choose tools, `[` `]` step the size, 1–6 are the
+   * The screen's window input while open: whether a finger is in use, the opening press's flick (a move toward a
+   * button highlights it; a release runs it, and Pan, Zoom and Rotate start navigating once the move reaches the
+   * ring, finishing on release), and the keys: B, E and S choose tools, `[` `]` step the size, 1–6 are the
    * QuickMenu's buttons (1–3 navigate with the pointer while held), Esc closes.
    */
   function setupInput() {
-    createEventListener(window, 'resize', () => setViewport({ width: innerWidth, height: innerHeight }));
-    createEventListener(window, 'pointerdown', (event) => setTouch(event.pointerType === 'touch'), { capture: true });
-    createEventListener(window, 'pointermove', (event) => {
-      const at = { x: event.clientX, y: event.clientY };
+    listenOnScreen('pointerdown', (event) => setTouch(event.pointerType === 'touch'), { capture: true });
+    listenOnScreen('pointermove', (event) => {
+      const at = screen.point(event);
       if (event.pointerType !== 'touch' && touch()) {
         setTouch(false);
       }
@@ -235,7 +234,7 @@ function Cluster(
 
       setHighlighted(slot?.id);
     });
-    createEventListener(window, 'pointerup', (event) => {
+    listenOnScreen('pointerup', (event) => {
       if (flick?.id !== event.pointerId) {
         return;
       }
@@ -251,7 +250,7 @@ function Cluster(
         run(ended.slot.id);
       }
     });
-    createEventListener(window, 'pointercancel', (event) => {
+    listenOnScreen('pointercancel', (event) => {
       if (flick?.id === event.pointerId) {
         if (flick.navigating) {
           navigation.end();
@@ -261,8 +260,7 @@ function Cluster(
         setHighlighted(undefined);
       }
     });
-    createEventListener(
-      window,
+    listenOnScreen(
       'keydown',
       (event) => {
         if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
@@ -314,10 +312,8 @@ function Cluster(
         navigation.end();
       }
     };
-    createEventListener(window, 'keyup', (event) => event.code === keyNavigation && endKeyNavigation(), {
-      capture: true
-    });
-    createEventListener(window, 'blur', endKeyNavigation);
+    listenOnScreen('keyup', (event) => event.code === keyNavigation && endKeyNavigation(), { capture: true });
+    listenOnScreen('blur', endKeyNavigation);
     onCleanup(endKeyNavigation);
   }
 }

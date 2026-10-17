@@ -6,6 +6,7 @@ import { blendLabel, type Point } from '../../kit/createSketchCanvas';
 import { LayerThumb } from '../../kit/LayerThumb';
 import { navigationDrag } from '../../kit/navigationDrag';
 import { pressHandlers, type Press } from '../../kit/pressHandlers';
+import { listenOnScreen, screenOf, useScreen } from '../../kit/screen';
 import { StrokePreview } from '../../kit/StrokePreview';
 import { formatValue, fractionOf, nearestPreset, stepPreset, valueAt } from '../../kit/values';
 import { galleryUi, type Summon, type VariantProps } from '../../kit/variant';
@@ -69,12 +70,13 @@ function Hive(props: {
   const navigation = navigationDrag(studio);
   const serial = createMemo(() => props.summon().serial);
   const hand = () => props.variant.hand;
-  const [viewport, setViewport] = createSignal({ width: innerWidth, height: innerHeight });
+  const screen = useScreen();
+  const viewport = screen.size;
   const layerIds = createMemo(() => studio.layers().map((entry) => entry.id), {
     equals: (a, b) => a.length === b.length && a.every((id, index) => id === b[index])
   });
 
-  /** The cells at full size, or scaled down (to 70% at most) when the window cannot hold them. */
+  /** The cells at full size, or scaled down (to 70% at most) when the screen cannot hold them. */
   const layout = createMemo(() => {
     const input = { hand: hand(), settings: studio.settings(), layers: layerIds() };
     const full = hiveCells({ ...input, unit: baseUnit });
@@ -82,7 +84,7 @@ function Hive(props: {
     const { width, height } = viewport();
     const fit = Math.min(
       1,
-      (height - margin.top - margin.edge) / (box.bottom - box.top),
+      (height - screen.top - margin.edge) / (box.bottom - box.top),
       (width - margin.edge * 2) / (box.right - box.left)
     );
     if (fit >= 1) {
@@ -94,14 +96,14 @@ function Hive(props: {
     return { cells, unit, box: bounds(cells) };
   });
 
-  /** The Puck's centre on screen: the opening point, moved just enough to keep the whole Hive in the window. */
+  /** The Puck's centre on screen: the opening point, moved just enough to keep the whole Hive on the screen. */
   const origin = createMemo(() => {
     const at = props.summon().at;
     const { box } = layout();
     const { width, height } = viewport();
     return {
       x: clampInto(at.x, margin.edge - box.left, width - margin.edge - box.right),
-      y: clampInto(at.y, margin.top - box.top, height - margin.edge - box.bottom)
+      y: clampInto(at.y, screen.top - box.top, height - margin.edge - box.bottom)
     };
   });
 
@@ -110,7 +112,7 @@ function Hive(props: {
     return [];
   });
 
-  /** The topmost unfolded flyout and its cells, shifted into the window; a layer's flyout follows its layer. */
+  /** The topmost unfolded flyout and its cells, shifted onto the screen; a layer's flyout follows its layer. */
   const flyout = createMemo(() => {
     const top = flyouts().at(-1);
     if (!top) {
@@ -129,7 +131,7 @@ function Hive(props: {
     const center = origin();
     const { width, height } = viewport();
     const dx = shiftInto(center.x + box.left, center.x + box.right, margin.edge, width - margin.edge);
-    const dy = shiftInto(center.y + box.top, center.y + box.bottom, margin.top, height - margin.edge);
+    const dy = shiftInto(center.y + box.top, center.y + box.bottom, screen.top, height - margin.edge);
     if (dx === 0 && dy === 0) {
       return { top: anchored, cells: placed };
     }
@@ -235,9 +237,8 @@ function Hive(props: {
     }
   });
 
-  createEventListener(window, 'resize', () => setViewport({ width: innerWidth, height: innerHeight }));
-  createEventListener(window, 'pointermove', (event) => {
-    const point = { x: event.clientX, y: event.clientY };
+  listenOnScreen('pointermove', (event) => {
+    const point = screen.point(event);
     if (holding(event)) {
       lastPointer = point;
       hover(point, event.pointerType === 'touch');
@@ -251,20 +252,23 @@ function Hive(props: {
     lastPointer = point;
     hover(point);
   });
-  createEventListener(window, 'pointerout', (event) => {
-    if (!event.relatedTarget && !press && event.pointerType !== 'touch') {
+  // Off the screen: out of the window, or on a shared page into another box or the page around it.
+  listenOnScreen('pointerout', (event) => {
+    const into = event.relatedTarget;
+    const left = !(into instanceof Element) || screenOf(into) !== screen;
+    if (left && !press && event.pointerType !== 'touch') {
       setHovered(undefined);
       aimLens(0);
     }
   });
   // A press-drag-release from the opening press (right button, long-press): lifting over a cell picks it.
-  createEventListener(window, 'pointerup', (event) => {
+  listenOnScreen('pointerup', (event) => {
     if (!holding(event)) {
       return;
     }
 
     liftedFor = serial();
-    const point = { x: event.clientX, y: event.clientY };
+    const point = screen.point(event);
     const opened = props.summon().at;
     setFinger(undefined);
     if (Math.hypot(point.x - opened.x, point.y - opened.y) < heldTravel) {
@@ -276,12 +280,12 @@ function Hive(props: {
       activate(cell);
     }
   });
-  createEventListener(window, 'pointercancel', (event) => {
+  listenOnScreen('pointercancel', (event) => {
     if (holding(event)) {
       liftedFor = serial();
     }
   });
-  createEventListener(window, 'keydown', onKey, { capture: true });
+  listenOnScreen('keydown', onKey, { capture: true });
 
   props.bindRelease(() => {
     if (flyouts().length > 0) {
@@ -358,7 +362,7 @@ function Hive(props: {
     return { ...text, x, y };
   });
 
-  /** Where the colour wheel's middle sits on screen while it is unfolded, kept inside the window. */
+  /** Where the colour wheel's middle sits on screen while it is unfolded, kept on the screen. */
   const wheelAt = () => {
     const top = flyout()?.top;
     if (top?.kind !== 'wheel') {
@@ -370,7 +374,7 @@ function Hive(props: {
     const half = wheelSize / 2;
     return {
       x: clampInto(center.x + top.at.x, margin.edge + half, width - margin.edge - half),
-      y: clampInto(center.y + top.at.y, margin.top + half, height - margin.edge - half)
+      y: clampInto(center.y + top.at.y, screen.top + half, height - margin.edge - half)
     };
   };
 
@@ -1006,7 +1010,7 @@ function Hive(props: {
 
   function onWheel(event: WheelEvent) {
     event.preventDefault();
-    const cell = probe({ x: event.clientX, y: event.clientY }).cell;
+    const cell = probe(screen.point(event)).cell;
     wheelRest += event.deltaMode === 0 ? event.deltaY || event.deltaX : (event.deltaY || event.deltaX) * 40;
     if (!cell || Math.abs(wheelRest) < wheelStep) {
       return;
@@ -1350,8 +1354,8 @@ const wheelSize = 272;
 const baseUnit = 42;
 /** A layer thumbnail's height over its width: the sheet's proportions. */
 const sheetAspect = 33 / 48;
-/** Room kept free at the window's edges; the top keeps clear of the gallery's bar. */
-const margin = { edge: 12, top: 52 };
+/** Room kept free at the screen's edges; the top keeps the screen's `top` clear instead. */
+const margin = { edge: 12 };
 const haloWidth = 3;
 /** How far a press may land outside every cell and still count for the nearest one: a little beyond the halo. */
 const seamTolerance = 5;

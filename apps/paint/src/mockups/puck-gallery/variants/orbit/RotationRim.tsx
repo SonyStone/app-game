@@ -15,7 +15,7 @@ import { tappable } from './tapPress';
  */
 export function RotationRim(props: {
   studio: Studio;
-  toLocal: (client: Point) => Point;
+  toLocal: (point: Point) => Point;
   onRotating: (on: boolean) => void;
 }) {
   const [rotating, setRotating] = createSignal(false);

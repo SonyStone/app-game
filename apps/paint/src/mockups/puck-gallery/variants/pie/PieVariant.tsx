@@ -1,10 +1,10 @@
-import { createEventListener } from '@solid-primitives/event-listener';
 import { createMemo, createSignal, For, Show, untrack } from 'solid-js';
 import { SketchIcon, type SketchIconName } from '../../../../shared/ui/SketchIcon';
 import { palette, presets, tools, type Setting } from '../../kit/catalog';
 import type { Point } from '../../kit/createSketchCanvas';
 import { navigationDrag, type NavigationKind } from '../../kit/navigationDrag';
 import { pressHandlers } from '../../kit/pressHandlers';
+import { listenOnScreen, useScreen } from '../../kit/screen';
 import { formatValue, nearestPreset, type NumberSetting } from '../../kit/values';
 import { galleryUi, type VariantProps } from '../../kit/variant';
 import { LayersPanel } from './LayersPanel';
@@ -29,6 +29,7 @@ import { ChoiceField, ColorWheel, ToggleField, ValueField } from './widgets';
  */
 export function PieVariant(props: VariantProps) {
   const studio = props.studio;
+  const screen = useScreen();
   const navigation = navigationDrag(studio);
   const pies = buildPies();
   const touch = () => props.summon?.pointerType === 'touch';
@@ -220,7 +221,7 @@ export function PieVariant(props: VariantProps) {
     }
 
     event.preventDefault();
-    const at = { x: event.clientX, y: event.clientY };
+    const at = screen.point(event);
     if (operation()?.modal) {
       endOperation();
       return;
@@ -258,7 +259,7 @@ export function PieVariant(props: VariantProps) {
       return;
     }
 
-    const at = { x: event.clientX, y: event.clientY };
+    const at = screen.point(event);
     if (operation()) {
       navigation.move(at, event.shiftKey);
       return;
@@ -299,7 +300,7 @@ export function PieVariant(props: VariantProps) {
 
     const item = itemAt(highlight());
     if (item) {
-      activate(item, { x: event.clientX, y: event.clientY }, 'press');
+      activate(item, screen.point(event), 'press');
     }
   }
 
@@ -336,8 +337,8 @@ export function PieVariant(props: VariantProps) {
     const holding = (event: PointerEvent) =>
       props.summon?.heldPointer === event.pointerId && liftedFor !== props.summon.serial;
 
-    createEventListener(window, 'pointermove', (event) => {
-      const at = { x: event.clientX, y: event.clientY };
+    listenOnScreen('pointermove', (event) => {
+      const at = screen.point(event);
       if (operation()?.modal) {
         navigation.move(at, event.shiftKey);
         return;
@@ -375,7 +376,7 @@ export function PieVariant(props: VariantProps) {
       const dy = at.y - current.center.y;
       setHighlight(Math.hypot(dx, dy) < current.definition.dead ? undefined : directionAt(dx, dy));
     });
-    createEventListener(window, 'pointerup', (event) => {
+    listenOnScreen('pointerup', (event) => {
       if (!holding(event)) {
         return;
       }
@@ -391,11 +392,10 @@ export function PieVariant(props: VariantProps) {
       // Lifting the opening press in a direction chooses it; lifting it where it began leaves the pie open.
       const item = moved ? itemAt(highlight()) : undefined;
       if (item) {
-        activate(item, { x: event.clientX, y: event.clientY }, 'release');
+        activate(item, screen.point(event), 'release');
       }
     });
-    createEventListener(
-      window,
+    listenOnScreen(
       'keydown',
       (event) => {
         const current = open();
@@ -466,7 +466,7 @@ export function PieVariant(props: VariantProps) {
       },
       { capture: true }
     );
-    createEventListener(window, 'keyup', (event) => {
+    listenOnScreen('keyup', (event) => {
       heldArrows.delete(event.key);
     });
   }
@@ -481,7 +481,10 @@ export function PieVariant(props: VariantProps) {
     return {
       kind: 'pie',
       definition,
-      center: { x: clamp(at.x, side + 8, innerWidth - side - 8), y: clamp(at.y, above + 52, innerHeight - below - 8) }
+      center: {
+        x: clamp(at.x, side + 8, screen.size().width - side - 8),
+        y: clamp(at.y, above + screen.top, screen.size().height - below - 8)
+      }
     };
   }
 
@@ -841,7 +844,8 @@ function tapHandlers(run: () => void) {
   return pressHandlers({
     tap: run,
     end: (press) => {
-      if (press.target.contains(document.elementFromPoint(press.point.x, press.point.y))) {
+      const at = press.screen.client(press.point);
+      if (press.target.contains(document.elementFromPoint(at.x, at.y))) {
         run();
       }
     }

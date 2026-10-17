@@ -1,4 +1,3 @@
-import { createEventListener } from '@solid-primitives/event-listener';
 import { createMemo, createSignal, For, Show, untrack } from 'solid-js';
 import { SketchIcon, type SketchIconName } from '../../../../shared/ui/SketchIcon';
 import { presets, type Preset } from '../../kit/catalog';
@@ -6,13 +5,14 @@ import type { Point } from '../../kit/createSketchCanvas';
 import type { Studio } from '../../kit/createStudio';
 import { navigationDrag, type NavigationKind } from '../../kit/navigationDrag';
 import { pressHandlers } from '../../kit/pressHandlers';
+import { listenOnScreen, useScreen } from '../../kit/screen';
 import { formatValue } from '../../kit/values';
 import { galleryUi, type VariantProps } from '../../kit/variant';
 import { ColorStripView, createColorStrip } from './ColorStrip';
 import { createFingerTaps } from './fingerTaps';
 import {
   clamp,
-  clampToWindow,
+  clampToScreen,
   directions,
   directionToward,
   functionAt,
@@ -81,9 +81,10 @@ function Hud(
 ) {
   const opened = untrack(() => props.summon!);
   const studio = untrack(() => props.studio);
+  const screen = useScreen();
   const openedAt = performance.now();
-  /** The ring's center: the summon point, moved in so that the two-step labels fit in the window. */
-  const center = clampToWindow(opened.at, { x: 168, y: 128 });
+  /** The ring's center: the summon point, moved in so that the two-step labels fit on the screen. */
+  const center = untrack(() => clampToScreen(opened.at, { x: 168, y: 128 }, screen));
   const navigation = navigationDrag(studio);
   /** Whether the opening press is still down and followed; see `followHeldPointer`. */
   let holding = opened.heldPointer !== undefined;
@@ -241,12 +242,12 @@ function Hud(
         onPointerMove={(event) => {
           surface.onPointerMove(event);
           if (event.pointerType !== 'touch' && pressZone === undefined && !holding) {
-            setHover(zoneAt({ x: event.clientX, y: event.clientY }, center));
+            setHover(zoneAt(screen.point(event), center));
           }
         }}
         onPointerLeave={() => !holding && setHover(undefined)}
         onWheel={(event) => {
-          const zone = zoneAt({ x: event.clientX, y: event.clientY }, center);
+          const zone = zoneAt(screen.point(event), center);
           if (zone === 'hub' || zone === 'rim') {
             event.preventDefault();
             studio.zoomBy(2 ** (-event.deltaY / 500), center);
@@ -318,7 +319,7 @@ function Hud(
 
   /** The context a strip opens with. */
   function stripContext(home: Point, via: StripVia): StripContext {
-    return { studio, hand: props.hand, center, home, via };
+    return { studio, hand: props.hand, screen, center, home, via };
   }
 
   /** Opens `fn`'s strip at `home`, replacing a strip that is open; a replaced strip's previews are restored. */
@@ -366,12 +367,12 @@ function Hud(
   function followHeldPointer() {
     const isHeld = (event: PointerEvent) => holding && event.pointerId === opened.heldPointer;
 
-    createEventListener(window, 'pointermove', (event) => {
+    listenOnScreen('pointermove', (event) => {
       if (!isHeld(event)) {
         return;
       }
 
-      const point = { x: event.clientX, y: event.clientY };
+      const point = screen.point(event);
       if (open?.via === 'drag') {
         open.model.move(point);
         return;
@@ -385,7 +386,7 @@ function Hud(
         openStrip(fnOf(direction), point, 'drag');
       }
     });
-    createEventListener(window, 'pointerup', (event) => {
+    listenOnScreen('pointerup', (event) => {
       if (!isHeld(event)) {
         return;
       }
@@ -401,7 +402,7 @@ function Hud(
         setTwoStep(true);
       }
     });
-    createEventListener(window, 'pointercancel', (event) => {
+    listenOnScreen('pointercancel', (event) => {
       if (!isHeld(event)) {
         return;
       }
@@ -420,8 +421,7 @@ function Hud(
    */
   function listenToKeys() {
     const held = new Set<string>();
-    createEventListener(
-      window,
+    listenOnScreen(
       'keydown',
       (event) => {
         if (props.hidden || event.defaultPrevented) {
@@ -487,8 +487,8 @@ function Hud(
       },
       { capture: true }
     );
-    createEventListener(window, 'keyup', (event) => held.delete(event.key));
-    createEventListener(window, 'blur', () => held.clear());
+    listenOnScreen('keyup', (event) => held.delete(event.key));
+    listenOnScreen('blur', () => held.clear());
   }
 }
 

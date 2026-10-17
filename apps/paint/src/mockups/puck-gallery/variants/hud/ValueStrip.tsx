@@ -6,7 +6,7 @@ import { pressHandlers } from '../../kit/pressHandlers';
 import type { NumberSetting } from '../../kit/values';
 import { formatValue, roundValue, stepPreset } from '../../kit/values';
 import { galleryUi } from '../../kit/variant';
-import { clamp, openSide, shiftRect, windowEdges, type Rect } from './geometry';
+import { clamp, edgesOf, openSide, shiftRect, type Rect } from './geometry';
 import styles from './Hud.module.css';
 import { placeStrip, stripPress, type StripContext } from './strip';
 
@@ -17,7 +17,7 @@ export type ValueFunction = 'size' | 'opacity' | 'zoom' | 'history';
  * Opens a value strip with the current value at `context.home`. Size and History lie horizontally just above the
  * pen, Opacity and Zoom vertically on the open side, so the hand never covers the readout. Sliding along the axis
  * changes the value live (geometrically for Size and Zoom); within 5 px of home it is the starting value, so a lift
- * there changes nothing. When the window is too small for the whole range on one side of home, only that side is
+ * there changes nothing. When the screen is too small for the whole range on one side of home, only that side is
  * compressed, so both ends stay reachable without a jump. Returns a note instead when the tool lacks the setting.
  */
 export function createValueStrip(context: StripContext, fn: ValueFunction) {
@@ -31,9 +31,10 @@ export function createValueStrip(context: StripContext, fn: ValueFunction) {
   const horizontal = scale.axis === 'x';
   const side = openSide(context.hand);
   // Room on each side of home along the axis; positive is right or up.
+  const edges = edgesOf(context.screen);
   const room = horizontal
-    ? { plus: innerWidth - windowEdges.margin - home.x, minus: home.x - windowEdges.margin }
-    : { plus: home.y - windowEdges.top, minus: innerHeight - windowEdges.margin - home.y };
+    ? { plus: edges.right - home.x, minus: home.x - edges.left }
+    : { plus: home.y - edges.top, minus: edges.bottom - home.y };
   const perUnit = (space: number, span: number) =>
     span <= 0 ? scale.pxPerUnit : clamp((space - bandEnd - deadZone) / span, 3, scale.pxPerUnit);
   const plus = perUnit(room.plus, scale.max - origin);
@@ -48,7 +49,7 @@ export function createValueStrip(context: StripContext, fn: ValueFunction) {
         ? origin + (offset + deadZone) / minus
         : origin;
   const offsetAt = (point: Point) => (horizontal ? point.x - home.x : home.y - point.y);
-  /** Client coordinate along the axis of `units`. */
+  /** Screen coordinate along the axis of `units`. */
   const along = (units: number) => (horizontal ? home.x + offsetOf(units) : home.y - offsetOf(units));
 
   const from = offsetOf(scale.min) - bandEnd;
@@ -87,13 +88,15 @@ export function createValueStrip(context: StripContext, fn: ValueFunction) {
     side,
     rect,
     home,
+    /** The screen the strip lies on, for placing its readout and buttons. */
+    screen: context.screen,
     /** The zoom pivot: the ring's center. */
     pivot: context.center,
-    /** Client coordinate of home along the axis. */
+    /** Screen coordinate of home along the axis. */
     homeAt: horizontal ? home.x : home.y,
     ticks: scale.ticks.map((tick) => ({ ...tick, at: along(tick.units) })),
     value,
-    /** Client coordinate along the axis of the current value. */
+    /** Screen coordinate along the axis of the current value. */
     thumbAt: () => along(scale.toUnits(value())),
     readout: () => scale.format(value()),
     /** The size dot's diameter at the current value, for the Size thumb. */
@@ -297,7 +300,7 @@ export function NoteStripView(props: { strip: NoteStrip }) {
   );
 }
 
-/** The CSS box of a client rectangle. */
+/** The CSS box of a screen rectangle. */
 export function rectStyle(rect: Rect) {
   return { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` };
 }
@@ -319,8 +322,9 @@ function HomeMark(props: { strip: ValueStrip; at: Point }) {
 /** Where the readout of a strip sits: above a horizontal thumb, beside a vertical one on the open side. */
 function readoutStyle(strip: ValueStrip, at: number) {
   if (strip.horizontal) {
+    const edges = edgesOf(strip.screen);
     return {
-      left: `${clamp(at, windowEdges.margin + 44, innerWidth - windowEdges.margin - 44)}px`,
+      left: `${clamp(at, edges.left + 44, edges.right - 44)}px`,
       top: `${strip.rect.top - 5}px`,
       translate: '-50% -100%'
     };
@@ -346,7 +350,7 @@ function HistoryButtons(props: { strip: ValueStrip; studio: Studio }) {
     <div
       class={styles.buttonRow}
       style={{
-        left: `${clamp(strip.homeAt, 120, innerWidth - 120)}px`,
+        left: `${clamp(strip.homeAt, 120, strip.screen.size().width - 120)}px`,
         top: `${strip.rect.top - 6}px`,
         translate: '-50% -100%'
       }}
@@ -374,12 +378,13 @@ function ViewButtons(props: { strip: ValueStrip; studio: Studio }) {
     { label: 'Flip', run: () => studio.flip(), on: () => studio.view().flipped },
     { label: 'Sym', run: () => studio.toggleSymmetry(), on: () => studio.symmetry() }
   ];
+  const edges = () => edgesOf(strip.screen);
   return (
     <div
       class={styles.buttonColumn}
       style={{
         left: `${strip.side > 0 ? strip.rect.left - 6 : strip.rect.left + strip.rect.width + 6}px`,
-        top: `${clamp(strip.homeAt - 20, windowEdges.top, innerHeight - windowEdges.margin - 130)}px`,
+        top: `${clamp(strip.homeAt - 20, edges().top, edges().bottom - 130)}px`,
         translate: strip.side > 0 ? '-100% 0' : '0 0'
       }}
     >

@@ -1,9 +1,10 @@
 import type { Point } from '../../kit/createSketchCanvas';
+import type { VariantScreen } from '../../kit/screen';
 import type { VariantProps } from '../../kit/variant';
 
 /**
  * The HUD's geometry: eight directions around the summon point and what each one opens for either hand, the press
- * zones of the ring, and the rectangle helpers that keep strips inside the window and, in tap mode, off the ring.
+ * zones of the ring, and the rectangle helpers that keep strips inside the screen and, in tap mode, off the ring.
  */
 
 /** A function the HUD opens, one per direction. */
@@ -84,7 +85,7 @@ export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-/** A rectangle in client pixels. */
+/** A rectangle in screen pixels. */
 export type Rect = { left: number; top: number; width: number; height: number };
 
 /** Whether `point` lies in `rect` grown by `inflate` on every side. */
@@ -111,13 +112,14 @@ export function unionRect(...rects: Rect[]): Rect {
   return { left, top, width: right - left, height: bottom - top };
 }
 
-/** How far `rect` must move to lie inside the window, below the gallery's bar. */
-export function fitDelta(rect: Rect): Point {
+/** How far `rect` must move to lie inside the screen's free edges (see `edgesOf`). */
+export function fitDelta(rect: Rect, screen: VariantScreen): Point {
   const fit = (start: number, size: number, min: number, max: number) =>
     size > max - min ? min - start : start < min ? min - start : start + size > max ? max - size - start : 0;
+  const edges = edgesOf(screen);
   return {
-    x: fit(rect.left, rect.width, windowEdges.margin, innerWidth - windowEdges.margin),
-    y: fit(rect.top, rect.height, windowEdges.top, innerHeight - windowEdges.margin)
+    x: fit(rect.left, rect.width, edges.left, edges.right),
+    y: fit(rect.top, rect.height, edges.top, edges.bottom)
   };
 }
 
@@ -145,17 +147,27 @@ export function overlapsCircle(rect: Rect, center: Point, radius: number) {
   return distance(nearest, center) < radius;
 }
 
-/** `point` moved inside the window by at least `reach` on each axis, below the gallery's bar. */
-export function clampToWindow(point: Point, reach: Point): Point {
+/** `point` moved inside the screen's free edges (see `edgesOf`) by at least `reach` on each axis. */
+export function clampToScreen(point: Point, reach: Point, screen: VariantScreen): Point {
   const fit = (value: number, min: number, max: number) => (min > max ? (min + max) / 2 : clamp(value, min, max));
+  const edges = edgesOf(screen);
   return {
-    x: fit(point.x, windowEdges.margin + reach.x, innerWidth - windowEdges.margin - reach.x),
-    y: fit(point.y, windowEdges.top + reach.y, innerHeight - windowEdges.margin - reach.y)
+    x: fit(point.x, edges.left + reach.x, edges.right - reach.x),
+    y: fit(point.y, edges.top + reach.y, edges.bottom - reach.y)
   };
 }
 
-/** The window's free edges: a margin all round and the gallery's bar at the top. */
-export const windowEdges = { margin: 8, top: 50 } as const;
+/**
+ * The screen's free edges in its pixels: a margin all round, and at the top the room the page keeps, such as the
+ * gallery's bar. Reads the screen's size, so it tracks it in a reactive scope.
+ */
+export function edgesOf(screen: VariantScreen) {
+  const { width, height } = screen.size();
+  return { left: edgeMargin, top: screen.top, right: width - edgeMargin, bottom: height - edgeMargin };
+}
+
+/** The free margin along the screen's edges. */
+const edgeMargin = 8;
 
 const leftHandedLayout = [
   'size',

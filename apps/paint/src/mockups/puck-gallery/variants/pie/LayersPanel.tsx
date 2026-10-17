@@ -4,6 +4,7 @@ import { blendLabel, blendModes, type BlendMode } from '../../kit/createSketchCa
 import type { Studio } from '../../kit/createStudio';
 import { LayerThumb } from '../../kit/LayerThumb';
 import { pressHandlers } from '../../kit/pressHandlers';
+import { useScreen } from '../../kit/screen';
 import { galleryUi } from '../../kit/variant';
 import styles from './pie.module.css';
 import { ChoiceField, ValueField } from './widgets';
@@ -15,6 +16,7 @@ import { ChoiceField, ValueField } from './widgets';
  */
 export function LayersPanel(props: { studio: Studio; at: { x: number; y: number }; touch: boolean }) {
   const studio = () => props.studio;
+  const screen = useScreen();
   const active = () =>
     studio()
       .layers()
@@ -22,8 +24,8 @@ export function LayersPanel(props: { studio: Studio; at: { x: number; y: number 
   const width = 300;
   const rowHeight = () => (props.touch ? 34 : 28);
   const height = () => 74 + studio().layers().length * (rowHeight() + 1) + 12;
-  const left = () => Math.min(Math.max(8, props.at.x - width / 2), innerWidth - width - 8);
-  const top = () => Math.min(Math.max(52, props.at.y - 40), innerHeight - height() - 8);
+  const left = () => Math.min(Math.max(8, props.at.x - width / 2), screen.size().width - width - 8);
+  const top = () => Math.min(Math.max(screen.top, props.at.y - 40), screen.size().height - height() - 8);
 
   return (
     <div

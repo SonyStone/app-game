@@ -211,7 +211,7 @@ function HistoryBar(props: { studio: Studio }) {
     }
   };
   const half = (press: Press) => {
-    const box = press.target.getBoundingClientRect();
+    const box = press.screen.rect(press.target);
     return press.start.x < box.left + box.width / 2 ? 'undo' : 'redo';
   };
   const press = pressable({

@@ -31,7 +31,7 @@ export function SettingArcs(props: {
   /** The page of numbers shown, kept by the variant across openings. */
   page: number;
   setPage: (page: number) => void;
-  toLocal: (client: Point) => Point;
+  toLocal: (point: Point) => Point;
 }) {
   const numbers = createMemo(() =>
     props.studio.settings().filter((setting): setting is NumberSetting => setting.kind === 'number')
@@ -121,7 +121,7 @@ function Gauge(props: {
   studio: Studio;
   setting: NumberSetting;
   slot: SettingSlot;
-  toLocal: (client: Point) => Point;
+  toLocal: (point: Point) => Point;
 }) {
   const id = createUniqueId();
   const [dragging, setDragging] = createSignal(false);
@@ -130,10 +130,10 @@ function Gauge(props: {
   const inner = () => props.slot.radius - settingBand / 2;
   const outer = () => props.slot.radius + settingBand / 2;
 
-  const setFrom = (client: Point) => {
+  const setFrom = (point: Point) => {
     const { low, high } = props.slot;
     const middle = (low + high) / 2;
-    const angle = middle + wrap(angleOf(props.toLocal(client)) - middle);
+    const angle = middle + wrap(angleOf(props.toLocal(point)) - middle);
     props.studio.setValue(props.setting.key, valueAt(props.setting, (angle - low) / (high - low)));
   };
   const press = pressHandlers({

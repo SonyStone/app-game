@@ -87,7 +87,7 @@ function Disc(props: { studio: Studio }) {
   );
 
   const apply = (press: Press) => {
-    const rect = press.target.getBoundingClientRect();
+    const rect = press.screen.rect(press.target);
     const unit = discSize / rect.width;
     const dx = (press.point.x - (rect.left + rect.width / 2)) * unit;
     const dy = (press.point.y - (rect.top + rect.height / 2)) * unit;
@@ -114,7 +114,7 @@ function Disc(props: { studio: Studio }) {
 
   const press = pressHandlers({
     start: (press) => {
-      const rect = press.target.getBoundingClientRect();
+      const rect = press.screen.rect(press.target);
       const distance =
         Math.hypot(press.point.x - (rect.left + rect.width / 2), press.point.y - (rect.top + rect.height / 2)) *
         (discSize / rect.width);

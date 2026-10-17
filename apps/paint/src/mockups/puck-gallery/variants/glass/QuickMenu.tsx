@@ -19,7 +19,7 @@ import css from './QuickMenu.module.css';
 export function QuickMenu(props: {
   studio: Studio;
   box: Box;
-  /** The QuickMenu's center in client pixels, the pivot of wheel zooms and turns. */
+  /** The QuickMenu's center in screen pixels, the pivot of wheel zooms and turns. */
   center: Point;
   navigation: GlassNavigation;
   /** Runs an instant slot: undo, redo or the eyedropper. */

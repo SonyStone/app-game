@@ -10,7 +10,9 @@ keyboard. Open `/puck-gallery.html` on the Paint dev server (`pnpm --filter @app
 - `kit/` — what every variant shares: the mock editor (`createStudio`: tools, settings, presets, color, layers,
   history, view), the layered drawing (`createSketchCanvas`, `stillLife`), the catalog of tools/settings/presets,
   `pressHandlers` (press-drag-lift with pointer capture), `navigationDrag`, value helpers, `StrokePreview`,
-  `LayerThumb`, and the variant contract (`variant.ts`).
+  `LayerThumb`, the variant contract (`variant.ts`) and the variant's screen (`screen.ts`: the window here, a box on
+  the component canvas, which shows every variant live at once; variants read sizes, positions and window events
+  through it).
 - `variants/<id>/` — one folder per variant, registered in `variants.ts` and loaded on first use. A variant only
   presents the studio; it must not change the kit.
 
