@@ -98,11 +98,7 @@ export function SideMenu(props: {
         '--card-radius-local': `${frame().radius}px`
       }}
     >
-      <div
-        class={styles.card}
-        style={{ transform: frame().transform, width: frame().width }}
-        inert={props.open || props.progress !== undefined}
-      >
+      <div class={styles.card} style={{ transform: frame().transform, width: frame().width }} inert={props.open}>
         <div class={styles.content}>{props.children}</div>
         <div class={styles.shade} style={{ opacity: shadeOpacity * amount() }} />
       </div>

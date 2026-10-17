@@ -3,15 +3,17 @@ import { createSignal, type Accessor } from 'solid-js';
 
 /**
  * Stepping back from the easel: `fingers` touches pinching together on `target` shrink the content toward the side
- * menu's card, following the fingers (`progress`, for `SideMenu`). Lifting a finger once the pinch is past half way
- * opens the menu through `onCommit`; earlier, the content springs back.
+ * menu's card, following the fingers (`progress`, for `SideMenu`). Once a finger lifts, the step back holds where it
+ * is; when the last one lifts, a pinch past half way opens the menu through `onCommit`, and a shorter one springs back.
+ * Opening only then leaves the content its every finger's lift before the menu makes it inert.
  *
  * Fewer fingers are left alone, so two still zoom and pan. The content may already have moved under the first fingers
  * before the last one landed: `snapshot` runs when the first finger lands, and the function it returns runs when the
  * pinch takes over, to undo that (Paint puts the camera back). From then on, until every finger is up, touch moves
- * stop at `target`'s capture phase, so its descendants see no movement; downs and ups pass, so they keep count.
+ * stop at the window's capture phase, so the content sees no movement; downs and ups pass, so it keeps count.
  *
- * Must be created within a Solid owner; the listeners follow `target` and detach while `enabled` is false.
+ * Only touches that start on `target` while `enabled` pinch. Their moves and lifts are followed on the window, and
+ * also after `enabled` turns false, so a gesture always ends. Must be created within a Solid owner.
  */
 export function createStepBack(options: {
   target: Accessor<HTMLElement | undefined>;
@@ -23,21 +25,25 @@ export function createStepBack(options: {
 }) {
   const fingers = options.fingers ?? 3;
   const [progress, setProgress] = createSignal<number>();
+  /** The touches of the current session that landed on the target, by pointer. */
   const touches = new Map<number, Point>();
+  /** Whether the current session may pinch: its first touch landed while enabled. */
+  let armed = false;
   /** Undoes what the first fingers did, from `snapshot`; until the pinch takes over. */
   let restore: (() => void) | void;
   /** The fingers' spread when the pinch took over; `undefined` until it does. */
   let startSpread: number | undefined;
   /** The pinch's progress, readable in the same event as it is written, unlike the signal. */
   let current = 0;
-  /** Whether a finger lifted after the pinch took over; the remaining fingers stay held until they lift. */
-  let finished = false;
+  /** Whether a finger lifted since the pinch took over, which holds the step back where it is. */
+  let held = false;
+  /** Whether the system cancelled one of the pinching touches, which springs the step back. */
+  let cancelled = false;
   /** Whether this touch session pinched visibly; see `pinched`. */
   let pinched = false;
-  const target = () => (options.enabled() ? options.target() : undefined);
 
   createEventListener(
-    target,
+    options.target,
     'pointerdown',
     (event) => {
       if (event.pointerType !== 'touch') {
@@ -45,14 +51,16 @@ export function createStepBack(options: {
       }
 
       if (!touches.size) {
-        restore = options.snapshot?.();
+        armed = options.enabled();
+        restore = armed ? options.snapshot?.() : undefined;
         startSpread = undefined;
-        finished = false;
+        held = false;
+        cancelled = false;
         pinched = false;
       }
 
       touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (touches.size === fingers && startSpread === undefined && !finished) {
+      if (armed && touches.size === fingers && startSpread === undefined && !held) {
         startSpread = spread([...touches.values()]);
         current = 0;
         restore?.();
@@ -63,7 +71,7 @@ export function createStepBack(options: {
     { capture: true, passive: true }
   );
   createEventListener(
-    target,
+    window,
     'pointermove',
     (event) => {
       if (!touches.has(event.pointerId)) {
@@ -71,12 +79,12 @@ export function createStepBack(options: {
       }
 
       touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (startSpread === undefined && !finished) {
+      if (startSpread === undefined) {
         return;
       }
 
       event.stopPropagation();
-      if (!finished && startSpread !== undefined) {
+      if (!held) {
         current = stepBackProgress(startSpread, spread([...touches.values()]));
         pinched ||= current > tapSlop;
         setProgress(current);
@@ -85,25 +93,31 @@ export function createStepBack(options: {
     { capture: true }
   );
   createEventListener(
-    target,
+    window,
     ['pointerup', 'pointercancel'],
     (event) => {
       if (!touches.delete(event.pointerId)) {
         return;
       }
 
-      if (startSpread !== undefined && !finished) {
-        finished = true;
+      if (startSpread !== undefined) {
+        held = true;
+        cancelled ||= event.type === 'pointercancel';
+      }
+
+      if (touches.size) {
+        return;
+      }
+
+      if (startSpread !== undefined) {
         setProgress(undefined);
-        if (event.type === 'pointerup' && current >= commitAt) {
+        if (!cancelled && current >= commitAt) {
           options.onCommit();
         }
       }
 
-      if (!touches.size) {
-        startSpread = undefined;
-        restore = undefined;
-      }
+      startSpread = undefined;
+      restore = undefined;
     },
     { capture: true, passive: true }
   );
