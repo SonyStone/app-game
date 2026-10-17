@@ -11,6 +11,10 @@
   isolation: isolate;
   background: #000;
   font-family: system-ui, sans-serif;
+
+  @media (prefers-reduced-motion: reduce) {
+    --duration: 1ms;
+  }
 }
 
 /* The card's corners are round as soon as it leaves the edges, coming out from behind the screen's edge; on the way
@@ -186,6 +190,12 @@
   &:focus-visible {
     outline: none;
   }
+
+  @media (hover: hover) {
+    .group:has(.item:hover:not(:disabled)) &:not(:hover) {
+      opacity: 0.42;
+    }
+  }
 }
 
 .note {
@@ -205,11 +215,21 @@
   display: inline-block;
   transform: translateY(110%);
   transition: transform 0s linear var(--duration);
+
+  @media (prefers-reduced-motion: reduce) {
+    transition-duration: 1ms;
+    transition-delay: 0s;
+  }
 }
 
 .root[data-revealed] .panel [data-side-menu-entry] > span {
   transform: none;
   transition: transform 520ms var(--ease) calc(60ms + var(--entry, 0) * 25ms);
+
+  @media (prefers-reduced-motion: reduce) {
+    transition-duration: 1ms;
+    transition-delay: 0s;
+  }
 }
 
 .root[data-following]:not([data-revealed]) .panel [data-side-menu-entry] > span {
@@ -228,22 +248,18 @@
   transition:
     width 300ms var(--ease),
     margin 300ms var(--ease);
-}
 
-.item:focus-visible .dash,
-.item:active:not(:disabled) .dash {
-  width: 0.5em;
-  margin-inline-end: 0.22em;
-}
-
-@media (hover: hover) {
-  .item:hover:not(:disabled) .dash {
+  .item:focus-visible &,
+  .item:active:not(:disabled) & {
     width: 0.5em;
     margin-inline-end: 0.22em;
   }
 
-  .group:has(.item:hover:not(:disabled)) .item:not(:hover) {
-    opacity: 0.42;
+  @media (hover: hover) {
+    .item:hover:not(:disabled) & {
+      width: 0.5em;
+      margin-inline-end: 0.22em;
+    }
   }
 }
 
@@ -297,6 +313,17 @@
 
   & > span {
     transition: transform 350ms var(--ease);
+
+    @media (hover: hover) {
+      .pill:hover & {
+        transform: translateY(-100%);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition-duration: 1ms;
+      transition-delay: 0s;
+    }
   }
 
   .root[data-open] & {
@@ -332,32 +359,15 @@
   .root[data-open] & {
     transform: rotate(135deg);
   }
-}
 
-@media (hover: hover) {
-  .pill:hover .pillLabel > span {
-    transform: translateY(-100%);
-  }
-
-  .root:not([data-open]) .pill:hover .pillIcon {
-    transform: rotate(90deg);
+  @media (hover: hover) {
+    .root:not([data-open]) .pill:hover & {
+      transform: rotate(90deg);
+    }
   }
 }
 
 .pill:focus-visible {
   outline: 2px solid #8ab4ff;
   outline-offset: 3px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .root {
-    --duration: 1ms;
-  }
-
-  .panel [data-side-menu-entry] > span,
-  .root[data-revealed] .panel [data-side-menu-entry] > span,
-  .pillLabel > span {
-    transition-duration: 1ms;
-    transition-delay: 0s;
-  }
 }
