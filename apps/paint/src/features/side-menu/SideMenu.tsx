@@ -41,13 +41,9 @@ export function SideMenu(props: {
   const label = () => props.label ?? 'Menu';
   const amount = () => props.progress ?? (props.open ? 1 : 0);
   // Layout sizes, which a transformed ancestor, such as the component canvas's zoom, leaves alone.
-  const geometry = () => menuGeometry({ width: size.clientWidth ?? 0, height: size.clientHeight ?? 0 });
-  /** The card's transform at `amount`: it moves toward the free side as it shrinks. */
-  const cardTransform = () => {
-    const { scale, shift } = geometry();
-    const t = amount();
-    return `translateX(${(side() === 'right' ? -shift : shift) * t}px) scale(${1 - (1 - scale) * t})`;
-  };
+  const rootSize = () => ({ width: size.clientWidth ?? 0, height: size.clientHeight ?? 0 });
+  const geometry = () => menuGeometry(rootSize());
+  const frame = () => cardFrame(rootSize(), side(), amount());
   const close = () => props.onOpenChange(false);
 
   createEventListener(
@@ -87,18 +83,23 @@ export function SideMenu(props: {
       data-open={props.open ? '' : undefined}
       data-revealed={props.open || amount() > revealAt ? '' : undefined}
       data-following={props.progress === undefined ? undefined : ''}
-      style={{ '--panel-width': `${geometry().panel}px` }}
+      style={{ '--panel-width': `${geometry().panel}px`, '--card-margin': `${margin}px` }}
     >
       <div
         class={styles.card}
-        style={{ transform: cardTransform(), 'border-radius': `${cardRadius * amount()}px` }}
+        style={{ transform: frame().transform, 'clip-path': frame().clipPath }}
         inert={props.open || props.progress !== undefined}
       >
         {props.children}
         <div class={styles.shade} style={{ opacity: shadeOpacity * amount() }} />
       </div>
       <Show when={props.open}>
-        <button class={styles.back} style={{ transform: cardTransform() }} aria-label="Back" onClick={close} />
+        <button
+          class={styles.back}
+          style={{ transform: frame().transform, 'clip-path': frame().clipPath }}
+          aria-label="Back"
+          onClick={close}
+        />
       </Show>
       <nav
         ref={setPanel}
@@ -197,19 +198,38 @@ export function SideMenuItem(props: {
 }
 
 /**
- * Where the menu puts the panel and the card in a root of `size`: the panel's width, and the card's scale and its
- * shift toward the free side, so that the whole content shows in the room the panel leaves, `margin` from its edges.
- * A root too narrow to leave room keeps the content nearly whole under a panel that covers it.
+ * How wide the panel is in a root of `size`, and how far from the root's edge on the panel's side the card ends: at the
+ * panel, or `margin` from the edge where the root is too narrow to leave the card room and the panel covers it.
  */
 export function menuGeometry(size: { width: number; height: number }) {
   const panel = Math.min(maxPanelWidth, size.width - minCardRoom);
-  if (size.width <= 0 || size.height <= 0 || panel < minPanelWidth) {
-    return { panel: Math.max(0, Math.min(maxPanelWidth, size.width)), scale: narrowScale, shift: 0 };
+  if (panel < minPanelWidth) {
+    return { panel: Math.max(0, Math.min(maxPanelWidth, size.width)), beside: margin };
   }
 
-  const room = size.width - panel;
-  const scale = Math.min((room - margin * 2) / size.width, (size.height - margin * 2) / size.height);
-  return { panel, scale, shift: panel / 2 };
+  return { panel, beside: panel };
+}
+
+/**
+ * The card's transform and clip at `amount` of the way to open, 0 to 1, in a root of `size`. As in a picture frame,
+ * the content shrinks only enough to leave `margin` above and below it and keeps the edge away from the panel
+ * `margin` from the root's; the panel's side is clipped where the card ends, so the margins are even and the content
+ * keeps nearly its size. The transform works from the content's top left corner.
+ */
+export function cardFrame(size: { width: number; height: number }, side: 'left' | 'right', amount: number) {
+  const { width, height } = size;
+  if (width <= 0 || height <= 0) {
+    return { transform: 'none', clipPath: 'none' };
+  }
+
+  const gap = margin * amount;
+  const scale = (height - gap * 2) / height;
+  const shown = width - gap - menuGeometry(size).beside * amount;
+  const hidden = Math.max(0, width - shown / scale);
+  const x = side === 'right' ? gap : width - gap - width * scale;
+  const radius = (cardRadius * amount) / scale;
+  const inset = side === 'right' ? `0 ${hidden}px 0 0` : `0 0 0 ${hidden}px`;
+  return { transform: `translate(${x}px, ${gap}px) scale(${scale})`, clipPath: `inset(${inset} round ${radius}px)` };
 }
 
 /** Closes the menu for the entries inside its panel. */
@@ -236,8 +256,5 @@ const minPanelWidth = 240;
 /** The narrowest card worth showing beside the panel, in CSS pixels. */
 const minCardRoom = 280;
 
-/** CSS pixels between the card and the room's edges. */
-const margin = 20;
-
-/** The card's scale under a panel that covers it. */
-const narrowScale = 0.94;
+/** CSS pixels between the card and the root's edges, and between the card and the panel's entries. */
+const margin = 16;

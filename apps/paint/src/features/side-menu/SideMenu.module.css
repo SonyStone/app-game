@@ -1,7 +1,7 @@
 /* The menu's ground shows around the stepped-back card, in the panel's color, so card and panel read as one surface. */
 .root {
-  --ease: cubic-bezier(0.76, 0, 0.24, 1);
-  --duration: 700ms;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration: 420ms;
   --ink: #f2f2f2;
   --muted: #858585;
   position: absolute;
@@ -16,10 +16,10 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
-  transform-origin: center;
+  transform-origin: 0 0;
   transition:
     transform var(--duration) var(--ease),
-    border-radius var(--duration) var(--ease);
+    clip-path var(--duration) var(--ease);
 }
 
 .shade {
@@ -39,8 +39,10 @@
   border: 0;
   background: transparent;
   cursor: pointer;
-  transform-origin: center;
-  transition: transform var(--duration) var(--ease);
+  transform-origin: 0 0;
+  transition:
+    transform var(--duration) var(--ease),
+    clip-path var(--duration) var(--ease);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -54,7 +56,8 @@
   flex-direction: column;
   gap: 20px;
   width: var(--panel-width);
-  padding: 88px 28px 28px;
+  /* The card's margin before the entries too, so the gap beside the card matches the others. */
+  padding: 88px 28px 28px var(--card-margin);
   overflow-y: auto;
   background: #0e0e0e;
   color: var(--ink);
@@ -63,11 +66,12 @@
   .root[data-side='left'] & {
     right: auto;
     left: 0;
+    padding: 88px var(--card-margin) 28px 28px;
   }
 }
 
 /* While a gesture leads, everything follows the fingers at once. */
-.root[data-following] :is(.card, .shade, .panel) {
+.root[data-following] :is(.card, .shade, .back, .panel) {
   transition: none;
 }
 
@@ -139,13 +143,13 @@
 .panel [data-side-menu-entry] > span {
   display: inline-block;
   transform: translateY(110%);
-  transition: transform 250ms var(--ease);
+  transition: transform 200ms var(--ease);
 }
 
 .root[data-revealed] .panel [data-side-menu-entry] > span {
   transform: none;
-  transition-duration: var(--duration);
-  transition-delay: calc(140ms + var(--entry, 0) * 40ms);
+  transition-duration: 520ms;
+  transition-delay: calc(60ms + var(--entry, 0) * 25ms);
 }
 
 /* The dash grows before the hovered, focused or pressed entry and pushes its name aside. */
@@ -228,7 +232,7 @@
     opacity 300ms ease;
 
   & > span {
-    transition: transform 450ms var(--ease);
+    transition: transform 350ms var(--ease);
   }
 
   .root[data-open] & {

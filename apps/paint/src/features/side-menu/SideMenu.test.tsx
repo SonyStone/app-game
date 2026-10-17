@@ -2,7 +2,7 @@
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { afterEach, beforeAll, expect, it, vi } from 'vitest';
-import { menuGeometry, SideMenu, SideMenuGroup, SideMenuItem } from './SideMenu';
+import { cardFrame, menuGeometry, SideMenu, SideMenuGroup, SideMenuItem } from './SideMenu';
 
 let dispose: (() => void) | undefined;
 beforeAll(() => {
@@ -58,17 +58,36 @@ it('closes before an entry runs, unless the entry keeps it open, and closes from
   expect(back()).toBeNull();
 });
 
-it('fits the whole content into the room beside the panel, and covers it where there is no room', () => {
-  const tablet = menuGeometry({ width: 1646, height: 909 });
-  expect(tablet.panel).toBe(380);
-  expect(tablet.shift).toBe(190);
-  expect(tablet.scale).toBeCloseTo((1646 - 380 - 40) / 1646);
+it('frames the content with even margins, clipped where the panel begins, and covers it where there is no room', () => {
+  const tablet = { width: 1646, height: 909 };
+  expect(menuGeometry(tablet)).toEqual({ panel: 380, beside: 380 });
+  expect(cardFrame(tablet, 'right', 0)).toEqual({
+    transform: 'translate(0px, 0px) scale(1)',
+    clipPath: 'inset(0 0px 0 0 round 0px)'
+  });
 
-  const wide = menuGeometry({ width: 6000, height: 300 });
-  expect(wide.scale).toBeCloseTo(260 / 300);
+  // Open, the card spans from 16 px off the left, top and bottom edges to the panel.
+  const scale = (909 - 32) / 909;
+  const open = frameNumbers(cardFrame(tablet, 'right', 1));
+  expect(open.x).toBe(16);
+  expect(open.y).toBe(16);
+  expect(open.scale).toBeCloseTo(scale);
+  expect(open.x + (1646 - open.right) * scale).toBeCloseTo(1646 - 380);
 
-  expect(menuGeometry({ width: 360, height: 700 })).toEqual({ panel: 360, scale: 0.94, shift: 0 });
+  // From the left, the card's right edge keeps the margin and the clip falls on the left.
+  const left = frameNumbers(cardFrame(tablet, 'left', 1));
+  expect(left.x + 1646 * scale).toBeCloseTo(1646 - 16);
+  expect(left.x + left.left * scale).toBeCloseTo(380);
+
+  expect(menuGeometry({ width: 360, height: 700 })).toEqual({ panel: 360, beside: 16 });
 });
+
+/** The numbers in a `cardFrame` result: translation, scale and the clip's right and left insets. */
+function frameNumbers(frame: ReturnType<typeof cardFrame>) {
+  const [x = NaN, y = NaN, scale = NaN] = [...frame.transform.matchAll(/-?[\d.]+/g)].map(Number);
+  const [, right = NaN, , left = NaN] = [...frame.clipPath.matchAll(/-?[\d.]+/g)].map(Number);
+  return { x, y, scale, right, left };
+}
 
 function mount() {
   const host = document.createElement('div');
