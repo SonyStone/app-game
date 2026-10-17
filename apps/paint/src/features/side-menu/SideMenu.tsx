@@ -107,8 +107,12 @@ export function SideMenu(props: {
       {/* The panel covers the card's far side; its caps round the card's corners where it meets the panel. */}
       <div class={styles.drawer} style={{ transform: `translateX(${drawerShift()}px)` }}>
         <Show when={!geometry().covers}>
-          <span class={styles.cap} data-edge="top" style={{ transform: `translateY(${frame().gap}px)` }} />
-          <span class={styles.cap} data-edge="bottom" style={{ transform: `translateY(${-frame().gap}px)` }} />
+          <span class={styles.cap} data-edge="top" style={{ transform: `translateY(${frame().gap}px)` }}>
+            <i />
+          </span>
+          <span class={styles.cap} data-edge="bottom" style={{ transform: `translateY(${-frame().gap}px)` }}>
+            <i />
+          </span>
         </Show>
         <nav ref={setPanel} id={panelId} class={styles.panel} aria-label={label()} inert={!props.open}>
           <SideMenuContext value={{ close }}>{props.menu}</SideMenuContext>
