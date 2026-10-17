@@ -12,7 +12,7 @@ import styles from './SideMenu.module.css';
  *
  * The menu is controlled: `open` is the caller's, and `onOpenChange` receives every request to change it, from the
  * pill, the card, Escape and the entries. `progress` previews a gesture toward opening, 0 to 1, following it without
- * animation (see `createStepBack`); when it ends, the menu animates to `open`.
+ * animation (see `createEdgePull`); when it ends, the menu animates to `open`.
  *
  * The root fills its positioned parent and measures itself, so the menu also works in a box smaller than the window.
  * The content keeps its layout size while it shrinks, as only a transform moves it; while the menu is open it is

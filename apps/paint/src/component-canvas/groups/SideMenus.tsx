@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { createStepBack, SideMenu, SideMenuGroup, SideMenuItem } from '../../features/side-menu';
+import { createEdgePull, menuGeometry, SideMenu, SideMenuGroup, SideMenuItem } from '../../features/side-menu';
 import { TryButton } from '../Screen';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
 import styles from './SideMenus.module.css';
@@ -7,7 +7,7 @@ import styles from './SideMenus.module.css';
 /**
  * Side menus: the menu that pushes the drawing aside into a card (`features/side-menu`), in its states and from both
  * sides, over a stand-in painting. The closed and open ones work: the pill and the card toggle them. The full-screen
- * one also steps back with three fingers pinched together, as the Puck variant does on the drawing.
+ * one also opens to three or four fingers pulled in from the right edge, as the Puck variant does on the drawing.
  */
 export function SideMenus() {
   return (
@@ -24,7 +24,7 @@ export function SideMenus() {
         >
           <MenuBox />
         </Specimen>
-        <Specimen id="side-menu/states/pinching" label="Pinching, half way">
+        <Specimen id="side-menu/states/pulling" label="Pulled half way">
           <MenuBox progress={0.5} />
         </Specimen>
         <Specimen id="side-menu/states/open" label="Open">
@@ -54,17 +54,22 @@ function MenuBox(props: { open?: boolean; progress?: number; side?: 'left' | 'ri
   );
 }
 
-/** The side menu full screen, with the pinch that steps back into it. */
+/** The side menu full screen, with the pull from the edge that opens it. */
 function LiveSideMenu() {
   const [open, setOpen] = createSignal(false);
   const [painting, setPainting] = createSignal<HTMLElement>();
-  const stepBack = createStepBack({ target: painting, enabled: () => !open(), onCommit: () => setOpen(true) });
+  const edgePull = createEdgePull({
+    target: painting,
+    enabled: () => !open(),
+    distance: () => menuGeometry({ width: painting()?.clientWidth ?? 0, height: painting()?.clientHeight ?? 0 }).panel,
+    onCommit: () => setOpen(true)
+  });
 
   return (
     <div class={styles.full}>
-      <SideMenu open={open()} onOpenChange={setOpen} progress={stepBack.progress()} menu={<DemoEntries />}>
+      <SideMenu open={open()} onOpenChange={setOpen} progress={edgePull.progress()} menu={<DemoEntries />}>
         <div ref={setPainting} class={styles.painting}>
-          <p class={styles.hint}>Pinch three fingers together, or press Menu</p>
+          <p class={styles.hint}>Pull three or four fingers in from the right edge, or press Menu</p>
         </div>
       </SideMenu>
     </div>

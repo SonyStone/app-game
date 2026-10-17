@@ -11,7 +11,7 @@ import {
   StageHint,
   StageOverlays
 } from '../../features/session';
-import { createStepBack } from '../../features/side-menu';
+import { createEdgePull, menuGeometry } from '../../features/side-menu';
 import { Cluster } from './Cluster';
 import { createSummon, ringDelay } from './createSummon';
 import { createViewDrag } from './createViewDrag';
@@ -26,7 +26,7 @@ import type { SlotId } from './slots';
  * with the same triggers (Space held, V, the right button, a pen's barrel or side button), and with a finger's long
  * press; see `createSummon` for how it closes. Two- and three-finger taps undo and redo. What is not for drawing, such
  * as files and the session's windows, is in a side menu that pushes the drawing aside, opened from the pill in the
- * corner or by pinching three fingers together on the drawing; summoning the cluster closes it.
+ * corner or by pulling three or four fingers in from the drawing's right edge; summoning the cluster closes it.
  */
 export function PuckStudio(props: PaintVariantProps) {
   const session = createPaintSession();
@@ -47,10 +47,11 @@ export function PuckStudio(props: PaintVariantProps) {
     return at && clusterLayout(at, session.size(), summon.hand());
   });
   const [menuOpen, setMenuOpen] = createSignal(false);
-  const stepBack = createStepBack({
+  const edgePull = createEdgePull({
     target: session.stage,
     enabled: () => session.ready() && !menuOpen(),
-    // Two of the fingers may have moved the view before the third landed.
+    distance: () => menuGeometry(session.size()).panel,
+    // The first fingers may have nudged the view before the last one landed.
     snapshot: () => {
       const view = camera.current();
       return () => camera.navigate(view);
@@ -87,7 +88,7 @@ export function PuckStudio(props: PaintVariantProps) {
         session={session}
         open={menuOpen()}
         onOpenChange={openMenu}
-        progress={stepBack.progress()}
+        progress={edgePull.progress()}
         experimentsHref={props.experimentsHref}
       >
         <PaintStage
@@ -95,9 +96,9 @@ export function PuckStudio(props: PaintVariantProps) {
           input={{
             touchGestures: {
               ...summon.touchGestures,
-              // A quick pinch lifts like a three-finger tap: the canvas saw none of its movement.
+              // A quick pull lifts like a three-finger tap: the canvas saw none of its movement.
               tap: (fingers) => {
-                if (!stepBack.pinched()) {
+                if (!edgePull.pulled()) {
                   summon.touchGestures.tap(fingers);
                 }
               }

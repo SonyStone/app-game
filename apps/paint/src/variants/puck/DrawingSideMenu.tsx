@@ -12,7 +12,7 @@ export function DrawingSideMenu(props: {
   session: PaintSession;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** A pinch toward opening, 0 to 1, while it lasts; see `createStepBack`. */
+  /** A pull toward opening, 0 to 1, while it lasts; see `createEdgePull`. */
   progress?: number;
   /** Link back to the embedding playground. */
   experimentsHref?: string;
