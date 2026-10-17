@@ -1,0 +1,26 @@
+/* The Size and Opacity pop-ups: a live preview over a few sliders. */
+.popup {
+  display: flex;
+  flex-direction: column;
+  width: 236px;
+  padding: 8px 0 8px;
+}
+
+.preview {
+  position: relative;
+  margin: 0 8px 6px;
+  padding: 4px 36px 4px 4px;
+  border-radius: 4px;
+  background: var(--ip-panel-sunken);
+  box-shadow: inset 0 0 0 1px var(--ip-hairline);
+}
+
+/* The brush editor's button sits in the preview's top right corner. */
+.edit {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  color: var(--ip-icon-dim);
+}

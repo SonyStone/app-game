@@ -1,0 +1,201 @@
+/* The brush selector: folders down the left, the pinned current brush and the folder's brushes on the right. */
+.selector {
+  display: flex;
+  flex-direction: column;
+  width: 292px;
+  height: min(500px, calc(100vh - 96px));
+  min-height: 280px;
+  overflow: hidden;
+
+  &[data-compact] {
+    width: 220px;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  padding: 2px 4px 0;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  flex: 1;
+  min-height: 0;
+
+  .selector[data-compact] & {
+    grid-template-columns: 40px 1fr;
+  }
+}
+
+.folders,
+.list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.folders {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0 8px 4px;
+}
+
+.folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--ip-radius);
+  background: none;
+  color: var(--ip-icon-dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--ip-icon);
+  }
+
+  &[aria-pressed='true'] {
+    color: var(--ip-label);
+  }
+}
+
+/* The open folder's icon sits in a light disc, as Infinite Painter marks its current folder. */
+.folderIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+
+  .folder[aria-pressed='true'] > & {
+    background: rgb(255 255 255 / 0.16);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.3);
+  }
+}
+
+.folderName {
+  overflow: hidden;
+  color: var(--ip-secondary);
+  /* On the name rather than the button, which hosts such as the component canvas reset to their font. */
+  font-size: 10px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+
+  .folder[aria-pressed='true'] > & {
+    color: var(--ip-label);
+  }
+
+  .selector[data-compact] & {
+    display: none;
+  }
+}
+
+.brushes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 4px 6px 0 2px;
+}
+
+.pinned,
+.brush {
+  position: relative;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 6px 6px 16px;
+  border: 0;
+  border-radius: var(--ip-radius);
+  background: none;
+  font: inherit;
+}
+
+.pinned {
+  flex: none;
+  background: var(--ip-panel-raised);
+  box-shadow: 0 0 0 1px var(--ip-hairline-strong);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 8px;
+}
+
+.brush {
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.04);
+  }
+
+  &[aria-selected='true'] {
+    background: #c6c6c9;
+  }
+
+  &:disabled {
+    cursor: progress;
+  }
+}
+
+/* The brush's name, small at the card's bottom right. */
+.name {
+  position: absolute;
+  right: 8px;
+  bottom: 3px;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  color: var(--ip-secondary);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  .brush[aria-selected='true'] > & {
+    color: #3a3a3d;
+  }
+}
+
+.heart {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ip-icon-dim);
+  cursor: pointer;
+
+  &[aria-pressed='true'] {
+    color: var(--ip-accent);
+
+    path {
+      fill: currentColor;
+    }
+  }
+}
+
+.empty {
+  margin: 8px 6px;
+  color: var(--ip-secondary);
+  font-size: 11px;
+}

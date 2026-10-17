@@ -6,15 +6,20 @@ import { createEffect } from 'solid-js';
  * across the width, in white. Its thickness grows with the preset's size (geometrically, so a 2 px liner and a
  * 300 px airbrush both read), tapers at both ends when size follows pressure, blurs for soft tips and fades with the
  * preset's opacity. Imported ABR tips are drawn as their spaced dabs, since their tip images are not loaded here.
- * Fills its parent's width at `height` CSS pixels; redraws when the settings change.
+ * Fills its parent's width at `height` CSS pixels; redraws when the settings or the color change.
  */
-export function StrokePreview(props: { settings: Partial<Brush>; height: number }) {
+export function StrokePreview(props: {
+  settings: Partial<Brush>;
+  height: number;
+  /** The stroke's CSS color; white by default. */
+  color?: string;
+}) {
   let canvas!: HTMLCanvasElement;
 
   createEffect(
-    () => ({ settings: props.settings, height: props.height }),
-    ({ settings, height }) => {
-      const frame = requestAnimationFrame(() => paint(canvas, settings, height));
+    () => ({ settings: props.settings, height: props.height, color: props.color ?? '#ffffff' }),
+    ({ settings, height, color }) => {
+      const frame = requestAnimationFrame(() => paint(canvas, settings, height, color));
       return () => cancelAnimationFrame(frame);
     }
   );
@@ -24,7 +29,7 @@ export function StrokePreview(props: { settings: Partial<Brush>; height: number 
   );
 }
 
-function paint(canvas: HTMLCanvasElement, settings: Partial<Brush>, height: number) {
+function paint(canvas: HTMLCanvasElement, settings: Partial<Brush>, height: number, color: string) {
   const ratio = devicePixelRatio || 1;
   const width = Math.max(40, canvas.clientWidth || 160);
   canvas.width = Math.round(width * ratio);
@@ -46,7 +51,7 @@ function paint(canvas: HTMLCanvasElement, settings: Partial<Brush>, height: numb
 
   context.globalAlpha = erase ? 0.55 : Math.max(0.25, settings.opacity ?? 1);
   context.filter = hardness < 0.9 ? `blur(${(1 - hardness) * thickness * 0.3}px)` : 'none';
-  context.strokeStyle = context.fillStyle = '#ffffff';
+  context.strokeStyle = context.fillStyle = color;
   context.lineCap = 'round';
   if (dabs) {
     // Spaced dabs suggest a stamped tip.
