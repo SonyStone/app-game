@@ -3,6 +3,8 @@
 .root {
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --duration: 420ms;
+  /* On closing, the card and the panel wait for the entries to start leaving. */
+  --wait: 70ms;
   --ink: #f2f2f2;
   --muted: #858585;
   position: absolute;
@@ -11,16 +13,29 @@
   isolation: isolate;
   background: #000;
   font-family: system-ui, sans-serif;
+
+  &[data-stepped] {
+    --wait: 0ms;
+  }
 }
 
+/* The card rounds its corners as soon as it leaves the edges and squares them only once it is back; the corners
+   come out from behind the screen's edge already round. */
 .card {
   position: absolute;
   inset: 0;
   overflow: hidden;
   transform-origin: 0 0;
   transition:
-    transform var(--duration) var(--ease),
-    clip-path var(--duration) var(--ease);
+    transform var(--duration) var(--ease) var(--wait),
+    border-radius 0s linear calc(var(--duration) + var(--wait));
+
+  .root[data-stepped] & {
+    border-radius: var(--card-radius-local);
+    transition:
+      transform var(--duration) var(--ease) var(--wait),
+      border-radius 0s;
+  }
 }
 
 /* Keeps the content's stacking, such as floating windows over the drawing, under the shade. */
@@ -35,7 +50,7 @@
   inset: 0;
   background: #000;
   pointer-events: none;
-  transition: opacity var(--duration) var(--ease);
+  transition: opacity var(--duration) var(--ease) var(--wait);
 }
 
 /* Over the card while the menu is open: a press brings the content back. */
@@ -48,38 +63,101 @@
   background: transparent;
   cursor: pointer;
   transform-origin: 0 0;
-  transition:
-    transform var(--duration) var(--ease),
-    clip-path var(--duration) var(--ease);
+  transition: transform var(--duration) var(--ease) var(--wait);
   -webkit-tap-highlight-color: transparent;
 }
 
-.panel {
+/* Holds the panel, which covers the card's far side, and the caps that round the card's corners at the panel. */
+.drawer {
   position: absolute;
   top: 0;
   bottom: 0;
   right: 0;
   z-index: 2;
+  width: var(--panel-width);
+  transition: transform var(--duration) var(--ease) var(--wait);
+
+  .root[data-side='left'] & {
+    right: auto;
+    left: 0;
+  }
+}
+
+.panel {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  width: var(--panel-width);
   /* The card's margin before the entries too, so the gap beside the card matches the others. */
   padding: 88px 28px 28px var(--card-margin);
   overflow-y: auto;
   background: #000;
   color: var(--ink);
-  transition: transform var(--duration) var(--ease);
 
   .root[data-side='left'] & {
-    right: auto;
-    left: 0;
     padding: 88px var(--card-margin) 28px 28px;
   }
 }
 
+/* A concave corner of the panel's black over the card's corner, moving with the card's top or bottom edge. Shown
+   with the card's own rounding. */
+.cap {
+  position: absolute;
+  right: 100%;
+  width: var(--card-radius);
+  height: var(--card-radius);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--duration) var(--ease) var(--wait),
+    opacity 0s linear calc(var(--duration) + var(--wait));
+
+  .root[data-stepped] & {
+    opacity: 1;
+    transition:
+      transform var(--duration) var(--ease) var(--wait),
+      opacity 0s;
+  }
+
+  .root[data-side='left'] & {
+    right: auto;
+    left: 100%;
+  }
+
+  &[data-edge='top'] {
+    top: 0;
+    background: radial-gradient(
+      circle at 0 100%,
+      transparent calc(var(--card-radius) - 0.5px),
+      #000 var(--card-radius)
+    );
+  }
+
+  &[data-edge='bottom'] {
+    bottom: 0;
+    background: radial-gradient(circle at 0 0, transparent calc(var(--card-radius) - 0.5px), #000 var(--card-radius));
+  }
+
+  .root[data-side='left'] &[data-edge='top'] {
+    background: radial-gradient(
+      circle at 100% 100%,
+      transparent calc(var(--card-radius) - 0.5px),
+      #000 var(--card-radius)
+    );
+  }
+
+  .root[data-side='left'] &[data-edge='bottom'] {
+    background: radial-gradient(
+      circle at 100% 0,
+      transparent calc(var(--card-radius) - 0.5px),
+      #000 var(--card-radius)
+    );
+  }
+}
+
 /* While a gesture leads, everything follows the fingers at once. */
-.root[data-following] :is(.card, .shade, .back, .panel) {
+.root[data-following] :is(.card, .shade, .back, .drawer, .cap) {
   transition: none;
 }
 
@@ -147,17 +225,28 @@
   }
 }
 
-/* Entries rise from below their own line, one after another as numbered by `--entry`, and sink at once. */
+/* Entries rise from below their own line one after another, as numbered by `--entry`, and on closing leave upward
+   and fade, quicker and closer together, so the menu folds away instead of replaying its entrance backwards. */
 .panel [data-side-menu-entry] > span {
   display: inline-block;
-  transform: translateY(110%);
-  transition: transform 200ms var(--ease);
+  animation: entryLeave 200ms cubic-bezier(0.33, 0, 0.2, 1) calc(var(--entry, 0) * 15ms) both;
 }
 
 .root[data-revealed] .panel [data-side-menu-entry] > span {
-  transform: none;
-  transition-duration: 520ms;
-  transition-delay: calc(60ms + var(--entry, 0) * 25ms);
+  animation: entryRise 520ms var(--ease) calc(60ms + var(--entry, 0) * 25ms) both;
+}
+
+@keyframes entryRise {
+  from {
+    transform: translateY(110%);
+  }
+}
+
+@keyframes entryLeave {
+  to {
+    transform: translateY(-45%);
+    opacity: 0;
+  }
 }
 
 /* The dash grows before the hovered, focused or pressed entry and pushes its name aside. */
@@ -294,14 +383,19 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .root {
+  .root,
+  .root[data-stepped] {
     --duration: 1ms;
+    --wait: 0ms;
   }
 
   .panel [data-side-menu-entry] > span,
-  .root[data-revealed] .panel [data-side-menu-entry] > span,
+  .root[data-revealed] .panel [data-side-menu-entry] > span {
+    animation-duration: 1ms;
+    animation-delay: 0s;
+  }
+
   .pillLabel > span {
     transition-duration: 1ms;
-    transition-delay: 0s;
   }
 }

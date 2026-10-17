@@ -44,6 +44,8 @@ export function SideMenu(props: {
   const rootSize = () => ({ width: size.clientWidth ?? 0, height: size.clientHeight ?? 0 });
   const geometry = () => menuGeometry(rootSize());
   const frame = () => cardFrame(rootSize(), side(), amount());
+  /** The panel's offset from its open place, toward its edge. */
+  const drawerShift = () => (side() === 'right' ? 1 : -1) * geometry().panel * (1 - amount());
   const close = () => props.onOpenChange(false);
 
   createEventListener(
@@ -81,38 +83,37 @@ export function SideMenu(props: {
       class={[styles.root, props.class]}
       data-side={side()}
       data-open={props.open ? '' : undefined}
+      data-stepped={props.open || amount() > 0 ? '' : undefined}
       data-revealed={props.open || amount() > revealAt ? '' : undefined}
       data-following={props.progress === undefined ? undefined : ''}
-      style={{ '--panel-width': `${geometry().panel}px`, '--card-margin': `${margin}px` }}
+      style={{
+        '--panel-width': `${geometry().panel}px`,
+        '--card-margin': `${margin}px`,
+        '--card-radius': `${cardRadius}px`,
+        '--card-radius-local': `${frame().radius}px`
+      }}
     >
       <div
         class={styles.card}
-        style={{ transform: frame().transform, 'clip-path': frame().clipPath }}
+        style={{ transform: frame().transform }}
         inert={props.open || props.progress !== undefined}
       >
         <div class={styles.content}>{props.children}</div>
         <div class={styles.shade} style={{ opacity: shadeOpacity * amount() }} />
       </div>
       <Show when={props.open}>
-        <button
-          class={styles.back}
-          style={{ transform: frame().transform, 'clip-path': frame().clipPath }}
-          aria-label="Back"
-          onClick={close}
-        />
+        <button class={styles.back} style={{ transform: frame().transform }} aria-label="Back" onClick={close} />
       </Show>
-      <nav
-        ref={setPanel}
-        id={panelId}
-        class={styles.panel}
-        aria-label={label()}
-        inert={!props.open}
-        style={{
-          transform: `translateX(${(side() === 'right' ? 100 : -100) * (1 - amount())}%)`
-        }}
-      >
-        <SideMenuContext value={{ close }}>{props.menu}</SideMenuContext>
-      </nav>
+      {/* The panel covers the card's far side; its caps round the card's corners where it meets the panel. */}
+      <div class={styles.drawer} style={{ transform: `translateX(${drawerShift()}px)` }}>
+        <Show when={!geometry().covers}>
+          <span class={styles.cap} data-edge="top" style={{ transform: `translateY(${frame().gap}px)` }} />
+          <span class={styles.cap} data-edge="bottom" style={{ transform: `translateY(${-frame().gap}px)` }} />
+        </Show>
+        <nav ref={setPanel} id={panelId} class={styles.panel} aria-label={label()} inert={!props.open}>
+          <SideMenuContext value={{ close }}>{props.menu}</SideMenuContext>
+        </nav>
+      </div>
       <button
         ref={setPill}
         class={styles.pill}
@@ -198,38 +199,35 @@ export function SideMenuItem(props: {
 }
 
 /**
- * How wide the panel is in a root of `size`, and how far from the root's edge on the panel's side the card ends: at the
- * panel, or `margin` from the edge where the root is too narrow to leave the card room and the panel covers it.
+ * How wide the panel is in a root of `size`, and whether it `covers` the card: in a root too narrow to leave the card
+ * room beside the panel, the panel lies over the card instead of meeting its edge.
  */
 export function menuGeometry(size: { width: number; height: number }) {
   const panel = Math.min(maxPanelWidth, size.width - minCardRoom);
   if (panel < minPanelWidth) {
-    return { panel: Math.max(0, Math.min(maxPanelWidth, size.width)), beside: margin };
+    return { panel: Math.max(0, Math.min(maxPanelWidth, size.width)), covers: true };
   }
 
-  return { panel, beside: panel };
+  return { panel, covers: false };
 }
 
 /**
- * The card's transform and clip at `amount` of the way to open, 0 to 1, in a root of `size`. As in a picture frame,
- * the content shrinks only enough to leave `margin` above and below it and keeps the edge away from the panel
- * `margin` from the root's; the panel's side is clipped where the card ends, so the margins are even and the content
- * keeps nearly its size. The transform works from the content's top left corner.
+ * The card's transform at `amount` of the way to open, 0 to 1, in a root of `size`, from the content's top left
+ * corner. As in a picture frame, the content shrinks only enough to leave `gap` (up to `margin`) above and below it
+ * and keeps the edge away from the panel as far from the root's; its far side goes under the panel. `radius` is the
+ * card's rounding in the content's own pixels, which the open card scales down to `cardRadius`.
  */
 export function cardFrame(size: { width: number; height: number }, side: 'left' | 'right', amount: number) {
   const { width, height } = size;
   if (width <= 0 || height <= 0) {
-    return { transform: 'none', clipPath: 'none' };
+    return { transform: 'none', gap: 0, radius: cardRadius };
   }
 
   const gap = margin * amount;
   const scale = (height - gap * 2) / height;
-  const shown = width - gap - menuGeometry(size).beside * amount;
-  const hidden = Math.max(0, width - shown / scale);
   const x = side === 'right' ? gap : width - gap - width * scale;
-  const radius = (cardRadius * amount) / scale;
-  const inset = side === 'right' ? `0 ${hidden}px 0 0` : `0 0 0 ${hidden}px`;
-  return { transform: `translate(${x}px, ${gap}px) scale(${scale})`, clipPath: `inset(${inset} round ${radius}px)` };
+  const radius = (cardRadius * height) / (height - margin * 2);
+  return { transform: `translate(${x}px, ${gap}px) scale(${scale})`, gap, radius };
 }
 
 /** Closes the menu for the entries inside its panel. */
