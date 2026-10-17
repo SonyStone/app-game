@@ -1,0 +1,104 @@
+.editor {
+  background: var(--ip-ground);
+}
+
+.ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.toolbarHost {
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.layers {
+  position: absolute;
+  top: 52px;
+  right: 0;
+  bottom: 120px;
+  display: flex;
+  align-items: flex-start;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.miniBars {
+  position: absolute;
+  top: 52px;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.showInterface {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top));
+  right: 8px;
+  color: var(--ip-icon);
+  filter: drop-shadow(0 0 2px rgb(0 0 0 / 0.7));
+}
+
+.selectionMenu {
+  width: 200px;
+  padding-bottom: 6px;
+
+  button {
+    display: block;
+    width: 100%;
+    padding: 8px 14px;
+    border: 0;
+    background: none;
+    color: var(--ip-label);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: var(--ip-panel-raised);
+    }
+
+    &:disabled {
+      color: var(--ip-disabled);
+    }
+  }
+}
+
+.dragGhost {
+  position: fixed;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: var(--ip-radius);
+  background: var(--ip-panel-raised);
+  box-shadow: var(--ip-shadow);
+  color: var(--ip-label);
+  pointer-events: none;
+}
+
+.failed {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  margin: 0;
+  padding: 8px 12px;
+  transform: translateX(-50%);
+  border-radius: var(--ip-radius);
+  background: var(--ip-panel);
+}

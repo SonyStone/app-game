@@ -10,11 +10,17 @@ import { CommandPalette } from '../../variants/command/CommandPalette';
 import { Swatches } from '../../variants/demos/Swatches';
 import type { Menu } from '../../variants/desktop/createDesktopCommands';
 import { MenuBar } from '../../variants/desktop/MenuBar';
+import { availableInPaint } from '../../variants/infinite/createToolActions';
+import { HistoryControls } from '../../variants/infinite/HistoryControls';
+import { OptionsMenu } from '../../variants/infinite/OptionsMenu';
+import { Readout } from '../../variants/infinite/Readout';
+import { findTool } from '../../variants/infinite/toolCatalog';
+import { TopBar, type TopBarMenu } from '../../variants/infinite/TopBar';
 import { ActionsPopover } from '../../variants/procreate/ActionsPopover';
 import { GalleryPopover } from '../../variants/procreate/GalleryPopover';
 import { MoreSheet } from '../../variants/zen/MoreSheet';
 import styles from '../ComponentCanvas.module.css';
-import { DesktopFrame, StudioFrame, ZenFrame } from '../frames';
+import { DesktopFrame, InfiniteFrame, StudioFrame, ZenFrame } from '../frames';
 import { ProcreateFrame } from '../ProcreateFrame';
 import { fourLayers, SeededLayers } from '../seededLayers';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
@@ -66,6 +72,28 @@ export function Panels() {
         </Specimen>
         <Specimen id="panels/bars/studio-view" label="Studio: view controls">
           <StudioView />
+        </Specimen>
+      </CanvasRow>
+
+      <CanvasRow
+        title="Infinite Painter"
+        note="the top bar with two docked icons, the Options menu, Undo and the readout"
+      >
+        <Specimen id="panels/infinite/top-bar" label="Top bar">
+          <InfiniteTopBar />
+        </Specimen>
+        <Specimen id="panels/infinite/options" label="Options menu">
+          <InfiniteFrame>
+            <OptionsMenu available={availableInPaint} onRun={() => {}} onExport={() => {}} />
+          </InfiniteFrame>
+        </Specimen>
+        <Specimen id="panels/infinite/history" label="Undo, Redo and the history slider">
+          <InfiniteHistory />
+        </Specimen>
+        <Specimen id="panels/infinite/readout" label="Size readout">
+          <InfiniteFrame width={280} height={340}>
+            <Readout text="Size: 80 px" ring={{ current: 80, max: 200 }} color="#c8553d" />
+          </InfiniteFrame>
         </Specimen>
       </CanvasRow>
 
@@ -284,5 +312,52 @@ function DemoSwatches() {
         <Swatches color={color()} onPick={setColor} />
       </section>
     </div>
+  );
+}
+
+/**
+ * The Infinite Painter variant's top bar on a strip of drawing, with Fill and Flip docked; its buttons only mark
+ * their menus here, and docked icons do not drag.
+ */
+function InfiniteTopBar() {
+  const [open, setOpen] = createSignal<TopBarMenu>();
+  const [layers, setLayers] = createSignal(true);
+
+  return (
+    <InfiniteFrame width={720} height={64}>
+      <TopBar
+        open={open()}
+        onMenu={(menu) => setOpen((current) => (current === menu ? undefined : menu))}
+        layersOpen={layers()}
+        onLayers={() => setLayers((shown) => !shown)}
+        selection
+        docked={['fill', 'flip'].flatMap((id) => findTool(id) ?? [])}
+        available={availableInPaint}
+        active={() => false}
+        onRun={() => {}}
+        onDockDragStart={() => {}}
+        dockArea={() => {}}
+      />
+    </InfiniteFrame>
+  );
+}
+
+/** The Infinite Painter variant's undo corner on a history of twelve steps that its buttons and slider walk. */
+function InfiniteHistory() {
+  const [current, setCurrent] = createSignal(9);
+  const states = 12;
+
+  return (
+    <InfiniteFrame width={520} height={150}>
+      <HistoryControls
+        canUndo={current() > 0}
+        canRedo={current() < states - 1}
+        states={states}
+        current={current()}
+        onUndo={() => setCurrent((step) => Math.max(0, step - 1))}
+        onRedo={() => setCurrent((step) => Math.min(states - 1, step + 1))}
+        onStep={(steps) => setCurrent((step) => Math.max(0, Math.min(states - 1, step + steps)))}
+      />
+    </InfiniteFrame>
   );
 }

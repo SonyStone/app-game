@@ -1,0 +1,46 @@
+.stack {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+}
+
+.close {
+  color: var(--ip-label);
+}
+
+/* A text control of a mini-toolbar, such as Apply. */
+.text {
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--ip-radius);
+  background: none;
+  color: var(--ip-label);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.08);
+  }
+
+  &[aria-pressed='true'] {
+    color: var(--ip-accent);
+  }
+
+  &:disabled {
+    color: var(--ip-disabled);
+  }
+}

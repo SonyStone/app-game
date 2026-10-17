@@ -1,0 +1,39 @@
+.readout {
+  position: absolute;
+  top: 58px;
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.text {
+  padding: 5px 10px;
+  border-radius: 12px;
+  background: rgb(30 30 32 / 0.88);
+  color: var(--ip-label);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.outer {
+  display: grid;
+  place-items: center;
+  width: var(--diameter);
+  height: var(--diameter);
+  border-radius: 50%;
+  background: rgb(30 30 32 / 0.18);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.45),
+    0 0 0 1px rgb(0 0 0 / 0.25);
+}
+
+.inner {
+  width: var(--diameter);
+  height: var(--diameter);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.5);
+}

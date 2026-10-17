@@ -1,0 +1,79 @@
+.toolbar {
+  position: absolute;
+  display: flex;
+  align-items: stretch;
+  touch-action: none;
+  user-select: none;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 44px;
+  padding: 4px 0;
+}
+
+.divider {
+  height: 4px;
+}
+
+.mode,
+.slider {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ip-icon-dim);
+  cursor: pointer;
+  touch-action: none;
+
+  &:disabled {
+    color: var(--ip-disabled);
+    cursor: default;
+  }
+}
+
+.mode[aria-pressed='true'] {
+  color: var(--ip-label);
+}
+
+/* The size indicator: a ring whose diameter grows with the brush size. */
+.sizeRing {
+  width: calc(7px + var(--size) * 17px);
+  height: calc(7px + var(--size) * 17px);
+  border: 1.5px solid var(--ip-icon);
+  border-radius: 50%;
+}
+
+.colorDot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1.5px var(--ip-panel),
+    0 0 0 2.5px rgb(255 255 255 / 0.35);
+}
+
+/* The opacity indicator: a soft white dot over a dark disc, as opaque as the value. */
+.opacityDot {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(#555 0 25%, #333 0 50%) 0 0 / 8px 8px;
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.35);
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, #f2f2f4 45%, rgb(242 242 244 / 0) 72%);
+    opacity: var(--opacity);
+  }
+}

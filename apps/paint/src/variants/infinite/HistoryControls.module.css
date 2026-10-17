@@ -1,0 +1,63 @@
+.corner {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: max(6px, env(safe-area-inset-bottom));
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.buttons {
+  display: flex;
+  gap: 2px;
+}
+
+.icon {
+  color: var(--ip-icon);
+  filter: drop-shadow(0 0 2px rgb(0 0 0 / 0.7));
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.track {
+  position: relative;
+  flex: 1;
+  height: 36px;
+  border-radius: 18px;
+  background: rgb(46 46 48 / 0.85);
+  touch-action: none;
+  cursor: pointer;
+}
+
+.line {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: rgb(255 255 255 / 0.35);
+}
+
+.thumb {
+  position: absolute;
+  top: 50%;
+  left: calc(10px + var(--fraction) * (100% - 36px));
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: var(--ip-thumb);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}

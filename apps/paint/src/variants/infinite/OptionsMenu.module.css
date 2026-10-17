@@ -1,0 +1,40 @@
+.menu {
+  width: 216px;
+  padding-bottom: 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 0 8px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+
+  h3 {
+    padding: 0;
+  }
+}
+
+.format {
+  display: grid;
+  width: 100%;
+  padding: 8px 16px;
+  border: 0;
+  background: none;
+  color: var(--ip-label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  span {
+    color: var(--ip-secondary);
+    font-size: 11px;
+  }
+
+  &:hover {
+    background: var(--ip-panel-raised);
+  }
+}

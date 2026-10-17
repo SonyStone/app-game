@@ -1,3 +1,4 @@
+import { defaultBrush } from '@app-game/paint-core/brush';
 import type { SelectionMode } from '@app-game/paint-core/selectionMask';
 import { createSignal } from 'solid-js';
 import type { PaintTool } from '../../features/brush';
@@ -6,10 +7,14 @@ import type { PanelId } from '../../features/studio/StudioPanel';
 import { ToolBar } from '../../features/studio/ToolBar';
 import type { DesktopTool } from '../../variants/desktop/createDesktopTools';
 import { ToolColumn } from '../../variants/desktop/ToolColumn';
+import { availableInPaint } from '../../variants/infinite/createToolActions';
+import { MainToolbar, type ToolbarMode } from '../../variants/infinite/MainToolbar';
+import { creativeTools, editingTools } from '../../variants/infinite/toolCatalog';
+import { ToolsMenu } from '../../variants/infinite/ToolsMenu';
 import procreate from '../../variants/procreate/ProcreateStudio.module.css';
 import { SelectionToolbar } from '../../variants/procreate/SelectionToolbar';
 import styles from '../ComponentCanvas.module.css';
-import { DesktopFrame, StudioFrame } from '../frames';
+import { DesktopFrame, InfiniteFrame, StudioFrame } from '../frames';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
 
 /**
@@ -34,6 +39,21 @@ export function Tools() {
         </Specimen>
         <Specimen id="tools/rails/desktop" label="Desktop">
           <DesktopColumn />
+        </Specimen>
+      </CanvasRow>
+
+      <CanvasRow
+        title="Infinite Painter"
+        note="its main toolbar, whose buttons slide on a drag, and its tools menus; greyed entries are not in Paint"
+      >
+        <Specimen id="tools/infinite/toolbar" label="Main toolbar">
+          <InfiniteToolbar />
+        </Specimen>
+        <Specimen id="tools/infinite/creative" label="Creative Tools menu">
+          <InfiniteMenu label="Creative Tools" sections={creativeTools} />
+        </Specimen>
+        <Specimen id="tools/infinite/editing" label="Editing Tools menu">
+          <InfiniteMenu label="Editing Tools" sections={editingTools} />
         </Specimen>
       </CanvasRow>
 
@@ -125,5 +145,66 @@ function ProcreateSelection() {
         onClear={() => {}}
       />
     </div>
+  );
+}
+
+/**
+ * The Infinite Painter variant's main toolbar on a brush of its own: the modes choose, Size, Color and Opacity slide on
+ * a drag; their pop-ups and the eyedropper belong to the variant and do nothing here, nor does the two-finger move.
+ */
+function InfiniteToolbar() {
+  const [mode, setMode] = createSignal<ToolbarMode>('brush');
+  const [brush, setBrush] = createSignal({ ...defaultBrush(), color: '#c8553d' });
+  const [size, setSize] = createSignal(0.55);
+
+  return (
+    <InfiniteFrame width={96} height={330}>
+      <MainToolbar
+        mode={mode()}
+        onMode={setMode}
+        onBrushes={() => {}}
+        sizeFraction={size()}
+        onSize={setSize}
+        onSizeTap={() => {}}
+        opacityValue={brush().opacity}
+        opacityLabel="Opacity"
+        onOpacity={(opacity) => setBrush((current) => ({ ...current, opacity }))}
+        onOpacityTap={() => {}}
+        color={brush().color}
+        brightness={0.78}
+        onBrightness={() => {}}
+        onColorTap={() => {}}
+        onEyedropper={() => {}}
+        onReadout={() => {}}
+        position={{ x: 20, y: 20 }}
+        onMove={() => {}}
+      />
+    </InfiniteFrame>
+  );
+}
+
+/** An Infinite Painter tools menu whose entries Paint has toggle on and off here. */
+function InfiniteMenu(props: { label: string; sections: Parameters<typeof ToolsMenu>[0]['sections'] }) {
+  const [active, setActive] = createSignal(new Set<string>(['vertical']));
+
+  return (
+    <InfiniteFrame>
+      <ToolsMenu
+        label={props.label}
+        sections={props.sections}
+        available={availableInPaint}
+        active={(id) => active().has(id)}
+        onRun={(id) =>
+          setActive((current) => {
+            const next = new Set(current);
+            if (!next.delete(id)) {
+              next.add(id);
+            }
+
+            return next;
+          })
+        }
+      />
+    </InfiniteFrame>
   );
 }

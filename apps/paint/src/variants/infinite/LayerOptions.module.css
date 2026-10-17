@@ -1,0 +1,80 @@
+.options {
+  width: 196px;
+  padding: 8px 0;
+}
+
+.name,
+.nameField {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 0 12px 6px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--ip-label);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+}
+
+.name {
+  cursor: text;
+}
+
+.nameField {
+  border-bottom: 1px solid var(--ip-accent);
+  outline: none;
+}
+
+.blend {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 0 12px 4px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--ip-panel-raised);
+  color: var(--ip-label);
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 4px 8px 0;
+}
+
+.modes {
+  max-height: 340px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.modeGroup + .modeGroup {
+  border-top: 1px solid var(--ip-hairline);
+}
+
+.mode {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  border: 0;
+  background: none;
+  color: var(--ip-label);
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+
+  &[aria-selected='true'] {
+    color: var(--ip-accent);
+  }
+
+  &:disabled {
+    color: var(--ip-disabled);
+    cursor: default;
+  }
+}

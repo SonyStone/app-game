@@ -229,6 +229,14 @@ it.each(paintVariants.filter(({ id }) => id !== 'puck').map((variant) => [varian
 const localUndoOpeners: Record<string, () => void | Promise<void>> = {
   studio: () => click('nav[aria-label="Drawing tools"] button[aria-label="Local undo"]'),
   procreate: () => click('button[aria-label="Local undo"]'),
+  infinite() {
+    click('button[aria-label="Editing Tools"]');
+    const entry = [...document.querySelectorAll<HTMLButtonElement>('nav[aria-label="Editing Tools"] button')].find(
+      (button) => button.textContent === 'Local undo'
+    );
+    entry!.click();
+    flush();
+  },
   desktop: () => click('nav[aria-label="Tools"] button[aria-label="Local undo"]'),
   zen() {
     const pebble = document.querySelector<HTMLElement>('[aria-label^="Tools · drag to move"]')!;

@@ -1,0 +1,50 @@
+.menu {
+  width: 248px;
+  max-height: calc(100vh - 72px);
+  padding-bottom: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.section + .section {
+  margin-top: -2px;
+}
+
+.rowFrame {
+  position: relative;
+  padding: 0 14px 0 8px;
+}
+
+.row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 25%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  touch-action: pan-x;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  &[data-wrap] {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(4, 1fr);
+    touch-action: auto;
+  }
+}
+
+.item {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.chevron {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  margin-top: -14px;
+  color: var(--ip-secondary);
+  pointer-events: none;
+}

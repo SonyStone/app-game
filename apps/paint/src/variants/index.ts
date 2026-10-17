@@ -36,6 +36,13 @@ export const paintVariants: PaintVariant[] = [
     load: () => import('./procreate').then(({ ProcreateStudio }) => ProcreateStudio)
   },
   {
+    id: 'infinite',
+    name: 'Infinite Painter',
+    description:
+      'A close copy of Infinite Painter for Android: a toolbar of sliding buttons, thumbnail layers at the edge, the tools menus.',
+    load: () => import('./infinite').then(({ InfiniteStudio }) => InfiniteStudio)
+  },
+  {
     id: 'puck',
     name: 'Puck',
     description: 'Only the canvas; everything opens as one glass cluster under the pen.',
