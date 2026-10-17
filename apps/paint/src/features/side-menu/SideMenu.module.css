@@ -13,8 +13,8 @@
   font-family: system-ui, sans-serif;
 }
 
-/* The card rounds its corners as soon as it leaves the edges and squares them only once it is back; the corners
-   come out from behind the screen's edge already round. */
+/* The card's corners are round as soon as it leaves the edges, coming out from behind the screen's edge; on the way
+   back they shrink with the margin, sinking into the edge as the card reaches it. */
 .card {
   position: absolute;
   inset: 0;
@@ -22,7 +22,7 @@
   transform-origin: 0 0;
   transition:
     transform var(--duration) var(--ease),
-    border-radius 0s linear calc(var(--duration) +);
+    border-radius var(--duration) var(--ease);
 
   .root[data-stepped] & {
     border-radius: var(--card-radius-local);
