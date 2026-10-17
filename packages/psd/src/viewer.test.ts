@@ -181,7 +181,7 @@ it("refuses Dissolve without Photoshop's noise table and approximates it on requ
 
   const approximate = value(opened.render({ ...photoshopDefaultSettings, approximate: true }));
   expect(approximate.approximations).toEqual([
-    `\u201cGrain\u201d: ${setting} \u2014 dissolved with a stand-in noise, so other pixels are drawn than in Photoshop`
+    `\u201cGrain\u201d: ${setting} \u2014 drawn with a look-alike noise instead of Photoshop's, so its dots and grain lie at other pixels`
   ]);
   // Dissolve draws whole pixels: each is paper or grain.
   for (let index = 0; index < 12; index++) {

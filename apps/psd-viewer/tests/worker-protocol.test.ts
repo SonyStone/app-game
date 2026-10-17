@@ -42,6 +42,12 @@ function value<T>(result: PsdResultOf<T> | undefined): T {
 
 const settings: PsdRenderSettings = photoshopDefaultSettings;
 
+/**
+ * Settings for `pass-through-groups.psd`, whose Exposure layer needs a rounding of Apple's `powf` that the WASM build
+ * cannot decide yet, so the exact render refuses it; the approximate one renders Photoshop's pixels.
+ */
+const approximated: PsdRenderSettings = { ...settings, approximate: true };
+
 /** Photoshop's "Image Interpolation" preferences. */
 const interpolations: PsdInterpolation[] = [
   'nearestNeighbor',
@@ -92,9 +98,9 @@ it('opens, renders and compares an example our renderer reproduces exactly', asy
 it('coalesces renders: only the newest waiting render runs after the one in flight', async () => {
   const { client, sent } = connect();
   const { document } = value(await client.open(await example('pass-through-groups.psd')));
-  const first = client.render(document, settings, []);
-  const second = client.render(document, settings, [[3, false]]);
-  const third = client.render(document, { ...settings, linearBlending: true }, []);
+  const first = client.render(document, approximated, []);
+  const second = client.render(document, approximated, [[3, false]]);
+  const third = client.render(document, { ...approximated, linearBlending: true }, []);
   expect(await second).toEqual({
     ok: false,
     error: { kind: 'superseded', message: 'a newer render replaced this one' }
@@ -110,10 +116,10 @@ it('detects the gamma blending options a document was saved with, and reuses its
   const { client } = connect();
   // Captured with gamma 1.0 blending.
   const gammaOne = value(await client.open(await example('pass-through-groups.psd')));
-  const detected = value(await client.detectBlending(gammaOne.document, settings, []));
+  const detected = value(await client.detectBlending(gammaOne.document, approximated, []));
   expect(detected).toMatchObject({ linearBlending: true, differing: { linear: 0 } });
   expect(detected.differing.encoded).toBeGreaterThan(0);
-  const render = value(await client.render(gammaOne.document, { ...settings, linearBlending: true }, []));
+  const render = value(await client.render(gammaOne.document, { ...approximated, linearBlending: true }, []));
   expect(value(await client.difference(gammaOne.document, render.render)).differingSamples).toBe(0);
 
   // Captured with Photoshop's default Color Settings.
@@ -349,11 +355,11 @@ it('opens like Photoshop: strict files as before, prompts sent back for an answe
   });
   // Recovered documents render, compare and detect their blending options like any other.
   // The example was captured with gamma 1.0 blending, which still reproduces the merged image more closely.
-  expect(value(await client.detectBlending(continued.document, settings, []))).toMatchObject({
+  expect(value(await client.detectBlending(continued.document, approximated, []))).toMatchObject({
     linearBlending: true,
     differing: { encoded: 624, linear: 207 }
   });
-  const render = value(await client.render(continued.document, { ...settings, linearBlending: true }, []));
+  const render = value(await client.render(continued.document, { ...approximated, linearBlending: true }, []));
   expect(value(await client.difference(continued.document, render.render)).differingSamples).toBe(207);
 
   const flattened = value(await client.open(corrupt.slice(0), { corruptLayers: 'flatten' }));

@@ -172,10 +172,7 @@ function EffectsSection(props: { detail: PsdLayerDetail }) {
                       <span class={styles.warning}>not rendered exactly: {instance.unsupported}</span>
                     </Show>
                     <Show when={instance.needsNoise}>
-                      <span class={styles.warning}>needs Photoshop's noise table</span>
-                    </Show>
-                    <Show when={instance.needsAngleTable}>
-                      <span class={styles.warning}>needs Photoshop's angle table</span>
+                      <span class={styles.warning}>noise approximated: Photoshop's noise table is not shipped</span>
                     </Show>
                   </summary>
                   <pre class={styles.settings}>{instance.settings}</pre>
