@@ -1,0 +1,130 @@
+/*
+ * Infinite Painter's dark interface (Android 7.1): flat charcoal panels with small radii, thin light grey line icons
+ * with tiny labels under them, and one red for what is active: the active layer's frame and a highlighted parameter.
+ * Every part of the variant, and the component canvas's frames of those parts, put `.theme` on an ancestor.
+ */
+.theme {
+  --ip-ground: #1d1d1f;
+  --ip-panel: #2e2e30;
+  --ip-panel-raised: #3a3a3d;
+  --ip-panel-sunken: #252527;
+  --ip-hairline: rgb(255 255 255 / 0.08);
+  --ip-hairline-strong: rgb(255 255 255 / 0.16);
+  --ip-icon: rgb(232 232 235 / 0.9);
+  --ip-icon-dim: rgb(232 232 235 / 0.42);
+  --ip-label: #e9e9eb;
+  --ip-secondary: rgb(233 233 235 / 0.58);
+  --ip-disabled: rgb(233 233 235 / 0.22);
+  --ip-accent: #e5483d;
+  --ip-thumb: #f2f2f4;
+  --ip-radius: 6px;
+  --ip-shadow: 0 6px 24px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(0 0 0 / 0.35);
+
+  color: var(--ip-label);
+  font:
+    13px/1.3 Roboto,
+    'Segoe UI',
+    system-ui,
+    sans-serif;
+
+  :where(button, [role='slider']) {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :where(button):focus-visible {
+    outline: 2px solid var(--ip-accent);
+    outline-offset: -2px;
+  }
+}
+
+/** A floating panel: the brush selector, color panel, menus and pop-ups. */
+.panel {
+  background: var(--ip-panel);
+  border-radius: var(--ip-radius);
+  box-shadow: var(--ip-shadow);
+  color: var(--ip-label);
+}
+
+/** A tiny section heading inside a panel, such as "Guides" in the Creative Tools menu. */
+.sectionTitle {
+  margin: 0;
+  padding: 10px 14px 4px;
+  color: var(--ip-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/** An icon button with its label under it, as in the tools and options menus and the layer options. */
+.labeledIcon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 2px 6px;
+  border: 0;
+  border-radius: var(--ip-radius);
+  background: none;
+  color: var(--ip-icon);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+
+  > span {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--ip-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--ip-panel-raised);
+  }
+
+  &[aria-pressed='true'] {
+    color: var(--ip-accent);
+
+    > span {
+      color: var(--ip-accent);
+    }
+  }
+
+  &:disabled {
+    color: var(--ip-disabled);
+    cursor: default;
+
+    > span {
+      color: var(--ip-disabled);
+    }
+  }
+}
+
+/** A plain icon button of a bar. */
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ip-radius);
+  background: none;
+  color: var(--ip-icon);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.06);
+  }
+
+  &[aria-pressed='true'],
+  &[aria-expanded='true'] {
+    color: var(--ip-label);
+    background: rgb(255 255 255 / 0.1);
+  }
+
+  &:disabled {
+    color: var(--ip-disabled);
+    cursor: default;
+  }
+}

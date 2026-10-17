@@ -556,6 +556,24 @@
 }
 
 /* Grounds of the variant frames (`frames.tsx`): each variant's own background, as its parts sit on it. */
+/* The Infinite Painter layer panel at the right edge of its frame, as at the screen's edge. */
+.infiniteLayers {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* The Infinite Painter variant's dark ground around its floating panels. */
+.infiniteGround {
+  position: relative;
+  padding: 20px;
+  border-radius: 8px;
+  background: #1d1d1f;
+}
+
 .variantGround {
   position: relative;
   border-radius: 8px;

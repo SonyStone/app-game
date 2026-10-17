@@ -1,0 +1,82 @@
+.slider {
+  display: grid;
+  gap: 2px;
+  padding: 4px 12px;
+
+  &[data-disabled] {
+    opacity: 0.4;
+  }
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+}
+
+.label {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ip-secondary);
+  font: inherit;
+
+  &:is(button) {
+    cursor: pointer;
+  }
+
+  &[aria-pressed='true'] {
+    color: var(--ip-accent);
+  }
+}
+
+.value {
+  color: var(--ip-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.track {
+  position: relative;
+  height: 26px;
+  touch-action: none;
+  cursor: pointer;
+
+  &[aria-disabled='true'] {
+    cursor: default;
+  }
+}
+
+.line {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: linear-gradient(
+    to right,
+    var(--ip-thumb) calc(var(--fraction) * 100%),
+    rgb(255 255 255 / 0.18) calc(var(--fraction) * 100%)
+  );
+
+  .track[data-custom-track] & {
+    height: 8px;
+    margin-top: -4px;
+    border-radius: 4px;
+    background: var(--track);
+  }
+}
+
+.thumb {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--fraction) * (100% - 14px));
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--ip-thumb);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}

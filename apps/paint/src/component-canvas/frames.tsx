@@ -1,6 +1,7 @@
 import type { JSX } from '@solidjs/web';
 import studio from '../features/studio/PaintStudio.module.css';
 import desktop from '../variants/desktop/DesktopStudio.module.css';
+import infinite from '../variants/infinite/theme.module.css';
 import cluster from '../variants/puck/cluster.module.css';
 import { clusterLayout, type Box } from '../variants/puck/layout';
 import zen from '../variants/zen/ZenStudio.module.css';
@@ -53,6 +54,24 @@ export function DesktopFrame(props: { width?: number; children: JSX.Element }) {
     <div
       class={[desktop.editor, styles.desktopGround]}
       style={{ display: 'block', width: props.width === undefined ? undefined : `${props.width}px` }}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+/**
+ * The Infinite Painter variant's tokens on its dark ground around its parts, which float over the drawing in the
+ * variant; `width` and `height` give the frame a size for parts that place themselves against its edges.
+ */
+export function InfiniteFrame(props: { width?: number; height?: number; children: JSX.Element }) {
+  return (
+    <div
+      class={[infinite.theme, styles.infiniteGround]}
+      style={{
+        width: props.width === undefined ? undefined : `${props.width}px`,
+        height: props.height === undefined ? undefined : `${props.height}px`
+      }}
     >
       {props.children}
     </div>
