@@ -12,22 +12,31 @@ import {
   type GamutMask,
   type Harmony
 } from '../../features/color-wheel';
+import { mergeSimilar } from '../../features/color/mergeSimilar';
 import { CoolorusWheel, defaultCoolorusSettings, type CoolorusSettings } from '../../features/coolorus-wheel';
 import { HueTriangle } from '../../features/hue-triangle';
+import { LightingOrb, type OrbChip, type OrbPoint } from '../../features/lighting-orb';
 import { ColorPanel as DesktopColorPanel } from '../../variants/desktop/ColorPanel';
+import { ColorPanel as InfiniteColorPanel } from '../../variants/infinite/ColorPanel';
+import {
+  defaultInfiniteColorSettings,
+  type InfiniteColorSettings
+} from '../../variants/infinite/createInfiniteColorSettings';
+import { historyLimit, RecentColorsStrip } from '../../variants/infinite/RecentColorsStrip';
 import { ColorsPopover, type ColorMode } from '../../variants/procreate/ColorsPopover';
 import { ColorCard } from '../../variants/puck/ColorCard';
 import { ColorDisc } from '../../variants/zen/ColorDisc';
 import styles from '../ComponentCanvas.module.css';
-import { DesktopFrame, PuckFrame, puckBoxes, ZenFrame } from '../frames';
+import { DesktopFrame, InfiniteFrame, puckBoxes, PuckFrame, ZenFrame } from '../frames';
 import { ProcreateFrame } from '../ProcreateFrame';
 import { CanvasGroup, CanvasRow, Specimen } from '../Specimen';
 import { TestStrip } from '../TestStrip';
 
 /**
- * Color pickers: each picker alone and inside Studio's Color panel, both with test strips, then the OKLCH wheel's
- * gamut masks and harmonies, where strips would add nothing: those rows compare guides, not colors. Every specimen
- * keeps its own color and wheel settings, starting from the same ones, and nothing reaches Paint's own settings.
+ * Color pickers: each picker alone and inside Studio's Color panel, both with test strips, the variants' pickers and
+ * Infinite Painter's color panel, Lighting Orb and Recent Colors strip, then the OKLCH wheel's gamut masks and
+ * harmonies, where strips would add nothing: those rows compare guides, not colors. Every specimen keeps its own color
+ * and wheel settings, starting from the same ones, and nothing reaches Paint's own settings.
  */
 export function ColorPickers() {
   return (
@@ -37,9 +46,9 @@ export function ColorPickers() {
       omitted={
         <>
           Not here: the square alone (it is part of the Color panel); the panel's background color, hex field and
-          recents (the same for every picker; the panel keeps its recents with Paint's on this address); a custom
-          gamut mask (draw one on any wheel of the mask row). The Procreate disc lives inside its Colors popover, so
-          it comes with it.
+          recents (the same for every picker; the panel keeps its recents with Paint's on this address); a custom gamut
+          mask (draw one on any wheel of the mask row). The Procreate disc lives inside its Colors popover, so it comes
+          with it.
         </>
       }
     >
@@ -87,6 +96,40 @@ export function ColorPickers() {
             />
           )}
         </For>
+      </CanvasRow>
+
+      <CanvasRow
+        title="Infinite Painter"
+        note="the color panel's four tabs, the Lighting Orb and the Recent Colors strip"
+      >
+        <InfinitePanelSpecimen
+          id="color-pickers/infinite/wheel"
+          label="Color panel: HSB wheel"
+          settings={{ tab: 'wheel' }}
+        />
+        <InfinitePanelSpecimen
+          id="color-pickers/infinite/wheel-tone-lock"
+          label="Color panel: wheel with Tone Lock and Compare tone"
+          settings={{ tab: 'wheel', toneLock: true, compareTone: true }}
+        />
+        <InfinitePanelSpecimen
+          id="color-pickers/infinite/sliders"
+          label="Color panel: color sliders"
+          settings={{ tab: 'sliders' }}
+        />
+        <InfinitePanelSpecimen
+          id="color-pickers/infinite/swatches"
+          label="Color panel: swatch palettes"
+          settings={{ tab: 'swatches' }}
+        />
+        <InfinitePanelSpecimen
+          id="color-pickers/infinite/orb"
+          label="Color panel: Lighting Orb"
+          settings={{ tab: 'orb' }}
+        />
+        <OrbSpecimen id="color-pickers/infinite/orb-low" label="Lighting Orb, low contrast" contrast={0.2} />
+        <OrbSpecimen id="color-pickers/infinite/orb-high" label="Lighting Orb, high contrast" contrast={0.9} />
+        <StripSpecimen />
       </CanvasRow>
 
       <CanvasRow title="OKLCH wheel: gamut mask">
@@ -443,6 +486,95 @@ function sampleDrawing(drawing: HTMLCanvasElement, point: Point): Pick<PickerPre
   };
 }
 
+/**
+ * The Infinite Painter variant's color panel with `settings` over the defaults, in its frame, with a test strip in its
+ * color. It keeps its own color, history and settings; a commit makes the color before it the previous one, so a tap
+ * on the previous color swaps the two. The eyedropper does nothing here.
+ */
+function InfinitePanelSpecimen(props: { id: string; label: string; settings: Partial<InfiniteColorSettings> }) {
+  const [color, setColor] = createSignal(startColor);
+  const [committed, setCommitted] = createSignal(startColor);
+  const [previous, setPrevious] = createSignal('#3d6a8c');
+  const [recent, setRecent] = createSignal<readonly string[]>(infiniteRecent);
+  const [settings, setSettings] = createSignal<InfiniteColorSettings>({
+    ...defaultInfiniteColorSettings,
+    ...untrack(() => props.settings)
+  });
+
+  return (
+    <Specimen
+      id={props.id}
+      label={props.label}
+      below={<TestStrip brush={stripBrush({ color: color() })} width={infinitePanelWidth + 40} />}
+    >
+      <InfiniteFrame>
+        <InfiniteColorPanel
+          color={color()}
+          previous={previous()}
+          recent={recent()}
+          settings={settings()}
+          onSettings={(patch) => setSettings((current) => ({ ...current, ...patch }))}
+          onInput={setColor}
+          onCommit={(chosen) => {
+            setColor(chosen);
+            if (chosen !== committed()) {
+              setPrevious(committed());
+              setCommitted(chosen);
+            }
+
+            setRecent((list) => mergeSimilar(list, chosen).slice(0, historyLimit));
+          }}
+          onEyedropper={() => {}}
+        />
+      </InfiniteFrame>
+    </Specimen>
+  );
+}
+
+/** The Lighting Orb alone, with its chips, at `contrast`; a pick shows in the test strip. */
+function OrbSpecimen(props: { id: string; label: string; contrast: number }) {
+  const [color, setColor] = createSignal(defaultInfiniteColorSettings.orb.base);
+  const [picker, setPicker] = createSignal<OrbPoint>(defaultInfiniteColorSettings.orb.picker);
+  const [selected, setSelected] = createSignal<OrbChip>(defaultInfiniteColorSettings.orb.selected);
+
+  return (
+    <Specimen
+      id={props.id}
+      label={props.label}
+      below={<TestStrip brush={stripBrush({ color: color() })} width={260} />}
+    >
+      <InfiniteFrame width={260}>
+        <LightingOrb
+          lights={{ ...defaultInfiniteColorSettings.orb, contrast: props.contrast }}
+          picker={picker()}
+          selected={selected()}
+          onSelect={setSelected}
+          onPicker={setPicker}
+          onInput={setColor}
+          onCommit={setColor}
+        />
+      </InfiniteFrame>
+    </Specimen>
+  );
+}
+
+/** The Recent Colors strip at the main toolbar's height, holding a history; a pick shows in the test strip. */
+function StripSpecimen() {
+  const [color, setColor] = createSignal(infiniteRecent[0]!);
+
+  return (
+    <Specimen
+      id="color-pickers/infinite/recent-strip"
+      label="Recent Colors strip (drag along it)"
+      below={<TestStrip brush={stripBrush({ color: color() })} width={180} />}
+    >
+      <InfiniteFrame width={180} height={340}>
+        <RecentColorsStrip colors={infiniteRecent} height={300} onPick={setColor} />
+      </InfiniteFrame>
+    </Specimen>
+  );
+}
+
 /** The Color panel's content width, which pickers fill in Studio. */
 function PickerBox(props: { children: JSX.Element }) {
   return <div class={styles.pickerBox}>{props.children}</div>;
@@ -454,6 +586,23 @@ function stripBrush(patch: Partial<Brush>): Brush {
 }
 
 const startColor = '#c8553d';
+
+/** A history for the Infinite Painter specimens, newest first: greens and earth tones, as in the manual. */
+const infiniteRecent = [
+  '#c8553d',
+  '#9a9a9a',
+  '#1f4a2c',
+  '#5b8a55',
+  '#173326',
+  '#e7e2cf',
+  '#7e9a6a',
+  '#a9b99a',
+  '#6a4512',
+  '#3b2d0c'
+];
+
+/** The Infinite Painter variant's color panel width. */
+const infinitePanelWidth = 300;
 
 const panelPickers = [
   { id: 'square', label: 'Square' },

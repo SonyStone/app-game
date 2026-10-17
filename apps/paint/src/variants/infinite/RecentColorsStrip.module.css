@@ -1,0 +1,42 @@
+/* The Recent Colors strip: an 8 px column beside the main toolbar, with a wider invisible margin to press. */
+
+.strip {
+  position: relative;
+  width: 8px;
+}
+
+.hitArea {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin: 0 -8px;
+  padding: 0 8px;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.segment {
+  flex: none;
+  width: 8px;
+  background-color: var(--ip-panel-sunken, #252527);
+}
+
+.preview {
+  position: absolute;
+  width: 84px;
+  height: 84px;
+  margin-top: -42px;
+  border-radius: 50%;
+  box-shadow:
+    0 6px 20px rgb(0 0 0 / 0.45),
+    0 0 0 1px rgb(0 0 0 / 0.25);
+  pointer-events: none;
+
+  .strip[data-side='right'] & {
+    left: calc(100% + 28px);
+  }
+
+  .strip[data-side='left'] & {
+    right: calc(100% + 28px);
+  }
+}
