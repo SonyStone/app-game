@@ -5,8 +5,8 @@ import { createContext, createEffect, createSignal, createUniqueId, Show, untrac
 import styles from './SideMenu.module.css';
 
 /**
- * A menu that slides in from the side and pushes the content aside instead of covering it: the content steps back into
- * a dimmed card beside the panel, and a press on the card brings it back. The pill in the corner on the panel's side
+ * A menu that lies under the content and is uncovered as the content steps aside: the content steps back into a dimmed
+ * card whose far edge draws back off the panel, and a press on the card brings it back. The pill in the corner on the panel's side
  * opens and closes the menu; its label rolls over on hover, and it turns into a round close button while the menu is
  * open. The panel's entries (`SideMenuGroup`, `SideMenuItem`) rise into view one after another.
  *
@@ -25,7 +25,7 @@ export function SideMenu(props: {
   menu: JSX.Element;
   /** The content that steps back, such as the drawing stage. */
   children: JSX.Element;
-  /** The edge the panel slides from; `right` by default. */
+  /** The edge the panel lies at; `right` by default. */
   side?: 'left' | 'right';
   /** The pill's label and the panel's accessible name; `Menu` by default. */
   label?: string;
@@ -44,8 +44,12 @@ export function SideMenu(props: {
   const rootSize = () => ({ width: size.clientWidth ?? 0, height: size.clientHeight ?? 0 });
   const geometry = () => menuGeometry(rootSize());
   const frame = () => cardFrame(rootSize(), side(), amount());
-  /** The panel's offset from its open place, toward its edge. */
-  const drawerShift = () => (side() === 'right' ? 1 : -1) * geometry().panel * (1 - amount());
+  /** The panel's offset from its open place toward its edge: a slight drift as it is uncovered, or the whole slide
+   * over the card where it covers it. */
+  const drawerShift = () => {
+    const { panel, covers } = geometry();
+    return (side() === 'right' ? 1 : -1) * panel * (covers ? 1 : panelDrift) * (1 - amount());
+  };
   const close = () => props.onOpenChange(false);
 
   createEventListener(
@@ -86,34 +90,31 @@ export function SideMenu(props: {
       data-stepped={props.open || amount() > 0 ? '' : undefined}
       data-revealed={props.open || amount() > revealAt ? '' : undefined}
       data-following={props.progress === undefined ? undefined : ''}
+      data-covers={geometry().covers ? '' : undefined}
       style={{
+        '--root-width': `${rootSize().width}px`,
         '--panel-width': `${geometry().panel}px`,
         '--card-margin': `${margin}px`,
-        '--card-radius': `${cardRadius}px`,
         '--card-radius-local': `${frame().radius}px`
       }}
     >
       <div
         class={styles.card}
-        style={{ transform: frame().transform }}
+        style={{ transform: frame().transform, width: frame().width }}
         inert={props.open || props.progress !== undefined}
       >
         <div class={styles.content}>{props.children}</div>
         <div class={styles.shade} style={{ opacity: shadeOpacity * amount() }} />
       </div>
       <Show when={props.open}>
-        <button class={styles.back} style={{ transform: frame().transform }} aria-label="Back" onClick={close} />
+        <button
+          class={styles.back}
+          style={{ transform: frame().transform, width: frame().width }}
+          aria-label="Back"
+          onClick={close}
+        />
       </Show>
-      {/* The panel covers the card's far side; its caps round the card's corners where it meets the panel. */}
       <div class={styles.drawer} style={{ transform: `translateX(${drawerShift()}px)` }}>
-        <Show when={!geometry().covers}>
-          <span class={styles.cap} data-edge="top" style={{ transform: `translateY(${frame().gap}px)` }}>
-            <i />
-          </span>
-          <span class={styles.cap} data-edge="bottom" style={{ transform: `translateY(${-frame().gap}px)` }}>
-            <i />
-          </span>
-        </Show>
         <nav ref={setPanel} id={panelId} class={styles.panel} aria-label={label()} inert={!props.open}>
           <SideMenuContext value={{ close }}>{props.menu}</SideMenuContext>
         </nav>
@@ -216,22 +217,31 @@ export function menuGeometry(size: { width: number; height: number }) {
 }
 
 /**
- * The card's transform at `amount` of the way to open, 0 to 1, in a root of `size`, from the content's top left
- * corner. As in a picture frame, the content shrinks only enough to leave `gap` (up to `margin`) above and below it
- * and keeps the edge away from the panel as far from the root's; its far side goes under the panel. `radius` is the
- * card's rounding in the content's own pixels, which the open card scales down to `cardRadius`.
+ * The card at `amount` of the way to open, 0 to 1, in a root of `size`: its transform from the top left corner and
+ * its `width` in the content's own pixels. As in a picture frame, the content shrinks only enough to leave `gap` (up
+ * to `margin`) above and below it and keeps the edge away from the panel as far from the root's; the card's other
+ * edge draws back off the panel, cutting the content's far side, or stays `gap` from the root's edge under a panel
+ * that covers it. `radius` is the card's rounding in the content's pixels, which the open card scales to `cardRadius`.
  */
 export function cardFrame(size: { width: number; height: number }, side: 'left' | 'right', amount: number) {
   const { width, height } = size;
   if (width <= 0 || height <= 0) {
-    return { transform: 'none', gap: 0, radius: cardRadius };
+    return { transform: 'none', width: '100%', radius: cardRadius };
   }
 
+  const { panel, covers } = menuGeometry(size);
   const gap = margin * amount;
   const scale = (height - gap * 2) / height;
-  const x = side === 'right' ? gap : width - gap - width * scale;
+  const shown = covers ? width - gap * 2 : width - gap - panel * amount;
+  const cardWidth = Math.min(width, shown / scale);
+  const x = side === 'right' ? gap : width - gap - cardWidth * scale;
   const radius = (cardRadius * height) / (height - margin * 2);
-  return { transform: `translate(${x}px, ${gap}px) scale(${scale})`, gap, radius };
+  // Whole at rest, so that a resize of the root does not animate.
+  return {
+    transform: `translate(${x}px, ${gap}px) scale(${scale})`,
+    width: amount === 0 ? '100%' : `${cardWidth}px`,
+    radius
+  };
 }
 
 /** Closes the menu for the entries inside its panel. */
@@ -257,6 +267,9 @@ const minPanelWidth = 240;
 
 /** The narrowest card worth showing beside the panel, in CSS pixels. */
 const minCardRoom = 280;
+
+/** How far the uncovered panel drifts in from, as a share of its width. */
+const panelDrift = 0.1;
 
 /** CSS pixels between the card and the root's edges, and between the card and the panel's entries. */
 const margin = 16;

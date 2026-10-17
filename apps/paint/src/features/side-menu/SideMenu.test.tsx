@@ -58,23 +58,27 @@ it('closes before an entry runs, unless the entry keeps it open, and closes from
   expect(back()).toBeNull();
 });
 
-it('frames the content with even margins and leaves its far side to the panel, which covers it where there is no room', () => {
+it('frames the content with even margins and draws its far edge back off the panel, or lets a panel cover it', () => {
   const tablet = { width: 1646, height: 909 };
   expect(menuGeometry(tablet)).toEqual({ panel: 380, covers: false });
-  expect(cardFrame(tablet, 'right', 0)).toMatchObject({ transform: 'translate(0px, 0px) scale(1)', gap: 0 });
+  expect(cardFrame(tablet, 'right', 0)).toMatchObject({ transform: 'translate(0px, 0px) scale(1)', width: '100%' });
 
-  // Open, the card sits 16 px off the top, bottom and outer edge, and its rounding scales down to 14 px.
+  // Open, the card sits 16 px off the top, bottom and outer edge and ends where the panel begins, rounded to 14 px.
   const scale = (909 - 32) / 909;
   const open = cardFrame(tablet, 'right', 1);
   expect(open.transform).toBe(`translate(16px, 16px) scale(${scale})`);
+  expect(16 + parseFloat(open.width) * scale).toBeCloseTo(1646 - 380);
   expect(open.radius * scale).toBeCloseTo(14);
-  expect(16 + 1646 * scale).toBeGreaterThan(1646 - 380);
 
-  // From the left, the card keeps the margin on the right.
+  // From the left, the card keeps the margin on the right and begins where the panel ends.
   const left = cardFrame(tablet, 'left', 1);
-  expect(left.transform).toBe(`translate(${1646 - 16 - 1646 * scale}px, 16px) scale(${scale})`);
+  expect(left.transform).toBe(`translate(380px, 16px) scale(${scale})`);
+  expect(380 + parseFloat(left.width) * scale).toBeCloseTo(1646 - 16);
 
-  expect(menuGeometry({ width: 360, height: 700 })).toEqual({ panel: 360, covers: true });
+  // A phone's panel covers a card with even margins all round.
+  const phone = { width: 360, height: 700 };
+  expect(menuGeometry(phone)).toEqual({ panel: 360, covers: true });
+  expect(16 + parseFloat(cardFrame(phone, 'right', 1).width) * ((700 - 32) / 700)).toBeCloseTo(360 - 16);
 });
 
 function mount() {

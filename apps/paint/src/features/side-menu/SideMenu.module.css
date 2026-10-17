@@ -14,29 +14,45 @@
 }
 
 /* The card's corners are round as soon as it leaves the edges, coming out from behind the screen's edge; on the way
-   back they shrink with the margin, sinking into the edge as the card reaches it. */
+   back they shrink with the margin, sinking into the edge as the card reaches it. Its width draws its far edge back
+   off the panel underneath. */
 .card {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   transform-origin: 0 0;
   transition:
     transform var(--duration) var(--ease),
+    width var(--duration) var(--ease),
     border-radius var(--duration) var(--ease);
 
   .root[data-stepped] & {
     border-radius: var(--card-radius-local);
     transition:
       transform var(--duration) var(--ease),
+      width var(--duration) var(--ease),
       border-radius 0s;
   }
 }
 
-/* Keeps the content's stacking, such as floating windows over the drawing, under the shade. */
+/* The content keeps the root's width as the card narrows, held to the card's outer edge. Its stacking, such as
+   floating windows over the drawing, stays under the shade. */
 .content {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: var(--root-width, 100%);
+  height: 100%;
   isolation: isolate;
+
+  .root[data-side='left'] & {
+    right: 0;
+    left: auto;
+  }
 }
 
 .shade {
@@ -50,26 +66,46 @@
 /* Over the card while the menu is open: a press brings the content back. */
 .back {
   position: absolute;
-  inset: 0;
-  z-index: 1;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: pointer;
   transform-origin: 0 0;
-  transition: transform var(--duration) var(--ease);
+  transition:
+    transform var(--duration) var(--ease),
+    width var(--duration) var(--ease);
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Holds the panel, which covers the card's far side, and the caps that round the card's corners at the panel. */
+/* Holds the panel under the card, hidden while the card covers it whole. Where the root is too narrow for the card
+   to leave it room, the panel slides in over the card instead. */
 .drawer {
   position: absolute;
   top: 0;
   bottom: 0;
   right: 0;
-  z-index: 2;
+  z-index: 0;
   width: var(--panel-width);
-  transition: transform var(--duration) var(--ease);
+  visibility: hidden;
+  transition:
+    transform var(--duration) var(--ease),
+    visibility 0s linear var(--duration);
+
+  .root[data-stepped] & {
+    visibility: visible;
+    transition:
+      transform var(--duration) var(--ease),
+      visibility 0s;
+  }
+
+  .root[data-covers] & {
+    z-index: 3;
+  }
 
   .root[data-side='left'] & {
     right: auto;
@@ -94,76 +130,8 @@
   }
 }
 
-/* A concave corner of the panel's black over the card's corner, moving with the card's top or bottom edge. Its
-   shape appears and shrinks toward the corner's point as the card's own rounding does. */
-.cap {
-  position: absolute;
-  right: 100%;
-  width: var(--card-radius);
-  height: var(--card-radius);
-  pointer-events: none;
-  transition: transform var(--duration) var(--ease);
-
-  .root[data-side='left'] & {
-    right: auto;
-    left: 100%;
-  }
-
-  &[data-edge='top'] {
-    top: 0;
-  }
-
-  &[data-edge='bottom'] {
-    bottom: 0;
-  }
-
-  & > i {
-    position: absolute;
-    inset: 0;
-    transform: scale(0);
-    transition: transform var(--duration) var(--ease);
-  }
-
-  .root[data-stepped] & > i {
-    transform: none;
-    transition: none;
-  }
-
-  &[data-edge='top'] > i {
-    transform-origin: 100% 0;
-    background: radial-gradient(
-      circle at 0 100%,
-      transparent calc(var(--card-radius) - 0.5px),
-      #000 var(--card-radius)
-    );
-  }
-
-  &[data-edge='bottom'] > i {
-    transform-origin: 100% 100%;
-    background: radial-gradient(circle at 0 0, transparent calc(var(--card-radius) - 0.5px), #000 var(--card-radius));
-  }
-
-  .root[data-side='left'] &[data-edge='top'] > i {
-    transform-origin: 0 0;
-    background: radial-gradient(
-      circle at 100% 100%,
-      transparent calc(var(--card-radius) - 0.5px),
-      #000 var(--card-radius)
-    );
-  }
-
-  .root[data-side='left'] &[data-edge='bottom'] > i {
-    transform-origin: 0 100%;
-    background: radial-gradient(
-      circle at 100% 0,
-      transparent calc(var(--card-radius) - 0.5px),
-      #000 var(--card-radius)
-    );
-  }
-}
-
 /* While a gesture leads, everything follows the fingers at once. */
-.root[data-following] :is(.card, .shade, .back, .drawer, .cap, .cap > i) {
+.root[data-following] :is(.card, .shade, .back, .drawer) {
   transition: none;
 }
 
@@ -283,7 +251,7 @@
   position: absolute;
   top: 16px;
   right: 16px;
-  z-index: 3;
+  z-index: 4;
   display: inline-flex;
   align-items: center;
   height: 36px;
