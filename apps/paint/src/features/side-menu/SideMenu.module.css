@@ -1,4 +1,5 @@
-/* The menu's ground shows around the stepped-back card, in the panel's color, so card and panel read as one surface. */
+/* The menu's ground shows around the stepped-back card, in the panel's color, so card and panel read as one surface.
+   Pure black, so an OLED screen turns those pixels off. */
 .root {
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --duration: 420ms;
@@ -8,7 +9,7 @@
   inset: 0;
   overflow: hidden;
   isolation: isolate;
-  background: #0e0e0e;
+  background: #000;
   font-family: system-ui, sans-serif;
 }
 
@@ -66,7 +67,7 @@
   /* The card's margin before the entries too, so the gap beside the card matches the others. */
   padding: 88px 28px 28px var(--card-margin);
   overflow-y: auto;
-  background: #0e0e0e;
+  background: #000;
   color: var(--ink);
   transition: transform var(--duration) var(--ease);
 
