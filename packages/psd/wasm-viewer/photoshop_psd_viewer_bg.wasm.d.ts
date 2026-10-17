@@ -9,6 +9,7 @@ export const psddocumenthandle_layers: (a: number) => [number, number, number];
 export const psddocumenthandle_layerDetail: (a: number, b: number) => [number, number, number];
 export const psddocumenthandle_layerPixels: (a: number, b: number) => [number, number, number];
 export const psddocumenthandle_render: (a: number, b: any, c: number) => [number, number, number];
+export const psddocumenthandle_states: (a: number) => any;
 export const psddocumenthandle_documentFonts: (a: number, b: number) => any;
 export const psddocumenthandle_textSupport: (a: number, b: number, c: number) => [number, number, number];
 export const psddocumenthandle_merged: (a: number) => [number, number, number];

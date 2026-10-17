@@ -11,6 +11,7 @@ import type {
   PsdOpenAnswers,
   PsdOpening,
   PsdRenderSettings,
+  PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
 
@@ -51,7 +52,15 @@ export type PsdRequest =
 
 /** The worker's answer to the request with the same `id`. Pixel buffers are transferred, never copied. */
 export type PsdReply =
-  | { id: number; type: 'opened'; document: number; info: PsdInfo; layers: PsdLayerNode[]; opening: PsdOpening }
+  | {
+      id: number;
+      type: 'opened';
+      document: number;
+      info: PsdInfo;
+      layers: PsdLayerNode[];
+      states: PsdStates;
+      opening: PsdOpening;
+    }
   | { id: number; type: 'rendered'; render: RenderedPixels }
   | { id: number; type: 'merged'; image: PsdImage }
   | { id: number; type: 'difference'; difference: PsdDifference }

@@ -57,6 +57,7 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
           document: document.id,
           info: opened.value.info,
           layers: [...opened.value.layers],
+          states: opened.value.states,
           opening: opened.value.opening
         },
         []
@@ -273,7 +274,8 @@ function failed(request: PsdRequest, error: PsdFailure): PsdReply {
 
 /** Identifies a render request by its settings and visibility overrides, whatever the order of the settings' fields. */
 function renderKey(settings: PsdRenderSettings, visibility: [number, boolean][]): string {
-  return JSON.stringify([settings, visibility], [...Object.keys(settings)].sort());
+  // The key list also filters nested objects, so it names the keys of a saved state too.
+  return JSON.stringify([settings, visibility], [...Object.keys(settings), 'frame', 'comp'].sort());
 }
 
 /** Whether the second of two differing-sample counts is smaller: `null` when either is missing or they are equal. */

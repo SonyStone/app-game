@@ -1,6 +1,7 @@
 import { photoshopDefaultSettings, type PsdRenderSettings } from '@app-game/psd/viewer';
 import adjustmentStack from './assets/adjustment-stack.psd?url';
 import cmykLevels from './assets/cmyk-levels.psd?url';
+import layerComps from './assets/layer-comps.psd?url';
 import passThroughGroups from './assets/pass-through-groups.psd?url';
 import rotatedSmartObject from './assets/rotated-smart-object.psd?url';
 import typeWithLayerStyles from './assets/type-with-layer-styles.psd?url';
@@ -60,6 +61,16 @@ export const psdExamples = [
     description:
       'A Levels adjustment in CMYK: composited exactly in its CMYK channels, compared channel by channel; only the view converts to sRGB approximately.',
     credit: 'PhotoCraft Corpus (MIT)'
+  },
+  {
+    name: 'Layer comps',
+    file: 'layer-comps.psd',
+    url: layerComps,
+    size: '33 KB',
+    settings: photoshopDefaultSettings,
+    description:
+      'Three layer comps moving one layer and changing its opacity, Fill and blend mode. Pick a comp under Saved states.',
+    credit: 'photoshop-analysis capture'
   }
 ] as const satisfies readonly PsdExample[];
 

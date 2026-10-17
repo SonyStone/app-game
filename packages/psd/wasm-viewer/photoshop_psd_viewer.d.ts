@@ -78,6 +78,15 @@ export class PsdDocumentHandle {
    */
   render(options: any, fonts: PsdFontLibrary): RenderedImage;
   /**
+   * The document's saved alternate states, which `render`'s `state` selects: `comps`, its layer comps in panel
+   * order (`id`, `name`, `comment` when it has one); `lastAppliedComp`, the ID of the comp last applied, which the
+   * saved layers need not match, or `null`; `frames`, the frames of the active frame set in playback order (`id`,
+   * `delay` in hundredths of a second); `activeFrame`, the ID of the saved active frame, whose selection leaves the
+   * document as saved, or `null`. Lists are empty without comps or a frame animation; a resource that does not
+   * parse counts as absent and is named in `errors`.
+   */
+  states(): any;
+  /**
    * The fonts the document's type layers use, by the PostScript names their style runs select from the layer's
    * `FontSet` (unused `FontSet` defaults such as `AdobeInvisFont` are left out), sorted by name, each with whether
    * `fonts` holds it and the record indices of the type layers using it (`fonts`), and per type layer record, bottom
@@ -185,6 +194,7 @@ export interface InitOutput {
   readonly psddocumenthandle_layerDetail: (a: number, b: number) => [number, number, number];
   readonly psddocumenthandle_layerPixels: (a: number, b: number) => [number, number, number];
   readonly psddocumenthandle_render: (a: number, b: any, c: number) => [number, number, number];
+  readonly psddocumenthandle_states: (a: number) => any;
   readonly psddocumenthandle_documentFonts: (a: number, b: number) => any;
   readonly psddocumenthandle_textSupport: (a: number, b: number, c: number) => [number, number, number];
   readonly psddocumenthandle_merged: (a: number) => [number, number, number];

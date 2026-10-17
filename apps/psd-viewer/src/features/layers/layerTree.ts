@@ -8,9 +8,13 @@ export function topFirst(nodes: readonly PsdLayerNode[]): PsdLayerNode[] {
 /** A layer's note with the layer it belongs to, for document-wide lists. */
 export type LayerNote = { index: number; name: string; note: string };
 
-/** Every note of every layer and group, top first, in panel order. */
+/**
+ * Every note of every layer and group, top first, in panel order, with a note for each 3D and video layer, whose scene
+ * or footage is not rendered.
+ */
 export function collectNotes(nodes: readonly PsdLayerNode[]): LayerNote[] {
   return topFirst(nodes).flatMap((node) => [
+    ...(node.pixelSource ? [{ index: node.index, name: node.name, note: pixelSourceNotes[node.pixelSource] }] : []),
     ...node.notes.map((note) => ({ index: node.index, name: node.name, note })),
     ...collectNotes(node.children ?? [])
   ]);
@@ -51,3 +55,9 @@ export const kindLabels: Record<PsdLayerNode['kind'], string> = {
 export function percent(byte: number): string {
   return `${Math.round((byte / 255) * 100)}%`;
 }
+
+/** What the viewer shows for 3D and video layers. */
+const pixelSourceNotes = {
+  '3d': 'a 3D layer: shown as the pixels Photoshop saved; the 3D scene is not rendered',
+  video: 'a video layer: shown as the frame Photoshop saved; the footage is not played'
+} as const;

@@ -182,6 +182,8 @@ export type PsdViewerDocument = {
   readonly opening: PsdOpening;
   /** The layer tree, bottom to top as stored; group children are bottom to top as well. */
   readonly layers: readonly PsdLayerNode[];
+  /** The saved layer comps and animation frames, which {@link PsdRenderSettings.state} renders. */
+  readonly states: PsdStates;
   /**
    * Composites the document at its depth with `settings`. `visibility` overrides the saved visibility of layer
    * records by index for this render only. With {@link PsdRenderSettings.typeLayers}, type layers re-render from their
@@ -250,6 +252,31 @@ export type PsdRenderSettings = {
    * composites its cached raster and is listed among the approximations. Off by default.
    */
   typeLayers: boolean;
+  /**
+   * A saved layer comp or animation frame ({@link PsdViewerDocument.states}) to render instead of the document as
+   * saved; visibility overrides apply over it. Exact within the frames and comps Photoshop 26's rules are verified for;
+   * outside them the render fails, or with `approximate` applies the same rules and lists them. The merged image
+   * Photoshop saved shows the document as saved, so it is the comparison only for that state. Absent or `null` renders
+   * the document as saved.
+   */
+  state?: PsdStateChoice | null;
+};
+
+/** A saved state to render: a frame or a layer comp by its persistent ID. */
+export type PsdStateChoice = { frame: number } | { comp: number };
+
+/** A document's saved alternate states. */
+export type PsdStates = {
+  /** Layer comps in panel order. */
+  comps: { id: number; name: string; comment?: string }[];
+  /** The comp last applied, which the saved layers need not match; `null` when none was. */
+  lastAppliedComp: number | null;
+  /** The frames of the active frame set in playback order, with their delays in hundredths of a second. */
+  frames: { id: number; delay: number }[];
+  /** The saved active frame, whose selection leaves the document as saved; `null` without an animation. */
+  activeFrame: number | null;
+  /** Comp or animation resources that do not parse, which then count as absent. */
+  errors: string[];
 };
 
 /** Photoshop's "Image Interpolation" preferences. */
@@ -420,6 +447,11 @@ export type PsdLayerNode = {
   kind: PsdLayerKind;
   /** The bottom layer without transparency, Photoshop's Background. */
   background: boolean;
+  /**
+   * What feeds the pixels of a 3D or video layer. Neither is rendered: the layer shows the pixels Photoshop saved,
+   * for video its frame at the saved time.
+   */
+  pixelSource?: '3d' | 'video';
   /** The adjustment's name for adjustment layers. */
   adjustment?: string;
   /** Blend mode name such as `multiply` or `passThrough`, or the stored key when unknown. */
@@ -631,6 +663,7 @@ function makeViewerDocument(
     info: handle.info() as PsdInfo,
     opening,
     layers,
+    states: handle.states() as PsdStates,
     render(settings, visibility = [], fonts) {
       if (!open) {
         return closed();

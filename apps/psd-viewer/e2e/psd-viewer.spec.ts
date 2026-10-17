@@ -134,6 +134,26 @@ test('shows a document the exact path refuses approximated, saying what it appro
   await expect(status).toContainText('adjustment layers with a blend mode, Fill or effects in 8-bit CMYK');
 });
 
+test('renders a saved layer comp picked under Saved states', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Examples…' }).click();
+  await page.getByRole('button', { name: /Layer comps/ }).click();
+  await settled(page);
+  const states = page.getByRole('region', { name: 'Saved states' });
+  await expect(states.getByRole('option')).toHaveText(['The document as saved', /first/, /second/, /third/]);
+
+  const saved = await stage(page).getAttribute('data-render-id');
+  // The second comp, after the document as saved and the first comp.
+  await states.getByRole('combobox').selectOption({ index: 2 });
+  await expect(stage(page)).not.toHaveAttribute('data-render-id', saved!);
+  await settled(page);
+  await expect(states).toContainText("Photoshop's merged image shows the document as saved");
+  await expect(page.getByRole('region', { name: 'Renderer status' })).toHaveAttribute('data-render-state', 'exact');
+  expect(errors).toEqual([]);
+});
+
 /** The bytes of a Node buffer as an `ArrayBuffer` of their own. */
 function toArrayBuffer(buffer: Buffer): ArrayBuffer {
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;

@@ -1,0 +1,6 @@
+Test documents: our own Photoshop 26 captures from photoshop-analysis (fixtures/psd/states-1), made with Photoshop's
+default Color Settings.
+
+frames.psd             frames-plain-g0/document.psd, a frame animation of three frames
+frames-third.psd       frames-plain-g0/states/third/native.psd, Photoshop's save with the third frame selected
+layer-comps-second.psd comps-plain-g0/states/second/native.psd, Photoshop's save with the second comp applied

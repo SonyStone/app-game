@@ -10,6 +10,7 @@ import type {
   PsdOpenAnswers,
   PsdOpening,
   PsdRenderSettings,
+  PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
 import type { BlendingDetection, PsdReply, PsdRequest, PsdResultOf, RenderedPixels, WorkerFailure } from './protocol';
@@ -53,7 +54,13 @@ export function makePsdClient(worker: PsdWorkerPort) {
     return reply.type === 'opened'
       ? {
           ok: true,
-          value: { document: reply.document, info: reply.info, layers: reply.layers, opening: reply.opening }
+          value: {
+            document: reply.document,
+            info: reply.info,
+            layers: reply.layers,
+            states: reply.states,
+            opening: reply.opening
+          }
         }
       : failure(reply);
   }
@@ -213,8 +220,16 @@ export type PsdWorkerPort = {
   onmessageerror: (() => void) | null;
 };
 
-/** A document the worker opened: its id for later requests, its structure, and how the file was read. */
-export type OpenedPsd = { document: number; info: PsdInfo; layers: PsdLayerNode[]; opening: PsdOpening };
+/**
+ * A document the worker opened: its id for later requests, its structure and saved states, and how the file was read.
+ */
+export type OpenedPsd = {
+  document: number;
+  info: PsdInfo;
+  layers: PsdLayerNode[];
+  states: PsdStates;
+  opening: PsdOpening;
+};
 
 /** A layer's detail, and its pixels or why it has none. */
 export type LayerContents = { detail: PsdLayerDetail; pixels: PsdResultOf<PsdLayerPixels> };

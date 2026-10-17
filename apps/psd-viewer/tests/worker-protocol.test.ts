@@ -381,3 +381,31 @@ it('opens like Photoshop: strict files as before, prompts sent back for an answe
   expect(cut).toMatchObject({ ok: false, error: { kind: 'refused' } });
   expect(!cut.ok && cut.error.message).toContain('extends past its container');
 });
+
+it("renders a saved layer comp and animation frame as Photoshop's saves with them selected", async () => {
+  const { client } = connect();
+  const comps = value(await client.open(await example('layer-comps.psd')));
+  expect(comps.states.comps.map((comp) => comp.name)).toEqual(['first', 'second', 'third']);
+  expect(comps.states.frames).toEqual([]);
+  const second = comps.states.comps[1]!.id;
+  const comp = value(await client.render(comps.document, { ...settings, state: { comp: second } }, []));
+  expect(comp.approximations).toEqual([]);
+  const compSaved = value(await client.open(await testAsset('layer-comps-second.psd')));
+  expect(comp.pixels).toEqual(value(await client.merged(compSaved.document)).pixels);
+
+  const frames = value(await client.open(await testAsset('frames.psd')));
+  expect(frames.states.frames).toHaveLength(3);
+  // The second frame is the saved one; the third changes the document.
+  expect(frames.states.activeFrame).toBe(frames.states.frames[1]!.id);
+  const frame = value(
+    await client.render(frames.document, { ...settings, state: { frame: frames.states.frames[2]!.id } }, [])
+  );
+  const frameSaved = value(await client.open(await testAsset('frames-third.psd')));
+  expect(frame.pixels).toEqual(value(await client.merged(frameSaved.document)).pixels);
+});
+
+/** A document of `tests/assets`. */
+async function testAsset(name: string): Promise<ArrayBuffer> {
+  const bytes = await readFile(new URL(`assets/${name}`, import.meta.url));
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}

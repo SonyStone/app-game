@@ -13,6 +13,7 @@ import { createOpenPrompt, OpeningReport, OpenPromptDialog } from './features/op
 import { createPsdWorker, makePsdClient, type PsdResultOf, type WorkerFailure } from './features/psd-worker';
 import { createRenderSettings, RenderSettingsPanel } from './features/render-settings';
 import { ariaState } from './features/shared/format';
+import { createStateChoice, StatesPanel } from './features/states';
 import { StatusArea } from './features/status';
 import { createViewport, RgbaCanvas } from './features/viewport';
 
@@ -20,7 +21,8 @@ import { createViewport, RgbaCanvas } from './features/viewport';
  * PSD Viewer: opens a Photoshop document in a worker, renders it with the Rust compositor and compares the result with
  * the merged image Photoshop saved. The screen is assembled here from independent features: the worker client and
  * document session, opening files as Photoshop does with its prompts, layer visibility, render settings with the gamma blending options detected per document, the fonts for
- * re-rendering text, the zoomable viewport, the comparison views, the inspector and the renderer status.
+ * re-rendering text, the saved layer comps and animation frames to render, the zoomable viewport, the comparison views,
+ * the inspector and the renderer status.
  */
 export function App() {
   const client = makePsdClient(createPsdWorker());
@@ -37,7 +39,8 @@ export function App() {
     return undefined;
   });
   const fonts = createFonts(client, opened, selected);
-  const render = createPsdRender(client, opened, fonts.withFonts(settings), pairs);
+  const { choice: stateChoice, choose: chooseState, withState } = createStateChoice(source);
+  const render = createPsdRender(client, opened, fonts.withFonts(withState(settings)), pairs);
   const { view, setView, merged, difference } = createComparison(client, opened, render);
 
   const [tab, setTab] = createSignal<'layer' | 'document'>('document');
@@ -74,6 +77,10 @@ export function App() {
   };
   const viewport = createViewport(() => document()?.info, source);
   const layerNotes = createMemo(() => collectNotes(document()?.layers ?? []));
+  const savedStates = () => {
+    const states = document()?.states;
+    return states?.comps.length || states?.frames.length || states?.errors.length ? states : undefined;
+  };
 
   const activity = () => {
     if (isPending(opened)) {
@@ -282,6 +289,9 @@ export function App() {
                 reset();
               }}
             />
+            <Show when={savedStates()}>
+              {(states) => <StatesPanel states={states()} choice={stateChoice()} onChoose={chooseState} />}
+            </Show>
             <Show when={documentFonts()?.layers.length ? documentFonts() : undefined}>
               {(report) => (
                 <FontsPanel

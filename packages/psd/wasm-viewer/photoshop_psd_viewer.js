@@ -306,6 +306,19 @@ export class PsdDocumentHandle {
         return RenderedImage.__wrap(ret[0]);
     }
     /**
+     * The document's saved alternate states, which `render`'s `state` selects: `comps`, its layer comps in panel
+     * order (`id`, `name`, `comment` when it has one); `lastAppliedComp`, the ID of the comp last applied, which the
+     * saved layers need not match, or `null`; `frames`, the frames of the active frame set in playback order (`id`,
+     * `delay` in hundredths of a second); `activeFrame`, the ID of the saved active frame, whose selection leaves the
+     * document as saved, or `null`. Lists are empty without comps or a frame animation; a resource that does not
+     * parse counts as absent and is named in `errors`.
+     * @returns {any}
+     */
+    states() {
+        const ret = wasm.psddocumenthandle_states(this.__wbg_ptr);
+        return ret;
+    }
+    /**
      * The fonts the document's type layers use, by the PostScript names their style runs select from the layer's
      * `FontSet` (unused `FontSet` defaults such as `AdobeInvisFont` are left out), sorted by name, each with whether
      * `fonts` holds it and the record indices of the type layers using it (`fonts`), and per type layer record, bottom

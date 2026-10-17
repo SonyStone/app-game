@@ -19,3 +19,8 @@ pass-through-groups.psd      fixtures/psd/native-v3/group-adjustment-passThrough
 rotated-smart-object.psd     fixtures/psd/smart-objects/rotate-17/document.psd
 
   Our own Photoshop 26 captures from photoshop-analysis, made with "Blend RGB Colors Using Gamma 1.0" on.
+
+layer-comps.psd              fixtures/psd/states-1/comps-plain-g0/document.psd
+
+  Our own Photoshop 26 capture from photoshop-analysis, made with Photoshop's default Color Settings (gamma 1.0
+  blending off): three layer comps over one layer.
