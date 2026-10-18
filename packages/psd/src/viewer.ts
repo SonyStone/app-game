@@ -238,8 +238,9 @@ export type PsdRenderSettings = {
    * documents render leniently: each refused setting is drawn by the nearest model the renderer has (dithered
    * gradients undithered, out-of-range settings moved to the nearest verified ones, unverified routes taken as the
    * verified ones closest to them, a Photo Filter model), or left out or kept from its cached raster where it has none;
-   * 16-bit documents the depth compositor refuses composite at 8 bits, 32-bit ones at 8 bits with their adjustments
-   * applied to linear samples. Indexed, Duotone and Multichannel documents, and CMYK
+   * 16- and 32-bit documents the depth compositor refuses only for adjustments it has a model of composite at their own
+   * depth with those models, others at 8 bits, 32-bit ones with their adjustments applied to linear samples. Indexed,
+   * Duotone and Multichannel documents, and CMYK
    * and Lab documents whose layers the channel compositor rejects, composite with every layer converted to sRGB
    * first. Documents the exact path renders render identically with this option. Each render lists what it
    * approximated in {@link PsdRender.approximations}, including the display conversion of CMYK and Lab. Off by
