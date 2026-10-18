@@ -164,31 +164,22 @@ it('renders CMYK and Lab in their own channels and compares them channel by chan
   lab.close();
 });
 
-it("refuses Dissolve without Photoshop's noise table and approximates it on request", async () => {
+it("renders Dissolve exactly with Photoshop's noise table, which the crate generates", async () => {
   const layers = [
     solid('Paper', [255, 255, 255, 255]),
     solid('Grain', [200, 30, 10, 255], { blend: 'dissolve', opacity: 0.5 })
   ];
   const opened = value(await openPsd(await writePsd({ width: 4, height: 3, layers }, new Uint8Array(48).fill(255))));
-  const setting = "Dissolve without Photoshop's Dissolve noise table";
-  expect(opened.render(photoshopDefaultSettings)).toEqual({
-    ok: false,
-    error: { kind: 'unsupported', message: `layer "Grain": ${setting}` }
-  });
-  expect(opened.layers[1]!.notes[0]).toMatch(
-    /^Dissolve needs Photoshop's noise table.*the approximate render dissolves/
-  );
-
-  const approximate = value(opened.render({ ...photoshopDefaultSettings, approximate: true }));
-  expect(approximate.approximations).toEqual([
-    `\u201cGrain\u201d: ${setting} \u2014 drawn with a look-alike noise instead of Photoshop's, so its dots and grain lie at other pixels`
-  ]);
+  expect(opened.layers[1]!.notes).toEqual([]);
+  const render = value(opened.render(photoshopDefaultSettings));
+  expect(render.approximations).toEqual([]);
   // Dissolve draws whole pixels: each is paper or grain.
-  for (let index = 0; index < 12; index++) {
+  const pixels = Array.from({ length: 12 }, (_, index) => pixel(render.pixels, index % 4, index >> 2));
+  for (const drawn of pixels) {
     expect([
       [255, 255, 255, 255],
       [200, 30, 10, 255]
-    ]).toContainEqual(pixel(approximate.pixels, index % 4, index >> 2));
+    ]).toContainEqual(drawn);
   }
 
   opened.close();

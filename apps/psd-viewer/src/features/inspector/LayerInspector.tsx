@@ -171,9 +171,6 @@ function EffectsSection(props: { detail: PsdLayerDetail }) {
                     <Show when={instance.unsupported}>
                       <span class={styles.warning}>not rendered exactly: {instance.unsupported}</span>
                     </Show>
-                    <Show when={instance.needsNoise}>
-                      <span class={styles.warning}>noise approximated: Photoshop's noise table is not shipped</span>
-                    </Show>
                   </summary>
                   <pre class={styles.settings}>{instance.settings}</pre>
                 </details>
