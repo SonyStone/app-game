@@ -47,13 +47,17 @@ export class PsdDocumentHandle {
   info(): any;
   /**
    * The layer tree, bottom to top as stored: groups hold their children, also bottom to top. Each node carries
-   * the summary a layers panel shows and `notes` on what the compositor leaves out or approximates. Fails when
-   * group markers do not nest.
+   * the summary a layers panel shows and `notes` on what the compositor leaves out or approximates. Its `opacity`,
+   * `fill` and `transparencyShapesLayer` are those Photoshop 26 imports, which its Layers panel shows and the
+   * compositor uses; `legacyOpacity` is `{ storedOpacity, inferredVersion }` for a legacy record whose stored opacity
+   * it imports as Fill ([`legacy_opacity`]), `null` otherwise. Fails when group markers do not nest.
    */
   layers(): any;
   /**
    * Everything known about layer record `index`: properties, mask, vector mask, effects with their settings,
-   * adjustment settings, text, smart-object placement and contents, and the raw tagged blocks.
+   * adjustment settings, text, smart-object placement and contents, and the raw tagged blocks. The properties'
+   * opacity, Fill and `transparencyShapesLayer` are those Photoshop 26 imports, with `legacyOpacity` as in
+   * [`Self::layers`].
    */
   layerDetail(index: number): any;
   /**

@@ -1,6 +1,12 @@
-Test documents: our own Photoshop 26 captures from photoshop-analysis (fixtures/psd/states-1), made with Photoshop's
-default Color Settings.
+Test documents: our own Photoshop 26 captures from photoshop-analysis, made with Photoshop's default Color Settings
+unless stated.
 
-frames.psd             frames-plain-g0/document.psd, a frame animation of three frames
-frames-third.psd       frames-plain-g0/states/third/native.psd, Photoshop's save with the third frame selected
-layer-comps-second.psd comps-plain-g0/states/second/native.psd, Photoshop's save with the second comp applied
+frames.psd                    states-1 frames-plain-g0/document.psd, a frame animation of three frames
+frames-third.psd              states-1 frames-plain-g0/states/third/native.psd, Photoshop's save with the third frame
+                              selected
+layer-comps-second.psd        states-1 comps-plain-g0/states/second/native.psd, Photoshop's save with the second comp
+                              applied
+legacy-opacity.psd            legacy-1 r261018-extra-nine/input.psd, written by our own minimal writer: nine layers
+                              without tagged blocks, the top one Color Dodge at opacity 68
+legacy-opacity-photoshop.psd  legacy-1 r261018-extra-nine/document.psd, Photoshop's save of it with "Blend RGB Colors
+                              Using Gamma 1.0"

@@ -457,10 +457,14 @@ export type PsdLayerNode = {
   adjustment?: string;
   /** Blend mode name such as `multiply` or `passThrough`, or the stored key when unknown. */
   blendMode: string;
-  /** 0 to 255. */
+  /** 0 to 255, as Photoshop 26 imports it and its Layers panel shows it (see `legacyOpacity`). */
   opacity: number;
-  /** Fill opacity, 0 to 255. */
+  /** Fill opacity, 0 to 255, as Photoshop 26 imports it. */
   fill: number;
+  /** "Transparency Shapes Layer", as Photoshop 26 imports it. */
+  transparencyShapesLayer: boolean;
+  /** Set when Photoshop 26 imports the stored opacity as Fill; `null` when it imports the record as stored. */
+  legacyOpacity: PsdLegacyOpacity | null;
   /** As saved. */
   visible: boolean;
   clipped: boolean;
@@ -485,6 +489,18 @@ export type PsdLayerNode = {
   children?: PsdLayerNode[];
 };
 
+/**
+ * A legacy Color Dodge, Color Burn or Difference record (its reader infers it older than version 60, with full Fill
+ * and no effects) whose stored opacity Photoshop 26 imports as Fill, at full opacity with "Transparency Shapes Layer"
+ * off. The render follows this exactly: it is not an approximation.
+ */
+export type PsdLegacyOpacity = {
+  /** The opacity byte in the file, which becomes Fill. */
+  storedOpacity: number;
+  /** The record version Photoshop's reader infers from the record's tagged blocks. */
+  inferredVersion: number;
+};
+
 /** One effect of a layer style. */
 export type PsdEffectSummary = {
   name: string;
@@ -501,8 +517,10 @@ export type PsdLayerDetail = {
   properties: {
     blendMode: string;
     blendKey: string;
+    /** Opacity and Fill as Photoshop 26 imports them, with `legacyOpacity` as in `PsdLayerNode`. */
     opacity: number;
     fill: number;
+    legacyOpacity: PsdLegacyOpacity | null;
     visible: boolean;
     clipped: boolean;
     transparencyLocked: boolean;
