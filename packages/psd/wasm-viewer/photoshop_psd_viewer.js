@@ -115,26 +115,6 @@ function takeFromExternrefTable0(idx) {
     return value;
 }
 
-function _assertClass(instance, klass) {
-    if (!(instance instanceof klass)) {
-        throw new Error(`expected instance of ${klass.name}`);
-    }
-}
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- * @param {Uint8Array} bytes
- * @returns {any}
- */
-export function readPsd(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readPsd(ptr0, len0);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
-}
-
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
@@ -156,6 +136,27 @@ export function writePsd(document, composite) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * @param {Uint8Array} bytes
+ * @returns {any}
+ */
+export function readPsd(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsd(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+function _assertClass(instance, klass) {
+    if (!(instance instanceof klass)) {
+        throw new Error(`expected instance of ${klass.name}`);
+    }
 }
 
 const PsdDocumentHandleFinalization = (typeof FinalizationRegistry === 'undefined')
@@ -186,19 +187,164 @@ export class PsdDocumentHandle {
         wasm.__wbg_psddocumenthandle_free(ptr, 0);
     }
     /**
-     * Parses a PSD or PSB file. Fails only when the header or an outer section is unusable; damaged inner
-     * structures stay readable as far as they parse.
-     * @param {Uint8Array} bytes
-     * @returns {PsdDocumentHandle}
+     * Compares `image`, a render of this document, with Photoshop's merged image as Photoshop stores it: our color
+     * matted against white where the merged image has an alpha plane, 8-bit documents in levels, 16-bit ones in wire
+     * levels and 32-bit ones in float32 units in the last place. CMYK and Lab composites made in their channels
+     * compare channel by channel at the document's depth (`CMYK level`, `16-bit Lab level`, …), approximate renders of
+     * other color modes in sRGB levels against the merged image converted the same way, and approximate renders of
+     * 16- and 32-bit documents made at 8 bits in `8-bit level`s against the merged image reduced the same way.
+     * Returns the counts, the largest difference, a histogram of absolute differences and a heat map (`pixels`):
+     * matching pixels as a dimmed gray of our render, differing ones from yellow (one level) through red to magenta
+     * (largest) on a logarithmic scale.
+     * @param {RenderedImage} image
+     * @returns {any}
      */
-    static open(bytes) {
-        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.psddocumenthandle_open(ptr0, len0);
+    difference(image) {
+        _assertClass(image, RenderedImage);
+        const ret = wasm.psddocumenthandle_difference(this.__wbg_ptr, image.__wbg_ptr);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
-        return PsdDocumentHandle.__wrap(ret[0]);
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Everything known about layer record `index`: properties, mask, vector mask, effects with their settings,
+     * adjustment settings, text, smart-object placement and contents, and the raw tagged blocks. The properties'
+     * opacity, Fill and `transparencyShapesLayer` are those Photoshop 26 imports, with `legacyOpacity` as in
+     * [`Self::layers`].
+     * @param {number} index
+     * @returns {any}
+     */
+    layerDetail(index) {
+        const ret = wasm.psddocumenthandle_layerDetail(this.__wbg_ptr, index);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * The layer's own color and transparency as straight 8-bit RGBA (`left`, `top`, `width`, `height`, `pixels`),
+     * converted from the document's depth with the crate's verified conversions, without masks or effects, and its
+     * mask channels (`masks`: user mask `-2` and real raster mask `-3`) as 8-bit planes with their rectangles.
+     * @param {number} index
+     * @returns {any}
+     */
+    layerPixels(index) {
+        const ret = wasm.psddocumenthandle_layerPixels(this.__wbg_ptr, index);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Whether type layer record `index` re-renders from its text with `fonts` as the compositor would with
+     * `typeLayers` (`supported`, else the crate's `reason`), with the fonts it uses (`fonts`) and those `fonts` lacks
+     * (`missing`); `null` for other records. 8-bit documents are checked with `render_rgba8`, 16- and 32-bit RGB and
+     * Grayscale ones with `render_saved`; the compositor can still refuse the layer's blending at those depths. The
+     * layer is re-rendered once to decide, which takes as long as compositing it.
+     * @param {number} index
+     * @param {PsdFontLibrary} fonts
+     * @returns {any}
+     */
+    textSupport(index, fonts) {
+        _assertClass(fonts, PsdFontLibrary);
+        const ret = wasm.psddocumenthandle_textSupport(this.__wbg_ptr, index, fonts.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Renders a rectangle in document pixels as a `PsdRegionPixels` object. `left`, `top`,
+     * `width`, `height` must describe a nonempty rectangle inside the canvas. `options` and
+     * `fonts` have `render`'s meaning, with optional positive integer `maxWorkPixels`, default
+     * 16,777,216. Spatial dependencies may require a full-canvas fallback, reported by
+     * `strategy`; a dependency exceeding the limit throws `PsdUnsupportedError` before rendering.
+     * Pixels equal the corresponding whole render, including its reported approximations.
+     * The returned `Uint8Array` owns its storage and can be transferred to another worker.
+     * @param {number} left
+     * @param {number} top
+     * @param {number} width
+     * @param {number} height
+     * @param {any} options
+     * @param {PsdFontLibrary} fonts
+     * @returns {PsdRegionPixels}
+     */
+    renderRegion(left, top, width, height, options, fonts) {
+        _assertClass(fonts, PsdFontLibrary);
+        const ret = wasm.psddocumenthandle_renderRegion(this.__wbg_ptr, left, top, width, height, options, fonts.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * The fonts the document's type layers use, by the PostScript names their style runs select from the layer's
+     * `FontSet` (unused `FontSet` defaults such as `AdobeInvisFont` are left out), sorted by name, each with whether
+     * `fonts` holds it and the record indices of the type layers using it (`fonts`), and per type layer record, bottom
+     * to top, its name, visibility as saved and fonts, or `error` when its text cannot be read (`layers`).
+     * @param {PsdFontLibrary} fonts
+     * @returns {any}
+     */
+    documentFonts(fonts) {
+        _assertClass(fonts, PsdFontLibrary);
+        const ret = wasm.psddocumenthandle_documentFonts(this.__wbg_ptr, fonts.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Renders 1 to 256 rectangles from one state/visibility/font snapshot. Each rectangle is
+     * `{ left, top, width, height }` in integer document pixels. Their total output area and
+     * every spatial dependency must fit `maxWorkPixels`. Full-canvas fallbacks are computed
+     * once for the batch and freed before return; each result has `renderRegion`'s contract.
+     * A failure returns no partial batch and restores the document's visibility.
+     * @param {PsdRegionRect[]} rectangles
+     * @param {any} options
+     * @param {PsdFontLibrary} fonts
+     * @returns {PsdRegionPixels[]}
+     */
+    renderRegions(rectangles, options, fonts) {
+        _assertClass(fonts, PsdFontLibrary);
+        const ret = wasm.psddocumenthandle_renderRegions(this.__wbg_ptr, rectangles, options, fonts.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Decimates the file's saved merged image with bounded row scratch. Returns `PsdRegionPixels`
+     * with `source: 'savedComposite'` and `exactToLayerRender: false`. This preview can be stale
+     * and may differ from Photoshop-26 recompositing. It ignores visibility/state edits and must
+     * be discarded after edits. Refuses an image marked as not real. `maxWorkPixels` limits
+     * output pixels, default 16,777,216 when zero. `step` must be positive.
+     * @param {number} step
+     * @param {number} max_work_pixels
+     * @returns {PsdRegionPixels}
+     */
+    savedOverview(step, max_work_pixels) {
+        const ret = wasm.psddocumenthandle_savedOverview(this.__wbg_ptr, step, max_work_pixels);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Exact integer decimation of a fresh layer render. Output pixel `(x,y)` samples document
+     * pixel `(x*step,y*step)`, without filtering or scaling operation parameters. Dimensions are
+     * `ceil(documentWidth/step)` by `ceil(documentHeight/step)`. `step` must be positive.
+     * Returns `PsdRegionPixels`; options, visibility, state and fonts match `renderRegion`.
+     * Rendering sampled scanlines bounds canvas storage but may be slower than a whole render.
+     * @param {number} step
+     * @param {any} options
+     * @param {PsdFontLibrary} fonts
+     * @returns {PsdRegionPixels}
+     */
+    renderOverview(step, options, fonts) {
+        _assertClass(fonts, PsdFontLibrary);
+        const ret = wasm.psddocumenthandle_renderOverview(this.__wbg_ptr, step, options, fonts.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
     }
     /**
      * Opens a PSD or PSB as Photoshop 26 does, keeping the strict reading of [`Self::open`] where it is Photoshop's
@@ -241,6 +387,21 @@ export class PsdDocumentHandle {
         return ret;
     }
     /**
+     * Parses a PSD or PSB file. Fails only when the header or an outer section is unusable; damaged inner
+     * structures stay readable as far as they parse.
+     * @param {Uint8Array} bytes
+     * @returns {PsdDocumentHandle}
+     */
+    static open(bytes) {
+        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.psddocumenthandle_open(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return PsdDocumentHandle.__wrap(ret[0]);
+    }
+    /**
      * The layer tree, bottom to top as stored: groups hold their children, also bottom to top. Each node carries
      * the summary a layers panel shows and `notes` on what the compositor leaves out or approximates. Its `opacity`,
      * `fill` and `transparencyShapesLayer` are those Photoshop 26 imports, which its Layers panel shows and the
@@ -256,29 +417,13 @@ export class PsdDocumentHandle {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
-     * Everything known about layer record `index`: properties, mask, vector mask, effects with their settings,
-     * adjustment settings, text, smart-object placement and contents, and the raw tagged blocks. The properties'
-     * opacity, Fill and `transparencyShapesLayer` are those Photoshop 26 imports, with `legacyOpacity` as in
-     * [`Self::layers`].
-     * @param {number} index
+     * Photoshop's saved merged image ("Maximize Compatibility") as straight 8-bit RGBA, unmatted from white where it
+     * carries transparency and converted from 16 and 32 bits like the composite. Throws `PsdUnsupportedError` when
+     * the file has none or its color mode is not rendered.
      * @returns {any}
      */
-    layerDetail(index) {
-        const ret = wasm.psddocumenthandle_layerDetail(this.__wbg_ptr, index);
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
-        }
-        return takeFromExternrefTable0(ret[0]);
-    }
-    /**
-     * The layer's own color and transparency as straight 8-bit RGBA (`left`, `top`, `width`, `height`, `pixels`),
-     * converted from the document's depth with the crate's verified conversions, without masks or effects, and its
-     * mask channels (`masks`: user mask `-2` and real raster mask `-3`) as 8-bit planes with their rectangles.
-     * @param {number} index
-     * @returns {any}
-     */
-    layerPixels(index) {
-        const ret = wasm.psddocumenthandle_layerPixels(this.__wbg_ptr, index);
+    merged() {
+        const ret = wasm.psddocumenthandle_merged(this.__wbg_ptr);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -323,71 +468,6 @@ export class PsdDocumentHandle {
         const ret = wasm.psddocumenthandle_states(this.__wbg_ptr);
         return ret;
     }
-    /**
-     * The fonts the document's type layers use, by the PostScript names their style runs select from the layer's
-     * `FontSet` (unused `FontSet` defaults such as `AdobeInvisFont` are left out), sorted by name, each with whether
-     * `fonts` holds it and the record indices of the type layers using it (`fonts`), and per type layer record, bottom
-     * to top, its name, visibility as saved and fonts, or `error` when its text cannot be read (`layers`).
-     * @param {PsdFontLibrary} fonts
-     * @returns {any}
-     */
-    documentFonts(fonts) {
-        _assertClass(fonts, PsdFontLibrary);
-        const ret = wasm.psddocumenthandle_documentFonts(this.__wbg_ptr, fonts.__wbg_ptr);
-        return ret;
-    }
-    /**
-     * Whether type layer record `index` re-renders from its text with `fonts` as the compositor would with
-     * `typeLayers` (`supported`, else the crate's `reason`), with the fonts it uses (`fonts`) and those `fonts` lacks
-     * (`missing`); `null` for other records. 8-bit documents are checked with `render_rgba8`, 16- and 32-bit RGB and
-     * Grayscale ones with `render_saved`; the compositor can still refuse the layer's blending at those depths. The
-     * layer is re-rendered once to decide, which takes as long as compositing it.
-     * @param {number} index
-     * @param {PsdFontLibrary} fonts
-     * @returns {any}
-     */
-    textSupport(index, fonts) {
-        _assertClass(fonts, PsdFontLibrary);
-        const ret = wasm.psddocumenthandle_textSupport(this.__wbg_ptr, index, fonts.__wbg_ptr);
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
-        }
-        return takeFromExternrefTable0(ret[0]);
-    }
-    /**
-     * Photoshop's saved merged image ("Maximize Compatibility") as straight 8-bit RGBA, unmatted from white where it
-     * carries transparency and converted from 16 and 32 bits like the composite. Throws `PsdUnsupportedError` when
-     * the file has none or its color mode is not rendered.
-     * @returns {any}
-     */
-    merged() {
-        const ret = wasm.psddocumenthandle_merged(this.__wbg_ptr);
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
-        }
-        return takeFromExternrefTable0(ret[0]);
-    }
-    /**
-     * Compares `image`, a render of this document, with Photoshop's merged image as Photoshop stores it: our color
-     * matted against white where the merged image has an alpha plane, 8-bit documents in levels, 16-bit ones in wire
-     * levels and 32-bit ones in float32 units in the last place. CMYK and Lab composites made in their channels
-     * compare channel by channel at the document's depth (`CMYK level`, `16-bit Lab level`, …), approximate renders of
-     * other color modes in sRGB levels against the merged image converted the same way, and approximate renders of
-     * 16- and 32-bit documents made at 8 bits in `8-bit level`s against the merged image reduced the same way.
-     * Returns the counts, the largest difference, a histogram of absolute differences and a heat map (`pixels`):
-     * matching pixels as a dimmed gray of our render, differing ones from yellow (one level) through red to magenta
-     * (largest) on a logarithmic scale.
-     * @param {RenderedImage} image
-     * @returns {any}
-     */
-    difference(image) {
-        _assertClass(image, RenderedImage);
-        const ret = wasm.psddocumenthandle_difference(this.__wbg_ptr, image.__wbg_ptr);
-        if (ret[2]) {
-            throw takeFromExternrefTable0(ret[1]);
-        }
-        return takeFromExternrefTable0(ret[0]);
-    }
 }
 
 const PsdFontLibraryFinalization = (typeof FinalizationRegistry === 'undefined')
@@ -412,13 +492,17 @@ export class PsdFontLibrary {
         wasm.__wbg_psdfontlibrary_free(ptr, 0);
     }
     /**
-     * An empty library.
+     * Supplies Photoshop 26.0.0's `hyph_en_US.dic`, which hyphenated paragraph text needs; the crate verifies its
+     * SHA-256 and throws `PsdUnsupportedError` for other dictionaries.
+     * @param {Uint8Array} bytes
      */
-    constructor() {
-        const ret = wasm.psdfontlibrary_new();
-        this.__wbg_ptr = ret >>> 0;
-        PsdFontLibraryFinalization.register(this, this.__wbg_ptr, this);
-        return this;
+    setHyphenationDictionary(bytes) {
+        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.psdfontlibrary_setHyphenationDictionary(this.__wbg_ptr, ptr0, len0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
     }
     /**
      * Adds a TrueType (`glyf`) or OpenType CFF font file under its PostScript name (`name` ID 6), replacing a font of
@@ -438,25 +522,21 @@ export class PsdFontLibrary {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
+     * An empty library.
+     */
+    constructor() {
+        const ret = wasm.psdfontlibrary_new();
+        this.__wbg_ptr = ret >>> 0;
+        PsdFontLibraryFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
      * The fonts added, sorted by PostScript name: `name`, `format` (`TrueType` or `CFF`) and `size` in bytes.
      * @returns {Array<any>}
      */
     fonts() {
         const ret = wasm.psdfontlibrary_fonts(this.__wbg_ptr);
         return ret;
-    }
-    /**
-     * Supplies Photoshop 26.0.0's `hyph_en_US.dic`, which hyphenated paragraph text needs; the crate verifies its
-     * SHA-256 and throws `PsdUnsupportedError` for other dictionaries.
-     * @param {Uint8Array} bytes
-     */
-    setHyphenationDictionary(bytes) {
-        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.psdfontlibrary_setHyphenationDictionary(this.__wbg_ptr, ptr0, len0);
-        if (ret[1]) {
-            throw takeFromExternrefTable0(ret[0]);
-        }
     }
 }
 
@@ -489,20 +569,14 @@ export class RenderedImage {
         wasm.__wbg_renderedimage_free(ptr, 0);
     }
     /**
-     * Width in pixels.
-     * @returns {number}
+     * The documented approximations the render made, in words: the display conversion of a CMYK or Lab composite
+     * made exactly in its channels, or what `approximate` allowed; empty when the render followed the exact path to
+     * its display.
+     * @returns {Array<any>}
      */
-    get width() {
-        const ret = wasm.renderedimage_width(this.__wbg_ptr);
-        return ret >>> 0;
-    }
-    /**
-     * Height in pixels.
-     * @returns {number}
-     */
-    get height() {
-        const ret = wasm.renderedimage_height(this.__wbg_ptr);
-        return ret >>> 0;
+    approximations() {
+        const ret = wasm.renderedimage_approximations(this.__wbg_ptr);
+        return ret;
     }
     /**
      * The depth the composite was computed at: 8, 16 or 32.
@@ -524,14 +598,20 @@ export class RenderedImage {
         return ret;
     }
     /**
-     * The documented approximations the render made, in words: the display conversion of a CMYK or Lab composite
-     * made exactly in its channels, or what `approximate` allowed; empty when the render followed the exact path to
-     * its display.
-     * @returns {Array<any>}
+     * Width in pixels.
+     * @returns {number}
      */
-    approximations() {
-        const ret = wasm.renderedimage_approximations(this.__wbg_ptr);
-        return ret;
+    get width() {
+        const ret = wasm.renderedimage_width(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Height in pixels.
+     * @returns {number}
+     */
+    get height() {
+        const ret = wasm.renderedimage_height(this.__wbg_ptr);
+        return ret >>> 0;
     }
 }
 
@@ -583,6 +663,10 @@ function __wbg_get_imports() {
     }, arguments) };
     imports.wbg.__wbg_get_b9b93047fe3cf45b = function(arg0, arg1) {
         const ret = arg0[arg1 >>> 0];
+        return ret;
+    };
+    imports.wbg.__wbg_isArray_a1eab7e0d067391b = function(arg0) {
+        const ret = Array.isArray(arg0);
         return ret;
     };
     imports.wbg.__wbg_length_a446193dc22c12f8 = function(arg0) {

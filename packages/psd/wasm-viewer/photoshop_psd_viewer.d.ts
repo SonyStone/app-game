@@ -1,14 +1,51 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
-/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
+
+/** A nonempty rectangle in document pixels, used by renderRegions. */
+export interface PsdRegionRect {
+    /** Left document coordinate. */
+    left: number;
+    /** Top document coordinate. */
+    top: number;
+    /** Positive integer width. */
+    width: number;
+    /** Positive integer height. */
+    height: number;
+}
+/** Display pixels returned by the region and overview APIs. */
+export interface PsdRegionPixels {
+    /** Document x origin for a region, zero for an overview. */
+    left: number;
+    /** Document y origin for a region, zero for an overview. */
+    top: number;
+    /** Output width in pixels. */
+    width: number;
+    /** Output height in pixels. */
+    height: number;
+    /** Straight 8-bit RGBA. Its buffer may be transferred to a worker. */
+    pixels: Uint8Array;
+    /** Integer document-pixel sampling stride. */
+    step: number;
+    /** Allocation strategy; fullCanvas is a conservative spatial fallback. */
+    strategy: 'window' | 'fullCanvas' | 'streamed';
+    /** Fresh layer compositing or the file's potentially stale merged image. */
+    source: 'layers' | 'savedComposite';
+    /** True means exact decimation/cropping of the layer render, with approximations below. */
+    exactToLayerRender: boolean;
+    /** Existing compositor approximations, independent of crop/decimation exactness. */
+    approximations: string[];
+}
+
+
 /**
  * An open document: its parsed container and each layer record's saved visibility.
  */
@@ -16,10 +53,79 @@ export class PsdDocumentHandle {
   private constructor();
   free(): void;
   /**
-   * Parses a PSD or PSB file. Fails only when the header or an outer section is unusable; damaged inner
-   * structures stay readable as far as they parse.
+   * Compares `image`, a render of this document, with Photoshop's merged image as Photoshop stores it: our color
+   * matted against white where the merged image has an alpha plane, 8-bit documents in levels, 16-bit ones in wire
+   * levels and 32-bit ones in float32 units in the last place. CMYK and Lab composites made in their channels
+   * compare channel by channel at the document's depth (`CMYK level`, `16-bit Lab level`, …), approximate renders of
+   * other color modes in sRGB levels against the merged image converted the same way, and approximate renders of
+   * 16- and 32-bit documents made at 8 bits in `8-bit level`s against the merged image reduced the same way.
+   * Returns the counts, the largest difference, a histogram of absolute differences and a heat map (`pixels`):
+   * matching pixels as a dimmed gray of our render, differing ones from yellow (one level) through red to magenta
+   * (largest) on a logarithmic scale.
    */
-  static open(bytes: Uint8Array): PsdDocumentHandle;
+  difference(image: RenderedImage): any;
+  /**
+   * Everything known about layer record `index`: properties, mask, vector mask, effects with their settings,
+   * adjustment settings, text, smart-object placement and contents, and the raw tagged blocks. The properties'
+   * opacity, Fill and `transparencyShapesLayer` are those Photoshop 26 imports, with `legacyOpacity` as in
+   * [`Self::layers`].
+   */
+  layerDetail(index: number): any;
+  /**
+   * The layer's own color and transparency as straight 8-bit RGBA (`left`, `top`, `width`, `height`, `pixels`),
+   * converted from the document's depth with the crate's verified conversions, without masks or effects, and its
+   * mask channels (`masks`: user mask `-2` and real raster mask `-3`) as 8-bit planes with their rectangles.
+   */
+  layerPixels(index: number): any;
+  /**
+   * Whether type layer record `index` re-renders from its text with `fonts` as the compositor would with
+   * `typeLayers` (`supported`, else the crate's `reason`), with the fonts it uses (`fonts`) and those `fonts` lacks
+   * (`missing`); `null` for other records. 8-bit documents are checked with `render_rgba8`, 16- and 32-bit RGB and
+   * Grayscale ones with `render_saved`; the compositor can still refuse the layer's blending at those depths. The
+   * layer is re-rendered once to decide, which takes as long as compositing it.
+   */
+  textSupport(index: number, fonts: PsdFontLibrary): any;
+  /**
+   * Renders a rectangle in document pixels as a `PsdRegionPixels` object. `left`, `top`,
+   * `width`, `height` must describe a nonempty rectangle inside the canvas. `options` and
+   * `fonts` have `render`'s meaning, with optional positive integer `maxWorkPixels`, default
+   * 16,777,216. Spatial dependencies may require a full-canvas fallback, reported by
+   * `strategy`; a dependency exceeding the limit throws `PsdUnsupportedError` before rendering.
+   * Pixels equal the corresponding whole render, including its reported approximations.
+   * The returned `Uint8Array` owns its storage and can be transferred to another worker.
+   */
+  renderRegion(left: number, top: number, width: number, height: number, options: any, fonts: PsdFontLibrary): PsdRegionPixels;
+  /**
+   * The fonts the document's type layers use, by the PostScript names their style runs select from the layer's
+   * `FontSet` (unused `FontSet` defaults such as `AdobeInvisFont` are left out), sorted by name, each with whether
+   * `fonts` holds it and the record indices of the type layers using it (`fonts`), and per type layer record, bottom
+   * to top, its name, visibility as saved and fonts, or `error` when its text cannot be read (`layers`).
+   */
+  documentFonts(fonts: PsdFontLibrary): any;
+  /**
+   * Renders 1 to 256 rectangles from one state/visibility/font snapshot. Each rectangle is
+   * `{ left, top, width, height }` in integer document pixels. Their total output area and
+   * every spatial dependency must fit `maxWorkPixels`. Full-canvas fallbacks are computed
+   * once for the batch and freed before return; each result has `renderRegion`'s contract.
+   * A failure returns no partial batch and restores the document's visibility.
+   */
+  renderRegions(rectangles: PsdRegionRect[], options: any, fonts: PsdFontLibrary): PsdRegionPixels[];
+  /**
+   * Decimates the file's saved merged image with bounded row scratch. Returns `PsdRegionPixels`
+   * with `source: 'savedComposite'` and `exactToLayerRender: false`. This preview can be stale
+   * and may differ from Photoshop-26 recompositing. It ignores visibility/state edits and must
+   * be discarded after edits. Refuses an image marked as not real. `maxWorkPixels` limits
+   * output pixels, default 16,777,216 when zero. `step` must be positive.
+   */
+  savedOverview(step: number, max_work_pixels: number): PsdRegionPixels;
+  /**
+   * Exact integer decimation of a fresh layer render. Output pixel `(x,y)` samples document
+   * pixel `(x*step,y*step)`, without filtering or scaling operation parameters. Dimensions are
+   * `ceil(documentWidth/step)` by `ceil(documentHeight/step)`. `step` must be positive.
+   * Returns `PsdRegionPixels`; options, visibility, state and fonts match `renderRegion`.
+   * Rendering sampled scanlines bounds canvas storage but may be slower than a whole render.
+   */
+  renderOverview(step: number, options: any, fonts: PsdFontLibrary): PsdRegionPixels;
   /**
    * Opens a PSD or PSB as Photoshop 26 does, keeping the strict reading of [`Self::open`] where it is Photoshop's
    * document or Photoshop refuses a file the strict reader reads (see the `opening` module). `answers` holds the
@@ -46,6 +152,11 @@ export class PsdDocumentHandle {
    */
   info(): any;
   /**
+   * Parses a PSD or PSB file. Fails only when the header or an outer section is unusable; damaged inner
+   * structures stay readable as far as they parse.
+   */
+  static open(bytes: Uint8Array): PsdDocumentHandle;
+  /**
    * The layer tree, bottom to top as stored: groups hold their children, also bottom to top. Each node carries
    * the summary a layers panel shows and `notes` on what the compositor leaves out or approximates. Its `opacity`,
    * `fill` and `transparencyShapesLayer` are those Photoshop 26 imports, which its Layers panel shows and the
@@ -54,18 +165,11 @@ export class PsdDocumentHandle {
    */
   layers(): any;
   /**
-   * Everything known about layer record `index`: properties, mask, vector mask, effects with their settings,
-   * adjustment settings, text, smart-object placement and contents, and the raw tagged blocks. The properties'
-   * opacity, Fill and `transparencyShapesLayer` are those Photoshop 26 imports, with `legacyOpacity` as in
-   * [`Self::layers`].
+   * Photoshop's saved merged image ("Maximize Compatibility") as straight 8-bit RGBA, unmatted from white where it
+   * carries transparency and converted from 16 and 32 bits like the composite. Throws `PsdUnsupportedError` when
+   * the file has none or its color mode is not rendered.
    */
-  layerDetail(index: number): any;
-  /**
-   * The layer's own color and transparency as straight 8-bit RGBA (`left`, `top`, `width`, `height`, `pixels`),
-   * converted from the document's depth with the crate's verified conversions, without masks or effects, and its
-   * mask channels (`masks`: user mask `-2` and real raster mask `-3`) as 8-bit planes with their rectangles.
-   */
-  layerPixels(index: number): any;
+  merged(): any;
   /**
    * Composites the document with `options` (see [`RenderSettings::read`]): 8-bit RGB and Grayscale with
    * `composite_with_report`, 16- and 32-bit with `composite_deep`, CMYK and Lab of 8 and 16 bits in their own
@@ -91,39 +195,6 @@ export class PsdDocumentHandle {
    * parse counts as absent and is named in `errors`.
    */
   states(): any;
-  /**
-   * The fonts the document's type layers use, by the PostScript names their style runs select from the layer's
-   * `FontSet` (unused `FontSet` defaults such as `AdobeInvisFont` are left out), sorted by name, each with whether
-   * `fonts` holds it and the record indices of the type layers using it (`fonts`), and per type layer record, bottom
-   * to top, its name, visibility as saved and fonts, or `error` when its text cannot be read (`layers`).
-   */
-  documentFonts(fonts: PsdFontLibrary): any;
-  /**
-   * Whether type layer record `index` re-renders from its text with `fonts` as the compositor would with
-   * `typeLayers` (`supported`, else the crate's `reason`), with the fonts it uses (`fonts`) and those `fonts` lacks
-   * (`missing`); `null` for other records. 8-bit documents are checked with `render_rgba8`, 16- and 32-bit RGB and
-   * Grayscale ones with `render_saved`; the compositor can still refuse the layer's blending at those depths. The
-   * layer is re-rendered once to decide, which takes as long as compositing it.
-   */
-  textSupport(index: number, fonts: PsdFontLibrary): any;
-  /**
-   * Photoshop's saved merged image ("Maximize Compatibility") as straight 8-bit RGBA, unmatted from white where it
-   * carries transparency and converted from 16 and 32 bits like the composite. Throws `PsdUnsupportedError` when
-   * the file has none or its color mode is not rendered.
-   */
-  merged(): any;
-  /**
-   * Compares `image`, a render of this document, with Photoshop's merged image as Photoshop stores it: our color
-   * matted against white where the merged image has an alpha plane, 8-bit documents in levels, 16-bit ones in wire
-   * levels and 32-bit ones in float32 units in the last place. CMYK and Lab composites made in their channels
-   * compare channel by channel at the document's depth (`CMYK level`, `16-bit Lab level`, …), approximate renders of
-   * other color modes in sRGB levels against the merged image converted the same way, and approximate renders of
-   * 16- and 32-bit documents made at 8 bits in `8-bit level`s against the merged image reduced the same way.
-   * Returns the counts, the largest difference, a histogram of absolute differences and a heat map (`pixels`):
-   * matching pixels as a dimmed gray of our render, differing ones from yellow (one level) through red to magenta
-   * (largest) on a logarithmic scale.
-   */
-  difference(image: RenderedImage): any;
 }
 /**
  * Fonts the caller supplies for re-rendering type layers, by PostScript name; nothing is loaded from the system. One
@@ -133,9 +204,10 @@ export class PsdDocumentHandle {
 export class PsdFontLibrary {
   free(): void;
   /**
-   * An empty library.
+   * Supplies Photoshop 26.0.0's `hyph_en_US.dic`, which hyphenated paragraph text needs; the crate verifies its
+   * SHA-256 and throws `PsdUnsupportedError` for other dictionaries.
    */
-  constructor();
+  setHyphenationDictionary(bytes: Uint8Array): void;
   /**
    * Adds a TrueType (`glyf`) or OpenType CFF font file under its PostScript name (`name` ID 6), replacing a font of
    * the same name, and returns its entry as [`Self::fonts`] lists it. Throws `PsdUnsupportedError` for font
@@ -144,14 +216,13 @@ export class PsdFontLibrary {
    */
   add(bytes: Uint8Array): any;
   /**
+   * An empty library.
+   */
+  constructor();
+  /**
    * The fonts added, sorted by PostScript name: `name`, `format` (`TrueType` or `CFF`) and `size` in bytes.
    */
   fonts(): Array<any>;
-  /**
-   * Supplies Photoshop 26.0.0's `hyph_en_US.dic`, which hyphenated paragraph text needs; the crate verifies its
-   * SHA-256 and throws `PsdUnsupportedError` for other dictionaries.
-   */
-  setHyphenationDictionary(bytes: Uint8Array): void;
 }
 /**
  * One composite: straight 8-bit RGBA for display and, for 16- and 32-bit documents, the composite at their depth, or
@@ -161,6 +232,12 @@ export class RenderedImage {
   private constructor();
   free(): void;
   /**
+   * The documented approximations the render made, in words: the display conversion of a CMYK or Lab composite
+   * made exactly in its channels, or what `approximate` allowed; empty when the render followed the exact path to
+   * its display.
+   */
+  approximations(): Array<any>;
+  /**
    * The composite as straight 8-bit RGBA, row by row: a fresh copy each call. 16-bit samples convert with
    * `R(q·255, 32768)`, 32-bit color with Photoshop's Exposure and Gamma toning at its defaults and alpha with
    * `⌊255a + ½⌋`; CMYK and Lab composites convert to sRGB through the approximate color management the
@@ -168,11 +245,9 @@ export class RenderedImage {
    */
   rgba8(): Uint8Array;
   /**
-   * The documented approximations the render made, in words: the display conversion of a CMYK or Lab composite
-   * made exactly in its channels, or what `approximate` allowed; empty when the render followed the exact path to
-   * its display.
+   * The depth the composite was computed at: 8, 16 or 32.
    */
-  approximations(): Array<any>;
+  readonly depth: number;
   /**
    * Width in pixels.
    */
@@ -181,10 +256,6 @@ export class RenderedImage {
    * Height in pixels.
    */
   readonly height: number;
-  /**
-   * The depth the composite was computed at: 8, 16 or 32.
-   */
-  readonly depth: number;
 }
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -192,30 +263,34 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly __wbg_psddocumenthandle_free: (a: number, b: number) => void;
-  readonly psddocumenthandle_open: (a: number, b: number) => [number, number, number];
-  readonly psddocumenthandle_openLikePhotoshop: (a: number, b: number, c: any) => [number, number, number];
+  readonly __wbg_psdfontlibrary_free: (a: number, b: number) => void;
+  readonly __wbg_renderedimage_free: (a: number, b: number) => void;
+  readonly psddocumenthandle_difference: (a: number, b: number) => [number, number, number];
+  readonly psddocumenthandle_documentFonts: (a: number, b: number) => any;
   readonly psddocumenthandle_info: (a: number) => any;
-  readonly psddocumenthandle_layers: (a: number) => [number, number, number];
   readonly psddocumenthandle_layerDetail: (a: number, b: number) => [number, number, number];
   readonly psddocumenthandle_layerPixels: (a: number, b: number) => [number, number, number];
-  readonly psddocumenthandle_render: (a: number, b: any, c: number) => [number, number, number];
-  readonly psddocumenthandle_states: (a: number) => any;
-  readonly psddocumenthandle_documentFonts: (a: number, b: number) => any;
-  readonly psddocumenthandle_textSupport: (a: number, b: number, c: number) => [number, number, number];
+  readonly psddocumenthandle_layers: (a: number) => [number, number, number];
   readonly psddocumenthandle_merged: (a: number) => [number, number, number];
-  readonly psddocumenthandle_difference: (a: number, b: number) => [number, number, number];
-  readonly __wbg_psdfontlibrary_free: (a: number, b: number) => void;
-  readonly psdfontlibrary_new: () => number;
+  readonly psddocumenthandle_open: (a: number, b: number) => [number, number, number];
+  readonly psddocumenthandle_openLikePhotoshop: (a: number, b: number, c: any) => [number, number, number];
+  readonly psddocumenthandle_render: (a: number, b: any, c: number) => [number, number, number];
+  readonly psddocumenthandle_renderOverview: (a: number, b: number, c: any, d: number) => [number, number, number];
+  readonly psddocumenthandle_renderRegion: (a: number, b: number, c: number, d: number, e: number, f: any, g: number) => [number, number, number];
+  readonly psddocumenthandle_renderRegions: (a: number, b: any, c: any, d: number) => [number, number, number];
+  readonly psddocumenthandle_savedOverview: (a: number, b: number, c: number) => [number, number, number];
+  readonly psddocumenthandle_states: (a: number) => any;
+  readonly psddocumenthandle_textSupport: (a: number, b: number, c: number) => [number, number, number];
   readonly psdfontlibrary_add: (a: number, b: number, c: number) => [number, number, number];
   readonly psdfontlibrary_fonts: (a: number) => any;
+  readonly psdfontlibrary_new: () => number;
   readonly psdfontlibrary_setHyphenationDictionary: (a: number, b: number, c: number) => [number, number];
-  readonly __wbg_renderedimage_free: (a: number, b: number) => void;
-  readonly renderedimage_width: (a: number) => number;
-  readonly renderedimage_height: (a: number) => number;
-  readonly renderedimage_depth: (a: number) => number;
-  readonly renderedimage_rgba8: (a: number) => any;
-  readonly renderedimage_approximations: (a: number) => any;
   readonly readPsd: (a: number, b: number) => [number, number, number];
+  readonly renderedimage_approximations: (a: number) => any;
+  readonly renderedimage_depth: (a: number) => number;
+  readonly renderedimage_height: (a: number) => number;
+  readonly renderedimage_rgba8: (a: number) => any;
+  readonly renderedimage_width: (a: number) => number;
   readonly writePsd: (a: any, b: number, c: number) => [number, number, number, number];
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
