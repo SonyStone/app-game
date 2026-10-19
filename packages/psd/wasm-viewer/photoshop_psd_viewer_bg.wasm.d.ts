@@ -21,6 +21,7 @@ export const psddocumenthandle_savedOverview: (a: number, b: number, c: number) 
 export const psddocumenthandle_states: (a: number) => any;
 export const psddocumenthandle_textSupport: (a: number, b: number, c: number) => [number, number, number];
 export const psdfontlibrary_add: (a: number, b: number, c: number) => [number, number, number];
+export const psdfontlibrary_addActiveFace: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
 export const psdfontlibrary_fonts: (a: number) => any;
 export const psdfontlibrary_new: () => number;
 export const psdfontlibrary_setHyphenationDictionary: (a: number, b: number, c: number) => [number, number];

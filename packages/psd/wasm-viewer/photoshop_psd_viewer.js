@@ -114,6 +114,20 @@ function takeFromExternrefTable0(idx) {
     wasm.__externref_table_dealloc(idx);
     return value;
 }
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * @param {Uint8Array} bytes
+ * @returns {any}
+ */
+export function readPsd(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsd(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
 
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -136,21 +150,6 @@ export function writePsd(document, composite) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
-}
-
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- * @param {Uint8Array} bytes
- * @returns {any}
- */
-export function readPsd(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readPsd(ptr0, len0);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
 }
 
 function _assertClass(instance, klass) {
@@ -440,8 +439,14 @@ export class PsdDocumentHandle {
      * `composite_channels` rejects with their layers converted to sRGB, each approximation listed in the render's
      * `approximations`. With `typeLayers`, type layers are re-rendered from their text with the fonts of `fonts`
      * (`CompositeOptions::type_layers`): a type layer the crate does not re-render exactly, or whose font `fonts` lacks,
-     * fails the render, or with `approximate` composites its cached raster and is listed. Without `typeLayers`,
-     * `fonts` is not read. Visibility overrides apply to this render only. Throws `PsdUnsupportedError` naming the
+     * fails the render, or with `approximate` composites its cached raster and is listed. Separately,
+     * `fonts` supplies active-face data for conservative imported-layout reporting even without `typeLayers`.
+     * The host must add original active TrueType bytes with their actual TTC indices using `addActiveFace`, or
+     * standalone active fonts using `add`. No system inventory is read. An empty library preserves existing
+     * cached rendering and abstains from font-dependent witnesses. A partial library checks uniquely supplied
+     * faces without treating absent names as missing fonts; it never certifies every imported layout as valid.
+     * Conflicts throw in strict mode; `approximate` lists them and retains the existing cached-pixel mixer.
+     * Visibility overrides apply to this render only. Throws `PsdUnsupportedError` naming the
      * first setting the compositor does not reproduce.
      * @param {any} options
      * @param {PsdFontLibrary} fonts
@@ -474,7 +479,9 @@ const PsdFontLibraryFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_psdfontlibrary_free(ptr >>> 0, 1));
 /**
- * Fonts the caller supplies for re-rendering type layers, by PostScript name; nothing is loaded from the system. One
+ * Host-supplied fonts for re-rendering and independent imported-layout reporting. `addActiveFace` accepts active
+ * sfnt/TTC faces for reporting only; `add` also adds standalone fonts for rerasterization. Empty input preserves
+ * existing cached rendering and abstains from font-dependent witnesses. Nothing is loaded from the system. One
  * library serves any number of documents: [`DocumentHandle::render`], [`DocumentHandle::document_fonts`] and
  * [`DocumentHandle::text_support`] take it by reference. Fonts share their bytes, so a render copies none.
  */
@@ -492,6 +499,41 @@ export class PsdFontLibrary {
         wasm.__wbg_psdfontlibrary_free(ptr, 0);
     }
     /**
+     * Supplies an active TrueType face for imported-layout reporting only. Pass original `.ttf`/`.ttc` bytes,
+     * the actual zero-based `faceIndex` and a host source identifier `provenance`, such as a path or asset ID.
+     * Returns the face's PostScript name. This never requests rerasterization, supplies missing-font inventory,
+     * installs fonts, or changes cached-pixel arithmetic. CFF, invalid indices and unreadable/unnamed faces throw.
+     * Repeated identical bytes/index deduplicate; distinct faces under one name cause reporting to abstain.
+     * Browsers have no system font inventory. With no added data, existing renders stay admitted, and only
+     * file-decidable reports remain available. Partial input checks only uniquely resolved supplied faces.
+     * @param {Uint8Array} bytes
+     * @param {number} face_index
+     * @param {string} provenance
+     * @returns {string}
+     */
+    addActiveFace(bytes, face_index, provenance) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(provenance, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len1 = WASM_VECTOR_LEN;
+            const ret = wasm.psdfontlibrary_addActiveFace(this.__wbg_ptr, ptr0, len0, face_index, ptr1, len1);
+            var ptr3 = ret[0];
+            var len3 = ret[1];
+            if (ret[3]) {
+                ptr3 = 0; len3 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred4_0 = ptr3;
+            deferred4_1 = len3;
+            return getStringFromWasm0(ptr3, len3);
+        } finally {
+            wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+        }
+    }
+    /**
      * Supplies Photoshop 26.0.0's `hyph_en_US.dic`, which hyphenated paragraph text needs; the crate verifies its
      * SHA-256 and throws `PsdUnsupportedError` for other dictionaries.
      * @param {Uint8Array} bytes
@@ -506,9 +548,11 @@ export class PsdFontLibrary {
     }
     /**
      * Adds a TrueType (`glyf`) or OpenType CFF font file under its PostScript name (`name` ID 6), replacing a font of
-     * the same name, and returns its entry as [`Self::fonts`] lists it. Throws `PsdUnsupportedError` for font
+     * the same name for rerasterization, and returns its entry as [`Self::fonts`] lists it. Throws `PsdUnsupportedError` for font
      * collections (`.ttc`, `.otc`), WOFF files and fonts without a PostScript name or with outlines the crate does not
-     * read, and `PsdError` for bytes that are not a readable font.
+     * read, and `PsdError` for bytes that are not a readable font. The host attests this is an active face.
+     * TrueType bytes also feed imported-layout reporting independently of `typeLayers`; distinct bytes sharing
+     * a name make validation ambiguous even though the rerasterization library replaces its earlier entry.
      * @param {Uint8Array} bytes
      * @returns {any}
      */
