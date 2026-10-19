@@ -1,5 +1,6 @@
 import {
   createFontLibrary,
+  openPsd,
   openPsdLikePhotoshop,
   type PsdFailure,
   type PsdFontLibrary,
@@ -8,13 +9,21 @@ import {
   type PsdRenderSettings,
   type PsdViewerDocument
 } from '@app-game/psd/viewer';
-import type { BlendingDetection, PsdReply, PsdRequest } from './protocol';
+import {
+  requiresWindowedRendering,
+  windowWorkPixels,
+  type BlendingDetection,
+  type PsdReply,
+  type PsdRequest
+} from './protocol';
 
 /**
  * The worker side of the protocol, independent of the worker global so tests can drive it directly. It holds one open
  * document and the full-depth composites of its two latest renders, so the UI can still compare the render it shows
  * while the next one is already running; opening another document closes the previous one, even when the new one
- * fails or waits for an answer to a Photoshop prompt. Documents open as Photoshop opens them (`openPsdLikePhotoshop`).
+ * fails or waits for an answer to a Photoshop prompt. Small documents open as Photoshop opens them; large canvases
+ * use the strict, lazy reader because recovery still decodes whole channels. Large-canvas requests never run
+ * whole-document compositing, comparison or blending detection.
  * The renders a blending
  * detection made wait for the next render request, which takes the one with its settings and visibility instead of
  * compositing again; the others are freed then. It also holds the font library, created on first use and kept across
@@ -43,7 +52,13 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
   async function handle(request: PsdRequest) {
     if (request.type === 'open') {
       close();
-      const opened = await openPsdLikePhotoshop(request.bytes, request.answers);
+      // Recovery opening decodes whole channels. Inspect only the fixed header before choosing that path.
+      const header = new DataView(request.bytes);
+      const large =
+        header.byteLength >= 26 &&
+        header.getUint32(0) === 0x38425053 &&
+        requiresWindowedRendering({ width: header.getUint32(18), height: header.getUint32(14) });
+      const opened = large ? await openPsd(request.bytes) : await openPsdLikePhotoshop(request.bytes, request.answers);
       if (!opened.ok) {
         post({ id: request.id, type: 'failed', error: opened.error }, []);
         return;
@@ -89,7 +104,41 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
     }
 
     const viewer = document.viewer;
+    const windowed = requiresWindowedRendering(viewer.info);
+    if (windowed && ['render', 'merged', 'difference', 'textSupport'].includes(request.type)) {
+      post(
+        failed(request, {
+          kind: 'unsupported',
+          message: 'This operation requires a whole-document composite; use the windowed layer view for this canvas.'
+        }),
+        []
+      );
+      return;
+    }
+
     switch (request.type) {
+      case 'renderWindow': {
+        const start = performance.now();
+        const settings = { ...request.settings, maxWorkPixels: windowWorkPixels };
+        const window = request.window;
+        const result =
+          window.kind === 'regions'
+            ? viewer.renderRegions(window.rectangles, settings, request.visibility, fonts)
+            : window.kind === 'overview'
+              ? viewer.renderOverview(window.step, settings, request.visibility, fonts)
+              : viewer.savedOverview(window.step, windowWorkPixels);
+        if (!result.ok) {
+          post(failed(request, result.error), []);
+          return;
+        }
+
+        const images = Array.isArray(result.value) ? result.value : [result.value];
+        post(
+          { id: request.id, type: 'windowRendered', images, milliseconds: performance.now() - start },
+          images.map((image) => image.pixels.buffer)
+        );
+        return;
+      }
       case 'render': {
         const key = renderKey(request.settings, request.visibility);
         const reused = prepared.get(key);
@@ -159,7 +208,9 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
 
       case 'detectBlending': {
         releasePrepared();
-        const detection = detectBlending(viewer, request.settings, request.visibility);
+        const detection = windowed
+          ? { linearBlending: null, textGamma: null, differing: { encoded: null, linear: null, otherTextGamma: null } }
+          : detectBlending(viewer, request.settings, request.visibility);
         post({ id: request.id, type: 'blending', detection }, []);
         return;
       }
@@ -190,7 +241,21 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
         }
 
         // Adjustment and group records hold no pixels; their failure is part of the reply, not of the request.
-        const pixels = viewer.layerPixels(request.index);
+        const bounds = detail.value.properties.bounds;
+        const mask = detail.value.mask;
+        const rectangles =
+          mask && !('error' in mask) ? [bounds, mask.rect, ...(mask.real ? [mask.real.rect] : [])] : [bounds];
+        const previewPixels = rectangles.reduce(
+          (area, rect) => area + Math.max(0, rect.right - rect.left) * Math.max(0, rect.bottom - rect.top),
+          0
+        );
+        const pixels =
+          windowed && (previewPixels > windowWorkPixels || (mask && 'error' in mask))
+            ? {
+                ok: false as const,
+                error: { kind: 'unsupported' as const, message: 'This layer is too large for a whole-layer preview.' }
+              }
+            : viewer.layerPixels(request.index);
         const transfer = pixels.ok
           ? [pixels.value.pixels.buffer, ...pixels.value.masks.map((mask) => mask.values.buffer)]
           : [];

@@ -16,6 +16,12 @@
   }
 }
 
+.status[data-windowed='true'] {
+  height: 132px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
 .error {
   color: #ff9b8f;
 }

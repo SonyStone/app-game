@@ -10,6 +10,8 @@ import type {
   PsdLayerPixels,
   PsdOpenAnswers,
   PsdOpening,
+  PsdRegionPixels,
+  PsdRegionRect,
   PsdRenderSettings,
   PsdStates,
   PsdTextSupport
@@ -32,6 +34,14 @@ export type PsdRequest =
       settings: PsdRenderSettings;
       /** Visibility overrides as `[layer record index, visible]`. */
       visibility: [number, boolean][];
+    }
+  | {
+      id: number;
+      type: 'renderWindow';
+      document: number;
+      settings: PsdRenderSettings;
+      visibility: [number, boolean][];
+      window: WindowRequest;
     }
   | { id: number; type: 'merged'; document: number }
   | { id: number; type: 'difference'; document: number; render: number }
@@ -62,6 +72,7 @@ export type PsdReply =
       opening: PsdOpening;
     }
   | { id: number; type: 'rendered'; render: RenderedPixels }
+  | { id: number; type: 'windowRendered'; images: PsdRegionPixels[]; milliseconds: number }
   | { id: number; type: 'merged'; image: PsdImage }
   | { id: number; type: 'difference'; difference: PsdDifference }
   | { id: number; type: 'blending'; detection: BlendingDetection }
@@ -99,6 +110,8 @@ export type RenderedPixels = PsdImage & {
   depth: 8 | 16 | 32;
   milliseconds: number;
   approximations: string[];
+  /** Present for a viewport surface or overview; its pixels map back into document space at this stride. */
+  window?: Pick<PsdRegionPixels, 'left' | 'top' | 'step' | 'strategy' | 'source' | 'exactToLayerRender'>;
 };
 
 /**
@@ -109,3 +122,17 @@ export type WorkerFailure = PsdFailure | { kind: 'stale' | 'superseded'; message
 
 /** A value or a failure, as the worker reports parts of a reply that may fail on their own. */
 export type PsdResultOf<T> = { ok: true; value: T } | { ok: false; error: WorkerFailure };
+
+/** Bounded rendering operations. Saved pixels are only a temporary first frame. */
+export type WindowRequest =
+  | { kind: 'regions'; rectangles: PsdRegionRect[] }
+  | { kind: 'overview'; step: number }
+  | { kind: 'saved'; step: number };
+
+/** Above this canvas size, avoid whole-document recovery, rendering and comparison allocations. */
+export function requiresWindowedRendering(size: { width: number; height: number }): boolean {
+  return size.width * size.height > 16_777_216 || size.width > 16_384 || size.height > 16_384;
+}
+
+/** At most four million work pixels per window call, including conservative spatial fallbacks. */
+export const windowWorkPixels = 4_194_304;

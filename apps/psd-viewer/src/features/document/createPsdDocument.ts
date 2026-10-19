@@ -1,6 +1,7 @@
 import type { PsdOpenAnswers, PsdRenderSettings } from '@app-game/psd/viewer';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 import type { OpenedPsd, PsdClient, PsdResultOf } from '../psd-worker';
+import { requiresWindowedRendering } from '../psd-worker/protocol';
 
 /**
  * A file to open: its name for display, how to read its bytes, rendering settings it was captured with, and the
@@ -46,7 +47,9 @@ export function createPsdRender(
     const document = opened();
     const current = settings();
     const overrides = visibility();
-    return document?.ok ? client.render(document.value.document, current, overrides) : undefined;
+    return document?.ok && !requiresWindowedRendering(document.value.info)
+      ? client.render(document.value.document, current, overrides)
+      : undefined;
   });
 }
 

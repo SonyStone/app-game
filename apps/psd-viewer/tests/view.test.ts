@@ -15,7 +15,7 @@ it('zooms about a point that stays over the same image pixel, within limits', ()
   // Image pixel (50, 50) is under the point before and after.
   expect([50 * view.scale + view.x, 50 * zoomed.scale + zoomed.x]).toEqual([110, 110]);
   expect(clampScale(1000)).toBe(64);
-  expect(clampScale(0)).toBe(1 / 64);
+  expect(clampScale(0)).toBe(1 / 65536);
   expect(panView(view, { x: 5, y: -5 })).toEqual({ scale: 2, x: 15, y: 15 });
 });
 

@@ -92,7 +92,19 @@ export function createViewport(
     return `translate(${x}px, ${y}px) scale(${scale})`;
   };
 
-  return { setElement, surface, transform, view, percent, isFitted, zoomIn, zoomOut, fit, actualSize };
+  return {
+    setElement,
+    surface,
+    transform,
+    view,
+    size: () => ({ width: size.width ?? 0, height: size.height ?? 0 }),
+    percent,
+    isFitted,
+    zoomIn,
+    zoomOut,
+    fit,
+    actualSize
+  };
 }
 
 /** The factor of one zoom button press. */
