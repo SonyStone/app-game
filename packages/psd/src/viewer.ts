@@ -4,6 +4,8 @@
 import type {
   PsdFontLibrary as FontLibraryHandle,
   PsdDocumentHandle,
+  PsdRegionPixels as RegionPixels,
+  PsdRegionRect as RegionRect,
   RenderedImage
 } from '../wasm-viewer/photoshop_psd_viewer.js';
 
@@ -195,6 +197,32 @@ export type PsdViewerDocument = {
     visibility?: Iterable<readonly [number, boolean]>,
     fonts?: PsdFontLibrary
   ): PsdResult<PsdRender>;
+  /** Renders one in-canvas rectangle. Pixels and metadata own their storage; no dispose call is needed. */
+  renderRegion(
+    rectangle: PsdRegionRect,
+    settings: PsdWindowSettings,
+    visibility?: Iterable<readonly [number, boolean]>,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdRegionPixels>;
+  /** Renders 1 to 256 rectangles in one snapshot. Their combined area must fit maxWorkPixels. */
+  renderRegions(
+    rectangles: PsdRegionRect[],
+    settings: PsdWindowSettings,
+    visibility?: Iterable<readonly [number, boolean]>,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdRegionPixels[]>;
+  /** Samples the fresh layer render at (step*x, step*y). Step must be a positive integer. */
+  renderOverview(
+    step: number,
+    settings: PsdWindowSettings,
+    visibility?: Iterable<readonly [number, boolean]>,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdRegionPixels>;
+  /**
+   * Samples the potentially stale saved composite, ignoring render settings and edits. Use only as a temporary
+   * first frame, replacing it with a fresh layer render. Zero uses the WASM default work limit.
+   */
+  savedOverview(step: number, maxWorkPixels?: number): PsdResult<PsdRegionPixels>;
   /** The fonts the document's type layers use and whether `fonts` holds each (none when omitted). */
   fonts(fonts?: PsdFontLibrary): PsdResult<PsdDocumentFonts>;
   /**
@@ -263,6 +291,18 @@ export type PsdRenderSettings = {
    */
   state?: PsdStateChoice | null;
 };
+
+/** A nonempty integer rectangle inside the document canvas. */
+export type PsdRegionRect = RegionRect;
+
+/** Transferable RGBA8 with document origin, sampling stride, allocation strategy and fidelity metadata. */
+export type PsdRegionPixels = RegionPixels;
+
+/**
+ * Window rendering settings. The work limit defaults to 16,777,216 pixels and bounds individual allocations and batch
+ * output, not total memory. Spatial dependencies exceeding it fail as unsupported before a full-canvas allocation.
+ */
+export type PsdWindowSettings = PsdRenderSettings & { maxWorkPixels?: number };
 
 /** A saved state to render: a frame or a layer comp by its persistent ID. */
 export type PsdStateChoice = { frame: number } | { comp: number };
@@ -705,6 +745,36 @@ function makeViewerDocument(
       };
       images.set(render, image);
       return { ok: true, value: render };
+    },
+    renderRegion(rectangle, settings, visibility = [], fonts) {
+      const { left, top, width, height } = rectangle;
+      return open
+        ? attempt(() =>
+            handle.renderRegion(
+              left,
+              top,
+              width,
+              height,
+              { ...settings, visibility: [...visibility] },
+              libraryOf(fonts)
+            )
+          )
+        : closed();
+    },
+    renderRegions(rectangles, settings, visibility = [], fonts) {
+      return open
+        ? attempt(() =>
+            handle.renderRegions(rectangles, { ...settings, visibility: [...visibility] }, libraryOf(fonts))
+          )
+        : closed();
+    },
+    renderOverview(step, settings, visibility = [], fonts) {
+      return open
+        ? attempt(() => handle.renderOverview(step, { ...settings, visibility: [...visibility] }, libraryOf(fonts)))
+        : closed();
+    },
+    savedOverview(step, maxWorkPixels = 0) {
+      return open ? attempt(() => handle.savedOverview(step, maxWorkPixels)) : closed();
     },
     fonts(fonts) {
       return open ? attempt(() => handle.documentFonts(libraryOf(fonts)) as PsdDocumentFonts) : closed();
