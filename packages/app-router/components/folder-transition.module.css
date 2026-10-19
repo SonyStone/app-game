@@ -1,0 +1,25 @@
+/* Set on the root element during a folder morph, so these view transition pseudo-elements stay scoped. */
+.morphing {
+  &::view-transition-group(folder) {
+    animation-duration: 480ms;
+    animation-timing-function: cubic-bezier(0.2, 0.9, 0.1, 1);
+  }
+
+  /* Keeps the morphing pictures inside the morphing box. */
+  &::view-transition-image-pair(folder) {
+    overflow: clip;
+  }
+
+  /* The tile and the panel differ in shape: fill the morphing box from the top instead of stretching. */
+  &::view-transition-old(folder),
+  &::view-transition-new(folder) {
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+  }
+
+  &::view-transition-old(root),
+  &::view-transition-new(root) {
+    animation-duration: 300ms;
+  }
+}

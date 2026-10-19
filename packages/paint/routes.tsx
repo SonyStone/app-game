@@ -1,4 +1,4 @@
-import { Thumbnail, type Routes } from '@app-game/app-router';
+import { FolderIndex, Thumbnail, type FolderGroups, type Routes } from '@app-game/app-router';
 import multitouchThumbnail from '@app-game/hammer-examples/thumbnail.png';
 import { featureDemos, paintVariants, type PaintVariant } from '@app-game/paint/variants';
 import { Ripple } from '@app-game/ui-components/ripple';
@@ -76,12 +76,6 @@ export const restRoutes: Routes[] = [
     component: lazy(() => import('./paint-ogl-1/paint-2'))
   },
   {
-    path: '/paint-app',
-    name: 'paint app [WIP]',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./paint-app/paint-app'))
-  },
-  {
     path: '/lasso-select-example',
     name: 'Lasso Select Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
@@ -135,9 +129,7 @@ export const restRoutes: Routes[] = [
     path: '/puck-gallery',
     name: 'Paint · Puck gallery',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() =>
-      import('@app-game/paint/puck-gallery').then(({ PuckGallery }) => ({ default: PuckGallery }))
-    )
+    component: lazy(() => import('@app-game/paint/puck-gallery').then(({ PuckGallery }) => ({ default: PuckGallery })))
   },
   {
     path: '/trigonometry',
@@ -159,6 +151,17 @@ export const restRoutes: Routes[] = [
   }
 ];
 
+/** The Paint folder's pages: whole Paint programs first, then the parts and experiments they are built from. */
+export const paintFolderGroups: FolderGroups = [
+  { title: 'Variants', description: 'one drawing, different UIs', routes: variantRoutes },
+  { title: 'Component canvas', description: 'UI parts side by side, to choose', routes: componentCanvasRoutes },
+  { title: 'Feature demos', description: 'one feature each, on its own drawing', routes: demoRoutes },
+  { title: 'Renderer', description: 'the WebGL wrapper', routes: rendererRoutes },
+  { title: 'Brush engine', description: 'brushes, colours, sizes, strokes', routes: brushEngineRoutes },
+  { title: 'Pointer events', description: 'mouse, touch and stylus input', routes: pointerEventsRoutes },
+  { title: 'Other', description: 'undo, saving and experiments', routes: restRoutes }
+];
+
 export const paintRoutes: Routes = {
   path: '/paint',
   Preview: (props) => (
@@ -177,7 +180,7 @@ export const paintRoutes: Routes = {
   children: [
     {
       path: '/',
-      component: lazy(() => import('./index'))
+      component: FolderIndex
     },
     ...variantRoutes,
     ...componentCanvasRoutes,
@@ -194,8 +197,6 @@ function variantRoute(variant: PaintVariant, prefix: string): Routes {
     path: `/${variant.id}`,
     name: `${prefix} · ${variant.name}`,
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() =>
-      variant.load().then((Variant) => ({ default: () => <Variant experimentsHref="/paint" /> }))
-    )
+    component: lazy(() => variant.load().then((Variant) => ({ default: () => <Variant experimentsHref="/paint" /> })))
   };
 }

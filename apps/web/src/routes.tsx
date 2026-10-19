@@ -26,7 +26,7 @@ import { webglExamplesRoute } from '@app-game/webgl-examples/routes';
 import { webgpuRoutes } from '@app-game/webgpu-examples/routes';
 import { useNavigate } from '@solidjs/router';
 import { lazy, onSettled } from 'solid-js';
-import HomePage from './home-page';
+import HomePage from './home/home-page';
 import wireframeThumbnail from './thumbnail/wireframe-thumbnail.png?url';
 
 export const routes: Routes[] = [
@@ -98,15 +98,6 @@ export const routes: Routes[] = [
   escyRoutes,
   browserAtlasRoutes,
   {
-    path: '/wip',
-    Preview: () => (
-      <div class="rounded-2 flex flex-col place-content-center place-items-center border-e-15 border-slate-200 p-2">
-        <h2 class="text-4xl">WIP</h2>
-        <span class="text-center">And generally not interesting stuff</span>
-      </div>
-    )
-  },
-  {
     path: '/tanki',
     name: 'Tanki',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
@@ -131,18 +122,6 @@ export const routes: Routes[] = [
     component: lazy(() => import('@app-game/excalibur-examples'))
   },
   {
-    path: '/babylon',
-    name: 'Babylon.js',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@app-game/babylonjs-examples/babylon-example'))
-  },
-  {
-    path: '/game-ecs',
-    name: 'Game ECS',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./game-ecs/index'))
-  },
-  {
     path: '/gpu-text-rendering',
     name: 'GPU Text Rendering',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
@@ -159,12 +138,6 @@ export const routes: Routes[] = [
     name: 'ldtk-ts example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@app-game/ldtk-ts-examples/example'))
-  },
-  {
-    path: '/game-shaders-for-beginners',
-    name: '[WIP] Game Shaders For Beginners',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@app-game/game-shaders-for-beginners/game-shaders-for-beginners'))
   },
   {
     path: '/webxr-vr-teleport',
@@ -189,30 +162,6 @@ export const routes: Routes[] = [
     name: 'Page Scroll Animation',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@app-game/gsap-examples/page-scroll-animation/page-scroll-animation'))
-  },
-  {
-    path: '/piecs-performance',
-    name: 'piecs performance',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@app-game/piecs-examles/performance/performance'))
-  },
-  {
-    path: '/litegraph',
-    name: '[WIP] litegraph',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@app-game/litegraph-examples/litegraph'))
-  },
-  {
-    path: '/litegraph/first-project',
-    name: 'litegraph First project',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@app-game/litegraph-examples/first-project/first-project'))
-  },
-  {
-    path: '/svg-editor',
-    name: '[WIP] SVG Editor',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@app-game/svg-editor'))
   },
   {
     path: '/:any',

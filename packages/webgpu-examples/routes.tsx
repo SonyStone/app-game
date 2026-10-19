@@ -1,4 +1,4 @@
-import { Navigation, Thumbnail, type Routes } from '@app-game/app-router';
+import { FolderIndex, Thumbnail, type Routes } from '@app-game/app-router';
 import { Ripple } from '@app-game/ui-components/ripple';
 
 import { lazy } from 'solid-js';
@@ -53,12 +53,7 @@ export const webgpuRoutes: Routes = {
   children: [
     {
       path: '/',
-      component: () => (
-        <>
-          <div class="flex w-full place-content-center place-items-center bg-blue-100">WebGPU Examples</div>
-          <Navigation routes={routes} parentPath="." />
-        </>
-      )
+      component: FolderIndex
     },
     ...routes
   ]

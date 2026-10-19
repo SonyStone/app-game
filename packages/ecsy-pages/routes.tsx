@@ -1,4 +1,4 @@
-import { Navigation, SectionTitle, Thumbnail, type Routes } from '@app-game/app-router';
+import { FolderIndex, SectionTitle, Thumbnail, type Routes } from '@app-game/app-router';
 import { Ripple } from '@app-game/ui-components/ripple';
 
 import { lazy } from 'solid-js';
@@ -48,7 +48,7 @@ export const escyRoutes: Routes = {
   children: [
     {
       path: '/',
-      component: () => <Navigation routes={routes} parentPath="." />
+      component: FolderIndex
     },
     ...routes
   ]

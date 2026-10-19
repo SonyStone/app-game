@@ -1,4 +1,4 @@
-import { Navigation } from '@app-game/app-router/components/navigation';
+import { FolderIndex } from '@app-game/app-router';
 import { SectionTitle } from '@app-game/app-router/components/section-title';
 import { Thumbnail } from '@app-game/app-router/components/thumbnail';
 import { Routes } from '@app-game/app-router/routes.interface';
@@ -40,7 +40,7 @@ export const twglRoutes: Routes = {
   children: [
     {
       path: '/',
-      component: () => <Navigation routes={routes} parentPath="." />
+      component: FolderIndex
     },
     ...routes
   ]

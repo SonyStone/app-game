@@ -1,7 +1,7 @@
-import { Thumbnail, type Routes } from '@app-game/app-router';
+import { FolderIndex, Thumbnail, type Routes } from '@app-game/app-router';
 import { Ripple } from '@app-game/ui-components/ripple';
 
-import { For, lazy } from 'solid-js';
+import { lazy } from 'solid-js';
 import instancingWithUBOandVAOThumbnail from './instancing-with-ubo-and-vao/image.png?url';
 import tiledMaphumbnail from './tiled-map/image.png?url';
 
@@ -110,14 +110,7 @@ export const webglExamplesRoute: Routes = {
   children: [
     {
       path: '/',
-      component: () => (
-        <>
-          <div class="flex w-full place-content-center place-items-center bg-blue-100">WebGL Examples</div>
-          <div class="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-4 p-4">
-            <For each={routes}>{({ Preview }) => <Preview />}</For>
-          </div>
-        </>
-      )
+      component: FolderIndex
     },
     ...routes
   ]

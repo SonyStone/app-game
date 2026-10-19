@@ -380,9 +380,6 @@ importers:
       happy-dom:
         specifier: ^20.9.0
         version: 20.9.0
-      litegraph.js:
-        specifier: ^0.7.18
-        version: 0.7.18
       mediainfo.js:
         specifier: ^0.3.7
         version: 0.3.7
@@ -421,7 +418,7 @@ importers:
         version: 0.11.4
       unocss-preset-animations:
         specifier: ^1.3.0
-        version: 1.3.0(@unocss/preset-wind3@66.6.8)(unocss@66.6.8(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4)))
+        version: 1.3.0(@unocss/preset-wind3@66.6.8)(unocss@66.6.8(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4)))
       vite-plugin-glsl:
         specifier: 1.6.0
         version: 1.6.0(@rollup/pluginutils@5.3.0(rollup@4.60.4))(esbuild@0.28.0)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
@@ -1359,9 +1356,6 @@ importers:
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../../packages/app-router
-      '@app-game/babylonjs-examples':
-        specifier: workspace:*
-        version: link:../../packages/babylonjs-examples
       '@app-game/browser-atlas':
         specifier: workspace:*
         version: link:../browser-atlas
@@ -1380,9 +1374,6 @@ importers:
       '@app-game/folder-tabs':
         specifier: workspace:*
         version: link:../folder-tabs
-      '@app-game/game-shaders-for-beginners':
-        specifier: workspace:*
-        version: link:../../packages/game-shaders-for-beginners
       '@app-game/gpu-text-rendering':
         specifier: workspace:*
         version: link:../gpu-text-rendering
@@ -1398,9 +1389,6 @@ importers:
       '@app-game/ldtk-ts-examples':
         specifier: workspace:*
         version: link:../../packages/ldtk-ts-examples
-      '@app-game/litegraph-examples':
-        specifier: workspace:*
-        version: link:../../packages/litegraph-examples
       '@app-game/math-examples':
         specifier: workspace:*
         version: link:../../packages/math-examples
@@ -1419,9 +1407,6 @@ importers:
       '@app-game/phaser-examples':
         specifier: workspace:*
         version: link:../../packages/phaser-examples
-      '@app-game/piecs-examles':
-        specifier: workspace:*
-        version: link:../../packages/piecs-examles
       '@app-game/pixijs-examples':
         specifier: workspace:*
         version: link:../../packages/pixijs-examples
@@ -1449,9 +1434,6 @@ importers:
       '@app-game/spector':
         specifier: workspace:*
         version: link:../../packages/spector
-      '@app-game/svg-editor':
-        specifier: workspace:*
-        version: link:../../packages/svg-editor
       '@app-game/tanki':
         specifier: workspace:*
         version: link:../../packages/tanki
@@ -1485,6 +1467,13 @@ importers:
       '@app-game/webgpu-examples':
         specifier: workspace:*
         version: link:../../packages/webgpu-examples
+      '@tabler/icons':
+        specifier: 'catalog:'
+        version: 3.34.1
+    devDependencies:
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.60.0
 
   packages/abr-brush:
     dependencies:
@@ -1586,14 +1575,15 @@ importers:
       '@app-game/utils':
         specifier: workspace:*
         version: link:../utils
-
-  packages/babylonjs-examples: {}
-
-  packages/bevy: {}
-
-  packages/bevy-examples: {}
-
-  packages/bitecs: {}
+      '@solid-primitives/event-listener':
+        specifier: 'catalog:'
+        version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
+      '@solid-primitives/media':
+        specifier: 'catalog:'
+        version: 4.0.0-next.2(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
+      '@solid-primitives/timer':
+        specifier: 'catalog:'
+        version: 1.4.5-next.1(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
 
   packages/brush-preview:
     dependencies:
@@ -1742,8 +1732,6 @@ importers:
         specifier: workspace:*
         version: link:../utils
 
-  packages/game-shaders-for-beginners: {}
-
   packages/gsap:
     dependencies:
       '@app-game/film-annotation-player':
@@ -1784,27 +1772,11 @@ importers:
 
   packages/ldtk-ts-examples: {}
 
-  packages/lil-gui: {}
-
-  packages/litegraph: {}
-
-  packages/litegraph-examples:
-    dependencies:
-      '@app-game/litegraph':
-        specifier: workspace:*
-        version: link:../litegraph
-
   packages/math:
     dependencies:
       '@app-game/utils':
         specifier: workspace:*
         version: link:../utils
-
-  packages/math-2:
-    dependencies:
-      '@app-game/math':
-        specifier: workspace:*
-        version: link:../math
 
   packages/math-examples:
     dependencies:
@@ -2042,8 +2014,6 @@ importers:
 
   packages/penner-easing-equations: {}
 
-  packages/phaser: {}
-
   packages/phaser-examples:
     dependencies:
       '@app-game/app-router':
@@ -2055,14 +2025,6 @@ importers:
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
-
-  packages/piecs: {}
-
-  packages/piecs-examles:
-    dependencies:
-      '@app-game/piecs':
-        specifier: workspace:*
-        version: link:../piecs
 
   packages/pixijs-examples:
     dependencies:
@@ -2142,8 +2104,6 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.6(@types/node@25.8.0)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
-
-  packages/rollup-plugin-svg-font: {}
 
   packages/sequence-editor:
     dependencies:
@@ -2496,15 +2456,6 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.6(@types/node@25.8.0)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
-
-  packages/svg-editor:
-    dependencies:
-      '@app-game/components':
-        specifier: workspace:*
-        version: link:../components
-      '@app-game/utils':
-        specifier: workspace:*
-        version: link:../utils
 
   packages/tanki:
     dependencies:
@@ -6471,9 +6422,6 @@ packages:
     resolution: {integrity: sha512-NXYBzinNrblfraPGyrbPoD19C1h9lfI/1mzgWYvXUTe414Gz/X1FD2XBZSZM7rRTrMA8JL3OtAaGifrIKhQ5yQ==}
     engines: {node: '>= 12.0.0'}
 
-  litegraph.js@0.7.18:
-    resolution: {integrity: sha512-1WEwjOO58j4FcLX8DvsuMXM371MEq4Y+8pBr3q2pBhJ9nDkwBtBd9Gj6bxArBKhW6i42bSOyv9ybeuez6NAxoQ==}
-
   locate-path@6.0.0:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
     engines: {node: '>=10'}
@@ -9179,9 +9127,9 @@ snapshots:
   '@oxc-parser/binding-openharmony-arm64@0.124.0':
     optional: true
 
-  '@oxc-parser/binding-wasm32-wasi@0.124.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
+  '@oxc-parser/binding-wasm32-wasi@0.124.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)':
     dependencies:
-      '@napi-rs/wasm-runtime': 1.1.6(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      '@napi-rs/wasm-runtime': 1.1.6(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
     transitivePeerDependencies:
       - '@emnapi/core'
       - '@emnapi/runtime'
@@ -10363,11 +10311,11 @@ snapshots:
       '@unocss/core': 66.6.8
       magic-string: 0.30.21
 
-  '@unocss/transformer-attributify-jsx@66.6.8(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
+  '@unocss/transformer-attributify-jsx@66.6.8(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)':
     dependencies:
       '@unocss/core': 66.6.8
-      oxc-parser: 0.124.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
-      oxc-walker: 0.7.0(oxc-parser@0.124.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))
+      oxc-parser: 0.124.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
+      oxc-walker: 0.7.0(oxc-parser@0.124.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3))
     transitivePeerDependencies:
       - '@emnapi/core'
       - '@emnapi/runtime'
@@ -11762,8 +11710,6 @@ snapshots:
       lightningcss-win32-arm64-msvc: 1.32.0
       lightningcss-win32-x64-msvc: 1.32.0
 
-  litegraph.js@0.7.18: {}
-
   locate-path@6.0.0:
     dependencies:
       p-locate: 5.0.0
@@ -12222,7 +12168,7 @@ snapshots:
       object-keys: 1.1.1
       safe-push-apply: 1.0.0
 
-  oxc-parser@0.124.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0):
+  oxc-parser@0.124.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3):
     dependencies:
       '@oxc-project/types': 0.124.0
     optionalDependencies:
@@ -12242,7 +12188,7 @@ snapshots:
       '@oxc-parser/binding-linux-x64-gnu': 0.124.0
       '@oxc-parser/binding-linux-x64-musl': 0.124.0
       '@oxc-parser/binding-openharmony-arm64': 0.124.0
-      '@oxc-parser/binding-wasm32-wasi': 0.124.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      '@oxc-parser/binding-wasm32-wasi': 0.124.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
       '@oxc-parser/binding-win32-arm64-msvc': 0.124.0
       '@oxc-parser/binding-win32-ia32-msvc': 0.124.0
       '@oxc-parser/binding-win32-x64-msvc': 0.124.0
@@ -12250,10 +12196,10 @@ snapshots:
       - '@emnapi/core'
       - '@emnapi/runtime'
 
-  oxc-walker@0.7.0(oxc-parser@0.124.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)):
+  oxc-walker@0.7.0(oxc-parser@0.124.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)):
     dependencies:
       magic-regexp: 0.10.0
-      oxc-parser: 0.124.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      oxc-parser: 0.124.0(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
 
   p-limit@3.1.0:
     dependencies:
@@ -13130,13 +13076,13 @@ snapshots:
 
   universalify@2.0.1: {}
 
-  unocss-preset-animations@1.3.0(@unocss/preset-wind3@66.6.8)(unocss@66.6.8(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))):
+  unocss-preset-animations@1.3.0(@unocss/preset-wind3@66.6.8)(unocss@66.6.8(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))):
     dependencies:
-      unocss: 66.6.8(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
+      unocss: 66.6.8(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
     optionalDependencies:
       '@unocss/preset-wind3': 66.6.8
 
-  unocss@66.6.8(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4)):
+  unocss@66.6.8(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4)):
     dependencies:
       '@unocss/cli': 66.6.8
       '@unocss/core': 66.6.8
@@ -13150,7 +13096,7 @@ snapshots:
       '@unocss/preset-wind': 66.6.8
       '@unocss/preset-wind3': 66.6.8
       '@unocss/preset-wind4': 66.6.8
-      '@unocss/transformer-attributify-jsx': 66.6.8(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      '@unocss/transformer-attributify-jsx': 66.6.8(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
       '@unocss/transformer-compile-class': 66.6.8
       '@unocss/transformer-directives': 66.6.8
       '@unocss/transformer-variant-group': 66.6.8

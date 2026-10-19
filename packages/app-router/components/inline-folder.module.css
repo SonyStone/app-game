@@ -1,0 +1,207 @@
+/*
+ * A folder opened in place on the start page, dark in the folder tile's colour so tiles inside read as on
+ * a dark start screen. Its colour runs edge to edge of the screen, while its content keeps exactly the
+ * width of the start page's grid, so the tiles inside fall on the same columns as the tiles outside. The
+ * percentages are of that grid's width.
+ *
+ * Poster dressing matches the start page in light ink on the folder's colour: column guides, a header band
+ * with hatching and registration squares, dashed group rules with crosshairs.
+ */
+.panel {
+  --tile: oklch(0.36 0.07 var(--tile-hue));
+  --guide: oklch(1 0 0 / 0.1);
+  --rule: oklch(1 0 0 / 0.22);
+  --ink: oklch(1 0 0 / 0.6);
+  --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+
+  color-scheme: dark;
+  position: relative;
+  box-sizing: border-box;
+  margin: 0 calc(50% - 50vw);
+  padding: 28px calc(50vw - 50%) 40px;
+  background: var(--tile);
+  color: white;
+
+  /* Registration squares in the margins, level with the header, where wide screens have room. */
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    top: 52px;
+    display: none;
+    width: 8px;
+    height: 8px;
+    background: white;
+    translate: 0 -50%;
+  }
+
+  &::before {
+    left: 14px;
+  }
+
+  &::after {
+    right: 14px;
+  }
+
+  @media (width >= 1300px) {
+    &::before,
+    &::after {
+      display: block;
+    }
+  }
+}
+
+.muted {
+  --tile: oklch(0.34 0.01 var(--tile-hue));
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(28px, 4.5vw, 48px);
+  font-weight: 300;
+  line-height: 1.1;
+}
+
+.bandCount {
+  font: 12px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.hatch {
+  flex: 1;
+  align-self: stretch;
+  min-width: 40px;
+  margin: 6px 0;
+  background: repeating-linear-gradient(-45deg, var(--rule) 0 1px, transparent 1px 7px);
+}
+
+.close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: oklch(1 0 0 / 0.12);
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+
+  &:hover {
+    background: oklch(1 0 0 / 0.2);
+  }
+
+  &:focus-visible {
+    outline: 3px solid white;
+    outline-offset: 2px;
+  }
+
+  svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+/* The content box is the grid's width exactly, so it hosts the column guides and the group rules. */
+.content {
+  position: relative;
+  container-type: inline-size;
+}
+
+/* One guide per tile column; the column count follows the tile grid's breakpoints. */
+.guides {
+  --cols: 4;
+
+  position: absolute;
+  inset: -12px 0 -20px;
+  border-right: 1px solid var(--guide);
+  background: linear-gradient(to right, var(--guide) 1px, transparent 1px) 0 0 / calc(100% * 8 / (8 * var(--cols) - 1))
+    100%;
+  pointer-events: none;
+
+  @container (width >= 560px) {
+    --cols: 8;
+  }
+
+  @container (width >= 1000px) {
+    --cols: 12;
+  }
+
+  @container (width >= 1500px) {
+    --cols: 16;
+  }
+}
+
+/* A group after the first opens with a dashed rule across the screen, with crosshairs on the outer guides. */
+.section {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+
+  & + &::before {
+    content: '';
+    position: absolute;
+    top: -22px;
+    left: calc(50% - 50vw);
+    width: 100vw;
+    border-top: 1px dashed var(--rule);
+  }
+
+  & + &::after {
+    content: '';
+    position: absolute;
+    top: -22px;
+    left: -10px;
+    width: calc(100% + 21px);
+    height: 21px;
+    background:
+      linear-gradient(white, white) 10px 0 / 1px 100% no-repeat,
+      linear-gradient(white, white) 0 10px / 21px 1px no-repeat,
+      linear-gradient(white, white) calc(100% - 10px) 0 / 1px 100% no-repeat,
+      linear-gradient(white, white) 100% 10px / 21px 1px no-repeat;
+    opacity: 0.6;
+    translate: 0 -50%;
+  }
+}
+
+/* A group's head, as on the start page: the title, and on the right what its pages are. */
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 20px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+
+.sectionNote {
+  margin-left: auto;
+  font: 12px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
