@@ -40,7 +40,7 @@ for (const file of new Set(files.filter((file) => /\.(css|scss)$/.test(file)))) 
   const source = await readFile(filename, 'utf8').catch(() => undefined);
   if (source === undefined) continue;
   // These contain build directives or Sass mixins, not application selectors.
-  if (file === 'apps/ogl-playground/src/utilities.css' || file === 'packages/lil-gui/hover.scss') continue;
+  if (file === 'apps/ogl-playground/src/utilities.css') continue;
   if (!/\.module\.(css|scss)$/.test(file)) {
     failures.push(`${file}: application styles must use CSS Modules`);
     continue;

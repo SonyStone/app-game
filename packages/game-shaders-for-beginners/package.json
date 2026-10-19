@@ -1,9 +1,0 @@
-{
-  "name": "@app-game/game-shaders-for-beginners",
-  "version": "0.0.0",
-  "private": true,
-  "exports": {
-    "./game-shaders-for-beginners": "./game-shaders-for-beginners.tsx"
-  },
-  "type": "module"
-}

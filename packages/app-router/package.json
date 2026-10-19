@@ -4,7 +4,10 @@
   "private": true,
   "dependencies": {
     "@app-game/ui-components": "workspace:*",
-    "@app-game/utils": "workspace:*"
+    "@app-game/utils": "workspace:*",
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/media": "catalog:",
+    "@solid-primitives/timer": "catalog:"
   },
   "exports": {
     ".": "./index.ts"

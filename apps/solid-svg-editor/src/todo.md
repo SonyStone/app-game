@@ -32,6 +32,5 @@ Make the app revolve around registries and commands:
 3. Split `createViewportInteractions` into `selectTool`, `panTool`, `transformTool`, and `pathEditTool`.
 4. Turn `svg-db.ts`, `handles.ts`, and `InspectorInputs.tsx` into a capability registry.
 5. Add unit tests around `svg-model.ts`, `path-data.ts`, transforms, and command undo/redo. There are no app-local tests right now.
-6. Decide whether `packages/svg-editor` is dead legacy or a future shared core. Right now it duplicates concepts and its README marks it as GodSVG-derived exploration.
 
 Goal marked complete. Tracker reported 216,443 tokens and about 2m53s elapsed.

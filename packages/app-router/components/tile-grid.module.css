@@ -1,0 +1,351 @@
+.grid {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.group {
+  --cols: 4;
+  /* Cells and gaps fill the width exactly: width = cols × cell + (cols − 1) × cell / 7. */
+  --cell: calc(100cqw * 7 / (8 * var(--cols) - 1));
+  --gap: calc(var(--cell) / 7);
+
+  @container (width >= 560px) {
+    --cols: 8;
+  }
+
+  @container (width >= 1000px) {
+    --cols: 12;
+  }
+
+  @container (width >= 1500px) {
+    --cols: 16;
+  }
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--cell));
+  grid-auto-rows: var(--cell);
+  grid-auto-flow: row dense;
+  gap: var(--gap);
+}
+
+/* `--tile-fill` on an ancestor overrides the colour of plain tiles; folders and muted tiles keep theirs. */
+.tile {
+  --tile: var(--tile-fill, oklch(0.6 0.14 var(--tile-hue)));
+
+  position: relative;
+  overflow: hidden;
+  display: block;
+  background: var(--tile);
+  color: white;
+  text-decoration: none;
+  transform: perspective(calc(var(--cell) * 8)) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 160ms;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  animation: enter 520ms cubic-bezier(0.1, 0.9, 0.2, 1) backwards;
+
+  @supports (animation-delay: calc(sibling-index() * 1ms)) {
+    animation-delay: calc(sibling-index() * 16ms);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    transition: none;
+  }
+
+  &:hover {
+    filter: brightness(1.06);
+  }
+
+  &:focus-visible {
+    outline: 3px solid light-dark(oklch(0.2 0 0), white);
+    outline-offset: 3px;
+  }
+}
+
+.pressed {
+  transform: perspective(calc(var(--cell) * 8)) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) scale(0.96);
+  transition-duration: 90ms;
+}
+
+.small {
+  grid-column: span 1;
+  grid-row: span 1;
+}
+
+.medium {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.wide {
+  grid-column: span 4;
+  grid-row: span 2;
+}
+
+.large {
+  grid-column: span 4;
+  grid-row: span 4;
+}
+
+.hero {
+  grid-column: span 8;
+  grid-row: span 4;
+
+  @container (width < 560px) {
+    grid-column: span 4;
+  }
+}
+
+.muted {
+  --tile: oklch(0.55 0.015 var(--tile-hue));
+}
+
+.face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* A preview fills the tile; the next one slides up from the bottom and pushes the current one out. */
+.slides {
+  position: absolute;
+  inset: 0;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: translateY(100%);
+}
+
+.current {
+  transform: none;
+}
+
+.arriving {
+  animation: slideIn 900ms cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+.leaving {
+  transform: translateY(-100%);
+  animation: slideOut 900ms cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+/*
+ * Duotone-like previews, opted into with `--tile-duotone: on` on an ancestor: the picture keeps its colours
+ * but is screened with an ink (`--tile-ink`) that lifts its blacks and multiplied by a paper (`--tile-paper`)
+ * that tints its whites. Both default to the tile's own colour, darkened and paled, so a picture takes on
+ * the colour of the tile that holds it. A hovered or pressed tile fades back to its plain colours.
+ */
+.slides,
+.mini:has(> img) {
+  @container style(--tile-duotone: on) {
+    isolation: isolate;
+
+    &::before,
+    &::after {
+      content: '';
+      position: absolute;
+      z-index: 1;
+      inset: 0;
+      pointer-events: none;
+      transition: opacity 500ms;
+    }
+
+    &::before {
+      background: var(--tile-ink, oklch(from var(--tile) 0.2 calc(c * 0.6) h));
+      mix-blend-mode: screen;
+    }
+
+    &::after {
+      background: var(
+        --tile-paper,
+        light-dark(oklch(from var(--tile) 0.92 calc(c * 0.45) h), oklch(from var(--tile) 0.84 calc(c * 0.45) h))
+      );
+      mix-blend-mode: multiply;
+    }
+
+    .tile:is(:hover, .pressed) &::before,
+    .tile:is(:hover, .pressed) &::after {
+      opacity: 0;
+    }
+  }
+}
+
+/* A scrim keeps the label readable over a preview. */
+.tile:has(.slides)::after {
+  content: '';
+  position: absolute;
+  inset: 50% 0 0;
+  background: linear-gradient(transparent, oklch(0 0 0 / 0.55));
+}
+
+/*
+ * A folder is a tile filled edge to edge with a 2×2 grid of mini tiles holding its content, after Windows 10
+ * Mobile tile folders and iPadOS folders; a thin rim of the folder's colour frames them. Its label and page
+ * count float over the grid on a frosted tag in that colour, so they read over any preview.
+ */
+.tile:has(> .folder) {
+  --tile: oklch(0.42 0.09 var(--tile-hue));
+  --folder-pad: calc(var(--cell) * 0.06);
+
+  &.small {
+    --folder-pad: calc(var(--cell) * 0.05);
+  }
+
+  .label {
+    right: auto;
+    bottom: calc(var(--folder-pad) * 2);
+    left: calc(var(--folder-pad) * 2);
+    max-width: calc(100% - var(--folder-pad) * 4);
+    box-sizing: border-box;
+    padding: 0.3em 0.7em;
+    background: oklch(from var(--tile) l c h / 0.62);
+    box-shadow: 0 1px 8px oklch(0 0 0 / 0.25);
+    text-shadow: none;
+    backdrop-filter: blur(12px) saturate(1.6);
+  }
+
+  &.small .label {
+    bottom: calc(var(--folder-pad) * 1.5);
+    left: 50%;
+    max-width: calc(100% - var(--folder-pad) * 2);
+    padding: 0.2em 0.55em;
+    translate: -50%;
+  }
+}
+
+.muted:has(> .folder) {
+  --tile: oklch(0.42 0.012 var(--tile-hue));
+}
+
+.folder {
+  position: absolute;
+  inset: var(--folder-pad);
+  display: grid;
+  grid-template: 1fr 1fr / 1fr 1fr;
+  gap: var(--folder-pad);
+
+  .wide &,
+  .hero & {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* A hero folder squeezed to 4×4 on phones shows only its first four. */
+  .hero & {
+    @container (width < 560px) {
+      grid-template-columns: 1fr 1fr;
+
+      > :nth-child(n + 5) {
+        display: none;
+      }
+    }
+  }
+}
+
+.mini {
+  position: relative;
+  overflow: hidden;
+  background: oklch(0.64 0.13 calc(var(--tile-hue) + (var(--mini-index) - 1.5) * 22));
+
+  .muted & {
+    background: oklch(0.6 0.015 var(--tile-hue));
+  }
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.whole {
+  grid-area: 1 / 1 / -1 / -1;
+}
+
+.icon {
+  width: calc(var(--cell) * 0.8);
+  aspect-ratio: 1;
+  background: currentColor;
+  mask: var(--icon) center / contain no-repeat;
+
+  .small & {
+    width: calc(var(--cell) * 0.42);
+    margin-bottom: calc(var(--cell) * 0.16);
+  }
+
+  .large & {
+    width: calc(var(--cell) * 1.2);
+  }
+
+  .mini & {
+    width: 62%;
+    margin: 0;
+  }
+}
+
+.label {
+  position: absolute;
+  z-index: 1;
+  right: calc(var(--cell) * 0.12);
+  bottom: calc(var(--cell) * 0.09);
+  left: calc(var(--cell) * 0.12);
+  display: flex;
+  gap: 0.45em;
+  font-size: clamp(11px, calc(var(--cell) * 0.15), 15px);
+  font-weight: 600;
+  line-height: 1.2;
+  text-shadow: 0 1px 3px oklch(0 0 0 / 0.35);
+
+  .small & {
+    right: calc(var(--cell) * 0.08);
+    left: calc(var(--cell) * 0.08);
+    justify-content: center;
+    font-size: clamp(9px, calc(var(--cell) * 0.12), 12px);
+  }
+}
+
+.name {
+  overflow: hidden;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.count {
+  flex: none;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: perspective(600px) translateX(48px) rotateY(-24deg);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: none;
+  }
+}

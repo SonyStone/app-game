@@ -1,6 +1,0 @@
-{
-  "name": "@app-game/rollup-plugin-svg-font",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module"
-}

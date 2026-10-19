@@ -11,6 +11,7 @@ import wasm from 'vite-plugin-wasm';
 import { choicesBridge } from './apps/paint/choicesBridge';
 import { layoutsBridge } from './apps/paint/layoutsBridge';
 import { recordingBridge } from './apps/paint/recordingBridge';
+import { workspaceUpdates } from './apps/web/workspaceUpdates';
 import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
 import { vitePluginMarkdown } from './packages/vite-plugin-markdown/src';
 
@@ -63,7 +64,9 @@ export default defineConfig({
     recordingBridge(),
     // The component canvas at /paint/components saves its stars and comments through it, and its built pages.
     choicesBridge(),
-    layoutsBridge()
+    layoutsBridge(),
+    // The start page lists the projects changed last, from git.
+    workspaceUpdates()
   ],
   server: {
     port: devServerPort,
@@ -86,14 +89,12 @@ export default defineConfig({
       '@app-game/app-router': resolve(packages, 'app-router'),
       '@app-game/chroma': resolve(packages, 'chroma'),
       '@app-game/ecsy': resolve(packages, 'ecsy'),
-      '@app-game/litegraph': resolve(packages, 'litegraph'),
       '@app-game/math': resolve(packages, 'math'),
       '@app-game/math-examples': resolve(packages, 'math-examples'),
       '@app-game/ogl-examples': resolve(packages, 'ogl-examples'),
       '@app-game/paint-examples': resolve(packages, 'paint'),
       '@app-game/navigation-puck': resolve(packages, 'navigation-puck/src'),
       '@app-game/penner-easing-equations': resolve(packages, 'penner-easing-equations'),
-      '@app-game/piecs': resolve(packages, 'piecs'),
       '@app-game/spector': resolve(packages, 'spector'),
       '@app-game/solid-pixi': resolve(packages, 'solid-pixi'),
       '@app-game/solid-three': resolve(packages, 'solid-three'),
