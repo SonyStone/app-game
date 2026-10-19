@@ -62,6 +62,19 @@ test('opens a file from the picker and inspects a type layer', async ({ page }) 
   await expect(page.getByRole('region', { name: 'Image resources' })).toContainText('ICC');
 });
 
+test('shows an older Color Dodge layer as Photoshop 26 opens it, its stored opacity as Fill', async ({ page }) => {
+  await page.goto('/');
+  await page
+    .locator('input[accept=".psd,.psb"]')
+    .setInputFiles(fileURLToPath(new URL('../tests/assets/legacy-opacity.psd', import.meta.url)));
+  await settled(page);
+  await page.locator('[data-layer-index="8"]').click();
+  const detail = page.locator('[data-layer-detail="8"]');
+  await expect(detail).toContainText('Stored opacity');
+  await expect(detail).toContainText('27%, which Photoshop 26 opens as Fill in this older layer');
+  await page.screenshot({ path: test.info().outputPath('legacy-opacity.png') });
+});
+
 test('detects gamma 1.0 blending from the merged image of an opened file', async ({ page }) => {
   await page.goto('/');
   const gamma = page.getByRole('checkbox', { name: 'Blend RGB colors using gamma 1.0' });

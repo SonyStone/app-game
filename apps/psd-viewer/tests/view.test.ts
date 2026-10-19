@@ -28,6 +28,8 @@ it('lists layers top first and gathers notes, collapsed groups and records', () 
     blendMode: 'normal',
     opacity: 255,
     fill: 255,
+    transparencyShapesLayer: true,
+    legacyOpacity: null,
     visible: true,
     clipped: false,
     bounds: { top: 0, left: 0, bottom: 1, right: 1 },

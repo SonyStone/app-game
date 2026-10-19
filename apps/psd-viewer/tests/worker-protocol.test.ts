@@ -398,6 +398,26 @@ it("renders a saved layer comp and animation frame as Photoshop's saves with the
   expect(frame.pixels).toEqual(value(await client.merged(frameSaved.document)).pixels);
 });
 
+it('opens an older Color Dodge layer as Photoshop 26 does, its stored opacity as Fill', async () => {
+  const { client } = connect();
+  const legacy = value(await client.open(await testAsset('legacy-opacity.psd')));
+  const top = legacy.layers.at(-1)!;
+  expect(top).toMatchObject({
+    blendMode: 'colorDodge',
+    opacity: 255,
+    fill: 68,
+    transparencyShapesLayer: false,
+    legacyOpacity: { storedOpacity: 68, inferredVersion: 50 }
+  });
+  expect(legacy.layers[1]).toMatchObject({ opacity: 122, fill: 255, legacyOpacity: null });
+
+  // Captured with gamma 1.0 blending; the render is exact, not an approximation.
+  const render = value(await client.render(legacy.document, { ...settings, linearBlending: true }, []));
+  expect(render.approximations).toEqual([]);
+  const saved = value(await client.open(await testAsset('legacy-opacity-photoshop.psd')));
+  expect(render.pixels).toEqual(value(await client.merged(saved.document)).pixels);
+});
+
 /** A document of `tests/assets`. */
 async function testAsset(name: string): Promise<ArrayBuffer> {
   const bytes = await readFile(new URL(`assets/${name}`, import.meta.url));

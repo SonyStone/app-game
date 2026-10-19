@@ -64,7 +64,7 @@ export function RenderSettingsPanel(props: {
           <For each={interpolations}>{(choice) => <option value={choice.value}>Re-render: {choice.label}</option>}</For>
         </select>
       </label>
-      <label title="Render what the exact path refuses, listing each approximation below the canvas. RGB and Grayscale documents leave out or substitute the refused settings (each drawn by the nearest model the renderer has, or left out where it has none); 16- and 32-bit documents the depth compositor refuses render at 8 bits; Indexed, Duotone and Multichannel documents, and CMYK and Lab layers the channel compositor does not reproduce, render with every layer converted to sRGB first. Documents the exact path renders are unchanged.">
+      <label title="Render what the exact path refuses, listing each approximation below the canvas. RGB and Grayscale documents leave out or substitute the refused settings (each drawn by the nearest model the renderer has, or left out where it has none); 16- and 32-bit documents the depth compositor refuses render at their own depth where it has a model of what it refuses, otherwise at 8 bits; Indexed, Duotone and Multichannel documents, and CMYK and Lab layers the channel compositor does not reproduce, render with every layer converted to sRGB first. Documents the exact path renders are unchanged.">
         <input
           type="checkbox"
           checked={props.settings.approximate}

@@ -238,8 +238,9 @@ export type PsdRenderSettings = {
    * documents render leniently: each refused setting is drawn by the nearest model the renderer has (dithered
    * gradients undithered, out-of-range settings moved to the nearest verified ones, unverified routes taken as the
    * verified ones closest to them, a Photo Filter model), or left out or kept from its cached raster where it has none;
-   * 16-bit documents the depth compositor refuses composite at 8 bits, 32-bit ones at 8 bits with their adjustments
-   * applied to linear samples. Indexed, Duotone and Multichannel documents, and CMYK
+   * 16- and 32-bit documents the depth compositor refuses only for adjustments it has a model of composite at their own
+   * depth with those models, others at 8 bits, 32-bit ones with their adjustments applied to linear samples. Indexed,
+   * Duotone and Multichannel documents, and CMYK
    * and Lab documents whose layers the channel compositor rejects, composite with every layer converted to sRGB
    * first. Documents the exact path renders render identically with this option. Each render lists what it
    * approximated in {@link PsdRender.approximations}, including the display conversion of CMYK and Lab. Off by
@@ -457,10 +458,14 @@ export type PsdLayerNode = {
   adjustment?: string;
   /** Blend mode name such as `multiply` or `passThrough`, or the stored key when unknown. */
   blendMode: string;
-  /** 0 to 255. */
+  /** 0 to 255, as Photoshop 26 imports it and its Layers panel shows it (see `legacyOpacity`). */
   opacity: number;
-  /** Fill opacity, 0 to 255. */
+  /** Fill opacity, 0 to 255, as Photoshop 26 imports it. */
   fill: number;
+  /** "Transparency Shapes Layer", as Photoshop 26 imports it. */
+  transparencyShapesLayer: boolean;
+  /** Set when Photoshop 26 imports the stored opacity as Fill; `null` when it imports the record as stored. */
+  legacyOpacity: PsdLegacyOpacity | null;
   /** As saved. */
   visible: boolean;
   clipped: boolean;
@@ -485,6 +490,18 @@ export type PsdLayerNode = {
   children?: PsdLayerNode[];
 };
 
+/**
+ * A legacy Color Dodge, Color Burn or Difference record (its reader infers it older than version 60, with full Fill
+ * and no effects) whose stored opacity Photoshop 26 imports as Fill, at full opacity with "Transparency Shapes Layer"
+ * off. The render follows this exactly: it is not an approximation.
+ */
+export type PsdLegacyOpacity = {
+  /** The opacity byte in the file, which becomes Fill. */
+  storedOpacity: number;
+  /** The record version Photoshop's reader infers from the record's tagged blocks. */
+  inferredVersion: number;
+};
+
 /** One effect of a layer style. */
 export type PsdEffectSummary = {
   name: string;
@@ -501,8 +518,10 @@ export type PsdLayerDetail = {
   properties: {
     blendMode: string;
     blendKey: string;
+    /** Opacity and Fill as Photoshop 26 imports them, with `legacyOpacity` as in `PsdLayerNode`. */
     opacity: number;
     fill: number;
+    legacyOpacity: PsdLegacyOpacity | null;
     visible: boolean;
     clipped: boolean;
     transparencyLocked: boolean;

@@ -242,8 +242,10 @@ export class PsdDocumentHandle {
     }
     /**
      * The layer tree, bottom to top as stored: groups hold their children, also bottom to top. Each node carries
-     * the summary a layers panel shows and `notes` on what the compositor leaves out or approximates. Fails when
-     * group markers do not nest.
+     * the summary a layers panel shows and `notes` on what the compositor leaves out or approximates. Its `opacity`,
+     * `fill` and `transparencyShapesLayer` are those Photoshop 26 imports, which its Layers panel shows and the
+     * compositor uses; `legacyOpacity` is `{ storedOpacity, inferredVersion }` for a legacy record whose stored opacity
+     * it imports as Fill ([`legacy_opacity`]), `null` otherwise. Fails when group markers do not nest.
      * @returns {any}
      */
     layers() {
@@ -255,7 +257,9 @@ export class PsdDocumentHandle {
     }
     /**
      * Everything known about layer record `index`: properties, mask, vector mask, effects with their settings,
-     * adjustment settings, text, smart-object placement and contents, and the raw tagged blocks.
+     * adjustment settings, text, smart-object placement and contents, and the raw tagged blocks. The properties'
+     * opacity, Fill and `transparencyShapesLayer` are those Photoshop 26 imports, with `legacyOpacity` as in
+     * [`Self::layers`].
      * @param {number} index
      * @returns {any}
      */
@@ -286,7 +290,8 @@ export class PsdDocumentHandle {
      * channels with `composite_channels` whether or not `approximate` is set (shown through the approximate
      * conversion to sRGB, which the render's `approximations` report), Bitmap from its flattened image. With
      * `approximate`, what those refuse renders through `composite_with_report` instead: RGB and Grayscale documents
-     * leniently, 16- and 32-bit ones at 8 bits, the other color modes and the CMYK and Lab documents
+     * leniently, 16- and 32-bit ones at their depth where only modeled adjustment kernels are refused and otherwise at
+     * 8 bits, the other color modes and the CMYK and Lab documents
      * `composite_channels` rejects with their layers converted to sRGB, each approximation listed in the render's
      * `approximations`. With `typeLayers`, type layers are re-rendered from their text with the fonts of `fonts`
      * (`CompositeOptions::type_layers`): a type layer the crate does not re-render exactly, or whose font `fonts` lacks,

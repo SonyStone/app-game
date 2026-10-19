@@ -34,6 +34,12 @@ export function LayerInspector(props: { contents: LayerContents }) {
           ['Blend mode', `${properties().blendMode} (${properties().blendKey})`],
           ['Opacity', percent(properties().opacity)],
           ['Fill', percent(properties().fill)],
+          [
+            'Stored opacity',
+            properties().legacyOpacity
+              ? `${percent(properties().legacyOpacity!.storedOpacity)}, which Photoshop 26 opens as Fill in this older layer`
+              : undefined
+          ],
           ['Visible', yesNo(properties().visible)],
           ['Clipped', yesNo(properties().clipped)],
           ['Lock transparency', yesNo(properties().transparencyLocked)],
