@@ -1,14 +1,14 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
-/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
 
 /** A nonempty rectangle in document pixels, used by renderRegions. */
 export interface PsdRegionRect {
@@ -182,12 +182,16 @@ export class PsdDocumentHandle {
    * `approximations`. With `typeLayers`, type layers are re-rendered from their text with the fonts of `fonts`
    * (`CompositeOptions::type_layers`): a type layer the crate does not re-render exactly, or whose font `fonts` lacks,
    * fails the render, or with `approximate` composites its cached raster and is listed. Separately,
-   * `fonts` supplies active-face data for conservative imported-layout reporting even without `typeLayers`.
+   * `fonts` supplies active-face data for imported-layout diagnostics and bounded cached-mixer selection
+   * even with `typeLayers: false`. Pass known active PostScript names as `availableFonts` for missing-font
+   * decisions; omit an unknown inventory. This option is used only when active face bytes are supplied.
    * The host must add original active TrueType bytes with their actual TTC indices using `addActiveFace`, or
    * standalone active fonts using `add`. No system inventory is read. An empty library preserves existing
    * cached rendering and abstains from font-dependent witnesses. A partial library checks uniquely supplied
    * faces without treating absent names as missing fonts; it never certifies every imported layout as valid.
-   * Conflicts throw in strict mode; `approximate` lists them and retains the existing cached-pixel mixer.
+   * Conflicts throw in strict mode. In `approximate`, supported global-style cmap or coherent descender
+   * conflicts select ordinary document mixing and retain the cached raster and CachedRaster diagnostic.
+   * Other imports stay unresolved and keep their existing mixing and reporting.
    * Visibility overrides apply to this render only. Throws `PsdUnsupportedError` naming the
    * first setting the compositor does not reproduce.
    */
@@ -203,8 +207,9 @@ export class PsdDocumentHandle {
   states(): any;
 }
 /**
- * Host-supplied fonts for re-rendering and independent imported-layout reporting. `addActiveFace` accepts active
- * sfnt/TTC faces for reporting only; `add` also adds standalone fonts for rerasterization. Empty input preserves
+ * Host-supplied fonts for re-rendering, imported-layout diagnostics and bounded cached-mixer selection.
+ * `addActiveFace` accepts active sfnt/TTC faces without adding raster fonts; `add` also adds standalone fonts
+ * for rerasterization. Empty input preserves
  * existing cached rendering and abstains from font-dependent witnesses. Nothing is loaded from the system. One
  * library serves any number of documents: [`DocumentHandle::render`], [`DocumentHandle::document_fonts`] and
  * [`DocumentHandle::text_support`] take it by reference. Fonts share their bytes, so a render copies none.
@@ -212,13 +217,20 @@ export class PsdDocumentHandle {
 export class PsdFontLibrary {
   free(): void;
   /**
-   * Supplies an active TrueType face for imported-layout reporting only. Pass original `.ttf`/`.ttc` bytes,
-   * the actual zero-based `faceIndex` and a host source identifier `provenance`, such as a path or asset ID.
-   * Returns the face's PostScript name. This never requests rerasterization, supplies missing-font inventory,
-   * installs fonts, or changes cached-pixel arithmetic. CFF, invalid indices and unreadable/unnamed faces throw.
-   * Repeated identical bytes/index deduplicate; distinct faces under one name cause reporting to abstain.
-   * Browsers have no system font inventory. With no added data, existing renders stay admitted, and only
-   * file-decidable reports remain available. Partial input checks only uniquely resolved supplied faces.
+   * Supplies an active TrueType face for imported-layout diagnostics and bounded cached-mixer selection.
+   * Pass original `.ttf` or TrueType `.ttc`/`.otc` bytes, the actual zero-based `faceIndex`, and a host source
+   * identifier `provenance`, such as a path or asset ID. The returned PostScript name comes from the face;
+   * CSS family names cannot substitute for bytes. Preserve collection indices: Helvetica Neue regular 0,
+   * bold 1, light 7, medium 10; STHeitiSC-Light is index 1 in its original collection.
+   * Pass this library to render/renderRegion/renderOverview with `typeLayers: false`. For missing-font
+   * decisions also pass a trustworthy `availableFonts` PostScript-name inventory; omit unknown inventories.
+   * `availableFonts` is ignored without active bytes, preserving previous name-only viewer behavior.
+   * Supported RGB8 schema-7 global-style cmap or coherent descender conflicts use ordinary document mixing,
+   * retaining the cached raster and CachedRaster diagnostic. Strict rendering still refuses these conflicts.
+   * Absence of a conflict stays unresolved. Without active bytes the previous rendering behavior is preserved.
+   * This does not add raster fonts or install fonts. CFF, invalid indices and unreadable/unnamed faces throw.
+   * Repeated identical bytes/index deduplicate; distinct faces under one name abstain. Partial face input
+   * checks only uniquely resolved supplied faces and never implies absent faces are unavailable.
    */
   addActiveFace(bytes: Uint8Array, face_index: number, provenance: string): string;
   /**
@@ -231,7 +243,8 @@ export class PsdFontLibrary {
    * the same name for rerasterization, and returns its entry as [`Self::fonts`] lists it. Throws `PsdUnsupportedError` for font
    * collections (`.ttc`, `.otc`), WOFF files and fonts without a PostScript name or with outlines the crate does not
    * read, and `PsdError` for bytes that are not a readable font. The host attests this is an active face.
-   * TrueType bytes also feed imported-layout reporting independently of `typeLayers`; distinct bytes sharing
+   * TrueType bytes also feed imported-layout diagnostics and cached-mixer selection independently of
+   * `typeLayers`; distinct bytes sharing
    * a name make validation ambiguous even though the rerasterization library replaces its earlier entry.
    */
   add(bytes: Uint8Array): any;
