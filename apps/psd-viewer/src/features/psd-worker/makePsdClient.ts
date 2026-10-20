@@ -1,7 +1,6 @@
 import type {
   PsdDifference,
   PsdDocumentFonts,
-  PsdFontInfo,
   PsdImage,
   PsdInfo,
   PsdLayerDetail,
@@ -14,6 +13,7 @@ import type {
   PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
+import type { SessionFont } from '../fonts/addFontFile';
 import type {
   BlendingDetection,
   PsdReply,
@@ -174,20 +174,21 @@ export function makePsdClient(worker: PsdWorkerPort) {
   }
 
   /**
-   * Adds font files to the worker's font library, transferring their buffers; resolves with each file's font or why
+   * Adds font files to the worker's font library, transferring their buffers; resolves with each file's faces or why
    * it was refused, in order, and the library after adding.
    */
   async function addFonts(
-    fonts: ArrayBuffer[]
-  ): Promise<PsdResultOf<{ results: PsdResultOf<PsdFontInfo>[]; fonts: PsdFontInfo[] }>> {
-    const reply = await send({ type: 'addFonts', fonts }, fonts);
+    fonts: ArrayBuffer[],
+    sources?: string[]
+  ): Promise<PsdResultOf<{ results: PsdResultOf<SessionFont[]>[]; fonts: SessionFont[] }>> {
+    const reply = await send({ type: 'addFonts', fonts, sources }, fonts);
     return reply.type === 'fontsAdded'
       ? { ok: true, value: { results: reply.results, fonts: reply.fonts } }
       : failure(reply);
   }
 
   /** The fonts in the worker's font library, sorted by PostScript name. */
-  async function fonts(): Promise<PsdResultOf<PsdFontInfo[]>> {
+  async function fonts(): Promise<PsdResultOf<SessionFont[]>> {
     const reply = await send({ type: 'listFonts' });
     return reply.type === 'fonts' ? { ok: true, value: reply.fonts } : failure(reply);
   }

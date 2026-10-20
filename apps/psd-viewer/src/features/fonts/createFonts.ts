@@ -4,12 +4,13 @@ import type { OpenedPsd, PsdClient, PsdResultOf } from '../psd-worker';
 import { installedFonts, localFontAccess } from './localFonts';
 
 /**
- * Owns the fonts for re-rendering type layers from their text. The worker keeps the font library across documents;
+ * Owns fonts for imported cache mixing and re-rendering edited type layers from their text. The worker keeps the
+ * font library across documents;
  * this factory reports what the open document needs from it (`report`: its fonts with their availability, its type
  * layers), the library itself (`library`), and the re-render support of the `selected` layer (`layerSupport`, asked
  * only for type layers and again whenever fonts are added). `addFiles` and `useInstalled` add fonts and record each
  * file the library refused in `refusals`; every addition invalidates the reports. `withFonts` makes renders that
- * re-render text run again when fonts arrive.
+ * use cached rasters or re-render text run again when fonts arrive.
  */
 export function createFonts(
   client: PsdClient,
@@ -45,7 +46,13 @@ export function createFonts(
   /** Whether the document has type layers and the library holds every font they use. */
   const ready = () => {
     const current = report();
-    return Boolean(current?.ok && current.value.fonts.length && !missing().length);
+    const rasterFonts = library();
+    return Boolean(
+      current?.ok &&
+      current.value.fonts.length &&
+      rasterFonts?.ok &&
+      current.value.fonts.every((font) => rasterFonts.value.some((face) => face.name === font.name && face.raster))
+    );
   };
 
   /** Adds font files to the library; files it refuses are listed in `refusals` by name with the reason. */
@@ -58,13 +65,29 @@ export function createFonts(
     setAdding(true);
     try {
       const buffers = await Promise.all(files.map((file) => file.arrayBuffer()));
-      const added = await client.addFonts(buffers);
+      const added = await client.addFonts(
+        buffers,
+        files.map((file) => file.name)
+      );
       const refused = added.ok
         ? added.value.results.flatMap((result, index) =>
-            result.ok ? [] : [{ file: files[index].name, reason: result.error.message }]
+            result.ok
+              ? result.value.flatMap((face) =>
+                  face.validationError
+                    ? [{ file: `${files[index].name} (${face.name})`, reason: `Imported text: ${face.validationError}` }]
+                    : []
+                )
+              : [{ file: files[index].name, reason: result.error.message }]
           )
         : [{ file: files.map((file) => file.name).join(', '), reason: added.error.message }];
       setRefusals(refused);
+    } catch (error) {
+      setRefusals([
+        {
+          file: files.map((file) => file.name).join(', '),
+          reason: error instanceof Error ? error.message : String(error)
+        }
+      ]);
     } finally {
       setAdding(false);
       setRevision((current) => current + 1);
@@ -97,17 +120,14 @@ export function createFonts(
   }
 
   /**
-   * `settings` for rendering: with `typeLayers` on, reading it also tracks the library, so the render runs again with
-   * newly added fonts; renders from cached rasters do not.
+   * Tracks session font changes for both imported cache mixing and optional rerasterization. Returns a new settings
+   * snapshot after additions so memoized window renderers also invalidate. Supplied files are a partial inventory,
+   * so they never become `availableFonts` missing-font evidence.
    */
   function withFonts(settings: Accessor<PsdRenderSettings>): Accessor<PsdRenderSettings> {
     return () => {
-      const current = settings();
-      if (current.typeLayers) {
-        revision();
-      }
-
-      return current;
+      revision();
+      return { ...settings() };
     };
   }
 

@@ -250,6 +250,9 @@ function u32(value: number) {
 it('adds fonts by PostScript name and rejects what it cannot read with a clear reason', async () => {
   const library = await createFontLibrary();
   expect(library.fonts()).toEqual([]);
+  expect(library.addActiveFace(new Uint8Array(64), 0, 'invalid.ttf')).toMatchObject({
+    ok: false, error: { kind: 'invalid' }
+  });
   expect(library.add(new Uint8Array(64))).toMatchObject({ ok: false, error: { kind: 'invalid' } });
   const collection = new Uint8Array(64);
   collection.set(new TextEncoder().encode('ttcf'));
@@ -265,6 +268,9 @@ it('adds fonts by PostScript name and rejects what it cannot read with a clear r
     error: { kind: 'unsupported' }
   });
   library.free();
+  expect(library.addActiveFace(new Uint8Array(64), 0, 'closed.ttf')).toMatchObject({
+    ok: false, error: { message: 'the font library was freed' }
+  });
   expect(library.add(new Uint8Array(64))).toMatchObject({
     ok: false,
     error: { message: 'the font library was freed' }

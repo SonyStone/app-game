@@ -133,7 +133,7 @@ function strictOpening(): PsdOpening {
 }
 
 /**
- * Creates an empty font library for re-rendering type layers from their text, loading the viewer module on first use.
+ * Creates an empty font library for type rerasterization and imported cache mixing, loading WASM on first use.
  * Fonts come only from the caller: nothing is loaded from the system. One library serves any number of documents.
  */
 export async function createFontLibrary(): Promise<PsdFontLibrary> {
@@ -143,6 +143,9 @@ export async function createFontLibrary(): Promise<PsdFontLibrary> {
   const library: PsdFontLibrary = {
     add(bytes) {
       return open ? attempt(() => handle.add(asBytes(bytes)) as PsdFontInfo) : closedFailure();
+    },
+    addActiveFace(bytes, faceIndex, provenance) {
+      return open ? attempt(() => handle.addActiveFace(asBytes(bytes), faceIndex, provenance)) : closedFailure();
     },
     fonts() {
       return open ? (handle.fonts() as PsdFontInfo[]) : [];
@@ -189,8 +192,9 @@ export type PsdViewerDocument = {
   /**
    * Composites the document at its depth with `settings`. `visibility` overrides the saved visibility of layer
    * records by index for this render only. With {@link PsdRenderSettings.typeLayers}, type layers re-render from their
-   * text with `fonts` (none when omitted). The render keeps its full-depth composite for {@link difference} until
-   * disposed or the document closes.
+   * text with `fonts` (none when omitted). Active faces also supply imported cache-mixing decisions with
+   * `typeLayers: false`; an unknown active-name inventory must stay omitted. The render keeps its full-depth
+   * composite for {@link difference} until disposed or the document closes.
    */
   render(
     settings: PsdRenderSettings,
@@ -283,6 +287,12 @@ export type PsdRenderSettings = {
    */
   typeLayers: boolean;
   /**
+   * Known active PostScript-name inventory for imported missing-font decisions. Omit or use null when unknown.
+   * An empty array means known-empty. A partial list of supplied font files is not an inventory. Ignored by WASM
+   * without active face bytes; never enables rerasterization.
+   */
+  availableFonts?: readonly string[] | null;
+  /**
    * A saved layer comp or animation frame ({@link PsdViewerDocument.states}) to render instead of the document as
    * saved; visibility overrides apply over it. Exact within the frames and comps Photoshop 26's rules are verified for;
    * outside them the render fails, or with `approximate` applies the same rules and lists them. The merged image
@@ -344,17 +354,25 @@ export const photoshopDefaultSettings: PsdRenderSettings = {
 };
 
 /**
- * Fonts supplied for re-rendering type layers, by PostScript name. Adding a font of a name already present replaces
- * it. Every call is synchronous.
+ * Host-supplied fonts for type rerasterization and imported cache mixing. Adding a raster font replaces that name;
+ * distinct active faces under one name make imported validation abstain. Every call is synchronous.
  */
 export type PsdFontLibrary = {
   /**
    * Adds a TrueType or OpenType CFF font file (`.ttf`, `.otf`) under its PostScript name. Font collections (`.ttc`),
    * WOFF files, fonts without a PostScript name and outlines the renderer does not read fail as `unsupported`, other
-   * bytes as `invalid`.
+   * bytes as `invalid`. Standalone TrueType bytes also supply imported validation; `addActiveFace` preserves an
+   * explicit source identifier and supports original collection indices without adding raster fonts.
    */
   add(bytes: Uint8Array | ArrayBuffer): PsdResult<PsdFontInfo>;
-  /** The fonts added, sorted by PostScript name. */
+  /**
+   * Registers original active TrueType sfnt/TTC/OTC bytes for imported cache mixing, without adding raster fonts.
+   * Pass the original collection index and a source identifier. Validate the returned PostScript name against the
+   * intended face. CFF and invalid faces fail. Distinct same-name faces abstain; identical faces deduplicate.
+   * Use with `typeLayers: false`; partial face input never implies that other fonts are missing.
+   */
+  addActiveFace(bytes: Uint8Array | ArrayBuffer, faceIndex: number, provenance: string): PsdResult<string>;
+  /** The raster fonts added, sorted by PostScript name. */
   fonts(): PsdFontInfo[];
   /**
    * Supplies Photoshop 26.0.0's `hyph_en_US.dic`, which hyphenated paragraph text needs; other dictionaries fail as

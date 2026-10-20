@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { truncated, withChannelCompression } from '../tests/damagedPsd';
+import { fontFileFaces } from '../../../packages/psd/src/fontFile';
 import { withTopBlendKey } from '../tests/patchedPsd';
 
 const assets = new URL('../src/features/examples/assets/', import.meta.url);
@@ -195,9 +196,15 @@ test('re-renders text with a font file the user adds and matches the merged imag
   await expect(support).toHaveAttribute('data-text-support', 'refused');
   await expect(support).toContainText('font Arial-BoldMT was not supplied');
 
+  const beforeFonts = await stage(page).getAttribute('data-render-id');
+  await expect(fonts.locator('[data-text-layer="1"]')).toHaveAttribute('data-text-mixing', 'unrendered');
   await fonts.locator('input[type=file]').setInputFiles(arialBold);
+  await expect(stage(page)).not.toHaveAttribute('data-render-id', beforeFonts!);
+  await settled(page);
+  await expect(toggle).not.toBeChecked();
   await expect(fonts.locator('[data-font-status="available"]')).toHaveCount(1);
   await expect(support).toHaveAttribute('data-text-support', 'supported');
+  await expect(fonts.locator('[data-text-layer="1"]')).toHaveAttribute('data-text-mixing', 'path');
   await expect(toggle).toBeEnabled();
 
   const cached = await stage(page).getAttribute('data-render-id');
@@ -292,4 +299,117 @@ test('opens damaged files as Photoshop does, asking its prompt first', async ({ 
   await expect(refusal).toContainText('extends past its container');
   await expect(prompt).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+
+const helveticaCollection = '/System/Library/Fonts/HelveticaNeue.ttc';
+
+test('adds every TTC face for cached text and keeps them for later documents', async ({ page }) => {
+  test.skip(!existsSync(helveticaCollection), 'needs the system Helvetica Neue collection');
+  const faces = fontFileFaces(new Uint8Array(await readFile(helveticaCollection)));
+  await page.goto('/');
+  const documentPath = fileURLToPath(new URL('type-with-layer-styles.psd', assets));
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(documentPath);
+  await expect(stage(page)).toHaveAttribute('data-render-id', /\d+/);
+  await settled(page);
+  const fonts = page.getByRole('region', { name: 'Fonts' });
+  const before = await stage(page).getAttribute('data-render-id');
+  await fonts.getByLabel('Font files').setInputFiles(helveticaCollection);
+  await expect(stage(page)).not.toHaveAttribute('data-render-id', before!);
+  await settled(page);
+  const inventory = fonts.locator('header span');
+  await expect(inventory).toHaveText(`${faces.length} in library`);
+  for (const face of faces) {
+    await expect(inventory).toHaveAttribute('title', new RegExp(face.name));
+  }
+
+  await expect(fonts.getByRole('checkbox', { name: 'Re-render text' })).not.toBeChecked();
+  await expect(fonts.locator('[data-font-status="missing"]')).toHaveCount(1);
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(documentPath);
+  await expect(inventory).toHaveText(`${faces.length} in library`);
+  await settled(page);
+  await page.getByRole('button', { name: 'Difference', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Difference statistics' })).toHaveAttribute('data-mismatches', '0');
+});
+
+test('asks for installed fonts only after a click and keeps the file picker after permission is denied', async ({ page }) => {
+  await page.addInitScript(() => {
+    let calls = 0;
+    Object.defineProperty(window, '__fontQueries', { get: () => calls });
+    Object.defineProperty(window, 'queryLocalFonts', { value: async () => {
+      calls++;
+      throw new DOMException('User denied font access', 'NotAllowedError');
+    } });
+  });
+  await page.goto('/');
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(fileURLToPath(new URL('type-with-layer-styles.psd', assets)));
+  const fonts = page.getByRole('region', { name: 'Fonts' });
+  await expect(fonts).toBeVisible();
+  expect(await page.evaluate(() => Reflect.get(window, '__fontQueries'))).toBe(0);
+  await fonts.getByRole('button', { name: 'Use installed fonts' }).click();
+  await expect(fonts.getByRole('list', { name: 'Fonts not added' })).toContainText('User denied font access');
+  expect(await page.evaluate(() => Reflect.get(window, '__fontQueries'))).toBe(1);
+  await expect(fonts.getByRole('button', { name: 'Add font files…' })).toBeEnabled();
+});
+
+/** Optional read-only check against a public source and the captured Photoshop 26 reopen, never bundled. */
+const researchRoot = process.env.PSD_TEXT_MIXER_RESEARCH_ROOT;
+
+test('matches the Photoshop 26 public 33437 reopen after adding original collection bytes', async ({ page }) => {
+  test.skip(!researchRoot || !existsSync(helveticaCollection), 'set PSD_TEXT_MIXER_RESEARCH_ROOT and supply system Helvetica Neue');
+  const source = `${researchRoot}/private/psd-downloads/github/iamdaiyuan__dribbble_psd_files/dribbble_psd__33437.psd`;
+  const native = await readFile(`${researchRoot}/fixtures/psd/text-mixer-1/public-33437-g0/native.png`);
+  await page.goto('/');
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(source);
+  await expect(stage(page)).toHaveAttribute('data-render-id', /\d+/);
+  await settled(page);
+
+  const compare = () => page.getByRole('img', { name: 'Our render', exact: true }).evaluate(async (element, encoded) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${encoded}`;
+    await image.decode();
+    const reference = document.createElement('canvas');
+    reference.width = image.width;
+    reference.height = image.height;
+    reference.getContext('2d')!.drawImage(image, 0, 0);
+    const expected = reference.getContext('2d')!.getImageData(0, 0, image.width, image.height).data;
+    const actual = (element as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, image.width, image.height).data;
+    let rgb = 0;
+    let alpha = 0;
+    let max = 0;
+    actual.forEach((sample, index) => {
+      const difference = Math.abs(sample - expected[index]);
+      if (difference) {
+        if (index % 4 === 3) {
+          alpha++;
+        } else {
+          rgb++;
+        }
+
+        max = Math.max(max, difference);
+      }
+    });
+    return { rgb, alpha, max };
+  }, native.toString('base64'));
+
+  const before = await compare();
+  expect(before.rgb).toBeGreaterThan(0);
+  const render = await stage(page).getAttribute('data-render-id');
+  const fonts = page.getByRole('region', { name: 'Fonts' });
+  await fonts.getByLabel('Font files').setInputFiles(helveticaCollection);
+  await expect(stage(page)).not.toHaveAttribute('data-render-id', render!);
+  await settled(page);
+  await expect(fonts.getByRole('checkbox', { name: 'Re-render text' })).not.toBeChecked();
+  await expect(fonts.locator('[data-font-status="available"]')).toHaveCount(1);
+  await expect(fonts.locator('[data-text-mixing="approximate"]')).toHaveCount(4);
+  await expect(page.getByRole('list', { name: 'Approximations', exact: true })).toContainText('font-bbox descender');
+  const after = await compare();
+  expect(after).toEqual({ rgb: 0, alpha: 0, max: 0 });
+  const withFonts = await stage(page).getAttribute('data-render-id');
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(source);
+  await expect(stage(page)).not.toHaveAttribute('data-render-id', withFonts!);
+  await settled(page);
+  expect(await compare()).toEqual(after);
+  await expect(fonts.locator('[data-font-status="available"]')).toHaveCount(1);
+  console.log('33437 vs Photoshop 26 reopen:', { before, after });
 });

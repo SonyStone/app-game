@@ -1,17 +1,25 @@
-import type { PsdDocumentFonts, PsdFontInfo } from '@app-game/psd/viewer';
+import type { PsdDocumentFonts } from '@app-game/psd/viewer';
 import { For, Show } from 'solid-js';
+import type { PsdResultOf, RenderedPixels } from '../psd-worker';
 import { ariaState } from '../shared/format';
+import type { SessionFont } from './addFontFile';
+import { importedTextStatus } from './importedTextStatus';
 import type { FontRefusal } from './createFonts';
 import styles from './fonts.module.css';
 
 /**
  * The open document's fonts with their status in the library, the ways to add fonts (installed fonts through the Local
  * Font Access API where the browser offers it, and font files), and the "Re-render text" switch. The switch can be
- * turned on only once every font the type layers use is present; it can always be turned off.
+ * turned on only once every raster font the type layers use is present; it can always be turned off. Imported-text
+ * status reuses current approximation diagnostics, leaving unsupported validation and unknown visibility explicit.
  */
 export function FontsPanel(props: {
   report: PsdDocumentFonts;
-  library: readonly PsdFontInfo[];
+  library: readonly SessionFont[];
+  /** Current renderer diagnostics, used to report each imported layer's actual path. */
+  render: PsdResultOf<RenderedPixels> | undefined;
+  /** Undefined when a saved state prevents determining layer visibility from the saved document. */
+  visibleOf: (index: number) => boolean | undefined;
   /** Whether type layers re-render from their text: the `typeLayers` render setting. */
   reRender: boolean;
   onReRender: (enabled: boolean) => void;
@@ -45,6 +53,11 @@ export function FontsPanel(props: {
               <span class={font.available ? styles.available : styles.missing}>
                 {font.available ? 'available' : 'missing'}
               </span>
+              <Show when={props.library.find((face) => face.name === font.name)?.validationError}>
+                {(reason) => (
+                  <span class={styles.missing} title={reason()}>import validation unavailable</span>
+                )}
+              </Show>
             </li>
           )}
         </For>
@@ -79,7 +92,7 @@ export function FontsPanel(props: {
         <input
           ref={(element) => (input = element)}
           type="file"
-          accept=".ttf,.otf,font/ttf,font/otf"
+          accept=".ttf,.otf,.ttc,.otc,font/ttf,font/otf,font/collection"
           multiple
           hidden
           aria-label="Font files"
@@ -89,6 +102,34 @@ export function FontsPanel(props: {
           }}
         />
       </div>
+      <p>
+        Added fonts stay in this session and refresh imported text using Photoshop's cached pixels.
+        Files stay on this computer.
+      </p>
+      <ul class={styles.fonts} aria-label="Imported text rendering">
+        <For each={props.report.layers}>
+          {(layer) => {
+            const status = () =>
+              importedTextStatus(
+                layer,
+                props.render,
+                props.visibleOf(layer.index),
+                layer.fonts.length > 0 &&
+                  layer.fonts.every((name) => props.library.some((face) => face.name === name && face.active))
+              );
+
+            return (
+              <li data-text-layer={layer.index} data-text-mixing={status().kind}>
+                <span class={styles.name}>{layer.name || '(unnamed)'}</span>
+                <span class={status().kind === 'approximate' ? styles.missing : ''} title={status().reason}>
+                  {status().label}
+                </span>
+              </li>
+            );
+          }}
+        </For>
+      </ul>
+      <p>Text status follows this render. Some imported layouts still cannot be validated.</p>
       <label title="Re-render type layers from their text with these fonts instead of the rasters Photoshop cached, exact where Photoshop's text rendering is verified. A layer the renderer does not reproduce fails the render with the reason, or with Approximate keeps its cached raster and is listed below the canvas.">
         <input
           type="checkbox"
