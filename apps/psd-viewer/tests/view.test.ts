@@ -1,6 +1,6 @@
 import type { PsdLayerNode } from '@app-game/psd/viewer';
 import { expect, it } from 'vitest';
-import { collapsedGroups, collectNotes, findLayer, topFirst } from '../src/features/layers/layerTree';
+import { collapsedGroups, collectNotes, findLayer, layerVisibility, topFirst } from '../src/features/layers/layerTree';
 import { clampScale, fitView, panView, zoomView } from '../src/features/viewport/view';
 
 it('fits an image centered with a margin and magnifies small ones', () => {
@@ -50,6 +50,10 @@ it('lists layers top first and gathers notes, collapsed groups and records', () 
       notes: ['Blend If on a group is not rendered']
     })
   ];
+  expect(layerVisibility(layers, 2, new Map())).toBe(true);
+  expect(layerVisibility(layers, 2, new Map([[3, false]]))).toBe(false);
+  expect(layerVisibility(layers, 2, new Map([[2, false]]))).toBe(false);
+  expect(layerVisibility(layers, 999, new Map())).toBeUndefined();
   expect(topFirst(layers).map((layer) => layer.name)).toEqual(['Group', 'Paper']);
   expect(collectNotes(layers)).toEqual([
     { index: 3, name: 'Group', note: 'Blend If on a group is not rendered' },

@@ -2,7 +2,6 @@ import type {
   PsdDifference,
   PsdDocumentFonts,
   PsdFailure,
-  PsdFontInfo,
   PsdImage,
   PsdInfo,
   PsdLayerDetail,
@@ -16,6 +15,7 @@ import type {
   PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
+import type { SessionFont } from '../fonts/addFontFile';
 
 /**
  * A request to the PSD worker. `id` pairs it with its reply. `open` opens as Photoshop does, with `answers` to the
@@ -23,7 +23,8 @@ import type {
  * file Photoshop refuses with a `refused` one. Requests about a document name it by the `document` id its
  * `opened` reply gave; the worker refuses requests for a document it no longer holds with a `stale` failure. The
  * worker keeps one font library for its lifetime, across documents: `addFonts` adds font files to it (their buffers
- * transferred), and renders with `typeLayers` re-render type layers with it.
+ * transferred), and cached renders use its active faces with `typeLayers: false`. Optional `typeLayers` renders use its raster fonts.
+ * Supplied files are partial input, so they never become an `availableFonts` missing-font inventory.
  */
 export type PsdRequest =
   | { id: number; type: 'open'; bytes: ArrayBuffer; answers?: PsdOpenAnswers }
@@ -54,7 +55,7 @@ export type PsdRequest =
       visibility: [number, boolean][];
     }
   | { id: number; type: 'layer'; document: number; index: number }
-  | { id: number; type: 'addFonts'; fonts: ArrayBuffer[] }
+  | { id: number; type: 'addFonts'; fonts: ArrayBuffer[]; sources?: string[] }
   | { id: number; type: 'listFonts' }
   | { id: number; type: 'documentFonts'; document: number }
   | { id: number; type: 'textSupport'; document: number; index: number }
@@ -80,12 +81,12 @@ export type PsdReply =
   | {
       id: number;
       type: 'fontsAdded';
-      /** Per file of the request, in order: the font added, or why it was refused. */
-      results: PsdResultOf<PsdFontInfo>[];
+      /** Per file of the request, in order: the faces added, or why it was refused. */
+      results: PsdResultOf<SessionFont[]>[];
       /** The library after adding. */
-      fonts: PsdFontInfo[];
+      fonts: SessionFont[];
     }
-  | { id: number; type: 'fonts'; fonts: PsdFontInfo[] }
+  | { id: number; type: 'fonts'; fonts: SessionFont[] }
   | { id: number; type: 'documentFonts'; report: PsdDocumentFonts }
   | { id: number; type: 'textSupport'; support: PsdTextSupport | null }
   | { id: number; type: 'closed' }

@@ -7,7 +7,7 @@ import { createPsdDocument, createPsdRender, type PsdSource } from './features/d
 import { ExamplesMenu } from './features/examples';
 import { createFonts, FontsPanel, TextSupportSection } from './features/fonts';
 import { DocumentInspector, LayerInspector } from './features/inspector';
-import { collectNotes, createLayerVisibility, LayersPanel } from './features/layers';
+import { collectNotes, createLayerVisibility, LayersPanel, layerVisibility } from './features/layers';
 import { createFileDrop, fileSource, firstPsd, urlSource } from './features/open-file';
 import { createOpenPrompt, OpeningReport, OpenPromptDialog } from './features/open-like-photoshop';
 import {
@@ -325,6 +325,10 @@ export function App() {
               {(report) => (
                 <FontsPanel
                   report={report()}
+                  render={render()}
+                  visibleOf={(index) =>
+                    stateChoice() ? undefined : layerVisibility(document()?.layers ?? [], index, latest(overrides))
+                  }
                   library={valueOf(fonts.library()) ?? []}
                   reRender={latest(settings).typeLayers}
                   onReRender={(typeLayers) => update({ typeLayers })}

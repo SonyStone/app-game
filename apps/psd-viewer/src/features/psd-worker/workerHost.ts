@@ -9,6 +9,7 @@ import {
   type PsdRenderSettings,
   type PsdViewerDocument
 } from '@app-game/psd/viewer';
+import { addFontFile, type SessionFont } from '../fonts/addFontFile';
 import {
   requiresWindowedRendering,
   windowWorkPixels,
@@ -27,11 +28,14 @@ import {
  * The renders a blending
  * detection made wait for the next render request, which takes the one with its settings and visibility instead of
  * compositing again; the others are freed then. It also holds the font library, created on first use and kept across
- * documents, which renders with `typeLayers` use. Requests run one at a time in arrival order. `post` sends a reply with the buffers to transfer.
+ * documents, for imported cache mixing and optional rerasterization. Adding fonts releases prepared renders. Requests
+ * run one at a time in arrival order. `post` sends a reply with the buffers to transfer.
  */
 export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable[]) => void) {
   let document: { id: number; viewer: PsdViewerDocument } | undefined;
   let fonts: PsdFontLibrary | undefined;
+  const sessionFonts = new Map<string, SessionFont>();
+  const suppliedFonts = () => [...sessionFonts.values()].sort((a, b) => a.name.localeCompare(b.name));
   const renders = new Map<number, PsdRender>();
   // Detection renders by `renderKey`, until the next render request.
   const prepared = new Map<string, PsdRender>();
@@ -82,13 +86,29 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
 
     if (request.type === 'addFonts') {
       const library = (fonts ??= await createFontLibrary());
-      const results = request.fonts.map((bytes) => library.add(bytes));
-      post({ id: request.id, type: 'fontsAdded', results, fonts: library.fonts() }, []);
+      releasePrepared();
+      const results = request.fonts.map((bytes, index) =>
+        addFontFile(library, bytes, request.sources?.[index] ?? `font file ${request.id}:${index}`)
+      );
+      const rasterNames = new Set(library.fonts().map((font) => font.name));
+      for (const result of results) {
+        if (result.ok) {
+          for (const face of result.value) {
+            sessionFonts.set(face.name, {
+              ...face,
+              active: face.active || sessionFonts.get(face.name)?.active || false,
+              raster: rasterNames.has(face.name)
+            });
+          }
+        }
+      }
+
+      post({ id: request.id, type: 'fontsAdded', results, fonts: suppliedFonts() }, []);
       return;
     }
 
     if (request.type === 'listFonts') {
-      post({ id: request.id, type: 'fonts', fonts: fonts?.fonts() ?? [] }, []);
+      post({ id: request.id, type: 'fonts', fonts: suppliedFonts() }, []);
       return;
     }
 
@@ -217,6 +237,11 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
 
       case 'documentFonts': {
         const report = viewer.fonts(fonts);
+        if (report.ok) {
+          for (const font of report.value.fonts) {
+            font.available = sessionFonts.has(font.name) || font.available;
+          }
+        }
         post(
           report.ok ? { id: request.id, type: 'documentFonts', report: report.value } : failed(request, report.error),
           []
