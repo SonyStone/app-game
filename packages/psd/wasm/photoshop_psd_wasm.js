@@ -153,6 +153,153 @@ export function readPsd(bytes) {
     return takeFromExternrefTable0(ret[0]);
 }
 
+const PsdEditorSessionFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_psdeditorsession_free(ptr >>> 0, 1));
+/**
+ * Persistent M01 preserve-mode editor. Opening does not fetch assets or flatten the document.
+ * RGB8 plain raster/group edits are atomic; unsupported dependencies throw structured Error objects.
+ * Visual or structural edits block prepareSave until cache regeneration is implemented in M02.
+ */
+export class PsdEditorSession {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        PsdEditorSessionFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_psdeditorsession_free(ptr, 0);
+    }
+    /**
+     * Freezes preserve-mode bytes for this revision. Untouched output is byte-identical; rename-only saves
+     * preserve all other carriers. Throws code CachesRequired for any committed visual/structural change.
+     * Model-only, native-deferred save and cache regeneration are deliberately unavailable in M01.
+     * @returns {PsdPreparedSave}
+     */
+    prepareSave() {
+        const ret = wasm.psdeditorsession_prepareSave(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return PsdPreparedSave.__wrap(ret[0]);
+    }
+    /**
+     * Opens an in-memory PSD/PSB. Untouched save works for any container the lossless parser accepts.
+     * This bounded API does not claim paged input or arbitrary-size PSB support.
+     * @param {Uint8Array} bytes
+     */
+    constructor(bytes) {
+        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.psdeditorsession_new(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        PsdEditorSessionFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Applies a M01Edit array atomically. Positions are bottom to top and moves count after removal.
+     * New IDs are returned in insertion order. Group-end IDs cannot be targeted. Names must be control-free
+     * and at most 255 UTF-16 units. Invalid values refuse,
+     * preserving revision, tree and allocation floor. Clip/unclip must leave a preceding raster base.
+     * No host context is consumed because this round does not certify renders or regenerate caches.
+     * @param {readonly M01Edit[]} batch
+     * @returns {M01EditOutcome}
+     */
+    edit(batch) {
+        const ret = wasm.psdeditorsession_edit(this.__wbg_ptr, batch);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Releases the source/model. Existing prepared saves remain independent. Further session calls throw.
+     */
+    dispose() {
+        wasm.psdeditorsession_dispose(this.__wbg_ptr);
+    }
+    /**
+     * Returns revision as bigint, native canvas dimensions and a stable bottom-to-top raster/group tree.
+     * Inspection throws a typed refusal when the import is outside M01 admission; untouched save remains available.
+     * @returns {M01Snapshot}
+     */
+    inspect() {
+        const ret = wasm.psdeditorsession_inspect(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+}
+
+const PsdPreparedSaveFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_psdpreparedsave_free(ptr >>> 0, 1));
+/**
+ * Frozen M01 in-memory save. Chunk reads bound each returned Uint8Array, not total WASM allocation.
+ */
+export class PsdPreparedSave {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(PsdPreparedSave.prototype);
+        obj.__wbg_ptr = ptr;
+        PsdPreparedSaveFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        PsdPreparedSaveFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_psdpreparedsave_free(ptr, 0);
+    }
+    /**
+     * Returns the next at-most-maxBytes chunk, or undefined at EOF. Accepts 1 through 16 MiB.
+     * Bytes are available only after all save checks succeed. Throws after disposal.
+     * @param {number} max_bytes
+     * @returns {Uint8Array | undefined}
+     */
+    nextChunk(max_bytes) {
+        const ret = wasm.psdpreparedsave_nextChunk(this.__wbg_ptr, max_bytes);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        let v1;
+        if (ret[0] !== 0) {
+            v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        }
+        return v1;
+    }
+    /**
+     * Releases prepared bytes. Further chunk reads throw; repeated disposal is harmless.
+     */
+    dispose() {
+        wasm.psdpreparedsave_dispose(this.__wbg_ptr);
+    }
+    /**
+     * Revision frozen by prepareSave, independent of later edits or session disposal.
+     * @returns {bigint}
+     */
+    get revision() {
+        const ret = wasm.psdpreparedsave_revision(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
+    }
+}
+
 async function __wbg_load(module, imports) {
     if (typeof Response === 'function' && module instanceof Response) {
         if (typeof WebAssembly.instantiateStreaming === 'function') {
@@ -203,6 +350,20 @@ function __wbg_get_imports() {
         const ret = arg0[arg1 >>> 0];
         return ret;
     };
+    imports.wbg.__wbg_instanceof_Uint8Array_17156bcf118086a9 = function(arg0) {
+        let result;
+        try {
+            result = arg0 instanceof Uint8Array;
+        } catch (_) {
+            result = false;
+        }
+        const ret = result;
+        return ret;
+    };
+    imports.wbg.__wbg_isArray_a1eab7e0d067391b = function(arg0) {
+        const ret = Array.isArray(arg0);
+        return ret;
+    };
     imports.wbg.__wbg_length_a446193dc22c12f8 = function(arg0) {
         const ret = arg0.length;
         return ret;
@@ -246,6 +407,10 @@ function __wbg_get_imports() {
         const ret = Reflect.set(arg0, arg1, arg2);
         return ret;
     }, arguments) };
+    imports.wbg.__wbindgen_bigint_from_u64 = function(arg0) {
+        const ret = BigInt.asUintN(64, arg0);
+        return ret;
+    };
     imports.wbg.__wbindgen_boolean_get = function(arg0) {
         const v = arg0;
         const ret = typeof(v) === 'boolean' ? (v ? 1 : 0) : 2;
@@ -260,6 +425,10 @@ function __wbg_get_imports() {
         table.set(offset + 2, true);
         table.set(offset + 3, false);
         ;
+    };
+    imports.wbg.__wbindgen_is_null = function(arg0) {
+        const ret = arg0 === null;
+        return ret;
     };
     imports.wbg.__wbindgen_is_undefined = function(arg0) {
         const ret = arg0 === undefined;
