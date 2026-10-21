@@ -1,20 +1,40 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
-/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
 /**
  * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
  * Physical record indices refer to the selected layer-info section and change after structural edits.
  */
 export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
+
+/** Per-call host policy. Defaults are 64 MiB per allocation, 512 MiB live and depth 64.
+ * Limits concern accounted buffers, not OS RSS. Safe-integer byte values may raise or lower defaults.
+ * retainedBytes includes caller input copies, fonts and caches not owned by this operation. */
+export interface PsdBudgetOptions {
+  allocationBytes?: number;
+  liveBytes?: number;
+  maxOffset?: number;
+  maxDepth?: number;
+  retainedBytes?: number;
+}
+/** A policy refusal, separate from corruption and Photoshop's native refusal. */
+export interface PsdBudgetError extends Error {
+  name: 'PsdBudgetError';
+  resource: string;
+  requested: bigint;
+  limit: bigint;
+}
+
+
 
 /** Partial repaint of a sole RGB8 Classic canvas GdFl. Empty patch regenerates existing stops cache-free. */
 export interface GradientFillPatch {
@@ -87,6 +107,18 @@ export type M01Edit =
   | {kind: 'fill'; layerId: number; fill: number}
   | {kind: 'blend'; layerId: number; blend: string}
   | {kind: 'clip'; layerId: number; clipped: boolean};
+/** Atomic geometry command. Refused kinds reserve names only; no metadata-only edit is performed. */
+export type PsdGeometryEdit =
+  | {
+      /** Strict clipping/background resize; children retain document coordinates. */ kind: 'resizeArtboard';
+      /** Physical artb group index from inspectSource(), invalidated by structural edits. */ recordIndex: number;
+      /** Nonzero committed pixel width. */ width: number;
+      /** Nonzero committed pixel height. */ height: number;
+    }
+  | { /** Named refusal until coherent creation and extent policy exist. */ kind: 'createArtboard' }
+  | { /** Named refusal until all descendant carriers can be translated. */ kind: 'moveArtboard' }
+  | { /** Named refusal until parameters, paths and caches agree. */ kind: 'editLiveShape' }
+  | { /** Named refusal until placement, resampling and caches agree. */ kind: 'replaceFrameContents' };
 /** Target for a persisted source change. Reinspect after structural edits. */
 export interface PsdSourceEditTarget {
   /** Physical index in inspectSource().layers, not a semantic layer ID. */ readonly recordIndex: number;
@@ -341,6 +373,14 @@ export class PsdEditorSession {
    */
   addTextFont(bytes: Uint8Array, face_index: number): void;
   /**
+   * Resizes an existing root artboard from its committed top-left, leaving children and canvas fixed.
+   * RGB8 PSD only, canvas at most 2000x1000, coordinates within +/-2000, with auto-expand/shrinkwrap off.
+   * Rebuilds merged RGB/alpha strictly and omits stale previews before publishing the revision.
+   * Create/move, live-parameter edits and frame-content replacement throw named Dependency errors.
+   * Failure preserves bytes and revision. linearBlending is the host gamma-1 preference, false by default.
+   */
+  editGeometry(edit: PsdGeometryEdit, linear_blending?: boolean | null): M01EditOutcome;
+  /**
    * Inspects full-precision persisted source fields for any parsed container, without RGB8 tree admission.
    * Null leaves remain absent. This reads neither linked assets nor application-only state.
    */
@@ -412,6 +452,37 @@ export class PsdPreparedSave {
    */
   readonly revision: bigint;
 }
+/**
+ * A host-owned file with u64 spans. The callback `(offset: bigint, length: number) => Uint8Array`
+ * must synchronously read exactly the requested window. In a worker use
+ * `new Uint8Array(new FileReaderSync().readAsArrayBuffer(blob.slice(Number(offset), Number(offset)+length)))`.
+ * Keep the blob and callback alive until free(). No complete file is copied into WASM.
+ */
+export class PsdSourceHandle {
+  private constructor();
+  free(): void;
+  /**
+   * Emits original file bytes in chunks of at most 64 KiB. The callback must consume each
+   * Uint8Array before returning. It must not accumulate unaccounted chunks in linear memory.
+   */
+  writeUnchanged(emit: Function, options: PsdBudgetOptions | null | undefined): void;
+  /**
+   * Returns native header fields and logical section spans, with bigint offsets/lengths.
+   */
+  info(): any;
+  /**
+   * Reads strict outer envelopes without repairing or materializing inner sections.
+   * Default budget is 64 MiB per allocation, 512 MiB live, i64::MAX offsets and depth 64.
+   * Options `allocationBytes`, `liveBytes`, `maxOffset`, `maxDepth`, `retainedBytes` override per call.
+   */
+  static open(read: (offset: bigint, length: number) => Uint8Array, length: bigint, options: PsdBudgetOptions | null | undefined): PsdSourceHandle;
+  /**
+   * Decodes a channel grid from a payload span without its compression word. Native planar
+   * bytes are returned, including packed bits, big-endian words and IEEE payloads. ZIP/RLE
+   * rows after the requested region remain unvalidated. Uses the same per-call budget defaults as open().
+   */
+  readGrid(offset: bigint, length: bigint, compression: number, width: number, rows: number, depth: number, psb: boolean, left: number, top: number, grid_width: number, grid_height: number, step: number, options: PsdBudgetOptions | null | undefined): Uint8Array;
+}
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -419,9 +490,11 @@ export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly __wbg_psdeditorsession_free: (a: number, b: number) => void;
   readonly __wbg_psdpreparedsave_free: (a: number, b: number) => void;
+  readonly __wbg_psdsourcehandle_free: (a: number, b: number) => void;
   readonly psdeditorsession_addTextFont: (a: number, b: number, c: number, d: number) => [number, number];
   readonly psdeditorsession_dispose: (a: number) => void;
   readonly psdeditorsession_edit: (a: number, b: any) => [number, number, number];
+  readonly psdeditorsession_editGeometry: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editSmart: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editSource: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_inspect: (a: number) => [number, number, number];
@@ -433,6 +506,10 @@ export interface InitOutput {
   readonly psdpreparedsave_dispose: (a: number) => void;
   readonly psdpreparedsave_nextChunk: (a: number, b: number) => [number, number, number, number];
   readonly psdpreparedsave_revision: (a: number) => bigint;
+  readonly psdsourcehandle_info: (a: number) => [number, number, number];
+  readonly psdsourcehandle_open: (a: any, b: bigint, c: any) => [number, number, number];
+  readonly psdsourcehandle_readGrid: (a: number, b: bigint, c: bigint, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: any) => [number, number, number, number];
+  readonly psdsourcehandle_writeUnchanged: (a: number, b: any, c: any) => [number, number];
   readonly readPsd: (a: number, b: number) => [number, number, number];
   readonly readPsdSource: (a: number, b: number) => [number, number, number];
   readonly writePsd: (a: any, b: number, c: number) => [number, number, number, number];

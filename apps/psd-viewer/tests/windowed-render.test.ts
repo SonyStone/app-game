@@ -1,4 +1,4 @@
-import { photoshopDefaultSettings, type PsdRegionPixels } from '@app-game/psd/viewer';
+import { loadPsdViewer, photoshopDefaultSettings, type PsdRegionPixels } from '@app-game/psd/viewer';
 import { readFile } from 'node:fs/promises';
 import { createRoot, createSignal, flush } from 'solid-js';
 import { expect, it, vi } from 'vitest';
@@ -35,6 +35,31 @@ it('renders a generated large PSB through the worker and refuses whole-canvas op
   expect(await client.merged(opened.document)).toMatchObject({ ok: false, error: { kind: 'unsupported' } });
   expect(value(await client.detectBlending(opened.document, photoshopDefaultSettings, [])).linearBlending).toBeNull();
   client.dispose();
+});
+
+it('transfers typed budget refusals without breaking subsequent worker requests', async () => {
+  const codec = await loadPsdViewer();
+  const open = codec.PsdDocumentHandle.openWithBudget;
+  const refused = vi.spyOn(codec.PsdDocumentHandle, 'openWithBudget').mockImplementationOnce((bytes, options) =>
+    open(bytes, { ...options, allocationBytes: 1 })
+  );
+  const { client } = connect();
+  try {
+    expect(await client.open(largePsb().buffer as ArrayBuffer)).toMatchObject({
+      ok: false,
+      error: {
+        kind: 'budget',
+        resource: 'allocation bytes',
+        limit: 1n,
+        message: expect.stringContaining("exceeds the viewer's resource budget")
+      }
+    });
+    const opened = value(await client.open(largePsb().buffer as ArrayBuffer));
+    expect(opened.info).toMatchObject({ width: 300000, height: 300000 });
+  } finally {
+    refused.mockRestore();
+    client.dispose();
+  }
 });
 
 it('assembles cached fixture tiles and invalidates them after edits', async () => {

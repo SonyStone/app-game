@@ -3,6 +3,8 @@
 // codec (`readPsd`, `writePsd` in ./index) stays in its own, much smaller module.
 import type {
   PsdFontLibrary as FontLibraryHandle,
+  PsdBudgetOptions as BudgetOptions,
+  PsdBudgetError as BudgetError,
   PsdDocumentHandle,
   PsdRegionPixels as RegionPixels,
   PsdRegionRect as RegionRect,
@@ -13,10 +15,16 @@ import type {
  * Opens a PSD or PSB for viewing, loading the viewer module on first use. The document keeps the parsed file in
  * WebAssembly memory until {@link PsdViewerDocument.close}. Files that are not Photoshop documents, or whose header or
  * outer sections are unusable, fail with `kind: 'invalid'`; damaged inner structures stay readable.
+ * Admission defaults to 128 MiB per allocation and 2 GiB live. The 30,806×45,624 public PSB needs more than the
+ * WASM32 default 64 MiB for compressed source storage even though its rendered output stays windowed. `budget`
+ * overrides these limits; the binding counts both input copies automatically. Policy refusals have `kind: 'budget'`.
  */
-export async function openPsd(bytes: Uint8Array | ArrayBuffer): Promise<PsdResult<PsdViewerDocument>> {
+export async function openPsd(
+  bytes: Uint8Array | ArrayBuffer,
+  budget: PsdBudgetOptions = {}
+): Promise<PsdResult<PsdViewerDocument>> {
   const codec = await loadPsdViewer();
-  const opened = attempt(() => codec.PsdDocumentHandle.open(asBytes(bytes)));
+  const opened = attempt(() => codec.PsdDocumentHandle.openWithBudget(asBytes(bytes), { ...openingBudget, ...budget }));
   if (!opened.ok) {
     return opened;
   }
@@ -42,13 +50,21 @@ export async function openPsd(bytes: Uint8Array | ArrayBuffer): Promise<PsdResul
  * Photoshop's prompts are answered by `answers`. A prompt Photoshop shows that `answers` leaves unanswered fails with
  * `kind: 'needsAnswer'` and the prompt; open again with its answer. Files Photoshop refuses and the strict reader
  * cannot read, and Cancel answers, fail with `kind: 'refused'` and Photoshop's behavior as the message.
+ * Uses the same default admission budget as {@link openPsd}; recovery still decodes whole channels.
  */
 export async function openPsdLikePhotoshop(
   bytes: Uint8Array | ArrayBuffer,
-  answers: PsdOpenAnswers = {}
+  answers: PsdOpenAnswers = {},
+  budget: PsdBudgetOptions = {}
 ): Promise<PsdResult<PsdViewerDocument>> {
   const codec = await loadPsdViewer();
-  const outcome = attempt(() => codec.PsdDocumentHandle.openLikePhotoshop(asBytes(bytes), answers) as OpenOutcome);
+  const outcome = attempt(
+    () =>
+      codec.PsdDocumentHandle.openLikePhotoshopWithBudget(asBytes(bytes), answers, {
+        ...openingBudget,
+        ...budget
+      }) as OpenOutcome
+  );
   if (!outcome.ok) {
     return outcome;
   }
@@ -165,6 +181,9 @@ export async function createFontLibrary(): Promise<PsdFontLibrary> {
   return library;
 }
 
+/** Per-call buffer admission limits. Retained bytes cover caller-owned fonts, input and caches. */
+export type PsdBudgetOptions = BudgetOptions;
+
 /** A value, or the reason it could not be produced. */
 export type PsdResult<T> = { ok: true; value: T } | { ok: false; error: PsdFailure };
 
@@ -173,11 +192,12 @@ export type PsdResult<T> = { ok: true; value: T } | { ok: false; error: PsdFailu
  * names it, for example `layer "Logo": a non-parallelogram smart-object quad`), `invalid` for unreadable input. Opening
  * as Photoshop does ({@link openPsdLikePhotoshop}) fails with `refused` when Photoshop does not open the file, the
  * message naming Photoshop's behavior, and with `needsAnswer` when Photoshop asks `prompt` first, the message being the
- * prompt's text.
+ * prompt's text. `budget` is a host policy refusal, with the resource, requested amount and limit preserved from WASM.
  */
 export type PsdFailure =
   | { kind: 'unsupported' | 'invalid' | 'refused'; message: string }
-  | { kind: 'needsAnswer'; message: string; prompt: PsdOpenPrompt };
+  | { kind: 'needsAnswer'; message: string; prompt: PsdOpenPrompt }
+  | ({ kind: 'budget'; message: string } & Pick<BudgetError, 'resource' | 'requested' | 'limit'>);
 
 /** An open document. Every call is synchronous; run it in a worker for large files. */
 export type PsdViewerDocument = {
@@ -243,8 +263,9 @@ export type PsdViewerDocument = {
   /**
    * Samples the potentially stale saved composite, ignoring render settings and edits. Use only as a temporary
    * first frame, replacing it with a fresh layer render. Zero uses the WASM default work limit.
+   * `budget` overrides WASM32 admission defaults and accounts for caller-retained storage.
    */
-  savedOverview(step: number, maxWorkPixels?: number): PsdResult<PsdRegionPixels>;
+  savedOverview(step: number, maxWorkPixels?: number, budget?: PsdBudgetOptions): PsdResult<PsdRegionPixels>;
   /**
    * The fonts the document's type layers use, their availability in `fonts` (none when omitted), and supplied
    * releases that differ from the document's recorded versions. Availability alone does not imply exact text.
@@ -333,7 +354,11 @@ export type PsdRegionPixels = RegionPixels;
  * Window rendering settings. The work limit defaults to 16,777,216 pixels and bounds individual allocations and batch
  * output, not total memory. Spatial dependencies exceeding it fail as unsupported before a full-canvas allocation.
  */
-export type PsdWindowSettings = PsdRenderSettings & { maxWorkPixels?: number };
+export type PsdWindowSettings = PsdRenderSettings & {
+  maxWorkPixels?: number;
+  /** Overrides WASM32 admission defaults; retainedBytes includes caller-owned input, fonts and caches. */
+  budget?: PsdBudgetOptions;
+};
 
 /** A saved state to render: a frame or a layer comp by its persistent ID. */
 export type PsdStateChoice = { frame: number } | { comp: number };
@@ -885,6 +910,12 @@ export type ViewerCodec = typeof import('../wasm-viewer/photoshop_psd_viewer.js'
 /** What the bindings accept as the WebAssembly module: a URL, a response, bytes or a compiled module. */
 export type ViewerWasmInput = NonNullable<Parameters<ViewerCodec['default']>[0]>;
 
+/** Allows compressed source storage for existing huge PSBs without admitting a full-canvas render. */
+const openingBudget = {
+  allocationBytes: 128 * 1024 * 1024,
+  liveBytes: 2 * 1024 * 1024 * 1024
+} satisfies PsdBudgetOptions;
+
 let pending: Promise<ViewerCodec> | undefined;
 
 /** The WebAssembly handles behind the libraries {@link createFontLibrary} made, until freed. */
@@ -979,8 +1010,8 @@ function makeViewerDocument(
         ? attempt(() => handle.renderOverview(step, { ...settings, visibility: [...visibility] }, libraryOf(fonts)))
         : closed();
     },
-    savedOverview(step, maxWorkPixels = 0) {
-      return open ? attempt(() => handle.savedOverview(step, maxWorkPixels)) : closed();
+    savedOverview(step, maxWorkPixels = 0, budget) {
+      return open ? attempt(() => handle.savedOverview(step, maxWorkPixels, budget)) : closed();
     },
     fonts(fonts) {
       return open ? attempt(() => handle.documentFonts(libraryOf(fonts)) as PsdDocumentFonts) : closed();
@@ -1043,8 +1074,27 @@ function attempt<T>(run: () => T): PsdResult<T> {
   }
 }
 
-/** The module names expected errors `PsdUnsupportedError` and `PsdError`; anything else is invalid input too. */
+/** Preserves typed budget refusals; unsupported features and unreadable input remain separate failures. */
 function toFailure(error: unknown): PsdFailure {
+  if (
+    error instanceof Error &&
+    error.name === 'PsdBudgetError' &&
+    'resource' in error &&
+    typeof error.resource === 'string' &&
+    'requested' in error &&
+    typeof error.requested === 'bigint' &&
+    'limit' in error &&
+    typeof error.limit === 'bigint'
+  ) {
+    return {
+      kind: 'budget',
+      message: `This operation exceeds the viewer's resource budget (${error.resource}: ${error.requested} requested, limit ${error.limit}).`,
+      resource: error.resource,
+      requested: error.requested,
+      limit: error.limit
+    };
+  }
+
   if (error instanceof Error) {
     return { kind: error.name === 'PsdUnsupportedError' ? 'unsupported' : 'invalid', message: error.message };
   }

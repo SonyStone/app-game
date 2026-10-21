@@ -114,6 +114,20 @@ function takeFromExternrefTable0(idx) {
     wasm.__externref_table_dealloc(idx);
     return value;
 }
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * @param {Uint8Array} bytes
+ * @returns {any}
+ */
+export function readPsd(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsd(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
 
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -136,21 +150,6 @@ export function writePsd(document, composite) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
-}
-
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- * @param {Uint8Array} bytes
- * @returns {any}
- */
-export function readPsd(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readPsd(ptr0, len0);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
 }
 
 /**
@@ -310,6 +309,9 @@ export class PsdDocumentHandle {
      * `strategy`; a dependency exceeding the limit throws `PsdUnsupportedError` before rendering.
      * Pixels equal the corresponding whole render, including its reported approximations.
      * The returned `Uint8Array` owns its storage and can be transferred to another worker.
+     * `options.budget` overrides 64 MiB per allocation/512 MiB live admission per call, using
+     * allocationBytes/liveBytes/retainedBytes. Retained bytes include external fonts/caches.
+     * Conservative accounting can require a larger liveBytes value for a many-layer document.
      * @param {number} left
      * @param {number} top
      * @param {number} width
@@ -364,12 +366,15 @@ export class PsdDocumentHandle {
      * and may differ from Photoshop-26 recompositing. It ignores visibility/state edits and must
      * be discarded after edits. Refuses an image marked as not real. `maxWorkPixels` limits
      * output pixels, default 16,777,216 when zero. `step` must be positive.
+     * Optional third argument overrides 64 MiB allocation/512 MiB live budgets per call with
+     * allocationBytes/liveBytes/retainedBytes; container storage is counted automatically.
      * @param {number} step
      * @param {number} max_work_pixels
+     * @param {object | null} [budget_options]
      * @returns {PsdRegionPixels}
      */
-    savedOverview(step, max_work_pixels) {
-        const ret = wasm.psddocumenthandle_savedOverview(this.__wbg_ptr, step, max_work_pixels);
+    savedOverview(step, max_work_pixels, budget_options) {
+        const ret = wasm.psddocumenthandle_savedOverview(this.__wbg_ptr, step, max_work_pixels, isLikeNone(budget_options) ? 0 : addToExternrefTable0(budget_options));
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -393,6 +398,41 @@ export class PsdDocumentHandle {
             throw takeFromExternrefTable0(ret[1]);
         }
         return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Parses with explicit host budgets before copying payloads. Defaults are 64 MiB per
+     * allocation and 512 MiB live, depth 64, u64 offsets through i64::MAX. Options are
+     * allocationBytes/liveBytes/maxOffset/maxDepth/retainedBytes. Retained bytes must include
+     * external caches; the binding additionally accounts for its input and the host input copy.
+     * Input length is checked before copying the host Uint8Array into WASM.
+     * Use per-call overrides when a compressed payload exceeds the default; region output stays windowed.
+     * @param {Uint8Array} bytes
+     * @param {any} options
+     * @returns {PsdDocumentHandle}
+     */
+    static openWithBudget(bytes, options) {
+        const ret = wasm.psddocumenthandle_openWithBudget(bytes, options);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return PsdDocumentHandle.__wrap(ret[0]);
+    }
+    /**
+     * Full rendering with explicit per-call host admission. Defaults are 64 MiB per
+     * allocation and 512 MiB live; retainedBytes includes caller fonts and caches.
+     * This can conservatively refuse a dependency graph before legacy render() enters it.
+     * @param {any} options
+     * @param {PsdFontLibrary} fonts
+     * @param {any} budget_options
+     * @returns {RenderedImage}
+     */
+    renderWithBudget(options, fonts, budget_options) {
+        _assertClass(fonts, PsdFontLibrary);
+        const ret = wasm.psddocumenthandle_renderWithBudget(this.__wbg_ptr, options, fonts.__wbg_ptr, budget_options);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return RenderedImage.__wrap(ret[0]);
     }
     /**
      * Opens a PSD or PSB as Photoshop 26 does, keeping the strict reading of [`Self::open`] where it is Photoshop's
@@ -436,6 +476,22 @@ export class PsdDocumentHandle {
      */
     savedProcessChannels(visibility) {
         const ret = wasm.psddocumenthandle_savedProcessChannels(this.__wbg_ptr, isLikeNone(visibility) ? 0 : addToExternrefTable0(visibility));
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Recovery opening with explicit per-call budgets and typed PsdBudgetError failures.
+     * Defaults are 64 MiB per allocation, 512 MiB live and nesting depth 64. Caller retainedBytes
+     * covers external storage; both reader models and both input copies are additionally counted.
+     * @param {Uint8Array} bytes
+     * @param {any} answers
+     * @param {any} options
+     * @returns {any}
+     */
+    static openLikePhotoshopWithBudget(bytes, answers, options) {
+        const ret = wasm.psddocumenthandle_openLikePhotoshopWithBudget(bytes, answers, options);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -662,6 +718,105 @@ export class PsdFontLibrary {
     }
 }
 
+const PsdSourceHandleFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_psdsourcehandle_free(ptr >>> 0, 1));
+/**
+ * A host-owned file with u64 spans. The callback `(offset: bigint, length: number) => Uint8Array`
+ * must synchronously read exactly the requested window. In a worker use
+ * `new Uint8Array(new FileReaderSync().readAsArrayBuffer(blob.slice(Number(offset), Number(offset)+length)))`.
+ * Keep the blob and callback alive until free(). No complete file is copied into WASM.
+ */
+export class PsdSourceHandle {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(PsdSourceHandle.prototype);
+        obj.__wbg_ptr = ptr;
+        PsdSourceHandleFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        PsdSourceHandleFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_psdsourcehandle_free(ptr, 0);
+    }
+    /**
+     * Emits original file bytes in chunks of at most 64 KiB. The callback must consume each
+     * Uint8Array before returning. It must not accumulate unaccounted chunks in linear memory.
+     * @param {Function} emit
+     * @param {PsdBudgetOptions | null | undefined} options
+     */
+    writeUnchanged(emit, options) {
+        const ret = wasm.psdsourcehandle_writeUnchanged(this.__wbg_ptr, emit, options);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Returns native header fields and logical section spans, with bigint offsets/lengths.
+     * @returns {any}
+     */
+    info() {
+        const ret = wasm.psdsourcehandle_info(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Reads strict outer envelopes without repairing or materializing inner sections.
+     * Default budget is 64 MiB per allocation, 512 MiB live, i64::MAX offsets and depth 64.
+     * Options `allocationBytes`, `liveBytes`, `maxOffset`, `maxDepth`, `retainedBytes` override per call.
+     * @param {(offset: bigint, length: number) => Uint8Array} read
+     * @param {bigint} length
+     * @param {PsdBudgetOptions | null | undefined} options
+     * @returns {PsdSourceHandle}
+     */
+    static open(read, length, options) {
+        const ret = wasm.psdsourcehandle_open(read, length, options);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return PsdSourceHandle.__wrap(ret[0]);
+    }
+    /**
+     * Decodes a channel grid from a payload span without its compression word. Native planar
+     * bytes are returned, including packed bits, big-endian words and IEEE payloads. ZIP/RLE
+     * rows after the requested region remain unvalidated. Uses the same per-call budget defaults as open().
+     * @param {bigint} offset
+     * @param {bigint} length
+     * @param {number} compression
+     * @param {number} width
+     * @param {number} rows
+     * @param {number} depth
+     * @param {boolean} psb
+     * @param {number} left
+     * @param {number} top
+     * @param {number} grid_width
+     * @param {number} grid_height
+     * @param {number} step
+     * @param {PsdBudgetOptions | null | undefined} options
+     * @returns {Uint8Array}
+     */
+    readGrid(offset, length, compression, width, rows, depth, psb, left, top, grid_width, grid_height, step, options) {
+        const ret = wasm.psdsourcehandle_readGrid(this.__wbg_ptr, offset, length, compression, width, rows, depth, psb, left, top, grid_width, grid_height, step, options);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+}
+
 const RenderedImageFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_renderedimage_free(ptr >>> 0, 1));
@@ -775,6 +930,14 @@ function __wbg_get_imports() {
         const ret = arg0.buffer;
         return ret;
     };
+    imports.wbg.__wbg_call_7cccdd69e0791ae2 = function() { return handleError(function (arg0, arg1, arg2) {
+        const ret = arg0.call(arg1, arg2);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_call_833bed5770ea2041 = function() { return handleError(function (arg0, arg1, arg2, arg3) {
+        const ret = arg0.call(arg1, arg2, arg3);
+        return ret;
+    }, arguments) };
     imports.wbg.__wbg_from_2a5d3e218e67aa85 = function(arg0) {
         const ret = Array.from(arg0);
         return ret;
@@ -874,6 +1037,14 @@ function __wbg_get_imports() {
     }, arguments) };
     imports.wbg.__wbg_setname_6df54b7ebf9404a9 = function(arg0, arg1, arg2) {
         arg0.name = getStringFromWasm0(arg1, arg2);
+    };
+    imports.wbg.__wbg_subarray_aa9065fa9dc5df96 = function(arg0, arg1, arg2) {
+        const ret = arg0.subarray(arg1 >>> 0, arg2 >>> 0);
+        return ret;
+    };
+    imports.wbg.__wbindgen_bigint_from_u64 = function(arg0) {
+        const ret = BigInt.asUintN(64, arg0);
+        return ret;
     };
     imports.wbg.__wbindgen_boolean_get = function(arg0) {
         const v = arg0;

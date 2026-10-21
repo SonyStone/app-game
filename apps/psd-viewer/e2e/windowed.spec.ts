@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
+import { truncate, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { largePsb } from '../../../packages/psd/test/largePsb';
 
@@ -42,6 +43,30 @@ test('opens a generated 300000-square PSB and pans/zooms through bounded regions
   await expect(stage(page)).toHaveAttribute('data-busy', 'false');
   const regionSize = await canvas.evaluate((element: HTMLCanvasElement) => [element.width, element.height]);
   expect(regionSize[0] * regionSize[1]).toBeLessThanOrEqual(4_194_304);
+  expect(errors).toEqual([]);
+});
+
+/** A sparse oversized source is rejected before WASM copies it; the worker remains usable. */
+test('shows a budget refusal as an open failure and can open another file', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const source = test.info().outputPath('over-budget.psb');
+  await writeFile(source, largePsb());
+  await truncate(source, 128 * 1024 * 1024 + 1);
+  await page.goto('/');
+  const picker = page.locator('input[accept=".psd,.psb"]');
+  await picker.setInputFiles(source);
+  const failure = page.locator('[data-failure="budget"]');
+  await expect(failure).toContainText("exceeds the viewer's resource budget");
+  await expect(failure).toContainText('allocation bytes');
+  await picker.setInputFiles({
+    name: 'small-source.psb',
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from(largePsb())
+  });
+  await expect(failure).toHaveCount(0);
+  await expect(stage(page)).toHaveAttribute('data-render-source', 'layers');
+  await expect(stage(page)).toHaveAttribute('data-busy', 'false');
   expect(errors).toEqual([]);
 });
 

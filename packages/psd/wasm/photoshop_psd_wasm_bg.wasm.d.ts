@@ -3,9 +3,11 @@
 export const memory: WebAssembly.Memory;
 export const __wbg_psdeditorsession_free: (a: number, b: number) => void;
 export const __wbg_psdpreparedsave_free: (a: number, b: number) => void;
+export const __wbg_psdsourcehandle_free: (a: number, b: number) => void;
 export const psdeditorsession_addTextFont: (a: number, b: number, c: number, d: number) => [number, number];
 export const psdeditorsession_dispose: (a: number) => void;
 export const psdeditorsession_edit: (a: number, b: any) => [number, number, number];
+export const psdeditorsession_editGeometry: (a: number, b: any, c: number) => [number, number, number];
 export const psdeditorsession_editSmart: (a: number, b: any, c: number) => [number, number, number];
 export const psdeditorsession_editSource: (a: number, b: any) => [number, number, number];
 export const psdeditorsession_inspect: (a: number) => [number, number, number];
@@ -17,6 +19,10 @@ export const psdeditorsession_setText: (a: number, b: number, c: number, d: numb
 export const psdpreparedsave_dispose: (a: number) => void;
 export const psdpreparedsave_nextChunk: (a: number, b: number) => [number, number, number, number];
 export const psdpreparedsave_revision: (a: number) => bigint;
+export const psdsourcehandle_info: (a: number) => [number, number, number];
+export const psdsourcehandle_open: (a: any, b: bigint, c: any) => [number, number, number];
+export const psdsourcehandle_readGrid: (a: number, b: bigint, c: bigint, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: any) => [number, number, number, number];
+export const psdsourcehandle_writeUnchanged: (a: number, b: any, c: any) => [number, number];
 export const readPsd: (a: number, b: number) => [number, number, number];
 export const readPsdSource: (a: number, b: number) => [number, number, number];
 export const writePsd: (a: any, b: number, c: number) => [number, number, number, number];

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, it } from 'vitest';
 import { largePsb } from '../test/largePsb';
-import { openPsd, photoshopDefaultSettings, type PsdResult } from './viewer';
+import { openPsd, openPsdLikePhotoshop, photoshopDefaultSettings, type PsdResult } from './viewer';
 
 it.each([
   'adjustment-stack.psd',
@@ -86,6 +86,47 @@ it('renders a generated highly compressed PSB beyond wasm32 canvas indices witho
     ok: false,
     error: { kind: 'invalid' }
   });
+});
+
+it('preserves typed budget refusals for strict and recovery opening before copying host input', async () => {
+  const bytes = largePsb();
+  for (const result of [
+    await openPsd(bytes, { allocationBytes: 1 }),
+    await openPsdLikePhotoshop(bytes, {}, { allocationBytes: 1 })
+  ]) {
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        kind: 'budget',
+        resource: 'allocation bytes',
+        requested: BigInt(bytes.byteLength),
+        limit: 1n,
+        message: expect.stringContaining("exceeds the viewer's resource budget")
+      }
+    });
+  }
+
+  value(await openPsd(bytes)).close();
+});
+
+it('reports window admission failures and allows a subsequent render', async () => {
+  const document = value(await openPsd(largePsb()));
+  try {
+    const rectangle = { left: 299000, top: 299000, width: 144, height: 144 };
+    const settings = { ...photoshopDefaultSettings, budget: { liveBytes: 1 } };
+    for (const result of [
+      document.renderRegion(rectangle, settings),
+      document.renderRegions([rectangle], settings),
+      document.renderOverview(512, settings),
+      document.savedOverview(512, 0, { liveBytes: 1 })
+    ]) {
+      expect(result).toMatchObject({ ok: false, error: { kind: 'budget', resource: 'live bytes', limit: 1n } });
+    }
+
+    expect(value(document.renderRegion(rectangle, photoshopDefaultSettings)).pixels).toHaveLength(144 * 144 * 4);
+  } finally {
+    document.close();
+  }
 });
 
 it('bounds batch work and restores visibility after a failed batch', async () => {
