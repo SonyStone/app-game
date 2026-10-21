@@ -114,6 +114,20 @@ function takeFromExternrefTable0(idx) {
     wasm.__externref_table_dealloc(idx);
     return value;
 }
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * @param {Uint8Array} bytes
+ * @returns {any}
+ */
+export function readPsd(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsd(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
 
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -139,14 +153,16 @@ export function writePsd(document, composite) {
 }
 
 /**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
+ * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
+ * Physical record indices refer to the selected layer-info section and change after structural edits.
  * @param {Uint8Array} bytes
- * @returns {any}
+ * @returns {PsdSourceSnapshot}
  */
-export function readPsd(bytes) {
+export function readPsdSource(bytes) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readPsd(ptr0, len0);
+    const ret = wasm.readPsdSource(ptr0, len0);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -157,9 +173,9 @@ const PsdEditorSessionFinalization = (typeof FinalizationRegistry === 'undefined
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_psdeditorsession_free(ptr >>> 0, 1));
 /**
- * Persistent M01 preserve-mode editor. Opening does not fetch assets or flatten the document.
+ * Persistent bounded RGB8 preserve-mode editor. Opening does not fetch assets or flatten the document.
  * RGB8 plain raster/group edits are atomic; unsupported dependencies throw structured Error objects.
- * Visual or structural edits block prepareSave until cache regeneration is implemented in M02.
+ * Visual saves require the strict renderer, regenerate merged data and omit thumbnail 1036.
  */
 export class PsdEditorSession {
 
@@ -175,17 +191,48 @@ export class PsdEditorSession {
         wasm.__wbg_psdeditorsession_free(ptr, 0);
     }
     /**
+     * Atomically edits persisted locks, labels, copy flags, style UI flags and existing percent opacity.
+     * Record indices come from inspectSource and change after structural edits. Opacity edits require
+     * strict merged-image regeneration at prepareSave; unsupported rendering refuses the save.
+     * Visual edits admit RGB8 primary layers on canvases at most 2000x1000. Labels must be in 0..11.
+     * Arbitrary shmd/XMP payload replacement, colors, nested paint edits and runtime state refuse with Dependency.
+     * @param {readonly PsdSourceEdit[]} batch
+     * @returns {M01EditOutcome}
+     */
+    editSource(batch) {
+        const ret = wasm.psdeditorsession_editSource(this.__wbg_ptr, batch);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * Freezes preserve-mode bytes for this revision. Untouched output is byte-identical; rename-only saves
-     * preserve all other carriers. Throws code CachesRequired for any committed visual/structural change.
-     * Model-only, native-deferred save and cache regeneration are deliberately unavailable in M01.
+     * preserve all other carriers. Visual saves require exact rendering, write real merged data, set 1057 true
+     * and omit 1036. Compatibility-off inputs are promoted. Throws RenderRequired with the renderer's cause.
+     * Unmodeled auxiliary document planes throw Dependency rather than being replaced by merged alpha.
+     * linearBlending is the host gamma-1 RGB setting, false by default; PSD does not store this preference.
+     * @param {boolean | null} [linear_blending]
      * @returns {PsdPreparedSave}
      */
-    prepareSave() {
-        const ret = wasm.psdeditorsession_prepareSave(this.__wbg_ptr);
+    prepareSave(linear_blending) {
+        const ret = wasm.psdeditorsession_prepareSave(this.__wbg_ptr, isLikeNone(linear_blending) ? 0xFFFFFF : linear_blending ? 1 : 0);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
         return PsdPreparedSave.__wrap(ret[0]);
+    }
+    /**
+     * Inspects full-precision persisted source fields for any parsed container, without RGB8 tree admission.
+     * Null leaves remain absent. This reads neither linked assets nor application-only state.
+     * @returns {PsdSourceSnapshot}
+     */
+    inspectSource() {
+        const ret = wasm.psdeditorsession_inspectSource(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
     }
     /**
      * Opens an in-memory PSD/PSB. Untouched save works for any container the lossless parser accepts.
@@ -208,7 +255,15 @@ export class PsdEditorSession {
      * New IDs are returned in insertion order. Group-end IDs cannot be targeted. Names must be control-free
      * and at most 255 UTF-16 units. Invalid values refuse,
      * preserving revision, tree and allocation floor. Clip/unclip must leave a preceding raster base.
-     * No host context is consumed because this round does not certify renders or regenerate caches.
+     * replacePixels preserves properties and exact straight RGBA, including hidden RGB and off-canvas samples.
+     * paintPixels replaces its rectangle exactly and extends bounds; it does not blend brush samples.
+     * setMask creates/edits the independent raster source, or removes it with null. With a vector it edits -3
+     * and rebuilds combined -2. Empty outside-white masks remain distinct from deletion.
+     * setVectorMask creates/edits/removes one absolute rectangle/ellipse path, keeping raster source independent.
+     * setSolid updates RGB8 SoCo and vector generator mirrors plus caches; shape null makes an unbounded fill.
+     * Relative/inverted/feathered masks, strokes, live origination and general curves refuse.
+     * Shape canvases are at most 2000x1000, coordinates within +/-2000.
+     * Groups refuse pixel edits; malformed buffers/extents roll back the complete batch.
      * @param {readonly M01Edit[]} batch
      * @returns {M01EditOutcome}
      */
@@ -227,7 +282,8 @@ export class PsdEditorSession {
     }
     /**
      * Returns revision as bigint, native canvas dimensions and a stable bottom-to-top raster/group tree.
-     * Inspection throws a typed refusal when the import is outside M01 admission; untouched save remains available.
+     * Inspection throws a typed refusal outside admission; untouched save remains available.
+     * Dirty inspection checks saving with encoded RGB blending and can allocate a whole-canvas render.
      * @returns {M01Snapshot}
      */
     inspect() {
@@ -380,6 +436,10 @@ function __wbg_get_imports() {
         const ret = new Array();
         return ret;
     };
+    imports.wbg.__wbg_new_9fee97a409b32b68 = function(arg0) {
+        const ret = new Uint16Array(arg0);
+        return ret;
+    };
     imports.wbg.__wbg_new_a12002a7f91c75be = function(arg0) {
         const ret = new Uint8Array(arg0);
         return ret;
@@ -390,6 +450,10 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbg_new_c68d7209be747379 = function(arg0, arg1) {
         const ret = new Error(getStringFromWasm0(arg0, arg1));
+        return ret;
+    };
+    imports.wbg.__wbg_newwithbyteoffsetandlength_d4a86622320ea258 = function(arg0, arg1, arg2) {
+        const ret = new Uint16Array(arg0, arg1 >>> 0, arg2 >>> 0);
         return ret;
     };
     imports.wbg.__wbg_newwithbyteoffsetandlength_d97e637ebe145a9a = function(arg0, arg1, arg2) {

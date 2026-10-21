@@ -26,6 +26,7 @@ export const psdfontlibrary_fonts: (a: number) => any;
 export const psdfontlibrary_new: () => number;
 export const psdfontlibrary_setHyphenationDictionary: (a: number, b: number, c: number) => [number, number];
 export const readPsd: (a: number, b: number) => [number, number, number];
+export const readPsdSource: (a: number, b: number) => [number, number, number];
 export const renderedimage_approximations: (a: number) => any;
 export const renderedimage_depth: (a: number) => number;
 export const renderedimage_height: (a: number) => number;

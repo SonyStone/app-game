@@ -1,14 +1,20 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
+/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
 /**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
+ * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
+ * Physical record indices refer to the selected layer-info section and change after structural edits.
  */
-export function readPsd(bytes: Uint8Array): any;
+export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
 
 /** Snapshot of the admitted RGB8 identity tree. Scalars use byte opacity/Fill. */
 export interface M01Snapshot { readonly revision: bigint; readonly width: number; readonly height: number; readonly identityFloor: number; readonly saveBlocked: boolean; readonly selected: readonly number[]; readonly layers: readonly M01Layer[]; }
@@ -16,9 +22,25 @@ export interface M01Snapshot { readonly revision: bigint; readonly width: number
 export interface M01Layer { readonly id: number; readonly endId: number | null; readonly name: string; readonly visible: boolean; readonly opacity: number; readonly fill: number; readonly blend: string; readonly clipped: boolean; readonly link: number | null; readonly linkEnabled: boolean | null; readonly children: readonly M01Layer[]; }
 /** IDs correspond to insertions in batch order; refusals leave all state unchanged. */
 export interface M01EditOutcome { readonly revision: bigint; readonly created: readonly number[]; readonly diagnostics: readonly never[]; }
-/** M01 positions are bottom-to-top, measured after removal for moves. All batches are atomic. */
+/** Absolute raster source mask; defaultColor is 0 or 255. Extents/samples remain untrimmed. */
+export interface RasterMask { left: number; top: number; width: number; height: number; samples: Uint8Array; defaultColor: number; disabled: boolean; }
+/** One canonical path in document pixels. Finite, nondegenerate coordinates only; no strokes or live origination. */
+export interface SimpleShape { kind: 'rectangle' | 'ellipse'; left: number; top: number; right: number; bottom: number; }
+/** Exact straight RGB8 source samples. Zero-by-zero clears; other extents and buffers must agree. */
+export interface RasterPixels { left: number; top: number; width: number; height: number; rgba: Uint8Array; }
+/** Positions are bottom-to-top, measured after removal for moves. All batches are atomic. */
 export type M01Edit =
   | {kind: 'insertRaster'; parent?: number | null; index: number; raster: {name: string; left: number; top: number; width: number; height: number; pixels: Uint8Array}}
+  /** Replace source pixels/bounds while retaining metadata. Groups/generators refuse. */
+  | {kind: 'replacePixels'; layerId: number; pixels: RasterPixels}
+  /** Replace this patch's samples, extending bounds. Invalid or empty patches refuse. */
+  | {kind: 'paintPixels'; layerId: number; pixels: RasterPixels}
+  /** Create/edit/delete independent raster source. Null removes only the source, preserving a vector. */
+  | {kind: 'setMask'; layerId: number; mask: RasterMask | null}
+  /** Create/edit/delete a simple vector mask, keeping real source and combined cache distinct. */
+  | {kind: 'setVectorMask'; layerId: number; shape: SimpleShape | null}
+  /** Convert/edit a simple solid with coherent mirrors/caches. Null shape paints the canvas. */
+  | {kind: 'setSolid'; layerId: number; color: readonly [number, number, number]; shape?: SimpleShape | null}
   | {kind: 'insertGroup'; parent?: number | null; index: number; name: string}
   | {kind: 'delete'; layerId: number}
   | {kind: 'move'; layerId: number; parent?: number | null; index: number}
@@ -28,21 +50,250 @@ export type M01Edit =
   | {kind: 'fill'; layerId: number; fill: number}
   | {kind: 'blend'; layerId: number; blend: string}
   | {kind: 'clip'; layerId: number; clipped: boolean};
+/** Target for a persisted source change. Reinspect after structural edits. */
+export interface PsdSourceEditTarget {
+  /** Physical index in inspectSource().layers, not a semantic layer ID. */ readonly recordIndex: number;
+}
+/** Atomic persisted-source changes. Application state and arbitrary descriptor/metadata replacement refuse. */
+export type PsdSourceEdit = PsdSourceEditTarget & (
+  | {
+      /** Replace the stored lock word and synchronize the transparency flag when changed. */ kind: 'locks';
+      /** All 32 lspf bits. Supply reserved bits explicitly to retain them. */ bits: number;
+    }
+  | {
+      /** Replace only the persisted color-label word. */ kind: 'label';
+      /** Photoshop 26 label index, 0 through 11. Reserved bytes and tail remain intact. */ index: number;
+    }
+  | {
+      /** Change one existing percent leaf. Save requires a certified strict RGB8 render. */ kind: 'styleOpacity';
+      /** Flattened source instance index, in storage order. */ instance: number;
+      /** Finite percentage in 0 through 100; no renderer-byte round trip. */ percent: number;
+    }
+  | {
+      /** Change only the existing showInDialog leaf. */ kind: 'styleDialog';
+      /** Flattened source instance index, in storage order. */ instance: number;
+      /** UI visibility, independent from enabled and present. */ show: boolean;
+    }
+  | {
+      /** Change a copy flag, retaining its opaque payload and envelope. */ kind: 'metadataCopy';
+      /** shmd record index, including duplicates. */ entry: number;
+      /** Raw copy-on-sheet byte, 0 through 255. */ copyOnSheet: number;
+    }
+);
+
+
+
+/** Persisted source snapshot. It contains no selection, zoom, document dirty bit or linked-file OS state. */
+export interface PsdSourceSnapshot {
+  /** Layers in physical source order. Record indices change after structural edits. */ readonly layers: readonly PsdSourceLayer[];
+  /** Resource 1060 bytes, including encoding and padding; null when absent. */ readonly xmp: Uint8Array | null;
+}
+/** Persisted source properties. Null means absent, never a synthesized default. */
+export interface PsdSourceLayer {
+  /** Index in the selected layer-info section. */ readonly recordIndex: number;
+  /** Stored lyid, null if absent. */ readonly layerId: number | null;
+  /** Raw lspf bits plus their named stored flags, null without lspf. */ readonly locks: SourceLocks | null;
+  /** Stored lclr index and Photoshop 26 enum name, null without lclr. */ readonly label: SourceLabel | null;
+  /** Winning modern source block, null without modern styles. Legacy lrFX stays separate. */ readonly styles: SourceStyles | null;
+  /** Persisted shmd envelope, null without the block. Payloads are retained as bytes. */ readonly metadata: SourceMetadata | null;
+}
+/** Stored lock flags. Background runtime defaults are not inserted. */
+export interface SourceLocks {
+  /** All 32 bits, including reserved bits. */ readonly bits: number;
+  /** Bit 0. */ readonly transparency: boolean;
+  /** Bit 1. */ readonly composite: boolean;
+  /** Bit 2. */ readonly position: boolean;
+  /** Bit 3. */ readonly artboardAutonest: boolean;
+  /** Bit 31. */ readonly all: boolean;
+}
+/** Persisted layer color label. */
+export interface SourceLabel {
+  /** Raw unsigned label index. */ readonly index: number;
+  /** Photoshop 26 AM name, null for an unknown index. */ readonly name: string | null;
+}
+/** Lossless shmd records and tail. */
+export interface SourceMetadata {
+  /** Source order, including duplicate keys. */ readonly records: readonly SourceMetadataEntry[];
+  /** Bytes following the declared record count. */ readonly trailing: Uint8Array;
+}
+/** A shmd record; opaque payloads do not imply typed AM metadata coverage. */
+export interface SourceMetadataEntry {
+  /** Four source signature bytes. */ readonly signature: Uint8Array;
+  /** Four metadata-key bytes. */ readonly key: Uint8Array;
+  /** Raw copy-on-sheet byte. */ readonly copyOnSheet: number;
+  /** Three reserved bytes. */ readonly reserved: Uint8Array;
+  /** Original payload and its padding. */ readonly payload: Uint8Array;
+}
+/** Stored SourceStyles snapshot; fields retain source precision and absence. */
+export interface SourceStyles {
+  /** Winning block key. */ readonly key: Uint8Array;
+  /** Stored effects version. */ readonly version: number;
+  /** Stored master switch; missing imports as true in the rendering projection. */ readonly masterFxSwitch: boolean | null;
+  /** Stored style scale, with its unit and binary64 value. */ readonly scale: SourceNumber | null;
+  /** Known families in physical source order, including disabled/UI-only instances. */ readonly instances: readonly (SourceInstance)[];
+  /** Original block bytes, including unknown entries and padding. */ readonly sourceBlock: Uint8Array;
+}
+/** Stored SourceInstance snapshot; fields retain source precision and absence. */
+export interface SourceInstance {
+  /** Family's source key, retaining the single versus Multi distinction. */ readonly key: Uint8Array;
+  /** Position in the family's source list, zero for a singleton. */ readonly index: number;
+  /** Stored settings, independent from renderer defaults and projections. */ readonly settings: SourceSettings;
+}
+/** Stored SourceSettings snapshot; fields retain source precision and absence. */
+export interface SourceSettings {
+  /** Stored `enab`; absent or differently tagged leaves remain None. */ readonly enabled: boolean | null;
+  /** Stored `present`; absent or differently tagged leaves remain None. */ readonly present: boolean | null;
+  /** Stored `showInDialog`; absent or differently tagged leaves remain None. */ readonly showInDialog: boolean | null;
+  /** Stored `AntA`; absent or differently tagged leaves remain None. */ readonly antiAlias: boolean | null;
+  /** Stored `uglg`; absent or differently tagged leaves remain None. */ readonly useGlobalAngle: boolean | null;
+  /** Stored `layerConceals`; absent or differently tagged leaves remain None. */ readonly layerConceals: boolean | null;
+  /** Stored `Invr`; absent or differently tagged leaves remain None. */ readonly invert: boolean | null;
+  /** Stored `overprint`; absent or differently tagged leaves remain None. */ readonly overprint: boolean | null;
+  /** Stored `useShape`; absent or differently tagged leaves remain None. */ readonly useShape: boolean | null;
+  /** Stored `useTexture`; absent or differently tagged leaves remain None. */ readonly useTexture: boolean | null;
+  /** Stored `antialiasGloss`; absent or differently tagged leaves remain None. */ readonly antialiasGloss: boolean | null;
+  /** Stored `InvT`; absent or differently tagged leaves remain None. */ readonly invertTexture: boolean | null;
+  /** Stored `Algn`; absent or differently tagged leaves remain None. */ readonly align: boolean | null;
+  /** Stored `Rvrs`; absent or differently tagged leaves remain None. */ readonly reverse: boolean | null;
+  /** Stored `Dthr`; absent or differently tagged leaves remain None. */ readonly dither: boolean | null;
+  /** Stored `Lnkd`; absent or differently tagged leaves remain None. */ readonly linked: boolean | null;
+  /** Stored `Opct`; absent or differently tagged leaves remain None. */ readonly opacity: SourceNumber | null;
+  /** Stored `hglO`; absent or differently tagged leaves remain None. */ readonly highlightOpacity: SourceNumber | null;
+  /** Stored `sdwO`; absent or differently tagged leaves remain None. */ readonly shadowOpacity: SourceNumber | null;
+  /** Stored `Dstn`; absent or differently tagged leaves remain None. */ readonly distance: SourceNumber | null;
+  /** Stored `blur`; absent or differently tagged leaves remain None. */ readonly blur: SourceNumber | null;
+  /** Stored `Ckmt`; absent or differently tagged leaves remain None. */ readonly choke: SourceNumber | null;
+  /** Stored `Nose`; absent or differently tagged leaves remain None. */ readonly noise: SourceNumber | null;
+  /** Stored `Angl`; absent or differently tagged leaves remain None. */ readonly angle: SourceNumber | null;
+  /** Stored `lagl`; absent or differently tagged leaves remain None. */ readonly localLightingAngle: SourceNumber | null;
+  /** Stored `Lald`; absent or differently tagged leaves remain None. */ readonly localLightingAltitude: SourceNumber | null;
+  /** Stored `ShdN`; absent or differently tagged leaves remain None. */ readonly shadingNoise: SourceNumber | null;
+  /** Stored `Inpr`; absent or differently tagged leaves remain None. */ readonly inputRange: SourceNumber | null;
+  /** Stored `Sz  `; absent or differently tagged leaves remain None. */ readonly size: SourceNumber | null;
+  /** Stored `srgR`; absent or differently tagged leaves remain None. */ readonly strength: SourceNumber | null;
+  /** Stored `Sftn`; absent or differently tagged leaves remain None. */ readonly softness: SourceNumber | null;
+  /** Stored `textureDepth`; absent or differently tagged leaves remain None. */ readonly textureDepth: SourceNumber | null;
+  /** Stored `Scl `; absent or differently tagged leaves remain None. */ readonly scale: SourceNumber | null;
+  /** Stored `Md  `; absent or differently tagged leaves remain None. */ readonly mode: SourceEnum | null;
+  /** Stored `hglM`; absent or differently tagged leaves remain None. */ readonly highlightMode: SourceEnum | null;
+  /** Stored `sdwM`; absent or differently tagged leaves remain None. */ readonly shadowMode: SourceEnum | null;
+  /** Stored `bvlS`; absent or differently tagged leaves remain None. */ readonly bevelStyle: SourceEnum | null;
+  /** Stored `bvlT`; absent or differently tagged leaves remain None. */ readonly bevelTechnique: SourceEnum | null;
+  /** Stored `bvlD`; absent or differently tagged leaves remain None. */ readonly bevelDirection: SourceEnum | null;
+  /** Stored `GlwT`; absent or differently tagged leaves remain None. */ readonly glowTechnique: SourceEnum | null;
+  /** Stored `glwS`; absent or differently tagged leaves remain None. */ readonly innerGlowSource: SourceEnum | null;
+  /** Stored `Styl`; absent or differently tagged leaves remain None. */ readonly style: SourceEnum | null;
+  /** Stored `PntT`; absent or differently tagged leaves remain None. */ readonly paintType: SourceEnum | null;
+  /** Stored `Type`; absent or differently tagged leaves remain None. */ readonly gradientType: SourceEnum | null;
+  /** Stored `gradientsInterpolationMethod`; absent or differently tagged leaves remain None. */ readonly interpolation: SourceEnum | null;
+  /** Stored `gs99`, the Gradient Overlay interpolation selector; absence stays distinct from the stroke/glow key. */ readonly gradientInterpolation: SourceEnum | null;
+  /** Stored `Clr `; absent or differently tagged leaves remain None. */ readonly color: SourceColor | null;
+  /** Stored `hglC`; absent or differently tagged leaves remain None. */ readonly highlightColor: SourceColor | null;
+  /** Stored `sdwC`; absent or differently tagged leaves remain None. */ readonly shadowColor: SourceColor | null;
+  /** Stored `TrnS`; absent or differently tagged leaves remain None. */ readonly transferSpec: SourceContour | null;
+  /** Stored `MpgS`; absent or differently tagged leaves remain None. */ readonly mappingShape: SourceContour | null;
+  /** Stored `TrnS`; absent or differently tagged leaves remain None. */ readonly transparencyShape: SourceContour | null;
+  /** Stored `Grad`; absent or differently tagged leaves remain None. */ readonly gradient: SourceGradient | null;
+  /** Stored `Ptrn`; absent or differently tagged leaves remain None. */ readonly pattern: SourcePattern | null;
+  /** Stored `phase`; absent or differently tagged leaves remain None. */ readonly phase: SourcePoint | null;
+  /** Stored `Ofst`; absent or differently tagged leaves remain None. */ readonly offset: SourcePoint | null;
+}
+/** Stored SourceNumber snapshot; fields retain source precision and absence. */
+export interface SourceNumber {
+  /** Exact binary64 value, without color scaling, percent conversion or byte rounding. */ readonly value: number;
+  /** Unit FourCC, None for an untagged numeric value. */ readonly unit: readonly (number)[] | null;
+  /** True only for the original signed-integer value tag. */ readonly integer: boolean;
+}
+/** Stored SourceEnum snapshot; fields retain source precision and absence. */
+export interface SourceEnum {
+  /** Original domain and selected identifier. */ readonly value: SourceEnumValue;
+}
+/** Stored SourceColor snapshot; fields retain source precision and absence. */
+export interface SourceColor {
+  /** Descriptor color class, such as RGBC, CMYC, LbCl, Grsc or RGBT. */ readonly class: readonly (number)[];
+  /** Red, green and blue in source RGB component units. */ readonly rgb: readonly (SourceNumber | null)[];
+  /** Float RGB components, stored separately from ordinary RGB components. */ readonly rgbFloat: readonly (SourceNumber | null)[];
+  /** Cyan, magenta, yellow and black source percentages. */ readonly cmyk: readonly (SourceNumber | null)[];
+  /** Lab lightness, a and b. */ readonly lab: readonly (SourceNumber | null)[];
+  /** Gray source component. */ readonly gray: SourceNumber | null;
+  /** Hue, saturation and brightness source components. */ readonly hsb: readonly (SourceNumber | null)[];
+}
+/** Stored SourcePoint snapshot; fields retain source precision and absence. */
+export interface SourcePoint {
+  /** Horizontal source coordinate. */ readonly horizontal: SourceNumber | null;
+  /** Vertical source coordinate. */ readonly vertical: SourceNumber | null;
+}
+/** Stored SourceContour snapshot; fields retain source precision and absence. */
+export interface SourceContour {
+  /** Raw UTF16 contour name, including any terminator. */ readonly name: Uint16Array | null;
+  /** Ordered points, None if the list is absent or differently tagged. */ readonly points: readonly (SourceContourPoint)[] | null;
+}
+/** Stored SourceContourPoint snapshot; fields retain source precision and absence. */
+export interface SourceContourPoint {
+  /** Exact source coordinates. */ readonly point: SourcePoint;
+  /** Optional continuity flag. Absence is distinct from false. */ readonly continuity: boolean | null;
+}
+/** Stored SourceGradient snapshot; fields retain source precision and absence. */
+export interface SourceGradient {
+  /** Raw UTF16 name, including any terminator. */ readonly name: Uint16Array | null;
+  /** Stored gradient form, including noise gradients. */ readonly form: SourceEnum | null;
+  /** Stored interpolation smoothness. */ readonly smoothness: SourceNumber | null;
+  /** Source color stops; None without the list. */ readonly colors: readonly (SourceColorStop)[] | null;
+  /** Source transparency stops; None without the list. */ readonly transparency: readonly (SourceOpacityStop)[] | null;
+}
+/** Stored SourceColorStop snapshot; fields retain source precision and absence. */
+export interface SourceColorStop {
+  /** Stored position, conventionally 0..4096. */ readonly location: SourceNumber | null;
+  /** Stored midpoint percentage. */ readonly midpoint: SourceNumber | null;
+  /** Stored color without conversion. */ readonly color: SourceColor | null;
+  /** User/foreground/background color-stop type. */ readonly kind: SourceEnum | null;
+}
+/** Stored SourceOpacityStop snapshot; fields retain source precision and absence. */
+export interface SourceOpacityStop {
+  /** Stored position. */ readonly location: SourceNumber | null;
+  /** Stored midpoint. */ readonly midpoint: SourceNumber | null;
+  /** Exact stored opacity percentage. */ readonly opacity: SourceNumber | null;
+}
+/** Stored SourcePattern snapshot; fields retain source precision and absence. */
+export interface SourcePattern {
+  /** Raw UTF16 display name, including any terminator. */ readonly name: Uint16Array | null;
+  /** Raw UTF16 pattern identifier, including any terminator. */ readonly id: Uint16Array | null;
+}
+/** Exact enum identifiers as text; the original FourCC/string envelope remains in sourceBlock. */
+export interface SourceEnumValue {
+  /** Enum domain. */ readonly type: string;
+  /** Selected identifier, including unknown values. */ readonly value: string;
+}
 
 
 /**
- * Persistent M01 preserve-mode editor. Opening does not fetch assets or flatten the document.
+ * Persistent bounded RGB8 preserve-mode editor. Opening does not fetch assets or flatten the document.
  * RGB8 plain raster/group edits are atomic; unsupported dependencies throw structured Error objects.
- * Visual or structural edits block prepareSave until cache regeneration is implemented in M02.
+ * Visual saves require the strict renderer, regenerate merged data and omit thumbnail 1036.
  */
 export class PsdEditorSession {
   free(): void;
   /**
-   * Freezes preserve-mode bytes for this revision. Untouched output is byte-identical; rename-only saves
-   * preserve all other carriers. Throws code CachesRequired for any committed visual/structural change.
-   * Model-only, native-deferred save and cache regeneration are deliberately unavailable in M01.
+   * Atomically edits persisted locks, labels, copy flags, style UI flags and existing percent opacity.
+   * Record indices come from inspectSource and change after structural edits. Opacity edits require
+   * strict merged-image regeneration at prepareSave; unsupported rendering refuses the save.
+   * Visual edits admit RGB8 primary layers on canvases at most 2000x1000. Labels must be in 0..11.
+   * Arbitrary shmd/XMP payload replacement, colors, nested paint edits and runtime state refuse with Dependency.
    */
-  prepareSave(): PsdPreparedSave;
+  editSource(batch: readonly PsdSourceEdit[]): M01EditOutcome;
+  /**
+   * Freezes preserve-mode bytes for this revision. Untouched output is byte-identical; rename-only saves
+   * preserve all other carriers. Visual saves require exact rendering, write real merged data, set 1057 true
+   * and omit 1036. Compatibility-off inputs are promoted. Throws RenderRequired with the renderer's cause.
+   * Unmodeled auxiliary document planes throw Dependency rather than being replaced by merged alpha.
+   * linearBlending is the host gamma-1 RGB setting, false by default; PSD does not store this preference.
+   */
+  prepareSave(linear_blending?: boolean | null): PsdPreparedSave;
+  /**
+   * Inspects full-precision persisted source fields for any parsed container, without RGB8 tree admission.
+   * Null leaves remain absent. This reads neither linked assets nor application-only state.
+   */
+  inspectSource(): PsdSourceSnapshot;
   /**
    * Opens an in-memory PSD/PSB. Untouched save works for any container the lossless parser accepts.
    * This bounded API does not claim paged input or arbitrary-size PSB support.
@@ -53,7 +304,15 @@ export class PsdEditorSession {
    * New IDs are returned in insertion order. Group-end IDs cannot be targeted. Names must be control-free
    * and at most 255 UTF-16 units. Invalid values refuse,
    * preserving revision, tree and allocation floor. Clip/unclip must leave a preceding raster base.
-   * No host context is consumed because this round does not certify renders or regenerate caches.
+   * replacePixels preserves properties and exact straight RGBA, including hidden RGB and off-canvas samples.
+   * paintPixels replaces its rectangle exactly and extends bounds; it does not blend brush samples.
+   * setMask creates/edits the independent raster source, or removes it with null. With a vector it edits -3
+   * and rebuilds combined -2. Empty outside-white masks remain distinct from deletion.
+   * setVectorMask creates/edits/removes one absolute rectangle/ellipse path, keeping raster source independent.
+   * setSolid updates RGB8 SoCo and vector generator mirrors plus caches; shape null makes an unbounded fill.
+   * Relative/inverted/feathered masks, strokes, live origination and general curves refuse.
+   * Shape canvases are at most 2000x1000, coordinates within +/-2000.
+   * Groups refuse pixel edits; malformed buffers/extents roll back the complete batch.
    */
   edit(batch: readonly M01Edit[]): M01EditOutcome;
   /**
@@ -62,7 +321,8 @@ export class PsdEditorSession {
   dispose(): void;
   /**
    * Returns revision as bigint, native canvas dimensions and a stable bottom-to-top raster/group tree.
-   * Inspection throws a typed refusal when the import is outside M01 admission; untouched save remains available.
+   * Inspection throws a typed refusal outside admission; untouched save remains available.
+   * Dirty inspection checks saving with encoded RGB blending and can allocate a whole-canvas render.
    */
   inspect(): M01Snapshot;
 }
@@ -95,13 +355,16 @@ export interface InitOutput {
   readonly __wbg_psdpreparedsave_free: (a: number, b: number) => void;
   readonly psdeditorsession_dispose: (a: number) => void;
   readonly psdeditorsession_edit: (a: number, b: any) => [number, number, number];
+  readonly psdeditorsession_editSource: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_inspect: (a: number) => [number, number, number];
+  readonly psdeditorsession_inspectSource: (a: number) => [number, number, number];
   readonly psdeditorsession_new: (a: number, b: number) => [number, number, number];
-  readonly psdeditorsession_prepareSave: (a: number) => [number, number, number];
+  readonly psdeditorsession_prepareSave: (a: number, b: number) => [number, number, number];
   readonly psdpreparedsave_dispose: (a: number) => void;
   readonly psdpreparedsave_nextChunk: (a: number, b: number) => [number, number, number, number];
   readonly psdpreparedsave_revision: (a: number) => bigint;
   readonly readPsd: (a: number, b: number) => [number, number, number];
+  readonly readPsdSource: (a: number, b: number) => [number, number, number];
   readonly writePsd: (a: any, b: number, c: number) => [number, number, number, number];
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
