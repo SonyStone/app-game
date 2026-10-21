@@ -16,6 +16,16 @@ export function writePsd(document: any, composite: Uint8Array): Uint8Array;
  */
 export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
 
+/** Partial repaint of a sole RGB8 Classic canvas GdFl. Empty patch regenerates existing stops cache-free. */
+export interface GradientFillPatch {
+  /** Finite degrees. Omitted fields retain descriptor precision. */ angle?: number;
+  /** Percent in 10 through 150. */ scale?: number;
+  /** Horizontal and vertical canvas percentages in -100 through 100. */ offset?: readonly [number, number];
+  /** Reverse lookup without reordering stops. */ reverse?: boolean;
+  /** Classic geometry. Interpolation cannot be changed by this operation. */ style?: 'linear' | 'radial' | 'angle' | 'reflected' | 'diamond';
+  /** Existing stop indices; components in 0 through 255, normalized as 255*f32(c/255). */ colors?: readonly {index: number; rgb: readonly [number,number,number]}[];
+  /** Existing stop indices; opacity in 0 through 100, normalized to native byte opacity. */ opacities?: readonly {index: number; percent: number}[];
+}
 /** Snapshot of the admitted RGB8 identity tree. Scalars use byte opacity/Fill. */
 export interface M01Snapshot { readonly revision: bigint; readonly width: number; readonly height: number; readonly identityFloor: number; readonly saveBlocked: boolean; readonly selected: readonly number[]; readonly layers: readonly M01Layer[]; }
 /** Group children are bottom-to-top; endId is reserved and cannot be edited. */
@@ -295,6 +305,13 @@ export class PsdEditorSession {
    */
   inspectSource(): PsdSourceSnapshot;
   /**
+   * Edits and repaints a sole Normal RGB8 Classic canvas GdFl, with all render-input caches removed.
+   * Regenerates layer RGB/alpha and real merged caches atomically, omitting stale thumbnail 1036.
+   * Empty patch repaints the current descriptor. DitheredGradient and UnsupportedGradientInterpolation
+   * are named refusals. Active masks, shapes, styles, additional layers and other modes/depths refuse.
+   */
+  repaintGradientFill(record_index: number, patch: GradientFillPatch, linear_blending?: boolean | null): M01EditOutcome;
+  /**
    * Opens an in-memory PSD/PSB. Untouched save works for any container the lossless parser accepts.
    * This bounded API does not claim paged input or arbitrary-size PSB support.
    */
@@ -360,6 +377,7 @@ export interface InitOutput {
   readonly psdeditorsession_inspectSource: (a: number) => [number, number, number];
   readonly psdeditorsession_new: (a: number, b: number) => [number, number, number];
   readonly psdeditorsession_prepareSave: (a: number, b: number) => [number, number, number];
+  readonly psdeditorsession_repaintGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
   readonly psdpreparedsave_dispose: (a: number) => void;
   readonly psdpreparedsave_nextChunk: (a: number, b: number) => [number, number, number, number];
   readonly psdpreparedsave_revision: (a: number) => bigint;

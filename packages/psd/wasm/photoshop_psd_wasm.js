@@ -235,6 +235,23 @@ export class PsdEditorSession {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
+     * Edits and repaints a sole Normal RGB8 Classic canvas GdFl, with all render-input caches removed.
+     * Regenerates layer RGB/alpha and real merged caches atomically, omitting stale thumbnail 1036.
+     * Empty patch repaints the current descriptor. DitheredGradient and UnsupportedGradientInterpolation
+     * are named refusals. Active masks, shapes, styles, additional layers and other modes/depths refuse.
+     * @param {number} record_index
+     * @param {GradientFillPatch} patch
+     * @param {boolean | null} [linear_blending]
+     * @returns {M01EditOutcome}
+     */
+    repaintGradientFill(record_index, patch, linear_blending) {
+        const ret = wasm.psdeditorsession_repaintGradientFill(this.__wbg_ptr, record_index, patch, isLikeNone(linear_blending) ? 0xFFFFFF : linear_blending ? 1 : 0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * Opens an in-memory PSD/PSB. Untouched save works for any container the lossless parser accepts.
      * This bounded API does not claim paged input or arbitrary-size PSB support.
      * @param {Uint8Array} bytes
@@ -420,6 +437,10 @@ function __wbg_get_imports() {
         const ret = Array.isArray(arg0);
         return ret;
     };
+    imports.wbg.__wbg_keys_5c77a08ddc2fb8a6 = function(arg0) {
+        const ret = Object.keys(arg0);
+        return ret;
+    };
     imports.wbg.__wbg_length_a446193dc22c12f8 = function(arg0) {
         const ret = arg0.length;
         return ret;
@@ -492,6 +513,11 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbindgen_is_null = function(arg0) {
         const ret = arg0 === null;
+        return ret;
+    };
+    imports.wbg.__wbindgen_is_object = function(arg0) {
+        const val = arg0;
+        const ret = typeof(val) === 'object' && val !== null;
         return ret;
     };
     imports.wbg.__wbindgen_is_undefined = function(arg0) {
