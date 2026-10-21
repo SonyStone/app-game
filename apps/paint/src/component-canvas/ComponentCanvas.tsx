@@ -1,6 +1,6 @@
 import type { JSX } from '@solidjs/web';
 import { createEffect, createSignal, For, Show, untrack } from 'solid-js';
-import { createFreshTab, FreshTabNotice } from '../features/fresh-tab';
+import { arrivedByMove, createFreshTab, FreshTabNotice } from '../features/fresh-tab';
 import { createPalmRejection, createPalmRejectionSettings } from '../features/palm-rejection';
 import { createPenHover } from '../features/pen-hover';
 import { watchTapTargets } from '../mockups/puck-gallery/kit/watchTapTargets';
@@ -59,7 +59,7 @@ export function ComponentCanvas() {
 
   // Paint's own guards first: palm rejection must see touches before the canvas does, and the pen hover detection
   // before palm rejection, so that the press that finds the pen without hover is guarded as such.
-  const penHover = createPenHover();
+  const penHover = createPenHover({ trustRemembered: !arrivedByMove() });
   const palmOptions = createPalmRejectionSettings().settings;
   const hoverless = () => {
     const mode = palmOptions().hoverless;

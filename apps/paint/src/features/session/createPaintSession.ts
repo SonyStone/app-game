@@ -26,7 +26,7 @@ import { createDrawingFolder } from '../drawing-folder';
 import { createPaintEngine } from '../engine';
 import { createFill } from '../fill';
 import { createFrames, frameRegion } from '../frames';
-import { arrivalStorageWaitMs, createFreshTab } from '../fresh-tab';
+import { arrivalStorageWaitMs, arrivedByMove, createFreshTab } from '../fresh-tab';
 import { createGpuWarmup } from '../gpu-warmup';
 import { createGradient } from '../gradient';
 import { createHiddenLayerGuard } from '../hidden-layer';
@@ -323,7 +323,7 @@ export function createPaintSession(options: {
   // After the recorder, so that recordings keep ignored touches, and before the other window listeners, so that
   // nothing else sees them.
   // Before palm rejection, so that the press that finds the pen without hover is guarded as such.
-  const penHover = createPenHover();
+  const penHover = createPenHover({ trustRemembered: !arrivedByMove() });
   const palmOptions = palmSettings.settings;
   const hoverless = () => {
     const mode = palmOptions().hoverless;

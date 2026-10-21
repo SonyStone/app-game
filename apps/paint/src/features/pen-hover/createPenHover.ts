@@ -11,17 +11,31 @@ import { createImmediateSignal } from '../../shared/createImmediateSignal';
  * window listeners created after this one can act on the press that found it out. Listens on the window in the
  * capture phase without stopping anything. Must be created within a Solid owner.
  *
- * `lostContacts` counts the pen's touches in a row without hover since it last hovered, once it has hovered in this
- * page: 0 while the pen hovers, and always 0 for a pen that never did, such as on a tablet without hover.
+ * `lostContacts` counts the pen's touches in a row without hover since it last hovered, once it is known to hover: 0
+ * while the pen hovers, and always 0 for a pen that never did, such as on a tablet without hover. Whether the pen
+ * hovers is remembered in `localStorage` across pages, as a page loaded into a tab that already lost hover (a reload,
+ * a navigation) never sees it hover.
  */
-export function createPenHover() {
+export function createPenHover(
+  options: {
+    /**
+     * Whether hover remembered from earlier pages counts here; defaults to `true`. Pass `false` in a page opened to
+     * get hover back: if the pen touches down there before it hovered, the new page did not bring hover back, so the
+     * remembered hover is forgotten and the next pages do not count its touches as lost either.
+     */
+    trustRemembered?: boolean;
+  } = {}
+) {
+  const trustRemembered = options.trustRemembered ?? true;
   const [, setHovers, hovers] = createImmediateSignal<boolean | undefined>(undefined);
   const [, setLostContacts, lostContacts] = createImmediateSignal(0);
   /** The pen hovered since it last lifted, or since this started. */
   let hovered = false;
-  /** The pen hovered at some point in this page. */
-  let everHovered = false;
-  const options = { capture: true, passive: true };
+  /** Hover is remembered in `localStorage`. */
+  let remembered = readRemembered();
+  /** The pen is known to hover: it hovered in this page, or `remembered` counts here. */
+  let everHovered = trustRemembered && remembered;
+  const listenerOptions = { capture: true, passive: true };
 
   createEventListener(
     window,
@@ -30,6 +44,11 @@ export function createPenHover() {
       if (event.pointerType === 'pen' && event.buttons === 0) {
         hovered = true;
         everHovered = true;
+        if (!remembered) {
+          remembered = true;
+          writeRemembered(true);
+        }
+
         if (hovers() !== true) {
           setHovers(true);
         }
@@ -39,7 +58,7 @@ export function createPenHover() {
         }
       }
     },
-    options
+    listenerOptions
   );
   createEventListener(
     window,
@@ -56,8 +75,13 @@ export function createPenHover() {
       if (everHovered && !hovered) {
         setLostContacts(lostContacts() + 1);
       }
+
+      if (!everHovered && remembered) {
+        remembered = false;
+        writeRemembered(false);
+      }
     },
-    options
+    listenerOptions
   );
   createEventListener(
     window,
@@ -67,7 +91,7 @@ export function createPenHover() {
         hovered = false;
       }
     },
-    options
+    listenerOptions
   );
 
   return {
@@ -77,3 +101,25 @@ export function createPenHover() {
     lostContacts
   };
 }
+
+function readRemembered() {
+  try {
+    return localStorage.getItem(rememberedKey) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function writeRemembered(next: boolean) {
+  try {
+    if (next) {
+      localStorage.setItem(rememberedKey, 'true');
+    } else {
+      localStorage.removeItem(rememberedKey);
+    }
+  } catch {
+    // Remember it for this page only.
+  }
+}
+
+const rememberedKey = 'paint.penHover.seen';
