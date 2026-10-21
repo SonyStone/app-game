@@ -201,6 +201,24 @@ export type PsdViewerDocument = {
     visibility?: Iterable<readonly [number, boolean]>,
     fonts?: PsdFontLibrary
   ): PsdResult<PsdRender>;
+  /**
+   * Composites exact process channels, then converts them separately to caller-configured display sRGB.
+   * Requires `approximate: false`; display conversion can still report approximations without changing process
+   * samples. Profiles come only from the document and `color`, never from installed profiles. Returned arrays own
+   * their storage and need no disposal. This result cannot be passed to `difference`.
+   */
+  renderColor(
+    settings: PsdRenderSettings & { approximate: false },
+    color: PsdColorSettings,
+    visibility?: Iterable<readonly [number, boolean]>,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdColorRender>;
+  /**
+   * Decodes native saved process and auxiliary planes without compositing, unmatting or display conversion.
+   * The saved image may be stale. Optional visibility needs one boolean per saved plane and only describes the view.
+   * Returned arrays own their storage; calls after close fail.
+   */
+  savedProcessChannels(visibility?: boolean[]): PsdResult<PsdSavedProcessChannels>;
   /** Renders one in-canvas rectangle. Pixels and metadata own their storage; no dispose call is needed. */
   renderRegion(
     rectangle: PsdRegionRect,
@@ -437,7 +455,10 @@ export type PsdFontReleaseMismatch = {
 /** Straight (not premultiplied) 8-bit RGBA, row by row. */
 export type PsdImage = { width: number; height: number; pixels: Uint8Array };
 
-/** A composite: 8-bit RGBA for display, its depth, and how long compositing took. */
+/**
+ * A composite for the existing viewer display path. `pixels` are display RGBA8, not native process channels.
+ * Use `renderColor` for separately identified process and configured sRGB samples.
+ */
 export type PsdRender = PsdImage & {
   /**
    * The depth the compositor worked at; 16- and 32-bit composites, and CMYK and Lab composites made in their own
@@ -454,6 +475,132 @@ export type PsdRender = PsdImage & {
   approximations: string[];
   /** Frees the full-depth composite kept for comparisons; `pixels` stay usable. */
   dispose(): void;
+};
+
+/**
+ * Explicit process-to-sRGB conversion settings. The caller attests that `srgb` describes sRGB; unrecognized
+ * serializations use a reported approximation. Missing or invalid required profiles fail instead of being guessed.
+ */
+export type PsdColorSettings = {
+  /** Destination sRGB ICC profile bytes, required for every configured conversion. */
+  srgb: Uint8Array;
+  /** Working RGB profile for untagged RGB or expanded Indexed data. Embedded profiles take precedence. */
+  workingRgb?: Uint8Array;
+  /** Working Gray profile for untagged Grayscale or expanded Bitmap data. */
+  workingGray?: Uint8Array;
+  /** Working CMYK profile for untagged CMYK data. */
+  workingCmyk?: Uint8Array;
+  /** ACE-target conversion; generic ICC fallbacks are reported separately. Defaults to `ace`. */
+  engine?: 'ace';
+  /** Rendering intent, `relative` by default. */
+  intent?: 'relative' | 'perceptual' | 'saturation' | 'absolute';
+  /** Defaults to true. */
+  blackPointCompensation?: boolean;
+  /** Defaults to false. True reports an approximation because ACE dither is not implemented. */
+  dither?: boolean;
+  /** Direct float evaluation, true by default. Float display conversion remains approximate. */
+  preciseFloat?: boolean;
+  /** Records an import already applied by the caller; never changes process samples. Defaults to `preserve`. */
+  importPolicy?: 'preserve' | 'convert' | 'off';
+  /** Correct continuous display bounds for the saved pixel aspect ratio, false by default. */
+  pixelAspectCorrection?: boolean;
+  /** Defaults to false. True, or an OCIO document kind, fails because an external OCIO processor is required. */
+  ocio?: boolean;
+  /** Defaults to false; true fails because proof presentation is unsupported. */
+  proof?: boolean;
+  /** Defaults to false; true fails because scene-referred presentation is unsupported. */
+  sceneReferred?: boolean;
+  /** Defaults to false; true fails because HDR preview presentation is unsupported. */
+  hdrPreview?: boolean;
+};
+
+/**
+ * Color channels followed by a separate alpha sample per interleaved pixel. Wire16 uses PSD's wire scale, not Q15.
+ * Packed Bitmap rows are the exception: most significant bit first, 1 means black, byte padded per row, no alpha.
+ */
+export type PsdColorSamples =
+  | { encoding: 'packed-bitmap' | 'byte'; values: Uint8Array }
+  | { encoding: 'wire16'; values: Uint16Array }
+  | { encoding: 'float32'; values: Float32Array };
+
+/** Exact process composite and its separately converted display output. No WASM resources are retained. */
+export type PsdColorRender = {
+  width: number;
+  height: number;
+  /** Native Photoshop color mode number; process samples are never implicitly sRGB. */
+  mode: number;
+  /** Process color channel count before alpha. Indexed stores an index plus alpha; its palette stays in colorModeData. */
+  colorChannels: number;
+  /** Original color-mode data, including the Indexed palette or ink data. */
+  colorModeData: Uint8Array;
+  /** Exact native process samples. Float RGB/Gray process samples are linear. */
+  process: PsdColorSamples;
+  /** Target-encoded RGB plus alpha at process precision, independent of process samples. */
+  srgb: PsdColorSamples;
+  /** Display sRGB RGBA8, reduced without dither for browser display. */
+  rgba8: Uint8Array;
+  /** Display conversion provenance; exactness here describes conversion only. */
+  conversion: PsdDisplayConversion;
+  /** DisplayConversion messages suitable for the viewer's existing approximation list. */
+  approximations: string[];
+  /** Continuous presentation bounds, optionally corrected for pixel aspect ratio; sample dimensions do not change. */
+  displayWidth: number;
+  displayHeight: number;
+};
+
+/** Provenance of configured display conversion, independent of exact process compositing. */
+export type PsdDisplayConversion = {
+  exact: boolean;
+  requestedEngine: 'ace';
+  engine: 'ACE verified integer route' | 'generic ICC';
+  operation: string;
+  /** WASM provenance spelling: `Some(Embedded)`, `Some(Working)` or `None` for fixed document Lab. */
+  sourceOrigin: string;
+  destinationSHA256: string;
+  importPolicy: 'Preserve' | 'Convert' | 'Off';
+  intent: string;
+  blackPointCompensation: boolean;
+  dither: boolean;
+  /** Null for an admitted exact route; otherwise the generic conversion and omitted ACE dither are identified. */
+  approximation: {
+    kind: 'DisplayConversion';
+    sourceSHA256: string;
+    destinationSHA256: string;
+    intent: string;
+    blackPointCompensation: boolean;
+    preciseFloat: boolean;
+    dither: boolean;
+    aceDitherImplemented: false;
+  } | null;
+};
+
+/** Native saved planes, preserving auxiliary plates, profile resources and float bit patterns. */
+export type PsdSavedProcessChannels = {
+  width: number;
+  height: number;
+  mode: number;
+  depth: number;
+  /** Native decoded bytes, including original byte order, Bitmap packing and saved matte. */
+  planes: PsdSavedProcessPlane[];
+  colorModeData: Uint8Array;
+  /** Original channel metadata and color-profile resource payloads, including ICC resource 1039 when present. */
+  resources: { id: number; bytes: Uint8Array }[];
+  metadataError: string | null;
+  source: string;
+};
+
+/** One saved plane and its optional channel display metadata; visibility is null when the caller supplied none. */
+export type PsdSavedProcessPlane = {
+  index: number;
+  role: 'process' | 'mergedTransparency' | 'spot' | 'alpha' | 'auxiliary';
+  bytes: Uint8Array;
+  visible: boolean | null;
+  name?: string;
+  persistentId?: number;
+  displayKind?: number;
+  colorSpace?: number;
+  color?: number[];
+  opacityOrSolidityPercent?: number;
 };
 
 /**
@@ -794,6 +941,16 @@ function makeViewerDocument(
       };
       images.set(render, image);
       return { ok: true, value: render };
+    },
+    renderColor(settings, color, visibility = [], fonts) {
+      return open
+        ? attempt(() =>
+            handle.renderColor({ ...settings, visibility: [...visibility] }, color, libraryOf(fonts)) as PsdColorRender
+          )
+        : closed();
+    },
+    savedProcessChannels(visibility) {
+      return open ? attempt(() => handle.savedProcessChannels(visibility) as PsdSavedProcessChannels) : closed();
     },
     renderRegion(rectangle, settings, visibility = [], fonts) {
       const { left, top, width, height } = rectangle;

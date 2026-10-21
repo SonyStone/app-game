@@ -114,20 +114,6 @@ function takeFromExternrefTable0(idx) {
     wasm.__externref_table_dealloc(idx);
     return value;
 }
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- * @param {Uint8Array} bytes
- * @returns {any}
- */
-export function readPsd(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readPsd(ptr0, len0);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
-}
 
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -150,6 +136,21 @@ export function writePsd(document, composite) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * @param {Uint8Array} bytes
+ * @returns {any}
+ */
+export function readPsd(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsd(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
 }
 
 /**
@@ -247,6 +248,34 @@ export class PsdDocumentHandle {
      */
     layerPixels(index) {
         const ret = wasm.psddocumenthandle_layerPixels(this.__wbg_ptr, index);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Composite exact process channels and convert them separately to configured sRGB.
+     * `options` has render's blend/text gamma, fonts, state and visibility contract, with approximate=false.
+     * `color` requires caller-owned `srgb: Uint8Array`; optional `workingRgb`, `workingGray`, `workingCmyk`
+     * supply untagged sources. The caller attests srgb bytes describe sRGB; unknown RGB serializations are approximate.
+     * No installed profiles are read. Defaults: engine="ace", intent="relative", blackPointCompensation=true,
+     * dither=false, preciseFloat=true, importPolicy="preserve", pixelAspectCorrection=false. Unknown color keys fail.
+     * importPolicy records an already applied import, never changes process samples or repeats conversion.
+     * OCIO document kinds and color.ocio=true dispatch before ICC and refuse without an external processor.
+     * proof, sceneReferred and hdrPreview default false and refuse when true. This API defines sRGB output,
+     * not live monitor presentation. Returns process and srgb typed samples, rgba8, conversion provenance,
+     * DisplayConversion approximations and continuous displayWidth/displayHeight. Word samples use PSD wire16;
+     * alpha is separate from color in each interleaved pixel. Float display and dither remain reported approximations.
+     * Bitmap bits and Indexed indices/palette remain native in process; only the display operand expands.
+     * Ink modes and auxiliary plates remain available unchanged through savedProcessChannels.
+     * @param {any} options
+     * @param {any} color
+     * @param {PsdFontLibrary} fonts
+     * @returns {any}
+     */
+    renderColor(options, color, fonts) {
+        _assertClass(fonts, PsdFontLibrary);
+        const ret = wasm.psddocumenthandle_renderColor(this.__wbg_ptr, options, color, fonts.__wbg_ptr);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -391,6 +420,22 @@ export class PsdDocumentHandle {
         const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.psddocumenthandle_openLikePhotoshop(ptr0, len0, answers);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Exact decoded saved process planes, including auxiliary alpha/spot planes as separate byte arrays.
+     * Native byte order, packed Bitmap rows, Indexed palette, ink data and float bit patterns are preserved.
+     * The source is the potentially stale saved merged image with its original matte, not a fresh layer render.
+     * Resources preserve plate names, display metadata, profiles and untagged state without guessing.
+     * Optional visibility supplies one boolean per saved plane; omitted view visibility is returned as null.
+     * @param {Array<any> | null} [visibility]
+     * @returns {any}
+     */
+    savedProcessChannels(visibility) {
+        const ret = wasm.psddocumenthandle_savedProcessChannels(this.__wbg_ptr, isLikeNone(visibility) ? 0 : addToExternrefTable0(visibility));
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -742,6 +787,16 @@ function __wbg_get_imports() {
         const ret = arg0[arg1 >>> 0];
         return ret;
     };
+    imports.wbg.__wbg_instanceof_Uint8Array_17156bcf118086a9 = function(arg0) {
+        let result;
+        try {
+            result = arg0 instanceof Uint8Array;
+        } catch (_) {
+            result = false;
+        }
+        const ret = result;
+        return ret;
+    };
     imports.wbg.__wbg_isArray_a1eab7e0d067391b = function(arg0) {
         const ret = Array.isArray(arg0);
         return ret;
@@ -760,6 +815,10 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbg_new_405e22f390576ce2 = function() {
         const ret = new Object();
+        return ret;
+    };
+    imports.wbg.__wbg_new_780abee5c1739fd7 = function(arg0) {
+        const ret = new Float32Array(arg0);
         return ret;
     };
     imports.wbg.__wbg_new_78feb108b6472713 = function() {
@@ -790,6 +849,14 @@ function __wbg_get_imports() {
         const ret = new Uint8Array(arg0, arg1 >>> 0, arg2 >>> 0);
         return ret;
     };
+    imports.wbg.__wbg_newwithbyteoffsetandlength_e6b7e69acd4c7354 = function(arg0, arg1, arg2) {
+        const ret = new Float32Array(arg0, arg1 >>> 0, arg2 >>> 0);
+        return ret;
+    };
+    imports.wbg.__wbg_ownKeys_3930041068756f1f = function() { return handleError(function (arg0) {
+        const ret = Reflect.ownKeys(arg0);
+        return ret;
+    }, arguments) };
     imports.wbg.__wbg_psddocumenthandle_new = function(arg0) {
         const ret = PsdDocumentHandle.__wrap(arg0);
         return ret;
