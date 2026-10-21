@@ -1,14 +1,14 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
-/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
 /**
  * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
@@ -268,6 +268,23 @@ export class PsdDocumentHandle {
    */
   layerPixels(index: number): any;
   /**
+   * Composite exact process channels and convert them separately to configured sRGB.
+   * `options` has render's blend/text gamma, fonts, state and visibility contract, with approximate=false.
+   * `color` requires caller-owned `srgb: Uint8Array`; optional `workingRgb`, `workingGray`, `workingCmyk`
+   * supply untagged sources. The caller attests srgb bytes describe sRGB; unknown RGB serializations are approximate.
+   * No installed profiles are read. Defaults: engine="ace", intent="relative", blackPointCompensation=true,
+   * dither=false, preciseFloat=true, importPolicy="preserve", pixelAspectCorrection=false. Unknown color keys fail.
+   * importPolicy records an already applied import, never changes process samples or repeats conversion.
+   * OCIO document kinds and color.ocio=true dispatch before ICC and refuse without an external processor.
+   * proof, sceneReferred and hdrPreview default false and refuse when true. This API defines sRGB output,
+   * not live monitor presentation. Returns process and srgb typed samples, rgba8, conversion provenance,
+   * DisplayConversion approximations and continuous displayWidth/displayHeight. Word samples use PSD wire16;
+   * alpha is separate from color in each interleaved pixel. Float display and dither remain reported approximations.
+   * Bitmap bits and Indexed indices/palette remain native in process; only the display operand expands.
+   * Ink modes and auxiliary plates remain available unchanged through savedProcessChannels.
+   */
+  renderColor(options: any, color: any, fonts: PsdFontLibrary): any;
+  /**
    * Reports supplied release mismatches separately from unavailable raster fonts, including uniquely
    * supplied addActiveFace collection faces. Equal versions cannot
    * prove identical charstrings because PSD does not embed those font programs.
@@ -339,6 +356,14 @@ export class PsdDocumentHandle {
    * Throws a `TypeError` for answers that are not one of their prompt's.
    */
   static openLikePhotoshop(bytes: Uint8Array, answers: any): any;
+  /**
+   * Exact decoded saved process planes, including auxiliary alpha/spot planes as separate byte arrays.
+   * Native byte order, packed Bitmap rows, Indexed palette, ink data and float bit patterns are preserved.
+   * The source is the potentially stale saved merged image with its original matte, not a fresh layer render.
+   * Resources preserve plate names, display metadata, profiles and untagged state without guessing.
+   * Optional visibility supplies one boolean per saved plane; omitted view visibility is returned as null.
+   */
+  savedProcessChannels(visibility?: Array<any> | null): any;
   /**
    * Size, depth, color mode, channels, format, image resources, document-level tagged blocks and the merged
    * image's layout.
@@ -501,10 +526,12 @@ export interface InitOutput {
   readonly psddocumenthandle_open: (a: number, b: number) => [number, number, number];
   readonly psddocumenthandle_openLikePhotoshop: (a: number, b: number, c: any) => [number, number, number];
   readonly psddocumenthandle_render: (a: number, b: any, c: number) => [number, number, number];
+  readonly psddocumenthandle_renderColor: (a: number, b: any, c: any, d: number) => [number, number, number];
   readonly psddocumenthandle_renderOverview: (a: number, b: number, c: any, d: number) => [number, number, number];
   readonly psddocumenthandle_renderRegion: (a: number, b: number, c: number, d: number, e: number, f: any, g: number) => [number, number, number];
   readonly psddocumenthandle_renderRegions: (a: number, b: any, c: any, d: number) => [number, number, number];
   readonly psddocumenthandle_savedOverview: (a: number, b: number, c: number) => [number, number, number];
+  readonly psddocumenthandle_savedProcessChannels: (a: number, b: number) => [number, number, number];
   readonly psddocumenthandle_states: (a: number) => any;
   readonly psddocumenthandle_textSupport: (a: number, b: number, c: number) => [number, number, number];
   readonly psdfontlibrary_add: (a: number, b: number, c: number) => [number, number, number];

@@ -169,6 +169,7 @@ it('composites CMYK exactly in its channels without the approximate option', asy
   // Only the display conversion to sRGB is approximate.
   expect(render.approximations).toHaveLength(1);
   expect(render.approximations[0]).toMatch(/^8-bit CMYK: composited exactly in its CMYK channels; only the display/);
+  expect(render.pixels).toEqual(value(await client.merged(cmyk.document)).pixels);
   expect(value(await client.difference(cmyk.document, render.render))).toMatchObject({
     unit: 'CMYK level',
     samples: 96 * 96 * 4,
