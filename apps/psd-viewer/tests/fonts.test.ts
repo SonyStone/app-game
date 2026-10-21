@@ -72,6 +72,17 @@ it('uses current approximation reports and abstains for hidden layers, unknown v
   expect(importedTextStatus(layer, { ok: true, value: preview }, true, true).kind).toBe('unrendered');
 });
 
+it('reports release mismatches before a render and only for the fonts used by that layer', () => {
+  const layer = { index: 1, name: 'Title', fonts: ['RegularPS'], visible: true };
+  const mismatch = { name: 'RegularPS', reason: 'font present but a different release', recordedVersion: 'Version 1' };
+  expect(importedTextStatus(layer, undefined, true, true, [mismatch])).toEqual({
+    kind: 'releaseMismatch',
+    label: 'font present, different release — text not exact',
+    reason: 'RegularPS: font present but a different release'
+  });
+  expect(importedTextStatus(layer, undefined, true, true, [{ ...mismatch, name: 'OtherPS' }]).kind).toBe('unrendered');
+});
+
 /** A font library spy that makes the host's identity and byte/index/provenance checks observable. */
 function fakeLibrary(names: string[]) {
   return {

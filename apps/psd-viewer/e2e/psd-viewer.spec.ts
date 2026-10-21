@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { truncated, withChannelCompression } from '../tests/damagedPsd';
 import { fontFileFaces } from '../../../packages/psd/src/fontFile';
+import { withDifferentFontVersion } from '../../../packages/psd/test/fontRelease';
 import { withTopBlendKey } from '../tests/patchedPsd';
 
 const assets = new URL('../src/features/examples/assets/', import.meta.url);
@@ -175,6 +176,37 @@ function toArrayBuffer(buffer: Buffer): ArrayBuffer {
 
 /** The system's Arial Bold, the font of the type example; never copied into the repository. */
 const arialBold = '/System/Library/Fonts/Supplemental/Arial Bold.ttf';
+
+test('distinguishes a present font with a different release from exact text support', async ({ page }) => {
+  test.skip(!existsSync(arialBold), 'needs the system Arial Bold');
+  await page.goto('/');
+  await page
+    .locator('input[accept=".psd,.psb"]')
+    .setInputFiles(fileURLToPath(new URL('type-with-layer-styles.psd', assets)));
+  await settled(page);
+  await page.locator('[data-layer-index="1"]').click();
+  const support = page.getByRole('region', { name: 'Text re-rendering' });
+  await expect(support).toContainText('font Arial-BoldMT was not supplied');
+
+  const original = await readFile(arialBold);
+  const changed = withDifferentFontVersion(
+    original.buffer.slice(original.byteOffset, original.byteOffset + original.byteLength) as ArrayBuffer
+  );
+  const fonts = page.getByRole('region', { name: 'Fonts' });
+  await fonts.getByLabel('Font files').setInputFiles({
+    name: 'different-release.ttf',
+    mimeType: 'font/ttf',
+    buffer: Buffer.from(changed)
+  });
+  await expect(fonts.locator('[data-font-status="different-release"]')).toContainText('different release');
+  await expect(fonts.locator('[data-font-status="missing"]')).toHaveCount(0);
+  await expect(fonts.locator('[data-text-layer="1"]')).toHaveAttribute('data-text-mixing', 'releaseMismatch');
+  await expect(fonts.locator('[data-text-layer="1"]')).toContainText('font present, different release — text not exact');
+  await expect(support).toHaveAttribute('data-text-support', 'refused');
+  await expect(support).toContainText('font present, different release — text not exact');
+  await expect(support).toContainText('Arial-BoldMT: recorded Version 5.01.2x; supplied X');
+  await expect(support).not.toContainText('Re-renders exactly');
+});
 
 test('re-renders text with a font file the user adds and matches the merged image', async ({ page }) => {
   test.skip(!existsSync(arialBold), 'needs the system Arial Bold');

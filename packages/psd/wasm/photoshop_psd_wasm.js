@@ -191,6 +191,24 @@ export class PsdEditorSession {
         wasm.__wbg_psdeditorsession_free(ptr, 0);
     }
     /**
+     * Moves the sole smart layer or replaces its embedded PNG atomically. Requires one opaque raster
+     * backdrop and one unfiltered Normal smart layer in unprofiled RGB8, at integer unscaled in-canvas bounds.
+     * Replacement must have the same dimensions, positive alpha and fresh distinct host-generated UUIDs.
+     * Updates SoLd/PlLd, linked bytes and lengths, parent channels/bounds and real merged data; omits thumbnails.
+     * External/shared contents, filters and unsupported dependencies throw Dependency with propertyPath.
+     * Failure preserves bytes and revision. linearBlending is the host gamma-1 preference, false by default.
+     * @param {PsdSmartEdit} edit
+     * @param {boolean | null} [linear_blending]
+     * @returns {M01EditOutcome}
+     */
+    editSmart(edit, linear_blending) {
+        const ret = wasm.psdeditorsession_editSmart(this.__wbg_ptr, edit, isLikeNone(linear_blending) ? 0xFFFFFF : linear_blending ? 1 : 0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * Atomically edits persisted locks, labels, copy flags, style UI flags and existing percent opacity.
      * Record indices come from inspectSource and change after structural edits. Opacity edits require
      * strict merged-image regeneration at prepareSave; unsupported rendering refuses the save.
@@ -221,6 +239,20 @@ export class PsdEditorSession {
             throw takeFromExternrefTable0(ret[1]);
         }
         return PsdPreparedSave.__wrap(ret[0]);
+    }
+    /**
+     * Supply actual active font bytes for SetText. Nothing is loaded from the host automatically.
+     * Collection index names the face in the original TTC. This changes no source or revision.
+     * @param {Uint8Array} bytes
+     * @param {number} face_index
+     */
+    addTextFont(bytes, face_index) {
+        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.psdeditorsession_addTextFont(this.__wbg_ptr, ptr0, len0, face_index);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
     }
     /**
      * Inspects full-precision persisted source fields for any parsed container, without RGB8 tree admission.
@@ -305,6 +337,26 @@ export class PsdEditorSession {
      */
     inspect() {
         const ret = wasm.psdeditorsession_inspect(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Replaces text and optional uniform style in one atomic text-only transaction.
+     * Register actual original/requested fonts and the whitespace-marker face with addTextFont first.
+     * Supports bounded printable ASCII/CR in left horizontal Crisp point/Single-line RGB8 text.
+     * Unsupported shaping, mixed styles, negative spacing, overflow and dependencies throw named errors.
+     * Mixed raster/type batches remain refused. Font registration changes no revision or source bytes.
+     * @param {number} layer_id
+     * @param {string} text
+     * @param {PsdTextStylePatch | undefined} patch
+     * @returns {M01EditOutcome}
+     */
+    setText(layer_id, text, patch) {
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.psdeditorsession_setText(this.__wbg_ptr, layer_id, ptr0, len0, patch);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }

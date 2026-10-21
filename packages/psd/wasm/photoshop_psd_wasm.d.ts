@@ -26,6 +26,19 @@ export interface GradientFillPatch {
   /** Existing stop indices; components in 0 through 255, normalized as 255*f32(c/255). */ colors?: readonly {index: number; rgb: readonly [number,number,number]}[];
   /** Existing stop indices; opacity in 0 through 100, normalized to native byte opacity. */ opacities?: readonly {index: number; percent: number}[];
 }
+/** Bounded source edits for the sole smart layer over one opaque raster backdrop. No stored path is opened. */
+export type PsdSmartEdit =
+  | {
+      /** Integer unscaled upright placement. Both quads and the legacy carrier update together. */ kind: 'setSmartTransform';
+      /** Top-left, top-right, bottom-right, bottom-left document-pixel pairs. */ quad: readonly [number,number,number,number,number,number,number,number];
+    }
+  | {
+      /** Same-size untagged RGB/RGBA PNG with positive alpha. */ kind: 'replaceSmartContents';
+      /** Owned source bytes, at most 16000000. */ bytes: Uint8Array;
+      /** Leaf filename without NUL or directory separators. */ filename: string;
+      /** Fresh canonical UUID, distinct from either old ID and placementId. */ contentId: string;
+      /** Fresh canonical UUID for this placement, distinct from either old ID and contentId. */ placementId: string;
+    };
 /** Snapshot of the admitted RGB8 identity tree. Scalars use byte opacity/Fill. */
 export interface M01Snapshot { readonly revision: bigint; readonly width: number; readonly height: number; readonly identityFloor: number; readonly saveBlocked: boolean; readonly selected: readonly number[]; readonly layers: readonly M01Layer[]; }
 /** Group children are bottom-to-top; endId is reserved and cannot be edited. */
@@ -39,7 +52,21 @@ export interface SimpleShape { kind: 'rectangle' | 'ellipse'; left: number; top:
 /** Exact straight RGB8 source samples. Zero-by-zero clears; other extents and buffers must agree. */
 export interface RasterPixels { left: number; top: number; width: number; height: number; rgba: Uint8Array; }
 /** Positions are bottom-to-top, measured after removal for moves. All batches are atomic. */
+/** Uniform setters applied after text mutation. Omitted fields preserve current values.
+ * Bounded printable ASCII/CR, left horizontal Crisp point/Single-line RGB8 text only.
+ * Register original/requested and whitespace-marker fonts using addTextFont.
+ */
+export interface PsdTextStylePatch {
+  readonly font?: string;
+  readonly size?: number;
+  readonly tracking?: number;
+  readonly leading?: number;
+  readonly baseline?: number;
+  readonly color?: readonly [number, number, number];
+}
 export type M01Edit =
+  /** Caller-supplied actual fonts required. Text-only batches; mixed raster/type batches refuse. */
+  | ({kind: 'setText'; layerId: number; text: string} & PsdTextStylePatch)
   | {kind: 'insertRaster'; parent?: number | null; index: number; raster: {name: string; left: number; top: number; width: number; height: number; pixels: Uint8Array}}
   /** Replace source pixels/bounds while retaining metadata. Groups/generators refuse. */
   | {kind: 'replacePixels'; layerId: number; pixels: RasterPixels}
@@ -284,6 +311,15 @@ export interface SourceEnumValue {
 export class PsdEditorSession {
   free(): void;
   /**
+   * Moves the sole smart layer or replaces its embedded PNG atomically. Requires one opaque raster
+   * backdrop and one unfiltered Normal smart layer in unprofiled RGB8, at integer unscaled in-canvas bounds.
+   * Replacement must have the same dimensions, positive alpha and fresh distinct host-generated UUIDs.
+   * Updates SoLd/PlLd, linked bytes and lengths, parent channels/bounds and real merged data; omits thumbnails.
+   * External/shared contents, filters and unsupported dependencies throw Dependency with propertyPath.
+   * Failure preserves bytes and revision. linearBlending is the host gamma-1 preference, false by default.
+   */
+  editSmart(edit: PsdSmartEdit, linear_blending?: boolean | null): M01EditOutcome;
+  /**
    * Atomically edits persisted locks, labels, copy flags, style UI flags and existing percent opacity.
    * Record indices come from inspectSource and change after structural edits. Opacity edits require
    * strict merged-image regeneration at prepareSave; unsupported rendering refuses the save.
@@ -299,6 +335,11 @@ export class PsdEditorSession {
    * linearBlending is the host gamma-1 RGB setting, false by default; PSD does not store this preference.
    */
   prepareSave(linear_blending?: boolean | null): PsdPreparedSave;
+  /**
+   * Supply actual active font bytes for SetText. Nothing is loaded from the host automatically.
+   * Collection index names the face in the original TTC. This changes no source or revision.
+   */
+  addTextFont(bytes: Uint8Array, face_index: number): void;
   /**
    * Inspects full-precision persisted source fields for any parsed container, without RGB8 tree admission.
    * Null leaves remain absent. This reads neither linked assets nor application-only state.
@@ -342,6 +383,14 @@ export class PsdEditorSession {
    * Dirty inspection checks saving with encoded RGB blending and can allocate a whole-canvas render.
    */
   inspect(): M01Snapshot;
+  /**
+   * Replaces text and optional uniform style in one atomic text-only transaction.
+   * Register actual original/requested fonts and the whitespace-marker face with addTextFont first.
+   * Supports bounded printable ASCII/CR in left horizontal Crisp point/Single-line RGB8 text.
+   * Unsupported shaping, mixed styles, negative spacing, overflow and dependencies throw named errors.
+   * Mixed raster/type batches remain refused. Font registration changes no revision or source bytes.
+   */
+  setText(layer_id: number, text: string, patch: PsdTextStylePatch | undefined): M01EditOutcome;
 }
 /**
  * Frozen M01 in-memory save. Chunk reads bound each returned Uint8Array, not total WASM allocation.
@@ -370,14 +419,17 @@ export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly __wbg_psdeditorsession_free: (a: number, b: number) => void;
   readonly __wbg_psdpreparedsave_free: (a: number, b: number) => void;
+  readonly psdeditorsession_addTextFont: (a: number, b: number, c: number, d: number) => [number, number];
   readonly psdeditorsession_dispose: (a: number) => void;
   readonly psdeditorsession_edit: (a: number, b: any) => [number, number, number];
+  readonly psdeditorsession_editSmart: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editSource: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_inspect: (a: number) => [number, number, number];
   readonly psdeditorsession_inspectSource: (a: number) => [number, number, number];
   readonly psdeditorsession_new: (a: number, b: number) => [number, number, number];
   readonly psdeditorsession_prepareSave: (a: number, b: number) => [number, number, number];
   readonly psdeditorsession_repaintGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
+  readonly psdeditorsession_setText: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];
   readonly psdpreparedsave_dispose: (a: number) => void;
   readonly psdpreparedsave_nextChunk: (a: number, b: number) => [number, number, number, number];
   readonly psdpreparedsave_revision: (a: number) => bigint;
