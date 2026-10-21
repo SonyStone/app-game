@@ -226,6 +226,17 @@ export class PsdEditorSession {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
+     * Selects a comp for application UI only. Null clears selection; no bytes/revision change.
+     * Requires a unique existing comp ID and unambiguous layer IDs. Does not apply pixels or set lastAppliedComp.
+     * @param {number | null} [id]
+     */
+    selectComp(id) {
+        const ret = wasm.psdeditorsession_selectComp(this.__wbg_ptr, !isLikeNone(id), isLikeNone(id) ? 0 : id);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
      * Freezes preserve-mode bytes for this revision. Untouched output is byte-identical; rename-only saves
      * preserve all other carriers. Visual saves require exact rendering, write real merged data, set 1057 true
      * and omit 1036. Compatibility-off inputs are promoted. Throws RenderRequired with the renderer's cause.
@@ -273,12 +284,39 @@ export class PsdEditorSession {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
+     * Application-local selection, independent of persisted comp capture flags and lastAppliedComp.
+     * @returns {number | undefined}
+     */
+    get selectedComp() {
+        const ret = wasm.psdeditorsession_selectedComp(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] === 0x100000001 ? undefined : ret[0];
+    }
+    /**
      * Inspects full-precision persisted source fields for any parsed container, without RGB8 tree admission.
      * Null leaves remain absent. This reads neither linked assets nor application-only state.
      * @returns {PsdSourceSnapshot}
      */
     inspectSource() {
         const ret = wasm.psdeditorsession_inspectSource(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Atomically changes comp header strings, document guides or one BOM-tagged UTF-16 text note.
+     * Preserves pixels and unrelated carriers; guide edits regenerate both 1092 and 1032.
+     * Active credentials, unknown versions, duplicate identities/carriers and other note encodings refuse.
+     * Comp application/capture, slice partitions and XMP reconciliation throw named Dependency errors.
+     * Pending visual changes still require a strict render on prepareSave. Failure preserves revision/bytes.
+     * @param {readonly PsdStateMetadataEdit[]} edits
+     * @returns {M01EditOutcome}
+     */
+    editStateMetadata(edits) {
+        const ret = wasm.psdeditorsession_editStateMetadata(this.__wbg_ptr, edits);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -296,6 +334,24 @@ export class PsdEditorSession {
      */
     repaintGradientFill(record_index, patch, linear_blending) {
         const ret = wasm.psdeditorsession_repaintGradientFill(this.__wbg_ptr, record_index, patch, isLikeNone(linear_blending) ? 0xFFFFFF : linear_blending ? 1 : 0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Repaints explicit Linear interpolation/style on a sole full-strength Normal RGB8 canvas GdFl.
+     * Requires the admitted sampled sRGB profile and Dot Gain 20% working Gray; linearBlending is the
+     * host gamma-1 preference, false by default. Empty patch regenerates without using source caches.
+     * Preserves straight hidden RGB at zero alpha, rebuilds real merged data and removes stale thumbnails.
+     * Other profiles, dither, shapes, masks, effects, extra layers and unknown inputs refuse atomically.
+     * @param {number} record_index
+     * @param {LinearGradientFillPatch} patch
+     * @param {boolean | null} [linear_blending]
+     * @returns {M01EditOutcome}
+     */
+    repaintLinearGradientFill(record_index, patch, linear_blending) {
+        const ret = wasm.psdeditorsession_repaintLinearGradientFill(this.__wbg_ptr, record_index, patch, isLikeNone(linear_blending) ? 0xFFFFFF : linear_blending ? 1 : 0);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
