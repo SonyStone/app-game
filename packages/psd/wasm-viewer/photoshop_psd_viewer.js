@@ -152,6 +152,23 @@ export function writePsd(document, composite) {
     return v2;
 }
 
+/**
+ * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
+ * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
+ * Physical record indices refer to the selected layer-info section and change after structural edits.
+ * @param {Uint8Array} bytes
+ * @returns {PsdSourceSnapshot}
+ */
+export function readPsdSource(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsdSource(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
 function _assertClass(instance, klass) {
     if (!(instance instanceof klass)) {
         throw new Error(`expected instance of ${klass.name}`);
@@ -746,6 +763,10 @@ function __wbg_get_imports() {
         const ret = new Array();
         return ret;
     };
+    imports.wbg.__wbg_new_9fee97a409b32b68 = function(arg0) {
+        const ret = new Uint16Array(arg0);
+        return ret;
+    };
     imports.wbg.__wbg_new_a12002a7f91c75be = function(arg0) {
         const ret = new Uint8Array(arg0);
         return ret;
@@ -756,6 +777,10 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbg_new_c68d7209be747379 = function(arg0, arg1) {
         const ret = new Error(getStringFromWasm0(arg0, arg1));
+        return ret;
+    };
+    imports.wbg.__wbg_newwithbyteoffsetandlength_d4a86622320ea258 = function(arg0, arg1, arg2) {
+        const ret = new Uint16Array(arg0, arg1 >>> 0, arg2 >>> 0);
         return ret;
     };
     imports.wbg.__wbg_newwithbyteoffsetandlength_d97e637ebe145a9a = function(arg0, arg1, arg2) {

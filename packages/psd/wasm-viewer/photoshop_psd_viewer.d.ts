@@ -9,6 +9,196 @@ export function readPsd(bytes: Uint8Array): any;
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
+/**
+ * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
+ * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
+ * Physical record indices refer to the selected layer-info section and change after structural edits.
+ */
+export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
+
+/** Persisted source snapshot. It contains no selection, zoom, document dirty bit or linked-file OS state. */
+export interface PsdSourceSnapshot {
+  /** Layers in physical source order. Record indices change after structural edits. */ readonly layers: readonly PsdSourceLayer[];
+  /** Resource 1060 bytes, including encoding and padding; null when absent. */ readonly xmp: Uint8Array | null;
+}
+/** Persisted source properties. Null means absent, never a synthesized default. */
+export interface PsdSourceLayer {
+  /** Index in the selected layer-info section. */ readonly recordIndex: number;
+  /** Stored lyid, null if absent. */ readonly layerId: number | null;
+  /** Raw lspf bits plus their named stored flags, null without lspf. */ readonly locks: SourceLocks | null;
+  /** Stored lclr index and Photoshop 26 enum name, null without lclr. */ readonly label: SourceLabel | null;
+  /** Winning modern source block, null without modern styles. Legacy lrFX stays separate. */ readonly styles: SourceStyles | null;
+  /** Persisted shmd envelope, null without the block. Payloads are retained as bytes. */ readonly metadata: SourceMetadata | null;
+}
+/** Stored lock flags. Background runtime defaults are not inserted. */
+export interface SourceLocks {
+  /** All 32 bits, including reserved bits. */ readonly bits: number;
+  /** Bit 0. */ readonly transparency: boolean;
+  /** Bit 1. */ readonly composite: boolean;
+  /** Bit 2. */ readonly position: boolean;
+  /** Bit 3. */ readonly artboardAutonest: boolean;
+  /** Bit 31. */ readonly all: boolean;
+}
+/** Persisted layer color label. */
+export interface SourceLabel {
+  /** Raw unsigned label index. */ readonly index: number;
+  /** Photoshop 26 AM name, null for an unknown index. */ readonly name: string | null;
+}
+/** Lossless shmd records and tail. */
+export interface SourceMetadata {
+  /** Source order, including duplicate keys. */ readonly records: readonly SourceMetadataEntry[];
+  /** Bytes following the declared record count. */ readonly trailing: Uint8Array;
+}
+/** A shmd record; opaque payloads do not imply typed AM metadata coverage. */
+export interface SourceMetadataEntry {
+  /** Four source signature bytes. */ readonly signature: Uint8Array;
+  /** Four metadata-key bytes. */ readonly key: Uint8Array;
+  /** Raw copy-on-sheet byte. */ readonly copyOnSheet: number;
+  /** Three reserved bytes. */ readonly reserved: Uint8Array;
+  /** Original payload and its padding. */ readonly payload: Uint8Array;
+}
+/** Stored SourceStyles snapshot; fields retain source precision and absence. */
+export interface SourceStyles {
+  /** Winning block key. */ readonly key: Uint8Array;
+  /** Stored effects version. */ readonly version: number;
+  /** Stored master switch; missing imports as true in the rendering projection. */ readonly masterFxSwitch: boolean | null;
+  /** Stored style scale, with its unit and binary64 value. */ readonly scale: SourceNumber | null;
+  /** Known families in physical source order, including disabled/UI-only instances. */ readonly instances: readonly (SourceInstance)[];
+  /** Original block bytes, including unknown entries and padding. */ readonly sourceBlock: Uint8Array;
+}
+/** Stored SourceInstance snapshot; fields retain source precision and absence. */
+export interface SourceInstance {
+  /** Family's source key, retaining the single versus Multi distinction. */ readonly key: Uint8Array;
+  /** Position in the family's source list, zero for a singleton. */ readonly index: number;
+  /** Stored settings, independent from renderer defaults and projections. */ readonly settings: SourceSettings;
+}
+/** Stored SourceSettings snapshot; fields retain source precision and absence. */
+export interface SourceSettings {
+  /** Stored `enab`; absent or differently tagged leaves remain None. */ readonly enabled: boolean | null;
+  /** Stored `present`; absent or differently tagged leaves remain None. */ readonly present: boolean | null;
+  /** Stored `showInDialog`; absent or differently tagged leaves remain None. */ readonly showInDialog: boolean | null;
+  /** Stored `AntA`; absent or differently tagged leaves remain None. */ readonly antiAlias: boolean | null;
+  /** Stored `uglg`; absent or differently tagged leaves remain None. */ readonly useGlobalAngle: boolean | null;
+  /** Stored `layerConceals`; absent or differently tagged leaves remain None. */ readonly layerConceals: boolean | null;
+  /** Stored `Invr`; absent or differently tagged leaves remain None. */ readonly invert: boolean | null;
+  /** Stored `overprint`; absent or differently tagged leaves remain None. */ readonly overprint: boolean | null;
+  /** Stored `useShape`; absent or differently tagged leaves remain None. */ readonly useShape: boolean | null;
+  /** Stored `useTexture`; absent or differently tagged leaves remain None. */ readonly useTexture: boolean | null;
+  /** Stored `antialiasGloss`; absent or differently tagged leaves remain None. */ readonly antialiasGloss: boolean | null;
+  /** Stored `InvT`; absent or differently tagged leaves remain None. */ readonly invertTexture: boolean | null;
+  /** Stored `Algn`; absent or differently tagged leaves remain None. */ readonly align: boolean | null;
+  /** Stored `Rvrs`; absent or differently tagged leaves remain None. */ readonly reverse: boolean | null;
+  /** Stored `Dthr`; absent or differently tagged leaves remain None. */ readonly dither: boolean | null;
+  /** Stored `Lnkd`; absent or differently tagged leaves remain None. */ readonly linked: boolean | null;
+  /** Stored `Opct`; absent or differently tagged leaves remain None. */ readonly opacity: SourceNumber | null;
+  /** Stored `hglO`; absent or differently tagged leaves remain None. */ readonly highlightOpacity: SourceNumber | null;
+  /** Stored `sdwO`; absent or differently tagged leaves remain None. */ readonly shadowOpacity: SourceNumber | null;
+  /** Stored `Dstn`; absent or differently tagged leaves remain None. */ readonly distance: SourceNumber | null;
+  /** Stored `blur`; absent or differently tagged leaves remain None. */ readonly blur: SourceNumber | null;
+  /** Stored `Ckmt`; absent or differently tagged leaves remain None. */ readonly choke: SourceNumber | null;
+  /** Stored `Nose`; absent or differently tagged leaves remain None. */ readonly noise: SourceNumber | null;
+  /** Stored `Angl`; absent or differently tagged leaves remain None. */ readonly angle: SourceNumber | null;
+  /** Stored `lagl`; absent or differently tagged leaves remain None. */ readonly localLightingAngle: SourceNumber | null;
+  /** Stored `Lald`; absent or differently tagged leaves remain None. */ readonly localLightingAltitude: SourceNumber | null;
+  /** Stored `ShdN`; absent or differently tagged leaves remain None. */ readonly shadingNoise: SourceNumber | null;
+  /** Stored `Inpr`; absent or differently tagged leaves remain None. */ readonly inputRange: SourceNumber | null;
+  /** Stored `Sz  `; absent or differently tagged leaves remain None. */ readonly size: SourceNumber | null;
+  /** Stored `srgR`; absent or differently tagged leaves remain None. */ readonly strength: SourceNumber | null;
+  /** Stored `Sftn`; absent or differently tagged leaves remain None. */ readonly softness: SourceNumber | null;
+  /** Stored `textureDepth`; absent or differently tagged leaves remain None. */ readonly textureDepth: SourceNumber | null;
+  /** Stored `Scl `; absent or differently tagged leaves remain None. */ readonly scale: SourceNumber | null;
+  /** Stored `Md  `; absent or differently tagged leaves remain None. */ readonly mode: SourceEnum | null;
+  /** Stored `hglM`; absent or differently tagged leaves remain None. */ readonly highlightMode: SourceEnum | null;
+  /** Stored `sdwM`; absent or differently tagged leaves remain None. */ readonly shadowMode: SourceEnum | null;
+  /** Stored `bvlS`; absent or differently tagged leaves remain None. */ readonly bevelStyle: SourceEnum | null;
+  /** Stored `bvlT`; absent or differently tagged leaves remain None. */ readonly bevelTechnique: SourceEnum | null;
+  /** Stored `bvlD`; absent or differently tagged leaves remain None. */ readonly bevelDirection: SourceEnum | null;
+  /** Stored `GlwT`; absent or differently tagged leaves remain None. */ readonly glowTechnique: SourceEnum | null;
+  /** Stored `glwS`; absent or differently tagged leaves remain None. */ readonly innerGlowSource: SourceEnum | null;
+  /** Stored `Styl`; absent or differently tagged leaves remain None. */ readonly style: SourceEnum | null;
+  /** Stored `PntT`; absent or differently tagged leaves remain None. */ readonly paintType: SourceEnum | null;
+  /** Stored `Type`; absent or differently tagged leaves remain None. */ readonly gradientType: SourceEnum | null;
+  /** Stored `gradientsInterpolationMethod`; absent or differently tagged leaves remain None. */ readonly interpolation: SourceEnum | null;
+  /** Stored `gs99`, the Gradient Overlay interpolation selector; absence stays distinct from the stroke/glow key. */ readonly gradientInterpolation: SourceEnum | null;
+  /** Stored `Clr `; absent or differently tagged leaves remain None. */ readonly color: SourceColor | null;
+  /** Stored `hglC`; absent or differently tagged leaves remain None. */ readonly highlightColor: SourceColor | null;
+  /** Stored `sdwC`; absent or differently tagged leaves remain None. */ readonly shadowColor: SourceColor | null;
+  /** Stored `TrnS`; absent or differently tagged leaves remain None. */ readonly transferSpec: SourceContour | null;
+  /** Stored `MpgS`; absent or differently tagged leaves remain None. */ readonly mappingShape: SourceContour | null;
+  /** Stored `TrnS`; absent or differently tagged leaves remain None. */ readonly transparencyShape: SourceContour | null;
+  /** Stored `Grad`; absent or differently tagged leaves remain None. */ readonly gradient: SourceGradient | null;
+  /** Stored `Ptrn`; absent or differently tagged leaves remain None. */ readonly pattern: SourcePattern | null;
+  /** Stored `phase`; absent or differently tagged leaves remain None. */ readonly phase: SourcePoint | null;
+  /** Stored `Ofst`; absent or differently tagged leaves remain None. */ readonly offset: SourcePoint | null;
+}
+/** Stored SourceNumber snapshot; fields retain source precision and absence. */
+export interface SourceNumber {
+  /** Exact binary64 value, without color scaling, percent conversion or byte rounding. */ readonly value: number;
+  /** Unit FourCC, None for an untagged numeric value. */ readonly unit: readonly (number)[] | null;
+  /** True only for the original signed-integer value tag. */ readonly integer: boolean;
+}
+/** Stored SourceEnum snapshot; fields retain source precision and absence. */
+export interface SourceEnum {
+  /** Original domain and selected identifier. */ readonly value: SourceEnumValue;
+}
+/** Stored SourceColor snapshot; fields retain source precision and absence. */
+export interface SourceColor {
+  /** Descriptor color class, such as RGBC, CMYC, LbCl, Grsc or RGBT. */ readonly class: readonly (number)[];
+  /** Red, green and blue in source RGB component units. */ readonly rgb: readonly (SourceNumber | null)[];
+  /** Float RGB components, stored separately from ordinary RGB components. */ readonly rgbFloat: readonly (SourceNumber | null)[];
+  /** Cyan, magenta, yellow and black source percentages. */ readonly cmyk: readonly (SourceNumber | null)[];
+  /** Lab lightness, a and b. */ readonly lab: readonly (SourceNumber | null)[];
+  /** Gray source component. */ readonly gray: SourceNumber | null;
+  /** Hue, saturation and brightness source components. */ readonly hsb: readonly (SourceNumber | null)[];
+}
+/** Stored SourcePoint snapshot; fields retain source precision and absence. */
+export interface SourcePoint {
+  /** Horizontal source coordinate. */ readonly horizontal: SourceNumber | null;
+  /** Vertical source coordinate. */ readonly vertical: SourceNumber | null;
+}
+/** Stored SourceContour snapshot; fields retain source precision and absence. */
+export interface SourceContour {
+  /** Raw UTF16 contour name, including any terminator. */ readonly name: Uint16Array | null;
+  /** Ordered points, None if the list is absent or differently tagged. */ readonly points: readonly (SourceContourPoint)[] | null;
+}
+/** Stored SourceContourPoint snapshot; fields retain source precision and absence. */
+export interface SourceContourPoint {
+  /** Exact source coordinates. */ readonly point: SourcePoint;
+  /** Optional continuity flag. Absence is distinct from false. */ readonly continuity: boolean | null;
+}
+/** Stored SourceGradient snapshot; fields retain source precision and absence. */
+export interface SourceGradient {
+  /** Raw UTF16 name, including any terminator. */ readonly name: Uint16Array | null;
+  /** Stored gradient form, including noise gradients. */ readonly form: SourceEnum | null;
+  /** Stored interpolation smoothness. */ readonly smoothness: SourceNumber | null;
+  /** Source color stops; None without the list. */ readonly colors: readonly (SourceColorStop)[] | null;
+  /** Source transparency stops; None without the list. */ readonly transparency: readonly (SourceOpacityStop)[] | null;
+}
+/** Stored SourceColorStop snapshot; fields retain source precision and absence. */
+export interface SourceColorStop {
+  /** Stored position, conventionally 0..4096. */ readonly location: SourceNumber | null;
+  /** Stored midpoint percentage. */ readonly midpoint: SourceNumber | null;
+  /** Stored color without conversion. */ readonly color: SourceColor | null;
+  /** User/foreground/background color-stop type. */ readonly kind: SourceEnum | null;
+}
+/** Stored SourceOpacityStop snapshot; fields retain source precision and absence. */
+export interface SourceOpacityStop {
+  /** Stored position. */ readonly location: SourceNumber | null;
+  /** Stored midpoint. */ readonly midpoint: SourceNumber | null;
+  /** Exact stored opacity percentage. */ readonly opacity: SourceNumber | null;
+}
+/** Stored SourcePattern snapshot; fields retain source precision and absence. */
+export interface SourcePattern {
+  /** Raw UTF16 display name, including any terminator. */ readonly name: Uint16Array | null;
+  /** Raw UTF16 pattern identifier, including any terminator. */ readonly id: Uint16Array | null;
+}
+/** Exact enum identifiers as text; the original FourCC/string envelope remains in sourceBlock. */
+export interface SourceEnumValue {
+  /** Enum domain. */ readonly type: string;
+  /** Selected identifier, including unknown values. */ readonly value: string;
+}
+
+
 
 /** A nonempty rectangle in document pixels, used by renderRegions. */
 export interface PsdRegionRect {
@@ -320,6 +510,7 @@ export interface InitOutput {
   readonly psdfontlibrary_new: () => number;
   readonly psdfontlibrary_setHyphenationDictionary: (a: number, b: number, c: number) => [number, number];
   readonly readPsd: (a: number, b: number) => [number, number, number];
+  readonly readPsdSource: (a: number, b: number) => [number, number, number];
   readonly renderedimage_approximations: (a: number) => any;
   readonly renderedimage_depth: (a: number) => number;
   readonly renderedimage_height: (a: number) => number;
