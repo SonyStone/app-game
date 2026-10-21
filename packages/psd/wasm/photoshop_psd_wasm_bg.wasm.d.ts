@@ -3,14 +3,17 @@
 export const memory: WebAssembly.Memory;
 export const __wbg_psdeditorsession_free: (a: number, b: number) => void;
 export const __wbg_psdpreparedsave_free: (a: number, b: number) => void;
+export const psdeditorsession_addTextFont: (a: number, b: number, c: number, d: number) => [number, number];
 export const psdeditorsession_dispose: (a: number) => void;
 export const psdeditorsession_edit: (a: number, b: any) => [number, number, number];
+export const psdeditorsession_editSmart: (a: number, b: any, c: number) => [number, number, number];
 export const psdeditorsession_editSource: (a: number, b: any) => [number, number, number];
 export const psdeditorsession_inspect: (a: number) => [number, number, number];
 export const psdeditorsession_inspectSource: (a: number) => [number, number, number];
 export const psdeditorsession_new: (a: number, b: number) => [number, number, number];
 export const psdeditorsession_prepareSave: (a: number, b: number) => [number, number, number];
 export const psdeditorsession_repaintGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
+export const psdeditorsession_setText: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];
 export const psdpreparedsave_dispose: (a: number) => void;
 export const psdpreparedsave_nextChunk: (a: number, b: number) => [number, number, number, number];
 export const psdpreparedsave_revision: (a: number) => bigint;

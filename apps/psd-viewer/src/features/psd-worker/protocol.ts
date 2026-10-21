@@ -61,7 +61,10 @@ export type PsdRequest =
   | { id: number; type: 'textSupport'; document: number; index: number }
   | { id: number; type: 'close' };
 
-/** The worker's answer to the request with the same `id`. Pixel buffers are transferred, never copied. */
+/**
+ * The worker's answer to the request with the same `id`. Pixel buffers are transferred, never copied.
+ * `documentFonts` and `textSupport` preserve the facade's release mismatches, separately from font availability.
+ */
 export type PsdReply =
   | {
       id: number;

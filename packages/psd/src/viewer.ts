@@ -227,7 +227,10 @@ export type PsdViewerDocument = {
    * first frame, replacing it with a fresh layer render. Zero uses the WASM default work limit.
    */
   savedOverview(step: number, maxWorkPixels?: number): PsdResult<PsdRegionPixels>;
-  /** The fonts the document's type layers use and whether `fonts` holds each (none when omitted). */
+  /**
+   * The fonts the document's type layers use, their availability in `fonts` (none when omitted), and supplied
+   * releases that differ from the document's recorded versions. Availability alone does not imply exact text.
+   */
   fonts(fonts?: PsdFontLibrary): PsdResult<PsdDocumentFonts>;
   /**
    * Whether type layer record `index` re-renders from its text with `fonts`, re-rendering it once to decide; `null`
@@ -392,8 +395,11 @@ export type PsdFontInfo = { name: string; format: 'TrueType' | 'CFF'; size: numb
  * records using it; and the type layer records bottom to top with their fonts, or the error reading their text.
  */
 export type PsdDocumentFonts = {
+  /** Raster font availability by PostScript name; a present font can still have a release mismatch. */
   fonts: { name: string; available: boolean; layers: number[] }[];
   layers: { index: number; name: string; visible: boolean; fonts: string[]; error?: string }[];
+  /** Supplied raster fonts or unique active faces whose releases differ from the document's recorded versions. */
+  releaseMismatches: PsdFontReleaseMismatch[];
 };
 
 /**
@@ -401,7 +407,32 @@ export type PsdDocumentFonts = {
  * it: `reason` is the renderer's refusal when not, such as a missing font or an unverified setting. 16- and 32-bit
  * compositors can still refuse the layer's blending.
  */
-export type PsdTextSupport = { fonts: string[]; missing: string[]; supported: boolean; reason?: string };
+export type PsdTextSupport = {
+  fonts: string[];
+  /** Fonts unavailable for rasterization, separate from supplied release mismatches. */
+  missing: string[];
+  /** Supplied release mismatches for this layer's fonts. Any mismatch prevents exact text support. */
+  releaseMismatches: PsdFontReleaseMismatch[];
+  /** Whether re-rendering succeeds without a known release mismatch; equal versions do not prove identical outlines. */
+  supported: boolean;
+  reason?: string;
+};
+
+/**
+ * A supplied font with the required PostScript name but a different release from the document's recorded version.
+ * Version evidence diagnoses mismatches; equal versions cannot certify identical charstrings because PSDs do not
+ * embed the font programs.
+ */
+export type PsdFontReleaseMismatch = {
+  /** The font's PostScript name. */
+  name: string;
+  /** The renderer's explanation of the mismatch. */
+  reason: string;
+  /** Version saved in the document's text resources. */
+  recordedVersion: string;
+  /** Version in the supplied face, omitted when the face has no version metadata. */
+  suppliedVersion?: string;
+};
 
 /** Straight (not premultiplied) 8-bit RGBA, row by row. */
 export type PsdImage = { width: number; height: number; pixels: Uint8Array };

@@ -279,7 +279,7 @@ it('adds fonts by PostScript name and rejects what it cannot read with a clear r
 
 it('reports no fonts or text support for a document without type layers, and renders it with typeLayers', async () => {
   const opened = await document();
-  expect(value(opened.fonts())).toEqual({ fonts: [], layers: [] });
+  expect(value(opened.fonts())).toEqual({ fonts: [], layers: [], releaseMismatches: [] });
   expect(value(opened.textSupport(0))).toBeNull();
   const render = value(opened.render({ ...photoshopDefaultSettings, typeLayers: true }));
   expect(render.approximations).toEqual([]);

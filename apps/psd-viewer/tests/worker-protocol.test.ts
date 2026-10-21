@@ -2,6 +2,7 @@ import { photoshopDefaultSettings, type PsdInterpolation, type PsdRenderSettings
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { expect, it, vi } from 'vitest';
+import { withDifferentFontVersion } from '../../../packages/psd/test/fontRelease';
 import { makePsdClient, type PsdResultOf, type PsdWorkerPort } from '../src/features/psd-worker';
 import type { PsdReply, PsdRequest } from '../src/features/psd-worker/protocol';
 import { makePsdWorkerHost } from '../src/features/psd-worker/workerHost';
@@ -234,12 +235,14 @@ it('reports the fonts a document needs and refuses to re-render text without the
   expect(value(await client.fonts())).toEqual([]);
   expect(value(await client.documentFonts(document))).toEqual({
     fonts: [{ name: 'Arial-BoldMT', available: false, layers: [1] }],
-    layers: [{ index: 1, name: 'STYLED', visible: true, fonts: ['Arial-BoldMT'] }]
+    layers: [{ index: 1, name: 'STYLED', visible: true, fonts: ['Arial-BoldMT'] }],
+    releaseMismatches: []
   });
   expect(value(await client.textSupport(document, 0))).toBeNull();
   expect(value(await client.textSupport(document, 1))).toEqual({
     fonts: ['Arial-BoldMT'],
     missing: ['Arial-BoldMT'],
+    releaseMismatches: [],
     supported: false,
     reason: 'text rendering: font Arial-BoldMT was not supplied'
   });
@@ -274,12 +277,15 @@ it.skipIf(!arialPaths.every((path) => existsSync(path)))(
     expect(transferred[sent.findIndex((request) => request.type === 'addFonts')]).toEqual(fonts);
     expect(added.results.map((result) => result.ok && result.value.map((face) => face.name))).toEqual([['ArialMT'], ['Arial-BoldMT']]);
     expect(value(await client.fonts()).map((entry) => entry.name)).toEqual(['Arial-BoldMT', 'ArialMT']);
-    expect(value(await client.documentFonts(document)).fonts).toEqual([
-      { name: 'Arial-BoldMT', available: true, layers: [1] }
-    ]);
+    expect(value(await client.documentFonts(document))).toEqual({
+      fonts: [{ name: 'Arial-BoldMT', available: true, layers: [1] }],
+      layers: [{ index: 1, name: 'STYLED', visible: true, fonts: ['Arial-BoldMT'] }],
+      releaseMismatches: []
+    });
     expect(value(await client.textSupport(document, 1))).toEqual({
       fonts: ['Arial-BoldMT'],
       missing: [],
+      releaseMismatches: [],
       supported: true
     });
 
@@ -291,6 +297,34 @@ it.skipIf(!arialPaths.every((path) => existsSync(path)))(
       differingSamples: 0,
       max: 0
     });
+  }
+);
+
+it.skipIf(!existsSync(arialPaths[1]!))(
+  'preserves supplied release mismatches separately from missing fonts through the worker',
+  async () => {
+    const { client } = connect();
+    const { document } = value(await client.open(await example('type-with-layer-styles.psd')));
+    value(await client.addFonts([withDifferentFontVersion(await systemFont(arialPaths[1]!))]));
+    const report = value(await client.documentFonts(document));
+    expect(report.fonts).toEqual([{ name: 'Arial-BoldMT', available: true, layers: [1] }]);
+    expect(report.releaseMismatches).toEqual([
+      {
+        name: 'Arial-BoldMT',
+        reason: 'font present but a different release',
+        recordedVersion: 'Version 5.01.2x',
+        suppliedVersion: expect.stringMatching(/^X+$/)
+      }
+    ]);
+    expect(value(await client.textSupport(document, 1))).toEqual({
+      fonts: ['Arial-BoldMT'],
+      missing: [],
+      releaseMismatches: report.releaseMismatches,
+      supported: false,
+      reason: 'font present but a different release'
+    });
+    expect(value(await client.textSupport(document, 0))).toBeNull();
+    client.dispose();
   }
 );
 

@@ -193,7 +193,7 @@ export function makePsdClient(worker: PsdWorkerPort) {
     return reply.type === 'fonts' ? { ok: true, value: reply.fonts } : failure(reply);
   }
 
-  /** The fonts the document's type layers use, and which of them the worker's library holds. */
+  /** The document's fonts, their availability, and supplied releases differing from the recorded versions. */
   async function documentFonts(document: number): Promise<PsdResultOf<PsdDocumentFonts>> {
     const reply = await send({ type: 'documentFonts', document });
     return reply.type === 'documentFonts' ? { ok: true, value: reply.report } : failure(reply);
@@ -201,7 +201,7 @@ export function makePsdClient(worker: PsdWorkerPort) {
 
   /**
    * Whether type layer record `index` re-renders from its text with the worker's library; `null` for other records.
-   * The worker re-renders the layer once to decide.
+   * The worker re-renders the layer once to decide and reports supplied release mismatches separately from missing fonts.
    */
   async function textSupport(document: number, index: number): Promise<PsdResultOf<PsdTextSupport | null>> {
     const reply = await send({ type: 'textSupport', document, index });

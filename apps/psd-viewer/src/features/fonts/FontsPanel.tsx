@@ -45,21 +45,28 @@ export function FontsPanel(props: {
       </header>
       <ul class={styles.fonts} aria-label="Document fonts">
         <For each={props.report.fonts}>
-          {(font) => (
-            <li data-font-status={font.available ? 'available' : 'missing'}>
-              <span class={styles.name} title={`Used by ${layerNames(props.report, font.layers)}`}>
-                {font.name}
-              </span>
-              <span class={font.available ? styles.available : styles.missing}>
-                {font.available ? 'available' : 'missing'}
-              </span>
-              <Show when={props.library.find((face) => face.name === font.name)?.validationError}>
-                {(reason) => (
-                  <span class={styles.missing} title={reason()}>import validation unavailable</span>
-                )}
-              </Show>
-            </li>
-          )}
+          {(font) => {
+            const mismatch = () => props.report.releaseMismatches.find((entry) => entry.name === font.name);
+
+            return (
+              <li data-font-status={mismatch() ? 'different-release' : font.available ? 'available' : 'missing'}>
+                <span class={styles.name} title={`Used by ${layerNames(props.report, font.layers)}`}>
+                  {font.name}
+                </span>
+                <span
+                  class={font.available && !mismatch() ? styles.available : styles.missing}
+                  title={mismatch()?.reason}
+                >
+                  {mismatch() ? 'different release' : font.available ? 'available' : 'missing'}
+                </span>
+                <Show when={props.library.find((face) => face.name === font.name)?.validationError}>
+                  {(reason) => (
+                    <span class={styles.missing} title={reason()}>import validation unavailable</span>
+                  )}
+                </Show>
+              </li>
+            );
+          }}
         </For>
       </ul>
       <Show when={unreadable().length}>
@@ -115,13 +122,17 @@ export function FontsPanel(props: {
                 props.render,
                 props.visibleOf(layer.index),
                 layer.fonts.length > 0 &&
-                  layer.fonts.every((name) => props.library.some((face) => face.name === name && face.active))
+                  layer.fonts.every((name) => props.library.some((face) => face.name === name && face.active)),
+                props.report.releaseMismatches
               );
 
             return (
               <li data-text-layer={layer.index} data-text-mixing={status().kind}>
                 <span class={styles.name}>{layer.name || '(unnamed)'}</span>
-                <span class={status().kind === 'approximate' ? styles.missing : ''} title={status().reason}>
+                <span
+                  class={['approximate', 'releaseMismatch'].includes(status().kind) ? styles.missing : ''}
+                  title={status().reason}
+                >
                   {status().label}
                 </span>
               </li>
