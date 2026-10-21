@@ -1,20 +1,40 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
+/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
 /**
  * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
  * Physical record indices refer to the selected layer-info section and change after structural edits.
  */
 export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
+
+/** Per-call host policy. Defaults are 64 MiB per allocation, 512 MiB live and depth 64.
+ * Limits concern accounted buffers, not OS RSS. Safe-integer byte values may raise or lower defaults.
+ * retainedBytes includes caller input copies, fonts and caches not owned by this operation. */
+export interface PsdBudgetOptions {
+  allocationBytes?: number;
+  liveBytes?: number;
+  maxOffset?: number;
+  maxDepth?: number;
+  retainedBytes?: number;
+}
+/** A policy refusal, separate from corruption and Photoshop's native refusal. */
+export interface PsdBudgetError extends Error {
+  name: 'PsdBudgetError';
+  resource: string;
+  requested: bigint;
+  limit: bigint;
+}
+
+
 
 /** Persisted source snapshot. It contains no selection, zoom, document dirty bit or linked-file OS state. */
 export interface PsdSourceSnapshot {
@@ -303,6 +323,9 @@ export class PsdDocumentHandle {
    * `strategy`; a dependency exceeding the limit throws `PsdUnsupportedError` before rendering.
    * Pixels equal the corresponding whole render, including its reported approximations.
    * The returned `Uint8Array` owns its storage and can be transferred to another worker.
+   * `options.budget` overrides 64 MiB per allocation/512 MiB live admission per call, using
+   * allocationBytes/liveBytes/retainedBytes. Retained bytes include external fonts/caches.
+   * Conservative accounting can require a larger liveBytes value for a many-layer document.
    */
   renderRegion(left: number, top: number, width: number, height: number, options: any, fonts: PsdFontLibrary): PsdRegionPixels;
   /**
@@ -326,8 +349,10 @@ export class PsdDocumentHandle {
    * and may differ from Photoshop-26 recompositing. It ignores visibility/state edits and must
    * be discarded after edits. Refuses an image marked as not real. `maxWorkPixels` limits
    * output pixels, default 16,777,216 when zero. `step` must be positive.
+   * Optional third argument overrides 64 MiB allocation/512 MiB live budgets per call with
+   * allocationBytes/liveBytes/retainedBytes; container storage is counted automatically.
    */
-  savedOverview(step: number, max_work_pixels: number): PsdRegionPixels;
+  savedOverview(step: number, max_work_pixels: number, budget_options?: object | null): PsdRegionPixels;
   /**
    * Exact integer decimation of a fresh layer render. Output pixel `(x,y)` samples document
    * pixel `(x*step,y*step)`, without filtering or scaling operation parameters. Dimensions are
@@ -336,6 +361,21 @@ export class PsdDocumentHandle {
    * Rendering sampled scanlines bounds canvas storage but may be slower than a whole render.
    */
   renderOverview(step: number, options: any, fonts: PsdFontLibrary): PsdRegionPixels;
+  /**
+   * Parses with explicit host budgets before copying payloads. Defaults are 64 MiB per
+   * allocation and 512 MiB live, depth 64, u64 offsets through i64::MAX. Options are
+   * allocationBytes/liveBytes/maxOffset/maxDepth/retainedBytes. Retained bytes must include
+   * external caches; the binding additionally accounts for its input and the host input copy.
+   * Input length is checked before copying the host Uint8Array into WASM.
+   * Use per-call overrides when a compressed payload exceeds the default; region output stays windowed.
+   */
+  static openWithBudget(bytes: Uint8Array, options: any): PsdDocumentHandle;
+  /**
+   * Full rendering with explicit per-call host admission. Defaults are 64 MiB per
+   * allocation and 512 MiB live; retainedBytes includes caller fonts and caches.
+   * This can conservatively refuse a dependency graph before legacy render() enters it.
+   */
+  renderWithBudget(options: any, fonts: PsdFontLibrary, budget_options: any): RenderedImage;
   /**
    * Opens a PSD or PSB as Photoshop 26 does, keeping the strict reading of [`Self::open`] where it is Photoshop's
    * document or Photoshop refuses a file the strict reader reads (see the `opening` module). `answers` holds the
@@ -364,6 +404,12 @@ export class PsdDocumentHandle {
    * Optional visibility supplies one boolean per saved plane; omitted view visibility is returned as null.
    */
   savedProcessChannels(visibility?: Array<any> | null): any;
+  /**
+   * Recovery opening with explicit per-call budgets and typed PsdBudgetError failures.
+   * Defaults are 64 MiB per allocation, 512 MiB live and nesting depth 64. Caller retainedBytes
+   * covers external storage; both reader models and both input copies are additionally counted.
+   */
+  static openLikePhotoshopWithBudget(bytes: Uint8Array, answers: any, options: any): any;
   /**
    * Size, depth, color mode, channels, format, image resources, document-level tagged blocks and the merged
    * image's layout.
@@ -476,6 +522,37 @@ export class PsdFontLibrary {
   fonts(): Array<any>;
 }
 /**
+ * A host-owned file with u64 spans. The callback `(offset: bigint, length: number) => Uint8Array`
+ * must synchronously read exactly the requested window. In a worker use
+ * `new Uint8Array(new FileReaderSync().readAsArrayBuffer(blob.slice(Number(offset), Number(offset)+length)))`.
+ * Keep the blob and callback alive until free(). No complete file is copied into WASM.
+ */
+export class PsdSourceHandle {
+  private constructor();
+  free(): void;
+  /**
+   * Emits original file bytes in chunks of at most 64 KiB. The callback must consume each
+   * Uint8Array before returning. It must not accumulate unaccounted chunks in linear memory.
+   */
+  writeUnchanged(emit: Function, options: PsdBudgetOptions | null | undefined): void;
+  /**
+   * Returns native header fields and logical section spans, with bigint offsets/lengths.
+   */
+  info(): any;
+  /**
+   * Reads strict outer envelopes without repairing or materializing inner sections.
+   * Default budget is 64 MiB per allocation, 512 MiB live, i64::MAX offsets and depth 64.
+   * Options `allocationBytes`, `liveBytes`, `maxOffset`, `maxDepth`, `retainedBytes` override per call.
+   */
+  static open(read: (offset: bigint, length: number) => Uint8Array, length: bigint, options: PsdBudgetOptions | null | undefined): PsdSourceHandle;
+  /**
+   * Decodes a channel grid from a payload span without its compression word. Native planar
+   * bytes are returned, including packed bits, big-endian words and IEEE payloads. ZIP/RLE
+   * rows after the requested region remain unvalidated. Uses the same per-call budget defaults as open().
+   */
+  readGrid(offset: bigint, length: bigint, compression: number, width: number, rows: number, depth: number, psb: boolean, left: number, top: number, grid_width: number, grid_height: number, step: number, options: PsdBudgetOptions | null | undefined): Uint8Array;
+}
+/**
  * One composite: straight 8-bit RGBA for display and, for 16- and 32-bit documents, the composite at their depth, or
  * for CMYK and Lab documents the composite in their own channels.
  */
@@ -515,6 +592,7 @@ export interface InitOutput {
   readonly memory: WebAssembly.Memory;
   readonly __wbg_psddocumenthandle_free: (a: number, b: number) => void;
   readonly __wbg_psdfontlibrary_free: (a: number, b: number) => void;
+  readonly __wbg_psdsourcehandle_free: (a: number, b: number) => void;
   readonly __wbg_renderedimage_free: (a: number, b: number) => void;
   readonly psddocumenthandle_difference: (a: number, b: number) => [number, number, number];
   readonly psddocumenthandle_documentFonts: (a: number, b: number) => any;
@@ -525,12 +603,15 @@ export interface InitOutput {
   readonly psddocumenthandle_merged: (a: number) => [number, number, number];
   readonly psddocumenthandle_open: (a: number, b: number) => [number, number, number];
   readonly psddocumenthandle_openLikePhotoshop: (a: number, b: number, c: any) => [number, number, number];
+  readonly psddocumenthandle_openLikePhotoshopWithBudget: (a: any, b: any, c: any) => [number, number, number];
+  readonly psddocumenthandle_openWithBudget: (a: any, b: any) => [number, number, number];
   readonly psddocumenthandle_render: (a: number, b: any, c: number) => [number, number, number];
   readonly psddocumenthandle_renderColor: (a: number, b: any, c: any, d: number) => [number, number, number];
   readonly psddocumenthandle_renderOverview: (a: number, b: number, c: any, d: number) => [number, number, number];
   readonly psddocumenthandle_renderRegion: (a: number, b: number, c: number, d: number, e: number, f: any, g: number) => [number, number, number];
   readonly psddocumenthandle_renderRegions: (a: number, b: any, c: any, d: number) => [number, number, number];
-  readonly psddocumenthandle_savedOverview: (a: number, b: number, c: number) => [number, number, number];
+  readonly psddocumenthandle_renderWithBudget: (a: number, b: any, c: number, d: any) => [number, number, number];
+  readonly psddocumenthandle_savedOverview: (a: number, b: number, c: number, d: number) => [number, number, number];
   readonly psddocumenthandle_savedProcessChannels: (a: number, b: number) => [number, number, number];
   readonly psddocumenthandle_states: (a: number) => any;
   readonly psddocumenthandle_textSupport: (a: number, b: number, c: number) => [number, number, number];
@@ -539,6 +620,10 @@ export interface InitOutput {
   readonly psdfontlibrary_fonts: (a: number) => any;
   readonly psdfontlibrary_new: () => number;
   readonly psdfontlibrary_setHyphenationDictionary: (a: number, b: number, c: number) => [number, number];
+  readonly psdsourcehandle_info: (a: number) => [number, number, number];
+  readonly psdsourcehandle_open: (a: any, b: bigint, c: any) => [number, number, number];
+  readonly psdsourcehandle_readGrid: (a: number, b: bigint, c: bigint, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: any) => [number, number, number, number];
+  readonly psdsourcehandle_writeUnchanged: (a: number, b: any, c: any) => [number, number];
   readonly readPsd: (a: number, b: number) => [number, number, number];
   readonly readPsdSource: (a: number, b: number) => [number, number, number];
   readonly renderedimage_approximations: (a: number) => any;

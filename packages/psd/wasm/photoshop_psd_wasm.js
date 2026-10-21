@@ -114,20 +114,6 @@ function takeFromExternrefTable0(idx) {
     wasm.__externref_table_dealloc(idx);
     return value;
 }
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- * @param {Uint8Array} bytes
- * @returns {any}
- */
-export function readPsd(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readPsd(ptr0, len0);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
-}
 
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -150,6 +136,21 @@ export function writePsd(document, composite) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * @param {Uint8Array} bytes
+ * @returns {any}
+ */
+export function readPsd(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsd(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
 }
 
 /**
@@ -253,6 +254,23 @@ export class PsdEditorSession {
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
+    }
+    /**
+     * Resizes an existing root artboard from its committed top-left, leaving children and canvas fixed.
+     * RGB8 PSD only, canvas at most 2000x1000, coordinates within +/-2000, with auto-expand/shrinkwrap off.
+     * Rebuilds merged RGB/alpha strictly and omits stale previews before publishing the revision.
+     * Create/move, live-parameter edits and frame-content replacement throw named Dependency errors.
+     * Failure preserves bytes and revision. linearBlending is the host gamma-1 preference, false by default.
+     * @param {PsdGeometryEdit} edit
+     * @param {boolean | null} [linear_blending]
+     * @returns {M01EditOutcome}
+     */
+    editGeometry(edit, linear_blending) {
+        const ret = wasm.psdeditorsession_editGeometry(this.__wbg_ptr, edit, isLikeNone(linear_blending) ? 0xFFFFFF : linear_blending ? 1 : 0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
     }
     /**
      * Inspects full-precision persisted source fields for any parsed container, without RGB8 tree admission.
@@ -425,6 +443,105 @@ export class PsdPreparedSave {
     }
 }
 
+const PsdSourceHandleFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_psdsourcehandle_free(ptr >>> 0, 1));
+/**
+ * A host-owned file with u64 spans. The callback `(offset: bigint, length: number) => Uint8Array`
+ * must synchronously read exactly the requested window. In a worker use
+ * `new Uint8Array(new FileReaderSync().readAsArrayBuffer(blob.slice(Number(offset), Number(offset)+length)))`.
+ * Keep the blob and callback alive until free(). No complete file is copied into WASM.
+ */
+export class PsdSourceHandle {
+
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(PsdSourceHandle.prototype);
+        obj.__wbg_ptr = ptr;
+        PsdSourceHandleFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        PsdSourceHandleFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_psdsourcehandle_free(ptr, 0);
+    }
+    /**
+     * Emits original file bytes in chunks of at most 64 KiB. The callback must consume each
+     * Uint8Array before returning. It must not accumulate unaccounted chunks in linear memory.
+     * @param {Function} emit
+     * @param {PsdBudgetOptions | null | undefined} options
+     */
+    writeUnchanged(emit, options) {
+        const ret = wasm.psdsourcehandle_writeUnchanged(this.__wbg_ptr, emit, options);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Returns native header fields and logical section spans, with bigint offsets/lengths.
+     * @returns {any}
+     */
+    info() {
+        const ret = wasm.psdsourcehandle_info(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Reads strict outer envelopes without repairing or materializing inner sections.
+     * Default budget is 64 MiB per allocation, 512 MiB live, i64::MAX offsets and depth 64.
+     * Options `allocationBytes`, `liveBytes`, `maxOffset`, `maxDepth`, `retainedBytes` override per call.
+     * @param {(offset: bigint, length: number) => Uint8Array} read
+     * @param {bigint} length
+     * @param {PsdBudgetOptions | null | undefined} options
+     * @returns {PsdSourceHandle}
+     */
+    static open(read, length, options) {
+        const ret = wasm.psdsourcehandle_open(read, length, options);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return PsdSourceHandle.__wrap(ret[0]);
+    }
+    /**
+     * Decodes a channel grid from a payload span without its compression word. Native planar
+     * bytes are returned, including packed bits, big-endian words and IEEE payloads. ZIP/RLE
+     * rows after the requested region remain unvalidated. Uses the same per-call budget defaults as open().
+     * @param {bigint} offset
+     * @param {bigint} length
+     * @param {number} compression
+     * @param {number} width
+     * @param {number} rows
+     * @param {number} depth
+     * @param {boolean} psb
+     * @param {number} left
+     * @param {number} top
+     * @param {number} grid_width
+     * @param {number} grid_height
+     * @param {number} step
+     * @param {PsdBudgetOptions | null | undefined} options
+     * @returns {Uint8Array}
+     */
+    readGrid(offset, length, compression, width, rows, depth, psb, left, top, grid_width, grid_height, step, options) {
+        const ret = wasm.psdsourcehandle_readGrid(this.__wbg_ptr, offset, length, compression, width, rows, depth, psb, left, top, grid_width, grid_height, step, options);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+}
+
 async function __wbg_load(module, imports) {
     if (typeof Response === 'function' && module instanceof Response) {
         if (typeof WebAssembly.instantiateStreaming === 'function') {
@@ -463,6 +580,14 @@ function __wbg_get_imports() {
         const ret = arg0.buffer;
         return ret;
     };
+    imports.wbg.__wbg_call_7cccdd69e0791ae2 = function() { return handleError(function (arg0, arg1, arg2) {
+        const ret = arg0.call(arg1, arg2);
+        return ret;
+    }, arguments) };
+    imports.wbg.__wbg_call_833bed5770ea2041 = function() { return handleError(function (arg0, arg1, arg2, arg3) {
+        const ret = arg0.call(arg1, arg2, arg3);
+        return ret;
+    }, arguments) };
     imports.wbg.__wbg_from_2a5d3e218e67aa85 = function(arg0) {
         const ret = Array.from(arg0);
         return ret;
@@ -544,6 +669,9 @@ function __wbg_get_imports() {
         const ret = Reflect.set(arg0, arg1, arg2);
         return ret;
     }, arguments) };
+    imports.wbg.__wbg_setname_6df54b7ebf9404a9 = function(arg0, arg1, arg2) {
+        arg0.name = getStringFromWasm0(arg1, arg2);
+    };
     imports.wbg.__wbindgen_bigint_from_u64 = function(arg0) {
         const ret = BigInt.asUintN(64, arg0);
         return ret;

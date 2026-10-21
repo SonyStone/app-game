@@ -24,7 +24,8 @@ import {
  * while the next one is already running; opening another document closes the previous one, even when the new one
  * fails or waits for an answer to a Photoshop prompt. Small documents open as Photoshop opens them; large canvases
  * use the strict, lazy reader because recovery still decodes whole channels. Large-canvas requests never run
- * whole-document compositing, comparison or blending detection.
+ * whole-document compositing, comparison or blending detection. Window calls admit up to 2 GiB live and count
+ * the retained host input; typed budget refusals travel to the UI as ordinary failed replies.
  * The renders a blending
  * detection made wait for the next render request, which takes the one with its settings and visibility instead of
  * compositing again; the others are freed then. It also holds the font library, created on first use and kept across
@@ -32,7 +33,7 @@ import {
  * run one at a time in arrival order. `post` sends a reply with the buffers to transfer.
  */
 export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable[]) => void) {
-  let document: { id: number; viewer: PsdViewerDocument } | undefined;
+  let document: { id: number; viewer: PsdViewerDocument; inputBytes: number } | undefined;
   let fonts: PsdFontLibrary | undefined;
   const sessionFonts = new Map<string, SessionFont>();
   const suppliedFonts = () => [...sessionFonts.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -68,7 +69,7 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
         return;
       }
 
-      document = { id: ++nextDocument, viewer: opened.value };
+      document = { id: ++nextDocument, viewer: opened.value, inputBytes: request.bytes.byteLength };
       post(
         {
           id: request.id,
@@ -139,14 +140,16 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
     switch (request.type) {
       case 'renderWindow': {
         const start = performance.now();
-        const settings = { ...request.settings, maxWorkPixels: windowWorkPixels };
+        // Admission includes the host input in addition to WASM-owned document storage.
+        const budget = { liveBytes: 2 * 1024 * 1024 * 1024, retainedBytes: document.inputBytes };
+        const settings = { ...request.settings, maxWorkPixels: windowWorkPixels, budget };
         const window = request.window;
         const result =
           window.kind === 'regions'
             ? viewer.renderRegions(window.rectangles, settings, request.visibility, fonts)
             : window.kind === 'overview'
               ? viewer.renderOverview(window.step, settings, request.visibility, fonts)
-              : viewer.savedOverview(window.step, windowWorkPixels);
+              : viewer.savedOverview(window.step, windowWorkPixels, budget);
         if (!result.ok) {
           post(failed(request, result.error), []);
           return;
