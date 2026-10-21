@@ -263,6 +263,8 @@ export class PsdDocumentHandle {
   private constructor();
   free(): void;
   /**
+   * Compares a render to the saved snapshot. A mismatch can reflect authoring-state differences; this is not
+   * a Photoshop 26 next-open oracle. Equality applies only to these pixels and does not authorize an edit.
    * Compares `image`, a render of this document, with Photoshop's merged image as Photoshop stores it: our color
    * matted against white where the merged image has an alpha plane, 8-bit documents in levels, 16-bit ones in wire
    * levels and 32-bit ones in float32 units in the last place. CMYK and Lab composites made in their channels
@@ -429,12 +431,17 @@ export class PsdDocumentHandle {
    */
   layers(): any;
   /**
+   * Displays the saved snapshot without reconstructing layers or validating historical text state. It may
+   * differ from `render()` and Photoshop 26 next-open composition. Decoding does not certify an editable state.
    * Photoshop's saved merged image ("Maximize Compatibility") as straight 8-bit RGBA, unmatted from white where it
    * carries transparency and converted from 16 and 32 bits like the composite. Throws `PsdUnsupportedError` when
    * the file has none or its color mode is not rendered.
    */
   merged(): any;
   /**
+   * Reconstructs layers for the Photoshop 26 target with caller-supplied settings. Historical authoring state
+   * is not reconstructed, and a successful render can differ from the saved snapshot even when Photoshop 26
+   * wrote it. Use `merged()` for saved pixels. Empty approximations describe this render policy only.
    * Composites the document with `options` (see [`RenderSettings::read`]): 8-bit RGB and Grayscale with
    * `composite_with_report`, 16- and 32-bit with `composite_deep`, CMYK and Lab of 8 and 16 bits in their own
    * channels with `composite_channels` whether or not `approximate` is set (shown through the approximate

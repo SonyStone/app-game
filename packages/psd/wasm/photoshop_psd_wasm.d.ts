@@ -36,6 +36,21 @@ export interface PsdBudgetError extends Error {
 
 
 
+/** Nonvisual metadata writes. Every failed batch preserves revision and source bytes. */
+export type PsdStateMetadataEdit =
+  | { readonly kind: 'compHeader'; readonly compId: number; readonly name?: string; readonly comment?: string }
+  | {
+      readonly kind: 'guides';
+      /** Stored u32 grid periods. Both document-guide resources update together. */ readonly grid: readonly [number, number];
+      /** Signed i32 location in 1/32 pixel, 0 vertical/1 horizontal, unsigned ARGB word. */
+      readonly guides: readonly { readonly location: number; readonly direction: 0 | 1; readonly argb: number }[];
+    }
+  | { readonly kind: 'noteText'; readonly index: number; readonly text: string }
+  /** Named refusals until complete dependent writers have native acceptance. */
+  | { readonly kind: 'applyComp' | 'captureComp' | 'slices' | 'xmp' };
+
+/** Linear interpolation/style only, with sampled sRGB and Dot Gain 20%. Other context refuses atomically. */
+export type LinearGradientFillPatch = Omit<GradientFillPatch, 'style'> & { readonly style?: 'linear' };
 /** Partial repaint of a sole RGB8 Classic canvas GdFl. Empty patch regenerates existing stops cache-free. */
 export interface GradientFillPatch {
   /** Finite degrees. Omitted fields retain descriptor precision. */ angle?: number;
@@ -360,6 +375,11 @@ export class PsdEditorSession {
    */
   editSource(batch: readonly PsdSourceEdit[]): M01EditOutcome;
   /**
+   * Selects a comp for application UI only. Null clears selection; no bytes/revision change.
+   * Requires a unique existing comp ID and unambiguous layer IDs. Does not apply pixels or set lastAppliedComp.
+   */
+  selectComp(id?: number | null): void;
+  /**
    * Freezes preserve-mode bytes for this revision. Untouched output is byte-identical; rename-only saves
    * preserve all other carriers. Visual saves require exact rendering, write real merged data, set 1057 true
    * and omit 1036. Compatibility-off inputs are promoted. Throws RenderRequired with the renderer's cause.
@@ -386,12 +406,28 @@ export class PsdEditorSession {
    */
   inspectSource(): PsdSourceSnapshot;
   /**
+   * Atomically changes comp header strings, document guides or one BOM-tagged UTF-16 text note.
+   * Preserves pixels and unrelated carriers; guide edits regenerate both 1092 and 1032.
+   * Active credentials, unknown versions, duplicate identities/carriers and other note encodings refuse.
+   * Comp application/capture, slice partitions and XMP reconciliation throw named Dependency errors.
+   * Pending visual changes still require a strict render on prepareSave. Failure preserves revision/bytes.
+   */
+  editStateMetadata(edits: readonly PsdStateMetadataEdit[]): M01EditOutcome;
+  /**
    * Edits and repaints a sole Normal RGB8 Classic canvas GdFl, with all render-input caches removed.
    * Regenerates layer RGB/alpha and real merged caches atomically, omitting stale thumbnail 1036.
    * Empty patch repaints the current descriptor. DitheredGradient and UnsupportedGradientInterpolation
    * are named refusals. Active masks, shapes, styles, additional layers and other modes/depths refuse.
    */
   repaintGradientFill(record_index: number, patch: GradientFillPatch, linear_blending?: boolean | null): M01EditOutcome;
+  /**
+   * Repaints explicit Linear interpolation/style on a sole full-strength Normal RGB8 canvas GdFl.
+   * Requires the admitted sampled sRGB profile and Dot Gain 20% working Gray; linearBlending is the
+   * host gamma-1 preference, false by default. Empty patch regenerates without using source caches.
+   * Preserves straight hidden RGB at zero alpha, rebuilds real merged data and removes stale thumbnails.
+   * Other profiles, dither, shapes, masks, effects, extra layers and unknown inputs refuse atomically.
+   */
+  repaintLinearGradientFill(record_index: number, patch: LinearGradientFillPatch, linear_blending?: boolean | null): M01EditOutcome;
   /**
    * Opens an in-memory PSD/PSB. Untouched save works for any container the lossless parser accepts.
    * This bounded API does not claim paged input or arbitrary-size PSB support.
@@ -431,6 +467,10 @@ export class PsdEditorSession {
    * Mixed raster/type batches remain refused. Font registration changes no revision or source bytes.
    */
   setText(layer_id: number, text: string, patch: PsdTextStylePatch | undefined): M01EditOutcome;
+  /**
+   * Application-local selection, independent of persisted comp capture flags and lastAppliedComp.
+   */
+  readonly selectedComp: number | undefined;
 }
 /**
  * Frozen M01 in-memory save. Chunk reads bound each returned Uint8Array, not total WASM allocation.
@@ -497,11 +537,15 @@ export interface InitOutput {
   readonly psdeditorsession_editGeometry: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editSmart: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editSource: (a: number, b: any) => [number, number, number];
+  readonly psdeditorsession_editStateMetadata: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_inspect: (a: number) => [number, number, number];
   readonly psdeditorsession_inspectSource: (a: number) => [number, number, number];
   readonly psdeditorsession_new: (a: number, b: number) => [number, number, number];
   readonly psdeditorsession_prepareSave: (a: number, b: number) => [number, number, number];
   readonly psdeditorsession_repaintGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
+  readonly psdeditorsession_repaintLinearGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
+  readonly psdeditorsession_selectComp: (a: number, b: number, c: number) => [number, number];
+  readonly psdeditorsession_selectedComp: (a: number) => [number, number, number];
   readonly psdeditorsession_setText: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];
   readonly psdpreparedsave_dispose: (a: number) => void;
   readonly psdpreparedsave_nextChunk: (a: number, b: number) => [number, number, number, number];

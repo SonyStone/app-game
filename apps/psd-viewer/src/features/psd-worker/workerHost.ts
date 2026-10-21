@@ -186,8 +186,8 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
           renders.delete(old);
         }
 
-        // Display RGBA8 stays on the existing path. Exact process channels can still have display-conversion
-        // approximations, so forward every WASM report to the existing approximation list.
+        // Keep every WASM report, including saved comp/frame selection and display-conversion approximations,
+        // in the existing approximation list.
         const { width, height, depth, pixels, milliseconds, approximations } = rendered.value;
         post(
           {

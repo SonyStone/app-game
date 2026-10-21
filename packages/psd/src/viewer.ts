@@ -215,6 +215,9 @@ export type PsdViewerDocument = {
    * text with `fonts` (none when omitted). Active faces also supply imported cache-mixing decisions with
    * `typeLayers: false`; an unknown active-name inventory must stay omitted. The render keeps its full-depth
    * composite for {@link difference} until disposed or the document closes.
+   * Targets Photoshop 26 with caller-supplied settings; historical authoring state is not reconstructed.
+   * A successful render can differ from the saved snapshot, even for Photoshop 26 files. Use {@link merged}
+   * for the stored pixels; an empty approximation list describes only this render policy.
    */
   render(
     settings: PsdRenderSettings,
@@ -278,10 +281,14 @@ export type PsdViewerDocument = {
   textSupport(index: number, fonts?: PsdFontLibrary): PsdResult<PsdTextSupport | null>;
   /**
    * Photoshop's saved merged image as straight 8-bit RGBA, other color modes than RGB and Grayscale converted to sRGB
-   * as renders are; `unsupported` when the file has none.
+   * as renders are; `unsupported` when the file has none. Displays the stored snapshot without reconstructing layers
+   * or validating historical text state. Decoding it does not certify an editable state or next-open composition.
    */
   merged(): PsdResult<PsdImage>;
-  /** Compares a live render of this document with the merged image as Photoshop stores it. */
+  /**
+   * Compares a live render with the stored snapshot. Differences can reflect authoring-state changes rather than
+   * next-open rendering errors. Equality applies only to these pixels and does not authorize an edit.
+   */
   difference(render: PsdRender): PsdResult<PsdDifference>;
   /** Everything known about one layer record. */
   layerDetail(index: number): PsdResult<PsdLayerDetail>;
@@ -495,7 +502,8 @@ export type PsdRender = PsdImage & {
   /**
    * What this render approximated, in words, one entry each: the conversion to sRGB of a CMYK or Lab composite made
    * exactly in its channels, or what `approximate` allowed (a color-mode conversion, a reduction to 8 bits, and each
-   * layer setting left out or substituted, as `“layer”: setting — what was done`); empty for exact renders.
+   * layer setting left out or substituted, as `“layer”: setting — what was done`). Includes saved-state selection
+   * reports. Empty means no approximation under this render policy, not equivalence to historical saved pixels.
    */
   approximations: string[];
   /** Frees the full-depth composite kept for comparisons; `pixels` stay usable. */
