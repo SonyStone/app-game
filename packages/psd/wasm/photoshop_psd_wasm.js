@@ -191,8 +191,10 @@ export class PsdEditorSession {
         wasm.__wbg_psdeditorsession_free(ptr, 0);
     }
     /**
-     * Moves the sole smart layer or replaces its embedded PNG atomically. Requires one opaque raster
-     * backdrop and one unfiltered Normal smart layer in unprofiled RGB8, at integer unscaled in-canvas bounds.
+     * Moves/scales the sole smart layer or replaces its embedded PNG atomically. Requires one opaque raster
+     * backdrop and one unfiltered Normal smart layer in unprofiled RGB8, at integer upright in-canvas bounds.
+     * setSmartAxisTransform requires a fresh placementId and explicit nearestNeighbor or bilinear interpolation.
+     * Bilinear retains at least half of each source axis; cubic scaling requires unavailable table state.
      * Replacement must have the same dimensions, positive alpha and fresh distinct host-generated UUIDs.
      * Updates SoLd/PlLd, linked bytes and lengths, parent channels/bounds and real merged data; omits thumbnails.
      * External/shared contents, filters and unsupported dependencies throw Dependency with propertyPath.
@@ -217,7 +219,9 @@ export class PsdEditorSession {
      * Record indices come from inspectSource and change after structural edits. Opacity edits require
      * strict merged-image regeneration at prepareSave; unsupported rendering refuses the save.
      * Visual edits admit RGB8 primary layers on canvases at most 2000x1000. Labels must be in 0..11.
-     * Arbitrary shmd/XMP payload replacement, colors, nested paint edits and runtime state refuse with Dependency.
+     * Color Overlay edits admit one enabled singleton Normal RGB effect on flat unmasked RGB8 raster layers,
+     * synchronize existing legacy companions, and require strict prepareSave regeneration.
+     * Arbitrary shmd/XMP replacement, other colors, nested paint edits and runtime state refuse.
      * @param {readonly PsdSourceEdit[]} batch
      * @returns {M01EditOutcome}
      */
@@ -289,10 +293,10 @@ export class PsdEditorSession {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
-     * Resizes an existing root artboard from its committed top-left, leaving children and canvas fixed.
+     * Resizes a root artboard or translates one admitted raster subtree on a fixed canvas.
      * RGB8 PSD only, canvas at most 2000x1000, coordinates within +/-2000, with auto-expand/shrinkwrap off.
      * Rebuilds merged RGB/alpha strictly and omits stale previews before publishing the revision.
-     * Create/move, live-parameter edits and frame-content replacement throw named Dependency errors.
+     * Move translates an admitted raster subtree; create, live-parameter edits and frame replacement refuse.
      * Failure preserves bytes and revision. linearBlending is the host gamma-1 preference, false by default.
      * @param {PsdGeometryEdit} edit
      * @param {boolean | null} [linear_blending]
@@ -300,6 +304,25 @@ export class PsdEditorSession {
      */
     editGeometry(edit, linear_blending) {
         const ret = wasm.psdeditorsession_editGeometry(this.__wbg_ptr, edit, isLikeNone(linear_blending) ? 0xFFFFFF : linear_blending ? 1 : 0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Builds a read-only CFF1 layout plan using fonts registered with addTextFont.
+     * Admits unchanged size/font at size/unitsPerEm = 1/16, printable ASCII/CR, left Crisp point
+     * or Single-line boxes, zero tracking/baseline and exact source raster regeneration.
+     * Shaping, soft wrapping, negative extents and other dependencies throw. Revision and bytes stay intact.
+     * Omits unresolved actual-size ink bounds. This plan cannot be committed by setText or prepareSave.
+     * @param {number} layer_id
+     * @param {string} text
+     * @returns {PsdCffLayoutCachePlan}
+     */
+    planCffText(layer_id, text) {
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.psdeditorsession_planCffText(this.__wbg_ptr, layer_id, ptr0, len0);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -446,6 +469,7 @@ export class PsdEditorSession {
      * Register actual original/requested fonts and the whitespace-marker face with addTextFont first.
      * Supports bounded printable ASCII/CR in left horizontal Crisp point or left/center/right Single-line RGB8 boxes.
      * Center/right require integral font size and zero tracking; full justification and non-left point text refuse.
+     * Full CFF edits refuse because actual-size ink bounds remain unresolved; planCffText is read-only.
      * Unsupported shaping, mixed styles, negative spacing, overflow and dependencies throw named errors.
      * Mixed raster/type batches remain refused. Font registration changes no revision or source bytes.
      * @param {number} layer_id

@@ -1,14 +1,14 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
-/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
 /**
  * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
@@ -48,6 +48,7 @@ export interface PsdSourceLayer {
   /** Raw lspf bits plus their named stored flags, null without lspf. */ readonly locks: SourceLocks | null;
   /** Stored lclr index and Photoshop 26 enum name, null without lclr. */ readonly label: SourceLabel | null;
   /** Winning modern source block, null without modern styles. Legacy lrFX stays separate. */ readonly styles: SourceStyles | null;
+  /** First legacy lrFX storage block; no rendering or edit admission follows from typing. */ readonly legacyStyles: LegacyStyleSource | null;
   /** Persisted shmd envelope, null without the block. Payloads are retained as bytes. */ readonly metadata: SourceMetadata | null;
 }
 /** Stored lock flags. Background runtime defaults are not inserted. */
@@ -216,6 +217,90 @@ export interface SourcePattern {
 export interface SourceEnumValue {
   /** Enum domain. */ readonly type: string;
   /** Selected identifier, including unknown values. */ readonly value: string;
+}
+/** Ordered lossless lrFX storage, independent of modern effects and render admission. */
+export interface LegacyStyleSource {
+  readonly version: number;
+  readonly records: readonly LegacyRecord[];
+  readonly tail: Uint8Array;
+  readonly sourceBlock: Uint8Array;
+}
+export interface LegacyRecord {
+  readonly signature: Uint8Array;
+  readonly key: Uint8Array;
+  readonly body: Uint8Array;
+  readonly tail: Uint8Array;
+  readonly settings: LegacySettings;
+}
+export type LegacySettings =
+  | (LegacyCommon & { readonly kind: 'common' })
+  | (LegacyShadow & { readonly kind: 'shadow' })
+  | (LegacyGlow & { readonly kind: 'glow' })
+  | (LegacyBevel & { readonly kind: 'bevel' })
+  | (LegacyOverlay & { readonly kind: 'overlay' })
+  | { readonly kind: 'opaque' };
+export interface LegacyCommon {
+ /** Stored version, without normalization. */ readonly version: number;
+ /** Stored common visibility byte; Photoshop26 reads and discards it. */ readonly visible: number;
+ /** Reserved bytes preserved exactly. */ readonly reserved: readonly number[];
+}
+export interface LegacyShadow {
+ /** Stored record version. */ readonly version: number;
+ /** Unsigned 16.16 blur. */ readonly blur: number;
+ /** Unsigned 16.16 intensity; runtime may convert it to a contour. */ readonly intensity: number;
+ /** Signed 16.16 local angle. */ readonly angle: number;
+ /** Unsigned 16.16 distance. */ readonly distance: number;
+ /** Imported legacy color. */ readonly color: LegacyColor;
+ /** Stored blend signature and key. */ readonly mode: LegacyMode;
+ /** Stored enable byte. */ readonly enabled: number;
+ /** Stored global-light byte. */ readonly useGlobalAngle: number;
+ /** Stored opacity byte. */ readonly opacity: number;
+ /** Optional compatibility color tail; ignored by the PS26 importer. */ readonly nativeColor: LegacyColor | null;
+}
+export interface LegacyGlow {
+ /** Stored record version. */ readonly version: number;
+ /** Unsigned 16.16 blur. */ readonly blur: number;
+ /** Unsigned 16.16 intensity. */ readonly intensity: number;
+ /** Imported color. */ readonly color: LegacyColor;
+ /** Stored blend signature and key. */ readonly mode: LegacyMode;
+ /** Stored enable byte. */ readonly enabled: number;
+ /** Stored opacity byte. */ readonly opacity: number;
+ /** Inner Glow source byte, present for versions above zero in PS26. */ readonly invert: number | null;
+ /** Optional ignored compatibility color tail. */ readonly nativeColor: LegacyColor | null;
+}
+export interface LegacyBevel {
+ /** Stored record version. */ readonly version: number;
+ /** Signed 16.16 angle. */ readonly angle: number;
+ /** Unsigned 16.16 legacy strength, before runtime division by blur. */ readonly strength: number;
+ /** Unsigned 16.16 blur, before style-dependent runtime doubling. */ readonly blur: number;
+ /** Stored highlight blend mode. */ readonly highlightMode: LegacyMode;
+ /** Stored shadow blend mode. */ readonly shadowMode: LegacyMode;
+ /** Imported highlight color. */ readonly highlightColor: LegacyColor;
+ /** Imported shadow color. */ readonly shadowColor: LegacyColor;
+ /** Stored style index. */ readonly style: number;
+ /** Stored highlight opacity byte. */ readonly highlightOpacity: number;
+ /** Stored shadow opacity byte. */ readonly shadowOpacity: number;
+ /** Stored enable byte. */ readonly enabled: number;
+ /** Stored global-light byte. */ readonly useGlobalAngle: number;
+ /** Stored direction byte. */ readonly direction: number;
+ /** Optional ignored native highlight tail. */ readonly nativeHighlight: LegacyColor | null;
+ /** Optional ignored native shadow tail. */ readonly nativeShadow: LegacyColor | null;
+}
+export interface LegacyOverlay {
+ /** Stored version; PS26 reads and discards it. */ readonly version: number;
+ /** Stored blend signature and key. */ readonly mode: LegacyMode;
+ /** Color used by PS26, independent of the native tail. */ readonly color: LegacyColor;
+ /** Stored opacity byte. */ readonly opacity: number;
+ /** Stored enable byte. */ readonly enabled: number;
+ /** Optional ignored native-color tail. */ readonly nativeColor: LegacyColor | null;
+}
+export interface LegacyColor {
+ /** Stored color-space identifier, without conversion. */ readonly space: number;
+ /** Four raw component words, including reserved components. */ readonly components: readonly number[];
+}
+export interface LegacyMode {
+ /** Stored signature; no substitution is performed. */ readonly signature: Uint8Array;
+ /** Stored FourCC blend key. */ readonly key: Uint8Array;
 }
 
 

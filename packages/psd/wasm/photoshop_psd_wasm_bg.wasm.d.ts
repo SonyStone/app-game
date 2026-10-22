@@ -15,6 +15,7 @@ export const psdeditorsession_editStateMetadata: (a: number, b: any) => [number,
 export const psdeditorsession_inspect: (a: number) => [number, number, number];
 export const psdeditorsession_inspectSource: (a: number) => [number, number, number];
 export const psdeditorsession_new: (a: number, b: number) => [number, number, number];
+export const psdeditorsession_planCffText: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const psdeditorsession_prepareSave: (a: number, b: number) => [number, number, number];
 export const psdeditorsession_repaintGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
 export const psdeditorsession_repaintLinearGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
