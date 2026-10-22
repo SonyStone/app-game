@@ -10,11 +10,34 @@ export function writePsd(document: any, composite: Uint8Array): Uint8Array;
  */
 export function readPsd(bytes: Uint8Array): any;
 /**
+ * Rasterizes one upright stem-free CFF2 glyph with Strong AA at 13.375..47.5625 px.
+ * The caller supplies actual single-face OTTO font bytes, a complete signed 16.16 design tuple
+ * in fvar order and a finite baseline origin within +/-100000 pixels. Font input is at most 64 MiB.
+ * No font lookup, shaping, HVAR or paint occurs.
+ * Hints, masks, flex/arithmetic programs, multiple FDs, transforms and other AA methods refuse.
+ * Returns coverage and document-space bounds only. This does not admit CFF2 to addTextFont or SetText.
+ */
+export function rasterizeCff2Strong(font_bytes: Uint8Array, design_coordinates: readonly number[], character: string, size: number, origin_x: number, origin_y: number): PsdCff2Coverage;
+/**
  * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
  * Physical record indices refer to the selected layer-info section and change after structural edits.
  */
 export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
+
+/** Isolated Strong glyph coverage. Bounds are document-space pixels; no paint, layout or editor cache is produced. */
+export interface PsdCff2Coverage {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly alpha: Uint8Array;
+  readonly glyphIndex: number;
+  /** Signed 16.16 fvar/avar coordinates, distinct from the supplied design tuple. */
+  readonly normalizedCoordinates: readonly number[];
+}
+
+
 
 /** Per-call host policy. Defaults are 64 MiB per allocation, 512 MiB live and depth 64.
  * Limits concern accounted buffers, not OS RSS. Safe-integer byte values may raise or lower defaults.
@@ -716,6 +739,7 @@ export interface InitOutput {
   readonly psdsourcehandle_open: (a: any, b: bigint, c: any) => [number, number, number];
   readonly psdsourcehandle_readGrid: (a: number, b: bigint, c: bigint, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: any) => [number, number, number, number];
   readonly psdsourcehandle_writeUnchanged: (a: number, b: any, c: any) => [number, number];
+  readonly rasterizeCff2Strong: (a: number, b: number, c: any, d: any, e: number, f: number, g: number) => [number, number, number];
   readonly readPsd: (a: number, b: number) => [number, number, number];
   readonly readPsdSource: (a: number, b: number) => [number, number, number];
   readonly renderedimage_approximations: (a: number) => any;

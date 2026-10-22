@@ -1,20 +1,43 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
-/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
+/**
+ * Rasterizes one upright stem-free CFF2 glyph with Strong AA at 13.375..47.5625 px.
+ * The caller supplies actual single-face OTTO font bytes, a complete signed 16.16 design tuple
+ * in fvar order and a finite baseline origin within +/-100000 pixels. Font input is at most 64 MiB.
+ * No font lookup, shaping, HVAR or paint occurs.
+ * Hints, masks, flex/arithmetic programs, multiple FDs, transforms and other AA methods refuse.
+ * Returns coverage and document-space bounds only. This does not admit CFF2 to addTextFont or SetText.
+ */
+export function rasterizeCff2Strong(font_bytes: Uint8Array, design_coordinates: readonly number[], character: string, size: number, origin_x: number, origin_y: number): PsdCff2Coverage;
 /**
  * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
  * Physical record indices refer to the selected layer-info section and change after structural edits.
  */
 export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
+
+/** Isolated Strong glyph coverage. Bounds are document-space pixels; no paint, layout or editor cache is produced. */
+export interface PsdCff2Coverage {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly alpha: Uint8Array;
+  readonly glyphIndex: number;
+  /** Signed 16.16 fvar/avar coordinates, distinct from the supplied design tuple. */
+  readonly normalizedCoordinates: readonly number[];
+}
+
+
 
 /** Per-call host policy. Defaults are 64 MiB per allocation, 512 MiB live and depth 64.
  * Limits concern accounted buffers, not OS RSS. Safe-integer byte values may raise or lower defaults.
@@ -36,6 +59,42 @@ export interface PsdBudgetError extends Error {
 
 
 
+/** Native source metadata only. Inspection grants no edit admission and performs no display conversion. */
+export interface PsdProcessSource {
+  /** PSD color-mode number. */ readonly mode: number;
+  /** Native bits per sample. */ readonly depth: number;
+  readonly width: number;
+  readonly height: number;
+  /** Stored merged channel count. */ readonly channels: number;
+  readonly mergedTransparency: boolean;
+  /** Physical source order. Reinspect after structural edits. */
+  readonly layers: readonly {
+    readonly recordIndex: number;
+    /** Persistent lyid, null if absent. */ readonly layerId: number | null;
+    readonly left: number;
+    readonly top: number;
+    readonly right: number;
+    readonly bottom: number;
+    /** Stored channel IDs in stream order; this is not process-plane replacement order. */
+    readonly channelIds: readonly number[];
+  }[];
+}
+/** Native wire-plane commands. Mode, depth and existing rectangle are inherited from inspectProcess().
+ * Big-endian bytes retain native precision. CMYK is inverted; alpha is last. No display conversion.
+ * Only bounded flat Normal Gray8/16, RGB16/32 and CMYK8 products admit. Failures are atomic. */
+export type PsdProcessEdit =
+  | { readonly kind: 'replaceProcessPlanes'; readonly layerId: number;
+      /** Complete native process planes then alpha, matching existing bounds. Array bytes are checked before casting. */
+      readonly planes: readonly (Uint8Array | readonly number[])[] }
+  | { readonly kind: 'setProcessOpacity'; readonly layerId: number; /** Integral native byte. */ readonly opacity: number }
+  | { readonly kind: 'renameProcessLayer'; readonly layerId: number; /** Control-free valid Unicode, at most 255 UTF-16 units. */ readonly name: string };
+/** Existing version-2 Lab CMYK Photo Filter settings. Unsupported products refuse before publishing. */
+export interface PsdCmykPhotoFilterPatch {
+  /** Integral 1..100; omission preserves source. */ readonly density?: number;
+  /** Encoded u16 Lab words, L in hundredths and signed a/b in hundredths represented as u16. */
+  readonly lab?: readonly [number, number, number];
+  /** Preserve CMY luminance and source K; omission preserves source. */ readonly preserveLuminosity?: boolean;
+}
 /** Nonvisual metadata writes. Every failed batch preserves revision and source bytes. */
 export type PsdStateMetadataEdit =
   | { readonly kind: 'compHeader'; readonly compId: number; readonly name?: string; readonly comment?: string }
@@ -513,7 +572,8 @@ export interface LegacyMode {
 
 
 /**
- * Persistent bounded RGB8 preserve-mode editor. Opening does not fetch assets or flatten the document.
+ * Persistent source-preserving editor. Opening does not fetch assets or flatten the document.
+ * Native process edits additionally admit bounded Gray8/16, RGB16/32 and CMYK8 products.
  * RGB8 plain raster/group edits are atomic; unsupported dependencies throw structured Error objects.
  * Visual saves require the strict renderer, regenerate merged data and omit thumbnail 1036.
  */
@@ -549,6 +609,16 @@ export class PsdEditorSession {
    * Requires a unique existing comp ID and unambiguous layer IDs. Does not apply pixels or set lastAppliedComp.
    */
   selectComp(id?: number | null): void;
+  /**
+   * Applies native-plane replacement, opacity and rename commands atomically in Gray8/16, RGB16/32 or CMYK8.
+   * IDs and bounds come from inspectProcess. Planes are complete big-endian native wire samples,
+   * process channels first and alpha last; CMYK is inverted. No RGBA8 conversion occurs.
+   * Requires explicit host gamma context, flat Normal rasters, measured native defaults and bounded samples.
+   * RGB32 colors must be finite and alpha in 0..1. Masks, groups, generators, extra channels,
+   * unsupported HDR views and unknown active dependencies throw named errors without changing revision.
+   * Successful changes regenerate merged data, order depth markers before layers and remove previews.
+   */
+  editProcess(batch: readonly PsdProcessEdit[], linear_blending: boolean): M01EditOutcome;
   /**
    * Freezes preserve-mode bytes for this revision. Untouched output is byte-identical; rename-only saves
    * preserve all other carriers. Visual saves require exact rendering, write real merged data, set 1057 true
@@ -595,6 +665,13 @@ export class PsdEditorSession {
    */
   inspectSource(): PsdSourceSnapshot;
   /**
+   * Inspects native mode/depth and physical layer bounds/channel IDs without display conversion.
+   * Source inspection alone does not admit an edit. Persistent IDs can be absent in arbitrary files;
+   * editProcess validates unique nonzero IDs, complete native planes and every dependency separately.
+   * Physical record order and bounds describe the current revision, including earlier transactions.
+   */
+  inspectProcess(): PsdProcessSource;
+  /**
    * Atomically changes bounded nonvisual metadata, including print captions and authored slice text.
    * Preserves pixels and unrelated carriers; guide edits regenerate both 1092 and 1032.
    * Active credentials, unknown versions, duplicate identities/carriers and other note encodings refuse.
@@ -612,6 +689,15 @@ export class PsdEditorSession {
    * are named refusals. Active masks, shapes, styles, additional layers and other modes/depths refuse.
    */
   repaintGradientFill(record_index: number, patch: GradientFillPatch, linear_blending?: boolean | null): M01EditOutcome;
+  /**
+   * Changes existing version-2 Lab Photo Filter settings in the bounded CMYK8/16 two-layer product.
+   * recordIndex comes from inspectSource. Requires the measured embedded coated profile,
+   * opaque raw source, full strength, absent/default white mask and relative/BPC-on/dither-off context.
+   * Rebuilds native merged data and depth carriers before publishing; removes stale previews.
+   * Other profiles, identity shortcuts, version-3 colors, unknown dependencies and unsupported
+   * graphs throw named errors atomically. Omitted patch fields preserve their exact source values.
+   */
+  setCmykPhotoFilter(record_index: number, patch: PsdCmykPhotoFilterPatch, linear_blending: boolean): M01EditOutcome;
   /**
    * Repaints explicit Linear interpolation/style on a sole full-strength Normal RGB8 canvas GdFl.
    * Requires the admitted sampled sRGB profile and Dot Gain 20% working Gray; linearBlending is the
@@ -730,10 +816,12 @@ export interface InitOutput {
   readonly psdeditorsession_edit: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_editChannels: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_editGeometry: (a: number, b: any, c: number) => [number, number, number];
+  readonly psdeditorsession_editProcess: (a: number, b: any, c: any) => [number, number, number];
   readonly psdeditorsession_editSmart: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editSource: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_editStateMetadata: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_inspect: (a: number) => [number, number, number];
+  readonly psdeditorsession_inspectProcess: (a: number) => [number, number, number];
   readonly psdeditorsession_inspectSource: (a: number) => [number, number, number];
   readonly psdeditorsession_new: (a: number, b: number) => [number, number, number];
   readonly psdeditorsession_planCffText: (a: number, b: number, c: number, d: number) => [number, number, number];
@@ -742,6 +830,7 @@ export interface InitOutput {
   readonly psdeditorsession_repaintLinearGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
   readonly psdeditorsession_selectComp: (a: number, b: number, c: number) => [number, number];
   readonly psdeditorsession_selectedComp: (a: number) => [number, number, number];
+  readonly psdeditorsession_setCmykPhotoFilter: (a: number, b: any, c: any, d: any) => [number, number, number];
   readonly psdeditorsession_setText: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];
   readonly psdpreparedsave_dispose: (a: number) => void;
   readonly psdpreparedsave_nextChunk: (a: number, b: number) => [number, number, number, number];
@@ -750,6 +839,7 @@ export interface InitOutput {
   readonly psdsourcehandle_open: (a: any, b: bigint, c: any) => [number, number, number];
   readonly psdsourcehandle_readGrid: (a: number, b: bigint, c: bigint, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: any) => [number, number, number, number];
   readonly psdsourcehandle_writeUnchanged: (a: number, b: any, c: any) => [number, number];
+  readonly rasterizeCff2Strong: (a: number, b: number, c: any, d: any, e: number, f: number, g: number) => [number, number, number];
   readonly readPsd: (a: number, b: number) => [number, number, number];
   readonly readPsdSource: (a: number, b: number) => [number, number, number];
   readonly writePsd: (a: any, b: number, c: number) => [number, number, number, number];
