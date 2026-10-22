@@ -1,9 +1,12 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const __wbg_psdallocationcontext_free: (a: number, b: number) => void;
 export const __wbg_psdeditorsession_free: (a: number, b: number) => void;
 export const __wbg_psdpreparedsave_free: (a: number, b: number) => void;
 export const __wbg_psdsourcehandle_free: (a: number, b: number) => void;
+export const psdallocationcontext_new: (a: any) => [number, number, number];
+export const psdallocationcontext_retainedBytes: (a: number) => bigint;
 export const psdeditorsession_addTextFont: (a: number, b: number, c: number, d: number) => [number, number];
 export const psdeditorsession_dispose: (a: number) => void;
 export const psdeditorsession_edit: (a: number, b: any) => [number, number, number];
@@ -19,13 +22,18 @@ export const psdeditorsession_inspectProcess: (a: number) => [number, number, nu
 export const psdeditorsession_inspectSource: (a: number) => [number, number, number];
 export const psdeditorsession_new: (a: number, b: number) => [number, number, number];
 export const psdeditorsession_planCffText: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const psdeditorsession_prepareContainerMutation: (a: number, b: bigint, c: number, d: number, e: number) => [number, number, number];
 export const psdeditorsession_prepareSave: (a: number, b: number) => [number, number, number];
+export const psdeditorsession_prepareSaveWithContext: (a: number, b: number) => [number, number, number];
+export const psdeditorsession_renameInContext: (a: number, b: any, c: number) => [number, number, number];
 export const psdeditorsession_repaintGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
 export const psdeditorsession_repaintLinearGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
+export const psdeditorsession_revision: (a: number) => [bigint, number, number];
 export const psdeditorsession_selectComp: (a: number, b: number, c: number) => [number, number];
 export const psdeditorsession_selectedComp: (a: number) => [number, number, number];
 export const psdeditorsession_setCmykPhotoFilter: (a: number, b: any, c: any, d: any) => [number, number, number];
 export const psdeditorsession_setText: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];
+export const psdeditorsession_sourceSnapshot: (a: number) => [number, number, number];
 export const psdpreparedsave_dispose: (a: number) => void;
 export const psdpreparedsave_nextChunk: (a: number, b: number) => [number, number, number, number];
 export const psdpreparedsave_revision: (a: number) => bigint;

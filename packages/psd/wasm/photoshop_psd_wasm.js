@@ -114,20 +114,6 @@ function takeFromExternrefTable0(idx) {
     wasm.__externref_table_dealloc(idx);
     return value;
 }
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- * @param {Uint8Array} bytes
- * @returns {any}
- */
-export function readPsd(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readPsd(ptr0, len0);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
-}
 
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -150,6 +136,21 @@ export function writePsd(document, composite) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * @param {Uint8Array} bytes
+ * @returns {any}
+ */
+export function readPsd(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsd(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
 }
 
 /**
@@ -177,6 +178,11 @@ export function rasterizeCff2Strong(font_bytes, design_coordinates, character, s
     return takeFromExternrefTable0(ret[0]);
 }
 
+function _assertClass(instance, klass) {
+    if (!(instance instanceof klass)) {
+        throw new Error(`expected instance of ${klass.name}`);
+    }
+}
 /**
  * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
@@ -192,6 +198,52 @@ export function readPsdSource(bytes) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return takeFromExternrefTable0(ret[0]);
+}
+
+const PsdAllocationContextFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_psdallocationcontext_free(ptr >>> 0, 1));
+/**
+ * Shared conservative account for explicit editor rename transactions.
+ * Existing document models, supplied assets, batch strings and JS/WASM copies belong in retainedBytes.
+ * Charges never refund. The first allocation/live refusal persists until this handle is freed.
+ * Other editor operations and browser transfers do not automatically use this account.
+ */
+export class PsdAllocationContext {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        PsdAllocationContextFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_psdallocationcontext_free(ptr, 0);
+    }
+    /**
+     * Cumulative admitted storage including the baseline, even after results are dropped or a call fails.
+     * @returns {bigint}
+     */
+    get retainedBytes() {
+        const ret = wasm.psdallocationcontext_retainedBytes(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
+    }
+    /**
+     * Creates an opt-in account with the WASM32 defaults and a caller-supplied retained baseline.
+     * Limits govern audited payload/capacity charges, without an OS RSS or whole-program guarantee.
+     * @param {PsdBudgetOptions | undefined} options
+     */
+    constructor(options) {
+        const ret = wasm.psdallocationcontext_new(options);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0] >>> 0;
+        PsdAllocationContextFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
 }
 
 const PsdEditorSessionFinalization = (typeof FinalizationRegistry === 'undefined')
@@ -374,8 +426,9 @@ export class PsdEditorSession {
     }
     /**
      * Builds a read-only CFF1 layout plan using fonts registered with addTextFont.
-     * Admits unchanged size/font at size/unitsPerEm = 1/16, printable ASCII/CR, left Crisp point
-     * or Single-line boxes, zero tracking/baseline and exact source raster regeneration.
+     * Admits unchanged size/font at size/unitsPerEm = 1/16 for printable ASCII/CR in left Crisp point
+     * or Single-line boxes, or exactly one graphic ASCII glyph at unchanged 24 points in point text.
+     * Requires zero tracking/baseline and exact source raster regeneration in both domains.
      * Shaping, soft wrapping, negative extents and other dependencies throw. Revision and bytes stay intact.
      * Omits unresolved actual-size ink bounds. This plan cannot be committed by setText or prepareSave.
      * @param {number} layer_id
@@ -429,6 +482,38 @@ export class PsdEditorSession {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
+     * Copies the current serialized source and its revision for a checked container proposal.
+     * Pending visual edits may leave stale caches in this snapshot. This performs no save preparation.
+     * The bytes are independent of the session. Serialization and the full JS copy are unbudgeted.
+     * @returns {PsdContainerSnapshot}
+     */
+    sourceSnapshot() {
+        const ret = wasm.psdeditorsession_sourceSnapshot(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Renames primary lyid/luni-only raster records through a shared allocation context.
+     * Requires unique IDs and no staged semantic state or pending visual work. Other carriers refuse.
+     * The context baseline must include the current source, supplied fonts, batch strings and host copies.
+     * Bounded serialization, reparse, name storage and final save complete before publishing one revision.
+     * Failure preserves source/revision and retains account charges. Allocation/live refusals throw
+     * PsdBudgetError and stay sticky across later calls using the same context. No visual edit is admitted.
+     * @param {readonly PsdContextRename[]} batch
+     * @param {PsdAllocationContext} context
+     * @returns {PsdPreparedSave}
+     */
+    renameInContext(batch, context) {
+        _assertClass(context, PsdAllocationContext);
+        const ret = wasm.psdeditorsession_renameInContext(this.__wbg_ptr, batch, context.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return PsdPreparedSave.__wrap(ret[0]);
+    }
+    /**
      * Atomically changes bounded nonvisual metadata, including print captions and authored slice text.
      * Preserves pixels and unrelated carriers; guide edits regenerate both 1092 and 1032.
      * Active credentials, unknown versions, duplicate identities/carriers and other note encodings refuse.
@@ -478,6 +563,41 @@ export class PsdEditorSession {
      */
     setCmykPhotoFilter(record_index, patch, linear_blending) {
         const ret = wasm.psdeditorsession_setCmykPhotoFilter(this.__wbg_ptr, record_index, patch, linear_blending);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Freezes the same strict save as prepareSave and records the consumed RGB blending operand.
+     * Omission assumes encoded blending, false. A supplied Boolean records host input without verifying it.
+     * Fonts, text gamma and profiles are not consumed by this operation. Existing save refusals propagate.
+     * @param {boolean | null} [linear_blending]
+     * @returns {PsdContextualSave}
+     */
+    prepareSaveWithContext(linear_blending) {
+        const ret = wasm.psdeditorsession_prepareSaveWithContext(this.__wbg_ptr, isLikeNone(linear_blending) ? 0xFFFFFF : linear_blending ? 1 : 0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Checks a strict serialized proposal against baseRevision and atomically prepares its save.
+     * Only canonical names, opacity, locks, labels and existing metadata copy flags are bridged.
+     * Every other source byte must match an exact replay. Unaccounted changes throw Dependency;
+     * stale revisions throw Invalid. Render, parse and save failures preserve source and revision.
+     * linearBlending is the explicit host gamma-1 RGB operand. Use the returned frozen save bytes,
+     * which may replace stale proposed caches. Inherited opening caches are not certified.
+     * @param {bigint} base_revision
+     * @param {Uint8Array} proposed
+     * @param {boolean} linear_blending
+     * @returns {PsdMutationSave}
+     */
+    prepareContainerMutation(base_revision, proposed, linear_blending) {
+        const ptr0 = passArray8ToWasm0(proposed, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.psdeditorsession_prepareContainerMutation(this.__wbg_ptr, base_revision, ptr0, len0, linear_blending);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -561,10 +681,25 @@ export class PsdEditorSession {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
+     * Current source revision, including documents outside tree-inspection admission.
+     * Reading it performs no render or allocation-heavy source snapshot.
+     * @returns {bigint}
+     */
+    get revision() {
+        const ret = wasm.psdeditorsession_revision(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return BigInt.asUintN(64, ret[0]);
+    }
+    /**
      * Replaces text and optional uniform style in one atomic text-only transaction.
      * Register actual original/requested fonts and the whitespace-marker face with addTextFont first.
      * Supports bounded printable ASCII/CR in left horizontal Crisp point or left/center/right Single-line RGB8 boxes.
-     * Center/right require integral font size and zero tracking; full justification and non-left point text refuse.
+     * Fitting Every-line boxes admit terminal aliases with integral size and zero tracking.
+     * Two alphabetic words separated by one space may wrap in left/center/right modes when conservative
+     * margins force one break. Wrapped style mutations, competing/near-fit breaks and full justification refuse.
+     * Center/right require integral font size and zero tracking; non-left point text refuses.
      * Full CFF edits refuse because actual-size ink bounds remain unresolved; planCffText is read-only.
      * Unsupported shaping, mixed styles, negative spacing, overflow and dependencies throw named errors.
      * Mixed raster/type batches remain refused. Font registration changes no revision or source bytes.
@@ -866,6 +1001,10 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbg_newwithbyteoffsetandlength_d97e637ebe145a9a = function(arg0, arg1, arg2) {
         const ret = new Uint8Array(arg0, arg1 >>> 0, arg2 >>> 0);
+        return ret;
+    };
+    imports.wbg.__wbg_psdpreparedsave_new = function(arg0) {
+        const ret = PsdPreparedSave.__wrap(arg0);
         return ret;
     };
     imports.wbg.__wbg_push_737cfc8c1432c2c6 = function(arg0, arg1) {
