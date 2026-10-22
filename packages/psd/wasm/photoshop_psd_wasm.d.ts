@@ -1,14 +1,14 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
-/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
 /**
  * Rasterizes one upright stem-free CFF2 glyph with Strong AA at 13.375..47.5625 px.
  * The caller supplies actual single-face OTTO font bytes, a complete signed 16.16 design tuple
@@ -39,7 +39,7 @@ export interface PsdCff2Coverage {
 
 
 
-/** Per-call host policy. Defaults are 64 MiB per allocation, 512 MiB live and depth 64.
+/** Host policy for a call or explicit allocation context. Defaults are 64 MiB per allocation, 512 MiB live and depth 64.
  * Limits concern accounted buffers, not OS RSS. Safe-integer byte values may raise or lower defaults.
  * retainedBytes includes caller input copies, fonts and caches not owned by this operation. */
 export interface PsdBudgetOptions {
@@ -154,6 +154,27 @@ export type PsdSmartEdit =
     }
   /** These operations always throw Dependency with a smart.* propertyPath until separately certified. */
   | { readonly kind: 'duplicateSmart' | 'applySmartComp' | 'appendSmartFilter' | 'updateSmartLink' };
+/** Source-only rename. Names use the existing control-free, 255 UTF-16-unit limit. */
+export interface PsdContextRename {
+  readonly layerId: number;
+  readonly name: string;
+}
+/** Independent current source bytes. Pending caches may be stale; this is not a prepared save. */
+export interface PsdContainerSnapshot {
+  readonly revision: bigint;
+  readonly bytes: Uint8Array;
+}
+/** Source change and actual cache work are independent, including earlier pending visual edits. */
+export interface PsdMutationSave {
+  readonly change: 'unchanged' | 'sourceOnly' | 'visual';
+  readonly caches: 'preserved' | 'rebuilt';
+  readonly save: PsdPreparedSave;
+}
+/** A frozen save and its effective RGB blending operand. No general host-state certificate. */
+export interface PsdContextualSave {
+  readonly save: PsdPreparedSave;
+  readonly rgbBlending: { readonly kind: 'assumed' | 'supplied'; readonly value: boolean };
+}
 /** Snapshot of the admitted RGB8 identity tree. Scalars use byte opacity/Fill. */
 export interface M01Snapshot { readonly revision: bigint; readonly width: number; readonly height: number; readonly identityFloor: number; readonly saveBlocked: boolean; readonly selected: readonly number[]; readonly layers: readonly M01Layer[]; }
 /** Group children are bottom-to-top; endId is reserved and cannot be edited. */
@@ -187,8 +208,8 @@ export interface RasterPixels { left: number; top: number; width: number; height
  * Register original/requested and whitespace-marker fonts using addTextFont.
  */
 export interface PsdTextStylePatch {
-  /** Uniform paragraph alignment. Full justification refuses; center/right require an integral size and zero tracking in a Single-line box. */
-  readonly justification?: 'left' | 'center' | 'right';
+  /** Single-line alignment or fitting Every-line terminal alias. Aligned/Every-line boxes require integral size and zero tracking. Two alphabetic words may wrap with a forced, well-separated break in left/center/right modes. Wrapped style mutations, general composition, full justification and hyphenation refuse. */
+  readonly justification?: 'left' | 'center' | 'right' | 'justifyLastLeft' | 'justifyLastRight' | 'justifyLastCenter';
   readonly font?: string;
   readonly size?: number;
   readonly tracking?: number;
@@ -577,6 +598,24 @@ export interface LegacyMode {
 
 
 /**
+ * Shared conservative account for explicit editor rename transactions.
+ * Existing document models, supplied assets, batch strings and JS/WASM copies belong in retainedBytes.
+ * Charges never refund. The first allocation/live refusal persists until this handle is freed.
+ * Other editor operations and browser transfers do not automatically use this account.
+ */
+export class PsdAllocationContext {
+  free(): void;
+  /**
+   * Creates an opt-in account with the WASM32 defaults and a caller-supplied retained baseline.
+   * Limits govern audited payload/capacity charges, without an OS RSS or whole-program guarantee.
+   */
+  constructor(options: PsdBudgetOptions | undefined);
+  /**
+   * Cumulative admitted storage including the baseline, even after results are dropped or a call fails.
+   */
+  readonly retainedBytes: bigint;
+}
+/**
  * Persistent source-preserving editor. Opening does not fetch assets or flatten the document.
  * Native process edits additionally admit bounded Gray8/16, RGB16/32 and CMYK8 products.
  * RGB8 plain raster/group edits are atomic; unsupported dependencies throw structured Error objects.
@@ -667,8 +706,9 @@ export class PsdEditorSession {
   editGeometry(edit: PsdGeometryEdit, linear_blending?: boolean | null): M01EditOutcome;
   /**
    * Builds a read-only CFF1 layout plan using fonts registered with addTextFont.
-   * Admits unchanged size/font at size/unitsPerEm = 1/16, printable ASCII/CR, left Crisp point
-   * or Single-line boxes, zero tracking/baseline and exact source raster regeneration.
+   * Admits unchanged size/font at size/unitsPerEm = 1/16 for printable ASCII/CR in left Crisp point
+   * or Single-line boxes, or exactly one graphic ASCII glyph at unchanged 24 points in point text.
+   * Requires zero tracking/baseline and exact source raster regeneration in both domains.
    * Shaping, soft wrapping, negative extents and other dependencies throw. Revision and bytes stay intact.
    * Omits unresolved actual-size ink bounds. This plan cannot be committed by setText or prepareSave.
    */
@@ -685,6 +725,21 @@ export class PsdEditorSession {
    * Physical record order and bounds describe the current revision, including earlier transactions.
    */
   inspectProcess(): PsdProcessSource;
+  /**
+   * Copies the current serialized source and its revision for a checked container proposal.
+   * Pending visual edits may leave stale caches in this snapshot. This performs no save preparation.
+   * The bytes are independent of the session. Serialization and the full JS copy are unbudgeted.
+   */
+  sourceSnapshot(): PsdContainerSnapshot;
+  /**
+   * Renames primary lyid/luni-only raster records through a shared allocation context.
+   * Requires unique IDs and no staged semantic state or pending visual work. Other carriers refuse.
+   * The context baseline must include the current source, supplied fonts, batch strings and host copies.
+   * Bounded serialization, reparse, name storage and final save complete before publishing one revision.
+   * Failure preserves source/revision and retains account charges. Allocation/live refusals throw
+   * PsdBudgetError and stay sticky across later calls using the same context. No visual edit is admitted.
+   */
+  renameInContext(batch: readonly PsdContextRename[], context: PsdAllocationContext): PsdPreparedSave;
   /**
    * Atomically changes bounded nonvisual metadata, including print captions and authored slice text.
    * Preserves pixels and unrelated carriers; guide edits regenerate both 1092 and 1032.
@@ -712,6 +767,21 @@ export class PsdEditorSession {
    * graphs throw named errors atomically. Omitted patch fields preserve their exact source values.
    */
   setCmykPhotoFilter(record_index: number, patch: PsdCmykPhotoFilterPatch, linear_blending: boolean): M01EditOutcome;
+  /**
+   * Freezes the same strict save as prepareSave and records the consumed RGB blending operand.
+   * Omission assumes encoded blending, false. A supplied Boolean records host input without verifying it.
+   * Fonts, text gamma and profiles are not consumed by this operation. Existing save refusals propagate.
+   */
+  prepareSaveWithContext(linear_blending?: boolean | null): PsdContextualSave;
+  /**
+   * Checks a strict serialized proposal against baseRevision and atomically prepares its save.
+   * Only canonical names, opacity, locks, labels and existing metadata copy flags are bridged.
+   * Every other source byte must match an exact replay. Unaccounted changes throw Dependency;
+   * stale revisions throw Invalid. Render, parse and save failures preserve source and revision.
+   * linearBlending is the explicit host gamma-1 RGB operand. Use the returned frozen save bytes,
+   * which may replace stale proposed caches. Inherited opening caches are not certified.
+   */
+  prepareContainerMutation(base_revision: bigint, proposed: Uint8Array, linear_blending: boolean): PsdMutationSave;
   /**
    * Repaints explicit Linear interpolation/style on a sole full-strength Normal RGB8 canvas GdFl.
    * Requires the admitted sampled sRGB profile and Dot Gain 20% working Gray; linearBlending is the
@@ -755,7 +825,10 @@ export class PsdEditorSession {
    * Replaces text and optional uniform style in one atomic text-only transaction.
    * Register actual original/requested fonts and the whitespace-marker face with addTextFont first.
    * Supports bounded printable ASCII/CR in left horizontal Crisp point or left/center/right Single-line RGB8 boxes.
-   * Center/right require integral font size and zero tracking; full justification and non-left point text refuse.
+   * Fitting Every-line boxes admit terminal aliases with integral size and zero tracking.
+   * Two alphabetic words separated by one space may wrap in left/center/right modes when conservative
+   * margins force one break. Wrapped style mutations, competing/near-fit breaks and full justification refuse.
+   * Center/right require integral font size and zero tracking; non-left point text refuses.
    * Full CFF edits refuse because actual-size ink bounds remain unresolved; planCffText is read-only.
    * Unsupported shaping, mixed styles, negative spacing, overflow and dependencies throw named errors.
    * Mixed raster/type batches remain refused. Font registration changes no revision or source bytes.
@@ -765,6 +838,11 @@ export class PsdEditorSession {
    * Application-local selection, independent of persisted comp capture flags and lastAppliedComp.
    */
   readonly selectedComp: number | undefined;
+  /**
+   * Current source revision, including documents outside tree-inspection admission.
+   * Reading it performs no render or allocation-heavy source snapshot.
+   */
+  readonly revision: bigint;
 }
 /**
  * Frozen M01 in-memory save. Chunk reads bound each returned Uint8Array, not total WASM allocation.
@@ -822,9 +900,12 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  readonly __wbg_psdallocationcontext_free: (a: number, b: number) => void;
   readonly __wbg_psdeditorsession_free: (a: number, b: number) => void;
   readonly __wbg_psdpreparedsave_free: (a: number, b: number) => void;
   readonly __wbg_psdsourcehandle_free: (a: number, b: number) => void;
+  readonly psdallocationcontext_new: (a: any) => [number, number, number];
+  readonly psdallocationcontext_retainedBytes: (a: number) => bigint;
   readonly psdeditorsession_addTextFont: (a: number, b: number, c: number, d: number) => [number, number];
   readonly psdeditorsession_dispose: (a: number) => void;
   readonly psdeditorsession_edit: (a: number, b: any) => [number, number, number];
@@ -840,13 +921,18 @@ export interface InitOutput {
   readonly psdeditorsession_inspectSource: (a: number) => [number, number, number];
   readonly psdeditorsession_new: (a: number, b: number) => [number, number, number];
   readonly psdeditorsession_planCffText: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly psdeditorsession_prepareContainerMutation: (a: number, b: bigint, c: number, d: number, e: number) => [number, number, number];
   readonly psdeditorsession_prepareSave: (a: number, b: number) => [number, number, number];
+  readonly psdeditorsession_prepareSaveWithContext: (a: number, b: number) => [number, number, number];
+  readonly psdeditorsession_renameInContext: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_repaintGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
   readonly psdeditorsession_repaintLinearGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
+  readonly psdeditorsession_revision: (a: number) => [bigint, number, number];
   readonly psdeditorsession_selectComp: (a: number, b: number, c: number) => [number, number];
   readonly psdeditorsession_selectedComp: (a: number) => [number, number, number];
   readonly psdeditorsession_setCmykPhotoFilter: (a: number, b: any, c: any, d: any) => [number, number, number];
   readonly psdeditorsession_setText: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];
+  readonly psdeditorsession_sourceSnapshot: (a: number) => [number, number, number];
   readonly psdpreparedsave_dispose: (a: number) => void;
   readonly psdpreparedsave_nextChunk: (a: number, b: number) => [number, number, number, number];
   readonly psdpreparedsave_revision: (a: number) => bigint;
