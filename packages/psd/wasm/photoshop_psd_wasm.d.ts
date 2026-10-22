@@ -74,6 +74,14 @@ export type PsdSmartEdit =
       /** Top-left, top-right, bottom-right, bottom-left document-pixel pairs. */ quad: readonly [number,number,number,number,number,number,number,number];
     }
   | {
+      /** Same-source integer axis transform; source identity stays fixed and placementId must be fresh. */
+      kind: 'setSmartAxisTransform';
+      quad: readonly [number, number, number, number, number, number, number, number];
+      placementId: string;
+      /** Required host preference. Bilinear retains at least half of each source axis. */
+      interpolation: 'nearestNeighbor' | 'bilinear';
+    }
+  | {
       /** Same-size untagged RGB/RGBA PNG with positive alpha. */ kind: 'replaceSmartContents';
       /** Owned source bytes, at most 16000000. */ bytes: Uint8Array;
       /** Leaf filename without NUL or directory separators. */ filename: string;
@@ -90,6 +98,20 @@ export interface M01Layer { readonly id: number; readonly endId: number | null; 
 export interface M01EditOutcome { readonly revision: bigint; readonly created: readonly number[]; readonly diagnostics: readonly never[]; }
 /** Absolute raster source mask; defaultColor is 0 or 255. Extents/samples remain untrimmed. */
 export interface RasterMask { left: number; top: number; width: number; height: number; samples: Uint8Array; defaultColor: number; disabled: boolean; }
+/** Read-only CFF1 layout result. No complete ink descriptor or saved text transaction is supplied. */
+export interface PsdCffLayoutCachePlan {
+  readonly kind: 'cffLayoutOnly';
+  /** Ordered named EngineData bytes with updated text/runs and unchanged font resources. */
+  readonly localEngine: Uint8Array;
+  /** Ordered numeric Model/View EngineData bytes with rebuilt mappings and L/S/G records. */
+  readonly globalEngine: Uint8Array;
+  /** Local layout bounds, excluding unresolved ink bounds. */
+  readonly layoutBounds: readonly [number, number, number, number];
+  /** Retained signed 16.16 em ascent/descent for the unchanged font and size. */
+  readonly selectionMetricWords: readonly [number, number];
+  /** Fresh straight RGBA and bounds, generated without destination pixels. */
+  readonly raster: { readonly left: number; readonly top: number; readonly width: number; readonly height: number; readonly rgba: Uint8Array };
+}
 /** One canonical path in document pixels. Finite, nondegenerate coordinates only; no strokes or live origination. */
 export interface SimpleShape { kind: 'rectangle' | 'ellipse'; left: number; top: number; right: number; bottom: number; }
 /** Exact straight RGB8 source samples. Zero-by-zero clears; other extents and buffers must agree. */
@@ -142,7 +164,15 @@ export type PsdGeometryEdit =
       /** Nonzero committed pixel height. */ height: number;
     }
   | { /** Named refusal until coherent creation and extent policy exist. */ kind: 'createArtboard' }
-  | { /** Named refusal until all descendant carriers can be translated. */ kind: 'moveArtboard' }
+  | {
+      /** Translate a fixed-canvas RGB8 root board and plain Normal raster subtree, with ordinary linked masks.
+       * Requires unique IDs and disabled auto-expand, shrinkwrap, positioning and nesting. Other coordinate
+       * carriers, live content and effects refuse atomically. Rebuilds merged pixels and drops previews.
+       */ kind: 'moveArtboard';
+      /** Physical artb group index from inspectSource(), invalidated by structural edits. */ recordIndex: number;
+      /** Integer horizontal displacement; translated coordinates must remain strictly within +/-2000. */ dx: number;
+      /** Integer vertical displacement; translated coordinates must remain strictly within +/-2000. */ dy: number;
+    }
   | { /** Named refusal until parameters, paths and caches agree. */ kind: 'editLiveShape' }
   | { /** Named refusal until placement, resampling and caches agree. */ kind: 'replaceFrameContents' };
 /** Confirmed atomic mask/channel setters. All refusals preserve source bytes and revision. */
@@ -196,6 +226,11 @@ export type PsdSourceEdit = PsdSourceEditTarget & (
       /** Finite percentage in 0 through 100; no renderer-byte round trip. */ percent: number;
     }
   | {
+      /** Existing enabled singleton Normal RGB overlay on a flat RGB8 raster document. Strict prepareSave refreshes merge and removes stale thumbnails. Activation, masks, groups and stacks refuse. */ kind: 'styleColorOverlayRgb';
+      /** Flattened modern source instance index. */ instance: number;
+      /** Integral encoded RGB bytes. */ rgb: readonly [number, number, number];
+    }
+  | {
       /** Change only the existing showInDialog leaf. */ kind: 'styleDialog';
       /** Flattened source instance index, in storage order. */ instance: number;
       /** UI visibility, independent from enabled and present. */ show: boolean;
@@ -221,6 +256,7 @@ export interface PsdSourceLayer {
   /** Raw lspf bits plus their named stored flags, null without lspf. */ readonly locks: SourceLocks | null;
   /** Stored lclr index and Photoshop 26 enum name, null without lclr. */ readonly label: SourceLabel | null;
   /** Winning modern source block, null without modern styles. Legacy lrFX stays separate. */ readonly styles: SourceStyles | null;
+  /** First legacy lrFX storage block; no rendering or edit admission follows from typing. */ readonly legacyStyles: LegacyStyleSource | null;
   /** Persisted shmd envelope, null without the block. Payloads are retained as bytes. */ readonly metadata: SourceMetadata | null;
 }
 /** Stored lock flags. Background runtime defaults are not inserted. */
@@ -390,6 +426,90 @@ export interface SourceEnumValue {
   /** Enum domain. */ readonly type: string;
   /** Selected identifier, including unknown values. */ readonly value: string;
 }
+/** Ordered lossless lrFX storage, independent of modern effects and render admission. */
+export interface LegacyStyleSource {
+  readonly version: number;
+  readonly records: readonly LegacyRecord[];
+  readonly tail: Uint8Array;
+  readonly sourceBlock: Uint8Array;
+}
+export interface LegacyRecord {
+  readonly signature: Uint8Array;
+  readonly key: Uint8Array;
+  readonly body: Uint8Array;
+  readonly tail: Uint8Array;
+  readonly settings: LegacySettings;
+}
+export type LegacySettings =
+  | (LegacyCommon & { readonly kind: 'common' })
+  | (LegacyShadow & { readonly kind: 'shadow' })
+  | (LegacyGlow & { readonly kind: 'glow' })
+  | (LegacyBevel & { readonly kind: 'bevel' })
+  | (LegacyOverlay & { readonly kind: 'overlay' })
+  | { readonly kind: 'opaque' };
+export interface LegacyCommon {
+ /** Stored version, without normalization. */ readonly version: number;
+ /** Stored common visibility byte; Photoshop26 reads and discards it. */ readonly visible: number;
+ /** Reserved bytes preserved exactly. */ readonly reserved: readonly number[];
+}
+export interface LegacyShadow {
+ /** Stored record version. */ readonly version: number;
+ /** Unsigned 16.16 blur. */ readonly blur: number;
+ /** Unsigned 16.16 intensity; runtime may convert it to a contour. */ readonly intensity: number;
+ /** Signed 16.16 local angle. */ readonly angle: number;
+ /** Unsigned 16.16 distance. */ readonly distance: number;
+ /** Imported legacy color. */ readonly color: LegacyColor;
+ /** Stored blend signature and key. */ readonly mode: LegacyMode;
+ /** Stored enable byte. */ readonly enabled: number;
+ /** Stored global-light byte. */ readonly useGlobalAngle: number;
+ /** Stored opacity byte. */ readonly opacity: number;
+ /** Optional compatibility color tail; ignored by the PS26 importer. */ readonly nativeColor: LegacyColor | null;
+}
+export interface LegacyGlow {
+ /** Stored record version. */ readonly version: number;
+ /** Unsigned 16.16 blur. */ readonly blur: number;
+ /** Unsigned 16.16 intensity. */ readonly intensity: number;
+ /** Imported color. */ readonly color: LegacyColor;
+ /** Stored blend signature and key. */ readonly mode: LegacyMode;
+ /** Stored enable byte. */ readonly enabled: number;
+ /** Stored opacity byte. */ readonly opacity: number;
+ /** Inner Glow source byte, present for versions above zero in PS26. */ readonly invert: number | null;
+ /** Optional ignored compatibility color tail. */ readonly nativeColor: LegacyColor | null;
+}
+export interface LegacyBevel {
+ /** Stored record version. */ readonly version: number;
+ /** Signed 16.16 angle. */ readonly angle: number;
+ /** Unsigned 16.16 legacy strength, before runtime division by blur. */ readonly strength: number;
+ /** Unsigned 16.16 blur, before style-dependent runtime doubling. */ readonly blur: number;
+ /** Stored highlight blend mode. */ readonly highlightMode: LegacyMode;
+ /** Stored shadow blend mode. */ readonly shadowMode: LegacyMode;
+ /** Imported highlight color. */ readonly highlightColor: LegacyColor;
+ /** Imported shadow color. */ readonly shadowColor: LegacyColor;
+ /** Stored style index. */ readonly style: number;
+ /** Stored highlight opacity byte. */ readonly highlightOpacity: number;
+ /** Stored shadow opacity byte. */ readonly shadowOpacity: number;
+ /** Stored enable byte. */ readonly enabled: number;
+ /** Stored global-light byte. */ readonly useGlobalAngle: number;
+ /** Stored direction byte. */ readonly direction: number;
+ /** Optional ignored native highlight tail. */ readonly nativeHighlight: LegacyColor | null;
+ /** Optional ignored native shadow tail. */ readonly nativeShadow: LegacyColor | null;
+}
+export interface LegacyOverlay {
+ /** Stored version; PS26 reads and discards it. */ readonly version: number;
+ /** Stored blend signature and key. */ readonly mode: LegacyMode;
+ /** Color used by PS26, independent of the native tail. */ readonly color: LegacyColor;
+ /** Stored opacity byte. */ readonly opacity: number;
+ /** Stored enable byte. */ readonly enabled: number;
+ /** Optional ignored native-color tail. */ readonly nativeColor: LegacyColor | null;
+}
+export interface LegacyColor {
+ /** Stored color-space identifier, without conversion. */ readonly space: number;
+ /** Four raw component words, including reserved components. */ readonly components: readonly number[];
+}
+export interface LegacyMode {
+ /** Stored signature; no substitution is performed. */ readonly signature: Uint8Array;
+ /** Stored FourCC blend key. */ readonly key: Uint8Array;
+}
 
 
 /**
@@ -400,8 +520,10 @@ export interface SourceEnumValue {
 export class PsdEditorSession {
   free(): void;
   /**
-   * Moves the sole smart layer or replaces its embedded PNG atomically. Requires one opaque raster
-   * backdrop and one unfiltered Normal smart layer in unprofiled RGB8, at integer unscaled in-canvas bounds.
+   * Moves/scales the sole smart layer or replaces its embedded PNG atomically. Requires one opaque raster
+   * backdrop and one unfiltered Normal smart layer in unprofiled RGB8, at integer upright in-canvas bounds.
+   * setSmartAxisTransform requires a fresh placementId and explicit nearestNeighbor or bilinear interpolation.
+   * Bilinear retains at least half of each source axis; cubic scaling requires unavailable table state.
    * Replacement must have the same dimensions, positive alpha and fresh distinct host-generated UUIDs.
    * Updates SoLd/PlLd, linked bytes and lengths, parent channels/bounds and real merged data; omits thumbnails.
    * External/shared contents, filters and unsupported dependencies throw Dependency with propertyPath.
@@ -417,7 +539,9 @@ export class PsdEditorSession {
    * Record indices come from inspectSource and change after structural edits. Opacity edits require
    * strict merged-image regeneration at prepareSave; unsupported rendering refuses the save.
    * Visual edits admit RGB8 primary layers on canvases at most 2000x1000. Labels must be in 0..11.
-   * Arbitrary shmd/XMP payload replacement, colors, nested paint edits and runtime state refuse with Dependency.
+   * Color Overlay edits admit one enabled singleton Normal RGB effect on flat unmasked RGB8 raster layers,
+   * synchronize existing legacy companions, and require strict prepareSave regeneration.
+   * Arbitrary shmd/XMP replacement, other colors, nested paint edits and runtime state refuse.
    */
   editSource(batch: readonly PsdSourceEdit[]): M01EditOutcome;
   /**
@@ -450,13 +574,21 @@ export class PsdEditorSession {
    */
   editChannels(batch: readonly PsdChannelEdit[]): M01EditOutcome;
   /**
-   * Resizes an existing root artboard from its committed top-left, leaving children and canvas fixed.
+   * Resizes a root artboard or translates one admitted raster subtree on a fixed canvas.
    * RGB8 PSD only, canvas at most 2000x1000, coordinates within +/-2000, with auto-expand/shrinkwrap off.
    * Rebuilds merged RGB/alpha strictly and omits stale previews before publishing the revision.
-   * Create/move, live-parameter edits and frame-content replacement throw named Dependency errors.
+   * Move translates an admitted raster subtree; create, live-parameter edits and frame replacement refuse.
    * Failure preserves bytes and revision. linearBlending is the host gamma-1 preference, false by default.
    */
   editGeometry(edit: PsdGeometryEdit, linear_blending?: boolean | null): M01EditOutcome;
+  /**
+   * Builds a read-only CFF1 layout plan using fonts registered with addTextFont.
+   * Admits unchanged size/font at size/unitsPerEm = 1/16, printable ASCII/CR, left Crisp point
+   * or Single-line boxes, zero tracking/baseline and exact source raster regeneration.
+   * Shaping, soft wrapping, negative extents and other dependencies throw. Revision and bytes stay intact.
+   * Omits unresolved actual-size ink bounds. This plan cannot be committed by setText or prepareSave.
+   */
+  planCffText(layer_id: number, text: string): PsdCffLayoutCachePlan;
   /**
    * Inspects full-precision persisted source fields for any parsed container, without RGB8 tree admission.
    * Null leaves remain absent. This reads neither linked assets nor application-only state.
@@ -524,6 +656,7 @@ export class PsdEditorSession {
    * Register actual original/requested fonts and the whitespace-marker face with addTextFont first.
    * Supports bounded printable ASCII/CR in left horizontal Crisp point or left/center/right Single-line RGB8 boxes.
    * Center/right require integral font size and zero tracking; full justification and non-left point text refuse.
+   * Full CFF edits refuse because actual-size ink bounds remain unresolved; planCffText is read-only.
    * Unsupported shaping, mixed styles, negative spacing, overflow and dependencies throw named errors.
    * Mixed raster/type batches remain refused. Font registration changes no revision or source bytes.
    */
@@ -603,6 +736,7 @@ export interface InitOutput {
   readonly psdeditorsession_inspect: (a: number) => [number, number, number];
   readonly psdeditorsession_inspectSource: (a: number) => [number, number, number];
   readonly psdeditorsession_new: (a: number, b: number) => [number, number, number];
+  readonly psdeditorsession_planCffText: (a: number, b: number, c: number, d: number) => [number, number, number];
   readonly psdeditorsession_prepareSave: (a: number, b: number) => [number, number, number];
   readonly psdeditorsession_repaintGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
   readonly psdeditorsession_repaintLinearGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
