@@ -7,6 +7,7 @@ export const __wbg_psdsourcehandle_free: (a: number, b: number) => void;
 export const psdeditorsession_addTextFont: (a: number, b: number, c: number, d: number) => [number, number];
 export const psdeditorsession_dispose: (a: number) => void;
 export const psdeditorsession_edit: (a: number, b: any) => [number, number, number];
+export const psdeditorsession_editCarriers: (a: number, b: any, c: any) => [number, number, number];
 export const psdeditorsession_editChannels: (a: number, b: any) => [number, number, number];
 export const psdeditorsession_editGeometry: (a: number, b: any, c: number) => [number, number, number];
 export const psdeditorsession_editProcess: (a: number, b: any, c: any) => [number, number, number];

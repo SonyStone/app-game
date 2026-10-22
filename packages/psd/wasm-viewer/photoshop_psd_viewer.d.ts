@@ -1,14 +1,14 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
+/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
 /**
  * Rasterizes one upright stem-free CFF2 glyph with Strong AA at 13.375..47.5625 px.
  * The caller supplies actual single-face OTTO font bytes, a complete signed 16.16 design tuple
