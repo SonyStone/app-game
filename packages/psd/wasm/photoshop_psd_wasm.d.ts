@@ -1,14 +1,14 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
+/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
 /**
  * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
@@ -46,8 +46,14 @@ export type PsdStateMetadataEdit =
       readonly guides: readonly { readonly location: number; readonly direction: 0 | 1; readonly argb: number }[];
     }
   | { readonly kind: 'noteText'; readonly index: number; readonly text: string }
+  /** Coordinates existing 1083/Cptn and 1011 caption slots. Other print fields and pixels survive. */
+  | { readonly kind: 'printCaption'; readonly enabled: boolean }
+  /** Existing authored v6/v7/v8 slice. Geometry, partitions and IDs survive. */
+  | { readonly kind: 'sliceName'; readonly sliceId: number; readonly name: string }
+  /** Coordinates 1050 and existing 1054/slic. No URL is fetched; malformed dependencies refuse. */
+  | { readonly kind: 'sliceUrl'; readonly sliceId: number; readonly url: string }
   /** Named refusals until complete dependent writers have native acceptance. */
-  | { readonly kind: 'applyComp' | 'captureComp' | 'slices' | 'xmp' };
+  | { readonly kind: 'applyComp' | 'captureComp' | 'slices' | 'xmp' | 'printOptions' | 'resolution' };
 
 /** Linear interpolation/style only, with sampled sRGB and Dot Gain 20%. Other context refuses atomically. */
 export type LinearGradientFillPatch = Omit<GradientFillPatch, 'style'> & { readonly style?: 'linear' };
@@ -73,7 +79,9 @@ export type PsdSmartEdit =
       /** Leaf filename without NUL or directory separators. */ filename: string;
       /** Fresh canonical UUID, distinct from either old ID and placementId. */ contentId: string;
       /** Fresh canonical UUID for this placement, distinct from either old ID and contentId. */ placementId: string;
-    };
+    }
+  /** These operations always throw Dependency with a smart.* propertyPath until separately certified. */
+  | { readonly kind: 'duplicateSmart' | 'applySmartComp' | 'appendSmartFilter' | 'updateSmartLink' };
 /** Snapshot of the admitted RGB8 identity tree. Scalars use byte opacity/Fill. */
 export interface M01Snapshot { readonly revision: bigint; readonly width: number; readonly height: number; readonly identityFloor: number; readonly saveBlocked: boolean; readonly selected: readonly number[]; readonly layers: readonly M01Layer[]; }
 /** Group children are bottom-to-top; endId is reserved and cannot be edited. */
@@ -88,10 +96,13 @@ export interface SimpleShape { kind: 'rectangle' | 'ellipse'; left: number; top:
 export interface RasterPixels { left: number; top: number; width: number; height: number; rgba: Uint8Array; }
 /** Positions are bottom-to-top, measured after removal for moves. All batches are atomic. */
 /** Uniform setters applied after text mutation. Omitted fields preserve current values.
- * Bounded printable ASCII/CR, left horizontal Crisp point/Single-line RGB8 text only.
+ * Bounded printable ASCII/CR, left horizontal Crisp point or left/center/right Single-line RGB8 boxes.
+ * Center/right require integral font size and zero tracking. Other text-4 admission gates still apply.
  * Register original/requested and whitespace-marker fonts using addTextFont.
  */
 export interface PsdTextStylePatch {
+  /** Uniform paragraph alignment. Full justification refuses; center/right require an integral size and zero tracking in a Single-line box. */
+  readonly justification?: 'left' | 'center' | 'right';
   readonly font?: string;
   readonly size?: number;
   readonly tracking?: number;
@@ -134,6 +145,37 @@ export type PsdGeometryEdit =
   | { /** Named refusal until all descendant carriers can be translated. */ kind: 'moveArtboard' }
   | { /** Named refusal until parameters, paths and caches agree. */ kind: 'editLiveShape' }
   | { /** Named refusal until placement, resampling and caches agree. */ kind: 'replaceFrameContents' };
+/** Confirmed atomic mask/channel setters. All refusals preserve source bytes and revision. */
+export type PsdChannelEdit =
+  | {
+      /** Existing absolute, uninverted RGB8 raster source without density/feather records. prepareSave regenerates with its host gamma setting. Compound real/vector disable refuses. */
+      readonly kind: 'disableRasterMask';
+      /** Physical layer record index from inspectSource, invalidated by structural edits. */
+      readonly recordIndex: number;
+    }
+  | {
+      /** Native version-4 soLD/filterFXStyle with a placement-matched entirely white RGB8 bitmap. Nonwhite or missing bitmaps refuse. */
+      readonly kind: 'filterMask';
+      readonly recordIndex: number;
+      /** Byte in 0..255, equivalent to native percent byte*100/255. Omission preserves source. */
+      readonly density?: number;
+      /** Finite pixels in 0..1000. No filter stack regeneration is performed. */
+      readonly feather?: number;
+      /** Retains the existing bitmap when disabled. */
+      readonly enabled?: boolean;
+    }
+  | {
+      /** Coordinates complete existing alpha name/display metadata, preserving samples, IDs and other resources. */
+      readonly kind: 'alphaOptions';
+      /** Existing persistent 1053 alpha ID, never panel position. Missing/ambiguous IDs and spot channels refuse. */
+      readonly channelId: number;
+      /** Nonempty control-free ASCII/supplementary text, at most 255 UTF-16 units. Other legacy encodings refuse. */
+      readonly name: string;
+      /** Integral 0..100. */ readonly opacity: number;
+      readonly interpretation: 'selectedAreas' | 'maskedAreas';
+      /** Integral RGB display bytes. This does not change alpha samples. */
+      readonly color: readonly [number, number, number];
+    };
 /** Target for a persisted source change. Reinspect after structural edits. */
 export interface PsdSourceEditTarget {
   /** Physical index in inspectSource().layers, not a semantic layer ID. */ readonly recordIndex: number;
@@ -363,11 +405,15 @@ export class PsdEditorSession {
    * Replacement must have the same dimensions, positive alpha and fresh distinct host-generated UUIDs.
    * Updates SoLd/PlLd, linked bytes and lengths, parent channels/bounds and real merged data; omits thumbnails.
    * External/shared contents, filters and unsupported dependencies throw Dependency with propertyPath.
+   * duplicateSmart, applySmartComp, appendSmartFilter and updateSmartLink always refuse with named paths;
+   * native authoring observations alone do not certify their dependent editor writes.
    * Failure preserves bytes and revision. linearBlending is the host gamma-1 preference, false by default.
    */
   editSmart(edit: PsdSmartEdit, linear_blending?: boolean | null): M01EditOutcome;
   /**
    * Atomically edits persisted locks, labels, copy flags, style UI flags and existing percent opacity.
+   * Locks change the modern source word; later legacy aliases and Background defaults remain independent.
+   * Style dialog edits change the stored flag; native import may force effective visibility true.
    * Record indices come from inspectSource and change after structural edits. Opacity edits require
    * strict merged-image regeneration at prepareSave; unsupported rendering refuses the save.
    * Visual edits admit RGB8 primary layers on canvases at most 2000x1000. Labels must be in 0..11.
@@ -393,6 +439,17 @@ export class PsdEditorSession {
    */
   addTextFont(bytes: Uint8Array, face_index: number): void;
   /**
+   * Applies confirmed mask/channel operations atomically, using physical record indices and persisted alpha IDs.
+   * disableRasterMask admits an existing absolute uninverted RGB8 raster source without density/feather records.
+   * prepareSave supplies the host linearBlending context and strictly regenerates merged caches.
+   * Compound real/vector masks refuse. filterMask requires a version-4 soLD/filterFXStyle carrier and an
+   * existing placement-matched entirely white RGB8 bitmap. Density is a byte, feather is pixels, and disabling
+   * retains the bitmap. Nonwhite masks refuse.
+   * alphaOptions coordinates ASCII/supplementary names and RGB display resources without changing samples or IDs.
+   * Missing/ambiguous metadata, spot conversion and runtime allocation refuse. Reinspect after structural edits.
+   */
+  editChannels(batch: readonly PsdChannelEdit[]): M01EditOutcome;
+  /**
    * Resizes an existing root artboard from its committed top-left, leaving children and canvas fixed.
    * RGB8 PSD only, canvas at most 2000x1000, coordinates within +/-2000, with auto-expand/shrinkwrap off.
    * Rebuilds merged RGB/alpha strictly and omits stale previews before publishing the revision.
@@ -406,10 +463,13 @@ export class PsdEditorSession {
    */
   inspectSource(): PsdSourceSnapshot;
   /**
-   * Atomically changes comp header strings, document guides or one BOM-tagged UTF-16 text note.
+   * Atomically changes bounded nonvisual metadata, including print captions and authored slice text.
    * Preserves pixels and unrelated carriers; guide edits regenerate both 1092 and 1032.
    * Active credentials, unknown versions, duplicate identities/carriers and other note encodings refuse.
-   * Comp application/capture, slice partitions and XMP reconciliation throw named Dependency errors.
+   * printCaption coordinates existing 1083/1011 slots. sliceName admits existing authored v6/v7/v8
+   * Unicode names; sliceUrl also coordinates its existing 1054/slic URL association without fetching it.
+   * Names are at most 4096 UTF-16 units, URLs 65536; NUL, duplicate/missing carriers and automatic slices refuse.
+   * Comp application/capture, slice partitions, general print/resolution and XMP throw named Dependency errors.
    * Pending visual changes still require a strict render on prepareSave. Failure preserves revision/bytes.
    */
   editStateMetadata(edits: readonly PsdStateMetadataEdit[]): M01EditOutcome;
@@ -441,7 +501,7 @@ export class PsdEditorSession {
    * replacePixels preserves properties and exact straight RGBA, including hidden RGB and off-canvas samples.
    * paintPixels replaces its rectangle exactly and extends bounds; it does not blend brush samples.
    * setMask creates/edits the independent raster source, or removes it with null. With a vector it edits -3
-   * and rebuilds combined -2. Empty outside-white masks remain distinct from deletion.
+   * and rebuilds combined -2. Disabling a real source beside a vector refuses. Empty outside-white masks remain distinct from deletion.
    * setVectorMask creates/edits/removes one absolute rectangle/ellipse path, keeping raster source independent.
    * setSolid updates RGB8 SoCo and vector generator mirrors plus caches; shape null makes an unbounded fill.
    * Relative/inverted/feathered masks, strokes, live origination and general curves refuse.
@@ -462,7 +522,8 @@ export class PsdEditorSession {
   /**
    * Replaces text and optional uniform style in one atomic text-only transaction.
    * Register actual original/requested fonts and the whitespace-marker face with addTextFont first.
-   * Supports bounded printable ASCII/CR in left horizontal Crisp point/Single-line RGB8 text.
+   * Supports bounded printable ASCII/CR in left horizontal Crisp point or left/center/right Single-line RGB8 boxes.
+   * Center/right require integral font size and zero tracking; full justification and non-left point text refuse.
    * Unsupported shaping, mixed styles, negative spacing, overflow and dependencies throw named errors.
    * Mixed raster/type batches remain refused. Font registration changes no revision or source bytes.
    */
@@ -534,6 +595,7 @@ export interface InitOutput {
   readonly psdeditorsession_addTextFont: (a: number, b: number, c: number, d: number) => [number, number];
   readonly psdeditorsession_dispose: (a: number) => void;
   readonly psdeditorsession_edit: (a: number, b: any) => [number, number, number];
+  readonly psdeditorsession_editChannels: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_editGeometry: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editSmart: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editSource: (a: number, b: any) => [number, number, number];

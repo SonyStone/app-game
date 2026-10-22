@@ -114,6 +114,20 @@ function takeFromExternrefTable0(idx) {
     wasm.__externref_table_dealloc(idx);
     return value;
 }
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * @param {Uint8Array} bytes
+ * @returns {any}
+ */
+export function readPsd(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsd(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
 
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -136,21 +150,6 @@ export function writePsd(document, composite) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
-}
-
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- * @param {Uint8Array} bytes
- * @returns {any}
- */
-export function readPsd(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readPsd(ptr0, len0);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
 }
 
 /**
@@ -197,6 +196,8 @@ export class PsdEditorSession {
      * Replacement must have the same dimensions, positive alpha and fresh distinct host-generated UUIDs.
      * Updates SoLd/PlLd, linked bytes and lengths, parent channels/bounds and real merged data; omits thumbnails.
      * External/shared contents, filters and unsupported dependencies throw Dependency with propertyPath.
+     * duplicateSmart, applySmartComp, appendSmartFilter and updateSmartLink always refuse with named paths;
+     * native authoring observations alone do not certify their dependent editor writes.
      * Failure preserves bytes and revision. linearBlending is the host gamma-1 preference, false by default.
      * @param {PsdSmartEdit} edit
      * @param {boolean | null} [linear_blending]
@@ -211,6 +212,8 @@ export class PsdEditorSession {
     }
     /**
      * Atomically edits persisted locks, labels, copy flags, style UI flags and existing percent opacity.
+     * Locks change the modern source word; later legacy aliases and Background defaults remain independent.
+     * Style dialog edits change the stored flag; native import may force effective visibility true.
      * Record indices come from inspectSource and change after structural edits. Opacity edits require
      * strict merged-image regeneration at prepareSave; unsupported rendering refuses the save.
      * Visual edits admit RGB8 primary layers on canvases at most 2000x1000. Labels must be in 0..11.
@@ -267,6 +270,25 @@ export class PsdEditorSession {
         }
     }
     /**
+     * Applies confirmed mask/channel operations atomically, using physical record indices and persisted alpha IDs.
+     * disableRasterMask admits an existing absolute uninverted RGB8 raster source without density/feather records.
+     * prepareSave supplies the host linearBlending context and strictly regenerates merged caches.
+     * Compound real/vector masks refuse. filterMask requires a version-4 soLD/filterFXStyle carrier and an
+     * existing placement-matched entirely white RGB8 bitmap. Density is a byte, feather is pixels, and disabling
+     * retains the bitmap. Nonwhite masks refuse.
+     * alphaOptions coordinates ASCII/supplementary names and RGB display resources without changing samples or IDs.
+     * Missing/ambiguous metadata, spot conversion and runtime allocation refuse. Reinspect after structural edits.
+     * @param {readonly PsdChannelEdit[]} batch
+     * @returns {M01EditOutcome}
+     */
+    editChannels(batch) {
+        const ret = wasm.psdeditorsession_editChannels(this.__wbg_ptr, batch);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * Resizes an existing root artboard from its committed top-left, leaving children and canvas fixed.
      * RGB8 PSD only, canvas at most 2000x1000, coordinates within +/-2000, with auto-expand/shrinkwrap off.
      * Rebuilds merged RGB/alpha strictly and omits stale previews before publishing the revision.
@@ -307,10 +329,13 @@ export class PsdEditorSession {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
-     * Atomically changes comp header strings, document guides or one BOM-tagged UTF-16 text note.
+     * Atomically changes bounded nonvisual metadata, including print captions and authored slice text.
      * Preserves pixels and unrelated carriers; guide edits regenerate both 1092 and 1032.
      * Active credentials, unknown versions, duplicate identities/carriers and other note encodings refuse.
-     * Comp application/capture, slice partitions and XMP reconciliation throw named Dependency errors.
+     * printCaption coordinates existing 1083/1011 slots. sliceName admits existing authored v6/v7/v8
+     * Unicode names; sliceUrl also coordinates its existing 1054/slic URL association without fetching it.
+     * Names are at most 4096 UTF-16 units, URLs 65536; NUL, duplicate/missing carriers and automatic slices refuse.
+     * Comp application/capture, slice partitions, general print/resolution and XMP throw named Dependency errors.
      * Pending visual changes still require a strict render on prepareSave. Failure preserves revision/bytes.
      * @param {readonly PsdStateMetadataEdit[]} edits
      * @returns {M01EditOutcome}
@@ -381,7 +406,7 @@ export class PsdEditorSession {
      * replacePixels preserves properties and exact straight RGBA, including hidden RGB and off-canvas samples.
      * paintPixels replaces its rectangle exactly and extends bounds; it does not blend brush samples.
      * setMask creates/edits the independent raster source, or removes it with null. With a vector it edits -3
-     * and rebuilds combined -2. Empty outside-white masks remain distinct from deletion.
+     * and rebuilds combined -2. Disabling a real source beside a vector refuses. Empty outside-white masks remain distinct from deletion.
      * setVectorMask creates/edits/removes one absolute rectangle/ellipse path, keeping raster source independent.
      * setSolid updates RGB8 SoCo and vector generator mirrors plus caches; shape null makes an unbounded fill.
      * Relative/inverted/feathered masks, strokes, live origination and general curves refuse.
@@ -419,7 +444,8 @@ export class PsdEditorSession {
     /**
      * Replaces text and optional uniform style in one atomic text-only transaction.
      * Register actual original/requested fonts and the whitespace-marker face with addTextFont first.
-     * Supports bounded printable ASCII/CR in left horizontal Crisp point/Single-line RGB8 text.
+     * Supports bounded printable ASCII/CR in left horizontal Crisp point or left/center/right Single-line RGB8 boxes.
+     * Center/right require integral font size and zero tracking; full justification and non-left point text refuse.
      * Unsupported shaping, mixed styles, negative spacing, overflow and dependencies throw named errors.
      * Mixed raster/type batches remain refused. Font registration changes no revision or source bytes.
      * @param {number} layer_id
@@ -644,6 +670,10 @@ function __wbg_get_imports() {
         const ret = arg0.call(arg1, arg2, arg3);
         return ret;
     }, arguments) };
+    imports.wbg.__wbg_charCodeAt_abe5953e37f4b5a6 = function(arg0, arg1) {
+        const ret = arg0.charCodeAt(arg1 >>> 0);
+        return ret;
+    };
     imports.wbg.__wbg_from_2a5d3e218e67aa85 = function(arg0) {
         const ret = Array.from(arg0);
         return ret;
@@ -675,6 +705,10 @@ function __wbg_get_imports() {
         return ret;
     };
     imports.wbg.__wbg_length_a446193dc22c12f8 = function(arg0) {
+        const ret = arg0.length;
+        return ret;
+    };
+    imports.wbg.__wbg_length_d56737991078581b = function(arg0) {
         const ret = arg0.length;
         return ret;
     };
@@ -754,6 +788,10 @@ function __wbg_get_imports() {
     imports.wbg.__wbindgen_is_object = function(arg0) {
         const val = arg0;
         const ret = typeof(val) === 'object' && val !== null;
+        return ret;
+    };
+    imports.wbg.__wbindgen_is_string = function(arg0) {
+        const ret = typeof(arg0) === 'string';
         return ret;
     };
     imports.wbg.__wbindgen_is_undefined = function(arg0) {
