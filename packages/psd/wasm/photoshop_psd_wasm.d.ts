@@ -1,14 +1,14 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
+/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
 /**
  * Rasterizes one upright stem-free CFF2 glyph with Strong AA at 13.375..47.5625 px.
  * The caller supplies actual single-face OTTO font bytes, a complete signed 16.16 design tuple
@@ -59,6 +59,11 @@ export interface PsdBudgetError extends Error {
 
 
 
+/** Current-state writes. All failures preserve bytes and revision. Merged output is rebuilt strictly.
+ * RGB8 primary layers up to 2000x1000 only. No timeline, color-dissolve or OCIO authoring admission. */
+export type PsdCarrierEdit =
+  | { readonly kind: 'effectsVisible'; readonly visible: boolean }
+  | { readonly kind: 'dissolveOpacity'; readonly recordIndex: number; /** Integral 0..255. */ readonly opacity: number };
 /** Native source metadata only. Inspection grants no edit admission and performs no display conversion. */
 export interface PsdProcessSource {
   /** PSD color-mode number. */ readonly mode: number;
@@ -633,6 +638,15 @@ export class PsdEditorSession {
    */
   addTextFont(bytes: Uint8Array, face_index: number): void;
   /**
+   * Atomically edits current effect visibility or an existing opacity-dissolve byte on RGB8 primary
+   * canvases up to 2000x1000. Rebuilds real merged pixels strictly using the supplied host gamma.
+   * Preserves style/anFX source and unknown fields. Record indices come from inspectSource.
+   * Opacity requires flat ordinary rasters without timelines, masks, clipping or generated content.
+   * Color dissolve, keyframes, duplicate/malformed carriers and other writer modes refuse atomically.
+   * Higher-depth/CMYK/Lab visibility rendering grants no additional edit/save admission.
+   */
+  editCarriers(batch: readonly PsdCarrierEdit[], linear_blending: boolean): M01EditOutcome;
+  /**
    * Applies confirmed mask/channel operations atomically, using physical record indices and persisted alpha IDs.
    * disableRasterMask admits an existing absolute uninverted RGB8 raster source without density/feather records.
    * prepareSave supplies the host linearBlending context and strictly regenerates merged caches.
@@ -814,6 +828,7 @@ export interface InitOutput {
   readonly psdeditorsession_addTextFont: (a: number, b: number, c: number, d: number) => [number, number];
   readonly psdeditorsession_dispose: (a: number) => void;
   readonly psdeditorsession_edit: (a: number, b: any) => [number, number, number];
+  readonly psdeditorsession_editCarriers: (a: number, b: any, c: any) => [number, number, number];
   readonly psdeditorsession_editChannels: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_editGeometry: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editProcess: (a: number, b: any, c: any) => [number, number, number];
