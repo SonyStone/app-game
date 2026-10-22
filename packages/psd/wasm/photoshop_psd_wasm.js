@@ -114,20 +114,6 @@ function takeFromExternrefTable0(idx) {
     wasm.__externref_table_dealloc(idx);
     return value;
 }
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- * @param {Uint8Array} bytes
- * @returns {any}
- */
-export function readPsd(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readPsd(ptr0, len0);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
-}
 
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -153,6 +139,46 @@ export function writePsd(document, composite) {
 }
 
 /**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * @param {Uint8Array} bytes
+ * @returns {any}
+ */
+export function readPsd(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsd(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Rasterizes one upright stem-free CFF2 glyph with Strong AA at 13.375..47.5625 px.
+ * The caller supplies actual single-face OTTO font bytes, a complete signed 16.16 design tuple
+ * in fvar order and a finite baseline origin within +/-100000 pixels. Font input is at most 64 MiB.
+ * No font lookup, shaping, HVAR or paint occurs.
+ * Hints, masks, flex/arithmetic programs, multiple FDs, transforms and other AA methods refuse.
+ * Returns coverage and document-space bounds only. This does not admit CFF2 to addTextFont or SetText.
+ * @param {Uint8Array} font_bytes
+ * @param {readonly number[]} design_coordinates
+ * @param {string} character
+ * @param {number} size
+ * @param {number} origin_x
+ * @param {number} origin_y
+ * @returns {PsdCff2Coverage}
+ */
+export function rasterizeCff2Strong(font_bytes, design_coordinates, character, size, origin_x, origin_y) {
+    const ptr0 = passArray8ToWasm0(font_bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.rasterizeCff2Strong(ptr0, len0, design_coordinates, character, size, origin_x, origin_y);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
  * Physical record indices refer to the selected layer-info section and change after structural edits.
@@ -173,7 +199,8 @@ const PsdEditorSessionFinalization = (typeof FinalizationRegistry === 'undefined
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_psdeditorsession_free(ptr >>> 0, 1));
 /**
- * Persistent bounded RGB8 preserve-mode editor. Opening does not fetch assets or flatten the document.
+ * Persistent source-preserving editor. Opening does not fetch assets or flatten the document.
+ * Native process edits additionally admit bounded Gray8/16, RGB16/32 and CMYK8 products.
  * RGB8 plain raster/group edits are atomic; unsupported dependencies throw structured Error objects.
  * Visual saves require the strict renderer, regenerate merged data and omit thumbnail 1036.
  */
@@ -242,6 +269,25 @@ export class PsdEditorSession {
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
+    }
+    /**
+     * Applies native-plane replacement, opacity and rename commands atomically in Gray8/16, RGB16/32 or CMYK8.
+     * IDs and bounds come from inspectProcess. Planes are complete big-endian native wire samples,
+     * process channels first and alpha last; CMYK is inverted. No RGBA8 conversion occurs.
+     * Requires explicit host gamma context, flat Normal rasters, measured native defaults and bounded samples.
+     * RGB32 colors must be finite and alpha in 0..1. Masks, groups, generators, extra channels,
+     * unsupported HDR views and unknown active dependencies throw named errors without changing revision.
+     * Successful changes regenerate merged data, order depth markers before layers and remove previews.
+     * @param {readonly PsdProcessEdit[]} batch
+     * @param {boolean} linear_blending
+     * @returns {M01EditOutcome}
+     */
+    editProcess(batch, linear_blending) {
+        const ret = wasm.psdeditorsession_editProcess(this.__wbg_ptr, batch, linear_blending);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
     }
     /**
      * Freezes preserve-mode bytes for this revision. Untouched output is byte-identical; rename-only saves
@@ -352,6 +398,20 @@ export class PsdEditorSession {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
+     * Inspects native mode/depth and physical layer bounds/channel IDs without display conversion.
+     * Source inspection alone does not admit an edit. Persistent IDs can be absent in arbitrary files;
+     * editProcess validates unique nonzero IDs, complete native planes and every dependency separately.
+     * Physical record order and bounds describe the current revision, including earlier transactions.
+     * @returns {PsdProcessSource}
+     */
+    inspectProcess() {
+        const ret = wasm.psdeditorsession_inspectProcess(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * Atomically changes bounded nonvisual metadata, including print captions and authored slice text.
      * Preserves pixels and unrelated carriers; guide edits regenerate both 1092 and 1032.
      * Active credentials, unknown versions, duplicate identities/carriers and other note encodings refuse.
@@ -382,6 +442,25 @@ export class PsdEditorSession {
      */
     repaintGradientFill(record_index, patch, linear_blending) {
         const ret = wasm.psdeditorsession_repaintGradientFill(this.__wbg_ptr, record_index, patch, isLikeNone(linear_blending) ? 0xFFFFFF : linear_blending ? 1 : 0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Changes existing version-2 Lab Photo Filter settings in the bounded CMYK8/16 two-layer product.
+     * recordIndex comes from inspectSource. Requires the measured embedded coated profile,
+     * opaque raw source, full strength, absent/default white mask and relative/BPC-on/dither-off context.
+     * Rebuilds native merged data and depth carriers before publishing; removes stale previews.
+     * Other profiles, identity shortcuts, version-3 colors, unknown dependencies and unsupported
+     * graphs throw named errors atomically. Omitted patch fields preserve their exact source values.
+     * @param {number} record_index
+     * @param {PsdCmykPhotoFilterPatch} patch
+     * @param {boolean} linear_blending
+     * @returns {M01EditOutcome}
+     */
+    setCmykPhotoFilter(record_index, patch, linear_blending) {
+        const ret = wasm.psdeditorsession_setCmykPhotoFilter(this.__wbg_ptr, record_index, patch, linear_blending);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }

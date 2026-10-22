@@ -154,6 +154,31 @@ export function readPsd(bytes) {
 }
 
 /**
+ * Rasterizes one upright stem-free CFF2 glyph with Strong AA at 13.375..47.5625 px.
+ * The caller supplies actual single-face OTTO font bytes, a complete signed 16.16 design tuple
+ * in fvar order and a finite baseline origin within +/-100000 pixels. Font input is at most 64 MiB.
+ * No font lookup, shaping, HVAR or paint occurs.
+ * Hints, masks, flex/arithmetic programs, multiple FDs, transforms and other AA methods refuse.
+ * Returns coverage and document-space bounds only. This does not admit CFF2 to addTextFont or SetText.
+ * @param {Uint8Array} font_bytes
+ * @param {readonly number[]} design_coordinates
+ * @param {string} character
+ * @param {number} size
+ * @param {number} origin_x
+ * @param {number} origin_y
+ * @returns {PsdCff2Coverage}
+ */
+export function rasterizeCff2Strong(font_bytes, design_coordinates, character, size, origin_x, origin_y) {
+    const ptr0 = passArray8ToWasm0(font_bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.rasterizeCff2Strong(ptr0, len0, design_coordinates, character, size, origin_x, origin_y);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
  * Physical record indices refer to the selected layer-info section and change after structural edits.
@@ -946,6 +971,10 @@ function __wbg_get_imports() {
         const ret = arg0.call(arg1, arg2, arg3);
         return ret;
     }, arguments) };
+    imports.wbg.__wbg_charCodeAt_abe5953e37f4b5a6 = function(arg0, arg1) {
+        const ret = arg0.charCodeAt(arg1 >>> 0);
+        return ret;
+    };
     imports.wbg.__wbg_from_2a5d3e218e67aa85 = function(arg0) {
         const ret = Array.from(arg0);
         return ret;
@@ -973,6 +1002,10 @@ function __wbg_get_imports() {
         return ret;
     };
     imports.wbg.__wbg_length_a446193dc22c12f8 = function(arg0) {
+        const ret = arg0.length;
+        return ret;
+    };
+    imports.wbg.__wbg_length_d56737991078581b = function(arg0) {
         const ret = arg0.length;
         return ret;
     };
@@ -1075,6 +1108,10 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbindgen_is_null = function(arg0) {
         const ret = arg0 === null;
+        return ret;
+    };
+    imports.wbg.__wbindgen_is_string = function(arg0) {
+        const ret = typeof(arg0) === 'string';
         return ret;
     };
     imports.wbg.__wbindgen_is_undefined = function(arg0) {

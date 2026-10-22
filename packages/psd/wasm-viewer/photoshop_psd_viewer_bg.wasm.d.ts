@@ -35,6 +35,7 @@ export const psdsourcehandle_info: (a: number) => [number, number, number];
 export const psdsourcehandle_open: (a: any, b: bigint, c: any) => [number, number, number];
 export const psdsourcehandle_readGrid: (a: number, b: bigint, c: bigint, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: any) => [number, number, number, number];
 export const psdsourcehandle_writeUnchanged: (a: number, b: any, c: any) => [number, number];
+export const rasterizeCff2Strong: (a: number, b: number, c: any, d: any, e: number, f: number, g: number) => [number, number, number];
 export const readPsd: (a: number, b: number) => [number, number, number];
 export const readPsdSource: (a: number, b: number) => [number, number, number];
 export const renderedimage_approximations: (a: number) => any;
