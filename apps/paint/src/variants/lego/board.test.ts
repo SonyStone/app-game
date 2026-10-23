@@ -33,15 +33,13 @@ it('grows downward over a part below by pushing it down', () => {
   expect(cells(grown)).toEqual({ a: [0, 0], b: [0, 2] });
 });
 
-it('pushes a dropped-on part away from the dropped one, also left and up past the panel edge', () => {
-  const parts = [part('a', 0, 0, 2, 1)];
-
-  // Dropped on a's right half: a moves left of it, into column -1.
-  expect(cells(placePart(parts, part('new', 1, 0)))).toEqual({ a: [-1, 0], new: [1, 0] });
-  // Dropped on its left half: a moves right.
-  expect(cells(placePart(parts, part('new', 0, 0)))).toEqual({ a: [1, 0], new: [0, 0] });
-  // Dropped half a row lower, as a wide part: a moves up.
-  expect(cells(placePart([part('a', 0, 1)], part('new', 0, 1, 1, 2)))).toEqual({ a: [0, 0], new: [0, 1] });
+it('pushes a dropped-on part right or down, whichever takes fewer cells', () => {
+  // A wide part dropped on: moving a down one row beats moving it right two columns.
+  expect(cells(placePart([part('a', 0, 0, 2, 1)], part('new', 0, 0, 2, 1)))).toEqual({ a: [0, 1], new: [0, 0] });
+  // A tall part dropped on: right beats down.
+  expect(cells(placePart([part('a', 0, 0, 1, 3)], part('new', 0, 0, 1, 3)))).toEqual({ a: [1, 0], new: [0, 0] });
+  // Never left or up, even dropped on a part's far half.
+  expect(cells(placePart([part('a', 0, 0, 2, 1)], part('new', 1, 0)))).toEqual({ a: [0, 1], new: [1, 0] });
 });
 
 it('pushes the parts a pushed part runs into along with it', () => {

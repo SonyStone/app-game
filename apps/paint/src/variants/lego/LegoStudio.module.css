@@ -121,8 +121,8 @@
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   cursor: nwse-resize;
   touch-action: none;
   background: linear-gradient(135deg, transparent 50%, var(--lego-accent) 50%);

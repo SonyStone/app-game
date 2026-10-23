@@ -1,5 +1,5 @@
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import {
   cellSize,
   findPart,
@@ -14,6 +14,7 @@ import {
   spanAfter,
   type Board,
   type Panel,
+  type Part,
   type Point,
   type Span
 } from './board';
@@ -48,8 +49,19 @@ export function BoardView(props: {
   };
   const shown = createMemo(() => {
     const current = drag();
-    return current ? result(current) : props.board.board();
+    if (!current) {
+      return props.board.board();
+    }
+
+    return current.type === 'part' ? partDrop(current, current.settled).board : result(current);
   });
+  /** The drop a lifted part waits on before the parts in its way move aside; see `reorderDelay`. */
+  let pending: { key: string; timer: ReturnType<typeof setTimeout> } | undefined;
+  const stopWaiting = () => {
+    clearTimeout(pending?.timer);
+    pending = undefined;
+  };
+  onCleanup(stopWaiting);
   const lifted = () => {
     const current = drag();
     return current?.type === 'part' ? current : undefined;
@@ -57,22 +69,56 @@ export function BoardView(props: {
 
   createEventListener(window, 'pointermove', (event) => {
     const current = drag();
-    if (current && event.pointerId === current.pointer) {
-      setDrag({ ...current, point: { x: event.clientX, y: event.clientY } });
+    if (!current || event.pointerId !== current.pointer) {
+      return;
     }
+
+    const point = { x: event.clientX, y: event.clientY };
+    if (current.type !== 'part') {
+      setDrag({ ...current, point });
+      return;
+    }
+
+    // A place with room shows at once; one that pushes parts aside waits until the part rests over it.
+    const drop = partDrop(current, point);
+    if (!drop.pushes) {
+      stopWaiting();
+      setDrag({ ...current, point, settled: point });
+      return;
+    }
+
+    if (drop.key !== pending?.key) {
+      stopWaiting();
+      pending = {
+        key: drop.key,
+        timer: setTimeout(() => {
+          pending = undefined;
+          const latest = drag();
+          if (latest?.type === 'part') {
+            setDrag({ ...latest, settled: latest.point });
+          }
+        }, reorderDelay)
+      };
+    }
+
+    setDrag({ ...current, point });
   });
+  // A lift drops where the part is, without waiting.
   const finish = (event: PointerEvent) => {
     const current = drag();
     if (!current || event.pointerId !== current.pointer) {
       return;
     }
 
-    props.board.set(result({ ...current, point: { x: event.clientX, y: event.clientY } }));
+    stopWaiting();
+    const point = { x: event.clientX, y: event.clientY };
+    props.board.set(current.type === 'part' ? partDrop(current, point).board : result({ ...current, point }));
     setDrag(undefined);
   };
   createEventListener(window, 'pointerup', finish);
   createEventListener(window, 'pointercancel', (event) => {
     if (event.pointerId === drag()?.pointer) {
+      stopWaiting();
       setDrag(undefined);
     }
   });
@@ -200,6 +246,7 @@ export function BoardView(props: {
       pointer: event.pointerId,
       point: { x: event.clientX, y: event.clientY },
       grab: { x: event.clientX - rect.left, y: event.clientY - rect.top },
+      settled: { x: event.clientX, y: event.clientY },
       base: findPart(board, part.id) ? removePart(board, part.id) : board,
       newPanel: newId('panel'),
       ...part
@@ -232,8 +279,8 @@ export function BoardView(props: {
     });
   }
 
-  /** The board `drag` would leave if it ended now. */
-  function result(drag: Drag): Board {
+  /** The board a resize or a panel move would leave if it ended now. */
+  function result(drag: Exclude<Drag, { type: 'part' }>): Board {
     const size = view();
 
     if (drag.type === 'resize') {
@@ -246,25 +293,30 @@ export function BoardView(props: {
       return replacePanel(drag.base, panel.id, { ...panel, parts: resizePart(panel.parts, drag.id, span) });
     }
 
-    if (drag.type === 'panel') {
-      const panel = drag.base.panels.find((candidate) => candidate.id === drag.panel);
-      if (!panel) {
-        return drag.base;
-      }
-
-      const at = {
-        x: (drag.point.x - size.left - drag.grab.x) / size.width,
-        y: (drag.point.y - size.top - drag.grab.y) / size.height
-      };
-      return replacePanel(drag.base, panel.id, { ...panel, at });
-    }
-
-    if (overBox(drag.point)) {
+    const panel = drag.base.panels.find((candidate) => candidate.id === drag.panel);
+    if (!panel) {
       return drag.base;
     }
 
+    const at = {
+      x: (drag.point.x - size.left - drag.grab.x) / size.width,
+      y: (drag.point.y - size.top - drag.grab.y) / size.height
+    };
+    return replacePanel(drag.base, panel.id, { ...panel, at });
+  }
+
+  /**
+   * Where a lifted part held at `point` would land: the board with it there, a `key` naming the spot, and whether it
+   * `pushes` other parts aside to fit.
+   */
+  function partDrop(drag: Extract<Drag, { type: 'part' }>, point: Point) {
+    const size = view();
+    if (overBox(point)) {
+      return { board: drag.base, key: 'box', pushes: false };
+    }
+
     // The lifted part's top-left corner, in view pixels.
-    const corner = { x: drag.point.x - size.left - drag.grab.x, y: drag.point.y - size.top - drag.grab.y };
+    const corner = { x: point.x - size.left - drag.grab.x, y: point.y - size.top - drag.grab.y };
     const center = {
       x: corner.x + (drag.span.columns * pitch) / 2,
       y: corner.y + (drag.span.rows * pitch) / 2
@@ -280,14 +332,24 @@ export function BoardView(props: {
         center.y >= rect.top - pitch &&
         center.y <= rect.top + rect.height + pitch;
       if (inside) {
-        const placed = placePart(panel.parts, { ...part, cell: nearestCell(origin, corner) });
-        return replacePanel(drag.base, panel.id, { ...panel, parts: placed });
+        const cell = nearestCell(origin, corner);
+        const placed = placePart(panel.parts, { ...part, cell });
+        const moved = (other: Part) => panel.parts.find((before) => before.id === other.id)?.cell !== other.cell;
+        return {
+          board: replacePanel(drag.base, panel.id, { ...panel, parts: placed }),
+          key: `${panel.id}:${cell.column},${cell.row}`,
+          pushes: placed.some((other) => other.id !== part.id && moved(other))
+        };
       }
     }
 
     const at = { x: corner.x / size.width, y: corner.y / size.height };
     return {
-      panels: [...drag.base.panels, { id: drag.newPanel, at, parts: [{ ...part, cell: { column: 0, row: 0 } }] }]
+      board: {
+        panels: [...drag.base.panels, { id: drag.newPanel, at, parts: [{ ...part, cell: { column: 0, row: 0 } }] }]
+      },
+      key: 'new',
+      pushes: false
     };
   }
 
@@ -315,9 +377,17 @@ type Drag = { pointer: number; point: Point; base: Board } & (
       span: Span;
       /** Where the pointer holds the part, from its top-left corner. */
       grab: Point;
+      /** The pointer position whose drop the board shows; it lags `point` while a drop would push parts aside. */
+      settled: Point;
       /** The id a new panel gets if the part lands on the bare drawing. */
       newPanel: string;
     }
   | { type: 'resize'; panel: string; id: string; span: Span; start: Point }
   | { type: 'panel'; panel: string; grab: Point }
 );
+
+/**
+ * Milliseconds a lifted part must rest over a spot before the parts in its way move aside, after Android's launcher:
+ * passing over parts on the way somewhere else leaves them still.
+ */
+const reorderDelay = 220;

@@ -35,19 +35,23 @@ export const panelPadding = 6;
 /** The largest span of a part in either direction. */
 export const maxSpan = 10;
 
-/** A way a part can be pushed. */
-export type Direction = 'right' | 'down' | 'left' | 'up';
+/**
+ * A way a part can be pushed. Only right and down: a push then never moves a panel's parts toward the top or left,
+ * so a panel grows only on its right and bottom, and one lying at the view's right or bottom edge is the only kind
+ * that shifts on screen.
+ */
+export type Direction = 'right' | 'down';
 
 /**
  * Puts `moving` among `parts` (replacing the part of the same id) and pushes every part it would overlap out of its
- * way: `way` picks the direction for each part `moving` overlaps (by default away from `moving`'s center, see
- * `awayFrom`), and parts a pushed part then overlaps move on in the same direction. `moving` itself stays where it
- * is asked to be. Keeps the parts' order.
+ * way: `way` picks the direction for each part `moving` overlaps (by default the shorter way, see `shorterWay`), and
+ * parts a pushed part then overlaps move on in the same direction. `moving` itself stays where it is asked to be.
+ * Keeps the parts' order.
  */
 export function placePart(
   parts: readonly Part[],
   moving: Part,
-  way: (part: Part, moving: Part) => Direction = awayFrom
+  way: (part: Part, moving: Part) => Direction = shorterWay
 ) {
   const placed = new Map(parts.map((part) => [part.id, part]));
   placed.set(moving.id, moving);
@@ -93,7 +97,7 @@ export function resizePart(parts: readonly Part[], id: string, span: Span) {
       return 'down';
     }
 
-    return shortestWay(other, grown, ['right', 'down']);
+    return shorterWay(other, grown);
   });
 }
 
@@ -177,25 +181,6 @@ export function newId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-/**
- * The way `part` moves away from `moving`: along the axis on which their centers lie further apart, or, with
- * centers on the same spot, the way that takes the fewest cells.
- */
-export function awayFrom(part: Part, moving: Part): Direction {
-  const dx = part.cell.column * 2 + part.span.columns - (moving.cell.column * 2 + moving.span.columns);
-  const dy = part.cell.row * 2 + part.span.rows - (moving.cell.row * 2 + moving.span.rows);
-
-  if (dx === 0 && dy === 0) {
-    return shortestWay(part, moving, ['right', 'down', 'left', 'up']);
-  }
-
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    return dx > 0 ? 'right' : 'left';
-  }
-
-  return dy > 0 ? 'down' : 'up';
-}
-
 function bandsMeet(start: number, length: number, otherStart: number, otherLength: number) {
   return start < otherStart + otherLength && otherStart < start + length;
 }
@@ -209,21 +194,11 @@ function overlaps(a: Part, b: Part) {
   );
 }
 
-/** The way `part` gets clear of `pusher` by the fewest cells, among `directions` (ties in their order). */
-function shortestWay(part: Part, pusher: Part, directions: readonly Direction[]) {
-  let best = directions[0] ?? 'right';
-  let bestDistance = Number.POSITIVE_INFINITY;
-
-  for (const direction of directions) {
-    const cell = pushedCell(part, pusher, direction);
-    const distance = Math.abs(cell.column - part.cell.column) + Math.abs(cell.row - part.cell.row);
-    if (distance < bestDistance) {
-      best = direction;
-      bestDistance = distance;
-    }
-  }
-
-  return best;
+/** The way `part` gets clear of `pusher` by fewer cells: right or down, right on a tie. */
+export function shorterWay(part: Part, pusher: Part): Direction {
+  const right = pushedCell(part, pusher, 'right').column - part.cell.column;
+  const down = pushedCell(part, pusher, 'down').row - part.cell.row;
+  return down < right ? 'down' : 'right';
 }
 
 /** Where `part` lands when pushed just clear of `pusher` toward `direction`. */
@@ -231,12 +206,8 @@ function pushedCell(part: Part, pusher: Part, direction: Direction): Cell {
   switch (direction) {
     case 'right':
       return { ...part.cell, column: pusher.cell.column + pusher.span.columns };
-    case 'left':
-      return { ...part.cell, column: pusher.cell.column - part.span.columns };
     case 'down':
       return { ...part.cell, row: pusher.cell.row + pusher.span.rows };
-    case 'up':
-      return { ...part.cell, row: pusher.cell.row - part.span.rows };
   }
 }
 
