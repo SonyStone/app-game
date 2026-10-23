@@ -37,6 +37,7 @@ export const psdsourcehandle_readGrid: (a: number, b: bigint, c: bigint, d: numb
 export const psdsourcehandle_writeUnchanged: (a: number, b: any, c: any) => [number, number];
 export const rasterizeCff2Strong: (a: number, b: number, c: any, d: any, e: number, f: number, g: number) => [number, number, number];
 export const readPsd: (a: number, b: number) => [number, number, number];
+export const readPsdMetadataQueries: (a: number, b: number) => [number, number, number];
 export const readPsdSource: (a: number, b: number) => [number, number, number];
 export const renderedimage_approximations: (a: number) => any;
 export const renderedimage_depth: (a: number) => number;

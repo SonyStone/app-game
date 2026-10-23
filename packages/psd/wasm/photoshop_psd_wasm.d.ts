@@ -1,14 +1,14 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
+/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
 /**
  * Rasterizes one upright stem-free CFF2 glyph with Strong AA at 13.375..47.5625 px.
  * The caller supplies actual single-face OTTO font bytes, a complete signed 16.16 design tuple
@@ -19,11 +19,147 @@ export function readPsd(bytes: Uint8Array): any;
  */
 export function rasterizeCff2Strong(font_bytes: Uint8Array, design_coordinates: readonly number[], character: string, size: number, origin_x: number, origin_y: number): PsdCff2Coverage;
 /**
- * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
+ * Reads persisted styles, vectors, locks, labels, metadata and XMP without renderer admission.
+ * Vector frame queries are separate from stored values and report malformed-name/rectangle refusals.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
  * Physical record indices refer to the selected layer-info section and change after structural edits.
  */
 export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
+/**
+ * Reads the bounded J-metadata query model. Missing scalars use confirmed defaults 30 and 1.
+ * Refused carriers return null plus an explicit reason. File Info may contain independently
+ * admitted fields and field-specific refusals. This does not edit source, infer comp selection,
+ * reconcile copyright or normalize a document for saving.
+ */
+export function readPsdMetadataQueries(bytes: Uint8Array): PsdMetadataQueries;
+
+/** Stored vector carriers. Missing fields stay null; unknown entries and suffixes stay in sourceBlock.
+ * This inspection admits no new line/star/frame edit, generated geometry or stroke rendering. */
+export interface PsdVectorSource {
+  readonly origin: { readonly sourceBlock: Uint8Array; readonly version: number | null; readonly origins: readonly VectorOrigin[] | null } | null;
+  readonly stroke: { readonly sourceBlock: Uint8Array; readonly settings: VectorStrokeSource | null } | null;
+  readonly frame: { readonly sourceBlock: Uint8Array; readonly settings: VectorFrameSettings; readonly query: FrameQuery } | null;
+}
+/** Bounded native import view, independent of source values. A refusal is null plus its error. */
+export interface FrameQuery {
+  /** Rounded and int32-saturated Left/Top/Right/Bottom; nonpixel/nonfinite coordinates refuse. */ readonly bounds: readonly number[] | null;
+  readonly boundsError: string | null;
+  /** Explicit types 2/3/4, otherwise 1; absent stays null. */ readonly kind: number | null;
+  /** Decoded terminated UTF-16 name; malformed encodings refuse. */ readonly name: string | null;
+  readonly nameError: string | null;
+}
+/** Stored Origin; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorOrigin {
+  /** Source list ordinal, never substituted for an explicit index. */ readonly ordinal: number;
+  /** Original `keyOriginType`, not an authorization to synthesize that shape. */ readonly kind: number | null;
+  /** Explicit subpath/origination link. */ readonly index: number | null;
+  /** Explicit invalidation flag; absence remains distinct. */ readonly invalidated: boolean | null;
+  /** Serialized authoring resolution, independent of document and stroke resolution. */ readonly resolution: SourceNumber | null;
+  /** Stored rectangle; world coordinates must not receive the transform a second time. */ readonly bounds: VectorQuad | null;
+  /** Stored rounded-rectangle radii, preserving units per corner. */ readonly radii: VectorQuad | null;
+  /** Stored transform, not automatically applied to the serialized path. */ readonly transform: VectorTransform | null;
+  /** World-space corners in A/B/C/D order. */ readonly corners: VectorCorners | null;
+  /** Line-family source parameters, independent of regenerated path geometry. */ readonly line: VectorLineSource | null;
+  /** Polygon-family explicit parameters. Other future extensions remain retained source. */ readonly polygon: VectorPolygonSource | null;
+}
+/** Stored Quad; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorQuad {
+  /** Bounds Left/Top/Right/Bottom, or radii TL/TR/BR/BL. */ readonly values: readonly (SourceNumber | null)[];
+  /** Original `unitValueQuadVersion`. */ readonly version: number | null;
+}
+/** Stored Transform; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorTransform {
+  /** Original numeric leaves with their units and tags. */ readonly values: readonly (SourceNumber | null)[];
+}
+/** Stored Point; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorPoint {
+  /** Horizontal coordinate. */ readonly horizontal: SourceNumber | null;
+  /** Vertical coordinate. */ readonly vertical: SourceNumber | null;
+}
+/** Stored Corners; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorCorners {
+  /** Ordered source corners. */ readonly points: readonly (VectorPoint | null)[];
+}
+/** Stored LineSource; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorLineSource {
+  /** Stored endpoints with independent coordinate tags and units. */ readonly start: VectorPoint | null;
+  /** Stored endpoint; native transforms may change the imported query separately. */ readonly end: VectorPoint | null;
+  /** Stored line weight, separate from modern stroke width. */ readonly weight: SourceNumber | null;
+  /** Explicit start-arrow enablement. */ readonly arrowStart: boolean | null;
+  /** Explicit end-arrow enablement. */ readonly arrowEnd: boolean | null;
+  /** Stored arrow width; the optional flag determines its authoring unit context. */ readonly arrowWidth: SourceNumber | null;
+  /** Stored arrow length; the optional flag determines its authoring unit context. */ readonly arrowLength: SourceNumber | null;
+  /** Stored concavity, preserving the integer versus double distinction. */ readonly arrowConcavity: SourceNumber | null;
+  /** Explicit pixel-unit flag for arrow width; absence stays absent. */ readonly widthPixels: boolean | null;
+  /** Explicit pixel-unit flag for arrow length; absence stays absent. */ readonly lengthPixels: boolean | null;
+}
+/** Stored PolygonSource; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorPolygonSource {
+  /** Stored side count. Native import clamps this to 3..100. */ readonly sides: number | null;
+  /** Stored star percentage; native ratio divides by 100. */ readonly starRatio: SourceNumber | null;
+  /** Explicit smoothing controls. */ readonly smoothCorners: boolean | null;
+  /** Explicit indent smoothing. */ readonly smoothIndent: boolean | null;
+  /** Stored corner radius. */ readonly radius: SourceNumber | null;
+  /** Integer radius-unit selector, not a descriptor FourCC unit. */ readonly radiusUnit: number | null;
+  /** Stored horizontal pixel scale. */ readonly pixelHsf: SourceNumber | null;
+  /** Explicit inner radius; native derived radii remain separate. */ readonly innerRadius: SourceNumber | null;
+  /** Integer authoring unit selector for the inner radius. */ readonly innerRadiusUnit: number | null;
+  /** Explicit outer radius, without regenerating a star or polygon. */ readonly outerRadius: SourceNumber | null;
+  /** Integer authoring unit selector for the outer radius. */ readonly outerRadiusUnit: number | null;
+  /** Retained maximum inner corner radius, not a computed limit. */ readonly maxInnerCornerRadius: SourceNumber | null;
+  /** Retained maximum outer corner radius, not a computed limit. */ readonly maxOuterCornerRadius: SourceNumber | null;
+  /** Explicit predicted inner radius; sentinel values are not interpreted. */ readonly predictedInnerRadius: SourceNumber | null;
+  /** Explicit predicted outer radius; sentinel values are not interpreted. */ readonly predictedOuterRadius: SourceNumber | null;
+  /** Explicit authoring flag selecting the source outer corner radius. */ readonly sourceOuterCornerRadius: boolean | null;
+  /** Explicit linkage of star corner radii. */ readonly linkCornerRadius: boolean | null;
+  /** Previous tight world corners. */ readonly previous: VectorCorners | null;
+  /** True rectangular world corners. */ readonly trueCorners: VectorCorners | null;
+}
+/** Stored FrameSettings; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorFrameSettings {
+  /** Stored Left/Top/Right/Bottom before native integer rounding. */ readonly bounds: VectorQuad | null;
+  /** Original type; native import maps unsupported types to 1. */ readonly kind: number | null;
+  /** Explicit PPI lock, without assuming the constructor default. */ readonly lockPpi: boolean | null;
+  /** Explicit preferred resolution, independent of document resolution. */ readonly preferredResolution: SourceNumber | null;
+  /** Exact UTF-16 units including the source terminator when present. */ readonly savedName: Uint16Array | null;
+  /** Explicit resolution of a descriptor path; the path itself remains in `stored`. */ readonly pathResolution: SourceNumber | null;
+}
+/** Stored StrokeSource; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorStrokeSource {
+  /** Explicit `strokeEnabled`, without inserting a runtime default. */ readonly strokeEnabled: boolean | null;
+  /** Explicit `enabled`, without inserting a runtime default. */ readonly enabled: boolean | null;
+  /** Explicit `fillEnabled`, without inserting a runtime default. */ readonly fillEnabled: boolean | null;
+  /** Explicit `strokeStyleStrokeOnly`, without inserting a runtime default. */ readonly strokeStyleStrokeOnly: boolean | null;
+  /** Explicit `strokeStyleScaleLock`, without inserting a runtime default. */ readonly strokeStyleScaleLock: boolean | null;
+  /** Explicit `strokeStyleStrokeAdjust`, without inserting a runtime default. */ readonly strokeStyleStrokeAdjust: boolean | null;
+  /** Explicit `strokeStyleLineWidth`, without inserting a runtime default. */ readonly strokeStyleLineWidth: SourceNumber | null;
+  /** Explicit `strokeStyleLineDashOffset`, without inserting a runtime default. */ readonly strokeStyleLineDashOffset: SourceNumber | null;
+  /** Explicit `strokeStyleMiterLimit`, without inserting a runtime default. */ readonly strokeStyleMiterLimit: SourceNumber | null;
+  /** Explicit `strokeStyleOpacity`, without inserting a runtime default. */ readonly strokeStyleOpacity: SourceNumber | null;
+  /** Explicit `strokeStyleResolution`, without inserting a runtime default. */ readonly strokeStyleResolution: SourceNumber | null;
+  /** Explicit `strokeStyleLineCapType`, without inserting a runtime default. */ readonly strokeStyleLineCapType: SourceEnum | null;
+  /** Explicit `strokeStyleLineJoinType`, without inserting a runtime default. */ readonly strokeStyleLineJoinType: SourceEnum | null;
+  /** Explicit `strokeStyleLineAlignment`, without inserting a runtime default. */ readonly strokeStyleLineAlignment: SourceEnum | null;
+  /** Explicit `strokeStyleBlendMode`, without inserting a runtime default. */ readonly strokeStyleBlendMode: SourceEnum | null;
+  /** Explicit `strokeStyleVersion`, without inserting a runtime default. */ readonly strokeStyleVersion: number | null;
+  /** Every dash slot, including a retained-only malformed slot represented by None. */ readonly dashes: readonly (SourceNumber | null)[] | null;
+  /** Explicit paint, selected by its object class. */ readonly paint: VectorStrokePaint | null;
+}
+/** Stored PaintSource; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorPaintSource {
+  /** Color, gradient stops, pattern, phase, offset and paint flags. Unknown entries stay in VectorSource. */ readonly settings: SourceSettings;
+  /** Explicit gradient aspect ratio. */ readonly aspect: SourceNumber | null;
+  /** Source color-book identifier, independent of displayed process values. */ readonly bookId: number | null;
+  /** Original color-book name UTF16, including termination. */ readonly bookName: Uint16Array | null;
+  /** Original named color UTF16, including termination. */ readonly colorName: Uint16Array | null;
+  /** Source color-book key bytes. */ readonly bookKey: Uint8Array | null;
+}
+/** Typed paint or an explicitly retained unknown class; rendering remains separately gated. */
+export type VectorStrokePaint =
+  | { readonly kind: 'solid' | 'gradient' | 'pattern'; readonly settings: VectorPaintSource }
+  | { readonly kind: 'retained'; readonly settings: null; readonly class: Uint8Array };
+
+
 
 /** Isolated Strong glyph coverage. Bounds are document-space pixels; no paint, layout or editor cache is produced. */
 export interface PsdCff2Coverage {
@@ -55,6 +191,11 @@ export interface PsdBudgetError extends Error {
   resource: string;
   requested: bigint;
   limit: bigint;
+}
+/** An audited buffer allocation failed. Other legacy allocations may still abort on exhaustion. */
+export interface PsdAllocationError extends Error {
+  name: 'PsdAllocationError';
+  requested: bigint;
 }
 
 
@@ -91,15 +232,29 @@ export type PsdProcessEdit =
   | { readonly kind: 'replaceProcessPlanes'; readonly layerId: number;
       /** Complete native process planes then alpha, matching existing bounds. Array bytes are checked before casting. */
       readonly planes: readonly (Uint8Array | readonly number[])[] }
+  | { /** Fixed-canvas RGB16 PSD/PSB translation. Requires canonical Q15 words and nonzero alpha at every stored edge.
+       * Masks, groups, coordinate dependencies and transparent borders refuse atomically. Encoded planes remain unchanged. */
+      readonly kind: 'moveProcessLayer'; readonly layerId: number;
+      /** Signed i32 horizontal pixels; translated bounds must pass the native coordinate budget. */ readonly dx: number;
+      /** Signed i32 vertical pixels; translated bounds must pass the native coordinate budget. */ readonly dy: number }
   | { readonly kind: 'setProcessOpacity'; readonly layerId: number; /** Integral native byte. */ readonly opacity: number }
   | { readonly kind: 'renameProcessLayer'; readonly layerId: number; /** Control-free valid Unicode, at most 255 UTF-16 units. */ readonly name: string };
-/** Existing version-2 Lab CMYK Photo Filter settings. Unsupported products refuse before publishing. */
-export interface PsdCmykPhotoFilterPatch {
+/** Existing version-2 Lab or version-3 XYZ CMYK settings. Color encoding must match the source. Unsupported products refuse atomically. */
+export type PsdCmykPhotoFilterPatch = {
   /** Integral 1..100; omission preserves source. */ readonly density?: number;
-  /** Encoded u16 Lab words, L in hundredths and signed a/b in hundredths represented as u16. */
-  readonly lab?: readonly [number, number, number];
   /** Preserve CMY luminance and source K; omission preserves source. */ readonly preserveLuminosity?: boolean;
-}
+} & (
+  | {
+      /** Version-2 encoded u16 Lab words. L is in hundredths, signed a/b hundredths are represented as u16. */
+      readonly lab?: readonly [number, number, number];
+      readonly xyz?: never;
+    }
+  | {
+      /** Version-3 source u32 XYZ words. High bits remain source data. Cannot accompany lab. */
+      readonly xyz?: readonly [number, number, number];
+      readonly lab?: never;
+    }
+);
 /** Nonvisual metadata writes. Every failed batch preserves revision and source bytes. */
 export type PsdStateMetadataEdit =
   | { readonly kind: 'compHeader'; readonly compId: number; readonly name?: string; readonly comment?: string }
@@ -116,11 +271,20 @@ export type PsdStateMetadataEdit =
   | { readonly kind: 'sliceName'; readonly sliceId: number; readonly name: string }
   /** Coordinates 1050 and existing 1054/slic. No URL is fetched; malformed dependencies refuse. */
   | { readonly kind: 'sliceUrl'; readonly sliceId: number; readonly url: string }
+  /** Existing positive i32 comp ID, all-layer visibility only. Coherent saved flat unmasked RGB8 rasters.
+   * Preserves IDs/flags/state 0 and current caches. Pending edits and unsupported captured domains refuse. */
+  | { readonly kind: 'captureCompVisibility'; readonly compId: number }
+  /** Positive exact signed-16.16 ppi without resampling. Plain RGB8 PSD rasters without XMP.
+   * Coordinates existing resolution/print/EXIF carriers and preserves units, unknown bytes and caches.
+   * Text/smart/vector/style/mask/state content and unsupported companion layouts refuse atomically. */
+  | { readonly kind: 'rasterResolution'; readonly ppi: number }
   /** Named refusals until complete dependent writers have native acceptance. */
   | { readonly kind: 'applyComp' | 'captureComp' | 'slices' | 'xmp' | 'printOptions' | 'resolution' };
 
 /** Linear interpolation/style only, with sampled sRGB and Dot Gain 20%. Other context refuses atomically. */
 export type LinearGradientFillPatch = Omit<GradientFillPatch, 'style'> & { readonly style?: 'linear' };
+/** Perceptual interpolation, Linear style, sampled sRGB and Dot Gain 20%. Other context refuses atomically. */
+export type PerceptualGradientFillPatch = Omit<GradientFillPatch, 'style'> & { readonly style?: 'linear' };
 /** Partial repaint of a sole RGB8 Classic canvas GdFl. Empty patch regenerates existing stops cache-free. */
 export interface GradientFillPatch {
   /** Finite degrees. Omitted fields retain descriptor precision. */ angle?: number;
@@ -131,6 +295,19 @@ export interface GradientFillPatch {
   /** Existing stop indices; components in 0 through 255, normalized as 255*f32(c/255). */ colors?: readonly {index: number; rgb: readonly [number,number,number]}[];
   /** Existing stop indices; opacity in 0 through 100, normalized to native byte opacity. */ opacities?: readonly {index: number; percent: number}[];
 }
+/** Replacement bytes are owned inputs; stored external paths are never read. Same-size positive-alpha
+ * untagged PNG, one identity Surface Blur stack, fresh distinct canonical UUIDs. */
+export interface PsdSurfaceBlurContents {
+  /** Caller-supplied noninterlaced untagged RGB8/RGBA8 PNG, at most 16,000,000 bytes, no zero alpha. */
+  readonly bytes: Uint8Array;
+  /** Nonempty stored filename without NUL or path separators. No file is opened at this name. */
+  readonly filename: string;
+  /** Fresh canonical UUID, distinct from placementId and both current source identities. */
+  readonly contentId: string;
+  /** Fresh canonical UUID shared by the new placement and regenerated FEid cache association. */
+  readonly placementId: string;
+}
+
 /** Bounded source edits for the sole smart layer over one opaque raster backdrop. No stored path is opened. */
 export type PsdSmartEdit =
   | {
@@ -142,7 +319,8 @@ export type PsdSmartEdit =
       kind: 'setSmartAxisTransform';
       quad: readonly [number, number, number, number, number, number, number, number];
       placementId: string;
-      /** Required host preference. Bilinear retains at least half of each source axis. */
+      /** Required host preference. Bilinear retains at least half of each axis, or uses exact
+       * power-of-two bins of at least four samples on both axes. */
       interpolation: 'nearestNeighbor' | 'bilinear';
     }
   | {
@@ -154,6 +332,15 @@ export type PsdSmartEdit =
     }
   /** These operations always throw Dependency with a smart.* propertyPath until separately certified. */
   | { readonly kind: 'duplicateSmart' | 'applySmartComp' | 'appendSmartFilter' | 'updateSmartLink' };
+/** Existing sole identity Surface Blur settings. Unsupported dependencies refuse atomically. */
+export interface PsdSurfaceBlurEdit {
+  /** Finite pixels in 0..100. The serialized binary64 radius retains its fractional precision. */
+  readonly radius: number;
+  /** Integer byte threshold in 2..255. */
+  readonly threshold: number;
+  /** Fresh canonical host UUID, distinct from both current content and placement UUIDs. */
+  readonly placementId: string;
+}
 /** Source-only rename. Names use the existing control-free, 255 UTF-16-unit limit. */
 export interface PsdContextRename {
   readonly layerId: number;
@@ -248,6 +435,10 @@ export type PsdGeometryEdit =
       /** Nonzero committed pixel width. */ width: number;
       /** Nonzero committed pixel height. */ height: number;
     }
+  | { /** Explicit save-shrinkwrap for visible RGB8 root boards with enabled auto-expand/shrinkwrap, equal integer origins
+       * and bounded raster/group descendants. Translates bounds, linked masks and reference points, updates origins/canvas,
+       * and strictly rebuilds merged pixels. Requires an explicit host gamma boolean. Failed/no-op edits preserve revision. */
+      kind: 'shrinkwrapArtboards' }
   | { /** Named refusal until coherent creation and extent policy exist. */ kind: 'createArtboard' }
   | {
       /** Translate a fixed-canvas RGB8 root board and plain Normal raster subtree, with ordinary linked masks.
@@ -258,7 +449,16 @@ export type PsdGeometryEdit =
       /** Integer horizontal displacement; translated coordinates must remain strictly within +/-2000. */ dx: number;
       /** Integer vertical displacement; translated coordinates must remain strictly within +/-2000. */ dy: number;
     }
-  | { /** Named refusal until parameters, paths and caches agree. */ kind: 'editLiveShape' }
+  | {
+      /** Integer translation of the sole unstroked type-1 live rectangle in bounded RGB8 PSD.
+       * Updates bbox/world corners/affine history/path and cache bounds together, retains exact channel
+       * streams, strictly regenerates merged pixels, and requires an explicit host gamma boolean.
+       * Masks, effects, strokes, pending edits, other shapes and coordinate dependencies refuse atomically. */
+      kind: 'editLiveShape';
+      /** Physical source index, currently zero for the sole admitted layer. */ recordIndex: number;
+      /** Integer horizontal displacement, within +/-1999 document pixels. */ dx: number;
+      /** Integer vertical displacement, within +/-1999 document pixels. */ dy: number;
+    }
   | { /** Named refusal until placement, resampling and caches agree. */ kind: 'replaceFrameContents' };
 /** Confirmed atomic mask/channel setters. All refusals preserve source bytes and revision. */
 export type PsdChannelEdit =
@@ -336,6 +536,7 @@ export interface PsdSourceSnapshot {
 }
 /** Persisted source properties. Null means absent, never a synthesized default. */
 export interface PsdSourceLayer {
+  /** Lossless vector authoring models and bounded frame query, without geometry/edit admission. */ readonly vector: PsdVectorSource;
   /** Index in the selected layer-info section. */ readonly recordIndex: number;
   /** Stored lyid, null if absent. */ readonly layerId: number | null;
   /** Raw lspf bits plus their named stored flags, null without lspf. */ readonly locks: SourceLocks | null;
@@ -597,6 +798,44 @@ export interface LegacyMode {
 }
 
 
+
+/** Confirmed imported queries. Source bytes remain the writing authority. */
+export interface PsdMetadataQueries {
+  /** Ordered persisted comps, null on refusal. Panel selection is not inferred. */
+  readonly compsList: readonly PsdImportedCompQuery[] | null;
+  /** Signed angle, default 30 when absent, null on refusal. */
+  readonly globalAngle: number | null;
+  /** Binary64 aspect ratio, default 1 when absent, null on refusal. Implausible-ratio correction is unresolved. */
+  readonly pixelScaleFactor: number | null;
+  /** Bounded XMP leaves; absent fields receive no empty defaults. Null on carrier refusal. */
+  readonly fileInfo: PsdImportedFileInfo | null;
+  /** Carrier or fileInfo/field reasons. Refused source bytes are retained. */
+  readonly refusals: Readonly<Record<string, string>>;
+}
+/** Persisted comp in source order, independent from the comp panel's selection. */
+export interface PsdImportedCompQuery {
+  /** Persistent source comp identity. */ readonly ID: number;
+  /** One-based position in resource 1065. */ readonly itemIndex: number;
+  /** Imported name. */ readonly title: string;
+  /** Omitted when the source has no comment. */ readonly comment?: string;
+  /** capturedInfo bit 1. */ readonly useVisibility: boolean;
+  /** capturedInfo bit 2. */ readonly usePosition: boolean;
+  /** capturedInfo bit 4. */ readonly useAppearance: boolean;
+  /** capturedInfo bit 8. */ readonly useChildLayerCompState: boolean;
+}
+/** Read-only J-metadata leaves. General XMP/IPTC editing and copyright reconciliation remain unresolved. */
+export interface PsdImportedFileInfo {
+  /** Photoshop AuthorsPosition. */ readonly bylineTitle?: string;
+  /** Photoshop CaptionWriter. */ readonly captionWriter?: string;
+  /** Photoshop City. */ readonly city?: string;
+  /** Photoshop Country. */ readonly countryName?: string;
+  /** Photoshop Credit. */ readonly credit?: string;
+  /** dc:subject Bag order, preserving duplicate entries. */ readonly keywords?: readonly string[];
+  /** Sole dc:title x-default. */ readonly objectName?: string;
+  /** Photoshop State. */ readonly provinceState?: string;
+}
+
+
 /**
  * Shared conservative account for explicit editor rename transactions.
  * Existing document models, supplied assets, batch strings and JS/WASM copies belong in retainedBytes.
@@ -627,7 +866,8 @@ export class PsdEditorSession {
    * Moves/scales the sole smart layer or replaces its embedded PNG atomically. Requires one opaque raster
    * backdrop and one unfiltered Normal smart layer in unprofiled RGB8, at integer upright in-canvas bounds.
    * setSmartAxisTransform requires a fresh placementId and explicit nearestNeighbor or bilinear interpolation.
-   * Bilinear retains at least half of each source axis; cubic scaling requires unavailable table state.
+   * Bilinear retains at least half of each source axis, or reduces both into exact power-of-two bins
+   * of at least four samples. Cubic scaling requires unavailable table state.
    * Replacement must have the same dimensions, positive alpha and fresh distinct host-generated UUIDs.
    * Updates SoLd/PlLd, linked bytes and lengths, parent channels/bounds and real merged data; omits thumbnails.
    * External/shared contents, filters and unsupported dependencies throw Dependency with propertyPath.
@@ -655,6 +895,7 @@ export class PsdEditorSession {
   selectComp(id?: number | null): void;
   /**
    * Applies native-plane replacement, opacity and rename commands atomically in Gray8/16, RGB16/32 or CMYK8.
+   * moveProcessLayer translates only alpha-tight canonical RGB16 rasters on the fixed PSD/PSB canvas.
    * IDs and bounds come from inspectProcess. Planes are complete big-endian native wire samples,
    * process channels first and alpha last; CMYK is inverted. No RGBA8 conversion occurs.
    * Requires explicit host gamma context, flat Normal rasters, measured native defaults and bounded samples.
@@ -697,11 +938,17 @@ export class PsdEditorSession {
    */
   editChannels(batch: readonly PsdChannelEdit[]): M01EditOutcome;
   /**
-   * Resizes a root artboard or translates one admitted raster subtree on a fixed canvas.
-   * RGB8 PSD only, canvas at most 2000x1000, coordinates within +/-2000, with auto-expand/shrinkwrap off.
+   * Resizes/translates a root artboard on a fixed canvas, or explicitly applies save-shrinkwrap.
+   * RGB8 PSD only, canvas at most 2000x1000, coordinates within +/-2000. Fixed-canvas edits require
+   * auto-expand/shrinkwrap off. shrinkwrapArtboards requires both enabled, visible root boards, complete
+   * integer origins and bounded raster/group descendants. It rebases the canvas, masks and reference points.
+   * Shrinkwrap requires an explicit linearBlending boolean; ordinary saves never invoke it implicitly.
    * Rebuilds merged RGB/alpha strictly and omits stale previews before publishing the revision.
-   * Move translates an admitted raster subtree; create, live-parameter edits and frame replacement refuse.
-   * Failure preserves bytes and revision. linearBlending is the host gamma-1 preference, false by default.
+   * Live edits translate one admitted unstroked rectangle and require an explicit blending boolean.
+   * Creation and frame replacement retain named typed refusals.
+   * A validated zero translation preserves bytes and revision; failures preserve the complete session.
+   * linearBlending is the host gamma-1 preference, required for live edits and shrinkwrap.
+   * Fixed-canvas board edits default to false.
    */
   editGeometry(edit: PsdGeometryEdit, linear_blending?: boolean | null): M01EditOutcome;
   /**
@@ -715,7 +962,8 @@ export class PsdEditorSession {
   planCffText(layer_id: number, text: string): PsdCffLayoutCachePlan;
   /**
    * Inspects full-precision persisted source fields for any parsed container, without RGB8 tree admission.
-   * Null leaves remain absent. This reads neither linked assets nor application-only state.
+   * Null leaves remain absent. Vector authoring includes separate bounded frame queries with explicit refusals.
+   * This reads neither linked assets nor application-only state and admits no new vector editing.
    */
   inspectSource(): PsdSourceSnapshot;
   /**
@@ -732,6 +980,18 @@ export class PsdEditorSession {
    */
   sourceSnapshot(): PsdContainerSnapshot;
   /**
+   * Changes the existing sole Surface Blur on one identity full-canvas embedded RGB8 PNG.
+   * Requires an untagged positive-alpha source and one opaque Normal backdrop, up to 512 per axis.
+   * Preserves content identity, PNG/link bytes, quads and source precision. A fresh canonical host
+   * placementId updates SoLd and FEid together. Rebuilds FEid input, parent and real merged caches,
+   * preserves the raw filter mask and removes stale thumbnails. Repeated edits use the original PNG.
+   * Existing Normal/Multiply returns and enabled unlinked white-extended masks admit integer density
+   * and feather 0, 0.5 or 2. linearBlending is required host gamma context; it is never inferred.
+   * Unknown settings/dependencies, stacks, transformed/shared/external sources, zero alpha and
+   * other modes/depths throw. Every failure preserves bytes and revision.
+   */
+  editSurfaceBlur(settings: PsdSurfaceBlurEdit, linear_blending: boolean): M01EditOutcome;
+  /**
    * Renames primary lyid/luni-only raster records through a shared allocation context.
    * Requires unique IDs and no staged semantic state or pending visual work. Other carriers refuse.
    * The context baseline must include the current source, supplied fonts, batch strings and host copies.
@@ -741,16 +1001,42 @@ export class PsdEditorSession {
    */
   renameInContext(batch: readonly PsdContextRename[], context: PsdAllocationContext): PsdPreparedSave;
   /**
+   * Repaints the selected source slot of a sole unmasked, full-strength Normal RGB8 canvas SoCo.
+   * recordIndex is the physical index from inspectSource, invalidated by structural edits.
+   * color null regenerates the existing source; otherwise three integral RGB8 components are required.
+   * Preserves nativeColor/userColor/Clr syntax and inactive values, rebuilding layer and merged caches
+   * atomically and removing stale thumbnails. linearBlending is the explicit host gamma-1 operand.
+   * Active non-RGB/HDR colors, non-sRGB profiles, shapes, styles, mirrors and multilayer scenes refuse.
+   * Type errors and dependency refusals preserve source bytes, pending edits and revision.
+   */
+  repaintSolidFill(record_index: number, color: readonly [number, number, number] | null, linear_blending: boolean): M01EditOutcome;
+  /**
    * Atomically changes bounded nonvisual metadata, including print captions and authored slice text.
    * Preserves pixels and unrelated carriers; guide edits regenerate both 1092 and 1032.
    * Active credentials, unknown versions, duplicate identities/carriers and other note encodings refuse.
    * printCaption coordinates existing 1083/1011 slots. sliceName admits existing authored v6/v7/v8
    * Unicode names; sliceUrl also coordinates its existing 1054/slic URL association without fetching it.
    * Names are at most 4096 UTF-16 units, URLs 65536; NUL, duplicate/missing carriers and automatic slices refuse.
-   * Comp application/capture, slice partitions, general print/resolution and XMP throw named Dependency errors.
+   * captureCompVisibility recaptures every layer into an existing unique comp on coherent saved flat
+   * unmasked RGB8 rasters. IDs, flags, state 0, other domains and current pixels/caches survive.
+   * Pending visual/tree edits, masks, styles, type, smart layers and ambiguous state mappings refuse.
+   * rasterResolution changes positive exact signed-16.16 ppi without resampling on plain RGB8 PSD rasters.
+   * Requires no XMP; coordinates existing 1005, optional 1083/Rslt and one in-place EXIF companion.
+   * Source units, unknown bytes and encoded pixels/previews survive. Unsupported companions and
+   * text/smart/vector/style/mask/state dependencies refuse; pending visual edits retain strict preparation.
+   * General comp application/capture, slice partitions, print/resolution and XMP throw Dependency errors.
    * Pending visual changes still require a strict render on prepareSave. Failure preserves revision/bytes.
    */
   editStateMetadata(edits: readonly PsdStateMetadataEdit[]): M01EditOutcome;
+  /**
+   * Applies an existing visibility-only comp on coherent saved flat unmasked RGB8 rasters.
+   * Preserves geometry, appearance and saved states, updates history and regenerates real merged pixels.
+   * compId must be a positive persistent i32 identity; capture flags must be 1 or 17.
+   * Requires unprofiled source, complete unique comp/state-0 mappings and explicit Boolean gamma.
+   * Tracks, masks, child state, other capture domains and pending visual edits throw typed errors,
+   * preserving bytes and revision. General applyComp and captureComp remain refused.
+   */
+  applyVisibilityComp(comp_id: number, linear_blending: boolean): M01EditOutcome;
   /**
    * Edits and repaints a sole Normal RGB8 Classic canvas GdFl, with all render-input caches removed.
    * Regenerates layer RGB/alpha and real merged caches atomically, omitting stale thumbnail 1036.
@@ -759,11 +1045,11 @@ export class PsdEditorSession {
    */
   repaintGradientFill(record_index: number, patch: GradientFillPatch, linear_blending?: boolean | null): M01EditOutcome;
   /**
-   * Changes existing version-2 Lab Photo Filter settings in the bounded CMYK8/16 two-layer product.
+   * Changes existing version-2 Lab or version-3 XYZ settings in the bounded CMYK8/16 two-layer product.
    * recordIndex comes from inspectSource. Requires the measured embedded coated profile,
    * opaque raw source, full strength, absent/default white mask and relative/BPC-on/dither-off context.
    * Rebuilds native merged data and depth carriers before publishing; removes stale previews.
-   * Other profiles, identity shortcuts, version-3 colors, unknown dependencies and unsupported
+   * Other profiles, identity shortcuts, incompatible Lab/XYZ patches, unknown dependencies and unsupported
    * graphs throw named errors atomically. Omitted patch fields preserve their exact source values.
    */
   setCmykPhotoFilter(record_index: number, patch: PsdCmykPhotoFilterPatch, linear_blending: boolean): M01EditOutcome;
@@ -790,6 +1076,23 @@ export class PsdEditorSession {
    * Other profiles, dither, shapes, masks, effects, extra layers and unknown inputs refuse atomically.
    */
   repaintLinearGradientFill(record_index: number, patch: LinearGradientFillPatch, linear_blending?: boolean | null): M01EditOutcome;
+  /**
+   * Replaces the embedded same-size positive-alpha PNG through one existing identity Surface Blur.
+   * Keeps complete filter/blend/mask source state and rebuilds FEid, parent and real merged pixels.
+   * Admits unprofiled RGB8, a full-canvas source up to 512 per axis, one opaque Normal backdrop,
+   * one enabled valid filter, a Normal/Multiply return and an enabled unlinked white-extended mask.
+   * Requires fresh distinct UUIDs and explicit Boolean gamma. Removes stale thumbnails on success.
+   * Unknown/shared/linked dependencies throw typed errors, preserving source bytes and revision.
+   */
+  replaceSurfaceBlurContents(replacement: PsdSurfaceBlurContents, linear_blending: boolean): M01EditOutcome;
+  /**
+   * Repaints explicit Perceptual interpolation with Linear style on a sole full-strength Normal RGB8 canvas GdFl.
+   * Requires the admitted sampled sRGB profile and Dot Gain 20% working Gray; linearBlending is the
+   * host gamma-1 preference, false by default. Empty patch regenerates without using source caches.
+   * Preserves straight hidden RGB at zero alpha, rebuilds real merged data and removes stale thumbnails.
+   * Other profiles, dither, shapes, masks, effects, extra layers and unknown inputs refuse atomically.
+   */
+  repaintPerceptualGradientFill(record_index: number, patch: PerceptualGradientFillPatch, linear_blending?: boolean | null): M01EditOutcome;
   /**
    * Opens an in-memory PSD/PSB. Untouched save works for any container the lossless parser accepts.
    * This bounded API does not claim paged input or arbitrary-size PSB support.
@@ -907,6 +1210,7 @@ export interface InitOutput {
   readonly psdallocationcontext_new: (a: any) => [number, number, number];
   readonly psdallocationcontext_retainedBytes: (a: number) => bigint;
   readonly psdeditorsession_addTextFont: (a: number, b: number, c: number, d: number) => [number, number];
+  readonly psdeditorsession_applyVisibilityComp: (a: number, b: any, c: any) => [number, number, number];
   readonly psdeditorsession_dispose: (a: number) => void;
   readonly psdeditorsession_edit: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_editCarriers: (a: number, b: any, c: any) => [number, number, number];
@@ -916,6 +1220,7 @@ export interface InitOutput {
   readonly psdeditorsession_editSmart: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editSource: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_editStateMetadata: (a: number, b: any) => [number, number, number];
+  readonly psdeditorsession_editSurfaceBlur: (a: number, b: any, c: any) => [number, number, number];
   readonly psdeditorsession_inspect: (a: number) => [number, number, number];
   readonly psdeditorsession_inspectProcess: (a: number) => [number, number, number];
   readonly psdeditorsession_inspectSource: (a: number) => [number, number, number];
@@ -927,6 +1232,9 @@ export interface InitOutput {
   readonly psdeditorsession_renameInContext: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_repaintGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
   readonly psdeditorsession_repaintLinearGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
+  readonly psdeditorsession_repaintPerceptualGradientFill: (a: number, b: number, c: any, d: number) => [number, number, number];
+  readonly psdeditorsession_repaintSolidFill: (a: number, b: any, c: any, d: any) => [number, number, number];
+  readonly psdeditorsession_replaceSurfaceBlurContents: (a: number, b: any, c: any) => [number, number, number];
   readonly psdeditorsession_revision: (a: number) => [bigint, number, number];
   readonly psdeditorsession_selectComp: (a: number, b: number, c: number) => [number, number];
   readonly psdeditorsession_selectedComp: (a: number) => [number, number, number];
@@ -942,6 +1250,7 @@ export interface InitOutput {
   readonly psdsourcehandle_writeUnchanged: (a: number, b: any, c: any) => [number, number];
   readonly rasterizeCff2Strong: (a: number, b: number, c: any, d: any, e: number, f: number, g: number) => [number, number, number];
   readonly readPsd: (a: number, b: number) => [number, number, number];
+  readonly readPsdMetadataQueries: (a: number, b: number) => [number, number, number];
   readonly readPsdSource: (a: number, b: number) => [number, number, number];
   readonly writePsd: (a: any, b: number, c: number) => [number, number, number, number];
   readonly __wbindgen_exn_store: (a: number) => void;

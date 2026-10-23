@@ -179,7 +179,8 @@ export function rasterizeCff2Strong(font_bytes, design_coordinates, character, s
 }
 
 /**
- * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
+ * Reads persisted styles, vectors, locks, labels, metadata and XMP without renderer admission.
+ * Vector frame queries are separate from stored values and report malformed-name/rectangle refusals.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
  * Physical record indices refer to the selected layer-info section and change after structural edits.
  * @param {Uint8Array} bytes
@@ -199,6 +200,23 @@ function _assertClass(instance, klass) {
     if (!(instance instanceof klass)) {
         throw new Error(`expected instance of ${klass.name}`);
     }
+}
+/**
+ * Reads the bounded J-metadata query model. Missing scalars use confirmed defaults 30 and 1.
+ * Refused carriers return null plus an explicit reason. File Info may contain independently
+ * admitted fields and field-specific refusals. This does not edit source, infer comp selection,
+ * reconcile copyright or normalize a document for saving.
+ * @param {Uint8Array} bytes
+ * @returns {PsdMetadataQueries}
+ */
+export function readPsdMetadataQueries(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsdMetadataQueries(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
 }
 
 const PsdDocumentHandleFinalization = (typeof FinalizationRegistry === 'undefined')
@@ -604,6 +622,9 @@ export class PsdDocumentHandle {
      * Conflicts throw in strict mode. In `approximate`, supported global-style cmap or coherent descender
      * conflicts select ordinary document mixing and retain the cached raster and CachedRaster diagnostic.
      * Other imports stay unresolved and keep their existing mixing and reporting.
+     * `grayProfile` optionally supplies caller-owned working-Gray ICC bytes as a `Uint8Array`.
+     * Modern transparent rectangle gradients require the admitted Dot Gain 20% profile explicitly;
+     * omitting it preserves their existing refusal/cache policy. No installed profile is read.
      * Visibility overrides apply to this render only. Throws `PsdUnsupportedError` naming the
      * first setting the compositor does not reproduce.
      * @param {any} options
