@@ -62,6 +62,24 @@ it('transfers typed budget refusals without breaking subsequent worker requests'
   }
 });
 
+it('preserves audited allocation failures through the facade and worker and permits another open', async () => {
+  const codec = await loadPsdViewer();
+  const refused = vi.spyOn(codec.PsdDocumentHandle, 'openWithBudget').mockImplementationOnce(() => {
+    throw Object.assign(new Error('buffer allocation failed'), { name: 'PsdAllocationError', requested: 4096n });
+  });
+  const { client } = connect();
+  try {
+    expect(await client.open(largePsb().buffer as ArrayBuffer)).toEqual({
+      ok: false,
+      error: { kind: 'allocation', message: 'buffer allocation failed', requested: 4096n }
+    });
+    expect(value(await client.open(largePsb().buffer as ArrayBuffer)).info.width).toBe(300000);
+  } finally {
+    refused.mockRestore();
+    client.dispose();
+  }
+});
+
 it('assembles cached fixture tiles and invalidates them after edits', async () => {
   const { client, sent } = connect();
   const bytes = await readFile(new URL('../src/features/examples/assets/adjustment-stack.psd', import.meta.url));

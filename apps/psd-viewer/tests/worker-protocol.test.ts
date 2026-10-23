@@ -1,4 +1,9 @@
-import { photoshopDefaultSettings, type PsdInterpolation, type PsdRenderSettings } from '@app-game/psd/viewer';
+import {
+  loadPsdViewer,
+  photoshopDefaultSettings,
+  type PsdInterpolation,
+  type PsdRenderSettings
+} from '@app-game/psd/viewer';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { expect, it, vi } from 'vitest';
@@ -52,6 +57,30 @@ const interpolations: PsdInterpolation[] = [
   'bicubicSharper',
   'bicubicAutomatic'
 ];
+
+it('reuses detection renders for equal Gray profiles and invalidates them when profile bytes change', async () => {
+  const { client } = connect();
+  const opened = value(await client.open(await example('adjustment-stack.psd')));
+  const codec = await loadPsdViewer();
+  const render = vi.spyOn(codec.PsdDocumentHandle.prototype, 'render');
+  const profiled = { ...settings, grayProfile: Uint8Array.of(1, 2, 3) };
+  try {
+    value(await client.detectBlending(opened.document, profiled, []));
+    const detected = render.mock.calls.length;
+    expect(detected).toBeGreaterThan(0);
+    value(await client.render(opened.document, { ...profiled, grayProfile: profiled.grayProfile.slice() }, []));
+    expect(render).toHaveBeenCalledTimes(detected);
+
+    value(await client.detectBlending(opened.document, profiled, []));
+    const beforeChange = render.mock.calls.length;
+    value(await client.render(opened.document, { ...profiled, grayProfile: Uint8Array.of(1, 2, 4) }, []));
+    expect(render).toHaveBeenCalledTimes(beforeChange + 1);
+    expect(render.mock.lastCall?.[0]).toMatchObject({ grayProfile: Uint8Array.of(1, 2, 4) });
+  } finally {
+    render.mockRestore();
+    client.dispose();
+  }
+});
 
 it('opens, renders and compares an example our renderer reproduces exactly', async () => {
   const { client } = connect();
