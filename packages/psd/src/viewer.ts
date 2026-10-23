@@ -5,6 +5,7 @@ import type {
   PsdFontLibrary as FontLibraryHandle,
   PsdBudgetOptions as BudgetOptions,
   PsdBudgetError as BudgetError,
+  PsdAllocationError as AllocationError,
   PsdDocumentHandle,
   PsdRegionPixels as RegionPixels,
   PsdRegionRect as RegionRect,
@@ -193,11 +194,13 @@ export type PsdResult<T> = { ok: true; value: T } | { ok: false; error: PsdFailu
  * as Photoshop does ({@link openPsdLikePhotoshop}) fails with `refused` when Photoshop does not open the file, the
  * message naming Photoshop's behavior, and with `needsAnswer` when Photoshop asks `prompt` first, the message being the
  * prompt's text. `budget` is a host policy refusal, with the resource, requested amount and limit preserved from WASM.
+ * `allocation` means an audited buffer allocation failed, preserving its requested byte count.
  */
 export type PsdFailure =
   | { kind: 'unsupported' | 'invalid' | 'refused'; message: string }
   | { kind: 'needsAnswer'; message: string; prompt: PsdOpenPrompt }
-  | ({ kind: 'budget'; message: string } & Pick<BudgetError, 'resource' | 'requested' | 'limit'>);
+  | ({ kind: 'budget'; message: string } & Pick<BudgetError, 'resource' | 'requested' | 'limit'>)
+  | ({ kind: 'allocation'; message: string } & Pick<AllocationError, 'requested'>);
 
 /** An open document. Every call is synchronous; run it in a worker for large files. */
 export type PsdViewerDocument = {
@@ -303,6 +306,11 @@ export type PsdViewerDocument = {
  * older viewer modules ignore.
  */
 export type PsdRenderSettings = {
+  /**
+   * Caller-owned working-Gray ICC bytes. Modern transparent rectangle gradients require the admitted
+   * Dot Gain 20% profile. Omission keeps their existing refusal/cache policy; no installed profile is read.
+   */
+  grayProfile?: Uint8Array | null;
   /** Color Settings' "Blend RGB Colors Using Gamma 1.0": mix coverage in linear light. Off by default. */
   linearBlending: boolean;
   /** "Blend Text Colors Using Gamma", 1.45 by default; `null` when off. */
@@ -1082,8 +1090,17 @@ function attempt<T>(run: () => T): PsdResult<T> {
   }
 }
 
-/** Preserves typed budget refusals; unsupported features and unreadable input remain separate failures. */
+/** Preserves typed budget/allocation failures separately from unsupported features and unreadable input. */
 function toFailure(error: unknown): PsdFailure {
+  if (
+    error instanceof Error &&
+    error.name === 'PsdAllocationError' &&
+    'requested' in error &&
+    typeof error.requested === 'bigint'
+  ) {
+    return { kind: 'allocation', message: error.message, requested: error.requested };
+  }
+
   if (
     error instanceof Error &&
     error.name === 'PsdBudgetError' &&

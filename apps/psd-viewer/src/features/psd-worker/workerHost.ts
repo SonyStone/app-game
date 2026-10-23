@@ -369,8 +369,13 @@ function failed(request: PsdRequest, error: PsdFailure): PsdReply {
 
 /** Identifies a render request by its settings and visibility overrides, whatever the order of the settings' fields. */
 function renderKey(settings: PsdRenderSettings, visibility: [number, boolean][]): string {
+  const { grayProfile, ...scalarSettings } = settings;
   // The key list also filters nested objects, so it names the keys of a saved state too.
-  return JSON.stringify([settings, visibility], [...Object.keys(settings), 'frame', 'comp'].sort());
+  // Keep profile bytes in an array: the scalar-key whitelist would erase a Uint8Array's numeric keys.
+  return JSON.stringify(
+    [scalarSettings, visibility, grayProfile ? Array.from(grayProfile) : null],
+    [...Object.keys(scalarSettings), 'frame', 'comp'].sort()
+  );
 }
 
 /** Whether the second of two differing-sample counts is smaller: `null` when either is missing or they are equal. */

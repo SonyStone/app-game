@@ -26,6 +26,33 @@ export async function writePsd(document: PsdDocument, composite: Uint8Array): Pr
 }
 
 /**
+ * Reads persisted styles, vector authoring data, locks, labels and metadata without renderer admission.
+ * Null leaves remain absent; vector frame queries carry their own refusal reasons. Record indices change
+ * after structural edits. This parses the complete supplied file and throws for unreadable input.
+ */
+export async function readPsdSource(bytes: ArrayBuffer | Uint8Array): Promise<PsdSourceSnapshot> {
+  const codec = await loadPsd();
+  return codec.readPsdSource(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
+}
+
+/** Persisted source data, including lossless vector carriers and bounded frame queries. */
+export type PsdSourceSnapshot = ReturnType<Codec['readPsdSource']>;
+
+/**
+ * Reads imported comps, global angle, pixel aspect ratio and bounded File Info leaves.
+ * Missing angle/aspect use 30/1; refused carriers return null with reasons in `refusals`.
+ * Source bytes remain authoritative for saving; comp selection is never inferred.
+ * This parses the complete supplied file and throws for unreadable input.
+ */
+export async function readPsdMetadataQueries(bytes: ArrayBuffer | Uint8Array): Promise<PsdMetadataQueries> {
+  const codec = await loadPsd();
+  return codec.readPsdMetadataQueries(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
+}
+
+/** Imported metadata with independent carrier and File Info field refusals. */
+export type PsdMetadataQueries = ReturnType<Codec['readPsdMetadataQueries']>;
+
+/**
  * Loads and initializes the codec once; concurrent calls share the work and a failed attempt can be retried.
  * Browsers fetch the adjacent `.wasm` asset, Node reads it from disk. `input` overrides the module source.
  */
