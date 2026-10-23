@@ -42,7 +42,9 @@ const boardSchema = z.object({
           id: z.string(),
           kind: z.string(),
           cell: z.object({ column: z.number().int(), row: z.number().int() }),
-          span: z.object({ columns: z.number().int().min(1), rows: z.number().int().min(1) })
+          span: z.object({ columns: z.number().int().min(1), rows: z.number().int().min(1) }),
+          looks: z.record(z.string(), z.string()).optional(),
+          popup: z.string().optional()
         })
       )
     })

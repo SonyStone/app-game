@@ -1,4 +1,5 @@
 import { createEventListener } from '@solid-primitives/event-listener';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintVariantProps } from '..';
 import {
@@ -12,15 +13,19 @@ import {
 import { BoardView } from './BoardView';
 import { createBoard } from './createBoard';
 import styles from './LegoStudio.module.css';
-import { pitch } from './board';
-import { ColorDiscFor, ValuePart, type Popup } from './parts';
+import { findPart } from './board';
+import { ColorPicker } from './colorLooks';
+import { LookChooser } from './LookChooser';
+import { chooseLook, choosePopup } from './looks';
+import { ValuePart, type Popup } from './parts';
 
 /**
  * The LEGO variant, a prototype of a UI built like printed LEGO tiles: panels lie freely on the drawing, each a plate
  * of studs, and parts sit on the studs in any whole number of cells. A part shows more the larger it is, like an
  * Android widget: a brush is a stroke sample, then gets its name, then a large sample; a value is a knob that opens a
  * slider, then a slider itself. Parts never overlap; placing or growing one pushes the others aside, and that is how
- * a panel grows. Only popups float over them.
+ * a panel grows. Only popups float over them. A part with several looks, such as the color, takes the one chosen for
+ * its size (a swatch, a mini disc, any of the library's pickers) and opens the picker chosen for it.
  *
  * "Edit" shows the studs and the box of parts: drag parts out of the box, between panels and back, size them by
  * their corner and move panels by their rim (see `BoardView`). The board is kept per device.
@@ -29,6 +34,7 @@ export function LegoStudio(props: PaintVariantProps) {
   const [editing, setEditing] = createSignal(false);
   const [popup, setPopup] = createSignal<{ popup: Popup; rect: DOMRect }>();
   const [popupElement, setPopupElement] = createSignal<HTMLElement>();
+  const popupSize = createElementSize(popupElement);
   const session = createPaintSession({ panel: () => popup()?.popup.kind });
   const board = createBoard();
 
@@ -70,8 +76,8 @@ export function LegoStudio(props: PaintVariantProps) {
       return undefined;
     }
 
-    const size = open.popup.kind === 'color' ? { width: 232, height: 232 } : { width: 5 * pitch + 8, height: 56 };
-    return besideAnchor(open.rect, size, session.size());
+    // Placed by its measured size; it stays hidden until measured.
+    return besideAnchor(open.rect, { width: popupSize.width ?? 0, height: popupSize.height ?? 0 }, session.size());
   };
 
   return (
@@ -92,11 +98,34 @@ export function LegoStudio(props: PaintVariantProps) {
             <div
               ref={setPopupElement}
               class={styles.popup}
-              style={{ left: `${place().x}px`, top: `${place().y}px` }}
+              style={{
+                left: `${place().x}px`,
+                top: `${place().y}px`,
+                visibility: popupSize.width ? undefined : 'hidden'
+              }}
             >
               <Switch>
-                <Match when={popup()?.popup.kind === 'color'}>
-                  <ColorDiscFor session={session} />
+                <Match when={popup()?.popup.kind === 'color' && popup()!.popup}>
+                  {(open) => (
+                    <ColorPicker look={(open() as Extract<Popup, { kind: 'color' }>).look} session={session} />
+                  )}
+                </Match>
+                <Match when={popup()?.popup.kind === 'looks' && popup()!.popup}>
+                  {(open) => {
+                    const id = () => (open() as Extract<Popup, { kind: 'looks' }>).id;
+                    return (
+                      <Show when={findPart(board.board(), id())?.part}>
+                        {(part) => (
+                          <LookChooser
+                            part={part()}
+                            session={session}
+                            onLook={(look) => board.set(chooseLook(board.latest(), id(), part().span, look))}
+                            onPopup={(look) => board.set(choosePopup(board.latest(), id(), look))}
+                          />
+                        )}
+                      </Show>
+                    );
+                  }}
                 </Match>
                 <Match when={popup()?.popup.kind === 'value' && popup()!.popup}>
                   {(open) => (

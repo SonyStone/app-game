@@ -17,8 +17,20 @@ export type Board = { panels: Panel[] };
  */
 export type Panel = { id: string; at: Point; parts: Part[] };
 
-/** A part on a panel: what it is (`kind`, see `parts.tsx`), its top-left cell and the cells it covers. */
-export type Part = { id: string; kind: string; cell: Cell; span: Span };
+/**
+ * A part on a panel: what it is (`kind`, see `parts.tsx`), its top-left cell and the cells it covers. A part with
+ * several looks keeps the ones the user chose per size (see `looks.ts`) and what it opens on a tap.
+ */
+export type Part = {
+  id: string;
+  kind: string;
+  cell: Cell;
+  span: Span;
+  /** Look ids by `spanKey` of the size they were chosen at. */
+  looks?: Record<string, string>;
+  /** The look its popup shows; the kind's default when absent. */
+  popup?: string;
+};
 
 export type Point = { x: number; y: number };
 export type Cell = { column: number; row: number };

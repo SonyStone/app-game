@@ -6,9 +6,9 @@ import type { PaintSession } from '../../features/session';
 import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { geometricFraction, geometricValue, linearFraction, linearValue } from '../procreate/sliderScale';
-import { ColorDisc } from '../zen/ColorDisc';
 import { PresetStroke } from '../zen/PresetStroke';
 import { cellGap, pitch, type Span } from './board';
+import { autoColorLook, colorLooks, colorPopups, ColorPicker, defaultColorPopup, setColor } from './colorLooks';
 import styles from './LegoStudio.module.css';
 
 /** The drawing session the parts work on. */
@@ -23,20 +23,27 @@ const scrubLength = 300;
 /** Single-button actions. */
 export type ActionKind = 'undo' | 'redo' | 'eraser' | 'local-undo';
 
-/** What a part can open floating over the board: its value as a full slider, or the color disc. */
-export type Popup = { kind: 'value'; value: ValueKind } | { kind: 'color' };
+/**
+ * What floats over the board: a value as a full slider, a color picker (a look of `colorPopups`), or the chooser of
+ * part `id`'s looks.
+ */
+export type Popup = { kind: 'value'; value: ValueKind } | { kind: 'color'; look: string } | { kind: 'looks'; id: string };
 
 /**
  * One part of the board at its size, like an Android widget: the more cells it covers, the more it shows. A brush is
  * a stroke sample alone at one cell, gets its name once it is two cells wide and a large sample once it is two cells
  * tall; a value is a knob at one cell and a slider once longer, lying along its longer side; an action gets its name
- * once two cells wide; the color shows its hex once wide and becomes the whole color disc at 5×5 cells. `kind` is
- * `preset:<id>`, `value:<ValueKind>`, `action:<ActionKind>` or `color`.
+ * once two cells wide. The color has looks to choose from (see `partLooks`). `kind` is `preset:<id>`,
+ * `value:<ValueKind>`, `action:<ActionKind>` or `color`.
  */
 export function PartView(props: {
   kind: string;
   span: Span;
   session: Session;
+  /** The look it shows, for kinds with looks; the kind's automatic look for the span when absent. */
+  look?: string;
+  /** The look its popup shows, for kinds with looks; the kind's default when absent. */
+  popupLook?: string;
   /** Opens `popup` beside `anchor`; see `Popup`. */
   onPopup: (anchor: Element, popup: Popup) => void;
 }) {
@@ -63,8 +70,9 @@ export function PartView(props: {
       <Match when={parsed()?.type === 'color'}>
         <ColorPart
           span={props.span}
+          look={props.look ?? autoColorLook(props.span)}
           session={props.session}
-          onPopup={(anchor) => props.onPopup(anchor, { kind: 'color' })}
+          onPopup={(anchor) => props.onPopup(anchor, { kind: 'color', look: props.popupLook ?? defaultColorPopup })}
         />
       </Match>
     </Switch>
@@ -84,6 +92,16 @@ export const boxKinds = [
   'value:saturation',
   'value:brightness'
 ];
+
+/**
+ * The looks a part of `kind` can take and what it can open (see `looks.ts`), with the look it shows for a span until
+ * one is chosen; `undefined` for kinds with a single look.
+ */
+export function partLooks(kind: string) {
+  return kind === 'color'
+    ? { looks: colorLooks, auto: autoColorLook, popups: colorPopups, defaultPopup: defaultColorPopup }
+    : undefined;
+}
 
 /** A part's name, for the box's tooltips and screen readers. */
 export function kindLabel(kind: string, session: Session) {
@@ -215,15 +233,6 @@ const values: Record<
       `linear-gradient(to var(--track-to), ${hsvToHex({ ...hsv, v: 0 })}, ${hsvToHex({ ...hsv, v: 1 })})`
   }
 };
-
-/** Paints in `color` (`#rrggbb` or HSV) from now on; the eraser gives way to the brush. */
-function setColor(session: Session, color: string | Hsv) {
-  if (session.tool() === 'eraser') {
-    session.chooseTool('brush');
-  }
-
-  session.tools.updateBrush({ color: typeof color === 'string' ? color : hsvToHex(color) });
-}
 
 /**
  * The HSV of the session's brush color. Greys and black keep the hue and saturation they were reached from, so
@@ -383,20 +392,19 @@ function ActionPart(props: { action: ActionKind; span: Span; session: Session })
   }
 }
 
-/** Covers at least this many cells each way before the color part shows the whole disc. */
-const discCells = 5;
-
-function ColorPart(props: { span: Span; session: Session; onPopup: (anchor: Element) => void }) {
+/** The color: a swatch (with its hex once two cells wide) that opens its popup on a tap, or a picker in place. */
+function ColorPart(props: { span: Span; look: string; session: Session; onPopup: (anchor: Element) => void }) {
   const color = () => props.session.brush().color;
-  const inline = () => props.span.columns >= discCells && props.span.rows >= discCells;
 
   return (
     <Show
-      when={!inline()}
+      when={props.look === 'swatch'}
       fallback={
-        <div class={styles.inlineDisc} style={{ '--disc-scale': `${Math.min(length(props.span.columns), length(props.span.rows)) / 232}` }}>
-          <ColorDiscFor session={props.session} />
-        </div>
+        <ColorPicker
+          look={props.look}
+          session={props.session}
+          box={{ width: length(props.span.columns), height: length(props.span.rows) }}
+        />
       }
     >
       <button
@@ -413,11 +421,3 @@ function ColorPart(props: { span: Span; session: Session; onPopup: (anchor: Elem
     </Show>
   );
 }
-
-/** The Zen variant's color disc on the session's brush color. */
-export function ColorDiscFor(props: { session: Session }) {
-  return (
-    <ColorDisc color={props.session.brush().color} onInput={(color) => setColor(props.session, color)} onCommit={() => {}} />
-  );
-}
-

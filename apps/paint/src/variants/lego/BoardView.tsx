@@ -20,7 +20,8 @@ import {
 } from './board';
 import type { createBoard } from './createBoard';
 import styles from './LegoStudio.module.css';
-import { boxKinds, kindLabel, PartView, type Popup, type Session } from './parts';
+import { resolveLook } from './looks';
+import { boxKinds, kindLabel, partLooks, PartView, type Popup, type Session } from './parts';
 
 /**
  * The board over the drawing: its panels, and in edit mode the studs, the box of parts and the drags that change it.
@@ -28,7 +29,7 @@ import { boxKinds, kindLabel, PartView, type Popup, type Session } from './parts
  * While editing, a part dragged anywhere lifts and follows the pointer: over a panel (or one cell beside it) it takes
  * the nearest cell and pushes the parts in its way aside, which also grows the panel; over the bare drawing it starts
  * a panel of its own; over the box it is put away. Its corner handle sizes it in whole cells, pushing neighbours right
- * and down. A panel dragged by its rim moves freely. Each drag shows its result while it lasts and is kept on lift.
+ * and down; a part with several looks also has a handle opening their chooser. A panel dragged by its rim moves freely. Each drag shows its result while it lasts and is kept on lift.
  * Outside edit mode parts simply work.
  */
 export function BoardView(props: {
@@ -160,14 +161,35 @@ export function BoardView(props: {
                       }}
                       onPointerDown={(event) => {
                         if (props.editing) {
-                          startPartDrag(event, { id: part().id, kind: part().kind, span: part().span });
+                          const { id, kind, span, looks, popup } = part();
+                          startPartDrag(event, { id, kind, span, looks, popup });
                         }
                       }}
                     >
                       <Show when={!isLifted()}>
                         <div class={styles.content} inert={props.editing || undefined}>
-                          <PartView kind={part().kind} span={part().span} session={props.session} onPopup={props.onPopup} />
+                          <PartView
+                            kind={part().kind}
+                            span={part().span}
+                            look={lookOf(part())}
+                            popupLook={part().popup}
+                            session={props.session}
+                            onPopup={props.onPopup}
+                          />
                         </div>
+                      </Show>
+                      <Show when={props.editing && !isLifted() && partLooks(part().kind)}>
+                        <button
+                          type="button"
+                          class={styles.looksHandle}
+                          aria-label="Choose look"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) =>
+                            props.onPopup(event.currentTarget.parentElement!, { kind: 'looks', id: part().id })
+                          }
+                        >
+                          ⇄
+                        </button>
                       </Show>
                       <Show when={props.editing && !isLifted()}>
                         <span
@@ -201,7 +223,13 @@ export function BoardView(props: {
             }}
           >
             <div class={styles.content} inert>
-              <PartView kind={current().kind} span={current().span} session={props.session} onPopup={() => {}} />
+              <PartView
+                kind={current().kind}
+                span={current().span}
+                look={lookOf(current())}
+                session={props.session}
+                onPopup={() => {}}
+              />
             </div>
           </div>
         )}
@@ -237,7 +265,7 @@ export function BoardView(props: {
   );
 
   /** Lifts a part from the board, or a new one from the box. */
-  function startPartDrag(event: PointerEvent, part: { id: string; kind: string; span: Span }) {
+  function startPartDrag(event: PointerEvent, part: Lifted) {
     event.preventDefault();
     const rect = (event.currentTarget as Element).getBoundingClientRect();
     const board = props.board.latest();
@@ -321,7 +349,7 @@ export function BoardView(props: {
       x: corner.x + (drag.span.columns * pitch) / 2,
       y: corner.y + (drag.span.rows * pitch) / 2
     };
-    const part = { id: drag.id, kind: drag.kind, span: drag.span };
+    const part = { id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks, popup: drag.popup };
 
     // The top-most panel whose cells, or one ring of cells around them, lie under the part's center.
     for (const panel of [...drag.base.panels].reverse()) {
@@ -370,21 +398,27 @@ export function BoardView(props: {
  * every move computes its result afresh.
  */
 type Drag = { pointer: number; point: Point; base: Board } & (
-  | {
+  | (Lifted & {
       type: 'part';
-      id: string;
-      kind: string;
-      span: Span;
       /** Where the pointer holds the part, from its top-left corner. */
       grab: Point;
       /** The pointer position whose drop the board shows; it lags `point` while a drop would push parts aside. */
       settled: Point;
       /** The id a new panel gets if the part lands on the bare drawing. */
       newPanel: string;
-    }
+    })
   | { type: 'resize'; panel: string; id: string; span: Span; start: Point }
   | { type: 'panel'; panel: string; grab: Point }
 );
+
+/** A part as it is carried: everything but the cell it will land on. */
+type Lifted = Omit<Part, 'cell'>;
+
+/** The look a part shows at its span, for kinds with several; see `looks.ts`. */
+function lookOf(part: Lifted) {
+  const options = partLooks(part.kind);
+  return options && resolveLook(part.looks, part.span, options.looks, options.auto(part.span));
+}
 
 /**
  * Milliseconds a lifted part must rest over a spot before the parts in its way move aside, after Android's launcher:

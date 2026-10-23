@@ -308,15 +308,6 @@
   font-family: ui-monospace, monospace;
 }
 
-.inlineDisc {
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-
-  > * {
-    scale: var(--disc-scale);
-  }
-}
 
 /* Popups: the only things that float over parts. */
 
@@ -325,7 +316,7 @@
   z-index: 20;
   padding: 8px;
   border-radius: 14px;
-  background: var(--lego-plate);
+  background: rgb(36 38 44);
   box-shadow: var(--lego-shadow);
 }
 
@@ -413,4 +404,130 @@
 
 .editButton[data-active] {
   background: var(--lego-accent);
+}
+
+/* Looks */
+
+/* A picker scaled into its part, centered whatever its scale. */
+.fitted {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+
+  > * {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+  }
+}
+
+/* The light card the library's light pickers stand on, in a part or a popup. */
+.pickerSurface {
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--lego-tile);
+}
+
+.procreateSurface {
+  border-radius: 14px;
+  background: var(--pc-card-solid);
+  overflow: hidden;
+}
+
+.desktopSurface {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* The handle opening a part's looks, in its top-right corner while editing. */
+.looksHandle {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--lego-accent);
+  color: #ffffff !important;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.chooser {
+  display: grid;
+  gap: 8px;
+  max-width: calc(4 * 112px + 3 * 8px);
+  color: #ffffff;
+
+  h3 {
+    margin: 4px 2px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgb(255 255 255 / 0.7);
+  }
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(4, 112px);
+  gap: 8px;
+}
+
+.choice {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.06);
+  color: #ffffff !important;
+  cursor: pointer;
+}
+
+.choice[data-selected] {
+  background: rgb(61 126 255 / 0.3);
+  box-shadow: inset 0 0 0 2px var(--lego-accent);
+}
+
+.choice:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.choiceLabel {
+  font-size: 12px;
+  text-align: center;
+}
+
+.choiceNote {
+  font-size: 11px;
+  color: rgb(255 255 255 / 0.6);
+}
+
+/* A choice's live miniature. */
+.preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+}
+
+.previewTile {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--lego-tile);
 }
