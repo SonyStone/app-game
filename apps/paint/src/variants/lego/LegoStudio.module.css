@@ -1,0 +1,416 @@
+.editor {
+  /* The Zen color disc reads these. */
+  --zen-surface: #ffffff;
+  --zen-line: rgb(0 0 0 / 0.12);
+  --lego-plate: rgb(36 38 44 / 0.92);
+  --lego-tile: #f4f2ee;
+  --lego-ink: #24262c;
+  --lego-quiet: #7c7f88;
+  --lego-accent: #3d7eff;
+  --lego-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px rgb(0 0 0 / 0.16);
+
+  background: #faf8f4;
+  color: var(--lego-ink);
+  font:
+    13px/1.3 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+
+  canvas:focus {
+    outline: none;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+/* The layer over the drawing; only its children take presses. */
+.ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.board {
+  position: absolute;
+  inset: 0;
+  pointer-events: none !important;
+}
+
+/* A panel: a dark plate the parts lie on. In edit mode its studs show between and under the parts. */
+.panel {
+  position: absolute;
+  border-radius: 10px;
+  background: var(--lego-plate);
+  box-shadow: var(--lego-shadow);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.board[data-editing] .panel {
+  cursor: grab;
+  background-color: var(--lego-plate);
+  background-image: radial-gradient(circle, rgb(255 255 255 / 0.22) 0 9px, rgb(255 255 255 / 0.07) 10px, transparent 11px);
+  background-size: 48px 48px;
+  /* Stud centers on the cells' centers: the cell (0, 0) corner plus half a cell, less half the 48 px tile. */
+  background-position: calc(var(--stud-x) - 2px) calc(var(--stud-y) - 2px);
+  outline: 1.5px dashed rgb(255 255 255 / 0.28);
+  outline-offset: 3px;
+}
+
+/* A part: a flat tile on the studs, its print filling it edge to edge. */
+.part {
+  position: absolute;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--lego-tile);
+  transition:
+    left 120ms ease-out,
+    top 120ms ease-out,
+    width 120ms ease-out,
+    height 120ms ease-out;
+}
+
+.board[data-editing] .part {
+  cursor: grab;
+  touch-action: none;
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.25);
+}
+
+/* Where the lifted part will land. */
+.part[data-lifted] {
+  background: rgb(255 255 255 / 0.12);
+  outline: 2px dashed rgb(255 255 255 / 0.7);
+  outline-offset: -2px;
+}
+
+/* The lifted part following the pointer. */
+.ghost {
+  z-index: 10;
+  transition: none;
+  cursor: grabbing;
+  scale: 1.06;
+  box-shadow: 0 12px 30px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+
+.ghost[data-discard] {
+  opacity: 0.45;
+}
+
+.content {
+  position: absolute;
+  inset: 0;
+  display: grid;
+
+  > * {
+    min-width: 0;
+    min-height: 0;
+  }
+}
+
+/* The resize handle in a part's bottom-right corner. */
+.corner {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, var(--lego-accent) 50%);
+  border-bottom-right-radius: 7px;
+}
+
+.unknown {
+  display: grid;
+  place-items: center;
+  color: var(--lego-quiet);
+}
+
+.name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+/* Brushes */
+
+.preset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.preset.large {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0 0 4px;
+  gap: 0;
+
+  .name {
+    padding: 0 8px;
+  }
+}
+
+.preset[data-active] {
+  background: #dde7ff;
+  box-shadow: inset 0 0 0 2px var(--lego-accent);
+}
+
+.sample {
+  flex: none;
+  overflow: hidden;
+}
+
+/* Values */
+
+.knob {
+  display: grid;
+  place-items: center;
+  cursor: ew-resize;
+  touch-action: none;
+  font-weight: 600;
+  font-size: 12px;
+  background: conic-gradient(var(--lego-accent) var(--fraction), #dad7d0 0);
+
+  span {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--swatch, var(--lego-tile));
+    color: var(--swatch-ink, var(--lego-ink));
+    box-shadow: 0 0 0 2px var(--lego-tile);
+  }
+}
+
+.slider {
+  position: relative;
+  touch-action: none;
+  cursor: pointer;
+  background: #dad7d0;
+}
+
+.fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--fraction);
+  background: var(--lego-accent);
+}
+
+.thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: clamp(3px, calc(var(--fraction) - 3px), calc(100% - 9px));
+  width: 6px;
+  border-radius: 3px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.3);
+}
+
+.vertical {
+  .fill {
+    top: auto;
+    right: 0;
+    width: auto;
+    height: var(--fraction);
+  }
+
+  .thumb {
+    left: 3px;
+    right: 3px;
+    top: auto;
+    bottom: clamp(3px, calc(var(--fraction) - 3px), calc(100% - 9px));
+    width: auto;
+    height: 6px;
+  }
+
+  .sliderLabel {
+    writing-mode: vertical-rl;
+    rotate: 180deg;
+    flex-direction: row-reverse;
+    padding: 8px 0;
+  }
+}
+
+/* Color tracks show their gradient instead of a fill. */
+.colored .fill {
+  display: none;
+}
+
+.sliderLabel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+  font-weight: 600;
+  pointer-events: none;
+  color: var(--lego-ink);
+
+  span {
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgb(255 255 255 / 0.72);
+  }
+}
+
+/* Actions */
+
+.action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.action:disabled {
+  color: var(--lego-quiet);
+  opacity: 0.5;
+}
+
+.action[data-active] {
+  background: #dde7ff;
+  box-shadow: inset 0 0 0 2px var(--lego-accent);
+}
+
+/* Color */
+
+.color {
+  display: grid;
+  place-items: end start;
+  padding: 6px 8px;
+  border: 0;
+  cursor: pointer;
+  font-family: ui-monospace, monospace;
+}
+
+.inlineDisc {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+
+  > * {
+    scale: var(--disc-scale);
+  }
+}
+
+/* Popups: the only things that float over parts. */
+
+.popup {
+  position: absolute;
+  z-index: 20;
+  padding: 8px;
+  border-radius: 14px;
+  background: var(--lego-plate);
+  box-shadow: var(--lego-shadow);
+}
+
+.popupSlider {
+  position: relative;
+  display: grid;
+  width: calc(5 * 48px - 4px);
+  height: 44px;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+/* The box of parts and the edit button */
+
+.box {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 24px);
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgb(20 21 25 / 0.94);
+  color: #ffffff;
+  box-shadow: var(--lego-shadow);
+  pointer-events: auto;
+}
+
+.boxTitle {
+  flex: none;
+  width: 120px;
+  margin: 0;
+  color: rgb(255 255 255 / 0.7);
+  font-size: 12px;
+}
+
+/* One row of 1×1 parts, scrolling sideways when the view is narrow. */
+.boxGrid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 44px;
+  gap: 4px;
+  overflow-x: auto;
+  touch-action: pan-x;
+  scrollbar-width: thin;
+
+  .part {
+    cursor: grab;
+    touch-action: none;
+  }
+}
+
+.boxButton {
+  flex: none;
+  padding: 8px 12px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  border-radius: 8px;
+  background: none;
+  color: #ffffff !important;
+  cursor: pointer;
+}
+
+.controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.editButton {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--lego-plate);
+  color: #ffffff !important;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--lego-shadow);
+  cursor: pointer;
+}
+
+.editButton[data-active] {
+  background: var(--lego-accent);
+}

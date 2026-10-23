@@ -61,6 +61,13 @@ export const paintVariants: PaintVariant[] = [
     load: () => import('./zen').then(({ ZenStudio }) => ZenStudio)
   },
   {
+    id: 'lego',
+    name: 'LEGO',
+    description:
+      'A prototype: panels of studs on the drawing, parts of any size that show more as they grow, and an edit mode to build your own.',
+    load: () => import('./lego').then(({ LegoStudio }) => LegoStudio)
+  },
+  {
     id: 'command',
     name: 'Command',
     description: 'No buttons: type, or say, what you want.',

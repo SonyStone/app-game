@@ -238,6 +238,7 @@ const localUndoOpeners: Record<string, () => void | Promise<void>> = {
     flush();
   },
   desktop: () => click('nav[aria-label="Tools"] button[aria-label="Local undo"]'),
+  lego: () => click('button[aria-label="Local undo"]'),
   zen() {
     const pebble = document.querySelector<HTMLElement>('[aria-label^="Tools · drag to move"]')!;
     for (const type of ['pointerdown', 'pointerup']) {
