@@ -114,6 +114,20 @@ function takeFromExternrefTable0(idx) {
     wasm.__externref_table_dealloc(idx);
     return value;
 }
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * @param {Uint8Array} bytes
+ * @returns {any}
+ */
+export function readPsd(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsd(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
 
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -136,21 +150,6 @@ export function writePsd(document, composite) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
-}
-
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- * @param {Uint8Array} bytes
- * @returns {any}
- */
-export function readPsd(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readPsd(ptr0, len0);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
 }
 
 /**
@@ -184,7 +183,8 @@ function _assertClass(instance, klass) {
     }
 }
 /**
- * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
+ * Reads persisted styles, vectors, locks, labels, metadata and XMP without renderer admission.
+ * Vector frame queries are separate from stored values and report malformed-name/rectangle refusals.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
  * Physical record indices refer to the selected layer-info section and change after structural edits.
  * @param {Uint8Array} bytes
@@ -194,6 +194,24 @@ export function readPsdSource(bytes) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.readPsdSource(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Reads the bounded J-metadata query model. Missing scalars use confirmed defaults 30 and 1.
+ * Refused carriers return null plus an explicit reason. File Info may contain independently
+ * admitted fields and field-specific refusals. This does not edit source, infer comp selection,
+ * reconcile copyright or normalize a document for saving.
+ * @param {Uint8Array} bytes
+ * @returns {PsdMetadataQueries}
+ */
+export function readPsdMetadataQueries(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsdMetadataQueries(ptr0, len0);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -272,7 +290,8 @@ export class PsdEditorSession {
      * Moves/scales the sole smart layer or replaces its embedded PNG atomically. Requires one opaque raster
      * backdrop and one unfiltered Normal smart layer in unprofiled RGB8, at integer upright in-canvas bounds.
      * setSmartAxisTransform requires a fresh placementId and explicit nearestNeighbor or bilinear interpolation.
-     * Bilinear retains at least half of each source axis; cubic scaling requires unavailable table state.
+     * Bilinear retains at least half of each source axis, or reduces both into exact power-of-two bins
+     * of at least four samples. Cubic scaling requires unavailable table state.
      * Replacement must have the same dimensions, positive alpha and fresh distinct host-generated UUIDs.
      * Updates SoLd/PlLd, linked bytes and lengths, parent channels/bounds and real merged data; omits thumbnails.
      * External/shared contents, filters and unsupported dependencies throw Dependency with propertyPath.
@@ -323,6 +342,7 @@ export class PsdEditorSession {
     }
     /**
      * Applies native-plane replacement, opacity and rename commands atomically in Gray8/16, RGB16/32 or CMYK8.
+     * moveProcessLayer translates only alpha-tight canonical RGB16 rasters on the fixed PSD/PSB canvas.
      * IDs and bounds come from inspectProcess. Planes are complete big-endian native wire samples,
      * process channels first and alpha last; CMYK is inverted. No RGBA8 conversion occurs.
      * Requires explicit host gamma context, flat Normal rasters, measured native defaults and bounded samples.
@@ -408,11 +428,17 @@ export class PsdEditorSession {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
-     * Resizes a root artboard or translates one admitted raster subtree on a fixed canvas.
-     * RGB8 PSD only, canvas at most 2000x1000, coordinates within +/-2000, with auto-expand/shrinkwrap off.
+     * Resizes/translates a root artboard on a fixed canvas, or explicitly applies save-shrinkwrap.
+     * RGB8 PSD only, canvas at most 2000x1000, coordinates within +/-2000. Fixed-canvas edits require
+     * auto-expand/shrinkwrap off. shrinkwrapArtboards requires both enabled, visible root boards, complete
+     * integer origins and bounded raster/group descendants. It rebases the canvas, masks and reference points.
+     * Shrinkwrap requires an explicit linearBlending boolean; ordinary saves never invoke it implicitly.
      * Rebuilds merged RGB/alpha strictly and omits stale previews before publishing the revision.
-     * Move translates an admitted raster subtree; create, live-parameter edits and frame replacement refuse.
-     * Failure preserves bytes and revision. linearBlending is the host gamma-1 preference, false by default.
+     * Live edits translate one admitted unstroked rectangle and require an explicit blending boolean.
+     * Creation and frame replacement retain named typed refusals.
+     * A validated zero translation preserves bytes and revision; failures preserve the complete session.
+     * linearBlending is the host gamma-1 preference, required for live edits and shrinkwrap.
+     * Fixed-canvas board edits default to false.
      * @param {PsdGeometryEdit} edit
      * @param {boolean | null} [linear_blending]
      * @returns {M01EditOutcome}
@@ -457,7 +483,8 @@ export class PsdEditorSession {
     }
     /**
      * Inspects full-precision persisted source fields for any parsed container, without RGB8 tree admission.
-     * Null leaves remain absent. This reads neither linked assets nor application-only state.
+     * Null leaves remain absent. Vector authoring includes separate bounded frame queries with explicit refusals.
+     * This reads neither linked assets nor application-only state and admits no new vector editing.
      * @returns {PsdSourceSnapshot}
      */
     inspectSource() {
@@ -495,6 +522,27 @@ export class PsdEditorSession {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
+     * Changes the existing sole Surface Blur on one identity full-canvas embedded RGB8 PNG.
+     * Requires an untagged positive-alpha source and one opaque Normal backdrop, up to 512 per axis.
+     * Preserves content identity, PNG/link bytes, quads and source precision. A fresh canonical host
+     * placementId updates SoLd and FEid together. Rebuilds FEid input, parent and real merged caches,
+     * preserves the raw filter mask and removes stale thumbnails. Repeated edits use the original PNG.
+     * Existing Normal/Multiply returns and enabled unlinked white-extended masks admit integer density
+     * and feather 0, 0.5 or 2. linearBlending is required host gamma context; it is never inferred.
+     * Unknown settings/dependencies, stacks, transformed/shared/external sources, zero alpha and
+     * other modes/depths throw. Every failure preserves bytes and revision.
+     * @param {PsdSurfaceBlurEdit} settings
+     * @param {boolean} linear_blending
+     * @returns {M01EditOutcome}
+     */
+    editSurfaceBlur(settings, linear_blending) {
+        const ret = wasm.psdeditorsession_editSurfaceBlur(this.__wbg_ptr, settings, linear_blending);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * Renames primary lyid/luni-only raster records through a shared allocation context.
      * Requires unique IDs and no staged semantic state or pending visual work. Other carriers refuse.
      * The context baseline must include the current source, supplied fonts, batch strings and host copies.
@@ -514,19 +562,64 @@ export class PsdEditorSession {
         return PsdPreparedSave.__wrap(ret[0]);
     }
     /**
+     * Repaints the selected source slot of a sole unmasked, full-strength Normal RGB8 canvas SoCo.
+     * recordIndex is the physical index from inspectSource, invalidated by structural edits.
+     * color null regenerates the existing source; otherwise three integral RGB8 components are required.
+     * Preserves nativeColor/userColor/Clr syntax and inactive values, rebuilding layer and merged caches
+     * atomically and removing stale thumbnails. linearBlending is the explicit host gamma-1 operand.
+     * Active non-RGB/HDR colors, non-sRGB profiles, shapes, styles, mirrors and multilayer scenes refuse.
+     * Type errors and dependency refusals preserve source bytes, pending edits and revision.
+     * @param {number} record_index
+     * @param {readonly [number, number, number] | null} color
+     * @param {boolean} linear_blending
+     * @returns {M01EditOutcome}
+     */
+    repaintSolidFill(record_index, color, linear_blending) {
+        const ret = wasm.psdeditorsession_repaintSolidFill(this.__wbg_ptr, record_index, color, linear_blending);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * Atomically changes bounded nonvisual metadata, including print captions and authored slice text.
      * Preserves pixels and unrelated carriers; guide edits regenerate both 1092 and 1032.
      * Active credentials, unknown versions, duplicate identities/carriers and other note encodings refuse.
      * printCaption coordinates existing 1083/1011 slots. sliceName admits existing authored v6/v7/v8
      * Unicode names; sliceUrl also coordinates its existing 1054/slic URL association without fetching it.
      * Names are at most 4096 UTF-16 units, URLs 65536; NUL, duplicate/missing carriers and automatic slices refuse.
-     * Comp application/capture, slice partitions, general print/resolution and XMP throw named Dependency errors.
+     * captureCompVisibility recaptures every layer into an existing unique comp on coherent saved flat
+     * unmasked RGB8 rasters. IDs, flags, state 0, other domains and current pixels/caches survive.
+     * Pending visual/tree edits, masks, styles, type, smart layers and ambiguous state mappings refuse.
+     * rasterResolution changes positive exact signed-16.16 ppi without resampling on plain RGB8 PSD rasters.
+     * Requires no XMP; coordinates existing 1005, optional 1083/Rslt and one in-place EXIF companion.
+     * Source units, unknown bytes and encoded pixels/previews survive. Unsupported companions and
+     * text/smart/vector/style/mask/state dependencies refuse; pending visual edits retain strict preparation.
+     * General comp application/capture, slice partitions, print/resolution and XMP throw Dependency errors.
      * Pending visual changes still require a strict render on prepareSave. Failure preserves revision/bytes.
      * @param {readonly PsdStateMetadataEdit[]} edits
      * @returns {M01EditOutcome}
      */
     editStateMetadata(edits) {
         const ret = wasm.psdeditorsession_editStateMetadata(this.__wbg_ptr, edits);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Applies an existing visibility-only comp on coherent saved flat unmasked RGB8 rasters.
+     * Preserves geometry, appearance and saved states, updates history and regenerates real merged pixels.
+     * compId must be a positive persistent i32 identity; capture flags must be 1 or 17.
+     * Requires unprofiled source, complete unique comp/state-0 mappings and explicit Boolean gamma.
+     * Tracks, masks, child state, other capture domains and pending visual edits throw typed errors,
+     * preserving bytes and revision. General applyComp and captureComp remain refused.
+     * @param {number} comp_id
+     * @param {boolean} linear_blending
+     * @returns {M01EditOutcome}
+     */
+    applyVisibilityComp(comp_id, linear_blending) {
+        const ret = wasm.psdeditorsession_applyVisibilityComp(this.__wbg_ptr, comp_id, linear_blending);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -550,11 +643,11 @@ export class PsdEditorSession {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
-     * Changes existing version-2 Lab Photo Filter settings in the bounded CMYK8/16 two-layer product.
+     * Changes existing version-2 Lab or version-3 XYZ settings in the bounded CMYK8/16 two-layer product.
      * recordIndex comes from inspectSource. Requires the measured embedded coated profile,
      * opaque raw source, full strength, absent/default white mask and relative/BPC-on/dither-off context.
      * Rebuilds native merged data and depth carriers before publishing; removes stale previews.
-     * Other profiles, identity shortcuts, version-3 colors, unknown dependencies and unsupported
+     * Other profiles, identity shortcuts, incompatible Lab/XYZ patches, unknown dependencies and unsupported
      * graphs throw named errors atomically. Omitted patch fields preserve their exact source values.
      * @param {number} record_index
      * @param {PsdCmykPhotoFilterPatch} patch
@@ -616,6 +709,42 @@ export class PsdEditorSession {
      */
     repaintLinearGradientFill(record_index, patch, linear_blending) {
         const ret = wasm.psdeditorsession_repaintLinearGradientFill(this.__wbg_ptr, record_index, patch, isLikeNone(linear_blending) ? 0xFFFFFF : linear_blending ? 1 : 0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Replaces the embedded same-size positive-alpha PNG through one existing identity Surface Blur.
+     * Keeps complete filter/blend/mask source state and rebuilds FEid, parent and real merged pixels.
+     * Admits unprofiled RGB8, a full-canvas source up to 512 per axis, one opaque Normal backdrop,
+     * one enabled valid filter, a Normal/Multiply return and an enabled unlinked white-extended mask.
+     * Requires fresh distinct UUIDs and explicit Boolean gamma. Removes stale thumbnails on success.
+     * Unknown/shared/linked dependencies throw typed errors, preserving source bytes and revision.
+     * @param {PsdSurfaceBlurContents} replacement
+     * @param {boolean} linear_blending
+     * @returns {M01EditOutcome}
+     */
+    replaceSurfaceBlurContents(replacement, linear_blending) {
+        const ret = wasm.psdeditorsession_replaceSurfaceBlurContents(this.__wbg_ptr, replacement, linear_blending);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Repaints explicit Perceptual interpolation with Linear style on a sole full-strength Normal RGB8 canvas GdFl.
+     * Requires the admitted sampled sRGB profile and Dot Gain 20% working Gray; linearBlending is the
+     * host gamma-1 preference, false by default. Empty patch regenerates without using source caches.
+     * Preserves straight hidden RGB at zero alpha, rebuilds real merged data and removes stale thumbnails.
+     * Other profiles, dither, shapes, masks, effects, extra layers and unknown inputs refuse atomically.
+     * @param {number} record_index
+     * @param {PerceptualGradientFillPatch} patch
+     * @param {boolean | null} [linear_blending]
+     * @returns {M01EditOutcome}
+     */
+    repaintPerceptualGradientFill(record_index, patch, linear_blending) {
+        const ret = wasm.psdeditorsession_repaintPerceptualGradientFill(this.__wbg_ptr, record_index, patch, isLikeNone(linear_blending) ? 0xFFFFFF : linear_blending ? 1 : 0);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }

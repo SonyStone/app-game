@@ -19,11 +19,147 @@ export function readPsd(bytes: Uint8Array): any;
  */
 export function rasterizeCff2Strong(font_bytes: Uint8Array, design_coordinates: readonly number[], character: string, size: number, origin_x: number, origin_y: number): PsdCff2Coverage;
 /**
- * Reads persisted source styles, locks, labels, metadata envelopes and XMP without renderer projection.
+ * Reads persisted styles, vectors, locks, labels, metadata and XMP without renderer admission.
+ * Vector frame queries are separate from stored values and report malformed-name/rectangle refusals.
  * Optional fields are null when absent or differently tagged. Unknown descriptor leaves stay in sourceBlock.
  * Physical record indices refer to the selected layer-info section and change after structural edits.
  */
 export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
+/**
+ * Reads the bounded J-metadata query model. Missing scalars use confirmed defaults 30 and 1.
+ * Refused carriers return null plus an explicit reason. File Info may contain independently
+ * admitted fields and field-specific refusals. This does not edit source, infer comp selection,
+ * reconcile copyright or normalize a document for saving.
+ */
+export function readPsdMetadataQueries(bytes: Uint8Array): PsdMetadataQueries;
+
+/** Stored vector carriers. Missing fields stay null; unknown entries and suffixes stay in sourceBlock.
+ * This inspection admits no new line/star/frame edit, generated geometry or stroke rendering. */
+export interface PsdVectorSource {
+  readonly origin: { readonly sourceBlock: Uint8Array; readonly version: number | null; readonly origins: readonly VectorOrigin[] | null } | null;
+  readonly stroke: { readonly sourceBlock: Uint8Array; readonly settings: VectorStrokeSource | null } | null;
+  readonly frame: { readonly sourceBlock: Uint8Array; readonly settings: VectorFrameSettings; readonly query: FrameQuery } | null;
+}
+/** Bounded native import view, independent of source values. A refusal is null plus its error. */
+export interface FrameQuery {
+  /** Rounded and int32-saturated Left/Top/Right/Bottom; nonpixel/nonfinite coordinates refuse. */ readonly bounds: readonly number[] | null;
+  readonly boundsError: string | null;
+  /** Explicit types 2/3/4, otherwise 1; absent stays null. */ readonly kind: number | null;
+  /** Decoded terminated UTF-16 name; malformed encodings refuse. */ readonly name: string | null;
+  readonly nameError: string | null;
+}
+/** Stored Origin; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorOrigin {
+  /** Source list ordinal, never substituted for an explicit index. */ readonly ordinal: number;
+  /** Original `keyOriginType`, not an authorization to synthesize that shape. */ readonly kind: number | null;
+  /** Explicit subpath/origination link. */ readonly index: number | null;
+  /** Explicit invalidation flag; absence remains distinct. */ readonly invalidated: boolean | null;
+  /** Serialized authoring resolution, independent of document and stroke resolution. */ readonly resolution: SourceNumber | null;
+  /** Stored rectangle; world coordinates must not receive the transform a second time. */ readonly bounds: VectorQuad | null;
+  /** Stored rounded-rectangle radii, preserving units per corner. */ readonly radii: VectorQuad | null;
+  /** Stored transform, not automatically applied to the serialized path. */ readonly transform: VectorTransform | null;
+  /** World-space corners in A/B/C/D order. */ readonly corners: VectorCorners | null;
+  /** Line-family source parameters, independent of regenerated path geometry. */ readonly line: VectorLineSource | null;
+  /** Polygon-family explicit parameters. Other future extensions remain retained source. */ readonly polygon: VectorPolygonSource | null;
+}
+/** Stored Quad; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorQuad {
+  /** Bounds Left/Top/Right/Bottom, or radii TL/TR/BR/BL. */ readonly values: readonly (SourceNumber | null)[];
+  /** Original `unitValueQuadVersion`. */ readonly version: number | null;
+}
+/** Stored Transform; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorTransform {
+  /** Original numeric leaves with their units and tags. */ readonly values: readonly (SourceNumber | null)[];
+}
+/** Stored Point; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorPoint {
+  /** Horizontal coordinate. */ readonly horizontal: SourceNumber | null;
+  /** Vertical coordinate. */ readonly vertical: SourceNumber | null;
+}
+/** Stored Corners; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorCorners {
+  /** Ordered source corners. */ readonly points: readonly (VectorPoint | null)[];
+}
+/** Stored LineSource; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorLineSource {
+  /** Stored endpoints with independent coordinate tags and units. */ readonly start: VectorPoint | null;
+  /** Stored endpoint; native transforms may change the imported query separately. */ readonly end: VectorPoint | null;
+  /** Stored line weight, separate from modern stroke width. */ readonly weight: SourceNumber | null;
+  /** Explicit start-arrow enablement. */ readonly arrowStart: boolean | null;
+  /** Explicit end-arrow enablement. */ readonly arrowEnd: boolean | null;
+  /** Stored arrow width; the optional flag determines its authoring unit context. */ readonly arrowWidth: SourceNumber | null;
+  /** Stored arrow length; the optional flag determines its authoring unit context. */ readonly arrowLength: SourceNumber | null;
+  /** Stored concavity, preserving the integer versus double distinction. */ readonly arrowConcavity: SourceNumber | null;
+  /** Explicit pixel-unit flag for arrow width; absence stays absent. */ readonly widthPixels: boolean | null;
+  /** Explicit pixel-unit flag for arrow length; absence stays absent. */ readonly lengthPixels: boolean | null;
+}
+/** Stored PolygonSource; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorPolygonSource {
+  /** Stored side count. Native import clamps this to 3..100. */ readonly sides: number | null;
+  /** Stored star percentage; native ratio divides by 100. */ readonly starRatio: SourceNumber | null;
+  /** Explicit smoothing controls. */ readonly smoothCorners: boolean | null;
+  /** Explicit indent smoothing. */ readonly smoothIndent: boolean | null;
+  /** Stored corner radius. */ readonly radius: SourceNumber | null;
+  /** Integer radius-unit selector, not a descriptor FourCC unit. */ readonly radiusUnit: number | null;
+  /** Stored horizontal pixel scale. */ readonly pixelHsf: SourceNumber | null;
+  /** Explicit inner radius; native derived radii remain separate. */ readonly innerRadius: SourceNumber | null;
+  /** Integer authoring unit selector for the inner radius. */ readonly innerRadiusUnit: number | null;
+  /** Explicit outer radius, without regenerating a star or polygon. */ readonly outerRadius: SourceNumber | null;
+  /** Integer authoring unit selector for the outer radius. */ readonly outerRadiusUnit: number | null;
+  /** Retained maximum inner corner radius, not a computed limit. */ readonly maxInnerCornerRadius: SourceNumber | null;
+  /** Retained maximum outer corner radius, not a computed limit. */ readonly maxOuterCornerRadius: SourceNumber | null;
+  /** Explicit predicted inner radius; sentinel values are not interpreted. */ readonly predictedInnerRadius: SourceNumber | null;
+  /** Explicit predicted outer radius; sentinel values are not interpreted. */ readonly predictedOuterRadius: SourceNumber | null;
+  /** Explicit authoring flag selecting the source outer corner radius. */ readonly sourceOuterCornerRadius: boolean | null;
+  /** Explicit linkage of star corner radii. */ readonly linkCornerRadius: boolean | null;
+  /** Previous tight world corners. */ readonly previous: VectorCorners | null;
+  /** True rectangular world corners. */ readonly trueCorners: VectorCorners | null;
+}
+/** Stored FrameSettings; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorFrameSettings {
+  /** Stored Left/Top/Right/Bottom before native integer rounding. */ readonly bounds: VectorQuad | null;
+  /** Original type; native import maps unsupported types to 1. */ readonly kind: number | null;
+  /** Explicit PPI lock, without assuming the constructor default. */ readonly lockPpi: boolean | null;
+  /** Explicit preferred resolution, independent of document resolution. */ readonly preferredResolution: SourceNumber | null;
+  /** Exact UTF-16 units including the source terminator when present. */ readonly savedName: Uint16Array | null;
+  /** Explicit resolution of a descriptor path; the path itself remains in `stored`. */ readonly pathResolution: SourceNumber | null;
+}
+/** Stored StrokeSource; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorStrokeSource {
+  /** Explicit `strokeEnabled`, without inserting a runtime default. */ readonly strokeEnabled: boolean | null;
+  /** Explicit `enabled`, without inserting a runtime default. */ readonly enabled: boolean | null;
+  /** Explicit `fillEnabled`, without inserting a runtime default. */ readonly fillEnabled: boolean | null;
+  /** Explicit `strokeStyleStrokeOnly`, without inserting a runtime default. */ readonly strokeStyleStrokeOnly: boolean | null;
+  /** Explicit `strokeStyleScaleLock`, without inserting a runtime default. */ readonly strokeStyleScaleLock: boolean | null;
+  /** Explicit `strokeStyleStrokeAdjust`, without inserting a runtime default. */ readonly strokeStyleStrokeAdjust: boolean | null;
+  /** Explicit `strokeStyleLineWidth`, without inserting a runtime default. */ readonly strokeStyleLineWidth: SourceNumber | null;
+  /** Explicit `strokeStyleLineDashOffset`, without inserting a runtime default. */ readonly strokeStyleLineDashOffset: SourceNumber | null;
+  /** Explicit `strokeStyleMiterLimit`, without inserting a runtime default. */ readonly strokeStyleMiterLimit: SourceNumber | null;
+  /** Explicit `strokeStyleOpacity`, without inserting a runtime default. */ readonly strokeStyleOpacity: SourceNumber | null;
+  /** Explicit `strokeStyleResolution`, without inserting a runtime default. */ readonly strokeStyleResolution: SourceNumber | null;
+  /** Explicit `strokeStyleLineCapType`, without inserting a runtime default. */ readonly strokeStyleLineCapType: SourceEnum | null;
+  /** Explicit `strokeStyleLineJoinType`, without inserting a runtime default. */ readonly strokeStyleLineJoinType: SourceEnum | null;
+  /** Explicit `strokeStyleLineAlignment`, without inserting a runtime default. */ readonly strokeStyleLineAlignment: SourceEnum | null;
+  /** Explicit `strokeStyleBlendMode`, without inserting a runtime default. */ readonly strokeStyleBlendMode: SourceEnum | null;
+  /** Explicit `strokeStyleVersion`, without inserting a runtime default. */ readonly strokeStyleVersion: number | null;
+  /** Every dash slot, including a retained-only malformed slot represented by None. */ readonly dashes: readonly (SourceNumber | null)[] | null;
+  /** Explicit paint, selected by its object class. */ readonly paint: VectorStrokePaint | null;
+}
+/** Stored PaintSource; tags, units and absence are preserved independently of runtime geometry. */
+export interface VectorPaintSource {
+  /** Color, gradient stops, pattern, phase, offset and paint flags. Unknown entries stay in VectorSource. */ readonly settings: SourceSettings;
+  /** Explicit gradient aspect ratio. */ readonly aspect: SourceNumber | null;
+  /** Source color-book identifier, independent of displayed process values. */ readonly bookId: number | null;
+  /** Original color-book name UTF16, including termination. */ readonly bookName: Uint16Array | null;
+  /** Original named color UTF16, including termination. */ readonly colorName: Uint16Array | null;
+  /** Source color-book key bytes. */ readonly bookKey: Uint8Array | null;
+}
+/** Typed paint or an explicitly retained unknown class; rendering remains separately gated. */
+export type VectorStrokePaint =
+  | { readonly kind: 'solid' | 'gradient' | 'pattern'; readonly settings: VectorPaintSource }
+  | { readonly kind: 'retained'; readonly settings: null; readonly class: Uint8Array };
+
+
 
 /** Isolated Strong glyph coverage. Bounds are document-space pixels; no paint, layout or editor cache is produced. */
 export interface PsdCff2Coverage {
@@ -56,6 +192,11 @@ export interface PsdBudgetError extends Error {
   requested: bigint;
   limit: bigint;
 }
+/** An audited buffer allocation failed. Other legacy allocations may still abort on exhaustion. */
+export interface PsdAllocationError extends Error {
+  name: 'PsdAllocationError';
+  requested: bigint;
+}
 
 
 
@@ -66,6 +207,7 @@ export interface PsdSourceSnapshot {
 }
 /** Persisted source properties. Null means absent, never a synthesized default. */
 export interface PsdSourceLayer {
+  /** Lossless vector authoring models and bounded frame query, without geometry/edit admission. */ readonly vector: PsdVectorSource;
   /** Index in the selected layer-info section. */ readonly recordIndex: number;
   /** Stored lyid, null if absent. */ readonly layerId: number | null;
   /** Raw lspf bits plus their named stored flags, null without lspf. */ readonly locks: SourceLocks | null;
@@ -364,6 +506,44 @@ export interface PsdRegionPixels {
 }
 
 
+
+/** Confirmed imported queries. Source bytes remain the writing authority. */
+export interface PsdMetadataQueries {
+  /** Ordered persisted comps, null on refusal. Panel selection is not inferred. */
+  readonly compsList: readonly PsdImportedCompQuery[] | null;
+  /** Signed angle, default 30 when absent, null on refusal. */
+  readonly globalAngle: number | null;
+  /** Binary64 aspect ratio, default 1 when absent, null on refusal. Implausible-ratio correction is unresolved. */
+  readonly pixelScaleFactor: number | null;
+  /** Bounded XMP leaves; absent fields receive no empty defaults. Null on carrier refusal. */
+  readonly fileInfo: PsdImportedFileInfo | null;
+  /** Carrier or fileInfo/field reasons. Refused source bytes are retained. */
+  readonly refusals: Readonly<Record<string, string>>;
+}
+/** Persisted comp in source order, independent from the comp panel's selection. */
+export interface PsdImportedCompQuery {
+  /** Persistent source comp identity. */ readonly ID: number;
+  /** One-based position in resource 1065. */ readonly itemIndex: number;
+  /** Imported name. */ readonly title: string;
+  /** Omitted when the source has no comment. */ readonly comment?: string;
+  /** capturedInfo bit 1. */ readonly useVisibility: boolean;
+  /** capturedInfo bit 2. */ readonly usePosition: boolean;
+  /** capturedInfo bit 4. */ readonly useAppearance: boolean;
+  /** capturedInfo bit 8. */ readonly useChildLayerCompState: boolean;
+}
+/** Read-only J-metadata leaves. General XMP/IPTC editing and copyright reconciliation remain unresolved. */
+export interface PsdImportedFileInfo {
+  /** Photoshop AuthorsPosition. */ readonly bylineTitle?: string;
+  /** Photoshop CaptionWriter. */ readonly captionWriter?: string;
+  /** Photoshop City. */ readonly city?: string;
+  /** Photoshop Country. */ readonly countryName?: string;
+  /** Photoshop Credit. */ readonly credit?: string;
+  /** dc:subject Bag order, preserving duplicate entries. */ readonly keywords?: readonly string[];
+  /** Sole dc:title x-default. */ readonly objectName?: string;
+  /** Photoshop State. */ readonly provinceState?: string;
+}
+
+
 /**
  * An open document: its parsed container and each layer record's saved visibility.
  */
@@ -571,6 +751,9 @@ export class PsdDocumentHandle {
    * Conflicts throw in strict mode. In `approximate`, supported global-style cmap or coherent descender
    * conflicts select ordinary document mixing and retain the cached raster and CachedRaster diagnostic.
    * Other imports stay unresolved and keep their existing mixing and reporting.
+   * `grayProfile` optionally supplies caller-owned working-Gray ICC bytes as a `Uint8Array`.
+   * Modern transparent rectangle gradients require the admitted Dot Gain 20% profile explicitly;
+   * omitting it preserves their existing refusal/cache policy. No installed profile is read.
    * Visibility overrides apply to this render only. Throws `PsdUnsupportedError` naming the
    * first setting the compositor does not reproduce.
    */
@@ -741,6 +924,7 @@ export interface InitOutput {
   readonly psdsourcehandle_writeUnchanged: (a: number, b: any, c: any) => [number, number];
   readonly rasterizeCff2Strong: (a: number, b: number, c: any, d: any, e: number, f: number, g: number) => [number, number, number];
   readonly readPsd: (a: number, b: number) => [number, number, number];
+  readonly readPsdMetadataQueries: (a: number, b: number) => [number, number, number];
   readonly readPsdSource: (a: number, b: number) => [number, number, number];
   readonly renderedimage_approximations: (a: number) => any;
   readonly renderedimage_depth: (a: number) => number;
