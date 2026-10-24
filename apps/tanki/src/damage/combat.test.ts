@@ -142,8 +142,23 @@ function createBattle(options: Parameters<typeof createCombat>[4] = {}, layout: 
     world,
     renderer as unknown as ReturnType<typeof createRangeRenderer>,
     { halfWidth: 400, halfHeight: 300, ...layout },
-    { ...options, onHit: (target, shooter) => hits.push({ target, shooter }), onShot: (_shooter, path) => shots.push(path) }
+    {
+      random: seeded(1),
+      ...options,
+      onHit: (target, shooter) => hits.push({ target, shooter }),
+      onShot: (_shooter, path) => shots.push(path)
+    }
   );
 
   return { combat, hits, shots };
+}
+
+/** A repeatable source of numbers in [0, 1), so rough craters and debris come out the same every run. */
+function seeded(seed: number) {
+  let state = seed;
+
+  return () => {
+    state = (state * 16807) % 2147483647;
+    return (state - 1) / 2147483646;
+  };
 }
