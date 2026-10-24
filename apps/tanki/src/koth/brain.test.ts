@@ -31,6 +31,16 @@ describe('bot plans', () => {
     expect(names(situation({ facts: { coreOpen: true, inCover: true } }))).toEqual(['repair', 'retreat', 'repair']);
   });
 
+  it('mends its armor at a repair kit nearer than the base, even with the point to take', () => {
+    expect(names(situation({ facts: { armorLow: true }, travel: { kit: 2 } }))).toEqual(['repair', 'pickUpKit']);
+    expect(names(situation({ facts: { coreOpen: true, inCover: true }, travel: { kit: 3 } }))).toEqual(['repair', 'pickUpKit']);
+  });
+
+  it('drives home to mend its armor when every repair kit is farther than the base', () => {
+    expect(names(situation({ facts: { coreOpen: true, inCover: true }, travel: { kit: 12 } }))).toEqual(['repair', 'retreat', 'repair']);
+    expect(names(situation({ facts: { armorLow: true }, travel: { kit: 12 } }))[0]).toBe('capture');
+  });
+
   it('keeps fighting for the point with armor merely chipped, and mends it once the point is held', () => {
     expect(names(situation({ facts: { armorLow: true } }))[0]).toBe('capture');
     expect(names(situation({ facts: { armorLow: true, pointOurs: true } }))[0]).toBe('repair');
@@ -68,16 +78,16 @@ describe('bot plans', () => {
   });
 });
 
-/** A bot of the assault role at its base with the point free, adjusted by `overrides`. */
-function situation(overrides: Partial<Situation>): Situation {
+/** A bot of the assault role on its way with the point free and no repair kit about, adjusted by `overrides`. */
+function situation(overrides: Omit<Partial<Situation>, 'travel'> & { travel?: Partial<Situation['travel']> }): Situation {
   return {
     role: 'assault',
-    travel: { point: 4, stage: 3, approach: 2, flank: 4, support: 2, cover: 1, base: 6, rally: 3 },
     kill: { front: 3, rear: 0.5 },
     capture: 8,
     enemyClock: 0,
     targetClearsPoint: false,
     ...overrides,
+    travel: { point: 4, stage: 3, approach: 2, flank: 4, support: 2, cover: 1, base: 6, rally: 3, kit: Infinity, ...overrides.travel },
     facts: { ...overrides.facts }
   };
 }

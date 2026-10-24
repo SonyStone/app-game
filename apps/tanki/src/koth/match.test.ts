@@ -1,4 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { Tank } from '../arena/bodies';
+import { carve } from '../damage/field';
 import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import { inBase, onPoint } from './map';
@@ -187,6 +189,69 @@ describe('king of the hill with the player', () => {
     expect(match.combat.armorLeft(player)).toBeGreaterThan(chipped + (1 - chipped) * 0.8);
   });
 
+  it('mends a damaged tank that drives over a repair kit, and lays the kit out again ten seconds later', () => {
+    const match = createMatch(5, CAPTURE_RULES, true);
+    const player = match.player!;
+    const large = match.kits.kits.find((kit) => kit.size === 'large')!;
+    const small = match.kits.kits.find((kit) => kit.size === 'small')!;
+    match.bots.clear();
+
+    chip(match, player, 4);
+    const chipped = match.combat.armorLeft(player);
+    place(player, small);
+    match.step(1 / 60);
+    const mended = match.combat.armorLeft(player);
+
+    // A small kit mends part of the damage, a large one all of it.
+    expect(chipped).toBeLessThan(0.9);
+    expect(mended).toBeGreaterThan(chipped + 0.01);
+    expect(mended).toBeLessThan(0.99);
+    expect(small.readyAt).toBeCloseTo(match.time + 10, 5);
+    expect(match.hud().player.mending).toBe(true);
+
+    place(player, large);
+    match.step(1 / 60);
+
+    expect(match.combat.armorLeft(player)).toBeGreaterThan(0.999);
+
+    // Whole again, the tank drives over the small kit's pad until the kit comes back, and leaves it lying.
+    place(player, small);
+
+    for (let step = 0; step < 600; step++) {
+      match.step(1 / 60);
+    }
+
+    expect(small.readyAt).toBeLessThanOrEqual(match.time);
+    expect(match.kits.pickups).toBe(2);
+  });
+
+  it('sends a bot with chipped armor to a repair kit nearer than its base', () => {
+    const match = createMatch(5);
+    const member = match.members.find((candidate) => candidate.team === 'red' && candidate.index === 2)!;
+    const bot = match.bots.get(member)!;
+    const kit = match.kits.kits.find((candidate) => candidate.size === 'large' && candidate.x < 0 && candidate.y < 0)!;
+    const tank = member.tank!;
+
+    for (const other of match.members) {
+      if (other !== member) {
+        match.bots.delete(other);
+      }
+    }
+
+    place(tank, match.map.lanes.red.north);
+    chip(match, tank, 6);
+    const chipped = match.combat.armorLeft(tank);
+
+    while (match.time < 6 && kit.readyAt === 0) {
+      tick(match);
+    }
+
+    expect(chipped).toBeLessThan(0.72);
+    expect(bot.stats.actions.pickUpKit?.started).toBeGreaterThanOrEqual(1);
+    expect(kit.readyAt).toBeGreaterThan(0);
+    expect(match.combat.armorLeft(tank)).toBeGreaterThan(0.99);
+  });
+
   it('lets the player drive and aim while bots fill the other seats, and hands the seat to a bot when watching', () => {
     const match = createMatch(5, CAPTURE_RULES, true);
     const start = match.player!.hull.translation();
@@ -253,7 +318,7 @@ describe('king of the hill with the player', () => {
 function createMatch(seed: number, rules = CAPTURE_RULES, human = false) {
   const world = new rapier.World({ x: 0, y: 0 });
   world.lengthUnit = 100;
-  const slots = Array.from({ length: 256 }, (_, index) => 255 - index);
+  const slots = Array.from({ length: 512 }, (_, index) => 511 - index);
   const renderer = {
     allocateField: () => slots.pop(),
     releaseField: (slot: number) => slots.push(slot),
@@ -272,6 +337,27 @@ function createMatch(seed: number, rules = CAPTURE_RULES, human = false) {
   };
 
   return createKothMatch(rapier, world, renderer as unknown as ReturnType<typeof createRangeRenderer>, { human, random, rules });
+}
+
+/** Puts a tank and its tow point at `spot`, at rest. */
+function place(tank: Tank, spot: { x: number; y: number }) {
+  tank.hull.setTranslation({ x: spot.x, y: spot.y }, true);
+  tank.pull.setTranslation({ x: spot.x + 15, y: spot.y }, true);
+  tank.hull.setLinvel({ x: 0, y: 0 }, true);
+}
+
+/** Chips `holes` holes into the armor of `tank` along its rear and its left side, as hits there would. */
+function chip(match: ReturnType<typeof createMatch>, tank: Tank, holes: number) {
+  const field = match.combat.armorOf(tank)!;
+
+  for (let hole = 0; hole < holes; hole++) {
+    carve(field, { x: -19, y: (hole - (holes - 1) / 2) * 4 }, 5, 0.2, hole);
+    carve(field, { x: (hole - (holes - 1) / 2) * 5, y: -12 }, 5, 0.2, hole + 50);
+  }
+
+  // Mending by a hair makes the battle refresh the tank's shape with the next step.
+  match.combat.repair(tank, 1e-9);
+  match.step(1 / 60);
 }
 
 /** One physics step and one frame of effects, which also frees the field slots of old debris. */

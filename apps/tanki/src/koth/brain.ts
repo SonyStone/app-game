@@ -79,6 +79,7 @@ export type BotAction =
   | 'takeCover'
   | 'retreat'
   | 'repair'
+  | 'pickUpKit'
   | 'regroup';
 
 /** Everything a bot plans from. */
@@ -89,9 +90,10 @@ export type Situation = {
    * Seconds of driving to each place the bot's actions lead to, `Infinity` where there is no
    * such place or no way there: the bot's spot on the point, its staging spot for a push, a
    * firing position on its target, a spot behind the target, a spot beside the ally it helps,
-   * the nearest cover, its base and the team's rally point.
+   * the nearest cover, its base, the team's rally point and the repair kit most worth taking,
+   * a small kit counting a little longer than it is for mending less.
    */
-  travel: Record<'point' | 'stage' | 'approach' | 'flank' | 'support' | 'cover' | 'base' | 'rally', number>;
+  travel: Record<'point' | 'stage' | 'approach' | 'flank' | 'support' | 'cover' | 'base' | 'rally' | 'kit', number>;
   /** Seconds the bot expects to need to destroy its target from where it is and from behind. */
   kill: { front: number; rear: number };
   /** Seconds a capture would take with the bot's team on the point. */
@@ -113,9 +115,11 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
   const desperate = situation.enemyClock > 0.85 && !facts.pointOurs;
   const goals: GoapGoal<BotGoal>[] = [];
 
-  // An open core means the next hit is fatal, so the bot gets out of fire and home to mend it.
+  // An open core means the next hit is fatal, so the bot gets out of fire and off to mend it.
   // Armor merely chipped away is worth mending only when nothing more pressing goes on, since the
-  // base is a long drive away.
+  // base is a long drive away, or when a repair kit lies nearer than the base and close by.
+  const kitNear = situation.travel.kit < Math.min(situation.travel.base, KIT_DETOUR);
+
   if (facts.coreOpen && facts.underFire && !facts.inCover) {
     goals.push({ name: 'survive', wants: { safe: true }, priority: desperate ? 50 : 90 });
   }
@@ -123,7 +127,7 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
   if (facts.coreOpen) {
     goals.push({ name: 'repair', wants: { repaired: true }, priority: desperate ? 40 : 75 });
   } else if (facts.armorLow) {
-    goals.push({ name: 'repair', wants: { repaired: true }, priority: desperate ? 30 : 46 });
+    goals.push({ name: 'repair', wants: { repaired: true }, priority: desperate ? 30 : kitNear ? 58 : 46 });
   }
 
   if (!facts.pointOurs) {
@@ -188,6 +192,11 @@ export function botActions(situation: Situation): GoapAction<BotAction>[] {
     { name: 'regroup', requires: {}, effects: { regrouped: true }, cost: travel.rally + 1 }
   ];
 
+  // A kit mends on the spot, with no wait as at the base.
+  if (Number.isFinite(travel.kit)) {
+    actions.push({ name: 'pickUpKit', requires: {}, effects: { repaired: true, coreOpen: false, armorLow: false }, cost: travel.kit });
+  }
+
   // Every action takes some effort, so of two equally quick plans the shorter one wins.
   return actions.map((action) => ({ ...action, cost: action.cost + ACTION_EFFORT }));
 }
@@ -200,3 +209,5 @@ const COMMITMENT = 6;
 const STAGING_WAIT = 2;
 /** Seconds of mending at the base. */
 const REPAIR_TIME = 4;
+/** Seconds of driving to a repair kit that a bot with armor merely chipped makes a detour for. */
+const KIT_DETOUR = 4;

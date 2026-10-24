@@ -5,7 +5,7 @@ import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import { createDriver } from './driver';
 import { KOTH_MAP } from './map';
-import { cellCenter, createNavGrid, findPath, isOpenCell, pathLength, sampleDistance, type NavGrid } from './navigation';
+import { cellCenter, createNavGrid, findPath, isOpenAt, isOpenCell, pathLength, sampleDistance, type NavGrid } from './navigation';
 import { MEDIUM_TANK } from './tanks';
 
 type Point = { x: number; y: number };
@@ -19,11 +19,11 @@ beforeAll(async () => {
 describe('the king of the hill map', () => {
   const grid = createNavGrid(KOTH_MAP);
 
-  it('breaks up the lines of fire: none much longer than a shell flies, except across the point', () => {
+  it('breaks up the lines of fire: none longer than a shell flies, except across the point', () => {
     const lines = longestLines(grid);
 
-    expect(lines.elsewhere).toBeLessThan(900);
-    expect(lines.acrossPoint).toBeLessThan(1000);
+    expect(lines.elsewhere).toBeLessThan(MEDIUM_TANK.shell.range);
+    expect(lines.acrossPoint).toBeLessThan(1400);
   });
 
   it('hides the spawn rooms from the hall: no line out of a room reaches far toward the point', () => {
@@ -39,7 +39,19 @@ describe('the king of the hill map', () => {
       }
     }
 
-    expect(reach).toBeLessThan(650);
+    expect(reach).toBeLessThan(450);
+  });
+
+  it('builds the spawn rooms of steel, which no shot breaks', () => {
+    for (const team of ['red', 'blue'] as const) {
+      const { zone } = KOTH_MAP.bases[team];
+      const near = (KOTH_MAP.walls ?? []).filter(
+        (wall) => Math.abs(wall.x - zone.x) - wall.halfWidth < zone.halfWidth + 10 && Math.abs(wall.y - zone.y) - wall.halfHeight < zone.halfHeight + 10
+      );
+
+      expect(near.length).toBeGreaterThan(3);
+      expect(near.every((wall) => wall.material === 'steel')).toBe(true);
+    }
   });
 
   it('leads from each spawn to the point by the middle and by two longer flanks', () => {
@@ -49,21 +61,35 @@ describe('the king of the hill map', () => {
       const middle = pathLength(findPath(grid, spawn, KOTH_MAP.point)!);
 
       for (const flank of [lanes.north, lanes.south]) {
-        expect(pathLength(findPath(grid, spawn, flank)!) + pathLength(findPath(grid, flank, KOTH_MAP.point)!)).toBeGreaterThan(middle * 1.1);
+        expect(pathLength(findPath(grid, spawn, flank)!) + pathLength(findPath(grid, flank, KOTH_MAP.point)!)).toBeGreaterThan(middle * 1.15);
       }
 
-      expect(middle).toBeGreaterThan(1900);
+      expect(middle).toBeGreaterThan(1300);
+      expect(middle).toBeLessThan(1500);
     }
   });
 
-  it('takes a tank driven by the bot driver about ten seconds from its spawn to the point', () => {
+  it('takes a tank driven by the bot driver about five seconds from its spawn to the point', () => {
     for (const spawn of KOTH_MAP.bases.red.spawns) {
       const time = driveTime(grid, spawn, KOTH_MAP.point);
 
-      expect(time).toBeGreaterThan(9);
-      expect(time).toBeLessThan(12);
+      expect(time).toBeGreaterThan(4.5);
+      expect(time).toBeLessThan(6.5);
     }
   }, 30_000);
+
+  it('lays repair kits out on open ground, large ones on the flanks and small ones beside the point, the same for both teams', () => {
+    for (const kit of KOTH_MAP.kits) {
+      expect(isOpenAt(grid, kit)).toBe(true);
+      expect(KOTH_MAP.kits.some((other) => other.x === -kit.x && other.y === kit.y && other.size === kit.size)).toBe(true);
+    }
+
+    const distances = (size: 'small' | 'large') =>
+      KOTH_MAP.kits.filter((kit) => kit.size === size).map((kit) => pathLength(findPath(grid, kit, KOTH_MAP.point)!));
+
+    expect(Math.max(...distances('small'))).toBeLessThan(400);
+    expect(Math.min(...distances('large'))).toBeGreaterThan(600);
+  });
 });
 
 /**

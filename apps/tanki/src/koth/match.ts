@@ -5,8 +5,9 @@ import type { Rapier } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
 import { createBot, type Bot } from './bot';
 import { createGun } from './gun';
+import { createKits } from './kits';
 import { inBase, KOTH_MAP, onPoint, type KothMap } from './map';
-import { createNavGrid } from './navigation';
+import { createNavGrid, updateNavGrid } from './navigation';
 import { advanceCapture, CAPTURE_RULES, createCaptureState, rivalOf, TEAMS, type CaptureRules, type TeamId } from './rules';
 import { createScenery } from './scenery';
 import { MEDIUM_TANK } from './tanks';
@@ -19,8 +20,8 @@ type Point = { x: number; y: number };
  * red, four bots for blue. Every tank is a `MEDIUM_TANK` firing shells on the battle core of
  * `createCombat`, without friendly fire. The point in the middle opens after a while and is taken
  * by standing on it (see `./rules`); the first team to hold it for the hold time wins. Destroyed
- * tanks come back at their base in waves, as in Team Fortress 2, and a tank in its own base has
- * its armor mended.
+ * tanks come back at their base in waves, as in Team Fortress 2. A tank in its own base has its
+ * armor mended, and repair kits on the map mend it on the way (see `./kits`).
  *
  * The match owns its Rapier bodies and renderer slots; `restart` begins a new match on the same map.
  *
@@ -48,11 +49,15 @@ export function createKothMatch(
     wreckFire: WRECK_FIRE,
     random,
     onHit: (target, shooter) => noteShot(byTank.get(target), shooter),
-    onDestroyed: destroyed
+    onDestroyed: destroyed,
+    // Shot-apart walls open new ways and lines of fire; the grid follows where they changed.
+    onWallsChanged: (bounds) => updateNavGrid(grid, grow(bounds, NAV_REACH), (point) => combat.obstacleDistance(point, NAV_CAP))
   });
   const grid = createNavGrid(map);
   const scenery = createScenery(renderer, map, { red: rgb(TEAM_COLORS.red), blue: rgb(TEAM_COLORS.blue) });
+  const kits = createKits(renderer, map.kits, combat);
   let time = 0;
+  let playerKitAt = -Infinity;
   let capture = createCaptureState(rules);
   let nextRepair = 0;
   let feedId = 0;
@@ -109,6 +114,9 @@ export function createKothMatch(
     /** The battle core, for tests and tools. */
     combat,
 
+    /** The repair kits on the map. */
+    kits,
+
     /**
      * Advances the match by one fixed physics step: the player's input, every bot, physics,
      * respawns, repairs and the capture. After a win tanks stop and only the wreckage moves.
@@ -152,6 +160,13 @@ export function createKothMatch(
         bot.step(dt);
       }
 
+      // Kits are taken before physics, which refreshes the mended armor's shape within this step.
+      for (const taker of kits.step(time, combat.tanks)) {
+        if (taker === members[0].tank) {
+          playerKitAt = time;
+        }
+      }
+
       combat.step(dt);
       nearMisses();
       respawn();
@@ -179,7 +194,10 @@ export function createKothMatch(
      * @param view - Point on the ground under the camera.
      */
     draw(view: Point) {
-      combat.draw(view, () => scenery.draw(capture));
+      combat.draw(view, () => {
+        scenery.draw(capture);
+        kits.draw(time);
+      });
     },
 
     /** What the heads-up display shows. */
@@ -218,7 +236,9 @@ export function createKothMatch(
           loading: human.gun?.loading ?? 0,
           armor: human.tank ? combat.armorLeft(human.tank) : 0,
           coreOpen: human.tank ? combat.isCoreOpen(human.tank) : false,
-          mending: human.tank !== undefined && inBase(map.bases.red, human.tank.hull.translation()) && combat.armorLeft(human.tank) < 0.99
+          mending:
+            human.tank !== undefined &&
+            ((inBase(map.bases.red, human.tank.hull.translation()) && combat.armorLeft(human.tank) < 0.99) || time - playerKitAt < KIT_NOTICE)
         },
         feed: feed
           .filter((entry) => time - entry.at < FEED_TIME)
@@ -260,9 +280,11 @@ export function createKothMatch(
     /** Clears the field and starts a new match. */
     restart() {
       combat.reset();
+      kits.reset();
       byTank.clear();
       time = 0;
       nextRepair = 0;
+      playerKitAt = -Infinity;
       capture = createCaptureState(rules);
       feed.length = 0;
       boards.red.reset();
@@ -305,7 +327,8 @@ export function createKothMatch(
       rules,
       clock: () => time,
       random,
-      fire
+      fire,
+      kits: kits.kits
     };
   }
 
@@ -441,6 +464,14 @@ const SPAWN_CLEARANCE = 40;
 const NEAR_MISS = 45;
 /** Seconds a kill stays in the feed. */
 const FEED_TIME = 6;
+/** Seconds the display tells the player that a repair kit mended their armor. */
+const KIT_NOTICE = 1.2;
+/**
+ * A changed wall changes the obstacle distance of grid cells up to `NAV_REACH` px away, as far as
+ * it matters for driving, which looks no further than `NAV_CAP` px.
+ */
+const NAV_REACH = 96;
+const NAV_CAP = 128;
 
 /** The team's intent in a few words, with the stage of a coordinated push. */
 function describePlan(board: TeamBoard) {
@@ -469,6 +500,11 @@ function createMembers(human: boolean): Member[] {
       deaths: 0
     }))
   );
+}
+
+/** `bounds` grown by `margin` on every side. */
+function grow(bounds: { minX: number; minY: number; maxX: number; maxY: number }, margin: number) {
+  return { minX: bounds.minX - margin, minY: bounds.minY - margin, maxX: bounds.maxX + margin, maxY: bounds.maxY + margin };
 }
 
 /** The first respawn wave at or after match time `time`. */
