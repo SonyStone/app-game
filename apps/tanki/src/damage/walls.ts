@@ -924,9 +924,13 @@ function steelDraw(wall: WallPlacement) {
   };
 }
 
-/** Keys of the buckets a box overlaps. */
+/** Keys of the buckets a box overlaps; none for a box that is not finite. */
 function bucketKeys(bounds: Bounds) {
   const keys: number[] = [];
+
+  if (![bounds.minX, bounds.minY, bounds.maxX, bounds.maxY].every(Number.isFinite)) {
+    return keys;
+  }
 
   for (let row = Math.floor(bounds.minY / BUCKET); row <= Math.floor(bounds.maxY / BUCKET); row++) {
     for (let col = Math.floor(bounds.minX / BUCKET); col <= Math.floor(bounds.maxX / BUCKET); col++) {

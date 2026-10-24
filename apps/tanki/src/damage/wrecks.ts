@@ -68,7 +68,8 @@ export function createWrecks(
      * @param wreck.color - The tank's color, components 0-1.
      * @param wreck.core - Center of the core in the field's coordinates, where the blast starts.
      * @param wreck.direction - Unit direction of the shot that destroyed the tank.
-     * @returns Whether the wreck was left; without a free field slot it is not.
+     * @returns Whether the wreck was left: without a free field slot it is not, and a hull with
+     *   less than `MIN_AREA` of armor left falls apart into scrap at once.
      */
     add(wreck: {
       field: DamageField;
@@ -114,6 +115,12 @@ export function createWrecks(
 
       rebuild(entry);
       entry.fullArea = entry.area;
+
+      if (entry.area < MIN_AREA || entry.boxes.length === 0) {
+        crumble(entry);
+        return false;
+      }
+
       options.onChange(boundsOf(entry));
 
       while (wrecks.length > limit) {
@@ -223,7 +230,7 @@ export function createWrecks(
 
         rebuild(wreck);
 
-        if (wreck.area < wreck.fullArea * CRUMBLE_AT) {
+        if (wreck.area < Math.max(wreck.fullArea * CRUMBLE_AT, MIN_AREA) || wreck.boxes.length === 0) {
           crumble(wreck);
         } else {
           options.onChange(boundsOf(wreck));
@@ -485,8 +492,12 @@ const BLAST_HOLE = 7;
 const BLAST_REACH = 40;
 const CRACK_WIDTH = 1.2;
 const BLAST_SPEED = 200;
-/** A wreck shot down to this share of its armor falls apart. */
+/**
+ * A wreck shot down to `CRUMBLE_AT` of its armor falls apart, and so does one with less than
+ * `MIN_AREA` square pixels of it, a few percent of a hull, which would be no cover.
+ */
 const CRUMBLE_AT = 0.4;
+const MIN_AREA = 120;
 const MIN_PIECE_CELLS = 6;
 /** Wrecks are darker than the tanks they were, and charred all over. */
 const WRECK_SHADE = 0.55;
@@ -551,8 +562,15 @@ function boundsOf(wreck: Wreck, at = wreck.body.translation()): Bounds {
   return { minX: at.x - WRECK_REACH, minY: at.y - WRECK_REACH, maxX: at.x + WRECK_REACH, maxY: at.y + WRECK_REACH };
 }
 
-/** Corners of a wreck's solid boxes, as they would be with its center at `at` turned by `angle`. */
+/**
+ * Corners of a wreck's solid boxes, as they would be with its center at `at` turned by `angle`;
+ * just `at` for a wreck without boxes.
+ */
 function cornersOf(wreck: Wreck, at: Point, angle: number) {
+  if (wreck.boxes.length === 0) {
+    return [at];
+  }
+
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   let minX = Infinity;

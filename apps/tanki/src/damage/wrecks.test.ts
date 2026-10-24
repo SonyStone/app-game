@@ -108,6 +108,21 @@ describe('wrecks', () => {
     expect(rammed.x - pushed.x).toBeLessThan(30);
   });
 
+  it('are not left of a hull with hardly any armor left, which falls apart into scrap instead', () => {
+    const { combat } = createBattle();
+    const shooter = combat.spawnTank({ x: -200, y: 0, rotation: 0 }, { color: 0xff0000 });
+    const target = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0x0000ff });
+
+    // Everything ahead of the core is shot away.
+    carve(combat.armorOf(target)!, { x: 8, y: 0 }, 17, 0, 1);
+    blowUp(combat, shooter, target);
+    settle(combat);
+
+    expect(combat.armorOf(target)).toBeUndefined();
+    expect(combat.wrecks.made).toBe(1);
+    expect(combat.wrecks.list).toHaveLength(0);
+  });
+
   it('block the ways of navigation where they stand, until they are gone', () => {
     const layout = { halfWidth: 400, halfHeight: 300 };
     const grid = createNavGrid(layout);
