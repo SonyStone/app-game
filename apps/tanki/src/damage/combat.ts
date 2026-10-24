@@ -969,7 +969,7 @@ export function createCombat(
   /**
    * What a shot does where it meets something: it chips a wall, detonates a core, chips armor
    * met head on, or glances off armor and flies on. A shell that pierces flies on through the
-   * hole it chipped, or clean through a thin body.
+   * hole it chipped, or clean through a thin body or a thin wall.
    *
    * @param canBounce - Whether the shot may fly on after a glancing hit; a spent one only scuffs the armor.
    * @param shell - The shell striking, if it is one, whose pierce it may spend.
@@ -990,16 +990,17 @@ export function createCombat(
       // A piercing round bores clean through a thin wall, such as a wooden fence, as through a crate.
       const exit = shell && hit.tile && shell.pierce.thin > 0 ? walls.punch(end, direction, shell.pierce.armor, scale) : undefined;
       const material = hit.tile && (exit ? hit.tile.material : walls.chip(end, direction, hit.tile, scale));
+      const dust = material ? material.color.map((channel) => channel * 0.6) : WALL_DUST;
       impact(end, { x: -direction.x, y: -direction.y });
-      spawnDust(end, direction, material ? material.color.map((channel) => channel * 0.6) : WALL_DUST);
+      spawnDust(end, direction, dust);
 
-      if (exit && shell) {
-        shell.pierce.thin--;
-        spawnDust(exit, { x: -direction.x, y: -direction.y }, material!.color.map((channel) => channel * 0.6));
-        return { direction, from: exit, ricochet: false };
+      if (!exit || !shell) {
+        return undefined;
       }
 
-      return undefined;
+      shell.pierce.thin--;
+      spawnDust(exit, { x: -direction.x, y: -direction.y }, dust);
+      return { direction, from: exit, ricochet: false };
     }
 
     hit.target.lastShooter = tank;

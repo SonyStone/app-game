@@ -226,14 +226,14 @@ export function createWalls(
       const seed = options.random() * 1000;
       const reach = hole * 1.4 + depth + 4;
       damage.hits++;
-      point = surfaceAlong(point, direction);
+      const surface = surfaceAlong(point, direction);
 
-      for (const near of tilesNear({ minX: point.x - reach, minY: point.y - reach, maxX: point.x + reach, maxY: point.y + reach })) {
+      for (const near of tilesNear({ minX: surface.x - reach, minY: surface.y - reach, maxX: surface.x + reach, maxY: surface.y + reach })) {
         if ((near.fallen && !near.rubble) || !near.material.crater) {
           continue;
         }
 
-        const local = toLocal(near.wall, point);
+        const local = toLocal(near.wall, surface);
         const inward = rotateInto(near.wall, direction);
 
         for (let index = 0; index <= craters; index++) {
