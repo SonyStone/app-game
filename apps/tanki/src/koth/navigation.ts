@@ -218,8 +218,11 @@ export function sightClear(grid: NavGrid, a: Point, b: Point) {
  * Whether a straight line from `a` to `b` stays out of the obstacles of a distance field on the
  * grid's cells, such as `grid.distance` or one that adds moving bodies. It steps by the distance
  * to the nearest obstacle, so open ground costs only a few samples.
+ *
+ * @param near - Within `near.reach` px of `a`, trace `near.field` instead: a field without the low
+ *   obstacles, such as rubble, that a viewer right behind them sees over.
  */
-export function traceClear(grid: NavGrid, field: Float32Array, a: Point, b: Point) {
+export function traceClear(grid: NavGrid, field: Float32Array, a: Point, b: Point, near?: { field: Float32Array; reach: number }) {
   const length = Math.hypot(b.x - a.x, b.y - a.y);
 
   if (length < 1e-6) {
@@ -231,7 +234,12 @@ export function traceClear(grid: NavGrid, field: Float32Array, a: Point, b: Poin
   let travelled = 0;
 
   while (travelled < length) {
-    const distance = sampleDistance(grid, field, { x: a.x + dx * travelled, y: a.y + dy * travelled });
+    const traced = near && travelled < near.reach ? near.field : field;
+    // Near the edge of `near`'s reach, a step may not jump past what the farther field holds.
+    const distance = Math.min(
+      sampleDistance(grid, traced, { x: a.x + dx * travelled, y: a.y + dy * travelled }),
+      near && travelled < near.reach ? near.reach - travelled + MIN_TRACE_STEP : Infinity
+    );
 
     if (distance < 0) {
       return false;
@@ -240,7 +248,7 @@ export function traceClear(grid: NavGrid, field: Float32Array, a: Point, b: Poin
     travelled += Math.max(distance * 0.9, MIN_TRACE_STEP);
   }
 
-  return sampleDistance(grid, field, b) >= 0;
+  return sampleDistance(grid, near && length < near.reach ? near.field : field, b) >= 0;
 }
 
 /**
@@ -248,8 +256,10 @@ export function traceClear(grid: NavGrid, field: Float32Array, a: Point, b: Poin
  * distance field on the grid's cells blocks it, up to `range`: the outline of what can be seen
  * from there. Direction `index` points at angle `index / rays * 2π`. The first few pixels are
  * skipped, so a viewer pressed against a wall still sees past it.
+ *
+ * @param near - Within `near.reach` px of `from`, trace `near.field` instead, as for `traceClear`.
  */
-export function sightReach(grid: NavGrid, field: Float32Array, from: Point, range: number, rays: number) {
+export function sightReach(grid: NavGrid, field: Float32Array, from: Point, range: number, rays: number, near?: { field: Float32Array; reach: number }) {
   const reach = new Float32Array(rays);
 
   for (let index = 0; index < rays; index++) {
@@ -259,7 +269,11 @@ export function sightReach(grid: NavGrid, field: Float32Array, from: Point, rang
     let travelled = VIEWER_RADIUS;
 
     while (travelled < range) {
-      const distance = sampleDistance(grid, field, { x: from.x + dx * travelled, y: from.y + dy * travelled });
+      const traced = near && travelled < near.reach ? near.field : field;
+      const distance = Math.min(
+        sampleDistance(grid, traced, { x: from.x + dx * travelled, y: from.y + dy * travelled }),
+        near && travelled < near.reach ? near.reach - travelled + MIN_TRACE_STEP : Infinity
+      );
 
       if (distance < 0) {
         break;

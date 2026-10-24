@@ -354,7 +354,7 @@ export function createCombat(
       }
 
       const direction = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
-      return castShot(from, direction, (body) => body.tank !== undefined, length, BARREL + OVER_RUBBLE).distance >= length;
+      return castShot(from, direction, (body) => body.tank !== undefined, length, SIGHT_OVER_RUBBLE).distance >= length;
     },
 
     /**
@@ -1406,6 +1406,8 @@ const SHELL_HOLE = 4.5;
  */
 const OVER_RUBBLE = 64;
 const BARREL = 30;
+/** Pixels from a tank's center over which it sees and shoots over rubble: its barrel and `OVER_RUBBLE` past the muzzle. */
+export const SIGHT_OVER_RUBBLE = BARREL + OVER_RUBBLE;
 /** Share of a hit's impulse applied again at the hit point, which turns the body a little. */
 const KNOCKBACK_SPIN_SHARE = 1 / 15;
 const RECOIL = 25;
