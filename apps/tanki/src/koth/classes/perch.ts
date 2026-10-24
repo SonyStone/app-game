@@ -8,7 +8,10 @@ type Point = { x: number; y: number };
  * Spots a casemate gun can watch the point from, best first: open ground on the team's own side,
  * `PERCH_RANGE` from the point, from where straight lines past every wall reach at least
  * `MIN_SEEN` of seven spots on the point, its middle and six round its rim, close to a wall that
- * covers a flank. The walls never move, so a team finds its perches once.
+ * covers a flank. A team finds its perches once, from the walls as built: walls shot apart only
+ * open more lines, so the perches stay good. On the king of the hill map they lie in the hall and
+ * at the doorways from the streets, 300-560 px from the point, with lines of fire across it of
+ * 1100-1400 px.
  */
 export function findPerches(grid: NavGrid, map: KothMap, team: TeamId): Point[] {
   const side = team === 'red' ? -1 : 1;
