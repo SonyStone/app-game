@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { MEDIUM_TANK } from '../koth/tanks';
 import type { Rapier } from '../physics/Rapier2D';
 import type { SpyArena } from './arena';
 import { createHeadlessSandbox, IDLE, runSandbox, STEP } from './headless';
@@ -118,6 +119,32 @@ describe('abilities', () => {
     expect(sandbox.spider.holding).toBeUndefined();
     expect(sandbox.combat.armorLeft(tank)).toBeLessThan(1);
     world.free();
+  });
+
+  it("a hijacked tank fires its class's own weapon, where its crew fires the patrol's quick gun", () => {
+    const fired = (tankClass: 'soldier' | 'demoman', hijack: boolean) => {
+      const arena = { ...yard(), patrols: yard().patrols.map((patrol) => ({ ...patrol, tankClass })) };
+      const { sandbox, world } = createHeadlessSandbox(rapier, variant({ ability: 'infect' }), { arena, tankBots: false });
+      const tank = sandbox.tanks[0]!;
+
+      if (hijack) {
+        grab(sandbox);
+        runSandbox(sandbox, HOLD_TIME.infect + 0.05, { ...IDLE, fire: true });
+        runSandbox(sandbox, 0.2, { ...IDLE, aim: Math.PI / 2 });
+        runSandbox(sandbox, STEP, { ...IDLE, aim: Math.PI / 2, fire: true });
+      } else {
+        sandbox.combat.fire(tank);
+      }
+
+      const shells = sandbox.combat.shells.filter((shell) => shell.shooter === tank);
+      world.free();
+      return { shells: shells.length, lobbed: shells.some((shell) => shell.lobbed), speed: shells[0]?.speed };
+    };
+
+    // The Soldier's tank fires a rocket, the Demoman's lobs a grenade; the crew's gun is hitscan.
+    expect(fired('soldier', true)).toEqual({ shells: 1, lobbed: false, speed: MEDIUM_TANK.shell.speed });
+    expect(fired('demoman', true)).toMatchObject({ shells: 1, lobbed: true });
+    expect(fired('soldier', false).shells).toBe(0);
   });
 
   it('infection ends when the infected tank is destroyed, throwing the spider out alive', () => {

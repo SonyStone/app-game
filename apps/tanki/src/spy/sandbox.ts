@@ -1,7 +1,10 @@
-import { muzzleOf, PLAYER_PULL_SPEED, type Tank } from '../arena/bodies';
-import { createCombat } from '../damage/combat';
+import { DEFAULT_PULL_SPEED, muzzleOf, PLAYER_PULL_SPEED, type Tank } from '../arena/bodies';
+import { createCombat, type Shot } from '../damage/combat';
 import { PARTICLE_DUST, PARTICLE_FIRE, PARTICLE_SPARK, PARTICLE_SMOKE, type createRangeRenderer } from '../damage/renderer';
 import type { Collider, Rapier } from '../physics/Rapier2D';
+import { TANK_CLASSES } from '../koth/classes/classes';
+import { createWeapon, type Trigger, type Weapon } from '../koth/classes/weapon';
+import { MEDIUM_TANK, type TankClass } from '../koth/tanks';
 import type { World } from '../physics/World';
 import { createObstacles, SPY_ARENA, type Patrol, type SpyArena } from './arena';
 import { createConeDraw } from './cones';
@@ -392,7 +395,8 @@ export function createSpySandbox(
     recordSuccess();
 
     if (ability === 'infect') {
-      spy.infection = { unit, left: INFECT_TIME, exposed: false, armed: false, reload: 0 };
+      // Inside, the spider works the tank's own gun, a fresh clip of its class's weapon.
+      spy.infection = { unit, left: INFECT_TIME, exposed: false, armed: false, weapon: createWeapon(unit.tankClass, random) };
       // The spider's mind replaces the crew's: whatever the crew saw or feared is gone.
       unit.bot = createPatrolBot(unit.patrol, random);
       stalker.succeeded(true);
@@ -506,20 +510,18 @@ export function createSpySandbox(
     }
   }
 
-  /** The spider drives the tank it is inside: the player's controls, or the bot's attack on the tank's own team. */
+  /**
+   * The spider drives the tank it is inside: the player's controls, or the bot's attack on the
+   * tank's own team. It fires the tank's own weapon, of the tank's class, with its clip and reloads,
+   * not the patrol's quick gun: a Soldier's tank fires rockets.
+   */
   function driveHijacked(dt: number, unit: Unit, tank: Tank, input: SandboxInput) {
     const infection = spy.infection!;
-    infection.reload = Math.max(infection.reload - dt, 0);
 
     if (variant.role === 'spy') {
       combat.drive(tank, input.move);
       tank.turretAngle = input.aim ?? tank.turretAngle;
-
-      if (input.fire && infection.armed && infection.reload === 0) {
-        infection.reload = PLAYER_RELOAD;
-        fireTank(unit, tank);
-      }
-
+      fireWeapon(unit, tank, infection.weapon, dt, input.fire && infection.armed);
       return;
     }
 
@@ -530,22 +532,33 @@ export function createSpySandbox(
     if (!controls) {
       const senses = { ...sensesOf(unit, tank), spider: undefined, enemy: undefined };
       combat.drive(tank, unit.bot.think(dt, tank, senses, { jammed: false, stunned: false }).move);
+      fireWeapon(unit, tank, infection.weapon, dt, false);
       return;
     }
 
     combat.drive(tank, controls.move);
     const error = angleBetween(tank.turretAngle, controls.aim);
     tank.turretAngle += Math.sign(error) * Math.min(Math.abs(error), HIJACK_TURRET_SPEED * dt);
+    fireWeapon(unit, tank, infection.weapon, dt, controls.fire);
+  }
 
-    if (controls.fire && infection.reload === 0) {
-      infection.reload = BOT_HIJACK_RELOAD;
-      fireTank(unit, tank);
+  /**
+   * Works a class's weapon for `dt` seconds and fires what it gives along the turret: `wants` pulls
+   * the trigger, a gatling spun up while it does, a charged shot held until full and let go.
+   */
+  function fireWeapon(unit: Unit, tank: Tank, weapon: Weapon, dt: number, wants: boolean) {
+    for (const shot of weapon.step(dt, pullFor(weapon, wants))) {
+      fireTank(unit, tank, { ...shot, angle: tank.turretAngle + (shot.angle ?? 0) });
     }
   }
 
-  function fireTank(unit: Unit, tank: Tank) {
+  /**
+   * Fires `tank`'s gun: the patrol's quick hitscan gun, or `shot` of the tank's class's weapon,
+   * which a hijacked tank fires; either way the shot makes noise and gives a hijacked tank away.
+   */
+  function fireTank(unit: Unit, tank: Tank, shot?: Shot) {
     unit.reload = variant.role === 'tank' && unit.index === PLAYER_UNIT ? PLAYER_RELOAD : BOT_RELOAD;
-    combat.fire(tank);
+    combat.fire(tank, shot);
 
     if (spy.infection?.unit === unit) {
       spy.infection.exposed = true;
@@ -702,7 +715,7 @@ export function createSpySandbox(
   function respawn(clock: number) {
     for (const unit of units) {
       if (!unit.tank && clock >= unit.respawnAt) {
-        unit.tank = spawnTank(unit.patrol, unit.index);
+        unit.tank = spawnTank(unit.patrol, unit.index, unit.tankClass);
         unit.bot = createPatrolBot(unit.patrol, random);
         unit.jammedUntil = 0;
         unit.stunnedUntil = 0;
@@ -718,10 +731,13 @@ export function createSpySandbox(
   }
 
   function spawnUnit(patrol: Patrol, index: number): Unit {
+    const tankClass = TANK_CLASSES[patrol.tankClass ?? MEDIUM_TANK.id];
+
     return {
       index,
       patrol,
-      tank: spawnTank(patrol, index),
+      tankClass,
+      tank: spawnTank(patrol, index, tankClass),
       bot: createPatrolBot(patrol, random),
       respawnAt: 0,
       jammedUntil: 0,
@@ -733,13 +749,17 @@ export function createSpySandbox(
     };
   }
 
-  function spawnTank(patrol: Patrol, index: number) {
+  /** Spawns the patrol's tank of `tankClass`, with its hull, mass and look, at the sandbox's speeds scaled by the class's. */
+  function spawnTank(patrol: Patrol, index: number, tankClass: TankClass) {
     const player = variant.role === 'tank' && index === PLAYER_UNIT;
 
     return combat.spawnTank(patrol.start, {
       color: player ? PLAYER_TANK_COLOR : TANK_COLOR,
       team: 'tanks',
-      pullSpeed: player ? PLAYER_PULL_SPEED : undefined
+      pullSpeed: ((player ? PLAYER_PULL_SPEED : DEFAULT_PULL_SPEED) * tankClass.speed) / MEDIUM_TANK.speed,
+      hull: tankClass.hull,
+      mass: tankClass.mass,
+      look: tankClass.look
     });
   }
 
@@ -981,6 +1001,8 @@ const PLAYER_UNIT = 0;
 type Unit = {
   index: number;
   patrol: Patrol;
+  /** Class of the patrol's tank, the Soldier's unless the patrol says otherwise. */
+  tankClass: TankClass;
   tank: Tank | undefined;
   bot: PatrolBot;
   respawnAt: number;
@@ -1004,7 +1026,6 @@ const GHOST_COLOR = [0.62, 0.52, 0.52];
 const SPIDER_DUST = [0.4, 0.13, 0.1, 1];
 const PLAYER_RELOAD = 0.6;
 const BOT_RELOAD = 0.9;
-const BOT_HIJACK_RELOAD = PLAYER_RELOAD;
 const HIJACK_TURRET_SPEED = 3;
 const SPIDER_RESPAWN = 3;
 const TANK_RESPAWN = 5;
@@ -1056,8 +1077,23 @@ function freshSpy() {
     deadUntil: 0,
     revealUntil: -Infinity,
     latch: undefined as { unit: Unit; held: number; drilled: number } | undefined,
-    infection: undefined as { unit: Unit; left: number; exposed: boolean; armed: boolean; reload: number } | undefined
+    infection: undefined as { unit: Unit; left: number; exposed: boolean; armed: boolean; weapon: Weapon } | undefined
   };
+}
+
+/** How to work the trigger of `weapon` for a shot when `wants`: a gatling spins while wanted, a charged shot is held until full. */
+function pullFor(weapon: Weapon, wants: boolean): Trigger {
+  const spec = weapon.tankClass.weapon;
+
+  if (spec.kind === 'spin') {
+    return { fire: wants, rev: wants };
+  }
+
+  if (spec.kind === 'charge') {
+    return { fire: !(wants && (weapon.charge ?? 0) >= 1) && (wants || weapon.charge !== undefined) };
+  }
+
+  return { fire: wants };
 }
 
 /** Distance from `point` to the segment from `a` to `b`. */

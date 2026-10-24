@@ -1,4 +1,5 @@
 import type { CombatLayout, Placement, WallPlacement } from '../damage/combat';
+import type { TankClassId } from '../koth/tanks';
 import { createField, FAR, sampleField, CHANNELS, type DamageField } from '../damage/field';
 import { KIND_FIELD, type createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
@@ -30,6 +31,8 @@ export type Patrol = {
   route: readonly Point[];
   /** Seconds the tank waits at the waypoint of each index; waypoints not listed are driven through. */
   posts: Readonly<Record<number, number>>;
+  /** Class of the patrol's tank, after the king of the hill's; defaults to the Soldier, the medium tank. */
+  tankClass?: TankClassId;
 };
 
 /** Everything the sandbox needs to know about its arena. */
