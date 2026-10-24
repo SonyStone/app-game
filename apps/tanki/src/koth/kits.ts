@@ -7,10 +7,12 @@ import type { KitPlacement } from './map';
 type Renderer = ReturnType<typeof createRangeRenderer>;
 
 /**
- * Repair kits lying about the map, after the health kits of Team Fortress 2: a tank that drives
- * over one has its armor mended at once, by `KIT_REPAIR` of its damage, and the kit comes back
- * `KIT_RESPAWN` seconds later. A tank with whole armor drives over a kit without taking it. Each
- * kit is a green box with a white cross on a pale pad that stays while the kit is away.
+ * Repair kits lying about the map, after the health kits of Team Fortress 2: a tank whose hull
+ * touches one has its armor mended at once, by `KIT_REPAIR` of its damage, and the kit comes back
+ * `KIT_RESPAWN` seconds later. The side of the hull that touched the kit mends more and the far
+ * side less, about as much in all, so a tank can back its holed rear onto a kit. A tank with whole
+ * armor drives over a kit without taking it. Each kit is a green box with a white cross on a pale
+ * pad that stays while the kit is away.
  *
  * Reserves five field slots for as long as the renderer lives.
  */
@@ -45,13 +47,10 @@ export function createKits(renderer: Renderer, placements: readonly KitPlacement
           continue;
         }
 
-        const taker = tanks.find((tank) => {
-          const at = tank.hull.translation();
-          return Math.hypot(at.x - kit.x, at.y - kit.y) < PICKUP_RADIUS && combat.armorLeft(tank) < WHOLE;
-        });
+        const taker = tanks.find((tank) => touches(tank, kit) && combat.armorLeft(tank) < WHOLE);
 
         if (taker) {
-          combat.repair(taker, KIT_REPAIR[kit.size]);
+          combat.repair(taker, KIT_REPAIR[kit.size], kit);
           kit.readyAt = time + KIT_RESPAWN;
           pickups++;
           takers.push(taker);
@@ -113,8 +112,12 @@ export const KIT_REPAIR = { small: 0.3, large: 1 };
 /** Seconds until a taken kit is back, as in Team Fortress 2. */
 export const KIT_RESPAWN = 10;
 
-/** A tank takes a kit when its center comes this close to the kit's. */
-export const PICKUP_RADIUS = 26;
+/**
+ * A tank takes a kit when the outline of its hull, a box of `HULL_HALF` half size, comes within
+ * `PICKUP_REACH` px of the kit's center, as close as the edge of a large kit's box.
+ */
+export const PICKUP_REACH = 9;
+const HULL_HALF = { x: 20, y: 12.5 };
 
 /** Armor share at and above which a tank leaves a kit lying. */
 const WHOLE = 0.999;
@@ -127,6 +130,17 @@ const TURN_SPEED = 0.6;
 const KIT_COLOR = [0.3, 0.62, 0.32];
 const CROSS_COLOR = [0.97, 0.97, 0.93];
 const PAD_COLOR = [0.9, 0.95, 0.88];
+
+/** Whether the outline of `tank`'s hull touches `kit`. */
+function touches(tank: Tank, kit: KitPlacement) {
+  const center = tank.hull.translation();
+  const angle = tank.hull.rotation();
+  const dx = kit.x - center.x;
+  const dy = kit.y - center.y;
+  const along = dx * Math.cos(angle) + dy * Math.sin(angle);
+  const across = -dx * Math.sin(angle) + dy * Math.cos(angle);
+  return roundedBox(along, across, HULL_HALF.x, HULL_HALF.y, 0) < PICKUP_REACH;
+}
 
 /** A box of side `size` with rounded corners. */
 function createBoxField(size: number) {

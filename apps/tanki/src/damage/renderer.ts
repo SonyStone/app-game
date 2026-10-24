@@ -122,14 +122,38 @@ export function createRangeRenderer(gpu: GpuContext) {
     const base = d.u32(item.grid.z) * SLOT_CELLS;
     const position = std.div(std.sub(point, item.field.xy), item.field.z);
     const floor = std.floor(position);
-    const t = std.clamp(std.sub(position, floor), d.vec2f(0), d.vec2f(1));
     const x0 = std.clamp(d.i32(floor.x), 0, d.i32(cols) - 1);
     const y0 = std.clamp(d.i32(floor.y), 0, d.i32(rows) - 1);
+    // Measured from the clamped cell: the half cell before a grid's first cell center reads that
+    // cell, as the CPU's `sampleField` does, instead of the cell after it. Tiles of a wall meet
+    // there without a margin, and the old reach showed as a doubled line along their seam.
+    const t = std.clamp(std.sub(position, d.vec2f(d.f32(x0), d.f32(y0))), d.vec2f(0), d.vec2f(1));
     const x1 = std.min(x0 + 1, d.i32(cols) - 1);
     const y1 = std.min(y0 + 1, d.i32(rows) - 1);
     const top = std.mix(texel(base, cols, x0, y0), texel(base, cols, x1, y0), t.x);
     const bottom = std.mix(texel(base, cols, x0, y1), texel(base, cols, x1, y1), t.x);
     return std.mix(top, bottom, t.y);
+  };
+
+  /** The cell of a body's field nearest to a local point, clamped to its grid, as stored. */
+  const nearestCell = (item: d.Infer<typeof BodyInstance>, point: d.v2f) => {
+    'use gpu';
+    const cols = d.u32(item.grid.x);
+    const rows = d.u32(item.grid.y);
+    const position = std.round(std.div(std.sub(point, item.field.xy), item.field.z));
+    const col = std.clamp(d.i32(position.x), 0, d.i32(cols) - 1);
+    const row = std.clamp(d.i32(position.y), 0, d.i32(rows) - 1);
+    return texel(d.u32(item.grid.z) * SLOT_CELLS, cols, col, row);
+  };
+
+  /** A fill color packed into one channel by `packColor`. */
+  const unpackColor = (packed: number) => {
+    'use gpu';
+    const value = std.max(packed - 1, 0);
+    const red = std.floor(value / 65536);
+    const green = std.floor((value - red * 65536) / 256);
+    const blue = value - red * 65536 - green * 256;
+    return std.div(d.vec3f(red, green, blue), 255);
   };
 
   /**
@@ -168,12 +192,14 @@ export function createRangeRenderer(gpu: GpuContext) {
     const flash = item.color.w;
     let result = d.vec4f(0);
 
-    if (kind === KIND_FIELD || kind === KIND_FIELD_OPEN) {
+    if (kind === KIND_FIELD || kind === KIND_FIELD_OPEN || kind === KIND_SCRAP) {
       const sample = sampleField(item, input.local);
       const open = kind === KIND_FIELD_OPEN;
       // The armor covers the core until a hole opens onto it; then the core shows through its own pocket.
       const armorDistance = std.select(sample.x, std.max(sample.x, -sample.z), open);
-      const fill = std.mix(item.color.xyz, d.vec3f(0.12, 0.11, 0.1), sample.w * 0.85);
+      // Scrap keeps each piece's own color where the core would be, read from the nearest cell.
+      const base = std.select(item.color.xyz, unpackColor(nearestCell(item, input.local).z), kind === KIND_SCRAP);
+      const fill = std.mix(base, d.vec3f(0.12, 0.11, 0.1), sample.w * 0.85);
       const lines = std.max(edgeBand(armorDistance, d.f32(OUTLINE)), coverage(sample.y));
       const armor = std.mix(std.mix(fill, black, lines), d.vec3f(1), flash * 0.6);
 
@@ -937,9 +963,9 @@ export function createRangeRenderer(gpu: GpuContext) {
     const kind = d.u32(item.grid.w);
     let cover = d.f32(0);
 
-    if (kind === KIND_FIELD || kind === KIND_FIELD_OPEN) {
+    if (kind === KIND_FIELD || kind === KIND_FIELD_OPEN || kind === KIND_SCRAP) {
       const sample = sampleField(item, input.local);
-      cover = coverage(std.min(sample.x, sample.z));
+      cover = coverage(std.select(std.min(sample.x, sample.z), sample.x, kind === KIND_SCRAP));
     } else if (kind === KIND_TURRET) {
       const barrel = roundedBox(std.sub(input.local, d.vec2f(18.55, 0)), d.vec2f(11.25, 3.75), d.f32(1));
       cover = coverage(std.min(barrel, std.length(input.local) - 9.6));
@@ -1623,6 +1649,21 @@ export const KIND_FIELD_OPEN = 3;
  * filling the quad less its `margin`, with an outline.
  */
 export const KIND_BLOCK = 4;
+
+/**
+ * Pieces of scrap lying on the ground, many in one field: shaded like `KIND_FIELD`, but each
+ * cell's core channel holds the color of the piece it belongs to, packed by `packColor`, and the
+ * body's own color is ignored.
+ */
+export const KIND_SCRAP = 5;
+
+/**
+ * Packs a fill color, components 0-1, into one field channel for `KIND_SCRAP`: a whole number
+ * from 1 to 2^24, which a 32-bit float holds exactly.
+ */
+export function packColor(color: readonly number[]) {
+  return 1 + Math.round(color[0] * 255) * 65536 + Math.round(color[1] * 255) * 256 + Math.round(color[2] * 255);
+}
 
 /** A tapered streak along its velocity. */
 export const PARTICLE_SPARK = 0;

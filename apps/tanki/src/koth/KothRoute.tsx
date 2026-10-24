@@ -16,7 +16,9 @@ import { CAPTURE_RULES } from './rules';
  * King of the hill on WebGPU: red against blue, four tanks a side, the player with three bots
  * against four bots. The point in the middle opens 30 seconds into the match; stand on it to
  * capture it. The first team to hold it for three minutes wins. Shots break walls of wood, brick
- * and concrete, and repair kits on the map mend armor as the base does.
+ * and concrete, and a ram at full speed breaks a fence. Destroyed tanks leave wrecks that are cover
+ * and pieces that stay on the ground. Repair kits on the map mend armor as the base does, more on
+ * the side of the hull that touches them.
  *
  * Keys: R restarts, B shows what the bots think, V hands the player's tank to a bot and shows the
  * whole map (1-8 follow a tank, 0 shows the whole map again). In the address, `?watch` starts
@@ -65,8 +67,8 @@ export default function KothRoute() {
       <KothHud state={state()} watching={watching()} />
       <MatchResult state={state()} onRestart={() => setRestarts((count) => count + 1)} />
       <p class="pointer-events-none absolute bottom-3 left-4 m-0 text-xs text-white/60">
-        WASD drive · mouse aims · click fires · stand on the point to capture it · shoot through wood, brick and concrete · your base and green
-        kits mend armor · B bot thoughts · V watch the bots (1-8 follow, 0 whole map) · R restart
+        WASD drive · mouse aims · click fires · stand on the point to capture it · shoot through wood, brick and concrete, ram through fences · wrecks are cover · your base and green
+        kits mend armor, most where they touch · B bot thoughts · V watch the bots (1-8 follow, 0 whole map) · R restart
       </p>
     </div>
   );
@@ -224,7 +226,7 @@ function thoughtsOnScreen(match: KothMatch, camera: ReturnType<typeof createCame
       name: thought.member.name,
       role: thought.member.role,
       goal: thought.goal ?? '',
-      action: thought.action ?? '',
+      action: thought.breach ? `${thought.action ?? ''} · breach: ${thought.breach.method} ${thought.breach.phase}` : (thought.action ?? ''),
       steps: thought.steps.join(' → '),
       covering: thought.covering?.name,
       x: label.x,

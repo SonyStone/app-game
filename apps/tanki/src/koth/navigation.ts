@@ -8,7 +8,9 @@ type Point = { x: number; y: number };
  * the nearest obstacle; a tank's center may stand in cells at least `clearance` away, so paths
  * through open cells keep the whole hull off the walls. Moving bodies such as tanks and crates
  * are not part of the grid: callers add them as path costs and steer around them. When walls are
- * shot apart, `updateNavGrid` follows them where they changed.
+ * shot apart or wrecks are left, `updateNavGrid` follows them where they changed. A second layer
+ * keeps the distance to what never breaks, so a way may also be planned through breakable walls
+ * (`findBreachPath`).
  */
 export type NavGrid = {
   /** Cell size in pixels. */
@@ -25,6 +27,12 @@ export type NavGrid = {
    * that `updateNavGrid` recomputed may hold less than the true distance where it is large.
    */
   readonly distance: Float32Array;
+  /**
+   * Distance from each cell center to the nearest obstacle that never breaks: the border, steel
+   * walls and campfire stones. A closed cell that is open here is closed only by breakable walls
+   * or wrecks, which a tank could break through.
+   */
+  readonly hard: Float32Array;
   /** Counts the updates that opened or closed a cell, so paths planned before can be planned again. */
   revision: number;
 };
@@ -43,37 +51,58 @@ export function createNavGrid(layout: CombatLayout, options: { cell?: number; cl
   const originX = -layout.halfWidth + cell / 2;
   const originY = -layout.halfHeight + cell / 2;
   const distance = new Float32Array(cols * rows);
+  const hard = new Float32Array(cols * rows);
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const x = originX + col * cell;
       const y = originY + row * cell;
-      let nearest = Math.min(layout.halfWidth - Math.abs(x), layout.halfHeight - Math.abs(y));
+      let unbreakable = Math.min(layout.halfWidth - Math.abs(x), layout.halfHeight - Math.abs(y));
+      let breakable = Infinity;
 
       for (const wall of layout.walls ?? []) {
-        nearest = Math.min(nearest, boxDistance({ x, y }, wall));
+        const gap = boxDistance({ x, y }, wall);
+
+        if ((wall.material ?? 'steel') === 'steel') {
+          unbreakable = Math.min(unbreakable, gap);
+        } else {
+          breakable = Math.min(breakable, gap);
+        }
       }
 
       for (const campfire of layout.campfires ?? []) {
-        nearest = Math.min(nearest, Math.hypot(x - campfire.x, y - campfire.y) - CAMPFIRE_RADIUS);
+        unbreakable = Math.min(unbreakable, Math.hypot(x - campfire.x, y - campfire.y) - CAMPFIRE_RADIUS);
       }
 
-      distance[row * cols + col] = nearest;
+      distance[row * cols + col] = Math.min(unbreakable, breakable);
+      hard[row * cols + col] = unbreakable;
     }
   }
 
-  return { cell, cols, rows, originX, originY, clearance: options.clearance ?? 24, distance, revision: 0 };
+  return { cell, cols, rows, originX, originY, clearance: options.clearance ?? 24, distance, hard, revision: 0 };
 }
 
 /**
  * Recomputes the cells whose centers lie within `bounds` from `distanceAt`, after obstacles there
- * changed, such as a wall shot apart. Bumps the grid's `revision` when a cell opened or closed.
+ * changed, such as a wall shot apart or a wreck left. Bumps the grid's `revision` when a cell
+ * opened or closed.
+ *
+ * Cells outside `bounds` keep their distances, which an obstacle that appeared within `changed`
+ * may make too large; they are capped at their distance to `changed`, so traces that step by the
+ * distance never skip over the new obstacle. Make `bounds` reach far enough around `changed`
+ * that the cap stays above the clearance.
  *
  * @param distanceAt - Distance from a point to the nearest obstacle as they stand now; it may cap
  *   large distances, as long as the cap exceeds the clearance with room to spare.
+ * @param changed - Where obstacles changed, inside `bounds`; without it, nothing outside `bounds` changes.
  * @returns How many cells opened or closed.
  */
-export function updateNavGrid(grid: NavGrid, bounds: { minX: number; minY: number; maxX: number; maxY: number }, distanceAt: (point: Point) => number) {
+export function updateNavGrid(
+  grid: NavGrid,
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  distanceAt: (point: Point) => number,
+  changed?: { minX: number; minY: number; maxX: number; maxY: number }
+) {
   const minCol = Math.max(Math.ceil((bounds.minX - grid.originX) / grid.cell), 0);
   const maxCol = Math.min(Math.floor((bounds.maxX - grid.originX) / grid.cell), grid.cols - 1);
   const minRow = Math.max(Math.ceil((bounds.minY - grid.originY) / grid.cell), 0);
@@ -88,6 +117,19 @@ export function updateNavGrid(grid: NavGrid, bounds: { minX: number; minY: numbe
 
       if (open !== isOpenCell(grid, cell)) {
         flipped++;
+      }
+    }
+  }
+
+  if (changed) {
+    for (let cell = 0; cell < grid.distance.length; cell++) {
+      const col = cell % grid.cols;
+      const row = Math.floor(cell / grid.cols);
+
+      if (col < minCol || col > maxCol || row < minRow || row > maxRow) {
+        const center = cellCenter(grid, cell);
+        const gap = Math.hypot(Math.max(changed.minX - center.x, 0, center.x - changed.maxX), Math.max(changed.minY - center.y, 0, center.y - changed.maxY));
+        grid.distance[cell] = Math.min(grid.distance[cell], gap);
       }
     }
   }
@@ -132,6 +174,63 @@ export function findPath(
   const points = [from, ...cells.slice(1, -1).map((cell) => cellCenter(grid, cell)), end];
 
   return smoothPath(grid, points, options.cost);
+}
+
+/**
+ * Finds a short way from `from` to `to` that may break through walls: as `findPath`, but cells
+ * closed only by breakable walls and wrecks (open in `grid.hard`) may be entered at the extra cost
+ * `through` gives them, as for `options.cost`; `Infinity` keeps a cell closed. The way is
+ * straightened on either side of the first stretch of closed cells it crosses, which it drives
+ * straight through.
+ *
+ * @returns The way from `from` to the goal and its first crossing of closed cells, if it has one:
+ *   the cells in order, the last open cell's center before them and the first after them;
+ *   `undefined` when the goal cannot be reached even so.
+ */
+export function findBreachPath(
+  grid: NavGrid,
+  from: Point,
+  to: Point,
+  options: { cost?: (cell: number) => number; through: (cell: number) => number }
+): { path: Point[]; crossing?: { cells: number[]; entry: Point; exit: Point } } | undefined {
+  const start = nearestOpen(grid, from, grid.cols + grid.rows);
+  const goal = nearestOpen(grid, to, 3);
+  const passable = (cell: number) => isOpenCell(grid, cell) || (grid.hard[cell] >= grid.clearance && Number.isFinite(options.through(cell)));
+  const extra = (cell: number) => (options.cost?.(cell) ?? 0) + (isOpenCell(grid, cell) ? 0 : options.through(cell));
+
+  if (start === undefined || goal === undefined) {
+    return undefined;
+  }
+
+  const cells = searchPath(grid, start, goal, extra, passable);
+
+  if (!cells) {
+    return undefined;
+  }
+
+  const end = isOpenAt(grid, to) ? to : cellCenter(grid, goal);
+  const first = cells.findIndex((cell) => !isOpenCell(grid, cell));
+
+  if (first < 0) {
+    return { path: smoothPath(grid, [from, ...cells.slice(1, -1).map((cell) => cellCenter(grid, cell)), end], options.cost) };
+  }
+
+  let last = first;
+
+  while (last + 1 < cells.length && !isOpenCell(grid, cells[last + 1])) {
+    last++;
+  }
+
+  // The start and the goal are open, so open cells bound the crossing on both sides.
+  const entry = cellCenter(grid, cells[first - 1]);
+  const exit = cellCenter(grid, cells[last + 1]);
+  const before = smoothPath(grid, [from, ...cells.slice(1, first).map((cell) => cellCenter(grid, cell))], options.cost);
+  const after = smoothPath(grid, [exit, ...cells.slice(last + 2, -1).map((cell) => cellCenter(grid, cell)), end], options.cost);
+
+  return {
+    path: [...(first > 1 ? before : [from]), ...after],
+    crossing: { cells: cells.slice(first, last + 1), entry: first > 1 ? entry : from, exit }
+  };
 }
 
 /**
@@ -193,8 +292,11 @@ export function sightClear(grid: NavGrid, a: Point, b: Point) {
  * Whether a straight line from `a` to `b` stays out of the obstacles of a distance field on the
  * grid's cells, such as `grid.distance` or one that adds moving bodies. It steps by the distance
  * to the nearest obstacle, so open ground costs only a few samples.
+ *
+ * @param near - Within `near.reach` px of `a`, trace `near.field` instead: a field without the low
+ *   obstacles, such as rubble, that a viewer right behind them sees over.
  */
-export function traceClear(grid: NavGrid, field: Float32Array, a: Point, b: Point) {
+export function traceClear(grid: NavGrid, field: Float32Array, a: Point, b: Point, near?: { field: Float32Array; reach: number }) {
   const length = Math.hypot(b.x - a.x, b.y - a.y);
 
   if (length < 1e-6) {
@@ -206,7 +308,12 @@ export function traceClear(grid: NavGrid, field: Float32Array, a: Point, b: Poin
   let travelled = 0;
 
   while (travelled < length) {
-    const distance = sampleDistance(grid, field, { x: a.x + dx * travelled, y: a.y + dy * travelled });
+    const traced = near && travelled < near.reach ? near.field : field;
+    // Near the edge of `near`'s reach, a step may not jump past what the farther field holds.
+    const distance = Math.min(
+      sampleDistance(grid, traced, { x: a.x + dx * travelled, y: a.y + dy * travelled }),
+      near && travelled < near.reach ? near.reach - travelled + MIN_TRACE_STEP : Infinity
+    );
 
     if (distance < 0) {
       return false;
@@ -215,7 +322,7 @@ export function traceClear(grid: NavGrid, field: Float32Array, a: Point, b: Poin
     travelled += Math.max(distance * 0.9, MIN_TRACE_STEP);
   }
 
-  return sampleDistance(grid, field, b) >= 0;
+  return sampleDistance(grid, near && length < near.reach ? near.field : field, b) >= 0;
 }
 
 /**
@@ -223,8 +330,10 @@ export function traceClear(grid: NavGrid, field: Float32Array, a: Point, b: Poin
  * distance field on the grid's cells blocks it, up to `range`: the outline of what can be seen
  * from there. Direction `index` points at angle `index / rays * 2π`. The first few pixels are
  * skipped, so a viewer pressed against a wall still sees past it.
+ *
+ * @param near - Within `near.reach` px of `from`, trace `near.field` instead, as for `traceClear`.
  */
-export function sightReach(grid: NavGrid, field: Float32Array, from: Point, range: number, rays: number) {
+export function sightReach(grid: NavGrid, field: Float32Array, from: Point, range: number, rays: number, near?: { field: Float32Array; reach: number }) {
   const reach = new Float32Array(rays);
 
   for (let index = 0; index < rays; index++) {
@@ -234,7 +343,11 @@ export function sightReach(grid: NavGrid, field: Float32Array, from: Point, rang
     let travelled = VIEWER_RADIUS;
 
     while (travelled < range) {
-      const distance = sampleDistance(grid, field, { x: from.x + dx * travelled, y: from.y + dy * travelled });
+      const traced = near && travelled < near.reach ? near.field : field;
+      const distance = Math.min(
+        sampleDistance(grid, traced, { x: from.x + dx * travelled, y: from.y + dy * travelled }),
+        near && travelled < near.reach ? near.reach - travelled + MIN_TRACE_STEP : Infinity
+      );
 
       if (distance < 0) {
         break;
@@ -449,8 +562,12 @@ const SQRT2 = Math.SQRT2;
 const WALL_MARGIN = 16;
 const WALL_PENALTY = 0.6;
 
-/** A* over cell indices from `start` to `goal`, with the octile distance as its estimate. */
-function searchPath(grid: NavGrid, start: number, goal: number, cost: ((cell: number) => number) | undefined) {
+/**
+ * A* over cell indices from `start` to `goal`, with the octile distance as its estimate.
+ *
+ * @param passable - Cells the search may enter; open cells by default.
+ */
+function searchPath(grid: NavGrid, start: number, goal: number, cost: ((cell: number) => number) | undefined, passable?: (cell: number) => boolean) {
   const count = grid.cols * grid.rows;
   const costs = new Float32Array(count).fill(Infinity);
   const parents = new Int32Array(count).fill(-1);
@@ -491,7 +608,7 @@ function searchPath(grid: NavGrid, start: number, goal: number, cost: ((cell: nu
         return;
       }
 
-      const margin = grid.distance[neighbor] - grid.clearance;
+      const margin = Math.max(grid.distance[neighbor] - grid.clearance, 0);
       const penalty = margin < WALL_MARGIN ? WALL_PENALTY * (1 - margin / WALL_MARGIN) : 0;
       const next = costs[cell] + length * (1 + penalty + (cost?.(neighbor) ?? 0));
 
@@ -500,14 +617,17 @@ function searchPath(grid: NavGrid, start: number, goal: number, cost: ((cell: nu
         parents[neighbor] = cell;
         heap.push(neighbor, next + estimate(neighbor));
       }
-    });
+    }, passable);
   }
 
   return undefined;
 }
 
-/** Calls `visit` with each open neighbor of `cell` and the step length; diagonals may not cut a blocked corner. */
-function forNeighbors(grid: NavGrid, cell: number, visit: (neighbor: number, length: number) => void) {
+/**
+ * Calls `visit` with each neighbor of `cell` the tank may enter, open ones unless `passable` says
+ * otherwise, and the step length; diagonals may not cut a corner it may not enter.
+ */
+function forNeighbors(grid: NavGrid, cell: number, visit: (neighbor: number, length: number) => void, passable = (other: number) => isOpenCell(grid, other)) {
   const col = cell % grid.cols;
   const row = Math.floor(cell / grid.cols);
 
@@ -526,11 +646,11 @@ function forNeighbors(grid: NavGrid, cell: number, visit: (neighbor: number, len
 
       const neighbor = y * grid.cols + x;
 
-      if (!isOpenCell(grid, neighbor)) {
+      if (!passable(neighbor)) {
         continue;
       }
 
-      if (dx !== 0 && dy !== 0 && (!isOpenCell(grid, row * grid.cols + x) || !isOpenCell(grid, y * grid.cols + col))) {
+      if (dx !== 0 && dy !== 0 && (!passable(row * grid.cols + x) || !passable(y * grid.cols + col))) {
         continue;
       }
 

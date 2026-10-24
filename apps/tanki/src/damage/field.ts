@@ -279,6 +279,23 @@ export function carve(field: DamageField, center: { x: number; y: number }, radi
   });
 }
 
+/**
+ * Cracks the armor along a segment: a cut `width` px wide, sooted along its rim. Two cracks that
+ * meet a hole and the edge cut off the wedge between them, which `detachLoosePieces` then frees.
+ */
+export function crack(field: DamageField, from: { x: number; y: number }, to: { x: number; y: number }, width: number) {
+  const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+  const center = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+
+  forCellsNear(field, center, length / 2 + width + SCORCH_REACH + field.cell, (index, x, y) => {
+    const t = Math.min(Math.max(((x - from.x) * (to.x - from.x) + (y - from.y) * (to.y - from.y)) / (length * length), 0), 1);
+    const gap = Math.hypot(x - from.x - (to.x - from.x) * t, y - from.y - (to.y - from.y) * t) - width / 2;
+    const data = field.data;
+    data[index] = Math.max(data[index], -gap);
+    data[index + 3] = Math.max(data[index + 3], Math.min(Math.max(1 - gap / SCORCH_REACH, 0), 1));
+  });
+}
+
 /** Soots the armor around `center` without removing any, as a glancing hit does. */
 export function scorch(field: DamageField, center: { x: number; y: number }, radius: number) {
   forCellsNear(field, center, radius, (index, x, y) => {
@@ -318,6 +335,65 @@ export function dent(
     field.data.set(sample, index);
   });
 }
+
+/**
+ * Mends a field toward `pristine`, its undamaged copy, by `amount` of its damage, 0 to 1: every
+ * channel of a cell moves its share of the way back. Without `toward` every cell's share is
+ * `amount`. With `toward`, a unit direction in the field's local axes, the side facing it mends
+ * more and the far side less: a cell's share is weighted by `1 + bias * cos θ`, θ the angle
+ * between `toward` and the cell's direction from the local origin, and the weights are scaled so
+ * the armor mended in all, as the change of the armor channel, stays what `amount` mends evenly.
+ * No cell mends past whole, so a full mend leaves the whole field whole either way.
+ *
+ * @param bias - How much more the near side mends than the far side, 0 to 1.
+ */
+export function mend(field: DamageField, pristine: Float32Array, amount: number, toward?: { x: number; y: number }, bias = MEND_BIAS) {
+  const cells = field.cols * field.rows;
+  const shares = new Float32Array(cells).fill(Math.min(amount, 1));
+
+  if (toward && amount < 1) {
+    const weights = new Float32Array(cells);
+    const damage = new Float32Array(cells);
+    let total = 0;
+
+    for (let cell = 0; cell < cells; cell++) {
+      const x = field.originX + (cell % field.cols) * field.cell;
+      const y = field.originY + Math.floor(cell / field.cols) * field.cell;
+      const length = Math.hypot(x, y);
+      weights[cell] = Math.max(1 + (length > 1e-6 ? (bias * (x * toward.x + y * toward.y)) / length : 0), MIN_MEND_WEIGHT);
+      damage[cell] = Math.abs(pristine[cell * CHANNELS] - field.data[cell * CHANNELS]);
+      total += damage[cell];
+    }
+
+    // The scale that mends `amount` of the damage in all; more cells reach whole as it grows.
+    const mended = (scale: number) => damage.reduce((sum, value, cell) => sum + Math.min(amount * weights[cell] * scale, 1) * value, 0);
+    let low = 0;
+    let high = 1 / (amount * MIN_MEND_WEIGHT);
+
+    for (let iteration = 0; iteration < 32 && total > 0; iteration++) {
+      const middle = (low + high) / 2;
+
+      if (mended(middle) < amount * total) {
+        low = middle;
+      } else {
+        high = middle;
+      }
+    }
+
+    weights.forEach((weight, cell) => (shares[cell] = Math.min(amount * weight * high, 1)));
+  }
+
+  for (let cell = 0; cell < cells; cell++) {
+    for (let channel = 0; channel < CHANNELS; channel++) {
+      const index = cell * CHANNELS + channel;
+      field.data[index] += (pristine[index] - field.data[index]) * shares[cell];
+    }
+  }
+}
+
+/** How much more the side of a field facing a directed mend mends than the far side, and the least weight of any cell. */
+const MEND_BIAS = 0.8;
+const MIN_MEND_WEIGHT = 0.05;
 
 /** A piece of armor cut from a field, with its own field in the parent's coordinates. */
 export type Fragment = {

@@ -1,5 +1,5 @@
 import type { Tank } from '../arena/bodies';
-import type { Combat } from '../damage/combat';
+import { SIGHT_OVER_RUBBLE, type Combat } from '../damage/combat';
 import type { Gun } from './gun';
 import type { Role } from './brain';
 import type { KothMap } from './map';
@@ -51,7 +51,8 @@ export type Sighting = {
  * - Knowledge: every enemy any member saw lately, plus any enemy on the point, which the capture
  *   display gives away, and the shooter of every shot at a member.
  * - Danger: how exposed each grid cell is to the known enemies' guns, from line-of-sight traces
- *   through walls and crates. Bots route around danger and look for cover where it is zero.
+ *   through walls, wrecks, crates and rubble, as shells see them: an enemy right behind rubble
+ *   sees and shoots over it. Bots route around danger and look for cover where it is zero.
  * - Roles: an assault, a flanker, a support and another assault, filled from the living members
  *   and kept stable; a human always plays assault.
  * - Intent: push for the point, hold it, or regroup when too many members are down.
@@ -77,8 +78,11 @@ export function createTeamBoard(
   const { combat, grid, map } = context;
   const sightings = new Map<Tank, Sighting>();
   const cellCount = grid.cols * grid.rows;
-  /** Distance to walls and crates for sight traces. */
+  /** Distance to walls, wrecks, crates and rubble for sight traces. */
   const sight = new Float32Array(cellCount);
+  /** The same without rubble, which a tank right behind it sees and shoots over. */
+  const overRubble = new Float32Array(cellCount);
+  const rubbleSight = { field: overRubble, reach: SIGHT_OVER_RUBBLE };
   const danger = new Float32Array(cellCount);
   /** Extra path cost of cells taken by crates, which tanks can shove but slowly. */
   const crateCost = new Float32Array(cellCount);
@@ -151,12 +155,15 @@ export function createTeamBoard(
       return crateCost[cell];
     },
 
-    /** Distance to walls and crates per grid cell, for sight traces. */
+    /** Distance to walls, wrecks, crates and rubble per grid cell, for sight traces. */
     sightField: sight as Readonly<Float32Array>,
 
-    /** Whether a straight line between two points passes no wall or crate, by the grid. */
+    /**
+     * Whether a straight line between two points passes no wall, wreck, crate or rubble, by the
+     * grid, as a tank at `from` sees: over rubble right in front of it.
+     */
     canSee(from: Point, to: Point) {
-      return traceClear(grid, sight, from, to);
+      return traceClear(grid, sight, from, to, rubbleSight);
     },
 
     /** The ally this member was asked to help and the enemy shooting at it, while both live. */
@@ -328,6 +335,40 @@ export function createTeamBoard(
         }
       }
     }
+
+    overRubble.set(sight);
+
+    for (const tile of combat.walls.tiles) {
+      if (tile.rubble) {
+        addRubble(tile);
+      }
+    }
+  }
+
+  /** Adds a heap of rubble to the sight field: tanks drive over it, but it stops shells and sight. */
+  function addRubble(tile: (typeof combat.walls.tiles)[number]) {
+    const angle = tile.wall.rotation ?? 0;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const minCol = Math.max(Math.floor((tile.bounds.minX - grid.originX) / grid.cell) - 1, 0);
+    const maxCol = Math.min(Math.ceil((tile.bounds.maxX - grid.originX) / grid.cell) + 1, grid.cols - 1);
+    const minRow = Math.max(Math.floor((tile.bounds.minY - grid.originY) / grid.cell) - 1, 0);
+    const maxRow = Math.min(Math.ceil((tile.bounds.maxY - grid.originY) / grid.cell) + 1, grid.rows - 1);
+
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        const cell = row * grid.cols + col;
+        const center = cellCenter(grid, cell);
+        const dx = center.x - tile.wall.x;
+        const dy = center.y - tile.wall.y;
+        const x = dx * cos + dy * sin;
+        const y = -dx * sin + dy * cos;
+
+        for (const box of tile.boxes) {
+          sight[cell] = Math.min(sight[cell], boxDistance(x - box.x, y - box.y, box.halfWidth, box.halfHeight));
+        }
+      }
+    }
   }
 
   /**
@@ -339,7 +380,7 @@ export function createTeamBoard(
     danger.fill(0);
 
     for (const threat of sightings.values()) {
-      const reach = sightReach(grid, sight, threat.position, DANGER_RANGE, SIGHT_RAYS);
+      const reach = sightReach(grid, sight, threat.position, DANGER_RANGE, SIGHT_RAYS, rubbleSight);
       const minCol = Math.max(Math.floor((threat.position.x - DANGER_RANGE - grid.originX) / grid.cell), 0);
       const maxCol = Math.min(Math.ceil((threat.position.x + DANGER_RANGE - grid.originX) / grid.cell), grid.cols - 1);
       const minRow = Math.max(Math.floor((threat.position.y - DANGER_RANGE - grid.originY) / grid.cell), 0);
@@ -556,6 +597,13 @@ const POINT_SPOT = 45;
 /** Half size of a crate's armor. */
 const CRATE_HALF = { x: 21.25, y: 46.25 };
 const CRATE_COST = 3;
+
+/** Signed distance to an axis-aligned box of half size `halfX` x `halfY` around the origin. */
+function boxDistance(x: number, y: number, halfX: number, halfY: number) {
+  const qx = Math.abs(x) - halfX;
+  const qy = Math.abs(y) - halfY;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
+}
 
 function distanceTo(a: Point, b: Point) {
   return Math.hypot(a.x - b.x, a.y - b.y);
