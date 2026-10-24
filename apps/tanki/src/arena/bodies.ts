@@ -12,6 +12,17 @@ export const PLAYER_PULL_SPEED = 25000 / 60;
 export const DEFAULT_PULL_SPEED = 15000 / 60;
 
 /**
+ * Share of the pull speed a hull reaches at full input: the hull's damping holds it back, so on
+ * a straight run it settles at about 0.68 of the pull's speed, whatever that speed is.
+ */
+export const HULL_SPEED_SHARE = 0.68;
+
+/** Pull speed that makes a hull run at `hullSpeed` pixels per second on a straight run. */
+export function pullSpeedFor(hullSpeed: number) {
+  return hullSpeed / HULL_SPEED_SHARE;
+}
+
+/**
  * A tank: a heavily damped hull dragged by a massive point, the "pull", through a pin joint
  * in front of the hull. Moving the pull tows the hull, which swings around to trail behind it,
  * so the tank turns into its direction of travel on its own instead of steering like a real tank.

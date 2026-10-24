@@ -1,23 +1,26 @@
-import { PLAYER_PULL_SPEED, type Tank } from '../arena/bodies';
+import { pullSpeedFor, type Tank } from '../arena/bodies';
 import { createCombat } from '../damage/combat';
 import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
 import { createBot, type Bot } from './bot';
+import { createGun } from './gun';
 import { inBase, KOTH_MAP, onPoint, type KothMap } from './map';
 import { createNavGrid } from './navigation';
 import { advanceCapture, CAPTURE_RULES, createCaptureState, rivalOf, TEAMS, type CaptureRules, type TeamId } from './rules';
 import { createScenery } from './scenery';
+import { MEDIUM_TANK } from './tanks';
 import { createTeamBoard, type Member, type TeamBoard } from './team';
 
 type Point = { x: number; y: number };
 
 /**
  * A king of the hill match, red against blue, four tanks a side: the player and three bots for
- * red, four bots for blue. Tanks fight on the battle core of `createCombat` without friendly
- * fire; the point in the middle is taken by standing on it (see `./rules`), and the first team to
- * hold it for the hold time wins. Destroyed tanks come back at their base after a few seconds,
- * and a tank in its own base has its armor mended.
+ * red, four bots for blue. Every tank is a `MEDIUM_TANK` firing shells on the battle core of
+ * `createCombat`, without friendly fire. The point in the middle opens after a while and is taken
+ * by standing on it (see `./rules`); the first team to hold it for the hold time wins. Destroyed
+ * tanks come back at their base in waves, as in Team Fortress 2, and a tank in its own base has
+ * its armor mended.
  *
  * The match owns its Rapier bodies and renderer slots; `restart` begins a new match on the same map.
  *
@@ -36,20 +39,21 @@ export function createKothMatch(
   const random = options.random ?? Math.random;
   const members = createMembers(options.human ?? true);
   const teams = { red: members.filter((member) => member.team === 'red'), blue: members.filter((member) => member.team === 'blue') };
+  // Destroyed tanks stay here, so a shell still flying from one is credited to its member.
   const byTank = new Map<Tank, Member>();
   const combat = createCombat(rapier, world, renderer, map, {
+    shell: MEDIUM_TANK.shell,
     friendlyFire: false,
     // Wrecks burn out quicker than on the range, so their smoke does not hide the point for long.
     wreckFire: WRECK_FIRE,
     random,
     onHit: (target, shooter) => noteShot(byTank.get(target), shooter),
-    onShot: nearMisses,
     onDestroyed: destroyed
   });
   const grid = createNavGrid(map);
   const scenery = createScenery(renderer, map, { red: rgb(TEAM_COLORS.red), blue: rgb(TEAM_COLORS.blue) });
   let time = 0;
-  let capture = createCaptureState();
+  let capture = createCaptureState(rules);
   let nextRepair = 0;
   let feedId = 0;
   const feed: { id: number; at: number; killer?: Member; victim: Member }[] = [];
@@ -109,17 +113,16 @@ export function createKothMatch(
      * Advances the match by one fixed physics step: the player's input, every bot, physics,
      * respawns, repairs and the capture. After a win tanks stop and only the wreckage moves.
      *
-     * @param input.drive - Player's drive direction in world axes, length up to 1; the turret is
-     *   aimed by the caller on `player.turretAngle`.
+     * @param input.drive - Player's drive direction in world axes, length up to 1.
+     * @param input.aim - Direction the player wants the turret to point, in world radians; the
+     *   turret turns toward it no faster than its tank class allows. Without it the turret stays.
      * @param input.fire - Whether the player holds the trigger.
      */
-    step(dt: number, input: { drive: Point; fire: boolean } = { drive: STOP, fire: false }) {
+    step(dt: number, input: { drive: Point; aim?: number; fire: boolean } = { drive: STOP, fire: false }) {
       time += dt;
 
       for (const member of members) {
-        if (member.tank) {
-          member.tank.reload = Math.max(member.tank.reload - dt, 0);
-        }
+        member.gun?.step(dt);
       }
 
       if (capture.winner) {
@@ -132,6 +135,10 @@ export function createKothMatch(
 
       if (player?.tank) {
         combat.drive(player.tank, input.drive);
+
+        if (input.aim !== undefined) {
+          turnTurret(player.tank, input.aim, MEDIUM_TANK.turretSpeed * dt);
+        }
 
         if (input.fire) {
           fire(player);
@@ -146,6 +153,7 @@ export function createKothMatch(
       }
 
       combat.step(dt);
+      nearMisses();
       respawn();
       repair();
 
@@ -205,6 +213,9 @@ export function createKothMatch(
         player: {
           alive: human.tank !== undefined,
           respawnIn: human.respawnAt === undefined ? 0 : Math.max(human.respawnAt - time, 0),
+          rounds: human.gun?.rounds ?? 0,
+          clip: MEDIUM_TANK.gun.clip,
+          loading: human.gun?.loading ?? 0,
           armor: human.tank ? combat.armorLeft(human.tank) : 0,
           coreOpen: human.tank ? combat.isCoreOpen(human.tank) : false,
           mending: human.tank !== undefined && inBase(map.bases.red, human.tank.hull.translation()) && combat.armorLeft(human.tank) < 0.99
@@ -251,13 +262,14 @@ export function createKothMatch(
       combat.reset();
       byTank.clear();
       time = 0;
-      capture = createCaptureState();
+      capture = createCaptureState(rules);
       feed.length = 0;
       boards.red.reset();
       boards.blue.reset();
 
       for (const member of members) {
         member.tank = undefined;
+        member.gun = undefined;
         member.kills = 0;
         member.deaths = 0;
         member.shotAt = -Infinity;
@@ -296,15 +308,14 @@ export function createKothMatch(
     };
   }
 
-  /** Fires the member's gun if it has reloaded. */
+  /** Fires the member's gun if it is ready. */
   function fire(member: Member) {
     const tank = member.tank;
 
-    if (!tank || tank.reload > 0) {
+    if (!tank || !member.gun?.fire()) {
       return false;
     }
 
-    tank.reload = RELOAD;
     combat.fire(tank);
     return true;
   }
@@ -319,10 +330,11 @@ export function createKothMatch(
     const tank = combat.spawnTank(placement, {
       color: member.index === 0 && member.team === 'red' ? PLAYER_COLOR : TEAM_COLORS[member.team],
       team: member.team,
-      pullSpeed: PLAYER_PULL_SPEED
+      pullSpeed: pullSpeedFor(MEDIUM_TANK.speed)
     });
 
     member.tank = tank;
+    member.gun = createGun(MEDIUM_TANK.gun);
     member.respawnAt = undefined;
     byTank.set(tank, member);
   }
@@ -356,14 +368,14 @@ export function createKothMatch(
   function destroyed(victim: Tank, killer: Tank | undefined) {
     const member = byTank.get(victim);
     const credited = killer && byTank.get(killer);
-    byTank.delete(victim);
 
     if (!member) {
       return;
     }
 
     member.tank = undefined;
-    member.respawnAt = time + RESPAWN_TIME;
+    member.gun = undefined;
+    member.respawnAt = nextWave(time + MIN_RESPAWN);
     member.deaths++;
 
     if (credited && credited.team !== member.team) {
@@ -381,21 +393,12 @@ export function createKothMatch(
     }
   }
 
-  /** A shot that flies close past an enemy tank puts it under fire as much as a hit. */
-  function nearMisses(shooter: Tank, path: readonly Point[]) {
-    const team = byTank.get(shooter)?.team;
-
-    for (const member of members) {
-      if (!member.tank || member.team === team) {
-        continue;
-      }
-
-      const at = member.tank.hull.translation();
-
-      for (let index = 1; index < path.length; index++) {
-        if (segmentDistance(at, path[index - 1], path[index]) < NEAR_MISS) {
-          noteShot(member, shooter);
-          break;
+  /** A shell that flies close past an enemy tank puts it under fire as much as a hit. */
+  function nearMisses() {
+    for (const shell of combat.shells) {
+      for (const member of members) {
+        if (member.tank && member.team !== shell.team && distance(member.tank.hull.translation(), shell) < NEAR_MISS) {
+          noteShot(member, shell.shooter);
         }
       }
     }
@@ -422,16 +425,19 @@ export const TEAM_COLORS: Record<TeamId, number> = { red: 0xc9473b, blue: 0x3b73
 export const PLAYER_COLOR = 0xf0773a;
 
 const STOP = { x: 0, y: 0 };
-/** Seconds between shots, as on the damage range. */
-const RELOAD = 0.1;
-const RESPAWN_TIME = 5;
+/**
+ * Destroyed tanks come back in waves every `RESPAWN_WAVE` seconds, after at least `MIN_RESPAWN`:
+ * between 5 and 11 s, 8 s on average, so the dead of a lost fight return together.
+ */
+const RESPAWN_WAVE = 6;
+const MIN_RESPAWN = 5;
 const WRECK_FIRE = 5;
 /** Share of armor damage mended per second in the base is `1 - exp(-REPAIR_RATE)`. */
 const REPAIR_RATE = 0.9;
 const REPAIR_INTERVAL = 0.25;
 const SPAWN_CLEARANCE = 40;
-/** A shot passing closer than this many pixels to a tank's center puts it under fire. */
-const NEAR_MISS = 40;
+/** A shell passing closer than this many pixels to a tank's center puts it under fire. */
+const NEAR_MISS = 45;
 /** Seconds a kill stays in the feed. */
 const FEED_TIME = 6;
 
@@ -453,6 +459,7 @@ function createMembers(human: boolean): Member[] {
       name: team === 'red' && index === 0 && human ? 'You' : `${team === 'red' ? 'Red' : 'Blue'} ${index + 1}`,
       human: team === 'red' && index === 0 && human,
       tank: undefined,
+      gun: undefined,
       role: 'assault' as const,
       respawnAt: undefined,
       shotAt: -Infinity,
@@ -463,12 +470,15 @@ function createMembers(human: boolean): Member[] {
   );
 }
 
-function segmentDistance(point: Point, a: Point, b: Point) {
-  const abx = b.x - a.x;
-  const aby = b.y - a.y;
-  const length = abx * abx + aby * aby;
-  const t = length > 0 ? Math.min(Math.max(((point.x - a.x) * abx + (point.y - a.y) * aby) / length, 0), 1) : 0;
-  return Math.hypot(point.x - a.x - abx * t, point.y - a.y - aby * t);
+/** The first respawn wave at or after match time `time`. */
+function nextWave(time: number) {
+  return Math.ceil(time / RESPAWN_WAVE) * RESPAWN_WAVE;
+}
+
+/** Turns a turret toward `goal` by at most `step` radians. */
+function turnTurret(tank: Tank, goal: number, step: number) {
+  const delta = Math.atan2(Math.sin(goal - tank.turretAngle), Math.cos(goal - tank.turretAngle));
+  tank.turretAngle += Math.abs(delta) <= step ? delta : Math.sign(delta) * step;
 }
 
 function distance(a: Point, b: Point) {

@@ -6,6 +6,7 @@ import { createDriver, type Obstacle } from './driver';
 import { inBase, onPoint, type KothMap } from './map';
 import { cellAt, floodCosts, isOpenAt, searchNearest, cellCenter, type NavGrid } from './navigation';
 import { captureRate, rivalOf, type CaptureRules, type CaptureState } from './rules';
+import { MEDIUM_TANK } from './tanks';
 import { DANGER_RANGE, type Member, type TeamBoard } from './team';
 
 type Point = { x: number; y: number };
@@ -42,9 +43,13 @@ export type BotContext = {
  *    plan that starts with the action under way keeps it going, so plans do not stutter.
  * 3. Carries out the current action: each action is a behavior that picks where to drive, which
  *    enemy to prefer and when it is done.
- * 4. Drives there with its driver and works the gun: the turret swings toward the preferred enemy,
- *    or the team's focus, at the core under its rear armor, leading it by its speed, and fires
- *    with some spread when on target and nothing is in the way.
+ * 4. Drives there with its driver, unless it sidesteps a shell flying at it, and works the gun:
+ *    the turret swings toward the preferred enemy, or the team's focus, at where the shell would
+ *    meet the core under its rear armor, and fires when on target, nothing is in the way and the
+ *    shot is likely to hit.
+ *
+ * A bot knows only what a player would: it sees as far as a player's screen reaches and not
+ * through walls, takes a moment to react to a new target, and misjudges a moving target's lead.
  */
 export function createBot(member: Member, context: BotContext) {
   const { combat, grid, map, board } = context;
@@ -57,7 +62,9 @@ export function createBot(member: Member, context: BotContext) {
   let nextReplan = 0;
   let lastPlan = -Infinity;
   let cover: Point | undefined;
-  let gun: { target: Tank | undefined; since: number } = { target: undefined, since: 0 };
+  let gun: Aim = { target: undefined, since: 0, reaction: 0, offset: undefined };
+  let dodge: { until: number; direction: Point } | undefined;
+  const judged = new Set<number>();
   const stats = {
     plans: 0,
     goalChanges: 0,
@@ -95,7 +102,9 @@ export function createBot(member: Member, context: BotContext) {
       task = undefined;
       facts = {};
       nextReplan = 0;
-      gun = { target: undefined, since: 0 };
+      gun = { target: undefined, since: 0, reaction: 0, offset: undefined };
+      dodge = undefined;
+      judged.clear();
     },
 
     /** Thinks, drives and shoots for one physics step of `dt` seconds. */
@@ -138,14 +147,70 @@ export function createBot(member: Member, context: BotContext) {
       }
 
       const position = tank.hull.translation();
-      const move = driver.steer(now, position, task?.hold ? undefined : task?.destination, obstacles(tank), {
+      const planned = driver.steer(now, position, task?.hold ? undefined : task?.destination, obstacles(tank), {
         arrive: task?.arrive,
         cost: costFor(task?.route ?? 'normal')
       });
+      const move = sidestep(position, now) ?? planned;
       combat.drive(tank, move);
       aim(tank, dt, now, move);
     }
   };
+
+  /**
+   * The drive direction of a sidestep away from an enemy shell about to hit the tank, or
+   * `undefined` when there is none. The bot judges each shell once: if it would pass close and
+   * arrives late enough to react to, the bot dodges it at `DODGE_CHANCE`, sideways off its line.
+   */
+  function sidestep(position: Point, now: number) {
+    if (dodge && now < dodge.until) {
+      return dodge.direction;
+    }
+
+    dodge = undefined;
+    const shells = combat.shells.filter((shell) => shell.team !== member.team);
+
+    for (const shell of shells) {
+      if (judged.has(shell.id)) {
+        continue;
+      }
+
+      const offset = { x: position.x - shell.x, y: position.y - shell.y };
+      const ahead = offset.x * shell.direction.x + offset.y * shell.direction.y;
+      const across = offset.x * shell.direction.y - offset.y * shell.direction.x;
+      const arrival = ahead / shell.speed;
+
+      if (ahead <= 0 || Math.abs(across) > DODGE_MISS || arrival > DODGE_LOOKAHEAD) {
+        continue;
+      }
+
+      judged.add(shell.id);
+
+      if (arrival < DODGE_REACTION || context.random() >= DODGE_CHANCE) {
+        continue;
+      }
+
+      // Off the shell's line on the side the tank already is, or the other way if that is blocked;
+      // pressed against walls on both sides, the tank cannot dodge and keeps to its way.
+      const side = across === 0 ? (context.random() < 0.5 ? 1 : -1) : Math.sign(across);
+      const away = { x: shell.direction.y * side, y: -shell.direction.x * side };
+      const direction = [away, { x: -away.x, y: -away.y }].find((option) =>
+        isOpenAt(grid, { x: position.x + option.x * DODGE_CHECK, y: position.y + option.y * DODGE_CHECK })
+      );
+
+      if (direction) {
+        dodge = { until: now + DODGE_TIME, direction };
+        break;
+      }
+    }
+
+    if (judged.size > 64) {
+      const flying = new Set(shells.map((shell) => shell.id));
+      [...judged].filter((id) => !flying.has(id)).forEach((id) => judged.delete(id));
+    }
+
+    return dodge?.direction;
+  }
 
   /** Which enemies the tank can see now: within range and not behind walls or crates. */
   function perceive(tank: Tank) {
@@ -290,7 +355,7 @@ export function createBot(member: Member, context: BotContext) {
   function describe(tank: Tank): Situation {
     const position = tank.hull.translation();
     const costs = floodCosts(grid, position, { cost: (cell) => board.crateCost(cell) });
-    const travel = (point: Point | undefined) => (point ? costs[cellAt(grid, point)] / SPEED : Infinity);
+    const travel = (point: Point | undefined) => (point ? costs[cellAt(grid, point)] / (MEDIUM_TANK.speed * TRAVEL_SHARE) : Infinity);
     const target = chooseTarget(tank);
     const help = board.helpFor(member);
     const capture = context.capture();
@@ -321,7 +386,11 @@ export function createBot(member: Member, context: BotContext) {
     };
   }
 
-  /** Seconds the bot expects to need to destroy `target`, from where it is or from behind. */
+  /**
+   * Seconds the bot expects to need to destroy `target`, from where it is or from behind: the
+   * shots it takes at the accuracy the range allows, fired one interval apart, with a reload after
+   * every clip, and some time exposed to the target's gun.
+   */
   function killTime(position: Point, target: Tank | undefined, fromRear: boolean) {
     if (!target) {
       return Infinity;
@@ -329,18 +398,21 @@ export function createBot(member: Member, context: BotContext) {
 
     const at = whereIs(target);
     const range = distance(position, at);
-    const accuracy = Math.min(Math.max(1.1 - range / 700, 0.25), 0.95);
+    const accuracy = Math.min(Math.max(1.1 - range / 550, 0.2), 0.9);
     const heading = target.hull.rotation();
     const facing = range > 1 ? ((position.x - at.x) * Math.cos(heading) + (position.y - at.y) * Math.sin(heading)) / range : 0;
-    let hits = fromRear ? 2 : facing > 0.5 ? 9 : facing > -0.4 ? 4 : 2;
-    let exposure = fromRear ? 0.3 : facing > 0.3 ? 1.5 : 0.5;
+    let hits = fromRear ? HITS_TO_KILL.rear : facing > 0.5 ? HITS_TO_KILL.front : facing > -0.4 ? HITS_TO_KILL.side : HITS_TO_KILL.rear;
+    let exposure = fromRear ? 0.5 : facing > 0.3 ? 2.5 : 1;
 
     if (combat.isCoreOpen(target)) {
       hits = 1;
       exposure = 0;
     }
 
-    return (hits * RELOAD) / accuracy + exposure;
+    const { interval, clip, firstReload, reload } = MEDIUM_TANK.gun;
+    const shots = hits / accuracy;
+    const reloads = Math.max(Math.ceil(shots / clip) - 1, 0);
+    return shots * interval + reloads * (firstReload + (clip - 1) * reload) + exposure;
   }
 
   /** The nearest spot out of every known enemy's sight, close to something to hide behind. */
@@ -707,9 +779,12 @@ export function createBot(member: Member, context: BotContext) {
   }
 
   /**
-   * Swings the turret toward the enemy most worth shooting, leading it by its speed, and fires
-   * when on target with a clear line. Without a target the turret watches the latest known threat
-   * or looks where the tank drives.
+   * Swings the turret toward the enemy most worth shooting and fires when the shot is worth it.
+   * The bot aims where the shell will meet the target's core, from the target's speed and the
+   * shell's flight time, but misjudges that spot: the error grows with range, with the target's
+   * speed and while the bot drives, and it is drawn anew for every shot. It holds fire for its
+   * reaction time after picking a target, and while the shell would likely miss. Without a target
+   * the turret watches the latest known threat or looks where the tank drives.
    */
   function aim(tank: Tank, dt: number, now: number, move: Point) {
     const position = tank.hull.translation();
@@ -718,29 +793,29 @@ export function createBot(member: Member, context: BotContext) {
     const target = preferred ?? focus ?? nearestVisible(position);
 
     if (target !== gun.target) {
-      gun = { target, since: now };
+      gun = { target, since: now, reaction: REACTION_MIN + context.random() * (REACTION_MAX - REACTION_MIN), offset: undefined };
     }
 
     let goal: number;
 
     if (target) {
-      const core = coreOf(target);
       const velocity = target.hull.linvel();
-      const lead = { x: core.x + velocity.x * LEAD_TIME, y: core.y + velocity.y * LEAD_TIME };
-      goal = Math.atan2(lead.y - position.y, lead.x - position.x);
-      const range = distance(position, lead);
+      const course = intercept(position, coreOf(target), velocity, MEDIUM_TANK.shell.speed);
+      const range = distance(position, course.point);
+      const own = tank.hull.linvel();
+      const error = aimError(range, Math.hypot(velocity.x, velocity.y) * course.time, Math.hypot(own.x, own.y) / MEDIUM_TANK.speed);
+      gun.offset ??= { x: gaussian(context.random) * error, y: gaussian(context.random) * error };
+      const spot = { x: course.point.x + gun.offset.x, y: course.point.y + gun.offset.y };
+      goal = Math.atan2(spot.y - position.y, spot.x - position.x);
       turnTurret(tank, goal, dt);
-      const error = Math.abs(angleBetween(tank.turretAngle, goal));
-      const tolerance = Math.max(Math.atan2(task?.action === 'suppress' ? 14 : 8, range), 0.03);
+      const aligned = Math.abs(angleBetween(tank.turretAngle, goal)) < Math.max(Math.atan2(AIM_TOLERANCE, range), 0.01);
+      const worth = error < MAX_AIM_ERROR || (member.gun?.rounds === MEDIUM_TANK.gun.clip && error < MAX_AIM_ERROR * 1.5);
+      const reacted = now - gun.since >= gun.reaction;
 
-      if (range < FIRE_RANGE && error < tolerance && tank.reload === 0 && combat.lineOfSight(position, lead)) {
-        const speed = Math.hypot(tank.hull.linvel().x, tank.hull.linvel().y);
-        const settle = Math.exp(-(now - gun.since) / SETTLE_TIME);
-        const spread = BASE_SPREAD + MOVING_SPREAD * Math.min(speed / 150, 1) + SETTLE_SPREAD * settle;
-        const steady = tank.turretAngle;
-        tank.turretAngle += gaussian(context.random) * spread;
-        context.fire(member);
-        tank.turretAngle = steady;
+      const clear = combat.lineOfSight(position, spot) && combat.lineOfSight(position, target.hull.translation());
+
+      if (member.gun?.ready && reacted && aligned && worth && range < VISION && clear && context.fire(member)) {
+        gun.offset = undefined;
       }
 
       return;
@@ -770,6 +845,12 @@ export type Bot = ReturnType<typeof createBot>;
 /** How a route weighs the danger of being seen by known enemies. */
 type Route = 'normal' | 'sneaky' | 'safe';
 
+/**
+ * The gun's hold on a target: since when the bot has it, how long it takes to react, and how far
+ * it misjudges where to aim for the next shot.
+ */
+type Aim = { target: Tank | undefined; since: number; reaction: number; offset: Point | undefined };
+
 /** The running behavior of a plan action and its memory. */
 type Task = {
   action: BotAction;
@@ -797,9 +878,12 @@ const PERCEIVE_INTERVAL = 0.1;
 const MIN_REPLAN = 0.3;
 const REPLAN_INTERVAL = 2.5;
 const REPLAN_JITTER = 1;
-/** How far a bot sees, and how far it shoots. */
-const VISION = 800;
-const FIRE_RANGE = 560;
+/**
+ * How far a bot sees, as far as a player sees on a laptop screen at the default zoom, and the
+ * range it likes to fight at; it shoots at anything it sees.
+ */
+const VISION = 480;
+const FIRE_RANGE = 440;
 /** Enemies this close to the point are a threat to it. */
 const NEAR_POINT = 320;
 /** Seconds after a hit or near miss that the bot still feels under fire. */
@@ -807,10 +891,10 @@ const UNDER_FIRE = 1.5;
 /** Armor shares below which a bot counts as badly damaged, and above which as mended. */
 const ARMOR_LOW = 0.72;
 const REPAIRED = 0.96;
-/** Hull speed at full drive in pixels per second, for travel estimates. */
-const SPEED = 150;
-/** Seconds between shots, as for the player. */
-const RELOAD = 0.1;
+/** Share of its top speed a tank keeps on average along a path, slowing for turns, for travel estimates. */
+const TRAVEL_SHARE = 0.85;
+/** Hits a bot expects to need to reach a core from behind, from the side and from the front. */
+const HITS_TO_KILL = { rear: 3, side: 4, front: 10 };
 /** How far the cover search looks, in path pixels, and how close to a wall or crate cover must be. */
 const COVER_SEARCH = 700;
 const COVER_HUG = 55;
@@ -824,8 +908,8 @@ const LOSE_REAR = 2.5;
 const FLANK_TIMEOUT = 12;
 const REGROUP_TIME = 8;
 /** Range kept in a head-on duel, and how far around the target the bot shifts every `ORBIT_INTERVAL` s. */
-const DUEL_MIN = 220;
-const DUEL_MAX = 420;
+const DUEL_MIN = 200;
+const DUEL_MAX = 380;
 const ORBIT_STEP = 0.35;
 const ORBIT_INTERVAL = 0.8;
 /** Angles off the target's tail and distances tried for a flanking spot. */
@@ -842,16 +926,26 @@ const SUPPORT_OFFSET = 110;
 /** A support trails only an ally at least this many pixels nearer the point, so it never waits for one lagging behind. */
 const ESCORT_LEAD = 40;
 const NEARBY = 120;
-/** Turret speed in radians per second, and the share of it used while just looking around. */
-const TURRET_SPEED = 5;
+/** Share of the turret's speed used while just looking around. */
 const IDLE_TURN = 0.6;
-/** Seconds of the target's motion the aim leads by, covering the bot's reaction time. */
-const LEAD_TIME = 0.12;
-/** Standard deviation of the aim in radians: always, at full speed, and just after picking a target. */
-const BASE_SPREAD = 0.012;
-const MOVING_SPREAD = 0.025;
-const SETTLE_SPREAD = 0.06;
-const SETTLE_TIME = 0.5;
+/** Seconds a bot takes to fire at a target it just picked, drawn between these. */
+const REACTION_MIN = 0.25;
+const REACTION_MAX = 0.5;
+/** Pixels off its aim point at the target's range within which the turret counts as on target. */
+const AIM_TOLERANCE = 4;
+/** Standard deviation of the aim error, in pixels at the target, beyond which a bot holds fire. */
+const MAX_AIM_ERROR = 32;
+/**
+ * A shell flying at the tank is dodged if it would pass within `DODGE_MISS` px and arrives
+ * within `DODGE_LOOKAHEAD` s but no sooner than `DODGE_REACTION` s, at `DODGE_CHANCE`: the bot
+ * drives sideways for `DODGE_TIME` s, checking `DODGE_CHECK` px ahead for room.
+ */
+const DODGE_MISS = 32;
+const DODGE_LOOKAHEAD = 0.8;
+const DODGE_REACTION = 0.2;
+const DODGE_CHANCE = 0.5;
+const DODGE_TIME = 0.45;
+const DODGE_CHECK = 40;
 
 /**
  * Whether the bot's facts changed enough to plan again: the fight for the point or the team's
@@ -880,12 +974,46 @@ function coreOf(tank: Tank) {
   };
 }
 
-/** Turns the turret toward `goal` by at most `TURRET_SPEED * dt`. */
+/** Turns the turret toward `goal` by at most the tank class's turret speed times `dt`. */
 function turnTurret(tank: Tank, goal: number, dt: number) {
   const delta = angleBetween(tank.turretAngle, goal);
-  const step = TURRET_SPEED * dt;
+  const step = MEDIUM_TANK.turretSpeed * dt;
   tank.turretAngle += Math.abs(delta) <= step ? delta : Math.sign(delta) * step;
 }
+
+/**
+ * Where a shell fired from `from` at `speed` meets a target at `at` moving at `velocity`, and its
+ * flight time; the shell leaves the muzzle, a barrel's length ahead.
+ */
+function intercept(from: Point, at: Point, velocity: Point, speed: number) {
+  let time = 0;
+  let point = at;
+
+  for (let iteration = 0; iteration < 3; iteration++) {
+    point = { x: at.x + velocity.x * time, y: at.y + velocity.y * time };
+    time = Math.max(distance(from, point) - BARREL, 0) / speed;
+  }
+
+  return { point, time };
+}
+
+/**
+ * Standard deviation of a bot's aim, in pixels at the target: a little always, more with range,
+ * a share of the lead it has to judge, and more while the bot itself drives.
+ *
+ * @param lead - Pixels the target moves while the shell flies.
+ * @param driving - The bot's own speed as a share of its top speed.
+ */
+function aimError(range: number, lead: number, driving: number) {
+  return AIM_BASE + range * AIM_PER_PIXEL + lead * LEAD_ERROR + range * DRIVING_ERROR * Math.min(driving, 1);
+}
+
+/** Pixels from a hull's center to its muzzle. */
+const BARREL = 30;
+const AIM_BASE = 3;
+const AIM_PER_PIXEL = 0.01;
+const LEAD_ERROR = 0.3;
+const DRIVING_ERROR = 0.02;
 
 /** Signed angle from `from` to `to`, in (-π, π]. */
 function angleBetween(from: number, to: number) {

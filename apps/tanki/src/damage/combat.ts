@@ -32,7 +32,7 @@ import {
   SLOT_CELLS,
   type createRangeRenderer
 } from './renderer';
-import { createCrateField, createHullField, HULL_CORE } from './shapes';
+import { createCrateField, createHullField, createShellField, HULL_CORE } from './shapes';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
 type Point = { x: number; y: number };
@@ -42,6 +42,24 @@ export type Placement = { x: number; y: number; rotation: number; turret?: numbe
 
 /** A fixed concrete wall: a box around its center, turned by `rotation`, that stops tanks and shots. */
 export type WallPlacement = { x: number; y: number; halfWidth: number; halfHeight: number; rotation?: number };
+
+/**
+ * A gun that fires shells instead of hitscan shots: a visible shell flies at `speed`, leaving the
+ * thin smoke trail behind it, and falls to the ground with a puff of dust once it has flown
+ * `range` pixels, ricochets included. It still bounces off armor it meets at a glancing angle.
+ */
+export type ShellSpec = {
+  /** Flight speed in pixels per second. */
+  speed: number;
+  /** Distance the shell flies before it falls, in pixels. */
+  range: number;
+  /** Radius of the hole a penetrating hit chips, in pixels. */
+  hole: number;
+  /** How far past the surface the hole reaches, in pixels: 0 chips a single crater. */
+  depth: number;
+  /** Impulse of a penetrating hit, which knocks the body back. */
+  knockback: number;
+};
 
 /**
  * Static layout of a battlefield in pixels around the origin: a walled floor, concrete walls,
@@ -71,6 +89,7 @@ export type CombatLayout = {
  * The battle owns its Rapier bodies and renderer field slots; `reset` rebuilds the crates and
  * removes every tank.
  *
+ * @param options.shell - Makes guns fire shells that fly for a while instead of hitscan shots.
  * @param options.friendlyFire - Whether shots hit the shooter's teammates; defaults to `true`.
  * @param options.wreckFire - Seconds a destroyed tank's wreck burns; defaults to 12.
  * @param options.random - Source of randomness in [0, 1) for damage and effects, so a test can
@@ -79,6 +98,7 @@ export type CombatLayout = {
  * @param options.onDestroyed - Called when a tank blows up or loses all its armor, with the tank
  *   whose shot did it, if any. The tank is already out of `tanks`.
  * @param options.onShot - Called for every shot with its path: the muzzle, each ricochet and the end.
+ *   A shell reports its path when it stops.
  */
 export function createCombat(
   rapier: Rapier,
@@ -86,6 +106,7 @@ export function createCombat(
   renderer: Renderer,
   layout: CombatLayout,
   options: {
+    shell?: ShellSpec;
     friendlyFire?: boolean;
     wreckFire?: number;
     random?: () => number;
@@ -122,6 +143,9 @@ export function createCombat(
     travelled: number;
   }[] = [];
   let trailId = 0;
+  let shellId = 0;
+  const shells: Shell[] = [];
+  const shellDraw = options.shell ? createShellDraw(renderer) : undefined;
 
   layout.crates?.forEach((placement) => spawnCrate(placement));
 
@@ -144,6 +168,22 @@ export function createCombat(
     /** Centers of every crate in play, with their headings. */
     get crates() {
       return armored.flatMap((body) => (body.tank ? [] : [{ ...body.body.translation(), rotation: body.body.rotation() }]));
+    },
+
+    /**
+     * Shells in flight: an id unique within the battle, where each is, the unit direction it flies
+     * in, its speed, and the tank that fired it with that tank's team.
+     */
+    get shells() {
+      return shells.map((shell) => ({
+        id: shell.id,
+        x: shell.x,
+        y: shell.y,
+        direction: shell.direction,
+        speed: options.shell?.speed ?? 0,
+        shooter: shell.shooter,
+        team: shell.team
+      }));
     },
 
     /**
@@ -192,7 +232,10 @@ export function createCombat(
       }
     },
 
-    /** Advances physics by one fixed step: drives every tank, steps Rapier, dents crashed bodies and refreshes changed shapes. */
+    /**
+     * Advances physics by one fixed step: drives every tank, steps Rapier, dents crashed bodies,
+     * moves shells and refreshes changed shapes.
+     */
     step(dt: number) {
       clock += dt;
 
@@ -211,6 +254,10 @@ export function createCombat(
         }
       });
 
+      for (const shell of [...shells]) {
+        flyShell(shell, dt);
+      }
+
       for (const body of [...armored]) {
         if (body.changed) {
           refreshShape(body);
@@ -224,12 +271,16 @@ export function createCombat(
     },
 
     /**
-     * Fires `tank`'s gun along its turret: a hitscan shot with recoil. It chips the first armor it
-     * meets, knocking the body back, or detonates a core; at a glancing angle it ricochets and
-     * flies on. Reload is up to the caller.
+     * Fires `tank`'s gun along its turret, with recoil: a hitscan shot, or a shell when the battle
+     * has `options.shell`. The shot chips the first armor it meets, knocking the body back, or
+     * detonates a core; at a glancing angle it ricochets and flies on. Reload is up to the caller.
      */
     fire(tank: Tank) {
-      fire(tank);
+      if (options.shell) {
+        launchShell(tank, options.shell);
+      } else {
+        fire(tank);
+      }
     },
 
     /**
@@ -399,6 +450,12 @@ export function createCombat(
         }
       }
 
+      // Shells cast a shadow of their own and glow on what they pass.
+      for (const shell of shellDraw ? shells : []) {
+        renderer.addBody({ ...shellDraw!.draw, x: shell.x, y: shell.y, angle: Math.atan2(shell.direction.y, shell.direction.x), color: SHELL_COLOR, height: SHELL_HEIGHT });
+        renderer.addLight(shell.x, shell.y, SHELL_LIGHT, 0.5, [1, 0.75, 0.4], SHELL_LIGHT_HEIGHT);
+      }
+
       burning.draw();
 
       for (const light of flashes) {
@@ -429,6 +486,7 @@ export function createCombat(
       }
 
       respawns.length = 0;
+      shells.length = 0;
       layout.crates?.forEach((placement) => spawnCrate(placement));
     }
   };
@@ -635,11 +693,10 @@ export function createCombat(
     let direction = { x: Math.cos(tank.turretAngle), y: Math.sin(tank.turretAngle) };
     let remaining = SHOT_RANGE;
     const path = [start];
-    const passes = (body: Armored, first: boolean) =>
-      (first && body === shooter) || (!friendlyFire && shooter?.team !== undefined && body.team === shooter.team && body !== shooter);
+    const passes = (body: Armored, first: boolean) => (first && body === shooter) || passesAsTeammate(shooter?.team, shooter, body);
 
     shooter?.body.applyImpulse({ x: -direction.x * RECOIL, y: -direction.y * RECOIL }, true);
-    muzzleBlast(start, direction, shooter, (body) => passes(body, true));
+    muzzleBlast(start, direction, shooter, castShot(start, direction, (body) => passes(body, true), SHOT_RANGE).distance);
 
     for (let bounce = 0; bounce <= MAX_RICOCHETS; bounce++) {
       const hit = castShot(start, direction, (body) => passes(body, bounce === 0), remaining);
@@ -651,38 +708,196 @@ export function createCombat(
         break;
       }
 
-      if (!hit.target) {
-        impact(end, { x: -direction.x, y: -direction.y });
-        spawnDust(end, direction, WALL_DUST);
+      const bounced = strike(hit, end, direction, tank, HITSCAN_HIT, bounce < MAX_RICOCHETS);
+
+      if (!bounced) {
         break;
       }
 
-      hit.target.lastShooter = tank;
-
-      if (hit.part === 'core') {
-        reportHit(hit.target, tank, 'core');
-        destroy(hit.target, direction);
-        break;
-      }
-
-      const normal = worldNormal(hit.target, end);
-
-      if (!normal || -(direction.x * normal.x + direction.y * normal.y) > RICOCHET_COS) {
-        impact(end, { x: -direction.x, y: -direction.y });
-        damage(hit.target, end, direction);
-        reportHit(hit.target, tank, 'armor');
-        break;
-      }
-
-      const along = direction.x * normal.x + direction.y * normal.y;
-      direction = { x: direction.x - 2 * along * normal.x, y: direction.y - 2 * along * normal.y };
-      ricochet(hit.target, end, normal, direction);
-      reportHit(hit.target, tank, 'ricochet');
-      start = { x: end.x + normal.x * 0.5, y: end.y + normal.y * 0.5 };
+      direction = bounced.direction;
+      start = bounced.from;
       remaining -= hit.distance;
     }
 
     options.onShot?.(tank, path);
+  }
+
+  /** Whether a shot from `shooter`, of `team`, passes through `body` because they are teammates. */
+  function passesAsTeammate(team: string | undefined, shooter: Armored | undefined, body: Armored) {
+    return !friendlyFire && team !== undefined && body.team === team && body !== shooter;
+  }
+
+  /**
+   * What a shot does where it meets something: it chips a wall, detonates a core, chips armor
+   * met head on, or glances off armor and flies on.
+   *
+   * @param canBounce - Whether the shot may fly on after a glancing hit; a spent one only scuffs the armor.
+   * @returns Where and in which direction a ricochet flies on, or `undefined` when the shot stops here.
+   */
+  function strike(
+    hit: ReturnType<typeof castShot>,
+    end: Point,
+    direction: Point,
+    tank: Tank,
+    blow: Pick<ShellSpec, 'hole' | 'depth' | 'knockback'>,
+    canBounce: boolean
+  ) {
+    if (!hit.target) {
+      impact(end, { x: -direction.x, y: -direction.y });
+      spawnDust(end, direction, WALL_DUST);
+      return undefined;
+    }
+
+    hit.target.lastShooter = tank;
+
+    if (hit.part === 'core') {
+      reportHit(hit.target, tank, 'core');
+      destroy(hit.target, direction);
+      return undefined;
+    }
+
+    const normal = worldNormal(hit.target, end);
+
+    if (!normal || -(direction.x * normal.x + direction.y * normal.y) > RICOCHET_COS) {
+      impact(end, { x: -direction.x, y: -direction.y });
+      damage(hit.target, end, direction, blow);
+      reportHit(hit.target, tank, 'armor');
+      return undefined;
+    }
+
+    const along = direction.x * normal.x + direction.y * normal.y;
+    const bounce = { x: direction.x - 2 * along * normal.x, y: direction.y - 2 * along * normal.y };
+    ricochet(hit.target, end, normal, bounce);
+    reportHit(hit.target, tank, 'ricochet');
+    return canBounce ? { direction: bounce, from: { x: end.x + normal.x * 0.5, y: end.y + normal.y * 0.5 } } : undefined;
+  }
+
+  /** Fires a shell from `tank`'s muzzle along its turret. */
+  function launchShell(tank: Tank, spec: ShellSpec) {
+    const shooter = byTank.get(tank);
+    const start = muzzleOf(tank);
+    const direction = { x: Math.cos(tank.turretAngle), y: Math.sin(tank.turretAngle) };
+    const shell: Shell = {
+      id: shellId++,
+      shooter: tank,
+      team: shooter?.team,
+      x: start.x,
+      y: start.y,
+      direction,
+      remaining: spec.range,
+      bounces: 0,
+      path: [start],
+      leg: { travelled: 0, length: 0 },
+      drift: { x: 0, y: 0 }
+    };
+
+    shooter?.body.applyImpulse({ x: -direction.x * RECOIL, y: -direction.y * RECOIL }, true);
+    muzzleBlast(start, direction, shooter, undefined);
+    shell.leg.length = expectedLeg(shell);
+    shells.push(shell);
+  }
+
+  /**
+   * Moves a shell along its flight for `dt` seconds: it strikes the first thing in its way, flies
+   * on after a ricochet with the range it has left, and falls once the range is spent.
+   */
+  function flyShell(shell: Shell, dt: number) {
+    const spec = options.shell!;
+    let step = Math.min(spec.speed * dt, shell.remaining);
+
+    // A shell bouncing in a corner could strike over and over within one step; a few strikes are plenty.
+    for (let strikes = 0; strikes < 4 && step > 1e-6; strikes++) {
+      const from = { x: shell.x, y: shell.y };
+      const hit = castShot(from, shell.direction, (body) => passesShell(shell, body), step);
+      const end = { x: from.x + shell.direction.x * hit.distance, y: from.y + shell.direction.y * hit.distance };
+      shellTrail(shell, from, end);
+      shell.x = end.x;
+      shell.y = end.y;
+      shell.remaining -= hit.distance;
+      shell.leg.travelled += hit.distance;
+
+      if (hit.distance >= step) {
+        break;
+      }
+
+      step -= hit.distance;
+      shell.path.push(end);
+      const bounced = strike(hit, end, shell.direction, shell.shooter, spec, shell.bounces < MAX_RICOCHETS);
+
+      if (!bounced) {
+        stopShell(shell);
+        return;
+      }
+
+      shell.bounces++;
+      shell.direction = bounced.direction;
+      // The bounce starts a hair off the surface; that hair counts against the range too.
+      shell.remaining = Math.max(shell.remaining - Math.hypot(bounced.from.x - end.x, bounced.from.y - end.y), 0);
+      shell.x = bounced.from.x;
+      shell.y = bounced.from.y;
+      shell.drift = { x: 0, y: 0 };
+      shell.leg = { travelled: 0, length: 0 };
+      shell.leg.length = expectedLeg(shell);
+    }
+
+    if (shell.remaining <= 1e-6) {
+      fall(shell);
+    }
+  }
+
+  /** Whether a shell flies through `body`: its own tank until the first ricochet, and teammates without friendly fire. */
+  function passesShell(shell: Shell, body: Armored) {
+    const shooter = byTank.get(shell.shooter);
+    return (body.tank === shell.shooter && shell.bounces === 0) || passesAsTeammate(shell.team, shooter, body);
+  }
+
+  /** How far the shell's current leg will likely reach, for the fade along its trail. */
+  function expectedLeg(shell: Shell) {
+    const distance = castShot({ x: shell.x, y: shell.y }, shell.direction, (body) => passesShell(shell, body), shell.remaining).distance;
+    return Math.max(distance, 1);
+  }
+
+  /**
+   * Extends a shell's trail by one segment, from `from` to `to`, in the look of `smokeTrail`. The
+   * segment is a trail of its own that starts where the previous one ended, with the same drift,
+   * so the pieces stay joined as they drift apart from the rest.
+   */
+  function shellTrail(shell: Shell, from: Point, to: Point) {
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+
+    if (length < 0.01) {
+      return;
+    }
+
+    const t0 = Math.min(shell.leg.travelled / shell.leg.length, 1);
+    const t1 = Math.min((shell.leg.travelled + length) / shell.leg.length, 1);
+    const angle = between(0, Math.PI * 2);
+    const speed = between(1, 10);
+    const drift = { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed };
+    trailId = (trailId + 1) % 1e6;
+    renderer.spawn(PARTICLE_TRAIL, from.x, from.y, shell.drift.x, shell.drift.y, TRAIL_LIFETIME, TRAIL_WIDTH, [t0, trailId, 0, 0]);
+    renderer.spawn(PARTICLE_TRAIL, to.x, to.y, drift.x, drift.y, TRAIL_LIFETIME, TRAIL_WIDTH, [t1, trailId, 0, 0]);
+    shell.drift = drift;
+  }
+
+  /** A spent shell drops to the ground in a puff of dust. */
+  function fall(shell: Shell) {
+    const at = { x: shell.x, y: shell.y };
+
+    for (let index = 0; index < 6; index++) {
+      const angle = between(0, Math.PI * 2);
+      const speed = between(20, 70);
+      renderer.spawn(PARTICLE_DUST, at.x, at.y, Math.cos(angle) * speed, Math.sin(angle) * speed, between(0.4, 0.8), between(1, 1.6), FALL_DUST);
+    }
+
+    renderer.spawn(PARTICLE_SMOKE, at.x, at.y, shell.direction.x * 15, shell.direction.y * 15, between(0.5, 0.8), between(2, 3), NO_COLOR);
+    shell.path.push(at);
+    stopShell(shell);
+  }
+
+  function stopShell(shell: Shell) {
+    shells.splice(shells.indexOf(shell), 1);
+    options.onShot?.(shell.shooter, shell.path);
   }
 
   function reportHit(body: Armored, shooter: Tank, part: 'armor' | 'core' | 'ricochet') {
@@ -730,14 +945,25 @@ export function createCombat(
     return wall ? { distance: wall.timeOfImpact } : best;
   }
 
-  /** Chips the armor where a shot hit, dents it slightly and knocks the body back. */
-  function damage(body: Armored, point: Point, direction: Point) {
+  /**
+   * Chips the armor where a shot hit, dents it slightly and knocks the body back. A deep blow
+   * chips a row of craters inward from the surface.
+   */
+  function damage(body: Armored, point: Point, direction: Point, blow: Pick<ShellSpec, 'hole' | 'depth' | 'knockback'>) {
     const local = toLocal(body.body, point);
     const inward = rotateInto(body.body, direction);
-    carve(body.field, { x: local.x + inward.x * 0.6, y: local.y + inward.y * 0.6 }, SHOT_HOLE, 0.35, random() * 1000);
+    const craters = Math.ceil(blow.depth / (blow.hole * 0.5));
+    const seed = random() * 1000;
+
+    for (let crater = 0; crater <= craters; crater++) {
+      const along = 0.6 + (craters > 0 ? (blow.depth * crater) / craters : 0);
+      carve(body.field, { x: local.x + inward.x * along, y: local.y + inward.y * along }, blow.hole, 0.35, seed + crater * 7.31);
+    }
+
+    const spin = blow.knockback * KNOCKBACK_SPIN_SHARE;
     dent(body.field, local, inward, 0.9, 4.5);
-    body.body.applyImpulse({ x: direction.x * KNOCKBACK, y: direction.y * KNOCKBACK }, true);
-    body.body.applyImpulseAtPoint({ x: direction.x * KNOCKBACK_SPIN, y: direction.y * KNOCKBACK_SPIN }, point, true);
+    body.body.applyImpulse({ x: direction.x * blow.knockback, y: direction.y * blow.knockback }, true);
+    body.body.applyImpulseAtPoint({ x: direction.x * spin, y: direction.y * spin }, point, true);
     body.flash = 1;
     body.changed = true;
 
@@ -801,18 +1027,20 @@ export function createCombat(
    * The gun going off, after photos of tank guns firing: a flash that lights the ground and throws
    * shadows, a fireball blown forward out of the barrel with two side jets, a little smoke and a few
    * sparks. The barrel kicks back and the camera shakes if it is near.
+   *
+   * @param reach - Where a hitscan shot first stops: the main light rides out of the barrel up to
+   *   there. A shell carries its own light, so it passes `undefined` and the light stays at the muzzle.
    */
-  function muzzleBlast(at: Point, direction: Point, shooter: Armored | undefined, skip: (body: Armored) => boolean) {
+  function muzzleBlast(at: Point, direction: Point, shooter: Armored | undefined, reach: number | undefined) {
     const across = { x: -direction.y, y: direction.x };
     // A brief flash at the muzzle lights the tank itself, so its turret shades the hull.
     flash(at.x + direction.x * 2, at.y + direction.y * 2, MUZZLE_GLARE, 0.07, 1, [1, 0.8, 0.5], MUZZLE_HEIGHT);
 
-    // The main light rides out of the barrel after the shot, up to where the shot first stops, fading as it goes.
-    const reach = castShot(at, direction, skip, SHOT_RANGE).distance;
+    // The main light rides out of the barrel after the shot, fading as it goes.
     flash(at.x + direction.x * 3, at.y + direction.y * 3, MUZZLE_LIGHT, MUZZLE_LIGHT_LIFE, 1, [1, 0.72, 0.38], MUZZLE_HEIGHT, {
       x: direction.x * MUZZLE_LIGHT_SPEED,
       y: direction.y * MUZZLE_LIGHT_SPEED,
-      distance: Math.max(reach - 3, 0)
+      distance: Math.max((reach ?? 0) - 3, 0)
     });
 
     for (let index = 0; index < 10; index++) {
@@ -1056,6 +1284,27 @@ type Debris = {
   color: readonly number[];
 };
 
+/** A shell in flight. */
+type Shell = {
+  id: number;
+  shooter: Tank;
+  team: string | undefined;
+  x: number;
+  y: number;
+  /** Unit direction of flight. */
+  direction: Point;
+  /** Pixels the shell may still fly. */
+  remaining: number;
+  /** Ricochets so far; before the first, the shell passes through its own tank. */
+  bounces: number;
+  /** The muzzle, each ricochet so far and, once it stops, where it ended. */
+  path: Point[];
+  /** How far the current leg, from the muzzle or the last ricochet, has come and is likely to reach. */
+  leg: { travelled: number; length: number };
+  /** Drift of the trail point last laid, which the next segment starts from. */
+  drift: Point;
+};
+
 const STOP = { x: 0, y: 0 };
 const WRECK_FIRE_SPREAD = 10;
 const WRECK_FIRE_LIFE = 12;
@@ -1064,11 +1313,13 @@ const CAMPFIRE_RADIUS = 13;
 const TANK_MASS = 1;
 const CRATE_MASS = 10;
 const SHOT_RANGE = 1000;
-const SHOT_HOLE = 2.3;
-/** Linear impulse of a penetrating hit, which shoves a 1-mass hull about 10 px against its damping. */
-const KNOCKBACK = 300;
-/** Extra impulse at the hit point, which turns the body a little. */
-const KNOCKBACK_SPIN = 20;
+/**
+ * A hitscan hit chips a 2.3 px hole; its impulse of 300 shoves a 1-mass hull about 10 px against
+ * its damping.
+ */
+const HITSCAN_HIT = { hole: 2.3, depth: 0, knockback: 300 };
+/** Share of a hit's impulse applied again at the hit point, which turns the body a little. */
+const KNOCKBACK_SPIN_SHARE = 1 / 15;
 const RECOIL = 25;
 /** Shots meeting armor at more than about 65 degrees from its normal bounce off. */
 const RICOCHET_COS = 0.42;
@@ -1118,6 +1369,15 @@ const FLOOR_COLOR = [0.514, 0.514, 0.514];
 const WALL_COLOR = [0.42, 0.42, 0.43];
 const WALL_DUST = [0.35, 0.35, 0.35];
 const SPARK_COLOR = [1, 0.9, 0.55, 1];
+const FALL_DUST = [0.62, 0.6, 0.56, 1];
+const SHELL_COLOR = [1, 0.84, 0.5];
+/**
+ * Shells fly at hull height, so they cast a small sun shadow; their glow hangs well above them, so
+ * the shell's own shadow from it stays short.
+ */
+const SHELL_HEIGHT = 6;
+const SHELL_LIGHT = 34;
+const SHELL_LIGHT_HEIGHT = 24;
 /** Puffs take their colors from their layer. */
 const NO_COLOR = [0, 0, 0, 0];
 
@@ -1174,7 +1434,24 @@ function createWallDraws(renderer: Renderer, walls: readonly WallPlacement[]) {
   });
 }
 
-/** A concrete slab of the given half size with a seam 3 px inside its edge. Cells grow in half pixels until the slab fits a slot. */
+/** Uploads the shape of a shell into a field slot it keeps for the renderer's life, ready to draw at any spot. */
+function createShellDraw(renderer: Renderer) {
+  const field = createShellField();
+  const slot = renderer.allocateField();
+
+  if (slot === undefined) {
+    throw new Error('The battle ran out of field slots for its shells.');
+  }
+
+  renderer.uploadField(slot, field);
+  return { draw: fieldDraw(field, slot) };
+}
+
+/**
+ * A concrete slab of the given half size with a seam 3 px inside its edge. Cells grow in half
+ * pixels until the slab fits a slot; on a slab as large as a building they grow so coarse that so
+ * fine a seam would smear into the outline, so there it lies two cells in and is a little wider.
+ */
 function createWallField(halfWidth: number, halfHeight: number) {
   const margin = 2;
   const width = (halfWidth + margin) * 2;
@@ -1185,9 +1462,12 @@ function createWallField(halfWidth: number, halfHeight: number) {
     cell += 0.5;
   }
 
+  const inset = Math.max(3, cell * 2);
+  const seamWidth = Math.max(0.4, cell * 0.3);
+
   return createField({ minX: -width / 2, minY: -height / 2, maxX: width / 2, maxY: height / 2 }, cell, (x, y) => {
     const armor = box(x, y, halfWidth, halfHeight);
-    const seam = Math.abs(box(x, y, halfWidth - 3, halfHeight - 3)) - 0.4;
+    const seam = Math.abs(box(x, y, halfWidth - inset, halfHeight - inset)) - seamWidth;
     return [armor, seam, FAR, 0];
   });
 }

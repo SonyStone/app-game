@@ -110,16 +110,20 @@ export type Situation = {
  */
 export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
   const { facts, role } = situation;
-  const wounded = facts.coreOpen || facts.armorLow;
   const desperate = situation.enemyClock > 0.85 && !facts.pointOurs;
   const goals: GoapGoal<BotGoal>[] = [];
 
-  if (wounded && facts.underFire && !facts.inCover) {
+  // An open core means the next hit is fatal, so the bot gets out of fire and home to mend it.
+  // Armor merely chipped away is worth mending only when nothing more pressing goes on, since the
+  // base is a long drive away.
+  if (facts.coreOpen && facts.underFire && !facts.inCover) {
     goals.push({ name: 'survive', wants: { safe: true }, priority: desperate ? 50 : 90 });
   }
 
-  if (wounded) {
+  if (facts.coreOpen) {
     goals.push({ name: 'repair', wants: { repaired: true }, priority: desperate ? 40 : 75 });
+  } else if (facts.armorLow) {
+    goals.push({ name: 'repair', wants: { repaired: true }, priority: desperate ? 30 : 46 });
   }
 
   if (!facts.pointOurs) {
@@ -131,7 +135,10 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
   if (facts.hasTarget) {
     // Holding the point, a bot fights what comes near it rather than chasing enemies across the map.
     const holding = facts.pointOurs && !facts.targetNearPoint && role !== 'flank';
-    const priority = holding ? 40 : (facts.targetVisible ? 55 : 42) + (role === 'flank' ? 8 : 0) + (facts.pointOurs && facts.enemyOnPoint ? 10 : 0);
+    // A target with its core open dies to the next hit, which is worth more than most else.
+    const finishing = facts.targetCoreOpen && facts.targetVisible ? 25 : 0;
+    const priority =
+      (holding ? 40 : (facts.targetVisible ? 55 : 42) + (role === 'flank' ? 8 : 0) + (facts.pointOurs && facts.enemyOnPoint ? 10 : 0)) + finishing;
     goals.push({ name: 'kill', wants: { targetDown: true }, priority });
   }
 

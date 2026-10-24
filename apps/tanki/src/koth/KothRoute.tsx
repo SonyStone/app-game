@@ -2,7 +2,7 @@ import { GpuCanvas, useGpuCanvas } from '@app-game/solid-gpu/gpu';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
 import { createSignal, onCleanup, onSettled, untrack } from 'solid-js';
-import { applyAim } from '../arena/aim';
+import { aimAngle } from '../arena/aim';
 import { createCamera, followTarget, screenToWorldDirection, worldToScreen, zoomCamera } from '../arena/camera';
 import { makeArenaInput } from '../arena/input';
 import { createRangeRenderer } from '../damage/renderer';
@@ -14,8 +14,8 @@ import { CAPTURE_RULES } from './rules';
 
 /**
  * King of the hill on WebGPU: red against blue, four tanks a side, the player with three bots
- * against four bots. Stand on the point in the middle to capture it; the first team to hold it
- * for 90 seconds wins.
+ * against four bots. The point in the middle opens 30 seconds into the match; stand on it to
+ * capture it. The first team to hold it for three minutes wins.
  *
  * Keys: R restarts, B shows what the bots think, V hands the player's tank to a bot and shows the
  * whole map (1-8 follow a tank, 0 shows the whole map again). In the address, `?watch` starts
@@ -149,16 +149,13 @@ function KothScene(props: {
     camera.rotation += controls.turn * VIEW_TURN_SPEED * dt;
     zoomCamera(camera, controls.zoom * Math.exp(controls.zoomKeys * KEY_ZOOM_SPEED * dt));
 
-    if (player && !props.watching) {
-      applyAim(player, controls.aim, camera, screen);
-    }
-
+    const aim = player && !props.watching ? aimAngle(player, controls.aim, camera, screen) : undefined;
     const drive = screenToWorldDirection(camera, controls.move);
     pendingStep += dt;
 
     while (pendingStep >= PHYSICS_STEP) {
       pendingStep -= PHYSICS_STEP;
-      match.step(PHYSICS_STEP, { drive, fire: controls.fire && !props.watching });
+      match.step(PHYSICS_STEP, { drive, aim, fire: controls.fire && !props.watching });
     }
 
     match.update(dt);
@@ -196,7 +193,8 @@ function KothScene(props: {
   }
 }
 
-const START_ZOOM = 2;
+/** About 900 x 560 px of the map on a laptop screen: as far as a bot sees to either side. */
+const START_ZOOM = 1.6;
 /** Zoom when watching one tank. */
 const FOLLOW_ZOOM = 1.6;
 const PHYSICS_STEP = 1 / 60;

@@ -4,6 +4,7 @@ import type { Rapier } from '../physics/Rapier2D';
 import { inBase, onPoint } from './map';
 import { createKothMatch } from './match';
 import { CAPTURE_RULES } from './rules';
+import { MEDIUM_TANK } from './tanks';
 
 let rapier: Rapier;
 
@@ -12,13 +13,13 @@ beforeAll(async () => {
 });
 
 describe('king of the hill with eight bots', () => {
-  it('reaches the point, takes it, fights over it and never gets stuck for long', () => {
+  it('reaches the point, takes it once it opens, fights over it and never gets stuck for long', () => {
     const match = createMatch(7);
     const watch = watchMovement(match);
     let firstCapture: number | undefined;
     let contested = 0;
 
-    while (match.time < 90) {
+    while (match.time < 150) {
       tick(match);
       watch.sample();
 
@@ -31,14 +32,14 @@ describe('king of the hill with eight bots', () => {
       }
     }
 
-    expect(firstCapture).toBeLessThan(45);
-    // Both teams fight on the point for a while, and shoot through to cores: this seed is one of
-    // the quieter ones, with two kills where others have up to eleven.
+    expect(firstCapture).toBeGreaterThan(CAPTURE_RULES.unlockTime);
+    expect(firstCapture).toBeLessThan(90);
+    // Both teams fight on the point for a while, and shoot through to cores.
     expect(contested).toBeGreaterThan(3);
     expect(match.members.reduce((total, member) => total + member.kills, 0)).toBeGreaterThanOrEqual(2);
 
     for (const bot of match.bots.values()) {
-      expect(bot.driver.longestStall).toBeLessThan(3);
+      expect(bot.driver.longestStall).toBeLessThan(1.5);
     }
 
     // A bot that wants to go somewhere far gets there: it rarely spends a whole window of four
@@ -47,12 +48,38 @@ describe('king of the hill with eight bots', () => {
     expect(watch.longest).toBeLessThan(2);
   }, 60_000);
 
-  it('brings destroyed tanks back at their base after five seconds', () => {
+  it('fires only at enemies in sight within the reach of a screen, at a measured pace', () => {
+    const match = createMatch(11);
+    const ranges: number[] = [];
+    const fire = match.combat.fire;
+    match.combat.fire = (tank) => {
+      const shooter = match.members.find((member) => member.tank === tank)!;
+      const at = tank.hull.translation();
+      const seen = match.members
+        .filter((member) => member.team !== shooter.team && member.tank)
+        .map((member) => member.tank!.hull.translation())
+        .filter((enemy) => match.combat.lineOfSight(at, enemy))
+        .map((enemy) => Math.hypot(enemy.x - at.x, enemy.y - at.y));
+      ranges.push(Math.min(...seen));
+      fire(tank);
+    };
+
+    while (match.time < 120) {
+      tick(match);
+    }
+
+    // The point opens at 30 s; from then on the eight tanks fight on and off.
+    expect(ranges.length).toBeGreaterThan(40);
+    expect(ranges.length / 8 / 2).toBeLessThan(30);
+    expect(Math.max(...ranges)).toBeLessThan(500);
+  }, 60_000);
+
+  it('brings destroyed tanks back at their base in waves', () => {
     const match = createMatch(3);
     const deaths = new Map<number, number>();
     let respawned = 0;
 
-    while (match.time < 60 && respawned < 3) {
+    while (match.time < 300 && respawned < 3) {
       tick(match);
 
       for (const member of match.members) {
@@ -61,7 +88,9 @@ describe('king of the hill with eight bots', () => {
         } else if (member.tank && deaths.has(member.id)) {
           const away = match.time - deaths.get(member.id)!;
           expect(away).toBeGreaterThan(4.9);
-          expect(away).toBeLessThan(5.2);
+          expect(away).toBeLessThan(11.1);
+          // Waves come every six seconds of match time.
+          expect(match.time % 6).toBeLessThan(0.05);
           expect(inBase(match.map.bases[member.team], member.tank.hull.translation())).toBe(true);
           deaths.delete(member.id);
           respawned++;
@@ -75,7 +104,7 @@ describe('king of the hill with eight bots', () => {
   it('declares the team that held the point long enough the winner, and starts over', () => {
     const match = createMatch(11, { ...CAPTURE_RULES, holdTime: 15 });
 
-    while (match.time < 120 && !match.capture.winner) {
+    while (match.time < 180 && !match.capture.winner) {
       tick(match);
     }
 
@@ -88,6 +117,7 @@ describe('king of the hill with eight bots', () => {
     match.restart();
 
     expect(match.capture.winner).toBeUndefined();
+    expect(match.capture.locked).toBe(CAPTURE_RULES.unlockTime);
     expect(match.time).toBe(0);
     expect(match.members.every((member) => member.tank && member.kills === 0)).toBe(true);
     expect(match.members.every((member) => !onPoint(match.map, member.tank!.hull.translation()))).toBe(true);
@@ -102,14 +132,18 @@ describe('king of the hill with the player', () => {
     const at = player.hull.translation();
     const away = { hull: enemy.hull.translation(), pull: enemy.pull.translation() };
 
-    // A blue tank, facing west like at its spawn, drops by and shoots at the player's tank in red's base.
+    // A blue tank, facing west like at its spawn, drops by and puts a few shells into the front of
+    // the player's tank in red's base.
     enemy.hull.setTranslation({ x: at.x + 80, y: at.y }, true);
     enemy.pull.setTranslation({ x: at.x + 65, y: at.y }, true);
 
-    for (let shot = 0; shot < 20; shot++) {
-      enemy.turretAngle = Math.PI + (shot % 5) * 0.03 - 0.06;
+    for (let shot = 0; shot < 3; shot++) {
+      enemy.turretAngle = Math.PI + (shot - 1) * 0.04;
       match.combat.fire(enemy);
-      match.step(1 / 60);
+
+      for (let step = 0; step < 20; step++) {
+        match.step(1 / 60);
+      }
     }
 
     enemy.hull.setTranslation(away.hull, true);
@@ -125,33 +159,62 @@ describe('king of the hill with the player', () => {
     expect(match.combat.armorLeft(player)).toBeGreaterThan(chipped + (1 - chipped) * 0.8);
   });
 
-  it('lets the player drive while bots fill the other seats, and hands the seat to a bot when watching', () => {
+  it('lets the player drive and aim while bots fill the other seats, and hands the seat to a bot when watching', () => {
     const match = createMatch(5, CAPTURE_RULES, true);
     const start = match.player!.hull.translation();
+    const turret = match.player!.turretAngle;
 
-    for (let step = 0; step < 120; step++) {
-      match.step(1 / 60, { drive: { x: 1, y: 0 }, fire: step % 10 === 0 });
+    for (let step = 0; step < 60; step++) {
+      match.step(1 / 60, { drive: { x: 0, y: 1 }, aim: turret + Math.PI, fire: false });
     }
 
     const moved = match.player!.hull.translation();
 
     expect(match.bots.has(match.seat)).toBe(false);
-    expect(moved.x - start.x).toBeGreaterThan(150);
+    expect(moved.y - start.y).toBeGreaterThan(100);
+    // Half a turn takes the turret longer than a second.
+    expect(Math.abs(match.player!.turretAngle - turret)).toBeCloseTo(MEDIUM_TANK.turretSpeed, 1);
 
     match.spectate(true);
 
     expect(match.player).toBeUndefined();
     expect(match.bots.has(match.seat)).toBe(true);
 
+    let planned = false;
+
     for (let step = 0; step < 300; step++) {
       tick(match);
+      planned ||= match.bots.get(match.seat)!.thought().goal !== undefined;
     }
 
-    expect(match.bots.get(match.seat)!.thought().goal).toBeDefined();
+    expect(planned).toBe(true);
 
     match.spectate(false);
 
     expect(match.player).toBe(match.seat.tank);
+  });
+
+  it('fires the clip one interval apart and reloads it', () => {
+    const match = createMatch(5, CAPTURE_RULES, true);
+    const shots: number[] = [];
+
+    for (let step = 0; step < 300; step++) {
+      const before = match.hud().player.rounds;
+      match.step(1 / 60, { drive: { x: 0, y: 0 }, fire: true });
+
+      if (match.hud().player.rounds < before) {
+        shots.push(match.time);
+      }
+    }
+
+    expect(shots).toHaveLength(MEDIUM_TANK.gun.clip);
+    expect(shots[1] - shots[0]).toBeCloseTo(MEDIUM_TANK.gun.interval, 1);
+
+    for (let step = 0; step < 300; step++) {
+      match.step(1 / 60);
+    }
+
+    expect(match.hud().player.rounds).toBe(MEDIUM_TANK.gun.clip);
   });
 });
 
