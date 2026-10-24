@@ -303,7 +303,8 @@ export function createCombat(
 
     /**
      * Whether a straight line from `from` to `to` is clear of walls and crates. Tanks never block
-     * it, and neither do holes shot through a crate.
+     * it, and neither do holes shot through a crate, nor rubble within the reach of a tank's gun
+     * of `from`: a tank sees and shoots over rubble right in front of it.
      */
     lineOfSight(from: Point, to: Point) {
       const length = Math.hypot(to.x - from.x, to.y - from.y);
@@ -313,7 +314,7 @@ export function createCombat(
       }
 
       const direction = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
-      return castShot(from, direction, (body) => body.tank !== undefined, length).distance >= length;
+      return castShot(from, direction, (body) => body.tank !== undefined, length, BARREL + OVER_RUBBLE).distance >= length;
     },
 
     /**
@@ -725,10 +726,10 @@ export function createCombat(
     const passes = (body: Armored, first: boolean) => (first && body === shooter) || passesAsTeammate(shooter?.team, shooter, body);
 
     shooter?.body.applyImpulse({ x: -direction.x * RECOIL, y: -direction.y * RECOIL }, true);
-    muzzleBlast(start, direction, shooter, castShot(start, direction, (body) => passes(body, true), SHOT_RANGE).distance);
+    muzzleBlast(start, direction, shooter, castShot(start, direction, (body) => passes(body, true), SHOT_RANGE, OVER_RUBBLE).distance);
 
     for (let bounce = 0; bounce <= MAX_RICOCHETS; bounce++) {
-      const hit = castShot(start, direction, (body) => passes(body, bounce === 0), remaining);
+      const hit = castShot(start, direction, (body) => passes(body, bounce === 0), remaining, bounce === 0 ? OVER_RUBBLE : 0);
       const end = { x: start.x + direction.x * hit.distance, y: start.y + direction.y * hit.distance };
       smokeTrail(start, end);
       path.push(end);
@@ -838,7 +839,7 @@ export function createCombat(
     // A shell bouncing in a corner could strike over and over within one step; a few strikes are plenty.
     for (let strikes = 0; strikes < 4 && step > 1e-6; strikes++) {
       const from = { x: shell.x, y: shell.y };
-      const hit = castShot(from, shell.direction, (body) => passesShell(shell, body), step);
+      const hit = castShot(from, shell.direction, (body) => passesShell(shell, body), step, overRubble(shell));
       const end = { x: from.x + shell.direction.x * hit.distance, y: from.y + shell.direction.y * hit.distance };
       shellTrail(shell, from, end);
       shell.x = end.x;
@@ -883,8 +884,13 @@ export function createCombat(
 
   /** How far the shell's current leg will likely reach, for the fade along its trail. */
   function expectedLeg(shell: Shell) {
-    const distance = castShot({ x: shell.x, y: shell.y }, shell.direction, (body) => passesShell(shell, body), shell.remaining).distance;
+    const distance = castShot({ x: shell.x, y: shell.y }, shell.direction, (body) => passesShell(shell, body), shell.remaining, overRubble(shell)).distance;
     return Math.max(distance, 1);
+  }
+
+  /** Pixels ahead of a shell over which it still passes over rubble: the first few after the muzzle. */
+  function overRubble(shell: Shell) {
+    return Math.max(OVER_RUBBLE - (options.shell!.range - shell.remaining), 0);
   }
 
   /**
@@ -943,10 +949,12 @@ export function createCombat(
   }
 
   /**
-   * Finds the first armor, core or wall within `maxDistance` along a ray, skipping bodies for
-   * which `skip` returns true.
+   * Finds the first armor, core, wall or rubble within `maxDistance` along a ray, skipping bodies
+   * for which `skip` returns true.
+   *
+   * @param overRubble - Pixels from the start over which the ray passes over rubble.
    */
-  function castShot(start: Point, direction: Point, skip: (body: Armored) => boolean, maxDistance: number) {
+  function castShot(start: Point, direction: Point, skip: (body: Armored) => boolean, maxDistance: number, overRubble = 0) {
     let best: { distance: number; target?: Armored; part?: 'armor' | 'core'; tile?: Tile } = { distance: maxDistance };
 
     for (const body of armored) {
@@ -961,7 +969,7 @@ export function createCombat(
       }
     }
 
-    const wall = walls.cast(start, direction, best.distance);
+    const wall = walls.cast(start, direction, best.distance, overRubble);
 
     return wall ? { distance: wall.distance, tile: wall.tile } : best;
   }
@@ -1352,6 +1360,13 @@ const SHOT_RANGE = 1000;
 const HITSCAN_HIT = { hole: 2.3, depth: 0, knockback: 300 };
 /** Hole of a medium tank's shell, the blow that chips a wall material's full crater. */
 const SHELL_HOLE = 4.5;
+/**
+ * A shot passes over rubble for this many pixels past the muzzle, about the depth of a heap, so a
+ * tank right behind rubble shoots over it, while shots from farther away meet it. The muzzle is
+ * `BARREL` px from a hull's center.
+ */
+const OVER_RUBBLE = 64;
+const BARREL = 30;
 /** Share of a hit's impulse applied again at the hit point, which turns the body a little. */
 const KNOCKBACK_SPIN_SHARE = 1 / 15;
 const RECOIL = 25;

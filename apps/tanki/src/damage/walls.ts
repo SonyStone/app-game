@@ -18,12 +18,14 @@ type Point = { x: number; y: number };
  * - `chip` cuts a crater into every tile around the hit point, its size set by the material.
  * - `refresh` then rebuilds each changed tile: pieces cut off from the rest of the wall fly away
  *   as debris, and a tile that has lost the material's `collapse` share falls apart altogether,
- *   leaving a gap a tank can drive through. Its colliders are built anew from the field and the
- *   field is uploaded again; `onChange` reports the area so navigation can follow.
+ *   leaving a gap a tank can drive through. A tile of a building leaves rubble behind, which tanks
+ *   drive over but which stops shells, so it is low cover. Its colliders are built anew from the
+ *   field and the field is uploaded again; `onChange` reports the area so navigation can follow.
  *
- * Every tile's field holds the distance to the whole wall, two pixels past the tile's own edges,
- * and every crater is cut into each tile it reaches, so tiles draw as one wall without seams; when
- * a tile falls, its neighbors are cut back to their own edges, which then get an outline.
+ * Every tile's field holds the distance to the whole wall over the tile's own part, and two pixels
+ * past the wall's edge for its outline, and every crater is cut into each tile it reaches, so tiles
+ * draw as one wall without seams; when a tile falls, its neighbors are cut back to their own
+ * edges, which then get an outline.
  *
  * @param options.random - Source of randomness in [0, 1) for crater outlines and breakage.
  * @param options.onDebris - Receives a piece of wall knocked loose, with its field centered on
@@ -73,22 +75,19 @@ export function createWalls(
     },
 
     /**
-     * The first wall along a ray within `maxDistance`, with the tile hit, if the wall is breakable;
-     * `undefined` when the ray meets no wall.
+     * The first wall or rubble along a ray within `maxDistance`, with the tile hit, if the wall is
+     * breakable; `undefined` when the ray meets neither.
      *
      * @param direction - Unit direction.
+     * @param overRubble - Pixels from the start within which the ray passes over rubble, as a shot
+     *   from a tank right behind rubble does, while shots from afar meet it.
      */
-    cast(start: Point, direction: Point, maxDistance: number) {
-      const hit = world.castRay(
-        new rapier.Ray(start, direction),
-        maxDistance,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        (collider) => collider.parent() === body
-      );
+    cast(start: Point, direction: Point, maxDistance: number, overRubble = 0) {
+      const solid = castRay(start, direction, maxDistance, false);
+      const reach = solid?.timeOfImpact ?? maxDistance;
+      const from = { x: start.x + direction.x * overRubble, y: start.y + direction.y * overRubble };
+      const rubble = overRubble < reach ? castRay(from, direction, reach - overRubble, true) : undefined;
+      const hit = rubble ? { timeOfImpact: overRubble + rubble.timeOfImpact, collider: rubble.collider } : solid;
 
       return hit ? { distance: hit.timeOfImpact, tile: owners.get(hit.collider.handle) } : undefined;
     },
@@ -103,7 +102,7 @@ export function createWalls(
     chip(point: Point, direction: Point, tile: Tile, scale = 1) {
       const crater = tile.material.crater;
 
-      if (!crater || tile.fallen) {
+      if (!crater || (tile.fallen && !tile.rubble)) {
         return tile.material;
       }
 
@@ -115,7 +114,7 @@ export function createWalls(
       damage.hits++;
 
       for (const near of tilesNear({ minX: point.x - reach, minY: point.y - reach, maxX: point.x + reach, maxY: point.y + reach })) {
-        if (near.fallen || !near.material.crater) {
+        if ((near.fallen && !near.rubble) || !near.material.crater) {
           continue;
         }
 
@@ -156,7 +155,7 @@ export function createWalls(
       }
 
       for (const tile of tiles) {
-        if (!tile.fallen && tile.slot !== undefined) {
+        if (tile.slot !== undefined) {
           renderer.addBody({
             kind: KIND_FIELD,
             x: tile.wall.x,
@@ -168,8 +167,8 @@ export function createWalls(
             cols: tile.field.cols,
             rows: tile.field.rows,
             slot: tile.slot,
-            color: tile.material.color,
-            height: tile.material.height
+            color: tile.rubble ? tile.material.color.map((channel) => channel * RUBBLE_SHADE) : tile.material.color,
+            height: tile.rubble ? RUBBLE_HEIGHT : tile.material.height
           });
         }
       }
@@ -216,6 +215,7 @@ export function createWalls(
         if (tile.fallen || !tile.pristine) {
           tile.field = createTileField(tile);
           tile.fallen = false;
+          tile.rubble = false;
           tile.pristine = true;
           build(tile);
           options.onChange(tile.bounds);
@@ -264,9 +264,28 @@ export function createWalls(
     rebuildColliders(tile);
   }
 
+  /** Casts a ray against the walls, or only against rubble. */
+  function castRay(start: Point, direction: Point, maxDistance: number, rubble: boolean) {
+    return world.castRay(
+      new rapier.Ray(start, direction),
+      maxDistance,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      (collider) => collider.parent() === body && collider.isSensor() === rubble
+    );
+  }
+
   /** Rebuilds a changed tile; a tile that lost too much falls, and its neighbors are cut back. */
   function update(tile: Tile) {
     tile.changed = false;
+
+    if (tile.rubble) {
+      settle(tile);
+      return;
+    }
 
     if (tile.fallen) {
       return;
@@ -288,21 +307,31 @@ export function createWalls(
     options.onChange(tile.bounds);
   }
 
-  /** Breaks a tile into pieces that fly off, frees its slot and cuts its neighbors back to their own edges. */
+  /**
+   * Breaks a tile into pieces that fly off and cuts its neighbors back to their own edges. A tile
+   * of a building leaves a heap of rubble in its place, in its slot; any other frees its slot.
+   */
   function fall(tile: Tile) {
     damage.collapsed++;
     tile.fallen = true;
+    tile.rubble = tile.material.rubble && Math.min(tile.rect.maxX - tile.rect.minX, tile.rect.maxY - tile.rect.minY) >= RUBBLE_THICKNESS;
     // The margin belongs to the neighbors; only the tile's own part falls.
     clip(tile.field, (x, y) => rectDistance(tile.rect, x, y));
     const pieces = Math.min(Math.max(Math.round(ownArea(tile) / 500), 3), 8);
 
-    for (const fragment of shatter(tile.field, pieces, MIN_PIECE_CELLS, options.random)) {
+    for (const fragment of shatter(tile.field, tile.rubble ? Math.ceil(pieces / 2) : pieces, MIN_PIECE_CELLS, options.random)) {
       launch(tile, fragment, 90);
     }
 
-    removeColliders(tile);
-    renderer.releaseField(tile.slot!);
-    tile.slot = undefined;
+    if (tile.rubble) {
+      tile.field = createRubbleField(tile, options.random);
+      renderer.uploadField(tile.slot!, tile.field);
+      rebuildColliders(tile);
+    } else {
+      removeColliders(tile);
+      renderer.releaseField(tile.slot!);
+      tile.slot = undefined;
+    }
 
     for (const neighbor of tile.neighbors) {
       if (!neighbor.fallen) {
@@ -313,6 +342,20 @@ export function createWalls(
     }
 
     options.onChange(tile.bounds);
+  }
+
+  /** Rebuilds a heap of rubble after a hit, or clears it away once little of it is left. */
+  function settle(tile: Tile) {
+    if (ownArea(tile) < RUBBLE_LEFT) {
+      tile.rubble = false;
+      removeColliders(tile);
+      renderer.releaseField(tile.slot!);
+      tile.slot = undefined;
+      return;
+    }
+
+    renderer.uploadField(tile.slot!, tile.field);
+    rebuildColliders(tile);
   }
 
   /** Sends a piece of `tile` flying, away from the tile's center and along the last hit. */
@@ -335,29 +378,35 @@ export function createWalls(
   }
 
   /**
-   * Whether a cell of `tile`'s field lies in a standing neighbor of the same wall: material there
-   * belongs to the rest of the wall, so it holds the tile's pieces that touch it in place.
+   * Whether a cell of `tile`'s field lies along an edge it shares with a standing neighbor of the
+   * same wall: material there joins the rest of the wall, so it holds the tile's pieces that touch
+   * it in place.
    */
   function isAnchored(tile: Tile, cell: number) {
     const x = tile.field.originX + (cell % tile.field.cols) * tile.field.cell;
     const y = tile.field.originY + Math.floor(cell / tile.field.cols) * tile.field.cell;
+    const { rect } = tile;
 
-    if (inside(tile.rect, x, y)) {
-      return false;
-    }
-
-    return tile.neighbors.some((neighbor) => !neighbor.fallen && inside(neighbor.rect, x, y));
+    return tile.neighbors.some(
+      (neighbor) =>
+        !neighbor.fallen &&
+        ((neighbor.rect.minX === rect.maxX && x > rect.maxX - 1) ||
+          (neighbor.rect.maxX === rect.minX && x < rect.minX + 1) ||
+          (neighbor.rect.minY === rect.maxY && y > rect.maxY - 1) ||
+          (neighbor.rect.maxY === rect.minY && y < rect.minY + 1))
+    );
   }
 
   function rebuildColliders(tile: Tile) {
     removeColliders(tile);
-    const { boxes } = solidBoxes(tile.field, 1);
+    const { boxes } = solidBoxes(tile.field, COLLIDER_BLOCK);
     const angle = tile.wall.rotation ?? 0;
     tile.boxes = boxes;
     tile.colliders = boxes.map((box) => {
       const center = toWorld(tile.wall, box);
+      // Rubble stops rays but not tanks.
       const collider = world.createCollider(
-        rapier.ColliderDesc.cuboid(box.halfWidth, box.halfHeight).setTranslation(center.x, center.y).setRotation(angle),
+        rapier.ColliderDesc.cuboid(box.halfWidth, box.halfHeight).setTranslation(center.x, center.y).setRotation(angle).setSensor(tile.rubble),
         body
       );
       owners.set(collider.handle, tile);
@@ -410,19 +459,21 @@ export type WallMaterialSpec = {
   crater?: { hole: number; depth: number };
   /** Share of a tile's material whose loss brings the whole tile down. */
   collapse: number;
+  /** Whether a fallen tile of a building of this material leaves rubble. */
+  rubble: boolean;
 };
 
 /**
  * The wall materials. A wooden fence 14 px thick is shot through in two hits, a brick wall 24 px
- * thick in four, a concrete wall 30 px thick in eight, and a tile of a fence falls after about
- * three hits; steel stands forever. Wood is drawn with planks, brick with courses of bricks,
- * concrete as slabs and steel hatched.
+ * thick in four, a concrete wall 30 px thick in nine, and a tile of a fence falls after about
+ * three hits; steel stands forever. Fallen tiles of brick and concrete buildings leave rubble.
+ * Wood is drawn with planks, brick with courses of bricks, concrete as slabs and steel hatched.
  */
 export const WALL_MATERIALS: Record<WallMaterial, WallMaterialSpec> = {
-  steel: { color: [0.31, 0.33, 0.37], height: 10, collapse: 0 },
-  concrete: { color: [0.62, 0.62, 0.6], height: 10, crater: { hole: 3.5, depth: 0 }, collapse: 0.5 },
-  brick: { color: [0.68, 0.39, 0.3], height: 10, crater: { hole: 5, depth: 2 }, collapse: 0.35 },
-  wood: { color: [0.64, 0.47, 0.29], height: 7, crater: { hole: 7, depth: 3 }, collapse: 0.3 }
+  steel: { color: [0.31, 0.33, 0.37], height: 10, collapse: 0, rubble: false },
+  concrete: { color: [0.62, 0.62, 0.6], height: 10, crater: { hole: 3.5, depth: 0 }, collapse: 0.5, rubble: true },
+  brick: { color: [0.68, 0.39, 0.3], height: 10, crater: { hole: 5, depth: 2 }, collapse: 0.35, rubble: true },
+  wood: { color: [0.64, 0.47, 0.29], height: 7, crater: { hole: 6, depth: 2.5 }, collapse: 0.3, rubble: false }
 };
 
 /**
@@ -451,6 +502,8 @@ export type Tile = {
   pristine: boolean;
   changed: boolean;
   fallen: boolean;
+  /** The tile fell and left a heap of rubble, drawn from its field in its slot. */
+  rubble: boolean;
 };
 
 /** Largest side of a tile in pixels: a fallen tile leaves a gap about this wide. */
@@ -458,11 +511,24 @@ const TILE = 72;
 /** Pixels of field around a tile's own rectangle, shared with its neighbors. */
 const MARGIN = 2;
 const MIN_PIECE_CELLS = 12;
+/**
+ * Rubble: only tiles at least `RUBBLE_THICKNESS` px thick leave it, a heap is cleared away once
+ * less than `RUBBLE_LEFT` square pixels of it are left, and it is drawn low and a little darker.
+ */
+const RUBBLE_THICKNESS = 40;
+const RUBBLE_LEFT = 150;
+const RUBBLE_HEIGHT = 4;
+const RUBBLE_SHADE = 0.85;
+/**
+ * Side of the blocks colliders are built of, in cells: ragged crater edges would otherwise make
+ * stacks of boxes a pixel thin, which push a tank shoved into them every which way and can trap it.
+ */
+const COLLIDER_BLOCK = 3;
 const CAMPFIRE_RADIUS = 13;
 /** Size of the buckets that index tiles by place, in pixels. */
 const BUCKET = 128;
 /** Half width of the lines of a material's pattern, in pixels. */
-const LINE = 0.4;
+const LINE = 0.5;
 
 function materialOf(wall: WallPlacement): WallMaterial {
   return wall.material ?? 'steel';
@@ -496,7 +562,8 @@ function cutIntoTiles(wall: WallPlacement): Tile[] {
         push: { x: 0, y: 0 },
         pristine: true,
         changed: false,
-        fallen: false
+        fallen: false,
+        rubble: false
       };
       tile.field = createTileField(tile);
       tile.fullArea = ownArea(tile);
@@ -516,7 +583,14 @@ function cutIntoTiles(wall: WallPlacement): Tile[] {
 /** The field of a tile: the distance to its whole wall and the wall's pattern, over the tile and its margin. */
 function createTileField(tile: Tile) {
   const { wall, rect } = tile;
-  const bounds = { minX: rect.minX - MARGIN, minY: rect.minY - MARGIN, maxX: rect.maxX + MARGIN, maxY: rect.maxY + MARGIN };
+  // Fields of neighbors do not overlap: drawn twice, their shared cells would not quite agree.
+  const margin = (edge: number, outer: number) => (edge === outer ? MARGIN : 0);
+  const bounds = {
+    minX: rect.minX - margin(rect.minX, -wall.halfWidth),
+    minY: rect.minY - margin(rect.minY, -wall.halfHeight),
+    maxX: rect.maxX + margin(rect.maxX, wall.halfWidth),
+    maxY: rect.maxY + margin(rect.maxY, wall.halfHeight)
+  };
   const pattern = patternOf(wall);
 
   return createField(bounds, 1, (x, y) => [boxDistance(x, y, wall.halfWidth, wall.halfHeight), pattern(x, y), FAR, 0]);
@@ -525,13 +599,18 @@ function createTileField(tile: Tile) {
 /**
  * The painted lines of a wall's material in its local coordinates, as a distance negative on a
  * line: planks across a wooden wall, courses of bricks along a brick one, slabs with a seam inside
- * the edge on concrete.
+ * the edge on concrete. Lines run through cell centers, from the wall's corner, so each is drawn
+ * a pixel wide wherever it lies.
  */
 function patternOf(wall: WallPlacement): (x: number, y: number) => number {
   const material = materialOf(wall);
   const along = wall.halfWidth >= wall.halfHeight;
-  // Coordinates along the wall's length and across it.
-  const split = (x: number, y: number) => (along ? { u: x, v: y } : { u: y, v: x });
+  // Coordinates along the wall's length and across it, from the center of its corner cell.
+  const split = (x: number, y: number) => {
+    const fromCorner = { x: x + wall.halfWidth - 0.5, y: y + wall.halfHeight - 0.5 };
+    return along ? { u: fromCorner.x, v: fromCorner.y } : { u: fromCorner.y, v: fromCorner.x };
+  };
+  const inner = (x: number, y: number) => boxDistance(x, y, wall.halfWidth - SLAB_SEAM, wall.halfHeight - SLAB_SEAM);
 
   if (material === 'wood') {
     return (x, y) => stripes(split(x, y).u, PLANK) - LINE;
@@ -541,27 +620,56 @@ function patternOf(wall: WallPlacement): (x: number, y: number) => number {
     return (x, y) => {
       const { u, v } = split(x, y);
       const course = Math.floor(v / BRICK_HEIGHT);
-      return Math.min(stripes(v, BRICK_HEIGHT), stripes(u + (course % 2) * (BRICK_LENGTH / 2), BRICK_LENGTH)) - LINE;
+      const shift = (((course % 2) + 2) % 2) * (BRICK_LENGTH / 2);
+      return Math.min(stripes(v, BRICK_HEIGHT), stripes(u + shift, BRICK_LENGTH)) - LINE;
     };
   }
 
-  return (x, y) => {
-    const seam = Math.abs(boxDistance(x, y, wall.halfWidth - SLAB_SEAM, wall.halfHeight - SLAB_SEAM)) - LINE;
-    const joint = Math.max(stripes(split(x, y).u, SLAB), boxDistance(x, y, wall.halfWidth - SLAB_SEAM, wall.halfHeight - SLAB_SEAM)) - LINE;
-    return Math.min(seam, joint);
-  };
+  return (x, y) => Math.min(Math.abs(inner(x, y)), Math.max(stripes(split(x, y).u, SLAB), inner(x, y))) - LINE;
 }
 
 const PLANK = 7;
 const BRICK_HEIGHT = 8;
 const BRICK_LENGTH = 16;
 const SLAB = 48;
-const SLAB_SEAM = 3;
+/** Inset of the seam on concrete, on a cell center. */
+const SLAB_SEAM = 3.5;
 
 /** Distance to the nearest of the lines at every multiple of `spacing`. */
 function stripes(value: number, spacing: number) {
   const phase = value / spacing - Math.floor(value / spacing);
   return Math.min(phase, 1 - phase) * spacing;
+}
+
+/**
+ * A heap of rubble over a tile's own rectangle: chunks of the material, turned every which way
+ * and denser toward the middle, with the material's pattern and a little dust.
+ */
+function createRubbleField(tile: Tile, random: () => number) {
+  const { rect, wall } = tile;
+  const width = rect.maxX - rect.minX;
+  const height = rect.maxY - rect.minY;
+  const pattern = patternOf(wall);
+  const chunks = Array.from({ length: Math.round((width * height) / 240) }, () => {
+    // Two draws averaged lean toward the middle.
+    const x = rect.minX + 4 + ((random() + random()) / 2) * (width - 8);
+    const y = rect.minY + 4 + ((random() + random()) / 2) * (height - 8);
+    const angle = random() * Math.PI;
+    return { x, y, cos: Math.cos(angle), sin: Math.sin(angle), halfX: 2.5 + random() * 4.5, halfY: 2 + random() * 3.5 };
+  });
+  const bounds = { minX: rect.minX - MARGIN, minY: rect.minY - MARGIN, maxX: rect.maxX + MARGIN, maxY: rect.maxY + MARGIN };
+
+  return createField(bounds, 1, (x, y) => {
+    let armor = FAR;
+
+    for (const chunk of chunks) {
+      const dx = x - chunk.x;
+      const dy = y - chunk.y;
+      armor = Math.min(armor, boxDistance(dx * chunk.cos + dy * chunk.sin, -dx * chunk.sin + dy * chunk.cos, chunk.halfX, chunk.halfY));
+    }
+
+    return [Math.max(armor, rectDistance(rect, x, y)), pattern(x, y), FAR, 0.35];
+  });
 }
 
 /** Solid area within a tile's own rectangle, in square pixels. */

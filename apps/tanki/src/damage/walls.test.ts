@@ -18,25 +18,26 @@ describe('breakable walls', () => {
   it.each([
     ['wood', 14, 2],
     ['brick', 24, 4],
-    ['concrete', 30, 8]
+    ['concrete', 30, 9]
   ] as [WallMaterial, number, number][])('chip a crater per hit, and a %s wall %i px thick is shot through in %i hits', (material, thickness, hits) => {
     const { combat } = createBattle({ walls: [{ x: 0, y: 0, halfWidth: thickness / 2, halfHeight: 120, material }] });
     const shooter = combat.spawnTank({ x: -250, y: 0, rotation: 0 }, { color: 0 });
-    const through = () => combat.lineOfSight({ x: -150, y: 0 }, { x: 150, y: 0 });
+    // Shots land within a tile, away from the seams between tiles.
+    const through = () => combat.lineOfSight({ x: -150, y: 10 }, { x: 150, y: 10 });
     let shots = 0;
     // Rapier answers ray queries from the state of the last step.
     combat.step(1 / 60);
 
     while (!through() && shots < 20) {
-      fireAt(combat, shooter, { x: 0, y: 0 });
+      fireAt(combat, shooter, { x: 0, y: 10 });
       shots++;
 
       if (shots === 1) {
         // The first hit leaves a crater in the near face but not a hole.
-        const tile = combat.walls.tiles.find((candidate) => !candidate.pristine)!;
+        const tile = combat.walls.tiles.find((candidate) => candidate.rect.minY < 10 && candidate.rect.maxY > 10)!;
 
-        expect(tile).toBeDefined();
-        expect(sampleArmor(tile.field, -thickness / 2 + 1, 0)).toBeGreaterThan(0);
+        expect(tile.pristine).toBe(false);
+        expect(sampleArmor(tile.field, -thickness / 2 + 1, 10)).toBeGreaterThan(0);
       }
     }
 
@@ -113,21 +114,42 @@ describe('breakable walls', () => {
     expect(crossedAt!.y).toBeLessThan(fallen.rect.maxY + fallen.wall.y);
   });
 
+  it('leave a heap of rubble where a piece of a building fell, which tanks drive over and shots from afar meet', () => {
+    // A brick building a tile thick and two tiles long.
+    const { combat } = createBattle({ walls: [{ x: 0, y: 0, halfWidth: 30, halfHeight: 60, material: 'brick' }] });
+    const shooter = combat.spawnTank({ x: -250, y: -30, rotation: 0 }, { color: 0 });
+    let shots = 0;
+
+    while (combat.walls.damage.collapsed === 0 && shots < 60) {
+      fireAt(combat, shooter, { x: 0, y: -30 + [0, 12, -12, 22, -22][shots % 5] });
+      shots++;
+    }
+
+    const heap = combat.walls.tiles.find((tile) => tile.fallen)!;
+    const lines = [-48, -39, -30, -21, -12];
+
+    expect(heap.rubble).toBe(true);
+    expect(combat.obstacleDistance({ x: 0, y: -30 }, 100)).toBeGreaterThan(24);
+    expect(lines.filter((y) => !combat.lineOfSight({ x: -250, y }, { x: 250, y })).length).toBeGreaterThanOrEqual(3);
+    // A tank right behind the rubble sees and shoots over it.
+    expect(lines.every((y) => combat.lineOfSight({ x: -55, y }, { x: 250, y }))).toBe(true);
+  });
+
   it('stand again, whole, after a reset', () => {
     const { combat } = createBattle({ walls: [{ x: 0, y: 0, halfWidth: 7, halfHeight: 120, material: 'wood' }] });
     const shooter = combat.spawnTank({ x: -250, y: 0, rotation: 0 }, { color: 0 });
 
     for (let shot = 0; shot < 4; shot++) {
-      fireAt(combat, shooter, { x: 0, y: 0 });
+      fireAt(combat, shooter, { x: 0, y: 10 });
     }
 
-    expect(combat.lineOfSight({ x: -150, y: 0 }, { x: 150, y: 0 })).toBe(true);
+    expect(combat.lineOfSight({ x: -150, y: 10 }, { x: 150, y: 10 })).toBe(true);
 
     combat.reset();
     combat.step(1 / 60);
 
     expect(combat.walls.tiles.every((tile) => tile.pristine && !tile.fallen)).toBe(true);
-    expect(combat.lineOfSight({ x: -150, y: 0 }, { x: 150, y: 0 })).toBe(false);
+    expect(combat.lineOfSight({ x: -150, y: 10 }, { x: 150, y: 10 })).toBe(false);
   });
 });
 
