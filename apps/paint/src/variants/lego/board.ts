@@ -65,12 +65,6 @@ export const panelPadding = 6;
 export const maxSpan = 10;
 
 /**
- * CSS pixels a panel keeps off the view's sides and bottom edge: on Android a swipe starting there goes back or home
- * instead of reaching the page, so a rim there could not be dragged.
- */
-export const edgeInset = 32;
-
-/**
  * A way a part can be pushed. Only right and down: a push then never moves a panel's parts toward the top or left,
  * so a panel grows only on its right and bottom, and one lying at the view's right or bottom edge is the only kind
  * that shifts on screen.
@@ -151,9 +145,8 @@ export function partsBounds(parts: readonly Part[]) {
 
 /**
  * Where `panel` lies in a view of `view` size, in CSS pixels: `origin` is the top-left of its cell (0, 0) and `rect`
- * its whole box with the padding. A panel partly off screen, or within `edgeInset` of a side or the bottom edge, is
- * shifted back in, so a turned or smaller view never hides parts and no rim lies where a swipe would go back or home;
- * its stored `at` is kept.
+ * its whole box with the padding. A panel partly off screen is shifted back in, so a turned or smaller view never
+ * hides parts; its stored `at` is kept.
  */
 export function panelFrame(panel: Panel, view: { width: number; height: number }) {
   const bounds = partsBounds(panel.parts);
@@ -163,11 +156,8 @@ export function panelFrame(panel: Panel, view: { width: number; height: number }
     x: panel.at.x * view.width + bounds.column * pitch - panelPadding,
     y: panel.at.y * view.height + bounds.row * pitch - panelPadding
   };
-  const left = Math.max(
-    Math.min(edgeInset, (view.width - width) / 2),
-    Math.min(wanted.x, view.width - width - edgeInset)
-  );
-  const top = Math.max(0, Math.min(wanted.y, view.height - height - edgeInset));
+  const left = Math.max(0, Math.min(wanted.x, view.width - width));
+  const top = Math.max(0, Math.min(wanted.y, view.height - height));
   const origin = { x: left - bounds.column * pitch + panelPadding, y: top - bounds.row * pitch + panelPadding };
 
   return { origin, rect: { left, top, width, height } };

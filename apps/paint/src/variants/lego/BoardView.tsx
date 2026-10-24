@@ -5,7 +5,6 @@ import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'so
 import {
   cellGap,
   cellSize,
-  edgeInset,
   findPart,
   frameAt,
   nearestCell,
@@ -1571,10 +1570,10 @@ function besideBlock(origin: Point, span: Span, view: { width: number; height: n
     { x: origin.x, y: origin.y - height - gap }
   ];
   const fits = ({ x, y }: Point) =>
-    x - panelPadding >= edgeInset &&
-    x + width + panelPadding <= view.width - edgeInset &&
+    x - panelPadding >= 0 &&
+    x + width + panelPadding <= view.width &&
     y - panelPadding >= 0 &&
-    y + height + panelPadding <= view.height - edgeInset;
+    y + height + panelPadding <= view.height;
   const at = candidates.find(fits) ?? candidates[0]!;
   return { x: at.x / view.width, y: at.y / view.height };
 }

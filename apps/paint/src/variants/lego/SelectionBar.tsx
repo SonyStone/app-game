@@ -1,13 +1,13 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, Show } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
-import { edgeInset, type Rect } from './board';
+import type { Rect } from './board';
 import styles from './LegoStudio.module.css';
 
 /**
  * What can be done with the parts selected while editing, floating above their outline (below it when there is no
- * room above), kept `edgeInset` off the place's sides: put them away, duplicate them beside themselves, keep them as a
- * kit, and for one part with several looks, choose its look. Its presses never reach the board under it.
+ * room above), kept inside the place: put them away, duplicate them beside themselves, keep them as a kit, and for
+ * one part with several looks, choose its look. Its presses never reach the board under it.
  */
 export function SelectionBar(props: {
   /** The selection's outline, in the pixels of the place it lies in. */
@@ -30,7 +30,7 @@ export function SelectionBar(props: {
     const width = size.width ?? 0;
     const height = size.height ?? 0;
     const { rect, area } = props;
-    const left = Math.max(edgeInset, Math.min(rect.left + rect.width / 2 - width / 2, area.width - width - edgeInset));
+    const left = Math.max(barGap, Math.min(rect.left + rect.width / 2 - width / 2, area.width - width - barGap));
     const above = rect.top - height - barGap;
     const below = rect.top + rect.height + barGap;
     const top = above >= barGap ? above : below + height <= area.height - barGap ? below : rect.top + barGap;
