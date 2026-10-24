@@ -225,6 +225,32 @@ describe('king of the hill with the player', () => {
     expect(match.kits.pickups).toBe(2);
   });
 
+  it('mends the side of the hull that touched a repair kit more than the far side, about as much in all', () => {
+    const mended = (offset: number) => {
+      const match = createMatch(5, CAPTURE_RULES, true);
+      const player = match.player!;
+      const small = match.kits.kits.find((kit) => kit.size === 'small')!;
+      match.bots.clear();
+
+      chipBothEnds(match, player);
+      const before = armorByHalf(match.combat.armorOf(player)!);
+      const total = match.combat.armorLeft(player);
+      // The hull faces +x; with an offset the kit touches its rear, without one it lies under the middle.
+      place(player, { x: small.x + offset, y: small.y });
+      match.step(1 / 60);
+      const after = armorByHalf(match.combat.armorOf(player)!);
+
+      return { front: after.front - before.front, rear: after.rear - before.rear, total: match.combat.armorLeft(player) - total };
+    };
+    const backedOn = mended(26);
+    const even = mended(0);
+
+    expect(backedOn.rear).toBeGreaterThan(backedOn.front * 2);
+    expect(even.rear).toBeLessThan(even.front * 1.5);
+    expect(backedOn.total).toBeGreaterThan(even.total * 0.7);
+    expect(backedOn.total).toBeLessThan(even.total * 1.3);
+  });
+
   it('sends a bot with chipped armor to a repair kit nearer than its base', () => {
     const match = createMatch(5);
     const member = match.members.find((candidate) => candidate.team === 'red' && candidate.index === 2)!;
@@ -358,6 +384,33 @@ function chip(match: ReturnType<typeof createMatch>, tank: Tank, holes: number) 
   // Mending by a hair makes the battle refresh the tank's shape with the next step.
   match.combat.repair(tank, 1e-9);
   match.step(1 / 60);
+}
+
+/** Chips the same holes into the front and the rear of `tank`'s armor. */
+function chipBothEnds(match: ReturnType<typeof createMatch>, tank: Tank) {
+  const field = match.combat.armorOf(tank)!;
+
+  for (let hole = 0; hole < 4; hole++) {
+    for (const end of [-19, 19]) {
+      carve(field, { x: end, y: (hole - 1.5) * 5 }, 4.5, 0.2, hole);
+    }
+  }
+
+  match.combat.repair(tank, 1e-9);
+  match.step(1 / 60);
+}
+
+/** Solid area of a hull's armor in front of its middle and behind it, in square pixels. */
+function armorByHalf(field: { cols: number; rows: number; cell: number; originX: number; data: Float32Array }) {
+  const halves = { front: 0, rear: 0 };
+
+  for (let cell = 0; cell < field.cols * field.rows; cell++) {
+    if (field.data[cell * 4] < 0) {
+      halves[field.originX + (cell % field.cols) * field.cell > 0 ? 'front' : 'rear'] += field.cell * field.cell;
+    }
+  }
+
+  return halves;
 }
 
 /** One physics step and one frame of effects, which also frees the field slots of old debris. */

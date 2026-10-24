@@ -9,6 +9,7 @@ import {
   dent,
   detachLoosePieces,
   isCoreExposed,
+  mend,
   raycastField,
   scorch,
   solidBoxes,
@@ -368,21 +369,20 @@ export function createCombat(
      * Mends `tank`'s armor toward its factory shape, filling holes and dents and wiping soot.
      *
      * @param amount - Share of the remaining damage to undo, 0-1.
+     * @param from - Where the mending comes from, such as a repair kit the tank drove onto: the
+     *   side of the hull facing it mends more and the far side less, about as much in all (see
+     *   `mend`). Without it the whole hull mends evenly.
      */
-    repair(tank: Tank, amount: number) {
+    repair(tank: Tank, amount: number, from?: Point) {
       const body = byTank.get(tank);
 
       if (!body?.pristine || amount <= 0) {
         return;
       }
 
-      const data = body.field.data;
-      const pristine = body.pristine;
-
-      for (let index = 0; index < data.length; index++) {
-        data[index] += (pristine[index] - data[index]) * Math.min(amount, 1);
-      }
-
+      const local = from && toLocal(body.body, from);
+      const toward = local && Math.hypot(local.x, local.y) > 1 ? normalize(local) : undefined;
+      mend(body.field, body.pristine, amount, toward);
       body.changed = true;
     },
 
