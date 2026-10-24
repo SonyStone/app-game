@@ -40,6 +40,7 @@ const boardSchema = z.object({
       at: point,
       parts: z.array(storedPart),
       owner: z.string().optional(),
+      offset: z.object({ column: z.number().int(), row: z.number().int() }).optional(),
       bench: z.literal(true).optional()
     })
   )

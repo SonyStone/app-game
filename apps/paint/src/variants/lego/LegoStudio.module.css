@@ -510,22 +510,6 @@
   pointer-events: none;
 }
 
-.saveKit {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 4px;
-  padding: 3px 8px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--lego-plate);
-  color: #ffffff !important;
-  font-size: 11px;
-  white-space: nowrap;
-  cursor: pointer;
-  box-shadow: var(--lego-shadow);
-}
-
 /* A kit being carried: its parts on a plate of their own. */
 .ghostBlock {
   position: absolute;
@@ -826,15 +810,59 @@
   }
 }
 
-.trayBody {
+/* Beside the workbench, the parts over the kits: two boxes, one that puts away what is dropped, one that keeps it. */
+.trayShelves {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(170px, 38%);
+  gap: 10px;
+  min-height: 0;
+}
+
+.trayBody,
+.kitShelf {
   display: grid;
   align-content: start;
   justify-items: start;
   gap: 14px;
-  padding: 4px 6px;
+  min-height: 0;
+  padding: 10px 12px 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  border: 1.5px solid transparent;
+  border-radius: 12px;
   touch-action: pan-y;
+  transition:
+    background 120ms,
+    border-color 120ms;
+}
+
+.trayBody {
+  background: rgb(255 255 255 / 0.03);
+
+  &[data-over] {
+    border-color: rgb(230 70 60 / 0.9);
+    background: rgb(230 70 60 / 0.16);
+  }
+}
+
+.kitShelf {
+  border-style: dashed;
+  border-color: rgb(61 126 255 / 0.45);
+  background: rgb(61 126 255 / 0.07);
+
+  &[data-over] {
+    border-color: var(--lego-accent);
+    background: rgb(61 126 255 / 0.22);
+  }
+}
+
+/* What a box does with what is dropped on it. */
+.zoneLabel {
+  color: rgb(255 255 255 / 0.5);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 /* The workbench's place: the board renders the bench plate into it at full size, filling it. */
@@ -864,20 +892,6 @@
   inset: 0;
   transform-origin: 0 0;
   transition: scale 200ms;
-}
-
-/* The kits, lit while something carried over them would be kept as a kit. */
-.kitShelf {
-  margin: -6px;
-  padding: 6px;
-  border-radius: 12px;
-  transition: background 120ms;
-
-  &[data-over] {
-    background: rgb(61 126 255 / 0.18);
-    outline: 2px dashed var(--lego-accent);
-    outline-offset: -2px;
-  }
 }
 
 .kitName {
@@ -925,11 +939,6 @@
 
 .selection {
   border: 2px dashed var(--lego-accent);
-
-  .saveKit {
-    background: var(--lego-accent);
-    pointer-events: auto;
-  }
 }
 
 .tray h4,

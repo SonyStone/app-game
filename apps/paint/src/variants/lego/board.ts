@@ -25,6 +25,11 @@ export type Panel = {
    */
   owner?: string;
   /**
+   * Where an owned panel lies from its part: its cell (0, 0) this many cells from the part's top-left cell, which may
+   * put it over the part. Without it the panel lies beside the part where there is room (see `ownedFrame`).
+   */
+  offset?: Cell;
+  /**
    * Whether this is the workbench: the plate in the fully pulled-out box where a kit is built at full size, shown
    * only there; dragged out by its rim it becomes a panel on the drawing.
    */

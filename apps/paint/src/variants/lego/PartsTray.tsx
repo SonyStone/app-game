@@ -10,8 +10,9 @@ import { boxSections, kindLabel, lookOf, PartView, type Session } from './parts'
  * The box of parts while editing, a sheet pulled up from the bottom edge (see `createSheet`): a wheel turned over the
  * board or the sheet moves its edge, as does a drag on its handle, and a tap on the handle opens or closes it. It
  * holds the workbench, where the board puts its bench plate to lay parts out at full size, beside every part by
- * family with its name, the brushes, and the kits as live previews, the user's with a delete button and a name to
- * tap and rename (the workbench above them in a narrow view). A part or group dropped on the kits is kept as one. While it is sunk, the strip it leaves puts away what is dropped on it.
+ * family with its name and the brushes, where a part dropped is put away, and apart from them the kits as live
+ * previews, the user's with a delete button and a name to tap and rename, where a part, group or panel dropped is
+ * kept as a kit (the workbench above both in a narrow view). While it is sunk, the strip it leaves puts away what is dropped on it.
  */
 export function PartsTray(props: {
   session: Session;
@@ -32,6 +33,7 @@ export function PartsTray(props: {
   overKits: boolean;
 }) {
   const [body, setBody] = createSignal<HTMLElement>();
+  const [shelf, setShelf] = createSignal<HTMLElement>();
   const closed = () => props.sheet.height() <= 0 && !props.sheet.sunk();
   const shownHeight = () => (props.sheet.sunk() ? sunkHeight : Math.max(barHeight, props.sheet.height()));
 
@@ -49,8 +51,8 @@ export function PartsTray(props: {
       }
 
       const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
-      const list = body();
-      if (list?.contains(target)) {
+      const list = [body(), shelf()].find((element) => element?.contains(target));
+      if (list) {
         const atTop = list.scrollTop <= 0;
         const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
         if (!(delta < 0 && atTop) && !(delta > 0 && atBottom)) {
@@ -85,23 +87,36 @@ export function PartsTray(props: {
       </div>
       <div class={styles.trayContent}>
         <div ref={props.benchRef} class={styles.benchSlot} />
-        <div ref={setBody} class={styles.trayBody}>
-          <For each={partFamilies(props.session)}>
-            {(family) => (
-              <section>
-                <h4>{family.title}</h4>
-                <div class={styles.trayItems}>
-                  <For each={family.kinds}>
-                    {(kind) => (
-                      <PartTile kind={kind} session={props.session} onLift={(event) => props.onLift(event, kind)} />
-                    )}
-                  </For>
-                </div>
-              </section>
-            )}
-          </For>
-          <section ref={props.kitsRef} class={styles.kitShelf} data-over={props.overKits ? '' : undefined}>
-            <h4>{props.overKits ? 'Drop to keep as a kit' : 'Kits'}</h4>
+        <div class={styles.trayShelves}>
+          <div ref={setBody} class={styles.trayBody} data-over={props.over && !props.sheet.sunk() ? '' : undefined}>
+            <span class={styles.zoneLabel}>{props.over ? 'Drop to put it away' : 'Parts'}</span>
+            <For each={partFamilies(props.session)}>
+              {(family) => (
+                <section>
+                  <h4>{family.title}</h4>
+                  <div class={styles.trayItems}>
+                    <For each={family.kinds}>
+                      {(kind) => (
+                        <PartTile kind={kind} session={props.session} onLift={(event) => props.onLift(event, kind)} />
+                      )}
+                    </For>
+                  </div>
+                </section>
+              )}
+            </For>
+            <button type="button" class={styles.boxButton} onClick={() => props.onReset()}>
+              Reset board
+            </button>
+          </div>
+          <div
+            ref={(element) => {
+              setShelf(element);
+              props.kitsRef(element);
+            }}
+            class={styles.kitShelf}
+            data-over={props.overKits ? '' : undefined}
+          >
+            <span class={styles.zoneLabel}>{props.overKits ? 'Drop to keep as a kit' : 'Kits · drop here to keep'}</span>
             <div class={styles.trayItems}>
               <For each={props.kits.kits()}>
                 {(kit) => (
@@ -114,10 +129,7 @@ export function PartsTray(props: {
                 )}
               </For>
             </div>
-          </section>
-          <button type="button" class={styles.boxButton} onClick={() => props.onReset()}>
-            Reset board
-          </button>
+          </div>
         </div>
       </div>
     </aside>

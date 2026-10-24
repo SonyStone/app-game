@@ -33,9 +33,9 @@ import {
   type Span
 } from './board';
 import type { createBoard } from './createBoard';
-import { swatchPanelParts, unpackKit, type createKits, type Kit } from './kits';
+import { describeKit, swatchPanelParts, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
-import { lookOf, partLooks, PartView, type Popup, type Session } from './parts';
+import { kindLabel, lookOf, partLooks, PartView, type Popup, type Session } from './parts';
 import type { createSheet } from './createSheet';
 import { BlockView, PartsTray } from './PartsTray';
 import { SpawnMenu } from './SpawnMenu';
@@ -312,6 +312,16 @@ export function BoardView(props: {
       return;
     }
 
+    // A panel from the board dropped on the kits is kept as one and stays where it was.
+    if (current.type === 'panel' && !current.owned && overKits(point)) {
+      const panel = current.base.panels.find((candidate) => candidate.id === current.panel);
+      if (panel) {
+        props.kits.save(current.base, panel, kitName(panel.parts));
+      }
+
+      return;
+    }
+
     if (current.type !== 'part') {
       const ended = result({ ...current, point });
       props.board.set(current.type === 'resize' ? pinPanels(ended, current.pinned, view()) : ended);
@@ -396,6 +406,8 @@ export function BoardView(props: {
             pressBench(event);
           } else if (panel().owner === undefined) {
             startPanelDrag(event, panel(), frame().origin);
+          } else {
+            startOwnedDrag(event, panel(), frame().origin);
           }
 
           armLongPress(event);
@@ -480,20 +492,6 @@ export function BoardView(props: {
             );
           }}
         </For>
-        <Show when={props.editing && panel().parts.length > 0 && !panel().bench && !drag()}>
-          <button
-            type="button"
-            class={styles.saveKit}
-            onClick={() => {
-              const name = window.prompt('Name the kit', 'My panel');
-              if (name) {
-                props.kits.save(props.board.latest(), panel(), name);
-              }
-            }}
-          >
-            Save as kit
-          </button>
-        </Show>
       </div>
     );
   }
@@ -577,7 +575,7 @@ export function BoardView(props: {
           kits={props.kits}
           sheet={props.sheet}
           kitsRef={setKitShelf}
-          overKits={lifted() !== undefined && overKits(lifted()!.point) && keepable(lifted()!)}
+          overKits={keepsOverKits()}
           over={lifted() !== undefined && overBox(lifted()!.point)}
           onLift={(event, kind) => startNewPart(event, kind)}
           onLiftKit={(event, kit) => startKitDrag(event, kit)}
@@ -731,6 +729,40 @@ export function BoardView(props: {
       panel,
       id,
       span
+    });
+  }
+
+  /**
+   * Moves a swatch's open panel, pressed by its rim, around its swatch in whole cells, over it too; where it ends is
+   * kept as its `offset`. An empty panel stays.
+   */
+  function startOwnedDrag(event: PointerEvent, panel: Panel, origin: Point) {
+    const onBench = bench()?.contains(event.currentTarget as Node) === true;
+    const host = (onBench ? benchPanels() : visible()).find((entry) =>
+      entry.panel.parts.some((part) => part.id === panel.owner)
+    );
+    const anchor = host?.panel.parts.find((part) => part.id === panel.owner);
+    const point = { x: event.clientX, y: event.clientY };
+    const pressed = onBench ? inBench(point) : toView(point);
+    if (panel.parts.length === 0 || !host || !anchor || !pressed) {
+      return;
+    }
+
+    event.preventDefault();
+    setDrag({
+      type: 'panel',
+      pointer: event.pointerId,
+      point,
+      grab: { x: pressed.x - origin.x, y: pressed.y - origin.y },
+      base: props.board.latest(),
+      panel: panel.id,
+      owned: {
+        anchor: {
+          x: host.frame.origin.x + anchor.cell.column * pitch,
+          y: host.frame.origin.y + anchor.cell.row * pitch
+        },
+        onBench
+      }
     });
   }
 
@@ -890,6 +922,15 @@ export function BoardView(props: {
       return drag.base;
     }
 
+    if (drag.owned) {
+      const pointer = (drag.owned.onBench ? inBench(drag.point) : undefined) ?? toView(drag.point);
+      const offset = {
+        column: Math.round((pointer.x - drag.grab.x - drag.owned.anchor.x) / pitch),
+        row: Math.round((pointer.y - drag.grab.y - drag.owned.anchor.y) / pitch)
+      };
+      return replacePanel(drag.base, panel.id, { ...panel, offset });
+    }
+
     const pointer = toView(drag.point);
     const at = { x: (pointer.x - drag.grab.x) / size.width, y: (pointer.y - drag.grab.y) / size.height };
     return replacePanel(drag.base, panel.id, { ...panel, at });
@@ -990,6 +1031,16 @@ export function BoardView(props: {
     return rect !== undefined && inside(point, rect) && !overBench(point) && !overKits(point);
   }
 
+  /** Whether what is carried now, a part, group or panel from the board or the bench, would be kept as a kit. */
+  function keepsOverKits() {
+    const current = drag();
+    if (current?.type === 'part') {
+      return overKits(current.point) && keepable(current);
+    }
+
+    return current?.type === 'panel' && !current.owned && overKits(current.point);
+  }
+
   /** Whether `point` on the page is over the box's kits while the sheet shows them. */
   function overKits(point: Point) {
     const rect = kitShelf()?.getBoundingClientRect();
@@ -1003,12 +1054,17 @@ export function BoardView(props: {
   }
 
   /**
-   * Keeps what `drag` carries as a new kit, with the panels of the swatches among it, named after the kits before it;
-   * the board stays as it was.
+   * Keeps what `drag` carries as a new kit, with the panels of the swatches among it, named after what it holds; the
+   * board stays as it was.
    */
   function keepAsKit(drag: Extract<Drag, { type: 'part' }>) {
     const parts = drag.block?.parts ?? [{ id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks, cell: { column: 0, row: 0 } }];
-    props.kits.save(drag.before, { id: 'kept', at: { x: 0, y: 0 }, parts }, props.kits.nextName());
+    props.kits.save(drag.before, { id: 'kept', at: { x: 0, y: 0 }, parts }, kitName(parts));
+  }
+
+  /** A name for a new kit of `parts`, after what it holds and unlike the user's other kits; see `describeKit`. */
+  function kitName(parts: readonly Part[]) {
+    return props.kits.uniqueName(describeKit(parts, (kind) => kindLabel(kind, props.session)));
   }
 }
 
@@ -1049,16 +1105,20 @@ function visiblePanels(
     let frame = pin ? frameAt(panel, pin) : panelFrame(panel, view);
     if (!pin && host && anchor && depth < 8) {
       const { origin } = frameOf(host, depth + 1);
-      frame = ownedFrame(
-        panel,
-        {
-          left: origin.x + anchor.cell.column * pitch,
-          top: origin.y + anchor.cell.row * pitch,
-          width: anchor.span.columns * pitch - cellGap,
-          height: anchor.span.rows * pitch - cellGap
-        },
-        view
-      );
+      const at = { x: origin.x + anchor.cell.column * pitch, y: origin.y + anchor.cell.row * pitch };
+      // Where the user put it from its swatch, kept in view; otherwise beside the swatch where there is room.
+      frame = panel.offset
+        ? keptInView(frameAt(panel, { x: at.x + panel.offset.column * pitch, y: at.y + panel.offset.row * pitch }), view)
+        : ownedFrame(
+            panel,
+            {
+              left: at.x,
+              top: at.y,
+              width: anchor.span.columns * pitch - cellGap,
+              height: anchor.span.rows * pitch - cellGap
+            },
+            view
+          );
     }
 
     frames.set(panel.id, frame);
@@ -1066,6 +1126,18 @@ function visiblePanels(
   };
 
   return panels.map((panel) => ({ panel, frame: frameOf(panel) }));
+}
+
+/** `frame` moved the least it takes to lie inside `view`, as far as it fits. */
+function keptInView(frame: ReturnType<typeof panelFrame>, view: { width: number; height: number }) {
+  const { rect, origin } = frame;
+  const shift = (start: number, length: number, room: number) => Math.max(0, Math.min(start, room - length)) - start;
+  const x = shift(rect.left, rect.width, view.width);
+  const y = shift(rect.top, rect.height, view.height);
+  return {
+    origin: { x: origin.x + x, y: origin.y + y },
+    rect: { ...rect, left: rect.left + x, top: rect.top + y }
+  };
 }
 
 /** Swatch `open` and the swatches whose panels it lies in, innermost first; empty when nothing is open or it is gone. */
@@ -1218,7 +1290,13 @@ type Drag = { pointer: number; point: Point; base: Board } & (
   | { type: 'resize'; panel: string; id: string; span: Span; start: Point; pinned: ReadonlyMap<string, Point> }
   /** A band dragged across the workbench's free studs, `start` and `point` in its place's pixels. */
   | { type: 'select'; start: Point; base: Board }
-  | { type: 'panel'; panel: string; grab: Point }
+  | {
+      type: 'panel';
+      panel: string;
+      grab: Point;
+      /** For a swatch's panel: where its swatch's top-left cell starts, on the board or the workbench. */
+      owned?: { anchor: Point; onBench: boolean };
+    }
 );
 
 /** A part as it is carried: everything but the cell it will land on. */

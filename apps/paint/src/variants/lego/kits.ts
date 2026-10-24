@@ -13,8 +13,11 @@ export type Kit = {
   name: string;
   /** The parts, their cells counted from the kit's top-left at (0, 0). */
   parts: Part[];
-  /** The panels of swatches among the parts, by the owner's id in the kit; owners may lie in other owned panels. */
-  owned: { owner: string; parts: Part[] }[];
+  /**
+   * The panels of swatches among the parts, by the owner's id in the kit, with where each lies from its swatch if
+   * the user placed it; owners may lie in other owned panels.
+   */
+  owned: { owner: string; parts: Part[]; offset?: { column: number; row: number } }[];
 };
 
 /** The kits on this device: the ready ones first, then the user's, kept in `localStorage`. */
@@ -44,15 +47,15 @@ export function createKits() {
     rename(id: string, name: string) {
       store(latest().map((kit) => (kit.id === id ? { ...kit, name } : kit)));
     },
-    /** A name for the next kit the user keeps: "Kit" and the first number no kit of theirs has. */
-    nextName() {
+    /** `name`, or with the first number after it that no kit of the user's has. */
+    uniqueName(name: string) {
       const names = new Set(latest().map((kit) => kit.name));
-      let number = latest().length + 1;
-      while (names.has(`Kit ${number}`)) {
-        number += 1;
+      let unique = name;
+      for (let number = 2; names.has(unique); number += 1) {
+        unique = `${name} ${number}`;
       }
 
-      return `Kit ${number}`;
+      return unique;
     }
   };
 }
@@ -70,13 +73,41 @@ export function unpackKit(kit: Pick<Kit, 'parts' | 'owned'>) {
       return { ...part, id };
     });
   const parts = renew(kit.parts);
-  const owned = kit.owned.map((entry) => ({ owner: entry.owner, parts: renew(entry.parts) }));
+  const owned = kit.owned.map((entry) => ({ ...entry, parts: renew(entry.parts) }));
   const panels: Panel[] = owned.flatMap((entry) => {
     const owner = ids.get(entry.owner);
-    return owner ? [{ id: newId('panel'), at: { x: 0, y: 0 }, owner, parts: entry.parts }] : [];
+    return owner ? [{ id: newId('panel'), at: { x: 0, y: 0 }, owner, parts: entry.parts, offset: entry.offset }] : [];
   });
 
   return { parts, panels };
+}
+
+/**
+ * A short name for a kit of `parts`, after what it holds: the largest parts first by `label`, at most two, and how
+ * many more there are, such as "Picker + Hue +2". Hue, saturation and brightness together read "HSB", and parts of
+ * one kind are named once.
+ */
+export function describeKit(parts: readonly Part[], label: (kind: string) => string) {
+  const kinds = [...parts]
+    .sort((a, b) => b.span.columns * b.span.rows - a.span.columns * a.span.rows)
+    .map((part) => part.kind)
+    .filter((kind, index, all) => all.indexOf(kind) === index);
+  const hsb = ['value:hue', 'value:saturation', 'value:brightness'];
+  const together = hsb.every((kind) => kinds.includes(kind));
+  // The three as one name where the first of them ranks.
+  const names = kinds.flatMap((kind) => {
+    if (!together || !hsb.includes(kind)) {
+      return [label(kind)];
+    }
+
+    return kinds.find((other) => hsb.includes(other)) === kind ? ['HSB'] : [];
+  });
+  if (names.length === 0) {
+    return 'Kit';
+  }
+
+  const shown = names.slice(0, 2).join(' + ');
+  return names.length > 2 ? `${shown} +${names.length - 2}` : shown;
 }
 
 /** `panel` of `board` as a kit, its cells counted from its top-left, with the panels its swatches own, nested too. */
@@ -86,7 +117,7 @@ function kitOf(board: Board, panel: Panel, name: string): Kit {
     for (const part of parts) {
       const own = board.panels.find((candidate) => candidate.owner === part.id);
       if (own && !owned.some((entry) => entry.owner === part.id)) {
-        owned.push({ owner: part.id, parts: own.parts });
+        owned.push({ owner: part.id, parts: own.parts, offset: own.offset });
         collect(own.parts);
       }
     }
@@ -191,7 +222,13 @@ const kitsSchema = z.array(
     id: z.string(),
     name: z.string(),
     parts: z.array(partSchema),
-    owned: z.array(z.object({ owner: z.string(), parts: z.array(partSchema) }))
+    owned: z.array(
+      z.object({
+        owner: z.string(),
+        parts: z.array(partSchema),
+        offset: z.object({ column: z.number().int(), row: z.number().int() }).optional()
+      })
+    )
   })
 );
 
