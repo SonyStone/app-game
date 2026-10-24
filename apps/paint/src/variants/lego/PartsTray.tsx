@@ -8,10 +8,10 @@ import { boxSections, kindLabel, lookOf, PartView, type Session } from './parts'
 
 /**
  * The box of parts while editing, a sheet pulled up from the bottom edge (see `createSheet`): a wheel turned over the
- * board or the sheet moves its edge, as does a drag on its handle or on the workbench's free space, and a tap on the
- * handle opens or closes it. It holds the workbench, where the board puts its bench panel to build a kit at full
- * size, beside every part by family with its name, the brushes, and the kits as live previews, the user's with a
- * delete button. While it is sunk, the strip it leaves puts away what is dropped on it.
+ * board or the sheet moves its edge, as does a drag on its handle, and a tap on the handle opens or closes it. It
+ * holds the workbench, where the board puts its bench plate to lay parts out at full size, beside every part by
+ * family with its name, the brushes, and the kits as live previews, the user's with a delete button (the workbench
+ * above them in a narrow view). While it is sunk, the strip it leaves puts away what is dropped on it.
  */
 export function PartsTray(props: {
   session: Session;
@@ -73,23 +73,15 @@ export function PartsTray(props: {
       data-keeps-panel
       style={{ height: `${shownHeight()}px` }}
     >
-      <div class={styles.trayBar} onPointerDown={(event) => dragSheet(event, props.sheet, true)}>
+      <div class={styles.trayBar} onPointerDown={(event) => dragSheet(event, props.sheet)}>
         <span class={styles.trayGrip} aria-hidden="true" />
         <Show when={props.sheet.sunk()}>
           <span class={styles.trayTitle}>{props.over ? 'Drop to put it away' : 'Drop here to put it away'}</span>
         </Show>
       </div>
       <div class={styles.trayContent}>
-        <div
-          ref={props.benchRef}
-          class={styles.benchSlot}
-          onPointerDown={(event) => {
-            if (event.target === event.currentTarget) {
-              dragSheet(event, props.sheet, false);
-            }
-          }}
-        >
-          <span class={styles.benchHint}>Workbench: build a kit here</span>
+        <div ref={props.benchRef} class={styles.benchSlot}>
+          <span class={styles.benchHint}>Workbench: lay parts out, drag across them to select</span>
         </div>
         <div ref={setBody} class={styles.trayBody}>
           <For each={partFamilies(props.session)}>
@@ -131,11 +123,10 @@ export function PartsTray(props: {
 }
 
 /**
- * Moves the sheet's edge with the press `event` until it lifts, then settles it the way it was flung, or on the
- * nearest stop. A press on the handle (`tappable`) that does not move opens a closed sheet to the middle and closes
- * an open one.
+ * Moves the sheet's edge with the press `event` on its handle until it lifts, then settles it the way it was flung,
+ * or on the nearest stop. A press that does not move opens a closed sheet to the middle and closes an open one.
  */
-function dragSheet(event: PointerEvent, sheet: ReturnType<typeof createSheet>, tappable: boolean) {
+function dragSheet(event: PointerEvent, sheet: ReturnType<typeof createSheet>) {
   const element = event.currentTarget as HTMLElement;
   element.setPointerCapture(event.pointerId);
   const start = { y: event.clientY, height: sheet.height() };
@@ -166,10 +157,7 @@ function dragSheet(event: PointerEvent, sheet: ReturnType<typeof createSheet>, t
     element.removeEventListener('pointerup', end);
     element.removeEventListener('pointercancel', end);
     if (!moved) {
-      if (tappable) {
-        sheet.to(sheet.height() > 0 ? 'closed' : 'middle');
-      }
-
+      sheet.to(sheet.height() > 0 ? 'closed' : 'middle');
       return;
     }
 

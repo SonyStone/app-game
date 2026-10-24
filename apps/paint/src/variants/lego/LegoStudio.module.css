@@ -818,7 +818,8 @@
   padding: 4px 12px 12px;
 }
 
-@media (orientation: portrait) {
+/* A narrow view has no room beside the workbench: the parts go under it. */
+@media (max-width: 760px) {
   .trayContent {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(150px, 45%) minmax(0, 1fr);
@@ -836,24 +837,57 @@
   touch-action: pan-y;
 }
 
-/* The workbench's place: the board renders the bench panel into it at full size; its free space drags the sheet. */
+/* The workbench's place: the board renders the bench plate into it at full size, filling it. */
 .benchSlot {
   position: relative;
   min-height: 0;
   overflow: auto;
-  border: 1.5px dashed rgb(255 255 255 / 0.18);
   border-radius: 12px;
-  background: rgb(255 255 255 / 0.03);
   touch-action: none;
+
+  .panel {
+    outline: none;
+    box-shadow: none;
+    cursor: crosshair;
+  }
+
+  .part[data-selected] {
+    outline: 2px solid var(--lego-accent);
+    outline-offset: 1px;
+  }
 }
 
 .benchHint {
   position: absolute;
-  right: 12px;
-  bottom: 10px;
-  color: rgb(255 255 255 / 0.3);
+  right: 26px;
+  bottom: 22px;
+  z-index: 1;
+  color: rgb(255 255 255 / 0.35);
   font-size: 12px;
   pointer-events: none;
+}
+
+/* The band dragged across the workbench, and the outline of the parts it selected, with their kit button. */
+.band,
+.selection {
+  position: absolute;
+  z-index: 2;
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+.band {
+  border: 1.5px solid var(--lego-accent);
+  background: rgb(61 126 255 / 0.12);
+}
+
+.selection {
+  border: 2px dashed var(--lego-accent);
+
+  .saveKit {
+    background: var(--lego-accent);
+    pointer-events: auto;
+  }
 }
 
 .tray h4,
