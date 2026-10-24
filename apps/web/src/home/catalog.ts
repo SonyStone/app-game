@@ -208,6 +208,7 @@ export const catalog: ProjectGroup[] = [
         icon: buildingCastleIcon,
         art: nightDefensePreview
       },
+      { href: '/tanki', name: 'Tanki', sources: ['apps/tanki'], icon: tankIcon },
       {
         href: '/spector',
         name: 'Spector',
@@ -337,7 +338,6 @@ export const catalog: ProjectGroup[] = [
     projects: [
       { href: '/player', name: 'Player', icon: movieIcon },
       { href: '/web-audio', name: 'Web Audio', icon: waveSineIcon },
-      { href: '/tanki', name: 'Tanki', icon: tankIcon },
       { href: '/3d-wireframe', name: '3D Wireframe', icon: cube3dSphereIcon },
       { href: '/excalibur-examples', name: 'Excalibur', icon: swordIcon },
       { href: '/animations', name: 'Animations', icon: ghostIcon },

@@ -1,0 +1,42 @@
+{
+  "name": "@app-game/tanki",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3190",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 4190",
+    "typecheck": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/ogl": "workspace:*",
+    "@app-game/solid-gpu": "workspace:*",
+    "@app-game/solid-pixi": "workspace:*",
+    "@app-game/solid-utils": "workspace:*",
+    "@dimforge/rapier2d-simd": "^0.19.3",
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/raf": "catalog:",
+    "@solid-primitives/resize-observer": "catalog:",
+    "@solidjs/router": "catalog:",
+    "@solidjs/web": "catalog:",
+    "pixi.js": "8.18.1",
+    "solid-js": "catalog:",
+    "typegpu": "^0.11.4"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@unocss/vite": "catalog:",
+    "typescript": "catalog:",
+    "unplugin-typegpu": "^0.11.3",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vite-plugin-wasm": "3.6.0",
+    "vitest": "catalog:"
+  },
+  "exports": {
+    "./routes": "./src/routes.tsx"
+  }
+}

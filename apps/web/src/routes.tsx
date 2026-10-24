@@ -8,6 +8,7 @@ import { routes as greasePencilTypegpuRoutes } from '@app-game/grease-pencil-typ
 import { gsapExamplesRoutes } from '@app-game/gsap-examples/routes';
 import { mathRoutes } from '@app-game/math-examples/routes';
 import { nightDefenseRoutes } from '@app-game/night-defense/routes';
+import { tankiRoutes } from '@app-game/tanki/routes';
 import { oglRoutes } from '@app-game/ogl-examples/routes';
 import { paintRoutes } from '@app-game/paint-examples/routes';
 import { phaserRoutes } from '@app-game/phaser-examples/routes';
@@ -97,12 +98,7 @@ export const routes: Routes[] = [
   pixijsRoutes,
   escyRoutes,
   browserAtlasRoutes,
-  {
-    path: '/tanki',
-    name: 'Tanki',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@app-game/tanki'))
-  },
+  tankiRoutes,
   {
     path: '/3d-wireframe',
     name: '3d Wireframe',
