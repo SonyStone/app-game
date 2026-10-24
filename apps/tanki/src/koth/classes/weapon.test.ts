@@ -38,10 +38,11 @@ describe('the weapons of the classes', () => {
 
   it('charge a Sniper shot while the trigger is held and fire it when let go, stronger and piercing at full charge', () => {
     const weapon = createWeapon(TANK_CLASSES.sniper, Math.random);
+    const time = TANK_CLASSES.sniper.weapon.kind === 'charge' ? TANK_CLASSES.sniper.weapon.time : NaN;
 
     hold(weapon, { fire: true }, 0.5);
 
-    expect(weapon.charge).toBeCloseTo(0.25, 1);
+    expect(weapon.charge).toBeCloseTo(0.5 / time, 1);
     expect(weapon.speedShare).toBeCloseTo(0.35);
 
     const [early] = weapon.step(1 / 60, { fire: false });

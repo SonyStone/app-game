@@ -9,9 +9,13 @@ import { TANK_CLASSES } from './classes';
 
 /**
  * Balance metrics of the tank classes, printed as tables: a matrix of bot duels, class against
- * class, from several starting ranges and seeds, and per-class results of full eight-bot matches.
+ * class, from several starting ranges and seeds, and per-class results of full eight-bot matches
+ * on the king of the hill map, with the repair kits each class took and the walls each match broke.
  * Slow, so it runs only with `TANKI_BALANCE=1 pnpm exec vitest run src/koth/classes/balance.harness.test.ts`.
  * `TANKI_MEDIUM_SPEED` sets the medium tank's speed the classes' speeds are shares of; defaults to 250.
+ * `TANKI_SEEDS` replaces the matches' twelve seeds with a comma-separated list: a class's kills
+ * against deaths moves by 0.2-0.5 from one set of twelve to another, so a change is worth checking
+ * on a second set.
  */
 describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
   let rapier: Rapier;
@@ -71,13 +75,30 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
   }, 900_000);
 
   it('plays eight-bot matches and sums up every class', () => {
-    const totals = new Map<TankClassId, { seats: number; kills: number; deaths: number; life: number; lives: number; damage: number; point: number }>();
+    const totals = new Map<TankClassId, { seats: number; kills: number; deaths: number; life: number; lives: number; damage: number; point: number; kits: number }>();
     const matches: string[] = [];
     let stalls = 0;
     let longest = 0;
 
-    for (const seed of [11, 23, 37, 41, 53, 67, 71, 89, 97, 101, 113, 127]) {
+    const seeds = import.meta.env.TANKI_SEEDS?.split(',').map(Number) ?? [11, 23, 37, 41, 53, 67, 71, 89, 97, 101, 113, 127];
+
+    for (const seed of seeds) {
       const match = createMatch(rapier, seed);
+      const step = match.kits.step;
+      match.kits.step = (time, tanks) => {
+        const takers = step(time, tanks);
+
+        for (const taker of takers) {
+          const member = match.members.find((candidate) => candidate.tank === taker);
+          const stats = member && totals.get(member.tankClass.id);
+
+          if (stats) {
+            stats.kits++;
+          }
+        }
+
+        return takers;
+      };
       const born = new Map<number, number>();
       const armor = new Map<object, number>();
       let firstCapture: number | undefined;
@@ -88,7 +109,7 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
         firstCapture ??= match.capture.owner ? match.time : undefined;
 
         for (const member of match.members) {
-          const stats = totals.get(member.tankClass.id) ?? { seats: 0, kills: 0, deaths: 0, life: 0, lives: 0, damage: 0, point: 0 };
+          const stats = totals.get(member.tankClass.id) ?? { seats: 0, kills: 0, deaths: 0, life: 0, lives: 0, damage: 0, point: 0, kits: 0 };
           totals.set(member.tankClass.id, stats);
 
           if (member.tank && !born.has(member.id)) {
@@ -132,15 +153,15 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
 
       const roster = (team: 'red' | 'blue') => match.members.filter((member) => member.team === team).map((member) => member.tankClass.id[0].toUpperCase() + member.tankClass.id.slice(1, 3));
       matches.push(
-        `seed ${seed}: ${roster('red').join(' ')} vs ${roster('blue').join(' ')} -> ${match.capture.winner ?? 'none'} at ${match.time.toFixed(0)} s, first capture ${firstCapture?.toFixed(0) ?? '-'} s, kills ${match.members.reduce((sum, member) => sum + member.kills, 0)}`
+        `seed ${seed}: ${roster('red').join(' ')} vs ${roster('blue').join(' ')} -> ${match.capture.winner ?? 'none'} at ${match.time.toFixed(0)} s, first capture ${firstCapture?.toFixed(0) ?? '-'} s, kills ${match.members.reduce((sum, member) => sum + member.kills, 0)}, wall hits ${match.combat.walls.damage.hits}, tiles fallen ${match.combat.walls.damage.collapsed}`
       );
     }
 
-    const lines = ['Eight-bot matches, hold time 120 s:', ...matches, '', 'class      seats  K/D    kills/seat  life s  damage/seat  on point s/seat'];
+    const lines = ['Eight-bot matches, hold time 120 s:', ...matches, '', 'class      seats  K/D    kills/seat  life s  damage/seat  on point s/seat  kits/seat'];
 
     for (const [id, stats] of totals) {
       lines.push(
-        `${id.padEnd(10)} ${String(stats.seats).padStart(5)}  ${(stats.kills / Math.max(stats.deaths, 1)).toFixed(2).padStart(4)}   ${(stats.kills / stats.seats).toFixed(2).padStart(9)}  ${(stats.life / Math.max(stats.lives, 1)).toFixed(0).padStart(6)}  ${(stats.damage / stats.seats).toFixed(2).padStart(11)}  ${(stats.point / stats.seats).toFixed(0).padStart(14)}`
+        `${id.padEnd(10)} ${String(stats.seats).padStart(5)}  ${(stats.kills / Math.max(stats.deaths, 1)).toFixed(2).padStart(4)}   ${(stats.kills / stats.seats).toFixed(2).padStart(9)}  ${(stats.life / Math.max(stats.lives, 1)).toFixed(0).padStart(6)}  ${(stats.damage / stats.seats).toFixed(2).padStart(11)}  ${(stats.point / stats.seats).toFixed(0).padStart(14)}  ${(stats.kits / stats.seats).toFixed(1).padStart(9)}`
       );
     }
 

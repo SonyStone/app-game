@@ -91,11 +91,13 @@ function createHeavy(): TankClass {
  *   in Team Fortress 2. A grenade flies 900 px/s over the ground to where it is aimed, a little
  *   slower than the rocket where Team Fortress 2's pipes are a little faster, up to 520 px, in an
  *   arc that clears a crate halfway beyond about 200 px. It bounces off walls keeping 0.7 of its
- *   speed, lands, bounces and rolls, and goes off 1.5 s after it was fired, or at once if it hits
+ *   speed, lands, bounces and rolls, and goes off 1.15 s after it was fired, or at once if it hits
  *   or brushes past an enemy tank before it first lands.
- * - Its blast reaches 95 px, half again as far as the rocket's, chips a 5.5 px crater 3 px deep at
- *   its center, enough to open the side of any hull, and hits crates and breakable walls three
- *   times as hard as tanks.
+ * - Its blast reaches 95 px, half again as far as the rocket's, chips a 6.2 px crater 3.9 px deep
+ *   at its center, enough to open the side of any hull, and hits crates and breakable walls three
+ *   times as hard as tanks. On the compact map, among more walls to bounce off, its grenades hurt
+ *   most but finished few, killing half as often as it died: the fuse was cut from 1.5 s, so
+ *   fewer roll away from their target before they go off, and the crater grew from 5.5 x 3 px.
  */
 function createDemoman(): TankClass {
   return {
@@ -115,8 +117,8 @@ function createDemoman(): TankClass {
       depth: 1,
       knockback: 250,
       ricochet: false,
-      lob: { fuse: 1.5, gravity: 1500, bounce: 0.45, rebound: 0.7, roll: 4, minReach: 70 },
-      blast: { radius: 95, hole: 5.5, depth: 3, knockback: 600, structures: 3, self: 0.7 }
+      lob: { fuse: 1.15, gravity: 1500, bounce: 0.45, rebound: 0.7, roll: 4, minReach: 70 },
+      blast: { radius: 95, hole: 6.2, depth: 3.9, knockback: 600, structures: 3, self: 0.7 }
     },
     weapon: { kind: 'lob' },
     capture: 1,
@@ -132,12 +134,14 @@ function createDemoman(): TankClass {
  * - Speed 0.92 of the medium tank's, 230 px/s at 250, down to 0.35 of that while it charges.
  * - A 46 x 24 hull with its core at the rear, 5.5 px under the rear armor and 7.5 px under the
  *   sides; the casemate in front makes the front 31.5 px thick. It weighs 1.1 medium tanks.
- * - Holding the trigger charges the shot for up to 2 s, letting go fires it: with no charge a
+ * - Holding the trigger charges the shot for up to 2.5 s, letting go fires it: with no charge a
  *   1300 px/s shell that flies 900 px and chips a small hole, at full charge a 3000 px/s round
  *   that flies 1300 px and bores through 28 px of armor and more, into the core of any class from
  *   any side it hits on the core's line, as a headshot kills in Team Fortress 2, and clean
- *   through crates. A shot charged less only chips. The gun then takes 2 s to load again. While
- *   it charges, its laser sight is drawn for everyone to see, and bots dodge off its beam.
+ *   through crates and wooden fences. A shot charged less only chips. The gun then takes 2 s to
+ *   load again. While it charges, its laser sight is drawn for everyone to see, and bots dodge off
+ *   its beam. The charge took 2 s until the compact map, where the Sniper killed more than twice
+ *   as often as it died.
  */
 function createSniper(): TankClass {
   return {
@@ -153,7 +157,7 @@ function createSniper(): TankClass {
     shell: { speed: 1300, range: 900, hole: 3, depth: 2, knockback: 500, size: 0.8 },
     weapon: {
       kind: 'charge',
-      time: 2,
+      time: 2.5,
       slowdown: 0.35,
       full: { speed: 3000, range: 1300, hole: 5, depth: 9, knockback: 1300, size: 1.1, pierce: { armor: 28, thin: true } }
     },

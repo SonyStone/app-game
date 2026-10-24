@@ -10,7 +10,7 @@ type Point = { x: number; y: number };
  * `MIN_SEEN` of seven spots on the point, its middle and six round its rim, close to a wall that
  * covers a flank. A team finds its perches once, from the walls as built: walls shot apart only
  * open more lines, so the perches stay good. On the king of the hill map they lie in the hall and
- * at the doorways from the streets, 300-560 px from the point, with lines of fire across it of
+ * at the doorways from the streets, 300-500 px from the point, with lines of fire across it of
  * 1100-1400 px.
  */
 export function findPerches(grid: NavGrid, map: KothMap, team: TeamId): Point[] {
@@ -54,8 +54,12 @@ export function findPerches(grid: NavGrid, map: KothMap, team: TeamId): Point[] 
   return perches;
 }
 
-/** Distances from the point a perch may lie at, and the one it should, in pixels. */
-const PERCH_RANGE = { min: 300, best: 550, max: 800 };
+/**
+ * Distances from the point a perch may lie at, and the one it should, in pixels: within the
+ * 470-480 px a Soldier and a Demoman open fire at, so the point can fight back. Perches beyond it,
+ * 550 px out on the compact map, let a Sniper kill four times as often as it died.
+ */
+const PERCH_RANGE = { min: 300, best: 420, max: 500 };
 /** Spots on the point a perch must see. */
 const MIN_SEEN = 2;
 /** A perch this close to a wall, or closer, has it covering a flank. */
