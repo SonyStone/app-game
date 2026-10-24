@@ -8,7 +8,8 @@ import { boxSections, kindLabel, lookOf, PartView, type Session } from './parts'
  * The box of parts as a drawer pulled up from the bottom edge while editing, like a tray of bricks: every part by
  * family with its name, the brushes, and the kits as live previews, the user's with a delete button. Its bar opens
  * and closes it with a tap or a swipe. While something is being carried the drawer sinks to its bar, which then
- * takes what is dropped on it, so the board stays in view; it comes back as it was after the drop.
+ * takes what is dropped on it, so the board stays in view; a part taken from it leaves it closed, as Android's
+ * widget picker does.
  */
 export function PartsDrawer(props: {
   session: Session;

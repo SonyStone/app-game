@@ -58,8 +58,8 @@ export function BoardView(props: {
 }) {
   const [layer, setLayer] = createSignal<HTMLElement>();
   const [box, setBox] = createSignal<HTMLElement>();
-  /** Whether the box of parts is pulled up; see `PartsDrawer`. */
-  const [drawer, setDrawer] = createSignal(true);
+  /** Whether the box of parts is pulled up; see `PartsDrawer`. It starts closed and closes once a part is taken. */
+  const [drawer, setDrawer] = createSignal(false);
   const [drag, setDrag] = createSignal<Drag>();
 
   /** The view's size, which the board covers, and where it lies on the page. */
@@ -172,6 +172,10 @@ export function BoardView(props: {
       }
 
       return;
+    }
+
+    if (current.fromBox) {
+      setDrawer(false);
     }
 
     let next = partDrop(current, point).board;
