@@ -1906,13 +1906,11 @@ export function createCombat(
 
   /**
    * Chips the wrecks a blast at `at` reaches in the open, of those `faces` found standing there: each
-   * takes a crater on the face toward the blast, falling off with distance and grown by
-   * `structures`, as a wall's does, for a wreck has no core left. Pieces cut loose fall off as
+   * takes a crater on the face toward the blast, falling off with distance, as a tank's armor does,
+   * for a wreck is a hull's armor, which shells chip as a tank's too. Pieces cut loose fall off as
    * scrap, and a wreck shot down far enough falls apart.
    */
   function blastWrecks(at: Point, spec: BlastSpec, faces: ReturnType<Wrecks['facesNear']>) {
-    const structures = spec.structures ?? 1;
-
     for (const face of faces) {
       const cover = castShot(at, face.direction, (body) => body.tank !== undefined, face.distance);
 
@@ -1922,7 +1920,7 @@ export function createCombat(
 
       const falloff = 1 - 0.5 * (face.distance / spec.radius);
       const inward = face.normal ? { x: -face.normal.x, y: -face.normal.y } : face.direction;
-      wrecks.chip(face.wreck, face.point, inward, { hole: spec.hole * falloff * Math.sqrt(structures), depth: spec.depth * falloff * structures });
+      wrecks.chip(face.wreck, face.point, inward, { hole: spec.hole * falloff, depth: spec.depth * falloff });
       spawnDust(face.point, inward, face.wreck.color);
     }
   }

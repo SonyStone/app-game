@@ -90,8 +90,8 @@ export function shotsToOpen(blocker: Blocker, tankClass: TankClass) {
 /**
  * Square pixels one shot of the class's gun chips out of a wall's material, or out of a wreck's
  * armor without `crater`: the craters of its shell or of every pellet of a volley, a little
- * smaller for the fade over `STAND_RANGE` px, and of its blast, grown by its `structures`, as the
- * battle cuts them. A crater of a hole of radius `h` reaching `d` deeper counts `πh² + 2hd`. A
+ * smaller for the fade over `STAND_RANGE` px, and of its blast, grown on walls by its
+ * `structures`, as the battle cuts them. A crater of a hole of radius `h` reaching `d` deeper counts `πh² + 2hd`. A
  * charged shot counts at full charge; a grenade bounces back off the wall and goes off a little way
  * from it, so its blast counts at `LOB_FALLOFF`.
  *
@@ -105,7 +105,8 @@ export function shotBite(tankClass: TankClass, crater: { hole: number; depth: nu
   let area = pellets * craterArea(shell.hole * bite, shell.depth * bite, crater);
 
   if (shell.blast) {
-    const structures = shell.blast.structures ?? 1;
+    // Walls take a blast grown by its structures factor; a wreck takes it as a tank's armor does.
+    const structures = crater ? (shell.blast.structures ?? 1) : 1;
     const falloff = weapon.kind === 'lob' ? LOB_FALLOFF : 1;
     area += craterArea(shell.blast.hole * falloff * Math.sqrt(structures), shell.blast.depth * falloff * structures, crater);
   }
