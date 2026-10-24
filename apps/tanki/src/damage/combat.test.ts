@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { Rapier } from '../physics/Rapier2D';
-import { createCombat } from './combat';
+import { createCombat, type ShellSpec } from './combat';
 import type { createRangeRenderer } from './renderer';
 
 let rapier: Rapier;
@@ -55,7 +55,71 @@ describe('battle core', () => {
   });
 });
 
-/** A battle on a real Rapier world with a renderer that only hands out field slots, recording hits. */
+describe('shells', () => {
+  const shell: ShellSpec = { speed: 900, range: 700, hole: 4.5, depth: 3, knockback: 700 };
+
+  it('fly for a while before they hit', () => {
+    const { combat, hits } = createBattle({ shell });
+    const shooter = combat.spawnTank({ x: -300, y: 0, rotation: 0 }, { color: 0 });
+    const target = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0 });
+
+    combat.fire(shooter);
+    run(combat, 0.15);
+
+    expect(hits).toHaveLength(0);
+    expect(combat.shells).toHaveLength(1);
+
+    run(combat, 0.2);
+
+    expect(hits).toEqual([{ target, shooter }]);
+    expect(combat.shells).toHaveLength(0);
+    expect(combat.armorLeft(target)).toBeLessThan(0.97);
+  });
+
+  it('fall once they have flown their range', () => {
+    const { combat, shots } = createBattle({ shell }, { halfWidth: 1500 });
+    const shooter = combat.spawnTank({ x: -1200, y: 0, rotation: 0 }, { color: 0 });
+
+    combat.fire(shooter);
+    run(combat, 0.7);
+
+    expect(combat.shells).toHaveLength(1);
+
+    run(combat, 0.2);
+
+    expect(combat.shells).toHaveLength(0);
+    expect(shots).toHaveLength(1);
+    expect(pathLength(shots[0])).toBeCloseTo(shell.range, 0);
+  });
+
+  it('glance off armor and fly on with the range they have left', () => {
+    const { combat, hits, shots } = createBattle({ shell }, { halfWidth: 1500 });
+    const shooter = combat.spawnTank({ x: -300, y: -40, rotation: 0 }, { color: 0 });
+    const target = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0 });
+    shooter.turretAngle = Math.atan2(27.5, 300);
+
+    combat.fire(shooter);
+    run(combat, 1);
+
+    expect(hits).toEqual([{ target, shooter }]);
+    expect(shots[0]).toHaveLength(3);
+    expect(pathLength(shots[0])).toBeLessThanOrEqual(shell.range + 1e-6);
+    expect(combat.armorLeft(target)).toBeGreaterThan(0.99);
+  });
+});
+
+/** Steps the battle for `seconds`. */
+function run(combat: ReturnType<typeof createCombat>, seconds: number) {
+  for (let time = 0; time < seconds - 1e-9; time += 1 / 60) {
+    combat.step(1 / 60);
+  }
+}
+
+function pathLength(path: readonly { x: number; y: number }[]) {
+  return path.slice(1).reduce((total, point, index) => total + Math.hypot(point.x - path[index].x, point.y - path[index].y), 0);
+}
+
+/** A battle on a real Rapier world with a renderer that only hands out field slots, recording hits and shot paths. */
 function createBattle(options: Parameters<typeof createCombat>[4] = {}, layout: Partial<Parameters<typeof createCombat>[3]> = {}) {
   const world = new rapier.World({ x: 0, y: 0 });
   world.lengthUnit = 100;
@@ -72,13 +136,14 @@ function createBattle(options: Parameters<typeof createCombat>[4] = {}, layout: 
     render() {}
   };
   const hits: { target: unknown; shooter: unknown }[] = [];
+  const shots: (readonly { x: number; y: number }[])[] = [];
   const combat = createCombat(
     rapier,
     world,
     renderer as unknown as ReturnType<typeof createRangeRenderer>,
     { halfWidth: 400, halfHeight: 300, ...layout },
-    { ...options, onHit: (target, shooter) => hits.push({ target, shooter }) }
+    { ...options, onHit: (target, shooter) => hits.push({ target, shooter }), onShot: (_shooter, path) => shots.push(path) }
   );
 
-  return { combat, hits };
+  return { combat, hits, shots };
 }

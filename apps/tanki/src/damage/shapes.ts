@@ -33,6 +33,11 @@ export function createCrateField() {
   });
 }
 
+/** A shell in flight: a slim capsule 9 px long pointing along +x, with no core. */
+export function createShellField() {
+  return createField({ minX: -6.5, minY: -3, maxX: 6.5, maxY: 3 }, 0.5, (x, y) => [segment(x, y, -3, 0, 3, 0) - 1.5, FAR, FAR, 0]);
+}
+
 const LINE_HALF_WIDTH = 0.5;
 
 /** Signed distance to a box of half size `halfX` x `halfY` with rounded corners. */
