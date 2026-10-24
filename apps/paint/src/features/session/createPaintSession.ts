@@ -2,9 +2,10 @@ import { blockEraserSize, isBlockEraser } from '@app-game/abr-brush/blockEraser'
 import { record } from '@app-game/abr-brush/form';
 import { screenToWorld, worldToScreen, type Point } from '@app-game/paint-core/camera';
 import { supportsPaintSymmetry } from '@app-game/paint-core/symmetry';
+import { errorMessage } from '@app-game/solid-gpu/errors';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createSignal, flush } from 'solid-js';
-import type { PaintError } from '../../shared/errors';
+import { engineError, type PaintError } from '../../shared/errors';
 import { createContextMenuBlock } from '../../shared/ui/createContextMenuBlock';
 import { createPageGestureGuard } from '../../shared/ui/createPageGestureGuard';
 import { createPointerTypeAttribute } from '../../shared/ui/createPointerTypeAttribute';
@@ -35,7 +36,7 @@ import { createLayerThumbnails } from '../layer-thumbnails';
 import { createImagePlacement, createLayerFilter } from '../layers';
 import { createLiveBroadcast, liveRelayUrl } from '../live';
 import { createLocalUndo } from '../local-undo';
-import { createNativeShell } from '../native-shell';
+import { createNativeShell, saveFile } from '../native-shell';
 import { createPalmRejection, createPalmRejectionSettings } from '../palm-rejection';
 import { createPenHover } from '../pen-hover';
 import { createPerformanceMonitor } from '../performance';
@@ -97,7 +98,11 @@ export function createPaintSession(options: {
     frames: { enabled: developer.performanceMonitor, receive: (event) => monitor.record(event) },
     layerThumbnails: { size: layerThumbnails.size, receive: layerThumbnails.receive },
     storageName: options.storageName,
-    storageWaitMs: arrivalStorageWaitMs()
+    storageWaitMs: arrivalStorageWaitMs(),
+    save: (blob, name) =>
+      void saveFile(blob, name).catch((cause: unknown) =>
+        setError(engineError('failed', `${name} could not be saved: ${errorMessage(cause)}`, cause))
+      )
   });
   const selection = createSelection({
     send: engine.send,

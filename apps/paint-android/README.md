@@ -11,6 +11,8 @@ the way.
   "Exit Paint?".
 - Pen hover goes from Android to the page over the bridge as well, and Paint replays it whenever Chromium has
   stopped reporting it (crbug 573236768), so palm rejection keeps working without a fresh tab.
+- Files the page saves (Export PNG and every other download, which a WebView cannot do) are streamed to the shell in
+  chunks and land in Downloads/Paint.
 
 ```sh
 ./gradlew assembleDebug

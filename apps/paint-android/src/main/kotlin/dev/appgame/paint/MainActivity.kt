@@ -180,6 +180,8 @@ class MainActivity : Activity() {
             )
         }
         bridge.command("setGestureExclusion", ::setGestureExclusion)
+        // saveBegin, saveChunk, saveEnd and saveCancel: files the page saves go to Downloads/Paint.
+        FileSaver(this, bridge)
     }
 
     /**

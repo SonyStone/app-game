@@ -44,6 +44,17 @@ export type ShellMethods = {
     params: { left?: VerticalRange[]; right?: VerticalRange[] };
     result: { left: VerticalRange[]; right: VerticalRange[]; limit: number };
   };
+  /**
+   * Starts saving a file named `name` into the device's Downloads/Paint; the answer's `id` names it in the calls that
+   * follow. See `saveFile`.
+   */
+  saveBegin: { params: { name: string; mime: string }; result: { id: string } };
+  /** Appends `data`, base64, to the file being saved as `id`. */
+  saveChunk: { params: { id: string; data: string }; result: Record<string, never> };
+  /** Finishes the file `id` and shows it to other apps; `name` is the one Android gave it. */
+  saveEnd: { params: { id: string }; result: { name: string; uri: string } };
+  /** Drops the file `id` and what was written of it. */
+  saveCancel: { params: { id: string }; result: Record<string, never> };
 };
 
 /** A vertical stretch of a screen edge, in CSS pixels from the top; `bottom` is exclusive. */
