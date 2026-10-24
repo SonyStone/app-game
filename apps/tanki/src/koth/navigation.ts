@@ -67,13 +67,25 @@ export function createNavGrid(layout: CombatLayout, options: { cell?: number; cl
 
 /**
  * Recomputes the cells whose centers lie within `bounds` from `distanceAt`, after obstacles there
- * changed, such as a wall shot apart. Bumps the grid's `revision` when a cell opened or closed.
+ * changed, such as a wall shot apart or a wreck left. Bumps the grid's `revision` when a cell
+ * opened or closed.
+ *
+ * Cells outside `bounds` keep their distances, which an obstacle that appeared within `changed`
+ * may make too large; they are capped at their distance to `changed`, so traces that step by the
+ * distance never skip over the new obstacle. Make `bounds` reach far enough around `changed`
+ * that the cap stays above the clearance.
  *
  * @param distanceAt - Distance from a point to the nearest obstacle as they stand now; it may cap
  *   large distances, as long as the cap exceeds the clearance with room to spare.
+ * @param changed - Where obstacles changed, inside `bounds`; without it, nothing outside `bounds` changes.
  * @returns How many cells opened or closed.
  */
-export function updateNavGrid(grid: NavGrid, bounds: { minX: number; minY: number; maxX: number; maxY: number }, distanceAt: (point: Point) => number) {
+export function updateNavGrid(
+  grid: NavGrid,
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  distanceAt: (point: Point) => number,
+  changed?: { minX: number; minY: number; maxX: number; maxY: number }
+) {
   const minCol = Math.max(Math.ceil((bounds.minX - grid.originX) / grid.cell), 0);
   const maxCol = Math.min(Math.floor((bounds.maxX - grid.originX) / grid.cell), grid.cols - 1);
   const minRow = Math.max(Math.ceil((bounds.minY - grid.originY) / grid.cell), 0);
@@ -88,6 +100,19 @@ export function updateNavGrid(grid: NavGrid, bounds: { minX: number; minY: numbe
 
       if (open !== isOpenCell(grid, cell)) {
         flipped++;
+      }
+    }
+  }
+
+  if (changed) {
+    for (let cell = 0; cell < grid.distance.length; cell++) {
+      const col = cell % grid.cols;
+      const row = Math.floor(cell / grid.cols);
+
+      if (col < minCol || col > maxCol || row < minRow || row > maxRow) {
+        const center = cellCenter(grid, cell);
+        const gap = Math.hypot(Math.max(changed.minX - center.x, 0, center.x - changed.maxX), Math.max(changed.minY - center.y, 0, center.y - changed.maxY));
+        grid.distance[cell] = Math.min(grid.distance[cell], gap);
       }
     }
   }

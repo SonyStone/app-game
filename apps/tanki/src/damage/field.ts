@@ -279,6 +279,23 @@ export function carve(field: DamageField, center: { x: number; y: number }, radi
   });
 }
 
+/**
+ * Cracks the armor along a segment: a cut `width` px wide, sooted along its rim. Two cracks that
+ * meet a hole and the edge cut off the wedge between them, which `detachLoosePieces` then frees.
+ */
+export function crack(field: DamageField, from: { x: number; y: number }, to: { x: number; y: number }, width: number) {
+  const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+  const center = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+
+  forCellsNear(field, center, length / 2 + width + SCORCH_REACH + field.cell, (index, x, y) => {
+    const t = Math.min(Math.max(((x - from.x) * (to.x - from.x) + (y - from.y) * (to.y - from.y)) / (length * length), 0), 1);
+    const gap = Math.hypot(x - from.x - (to.x - from.x) * t, y - from.y - (to.y - from.y) * t) - width / 2;
+    const data = field.data;
+    data[index] = Math.max(data[index], -gap);
+    data[index + 3] = Math.max(data[index + 3], Math.min(Math.max(1 - gap / SCORCH_REACH, 0), 1));
+  });
+}
+
 /** Soots the armor around `center` without removing any, as a glancing hit does. */
 export function scorch(field: DamageField, center: { x: number; y: number }, radius: number) {
   forCellsNear(field, center, radius, (index, x, y) => {

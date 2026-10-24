@@ -132,6 +132,27 @@ export function createRangeRenderer(gpu: GpuContext) {
     return std.mix(top, bottom, t.y);
   };
 
+  /** The cell of a body's field nearest to a local point, clamped to its grid, as stored. */
+  const nearestCell = (item: d.Infer<typeof BodyInstance>, point: d.v2f) => {
+    'use gpu';
+    const cols = d.u32(item.grid.x);
+    const rows = d.u32(item.grid.y);
+    const position = std.round(std.div(std.sub(point, item.field.xy), item.field.z));
+    const col = std.clamp(d.i32(position.x), 0, d.i32(cols) - 1);
+    const row = std.clamp(d.i32(position.y), 0, d.i32(rows) - 1);
+    return texel(d.u32(item.grid.z) * SLOT_CELLS, cols, col, row);
+  };
+
+  /** A fill color packed into one channel by `packColor`. */
+  const unpackColor = (packed: number) => {
+    'use gpu';
+    const value = std.max(packed - 1, 0);
+    const red = std.floor(value / 65536);
+    const green = std.floor((value - red * 65536) / 256);
+    const blue = value - red * 65536 - green * 256;
+    return std.div(d.vec3f(red, green, blue), 255);
+  };
+
   /**
    * Where a pixel lies on a `KIND_BLOCK` body: its offset from the block's center, and the block's
    * half size, the quad less `extra.y` pixels of margin on every side.
@@ -168,12 +189,14 @@ export function createRangeRenderer(gpu: GpuContext) {
     const flash = item.color.w;
     let result = d.vec4f(0);
 
-    if (kind === KIND_FIELD || kind === KIND_FIELD_OPEN) {
+    if (kind === KIND_FIELD || kind === KIND_FIELD_OPEN || kind === KIND_SCRAP) {
       const sample = sampleField(item, input.local);
       const open = kind === KIND_FIELD_OPEN;
       // The armor covers the core until a hole opens onto it; then the core shows through its own pocket.
       const armorDistance = std.select(sample.x, std.max(sample.x, -sample.z), open);
-      const fill = std.mix(item.color.xyz, d.vec3f(0.12, 0.11, 0.1), sample.w * 0.85);
+      // Scrap keeps each piece's own color where the core would be, read from the nearest cell.
+      const base = std.select(item.color.xyz, unpackColor(nearestCell(item, input.local).z), kind === KIND_SCRAP);
+      const fill = std.mix(base, d.vec3f(0.12, 0.11, 0.1), sample.w * 0.85);
       const lines = std.max(edgeBand(armorDistance, d.f32(OUTLINE)), coverage(sample.y));
       const armor = std.mix(std.mix(fill, black, lines), d.vec3f(1), flash * 0.6);
 
@@ -937,9 +960,9 @@ export function createRangeRenderer(gpu: GpuContext) {
     const kind = d.u32(item.grid.w);
     let cover = d.f32(0);
 
-    if (kind === KIND_FIELD || kind === KIND_FIELD_OPEN) {
+    if (kind === KIND_FIELD || kind === KIND_FIELD_OPEN || kind === KIND_SCRAP) {
       const sample = sampleField(item, input.local);
-      cover = coverage(std.min(sample.x, sample.z));
+      cover = coverage(std.select(std.min(sample.x, sample.z), sample.x, kind === KIND_SCRAP));
     } else if (kind === KIND_TURRET) {
       const barrel = roundedBox(std.sub(input.local, d.vec2f(18.55, 0)), d.vec2f(11.25, 3.75), d.f32(1));
       cover = coverage(std.min(barrel, std.length(input.local) - 9.6));
@@ -1623,6 +1646,21 @@ export const KIND_FIELD_OPEN = 3;
  * filling the quad less its `margin`, with an outline.
  */
 export const KIND_BLOCK = 4;
+
+/**
+ * Pieces of scrap lying on the ground, many in one field: shaded like `KIND_FIELD`, but each
+ * cell's core channel holds the color of the piece it belongs to, packed by `packColor`, and the
+ * body's own color is ignored.
+ */
+export const KIND_SCRAP = 5;
+
+/**
+ * Packs a fill color, components 0-1, into one field channel for `KIND_SCRAP`: a whole number
+ * from 1 to 2^24, which a 32-bit float holds exactly.
+ */
+export function packColor(color: readonly number[]) {
+  return 1 + Math.round(color[0] * 255) * 65536 + Math.round(color[1] * 255) * 256 + Math.round(color[2] * 255);
+}
 
 /** A tapered streak along its velocity. */
 export const PARTICLE_SPARK = 0;

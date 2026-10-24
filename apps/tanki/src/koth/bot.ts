@@ -165,7 +165,8 @@ export function createBot(member: Member, context: BotContext) {
       const position = tank.hull.translation();
       const planned = driver.steer(now, position, task?.hold ? undefined : task?.destination, obstacles(tank), {
         arrive: task?.arrive,
-        cost: costFor(task?.route ?? 'normal')
+        cost: costFor(task?.route ?? 'normal'),
+        heading: tank.hull.rotation()
       });
       const move = sidestep(position, now) ?? planned;
       combat.drive(tank, move);

@@ -11,7 +11,6 @@ import {
   isCoreExposed,
   raycastField,
   scorch,
-  shatter,
   solidBoxes,
   surfaceNormal,
   type DamageField,
@@ -30,7 +29,9 @@ import {
   type createRangeRenderer
 } from './renderer';
 import { createCrateField, createHullField, createShellField, HULL_CORE } from './shapes';
+import { createScrap } from './scrap';
 import { createWalls, type Bounds, type Tile } from './walls';
+import { createWrecks, type Wrecks } from './wrecks';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
 type Point = { x: number; y: number };
@@ -82,10 +83,11 @@ export type CombatLayout = {
  * The core of a tank battle with destructible armor: tanks and crates whose armor is a distance
  * field, on a walled floor among walls (see `./walls`). Shots chip holes, dent the armor and
  * knock bodies back; shots that meet armor at a glancing angle ricochet. Crashes dent both bodies,
- * armor cut loose falls off as debris, and a shot that reaches a tank's core, hidden until a hole
- * opens onto it, blows the tank apart. Shots chip craters into walls of every material but steel
- * until pieces of them fall. Crates come back after a few seconds; tanks only when spawned with
- * `respawn`.
+ * armor cut loose falls off as debris, which lands and stays as scrap (see `./scrap`), and a shot
+ * that reaches a tank's core, hidden until a hole opens onto it, blows the tank up and leaves its
+ * wreck standing (see `./wrecks`). Shots chip craters into walls of every material but steel until
+ * pieces of them fall, and a hard ram bites into them. Crates come back after a few seconds; tanks
+ * only when spawned with `respawn`.
  *
  * Any number of tanks can be driven at once: `drive` sets a tank's input until changed, `fire`
  * shoots its gun. Tanks may belong to teams, and without friendly fire shots pass through the
@@ -97,6 +99,8 @@ export type CombatLayout = {
  * @param options.shell - Makes guns fire shells that fly for a while instead of hitscan shots.
  * @param options.friendlyFire - Whether shots hit the shooter's teammates; defaults to `true`.
  * @param options.wreckFire - Seconds a destroyed tank's wreck burns; defaults to 12.
+ * @param options.wrecks - Most wrecks of destroyed tanks left standing at once (see `./wrecks`);
+ *   defaults to `WRECK_LIMIT`.
  * @param options.random - Source of randomness in [0, 1) for damage and effects, so a test can
  *   seed it; defaults to `Math.random`.
  * @param options.onHit - Called when a shot chips, ricochets off or detonates a tank.
@@ -104,8 +108,8 @@ export type CombatLayout = {
  *   whose shot did it, if any. The tank is already out of `tanks`.
  * @param options.onShot - Called for every shot with its path: the muzzle, each ricochet and the end.
  *   A shell reports its path when it stops.
- * @param options.onWallsChanged - Called with the world bounds of a piece of wall whose shape
- *   changed, during the step that changed it.
+ * @param options.onWallsChanged - Called with the world bounds of a piece of wall or a wreck
+ *   that changed shape, appeared, moved or went, during the step or reset that changed it.
  */
 export function createCombat(
   rapier: Rapier,
@@ -116,6 +120,7 @@ export function createCombat(
     shell?: ShellSpec;
     friendlyFire?: boolean;
     wreckFire?: number;
+    wrecks?: number;
     random?: () => number;
     onHit?: (target: Tank, shooter: Tank | undefined, part: 'armor' | 'core' | 'ricochet') => void;
     onDestroyed?: (victim: Tank, killer: Tank | undefined) => void;
@@ -129,11 +134,22 @@ export function createCombat(
   const owners = new Map<number, Armored>();
   const armored: Armored[] = [];
   const byTank = new Map<Tank, Armored>();
-  const debris: Debris[] = [];
   const respawns: { at: number; spawn: () => void }[] = [];
+  const scrap = createScrap(renderer, {
+    random,
+    bounds: layout,
+    buried: (point) => Math.min(walls.distance(point, BURIED), wrecks.distance(point, BURIED)) < -BURIED
+  });
   const walls = createWalls(rapier, world, renderer, layout, {
     random,
     onDebris: addWallDebris,
+    onChange: (bounds) => options.onWallsChanged?.(bounds)
+  });
+  const wrecks = createWrecks(rapier, world, renderer, {
+    limit: options.wrecks,
+    random,
+    wallDistance: (point, cap) => walls.distance(point, cap),
+    onDebris: (piece) => scrap.launch({ ...piece, shape: piece.field, spin: between(-6, 6), material: 'metal' }),
     onChange: (bounds) => options.onWallsChanged?.(bounds)
   });
   const burning = createBurning(renderer);
@@ -183,6 +199,23 @@ export function createCombat(
       return { tiles: walls.tiles, damage: walls.damage };
     },
 
+    /**
+     * Scrap on the ground: pieces knocked off armor and walls, and turrets blown off tanks, which
+     * landed and stay where they lie (see `./scrap`). `pieces` lists them with their material and
+     * area, `near` finds those around a point and `take` picks one up.
+     */
+    get scrap() {
+      return { pieces: scrap.pieces, near: scrap.near, take: scrap.take, chunks: scrap.chunks, flying: scrap.flying };
+    },
+
+    /**
+     * Wrecks of destroyed tanks standing on the field (see `./wrecks`): `list` tells where each is
+     * and how much armor it has left, `made` how many were left in all, and `take` takes one away whole.
+     */
+    get wrecks(): Pick<Wrecks, 'list' | 'made' | 'take'> {
+      return { list: wrecks.list, made: wrecks.made, take: wrecks.take };
+    },
+
     /** Centers of every crate in play, with their headings. */
     get crates() {
       return armored.flatMap((body) => (body.tank ? [] : [{ ...body.body.translation(), rotation: body.body.rotation() }]));
@@ -211,6 +244,7 @@ export function createCombat(
      * @param tank.team - Team the tank fights for; tanks without one have no teammates.
      * @param tank.pullSpeed - Pull speed in pixels per second at full input.
      * @param tank.respawn - Brings the tank back at `placement` a few seconds after it is destroyed.
+     *   A wreck standing on that spot falls apart as the tank comes.
      */
     spawnTank(placement: Placement, tank: { color: number; team?: string; pullSpeed?: number; respawn?: boolean }) {
       return spawnTank(placement, tank);
@@ -265,6 +299,7 @@ export function createCombat(
         body.before = { velocity: body.body.linvel(), spin: body.body.angvel() };
       }
 
+      wrecks.step(dt);
       world.step(events);
       crashes.length = 0;
       events.drainCollisionEvents((first, second, started) => {
@@ -284,6 +319,7 @@ export function createCombat(
       }
 
       walls.refresh();
+      wrecks.refresh();
 
       for (const respawn of respawns.filter((item) => item.at <= clock)) {
         respawns.splice(respawns.indexOf(respawn), 1);
@@ -305,9 +341,9 @@ export function createCombat(
     },
 
     /**
-     * Whether a straight line from `from` to `to` is clear of walls and crates. Tanks never block
-     * it, and neither do holes shot through a crate, nor rubble within the reach of a tank's gun
-     * of `from`: a tank sees and shoots over rubble right in front of it.
+     * Whether a straight line from `from` to `to` is clear of walls, wrecks and crates. Tanks never
+     * block it, and neither do holes shot through a crate, nor rubble within the reach of a tank's
+     * gun of `from`: a tank sees and shoots over rubble right in front of it.
      */
     lineOfSight(from: Point, to: Point) {
       const length = Math.hypot(to.x - from.x, to.y - from.y);
@@ -321,11 +357,11 @@ export function createCombat(
     },
 
     /**
-     * Distance from `point` to the nearest wall, the border or a campfire's stones as they stand
-     * now, negative inside one; at most `cap`. Tanks and crates are not obstacles here.
+     * Distance from `point` to the nearest wall, wreck, the border or a campfire's stones as they
+     * stand now, negative inside one; at most `cap`. Tanks and crates are not obstacles here.
      */
     obstacleDistance(point: Point, cap: number) {
-      return walls.distance(point, cap);
+      return Math.min(walls.distance(point, cap), wrecks.distance(point, cap));
     },
 
     /**
@@ -353,26 +389,8 @@ export function createCombat(
     /** Moves debris, emits exhaust, feeds fires and fades hit flashes over a frame of `dt` seconds. */
     update(dt: number) {
       burning.update(dt);
-
-      for (let index = debris.length - 1; index >= 0; index--) {
-        const piece = debris[index];
-        const drag = Math.exp(-DEBRIS_DRAG * dt);
-        piece.age += dt;
-        piece.x += piece.vx * dt;
-        piece.y += piece.vy * dt;
-        piece.angle += piece.spin * dt;
-        piece.vx *= drag;
-        piece.vy *= drag;
-        piece.spin *= drag;
-
-        if (piece.age >= piece.life) {
-          if (piece.slot !== undefined) {
-            renderer.releaseField(piece.slot);
-          }
-
-          debris.splice(index, 1);
-        }
-      }
+      scrap.update(dt);
+      wrecks.update(dt);
 
       shake *= Math.exp(-SHAKE_DECAY * dt);
 
@@ -436,17 +454,9 @@ export function createCombat(
       underlay?.();
       campfires.forEach((campfire) => campfire.draw());
 
-      for (const piece of debris) {
-        const alpha = Math.min((piece.life - piece.age) / DEBRIS_FADE, 1);
-
-        if (piece.field && piece.slot !== undefined) {
-          renderer.addBody({ ...fieldDraw(piece.field, piece.slot), x: piece.x, y: piece.y, angle: piece.angle, color: piece.color, alpha, height: DEBRIS_HEIGHT });
-        } else {
-          renderer.addBody({ ...TURRET_DRAW, x: piece.x, y: piece.y, angle: piece.angle, color: piece.color, alpha });
-        }
-      }
-
+      scrap.draw();
       walls.draw();
+      wrecks.draw();
 
       for (const body of armored) {
         const position = body.body.translation();
@@ -502,20 +512,16 @@ export function createCombat(
     },
 
     /**
-     * Removes every tank, crate and debris piece, cancels pending respawns, mends the walls and puts
-     * the layout's crates back.
+     * Removes every tank, crate, wreck and piece of scrap, cancels pending respawns, mends the walls
+     * and puts the layout's crates back.
      */
     reset() {
       for (const body of [...armored]) {
         remove(body);
       }
 
-      for (const piece of debris.splice(0)) {
-        if (piece.slot !== undefined) {
-          renderer.releaseField(piece.slot);
-        }
-      }
-
+      scrap.reset();
+      wrecks.reset();
       walls.reset();
 
       respawns.length = 0;
@@ -525,7 +531,11 @@ export function createCombat(
   };
 
   function spawnTank(placement: Placement, options: { color: number; team?: string; pullSpeed?: number; respawn?: boolean }) {
+    wrecks.clear(placement, SPAWN_CLEAR);
     const tank = createTank(rapier, world, placement, options.color, options.pullSpeed);
+    // A hard hit throws a hull at hundreds of pixels a second; without continuous collision
+    // detection it would sink into a wall within a step and stick there.
+    tank.hull.enableCcd(true);
     tank.turretAngle = placement.turret ?? placement.rotation;
     const field = createHullField();
     const respawn = options.respawn ? () => spawnTank(placement, options) : undefined;
@@ -560,7 +570,7 @@ export function createCombat(
     tank?: Tank,
     team?: string
   ): Armored {
-    const slot = renderer.allocateField() ?? reclaimDebrisSlot();
+    const slot = renderer.allocateField() ?? scrap.reclaimSlot();
 
     if (slot === undefined) {
       throw new Error('The battle ran out of field slots.');
@@ -599,18 +609,6 @@ export function createCombat(
     refreshShape(entry);
 
     return entry;
-  }
-
-  /** Takes the slot of the oldest debris piece that has one, for a body that needs a slot when all are taken. */
-  function reclaimDebrisSlot() {
-    const index = debris.findIndex((piece) => piece.slot !== undefined);
-
-    if (index < 0) {
-      return undefined;
-    }
-
-    const [piece] = debris.splice(index, 1);
-    return piece.slot;
   }
 
   /** Detaches loose armor, rebuilds colliders from the field and uploads it. */
@@ -711,14 +709,30 @@ export function createCombat(
   }
 
   /**
-   * A body that crashed at `speed` into something that does not move: the blow, its approach
-   * speed above `RAM_SPEED` times its mass, dents its armor, less against a softer wall, and bites
-   * into a breakable wall, which throws up dust of its material. A body rams once per run-up:
-   * contacts within `RAM_COOLDOWN` s of its last ram leave no mark.
+   * A body that crashed at `speed` into something tanks cannot push. A tank driving into it nose
+   * first rams it: the blow, its approach speed above `RAM_SPEED`, up to a tank's top speed, times its mass,
+   * dents its armor, less against a softer wall, bites into a breakable wall and may shove a wreck,
+   * which throws up dust of their material. A tank rams once per run-up: contacts within
+   * `RAM_COOLDOWN` s of its last ram leave no mark. A body thrown against it, by a hit or a crash,
+   * or brushing it with a corner or a side, only dents, as two bodies do when they crash.
    *
    * @param direction - Unit direction from the rammer into what it hit.
    */
   function ramWall(handle: number, rammer: Armored, point: Point, direction: Point, speed: number) {
+    // A body thrown against a wall, by a hit or by another, or brushing it with a corner or a side
+    // as it turns, only dents, as in a crash of two bodies.
+    const heading = rammer.body.rotation();
+    const nose = toLocal(rammer.body, point).x > RAM_NOSE;
+    const facing = Math.cos(heading) * direction.x + Math.sin(heading) * direction.y > RAM_FACING;
+
+    if (!nose || !facing || rammer.move.x * direction.x + rammer.move.y * direction.y < RAM_AIM) {
+      if (speed >= CRASH_SPEED) {
+        dentAt(rammer, point, { x: -direction.x, y: -direction.y }, (speed - CRASH_SPEED) * CRASH_DEPTH_PER_SPEED * THROWN_SHARE);
+      }
+
+      return;
+    }
+
     // Pressing on into a wall that just gave way is not another ram.
     if (clock - rammer.rammedAt < RAM_COOLDOWN) {
       return;
@@ -726,12 +740,14 @@ export function createCombat(
 
     rammer.rammedAt = clock;
     const at = rammer.body.translation();
-    const blow = (speed - RAM_SPEED) * rammer.body.mass();
+    const blow = (Math.min(speed, RAM_TOP_SPEED) - RAM_SPEED) * rammer.body.mass();
     const material = walls.ram(handle, { field: rammer.field, x: at.x, y: at.y, angle: rammer.body.rotation() }, direction, blow);
-    dentAt(rammer, point, { x: -direction.x, y: -direction.y }, blow * RAM_DENT * (material?.ram.hardness ?? 1));
+    const wreck = material ? undefined : wrecks.ram(handle, point, direction, blow);
+    const dust = material?.color ?? wreck?.color;
+    dentAt(rammer, point, { x: -direction.x, y: -direction.y }, blow * RAM_DENT * (material?.ram.hardness ?? wreck?.hardness ?? 1));
 
-    if (material) {
-      spawnDust(point, direction, material.color.map((channel) => channel * 0.6));
+    if (dust) {
+      spawnDust(point, direction, dust.map((channel) => channel * 0.6));
     }
   }
 
@@ -790,8 +806,8 @@ export function createCombat(
   }
 
   /**
-   * What a shot does where it meets something: it chips a wall, detonates a core, chips armor
-   * met head on, or glances off armor and flies on.
+   * What a shot does where it meets something: it chips a wall or a wreck, detonates a core,
+   * chips armor met head on, or glances off armor and flies on.
    *
    * @param canBounce - Whether the shot may fly on after a glancing hit; a spent one only scuffs the armor.
    * @returns Where and in which direction a ricochet flies on, or `undefined` when the shot stops here.
@@ -804,6 +820,13 @@ export function createCombat(
     blow: Pick<ShellSpec, 'hole' | 'depth' | 'knockback'>,
     canBounce: boolean
   ) {
+    if (hit.wreck) {
+      wrecks.chip(hit.wreck, end, direction, blow);
+      impact(end, { x: -direction.x, y: -direction.y });
+      spawnDust(end, direction, hit.wreck.color);
+      return undefined;
+    }
+
     if (!hit.target) {
       const material = hit.tile && walls.chip(end, direction, hit.tile, blow.hole / SHELL_HOLE);
       impact(end, { x: -direction.x, y: -direction.y });
@@ -981,13 +1004,13 @@ export function createCombat(
   }
 
   /**
-   * Finds the first armor, core, wall or rubble within `maxDistance` along a ray, skipping bodies
-   * for which `skip` returns true.
+   * Finds the first armor, core, wreck, wall or rubble within `maxDistance` along a ray, skipping
+   * bodies for which `skip` returns true.
    *
    * @param overRubble - Pixels from the start over which the ray passes over rubble.
    */
   function castShot(start: Point, direction: Point, skip: (body: Armored) => boolean, maxDistance: number, overRubble = 0) {
-    let best: { distance: number; target?: Armored; part?: 'armor' | 'core'; tile?: Tile } = { distance: maxDistance };
+    let best: { distance: number; target?: Armored; part?: 'armor' | 'core'; tile?: Tile; wreck?: WreckHit } = { distance: maxDistance };
 
     for (const body of armored) {
       if (skip(body)) {
@@ -999,6 +1022,12 @@ export function createCombat(
       if (hit && hit.distance < best.distance) {
         best = { distance: hit.distance, target: body, part: hit.part };
       }
+    }
+
+    const wreck = wrecks.cast(start, direction, best.distance);
+
+    if (wreck) {
+      best = { distance: wreck.distance, wreck: wreck.wreck };
     }
 
     const wall = walls.cast(start, direction, best.distance, overRubble);
@@ -1176,7 +1205,10 @@ export function createCombat(
     }
   }
 
-  /** Blows a body apart from its core: light, fire, smoke, the whole armor as debris, and a wreck fire left burning. */
+  /**
+   * Blows a tank up from its core: light, fire, smoke, the turret thrown off, and the hull left
+   * standing as a burning wreck, torn open around the core.
+   */
   function destroy(body: Armored, direction: Point) {
     const center = body.body.translation();
     const velocity = body.body.linvel();
@@ -1203,71 +1235,52 @@ export function createCombat(
       burning.puff(center.x + between(-8, 8), center.y + between(-8, 8), Math.cos(angle) * speed, Math.sin(angle) * speed, between(1.5, 3.5), between(5, 9));
     }
 
-    for (const fragment of shatter(body.field, 7, MIN_FRAGMENT_CELLS, random)) {
-      launchFragment(body, fragment, toWorld(body.body, { x: fragment.centerX, y: fragment.centerY }), 260, direction);
-    }
-
     if (body.tank) {
       const angle = between(0, Math.PI * 2);
-      debris.push({
+      scrap.launch({
+        shape: 'turret',
         x: center.x,
         y: center.y,
         angle: body.tank.turretAngle,
         vx: velocity.x + Math.cos(angle) * 90 + direction.x * 60,
         vy: velocity.y + Math.sin(angle) * 90 + direction.y * 60,
         spin: between(-12, 12),
-        age: 0,
-        life: between(3, 4.5),
-        color: rgb(body.color)
+        color: rgb(body.color),
+        material: 'metal'
       });
     }
 
     // The wreck burns where it stood until it burns out.
     burning.ignite(center, WRECK_FIRE_SPREAD, options.wreckFire ?? WRECK_FIRE_LIFE, WRECK_FIRE_LIGHT, 0.5);
 
+    const at = { x: center.x, y: center.y, angle: body.body.rotation() };
     remove(body);
+    wrecks.add({ field: body.field, ...at, color: rgb(body.color), team: body.team, core: HULL_CORE, direction });
     scheduleRespawn(body);
     reportDestroyed(body);
   }
 
-  /** Turns a piece knocked out of a wall into debris, if a field slot is free for it. */
-  function addWallDebris(piece: { field: DamageField; x: number; y: number; angle: number; vx: number; vy: number; color: readonly number[] }) {
-    const slot = renderer.allocateField();
-
-    if (slot === undefined) {
-      return;
-    }
-
-    renderer.uploadField(slot, piece.field);
-    debris.push({ ...piece, slot, spin: between(-5, 5), age: 0, life: between(2.5, 4) });
+  /** Sends a piece knocked out of a wall flying; it lands and stays as scrap. */
+  function addWallDebris(piece: Parameters<Parameters<typeof createWalls>[4]['onDebris']>[0]) {
+    scrap.launch({ ...piece, shape: piece.field, spin: between(-5, 5) });
   }
 
-  /** Turns a cut-off piece into debris flying away from `from`'s center. */
+  /** Sends a cut-off piece of armor flying away from `from`'s center; it lands and stays as scrap. */
   function launchFragment(from: Armored, fragment: Fragment, at: Point, speed: number, push?: Point) {
-    const slot = renderer.allocateField();
-
-    if (slot === undefined) {
-      return;
-    }
-
     const center = from.body.translation();
     const velocity = from.body.linvel();
     const away = normalize({ x: at.x - center.x, y: at.y - center.y });
     const kick = between(0.4, 1) * speed;
-    const piece = recenter(fragment);
-    renderer.uploadField(slot, piece);
-    debris.push({
-      field: piece,
-      slot,
+    scrap.launch({
+      shape: recenter(fragment),
       x: at.x,
       y: at.y,
       angle: from.body.rotation(),
       vx: velocity.x + away.x * kick + (push?.x ?? 0) * 60,
       vy: velocity.y + away.y * kick + (push?.y ?? 0) * 60,
       spin: between(-8, 8),
-      age: 0,
-      life: between(2.5, 4),
-      color: rgb(from.color)
+      color: rgb(from.color),
+      material: 'metal'
     });
   }
 
@@ -1344,20 +1357,8 @@ type Armored = {
   respawn: (() => void) | undefined;
 };
 
-/** A piece of armor or a turret flying off without physics, fading at the end of its life. */
-type Debris = {
-  field?: DamageField;
-  slot?: number;
-  x: number;
-  y: number;
-  angle: number;
-  vx: number;
-  vy: number;
-  spin: number;
-  age: number;
-  life: number;
-  color: readonly number[];
-};
+/** A wreck a shot met. */
+type WreckHit = NonNullable<ReturnType<Wrecks['cast']>>['wreck'];
 
 /** A shell in flight. */
 type Shell = {
@@ -1381,6 +1382,10 @@ type Shell = {
 };
 
 const STOP = { x: 0, y: 0 };
+/** A piece of scrap landing this many pixels inside a wall or a wreck is buried and gone. */
+const BURIED = 3;
+/** A tank coming back to its spot lets any wreck this close to it fall apart. */
+const SPAWN_CLEAR = 45;
 const WRECK_FIRE_SPREAD = 10;
 const WRECK_FIRE_LIFE = 12;
 const WRECK_FIRE_LIGHT = 140;
@@ -1422,7 +1427,6 @@ const CORE_LIGHT = 32;
 const CORE_HEIGHT = 3;
 const HULL_HEIGHT = 6;
 const CRATE_HEIGHT = 8;
-const DEBRIS_HEIGHT = 2;
 const MUZZLE_LIGHT_LIFE = 0.16;
 const MUZZLE_LIGHT_SPEED = 1100;
 const IMPACT_LIGHT = 45;
@@ -1449,11 +1453,24 @@ const CRASH_DEPTH_PER_SPEED = 0.012;
 const RAM_SPEED = 70;
 const RAM_DENT = 0.055;
 const RAM_COOLDOWN = 0.5;
+/**
+ * A tank rams only while it drives into the wall, its drive input at most about 50 degrees off the
+ * contact's normal, and no harder than at `RAM_TOP_SPEED`, a little over a medium tank's top speed,
+ * however hard a hit threw it. Thrown against something that does not move, a body dents
+ * `THROWN_SHARE` times as deep as in a crash with another body.
+ */
+const RAM_AIM = 0.6;
+/**
+ * A ram strikes with the nose: the contact lies more than `RAM_NOSE` px ahead of the hull's center
+ * and the hull faces within about 30 degrees of the contact's normal.
+ */
+const RAM_NOSE = 8;
+const RAM_FACING = 0.86;
+const RAM_TOP_SPEED = 150;
+const THROWN_SHARE = 1.6;
 const MAX_CRASH_DEPTH = 4;
 const CRASH_RADIUS = 7;
 const MIN_FRAGMENT_CELLS = 6;
-const DEBRIS_DRAG = 2.2;
-const DEBRIS_FADE = 1;
 const RESPAWN_DELAY = 5;
 const EXHAUST_RATE = 8 / 1.5;
 const EXHAUST_OFFSET = { x: -16, y: -8 };

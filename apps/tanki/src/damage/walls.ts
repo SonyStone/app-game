@@ -31,7 +31,8 @@ type Point = { x: number; y: number };
  *
  * @param options.random - Source of randomness in [0, 1) for crater outlines and breakage.
  * @param options.onDebris - Receives a piece of wall knocked loose, with its field centered on
- *   its own center, where that center is in the world, the wall's angle and the piece's velocity.
+ *   its own center, where that center is in the world, the wall's angle, the piece's velocity and
+ *   what it is made of.
  * @param options.onChange - Called after a refresh or reset with the world bounds of an area where
  *   walls changed shape; neighboring changed tiles are reported together.
  */
@@ -42,7 +43,7 @@ export function createWalls(
   layout: CombatLayout,
   options: {
     random: () => number;
-    onDebris: (piece: { field: DamageField; x: number; y: number; angle: number; vx: number; vy: number; color: readonly number[] }) => void;
+    onDebris: (piece: { field: DamageField; x: number; y: number; angle: number; vx: number; vy: number; color: readonly number[]; material: WallMaterial }) => void;
     onChange: (bounds: Bounds) => void;
   }
 ) {
@@ -453,7 +454,8 @@ export function createWalls(
       angle: tile.wall.rotation ?? 0,
       vx: outward.x * kick + tile.push.x * speed * 0.8,
       vy: outward.y * kick + tile.push.y * speed * 0.8,
-      color: tile.material.color
+      color: tile.material.color,
+      material: materialOf(tile.wall)
     });
   }
 

@@ -14,6 +14,7 @@ import { MEDIUM_TANK } from './tanks';
 import { createTeamBoard, type Member, type TeamBoard } from './team';
 
 type Point = { x: number; y: number };
+type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
 /**
  * A king of the hill match, red against blue, four tanks a side: the player and three bots for
@@ -50,11 +51,11 @@ export function createKothMatch(
     random,
     onHit: (target, shooter) => noteShot(byTank.get(target), shooter),
     onDestroyed: destroyed,
-    // Shot-apart walls open new ways and lines of fire; the grid follows where they changed.
-    onWallsChanged: (bounds) => navChanges.push(grow(bounds, NAV_REACH))
+    // Shot-apart walls open new ways and lines of fire, wrecks close some; the grid follows where they changed.
+    onWallsChanged: (bounds) => navChanges.push({ area: grow(bounds, NAV_REACH), changed: bounds })
   });
-  // Areas of the grid to bring up to date with the walls, one a step so no step does much work.
-  const navChanges: { minX: number; minY: number; maxX: number; maxY: number }[] = [];
+  // Areas of the grid to bring up to date with the walls and wrecks, one a step so no step does much work.
+  const navChanges: { area: Bounds; changed: Bounds }[] = [];
   const grid = createNavGrid(map);
   const scenery = createScenery(renderer, map, { red: rgb(TEAM_COLORS.red), blue: rgb(TEAM_COLORS.blue) });
   const kits = createKits(renderer, map.kits, combat);
@@ -417,12 +418,12 @@ export function createKothMatch(
     feed.push({ id: feedId++, at: time, killer: credited, victim: member });
   }
 
-  /** Brings the oldest changed area of the grid up to date with the walls. */
+  /** Brings the oldest changed area of the grid up to date with the walls and wrecks. */
   function updateGrid() {
-    const area = navChanges.shift();
+    const change = navChanges.shift();
 
-    if (area) {
-      updateNavGrid(grid, area, (point) => combat.obstacleDistance(point, NAV_CAP));
+    if (change) {
+      updateNavGrid(grid, change.area, (point) => combat.obstacleDistance(point, NAV_CAP), change.changed);
     }
   }
 
@@ -520,7 +521,7 @@ function createMembers(human: boolean): Member[] {
 }
 
 /** `bounds` grown by `margin` on every side. */
-function grow(bounds: { minX: number; minY: number; maxX: number; maxY: number }, margin: number) {
+function grow(bounds: Bounds, margin: number) {
   return { minX: bounds.minX - margin, minY: bounds.minY - margin, maxX: bounds.maxX + margin, maxY: bounds.maxY + margin };
 }
 

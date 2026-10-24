@@ -1,4 +1,4 @@
-import { canDrive, findPath, type NavGrid } from './navigation';
+import { canDrive, findPath, obstacleDistance, type NavGrid } from './navigation';
 
 type Point = { x: number; y: number };
 
@@ -15,6 +15,9 @@ export type Obstacle = { x: number; y: number; radius: number };
  * A tank that wants to move but has not for a while is stuck, for example against a crate it
  * cannot shove or another tank: it backs off to one side for a moment, alternating sides, and
  * then plans again.
+ *
+ * The hull trails its tow point and cuts corners, so a tank given its heading eases off when its
+ * nose is about to meet a wall: it touches walls gently instead of ramming them.
  */
 export function createDriver(grid: NavGrid) {
   let path: Point[] = [];
@@ -58,13 +61,14 @@ export function createDriver(grid: NavGrid) {
      * @param obstacles - Moving bodies nearby other than this tank.
      * @param options.arrive - Distance from the destination at which the tank stops; defaults to 14 px.
      * @param options.cost - Extra cell costs for planning, as for `findPath`.
+     * @param options.heading - The hull's heading in radians, for easing off before a wall ahead.
      */
     steer(
       now: number,
       position: Point,
       destination: Point | undefined,
       obstacles: readonly Obstacle[],
-      options: { arrive?: number; cost?: (cell: number) => number } = {}
+      options: { arrive?: number; cost?: (cell: number) => number; heading?: number } = {}
     ): Point {
       const arrive = options.arrive ?? 14;
 
@@ -104,7 +108,8 @@ export function createDriver(grid: NavGrid) {
         return unstick.direction;
       }
 
-      return { x: steered.x * throttle, y: steered.y * throttle };
+      const ease = options.heading === undefined ? 1 : easeBeforeWall(position, options.heading, steered);
+      return { x: steered.x * throttle * ease, y: steered.y * throttle * ease };
     },
 
     /** Forgets the path and the stall history, for a new tank; the clock may have started over. */
@@ -119,6 +124,18 @@ export function createDriver(grid: NavGrid) {
       unstick = undefined;
     }
   };
+
+  /** Throttle for driving along `toward`: eased off when the hull's nose, heading that way, is about to meet an obstacle. */
+  function easeBeforeWall(position: Point, heading: number, toward: Point) {
+    const ahead = { x: Math.cos(heading), y: Math.sin(heading) };
+
+    if (ahead.x * toward.x + ahead.y * toward.y < 0.5) {
+      return 1;
+    }
+
+    const nose = { x: position.x + ahead.x * NOSE, y: position.y + ahead.y * NOSE };
+    return obstacleDistance(grid, nose) < BRAKE_GAP ? BRAKE_THROTTLE : 1;
+  }
 
   function plan(now: number, position: Point, destination: Point, cost: ((cell: number) => number) | undefined) {
     goal = { x: destination.x, y: destination.y };
@@ -185,6 +202,13 @@ const STALL_DISTANCE = 6;
 const STUCK_TIME = 1.2;
 const UNSTICK_TIME = 0.7;
 const UNSTICK_ANGLE = 0.9;
+/**
+ * A tank whose nose, `NOSE` px ahead of its center, is closer than `BRAKE_GAP` px to an obstacle
+ * drives at `BRAKE_THROTTLE`, slow enough that touching a wall is no ram.
+ */
+const NOSE = 22;
+const BRAKE_GAP = 8;
+const BRAKE_THROTTLE = 0.4;
 /** Radius of a hull for avoidance, and the gap within which other bodies push it aside. */
 const HULL_RADIUS = 22;
 const AVOID_GAP = 45;
