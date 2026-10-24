@@ -1,5 +1,6 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 import type { OpenedPsd, PsdClient, PsdResultOf, RenderedPixels } from '../psd-worker';
+import { requiresWindowedRendering } from '../psd-worker/protocol';
 
 /** What the canvas shows: our render, Photoshop's saved merged image, or the heat map of their difference. */
 export type ViewMode = 'ours' | 'photoshop' | 'difference';
@@ -14,10 +15,16 @@ export function createComparison(
   opened: Accessor<PsdResultOf<OpenedPsd> | undefined>,
   render: Accessor<PsdResultOf<RenderedPixels> | undefined>
 ) {
-  const [view, setView] = createSignal<ViewMode>('ours');
+  const [chosen, setView] = createSignal<ViewMode>('ours');
+  const view = createMemo(() => {
+    const document = opened();
+    return document?.ok && requiresWindowedRendering(document.value.info) ? 'ours' : chosen();
+  });
   const merged = createMemo(() => {
     const document = opened();
-    return document?.ok ? client.merged(document.value.document) : undefined;
+    return document?.ok && !requiresWindowedRendering(document.value.info)
+      ? client.merged(document.value.document)
+      : undefined;
   });
   const difference = createMemo(() => {
     if (view() !== 'difference') {
@@ -26,7 +33,9 @@ export function createComparison(
 
     const document = opened();
     const current = render();
-    return document?.ok && current?.ok ? client.difference(document.value.document, current.value.render) : undefined;
+    return document?.ok && current?.ok && !current.value.window
+      ? client.difference(document.value.document, current.value.render)
+      : undefined;
   });
 
   return { view, setView, merged, difference };

@@ -1,0 +1,467 @@
+import { loadPsdViewer, photoshopDefaultSettings, type PsdRegionPixels } from '@app-game/psd/viewer';
+import { readFile } from 'node:fs/promises';
+import { createRoot, createSignal, flush } from 'solid-js';
+import { expect, it, vi } from 'vitest';
+import { largePsb } from '../../../packages/psd/test/largePsb';
+import { makePsdClient, type PsdClient, type PsdResultOf, type PsdWorkerPort } from '../src/features/psd-worker';
+import type { PsdRequest, WindowRequest } from '../src/features/psd-worker/protocol';
+import { makePsdWorkerHost } from '../src/features/psd-worker/workerHost';
+import { createWindowedRender } from '../src/features/viewport/createWindowedRender';
+import { makeWindowRenderer, planWindow, type WindowSnapshot } from '../src/features/viewport/makeWindowRenderer';
+
+it('renders a generated large PSB through the worker and refuses whole-canvas operations', async () => {
+  const { client, sent } = connect();
+  const opened = value(await client.open(largePsb().buffer as ArrayBuffer));
+  expect(opened.opening.reader).toBe('strict');
+  const renderer = makeWindowRenderer(client);
+  const snapshot = { opened, settings: photoshopDefaultSettings, visibility: [] };
+  const rendered = value(
+    await renderer.render(
+      snapshot,
+      { scale: 1, x: -299000, y: -299000 },
+      { width: 144, height: 144 },
+      new AbortController().signal,
+      vi.fn()
+    )
+  );
+  expect(rendered.window).toMatchObject({ source: 'layers', step: 1, strategy: 'window', exactToLayerRender: true });
+  const pixel = ((299008 - rendered.window!.top) * rendered.width + 299008 - rendered.window!.left) * 4;
+  expect([...rendered.pixels.subarray(pixel, pixel + 4)]).toEqual([255, 0, 0, 255]);
+  expect(sent.some((request) => request.type === 'renderWindow' && request.window.kind === 'regions')).toBe(true);
+  expect(await client.render(opened.document, photoshopDefaultSettings, [])).toMatchObject({
+    ok: false,
+    error: { kind: 'unsupported' }
+  });
+  expect(await client.merged(opened.document)).toMatchObject({ ok: false, error: { kind: 'unsupported' } });
+  expect(value(await client.detectBlending(opened.document, photoshopDefaultSettings, [])).linearBlending).toBeNull();
+  client.dispose();
+});
+
+it('transfers typed budget refusals without breaking subsequent worker requests', async () => {
+  const codec = await loadPsdViewer();
+  const open = codec.PsdDocumentHandle.openWithBudget;
+  const refused = vi.spyOn(codec.PsdDocumentHandle, 'openWithBudget').mockImplementationOnce((bytes, options) =>
+    open(bytes, { ...options, allocationBytes: 1 })
+  );
+  const { client } = connect();
+  try {
+    expect(await client.open(largePsb().buffer as ArrayBuffer)).toMatchObject({
+      ok: false,
+      error: {
+        kind: 'budget',
+        resource: 'allocation bytes',
+        limit: 1n,
+        message: expect.stringContaining("exceeds the viewer's resource budget")
+      }
+    });
+    const opened = value(await client.open(largePsb().buffer as ArrayBuffer));
+    expect(opened.info).toMatchObject({ width: 300000, height: 300000 });
+  } finally {
+    refused.mockRestore();
+    client.dispose();
+  }
+});
+
+it('preserves audited allocation failures through the facade and worker and permits another open', async () => {
+  const codec = await loadPsdViewer();
+  const refused = vi.spyOn(codec.PsdDocumentHandle, 'openWithBudget').mockImplementationOnce(() => {
+    throw Object.assign(new Error('buffer allocation failed'), { name: 'PsdAllocationError', requested: 4096n });
+  });
+  const { client } = connect();
+  try {
+    expect(await client.open(largePsb().buffer as ArrayBuffer)).toEqual({
+      ok: false,
+      error: { kind: 'allocation', message: 'buffer allocation failed', requested: 4096n }
+    });
+    expect(value(await client.open(largePsb().buffer as ArrayBuffer)).info.width).toBe(300000);
+  } finally {
+    refused.mockRestore();
+    client.dispose();
+  }
+});
+
+it('assembles cached fixture tiles and invalidates them after edits', async () => {
+  const { client, sent } = connect();
+  const bytes = await readFile(new URL('../src/features/examples/assets/adjustment-stack.psd', import.meta.url));
+  const opened = value(
+    await client.open(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer)
+  );
+  const whole = value(await client.render(opened.document, photoshopDefaultSettings, []));
+  const renderer = makeWindowRenderer(client);
+  const snapshot = { opened, settings: photoshopDefaultSettings, visibility: [] };
+  const image = value(
+    await renderer.render(
+      snapshot,
+      { scale: 1, x: 0, y: 0 },
+      { width: 96, height: 96 },
+      new AbortController().signal,
+      vi.fn()
+    )
+  );
+  expect(image.pixels).toEqual(whole.pixels);
+  const count = sent.length;
+  await renderer.render(
+    snapshot,
+    { scale: 1.25, x: 0, y: 0 },
+    { width: 96, height: 96 },
+    new AbortController().signal,
+    vi.fn()
+  );
+  expect(sent).toHaveLength(count);
+  const edited = value(
+    await renderer.render(
+      { ...snapshot, visibility: [[4, false]] },
+      { scale: 1, x: 0, y: 0 },
+      { width: 96, height: 96 },
+      new AbortController().signal,
+      vi.fn()
+    )
+  );
+  expect(edited.pixels).not.toEqual(whole.pixels);
+  expect(sent).toHaveLength(count + 1);
+  renderer.clear();
+  expect(renderer.cacheBytes()).toBe(0);
+  client.dispose();
+});
+
+it('bounds the LRU while panning and samples correctly across 512-pixel tile edges', async () => {
+  const { client, calls } = synthetic();
+  const renderer = makeWindowRenderer(client);
+  const snapshot = fakeSnapshot(100000, 100000);
+  // At scale 1/3 the complete overview is too large, so regions are sampled at stride three.
+  for (let index = 0; index < 12; index++) {
+    const image = value(
+      await renderer.render(
+        snapshot,
+        { scale: 1 / 3, x: -index * 700, y: -index * 700 },
+        { width: 300, height: 300 },
+        new AbortController().signal,
+        vi.fn()
+      )
+    );
+    for (const [x, y] of [
+      [0, 0],
+      [171, 173],
+      [image.width - 1, image.height - 1]
+    ]) {
+      const offset = (y * image.width + x) * 4;
+      expect([...image.pixels.subarray(offset, offset + 4)]).toEqual([
+        (image.window!.left + x * 3) % 256,
+        (image.window!.top + y * 3) % 256,
+        0,
+        255
+      ]);
+    }
+
+    expect(renderer.cacheBytes()).toBeLessThanOrEqual(32 * 1024 * 1024);
+  }
+
+  expect(calls.length).toBeGreaterThan(32);
+});
+
+it('replaces saved pixels with fresh overviews and never caches the potentially stale preview', async () => {
+  const { client, calls } = synthetic();
+  const renderer = makeWindowRenderer(client);
+  const snapshot = fakeSnapshot(30806, 45624);
+  const preview = vi.fn();
+  const image = value(
+    await renderer.render(
+      snapshot,
+      { scale: 1 / 64, x: 0, y: 0 },
+      { width: 600, height: 800 },
+      new AbortController().signal,
+      preview
+    )
+  );
+  expect(preview.mock.calls[0][0].window).toMatchObject({ source: 'savedComposite', exactToLayerRender: false });
+  expect(image.window).toMatchObject({ source: 'layers', exactToLayerRender: true, step: 64 });
+  expect(calls.map((call) => call.kind)).toEqual(['saved', 'overview']);
+  await renderer.render(
+    snapshot,
+    { scale: 1 / 64, x: 10, y: 10 },
+    { width: 600, height: 800 },
+    new AbortController().signal,
+    preview
+  );
+  expect(calls).toHaveLength(2);
+  await renderer.render(
+    { ...snapshot },
+    { scale: 1 / 64, x: 10, y: 10 },
+    { width: 600, height: 800 },
+    new AbortController().signal,
+    preview
+  );
+  expect(calls.map((call) => call.kind)).toEqual(['saved', 'overview', 'overview']);
+});
+
+it('never introduces a saved preview after displaying regions or changing render inputs', async () => {
+  const { client, calls } = synthetic();
+  const renderer = makeWindowRenderer(client);
+  const snapshot = fakeSnapshot(30806, 45624);
+  const signal = new AbortController().signal;
+  const preview = vi.fn();
+  await renderer.render(snapshot, { scale: 1, x: 0, y: 0 }, { width: 100, height: 100 }, signal, preview);
+  await renderer.render(
+    { ...snapshot, visibility: [[1, false]] },
+    { scale: 1 / 64, x: 0, y: 0 },
+    { width: 600, height: 800 },
+    signal,
+    preview
+  );
+  expect(calls.map((call) => call.kind)).toEqual(['regions', 'overview']);
+  expect(preview).not.toHaveBeenCalled();
+});
+
+it('returns a fresh-layer refusal after a saved first frame instead of leaving it as a successful final image', async () => {
+  const { client } = synthetic();
+  const wrapped = {
+    renderWindow: vi
+      .fn<PsdClient['renderWindow']>()
+      .mockImplementation(async (...args) =>
+        args[3].kind === 'overview'
+          ? { ok: false, error: { kind: 'unsupported', message: 'spatial fallback exceeds the budget' } }
+          : client.renderWindow(...args)
+      )
+  };
+  const preview = vi.fn();
+  const result = await makeWindowRenderer(wrapped).render(
+    fakeSnapshot(30806, 45624),
+    { scale: 1 / 64, x: 0, y: 0 },
+    { width: 600, height: 800 },
+    new AbortController().signal,
+    preview
+  );
+  expect(preview).toHaveBeenCalledOnce();
+  expect(result).toMatchObject({ ok: false, error: { kind: 'unsupported' } });
+});
+
+it('cancels in-flight tile assembly before any later batch, and ignores its late reply', async () => {
+  const { client } = synthetic();
+  let finish!: () => void;
+  const wrapped = {
+    renderWindow: vi.fn<PsdClient['renderWindow']>().mockImplementation(
+      (...args) =>
+        new Promise((resolve) => {
+          finish = async () => resolve(await client.renderWindow(...args));
+        })
+    )
+  };
+  const renderer = makeWindowRenderer(wrapped);
+  const controller = new AbortController();
+  const preview = vi.fn();
+  const rendering = renderer.render(
+    fakeSnapshot(300000, 300000),
+    { scale: 1, x: 0, y: 0 },
+    { width: 1600, height: 1600 },
+    controller.signal,
+    preview
+  );
+  controller.abort();
+  finish();
+  expect(await rendering).toBeUndefined();
+  expect(wrapped.renderWindow).toHaveBeenCalledOnce();
+  expect(renderer.cacheBytes()).toBe(0);
+  expect(preview).not.toHaveBeenCalled();
+});
+
+it('drops intermediate pan/zoom requests in the worker queue, including an aborted in-flight reply', async () => {
+  const sent: PsdRequest[] = [];
+  const port: PsdWorkerPort = {
+    onmessage: null,
+    onerror: null,
+    onmessageerror: null,
+    terminate: vi.fn(),
+    postMessage: (message) => {
+      sent.push(message);
+    }
+  };
+  const client = makePsdClient(port);
+  const controllers = Array.from({ length: 3 }, () => new AbortController());
+  const window = { kind: 'overview', step: 64 } as const;
+  const first = client.renderWindow(1, photoshopDefaultSettings, [], window, controllers[0].signal);
+  const second = client.renderWindow(1, photoshopDefaultSettings, [], window, controllers[1].signal);
+  controllers[0].abort();
+  controllers[1].abort();
+  const third = client.renderWindow(
+    1,
+    photoshopDefaultSettings,
+    [],
+    { kind: 'regions', rectangles: [{ left: 10, top: 10, width: 5, height: 5 }] },
+    controllers[2].signal
+  );
+  expect(await first).toMatchObject({ ok: false, error: { kind: 'superseded' } });
+  expect(await second).toMatchObject({ ok: false, error: { kind: 'superseded' } });
+  expect(sent).toHaveLength(1);
+  port.onmessage!({ data: { id: sent[0].id, type: 'windowRendered', images: [], milliseconds: 0 } });
+  await vi.waitFor(() => expect(sent).toHaveLength(2));
+  expect(sent[1]).toMatchObject({ window: { kind: 'regions' } });
+  port.onmessage!({ data: { id: sent[1].id, type: 'windowRendered', images: [], milliseconds: 0 } });
+  expect(await third).toMatchObject({ ok: true });
+  client.dispose();
+});
+
+it('clears temporary saved frames on pan cancellation and rejects late overview completion', async () => {
+  const state = reactiveRenderer();
+  flush();
+  expect(state.jobs[0].window.kind).toBe('saved');
+  state.jobs[0].resolve({ ok: true, value: { images: [singlePixel('savedComposite')], milliseconds: 1 } });
+  await vi.waitFor(() => {
+    flush();
+    expect(state.jobs).toHaveLength(2);
+  });
+  expect(value(state.render()).window?.source).toBe('savedComposite');
+  state.pan({ scale: 1, x: -1000, y: -1000 });
+  flush();
+  expect(state.jobs[1].signal.aborted).toBe(true);
+  expect(state.render()).toBeUndefined();
+  expect(state.jobs[2].window.kind).toBe('regions');
+  state.jobs[1].resolve({ ok: true, value: { images: [singlePixel('layers')], milliseconds: 1 } });
+  await Promise.resolve();
+  flush();
+  expect(state.render()).toBeUndefined();
+  state.dispose();
+  expect(state.jobs[2].signal.aborted).toBe(true);
+  state.jobs[2].resolve({ ok: false, error: { kind: 'superseded', message: 'disposed' } });
+});
+
+it('clears the saved first frame when fresh layer rendering fails', async () => {
+  const state = reactiveRenderer();
+  flush();
+  state.jobs[0].resolve({ ok: true, value: { images: [singlePixel('savedComposite')], milliseconds: 1 } });
+  await vi.waitFor(() => {
+    flush();
+    expect(state.jobs).toHaveLength(2);
+  });
+  expect(value(state.render()).window?.source).toBe('savedComposite');
+  state.jobs[1].resolve({ ok: false, error: { kind: 'unsupported', message: 'work limit' } });
+  await vi.waitFor(() => {
+    flush();
+    expect(state.busy()).toBe(false);
+  });
+  expect(state.render()).toMatchObject({ ok: false, error: { kind: 'unsupported' } });
+  state.dispose();
+});
+
+it('plans bounded overviews and viewport-only regions, including empty/off-canvas views', () => {
+  expect(
+    planWindow({ width: 30806, height: 45624 }, { scale: 1 / 64, x: 0, y: 0 }, { width: 1000, height: 768 })
+  ).toEqual({ kind: 'overview', step: 64 });
+  expect(
+    planWindow({ width: 300000, height: 300000 }, { scale: 1, x: 5000, y: 5000 }, { width: 1000, height: 768 })
+  ).toBeUndefined();
+  const plan = planWindow({ width: 300000, height: 300000 }, { scale: 1, x: 0, y: 0 }, { width: 8000, height: 8000 });
+  expect(plan?.kind).toBe('regions');
+  if (plan?.kind === 'regions') {
+    expect(
+      Math.ceil(plan.rectangle.width / plan.step) * Math.ceil(plan.rectangle.height / plan.step)
+    ).toBeLessThanOrEqual(4_194_304);
+  }
+});
+
+function connect() {
+  const sent: PsdRequest[] = [];
+  const port: PsdWorkerPort = {
+    onmessage: null,
+    onerror: null,
+    onmessageerror: null,
+    terminate: vi.fn(),
+    postMessage(message, transfer) {
+      sent.push(message);
+      void host.receive(structuredClone(message, { transfer }));
+    }
+  };
+  const host = makePsdWorkerHost((reply, transfer) => {
+    const data = structuredClone(reply, { transfer });
+    queueMicrotask(() => port.onmessage?.({ data }));
+  });
+  return { client: makePsdClient(port), sent };
+}
+
+function fakeSnapshot(width: number, height: number): WindowSnapshot {
+  return {
+    opened: { document: 1, info: { width, height, depth: 8 } } as WindowSnapshot['opened'],
+    settings: photoshopDefaultSettings,
+    visibility: []
+  };
+}
+
+/** Pixel values encode coordinates so misplaced and mis-sampled tile edges fail independently of the planner. */
+function synthetic() {
+  const calls: WindowRequest[] = [];
+  const client: Pick<PsdClient, 'renderWindow'> = {
+    async renderWindow(_document, _settings, _visibility, window) {
+      calls.push(window);
+      const rectangles = window.kind === 'regions' ? window.rectangles : [{ left: 0, top: 0, width: 8, height: 8 }];
+      const images: PsdRegionPixels[] = rectangles.map((rectangle) => {
+        const pixels = new Uint8Array(rectangle.width * rectangle.height * 4);
+        for (let y = 0; y < rectangle.height; y++) {
+          for (let x = 0; x < rectangle.width; x++) {
+            pixels.set([(rectangle.left + x) % 256, (rectangle.top + y) % 256, 0, 255], (y * rectangle.width + x) * 4);
+          }
+        }
+
+        return {
+          ...rectangle,
+          pixels,
+          step: window.kind === 'regions' ? 1 : window.step,
+          source: window.kind === 'saved' ? 'savedComposite' : 'layers',
+          strategy: 'window',
+          exactToLayerRender: window.kind !== 'saved',
+          approximations: []
+        };
+      });
+      return { ok: true, value: { images, milliseconds: 1 } };
+    }
+  };
+  return { client, calls };
+}
+
+function value<T>(result: PsdResultOf<T> | undefined): T {
+  if (!result?.ok) {
+    throw new Error(result ? result.error.message : 'no result');
+  }
+
+  return result.value;
+}
+
+/** Drives the owned reactive binding with controllable worker replies, including replies arriving after disposal. */
+function reactiveRenderer() {
+  const jobs: {
+    window: WindowRequest;
+    signal: AbortSignal;
+    resolve: (result: Awaited<ReturnType<PsdClient['renderWindow']>>) => void;
+  }[] = [];
+  const client: Pick<PsdClient, 'renderWindow'> = {
+    renderWindow: (_document, _settings, _visibility, window, signal) =>
+      new Promise((resolve) => {
+        jobs.push({ window, signal, resolve });
+      })
+  };
+  return createRoot((dispose) => {
+    const [view, pan] = createSignal({ scale: 1 / 64, x: 0, y: 0 });
+    const snapshot = fakeSnapshot(30806, 45624);
+    const state = createWindowedRender(
+      client,
+      () => ({ ok: true, value: snapshot.opened }),
+      () => snapshot.settings,
+      () => [],
+      { view, size: () => ({ width: 100, height: 100 }) }
+    );
+    return { ...state, jobs, pan, dispose };
+  });
+}
+
+function singlePixel(source: PsdRegionPixels['source']): PsdRegionPixels {
+  return {
+    left: 0,
+    top: 0,
+    width: 1,
+    height: 1,
+    step: 64,
+    pixels: new Uint8Array(4),
+    strategy: 'window',
+    source,
+    exactToLayerRender: source === 'layers',
+    approximations: []
+  };
+}

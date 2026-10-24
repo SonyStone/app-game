@@ -1,5 +1,6 @@
 import {
   createFontLibrary,
+  openPsd,
   openPsdLikePhotoshop,
   type PsdFailure,
   type PsdFontLibrary,
@@ -8,21 +9,34 @@ import {
   type PsdRenderSettings,
   type PsdViewerDocument
 } from '@app-game/psd/viewer';
-import type { BlendingDetection, PsdReply, PsdRequest } from './protocol';
+import { addFontFile, type SessionFont } from '../fonts/addFontFile';
+import {
+  requiresWindowedRendering,
+  windowWorkPixels,
+  type BlendingDetection,
+  type PsdReply,
+  type PsdRequest
+} from './protocol';
 
 /**
  * The worker side of the protocol, independent of the worker global so tests can drive it directly. It holds one open
  * document and the full-depth composites of its two latest renders, so the UI can still compare the render it shows
  * while the next one is already running; opening another document closes the previous one, even when the new one
- * fails or waits for an answer to a Photoshop prompt. Documents open as Photoshop opens them (`openPsdLikePhotoshop`).
+ * fails or waits for an answer to a Photoshop prompt. Small documents open as Photoshop opens them; large canvases
+ * use the strict, lazy reader because recovery still decodes whole channels. Large-canvas requests never run
+ * whole-document compositing, comparison or blending detection. Window calls admit up to 2 GiB live and count
+ * the retained host input; typed budget refusals travel to the UI as ordinary failed replies.
  * The renders a blending
  * detection made wait for the next render request, which takes the one with its settings and visibility instead of
  * compositing again; the others are freed then. It also holds the font library, created on first use and kept across
- * documents, which renders with `typeLayers` use. Requests run one at a time in arrival order. `post` sends a reply with the buffers to transfer.
+ * documents, for imported cache mixing and optional rerasterization. Adding fonts releases prepared renders. Requests
+ * run one at a time in arrival order. `post` sends a reply with the buffers to transfer.
  */
 export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable[]) => void) {
-  let document: { id: number; viewer: PsdViewerDocument } | undefined;
+  let document: { id: number; viewer: PsdViewerDocument; inputBytes: number } | undefined;
   let fonts: PsdFontLibrary | undefined;
+  const sessionFonts = new Map<string, SessionFont>();
+  const suppliedFonts = () => [...sessionFonts.values()].sort((a, b) => a.name.localeCompare(b.name));
   const renders = new Map<number, PsdRender>();
   // Detection renders by `renderKey`, until the next render request.
   const prepared = new Map<string, PsdRender>();
@@ -43,13 +57,19 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
   async function handle(request: PsdRequest) {
     if (request.type === 'open') {
       close();
-      const opened = await openPsdLikePhotoshop(request.bytes, request.answers);
+      // Recovery opening decodes whole channels. Inspect only the fixed header before choosing that path.
+      const header = new DataView(request.bytes);
+      const large =
+        header.byteLength >= 26 &&
+        header.getUint32(0) === 0x38425053 &&
+        requiresWindowedRendering({ width: header.getUint32(18), height: header.getUint32(14) });
+      const opened = large ? await openPsd(request.bytes) : await openPsdLikePhotoshop(request.bytes, request.answers);
       if (!opened.ok) {
         post({ id: request.id, type: 'failed', error: opened.error }, []);
         return;
       }
 
-      document = { id: ++nextDocument, viewer: opened.value };
+      document = { id: ++nextDocument, viewer: opened.value, inputBytes: request.bytes.byteLength };
       post(
         {
           id: request.id,
@@ -67,13 +87,29 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
 
     if (request.type === 'addFonts') {
       const library = (fonts ??= await createFontLibrary());
-      const results = request.fonts.map((bytes) => library.add(bytes));
-      post({ id: request.id, type: 'fontsAdded', results, fonts: library.fonts() }, []);
+      releasePrepared();
+      const results = request.fonts.map((bytes, index) =>
+        addFontFile(library, bytes, request.sources?.[index] ?? `font file ${request.id}:${index}`)
+      );
+      const rasterNames = new Set(library.fonts().map((font) => font.name));
+      for (const result of results) {
+        if (result.ok) {
+          for (const face of result.value) {
+            sessionFonts.set(face.name, {
+              ...face,
+              active: face.active || sessionFonts.get(face.name)?.active || false,
+              raster: rasterNames.has(face.name)
+            });
+          }
+        }
+      }
+
+      post({ id: request.id, type: 'fontsAdded', results, fonts: suppliedFonts() }, []);
       return;
     }
 
     if (request.type === 'listFonts') {
-      post({ id: request.id, type: 'fonts', fonts: fonts?.fonts() ?? [] }, []);
+      post({ id: request.id, type: 'fonts', fonts: suppliedFonts() }, []);
       return;
     }
 
@@ -89,7 +125,43 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
     }
 
     const viewer = document.viewer;
+    const windowed = requiresWindowedRendering(viewer.info);
+    if (windowed && ['render', 'merged', 'difference', 'textSupport'].includes(request.type)) {
+      post(
+        failed(request, {
+          kind: 'unsupported',
+          message: 'This operation requires a whole-document composite; use the windowed layer view for this canvas.'
+        }),
+        []
+      );
+      return;
+    }
+
     switch (request.type) {
+      case 'renderWindow': {
+        const start = performance.now();
+        // Admission includes the host input in addition to WASM-owned document storage.
+        const budget = { liveBytes: 2 * 1024 * 1024 * 1024, retainedBytes: document.inputBytes };
+        const settings = { ...request.settings, maxWorkPixels: windowWorkPixels, budget };
+        const window = request.window;
+        const result =
+          window.kind === 'regions'
+            ? viewer.renderRegions(window.rectangles, settings, request.visibility, fonts)
+            : window.kind === 'overview'
+              ? viewer.renderOverview(window.step, settings, request.visibility, fonts)
+              : viewer.savedOverview(window.step, windowWorkPixels, budget);
+        if (!result.ok) {
+          post(failed(request, result.error), []);
+          return;
+        }
+
+        const images = Array.isArray(result.value) ? result.value : [result.value];
+        post(
+          { id: request.id, type: 'windowRendered', images, milliseconds: performance.now() - start },
+          images.map((image) => image.pixels.buffer)
+        );
+        return;
+      }
       case 'render': {
         const key = renderKey(request.settings, request.visibility);
         const reused = prepared.get(key);
@@ -114,6 +186,8 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
           renders.delete(old);
         }
 
+        // Keep every WASM report, including saved comp/frame selection and display-conversion approximations,
+        // in the existing approximation list.
         const { width, height, depth, pixels, milliseconds, approximations } = rendered.value;
         post(
           {
@@ -159,13 +233,20 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
 
       case 'detectBlending': {
         releasePrepared();
-        const detection = detectBlending(viewer, request.settings, request.visibility);
+        const detection = windowed
+          ? { linearBlending: null, textGamma: null, differing: { encoded: null, linear: null, otherTextGamma: null } }
+          : detectBlending(viewer, request.settings, request.visibility);
         post({ id: request.id, type: 'blending', detection }, []);
         return;
       }
 
       case 'documentFonts': {
         const report = viewer.fonts(fonts);
+        if (report.ok) {
+          for (const font of report.value.fonts) {
+            font.available = sessionFonts.has(font.name) || font.available;
+          }
+        }
         post(
           report.ok ? { id: request.id, type: 'documentFonts', report: report.value } : failed(request, report.error),
           []
@@ -190,7 +271,21 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
         }
 
         // Adjustment and group records hold no pixels; their failure is part of the reply, not of the request.
-        const pixels = viewer.layerPixels(request.index);
+        const bounds = detail.value.properties.bounds;
+        const mask = detail.value.mask;
+        const rectangles =
+          mask && !('error' in mask) ? [bounds, mask.rect, ...(mask.real ? [mask.real.rect] : [])] : [bounds];
+        const previewPixels = rectangles.reduce(
+          (area, rect) => area + Math.max(0, rect.right - rect.left) * Math.max(0, rect.bottom - rect.top),
+          0
+        );
+        const pixels =
+          windowed && (previewPixels > windowWorkPixels || (mask && 'error' in mask))
+            ? {
+                ok: false as const,
+                error: { kind: 'unsupported' as const, message: 'This layer is too large for a whole-layer preview.' }
+              }
+            : viewer.layerPixels(request.index);
         const transfer = pixels.ok
           ? [pixels.value.pixels.buffer, ...pixels.value.masks.map((mask) => mask.values.buffer)]
           : [];
@@ -274,8 +369,13 @@ function failed(request: PsdRequest, error: PsdFailure): PsdReply {
 
 /** Identifies a render request by its settings and visibility overrides, whatever the order of the settings' fields. */
 function renderKey(settings: PsdRenderSettings, visibility: [number, boolean][]): string {
+  const { grayProfile, ...scalarSettings } = settings;
   // The key list also filters nested objects, so it names the keys of a saved state too.
-  return JSON.stringify([settings, visibility], [...Object.keys(settings), 'frame', 'comp'].sort());
+  // Keep profile bytes in an array: the scalar-key whitelist would erase a Uint8Array's numeric keys.
+  return JSON.stringify(
+    [scalarSettings, visibility, grayProfile ? Array.from(grayProfile) : null],
+    [...Object.keys(scalarSettings), 'frame', 'comp'].sort()
+  );
 }
 
 /** Whether the second of two differing-sample counts is smaller: `null` when either is missing or they are equal. */

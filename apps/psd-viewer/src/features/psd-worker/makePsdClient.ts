@@ -1,7 +1,6 @@
 import type {
   PsdDifference,
   PsdDocumentFonts,
-  PsdFontInfo,
   PsdImage,
   PsdInfo,
   PsdLayerDetail,
@@ -9,11 +8,21 @@ import type {
   PsdLayerPixels,
   PsdOpenAnswers,
   PsdOpening,
+  PsdRegionPixels,
   PsdRenderSettings,
   PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
-import type { BlendingDetection, PsdReply, PsdRequest, PsdResultOf, RenderedPixels, WorkerFailure } from './protocol';
+import type { SessionFont } from '../fonts/addFontFile';
+import type {
+  BlendingDetection,
+  PsdReply,
+  PsdRequest,
+  PsdResultOf,
+  RenderedPixels,
+  WindowRequest,
+  WorkerFailure
+} from './protocol';
 
 /**
  * Talks to a PSD worker: each call posts one request and resolves with its reply as a typed result. Renders are
@@ -27,9 +36,7 @@ export function makePsdClient(worker: PsdWorkerPort) {
   let nextId = 0;
   let crash: Error | undefined;
   let rendering = false;
-  let queued:
-    | { request: RenderRequest; settle: (result: PsdResultOf<RenderedPixels>) => void; reject: (error: Error) => void }
-    | undefined;
+  let queued: { request: RenderRequest; settle: (reply: PsdReply) => void; reject: (error: Error) => void } | undefined;
 
   worker.onmessage = (event) => {
     const entry = pending.get(event.data.id);
@@ -66,14 +73,69 @@ export function makePsdClient(worker: PsdWorkerPort) {
   }
 
   /** Renders the open document `document` with `settings` and visibility overrides. */
-  function render(
+  async function render(
     document: number,
     settings: PsdRenderSettings,
     visibility: [number, boolean][]
   ): Promise<PsdResultOf<RenderedPixels>> {
-    return new Promise((settle, reject) => {
-      queued?.settle({ ok: false, error: { kind: 'superseded', message: 'a newer render replaced this one' } });
-      queued = { request: { type: 'render', document, settings: { ...settings }, visibility }, settle, reject };
+    const reply = await scheduleRender({ type: 'render', document, settings: { ...settings }, visibility });
+    return reply.type === 'rendered' ? { ok: true, value: reply.render } : failure(reply);
+  }
+
+  /**
+   * Renders a bounded window through the same single-flight queue as whole renders. Aborting removes queued work and
+   * discards an in-flight reply. A synchronous WASM call already running finishes before the newest request starts.
+   */
+  async function renderWindow(
+    document: number,
+    settings: PsdRenderSettings,
+    visibility: [number, boolean][],
+    window: WindowRequest,
+    signal: AbortSignal
+  ): Promise<PsdResultOf<{ images: PsdRegionPixels[]; milliseconds: number }>> {
+    const reply = await scheduleRender(
+      { type: 'renderWindow', document, settings: { ...settings }, visibility, window },
+      signal
+    );
+    return reply.type === 'windowRendered'
+      ? { ok: true, value: { images: reply.images, milliseconds: reply.milliseconds } }
+      : failure(reply);
+  }
+
+  function scheduleRender(request: RenderRequest, signal?: AbortSignal): Promise<PsdReply> {
+    return new Promise((resolve, reject) => {
+      const superseded: PsdReply = {
+        id: 0,
+        type: 'failed',
+        error: { kind: 'superseded', message: 'a newer render replaced this one' }
+      };
+      const cleanup = () => signal?.removeEventListener('abort', abort);
+      const job = {
+        request,
+        settle(reply: PsdReply) {
+          cleanup();
+          resolve(reply);
+        },
+        reject(error: Error) {
+          cleanup();
+          reject(error);
+        }
+      };
+      const abort = () => {
+        if (queued === job) {
+          queued = undefined;
+        }
+
+        job.settle(superseded);
+      };
+      if (signal?.aborted) {
+        abort();
+        return;
+      }
+
+      signal?.addEventListener('abort', abort, { once: true });
+      queued?.settle(superseded);
+      queued = job;
       startRender();
     });
   }
@@ -112,25 +174,26 @@ export function makePsdClient(worker: PsdWorkerPort) {
   }
 
   /**
-   * Adds font files to the worker's font library, transferring their buffers; resolves with each file's font or why
+   * Adds font files to the worker's font library, transferring their buffers; resolves with each file's faces or why
    * it was refused, in order, and the library after adding.
    */
   async function addFonts(
-    fonts: ArrayBuffer[]
-  ): Promise<PsdResultOf<{ results: PsdResultOf<PsdFontInfo>[]; fonts: PsdFontInfo[] }>> {
-    const reply = await send({ type: 'addFonts', fonts }, fonts);
+    fonts: ArrayBuffer[],
+    sources?: string[]
+  ): Promise<PsdResultOf<{ results: PsdResultOf<SessionFont[]>[]; fonts: SessionFont[] }>> {
+    const reply = await send({ type: 'addFonts', fonts, sources }, fonts);
     return reply.type === 'fontsAdded'
       ? { ok: true, value: { results: reply.results, fonts: reply.fonts } }
       : failure(reply);
   }
 
   /** The fonts in the worker's font library, sorted by PostScript name. */
-  async function fonts(): Promise<PsdResultOf<PsdFontInfo[]>> {
+  async function fonts(): Promise<PsdResultOf<SessionFont[]>> {
     const reply = await send({ type: 'listFonts' });
     return reply.type === 'fonts' ? { ok: true, value: reply.fonts } : failure(reply);
   }
 
-  /** The fonts the document's type layers use, and which of them the worker's library holds. */
+  /** The document's fonts, their availability, and supplied releases differing from the recorded versions. */
   async function documentFonts(document: number): Promise<PsdResultOf<PsdDocumentFonts>> {
     const reply = await send({ type: 'documentFonts', document });
     return reply.type === 'documentFonts' ? { ok: true, value: reply.report } : failure(reply);
@@ -138,7 +201,7 @@ export function makePsdClient(worker: PsdWorkerPort) {
 
   /**
    * Whether type layer record `index` re-renders from its text with the worker's library; `null` for other records.
-   * The worker re-renders the layer once to decide.
+   * The worker re-renders the layer once to decide and reports supplied release mismatches separately from missing fonts.
    */
   async function textSupport(document: number, index: number): Promise<PsdResultOf<PsdTextSupport | null>> {
     const reply = await send({ type: 'textSupport', document, index });
@@ -160,10 +223,7 @@ export function makePsdClient(worker: PsdWorkerPort) {
     queued = undefined;
     rendering = true;
     send(job.request)
-      .then(
-        (reply) => job.settle(reply.type === 'rendered' ? { ok: true, value: reply.render } : failure(reply)),
-        job.reject
-      )
+      .then(job.settle, job.reject)
       .finally(() => {
         rendering = false;
         startRender();
@@ -196,6 +256,7 @@ export function makePsdClient(worker: PsdWorkerPort) {
   return {
     open,
     render,
+    renderWindow,
     merged,
     difference,
     detectBlending,
@@ -242,7 +303,7 @@ export function createPsdWorker(): PsdWorkerPort {
   }) as unknown as PsdWorkerPort;
 }
 
-type RenderRequest = Extract<DistributiveOmit<PsdRequest, 'id'>, { type: 'render' }>;
+type RenderRequest = Extract<DistributiveOmit<PsdRequest, 'id'>, { type: 'render' | 'renderWindow' }>;
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 

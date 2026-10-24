@@ -40,6 +40,27 @@ export function findLayer(nodes: readonly PsdLayerNode[], index: number): PsdLay
   return undefined;
 }
 
+/** Effective visibility of a record, including every parent group; undefined if the record is absent. */
+export function layerVisibility(
+  nodes: readonly PsdLayerNode[],
+  index: number,
+  overrides: ReadonlyMap<number, boolean>
+): boolean | undefined {
+  for (const node of nodes) {
+    const visible = overrides.get(node.index) ?? node.visible;
+    if (node.index === index) {
+      return visible;
+    }
+
+    const child = layerVisibility(node.children ?? [], index, overrides);
+    if (child !== undefined) {
+      return visible && child;
+    }
+  }
+
+  return undefined;
+}
+
 /** Short type labels for the panel's kind column. */
 export const kindLabels: Record<PsdLayerNode['kind'], string> = {
   group: 'Group',

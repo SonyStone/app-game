@@ -13,14 +13,19 @@ export function StatusArea(props: {
   layerNotes: LayerNote[];
   documentNotes: string[];
   onSelect: (index: number) => void;
+  /** Keeps the viewport size stable while the temporary preview is replaced by layer metadata. */
+  windowed?: boolean;
 }) {
   const failure = () => (props.render && !props.render.ok ? props.render.error : undefined);
   const approximations = () => (props.render?.ok ? props.render.value.approximations : []);
+  const windowed = () => props.windowed || (props.render?.ok && props.render.value.window !== undefined);
+  const saved = () => props.render?.ok && props.render.value.window?.source === 'savedComposite';
   const clean = () => !failure() && !approximations().length && !props.layerNotes.length && !props.documentNotes.length;
   return (
     <section
       class={styles.status}
       aria-label="Renderer status"
+      data-windowed={windowed() ? 'true' : undefined}
       data-render-state={failure() ? 'failed' : approximations().length ? 'approximate' : 'exact'}
     >
       <Show when={failure()}>
@@ -31,8 +36,9 @@ export function StatusArea(props: {
             <Show when={error().kind === 'unsupported'}>
               <span>
                 {' '}
-                Photoshop's merged image is still shown in the Photoshop view; try other render settings, or Approximate
-                unsupported settings.
+                {windowed()
+                  ? 'Try other render settings, or Approximate unsupported settings.'
+                  : "Photoshop's merged image is still shown in the Photoshop view; try other render settings, or Approximate unsupported settings."}
               </span>
             </Show>
           </p>
@@ -40,8 +46,11 @@ export function StatusArea(props: {
       </Show>
       <Show when={approximations().length}>
         <p class={styles.approximate}>
-          <strong>Not exactly as in Photoshop:</strong> this render approximates what is listed below. Photoshop's own
-          image is in the Photoshop view.
+          <strong>{saved() ? 'Temporary saved preview:' : 'Not exactly as in Photoshop:'}</strong>{' '}
+          {saved()
+            ? 'may be stale; replacing with a fresh layer render.'
+            : 'This render approximates what is listed below.'}
+          <Show when={!windowed()}> Photoshop's own image is in the Photoshop view.</Show>
         </p>
         <ul class={styles.approximate} aria-label="Approximations">
           <For each={approximations()}>

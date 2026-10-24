@@ -4,7 +4,12 @@ import styles from './comparison.module.css';
 import type { ViewMode } from './createComparison';
 
 /** Segmented buttons choosing what the canvas shows. */
-export function ViewSwitch(props: { view: ViewMode; onView: (view: ViewMode) => void; disabled?: boolean }) {
+export function ViewSwitch(props: {
+  view: ViewMode;
+  onView: (view: ViewMode) => void;
+  disabled?: boolean;
+  windowed?: boolean;
+}) {
   return (
     <div class={styles.switch} role="group" aria-label="View">
       <For each={modes}>
@@ -12,7 +17,7 @@ export function ViewSwitch(props: { view: ViewMode; onView: (view: ViewMode) => 
           <button
             type="button"
             aria-pressed={ariaState(props.view === mode.value)}
-            disabled={props.disabled}
+            disabled={props.disabled || (props.windowed && mode.value !== 'ours')}
             title={mode.title}
             onClick={() => props.onView(mode.value)}
           >

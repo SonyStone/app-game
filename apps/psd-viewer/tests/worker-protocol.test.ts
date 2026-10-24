@@ -1,7 +1,13 @@
-import { photoshopDefaultSettings, type PsdInterpolation, type PsdRenderSettings } from '@app-game/psd/viewer';
+import {
+  loadPsdViewer,
+  photoshopDefaultSettings,
+  type PsdInterpolation,
+  type PsdRenderSettings
+} from '@app-game/psd/viewer';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { expect, it, vi } from 'vitest';
+import { withDifferentFontVersion } from '../../../packages/psd/test/fontRelease';
 import { makePsdClient, type PsdResultOf, type PsdWorkerPort } from '../src/features/psd-worker';
 import type { PsdReply, PsdRequest } from '../src/features/psd-worker/protocol';
 import { makePsdWorkerHost } from '../src/features/psd-worker/workerHost';
@@ -51,6 +57,30 @@ const interpolations: PsdInterpolation[] = [
   'bicubicSharper',
   'bicubicAutomatic'
 ];
+
+it('reuses detection renders for equal Gray profiles and invalidates them when profile bytes change', async () => {
+  const { client } = connect();
+  const opened = value(await client.open(await example('adjustment-stack.psd')));
+  const codec = await loadPsdViewer();
+  const render = vi.spyOn(codec.PsdDocumentHandle.prototype, 'render');
+  const profiled = { ...settings, grayProfile: Uint8Array.of(1, 2, 3) };
+  try {
+    value(await client.detectBlending(opened.document, profiled, []));
+    const detected = render.mock.calls.length;
+    expect(detected).toBeGreaterThan(0);
+    value(await client.render(opened.document, { ...profiled, grayProfile: profiled.grayProfile.slice() }, []));
+    expect(render).toHaveBeenCalledTimes(detected);
+
+    value(await client.detectBlending(opened.document, profiled, []));
+    const beforeChange = render.mock.calls.length;
+    value(await client.render(opened.document, { ...profiled, grayProfile: Uint8Array.of(1, 2, 4) }, []));
+    expect(render).toHaveBeenCalledTimes(beforeChange + 1);
+    expect(render.mock.lastCall?.[0]).toMatchObject({ grayProfile: Uint8Array.of(1, 2, 4) });
+  } finally {
+    render.mockRestore();
+    client.dispose();
+  }
+});
 
 it('opens, renders and compares an example our renderer reproduces exactly', async () => {
   const { client } = connect();
@@ -168,6 +198,7 @@ it('composites CMYK exactly in its channels without the approximate option', asy
   // Only the display conversion to sRGB is approximate.
   expect(render.approximations).toHaveLength(1);
   expect(render.approximations[0]).toMatch(/^8-bit CMYK: composited exactly in its CMYK channels; only the display/);
+  expect(render.pixels).toEqual(value(await client.merged(cmyk.document)).pixels);
   expect(value(await client.difference(cmyk.document, render.render))).toMatchObject({
     unit: 'CMYK level',
     samples: 96 * 96 * 4,
@@ -234,12 +265,14 @@ it('reports the fonts a document needs and refuses to re-render text without the
   expect(value(await client.fonts())).toEqual([]);
   expect(value(await client.documentFonts(document))).toEqual({
     fonts: [{ name: 'Arial-BoldMT', available: false, layers: [1] }],
-    layers: [{ index: 1, name: 'STYLED', visible: true, fonts: ['Arial-BoldMT'] }]
+    layers: [{ index: 1, name: 'STYLED', visible: true, fonts: ['Arial-BoldMT'] }],
+    releaseMismatches: []
   });
   expect(value(await client.textSupport(document, 0))).toBeNull();
   expect(value(await client.textSupport(document, 1))).toEqual({
     fonts: ['Arial-BoldMT'],
     missing: ['Arial-BoldMT'],
+    releaseMismatches: [],
     supported: false,
     reason: 'text rendering: font Arial-BoldMT was not supplied'
   });
@@ -272,14 +305,17 @@ it.skipIf(!arialPaths.every((path) => existsSync(path)))(
     const added = value(await client.addFonts(fonts));
     // The buffers are transferred, not copied.
     expect(transferred[sent.findIndex((request) => request.type === 'addFonts')]).toEqual(fonts);
-    expect(added.results.map((result) => result.ok && result.value.name)).toEqual(['ArialMT', 'Arial-BoldMT']);
+    expect(added.results.map((result) => result.ok && result.value.map((face) => face.name))).toEqual([['ArialMT'], ['Arial-BoldMT']]);
     expect(value(await client.fonts()).map((entry) => entry.name)).toEqual(['Arial-BoldMT', 'ArialMT']);
-    expect(value(await client.documentFonts(document)).fonts).toEqual([
-      { name: 'Arial-BoldMT', available: true, layers: [1] }
-    ]);
+    expect(value(await client.documentFonts(document))).toEqual({
+      fonts: [{ name: 'Arial-BoldMT', available: true, layers: [1] }],
+      layers: [{ index: 1, name: 'STYLED', visible: true, fonts: ['Arial-BoldMT'] }],
+      releaseMismatches: []
+    });
     expect(value(await client.textSupport(document, 1))).toEqual({
       fonts: ['Arial-BoldMT'],
       missing: [],
+      releaseMismatches: [],
       supported: true
     });
 
@@ -291,6 +327,34 @@ it.skipIf(!arialPaths.every((path) => existsSync(path)))(
       differingSamples: 0,
       max: 0
     });
+  }
+);
+
+it.skipIf(!existsSync(arialPaths[1]!))(
+  'preserves supplied release mismatches separately from missing fonts through the worker',
+  async () => {
+    const { client } = connect();
+    const { document } = value(await client.open(await example('type-with-layer-styles.psd')));
+    value(await client.addFonts([withDifferentFontVersion(await systemFont(arialPaths[1]!))]));
+    const report = value(await client.documentFonts(document));
+    expect(report.fonts).toEqual([{ name: 'Arial-BoldMT', available: true, layers: [1] }]);
+    expect(report.releaseMismatches).toEqual([
+      {
+        name: 'Arial-BoldMT',
+        reason: 'font present but a different release',
+        recordedVersion: 'Version 5.01.2x',
+        suppliedVersion: expect.stringMatching(/^X+$/)
+      }
+    ]);
+    expect(value(await client.textSupport(document, 1))).toEqual({
+      fonts: ['Arial-BoldMT'],
+      missing: [],
+      releaseMismatches: report.releaseMismatches,
+      supported: false,
+      reason: 'font present but a different release'
+    });
+    expect(value(await client.textSupport(document, 0))).toBeNull();
+    client.dispose();
   }
 );
 
@@ -423,3 +487,42 @@ async function testAsset(name: string): Promise<ArrayBuffer> {
   const bytes = await readFile(new URL(`assets/${name}`, import.meta.url));
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
+
+const helveticaCollection = '/System/Library/Fonts/HelveticaNeue.ttc';
+
+it.skipIf(!existsSync(helveticaCollection))('registers real TTC faces with original indices across documents', async () => {
+  const { client } = connect();
+  const added = value(await client.addFonts([await systemFont(helveticaCollection)], ['HelveticaNeue.ttc']));
+  const faces = added.results[0];
+  expect(faces?.ok).toBe(true);
+  if (!faces?.ok) {
+    throw new Error('collection registration failed');
+  }
+
+  for (const [name, faceIndex] of [['HelveticaNeue', 0], ['HelveticaNeue-Bold', 1], ['HelveticaNeue-Light', 7], ['HelveticaNeue-Medium', 10]] as const) {
+    expect(faces.value.find((face) => face.name === name)).toMatchObject({ faceIndex, active: true, raster: false });
+  }
+
+  const first = value(await client.open(await example('type-with-layer-styles.psd')));
+  const baseline = value(await client.render(first.document, settings, []));
+  // A partial collection does not turn Arial into a known-missing active face.
+  expect(value(await client.difference(first.document, baseline.render)).differingSamples).toBe(0);
+  const second = value(await client.open(await example('type-with-layer-styles.psd')));
+  expect(value(await client.fonts())).toEqual(added.fonts);
+  expect(value(await client.render(second.document, settings, [])).pixels).toEqual(baseline.pixels);
+  client.dispose();
+});
+
+
+it('abstains from imported font decisions without face bytes, including names-only inventories', async () => {
+  const { client } = connect();
+  const { document } = value(await client.open(await example('type-with-layer-styles.psd')));
+  const baseline = value(await client.render(document, settings, []));
+  for (const availableFonts of [undefined, null, [], ['Arial-BoldMT']]) {
+    const render = value(await client.render(document, { ...settings, availableFonts }, []));
+    expect(render.pixels).toEqual(baseline.pixels);
+    expect(render.approximations).toEqual(baseline.approximations);
+  }
+
+  client.dispose();
+});

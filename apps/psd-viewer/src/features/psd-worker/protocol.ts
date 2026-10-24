@@ -2,7 +2,6 @@ import type {
   PsdDifference,
   PsdDocumentFonts,
   PsdFailure,
-  PsdFontInfo,
   PsdImage,
   PsdInfo,
   PsdLayerDetail,
@@ -10,10 +9,13 @@ import type {
   PsdLayerPixels,
   PsdOpenAnswers,
   PsdOpening,
+  PsdRegionPixels,
+  PsdRegionRect,
   PsdRenderSettings,
   PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
+import type { SessionFont } from '../fonts/addFontFile';
 
 /**
  * A request to the PSD worker. `id` pairs it with its reply. `open` opens as Photoshop does, with `answers` to the
@@ -21,7 +23,8 @@ import type {
  * file Photoshop refuses with a `refused` one. Requests about a document name it by the `document` id its
  * `opened` reply gave; the worker refuses requests for a document it no longer holds with a `stale` failure. The
  * worker keeps one font library for its lifetime, across documents: `addFonts` adds font files to it (their buffers
- * transferred), and renders with `typeLayers` re-render type layers with it.
+ * transferred), and cached renders use its active faces with `typeLayers: false`. Optional `typeLayers` renders use its raster fonts.
+ * Supplied files are partial input, so they never become an `availableFonts` missing-font inventory.
  */
 export type PsdRequest =
   | { id: number; type: 'open'; bytes: ArrayBuffer; answers?: PsdOpenAnswers }
@@ -32,6 +35,14 @@ export type PsdRequest =
       settings: PsdRenderSettings;
       /** Visibility overrides as `[layer record index, visible]`. */
       visibility: [number, boolean][];
+    }
+  | {
+      id: number;
+      type: 'renderWindow';
+      document: number;
+      settings: PsdRenderSettings;
+      visibility: [number, boolean][];
+      window: WindowRequest;
     }
   | { id: number; type: 'merged'; document: number }
   | { id: number; type: 'difference'; document: number; render: number }
@@ -44,13 +55,16 @@ export type PsdRequest =
       visibility: [number, boolean][];
     }
   | { id: number; type: 'layer'; document: number; index: number }
-  | { id: number; type: 'addFonts'; fonts: ArrayBuffer[] }
+  | { id: number; type: 'addFonts'; fonts: ArrayBuffer[]; sources?: string[] }
   | { id: number; type: 'listFonts' }
   | { id: number; type: 'documentFonts'; document: number }
   | { id: number; type: 'textSupport'; document: number; index: number }
   | { id: number; type: 'close' };
 
-/** The worker's answer to the request with the same `id`. Pixel buffers are transferred, never copied. */
+/**
+ * The worker's answer to the request with the same `id`. Pixel buffers are transferred, never copied.
+ * `documentFonts` and `textSupport` preserve the facade's release mismatches, separately from font availability.
+ */
 export type PsdReply =
   | {
       id: number;
@@ -62,6 +76,7 @@ export type PsdReply =
       opening: PsdOpening;
     }
   | { id: number; type: 'rendered'; render: RenderedPixels }
+  | { id: number; type: 'windowRendered'; images: PsdRegionPixels[]; milliseconds: number }
   | { id: number; type: 'merged'; image: PsdImage }
   | { id: number; type: 'difference'; difference: PsdDifference }
   | { id: number; type: 'blending'; detection: BlendingDetection }
@@ -69,12 +84,12 @@ export type PsdReply =
   | {
       id: number;
       type: 'fontsAdded';
-      /** Per file of the request, in order: the font added, or why it was refused. */
-      results: PsdResultOf<PsdFontInfo>[];
+      /** Per file of the request, in order: the faces added, or why it was refused. */
+      results: PsdResultOf<SessionFont[]>[];
       /** The library after adding. */
-      fonts: PsdFontInfo[];
+      fonts: SessionFont[];
     }
-  | { id: number; type: 'fonts'; fonts: PsdFontInfo[] }
+  | { id: number; type: 'fonts'; fonts: SessionFont[] }
   | { id: number; type: 'documentFonts'; report: PsdDocumentFonts }
   | { id: number; type: 'textSupport'; support: PsdTextSupport | null }
   | { id: number; type: 'closed' }
@@ -99,6 +114,8 @@ export type RenderedPixels = PsdImage & {
   depth: 8 | 16 | 32;
   milliseconds: number;
   approximations: string[];
+  /** Present for a viewport surface or overview; its pixels map back into document space at this stride. */
+  window?: Pick<PsdRegionPixels, 'left' | 'top' | 'step' | 'strategy' | 'source' | 'exactToLayerRender'>;
 };
 
 /**
@@ -109,3 +126,17 @@ export type WorkerFailure = PsdFailure | { kind: 'stale' | 'superseded'; message
 
 /** A value or a failure, as the worker reports parts of a reply that may fail on their own. */
 export type PsdResultOf<T> = { ok: true; value: T } | { ok: false; error: WorkerFailure };
+
+/** Bounded rendering operations. Saved pixels are only a temporary first frame. */
+export type WindowRequest =
+  | { kind: 'regions'; rectangles: PsdRegionRect[] }
+  | { kind: 'overview'; step: number }
+  | { kind: 'saved'; step: number };
+
+/** Above this canvas size, avoid whole-document recovery, rendering and comparison allocations. */
+export function requiresWindowedRendering(size: { width: number; height: number }): boolean {
+  return size.width * size.height > 16_777_216 || size.width > 16_384 || size.height > 16_384;
+}
+
+/** At most four million work pixels per window call, including conservative spatial fallbacks. */
+export const windowWorkPixels = 4_194_304;

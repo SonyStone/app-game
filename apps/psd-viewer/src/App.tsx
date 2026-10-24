@@ -7,15 +7,23 @@ import { createPsdDocument, createPsdRender, type PsdSource } from './features/d
 import { ExamplesMenu } from './features/examples';
 import { createFonts, FontsPanel, TextSupportSection } from './features/fonts';
 import { DocumentInspector, LayerInspector } from './features/inspector';
-import { collectNotes, createLayerVisibility, LayersPanel } from './features/layers';
+import { collectNotes, createLayerVisibility, LayersPanel, layerVisibility } from './features/layers';
 import { createFileDrop, fileSource, firstPsd, urlSource } from './features/open-file';
 import { createOpenPrompt, OpeningReport, OpenPromptDialog } from './features/open-like-photoshop';
-import { createPsdWorker, makePsdClient, type PsdResultOf, type WorkerFailure } from './features/psd-worker';
+import {
+  createPsdWorker,
+  makePsdClient,
+  type PsdResultOf,
+  type RenderedPixels,
+  type WorkerFailure
+} from './features/psd-worker';
+import { requiresWindowedRendering } from './features/psd-worker/protocol';
 import { createRenderSettings, RenderSettingsPanel } from './features/render-settings';
 import { ariaState } from './features/shared/format';
 import { createStateChoice, StatesPanel } from './features/states';
 import { StatusArea } from './features/status';
 import { createViewport, RgbaCanvas } from './features/viewport';
+import { createWindowedRender } from './features/viewport/createWindowedRender';
 
 /**
  * PSD Viewer: opens a Photoshop document in a worker, renders it with the Rust compositor and compares the result with
@@ -40,7 +48,14 @@ export function App() {
   });
   const fonts = createFonts(client, opened, selected);
   const { choice: stateChoice, choose: chooseState, withState } = createStateChoice(source);
-  const render = createPsdRender(client, opened, fonts.withFonts(withState(settings)), pairs);
+  const document = () => valueOf(opened());
+  const viewport = createViewport(() => document()?.info, source);
+  const windowed = () => Boolean(document() && requiresWindowedRendering(document()!.info));
+  const renderSettings = fonts.withFonts(withState(settings));
+  const wholeRender = createPsdRender(client, opened, renderSettings, pairs);
+  const windows = createWindowedRender(client, opened, renderSettings, pairs, viewport);
+  const render = () => (windowed() ? windows.render() : wholeRender());
+  const renderWindow = () => valueOf(render())?.window;
   const { view, setView, merged, difference } = createComparison(client, opened, render);
 
   const [tab, setTab] = createSignal<'layer' | 'document'>('document');
@@ -54,7 +69,6 @@ export function App() {
     setTab('layer');
   };
 
-  const document = () => valueOf(opened());
   // An unanswered prompt shows as the prompt dialog, not as a failure.
   const openFailure = () => {
     const failure = failureOf(opened());
@@ -65,7 +79,7 @@ export function App() {
   const layerTextSupport = () => valueOf(fonts.layerSupport());
   const layerFailure = () => failureOf(layer());
   const differenceValue = () => valueOf(difference());
-  const shown = createMemo<PsdImage | undefined>(() => {
+  const shown = createMemo<(PsdImage & { window?: RenderedPixels['window'] }) | undefined>(() => {
     const result = view() === 'ours' ? render() : view() === 'photoshop' ? merged() : difference();
     return result?.ok ? result.value : undefined;
   });
@@ -75,7 +89,6 @@ export function App() {
       ? result.error
       : undefined;
   };
-  const viewport = createViewport(() => document()?.info, source);
   const layerNotes = createMemo(() => collectNotes(document()?.layers ?? []));
   const savedStates = () => {
     const states = document()?.states;
@@ -87,7 +100,7 @@ export function App() {
       return `Opening ${latest(source)?.name ?? ''}…`;
     }
 
-    if (isPending(render)) {
+    if (windows.busy() || isPending(wholeRender)) {
       return 'Rendering…';
     }
 
@@ -138,7 +151,12 @@ export function App() {
           }}
         />
         <span class={styles.spacer} />
-        <ViewSwitch view={latest(view)} onView={(next: ViewMode) => setView(next)} disabled={!document()} />
+        <ViewSwitch
+          view={latest(view)}
+          onView={(next: ViewMode) => setView(next)}
+          disabled={!document()}
+          windowed={windowed()}
+        />
         <div class={styles.zoom} role="group" aria-label="Zoom">
           <button type="button" aria-label="Zoom out" onClick={viewport.zoomOut}>
             −
@@ -190,6 +208,8 @@ export function App() {
               {...viewport.surface}
               data-view={view()}
               data-busy={activity() ? 'true' : 'false'}
+              data-render-source={renderWindow()?.source}
+              data-render-step={renderWindow()?.step}
               data-render-id={(() => {
                 const current = render();
                 return current?.ok ? current.value.render : undefined;
@@ -200,7 +220,9 @@ export function App() {
                   <div
                     class={styles.imageLayer}
                     style={{
-                      transform: viewport.transform(),
+                      transform: image().window
+                        ? `${viewport.transform()} translate(${image().window!.left}px, ${image().window!.top}px) scale(${image().window!.step})`
+                        : viewport.transform(),
                       width: `${image().width}px`,
                       height: `${image().height}px`
                     }}
@@ -256,8 +278,15 @@ export function App() {
               {(current) => (
                 <>
                   <OpeningReport opening={current().opening} />
+                  <Show when={windowed()}>
+                    <p role="note">
+                      Windowed layer view. Large canvases use the strict reader and your blending preferences. Photoshop
+                      recovery, automatic blending detection and whole-image comparison are unavailable at this size.
+                    </p>
+                  </Show>
                   <StatusArea
                     render={render()}
+                    windowed={windowed()}
                     layerNotes={layerNotes()}
                     documentNotes={current().info.notes}
                     onSelect={selectLayer}
@@ -296,6 +325,10 @@ export function App() {
               {(report) => (
                 <FontsPanel
                   report={report()}
+                  render={render()}
+                  visibleOf={(index) =>
+                    stateChoice() ? undefined : layerVisibility(document()?.layers ?? [], index, latest(overrides))
+                  }
                   library={valueOf(fonts.library()) ?? []}
                   reRender={latest(settings).typeLayers}
                   onReRender={(typeLayers) => update({ typeLayers })}
@@ -383,6 +416,10 @@ export function App() {
       return current?.error.kind === 'unsupported'
         ? 'Not rendered: unsupported feature, see the status below the canvas'
         : 'Not rendered';
+    }
+
+    if (current.value.window?.source === 'savedComposite') {
+      return 'Temporary saved preview, rendering fresh layers…';
     }
 
     const approximate = current.value.approximations.length ? ', approximated' : '';
