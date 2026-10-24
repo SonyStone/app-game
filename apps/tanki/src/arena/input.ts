@@ -11,7 +11,8 @@ export type Aim = { kind: 'point'; x: number; y: number } | { kind: 'direction';
  *
  * - Keyboard: WASD or arrows drive, Space fires, Q/E turn the view, +/- zoom. Keys are read by
  *   physical position, so WASD works in any layout.
- * - Mouse: the turret follows the cursor, the left button fires, the wheel zooms.
+ * - Mouse: the turret follows the cursor, the left button fires, the right button is the second
+ *   action, the wheel zooms.
  * - Touch and pen: a touch starting in the left 40% of the screen is a floating drive stick; any
  *   other touch aims at its position and fires while held.
  * - Gamepad: left stick drives, right stick aims, right trigger fires.
@@ -22,6 +23,7 @@ export function makeArenaInput(target: HTMLElement) {
   const keys = new Set<string>();
   let aim: Aim | undefined;
   let mouseFire = false;
+  let mouseAlt = false;
   let zoomFactor = 1;
   let stick: { pointerId: number; origin: Point; knob: Point } | undefined;
   const firePointers = new Set<number>();
@@ -37,6 +39,7 @@ export function makeArenaInput(target: HTMLElement) {
   makeEventListener(window, 'blur', () => {
     keys.clear();
     mouseFire = false;
+    mouseAlt = false;
   });
 
   makeEventListener(target, 'contextmenu', (event) => event.preventDefault());
@@ -56,6 +59,7 @@ export function makeArenaInput(target: HTMLElement) {
     if (event.pointerType === 'mouse') {
       aim = { kind: 'point', x: event.offsetX, y: event.offsetY };
       mouseFire ||= event.button === 0;
+      mouseAlt ||= event.button === 2;
       return;
     }
 
@@ -78,11 +82,18 @@ export function makeArenaInput(target: HTMLElement) {
     if (event.pointerType === 'mouse' || firePointers.has(event.pointerId)) {
       aim = { kind: 'point', x: event.offsetX, y: event.offsetY };
     }
+
+    // A second button pressed or let go while another is held only shows in the buttons of a move.
+    if (event.pointerType === 'mouse') {
+      mouseFire = (event.buttons & 1) !== 0;
+      mouseAlt = (event.buttons & 2) !== 0;
+    }
   });
 
   const release = (event: PointerEvent) => {
     if (event.pointerType === 'mouse') {
       mouseFire = (event.buttons & 1) !== 0;
+      mouseAlt = (event.buttons & 2) !== 0;
     }
 
     if (stick?.pointerId === event.pointerId) {
@@ -127,6 +138,8 @@ export function makeArenaInput(target: HTMLElement) {
         move: applyDeadzone(drive),
         aim,
         fire: mouseFire || firePointers.size > 0 || keys.has('Space') || (pad?.buttons[RIGHT_TRIGGER]?.value ?? 0) > 0.5,
+        /** The second action, such as spinning a gatling or turning a casemate gun: the right mouse button, Shift or the left trigger. */
+        alt: mouseAlt || keys.has('ShiftLeft') || keys.has('ShiftRight') || (pad?.buttons[LEFT_TRIGGER]?.value ?? 0) > 0.5,
         /** View rotation direction: 1 turns the world clockwise. */
         turn: (keys.has('KeyQ') ? 1 : 0) - (keys.has('KeyE') ? 1 : 0),
         /** Zoom multiplier from the wheel since the previous read. */
@@ -167,8 +180,9 @@ const STICK_ZONE = 0.4;
 const STICK_RADIUS = 60;
 const DEADZONE = 0.2;
 
-/** Standard-mapping index of the right trigger, Godot's joypad axis 5. */
+/** Standard-mapping indices of the right trigger, Godot's joypad axis 5, and the left trigger. */
 const RIGHT_TRIGGER = 7;
+const LEFT_TRIGGER = 6;
 
 function axis(keys: ReadonlySet<string>, direction: keyof typeof DRIVE_KEYS) {
   return DRIVE_KEYS[direction].some((code) => keys.has(code)) ? 1 : 0;

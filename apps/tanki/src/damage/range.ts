@@ -2,8 +2,9 @@ import { PLAYER_PULL_SPEED, type Tank } from '../arena/bodies';
 import { PLAYER_COLOR, PROP_COLOR } from '../arena/draw';
 import type { Rapier } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
-import { createCombat, type CombatLayout, type Placement } from './combat';
+import { createCombat, type CombatLayout, type Placement, type TankLook } from './combat';
 import type { createRangeRenderer } from './renderer';
+import type { HullSpec } from './shapes';
 
 type Point = { x: number; y: number };
 
@@ -16,12 +17,20 @@ type Point = { x: number; y: number };
  * seconds.
  *
  * The range owns its Rapier bodies and renderer field slots; `reset` rebuilds everything.
+ *
+ * @param options.lineup - Tanks of these kinds stand in a row in front of the player instead of
+ *   the scattered targets, to compare them side by side.
  */
-export function createDamageRange(rapier: Rapier, world: World, renderer: ReturnType<typeof createRangeRenderer>) {
+export function createDamageRange(
+  rapier: Rapier,
+  world: World,
+  renderer: ReturnType<typeof createRangeRenderer>,
+  options: { lineup?: readonly { hull: HullSpec; mass: number; look: TankLook }[] } = {}
+) {
   const combat = createCombat(rapier, world, renderer, RANGE);
   let player = spawnPlayer();
 
-  RANGE.targets.forEach(spawnTarget);
+  spawnTargets();
 
   return {
     /** The player's tank, replaced on reset. */
@@ -81,18 +90,35 @@ export function createDamageRange(rapier: Rapier, world: World, renderer: Return
     reset() {
       combat.reset();
       player = spawnPlayer();
-      RANGE.targets.forEach(spawnTarget);
+      spawnTargets();
     }
   };
+
+  /** The scattered targets, or the lineup in a row, each turned a little so its turret shows. */
+  function spawnTargets() {
+    if (!options.lineup) {
+      RANGE.targets.forEach((placement) => spawnTarget(placement));
+      return;
+    }
+
+    options.lineup.forEach((kind, index) => {
+      const y = (index - (options.lineup!.length - 1) / 2) * LINEUP_SPACING;
+      spawnTarget({ x: LINEUP_X, y, rotation: 0, turret: 0.12 }, kind);
+    });
+  }
 
   function spawnPlayer() {
     return combat.spawnTank(RANGE.player, { color: PLAYER_COLOR, pullSpeed: PLAYER_PULL_SPEED });
   }
 
-  function spawnTarget(placement: Placement) {
-    combat.spawnTank(placement, { color: PROP_COLOR, respawn: true });
+  function spawnTarget(placement: Placement, kind?: { hull: HullSpec; mass: number; look: TankLook }) {
+    combat.spawnTank(placement, { color: PROP_COLOR, respawn: true, ...kind });
   }
 }
+
+/** Where the lineup stands, ahead of the player, and how far apart its tanks are. */
+const LINEUP_X = -60;
+const LINEUP_SPACING = 60;
 
 /** Layout of the range, in pixels around the origin. */
 const RANGE = {

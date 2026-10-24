@@ -7,13 +7,16 @@ import { createCamera, followTarget, screenToWorldDirection, zoomCamera } from '
 import { makeArenaInput } from '../arena/input';
 import { Rapier2D, useRapier2D } from '../physics/Rapier2D';
 import { createWorld } from '../physics/World';
+import { TANK_CLASS_IDS } from '../koth/tanks';
+import { TANK_CLASSES } from '../koth/classes/classes';
 import { createDamageRange } from './range';
 import { createRangeRenderer, SMOKE_STYLES, type SmokeStyle } from './renderer';
 
 /**
  * The damage range on WebGPU: drive into targets to dent them, shoot their armor off and hit
  * the glowing core at the rear to blow them up. R or the Reset button rebuilds the range. V
- * switches the style of smoke, which the address keeps as `?smoke=`.
+ * switches the style of smoke, which the address keeps as `?smoke=`. With `?classes` the targets
+ * are one tank of each king of the hill class in a row.
  */
 export default function DamageRoute() {
   const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
@@ -82,7 +85,9 @@ function DamageScene(props: { canvas: HTMLCanvasElement; resets: number; smoke: 
   const rapier = useRapier2D();
   const world = createWorld(rapier, { gravity: { x: 0, y: 0 }, lengthUnit: PIXELS_PER_METER });
   const renderer = createRangeRenderer(useGpuCanvas());
-  const range = createDamageRange(rapier, world, renderer);
+  const range = createDamageRange(rapier, world, renderer, {
+    lineup: new URLSearchParams(location.search).has('classes') ? TANK_CLASS_IDS.map((id) => TANK_CLASSES[id]) : undefined
+  });
   const input = makeArenaInput(canvas);
   const camera = createCamera(range.player.hull.translation());
   let lastTime: number | undefined;

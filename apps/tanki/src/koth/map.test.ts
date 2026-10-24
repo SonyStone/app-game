@@ -3,10 +3,12 @@ import { pullSpeedFor } from '../arena/bodies';
 import { createCombat } from '../damage/combat';
 import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
+import { findPerches } from './classes/perch';
+import { TANK_CLASSES } from './classes/classes';
 import { createDriver } from './driver';
 import { KOTH_MAP } from './map';
-import { cellCenter, createNavGrid, findPath, isOpenAt, isOpenCell, pathLength, sampleDistance, type NavGrid } from './navigation';
-import { MEDIUM_TANK } from './tanks';
+import { cellCenter, createNavGrid, findPath, isOpenAt, isOpenCell, pathLength, sampleDistance, sightClear, type NavGrid } from './navigation';
+import { MEDIUM_TANK, TANK_CLASS_IDS, type TankClass } from './tanks';
 
 type Point = { x: number; y: number };
 
@@ -77,6 +79,47 @@ describe('the king of the hill map', () => {
       expect(time).toBeLessThan(6.5);
     }
   }, 30_000);
+
+  it.each(TANK_CLASS_IDS)('lets a %s driven by the bot driver take every route from either spawn to the point, past the kits, without getting stuck', (id) => {
+    const tankClass = TANK_CLASSES[id];
+
+    for (const team of ['red', 'blue'] as const) {
+      const lanes = KOTH_MAP.lanes[team];
+      const side = team === 'red' ? -1 : 1;
+      const kits = KOTH_MAP.kits.filter((kit) => Math.sign(kit.x) === side);
+      const north = kits.filter((kit) => kit.y < 0).sort((a, b) => Math.abs(b.x) - Math.abs(a.x));
+      const south = kits.filter((kit) => kit.y > 0).sort((a, b) => Math.abs(b.x) - Math.abs(a.x));
+      const routes = [[lanes.center], [lanes.north, ...north], [lanes.south, ...south]];
+
+      for (const [index, spawn] of KOTH_MAP.bases[team].spawns.entries()) {
+        const stops = [...routes[index % routes.length], KOTH_MAP.point];
+        const run = driveRoute(grid, tankClass, spawn, stops);
+        const length = stops.reduce((sum, stop, at) => sum + pathLength(findPath(grid, at === 0 ? spawn : stops[at - 1], stop)!), 0);
+
+        expect(run.arrived).toBe(stops.length);
+        expect(run.stalls).toBe(0);
+        // About as quick as its speed drives the path, slowing for the turns.
+        expect(run.time).toBeLessThan(length / tankClass.speed / 0.7 + 0.5 * stops.length);
+      }
+    }
+  }, 60_000);
+
+  it("gives each team's Sniper perches that watch the point along lines longer than its shell flies", () => {
+    for (const team of ['red', 'blue'] as const) {
+      const perches = findPerches(grid, KOTH_MAP, team);
+
+      expect(perches.length).toBeGreaterThanOrEqual(4);
+
+      for (const perch of perches) {
+        expect(sightClear(grid, perch, KOTH_MAP.point)).toBe(true);
+      }
+
+      // Lines through the point reach the enemy's half far beyond it.
+      const longest = Math.max(...perches.map((perch) => openRay(grid, perch, Math.atan2(KOTH_MAP.point.y - perch.y, KOTH_MAP.point.x - perch.x))));
+
+      expect(longest).toBeGreaterThan(TANK_CLASSES.sniper.shell.range);
+    }
+  });
 
   it('lays repair kits out on open ground, large ones on the flanks and small ones beside the point, the same for both teams', () => {
     for (const kit of KOTH_MAP.kits) {
@@ -178,6 +221,54 @@ function driveTime(grid: NavGrid, from: Point & { rotation: number }, to: Point)
   }
 
   return time;
+}
+
+/**
+ * Drives a lone tank of `tankClass` with the bot driver from `from` through each of `stops` in
+ * turn, within 30 px of each and onto the last, for at most 40 s.
+ */
+function driveRoute(grid: NavGrid, tankClass: TankClass, from: Point & { rotation: number }, stops: readonly Point[]) {
+  const world = new rapier.World({ x: 0, y: 0 });
+  world.lengthUnit = 100;
+  const slots = Array.from({ length: 512 }, (_, index) => 511 - index);
+  const renderer = {
+    allocateField: () => slots.pop(),
+    releaseField: (slot: number) => slots.push(slot),
+    uploadField() {},
+    beginBodies() {},
+    addBody() {},
+    spawn() {},
+    addSmokeBall() {},
+    addLight() {},
+    render() {}
+  };
+  const combat = createCombat(rapier, world, renderer as unknown as ReturnType<typeof createRangeRenderer>, { ...KOTH_MAP, crates: [] });
+  const tank = combat.spawnTank(from, {
+    color: 0,
+    pullSpeed: pullSpeedFor(tankClass.speed),
+    hull: tankClass.hull,
+    mass: tankClass.mass,
+    look: tankClass.look
+  });
+  const driver = createDriver(grid);
+  let time = 0;
+  let arrived = 0;
+
+  while (time < 40 && arrived < stops.length) {
+    const at = tank.hull.translation();
+    const stop = stops[arrived];
+
+    if (Math.hypot(at.x - stop.x, at.y - stop.y) < 30) {
+      arrived++;
+      continue;
+    }
+
+    combat.drive(tank, driver.steer(time, at, stop, [], { arrive: 20 }));
+    combat.step(1 / 60);
+    time += 1 / 60;
+  }
+
+  return { arrived, time, stalls: driver.stalls };
 }
 
 function segmentDistance(point: Point, a: Point, b: Point) {

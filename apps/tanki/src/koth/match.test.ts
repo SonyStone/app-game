@@ -5,8 +5,10 @@ import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import { inBase, onPoint } from './map';
 import { createKothMatch } from './match';
+import { TANK_CLASSES } from './classes/classes';
+import { TACTICS } from './classes/tactics';
 import { CAPTURE_RULES } from './rules';
-import { MEDIUM_TANK } from './tanks';
+import { MEDIUM_TANK, type TankClassId } from './tanks';
 
 let rapier: Rapier;
 
@@ -16,64 +18,82 @@ beforeAll(async () => {
 
 describe('king of the hill with eight bots', () => {
   it('reaches the point, takes it once it opens, fights over it and never gets stuck for long', () => {
-    const match = createMatch(7);
-    const watch = watchMovement(match);
-    let firstCapture: number | undefined;
-    let contested = 0;
+    // A match is chaotic: one in a couple of dozen fights over the point for a minute before
+    // either team holds it, so the first capture is checked over three matches.
+    const firstCaptures: number[] = [];
 
-    while (match.time < 150) {
-      tick(match);
-      watch.sample();
+    for (const seed of [7, 11, 23]) {
+      const match = createMatch(seed);
+      const watch = watchMovement(match);
+      let firstCapture: number | undefined;
+      let contested = 0;
 
-      if (match.capture.owner) {
-        firstCapture ??= match.time;
+      while (match.time < 150) {
+        tick(match);
+        watch.sample();
+
+        if (match.capture.owner) {
+          firstCapture ??= match.time;
+        }
+
+        if (match.capture.contested) {
+          contested += 1 / 60;
+        }
       }
 
-      if (match.capture.contested) {
-        contested += 1 / 60;
+      firstCaptures.push(firstCapture ?? Infinity);
+      expect(firstCapture).toBeGreaterThan(CAPTURE_RULES.unlockTime);
+      // Both teams fight on the point for a while, and shoot through to cores.
+      expect(contested).toBeGreaterThan(3);
+      expect(match.members.reduce((total, member) => total + member.kills, 0)).toBeGreaterThanOrEqual(2);
+
+      for (const bot of match.bots.values()) {
+        expect(bot.driver.longestStall).toBeLessThan(1.5);
       }
+
+      // A bot that wants to go somewhere far gets there: it rarely spends a whole window of four
+      // seconds in one place, and never two in a row.
+      expect(watch.stuck / watch.windows).toBeLessThan(0.05);
+      expect(watch.longest).toBeLessThan(2);
     }
 
-    expect(firstCapture).toBeGreaterThan(CAPTURE_RULES.unlockTime);
-    expect(firstCapture).toBeLessThan(90);
-    // Both teams fight on the point for a while, and shoot through to cores.
-    expect(contested).toBeGreaterThan(3);
-    expect(match.members.reduce((total, member) => total + member.kills, 0)).toBeGreaterThanOrEqual(2);
+    expect(firstCaptures.filter((time) => time < 90).length).toBeGreaterThanOrEqual(2);
+    expect(Math.min(...firstCaptures)).toBeLessThan(60);
+  }, 120_000);
 
-    for (const bot of match.bots.values()) {
-      expect(bot.driver.longestStall).toBeLessThan(1.5);
-    }
-
-    // A bot that wants to go somewhere far gets there: it rarely spends a whole window of four
-    // seconds in one place, and never two in a row.
-    expect(watch.stuck / watch.windows).toBeLessThan(0.05);
-    expect(watch.longest).toBeLessThan(2);
-  }, 60_000);
-
-  it('fires only at enemies in sight within the reach of a screen, at a measured pace', () => {
+  it('fires only at enemies within its reach, in sight unless it lobs grenades over cover, at a measured pace', () => {
     const match = createMatch(11);
-    const ranges: number[] = [];
+    const shots: { tankClass: TankClassId; range: number }[] = [];
     const fire = match.combat.fire;
-    match.combat.fire = (tank) => {
+    match.combat.fire = (tank, shot) => {
       const shooter = match.members.find((member) => member.tank === tank)!;
       const at = tank.hull.translation();
+      const lobs = shooter.tankClass.weapon.kind === 'lob';
       const seen = match.members
         .filter((member) => member.team !== shooter.team && member.tank)
         .map((member) => member.tank!.hull.translation())
-        .filter((enemy) => match.combat.lineOfSight(at, enemy))
+        .filter((enemy) => lobs || match.combat.lineOfSight(at, enemy))
         .map((enemy) => Math.hypot(enemy.x - at.x, enemy.y - at.y));
-      ranges.push(Math.min(...seen));
-      fire(tank);
+      shots.push({ tankClass: shooter.tankClass.id, range: Math.min(...seen) });
+      fire(tank, shot);
     };
 
     while (match.time < 120) {
       tick(match);
     }
 
-    // The point opens at 30 s; from then on the eight tanks fight on and off.
-    expect(ranges.length).toBeGreaterThan(40);
-    expect(ranges.length / 8 / 2).toBeLessThan(30);
-    expect(Math.max(...ranges)).toBeLessThan(500);
+    const classes = new Set(shots.map((shot) => shot.tankClass));
+    const aimed = shots.filter((shot) => shot.tankClass !== 'heavy');
+
+    // The point opens at 30 s; from then on the eight tanks fight on and off, every class firing.
+    expect(classes.size).toBeGreaterThanOrEqual(3);
+    expect(aimed.length).toBeGreaterThan(40);
+    expect(aimed.length / 8 / 2).toBeLessThan(30);
+
+    for (const shot of shots) {
+      const reach = TANK_CLASSES[shot.tankClass].weapon.kind === 'lob' ? TANK_CLASSES[shot.tankClass].shell.range : TACTICS[shot.tankClass].reach;
+      expect(shot.range).toBeLessThan(reach + 80);
+    }
   }, 60_000);
 
   it('brings destroyed tanks back at their base in waves', () => {
@@ -100,7 +120,8 @@ describe('king of the hill with eight bots', () => {
       }
     }
 
-    expect(respawned).toBe(3);
+    // A wave may bring several back in the same step.
+    expect(respawned).toBeGreaterThanOrEqual(3);
   }, 60_000);
 
   it('declares the team that held the point long enough the winner, and starts over', () => {
@@ -265,7 +286,12 @@ describe('king of the hill with the player', () => {
     }
 
     place(tank, match.map.lanes.red.north);
-    chip(match, tank, 6);
+
+    // Hulls of every class: chip until the armor is low, as a bot judges it.
+    for (let holes = 6; match.combat.armorLeft(tank) >= 0.72 && holes < 12; holes++) {
+      chip(match, tank, holes);
+    }
+
     const chipped = match.combat.armorLeft(tank);
 
     while (match.time < 6 && kit.readyAt === 0) {

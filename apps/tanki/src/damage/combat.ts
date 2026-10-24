@@ -1,4 +1,4 @@
-import { createTank, driveTank, muzzleOf, type Tank } from '../arena/bodies';
+import { createTank, driveTank, HULL_LINEAR_DAMPING, PULL_ANCHOR, type Tank } from '../arena/bodies';
 import { PROP_COLOR } from '../arena/draw';
 import type { Collider, Rapier, RigidBody } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
@@ -6,11 +6,13 @@ import { createBurning } from './burning';
 import { createCampfire } from './campfire';
 import {
   carve,
+  CHANNELS,
   dent,
   detachLoosePieces,
   isCoreExposed,
   mend,
   raycastField,
+  sampleField,
   scorch,
   solidBoxes,
   surfaceNormal,
@@ -18,6 +20,7 @@ import {
   type Fragment
 } from './field';
 import {
+  CAMERA_HEIGHT,
   KIND_FIELD,
   KIND_FIELD_OPEN,
   KIND_RECT,
@@ -27,11 +30,16 @@ import {
   PARTICLE_SMOKE,
   PARTICLE_TRAIL,
   PARTICLE_SPARK,
+  SUN,
+  TURRET_CASEMATE,
+  TURRET_MEDIUM,
+  TURRET_QUADS,
   type createRangeRenderer
 } from './renderer';
-import { createCrateField, createHullField, createShellField, HULL_CORE } from './shapes';
+import { createCrateField, createGrenadeField, createHullField, createShellField, MEDIUM_HULL, type HullSpec } from './shapes';
 import { createScrap } from './scrap';
-import { createWalls, type Bounds, type Tile } from './walls';
+import { createWalls, RUBBLE_HEIGHT, WALL_BLOW, type Bounds, type Tile } from './walls';
+import { isRolling, launchLob, stepLob, type LobSpec, type LobState } from './weapons/lob';
 import { createWrecks, type Wrecks } from './wrecks';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
@@ -65,6 +73,76 @@ export type ShellSpec = {
   depth: number;
   /** Impulse of a penetrating hit, which knocks the body back. */
   knockback: number;
+  /**
+   * Share of its hole and depth a shell has lost by the end of its range, as damage falls off with
+   * distance in Team Fortress 2; defaults to 0, biting as hard at the end as at the muzzle.
+   */
+  fade?: number;
+  /** Drawn size against the 9 px tank shell; defaults to 1. */
+  size?: number;
+  /** Whether it glances off armor met at a steep angle; defaults to `true`. A shell with a blast goes off instead. */
+  ricochet?: boolean;
+  /** Goes off where it stops, at what it hits or where it falls, with this blast. */
+  blast?: BlastSpec;
+  /** Shrapnel the blast throws out in every direction: `count` small shells of `shell`. */
+  fragments?: { count: number; shell: ShellSpec };
+  /**
+   * Punches through what it hits: up to `armor` pixels of a tank's armor, flying on through the
+   * hole it chipped and so reaching a core that lies that deep, and, with `thin`, clean through
+   * thin bodies such as crates.
+   */
+  pierce?: { armor: number; thin: boolean };
+  /** Flies in an arc instead of along the ground: over low bodies, bouncing off walls, until its fuse burns down. */
+  lob?: LobSpec;
+};
+
+/**
+ * An explosion, which `blast` sets off and shells with a blast set off where they stop: every body
+ * with armor within `radius` and not behind a wall takes a crater on the side facing the blast and
+ * is pushed away from it. Craters and pushes shrink toward the edge of the radius, to half at the
+ * edge, as splash damage falls off in Team Fortress 2. A blast close to a core that was open
+ * before it destroys it.
+ */
+export type BlastSpec = {
+  radius: number;
+  /** Radius and depth of the crater at the blast's center. */
+  hole: number;
+  depth: number;
+  /** Impulse at the center. */
+  knockback: number;
+  /**
+   * Damage to bodies without a core, such as crates and walls that can break, against tanks; 3
+   * makes the blast a wall breaker. Defaults to 1.
+   */
+  structures?: number;
+  /** Share of the knockback the shooter's own tank takes, which lets it jump; its armor is spared. Defaults to 1. */
+  self?: number;
+};
+
+/** How a tank's turret is drawn and where its muzzle is. */
+export type TankLook = {
+  /** One of the renderer's `TURRET_*` looks. */
+  turret: number;
+  /** Distance from the hull's center to the muzzle along the gun, in pixels. */
+  muzzle: number;
+  /** A casemate gun: its superstructure is drawn turned with the hull, and the turret is only its gun. */
+  casemate?: boolean;
+};
+
+/**
+ * A shot for `fire`: the battle's shell, or a hitscan shot without one, along the turret, unless
+ * the shot says otherwise.
+ */
+export type Shot = {
+  shell?: ShellSpec;
+  /** World direction in radians; defaults to the turret's. */
+  angle?: number;
+  /** Offsets in radians from `angle` of the shells of a volley, all fired at once; defaults to one shell straight ahead. */
+  volley?: readonly number[];
+  /** How far a lobbed shell is thrown, in pixels; defaults to its whole range. */
+  reach?: number;
+  /** Size of the muzzle blast and recoil: 1 for a tank gun, less for a machine gun. */
+  flash?: number;
 };
 
 /**
@@ -92,7 +170,10 @@ export type CombatLayout = {
  *
  * Any number of tanks can be driven at once: `drive` sets a tank's input until changed, `fire`
  * shoots its gun. Tanks may belong to teams, and without friendly fire shots pass through the
- * shooter's teammates.
+ * shooter's teammates. Each tank may have a hull, mass and look of its own, and each shot a shell
+ * of its own: a volley of pellets, a rocket that goes off in a blast with shrapnel, a round that
+ * punches through, a grenade lobbed in an arc. `blast` sets off an explosion anywhere; it reaches
+ * every body with armor around it.
  *
  * The battle owns its Rapier bodies and renderer field slots; `reset` rebuilds the crates and
  * removes every tank.
@@ -175,7 +256,8 @@ export function createCombat(
   // Pairs that crashed this step: two bodies meet over several colliders at once, but crash once.
   const crashes: [Armored | undefined, Armored | undefined][] = [];
   const shells: Shell[] = [];
-  const shellDraw = options.shell ? createShellDraw(renderer) : undefined;
+  const shellDraw = createShellDraw(renderer, createShellField());
+  const grenadeDraw = createShellDraw(renderer, createGrenadeField());
 
   layout.crates?.forEach((placement) => spawnCrate(placement));
 
@@ -224,7 +306,8 @@ export function createCombat(
 
     /**
      * Shells in flight: an id unique within the battle, where each is, the unit direction it flies
-     * in, its speed, and the tank that fired it with that tank's team.
+     * in, its speed over the ground, its height for a lobbed one, and the tank that fired it with
+     * that tank's team.
      */
     get shells() {
       return shells.map((shell) => ({
@@ -232,7 +315,9 @@ export function createCombat(
         x: shell.x,
         y: shell.y,
         direction: shell.direction,
-        speed: options.shell?.speed ?? 0,
+        speed: shell.speed,
+        height: shell.lob?.height ?? 0,
+        lobbed: shell.lob !== undefined,
         shooter: shell.shooter,
         team: shell.team
       }));
@@ -246,14 +331,64 @@ export function createCombat(
      * @param tank.pullSpeed - Pull speed in pixels per second at full input.
      * @param tank.respawn - Brings the tank back at `placement` a few seconds after it is destroyed.
      *   A wreck standing on that spot falls apart as the tank comes.
+     * @param tank.hull - Shape of the hull and its core; defaults to the medium tank's.
+     * @param tank.mass - Mass of the hull, 1 for the medium tank. Heavier tanks are pushed less
+     *   by hits, dent less in crashes and shove harder.
+     * @param tank.look - How the turret is drawn and where its muzzle is; defaults to the medium tank's.
      */
-    spawnTank(placement: Placement, tank: { color: number; team?: string; pullSpeed?: number; respawn?: boolean }) {
+    spawnTank(
+      placement: Placement,
+      tank: { color: number; team?: string; pullSpeed?: number; respawn?: boolean; hull?: HullSpec; mass?: number; look?: TankLook }
+    ) {
       return spawnTank(placement, tank);
+    },
+
+    /** Takes `tank` off the field without a trace or a respawn, as when a player changes class in the base. */
+    removeTank(tank: Tank) {
+      const body = byTank.get(tank);
+
+      if (body) {
+        remove(body);
+      }
     },
 
     /** The armor field of `tank`, live; `undefined` once the tank is destroyed. */
     armorOf(tank: Tank) {
       return byTank.get(tank)?.field;
+    },
+
+    /** World position of `tank`'s core, under its armor; `undefined` once the tank is destroyed. */
+    coreOf(tank: Tank) {
+      const body = byTank.get(tank);
+      return body && toWorld(body.body, (body.hull ?? MEDIUM_HULL).core);
+    },
+
+    /** Where `tank`'s muzzle is when its gun points along `angle`, in world radians. */
+    muzzleOf(tank: Tank, angle = tank.turretAngle) {
+      return muzzleAt(tank, angle);
+    },
+
+    /**
+     * How far a ray goes before it meets a wall, a crate or a tank's armor, and which tank it met
+     * if any; `skip` lets it pass through tanks it returns true for.
+     */
+    raycast(from: Point, direction: Point, range: number, skip?: (tank: Tank) => boolean) {
+      const hit = castShot(from, direction, (body) => body.tank !== undefined && (skip?.(body.tank) ?? false), range);
+      return { distance: hit.distance, tank: hit.target?.tank };
+    },
+
+    /** Turns the barrels of a gatling turret to `angle` about their axis, for drawing. */
+    spinBarrels(tank: Tank, angle: number) {
+      const body = byTank.get(tank);
+
+      if (body) {
+        body.spin = angle;
+      }
+    },
+
+    /** Whether `tank` is in the air, thrown by a blast; it cannot drive until it lands. */
+    isAirborne(tank: Tank) {
+      return (byTank.get(tank)?.airborne?.left ?? 0) > 0;
     },
 
     /** Whether a hole in `tank`'s armor leads to its core, so one more hit there destroys it. */
@@ -293,7 +428,9 @@ export function createCombat(
       clock += dt;
 
       for (const body of armored) {
-        if (body.tank) {
+        if (body.tank && body.airborne) {
+          fly(body, dt);
+        } else if (body.tank) {
           driveTank(body.tank, body.move);
         }
 
@@ -329,16 +466,27 @@ export function createCombat(
     },
 
     /**
-     * Fires `tank`'s gun along its turret, with recoil: a hitscan shot, or a shell when the battle
-     * has `options.shell`. The shot chips the first armor it meets, knocking the body back, or
-     * detonates a core; at a glancing angle it ricochets and flies on. Reload is up to the caller.
+     * Fires `tank`'s gun along its turret, with recoil: the shot's shell, else the battle's
+     * `options.shell`, else a hitscan shot. The shot chips the first armor it meets, knocking the
+     * body back, or detonates a core; at a glancing angle it ricochets and flies on. A shell with a
+     * blast goes off where it stops instead. Reload is up to the caller.
      */
-    fire(tank: Tank) {
-      if (options.shell) {
-        launchShell(tank, options.shell);
+    fire(tank: Tank, shot: Shot = {}) {
+      const shell = shot.shell ?? options.shell;
+
+      if (shell) {
+        launchShell(tank, shell, shot);
       } else {
         fire(tank);
       }
+    },
+
+    /**
+     * Sets off an explosion at `at`, as `BlastSpec` describes, credited to `shooter`. Without
+     * friendly fire it spares the shooter's teammates; the shooter's own tank is only pushed.
+     */
+    blast(at: Point, spec: BlastSpec, shooter?: Tank) {
+      explode(at, spec, shooter, shooter && byTank.get(shooter)?.team);
     },
 
     /**
@@ -477,8 +625,9 @@ export function createCombat(
      *
      * @param view - Point on the ground under the camera.
      * @param underlay - Adds markings on the floor, drawn after the floor and before anything on it.
+     * @param overlay - Adds bodies such as sight lines, drawn over the tanks and shells and under the smoke.
      */
-    draw(view: Point, underlay?: () => void) {
+    draw(view: Point, underlay?: () => void, overlay?: () => void) {
       listener = { x: view.x, y: view.y };
       renderer.beginBodies();
       renderer.addBody({
@@ -500,14 +649,33 @@ export function createCombat(
       walls.draw();
       wrecks.draw();
 
+      // Things in the air cast their own long shadow on the ground, where the sun throws it.
       for (const body of armored) {
-        const position = body.body.translation();
+        const lift = liftOf(body);
+
+        if (lift > 0) {
+          const position = body.body.translation();
+          const shadow = shadowOf(position, lift);
+          renderer.addBody({ ...fieldDraw(body.field, body.slot), x: shadow.x, y: shadow.y, angle: body.body.rotation(), color: SHADOW_COLOR, alpha: SHADOW_ALPHA, height: 0 });
+        }
+      }
+
+      for (const shell of shells) {
+        if (shell.lob && shell.lob.height > 0) {
+          const shadow = shadowOf(shell, shell.lob.height);
+          renderer.addBody({ ...grenadeDraw.draw, x: shadow.x, y: shadow.y, angle: 0, color: SHADOW_COLOR, alpha: SHADOW_ALPHA, height: 0 });
+        }
+      }
+
+      for (const body of armored) {
+        const lift = liftOf(body);
+        const seen = seenFrom(view, body.body.translation(), lift);
         renderer.addBody({
-          ...fieldDraw(body.field, body.slot),
+          ...scaled(fieldDraw(body.field, body.slot), seen.scale),
           kind: body.coreOpen ? KIND_FIELD_OPEN : KIND_FIELD,
           height: body.tank ? HULL_HEIGHT : CRATE_HEIGHT,
-          x: position.x,
-          y: position.y,
+          x: seen.x,
+          y: seen.y,
           angle: body.body.rotation(),
           color: rgb(body.color),
           flash: body.flash
@@ -516,11 +684,20 @@ export function createCombat(
 
       for (const body of armored) {
         if (body.tank) {
-          const position = body.body.translation();
+          const position = seenFrom(view, body.body.translation(), liftOf(body));
           const angle = body.tank.turretAngle;
           const kick = body.barrelKick;
+          const look = body.look ?? MEDIUM_LOOK;
+
+          // A casemate is part of the hull: it turns with it, and only the gun inside it aims.
+          if (look.casemate) {
+            renderer.addBody({ ...turretDraw(TURRET_CASEMATE), style: TURRET_CASEMATE, x: position.x, y: position.y, angle: body.body.rotation(), color: rgb(body.color), flash: body.flash, height: CASEMATE_HEIGHT });
+          }
+
           renderer.addBody({
-            ...TURRET_DRAW,
+            ...turretDraw(look.turret),
+            style: look.turret,
+            spin: body.spin,
             x: position.x - Math.cos(angle) * kick,
             y: position.y - Math.sin(angle) * kick,
             angle,
@@ -530,12 +707,24 @@ export function createCombat(
         }
       }
 
-      // Shells cast a shadow of their own and glow on what they pass.
-      for (const shell of shellDraw ? shells : []) {
-        renderer.addBody({ ...shellDraw!.draw, x: shell.x, y: shell.y, angle: Math.atan2(shell.direction.y, shell.direction.x), color: SHELL_COLOR, height: SHELL_HEIGHT });
-        renderer.addLight(shell.x, shell.y, SHELL_LIGHT, 0.5, [1, 0.75, 0.4], SHELL_LIGHT_HEIGHT);
+      // Shells cast a shadow of their own and glow on what they pass; lobbed ones rise toward the camera.
+      for (const shell of shells) {
+        const size = shell.spec.size ?? 1;
+
+        if (shell.lob) {
+          const seen = seenFrom(view, shell, shell.lob.height);
+          renderer.addBody({ ...scaled(grenadeDraw.draw, seen.scale * size), x: seen.x, y: seen.y, angle: shell.lob.age * GRENADE_TUMBLE, color: GRENADE_COLOR, height: 0 });
+          continue;
+        }
+
+        renderer.addBody({ ...scaled(shellDraw.draw, size), x: shell.x, y: shell.y, angle: Math.atan2(shell.direction.y, shell.direction.x), color: SHELL_COLOR, height: SHELL_HEIGHT });
+
+        if (size >= 0.75) {
+          renderer.addLight(shell.x, shell.y, SHELL_LIGHT * size, 0.5, [1, 0.75, 0.4], SHELL_LIGHT_HEIGHT);
+        }
       }
 
+      overlay?.();
       burning.draw();
 
       for (const light of flashes) {
@@ -546,7 +735,7 @@ export function createCombat(
       // An open core glows; the hull around it is taller than the light, so it only shines out through the hole.
       for (const body of armored) {
         if (body.coreOpen) {
-          const core = toWorld(body.body, HULL_CORE);
+          const core = toWorld(body.body, (body.hull ?? MEDIUM_HULL).core);
           const pulse = 0.75 + 0.25 * Math.sin(clock * 9 + body.slot);
           renderer.addLight(core.x, core.y, CORE_LIGHT, pulse, [1, 0.5, 0.15], CORE_HEIGHT);
         }
@@ -572,16 +761,23 @@ export function createCombat(
     }
   };
 
-  function spawnTank(placement: Placement, options: { color: number; team?: string; pullSpeed?: number; respawn?: boolean }) {
+  function spawnTank(
+    placement: Placement,
+    options: { color: number; team?: string; pullSpeed?: number; respawn?: boolean; hull?: HullSpec; mass?: number; look?: TankLook }
+  ) {
     wrecks.clear(placement, SPAWN_CLEAR);
-    const tank = createTank(rapier, world, placement, options.color, options.pullSpeed);
-    // A hard hit throws a hull at hundreds of pixels a second; without continuous collision
-    // detection it would sink into a wall within a step and stick there.
+    const mass = options.mass ?? TANK_MASS;
+    // The pull weighs as many times more as the hull, so every hull is towed alike.
+    const tank = createTank(rapier, world, placement, options.color, options.pullSpeed, mass / TANK_MASS);
+    // A hard hit or a blast throws a hull at hundreds of pixels a second, a light one a wall's
+    // thickness in one step; sweeping its motion keeps it from sinking into a wall and sticking there.
     tank.hull.enableCcd(true);
     tank.turretAngle = placement.turret ?? placement.rotation;
-    const field = createHullField();
+    const field = createHullField(options.hull);
     const respawn = options.respawn ? () => spawnTank(placement, options) : undefined;
-    register(tank.hull, field, options.color, TANK_MASS, respawn, tank, options.team);
+    const entry = register(tank.hull, field, options.color, mass, respawn, tank, options.team);
+    entry.hull = options.hull;
+    entry.look = options.look;
 
     return tank;
   }
@@ -595,7 +791,10 @@ export function createCombat(
         .setAngularDamping(25)
     );
 
-    register(body, createCrateField(), PROP_COLOR, CRATE_MASS, () => spawnCrate(placement));
+    // A crate is thin enough for a piercing round and low enough for a grenade to fly over.
+    const entry = register(body, createCrateField(), PROP_COLOR, CRATE_MASS, () => spawnCrate(placement));
+    entry.thin = true;
+    entry.top = CRATE_HEIGHT;
   }
 
   /**
@@ -640,7 +839,14 @@ export function createCombat(
       before: { velocity: { x: 0, y: 0 }, spin: 0 },
       lastShooter: undefined,
       rammedAt: -Infinity,
-      respawn
+      respawn,
+      hull: undefined,
+      look: undefined,
+      thin: false,
+      // Bodies are tall unless said otherwise, so a grenade bounces off any new kind, such as a wall.
+      top: tank ? TANK_TOP : Infinity,
+      airborne: undefined,
+      spin: 0
     };
     armored.push(entry);
 
@@ -812,7 +1018,7 @@ export function createCombat(
 
   function fire(tank: Tank) {
     const shooter = byTank.get(tank);
-    let start = muzzleOf(tank);
+    let start = muzzleAt(tank, tank.turretAngle);
     let direction = { x: Math.cos(tank.turretAngle), y: Math.sin(tank.turretAngle) };
     let remaining = SHOT_RANGE;
     const path = [start];
@@ -852,18 +1058,22 @@ export function createCombat(
 
   /**
    * What a shot does where it meets something: it chips a wall or a wreck, detonates a core,
-   * chips armor met head on, or glances off armor and flies on.
+   * chips armor met head on, or glances off armor and flies on. A shell that pierces flies on
+   * through the hole it chipped, or clean through a thin body or a thin wall.
    *
    * @param canBounce - Whether the shot may fly on after a glancing hit; a spent one only scuffs the armor.
-   * @returns Where and in which direction a ricochet flies on, or `undefined` when the shot stops here.
+   * @param shell - The shell striking, if it is one, whose pierce it may spend.
+   * @returns Where and in which direction the shot flies on, and whether off a ricochet, or
+   *   `undefined` when the shot stops here.
    */
   function strike(
     hit: ReturnType<typeof castShot>,
     end: Point,
     direction: Point,
     tank: Tank,
-    blow: Pick<ShellSpec, 'hole' | 'depth' | 'knockback'>,
-    canBounce: boolean
+    blow: Pick<ShellSpec, 'hole' | 'depth' | 'knockback' | 'ricochet'>,
+    canBounce: boolean,
+    shell?: Shell
   ) {
     if (hit.wreck) {
       wrecks.chip(hit.wreck, end, direction, blow);
@@ -873,10 +1083,21 @@ export function createCombat(
     }
 
     if (!hit.target) {
-      const material = hit.tile && walls.chip(end, direction, hit.tile, blow.hole / SHELL_HOLE);
+      const scale = { hole: blow.hole / WALL_BLOW.hole, depth: blow.depth / WALL_BLOW.depth };
+      // A piercing round bores clean through a thin wall, such as a wooden fence, as through a crate.
+      const exit = shell && hit.tile && shell.pierce.thin > 0 ? walls.punch(end, direction, shell.pierce.armor, scale) : undefined;
+      const material = hit.tile && (exit ? hit.tile.material : walls.chip(end, direction, hit.tile, scale));
+      const dust = material ? material.color.map((channel) => channel * 0.6) : WALL_DUST;
       impact(end, { x: -direction.x, y: -direction.y });
-      spawnDust(end, direction, material ? material.color.map((channel) => channel * 0.6) : WALL_DUST);
-      return undefined;
+      spawnDust(end, direction, dust);
+
+      if (!exit || !shell) {
+        return undefined;
+      }
+
+      shell.pierce.thin--;
+      spawnDust(exit, { x: -direction.x, y: -direction.y }, dust);
+      return { direction, from: exit, ricochet: false };
     }
 
     hit.target.lastShooter = tank;
@@ -887,12 +1108,34 @@ export function createCombat(
       return undefined;
     }
 
+    if (shell && hit.target.thin && shell.pierce.thin > 0) {
+      shell.pierce.thin--;
+      impact(end, { x: -direction.x, y: -direction.y });
+      return { direction, from: punchThrough(hit.target, end, direction, blow), ricochet: false };
+    }
+
     const normal = worldNormal(hit.target, end);
 
-    if (!normal || -(direction.x * normal.x + direction.y * normal.y) > RICOCHET_COS) {
+    if (!normal || blow.ricochet === false || -(direction.x * normal.x + direction.y * normal.y) > RICOCHET_COS) {
       impact(end, { x: -direction.x, y: -direction.y });
       damage(hit.target, end, direction, blow);
+      const cost = blow.depth + blow.hole;
+
+      // A piercing shell whose tunnel passes by the core bores into it.
+      if (shell && hit.target.tank && shell.pierce.armor > 0 && boresCore(hit.target, end, direction, cost)) {
+        reportHit(hit.target, tank, 'core');
+        destroy(hit.target, direction);
+        return undefined;
+      }
+
       reportHit(hit.target, tank, 'armor');
+
+      // A piercing shell flies on into the hole it chipped, which may lead to the core.
+      if (shell && hit.target.tank && shell.pierce.armor >= cost) {
+        shell.pierce.armor -= cost;
+        return { direction, from: { x: end.x + direction.x * 0.5, y: end.y + direction.y * 0.5 }, ricochet: false };
+      }
+
       return undefined;
     }
 
@@ -900,40 +1143,108 @@ export function createCombat(
     const bounce = { x: direction.x - 2 * along * normal.x, y: direction.y - 2 * along * normal.y };
     ricochet(hit.target, end, normal, bounce);
     reportHit(hit.target, tank, 'ricochet');
-    return canBounce ? { direction: bounce, from: { x: end.x + normal.x * 0.5, y: end.y + normal.y * 0.5 } } : undefined;
+    return canBounce ? { direction: bounce, from: { x: end.x + normal.x * 0.5, y: end.y + normal.y * 0.5 }, ricochet: true } : undefined;
   }
 
-  /** Fires a shell from `tank`'s muzzle along its turret. */
-  function launchShell(tank: Tank, spec: ShellSpec) {
+  /** Whether a tunnel `length` pixels long into `body` from `entry` along `direction` passes close enough to the core to open it. */
+  function boresCore(body: Armored, entry: Point, direction: Point, length: number) {
+    const core = (body.hull ?? MEDIUM_HULL).core;
+    const start = toLocal(body.body, entry);
+    const inward = rotateInto(body.body, direction);
+    const along = Math.min(Math.max((core.x - start.x) * inward.x + (core.y - start.y) * inward.y, 0), length);
+    const gap = Math.hypot(start.x + inward.x * along - core.x, start.y + inward.y * along - core.y);
+    return gap < core.radius + BORE_REACH;
+  }
+
+  /**
+   * Bores a tunnel clean through a thin body from where a shot entered it, chipping holes along
+   * the way and knocking it back a little, and returns where the shot comes out.
+   */
+  function punchThrough(body: Armored, entry: Point, direction: Point, blow: Pick<ShellSpec, 'hole' | 'knockback'>) {
+    const local = toLocal(body.body, entry);
+    const inward = rotateInto(body.body, direction);
+    const sample = new Float32Array(CHANNELS);
+    const seed = random() * 1000;
+    let depth = 0;
+
+    while (depth < MAX_PUNCH && sampleField(body.field, local.x + inward.x * depth, local.y + inward.y * depth, sample)[0] < 0) {
+      depth += PUNCH_STEP;
+    }
+
+    for (let along = 0; along <= depth; along += blow.hole * 0.7) {
+      carve(body.field, { x: local.x + inward.x * along, y: local.y + inward.y * along }, blow.hole * 0.8, 0.3, seed + along);
+    }
+
+    body.body.applyImpulse({ x: direction.x * blow.knockback * 0.3, y: direction.y * blow.knockback * 0.3 }, true);
+    body.flash = 1;
+    body.changed = true;
+    const exit = { x: entry.x + direction.x * (depth + 0.5), y: entry.y + direction.y * (depth + 0.5) };
+    spawnDust(exit, { x: -direction.x, y: -direction.y }, rgb(body.color).map((value) => value * 0.55));
+    return exit;
+  }
+
+  /**
+   * Fires a shell, or a volley of them, from `tank`'s muzzle along the shot's angle, with one
+   * muzzle blast and recoil.
+   */
+  function launchShell(tank: Tank, spec: ShellSpec, shot: Shot) {
     const shooter = byTank.get(tank);
-    const start = muzzleOf(tank);
-    const direction = { x: Math.cos(tank.turretAngle), y: Math.sin(tank.turretAngle) };
+    const angle = shot.angle ?? tank.turretAngle;
+    const start = muzzleAt(tank, angle);
+    const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+    const size = shot.flash ?? 1;
+
+    for (const offset of shot.volley ?? [0]) {
+      addShell(tank, shooter?.team, start, { x: Math.cos(angle + offset), y: Math.sin(angle + offset) }, spec, { reach: shot.reach, primary: true });
+    }
+
+    shooter?.body.applyImpulse({ x: -direction.x * RECOIL * size, y: -direction.y * RECOIL * size }, true);
+    muzzleBlast(start, direction, shooter, undefined, size);
+  }
+
+  /**
+   * Puts a shell in flight from `start`.
+   *
+   * @param options.reach - How far a lobbed shell is thrown.
+   * @param options.primary - The shell was fired by a gun rather than thrown out by a blast, so
+   *   `onShot` reports its path.
+   */
+  function addShell(tank: Tank, team: string | undefined, start: Point, direction: Point, spec: ShellSpec, options: { reach?: number; primary: boolean }) {
     const shell: Shell = {
       id: shellId++,
       shooter: tank,
-      team: shooter?.team,
+      team,
+      spec,
       x: start.x,
       y: start.y,
       direction,
+      speed: spec.speed,
       remaining: spec.range,
       bounces: 0,
+      pierce: { armor: spec.pierce?.armor ?? 0, thin: spec.pierce?.thin ? MAX_PUNCHES : 0 },
+      lob: spec.lob && launchLob(spec.lob, spec.speed, options.reach ?? spec.range, spec.range),
+      primary: options.primary,
       path: [start],
       leg: { travelled: 0, length: 0 },
       drift: { x: 0, y: 0 }
     };
 
-    shooter?.body.applyImpulse({ x: -direction.x * RECOIL, y: -direction.y * RECOIL }, true);
-    muzzleBlast(start, direction, shooter, undefined);
     shell.leg.length = expectedLeg(shell);
     shells.push(shell);
   }
 
   /**
    * Moves a shell along its flight for `dt` seconds: it strikes the first thing in its way, flies
-   * on after a ricochet with the range it has left, and falls once the range is spent.
+   * on after a ricochet with the range it has left, and falls once the range is spent. A shell
+   * with a blast goes off where it stops.
    */
   function flyShell(shell: Shell, dt: number) {
-    const spec = options.shell!;
+    if (shell.lob) {
+      flyLob(shell, shell.lob, dt);
+      return;
+    }
+
+    const spec = shell.spec;
     let step = Math.min(spec.speed * dt, shell.remaining);
 
     // A shell bouncing in a corner could strike over and over within one step; a few strikes are plenty.
@@ -953,19 +1264,24 @@ export function createCombat(
 
       step -= hit.distance;
       shell.path.push(end);
-      const bounced = strike(hit, end, shell.direction, shell.shooter, spec, shell.bounces < MAX_RICOCHETS);
+      const bite = 1 - (spec.fade ?? 0) * Math.min(1 - shell.remaining / spec.range, 1);
+      const blow = { ...spec, hole: spec.hole * bite, depth: spec.depth * bite };
+      const onward = strike(hit, end, shell.direction, shell.shooter, blow, shell.bounces < MAX_RICOCHETS, shell);
 
-      if (!bounced) {
-        stopShell(shell);
+      if (!onward) {
+        detonate(shell, end);
         return;
       }
 
-      shell.bounces++;
-      shell.direction = bounced.direction;
-      // The bounce starts a hair off the surface; that hair counts against the range too.
-      shell.remaining = Math.max(shell.remaining - Math.hypot(bounced.from.x - end.x, bounced.from.y - end.y), 0);
-      shell.x = bounced.from.x;
-      shell.y = bounced.from.y;
+      if (onward.ricochet) {
+        shell.bounces++;
+      }
+
+      shell.direction = onward.direction;
+      // A bounce starts a hair off the surface, a pierce on the far side; that way counts against the range too.
+      shell.remaining = Math.max(shell.remaining - Math.hypot(onward.from.x - end.x, onward.from.y - end.y), 0);
+      shell.x = onward.from.x;
+      shell.y = onward.from.y;
       shell.drift = { x: 0, y: 0 };
       shell.leg = { travelled: 0, length: 0 };
       shell.leg.length = expectedLeg(shell);
@@ -974,6 +1290,125 @@ export function createCombat(
     if (shell.remaining <= 1e-6) {
       fall(shell);
     }
+  }
+
+  /**
+   * Moves a lobbed shell for `dt` seconds: up and down along its arc, over the ground at its
+   * speed, which every bounce on the ground and the rolling after cut. It flies over bodies lower
+   * than itself and bounces off walls and taller bodies, except an enemy tank it meets before it
+   * first landed, which sets it off. It goes off when its fuse has burned down.
+   */
+  function flyLob(shell: Shell, lob: LobState, dt: number) {
+    const spec = shell.spec.lob!;
+
+    if (stepLob(spec, lob, dt)) {
+      shell.speed *= spec.bounce;
+      spawnDust(shell, { x: -shell.direction.x, y: -shell.direction.y }, FALL_DUST.slice(0, 3));
+    }
+
+    if (isRolling(lob)) {
+      shell.speed *= Math.exp(-spec.roll * dt);
+    }
+
+    let step = shell.speed * dt;
+
+    for (let strikes = 0; strikes < 3 && step > 1e-6; strikes++) {
+      const from = { x: shell.x, y: shell.y };
+      const hit = castLob(shell, lob, from, step);
+      const end = { x: from.x + shell.direction.x * hit.distance, y: from.y + shell.direction.y * hit.distance };
+      shell.x = end.x;
+      shell.y = end.y;
+
+      if (hit.distance >= step) {
+        break;
+      }
+
+      step -= hit.distance;
+
+      if (hit.target?.tank && !lob.landed) {
+        shell.path.push(end);
+
+        // A grenade that flies into an open core destroys it before it goes off.
+        if (hit.part === 'core') {
+          hit.target.lastShooter = shell.shooter;
+          reportHit(hit.target, shell.shooter, 'core');
+          destroy(hit.target, shell.direction);
+        }
+
+        detonate(shell, end);
+        return;
+      }
+
+      const normal = hit.normal ?? (hit.target && worldNormal(hit.target, end)) ?? { x: -shell.direction.x, y: -shell.direction.y };
+      const along = shell.direction.x * normal.x + shell.direction.y * normal.y;
+      shell.direction = normalize({ x: shell.direction.x - 2 * along * normal.x, y: shell.direction.y - 2 * along * normal.y });
+      shell.speed *= spec.rebound;
+      shell.bounces++;
+      shell.x = end.x + normal.x * 0.5;
+      shell.y = end.y + normal.y * 0.5;
+      shell.path.push(end);
+
+      for (let index = 0; index < 3; index++) {
+        const angle = Math.atan2(normal.y, normal.x) + between(-0.9, 0.9);
+        const speed = between(60, 160);
+        renderer.spawn(PARTICLE_SPARK, end.x, end.y, Math.cos(angle) * speed, Math.sin(angle) * speed, between(0.06, 0.14), 1.5, SPARK_COLOR);
+      }
+    }
+
+    // Before it first lands, a grenade goes off as it brushes past an enemy tank, as a pipe's wide hull hits in Team Fortress 2.
+    const brushed = !lob.landed && lob.height < TANK_TOP && armored.some((body) => body.tank && !passesShell(shell, body) && hullDistance(body, shell) < PROXIMITY);
+
+    if (brushed || lob.age >= spec.fuse) {
+      shell.path.push({ x: shell.x, y: shell.y });
+      detonate(shell, { x: shell.x, y: shell.y });
+    }
+  }
+
+  /** Distance from a point to the outside of a tank's hull box, by its shape rather than its chipped armor. */
+  function hullDistance(body: Armored, point: Point) {
+    const hull = body.hull ?? MEDIUM_HULL;
+    const local = toLocal(body.body, point);
+    const qx = Math.abs(local.x) - hull.halfLength;
+    const qy = Math.abs(local.y) - hull.halfWidth;
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
+  }
+
+  /**
+   * The first wall, or body taller than a lobbed shell flies, within `maxDistance` of it, with the
+   * wall's normal: the slope of a breakable wall's surface where it has one. Rubble is low, as
+   * crates are: a grenade in the air flies over it and one rolling on the ground bounces off it.
+   * It passes its own tank until its first bounce and teammates without friendly fire.
+   */
+  function castLob(shell: Shell, lob: LobState, from: Point, maxDistance: number) {
+    const hit = castShot(from, shell.direction, (body) => body.top <= lob.height || passesShell(shell, body), maxDistance, lob.height > RUBBLE_HEIGHT ? Infinity : 0);
+
+    if (!hit.tile) {
+      return hit;
+    }
+
+    const at = { x: from.x + shell.direction.x * hit.distance, y: from.y + shell.direction.y * hit.distance };
+    const normal = walls.surfaceNormal(at);
+    // A slope met from behind is a seam or a corner the field sees wrong; the collider's face is surer there.
+    return normal && normal.x * shell.direction.x + normal.y * shell.direction.y < 0 ? { ...hit, normal } : hit;
+  }
+
+  /** Ends a shell where it stopped at `at`: a shell with a blast goes off there and throws out its shrapnel. */
+  function detonate(shell: Shell, at: Point) {
+    const spec = shell.spec;
+
+    if (spec.blast) {
+      // Back off the surface a little, so the blast sees the face it hit.
+      const center = { x: at.x - shell.direction.x * 1.5, y: at.y - shell.direction.y * 1.5 };
+      explode(center, spec.blast, shell.shooter, shell.team);
+
+      for (let index = 0; index < (spec.fragments?.count ?? 0); index++) {
+        const angle = between(0, Math.PI * 2);
+        const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+        addShell(shell.shooter, shell.team, center, direction, spec.fragments!.shell, { primary: false });
+      }
+    }
+
+    stopShell(shell);
   }
 
   /** Whether a shell flies through `body`: its own tank until the first ricochet, and teammates without friendly fire. */
@@ -988,9 +1423,12 @@ export function createCombat(
     return Math.max(distance, 1);
   }
 
-  /** Pixels ahead of a shell over which it still passes over rubble: the first few after the muzzle. */
+  /**
+   * Pixels ahead of a shell over which it still passes over rubble: the first few after the
+   * muzzle. Shrapnel flies from a blast, not a muzzle, and meets rubble at once.
+   */
   function overRubble(shell: Shell) {
-    return Math.max(OVER_RUBBLE - (options.shell!.range - shell.remaining), 0);
+    return shell.primary ? Math.max(OVER_RUBBLE - (shell.spec.range - shell.remaining), 0) : 0;
   }
 
   /**
@@ -1016,9 +1454,15 @@ export function createCombat(
     shell.drift = drift;
   }
 
-  /** A spent shell drops to the ground in a puff of dust. */
+  /** A spent shell drops to the ground in a puff of dust; one with a blast goes off there. */
   function fall(shell: Shell) {
     const at = { x: shell.x, y: shell.y };
+
+    if (shell.spec.blast) {
+      shell.path.push(at);
+      detonate(shell, at);
+      return;
+    }
 
     for (let index = 0; index < 6; index++) {
       const angle = between(0, Math.PI * 2);
@@ -1033,10 +1477,13 @@ export function createCombat(
 
   function stopShell(shell: Shell) {
     shells.splice(shells.indexOf(shell), 1);
-    options.onShot?.(shell.shooter, shell.path);
+
+    if (shell.primary) {
+      options.onShot?.(shell.shooter, shell.path);
+    }
   }
 
-  function reportHit(body: Armored, shooter: Tank, part: 'armor' | 'core' | 'ricochet') {
+  function reportHit(body: Armored, shooter: Tank | undefined, part: 'armor' | 'core' | 'ricochet') {
     if (body.tank) {
       options.onHit?.(body.tank, shooter, part);
     }
@@ -1050,12 +1497,14 @@ export function createCombat(
 
   /**
    * Finds the first armor, core, wreck, wall or rubble within `maxDistance` along a ray, skipping
-   * bodies for which `skip` returns true.
+   * bodies for which `skip` returns true. A wall hit comes with the wall's outward normal there
+   * and, for a breakable wall, the tile hit.
    *
-   * @param overRubble - Pixels from the start over which the ray passes over rubble.
+   * @param overRubble - Pixels from the start over which the ray passes over rubble; `Infinity`
+   *   passes over all of it, as a lobbed grenade does.
    */
   function castShot(start: Point, direction: Point, skip: (body: Armored) => boolean, maxDistance: number, overRubble = 0) {
-    let best: { distance: number; target?: Armored; part?: 'armor' | 'core'; tile?: Tile; wreck?: WreckHit } = { distance: maxDistance };
+    let best: { distance: number; target?: Armored; part?: 'armor' | 'core'; tile?: Tile; wreck?: WreckHit; normal?: Point } = { distance: maxDistance };
 
     for (const body of armored) {
       if (skip(body)) {
@@ -1077,7 +1526,7 @@ export function createCombat(
 
     const wall = walls.cast(start, direction, best.distance, overRubble);
 
-    return wall ? { distance: wall.distance, tile: wall.tile } : best;
+    return wall ? { distance: wall.distance, tile: wall.tile, normal: wall.normal } : best;
   }
 
   /**
@@ -1165,51 +1614,55 @@ export function createCombat(
    *
    * @param reach - Where a hitscan shot first stops: the main light rides out of the barrel up to
    *   there. A shell carries its own light, so it passes `undefined` and the light stays at the muzzle.
+   * @param size - 1 for a tank gun; a machine gun's smaller blast has fewer, smaller puffs, a
+   *   dimmer flash and shakes the camera less.
    */
-  function muzzleBlast(at: Point, direction: Point, shooter: Armored | undefined, reach: number | undefined) {
+  function muzzleBlast(at: Point, direction: Point, shooter: Armored | undefined, reach: number | undefined, size = 1) {
     const across = { x: -direction.y, y: direction.x };
     // A brief flash at the muzzle lights the tank itself, so its turret shades the hull.
-    flash(at.x + direction.x * 2, at.y + direction.y * 2, MUZZLE_GLARE, 0.07, 1, [1, 0.8, 0.5], MUZZLE_HEIGHT);
+    flash(at.x + direction.x * 2, at.y + direction.y * 2, MUZZLE_GLARE * size, 0.07, 1, [1, 0.8, 0.5], MUZZLE_HEIGHT);
 
     // The main light rides out of the barrel after the shot, fading as it goes.
-    flash(at.x + direction.x * 3, at.y + direction.y * 3, MUZZLE_LIGHT, MUZZLE_LIGHT_LIFE, 1, [1, 0.72, 0.38], MUZZLE_HEIGHT, {
-      x: direction.x * MUZZLE_LIGHT_SPEED,
-      y: direction.y * MUZZLE_LIGHT_SPEED,
-      distance: Math.max((reach ?? 0) - 3, 0)
-    });
+    if (size >= 0.75) {
+      flash(at.x + direction.x * 3, at.y + direction.y * 3, MUZZLE_LIGHT * size, MUZZLE_LIGHT_LIFE, 1, [1, 0.72, 0.38], MUZZLE_HEIGHT, {
+        x: direction.x * MUZZLE_LIGHT_SPEED,
+        y: direction.y * MUZZLE_LIGHT_SPEED,
+        distance: Math.max((reach ?? 0) - 3, 0)
+      });
+    }
 
-    for (let index = 0; index < 10; index++) {
+    for (let index = 0; index < Math.round(10 * size); index++) {
       const angle = Math.atan2(direction.y, direction.x) + between(-0.3, 0.3);
-      const speed = between(80, 280);
-      const ahead = between(2, 10);
-      renderer.spawn(PARTICLE_FIRE, at.x + direction.x * ahead, at.y + direction.y * ahead, Math.cos(angle) * speed, Math.sin(angle) * speed, between(0.1, 0.18), between(3.5, 6), NO_COLOR);
+      const speed = between(80, 280) * size;
+      const ahead = between(2, 10) * size;
+      renderer.spawn(PARTICLE_FIRE, at.x + direction.x * ahead, at.y + direction.y * ahead, Math.cos(angle) * speed, Math.sin(angle) * speed, between(0.1, 0.18), between(3.5, 6) * size, NO_COLOR);
     }
 
     for (const side of [-1, 1]) {
       const speed = between(60, 120);
       const vx = (across.x * side * 0.9 + direction.x * 0.4) * speed;
       const vy = (across.y * side * 0.9 + direction.y * 0.4) * speed;
-      renderer.spawn(PARTICLE_FIRE, at.x, at.y, vx, vy, between(0.06, 0.1), between(1.5, 2.2), NO_COLOR);
+      renderer.spawn(PARTICLE_FIRE, at.x, at.y, vx, vy, between(0.06, 0.1), between(1.5, 2.2) * size, NO_COLOR);
     }
 
-    for (let index = 0; index < 6; index++) {
+    for (let index = 0; index < Math.round(6 * size); index++) {
       const angle = Math.atan2(direction.y, direction.x) + between(-0.7, 0.7);
       const speed = between(15, 70);
       const ahead = between(4, 14);
-      renderer.spawn(PARTICLE_SMOKE, at.x + direction.x * ahead, at.y + direction.y * ahead, Math.cos(angle) * speed, Math.sin(angle) * speed, between(0.5, 0.9), between(2, 3.5), NO_COLOR);
+      renderer.spawn(PARTICLE_SMOKE, at.x + direction.x * ahead, at.y + direction.y * ahead, Math.cos(angle) * speed, Math.sin(angle) * speed, between(0.5, 0.9), between(2, 3.5) * size, NO_COLOR);
     }
 
-    for (let index = 0; index < 4; index++) {
+    for (let index = 0; index < Math.max(Math.round(4 * size), 1); index++) {
       const angle = Math.atan2(direction.y, direction.x) + between(-0.25, 0.25);
       const speed = between(300, 550);
       renderer.spawn(PARTICLE_SPARK, at.x, at.y, Math.cos(angle) * speed, Math.sin(angle) * speed, between(0.08, 0.18), 2, SPARK_COLOR);
     }
 
     if (shooter) {
-      shooter.barrelKick = BARREL_KICK;
+      shooter.barrelKick = BARREL_KICK * Math.max(size, 0.4);
     }
 
-    shakeFrom(at, MUZZLE_SHAKE);
+    shakeFrom(at, MUZZLE_SHAKE * size);
   }
 
   /** Shakes the camera by up to `strength`, less the farther `at` is from the point that hears it. */
@@ -1301,7 +1754,7 @@ export function createCombat(
 
     const at = { x: center.x, y: center.y, angle: body.body.rotation() };
     remove(body);
-    wrecks.add({ field: body.field, ...at, color: rgb(body.color), team: body.team, core: HULL_CORE, direction });
+    wrecks.add({ field: body.field, ...at, color: rgb(body.color), team: body.team, core: (body.hull ?? MEDIUM_HULL).core, direction });
     scheduleRespawn(body);
     reportDestroyed(body);
   }
@@ -1328,6 +1781,227 @@ export function createCombat(
       color: rgb(from.color),
       material: 'metal'
     });
+  }
+
+  /**
+   * An explosion at `at`: a fireball, smoke, sparks and a flash, and a blast that reaches every
+   * body with armor within its radius and in the open from it, as `BlastSpec` describes.
+   */
+  function explode(at: Point, spec: BlastSpec, shooter: Tank | undefined, team: string | undefined) {
+    const source = shooter && byTank.get(shooter);
+    blastEffects(at, spec.radius);
+
+    for (const body of [...armored]) {
+      const own = body.tank !== undefined && body.tank === shooter;
+
+      // A body the blast destroyed already is gone; teammates are spared without friendly fire.
+      if (!armored.includes(body) || (!own && passesAsTeammate(team, source, body))) {
+        continue;
+      }
+
+      const reach = blastReach(body, at, spec.radius);
+
+      if (!reach) {
+        continue;
+      }
+
+      const falloff = 1 - 0.5 * (reach.distance / spec.radius);
+
+      if (own) {
+        throwBody(body, reach.direction, spec.knockback * falloff * (spec.self ?? 1));
+        continue;
+      }
+
+      body.lastShooter = shooter ?? body.lastShooter;
+      const core = body.coreOpen ? coreReach(body, at, spec.radius * (1 - CORE_BLAST) * 2) : undefined;
+
+      // Only a core open before the blast: the hole a rocket chips as it hits does not let its own blast in.
+      if (core) {
+        reportHit(body, shooter, 'core');
+        destroy(body, core);
+        continue;
+      }
+
+      // The crater digs straight into the face the blast meets, the push goes away from the blast.
+      const scale = body.tank ? 1 : (spec.structures ?? 1);
+      const normal = worldNormal(body, reach.point);
+      const inward = normal ? { x: -normal.x, y: -normal.y } : reach.direction;
+      damage(body, reach.point, inward, { hole: spec.hole * falloff * Math.sqrt(scale), depth: spec.depth * falloff * scale, knockback: 0 });
+      throwBody(body, reach.direction, spec.knockback * falloff);
+      reportHit(body, shooter, 'armor');
+    }
+
+    blastWalls(at, spec);
+  }
+
+  /**
+   * Chips the breakable walls and heaps of rubble a blast at `at` reaches in the open: each takes a
+   * crater on its face nearest the blast, falling off with distance and grown by `structures`, as
+   * a crate's does.
+   */
+  function blastWalls(at: Point, spec: BlastSpec) {
+    const structures = spec.structures ?? 1;
+
+    for (const face of walls.facesNear(at, spec.radius)) {
+      const cover = castShot(at, face.direction, (body) => body.tank !== undefined, face.distance);
+
+      if (cover.distance < face.distance - BLAST_COVER && cover.tile !== face.tile) {
+        continue;
+      }
+
+      const falloff = 1 - 0.5 * (face.distance / spec.radius);
+      const scale = { hole: (spec.hole * falloff * Math.sqrt(structures)) / WALL_BLOW.hole, depth: (spec.depth * falloff * structures) / WALL_BLOW.depth };
+      const material = walls.chip(face.point, face.direction, face.tile, scale);
+      spawnDust(face.point, face.direction, material.color.map((channel) => channel * 0.6));
+    }
+  }
+
+  /**
+   * Where a blast at `at` meets `body`: the first armor or open core on the line from the blast to
+   * the body's center, if it lies within `radius` and no wall or crate stands in between.
+   */
+  function blastReach(body: Armored, at: Point, radius: number) {
+    const center = body.body.translation();
+    const length = Math.hypot(center.x - at.x, center.y - at.y);
+    const direction = length > 1e-6 ? { x: (center.x - at.x) / length, y: (center.y - at.y) / length } : { x: 1, y: 0 };
+    const hit = raycastField(body.field, toLocal(body.body, at), rotateInto(body.body, direction), radius);
+
+    if (!hit) {
+      return undefined;
+    }
+
+    const point = { x: at.x + direction.x * hit.distance, y: at.y + direction.y * hit.distance };
+    const cover = castShot(at, direction, (other) => other === body || other.tank !== undefined, hit.distance);
+
+    return cover.distance < hit.distance - 0.5 ? undefined : { distance: hit.distance, point, direction, part: hit.part };
+  }
+
+  /**
+   * Whether a blast at `at` reaches the open core of `body` within `reach` pixels: the line from
+   * the blast to the core meets the core before any armor and no wall or crate. Returns the line's
+   * direction, or `undefined`.
+   */
+  function coreReach(body: Armored, at: Point, reach: number) {
+    const core = toWorld(body.body, (body.hull ?? MEDIUM_HULL).core);
+    const length = Math.hypot(core.x - at.x, core.y - at.y);
+
+    if (length > reach + (body.hull ?? MEDIUM_HULL).core.radius) {
+      return undefined;
+    }
+
+    const direction = length > 1e-6 ? { x: (core.x - at.x) / length, y: (core.y - at.y) / length } : { x: 1, y: 0 };
+    const hit = raycastField(body.field, toLocal(body.body, at), rotateInto(body.body, direction), length + 1);
+
+    if (hit?.part !== 'core' || hit.distance > reach) {
+      return undefined;
+    }
+
+    const cover = castShot(at, direction, (other) => other === body || other.tank !== undefined, hit.distance);
+    return cover.distance < hit.distance - 0.5 ? undefined : direction;
+  }
+
+  /**
+   * Pushes a body away with `impulse`. A push hard enough lifts a tank off the ground: it flies on
+   * with the push, its pull carried along, and cannot drive until it lands.
+   */
+  function throwBody(body: Armored, direction: Point, impulse: number) {
+    body.body.applyImpulse({ x: direction.x * impulse, y: direction.y * impulse }, true);
+    const speed = impulse / body.body.mass();
+
+    if (!body.tank || speed < LIFT_SPEED) {
+      return;
+    }
+
+    const time = Math.min(MIN_AIR_TIME + (speed - LIFT_SPEED) * AIR_TIME_PER_SPEED, MAX_AIR_TIME);
+
+    if ((body.airborne?.left ?? 0) < time) {
+      body.airborne = { left: time, total: time };
+    }
+
+    // The pull flies along at the hull's speed and slows with it, so it neither drags nor brakes the hull.
+    body.body.setLinearDamping(AIR_DAMPING);
+    body.tank.pull.setLinearDamping(AIR_DAMPING);
+    body.tank.pull.setLinvel(body.body.linvel(), true);
+  }
+
+  /**
+   * Counts down a tank's time in the air; once it lands, the ground holds it again and its tracks
+   * raise dust. In the air the pull rides on its anchor at the front of the hull: flying on by
+   * itself, it would pass through a wall that stopped the hull and its joint would drag the hull
+   * in after it.
+   */
+  function fly(body: Armored, dt: number) {
+    const air = body.airborne!;
+    air.left -= dt;
+
+    if (body.tank) {
+      body.tank.pull.setTranslation(toWorld(body.body, PULL_ANCHOR), true);
+      body.tank.pull.setLinvel(body.body.linvel(), true);
+    }
+
+    if (air.left > 0) {
+      return;
+    }
+
+    body.airborne = undefined;
+    body.body.setLinearDamping(HULL_LINEAR_DAMPING);
+    body.tank?.pull.setLinearDamping(0);
+    spawnDust(body.body.translation(), normalize(body.body.linvel()), FALL_DUST.slice(0, 3));
+    shakeFrom(body.body.translation(), LANDING_SHAKE);
+  }
+
+  /** Height in pixels a tank flies at, along an arc over its time in the air; 0 on the ground. */
+  function liftOf(body: Armored) {
+    const air = body.airborne;
+
+    if (!air) {
+      return 0;
+    }
+
+    const t = 1 - air.left / air.total;
+    return 4 * t * (1 - t) * air.total * AIR_RISE;
+  }
+
+  /**
+   * The look of an explosion of `radius`: a flash that throws shadows, a fireball, soot, dust
+   * thrown out as far as the blast reaches, sparks, and a shake of the camera.
+   */
+  function blastEffects(at: Point, radius: number) {
+    const size = radius / 80;
+    flash(at.x, at.y, EXPLOSION_LIGHT * 0.7 * size, 0.3, 1, [1, 0.62, 0.3], EXPLOSION_HEIGHT);
+    flash(at.x, at.y, EXPLOSION_LIGHT * 0.35 * size, 0.1, 1, [1, 0.95, 0.8], EXPLOSION_HEIGHT);
+    shakeFrom(at, BLAST_SHAKE * size);
+
+    for (let index = 0; index < Math.round(22 * size); index++) {
+      const angle = between(0, Math.PI * 2);
+      const speed = between(30, 190) * size;
+      renderer.spawn(PARTICLE_FIRE, at.x, at.y, Math.cos(angle) * speed, Math.sin(angle) * speed, between(0.22, 0.45), between(5, 9) * size, NO_COLOR);
+    }
+
+    for (let index = 0; index < Math.round(8 * size); index++) {
+      const angle = between(0, Math.PI * 2);
+      const speed = between(10, 60);
+      burning.puff(at.x + between(-6, 6), at.y + between(-6, 6), Math.cos(angle) * speed, Math.sin(angle) * speed, between(0.9, 1.8), between(3, 5.5) * size);
+    }
+
+    for (let index = 0; index < 18; index++) {
+      const angle = between(0, Math.PI * 2);
+      const speed = radius * between(1.6, 2.6);
+      renderer.spawn(PARTICLE_DUST, at.x, at.y, Math.cos(angle) * speed, Math.sin(angle) * speed, between(0.35, 0.6), between(1.1, 1.8), FALL_DUST);
+    }
+
+    for (let index = 0; index < 20; index++) {
+      const angle = between(0, Math.PI * 2);
+      const speed = between(150, 420);
+      renderer.spawn(PARTICLE_SPARK, at.x, at.y, Math.cos(angle) * speed, Math.sin(angle) * speed, between(0.12, 0.35), 2.5, SPARK_COLOR);
+    }
+  }
+
+  /** Where `tank`'s muzzle is with its gun along `angle`: its look's barrel length out from the hull's center. */
+  function muzzleAt(tank: Tank, angle: number) {
+    const center = tank.hull.translation();
+    const reach = byTank.get(tank)?.look?.muzzle ?? MEDIUM_LOOK.muzzle;
+    return { x: center.x + Math.cos(angle) * reach, y: center.y + Math.sin(angle) * reach };
   }
 
   function remove(body: Armored) {
@@ -1401,6 +2075,17 @@ type Armored = {
   /** Battle time of the body's last ram into something that does not move. */
   rammedAt: number;
   respawn: (() => void) | undefined;
+  /** A tank's hull and look, when not the medium tank's. */
+  hull: HullSpec | undefined;
+  look: TankLook | undefined;
+  /** A thin body, such as a crate, that a piercing shell goes clean through. */
+  thin: boolean;
+  /** Height of the body's top in pixels, which a lobbed shell must clear to fly over it. */
+  top: number;
+  /** Seconds a tank thrown by a blast still flies, of how long it flies in all. */
+  airborne: { left: number; total: number } | undefined;
+  /** Angle the barrels of a gatling turret have turned. */
+  spin: number;
 };
 
 /** A wreck a shot met. */
@@ -1411,14 +2096,23 @@ type Shell = {
   id: number;
   shooter: Tank;
   team: string | undefined;
+  spec: ShellSpec;
   x: number;
   y: number;
   /** Unit direction of flight. */
   direction: Point;
+  /** Speed over the ground in pixels per second, which bounces of a lobbed shell cut. */
+  speed: number;
   /** Pixels the shell may still fly. */
   remaining: number;
-  /** Ricochets so far; before the first, the shell passes through its own tank. */
+  /** Ricochets and bounces so far; before the first, the shell passes through its own tank. */
   bounces: number;
+  /** Tank armor in pixels it may still punch through, and thin bodies it may still go through. */
+  pierce: { armor: number; thin: number };
+  /** Height and vertical motion of a lobbed shell. */
+  lob: LobState | undefined;
+  /** Fired by a gun, not thrown out by a blast. */
+  primary: boolean;
   /** The muzzle, each ricochet so far and, once it stops, where it ended. */
   path: Point[];
   /** How far the current leg, from the muzzle or the last ricochet, has come and is likely to reach. */
@@ -1428,6 +2122,8 @@ type Shell = {
 };
 
 const STOP = { x: 0, y: 0 };
+/** The medium tank's turret, with its muzzle 30 px out, the look of tanks spawned without one. */
+const MEDIUM_LOOK: TankLook = { turret: TURRET_MEDIUM, muzzle: 30 };
 /** Darkening of a turret blown off a tank. */
 const TURRET_SHADE = 0.55;
 /** A piece of scrap landing this many pixels inside a wall or a wreck is buried and gone. */
@@ -1445,8 +2141,6 @@ const SHOT_RANGE = 1000;
  * its damping.
  */
 const HITSCAN_HIT = { hole: 2.3, depth: 0, knockback: 300 };
-/** Hole of a medium tank's shell, the blow that chips a wall material's full crater. */
-const SHELL_HOLE = 4.5;
 /**
  * A shot passes over rubble for this many pixels past the muzzle, about the depth of a heap, so a
  * tank right behind rubble shoots over it, while shots from farther away meet it. The muzzle is
@@ -1477,6 +2171,9 @@ const CORE_LIGHT = 32;
 const CORE_HEIGHT = 3;
 const HULL_HEIGHT = 6;
 const CRATE_HEIGHT = 8;
+/** A tank's top, its turret included, which a lobbed shell must clear to fly over it. */
+const TANK_TOP = 12;
+const CASEMATE_HEIGHT = 9;
 const MUZZLE_LIGHT_LIFE = 0.16;
 const MUZZLE_LIGHT_SPEED = 1100;
 const IMPACT_LIGHT = 45;
@@ -1485,6 +2182,40 @@ const BARREL_KICK = 3;
 const BARREL_RETURN = 14;
 const MUZZLE_SHAKE = 1.2;
 const EXPLOSION_SHAKE = 6;
+const BLAST_SHAKE = 3.5;
+const LANDING_SHAKE = 1.5;
+/** Share of a blast's full effect, by nearness, from which it destroys an open core it reaches through the hole. */
+const CORE_BLAST = 0.75;
+/**
+ * A blast that would give a tank more than `LIFT_SPEED` px/s throws it into the air for
+ * `MIN_AIR_TIME` s and `AIR_TIME_PER_SPEED` s more per px/s beyond, up to `MAX_AIR_TIME` s. In the
+ * air its damping drops from the ground's 50 to `AIR_DAMPING`, and it rises `AIR_RISE` px per
+ * second it flies at the top of its arc.
+ */
+const LIFT_SPEED = 1100;
+const MIN_AIR_TIME = 0.2;
+const AIR_TIME_PER_SPEED = 0.0003;
+const MAX_AIR_TIME = 0.4;
+const AIR_DAMPING = 7;
+const AIR_RISE = 90;
+/** Shadows of things in the air: a translucent dark copy of their shape on the ground. */
+const SHADOW_COLOR = [0.05, 0.05, 0.06];
+const SHADOW_ALPHA = 0.32;
+/** Khaki, so a grenade stands out on the gray ground and against tanks of either team. */
+const GRENADE_COLOR = [0.78, 0.7, 0.36];
+/** Radians a grenade turns per second as it tumbles. */
+const GRENADE_TUMBLE = 9;
+/** Deepest a piercing shell bores through a thin body, and the step it bores in, in pixels. */
+const MAX_PUNCH = 140;
+const PUNCH_STEP = 1;
+/** Thin bodies a piercing shell goes through before it stops in one. */
+const MAX_PUNCHES = 2;
+/** A piercing round's tunnel opens the core when it passes this close to the core's rim. */
+const BORE_REACH = 4;
+/** A grenade in flight this close to an enemy hull goes off. */
+const PROXIMITY = 8;
+/** A wall or crate this much nearer a blast than a wall's face shields that face from it. */
+const BLAST_COVER = 2;
 const SHAKE_DECAY = 12;
 /** Shots and blasts within this many pixels of the camera shake it fully, and beyond `SHAKE_FAR` not at all. */
 const SHAKE_NEAR = 200;
@@ -1541,12 +2272,13 @@ const SHELL_LIGHT_HEIGHT = 24;
 /** Puffs take their colors from their layer. */
 const NO_COLOR = [0, 0, 0, 0];
 
-/** Draw fields of a turret: a quad from (-11, -11) to (31, 11) in turret coordinates. */
-const TURRET_DRAW = { kind: KIND_TURRET, originX: -10.5, originY: -10.5, cell: 1, cols: 42, rows: 22 };
+/** Draw fields of a turret of `style`, one of the renderer's `TURRET_*` looks. */
+function turretDraw(style: number) {
+  return { kind: KIND_TURRET, ...(TURRET_QUADS[style] ?? TURRET_QUADS[TURRET_MEDIUM]) };
+}
 
 /** Uploads the shape of a shell into a field slot it keeps for the renderer's life, ready to draw at any spot. */
-function createShellDraw(renderer: Renderer) {
-  const field = createShellField();
+function createShellDraw(renderer: Renderer, field: DamageField) {
   const slot = renderer.allocateField();
 
   if (slot === undefined) {
@@ -1559,6 +2291,29 @@ function createShellDraw(renderer: Renderer) {
 
 function fieldDraw(field: DamageField, slot: number) {
   return { kind: KIND_FIELD, originX: field.originX, originY: field.originY, cell: field.cell, cols: field.cols, rows: field.rows, slot };
+}
+
+/** A field's draw fields enlarged `scale` times about its local origin. */
+function scaled<Draw extends { originX: number; originY: number; cell: number }>(draw: Draw, scale: number): Draw {
+  return scale === 1 ? draw : { ...draw, originX: draw.originX * scale, originY: draw.originY * scale, cell: draw.cell * scale };
+}
+
+/**
+ * Where something `height` pixels above the ground point `at` appears to the camera looking down
+ * from the renderer's `CAMERA_HEIGHT` over `view`, and how much larger, as the renderer shows smoke.
+ */
+function seenFrom(view: Point, at: Point, height: number) {
+  if (height <= 0) {
+    return { x: at.x, y: at.y, scale: 1 };
+  }
+
+  const scale = CAMERA_HEIGHT / Math.max(CAMERA_HEIGHT - height, 1);
+  return { x: view.x + (at.x - view.x) * scale, y: view.y + (at.y - view.y) * scale, scale };
+}
+
+/** Where the sun throws the shadow of something `height` pixels above the ground point `at`. */
+function shadowOf(at: Point, height: number) {
+  return { x: at.x + SUN.direction.x * height * SUN.shadowLength, y: at.y + SUN.direction.y * height * SUN.shadowLength };
 }
 
 /** Moves a fragment's field so its center is the local origin, for debris that spins about it. */

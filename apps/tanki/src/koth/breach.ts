@@ -1,6 +1,7 @@
 import type { Tank } from '../arena/bodies';
 import type { Combat } from '../damage/combat';
 import { canDrive, cellAt, cellCenter, findBreachPath, findPath, isOpenAt, pathLength, type NavGrid } from './navigation';
+import type { Trigger, Weapon } from './classes/weapon';
 import { MEDIUM_TANK } from './tanks';
 import type { Member, TeamBoard } from './team';
 
@@ -14,8 +15,8 @@ export type BreachContext = {
   board: TeamBoard;
   /** Match time in seconds. */
   clock: () => number;
-  /** Fires the member's gun if it has reloaded; returns whether it fired. */
-  fire: (member: Member) => boolean;
+  /** Sets how the member works its trigger this step; the match fires what the weapon gives. */
+  trigger: (member: Member, trigger: Trigger) => void;
 };
 
 /**
@@ -176,6 +177,7 @@ export function createBreacher(member: Member, context: BreachContext) {
       rams: 0,
       shots: 0,
       aims: 0,
+      seenShots: undefined,
       charge: undefined,
       openedAt: 0,
       checkedAt: -Infinity
@@ -307,8 +309,20 @@ export function createBreacher(member: Member, context: BreachContext) {
     }
   }
 
-  /** Holds still and shoots the crossing, each shot at the next spot across it where material is left. */
+  /**
+   * Holds still and shoots the crossing, each shot at the next spot across it where material is
+   * left, working the trigger as the class's weapon wants it: a gatling spun up, a shot charged
+   * in full, a grenade thrown as far as the spot. The match fires after the bot's step, so a shot
+   * is counted on the step after it went.
+   */
   function shoot(current: Plan, tank: Tank, position: Point, now: number): BreachOrder {
+    const weapon = member.weapon;
+    const fired = weapon && current.seenShots !== undefined ? weapon.shots - current.seenShots : 0;
+    current.seenShots = weapon?.shots;
+    current.shots += fired;
+    current.aims += fired;
+    stats.shots += fired;
+
     if (current.shots >= current.maxShots) {
       finish('abandoned', now);
       return { move: STOP };
@@ -316,19 +330,14 @@ export function createBreacher(member: Member, context: BreachContext) {
 
     const target = nextTarget(current);
 
-    if (!target) {
+    if (!target || !weapon) {
       return { move: STOP };
     }
 
     const aim = Math.atan2(target.y - position.y, target.x - position.x);
-    const off = Math.abs(angleBetween(tank.turretAngle, aim));
-
-    if (off < Math.max(Math.atan2(AIM_TOLERANCE, distance(position, target)), 0.01) && member.gun?.ready && context.fire(member)) {
-      current.shots++;
-      current.aims++;
-      stats.shots++;
-    }
-
+    const range = distance(position, target);
+    const aligned = Math.abs(angleBetween(tank.turretAngle, aim)) < Math.max(Math.atan2(AIM_TOLERANCE, range), 0.01);
+    context.trigger(member, triggerFor(weapon, aligned, range));
     return { move: STOP, aim };
   }
 
@@ -556,11 +565,32 @@ type Plan = {
   maxShots: number;
   /** Shots aimed so far, which picks the next spot across the crossing. */
   aims: number;
+  /** The weapon's shot count at the last step of shooting, to count the shots it fired since. */
+  seenShots: number | undefined;
   /** The run at the wall under way, and where the tank was at the last check for a stop. */
   charge: { startedAt: number; check: { at: number; position: Point } } | undefined;
   openedAt: number;
   checkedAt: number;
 };
+
+/**
+ * How to work the trigger of `weapon` at a wall `range` px away, on target when `aligned`: a
+ * gatling spins all the while and fires on target; a charged shot is held until full and let go on
+ * target; anything else fires on target once loaded, a grenade thrown that far.
+ */
+function triggerFor(weapon: Weapon, aligned: boolean, range: number): Trigger {
+  const spec = weapon.tankClass.weapon;
+
+  if (spec.kind === 'spin') {
+    return { fire: aligned, rev: true };
+  }
+
+  if (spec.kind === 'charge') {
+    return { fire: !(aligned && (weapon.charge ?? 0) >= 1) };
+  }
+
+  return { fire: aligned && weapon.ready, reach: range };
+}
 
 /** The cost of a step into each closed cell, per grid, worked out as needed and anew with each revision. */
 const priceCache = new WeakMap<NavGrid, { revision: number; prices: Float32Array }>();

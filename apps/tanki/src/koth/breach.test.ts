@@ -4,12 +4,13 @@ import { createCombat, type CombatLayout, type WallPlacement } from '../damage/c
 import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import { createBreacher } from './breach';
+import { clampGun, inArc, turnInPlace } from './classes/casemate';
+import { createWeapon, type Trigger } from './classes/weapon';
 import { createDriver } from './driver';
-import { createGun } from './gun';
 import { KOTH_MAP } from './map';
 import { createNavGrid, updateNavGrid } from './navigation';
 import { CAPTURE_RULES, createCaptureState } from './rules';
-import { MEDIUM_TANK } from './tanks';
+import { MEDIUM_TANK, type TankClass } from './tanks';
 import { createTeamBoard, type Member } from './team';
 
 let rapier: Rapier;
@@ -74,13 +75,21 @@ describe('breaking through walls', () => {
 });
 
 /**
- * Drives a medium tank from `from` to `to` for up to `seconds` the way a bot does: with its driver,
- * a gun, and a breacher that may take over, on a field whose grid follows the walls as they break.
+ * Drives a tank of `tankClass`, by default the medium tank, from `from` to `to` for up to
+ * `seconds` the way a bot does: with its driver, its class's weapon, and a breacher that may take
+ * over, on a field whose grid follows the walls as they break.
  *
  * @param enemy - Where a known enemy stands, if anywhere.
  * @returns The breacher's statistics, how far down the tank ever went, when it arrived and the walls' damage.
  */
-function drive(layout: Partial<CombatLayout>, from: { x: number; y: number }, to: { x: number; y: number }, seconds = 10, enemy?: { x: number; y: number }) {
+function drive(
+  layout: Partial<CombatLayout>,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  seconds = 10,
+  enemy?: { x: number; y: number },
+  tankClass: TankClass = MEDIUM_TANK
+) {
   const world = new rapier.World({ x: 0, y: 0 });
   world.lengthUnit = 100;
   const slots = Array.from({ length: 128 }, (_, index) => 127 - index);
@@ -108,10 +117,31 @@ function drive(layout: Partial<CombatLayout>, from: { x: number; y: number }, to
     random,
     onWallsChanged: (bounds) => changes.push(bounds)
   });
-  const tank = combat.spawnTank({ ...from, rotation: 0 }, { color: 0, team: 'red', pullSpeed: pullSpeedFor(MEDIUM_TANK.speed) });
+  const tank = combat.spawnTank(
+    { ...from, rotation: 0 },
+    { color: 0, team: 'red', pullSpeed: pullSpeedFor(tankClass.speed), hull: tankClass.hull, mass: tankClass.mass, look: tankClass.look }
+  );
   const rival = enemy && combat.spawnTank({ ...enemy, rotation: 0 }, { color: 0, team: 'blue' });
-  const member: Member = { id: 0, team: 'red', index: 0, name: 'Red', human: false, tank, gun: createGun(MEDIUM_TANK.gun), role: 'assault', respawnAt: undefined, shotAt: -Infinity, attacker: undefined, kills: 0, deaths: 0 };
-  const rivals: Member[] = rival ? [{ ...member, id: 1, team: 'blue', tank: rival, gun: undefined }] : [];
+  const member: Member = {
+    id: 0,
+    team: 'red',
+    index: 0,
+    name: 'Red',
+    human: false,
+    tank,
+    tankClass,
+    nextClass: undefined,
+    weapon: createWeapon(tankClass, random),
+    trigger: { fire: false },
+    pivot: undefined,
+    role: 'assault',
+    respawnAt: undefined,
+    shotAt: -Infinity,
+    attacker: undefined,
+    kills: 0,
+    deaths: 0
+  };
+  const rivals: Member[] = rival ? [{ ...member, id: 1, team: 'blue', tank: rival, weapon: undefined }] : [];
   let time = 0;
   const board = createTeamBoard('red', [member], {
     combat,
@@ -122,15 +152,10 @@ function drive(layout: Partial<CombatLayout>, from: { x: number; y: number }, to
     capture: () => createCaptureState(CAPTURE_RULES),
     holdTime: CAPTURE_RULES.holdTime
   });
-  const fire = (shooter: Member) => {
-    if (!shooter.gun?.fire()) {
-      return false;
-    }
-
-    combat.fire(shooter.tank!);
-    return true;
+  const trigger = (shooter: Member, pull: Trigger) => {
+    shooter.trigger = pull;
   };
-  const breacher = createBreacher(member, { combat, grid, board, clock: () => time, fire });
+  const breacher = createBreacher(member, { combat, grid, board, clock: () => time, trigger });
   const driver = createDriver(grid);
   let lowest = -Infinity;
   let arrivedAt = Infinity;
@@ -141,16 +166,32 @@ function drive(layout: Partial<CombatLayout>, from: { x: number; y: number }, to
     }
 
     board.update();
-    member.gun!.step(1 / 60);
     const position = tank.hull.translation();
     const order = breacher.step(time, tank, { destination: to, allowed: true, cost: () => 0 });
-    const move =
+    let move =
       order?.move ?? driver.steer(time, position, order ? order.destination : to, [], { arrive: order ? order.arrive : 20, heading: tank.hull.rotation() });
 
     if (order?.aim !== undefined) {
       tank.turretAngle = order.aim;
+
+      // A casemate gun turns its hull onto the wall it shoots, as a bot's does.
+      if (tankClass.mount.kind === 'casemate' && !inArc(tank, order.aim, tankClass.mount.arc - 0.03)) {
+        member.pivot ??= { ...position };
+        move = turnInPlace(tank, member.pivot, order.aim, tankClass.mount.traverse, tank.pullSpeed);
+      }
     }
 
+    if (tankClass.mount.kind === 'casemate') {
+      clampGun(tank, tankClass.mount.arc);
+    }
+
+    // The weapon fires after the bot's step, as the match's does.
+    for (const shot of member.weapon!.step(1 / 60, member.trigger)) {
+      combat.fire(tank, { ...shot, angle: tank.turretAngle + (shot.angle ?? 0) });
+    }
+
+    member.trigger = { fire: false };
+    tank.pullSpeed = pullSpeedFor(tankClass.speed) * member.weapon!.speedShare;
     combat.drive(tank, move);
     combat.step(1 / 60);
     combat.update(1 / 60);
