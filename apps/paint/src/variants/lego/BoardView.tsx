@@ -45,12 +45,13 @@ import { SpawnMenu } from './SpawnMenu';
  * change them. While editing the drawing takes no strokes. The box is a sheet pulled up from the bottom (see
  * `PartsTray`), the drawing shrinking to a card above it, but whatever is carried off it is placed at full size: the
  * sheet sinks to a put-away strip and the card springs back while it lasts, and a part taken from the box and placed
- * on the board closes it, as Android's widget picker does. Held over the strip a while, the sheet rises again, so a
- * part from the board can reach the workbench: the board's bench panel, one plate filling its place in the sheet at
- * full size, where parts lie where they are put. Dragged across its free studs, a band selects the parts it touches;
- * pressed, a selected part or the selection's free space carries them all as one block, as a kit is carried, onto the
- * board or elsewhere on the bench. Dropped on the box's kits, a part or group from the board or the bench is kept as
- * a kit and stays where it was.
+ * on the board closes it, as Android's widget picker does; held over the strip a while, the sheet rises again. What
+ * is carried from the board leaves an open sheet as it is, to drop it on the workbench, the kits or the parts; a
+ * board panel carried onto the sheet becomes the block of its parts. The workbench is the board's bench panel, one
+ * plate filling its place in the sheet at full size, where parts lie where they are put. Dragged across its free
+ * studs, a band selects the parts it touches; pressed, a selected part or the selection's free space carries them all
+ * as one block, as a kit is carried, onto the board or elsewhere on the bench. Dropped on the box's kits, a part or
+ * group from the board or the bench is kept as a kit and stays where it was.
  *
  * While editing, a part dragged anywhere lifts and follows the pointer: over a panel, or touching one by an edge, it
  * takes the nearest cell and pushes the parts in its way aside, which also grows the panel; panels keep still on
@@ -133,8 +134,6 @@ export function BoardView(props: {
     width: (benchSize.width ?? 0) / benchScale(),
     height: (benchSize.height ?? 0) / benchScale()
   });
-  /** Whether something lifted is being carried; it shows at full size. */
-  const carrying = () => lifted()?.carried === true;
   /** The panels on screen, with where each lies; see `visiblePanels`. */
   const visible = createMemo(() => visiblePanels(shown(), props.openPanel, props.editing, view(), pinned(drag())));
   /** The workbench as shown, with where it lies in its place in the sheet. */
@@ -255,6 +254,16 @@ export function BoardView(props: {
       return;
     }
 
+    // A board panel carried into the open box becomes the block of its parts, for the workbench, the kits or the
+    // parts to take as any group.
+    if (current.type === 'panel' && !current.owned && overSheet(point)) {
+      const panel = current.base.panels.find((candidate) => candidate.id === current.panel);
+      if (panel) {
+        setDrag(panelAsBlock(current, panel, point));
+        return;
+      }
+    }
+
     if (current.type !== 'part') {
       setDrag({ ...current, point });
       return;
@@ -266,8 +275,10 @@ export function BoardView(props: {
       props.onOpenPanel(findPart(props.board.board(), current.id)?.panel.owner);
     }
 
+    // Only what is carried out of the box sinks it, to show the board at full size; from the board, an open box stays
+    // to take it. A closed one shows its strip to put it away.
     const carried = current.carried || moved;
-    if (carried) {
+    if (carried && (current.fromSheet || props.sheet.height() <= 0)) {
       followSheet(point);
     }
 
@@ -318,16 +329,6 @@ export function BoardView(props: {
       // A tap on the bench's free studs also closes a swatch's open panel.
       if (tapped) {
         props.onOpenPanel(undefined);
-      }
-
-      return;
-    }
-
-    // A panel from the board dropped on the kits is kept as one and stays where it was.
-    if (current.type === 'panel' && !current.owned && overKits(point)) {
-      const panel = current.base.panels.find((candidate) => candidate.id === current.panel);
-      if (panel) {
-        keepKit(current.base, panel);
       }
 
       return;
@@ -731,6 +732,7 @@ export function BoardView(props: {
       pinned: origins(board),
       newPanel: newId('panel'),
       fromBox: from.fromBox ?? false,
+      fromSheet: box()?.contains(element) === true,
       block: from.block,
       spawnAt: from.spawnAt,
       pressed: from.pressed,
@@ -889,13 +891,9 @@ export function BoardView(props: {
     };
   }
 
-  /** How large a part carried at `point` shows: as the workbench under it, the board, or at full size once carried. */
+  /** How large a part carried at `point` shows: as the workbench under it, otherwise as the board is now. */
   function ghostScale(point: Point) {
-    if (overBench(point)) {
-      return benchScale();
-    }
-
-    return carrying() ? 1 : view().scale;
+    return overBench(point) ? benchScale() : view().scale;
   }
 
   /** `point` on the page in the workbench's own pixels, before it is shrunk to fit, if its place is there. */
@@ -1078,14 +1076,47 @@ export function BoardView(props: {
     return rect !== undefined && inside(point, rect) && !overBench(point) && !overKits(point);
   }
 
-  /** Whether what is carried now, a part, group or panel from the board or the bench, would be kept as a kit. */
+  /** Whether what is carried now, a part or group from the board or the bench, would be kept as a kit. */
   function keepsOverKits() {
     const current = drag();
-    if (current?.type === 'part') {
-      return overKits(current.point) && keepable(current);
-    }
+    return current?.type === 'part' && overKits(current.point) && keepable(current);
+  }
 
-    return current?.type === 'panel' && !current.owned && overKits(current.point);
+  /** Whether `point` on the page is over the open sheet of the box. */
+  function overSheet(point: Point) {
+    const rect = box()?.getBoundingClientRect();
+    return !props.sheet.sunk() && props.sheet.height() > 0 && rect !== undefined && inside(point, rect);
+  }
+
+  /**
+   * Board panel drag `drag` of `panel`, now at `point`, as the carried block of the panel's parts, held where the
+   * panel was; the panel leaves the board until the block lands.
+   */
+  function panelAsBlock(drag: Extract<Drag, { type: 'panel' }>, panel: Panel, point: Point): Drag {
+    const bounds = partsBounds(panel.parts);
+    const parts = panel.parts.map((part) => ({
+      ...part,
+      cell: { column: part.cell.column - bounds.column, row: part.cell.row - bounds.row }
+    }));
+    return {
+      type: 'part',
+      pointer: drag.pointer,
+      point,
+      start: drag.start,
+      grab: { x: drag.grab.x - bounds.column * pitch, y: drag.grab.y - bounds.row * pitch },
+      settled: point,
+      base: replacePanel(drag.base, panel.id, { ...panel, parts: [] }),
+      before: drag.base,
+      pinned: origins(drag.base),
+      newPanel: panel.id,
+      fromBox: false,
+      fromSheet: false,
+      block: { parts, panels: [] },
+      carried: true,
+      id: newId('block'),
+      kind: 'kit',
+      span: { columns: bounds.columns, rows: bounds.rows }
+    };
   }
 
   /** Whether `point` on the page is over the box's kits while the sheet shows them. */
@@ -1354,6 +1385,8 @@ type Drag = { pointer: number; point: Point; base: Board } & (
       fromBox: boolean;
       /** The board as the drag began, which a drop on the kits leaves as it was. */
       before: Board;
+      /** Whether it was taken from the box or the workbench, so carrying it off sinks the sheet. */
+      fromSheet: boolean;
       /** A kit's parts and owned panels, carried as one block of `span`. */
       block?: { parts: Part[]; panels: Panel[] };
       /** Where the spawn menu it came from was opened, where a tap puts it. */
