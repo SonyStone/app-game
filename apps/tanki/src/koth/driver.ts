@@ -17,7 +17,8 @@ export type Obstacle = { x: number; y: number; radius: number };
  * then plans again.
  *
  * The hull trails its tow point and cuts corners, so a tank given its heading eases off when its
- * nose is about to meet a wall: it touches walls gently instead of ramming them.
+ * nose is about to meet a wall at speed: it touches walls gently instead of ramming them. Pressed
+ * against a wall already, it keeps full throttle to slide along it or turn away.
  */
 export function createDriver(grid: NavGrid) {
   let path: Point[] = [];
@@ -32,6 +33,7 @@ export function createDriver(grid: NavGrid) {
   let side = 1;
   let longestStall = 0;
   let stalls = 0;
+  let last: { at: number; position: Point } | undefined;
 
   return {
     /** The path being followed, from the tank's position when it was planned. */
@@ -108,12 +110,15 @@ export function createDriver(grid: NavGrid) {
         return unstick.direction;
       }
 
-      const ease = options.heading === undefined ? 1 : easeBeforeWall(position, options.heading, steered);
+      const speed = last && now > last.at ? distance(position, last.position) / (now - last.at) : 0;
+      last = { at: now, position: { x: position.x, y: position.y } };
+      const ease = options.heading === undefined || speed < BRAKE_SPEED ? 1 : easeBeforeWall(position, options.heading, steered);
       return { x: steered.x * throttle * ease, y: steered.y * throttle * ease };
     },
 
     /** Forgets the path and the stall history, for a new tank; the clock may have started over. */
     reset() {
+      last = undefined;
       path = [];
       next = 1;
       goal = undefined;
@@ -203,12 +208,13 @@ const STUCK_TIME = 1.2;
 const UNSTICK_TIME = 0.7;
 const UNSTICK_ANGLE = 0.9;
 /**
- * A tank whose nose, `NOSE` px ahead of its center, is closer than `BRAKE_GAP` px to an obstacle
- * drives at `BRAKE_THROTTLE`, slow enough that touching a wall is no ram.
+ * A tank faster than `BRAKE_SPEED` px/s whose nose, `NOSE` px ahead of its center, is closer than
+ * `BRAKE_GAP` px to an obstacle drives at `BRAKE_THROTTLE`, slow enough that touching a wall is no ram.
  */
 const NOSE = 22;
 const BRAKE_GAP = 8;
 const BRAKE_THROTTLE = 0.4;
+const BRAKE_SPEED = 140;
 /** Radius of a hull for avoidance, and the gap within which other bodies push it aside. */
 const HULL_RADIUS = 22;
 const AVOID_GAP = 45;
