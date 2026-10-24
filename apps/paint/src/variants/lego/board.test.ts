@@ -1,7 +1,9 @@
 import { expect, it } from 'vitest';
 import {
+  frameAt,
   panelFrame,
   partsBounds,
+  pinPanels,
   pitch,
   placeBlock,
   placePart,
@@ -95,4 +97,17 @@ it('drops the panels of parts that are gone, and the panels of the parts on thos
   };
 
   expect(pruneOwned(board).panels.map((panel) => panel.id)).toEqual(['main', 'kept-panel']);
+});
+
+it('keeps a panel at the view edge still while it grows, and shifts it in only once kept', () => {
+  const view = { width: 400, height: 400 };
+  const panel = { id: 'p', at: { x: 0.9, y: 0 }, parts: [part('a', 0, 0)] };
+  const { origin } = panelFrame(panel, view);
+  const grown = { ...panel, parts: [part('b', 0, 0), part('a', 1, 0)] };
+
+  expect(frameAt(grown, origin).origin).toEqual(origin);
+  expect(panelFrame(grown, view).origin.x).toBeLessThan(origin.x);
+
+  const kept = pinPanels({ panels: [grown] }, new Map([['p', origin]]), view);
+  expect(kept.panels[0]?.at).toEqual({ x: origin.x / view.width, y: origin.y / view.height });
 });

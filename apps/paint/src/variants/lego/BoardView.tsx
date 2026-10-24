@@ -4,12 +4,14 @@ import {
   cellGap,
   cellSize,
   findPart,
+  frameAt,
   nearestCell,
   newId,
   ownedFrame,
   ownedPanel,
   panelFrame,
   partsBounds,
+  pinPanels,
   pitch,
   placeBlock,
   placePart,
@@ -23,6 +25,7 @@ import {
   type Panel,
   type Part,
   type Point,
+  type Rect,
   type Span
 } from './board';
 import type { createBoard } from './createBoard';
@@ -34,12 +37,13 @@ import { SpawnMenu } from './SpawnMenu';
 
 /**
  * The board over the drawing: its panels, and in edit mode the studs, the box of parts and kits, and the drags that
- * change them. While editing, the drawing and the board shrink to a card (see `.editor[data-editing]`) with the box
- * docked in the room left beside it, so nothing covers the board; the drawing then takes no strokes.
+ * change them. While editing, the drawing and the board shrink to a card (see `.cardMode`) with the box docked in
+ * the room left beside it, so nothing covers the board; the drawing then takes no strokes.
  *
- * While editing, a part dragged anywhere lifts and follows the pointer: over a panel (or one cell beside it) it takes
- * the nearest cell and pushes the parts in its way aside, which also grows the panel; over the bare drawing it starts
- * a panel of its own; over the box it is put away. A kit from the box lands the same way, as one block of its parts.
+ * While editing, a part dragged anywhere lifts and follows the pointer: over a panel, or touching one by an edge, it
+ * takes the nearest cell and pushes the parts in its way aside, which also grows the panel; panels keep still on
+ * screen until the drag ends, even at the view's edge. Over the bare drawing it starts a panel of its own; over the
+ * box it is put away. A kit from the box lands the same way, as one block of its parts.
  * Its corner handle sizes a part in whole cells, pushing neighbours right and down; a part with several looks also
  * has a handle opening their chooser. A panel dragged by its rim moves freely, and its button keeps it as a kit.
  *
@@ -96,7 +100,7 @@ export function BoardView(props: {
     return current.type === 'part' ? partDrop(current, current.settled).board : result(current);
   });
   /** The panels on screen, with where each lies; see `visiblePanels`. */
-  const visible = createMemo(() => visiblePanels(shown(), props.openPanel, props.editing, view()));
+  const visible = createMemo(() => visiblePanels(shown(), props.openPanel, props.editing, view(), pinned(drag())));
   const chain = () => openChain(props.board.board(), props.openPanel);
 
   /** The drop a lifted part waits on before the parts in its way move aside; see `reorderDelay`. */
@@ -202,7 +206,8 @@ export function BoardView(props: {
     setDrag(undefined);
     let point = { x: event.clientX, y: event.clientY };
     if (current.type !== 'part') {
-      props.board.set(result({ ...current, point }));
+      const ended = result({ ...current, point });
+      props.board.set(current.type === 'resize' ? pinPanels(ended, current.pinned, view()) : ended);
       return;
     }
 
@@ -229,7 +234,7 @@ export function BoardView(props: {
       next = putPanel(next, { id: newId('panel'), at: { x: 0, y: 0 }, owner: current.id, parts });
     }
 
-    props.board.set(pruneOwned(next));
+    props.board.set(pruneOwned(pinPanels(next, current.pinned, view())));
   };
   createEventListener(window, 'pointerup', finish);
   createEventListener(window, 'pointercancel', (event) => {
@@ -522,6 +527,7 @@ export function BoardView(props: {
       grab,
       settled: point,
       base: findPart(board, part.id) ? removePart(board, part.id) : board,
+      pinned: origins(board),
       newPanel: newId('panel'),
       fromBox: from.fromBox ?? false,
       block: from.block,
@@ -550,6 +556,7 @@ export function BoardView(props: {
       point: { x: event.clientX, y: event.clientY },
       start: { x: event.clientX, y: event.clientY },
       base: props.board.latest(),
+      pinned: origins(props.board.latest()),
       panel,
       id,
       span
@@ -568,6 +575,12 @@ export function BoardView(props: {
       base: props.board.latest(),
       panel: panel.id
     });
+  }
+
+  /** Where each panel on screen has its cell (0, 0) now, to keep it there through a drag; see `frameAt`. */
+  function origins(board: Board) {
+    const frames = visiblePanels(board, props.openPanel, props.editing, view());
+    return new Map(frames.map(({ panel, frame }) => [panel.id, frame.origin]));
   }
 
   /** The board a resize or a panel move would leave if it ended now. */
@@ -610,33 +623,32 @@ export function BoardView(props: {
     // The lifted part's top-left corner, in view pixels.
     const pointer = toView(point);
     const corner = { x: pointer.x - drag.grab.x, y: pointer.y - drag.grab.y };
-    const center = {
-      x: corner.x + (drag.span.columns * pitch) / 2,
-      y: corner.y + (drag.span.rows * pitch) / 2
-    };
     const part = { id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks };
     const withOwned = (board: Board) => (drag.block ? { panels: [...board.panels, ...drag.block.panels] } : board);
 
-    // The top-most panel on screen whose cells, or one ring of cells around them, lie under the part's center.
-    for (const { panel, frame } of [...visiblePanels(drag.base, props.openPanel, props.editing, size)].reverse()) {
-      const { origin, rect } = frame;
-      const inside =
-        center.x >= rect.left - pitch &&
-        center.x <= rect.left + rect.width + pitch &&
-        center.y >= rect.top - pitch &&
-        center.y <= rect.top + rect.height + pitch;
-      if (inside) {
-        const cell = nearestCell(origin, corner);
-        const placed = drag.block
-          ? placeBlock(panel.parts, drag.block.parts, cell)
-          : placePart(panel.parts, { ...part, cell });
-        const before = new Map(panel.parts.map((other) => [other.id, other.cell]));
-        return {
-          board: withOwned(putPanel(drag.base, { ...panel, parts: placed })),
-          key: `${panel.id}:${cell.column},${cell.row}`,
-          pushes: placed.some((other) => before.has(other.id) && before.get(other.id) !== other.cell)
-        };
-      }
+    // The panel the part covers most of, counting half a cell around it, so a part, however long, joins a panel as
+    // soon as an edge of it touches; on a tie the top-most one.
+    const lifted = { left: corner.x, top: corner.y, width: drag.span.columns * pitch, height: drag.span.rows * pitch };
+    const panels = visiblePanels(drag.base, props.openPanel, props.editing, size, drag.pinned);
+    const target = panels.reduce<{ entry?: (typeof panels)[number]; area: number }>(
+      (best, entry) => {
+        const area = overlap(lifted, grow(entry.frame.rect, pitch / 2));
+        return area > 0 && area >= best.area ? { entry, area } : best;
+      },
+      { area: 0 }
+    ).entry;
+    if (target) {
+      const { panel, frame } = target;
+      const cell = nearestCell(frame.origin, corner);
+      const placed = drag.block
+        ? placeBlock(panel.parts, drag.block.parts, cell)
+        : placePart(panel.parts, { ...part, cell });
+      const before = new Map(panel.parts.map((other) => [other.id, other.cell]));
+      return {
+        board: withOwned(putPanel(drag.base, { ...panel, parts: placed })),
+        key: `${panel.id}:${cell.column},${cell.row}`,
+        pushes: placed.some((other) => before.has(other.id) && before.get(other.id) !== other.cell)
+      };
     }
 
     const at = { x: corner.x / size.width, y: corner.y / size.height };
@@ -663,9 +675,15 @@ export function BoardView(props: {
 /**
  * The panels of `board` on screen, in paint order, with where each lies: the free ones, then the open swatch's panel
  * and the panels of the swatches it lies in, outermost first. While editing, an open swatch without a panel shows an
- * empty one to drop parts into.
+ * empty one to drop parts into. The panels in `pinned` keep their cell (0, 0) at its origin there.
  */
-function visiblePanels(board: Board, open: string | undefined, editing: boolean, view: { width: number; height: number }) {
+function visiblePanels(
+  board: Board,
+  open: string | undefined,
+  editing: boolean,
+  view: { width: number; height: number },
+  pinned?: ReadonlyMap<string, Point>
+) {
   const owned = [...openChain(board, open)]
     .reverse()
     .map((owner) => ownedPanel(board, owner) ?? (editing ? emptyPanel(owner) : undefined))
@@ -681,8 +699,9 @@ function visiblePanels(board: Board, open: string | undefined, editing: boolean,
 
     const host = panels.find((other) => other.parts.some((part) => part.id === panel.owner));
     const anchor = host?.parts.find((part) => part.id === panel.owner);
-    let frame = panelFrame(panel, view);
-    if (host && anchor && depth < 8) {
+    const pin = pinned?.get(panel.id);
+    let frame = pin ? frameAt(panel, pin) : panelFrame(panel, view);
+    if (!pin && host && anchor && depth < 8) {
       const { origin } = frameOf(host, depth + 1);
       frame = ownedFrame(
         panel,
@@ -719,6 +738,23 @@ function openChain(board: Board, open: string | undefined) {
   return chain;
 }
 
+/** The area two rectangles share; 0 when they do not meet. */
+function overlap(a: Rect, b: Rect) {
+  const width = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
+  const height = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
+  return width > 0 && height > 0 ? width * height : 0;
+}
+
+/** `rect` with `by` CSS pixels more on every side. */
+function grow(rect: Rect, by: number): Rect {
+  return { left: rect.left - by, top: rect.top - by, width: rect.width + by * 2, height: rect.height + by * 2 };
+}
+
+/** The panel origins drag `drag` keeps still, if any. */
+function pinned(drag: Drag | undefined) {
+  return drag?.type === 'part' || drag?.type === 'resize' ? drag.pinned : undefined;
+}
+
 function emptyPanel(owner: string): Panel {
   return { id: `${owner}-panel`, at: { x: 0, y: 0 }, owner, parts: [] };
 }
@@ -736,6 +772,8 @@ type Drag = { pointer: number; point: Point; base: Board } & (
       grab: Point;
       /** The pointer position whose drop the board shows; it lags `point` while a drop would push parts aside. */
       settled: Point;
+      /** Where each panel had its cell (0, 0) as the drag began; panels keep still there while parts come and go. */
+      pinned: ReadonlyMap<string, Point>;
       /** The id a new panel gets if the part lands on the bare drawing. */
       newPanel: string;
       /** Whether it came out of the box rather than off the board. */
@@ -747,7 +785,7 @@ type Drag = { pointer: number; point: Point; base: Board } & (
       /** Whether it moved off where it was pressed. */
       carried: boolean;
     })
-  | { type: 'resize'; panel: string; id: string; span: Span; start: Point }
+  | { type: 'resize'; panel: string; id: string; span: Span; start: Point; pinned: ReadonlyMap<string, Point> }
   | { type: 'panel'; panel: string; grab: Point }
 );
 

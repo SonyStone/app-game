@@ -154,6 +154,37 @@ export function panelFrame(panel: Panel, view: { width: number; height: number }
 }
 
 /**
+ * Where `panel` lies when its cell (0, 0) starts at `origin`, as `panelFrame` gives it but not shifted into the view:
+ * a panel being edited stays where it was as it grows or shrinks, so the cells under the pointer keep still.
+ */
+export function frameAt(panel: Panel, origin: Point) {
+  const bounds = partsBounds(panel.parts);
+  const rect = {
+    left: origin.x + bounds.column * pitch - panelPadding,
+    top: origin.y + bounds.row * pitch - panelPadding,
+    width: bounds.columns * pitch - cellGap + panelPadding * 2,
+    height: bounds.rows * pitch - cellGap + panelPadding * 2
+  };
+
+  return { origin, rect };
+}
+
+/**
+ * `board` with each free panel in `origins` kept where its cell (0, 0) starts there, in a view of `view` size; a
+ * panel then partly off screen is shifted back in as `panelFrame` shows it.
+ */
+export function pinPanels(board: Board, origins: ReadonlyMap<string, Point>, view: { width: number; height: number }) {
+  return {
+    panels: board.panels.map((panel) => {
+      const origin = origins.get(panel.id);
+      return origin && panel.owner === undefined
+        ? { ...panel, at: { x: origin.x / view.width, y: origin.y / view.height } }
+        : panel;
+    })
+  };
+}
+
+/**
  * Where a panel owned by a part at `anchor` lies, as `panelFrame` gives it: beside the part (see `besideRect`), inside
  * `view`.
  */
