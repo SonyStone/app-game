@@ -52,7 +52,53 @@ describe('repair kits', () => {
 
     expect(mended.get('heavy')!).toBeGreaterThan(mended.get('scout')!);
   });
+
+  it("are taken by the edge of any class's hull and mend the side that touched them more", () => {
+    for (const id of TANK_CLASS_IDS) {
+      const { combat, renderer } = createBattle();
+      const tankClass = TANK_CLASSES[id];
+      const { hull } = tankClass;
+      const tank = combat.spawnTank(
+        { x: 0, y: 0, rotation: 0 },
+        { color: 0, pullSpeed: pullSpeedFor(tankClass.speed), hull, mass: tankClass.mass, look: tankClass.look }
+      );
+
+      // The same holes into the front and the rear.
+      for (const side of [-1, 1]) {
+        for (let hole = 0; hole < 3; hole++) {
+          combat.blast({ x: side * (hull.halfLength + 6), y: (hole - 1) * 5 }, { radius: 20, hole: 4, depth: 2, knockback: 0 });
+        }
+      }
+
+      combat.step(1 / 60);
+      tank.hull.setTranslation({ x: 0, y: 0 }, true);
+      tank.hull.setRotation(0, true);
+      const before = halves(combat.armorOf(tank)!);
+      // A kit just behind the rear, within reach of the hull's edge but far from its center.
+      const kits = createKits(renderer, [{ x: -hull.halfLength - 6, y: 0, size: 'small' }], combat);
+
+      expect(kits.step(1, [tank])).toEqual([tank]);
+
+      combat.step(1 / 60);
+      const after = halves(combat.armorOf(tank)!);
+
+      expect(after.rear - before.rear).toBeGreaterThan((after.front - before.front) * 1.5);
+    }
+  });
 });
+
+/** Cells of armor in the rear half of a hull's field and in its front half. */
+function halves(field: { data: Float32Array; cols: number; originX: number; cell: number }) {
+  const counts = { rear: 0, front: 0 };
+
+  for (let cell = 0; cell * 4 < field.data.length; cell++) {
+    if (field.data[cell * 4] < 0) {
+      counts[field.originX + (cell % field.cols) * field.cell < 0 ? 'rear' : 'front']++;
+    }
+  }
+
+  return counts;
+}
 
 /** A battle on a real Rapier world, seeded, with a renderer that only hands out field slots. */
 function createBattle() {
