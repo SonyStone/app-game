@@ -39,8 +39,8 @@ export type ValueKind = 'size' | 'opacity' | 'hue' | 'saturation' | 'brightness'
 const scrubLength = 300;
 
 /**
- * Single-button actions: commands, tools to switch to, and the panels a button opens beside itself (the layers and
- * the brush library).
+ * Single-button actions: commands, tools to switch to, and the panels a button opens beside itself (the layers, the
+ * brush library and the file commands).
  */
 export type ActionKind =
   | 'undo'
@@ -52,20 +52,22 @@ export type ActionKind =
   | 'fill'
   | 'transform'
   | 'layers'
-  | 'brushes';
+  | 'brushes'
+  | 'file';
 
 /** The color parts; see `colorParts.tsx`. */
 export type ColorKind = 'swatch' | 'wheel' | 'pair' | 'hex' | 'history' | 'palette' | 'harmony' | 'mask';
 
 /**
  * What floats over the board: a value as a full slider, the chooser of part `id`'s looks, the layers, the brush
- * library, or a short note on how to use a part.
+ * library, the file commands, or a short note on how to use a part.
  */
 export type Popup =
   | { kind: 'value'; value: ValueKind }
   | { kind: 'looks'; id: string }
   | { kind: 'layers' }
   | { kind: 'brushes' }
+  | { kind: 'file' }
   | { kind: 'note'; text: string };
 
 /**
@@ -146,6 +148,7 @@ export const boxSections: readonly { title: string; kinds: readonly string[] }[]
   {
     title: 'Tools',
     kinds: [
+      'action:file',
       'action:brushes',
       'action:eraser',
       'action:lasso',
@@ -577,7 +580,8 @@ const actions: Record<ActionKind, { label: string; icon: SketchIconName }> = {
   fill: { label: 'Fill', icon: 'fill' },
   transform: { label: 'Transform', icon: 'move' },
   layers: { label: 'Layers', icon: 'layers' },
-  brushes: { label: 'Brushes', icon: 'brush' }
+  brushes: { label: 'Brushes', icon: 'brush' },
+  file: { label: 'File', icon: 'paper' }
 };
 
 /**
@@ -646,6 +650,7 @@ function ActionPart(props: {
         return;
       case 'layers':
       case 'brushes':
+      case 'file':
         props.onPopup(anchor, { kind: props.action });
         return;
       case 'local-undo':

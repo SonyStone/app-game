@@ -378,6 +378,42 @@
   animation: none;
 }
 
+/* The file commands the File part opens: one row each, icon, name and what it makes. */
+.fileMenu {
+  display: grid;
+  min-width: 240px;
+
+  button {
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: #ffffff;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  button:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.1);
+  }
+
+  button:disabled {
+    opacity: 0.45;
+  }
+
+  small {
+    color: rgb(255 255 255 / 0.55);
+    font-weight: 500;
+  }
+}
+
 /* A short note on how to use a part, such as the fill without a selection. */
 .note {
   max-width: 260px;

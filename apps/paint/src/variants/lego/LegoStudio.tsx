@@ -19,6 +19,7 @@ import { besideRect, findPart } from './board';
 import { BoardView } from './BoardView';
 import { createBoard } from './createBoard';
 import { closedHeight, createSheet } from './createSheet';
+import { FileMenu } from './FileMenu';
 import { createKits } from './kits';
 import styles from './LegoStudio.module.css';
 import { LookChooser } from './LookChooser';
@@ -201,6 +202,9 @@ export function LegoStudio(props: PaintVariantProps) {
                       </div>
                     </section>
                   </div>
+                </Match>
+                <Match when={popup()?.popup.kind === 'file'}>
+                  <FileMenu session={session} onDone={() => setPopup(undefined)} />
                 </Match>
                 <Match when={popup()?.popup.kind === 'note' && popup()!.popup}>
                   {(open) => <p class={styles.note}>{(open() as Extract<Popup, { kind: 'note' }>).text}</p>}
