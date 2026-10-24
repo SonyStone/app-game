@@ -8,6 +8,7 @@ import { makeArenaInput } from '../arena/input';
 import { createRangeRenderer } from '../damage/renderer';
 import { Rapier2D, useRapier2D } from '../physics/Rapier2D';
 import { createWorld } from '../physics/World';
+import { AimOverlay, aimOnScreen, type AimView } from './AimOverlay';
 import { ClassMenu } from './classes/ClassMenu';
 import { BotThoughts, KothHud, MatchResult, type HudState, type ThoughtView } from './Hud';
 import { createKothMatch, type KothMatch } from './match';
@@ -24,14 +25,18 @@ import { TANK_CLASS_IDS, type TankClassId } from './tanks';
  * wrecks of their class that are cover and pieces that stay on the ground. Repair kits on the map
  * mend armor as the base does, more on the side of the hull that touches them.
  *
+ * The player aims with a crosshair of the game's own instead of the cursor; a line from the gun
+ * shows where the next shot goes and what it will hit, and a ring marks the player's tank (see
+ * `AimOverlay`).
+ *
  * Keys: 1-5 pick a class and C opens the class menu, R restarts, B shows what the bots think, V
  * hands the player's tank to a bot and shows the whole map (1-8 follow a tank, 0 shows the whole
- * map again). The right mouse button or Shift spins a Heavy's gatling up without firing and turns
- * a Sniper's hull on the spot toward the cursor, which it also does by itself when the player
- * stops driving and aims outside its gun's arc. In the address, `?watch` starts watching right
- * away, `?hold=30` shortens the hold time that wins to 30 seconds, `?class=scout` starts as
- * that class with the menu closed and `?slow=4` runs the game four times slower, to look at
- * effects frame by frame.
+ * map again), X switches the look of the aim. The right mouse button or Shift spins a Heavy's
+ * gatling up without firing and turns a Sniper's hull on the spot toward the cursor, which it also
+ * does by itself when the player stops driving and aims outside its gun's arc. In the address,
+ * `?watch` starts watching right away, `?hold=30` shortens the hold time that wins to 30 seconds,
+ * `?class=scout` starts as that class with the menu closed, `?aim=line` picks the aim's look and
+ * `?slow=4` runs the game four times slower, to look at effects frame by frame.
  */
 export default function KothRoute() {
   const address = new URLSearchParams(window.location.search);
@@ -41,6 +46,7 @@ export default function KothRoute() {
   const [watching, setWatching] = createSignal(address.has('watch'));
   const [state, setState] = createSignal<HudState>();
   const [thoughts, setThoughts] = createSignal<ThoughtView[]>([]);
+  const [aim, setAim] = createSignal<AimView>();
   const [menu, setMenu] = createSignal(!address.has('watch') && !address.has('class'));
   const [choice, setChoice] = createSignal<{ id: TankClassId; count: number }>();
 
@@ -82,12 +88,14 @@ export default function KothRoute() {
             onFrame={(frame) => {
               setState(frame.state);
               setThoughts(frame.thoughts);
+              setAim(frame.aim);
             }}
           />
         </Rapier2D>
       </GpuCanvas>
       <BotThoughts thoughts={thoughts()} />
       <KothHud state={state()} watching={watching()} />
+      <AimOverlay canvas={canvas()} view={aim()} player={state()?.player} active={!menu() && !watching() && !state()?.capture.winner} />
       <MatchResult state={state()} onRestart={() => setRestarts((count) => count + 1)} />
       <Show when={menu() && !watching() && state()}>
         {(shown) => (
@@ -101,8 +109,9 @@ export default function KothRoute() {
         )}
       </Show>
       <p class="pointer-events-none absolute bottom-3 left-4 m-0 text-xs text-white/60">
-        WASD drive · mouse aims · click fires · right button or Shift: spin up (Heavy), turn on the spot (Sniper) · C or 1-5 class · walls
-        break, ram fences · wrecks are cover · green kits mend where they touch · B bot thoughts · V watch (1-8 follow, 0 map) · R restart
+        WASD drive · mouse aims: the line shows what the shot hits · click fires · right button or Shift: spin up (Heavy), turn on the spot
+        (Sniper) · C or 1-5 class · walls break, ram fences · wrecks are cover · green kits mend where they touch · X aim look · B bot thoughts
+        · V watch (1-8 follow, 0 map) · R restart
       </p>
     </div>
   );
@@ -127,7 +136,7 @@ const PIXELS_PER_METER = 100;
  * @param thoughts - Reports what each bot thinks, placed on screen, with every frame.
  * @param choice - The class the player asked for last, handed to the match whenever it changes after mount.
  * @param playerClass - The player's first class, read once; anything but a class id means the Soldier.
- * @param onFrame - Receives the display state after each frame.
+ * @param onFrame - Receives the display state after each frame, with the player's aim on screen.
  */
 function KothScene(props: {
   canvas: HTMLCanvasElement;
@@ -136,7 +145,7 @@ function KothScene(props: {
   thoughts: boolean;
   choice: { id: TankClassId; count: number } | undefined;
   playerClass: string | null;
-  onFrame: (frame: { state: HudState; thoughts: ThoughtView[] }) => void;
+  onFrame: (frame: { state: HudState; thoughts: ThoughtView[]; aim: AimView | undefined }) => void;
 }) {
   const canvas = untrack(() => props.canvas);
   const rapier = useRapier2D();
@@ -225,7 +234,11 @@ function KothScene(props: {
     const shake = match.shake;
     const view = { ...camera, x: camera.x + (Math.random() * 2 - 1) * shake, y: camera.y + (Math.random() * 2 - 1) * shake };
     renderer.render(view, screen, BACKGROUND, dt);
-    props.onFrame({ state: match.hud(), thoughts: props.thoughts && !match.capture.winner ? thoughtsOnScreen(match, camera, screen) : [] });
+    props.onFrame({
+      state: match.hud(),
+      thoughts: props.thoughts && !match.capture.winner ? thoughtsOnScreen(match, camera, screen) : [],
+      aim: props.watching ? undefined : aimOnScreen(match, { angle: aim, reach }, view, screen)
+    });
   }
 
   /**

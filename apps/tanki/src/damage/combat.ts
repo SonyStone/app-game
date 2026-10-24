@@ -378,12 +378,34 @@ export function createCombat(
     },
 
     /**
-     * How far a ray goes before it meets a wall, a crate or a tank's armor, and which tank it met
-     * if any; `skip` lets it pass through tanks it returns true for.
+     * How far a ray goes before it meets a wall, a wreck, a crate or a tank's armor, as a shell's
+     * flight finds it; `skip` lets it pass through tanks it returns true for. Besides the distance
+     * it tells which tank it met, if any, and whether its core, what kind of thing it met, whether
+     * shots chip that thing, and the outward normal of its surface there.
+     *
+     * @param options.overRubble - Pixels from `from` over which the ray passes over rubble, as a
+     *   shell does for `OVER_RUBBLE` px past the muzzle; defaults to 0.
+     * @param options.height - Height above the ground the ray flies at, as a lobbed shell does: it
+     *   flies over the bodies, rubble and wrecks lower than that and bounces off a wall's surface
+     *   as the shell would.
      */
-    raycast(from: Point, direction: Point, range: number, skip?: (tank: Tank) => boolean) {
-      const hit = castShot(from, direction, (body) => body.tank !== undefined && (skip?.(body.tank) ?? false), range);
-      return { distance: hit.distance, tank: hit.target?.tank };
+    raycast(from: Point, direction: Point, range: number, skip?: (tank: Tank) => boolean, options: { overRubble?: number; height?: number } = {}) {
+      const passes = (body: Armored) => body.tank !== undefined && (skip?.(body.tank) ?? false);
+      const hit = options.height === undefined ? castShot(from, direction, passes, range, options.overRubble) : castAbove(from, direction, passes, range, options.height);
+      const at = { x: from.x + direction.x * hit.distance, y: from.y + direction.y * hit.distance };
+      const kind: 'tank' | 'crate' | 'wreck' | 'wall' | undefined = hit.target ? (hit.target.tank ? 'tank' : 'crate') : hit.wreck ? 'wreck' : hit.normal ? 'wall' : undefined;
+
+      return {
+        distance: hit.distance,
+        tank: hit.target?.tank,
+        /** Whether the ray met an open core before any armor. */
+        core: hit.part === 'core',
+        /** What the ray met; `undefined` when it flew its whole range. */
+        kind,
+        /** Whether shots chip what the ray met: anything but steel, the border and campfire stones. */
+        breakable: kind !== undefined && (kind !== 'wall' || hit.tile !== undefined),
+        normal: hit.normal ?? (hit.target && worldNormal(hit.target, at))
+      };
     },
 
     /** Turns the barrels of a gatling turret to `angle` about their axis, for drawing. */
@@ -1407,23 +1429,28 @@ export function createCombat(
    * the turret was. It passes its own tank until its first bounce and teammates without friendly fire.
    */
   function castLob(shell: Shell, lob: LobState, from: Point, maxDistance: number) {
+    return castAbove(from, shell.direction, (body) => passesShell(shell, body), maxDistance, lob.height);
+  }
+
+  /** `castShot` for something flying `height` pixels above the ground, as `castLob` describes. */
+  function castAbove(from: Point, direction: Point, skip: (body: Armored) => boolean, maxDistance: number, height: number) {
     const hit = castShot(
       from,
-      shell.direction,
-      (body) => body.top <= lob.height || passesShell(shell, body),
+      direction,
+      (body) => body.top <= height || skip(body),
       maxDistance,
-      lob.height > RUBBLE_HEIGHT ? Infinity : 0,
-      lob.height >= WRECK_TOP
+      height > RUBBLE_HEIGHT ? Infinity : 0,
+      height >= WRECK_TOP
     );
 
     if (!hit.tile) {
       return hit;
     }
 
-    const at = { x: from.x + shell.direction.x * hit.distance, y: from.y + shell.direction.y * hit.distance };
+    const at = { x: from.x + direction.x * hit.distance, y: from.y + direction.y * hit.distance };
     const normal = walls.surfaceNormal(at);
     // A slope met from behind is a seam or a corner the field sees wrong; the collider's face is surer there.
-    return normal && normal.x * shell.direction.x + normal.y * shell.direction.y < 0 ? { ...hit, normal } : hit;
+    return normal && normal.x * direction.x + normal.y * direction.y < 0 ? { ...hit, normal } : hit;
   }
 
   /** Ends a shell where it stopped at `at`: a shell with a blast goes off there and throws out its shrapnel. */
@@ -2220,7 +2247,7 @@ const HITSCAN_HIT = { hole: 2.3, depth: 0, knockback: 300 };
  * tank right behind rubble shoots over it, while shots from farther away meet it. The muzzle is
  * `BARREL` px from a hull's center.
  */
-const OVER_RUBBLE = 64;
+export const OVER_RUBBLE = 64;
 const BARREL = 30;
 /** Pixels from a tank's center over which it sees and shoots over rubble: its barrel and `OVER_RUBBLE` past the muzzle. */
 export const SIGHT_OVER_RUBBLE = BARREL + OVER_RUBBLE;
@@ -2228,7 +2255,7 @@ export const SIGHT_OVER_RUBBLE = BARREL + OVER_RUBBLE;
 const KNOCKBACK_SPIN_SHARE = 1 / 15;
 const RECOIL = 25;
 /** Shots meeting armor at more than about 65 degrees from its normal bounce off. */
-const RICOCHET_COS = 0.42;
+export const RICOCHET_COS = 0.42;
 const RICOCHET_PUSH = 90;
 const MAX_RICOCHETS = 2;
 const TRAIL_SPACING = 15;
@@ -2246,7 +2273,7 @@ const CORE_HEIGHT = 3;
 const HULL_HEIGHT = 6;
 const CRATE_HEIGHT = 8;
 /** A tank's top, its turret included, which a lobbed shell must clear to fly over it; a wreck's torn plates stand as tall. */
-const TANK_TOP = 12;
+export const TANK_TOP = 12;
 const WRECK_TOP = TANK_TOP;
 const CASEMATE_HEIGHT = 9;
 const MUZZLE_LIGHT_LIFE = 0.16;
@@ -2290,7 +2317,7 @@ const MAX_PUNCHES = 2;
 /** A piercing round's tunnel opens the core when it passes this close to the core's rim. */
 const BORE_REACH = 4;
 /** A grenade in flight this close to an enemy hull goes off. */
-const PROXIMITY = 8;
+export const PROXIMITY = 8;
 /** A wall or crate this much nearer a blast than a wall's face shields that face from it. */
 const BLAST_COVER = 2;
 const SHAKE_DECAY = 12;
