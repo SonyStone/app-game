@@ -439,8 +439,11 @@ export function createWalls(
     }
 
     renderer.uploadField(tile.slot!, tile.field);
-    rebuildColliders(tile);
-    changed.push(tile.bounds);
+
+    // A chip too small to change the colliders' blocks, as most of a gatling's are, changes no way or line of fire.
+    if (rebuildColliders(tile)) {
+      changed.push(tile.bounds);
+    }
   }
 
   /**
@@ -541,9 +544,20 @@ export function createWalls(
     );
   }
 
+  /**
+   * Builds a tile's colliders from its field anew, unless the field's blocks are the ones its
+   * standing colliders were built of.
+   *
+   * @returns Whether the colliders changed.
+   */
   function rebuildColliders(tile: Tile) {
-    removeColliders(tile);
     const { boxes } = solidBoxes(tile.field, COLLIDER_BLOCK);
+
+    if (tile.colliders.length > 0 && sameBoxes(boxes, tile.boxes)) {
+      return false;
+    }
+
+    removeColliders(tile);
     const angle = tile.wall.rotation ?? 0;
     tile.boxes = boxes;
     tile.colliders = boxes.map((box) => {
@@ -556,6 +570,8 @@ export function createWalls(
       owners.set(collider.handle, tile);
       return collider;
     });
+
+    return true;
   }
 
   function removeColliders(tile: Tile) {
@@ -961,6 +977,13 @@ function worldBounds(wall: WallPlacement, rect: Bounds, margin: number): Bounds 
     maxX: Math.max(...corners.map((corner) => corner.x)),
     maxY: Math.max(...corners.map((corner) => corner.y))
   };
+}
+
+function sameBoxes(a: readonly Tile['boxes'][number][], b: readonly Tile['boxes'][number][]) {
+  return (
+    a.length === b.length &&
+    a.every((box, index) => box.x === b[index].x && box.y === b[index].y && box.halfWidth === b[index].halfWidth && box.halfHeight === b[index].halfHeight)
+  );
 }
 
 function overlaps(a: Bounds, b: Bounds) {
