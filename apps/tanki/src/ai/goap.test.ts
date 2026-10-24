@@ -49,3 +49,25 @@ describe('chooseGoal', () => {
     expect(choice?.steps.map((step) => step.name)).toEqual(['driveToPoint']);
   });
 });
+
+describe('plan costs', () => {
+  it('finds the cheapest plan even when one cheap action settles several facts', () => {
+    const steps = plan({}, { armed: true, fueled: true }, [
+      { name: 'arm', requires: {}, effects: { armed: true }, cost: 0.3 },
+      { name: 'fuel', requires: {}, effects: { fueled: true }, cost: 0.3 },
+      { name: 'resupply', requires: {}, effects: { armed: true, fueled: true }, cost: 0.5 }
+    ]);
+
+    expect(steps?.map((step) => step.name)).toEqual(['resupply']);
+  });
+
+  it('leaves out actions priced at Infinity and reports the plan cost', () => {
+    const choice = chooseGoal({}, [{ name: 'safe', wants: { inCover: true }, priority: 1 }], [
+      { name: 'teleport', requires: {}, effects: { inCover: true }, cost: Infinity },
+      { name: 'drive', requires: {}, effects: { inCover: true }, cost: 3 }
+    ]);
+
+    expect(choice?.steps.map((step) => step.name)).toEqual(['drive']);
+    expect(choice?.cost).toBe(3);
+  });
+});
