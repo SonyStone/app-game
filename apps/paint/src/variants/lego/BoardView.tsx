@@ -49,7 +49,8 @@ import { SpawnMenu } from './SpawnMenu';
  * part from the board can reach the workbench: the board's bench panel, one plate filling its place in the sheet at
  * full size, where parts lie where they are put. Dragged across its free studs, a band selects the parts it touches;
  * pressed, a selected part or the selection's free space carries them all as one block, as a kit is carried, onto the
- * board or elsewhere on the bench, and the selection's button keeps them as a kit.
+ * board or elsewhere on the bench. Dropped on the box's kits, a part or group from the board or the bench is kept as
+ * a kit and stays where it was.
  *
  * While editing, a part dragged anywhere lifts and follows the pointer: over a panel, or touching one by an edge, it
  * takes the nearest cell and pushes the parts in its way aside, which also grows the panel; panels keep still on
@@ -84,6 +85,8 @@ export function BoardView(props: {
   /** The workbench's place in the sheet, which the bench panel is rendered into. */
   const [bench, setBench] = createSignal<HTMLElement>();
   const benchSize = createElementSize(bench);
+  /** The kits in the box, where a part or group from the board or the workbench is dropped to be kept as a kit. */
+  const [kitShelf, setKitShelf] = createSignal<HTMLElement>();
   /** The parts on the workbench selected to be carried together or kept as a kit. */
   const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set());
   /** The open spawn menu: where it was opened, and the pointer of the press while it is held. */
@@ -334,6 +337,11 @@ export function BoardView(props: {
 
     const drop = partDrop(current, point);
     props.sheet.setSunk(false);
+    if (drop.where === 'kits') {
+      keepAsKit(current);
+      return;
+    }
+
     if (current.fromBox && !current.spawnAt && drop.where === 'board') {
       props.sheet.to('closed');
     }
@@ -518,16 +526,7 @@ export function BoardView(props: {
               <Show when={band()}>{(rect) => <div class={styles.band} style={rectStyle(rect())} />}</Show>
               <Show when={!band() && selectionRect()}>
                 {(rect) => (
-                  <div class={styles.selection} style={rectStyle(rect())}>
-                    <button
-                      type="button"
-                      class={styles.saveKit}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={saveSelection}
-                    >
-                      Save as kit
-                    </button>
-                  </div>
+                  <div class={styles.selection} style={rectStyle(rect())} />
                 )}
               </Show>
             </div>
@@ -577,6 +576,8 @@ export function BoardView(props: {
           session={props.session}
           kits={props.kits}
           sheet={props.sheet}
+          kitsRef={setKitShelf}
+          overKits={lifted() !== undefined && overKits(lifted()!.point) && keepable(lifted()!)}
           over={lifted() !== undefined && overBox(lifted()!.point)}
           onLift={(event, kind) => startNewPart(event, kind)}
           onLiftKit={(event, kit) => startKitDrag(event, kit)}
@@ -696,6 +697,7 @@ export function BoardView(props: {
       grab,
       settled: point,
       base: from.base ?? (findPart(board, part.id) ? removePart(board, part.id) : board),
+      before: board,
       pinned: origins(board),
       newPanel: newId('panel'),
       fromBox: from.fromBox ?? false,
@@ -799,16 +801,6 @@ export function BoardView(props: {
         base: putPanel({ panels: board.panels.filter((other) => !other.bench) }, rest)
       }
     );
-  }
-
-  /** Keeps the selected parts of the workbench, with the panels of swatches among them, as a kit the user names. */
-  function saveSelection() {
-    const board = props.board.latest();
-    const parts = benchOf(board).parts.filter((part) => selected().has(part.id));
-    const name = parts.length > 0 ? window.prompt('Name the kit', 'My panel') : undefined;
-    if (name) {
-      props.kits.save(board, { id: 'selection', at: { x: 0, y: 0 }, parts }, name);
-    }
   }
 
   /** The workbench of `board` and the open chain of a swatch on it; see `visiblePanels`. */
@@ -957,6 +949,11 @@ export function BoardView(props: {
       return { where: 'bench' as const, ...placeOn(benchOf(drag.base), cell) };
     }
 
+    // Over the kits, something already on the board or the bench stays where it was, and is kept as a kit too.
+    if (overKits(point) && keepable(drag)) {
+      return { where: 'kits' as const, board: drag.before, key: 'kits', pushes: false };
+    }
+
     if (overBox(point)) {
       return { where: 'box' as const, board: drag.base, key: 'box', pushes: false };
     }
@@ -987,10 +984,31 @@ export function BoardView(props: {
     return shown && rect && inside(point, rect) ? rect : undefined;
   }
 
-  /** Whether `point` on the page is over the box, where a part is put away; the workbench in it is not. */
+  /** Whether `point` on the page is over the box, where a part is put away; the workbench and the kits in it are not. */
   function overBox(point: Point) {
     const rect = box()?.getBoundingClientRect();
-    return rect !== undefined && inside(point, rect) && !overBench(point);
+    return rect !== undefined && inside(point, rect) && !overBench(point) && !overKits(point);
+  }
+
+  /** Whether `point` on the page is over the box's kits while the sheet shows them. */
+  function overKits(point: Point) {
+    const rect = kitShelf()?.getBoundingClientRect();
+    return !props.sheet.sunk() && rect !== undefined && rect.height > 0 && inside(point, rect);
+  }
+
+  /** Whether carried `drag` was already on the board or the bench, rather than new from the box or a kit. */
+  function keepable(drag: Extract<Drag, { type: 'part' }>) {
+    const first = drag.block ? drag.block.parts[0]?.id : drag.id;
+    return first !== undefined && findPart(drag.before, first) !== undefined;
+  }
+
+  /**
+   * Keeps what `drag` carries as a new kit, with the panels of the swatches among it, named after the kits before it;
+   * the board stays as it was.
+   */
+  function keepAsKit(drag: Extract<Drag, { type: 'part' }>) {
+    const parts = drag.block?.parts ?? [{ id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks, cell: { column: 0, row: 0 } }];
+    props.kits.save(drag.before, { id: 'kept', at: { x: 0, y: 0 }, parts }, props.kits.nextName());
   }
 }
 
@@ -1110,14 +1128,18 @@ function benchOf(board: Board): Panel {
  * reach further.
  */
 function benchFrame(panel: Panel, size: { width: number; height: number }) {
-  const used = benchReach(panel);
+  // Whole cells only, so the plate ends with its padding rather than mid-stud.
+  const bounds = partsBounds(panel.parts);
+  const fit = (length: number) => Math.floor((length - (benchInset + panelPadding) * 2 + cellGap) / pitch);
+  const columns = Math.max(1, fit(size.width), panel.parts.length > 0 ? bounds.column + bounds.columns : 0);
+  const rows = Math.max(1, fit(size.height), panel.parts.length > 0 ? bounds.row + bounds.rows : 0);
   return {
     origin: benchOrigin,
     rect: {
       left: benchInset,
       top: benchInset,
-      width: Math.max(size.width, used.width) - benchInset * 2,
-      height: Math.max(size.height, used.height) - benchInset * 2
+      width: columns * pitch - cellGap + panelPadding * 2,
+      height: rows * pitch - cellGap + panelPadding * 2
     }
   };
 }
@@ -1184,6 +1206,8 @@ type Drag = { pointer: number; point: Point; base: Board } & (
       newPanel: string;
       /** Whether it came out of the box rather than off the board. */
       fromBox: boolean;
+      /** The board as the drag began, which a drop on the kits leaves as it was. */
+      before: Board;
       /** A kit's parts and owned panels, carried as one block of `span`. */
       block?: { parts: Part[]; panels: Panel[] };
       /** Where the spawn menu it came from was opened, where a tap puts it. */

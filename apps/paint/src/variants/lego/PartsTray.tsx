@@ -10,8 +10,8 @@ import { boxSections, kindLabel, lookOf, PartView, type Session } from './parts'
  * The box of parts while editing, a sheet pulled up from the bottom edge (see `createSheet`): a wheel turned over the
  * board or the sheet moves its edge, as does a drag on its handle, and a tap on the handle opens or closes it. It
  * holds the workbench, where the board puts its bench plate to lay parts out at full size, beside every part by
- * family with its name, the brushes, and the kits as live previews, the user's with a delete button (the workbench
- * above them in a narrow view). While it is sunk, the strip it leaves puts away what is dropped on it.
+ * family with its name, the brushes, and the kits as live previews, the user's with a delete button and a name to
+ * tap and rename (the workbench above them in a narrow view). A part or group dropped on the kits is kept as one. While it is sunk, the strip it leaves puts away what is dropped on it.
  */
 export function PartsTray(props: {
   session: Session;
@@ -26,6 +26,10 @@ export function PartsTray(props: {
   ref: (element: HTMLElement) => void;
   /** The workbench's place in the sheet. */
   benchRef: (element: HTMLElement) => void;
+  /** The kits, where a part or group from the board or the workbench is dropped to be kept as a kit. */
+  kitsRef: (element: HTMLElement) => void;
+  /** Whether something carried over the kits would be kept as one. */
+  overKits: boolean;
 }) {
   const [body, setBody] = createSignal<HTMLElement>();
   const closed = () => props.sheet.height() <= 0 && !props.sheet.sunk();
@@ -96,8 +100,8 @@ export function PartsTray(props: {
               </section>
             )}
           </For>
-          <section>
-            <h4>Kits</h4>
+          <section ref={props.kitsRef} class={styles.kitShelf} data-over={props.overKits ? '' : undefined}>
+            <h4>{props.overKits ? 'Drop to keep as a kit' : 'Kits'}</h4>
             <div class={styles.trayItems}>
               <For each={props.kits.kits()}>
                 {(kit) => (
@@ -226,8 +230,50 @@ export function KitTile(props: {
           </button>
         </Show>
       </div>
-      <span class={styles.trayCaption}>{props.kit.name}</span>
+      <Show when={props.kits.isSaved(props.kit.id)} fallback={<span class={styles.trayCaption}>{props.kit.name}</span>}>
+        <KitName name={props.kit.name} onRename={(name) => props.kits.rename(props.kit.id, name)} />
+      </Show>
     </div>
+  );
+}
+
+/** A kit of the user's name, which a tap turns into a field to rename it; Enter or leaving it keeps the name. */
+function KitName(props: { name: string; onRename: (name: string) => void }) {
+  const [editing, setEditing] = createSignal(false);
+  const keep = (field: HTMLInputElement) => {
+    const name = field.value.trim();
+    setEditing(false);
+    if (name && name !== props.name) {
+      props.onRename(name);
+    }
+  };
+
+  return (
+    <Show
+      when={editing()}
+      fallback={
+        <button type="button" class={[styles.trayCaption, styles.kitName]} title="Rename" onClick={() => setEditing(true)}>
+          {props.name}
+        </button>
+      }
+    >
+      <input
+        ref={(field) => queueMicrotask(() => field.select())}
+        class={styles.kitNameField}
+        value={props.name}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            keep(event.currentTarget);
+          }
+
+          if (event.key === 'Escape') {
+            event.stopPropagation();
+            setEditing(false);
+          }
+        }}
+        onBlur={(event) => keep(event.currentTarget)}
+      />
+    </Show>
   );
 }
 

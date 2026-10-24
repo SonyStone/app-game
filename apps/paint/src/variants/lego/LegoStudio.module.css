@@ -866,6 +866,39 @@
   transition: scale 200ms;
 }
 
+/* The kits, lit while something carried over them would be kept as a kit. */
+.kitShelf {
+  margin: -6px;
+  padding: 6px;
+  border-radius: 12px;
+  transition: background 120ms;
+
+  &[data-over] {
+    background: rgb(61 126 255 / 0.18);
+    outline: 2px dashed var(--lego-accent);
+    outline-offset: -2px;
+  }
+}
+
+.kitName {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: text;
+}
+
+.kitNameField {
+  width: 110px;
+  padding: 1px 4px;
+  border: 1px solid var(--lego-accent);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.1);
+  color: #ffffff;
+  font-size: 11px;
+  text-align: center;
+}
+
 .benchHint {
   position: absolute;
   right: 26px;

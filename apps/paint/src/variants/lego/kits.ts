@@ -40,6 +40,19 @@ export function createKits() {
     },
     remove(id: string) {
       store(latest().filter((kit) => kit.id !== id));
+    },
+    rename(id: string, name: string) {
+      store(latest().map((kit) => (kit.id === id ? { ...kit, name } : kit)));
+    },
+    /** A name for the next kit the user keeps: "Kit" and the first number no kit of theirs has. */
+    nextName() {
+      const names = new Set(latest().map((kit) => kit.name));
+      let number = latest().length + 1;
+      while (names.has(`Kit ${number}`)) {
+        number += 1;
+      }
+
+      return `Kit ${number}`;
     }
   };
 }
