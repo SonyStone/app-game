@@ -883,7 +883,8 @@ export function BoardView(props: {
       }
 
       // The workbench, with the panels of its swatches, is sized apart from the board.
-      const inBenchPlace = benchPanels().some((entry) => entry.panel.id === panel.id);
+      // From the drag's own board: `benchPanels` follows `shown`, which this computes.
+      const inBenchPlace = benchVisible(drag.base).some((entry) => entry.panel.id === panel.id);
       const scale = inBenchPlace ? benchScale() : size.scale;
       const span = spanAfter(drag.span, {
         x: (drag.point.x - drag.start.x) / scale,
