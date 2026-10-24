@@ -97,8 +97,8 @@ export default function KothRoute() {
         )}
       </Show>
       <p class="pointer-events-none absolute bottom-3 left-4 m-0 text-xs text-white/60">
-        WASD drive · mouse aims · click fires · right button or Shift: spin up (Heavy), turn on the spot (Sniper) · 1-5 or C class · stand on the
-        point to capture it · your base mends armor · B bot thoughts · V watch the bots (1-8 follow, 0 whole map) · R restart
+        WASD drive · mouse aims · click fires · right button or Shift: spin up (Heavy), turn on the spot (Sniper) · C or 1-5 class · B bot
+        thoughts · V watch (1-8 follow, 0 map) · R restart
       </p>
     </div>
   );
@@ -226,7 +226,7 @@ function KothScene(props: {
 
   /**
    * Follows the player's tank, a watched tank, or frames the whole map while watching. While the
-   * player's casemate gun charges or turns, the view slides forward along the gun, as a sniper's
+   * player's casemate gun charges a shot, the view slides forward along the gun, as a sniper's
    * scope looks far ahead.
    */
   function placeCamera(screen: { width: number; height: number }, dt: number) {
@@ -248,7 +248,7 @@ function KothScene(props: {
 
     overview = { zoom: 0 };
     const hud = match.hud().player;
-    const scoped = !props.watching && hud.weapon === 'charge' && (hud.charge !== undefined || match.seat.pivot !== undefined);
+    const scoped = !props.watching && hud.weapon === 'charge' && hud.charge !== undefined;
     scope += ((scoped ? 1 : 0) - scope) * Math.min(dt * SCOPE_SPEED, 1);
 
     if (target && match.seat.tank && scope > 0.01) {
