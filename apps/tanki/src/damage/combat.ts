@@ -37,7 +37,7 @@ import {
   type createRangeRenderer
 } from './renderer';
 import { createCrateField, createGrenadeField, createHullField, createShellField, MEDIUM_HULL, type HullSpec } from './shapes';
-import { createWalls, type Bounds, type Tile } from './walls';
+import { createWalls, RUBBLE_HEIGHT, WALL_BLOW, type Bounds, type Tile } from './walls';
 import { isRolling, launchLob, stepLob, type LobSpec, type LobState } from './weapons/lob';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
@@ -986,9 +986,19 @@ export function createCombat(
     shell?: Shell
   ) {
     if (!hit.target) {
-      const material = hit.tile && walls.chip(end, direction, hit.tile, blow.hole / SHELL_HOLE);
+      const scale = { hole: blow.hole / WALL_BLOW.hole, depth: blow.depth / WALL_BLOW.depth };
+      // A piercing round bores clean through a thin wall, such as a wooden fence, as through a crate.
+      const exit = shell && hit.tile && shell.pierce.thin > 0 ? walls.punch(end, direction, shell.pierce.armor, scale) : undefined;
+      const material = hit.tile && (exit ? hit.tile.material : walls.chip(end, direction, hit.tile, scale));
       impact(end, { x: -direction.x, y: -direction.y });
       spawnDust(end, direction, material ? material.color.map((channel) => channel * 0.6) : WALL_DUST);
+
+      if (exit && shell) {
+        shell.pierce.thin--;
+        spawnDust(exit, { x: -direction.x, y: -direction.y }, material!.color.map((channel) => channel * 0.6));
+        return { direction, from: exit, ricochet: false };
+      }
+
       return undefined;
     }
 
@@ -1267,11 +1277,21 @@ export function createCombat(
 
   /**
    * The first wall, or body taller than a lobbed shell flies, within `maxDistance` of it, with the
-   * wall's normal. It flies over rubble, passes its own tank until its first bounce and teammates
-   * without friendly fire.
+   * wall's normal: the slope of a breakable wall's surface where it has one. Rubble is low, as
+   * crates are: a grenade in the air flies over it and one rolling on the ground bounces off it.
+   * It passes its own tank until its first bounce and teammates without friendly fire.
    */
   function castLob(shell: Shell, lob: LobState, from: Point, maxDistance: number) {
-    return castShot(from, shell.direction, (body) => body.top <= lob.height || passesShell(shell, body), maxDistance, Infinity);
+    const hit = castShot(from, shell.direction, (body) => body.top <= lob.height || passesShell(shell, body), maxDistance, lob.height > RUBBLE_HEIGHT ? Infinity : 0);
+
+    if (!hit.tile) {
+      return hit;
+    }
+
+    const at = { x: from.x + shell.direction.x * hit.distance, y: from.y + shell.direction.y * hit.distance };
+    const normal = walls.surfaceNormal(at);
+    // A slope met from behind is a seam or a corner the field sees wrong; the collider's face is surer there.
+    return normal && normal.x * shell.direction.x + normal.y * shell.direction.y < 0 ? { ...hit, normal } : hit;
   }
 
   /** Ends a shell where it stopped at `at`: a shell with a blast goes off there and throws out its shrapnel. */
@@ -1723,6 +1743,29 @@ export function createCombat(
       reportHit(body, shooter, 'armor');
     }
 
+    blastWalls(at, spec);
+  }
+
+  /**
+   * Chips the breakable walls and heaps of rubble a blast at `at` reaches in the open: each takes a
+   * crater on its face nearest the blast, falling off with distance and grown by `structures`, as
+   * a crate's does.
+   */
+  function blastWalls(at: Point, spec: BlastSpec) {
+    const structures = spec.structures ?? 1;
+
+    for (const face of walls.facesNear(at, spec.radius)) {
+      const cover = castShot(at, face.direction, (body) => body.tank !== undefined, face.distance);
+
+      if (cover.distance < face.distance - BLAST_COVER && cover.tile !== face.tile) {
+        continue;
+      }
+
+      const falloff = 1 - 0.5 * (face.distance / spec.radius);
+      const scale = { hole: (spec.hole * falloff * Math.sqrt(structures)) / WALL_BLOW.hole, depth: (spec.depth * falloff * structures) / WALL_BLOW.depth };
+      const material = walls.chip(face.point, face.direction, face.tile, scale);
+      spawnDust(face.point, face.direction, material.color.map((channel) => channel * 0.6));
+    }
   }
 
   /**
@@ -2006,8 +2049,6 @@ const SHOT_RANGE = 1000;
  * its damping.
  */
 const HITSCAN_HIT = { hole: 2.3, depth: 0, knockback: 300 };
-/** Hole of a medium tank's shell, the blow that chips a wall material's full crater. */
-const SHELL_HOLE = 4.5;
 /**
  * A shot passes over rubble for this many pixels past the muzzle, about the depth of a heap, so a
  * tank right behind rubble shoots over it, while shots from farther away meet it. The muzzle is
@@ -2080,6 +2121,8 @@ const MAX_PUNCHES = 2;
 const BORE_REACH = 4;
 /** A grenade in flight this close to an enemy hull goes off. */
 const PROXIMITY = 8;
+/** A wall or crate this much nearer a blast than a wall's face shields that face from it. */
+const BLAST_COVER = 2;
 const SHAKE_DECAY = 12;
 /** Shots and blasts within this many pixels of the camera shake it fully, and beyond `SHAKE_FAR` not at all. */
 const SHAKE_NEAR = 200;
