@@ -237,7 +237,7 @@ describe('king of the hill with the player', () => {
     match.step(1 / 60);
     const mended = match.combat.armorLeft(player);
 
-    // A small kit mends part of the damage, a large one all of it.
+    // A small kit mends part of the damage, a large one half of it.
     expect(chipped).toBeLessThan(0.9);
     expect(mended).toBeGreaterThan(chipped + 0.01);
     expect(mended).toBeLessThan(0.99);
@@ -246,10 +246,13 @@ describe('king of the hill with the player', () => {
 
     place(player, large);
     match.step(1 / 60);
+    const halfMended = match.combat.armorLeft(player);
 
-    expect(match.combat.armorLeft(player)).toBeGreaterThan(0.999);
+    expect(halfMended - mended).toBeGreaterThan((1 - mended) * 0.35);
+    expect(halfMended).toBeLessThan(0.99);
 
     // Whole again, the tank drives over the small kit's pad until the kit comes back, and leaves it lying.
+    match.combat.repair(player, 1);
     place(player, small);
 
     for (let step = 0; step < 600; step++) {
@@ -315,7 +318,7 @@ describe('king of the hill with the player', () => {
     expect(chipped).toBeLessThan(0.72);
     expect(bot.stats.actions.pickUpKit?.started).toBeGreaterThanOrEqual(1);
     expect(kit.readyAt).toBeGreaterThan(0);
-    expect(match.combat.armorLeft(tank)).toBeGreaterThan(0.99);
+    expect(match.combat.armorLeft(tank) - chipped).toBeGreaterThan((1 - chipped) * 0.35);
   });
 
   it('lets the player drive and aim while bots fill the other seats, and hands the seat to a bot when watching', () => {

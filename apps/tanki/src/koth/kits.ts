@@ -106,9 +106,10 @@ export type Kit = KitPlacement & { readyAt: number };
 
 /**
  * Share of a tank's damage a kit mends: a small kit closes a hole onto the core and a good part of
- * the rest, about what a few hits chip; a large kit mends everything, as the base does.
+ * the rest, about what a few hits chip; a large kit mends half, as Team Fortress 2's medium kit
+ * heals, so only the base makes a tank whole again.
  */
-export const KIT_REPAIR = { small: 0.3, large: 1 };
+export const KIT_REPAIR = { small: 0.3, large: 0.5 };
 
 /** Seconds until a taken kit is back, as in Team Fortress 2. */
 export const KIT_RESPAWN = 10;

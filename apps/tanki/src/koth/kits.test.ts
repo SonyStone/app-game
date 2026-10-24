@@ -47,7 +47,9 @@ describe('repair kits', () => {
       createKits(renderer, [{ x: 0, y: 0, size: 'large' }], combat).step(1, [tank]);
       combat.step(1 / 60);
 
-      expect(combat.armorLeft(tank)).toBeGreaterThan(0.999);
+      // A large kit mends about half of what is left: only the base makes a tank whole.
+      expect((combat.armorLeft(tank) - after) / (1 - after)).toBeGreaterThan(0.4);
+      expect(combat.armorLeft(tank)).toBeLessThan(0.999);
     }
 
     expect(mended.get('heavy')!).toBeGreaterThan(mended.get('scout')!);
