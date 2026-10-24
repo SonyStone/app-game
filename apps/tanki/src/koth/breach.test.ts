@@ -5,6 +5,7 @@ import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import { createBreacher } from './breach';
 import { clampGun, inArc, turnInPlace } from './classes/casemate';
+import { TANK_CLASSES } from './classes/classes';
 import { createWeapon, type Trigger } from './classes/weapon';
 import { createDriver } from './driver';
 import { KOTH_MAP } from './map';
@@ -47,7 +48,7 @@ describe('breaking through walls', () => {
     expect(run.arrivedAt).toBeLessThan(6);
   });
 
-  it('shoots its way out through brick when there is no other way, and never through steel', () => {
+  it('breaks its way out through brick when there is no other way, as its class does best, and never through steel', () => {
     // A room of steel with one brick wall, on the side the bot wants to go.
     const room = (material: 'brick' | 'steel') => [
       { x: -200, y: -110, halfWidth: 100, halfHeight: 10, material: 'steel' as const },
@@ -55,16 +56,48 @@ describe('breaking through walls', () => {
       { x: -310, y: 0, halfWidth: 10, halfHeight: 120, material: 'steel' as const },
       { x: -88, y: 0, halfWidth: 12, halfHeight: 100, material }
     ];
-    const brick = drive({ walls: room('brick') }, { x: -200, y: 0 }, { x: 200, y: 0 }, 40);
+    const rammed = drive({ walls: room('brick') }, { x: -200, y: 0 }, { x: 200, y: 0 }, 40);
+    const shot = drive({ walls: room('brick') }, { x: -200, y: 0 }, { x: 200, y: 0 }, 40, undefined, TANK_CLASSES.demoman);
     const steel = drive({ walls: room('steel') }, { x: -200, y: 0 }, { x: 200, y: 0 }, 8);
 
-    expect(brick.stats.chosen).toBe(1);
-    expect(brick.stats.shots).toBeGreaterThanOrEqual(6);
-    expect(brick.stats.passed).toBe(1);
-    expect(brick.arrivedAt).toBeLessThan(40);
+    // A Soldier rams brick open in a couple of runs; a Demoman blows it apart with a few grenades.
+    expect(rammed.stats.chosen).toBe(1);
+    expect(rammed.stats.rams).toBeGreaterThanOrEqual(1);
+    expect(rammed.stats.shots).toBe(0);
+    expect(rammed.stats.passed).toBe(1);
+    expect(rammed.arrivedAt).toBeLessThan(20);
+    expect(shot.stats.chosen).toBe(1);
+    expect(shot.stats.shots).toBeGreaterThanOrEqual(3);
+    expect(shot.stats.rams).toBe(0);
+    expect(shot.stats.passed).toBe(1);
+    expect(shot.arrivedAt).toBeLessThan(20);
     expect(steel.stats.considered).toBe(0);
     expect(steel.stats.shots).toBe(0);
   }, 30_000);
+
+  it('breaks through brick by its class: a Heavy rams it, a Demoman blows it apart, a Scout drives round', () => {
+    // A brick wall across a tall field, with a way round at the bottom.
+    const layout = { halfHeight: 1500, walls: [{ x: 0, y: -50, halfWidth: 12, halfHeight: 1450, material: 'brick' as const }] };
+    const heavy = drive(layout, { x: -200, y: -300 }, { x: 200, y: -300 }, 30, undefined, TANK_CLASSES.heavy);
+    const demoman = drive(layout, { x: -200, y: -300 }, { x: 200, y: -300 }, 30, undefined, TANK_CLASSES.demoman);
+    const scout = drive(layout, { x: -200, y: -300 }, { x: 200, y: -300 }, 30, undefined, TANK_CLASSES.scout);
+
+    expect(heavy.stats.chosen).toBe(1);
+    expect(heavy.stats.rams).toBeGreaterThanOrEqual(1);
+    expect(heavy.stats.shots).toBe(0);
+    expect(heavy.stats.passed).toBe(1);
+    expect(demoman.stats.chosen).toBe(1);
+    expect(demoman.stats.shots).toBeGreaterThanOrEqual(3);
+    expect(demoman.stats.rams).toBe(0);
+    expect(demoman.stats.passed).toBe(1);
+    // Both got through straight, well before driving round would have brought them there.
+    expect(Math.max(heavy.lowest, demoman.lowest)).toBeLessThan(-150);
+    expect(Math.max(heavy.arrivedAt, demoman.arrivedAt)).toBeLessThan(15);
+    // Shooting its way through with a scattergun takes longer than the drive round.
+    expect(scout.stats.chosen).toBe(0);
+    expect(scout.walls.hits).toBe(0);
+    expect(scout.lowest).toBeGreaterThan(1300);
+  }, 60_000);
 
   it('does not stand and break a wall with an enemy near', () => {
     const run = drive({ walls: [fence(400)] }, { x: -200, y: -300 }, { x: 200, y: -300 }, 6, { x: 150, y: 50 });
