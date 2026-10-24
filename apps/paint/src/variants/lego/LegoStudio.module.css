@@ -940,10 +940,6 @@
     }
   }
 
-  .part[data-selected] {
-    outline: 2px solid var(--lego-accent);
-    outline-offset: 1px;
-  }
 }
 
 /* The bench and its selection, shrunk from the top-left corner when its parts would not fit. */
@@ -1000,7 +996,13 @@
   pointer-events: none;
 }
 
-/* The band dragged across the workbench, and the outline of the parts it selected, with their kit button. */
+/* A part selected, on the workbench or the board. */
+.part[data-selected] {
+  outline: 2px solid var(--lego-accent);
+  outline-offset: 1px;
+}
+
+/* The band dragged across the workbench or the board, and the outline around the parts it selected. */
 .band,
 .selection {
   position: absolute;

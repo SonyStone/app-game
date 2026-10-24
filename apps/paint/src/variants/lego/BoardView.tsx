@@ -157,21 +157,45 @@ export function BoardView(props: {
   const benchPanels = createMemo(() =>
     benchVisible(shown(), pinned(drag()))
   );
-  /** The band being dragged across the workbench, in its place's pixels. */
+  /** The band being dragged across the workbench or the board, in the pixels of the place it is dragged in. */
   const band = () => {
     const current = drag();
-    return current?.type === 'select' ? bandRect(current.start, current.point) : undefined;
+    return current?.type === 'select' ? { place: current.place, rect: bandRect(current.start, current.point) } : undefined;
   };
   /** The selected parts, or those the band touches while it is dragged. */
   const selection = createMemo<ReadonlySet<string>>(() => {
-    const rect = band();
-    if (!rect) {
+    const dragged = band();
+    if (!dragged) {
       return selected();
     }
 
-    const { panel, frame } = benchEntry();
-    return new Set(panel.parts.filter((part) => overlap(rect, partRect(part, frame.origin)) > 0).map((part) => part.id));
+    const entries = dragged.place === 'bench' ? [benchEntry()] : visible();
+    return new Set(
+      entries.flatMap(({ panel, frame }) =>
+        panel.parts.filter((part) => overlap(dragged.rect, partRect(part, frame.origin)) > 0).map((part) => part.id)
+      )
+    );
   });
+  /** Where the selected parts on the board lie together, in its pixels, while nothing is carried. */
+  const boardSelectionRect = () => {
+    const rects = visible().flatMap(({ panel, frame }) =>
+      panel.parts.filter((part) => selection().has(part.id)).map((part) => partRect(part, frame.origin))
+    );
+    if (rects.length === 0 || lifted()) {
+      return undefined;
+    }
+
+    const left = Math.min(...rects.map((rect) => rect.left));
+    const top = Math.min(...rects.map((rect) => rect.top));
+    const right = Math.max(...rects.map((rect) => rect.left + rect.width));
+    const bottom = Math.max(...rects.map((rect) => rect.top + rect.height));
+    return {
+      left: left - selectionPadding,
+      top: top - selectionPadding,
+      width: right - left + selectionPadding * 2,
+      height: bottom - top + selectionPadding * 2
+    };
+  };
   /** Where the selected parts lie together on the workbench, in its place's pixels, while nothing is carried. */
   const selectionRect = () => {
     const { panel, frame } = benchEntry();
@@ -250,7 +274,7 @@ export function BoardView(props: {
 
     const point = { x: event.clientX, y: event.clientY };
     if (current.type === 'select') {
-      setDrag({ ...current, point: inBench(point) ?? current.point });
+      setDrag({ ...current, point: (current.place === 'bench' ? inBench(point) : toView(point)) ?? current.point });
       return;
     }
 
@@ -322,11 +346,11 @@ export function BoardView(props: {
     setDrag(undefined);
     let point = { x: event.clientX, y: event.clientY };
     if (current.type === 'select') {
-      // A band selects what it touched; a tap on the bench's free studs clears the selection.
-      const end = inBench(point) ?? current.point;
+      // A band selects what it touched; a tap on free studs or the bare drawing clears the selection, and closes a
+      // swatch's open panel.
+      const end = (current.place === 'bench' ? inBench(point) : toView(point)) ?? current.point;
       const tapped = Math.hypot(end.x - current.start.x, end.y - current.start.y) < tapDistance;
       setSelected(tapped ? new Set<string>() : selection());
-      // A tap on the bench's free studs also closes a swatch's open panel.
       if (tapped) {
         props.onOpenPanel(undefined);
       }
@@ -349,11 +373,11 @@ export function BoardView(props: {
     }
 
     const tapped = Math.hypot(point.x - current.start.x, point.y - current.start.y) < tapDistance;
-    // A tap on a part of the workbench selects it alone, as a band around it would; a swatch also opens or closes.
-    const tappedId = tapped ? (current.fromBox ? current.pressed : current.id) : undefined;
+    // A tap on a part selects it alone, as a band around it would; a swatch also opens or closes.
+    const tappedId = tapped ? (current.pressed ?? (current.fromBox ? undefined : current.id)) : undefined;
     if (tappedId !== undefined) {
       const part = findPart(current.before, tappedId);
-      if (part?.panel.bench) {
+      if (part) {
         setSelected(new Set([tappedId]));
       }
 
@@ -390,8 +414,9 @@ export function BoardView(props: {
     }
 
     props.board.set(pruneOwned(pinPanels(next, current.pinned, view())));
-    const onBench = new Set(benchOf(props.board.latest()).parts.map((part) => part.id));
-    setSelected(new Set([...selected()].filter((id) => onBench.has(id))));
+    // What was selected stays so where it landed, to be carried on.
+    const kept = props.board.latest();
+    setSelected(new Set([...selected()].filter((id) => findPart(kept, id) !== undefined)));
   };
   createEventListener(window, 'pointerup', finish);
   createEventListener(window, 'pointercancel', (event) => {
@@ -462,7 +487,7 @@ export function BoardView(props: {
                 data-part={part().id}
                 data-lifted={isLifted() ? '' : undefined}
                 data-open={chain().has(part().id) ? '' : undefined}
-                data-selected={panel().bench && !isLifted() && selection().has(part().id) ? '' : undefined}
+                data-selected={props.editing && !isLifted() && selection().has(part().id) ? '' : undefined}
                 style={{
                   left: `${frame().origin.x - frame().rect.left + part().cell.column * pitch}px`,
                   top: `${frame().origin.y - frame().rect.top + part().cell.row * pitch}px`,
@@ -474,8 +499,13 @@ export function BoardView(props: {
                     return;
                   }
 
-                  if (panel().bench && selection().has(part().id)) {
-                    startSelectionDrag(event, part().id);
+                  if (selection().has(part().id)) {
+                    if (panel().bench) {
+                      startSelectionDrag(event, part().id);
+                    } else {
+                      startBoardSelectionDrag(event, part().id);
+                    }
+
                     return;
                   }
 
@@ -532,13 +562,24 @@ export function BoardView(props: {
         <Show when={props.editing}>
           <div
             class={styles.bare}
-            onPointerDown={armLongPress}
+            onPointerDown={(event) => {
+              pressBoard(event);
+              armLongPress(event);
+            }}
             onContextMenu={openSpawnFromMenuKey}
           />
         </Show>
         <For each={visible()} keyed={(entry) => entry.panel.id}>
           {(entry) => <PanelView entry={entry()} />}
         </For>
+        <Show when={props.editing}>
+          <Show when={band()?.place === 'board' && band()}>
+            {(dragged) => <div class={styles.band} style={rectStyle(dragged().rect)} />}
+          </Show>
+          <Show when={!band() && boardSelectionRect()}>
+            {(rect) => <div class={styles.selection} style={rectStyle(rect())} />}
+          </Show>
+        </Show>
       </div>
 
       <Show when={props.editing && bench()}>
@@ -551,7 +592,9 @@ export function BoardView(props: {
               <Show when={benchEntry().panel.parts.length === 0}>
                 <span class={styles.benchHint}>Workbench: lay parts out, drag across them to select</span>
               </Show>
-              <Show when={band()}>{(rect) => <div class={styles.band} style={rectStyle(rect())} />}</Show>
+              <Show when={band()?.place === 'bench' && band()}>
+                {(dragged) => <div class={styles.band} style={rectStyle(dragged().rect)} />}
+              </Show>
               <Show when={!band() && selectionRect()}>
                 {(rect) => (
                   <div class={styles.selection} style={rectStyle(rect())} />
@@ -834,7 +877,69 @@ export function BoardView(props: {
     }
 
     event.preventDefault();
-    setDrag({ type: 'select', pointer: event.pointerId, point: at, start: at, base: props.board.latest() });
+    setDrag({ type: 'select', place: 'bench', pointer: event.pointerId, point: at, start: at, base: props.board.latest() });
+  }
+
+  /**
+   * A press on the bare drawing while editing: inside the board's selection it carries the selected parts, elsewhere
+   * it drags a band to select parts on the board with, as on the workbench.
+   */
+  function pressBoard(event: PointerEvent) {
+    const at = toView({ x: event.clientX, y: event.clientY });
+    const rect = boardSelectionRect();
+    if (rect && overlap({ left: at.x, top: at.y, width: 1, height: 1 }, rect) > 0) {
+      startBoardSelectionDrag(event);
+      return;
+    }
+
+    event.preventDefault();
+    setDrag({ type: 'select', place: 'board', pointer: event.pointerId, point: at, start: at, base: props.board.latest() });
+  }
+
+  /**
+   * Carries the selected parts on the board, from one panel or several, as one block held where the press is, laid
+   * out as they lie on screen in whole cells; they land as a panel, in a panel, on the workbench or in the box.
+   */
+  function startBoardSelectionDrag(event: PointerEvent, pressed?: string) {
+    const board = props.board.latest();
+    const chosen = visible().flatMap(({ panel, frame }) =>
+      panel.parts
+        .filter((part) => selected().has(part.id))
+        .map((part) => ({ part, at: { x: frame.origin.x + part.cell.column * pitch, y: frame.origin.y + part.cell.row * pitch } }))
+    );
+    if (chosen.length === 0) {
+      return;
+    }
+
+    const left = Math.min(...chosen.map(({ at }) => at.x));
+    const top = Math.min(...chosen.map(({ at }) => at.y));
+    // Parts of panels out of step with each other may round onto the same cells; placing them in turn pushes apart.
+    const laid = chosen.reduce<Part[]>(
+      (parts, { part, at }) =>
+        placePart(parts, {
+          ...part,
+          cell: { column: Math.round((at.x - left) / pitch), row: Math.round((at.y - top) / pitch) }
+        }),
+      []
+    );
+    const bounds = partsBounds(laid);
+    const pressedAt = toView({ x: event.clientX, y: event.clientY });
+    startPartDrag(
+      event,
+      { id: newId('block'), kind: 'kit', span: { columns: bounds.columns, rows: bounds.rows } },
+      {
+        block: {
+          parts: laid.map((part) => ({
+            ...part,
+            cell: { column: part.cell.column - bounds.column, row: part.cell.row - bounds.row }
+          })),
+          panels: []
+        },
+        grab: { x: pressedAt.x - left - bounds.column * pitch, y: pressedAt.y - top - bounds.row * pitch },
+        base: chosen.reduce((next, { part }) => removePart(next, part.id), board),
+        pressed
+      }
+    );
   }
 
   /**
@@ -1397,8 +1502,8 @@ type Drag = { pointer: number; point: Point; base: Board } & (
       carried: boolean;
     })
   | { type: 'resize'; panel: string; id: string; span: Span; start: Point; pinned: ReadonlyMap<string, Point> }
-  /** A band dragged across the workbench's free studs, `start` and `point` in its place's pixels. */
-  | { type: 'select'; start: Point; base: Board }
+  /** A band dragged across the workbench's free studs or the bare drawing, `start` and `point` in that place's pixels. */
+  | { type: 'select'; place: 'bench' | 'board'; start: Point; base: Board }
   | {
       type: 'panel';
       panel: string;
