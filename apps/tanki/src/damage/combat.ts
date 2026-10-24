@@ -164,8 +164,9 @@ export type CombatLayout = {
  * knock bodies back; shots that meet armor at a glancing angle ricochet. Crashes dent both bodies,
  * armor cut loose falls off as debris, which lands and stays as scrap (see `./scrap`), and a shot
  * that reaches a tank's core, hidden until a hole opens onto it, blows the tank up and leaves its
- * wreck standing (see `./wrecks`). Shots chip craters into walls of every material but steel until
- * pieces of them fall, and a hard ram bites into them. Crates come back after a few seconds; tanks
+ * wreck standing in the shape of its hull (see `./wrecks`), its turret thrown off as scrap. Shots
+ * chip craters into walls of every material but steel until pieces of them fall, and a hard ram
+ * bites into them, the harder the heavier the tank. Crates come back after a few seconds; tanks
  * only when spawned with `respawn`.
  *
  * Any number of tanks can be driven at once: `drive` sets a tank's input until changed, `fire`
@@ -173,7 +174,7 @@ export type CombatLayout = {
  * shooter's teammates. Each tank may have a hull, mass and look of its own, and each shot a shell
  * of its own: a volley of pellets, a rocket that goes off in a blast with shrapnel, a round that
  * punches through, a grenade lobbed in an arc. `blast` sets off an explosion anywhere; it reaches
- * every body with armor around it.
+ * every body with armor, wall and wreck around it, and what it knocks off lands as scrap.
  *
  * The battle owns its Rapier bodies and renderer field slots; `reset` rebuilds the crates and
  * removes every tank.
