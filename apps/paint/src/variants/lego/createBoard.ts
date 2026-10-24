@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
-import type { Board } from './board';
+import type { Board, Part } from './board';
+import { storedPart, swatchPanelParts } from './kits';
 
 /**
  * The LEGO variant's board on this device, kept in `localStorage`; a missing or malformed one starts from
@@ -33,37 +34,63 @@ const storageKey = 'paint.lego';
 
 const point = z.object({ x: z.number(), y: z.number() });
 const boardSchema = z.object({
-  panels: z.array(
-    z.object({
-      id: z.string(),
-      at: point,
-      parts: z.array(
-        z.object({
-          id: z.string(),
-          kind: z.string(),
-          cell: z.object({ column: z.number().int(), row: z.number().int() }),
-          span: z.object({ columns: z.number().int().min(1), rows: z.number().int().min(1) }),
-          looks: z.record(z.string(), z.string()).optional(),
-          popup: z.string().optional()
-        })
-      )
-    })
-  )
+  panels: z.array(z.object({ id: z.string(), at: point, parts: z.array(storedPart), owner: z.string().optional() }))
 });
 
 function read(): Board {
   try {
     const stored = localStorage.getItem(storageKey);
     const parsed = stored ? boardSchema.safeParse(JSON.parse(stored)) : undefined;
-    return parsed?.success ? parsed.data : defaultBoard;
+    return parsed?.success ? withSplitColor(parsed.data) : defaultBoard;
   } catch {
     return defaultBoard;
   }
 }
 
 /**
- * The board a first visit sees: brushes, eraser, undo, redo and local undo on the left, the color across the top and the size
- * and opacity standing on the right, in a mix of sizes that shows how a part changes as it grows.
+ * A board from before the color was split into parts: its `color` parts become pickers where they showed one, and
+ * swatches opening the default panel otherwise.
+ */
+function withSplitColor(board: Board): Board {
+  const added: Board['panels'] = [];
+  const panels = board.panels.map((panel) => ({
+    ...panel,
+    parts: panel.parts.map((part): Part => {
+      if (part.kind !== 'color') {
+        return part;
+      }
+
+      const wheel = Object.values(part.looks ?? {}).some((look) => wheelIds.has(look)) || part.span.columns >= 5;
+      if (wheel) {
+        const looks = Object.fromEntries(Object.entries(part.looks ?? {}).filter(([, look]) => wheelIds.has(look)));
+        return { ...part, kind: 'color:wheel', looks: Object.keys(looks).length > 0 ? looks : undefined };
+      }
+
+      added.push(swatchPanel(part.id));
+      return { id: part.id, kind: 'color:swatch', cell: part.cell, span: part.span };
+    })
+  }));
+
+  return { panels: [...panels, ...added] };
+}
+
+/** The picker looks an old color part may have shown. */
+const wheelIds = new Set(['disc', 'triangle', 'wheel', 'coolorus']);
+
+/** The default panel swatch `owner` opens, its part ids prefixed with the owner's to keep them unique. */
+function swatchPanel(owner: string): Board['panels'][number] {
+  return {
+    id: `${owner}-panel`,
+    at: { x: 0, y: 0 },
+    owner,
+    parts: swatchPanelParts.map((part) => ({ ...part, id: `${owner}-${part.id}` }))
+  };
+}
+
+/**
+ * The board a first visit sees: brushes, eraser, undo, redo and local undo on the left, the color across the top (a
+ * swatch opening its panel of pickers, hue and brightness) and the size and opacity standing on the right, in a mix
+ * of sizes that shows how a part changes as it grows.
  */
 export const defaultBoard: Board = {
   panels: [
@@ -83,7 +110,7 @@ export const defaultBoard: Board = {
       id: 'colors',
       at: { x: 0.3, y: 0.02 },
       parts: [
-        { id: 'color', kind: 'color', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 2 } },
+        { id: 'color', kind: 'color:swatch', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 2 } },
         { id: 'hue', kind: 'value:hue', cell: { column: 2, row: 0 }, span: { columns: 5, rows: 1 } },
         { id: 'brightness', kind: 'value:brightness', cell: { column: 2, row: 1 }, span: { columns: 5, rows: 1 } }
       ]
@@ -95,6 +122,7 @@ export const defaultBoard: Board = {
         { id: 'size', kind: 'value:size', cell: { column: 0, row: 0 }, span: { columns: 1, rows: 4 } },
         { id: 'opacity', kind: 'value:opacity', cell: { column: 1, row: 0 }, span: { columns: 1, rows: 4 } }
       ]
-    }
+    },
+    swatchPanel('color')
   ]
 };

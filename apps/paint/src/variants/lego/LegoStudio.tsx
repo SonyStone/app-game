@@ -13,10 +13,10 @@ import {
 import { BoardView } from './BoardView';
 import { createBoard } from './createBoard';
 import styles from './LegoStudio.module.css';
-import { findPart } from './board';
-import { ColorPicker } from './colorLooks';
+import { besideRect, findPart } from './board';
+import { createKits } from './kits';
 import { LookChooser } from './LookChooser';
-import { chooseLook, choosePopup } from './looks';
+import { chooseLook } from './looks';
 import { ValuePart, type Popup } from './parts';
 
 /**
@@ -24,24 +24,33 @@ import { ValuePart, type Popup } from './parts';
  * of studs, and parts sit on the studs in any whole number of cells. A part shows more the larger it is, like an
  * Android widget: a brush is a stroke sample, then gets its name, then a large sample; a value is a knob that opens a
  * slider, then a slider itself. Parts never overlap; placing or growing one pushes the others aside, and that is how
- * a panel grows. Only popups float over them. A part with several looks, such as the color, takes the one chosen for
- * its size (a swatch, a mini disc, any of the library's pickers) and opens the picker chosen for it.
+ * a panel grows. Only popups float over them. A part with several looks, such as a color picker or a value, takes
+ * the one chosen for its size. A color swatch opens a panel of its own, built like any other; panels can be kept as
+ * kits and placed again.
  *
  * "Edit" shows the studs and the box of parts: drag parts out of the box, between panels and back, size them by
  * their corner and move panels by their rim (see `BoardView`). The board is kept per device.
  */
 export function LegoStudio(props: PaintVariantProps) {
   const [editing, setEditing] = createSignal(false);
+  /** The swatch whose panel is open; see `BoardView`. */
+  const [openPanel, setOpenPanel] = createSignal<string>();
   const [popup, setPopup] = createSignal<{ popup: Popup; rect: DOMRect }>();
   const [popupElement, setPopupElement] = createSignal<HTMLElement>();
   const popupSize = createElementSize(popupElement);
   const session = createPaintSession({ panel: () => popup()?.popup.kind });
   const board = createBoard();
+  const kits = createKits();
 
   session.createShortcuts({
     closePanel() {
       if (popup()) {
         setPopup(undefined);
+        return true;
+      }
+
+      if (openPanel()) {
+        setOpenPanel(undefined);
         return true;
       }
 
@@ -77,7 +86,7 @@ export function LegoStudio(props: PaintVariantProps) {
     }
 
     // Placed by its measured size; it stays hidden until measured.
-    return besideAnchor(open.rect, { width: popupSize.width ?? 0, height: popupSize.height ?? 0 }, session.size());
+    return besideRect(open.rect, { width: popupSize.width ?? 0, height: popupSize.height ?? 0 }, session.size());
   };
 
   return (
@@ -89,8 +98,11 @@ export function LegoStudio(props: PaintVariantProps) {
       <div class={styles.ui}>
         <BoardView
           board={board}
+          kits={kits}
           session={session}
           editing={editing()}
+          openPanel={openPanel()}
+          onOpenPanel={setOpenPanel}
           onPopup={(anchor, next) => setPopup({ popup: next, rect: anchor.getBoundingClientRect() })}
         />
         <Show when={popup() && popupPlace()}>
@@ -98,6 +110,7 @@ export function LegoStudio(props: PaintVariantProps) {
             <div
               ref={setPopupElement}
               class={styles.popup}
+              data-keeps-panel
               style={{
                 left: `${place().x}px`,
                 top: `${place().y}px`,
@@ -105,11 +118,6 @@ export function LegoStudio(props: PaintVariantProps) {
               }}
             >
               <Switch>
-                <Match when={popup()?.popup.kind === 'color' && popup()!.popup}>
-                  {(open) => (
-                    <ColorPicker look={(open() as Extract<Popup, { kind: 'color' }>).look} session={session} />
-                  )}
-                </Match>
                 <Match when={popup()?.popup.kind === 'looks' && popup()!.popup}>
                   {(open) => {
                     const id = () => (open() as Extract<Popup, { kind: 'looks' }>).id;
@@ -120,7 +128,6 @@ export function LegoStudio(props: PaintVariantProps) {
                             part={part()}
                             session={session}
                             onLook={(look) => board.set(chooseLook(board.latest(), id(), part().span, look))}
-                            onPopup={(look) => board.set(choosePopup(board.latest(), id(), look))}
                           />
                         )}
                       </Show>
@@ -132,6 +139,7 @@ export function LegoStudio(props: PaintVariantProps) {
                     <div class={styles.popupSlider}>
                       <ValuePart
                         value={(open() as Extract<Popup, { kind: 'value' }>).value}
+                        look="slider"
                         span={{ columns: 5, rows: 1 }}
                         session={session}
                       />
@@ -156,6 +164,7 @@ export function LegoStudio(props: PaintVariantProps) {
             data-active={editing() ? '' : undefined}
             onClick={() => {
               setPopup(undefined);
+              setOpenPanel(undefined);
               setEditing(!editing());
             }}
           >
@@ -166,28 +175,4 @@ export function LegoStudio(props: PaintVariantProps) {
       </div>
     </PaintEditor>
   );
-}
-
-/**
- * Where a popup of `size` goes beside the part at `anchor`: to its right, else its left, else below or above it, and
- * always inside `view`. Popups are the only things allowed over parts, but never over the part that opened them.
- */
-function besideAnchor(anchor: DOMRect, size: { width: number; height: number }, view: { width: number; height: number }) {
-  const gap = 10;
-  const clampX = (x: number) => Math.max(4, Math.min(view.width - size.width - 4, x));
-  const clampY = (y: number) => Math.max(4, Math.min(view.height - size.height - 4, y));
-  const middleY = clampY(anchor.top + anchor.height / 2 - size.height / 2);
-
-  if (anchor.right + gap + size.width <= view.width) {
-    return { x: anchor.right + gap, y: middleY };
-  }
-
-  if (anchor.left - gap - size.width >= 0) {
-    return { x: anchor.left - gap - size.width, y: middleY };
-  }
-
-  const x = clampX(anchor.left + anchor.width / 2 - size.width / 2);
-  return anchor.bottom + gap + size.height <= view.height
-    ? { x, y: anchor.bottom + gap }
-    : { x, y: clampY(anchor.top - gap - size.height) };
 }

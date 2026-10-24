@@ -6,12 +6,20 @@ import { findPart, replacePanel, type Board, type Part, type Span } from './boar
  * among Android's layouts for a widget's size, and the part remembers the choice for that size.
  */
 
-/** A look a part can take; `min` is the smallest span it fits. */
-export type LookSpec = { id: string; label: string; min: Span };
+/**
+ * A look a part can take: `min` is the smallest span it fits, and `fits` decides for looks that fit more shapes than
+ * every span from `min` up, such as a slider, which needs two cells along either side.
+ */
+export type LookSpec = { id: string; label: string; min: Span; fits?: (span: Span) => boolean };
 
 /** The key a look chosen at `span` is kept under in `Part.looks`. */
 export function spanKey(span: Span) {
   return `${span.columns}x${span.rows}`;
+}
+
+/** Whether `look` fits a part of `span`. */
+export function lookFits(look: LookSpec, span: Span) {
+  return look.fits ? look.fits(span) : fits(look.min, span);
 }
 
 /** Whether a look of at least `min` fits in `span`. */
@@ -30,7 +38,7 @@ export function resolveLook(chosen: Part['looks'], span: Span, looks: readonly L
   for (const [key, id] of Object.entries(chosen ?? {})) {
     const at = parseSpanKey(key);
     const look = looks.find((candidate) => candidate.id === id);
-    if (!at || !look || !fits(at, span) || !fits(look.min, span)) {
+    if (!at || !look || !fits(at, span) || !lookFits(look, span)) {
       continue;
     }
 
@@ -53,11 +61,6 @@ export function chooseLook(board: Board, id: string, span: Span, look: string | 
     const looks = look === undefined ? others : { ...others, [spanKey(span)]: look };
     return { ...part, looks: Object.keys(looks).length > 0 ? looks : undefined };
   });
-}
-
-/** `board` with part `id` opening `look` on a tap. */
-export function choosePopup(board: Board, id: string, look: string): Board {
-  return updatePart(board, id, (part) => ({ ...part, popup: look }));
 }
 
 /** The looks chosen at sizes other than `span`. */

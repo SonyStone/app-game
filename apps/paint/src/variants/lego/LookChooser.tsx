@@ -1,23 +1,20 @@
 import type { JSX } from '@solidjs/web';
 import { For, Show } from 'solid-js';
 import { cellGap, pitch, type Part, type Span } from './board';
-import { ColorPicker } from './colorLooks';
 import styles from './LegoStudio.module.css';
-import { fits, lookChoicesBut, resolveLook, spanKey } from './looks';
+import { lookChoicesBut, lookFits, resolveLook, spanKey } from './looks';
 import { PartView, partLooks, type Session } from './parts';
 
 /**
- * Chooses how `part` looks at its current size and what it opens on a tap, showing every choice live and in
- * miniature, like Android's widget picker. "Auto" forgets the choice at this size; looks too large for it show the
- * size they need and stay disabled until the part grows. Choices apply at once, so the part behind shows them too.
+ * Chooses how `part` looks at its current size, showing every choice live and in miniature, like Android's widget
+ * picker. "Auto" forgets the choice at this size; looks that do not fit it show the size they need and stay disabled
+ * until the part grows. Choices apply at once, so the part behind shows them too.
  */
 export function LookChooser(props: {
   part: Part;
   session: Session;
   /** Shows `look` at the part's size; `undefined` goes back to automatic. */
   onLook: (look: string | undefined) => void;
-  /** Opens `look` on a tap. */
-  onPopup: (look: string) => void;
 }) {
   const options = () => partLooks(props.part.kind);
   const span = () => props.part.span;
@@ -46,7 +43,7 @@ export function LookChooser(props: {
             </Choice>
             <For each={found().looks}>
               {(look) => {
-                const fitting = () => fits(look.min, span());
+                const fitting = () => lookFits(look, span());
                 return (
                   <Choice
                     label={look.label}
@@ -64,22 +61,6 @@ export function LookChooser(props: {
                   </Choice>
                 );
               }}
-            </For>
-          </div>
-          <h3>A tap on the swatch opens</h3>
-          <div class={styles.choices}>
-            <For each={found().popups}>
-              {(look) => (
-                <Choice
-                  label={look.label}
-                  selected={(props.part.popup ?? found().defaultPopup) === look.id}
-                  onChoose={() => props.onPopup(look.id)}
-                >
-                  <div class={styles.preview} inert>
-                    <ColorPicker look={look.id} session={props.session} box={{ width: previewSize, height: previewSize }} />
-                  </div>
-                </Choice>
-              )}
             </For>
           </div>
         </div>

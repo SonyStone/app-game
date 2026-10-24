@@ -4,12 +4,25 @@ import { maxBrushSize } from '../../features/brush';
 import { hexToHsv, hsvToHex, luminance, type Hsv } from '../../features/color/hsv';
 import type { PaintSession } from '../../features/session';
 import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
+import { ScrubNumber } from '../../shared/ui/ScrubNumber';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { geometricFraction, geometricValue, linearFraction, linearValue } from '../procreate/sliderScale';
 import { PresetStroke } from '../zen/PresetStroke';
 import { cellGap, pitch, type Span } from './board';
-import { autoColorLook, colorLooks, colorPopups, ColorPicker, defaultColorPopup, setColor } from './colorLooks';
+import {
+  autoWheelLook,
+  HexPart,
+  HistoryPart,
+  PairPart,
+  PalettePart,
+  recentFor,
+  setColor,
+  SwatchPart,
+  WheelPart,
+  wheelLooks
+} from './colorParts';
 import styles from './LegoStudio.module.css';
+import type { LookSpec } from './looks';
 
 /** The drawing session the parts work on. */
 export type Session = PaintSession;
@@ -21,20 +34,19 @@ export type ValueKind = 'size' | 'opacity' | 'hue' | 'saturation' | 'brightness'
 const scrubLength = 300;
 
 /** Single-button actions. */
-export type ActionKind = 'undo' | 'redo' | 'eraser' | 'local-undo';
+export type ActionKind = 'undo' | 'redo' | 'eraser' | 'local-undo' | 'mixing';
 
-/**
- * What floats over the board: a value as a full slider, a color picker (a look of `colorPopups`), or the chooser of
- * part `id`'s looks.
- */
-export type Popup = { kind: 'value'; value: ValueKind } | { kind: 'color'; look: string } | { kind: 'looks'; id: string };
+/** The color parts; see `colorParts.tsx`. */
+export type ColorKind = 'swatch' | 'wheel' | 'pair' | 'hex' | 'history' | 'palette';
+
+/** What floats over the board: a value as a full slider, or the chooser of part `id`'s looks. */
+export type Popup = { kind: 'value'; value: ValueKind } | { kind: 'looks'; id: string };
 
 /**
  * One part of the board at its size, like an Android widget: the more cells it covers, the more it shows. A brush is
  * a stroke sample alone at one cell, gets its name once it is two cells wide and a large sample once it is two cells
- * tall; a value is a knob at one cell and a slider once longer, lying along its longer side; an action gets its name
- * once two cells wide. The color has looks to choose from (see `partLooks`). `kind` is `preset:<id>`,
- * `value:<ValueKind>`, `action:<ActionKind>` or `color`.
+ * tall; an action gets its name once two cells wide. Values and color pickers have looks to choose from (see
+ * `partLooks`). `kind` is `preset:<id>`, `value:<ValueKind>`, `action:<ActionKind>` or `color:<ColorKind>`.
  */
 export function PartView(props: {
   kind: string;
@@ -42,12 +54,13 @@ export function PartView(props: {
   session: Session;
   /** The look it shows, for kinds with looks; the kind's automatic look for the span when absent. */
   look?: string;
-  /** The look its popup shows, for kinds with looks; the kind's default when absent. */
-  popupLook?: string;
   /** Opens `popup` beside `anchor`; see `Popup`. */
   onPopup: (anchor: Element, popup: Popup) => void;
+  /** Opens or closes the part's own panel, for a swatch. */
+  onOpen?: (anchor: Element) => void;
 }) {
   const parsed = () => parseKind(props.kind);
+  const look = () => props.look ?? partLooks(props.kind)?.auto(props.span) ?? '';
 
   return (
     <Switch fallback={<span class={styles.unknown}>?</span>}>
@@ -58,6 +71,7 @@ export function PartView(props: {
         {(value) => (
           <ValuePart
             value={value()}
+            look={look() as ValueLook}
             span={props.span}
             session={props.session}
             onPopup={(anchor) => props.onPopup(anchor, { kind: 'value', value: value() })}
@@ -67,13 +81,29 @@ export function PartView(props: {
       <Match when={parsed()?.type === 'action' && (parsed()!.id as ActionKind)}>
         {(action) => <ActionPart action={action()} span={props.span} session={props.session} />}
       </Match>
-      <Match when={parsed()?.type === 'color'}>
-        <ColorPart
-          span={props.span}
-          look={props.look ?? autoColorLook(props.span)}
-          session={props.session}
-          onPopup={(anchor) => props.onPopup(anchor, { kind: 'color', look: props.popupLook ?? defaultColorPopup })}
-        />
+      <Match when={parsed()?.type === 'color' && (parsed()!.id as ColorKind)}>
+        {(color) => (
+          <Switch fallback={<span class={styles.unknown}>?</span>}>
+            <Match when={color() === 'swatch'}>
+              <SwatchPart span={props.span} session={props.session} onOpen={(anchor) => props.onOpen?.(anchor)} />
+            </Match>
+            <Match when={color() === 'wheel'}>
+              <WheelPart look={look()} span={props.span} session={props.session} />
+            </Match>
+            <Match when={color() === 'pair'}>
+              <PairPart span={props.span} session={props.session} />
+            </Match>
+            <Match when={color() === 'hex'}>
+              <HexPart session={props.session} />
+            </Match>
+            <Match when={color() === 'history'}>
+              <HistoryPart span={props.span} session={props.session} />
+            </Match>
+            <Match when={color() === 'palette'}>
+              <PalettePart span={props.span} session={props.session} />
+            </Match>
+          </Switch>
+        )}
       </Match>
     </Switch>
   );
@@ -85,7 +115,13 @@ export const boxKinds = [
   'action:redo',
   'action:eraser',
   'action:local-undo',
-  'color',
+  'color:swatch',
+  'color:wheel',
+  'color:pair',
+  'color:hex',
+  'color:history',
+  'color:palette',
+  'action:mixing',
   'value:size',
   'value:opacity',
   'value:hue',
@@ -94,13 +130,15 @@ export const boxKinds = [
 ];
 
 /**
- * The looks a part of `kind` can take and what it can open (see `looks.ts`), with the look it shows for a span until
- * one is chosen; `undefined` for kinds with a single look.
+ * The looks a part of `kind` can take (see `looks.ts`), with the look it shows for a span until one is chosen;
+ * `undefined` for kinds with a single look.
  */
 export function partLooks(kind: string) {
-  return kind === 'color'
-    ? { looks: colorLooks, auto: autoColorLook, popups: colorPopups, defaultPopup: defaultColorPopup }
-    : undefined;
+  if (kind === 'color:wheel') {
+    return { looks: wheelLooks, auto: autoWheelLook };
+  }
+
+  return kind.startsWith('value:') ? { looks: valueLooks, auto: autoValueLook } : undefined;
 }
 
 /** A part's name, for the box's tooltips and screen readers. */
@@ -118,8 +156,34 @@ export function kindLabel(kind: string, session: Session) {
     return actions[parsed.id as ActionKind]?.label ?? kind;
   }
 
-  return parsed?.type === 'color' ? 'Color' : kind;
+  return parsed?.type === 'color' ? (colorLabels[parsed.id as ColorKind] ?? kind) : kind;
 }
+
+const colorLabels: Record<ColorKind, string> = {
+  swatch: 'Color swatch: opens its own panel',
+  wheel: 'Color picker',
+  pair: 'Foreground and background',
+  hex: 'Hex color',
+  history: 'Color history',
+  palette: 'Palette'
+};
+
+/** How a value shows: a knob at any size, a slider along the longer side, or a number to drag or type. */
+type ValueLook = 'knob' | 'slider' | 'number';
+
+const valueLooks: readonly LookSpec[] = [
+  { id: 'knob', label: 'Knob', min: { columns: 1, rows: 1 } },
+  {
+    id: 'slider',
+    label: 'Slider',
+    min: { columns: 2, rows: 1 },
+    fits: (span) => span.columns >= 2 || span.rows >= 2
+  },
+  { id: 'number', label: 'Number', min: { columns: 1, rows: 1 } }
+];
+
+/** A knob at one cell, a slider when longer. */
+const autoValueLook = (span: Span) => (span.columns === 1 && span.rows === 1 ? 'knob' : 'slider');
 
 function parseKind(kind: string) {
   const [type, ...rest] = kind.split(':');
@@ -193,6 +257,17 @@ const values: Record<
     text: (fraction: number, session: Session) => string;
     /** The track's background; plain when absent. */
     track?: (hsv: Hsv) => string;
+    /** The value as the number look shows and takes it, with a `short` caption for a part two cells wide. */
+    number: {
+      short: string;
+      unit: string;
+      max: (session: Session) => number;
+      min?: number;
+      scale?: 'log';
+      wrap?: boolean;
+      get: (brush: Brush, hsv: Hsv) => number;
+      set: (value: number, session: Session, hsv: Hsv) => void;
+    };
   }
 > = {
   size: {
@@ -200,19 +275,44 @@ const values: Record<
     read: (brush) => geometricFraction(brush.size, 1, maxBrushSize(brush)),
     write: (fraction, session) =>
       session.tools.updateBrush({ size: geometricValue(fraction, 1, maxBrushSize(session.brush())) }),
-    text: (_, session) => `${Math.round(session.brush().size)}`
+    text: (_, session) => `${Math.round(session.brush().size)}`,
+    number: {
+      short: 'Sz',
+      unit: 'px',
+      min: 1,
+      max: (session) => maxBrushSize(session.brush()),
+      scale: 'log',
+      get: (brush) => Math.round(brush.size),
+      set: (value, session) => session.tools.updateBrush({ size: value })
+    }
   },
   opacity: {
     label: 'Opacity',
     read: (brush) => linearFraction(brush.opacity, 0, 1),
     write: (fraction, session) => session.tools.updateBrush({ opacity: linearValue(fraction, 0.01, 1) }),
-    text: (fraction) => `${Math.round(fraction * 100)}%`
+    text: (fraction) => `${Math.round(fraction * 100)}%`,
+    number: {
+      short: 'Op',
+      unit: '%',
+      min: 1,
+      max: () => 100,
+      get: (brush) => Math.round(brush.opacity * 100),
+      set: (value, session) => session.tools.updateBrush({ opacity: value / 100 })
+    }
   },
   hue: {
     label: 'Hue',
     read: (_, hsv) => hsv.h / 360,
     write: (fraction, session, hsv) => setColor(session, { ...hsv, h: Math.min(359.9, fraction * 360) }),
     text: (fraction) => `${Math.round(fraction * 360)}°`,
+    number: {
+      short: 'H',
+      unit: '°',
+      max: () => 360,
+      wrap: true,
+      get: (_, hsv) => Math.round(hsv.h),
+      set: (value, session, hsv) => setColor(session, { ...hsv, h: value % 360 })
+    },
     track: (hsv) =>
       `linear-gradient(to var(--track-to), ${[0, 60, 120, 180, 240, 300, 360].map((h) => hsvToHex({ h, s: hsv.s, v: hsv.v })).join(', ')})`
   },
@@ -221,6 +321,13 @@ const values: Record<
     read: (_, hsv) => hsv.s,
     write: (fraction, session, hsv) => setColor(session, { ...hsv, s: fraction }),
     text: (fraction) => `${Math.round(fraction * 100)}%`,
+    number: {
+      short: 'S',
+      unit: '%',
+      max: () => 100,
+      get: (_, hsv) => Math.round(hsv.s * 100),
+      set: (value, session, hsv) => setColor(session, { ...hsv, s: value / 100 })
+    },
     track: (hsv) =>
       `linear-gradient(to var(--track-to), ${hsvToHex({ ...hsv, s: 0 })}, ${hsvToHex({ ...hsv, s: 1 })})`
   },
@@ -229,6 +336,13 @@ const values: Record<
     read: (_, hsv) => hsv.v,
     write: (fraction, session, hsv) => setColor(session, { ...hsv, v: fraction }),
     text: (fraction) => `${Math.round(fraction * 100)}%`,
+    number: {
+      short: 'B',
+      unit: '%',
+      max: () => 100,
+      get: (_, hsv) => Math.round(hsv.v * 100),
+      set: (value, session, hsv) => setColor(session, { ...hsv, v: value / 100 })
+    },
     track: (hsv) =>
       `linear-gradient(to var(--track-to), ${hsvToHex({ ...hsv, v: 0 })}, ${hsvToHex({ ...hsv, v: 1 })})`
   }
@@ -245,11 +359,13 @@ function createBrushHsv(session: Session) {
 }
 
 /**
- * A brush value: a knob at one cell, a slider along the longer side otherwise. Pressing the knob and dragging in any
- * direction changes the value (right and up raise it); tapping it opens the full slider beside it.
+ * A brush value in `look`: a knob, a slider along the longer side, or a number. Pressing the knob and dragging in any
+ * direction changes the value (right and up raise it); tapping it opens the full slider beside it. The number drags
+ * sideways or, tapped, takes typing (see `ScrubNumber`).
  */
 export function ValuePart(props: {
   value: ValueKind;
+  look: ValueLook;
   span: Span;
   session: Session;
   /** Opens the full slider beside `anchor`; absent on the popup's own slider. */
@@ -258,7 +374,7 @@ export function ValuePart(props: {
   const hsv = createBrushHsv(props.session);
   const spec = () => values[props.value];
   const fraction = () => spec().read(props.session.brush(), hsv());
-  const knob = () => props.span.columns === 1 && props.span.rows === 1;
+  const knob = () => props.look === 'knob';
   const vertical = () => props.span.rows > props.span.columns;
   /**
    * The value and color when the press began: a press changes one channel, and the others keep their values even
@@ -267,6 +383,12 @@ export function ValuePart(props: {
   let start = { fraction: 0, hsv: hsv() };
 
   const set = (next: number) => spec().write(Math.max(0, Math.min(1, next)), props.session, start.hsv);
+  /** A color value puts the color a press ends on in the history. */
+  const remember = () => {
+    if (spec().track) {
+      recentFor(props.session).remember(props.session.brush().color);
+    }
+  };
   const scrub = pressHandlers({
     start() {
       start = { fraction: fraction(), hsv: hsv() };
@@ -274,6 +396,7 @@ export function ValuePart(props: {
     move(press) {
       set(start.fraction + (press.point.x - press.start.x - (press.point.y - press.start.y)) / scrubLength);
     },
+    end: remember,
     tap: (press) => props.onPopup?.(press.target)
   });
   const slide = pressHandlers({
@@ -284,6 +407,7 @@ export function ValuePart(props: {
     move(press) {
       set(trackFraction(press));
     },
+    end: remember,
     tapDistance: 0
   });
 
@@ -298,57 +422,87 @@ export function ValuePart(props: {
   /** Color knobs show the brush color in their middle. */
   const swatched = () => track() !== undefined;
 
+  const number = () => spec().number;
+
   return (
     <Show
-      when={!knob()}
+      when={props.look !== 'number'}
       fallback={
-        <div
-          class={styles.knob}
-          role="slider"
-          aria-label={spec().label}
-          aria-valuenow={Math.round(fraction() * 100)}
-          style={{
-            '--fraction': `${fraction() * 360}deg`,
-            '--swatch': swatched() ? props.session.brush().color : undefined,
-            '--swatch-ink': swatched() && luminance(props.session.brush().color) < 0.4 ? '#ffffff' : undefined
-          }}
-          {...scrub}
-        >
-          <span>{spec().text(fraction(), props.session)}</span>
+        <div class={styles.number}>
+          <Show when={props.span.columns >= 2}>
+            <span class={styles.numberCaption}>
+              {props.span.columns >= 3 ? spec().label : number().short}
+            </span>
+          </Show>
+          <ScrubNumber
+            label={spec().label}
+            value={number().get(props.session.brush(), hsv())}
+            min={number().min ?? 0}
+            max={number().max(props.session)}
+            unit={props.span.columns >= 2 ? number().unit : undefined}
+            scale={number().scale}
+            wrap={number().wrap}
+            onInput={(value) => number().set(value, props.session, hsv())}
+            onChange={(value) => {
+              number().set(value, props.session, hsv());
+              remember();
+            }}
+          />
         </div>
       }
     >
-      <div
-        class={[styles.slider, vertical() && styles.vertical, track() !== undefined && styles.colored]}
-        role="slider"
-        aria-label={spec().label}
-        aria-orientation={vertical() ? 'vertical' : 'horizontal'}
-        aria-valuenow={Math.round(fraction() * 100)}
-        style={{
-          '--fraction': `${fraction() * 100}%`,
-          '--track-to': vertical() ? 'top' : 'right',
-          background: track()
-        }}
-        {...slide}
-      >
-        <span class={styles.fill} />
-        <span class={styles.thumb} />
-        <Show when={(vertical() ? props.span.rows : props.span.columns) >= 3}>
-          <span class={styles.sliderLabel}>
-            <span>{spec().label}</span>
+      <Show
+        when={!knob()}
+        fallback={
+          <div
+            class={styles.knob}
+            role="slider"
+            aria-label={spec().label}
+            aria-valuenow={Math.round(fraction() * 100)}
+            style={{
+              '--fraction': `${fraction() * 360}deg`,
+              '--swatch': swatched() ? props.session.brush().color : undefined,
+              '--swatch-ink': swatched() && luminance(props.session.brush().color) < 0.4 ? '#ffffff' : undefined
+            }}
+            {...scrub}
+          >
             <span>{spec().text(fraction(), props.session)}</span>
-          </span>
-        </Show>
-      </div>
+          </div>
+        }
+      >
+        <div
+          class={[styles.slider, vertical() && styles.vertical, track() !== undefined && styles.colored]}
+          role="slider"
+          aria-label={spec().label}
+          aria-orientation={vertical() ? 'vertical' : 'horizontal'}
+          aria-valuenow={Math.round(fraction() * 100)}
+          style={{
+            '--fraction': `${fraction() * 100}%`,
+            '--track-to': vertical() ? 'top' : 'right',
+            background: track()
+          }}
+          {...slide}
+        >
+          <span class={styles.fill} />
+          <span class={styles.thumb} />
+          <Show when={(vertical() ? props.span.rows : props.span.columns) >= 3}>
+            <span class={styles.sliderLabel}>
+              <span>{spec().label}</span>
+              <span>{spec().text(fraction(), props.session)}</span>
+            </span>
+          </Show>
+        </div>
+      </Show>
     </Show>
   );
 }
 
-const actions: Record<ActionKind, { label: string; icon: 'undo' | 'redo' | 'erase' | 'localUndo' }> = {
+const actions: Record<ActionKind, { label: string; icon: 'undo' | 'redo' | 'erase' | 'localUndo' | 'fill' }> = {
   undo: { label: 'Undo', icon: 'undo' },
   redo: { label: 'Redo', icon: 'redo' },
   eraser: { label: 'Eraser', icon: 'erase' },
-  'local-undo': { label: 'Local undo', icon: 'localUndo' }
+  'local-undo': { label: 'Local undo', icon: 'localUndo' },
+  mixing: { label: 'Mixing palette', icon: 'fill' }
 };
 
 function ActionPart(props: { action: ActionKind; span: Span; session: Session }) {
@@ -358,7 +512,9 @@ function ActionPart(props: { action: ActionKind; span: Span; session: Session })
     (props.action === 'undo' && !(state().canUndo && props.session.ready())) ||
     (props.action === 'redo' && !(state().canRedo && props.session.ready()));
   const active = () =>
-    (props.action === 'eraser' || props.action === 'local-undo') && props.session.tool() === props.action;
+    props.action === 'mixing'
+      ? props.session.windows.isOpen('palette')
+      : (props.action === 'eraser' || props.action === 'local-undo') && props.session.tool() === props.action;
   const iconSize = () => Math.min(40, 20 + (Math.min(props.span.columns, props.span.rows) - 1) * 10);
 
   return (
@@ -382,6 +538,8 @@ function ActionPart(props: { action: ActionKind; span: Span; session: Session })
       props.session.undo();
     } else if (props.action === 'redo') {
       props.session.redo();
+    } else if (props.action === 'mixing') {
+      props.session.windows.toggle('palette');
     } else if (props.action === 'eraser') {
       props.session.chooseTool(props.session.tool() === 'eraser' ? 'brush' : 'eraser');
     } else if (props.session.tool() === 'local-undo') {
@@ -390,34 +548,4 @@ function ActionPart(props: { action: ActionKind; span: Span; session: Session })
       props.session.chooseLocalUndo();
     }
   }
-}
-
-/** The color: a swatch (with its hex once two cells wide) that opens its popup on a tap, or a picker in place. */
-function ColorPart(props: { span: Span; look: string; session: Session; onPopup: (anchor: Element) => void }) {
-  const color = () => props.session.brush().color;
-
-  return (
-    <Show
-      when={props.look === 'swatch'}
-      fallback={
-        <ColorPicker
-          look={props.look}
-          session={props.session}
-          box={{ width: length(props.span.columns), height: length(props.span.rows) }}
-        />
-      }
-    >
-      <button
-        type="button"
-        class={styles.color}
-        style={{ background: color(), color: luminance(color()) > 0.4 ? '#1c1c1e' : '#ffffff' }}
-        aria-label={`Color ${color()}`}
-        onClick={(event) => props.onPopup(event.currentTarget)}
-      >
-        <Show when={props.span.columns >= 2}>
-          <span class={styles.name}>{color()}</span>
-        </Show>
-      </button>
-    </Show>
-  );
 }

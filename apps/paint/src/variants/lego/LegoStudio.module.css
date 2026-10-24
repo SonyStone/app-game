@@ -429,32 +429,21 @@
   background: var(--lego-tile);
 }
 
-.procreateSurface {
-  border-radius: 14px;
-  background: var(--pc-card-solid);
-  overflow: hidden;
-}
-
-.desktopSurface {
-  border-radius: 8px;
-  overflow: hidden;
-}
-
 /* The handle opening a part's looks, in its top-right corner while editing. */
 .looksHandle {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: 1px;
+  right: 1px;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: 0;
   border-radius: 50%;
   background: var(--lego-accent);
   color: #ffffff !important;
-  font-size: 12px;
+  font-size: 10px;
   line-height: 1;
   cursor: pointer;
   touch-action: none;
@@ -530,4 +519,240 @@
   border-radius: 7px;
   overflow: hidden;
   background: var(--lego-tile);
+}
+
+/* A swatch's own panel, lying beside it over the others. */
+.owned {
+  z-index: 5;
+  box-shadow:
+    0 0 0 1.5px var(--lego-accent),
+    var(--lego-shadow);
+}
+
+/* The swatch whose panel is open. */
+.part[data-open] {
+  outline: 2px solid var(--lego-accent);
+  outline-offset: 1px;
+}
+
+.emptyPanel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+  color: rgb(255 255 255 / 0.7);
+  font-size: 10px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.saveKit {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--lego-plate);
+  color: #ffffff !important;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: var(--lego-shadow);
+}
+
+/* A kit being carried: its parts on a plate of their own. */
+.ghostBlock {
+  position: absolute;
+  border-radius: 10px;
+  background: var(--lego-plate);
+  outline: 6px solid var(--lego-plate);
+
+  > .part {
+    transition: none;
+  }
+}
+
+/* A kit in the box: two cells wide, named. */
+.kitTile {
+  position: relative !important;
+  color: var(--lego-ink) !important;
+  display: grid;
+  place-items: center;
+  width: calc(2 * 48px - 4px);
+  height: 44px;
+  padding: 0 6px;
+  background: #dde7ff;
+  font-size: 11px;
+  text-align: center;
+  grid-column: span 2;
+
+  .name {
+    white-space: normal;
+    line-height: 1.15;
+  }
+}
+
+.kitRemove {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.55);
+  color: #ffffff !important;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Color parts */
+
+.pair {
+  position: relative;
+  display: block;
+
+  > * {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15);
+  }
+}
+
+/* At one cell the background color lies behind the foreground, bottom right. */
+.pairForeground {
+  z-index: 1;
+  left: 4px;
+  top: 4px;
+  width: 60%;
+  height: 60%;
+}
+
+.pairBackground {
+  right: 4px;
+  bottom: 4px;
+  width: 60%;
+  height: 60%;
+  cursor: pointer;
+}
+
+/* Wider, side by side. */
+.pairWide {
+  .pairForeground,
+  .pairBackground {
+    top: 4px;
+    bottom: 4px;
+    width: calc(50% - 6px);
+    height: auto;
+  }
+
+  .pairForeground {
+    left: 4px;
+  }
+
+  .pairBackground {
+    right: 4px;
+  }
+}
+
+.hex {
+  display: grid;
+  align-items: center;
+  padding: 6px;
+
+  input {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    padding: 0 8px;
+    border: 1px solid #d6d3cc;
+    border-radius: 6px;
+    background: #ffffff;
+    font: 600 13px ui-monospace, monospace;
+  }
+}
+
+.chips {
+  display: grid;
+  gap: 3px;
+  padding: 3px;
+}
+
+.chip {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.3);
+  cursor: pointer;
+
+  &[data-current] {
+    box-shadow:
+      0 0 0 1.5px var(--lego-tile),
+      0 0 0 3px var(--lego-ink);
+  }
+}
+
+.round .chip {
+  border-radius: 50%;
+}
+
+/* A place in the history no color has taken yet. */
+.slot {
+  border: 1px dashed rgb(0 0 0 / 0.25);
+  box-shadow: none;
+  cursor: default;
+}
+
+.square {
+  position: relative;
+  background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, var(--hue));
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.squareThumb {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 1px 4px 2px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+
+/* A value as a number to drag sideways or type. */
+.number {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  --scrub-width: 100%;
+  --scrub-height: 100%;
+  --scrub-fill: #d6e2ff;
+
+  > :last-child {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.numberCaption {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lego-quiet);
 }

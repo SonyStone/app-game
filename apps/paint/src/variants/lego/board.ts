@@ -15,11 +15,20 @@ export type Board = { panels: Panel[] };
  * layout keeps its proportions when the view resizes or turns; cells left of or above it have negative indices,
  * which lets a panel grow toward the top and left without moving its parts on screen.
  */
-export type Panel = { id: string; at: Point; parts: Part[] };
+export type Panel = {
+  id: string;
+  at: Point;
+  parts: Part[];
+  /**
+   * The part this panel belongs to, such as a swatch's panel of pickers: it lies beside that part instead of at `at`,
+   * and shows only while open, like an Android folder.
+   */
+  owner?: string;
+};
 
 /**
  * A part on a panel: what it is (`kind`, see `parts.tsx`), its top-left cell and the cells it covers. A part with
- * several looks keeps the ones the user chose per size (see `looks.ts`) and what it opens on a tap.
+ * several looks keeps the ones the user chose per size (see `looks.ts`).
  */
 export type Part = {
   id: string;
@@ -28,8 +37,6 @@ export type Part = {
   span: Span;
   /** Look ids by `spanKey` of the size they were chosen at. */
   looks?: Record<string, string>;
-  /** The look its popup shows; the kind's default when absent. */
-  popup?: string;
 };
 
 export type Point = { x: number; y: number };
@@ -146,6 +153,47 @@ export function panelFrame(panel: Panel, view: { width: number; height: number }
   return { origin, rect: { left, top, width, height } };
 }
 
+/**
+ * Where a panel owned by a part at `anchor` lies, as `panelFrame` gives it: beside the part (see `besideRect`), inside
+ * `view`.
+ */
+export function ownedFrame(panel: Panel, anchor: Rect, view: { width: number; height: number }) {
+  const bounds = partsBounds(panel.parts);
+  const size = { width: bounds.columns * pitch - cellGap + panelPadding * 2, height: bounds.rows * pitch - cellGap + panelPadding * 2 };
+  const { x: left, y: top } = besideRect(anchor, size, view);
+  const origin = { x: left - bounds.column * pitch + panelPadding, y: top - bounds.row * pitch + panelPadding };
+
+  return { origin, rect: { left, top, ...size } };
+}
+
+export type Rect = { left: number; top: number; width: number; height: number };
+
+/**
+ * Where a box of `size` goes beside `anchor`: to its right, else its left, else below or above it, and always inside
+ * `view`. Popups and owned panels go there: over other parts, but never over the part that opened them.
+ */
+export function besideRect(anchor: Rect, size: { width: number; height: number }, view: { width: number; height: number }) {
+  const gap = 10;
+  const right = anchor.left + anchor.width;
+  const bottom = anchor.top + anchor.height;
+  const clampX = (x: number) => Math.max(4, Math.min(view.width - size.width - 4, x));
+  const clampY = (y: number) => Math.max(4, Math.min(view.height - size.height - 4, y));
+  const middleY = clampY(anchor.top + anchor.height / 2 - size.height / 2);
+
+  if (right + gap + size.width <= view.width) {
+    return { x: right + gap, y: middleY };
+  }
+
+  if (anchor.left - gap - size.width >= 0) {
+    return { x: anchor.left - gap - size.width, y: middleY };
+  }
+
+  const x = clampX(anchor.left + anchor.width / 2 - size.width / 2);
+  return bottom + gap + size.height <= view.height
+    ? { x, y: bottom + gap }
+    : { x, y: clampY(anchor.top - gap - size.height) };
+}
+
 /** The cell whose top-left corner is nearest to `point`, on a grid whose cell (0, 0) starts at `origin`. */
 export function nearestCell(origin: Point, point: Point): Cell {
   return { column: Math.round((point.x - origin.x) / pitch), row: Math.round((point.y - origin.y) / pitch) };
@@ -164,6 +212,52 @@ export function replacePanel(board: Board, id: string, next: Panel): Board {
   return {
     panels: board.panels.flatMap((panel) => (panel.id !== id ? [panel] : next.parts.length > 0 ? [next] : []))
   };
+}
+
+/** `board` with `next` in place of the panel of its id, or added after the others; a panel without parts goes. */
+export function putPanel(board: Board, next: Panel): Board {
+  if (board.panels.some((panel) => panel.id === next.id)) {
+    return replacePanel(board, next.id, next);
+  }
+
+  return next.parts.length > 0 ? { panels: [...board.panels, next] } : board;
+}
+
+/**
+ * Puts `block`, parts laid out together such as a kit's, among `parts` with the block's top-left at `cell`. The parts
+ * in its way are pushed aside as by one part covering the block's bounds, so the block keeps its layout.
+ */
+export function placeBlock(parts: readonly Part[], block: readonly Part[], cell: Cell) {
+  const bounds = partsBounds(block);
+  const standIn = { id: 'block-stand-in', kind: 'block', cell, span: { columns: bounds.columns, rows: bounds.rows } };
+
+  return placePart(parts, standIn).flatMap((part) =>
+    part.id !== standIn.id
+      ? [part]
+      : block.map((inBlock) => ({
+          ...inBlock,
+          cell: { column: cell.column + inBlock.cell.column - bounds.column, row: cell.row + inBlock.cell.row - bounds.row }
+        }))
+  );
+}
+
+/** The panel part `owner` opens, if it has one. */
+export function ownedPanel(board: Board, owner: string) {
+  return board.panels.find((panel) => panel.owner === owner);
+}
+
+/** `board` without the panels of parts no longer on it, nor the panels of parts on those. */
+export function pruneOwned(board: Board): Board {
+  let current = board;
+  for (;;) {
+    const parts = new Set(current.panels.flatMap((panel) => panel.parts.map((part) => part.id)));
+    const kept = current.panels.filter((panel) => panel.owner === undefined || parts.has(panel.owner));
+    if (kept.length === current.panels.length) {
+      return current;
+    }
+
+    current = { panels: kept };
+  }
 }
 
 /** `board` without part `id`; a panel left without parts goes too. */
