@@ -190,16 +190,18 @@ export function createBot(member: Member, context: BotContext) {
         continue;
       }
 
-      // Off the shell's line on the side the tank already is, or the other way if that is blocked.
+      // Off the shell's line on the side the tank already is, or the other way if that is blocked;
+      // pressed against walls on both sides, the tank cannot dodge and keeps to its way.
       const side = across === 0 ? (context.random() < 0.5 ? 1 : -1) : Math.sign(across);
-      let direction = { x: shell.direction.y * side, y: -shell.direction.x * side };
+      const away = { x: shell.direction.y * side, y: -shell.direction.x * side };
+      const direction = [away, { x: -away.x, y: -away.y }].find((option) =>
+        isOpenAt(grid, { x: position.x + option.x * DODGE_CHECK, y: position.y + option.y * DODGE_CHECK })
+      );
 
-      if (!isOpenAt(grid, { x: position.x + direction.x * DODGE_CHECK, y: position.y + direction.y * DODGE_CHECK })) {
-        direction = { x: -direction.x, y: -direction.y };
+      if (direction) {
+        dodge = { until: now + DODGE_TIME, direction };
+        break;
       }
-
-      dodge = { until: now + DODGE_TIME, direction };
-      break;
     }
 
     if (judged.size > 64) {

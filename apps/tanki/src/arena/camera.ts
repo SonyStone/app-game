@@ -31,7 +31,7 @@ export function followTarget(camera: Camera, target: Point, screen: Size) {
   camera.y += worldShift.y;
 }
 
-/** Multiplies the zoom by `factor`, keeping it between 0.5 and 6. */
+/** Multiplies the zoom by `factor`, keeping it between 0.25 and 6. */
 export function zoomCamera(camera: Camera, factor: number) {
   camera.zoom = clamp(camera.zoom * factor, MIN_ZOOM, MAX_ZOOM);
 }
@@ -67,7 +67,8 @@ export function screenToWorldDirection(camera: Camera, direction: Point) {
 }
 
 const DEFAULT_ZOOM = 2;
-const MIN_ZOOM = 0.5;
+/** Low enough to see the whole king of the hill map at once. */
+const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 6;
 const DRAG_MARGIN = 0.2;
 

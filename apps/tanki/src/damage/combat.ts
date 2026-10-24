@@ -1448,7 +1448,11 @@ function createShellDraw(renderer: Renderer) {
   return { draw: fieldDraw(field, slot) };
 }
 
-/** A concrete slab of the given half size with a seam 3 px inside its edge. Cells grow in half pixels until the slab fits a slot. */
+/**
+ * A concrete slab of the given half size with a seam 3 px inside its edge. Cells grow in half
+ * pixels until the slab fits a slot; on a slab as large as a building they grow so coarse that so
+ * fine a seam would smear into the outline, so there it lies two cells in and is a little wider.
+ */
 function createWallField(halfWidth: number, halfHeight: number) {
   const margin = 2;
   const width = (halfWidth + margin) * 2;
@@ -1459,9 +1463,12 @@ function createWallField(halfWidth: number, halfHeight: number) {
     cell += 0.5;
   }
 
+  const inset = Math.max(3, cell * 2);
+  const seamWidth = Math.max(0.4, cell * 0.3);
+
   return createField({ minX: -width / 2, minY: -height / 2, maxX: width / 2, maxY: height / 2 }, cell, (x, y) => {
     const armor = box(x, y, halfWidth, halfHeight);
-    const seam = Math.abs(box(x, y, halfWidth - 3, halfHeight - 3)) - 0.4;
+    const seam = Math.abs(box(x, y, halfWidth - inset, halfHeight - inset)) - seamWidth;
     return [armor, seam, FAR, 0];
   });
 }
