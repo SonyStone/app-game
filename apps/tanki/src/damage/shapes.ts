@@ -150,13 +150,16 @@ function turretShape(style: number, x: number, y: number) {
     }
 
     case TURRET_CASEMATE: {
-      const plate = roundedBox(x - 4, y, 7.5, 6.2, 1.5);
-      return { outline: roundedBox(x - 3, y, 12, 10, 2.5), seam: plate };
+      // The edges of its plates, as lines: the roof, the slopes from its corners and the hatch.
+      const roof = Math.abs(roundedBox(x + 1, y, 4, 6, 1));
+      const slopes = Math.min(segment(x, Math.abs(y), 3, 6, 15.2, 8.2), segment(x, Math.abs(y), -5, 6, -6, 9));
+      const hatch = Math.abs(Math.hypot(x + 2.4, y + 2.6) - 1.9) + 0.05;
+      return { outline: roundedBox(x - 5, y, 11.5, 9.5, 3), seam: Math.min(roof, slopes, hatch) };
     }
 
     case TURRET_LONG_GUN: {
-      const mantlet = roundedBox(x - 9, y, 4, 5.6, 2);
-      return { outline: Math.min(roundedBox(x - 28, y, 20, 2.4, 1), roundedBox(x - 47, y, 2.6, 3.9, 0.8), mantlet), seam: mantlet };
+      const mantlet = roundedBox(x - 1.5, y, 4.5, 4.1, 3.4);
+      return { outline: Math.min(roundedBox(x - 14, y, 12, 1.9, 1), roundedBox(x - 26.4, y, 2, 3, 0.7), mantlet), seam: mantlet };
     }
 
     default: {
@@ -168,8 +171,8 @@ function turretShape(style: number, x: number, y: number) {
 
 /**
  * Paints the casemate of a casemate gun onto its hull's field, as lines: the outline of the
- * superstructure the renderer draws over the hull and of the plate in its face. A wreck keeps its
- * casemate this way, burnt onto the hull, and shots chip it away with the armor.
+ * superstructure the renderer draws over the hull and the edges of its sloped plates. A wreck
+ * keeps its casemate this way, burnt onto the hull, and shots chip it away with the armor.
  */
 export function paintCasemate(field: DamageField) {
   for (let row = 0; row < field.rows; row++) {

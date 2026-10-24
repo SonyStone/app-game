@@ -15,12 +15,15 @@ export function applyAim(tank: Tank, aim: Aim | undefined, camera: Camera, scree
   }
 }
 
-/** The world direction in radians the player aims `tank`'s turret, as for `applyAim`; `undefined` without aim. */
-export function aimAngle(tank: Tank, aim: Aim | undefined, camera: Camera, screen: { width: number; height: number }) {
+/**
+ * The world direction in radians the player aims `tank`'s turret, as for `applyAim`; `undefined` without aim.
+ *
+ * @param from - Where the gun turns, which a point aimed at is seen from; defaults to the hull's center.
+ */
+export function aimAngle(tank: Tank, aim: Aim | undefined, camera: Camera, screen: { width: number; height: number }, from = tank.hull.translation()) {
   if (aim?.kind === 'point') {
     const target = screenToWorld(camera, aim, screen);
-    const center = tank.hull.translation();
-    return Math.atan2(target.y - center.y, target.x - center.x);
+    return Math.atan2(target.y - from.y, target.x - from.x);
   }
 
   return aim?.kind === 'direction' ? aim.angle - camera.rotation : undefined;

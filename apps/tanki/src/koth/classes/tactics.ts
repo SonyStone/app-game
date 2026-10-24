@@ -9,7 +9,10 @@ import type { TankClassId } from '../tanks';
  * - `aimError`: how many times its usual aim error it still fires at, more for a spread of
  *   pellets or rounds, which forgive a worse aim.
  * - `dodge`: the chance it sidesteps a shell or a laser it sees coming, highest for the nimble Scout.
- * - `steadiness`: a factor on its aim error, below 1 for the Sniper aiming through its scope.
+ * - `steadiness`: a factor on its aim error. The Sniper's rail hits at once where the gun points,
+ *   with no flight time that lets a shell's error and a target's dodge cancel out, so its hand is
+ *   made half again as unsteady as the others' to keep a headshot a feat: one shot in four or five
+ *   crosses a core in eight-bot matches.
  */
 export type ClassTactics = {
   reach: number;
@@ -26,7 +29,7 @@ export const TACTICS: Record<TankClassId, ClassTactics> = {
   soldier: { reach: 470, duel: { min: 200, max: 380 }, hits: { rear: 2, side: 3, front: 4 }, aimError: 1, dodge: 0.5, steadiness: 1 },
   heavy: { reach: 430, duel: { min: 140, max: 320 }, hits: { rear: 6, side: 25, front: 22 }, aimError: 3, dodge: 0.3, steadiness: 1 },
   demoman: { reach: 480, duel: { min: 290, max: 450 }, hits: { rear: 2, side: 3, front: 5 }, aimError: 1.3, dodge: 0.5, steadiness: 1 },
-  sniper: { reach: 900, duel: { min: 420, max: 720 }, hits: { rear: 1, side: 1, front: 1 }, aimError: 0.8, dodge: 0.4, steadiness: 0.7 }
+  sniper: { reach: 900, duel: { min: 420, max: 720 }, hits: { rear: 1, side: 1, front: 1 }, aimError: 0.8, dodge: 0.4, steadiness: 1.5 }
 };
 
 /**

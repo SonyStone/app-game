@@ -109,6 +109,14 @@ export function createRangeRenderer(gpu: GpuContext) {
     return std.length(std.max(q, d.vec2f(0))) + std.min(std.max(q.x, q.y), 0) - radius;
   };
 
+  /** Distance from `point` to the segment from `from` to `to`. */
+  const segmentDistance = (point: d.v2f, from: d.v2f, to: d.v2f) => {
+    'use gpu';
+    const along = std.sub(to, from);
+    const t = std.clamp(std.dot(std.sub(point, from), along) / std.dot(along, along), 0, 1);
+    return std.length(std.sub(point, std.add(from, std.mul(along, t))));
+  };
+
   const texel = (base: number, cols: number, col: number, row: number) => {
     'use gpu';
     return d.vec4f(fields.$[base + d.u32(row) * cols + d.u32(col)]!);
@@ -215,20 +223,29 @@ export function createRangeRenderer(gpu: GpuContext) {
         distance = std.length(point) - 9.2;
       }
     } else if (style === TURRET_CASEMATE) {
-      // A casemate gun's fixed superstructure, turned with the hull, with the slope of its plates.
+      // The Hetzer's low casemate, turned with the hull: its sloped plates seen from above, a
+      // long glacis in front running up to a small flat roof, the edges between the plates drawn
+      // from the roof's corners down to the base's, and the commander's hatch on the roof.
       if (part === 0) {
-        distance = roundedBox(std.sub(point, d.vec2f(3, 0)), d.vec2f(12, 10), 2.5);
+        distance = roundedBox(std.sub(point, d.vec2f(5, 0)), d.vec2f(11.5, 9.5), d.f32(3));
       } else if (part === 1) {
-        distance = std.abs(roundedBox(std.sub(point, d.vec2f(4, 0)), d.vec2f(7.5, 6.2), 1.5)) - 0.5;
+        const roof = std.abs(roundedBox(std.sub(point, d.vec2f(-1, 0)), d.vec2f(4, 6), d.f32(1)));
+        // The casemate is the same on both sides of the hull's axis.
+        const side = d.vec2f(point.x, std.abs(point.y));
+        const upper = segmentDistance(side, d.vec2f(3, 6), d.vec2f(15.2, 8.2));
+        const lower = segmentDistance(side, d.vec2f(-5, 6), d.vec2f(-6, 9));
+        distance = std.min(roof, std.min(upper, lower)) - 0.5;
+      } else if (part === 2) {
+        distance = std.abs(std.length(std.sub(point, d.vec2f(-2.4, -2.6))) - 1.9) - 0.45;
       }
     } else if (style === TURRET_LONG_GUN) {
-      // A casemate gun's long barrel with a muzzle brake, from a mantlet in the casemate's face.
+      // The Hetzer's gun: a barrel with a muzzle brake from a rounded cast mantlet on the glacis.
       if (part === 0) {
-        distance = roundedBox(std.sub(point, d.vec2f(28, 0)), d.vec2f(20, 2.4), d.f32(1));
+        distance = roundedBox(std.sub(point, d.vec2f(14, 0)), d.vec2f(12, 1.9), d.f32(1));
       } else if (part === 1) {
-        distance = roundedBox(std.sub(point, d.vec2f(47, 0)), d.vec2f(2.6, 3.9), 0.8);
+        distance = roundedBox(std.sub(point, d.vec2f(26.4, 0)), d.vec2f(2, 3), 0.7);
       } else if (part === 2) {
-        distance = roundedBox(std.sub(point, d.vec2f(9, 0)), d.vec2f(4, 5.6), d.f32(2));
+        distance = roundedBox(std.sub(point, d.vec2f(1.5, 0)), d.vec2f(4.5, 4.1), 3.4);
       }
     } else if (part === 0) {
       // The medium tank: a cupola and one barrel.
@@ -1761,10 +1778,10 @@ export const TURRET_GATLING = 2;
 /** A cupola with a short, fat mortar tube. */
 export const TURRET_MORTAR = 3;
 
-/** A casemate gun's fixed superstructure, drawn turned with the hull. */
+/** A casemate gun's fixed superstructure, the Hetzer's sloped casemate, drawn turned with the hull. */
 export const TURRET_CASEMATE = 4;
 
-/** A casemate gun's long barrel with its mantlet and muzzle brake. */
+/** A casemate gun's barrel with its rounded mantlet and muzzle brake, turning about the mantlet. */
 export const TURRET_LONG_GUN = 5;
 
 /**
@@ -1776,8 +1793,8 @@ export const TURRET_QUADS: Record<number, Pick<BodyDraw, 'originX' | 'originY' |
   [TURRET_TWIN]: { originX: -8.5, originY: -8.5, cell: 1, cols: 33, rows: 18 },
   [TURRET_GATLING]: { originX: -14.5, originY: -12.5, cell: 1, cols: 50, rows: 26 },
   [TURRET_MORTAR]: { originX: -10.5, originY: -10.5, cell: 1, cols: 35, rows: 22 },
-  [TURRET_CASEMATE]: { originX: -10.5, originY: -11.5, cell: 1, cols: 28, rows: 24 },
-  [TURRET_LONG_GUN]: { originX: 3.5, originY: -6.5, cell: 1, cols: 49, rows: 14 }
+  [TURRET_CASEMATE]: { originX: -8.5, originY: -11.5, cell: 1, cols: 28, rows: 24 },
+  [TURRET_LONG_GUN]: { originX: -4.5, originY: -6.5, cell: 1, cols: 35, rows: 14 }
 };
 
 /** A tapered streak along its velocity. */

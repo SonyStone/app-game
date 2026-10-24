@@ -5,6 +5,7 @@ import type { createRangeRenderer } from '../../damage/renderer';
 import type { Rapier } from '../../physics/Rapier2D';
 import type { TankClassId } from '../tanks';
 import { TANK_CLASSES } from './classes';
+import { chargedShell } from './weapon';
 
 type Point = { x: number; y: number };
 
@@ -153,10 +154,10 @@ describe('grenades and breakable walls', () => {
   });
 });
 
-describe("a Sniper's full charge", () => {
+describe("a Sniper's rail", () => {
   const full = TANK_CLASSES.sniper.weapon.kind === 'charge' ? TANK_CLASSES.sniper.weapon.full : undefined!;
 
-  it('bores through a wooden fence into the tank behind it', () => {
+  it('bores through a wooden fence into the tank behind it at full charge', () => {
     const { combat, hits } = createBattle({ walls: [{ x: 0, y: 0, halfWidth: 7, halfHeight: 150, material: 'wood' }] });
     const sniper = spawn(combat, 'sniper', { x: -250, y: 0, rotation: 0 });
     const target = spawn(combat, 'soldier', { x: 120, y: 0, rotation: Math.PI });
@@ -168,14 +169,15 @@ describe("a Sniper's full charge", () => {
   });
 
   it.each([
-    ['brick', 12],
-    ['wood', 22]
-  ] as const)('stops in %s %i px thick and only chips it', (material, halfWidth) => {
+    ['brick', 12, 'a full', 1],
+    ['wood', 45, 'a full', 1],
+    ['wood', 7, 'no', 0]
+  ] as const)('stops in %s %i px thick at %s charge and only chips it', (material, halfWidth, _, charge) => {
     const { combat, hits } = createBattle({ walls: [{ x: 0, y: 0, halfWidth, halfHeight: 150, material }] });
     const sniper = spawn(combat, 'sniper', { x: -250, y: 0, rotation: 0 });
     const target = spawn(combat, 'soldier', { x: 120, y: 0, rotation: Math.PI });
     combat.step(1 / 60);
-    fireAt(combat, sniper, { x: 120, y: 0 }, { shell: full });
+    fireAt(combat, sniper, { x: 120, y: 0 }, { shell: chargedShell(TANK_CLASSES.sniper.shell, full, charge) });
 
     expect(hits.some((hit) => hit.target === target)).toBe(false);
     expect(combat.armorLeft(target)).toBe(1);

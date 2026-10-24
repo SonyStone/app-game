@@ -2,6 +2,7 @@ import type { Collider, Rapier } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
 import type { CombatLayout, WallMaterial, WallPlacement } from './combat';
 import { carve, CHANNELS, createField, detachLoosePieces, FAR, sampleField, shatter, solidBoxes, type DamageField, type Fragment } from './field';
+import { cutSlit } from './rail';
 import { KIND_BLOCK, KIND_FIELD, type createRangeRenderer } from './renderer';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
@@ -16,8 +17,8 @@ type Point = { x: number; y: number };
  * and its own colliders built from the field, so a hit changes only the tiles it touches:
  *
  * - `chip` cuts a crater into every tile around the hit point, its size set by the material and
- *   the blow: a blast chips each wall it reaches at the point `facesNear` finds, and a piercing
- *   round may `punch` clean through a thin wall instead.
+ *   the blow: a blast chips each wall it reaches at the point `facesNear` finds, and a rail may
+ *   `punch` clean through a thin wall instead.
  * - `ram` lets a hull that crashed into a wall bite into it, as deep as the blow and the material
  *   allow, in the outline of the hull's front.
  * - `refresh` then rebuilds each changed tile: pieces cut off from the rest of the wall fly away
@@ -155,14 +156,13 @@ export function createWalls(
     },
 
     /**
-     * Bores a piercing round clean through a thin wall, such as a wooden fence, from where it met
-     * the wall at `entry`: a tunnel of the material's crater holes along `direction`, cut into
-     * every tile it passes. Returns where the round comes out, or `undefined`, cutting nothing,
-     * when more than `maxDepth` pixels of wall or a wall of another material lie in its way.
-     *
-     * @param scale - Size of the blow against `WALL_BLOW`, as for `chip`.
+     * Bores a rail clean through a thin wall, such as a wooden fence, from where it met the wall at
+     * `entry`: its slit, `width` px wide, along `direction` through every tile it passes, with
+     * splinters torn out where it goes in and comes out. Returns where the rail comes out, or
+     * `undefined`, cutting nothing, when more than `maxDepth` pixels of wall or a wall of another
+     * material lie in its way.
      */
-    punch(entry: Point, direction: Point, maxDepth: number, scale: { hole: number; depth: number }) {
+    punch(entry: Point, direction: Point, maxDepth: number, width: number) {
       const at = (along: number) => ({ x: entry.x + direction.x * along, y: entry.y + direction.y * along });
       // The colliders' blocks reach a little past the fields, so the round may meet them just before the material.
       const surface = surfaceAlong(entry, direction);
@@ -182,23 +182,23 @@ export function createWalls(
       }
 
       const seed = options.random() * 1000;
+      const [from, to] = [at(start), at(depth)];
       damage.hits++;
 
-      for (let along = start; along <= depth; along += PUNCH_STEP * 2) {
-        const point = at(along);
+      const reach = { minX: Math.min(from.x, to.x) - 8, minY: Math.min(from.y, to.y) - 8, maxX: Math.max(from.x, to.x) + 8, maxY: Math.max(from.y, to.y) + 8 };
 
-        for (const near of tilesNear({ minX: point.x - 8, minY: point.y - 8, maxX: point.x + 8, maxY: point.y + 8 })) {
-          const crater = near.material.crater;
-
-          if (near.fallen || !near.material.thin || !crater) {
-            continue;
-          }
-
-          carve(near.field, toLocal(near.wall, point), crater.hole * scale.hole * 0.8, 0.3, seed + along);
-          near.changed = true;
-          near.pristine = false;
-          near.push = direction;
+      for (const near of tilesNear(reach)) {
+        if (near.fallen || !near.material.thin || !near.material.crater) {
+          continue;
         }
+
+        cutSlit(near.field, toLocal(near.wall, from), toLocal(near.wall, to), width);
+        // Splinters torn out where the rail goes in and comes out.
+        carve(near.field, toLocal(near.wall, from), width * SPLINTER, 0.5, seed);
+        carve(near.field, toLocal(near.wall, to), width * SPLINTER * 1.3, 0.6, seed + 1);
+        near.changed = true;
+        near.pristine = false;
+        near.push = direction;
       }
 
       // Out past the old colliders' blocks too, which stand until the next refresh.
@@ -761,7 +761,7 @@ export type WallMaterialSpec = {
   ram: { bite: number; hardness: number };
   /** Whether a fallen tile of a building of this material leaves rubble. */
   rubble: boolean;
-  /** A thin wall, such as a wooden fence, that a piercing round bores clean through, as through a crate. */
+  /** A thin wall, such as a wooden fence, that a rail bores clean through, as through a crate. */
   thin: boolean;
 };
 
@@ -771,7 +771,7 @@ export type WallMaterialSpec = {
  * fence falls after about three hits; steel stands forever. A medium tank ramming at full speed
  * breaks through a fence at once, needs two or three rams for a tile of a brick wall and barely
  * scratches concrete. Fallen tiles of brick and concrete buildings leave rubble. Wood is thin: a
- * piercing round bores through it. Wood is drawn with planks, brick with courses of bricks,
+ * rail bores through it. Wood is drawn with planks, brick with courses of bricks,
  * concrete as slabs and steel hatched.
  */
 export const WALL_MATERIALS: Record<WallMaterial, WallMaterialSpec> = {
@@ -854,8 +854,9 @@ const CHUNK_REACH = 18;
  * stacks of boxes a pixel thin, which push a tank shoved into them every which way and can trap it.
  */
 const COLLIDER_BLOCK = 3;
-/** Step in pixels a piercing round bores through a thin wall in. */
+/** Step in pixels a rail bores through a thin wall in, and the splinters it tears out against its slit's width. */
 const PUNCH_STEP = 1;
+const SPLINTER = 1.4;
 const CAMPFIRE_RADIUS = 13;
 /** Size of the buckets that index tiles by place, in pixels. */
 const BUCKET = 128;

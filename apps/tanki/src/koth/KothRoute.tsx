@@ -3,13 +3,14 @@ import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
 import { createSignal, onCleanup, onSettled, Show, untrack } from 'solid-js';
 import { aimAngle } from '../arena/aim';
-import { createCamera, followTarget, screenToWorld, screenToWorldDirection, worldToScreen, zoomCamera } from '../arena/camera';
-import { makeArenaInput } from '../arena/input';
+import { createCamera, DRAG_MARGIN, followTarget, screenToWorld, screenToWorldDirection, worldToScreen, zoomCamera } from '../arena/camera';
+import { makeArenaInput, type Aim } from '../arena/input';
 import { createRangeRenderer } from '../damage/renderer';
 import { Rapier2D, useRapier2D } from '../physics/Rapier2D';
 import { createWorld } from '../physics/World';
 import { AimOverlay, aimOnScreen, type AimView } from './AimOverlay';
 import { ClassMenu } from './classes/ClassMenu';
+import { createScope } from './classes/scope';
 import { BotThoughts, KothHud, MatchResult, type HudState, type ThoughtView } from './Hud';
 import { createKothMatch, type KothMatch } from './match';
 import { CAPTURE_RULES } from './rules';
@@ -23,7 +24,8 @@ import { TANK_CLASS_IDS, type TankClassId } from './tanks';
  * the player's base and otherwise with the next respawn. Shots and blasts break walls of wood,
  * brick and concrete, and a ram breaks a fence, harder the heavier the tank. Destroyed tanks leave
  * wrecks of their class that are cover and pieces that stay on the ground. Repair kits on the map
- * mend armor as the base does, more on the side of the hull that touches them.
+ * mend part of a tank's damage, more on the side of the hull that touches them; only the base
+ * makes a tank whole.
  *
  * The player aims with a crosshair of the game's own instead of the cursor; a line from the gun
  * shows where the next shot goes and what it will hit, and a ring marks the player's tank (see
@@ -33,10 +35,12 @@ import { TANK_CLASS_IDS, type TankClassId } from './tanks';
  * hands the player's tank to a bot and shows the whole map (1-8 follow a tank, 0 shows the whole
  * map again), X switches the look of the aim. The right mouse button or Shift spins a Heavy's
  * gatling up without firing and turns a Sniper's hull on the spot toward the cursor, which it also
- * does by itself when the player stops driving and aims outside its gun's arc. In the address,
- * `?watch` starts watching right away, `?hold=30` shortens the hold time that wins to 30 seconds,
- * `?class=scout` starts as that class with the menu closed, `?aim=line` picks the aim's look and
- * `?slow=4` runs the game four times slower, to look at effects frame by frame.
+ * does by itself when the player stops driving and aims outside its gun's arc. While a Sniper
+ * charges its shot, the view widens about the cursor, which keeps its aim, and letting go fires a
+ * rail that hits at once along the gun. In the address, `?watch` starts watching right away,
+ * `?hold=30` shortens the hold time that wins to 30 seconds, `?class=scout` starts as that class
+ * with the menu closed, `?aim=line` picks the aim's look and `?slow=4` runs the game four times
+ * slower, to look at effects frame by frame.
  */
 export default function KothRoute() {
   const address = new URLSearchParams(window.location.search);
@@ -109,9 +113,9 @@ export default function KothRoute() {
         )}
       </Show>
       <p class="pointer-events-none absolute bottom-3 left-4 m-0 text-xs text-white/60">
-        WASD drive · mouse aims: the line shows what the shot hits · click fires · right button or Shift: spin up (Heavy), turn on the spot
-        (Sniper) · C or 1-5 class · walls break, ram fences · wrecks are cover · green kits mend where they touch · X aim look · B bot thoughts
-        · V watch (1-8 follow, 0 map) · R restart
+        WASD drive · mouse aims: the line shows what the shot hits · click fires (Sniper: hold to charge and widen the view, let go for an
+        instant rail) · right button or Shift: spin up (Heavy), turn on the spot (Sniper) · C or 1-5 class · walls break, ram fences · wrecks
+        are cover · green kits mend where they touch · X aim look · B bot thoughts · V watch (1-8 follow, 0 map) · R restart
       </p>
     </div>
   );
@@ -162,7 +166,7 @@ function KothScene(props: {
   let seenChoice = untrack(() => props.choice);
   let watched: number | undefined;
   let overview = { zoom: START_ZOOM };
-  let scope = 0;
+  const scope = createScope();
 
   camera.zoom = START_ZOOM;
 
@@ -217,7 +221,7 @@ function KothScene(props: {
     camera.rotation += controls.turn * VIEW_TURN_SPEED * dt;
     zoomCamera(camera, controls.zoom * Math.exp(controls.zoomKeys * KEY_ZOOM_SPEED * dt));
 
-    const aim = player && !props.watching ? aimAngle(player, controls.aim, camera, screen) : undefined;
+    const aim = player && !props.watching ? aimAngle(player, controls.aim, camera, screen, match.combat.gunPivotOf(player)) : undefined;
     const drive = screenToWorldDirection(camera, controls.move);
     const reach = player && controls.aim?.kind === 'point' ? distanceTo(player.hull.translation(), screenToWorld(camera, controls.aim, screen)) : undefined;
     const alt = controls.alt && !props.watching;
@@ -229,7 +233,7 @@ function KothScene(props: {
     }
 
     match.update(dt);
-    placeCamera(screen, dt);
+    placeCamera(screen, dt, controls.aim);
     match.draw(camera);
     const shake = match.shake;
     const view = { ...camera, x: camera.x + (Math.random() * 2 - 1) * shake, y: camera.y + (Math.random() * 2 - 1) * shake };
@@ -243,14 +247,16 @@ function KothScene(props: {
 
   /**
    * Follows the player's tank, a watched tank, or frames the whole map while watching. While the
-   * player's casemate gun charges a shot, the view slides forward along the gun, as a sniper's
-   * scope looks far ahead.
+   * player's casemate gun charges a shot, the view zooms out about the cursor, as a sniper's scope
+   * shows more, and gives the tank more room before following it, so the ground under a still
+   * cursor, where the gun aims, stays put (see `createScope`).
    */
-  function placeCamera(screen: { width: number; height: number }, dt: number) {
+  function placeCamera(screen: { width: number; height: number }, dt: number, aim: Aim | undefined) {
     const followed = props.watching ? (watched === undefined ? undefined : match.members[watched]) : match.seat;
     const target = followed?.tank?.hull.translation();
 
     if (props.watching && watched === undefined) {
+      scope.reset();
       const fit = Math.min(screen.width / (match.map.halfWidth * 2 + 60), screen.height / (match.map.halfHeight * 2 + 140));
 
       if (overview.zoom !== fit) {
@@ -266,19 +272,12 @@ function KothScene(props: {
     overview = { zoom: 0 };
     const hud = match.hud().player;
     const scoped = !props.watching && hud.weapon === 'charge' && hud.charge !== undefined;
-    scope += ((scoped ? 1 : 0) - scope) * Math.min(dt * SCOPE_SPEED, 1);
-
-    if (target && match.seat.tank && scope > 0.01) {
-      const angle = match.seat.tank.turretAngle;
-      const ahead = (Math.min(screen.width, screen.height) / 2 / camera.zoom) * SCOPE_REACH * scope;
-      const sight = { x: target.x + Math.cos(angle) * ahead, y: target.y + Math.sin(angle) * ahead };
-      camera.x += (sight.x - camera.x) * Math.min(dt * SCOPE_SPEED, 1);
-      camera.y += (sight.y - camera.y) * Math.min(dt * SCOPE_SPEED, 1);
-      return;
-    }
+    // A stick's aim is a direction, which the camera does not change: its scope widens about the tank.
+    const anchor = aim?.kind === 'point' ? aim : target ? worldToScreen(camera, target, screen) : { x: screen.width / 2, y: screen.height / 2 };
+    scope.step(camera, screen, anchor, scoped, dt);
 
     if (target) {
-      followTarget(camera, target, screen);
+      followTarget(camera, target, screen, scope.followMargin(DRAG_MARGIN));
     }
   }
 }
@@ -292,9 +291,6 @@ const MAX_FRAME_TIME = 0.1;
 const VIEW_TURN_SPEED = 1.5;
 const KEY_ZOOM_SPEED = 1.5;
 const BACKGROUND = [0.302, 0.302, 0.302];
-/** How far ahead the scoped view looks, as a share of half the shorter side of the screen, and how fast it slides there per second. */
-const SCOPE_REACH = 0.75;
-const SCOPE_SPEED = 5;
 
 function distanceTo(a: { x: number; y: number }, b: { x: number; y: number }) {
   return Math.hypot(a.x - b.x, a.y - b.y);

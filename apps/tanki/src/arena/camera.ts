@@ -17,11 +17,13 @@ export function createCamera(center: Point) {
 /**
  * Moves the camera just enough to keep `target` inside the central drag box, as Godot's
  * `Camera2D` does with its default drag margins of 20% of the half screen.
+ *
+ * @param margin - Half the drag box's size as a share of the half screen; defaults to `DRAG_MARGIN`.
  */
-export function followTarget(camera: Camera, target: Point, screen: Size) {
+export function followTarget(camera: Camera, target: Point, screen: Size, margin = DRAG_MARGIN) {
   const offset = rotate({ x: target.x - camera.x, y: target.y - camera.y }, camera.rotation);
-  const limitX = ((screen.width / 2) * DRAG_MARGIN) / camera.zoom;
-  const limitY = ((screen.height / 2) * DRAG_MARGIN) / camera.zoom;
+  const limitX = ((screen.width / 2) * margin) / camera.zoom;
+  const limitY = ((screen.height / 2) * margin) / camera.zoom;
   const shift = {
     x: offset.x - clamp(offset.x, -limitX, limitX),
     y: offset.y - clamp(offset.y, -limitY, limitY)
@@ -70,7 +72,8 @@ const DEFAULT_ZOOM = 2;
 /** Low enough to see the whole king of the hill map at once. */
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 6;
-const DRAG_MARGIN = 0.2;
+/** Half the drag box of `followTarget` as a share of the half screen, Godot's default. */
+export const DRAG_MARGIN = 0.2;
 
 function rotate(point: Point, angle: number) {
   const cos = Math.cos(angle);

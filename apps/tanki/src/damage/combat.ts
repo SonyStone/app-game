@@ -6,13 +6,11 @@ import { createBurning } from './burning';
 import { createCampfire } from './campfire';
 import {
   carve,
-  CHANNELS,
   dent,
   detachLoosePieces,
   isCoreExposed,
   mend,
   raycastField,
-  sampleField,
   scorch,
   solidBoxes,
   surfaceNormal,
@@ -37,6 +35,7 @@ import {
   type createRangeRenderer
 } from './renderer';
 import { createCrateField, createGrenadeField, createHullField, createShellField, MEDIUM_HULL, paintCasemate, type HullSpec } from './shapes';
+import { cutRail, traceRail } from './rail';
 import { createScrap } from './scrap';
 import { createWalls, RUBBLE_HEIGHT, WALL_BLOW, type Bounds, type Tile } from './walls';
 import { isRolling, launchLob, stepLob, type LobSpec, type LobState } from './weapons/lob';
@@ -87,11 +86,17 @@ export type ShellSpec = {
   /** Shrapnel the blast throws out in every direction: `count` small shells of `shell`. */
   fragments?: { count: number; shell: ShellSpec };
   /**
-   * Punches through what it hits: up to `armor` pixels of a tank's armor, flying on through the
-   * hole it chipped and so reaching a core that lies that deep, and, with `thin`, clean through
-   * thin bodies such as crates.
+   * Makes the shot a rail, which hits at once: a straight line from the muzzle, `range` px long,
+   * with no shell in flight, as if `speed` were infinite. The line goes through what it meets for
+   * as long as it has `power` left: tanks and wrecks spend a pixel of power per pixel of armor
+   * along the line, crates and wooden walls half that, and brick, concrete, steel and rubble stop
+   * it. It cuts a slit `slit` px wide through what it goes through, with a hole of `hole` px where
+   * it goes in and a ragged one torn open where it comes out, and knocks each body back by
+   * `knockback`. A tank whose core the line crosses before its power is spent blows up, from any
+   * side, as a headshot kills in Team Fortress 2; elsewhere the slit only weakens the armor. Where
+   * it stops in a wall it chips a crater of `hole` and `depth`, as a shell would.
    */
-  pierce?: { armor: number; thin: boolean };
+  rail?: { power: number; slit: number };
   /** Flies in an arc instead of along the ground: over low bodies, bouncing off walls, until its fuse burns down. */
   lob?: LobSpec;
 };
@@ -123,10 +128,15 @@ export type BlastSpec = {
 export type TankLook = {
   /** One of the renderer's `TURRET_*` looks. */
   turret: number;
-  /** Distance from the hull's center to the muzzle along the gun, in pixels. */
+  /** Distance from the gun's pivot to the muzzle along the gun, in pixels. */
   muzzle: number;
   /** A casemate gun: its superstructure is drawn turned with the hull, and the turret is only its gun. */
   casemate?: boolean;
+  /**
+   * Where the gun turns, in hull coordinates, +x forward and +y to the right; defaults to the
+   * hull's center. A casemate gun may sit off to one side, as the Hetzer's does.
+   */
+  mount?: Point;
 };
 
 /**
@@ -172,9 +182,10 @@ export type CombatLayout = {
  * Any number of tanks can be driven at once: `drive` sets a tank's input until changed, `fire`
  * shoots its gun. Tanks may belong to teams, and without friendly fire shots pass through the
  * shooter's teammates. Each tank may have a hull, mass and look of its own, and each shot a shell
- * of its own: a volley of pellets, a rocket that goes off in a blast with shrapnel, a round that
- * punches through, a grenade lobbed in an arc. `blast` sets off an explosion anywhere; it reaches
- * every body with armor, wall and wreck around it, and what it knocks off lands as scrap.
+ * of its own: a volley of pellets, a rocket that goes off in a blast with shrapnel, a rail that
+ * hits at once and goes through what it meets, a grenade lobbed in an arc. `blast` sets off an
+ * explosion anywhere; it reaches every body with armor, wall and wreck around it, and what it
+ * knocks off lands as scrap.
  *
  * The battle owns its Rapier bodies and renderer field slots; `reset` rebuilds the crates and
  * removes every tank.
@@ -252,6 +263,8 @@ export function createCombat(
     motion: { x: number; y: number; distance: number };
     travelled: number;
   }[] = [];
+  // Tracers of rails fired lately, which fade out where they were drawn.
+  const rails: { from: Point; to: Point; age: number }[] = [];
   let trailId = 0;
   let shellId = 0;
   // Pairs that crashed this step: two bodies meet over several colliders at once, but crash once.
@@ -378,6 +391,14 @@ export function createCombat(
     },
 
     /**
+     * Where `tank`'s gun turns, in the world: the hull's center, or its look's `mount` off it.
+     * Aim from here, so the gun's line passes through what it is aimed at.
+     */
+    gunPivotOf(tank: Tank) {
+      return pivotAt(tank);
+    },
+
+    /**
      * How far a ray goes before it meets a wall, a wreck, a crate or a tank's armor, as a shell's
      * flight finds it; `skip` lets it pass through tanks it returns true for. Besides the distance
      * it tells which tank it met, if any, and whether its core, what kind of thing it met, whether
@@ -501,12 +522,15 @@ export function createCombat(
      * Fires `tank`'s gun along its turret, with recoil: the shot's shell, else the battle's
      * `options.shell`, else a hitscan shot. The shot chips the first armor it meets, knocking the
      * body back, or detonates a core; at a glancing angle it ricochets and flies on. A shell with a
-     * blast goes off where it stops instead. Reload is up to the caller.
+     * blast goes off where it stops instead, and a rail hits along its whole line at once and goes
+     * through what it meets (see `ShellSpec.rail`). Reload is up to the caller.
      */
     fire(tank: Tank, shot: Shot = {}) {
       const shell = shot.shell ?? options.shell;
 
-      if (shell) {
+      if (shell?.rail) {
+        fireRail(tank, shell, shell.rail, shot);
+      } else if (shell) {
         launchShell(tank, shell, shot);
       } else {
         fire(tank);
@@ -616,6 +640,14 @@ export function createCombat(
 
       shake *= Math.exp(-SHAKE_DECAY * dt);
 
+      for (let index = rails.length - 1; index >= 0; index--) {
+        rails[index].age += dt;
+
+        if (rails[index].age >= RAIL_LIFE) {
+          rails.splice(index, 1);
+        }
+      }
+
       for (let index = flashes.length - 1; index >= 0; index--) {
         const light = flashes[index];
         light.age += dt;
@@ -716,10 +748,12 @@ export function createCombat(
 
       for (const body of armored) {
         if (body.tank) {
-          const position = seenFrom(view, body.body.translation(), liftOf(body));
+          const lift = liftOf(body);
+          const position = seenFrom(view, body.body.translation(), lift);
           const angle = body.tank.turretAngle;
           const kick = body.barrelKick;
           const look = body.look ?? MEDIUM_LOOK;
+          const pivot = look.mount ? seenFrom(view, toWorld(body.body, look.mount), lift) : position;
 
           // A casemate is part of the hull: it turns with it, and only the gun inside it aims.
           if (look.casemate) {
@@ -730,8 +764,8 @@ export function createCombat(
             ...turretDraw(look.turret),
             style: look.turret,
             spin: body.spin,
-            x: position.x - Math.cos(angle) * kick,
-            y: position.y - Math.sin(angle) * kick,
+            x: pivot.x - Math.cos(angle) * kick,
+            y: pivot.y - Math.sin(angle) * kick,
             angle,
             color: rgb(body.color),
             flash: body.flash
@@ -756,6 +790,7 @@ export function createCombat(
         }
       }
 
+      drawRails();
       overlay?.();
       burning.draw();
 
@@ -789,6 +824,7 @@ export function createCombat(
 
       respawns.length = 0;
       shells.length = 0;
+      rails.length = 0;
       layout.crates?.forEach((placement) => spawnCrate(placement));
     }
   };
@@ -823,7 +859,8 @@ export function createCombat(
         .setAngularDamping(25)
     );
 
-    // A crate is thin enough for a piercing round and low enough for a grenade to fly over.
+    // A crate is wood, which a rail goes through at half the cost of armor, and low enough for a
+    // grenade to fly over.
     const entry = register(body, createCrateField(), PROP_COLOR, CRATE_MASS, () => spawnCrate(placement));
     entry.thin = true;
     entry.top = CRATE_HEIGHT;
@@ -1096,13 +1133,11 @@ export function createCombat(
 
   /**
    * What a shot does where it meets something: it chips a wall or a wreck, detonates a core,
-   * chips armor met head on, or glances off armor and flies on. A shell that pierces flies on
-   * through the hole it chipped, or clean through a thin body or a thin wall.
+   * chips armor met head on, or glances off armor and flies on.
    *
    * @param canBounce - Whether the shot may fly on after a glancing hit; a spent one only scuffs the armor.
-   * @param shell - The shell striking, if it is one, whose pierce it may spend.
-   * @returns Where and in which direction the shot flies on, and whether off a ricochet, or
-   *   `undefined` when the shot stops here.
+   * @returns Where and in which direction the shot flies on after a ricochet, or `undefined` when
+   *   the shot stops here.
    */
   function strike(
     hit: ReturnType<typeof castShot>,
@@ -1110,42 +1145,18 @@ export function createCombat(
     direction: Point,
     tank: Tank,
     blow: Pick<ShellSpec, 'hole' | 'depth' | 'knockback' | 'ricochet'>,
-    canBounce: boolean,
-    shell?: Shell
+    canBounce: boolean
   ) {
     if (hit.wreck) {
-      // A piercing round bores through a wreck where it is no thicker than the armor the round
-      // still punches through, as through a tank's; a thicker one only takes a deep crater.
-      const bored = shell && shell.pierce.armor > 0 ? wrecks.bore(hit.wreck, end, direction, shell.pierce.armor, blow.hole) : undefined;
       impact(end, { x: -direction.x, y: -direction.y });
       spawnDust(end, direction, hit.wreck.color);
-
-      if (!bored || !shell) {
-        wrecks.chip(hit.wreck, end, direction, blow);
-        return undefined;
-      }
-
-      shell.pierce.armor -= bored.armor;
-      spawnDust(bored.exit, { x: -direction.x, y: -direction.y }, hit.wreck.color);
-      return { direction, from: bored.exit, ricochet: false };
+      wrecks.chip(hit.wreck, end, direction, blow);
+      return undefined;
     }
 
     if (!hit.target) {
-      const scale = { hole: blow.hole / WALL_BLOW.hole, depth: blow.depth / WALL_BLOW.depth };
-      // A piercing round bores clean through a thin wall, such as a wooden fence, as through a crate.
-      const exit = shell && hit.tile && shell.pierce.thin > 0 ? walls.punch(end, direction, shell.pierce.armor, scale) : undefined;
-      const material = hit.tile && (exit ? hit.tile.material : walls.chip(end, direction, hit.tile, scale));
-      const dust = material ? material.color.map((channel) => channel * 0.6) : WALL_DUST;
-      impact(end, { x: -direction.x, y: -direction.y });
-      spawnDust(end, direction, dust);
-
-      if (!exit || !shell) {
-        return undefined;
-      }
-
-      shell.pierce.thin--;
-      spawnDust(exit, { x: -direction.x, y: -direction.y }, dust);
-      return { direction, from: exit, ricochet: false };
+      chipWall(hit, end, direction, blow);
+      return undefined;
     }
 
     hit.target.lastShooter = tank;
@@ -1156,34 +1167,12 @@ export function createCombat(
       return undefined;
     }
 
-    if (shell && hit.target.thin && shell.pierce.thin > 0) {
-      shell.pierce.thin--;
-      impact(end, { x: -direction.x, y: -direction.y });
-      return { direction, from: punchThrough(hit.target, end, direction, blow), ricochet: false };
-    }
-
     const normal = worldNormal(hit.target, end);
 
     if (!normal || blow.ricochet === false || -(direction.x * normal.x + direction.y * normal.y) > RICOCHET_COS) {
       impact(end, { x: -direction.x, y: -direction.y });
       damage(hit.target, end, direction, blow);
-      const cost = blow.depth + blow.hole;
-
-      // A piercing shell whose tunnel passes by the core bores into it.
-      if (shell && hit.target.tank && shell.pierce.armor > 0 && boresCore(hit.target, end, direction, cost)) {
-        reportHit(hit.target, tank, 'core');
-        destroy(hit.target, direction);
-        return undefined;
-      }
-
       reportHit(hit.target, tank, 'armor');
-
-      // A piercing shell flies on into the hole it chipped, which may lead to the core.
-      if (shell && hit.target.tank && shell.pierce.armor >= cost) {
-        shell.pierce.armor -= cost;
-        return { direction, from: { x: end.x + direction.x * 0.5, y: end.y + direction.y * 0.5 }, ricochet: false };
-      }
-
       return undefined;
     }
 
@@ -1191,44 +1180,229 @@ export function createCombat(
     const bounce = { x: direction.x - 2 * along * normal.x, y: direction.y - 2 * along * normal.y };
     ricochet(hit.target, end, normal, bounce);
     reportHit(hit.target, tank, 'ricochet');
-    return canBounce ? { direction: bounce, from: { x: end.x + normal.x * 0.5, y: end.y + normal.y * 0.5 }, ricochet: true } : undefined;
+    return canBounce ? { direction: bounce, from: { x: end.x + normal.x * 0.5, y: end.y + normal.y * 0.5 } } : undefined;
   }
 
-  /** Whether a tunnel `length` pixels long into `body` from `entry` along `direction` passes close enough to the core to open it. */
-  function boresCore(body: Armored, entry: Point, direction: Point, length: number) {
-    const core = (body.hull ?? MEDIUM_HULL).core;
-    const start = toLocal(body.body, entry);
-    const inward = rotateInto(body.body, direction);
-    const along = Math.min(Math.max((core.x - start.x) * inward.x + (core.y - start.y) * inward.y, 0), length);
-    const gap = Math.hypot(start.x + inward.x * along - core.x, start.y + inward.y * along - core.y);
-    return gap < core.radius + BORE_REACH;
+  /** Chips a shot's crater into the breakable wall a shot met, or only throws sparks off steel and the border. */
+  function chipWall(hit: ReturnType<typeof castShot>, end: Point, direction: Point, blow: Pick<ShellSpec, 'hole' | 'depth'>) {
+    const scale = { hole: blow.hole / WALL_BLOW.hole, depth: blow.depth / WALL_BLOW.depth };
+    const material = hit.tile && walls.chip(end, direction, hit.tile, scale);
+    const dust = material ? material.color.map((channel) => channel * 0.6) : WALL_DUST;
+    impact(end, { x: -direction.x, y: -direction.y });
+    spawnDust(end, direction, dust);
+    return dust;
   }
 
   /**
-   * Bores a tunnel clean through a thin body from where a shot entered it, chipping holes along
-   * the way and knocking it back a little, and returns where the shot comes out.
+   * Fires a rail (see `ShellSpec.rail`) from `tank`'s muzzle along the shot's angle. Its line goes
+   * at once through every body it meets while it has power, cutting its slit, blowing up a tank
+   * whose core it crosses, and stops in what it cannot go through or at the end of its range. A
+   * bright tracer shows the whole line for a moment, with the muzzle blast, a glow along the line
+   * and sparks where it goes in and comes out.
    */
-  function punchThrough(body: Armored, entry: Point, direction: Point, blow: Pick<ShellSpec, 'hole' | 'knockback'>) {
-    const local = toLocal(body.body, entry);
+  function fireRail(tank: Tank, spec: ShellSpec, rail: NonNullable<ShellSpec['rail']>, shot: Shot) {
+    const shooter = byTank.get(tank);
+    const angle = shot.angle ?? tank.turretAngle;
+    const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+    const muzzle = muzzleAt(tank, angle);
+    const size = shot.flash ?? 1;
+    const met = new Set<Armored>();
+    const passes = (body: Armored) => body === shooter || met.has(body) || passesAsTeammate(shooter?.team, shooter, body);
+    let power = rail.power;
+    let from = muzzle;
+    let travelled = 0;
+    let first: number | undefined;
+
+    // Leg by leg, from the muzzle and from each body it came out of, until it stops or runs out of range.
+    for (let legs = 0; legs < MAX_RAIL_LEGS; legs++) {
+      const left = spec.range - travelled;
+      const hit = castShot(from, direction, passes, left, Math.max(OVER_RUBBLE - travelled, 0));
+      const at = { x: from.x + direction.x * hit.distance, y: from.y + direction.y * hit.distance };
+      first ??= hit.distance;
+
+      if (hit.distance >= left) {
+        from = at;
+        break;
+      }
+
+      const onward = railStrike(hit, at, direction, tank, spec, rail, power);
+
+      if (hit.target) {
+        met.add(hit.target);
+      }
+
+      travelled += Math.hypot(onward.end.x - from.x, onward.end.y - from.y);
+      from = onward.end;
+      power -= onward.spent;
+
+      if (!onward.through || power <= 0) {
+        break;
+      }
+
+      // On from just past where it came out, which counts against the range too.
+      from = { x: from.x + direction.x * 0.5, y: from.y + direction.y * 0.5 };
+      travelled += 0.5;
+    }
+
+    shooter?.body.applyImpulse({ x: -direction.x * RECOIL * size, y: -direction.y * RECOIL * size }, true);
+    muzzleBlast(muzzle, direction, shooter, first, size);
+    railTracer(muzzle, from, size);
+    options.onShot?.(tank, [muzzle, from]);
+  }
+
+  /**
+   * What a rail does to what its line met at `at`: goes through a tank, a crate or a wreck as far
+   * as its power takes it (see `railThrough`), through a wooden wall at half the cost, and stops
+   * in any other wall, chipping it.
+   *
+   * @returns Where the line came out of what it met, or where it stopped, whether it went
+   *   through, and the power it spent.
+   */
+  function railStrike(
+    hit: ReturnType<typeof castShot>,
+    at: Point,
+    direction: Point,
+    tank: Tank,
+    spec: ShellSpec,
+    rail: NonNullable<ShellSpec['rail']>,
+    power: number
+  ): { end: Point; through: boolean; spent: number } {
+    if (hit.target) {
+      return railThrough(hit.target, at, direction, tank, spec, rail, power);
+    }
+
+    if (hit.wreck) {
+      const result = wrecks.rail(hit.wreck, at, direction, { power, slit: rail.slit, hole: spec.hole });
+      impact(at, { x: -direction.x, y: -direction.y });
+      spawnDust(at, direction, hit.wreck.color);
+
+      if (result?.through) {
+        railExit(result.end, direction, hit.wreck.color);
+      }
+
+      return result ? { end: result.end, through: result.through, spent: result.armor } : { end: at, through: true, spent: 0 };
+    }
+
+    // A wooden wall it bores through, as through a crate; anything harder stops it.
+    const exit = hit.tile?.material.thin ? walls.punch(at, direction, power / WOOD_COST, rail.slit) : undefined;
+
+    if (!exit) {
+      chipWall(hit, at, direction, spec);
+      return { end: at, through: false, spent: power };
+    }
+
+    const dust = hit.tile!.material.color.map((channel) => channel * 0.6);
+    impact(at, { x: -direction.x, y: -direction.y });
+    spawnDust(at, direction, dust);
+    railExit(exit, direction, dust);
+    return { end: exit, through: true, spent: Math.hypot(exit.x - at.x, exit.y - at.y) * WOOD_COST };
+  }
+
+  /**
+   * Runs a rail's line through `body` from where it met the body's armor at `at` (see
+   * `traceRail`): it cuts its slit as far as its power takes it, at half the cost through a thin
+   * body such as a crate, knocks the body back and blows up a tank whose core the line crossed,
+   * crediting `tank`. Hits are reported as a shot's: on the core, or on the armor.
+   */
+  function railThrough(
+    body: Armored,
+    at: Point,
+    direction: Point,
+    tank: Tank,
+    spec: ShellSpec,
+    rail: NonNullable<ShellSpec['rail']>,
+    power: number
+  ): { end: Point; through: boolean; spent: number } {
+    // The march starts a hair before the surface the cast found, so it finds the surface itself.
+    const back = 1;
+    const local = toLocal(body.body, { x: at.x - direction.x * back, y: at.y - direction.y * back });
     const inward = rotateInto(body.body, direction);
-    const sample = new Float32Array(CHANNELS);
-    const seed = random() * 1000;
-    let depth = 0;
+    const cost = body.thin ? WOOD_COST : 1;
+    const trace = traceRail(body.field, local, inward, { power, cost, graze: rail.slit / 2 });
 
-    while (depth < MAX_PUNCH && sampleField(body.field, local.x + inward.x * depth, local.y + inward.y * depth, sample)[0] < 0) {
-      depth += PUNCH_STEP;
+    if (!trace) {
+      return { end: at, through: true, spent: 0 };
     }
 
-    for (let along = 0; along <= depth; along += blow.hole * 0.7) {
-      carve(body.field, { x: local.x + inward.x * along, y: local.y + inward.y * along }, blow.hole * 0.8, 0.3, seed + along);
-    }
-
-    body.body.applyImpulse({ x: direction.x * blow.knockback * 0.3, y: direction.y * blow.knockback * 0.3 }, true);
-    body.flash = 1;
+    const along = (distance: number) => ({ x: at.x + direction.x * (distance - back), y: at.y + direction.y * (distance - back) });
+    const entry = along(trace.entry);
+    const end = along(trace.end);
+    const color = rgb(body.color).map((channel) => channel * 0.55);
+    cutRail(body.field, local, inward, trace, { slit: rail.slit, hole: spec.hole, seed: random() * 1000 });
     body.changed = true;
-    const exit = { x: entry.x + direction.x * (depth + 0.5), y: entry.y + direction.y * (depth + 0.5) };
-    spawnDust(exit, { x: -direction.x, y: -direction.y }, rgb(body.color).map((value) => value * 0.55));
-    return exit;
+    body.flash = 1;
+    const push = spec.knockback * (trace.through ? RAIL_THROUGH_PUSH : 1);
+    const spin = push * KNOCKBACK_SPIN_SHARE;
+    body.body.applyImpulse({ x: direction.x * push, y: direction.y * push }, true);
+    body.body.applyImpulseAtPoint({ x: direction.x * spin, y: direction.y * spin }, entry, true);
+    impact(entry, { x: -direction.x, y: -direction.y });
+    spawnDust(entry, direction, color);
+
+    if (trace.through) {
+      railExit(end, direction, color);
+    }
+
+    if (body.tank) {
+      body.lastShooter = tank;
+      reportHit(body, tank, trace.core === undefined ? 'armor' : 'core');
+
+      if (trace.core !== undefined) {
+        destroy(body, direction);
+      }
+    }
+
+    return { end, through: trace.through, spent: trace.armor * cost };
+  }
+
+  /** Where a rail comes out of something: a fan of sparks and chips thrown on along its line, and a flash. */
+  function railExit(at: Point, direction: Point, color: readonly number[]) {
+    flash(at.x, at.y, IMPACT_LIGHT, 0.08, 0.8, [1, 0.8, 0.5], IMPACT_HEIGHT);
+    spawnDust(at, { x: -direction.x, y: -direction.y }, color);
+
+    for (let index = 0; index < 7; index++) {
+      const angle = Math.atan2(direction.y, direction.x) + between(-0.45, 0.45);
+      const speed = between(250, 550);
+      renderer.spawn(PARTICLE_SPARK, at.x, at.y, Math.cos(angle) * speed, Math.sin(angle) * speed, between(0.06, 0.16), 2, SPARK_COLOR);
+    }
+  }
+
+  /**
+   * Shows a rail's line from `from` to `to`: a tracer drawn whole at once that fades within
+   * `RAIL_LIFE` s (see `drawRails`), a glow along the ground under it, and a shake of the camera,
+   * the harder the nearer the line passes.
+   */
+  function railTracer(from: Point, to: Point, size: number) {
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    const glows = Math.min(Math.max(Math.round(length / RAIL_GLOW_SPACING), 1), RAIL_GLOWS);
+    rails.push({ from, to, age: 0 });
+
+    for (let index = 1; index <= glows; index++) {
+      const t = index / (glows + 1);
+      flash(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t, RAIL_GLOW, RAIL_GLOW_LIFE, RAIL_GLOW_INTENSITY, [1, 0.85, 0.6], RAIL_GLOW_HEIGHT);
+    }
+
+    // The shake comes from the point of the line nearest the camera.
+    const t = length > 0 ? Math.min(Math.max(((listener.x - from.x) * (to.x - from.x) + (listener.y - from.y) * (to.y - from.y)) / (length * length), 0), 1) : 0;
+    shakeFrom({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t }, RAIL_SHAKE * size);
+  }
+
+  /**
+   * Draws the tracers of rails fired lately, over the tanks: a bright line with a crisp black edge
+   * from the muzzle to where the rail stopped, at its widest the moment it is fired, thinning and
+   * fading out over `RAIL_LIFE` s.
+   */
+  function drawRails() {
+    for (const rail of rails) {
+      const fade = 1 - rail.age / RAIL_LIFE;
+      const length = Math.hypot(rail.to.x - rail.from.x, rail.to.y - rail.from.y);
+      const angle = Math.atan2(rail.to.y - rail.from.y, rail.to.x - rail.from.x);
+      const core = RAIL_CORE[1] + (RAIL_CORE[0] - RAIL_CORE[1]) * fade * fade;
+      const line = (width: number, color: readonly number[], alpha: number) =>
+        renderer.addBody({ kind: KIND_RECT, x: rail.from.x, y: rail.from.y, angle, originX: 0.5, originY: 0.5 - width / 2, cell: 1, cols: length, rows: width, color, alpha, height: 0 });
+
+      line(core + RAIL_EDGE * 2, BLACK, fade);
+      line(core, RAIL_COLOR, Math.min(fade * 1.5, 1));
+    }
   }
 
   /**
@@ -1269,7 +1443,6 @@ export function createCombat(
       speed: spec.speed,
       remaining: spec.range,
       bounces: 0,
-      pierce: { armor: spec.pierce?.armor ?? 0, thin: spec.pierce?.thin ? MAX_PUNCHES : 0 },
       lob: spec.lob && launchLob(spec.lob, spec.speed, options.reach ?? spec.range, spec.range),
       primary: options.primary,
       path: [start],
@@ -1314,19 +1487,16 @@ export function createCombat(
       shell.path.push(end);
       const bite = 1 - (spec.fade ?? 0) * Math.min(1 - shell.remaining / spec.range, 1);
       const blow = { ...spec, hole: spec.hole * bite, depth: spec.depth * bite };
-      const onward = strike(hit, end, shell.direction, shell.shooter, blow, shell.bounces < MAX_RICOCHETS, shell);
+      const onward = strike(hit, end, shell.direction, shell.shooter, blow, shell.bounces < MAX_RICOCHETS);
 
       if (!onward) {
         detonate(shell, end);
         return;
       }
 
-      if (onward.ricochet) {
-        shell.bounces++;
-      }
-
+      shell.bounces++;
       shell.direction = onward.direction;
-      // A bounce starts a hair off the surface, a pierce on the far side; that way counts against the range too.
+      // A bounce starts a hair off the surface; that way counts against the range too.
       shell.remaining = Math.max(shell.remaining - Math.hypot(onward.from.x - end.x, onward.from.y - end.y), 0);
       shell.x = onward.from.x;
       shell.y = onward.from.y;
@@ -2098,11 +2268,17 @@ export function createCombat(
     }
   }
 
-  /** Where `tank`'s muzzle is with its gun along `angle`: its look's barrel length out from the hull's center. */
+  /** Where `tank`'s muzzle is with its gun along `angle`: its look's barrel length out from the gun's pivot. */
   function muzzleAt(tank: Tank, angle: number) {
-    const center = tank.hull.translation();
+    const pivot = pivotAt(tank);
     const reach = byTank.get(tank)?.look?.muzzle ?? MEDIUM_LOOK.muzzle;
-    return { x: center.x + Math.cos(angle) * reach, y: center.y + Math.sin(angle) * reach };
+    return { x: pivot.x + Math.cos(angle) * reach, y: pivot.y + Math.sin(angle) * reach };
+  }
+
+  /** Where `tank`'s gun turns: its look's `mount` on the hull, or the hull's center. */
+  function pivotAt(tank: Tank) {
+    const mount = byTank.get(tank)?.look?.mount;
+    return mount ? toWorld(tank.hull, mount) : tank.hull.translation();
   }
 
   function remove(body: Armored) {
@@ -2179,7 +2355,7 @@ type Armored = {
   /** A tank's hull and look, when not the medium tank's. */
   hull: HullSpec | undefined;
   look: TankLook | undefined;
-  /** A thin body, such as a crate, that a piercing shell goes clean through. */
+  /** A body of wood, such as a crate, which a rail goes through at `WOOD_COST` a pixel. */
   thin: boolean;
   /** Height of the body's top in pixels, which a lobbed shell must clear to fly over it. */
   top: number;
@@ -2208,8 +2384,6 @@ type Shell = {
   remaining: number;
   /** Ricochets and bounces so far; before the first, the shell passes through its own tank. */
   bounces: number;
-  /** Tank armor in pixels it may still punch through, and thin bodies it may still go through. */
-  pierce: { armor: number; thin: number };
   /** Height and vertical motion of a lobbed shell. */
   lob: LobState | undefined;
   /** Fired by a gun, not thrown out by a blast. */
@@ -2309,13 +2483,36 @@ const SHADOW_ALPHA = 0.32;
 const GRENADE_COLOR = [0.78, 0.7, 0.36];
 /** Radians a grenade turns per second as it tumbles. */
 const GRENADE_TUMBLE = 9;
-/** Deepest a piercing shell bores through a thin body, and the step it bores in, in pixels. */
-const MAX_PUNCH = 140;
-const PUNCH_STEP = 1;
-/** Thin bodies a piercing shell goes through before it stops in one. */
-const MAX_PUNCHES = 2;
-/** A piercing round's tunnel opens the core when it passes this close to the core's rim. */
-const BORE_REACH = 4;
+/**
+ * A rail spends `WOOD_COST` power per pixel of a crate or a wooden wall against a pixel of armor,
+ * passes through at most `MAX_RAIL_LEGS` bodies, and pushes a body it goes through by
+ * `RAIL_THROUGH_PUSH` of its knockback, all of it into one it stops in.
+ */
+const WOOD_COST = 0.5;
+const MAX_RAIL_LEGS = 8;
+const RAIL_THROUGH_PUSH = 0.5;
+/**
+ * A rail's tracer: seconds it takes to fade, its bright core's width and its black edge's, in
+ * pixels, at first and as it fades out, and the color of the core.
+ */
+const RAIL_LIFE = 0.3;
+const RAIL_CORE = [2.4, 0.8];
+const RAIL_EDGE = 1.2;
+const RAIL_COLOR = [1, 0.97, 0.82];
+const BLACK = [0.02, 0.02, 0.02];
+/**
+ * The glow a rail leaves on the ground: up to `RAIL_GLOWS` faint lights `RAIL_GLOW_SPACING` px
+ * apart along the line, of `RAIL_GLOW` px reach and `RAIL_GLOW_INTENSITY`, at `RAIL_GLOW_HEIGHT`
+ * px, fading in `RAIL_GLOW_LIFE` s.
+ */
+const RAIL_GLOWS = 3;
+const RAIL_GLOW_SPACING = 200;
+const RAIL_GLOW = 55;
+const RAIL_GLOW_INTENSITY = 0.25;
+const RAIL_GLOW_HEIGHT = 9;
+const RAIL_GLOW_LIFE = 0.12;
+/** Camera shake of a rail whose line passes right by the camera; a tank gun's muzzle blast shakes 1.2. */
+const RAIL_SHAKE = 3;
 /** A grenade in flight this close to an enemy hull goes off. */
 export const PROXIMITY = 8;
 /** A wall or crate this much nearer a blast than a wall's face shields that face from it. */

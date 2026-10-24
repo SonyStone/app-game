@@ -161,7 +161,7 @@ function solidPart(
 }
 
 /** Clips a ray to the grid rectangle; returns the entry and exit distances, or `undefined` if it misses. */
-function clipToGrid(
+export function clipToGrid(
   field: DamageField,
   origin: { x: number; y: number },
   direction: { x: number; y: number },

@@ -79,7 +79,7 @@ export function shotsToOpen(blocker: Blocker, tankClass: TankClass) {
 
   const material = WALL_MATERIALS[blocker.material];
 
-  if (material.thin && weapon.kind === 'charge' && weapon.full.pierce?.thin) {
+  if (material.thin && weapon.kind === 'charge' && weapon.full.rail) {
     return PIERCE_SHOTS;
   }
 

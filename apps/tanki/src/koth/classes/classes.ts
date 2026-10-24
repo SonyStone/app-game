@@ -127,41 +127,45 @@ function createDemoman(): TankClass {
 }
 
 /**
- * The casemate gun, the Sniper: a self-propelled anti-tank gun without a turret. Its long gun
- * swings only 0.16 rad, about 9 degrees, either side of the hull's heading, so to aim further the
- * whole tank turns, in place at 2.4 rad/s.
+ * The casemate gun, the Sniper: a small, low self-propelled anti-tank gun after the Hetzer,
+ * without a turret. Its gun sits off to the right in the sloped casemate and swings only
+ * 0.16 rad, about 9 degrees, either side of the hull's heading, so to aim further the whole tank
+ * turns, in place at 2.4 rad/s.
  *
- * - Speed 0.92 of the medium tank's, 230 px/s at 250, down to 0.35 of that while it charges.
- * - A 46 x 24 hull with its core at the rear, 5.5 px under the rear armor and 7.5 px under the
- *   sides; the casemate in front makes the front 31.5 px thick. It weighs 1.1 medium tanks.
- * - Holding the trigger charges the shot for up to 2.5 s, letting go fires it: with no charge a
- *   1300 px/s shell that flies 900 px and chips a small hole, at full charge a 3000 px/s round
- *   that flies 1300 px and bores through 28 px of armor and more, into the core of any class from
- *   any side it hits on the core's line, as a headshot kills in Team Fortress 2, and clean
- *   through crates and wooden fences. A shot charged less only chips. The gun then takes 2 s to
- *   load again. While it charges, its laser sight is drawn for everyone to see, and bots dodge off
- *   its beam. The charge took 2 s until the compact map, where the Sniper killed more than twice
- *   as often as it died.
+ * - Speed 0.96 of the medium tank's, 240 px/s at 250, down to 0.35 of that while it charges.
+ * - A 35 x 22 hull, smaller than the medium tank's 40 x 25, with its core 4 px under the rear
+ *   armor and 7 px under the sides, 23 px behind the front; the casemate covers all but the
+ *   engine deck. It weighs 0.8 of a medium tank, as the Hetzer's 16 tonnes were light for its
+ *   gun, so it rams and shrugs off hits less.
+ * - Holding the trigger charges the shot for up to 2.5 s, letting go fires it: a rail, which hits
+ *   at once along the gun (see `ShellSpec.rail`), 900 px long with no charge and 1300 px at full
+ *   charge. Its power grows with the charge from 5 px of armor to 40: with none it reaches a core
+ *   only through the thin rear armor; half charged, through the sides as well; fully charged,
+ *   from the front of any class, through a medium tank side on into the next tank behind it, or
+ *   through a wooden fence or a crate. A line that crosses the core blows the tank up from any
+ *   side, as a headshot kills in Team Fortress 2; elsewhere it leaves a slit through the armor
+ *   that weakens it about as much as a rocket's hit. The gun then takes 2 s to load again. While
+ *   it charges, its laser sight is drawn for everyone to see, and bots dodge off its beam.
  */
 function createSniper(): TankClass {
   return {
     id: 'sniper',
     name: 'Sniper',
-    role: 'Casemate gun: turn the hull to aim, hold to charge a piercing shot',
-    speed: MEDIUM_TANK.speed * 0.92,
+    role: 'Casemate gun: turn the hull to aim, hold to charge a rail that hits at once',
+    speed: MEDIUM_TANK.speed * 0.96,
     turretSpeed: 3,
     mount: { kind: 'casemate', arc: 0.16, traverse: 2.4 },
-    hull: { halfLength: 23, halfWidth: 12, corner: 1.5, core: { x: -13, y: 0, radius: 4.5 }, cell: 0.5, pattern: 'deck' },
-    mass: 1.1,
+    hull: { halfLength: 17.5, halfWidth: 11, corner: 2, core: { x: -9.5, y: 0, radius: 4 }, cell: 0.5, pattern: 'deck' },
+    mass: 0.8,
     gun: { interval: 0.5, clip: 1, firstReload: 1.5, reload: 1.5 },
-    shell: { speed: 1300, range: 900, hole: 3, depth: 2, knockback: 500, size: 0.8 },
+    shell: { speed: Infinity, range: 900, hole: 1.8, depth: 1, knockback: 120, rail: { power: 5, slit: 1 } },
     weapon: {
       kind: 'charge',
       time: 2.5,
       slowdown: 0.35,
-      full: { speed: 3000, range: 1300, hole: 5, depth: 9, knockback: 1300, size: 1.1, pierce: { armor: 28, thin: true } }
+      full: { speed: Infinity, range: 1300, hole: 2.6, depth: 2, knockback: 400, rail: { power: 40, slit: 1.5 } }
     },
     capture: 1,
-    look: { turret: TURRET_LONG_GUN, muzzle: 49, casemate: true }
+    look: { turret: TURRET_LONG_GUN, muzzle: 28, casemate: true, mount: { x: 6, y: 2.5 } }
   };
 }
