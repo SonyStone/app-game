@@ -135,6 +135,25 @@ describe('breakable walls', () => {
     expect(lines.every((y) => combat.lineOfSight({ x: -55, y }, { x: 250, y }))).toBe(true);
   });
 
+  it('give way to rams by material: a fence to one at full speed, a brick wall to a few that dent the rammer, concrete and steel to none', () => {
+    const fence = ram('wood', 14, 3);
+    const brick = ram('brick', 24, 6);
+    const concrete = ram('concrete', 30, 4);
+    const steel = ram('steel', 30, 4);
+
+    expect(fence.rams).toBe(1);
+    expect(fence.armor).toBeGreaterThan(0.99);
+    expect(brick.rams).toBeGreaterThanOrEqual(2);
+    expect(brick.rams).toBeLessThanOrEqual(4);
+    // Ramming brick is not free: the nose caves in a little with every ram.
+    expect(brick.armor).toBeLessThan(0.98);
+    expect(concrete.rams).toBe(Infinity);
+    expect(concrete.bitten).toBeGreaterThan(0);
+    expect(steel.rams).toBe(Infinity);
+    expect(steel.bitten).toBe(0);
+    expect(steel.armor).toBeLessThan(fence.armor);
+  });
+
   it('stand again, whole, after a reset', () => {
     const { combat } = createBattle({ walls: [{ x: 0, y: 0, halfWidth: 7, halfHeight: 120, material: 'wood' }] });
     const shooter = combat.spawnTank({ x: -250, y: 0, rotation: 0 }, { color: 0 });
@@ -152,6 +171,38 @@ describe('breakable walls', () => {
     expect(combat.lineOfSight({ x: -150, y: 10 }, { x: 150, y: 10 })).toBe(false);
   });
 });
+
+/**
+ * Rams a wall of `material` and `thickness` across the field with a medium tank at full speed, from
+ * a run-up of 120 px, up to `most` times, until the tank breaks through.
+ *
+ * @returns The ram that broke through, `Infinity` if none did; the rammer's armor left; and how
+ *   many rams bit into the wall.
+ */
+function ram(material: WallMaterial, thickness: number, most: number) {
+  const { combat } = createBattle({ walls: [{ x: 0, y: 0, halfWidth: thickness / 2, halfHeight: 120, material }] });
+  const tank = combat.spawnTank({ x: -150, y: 10, rotation: 0 }, { color: 0, pullSpeed: pullSpeedFor(250) });
+  let rams = Infinity;
+
+  for (let attempt = 1; attempt <= most && rams === Infinity; attempt++) {
+    tank.hull.setTranslation({ x: -150, y: 10 }, true);
+    tank.hull.setRotation(0, true);
+    tank.hull.setLinvel({ x: 0, y: 0 }, true);
+    tank.hull.setAngvel(0, true);
+    tank.pull.setTranslation({ x: -135, y: 10 }, true);
+
+    for (let step = 0; step < 72 && rams === Infinity; step++) {
+      combat.drive(tank, { x: 1, y: 0 });
+      combat.step(1 / 60);
+
+      if (tank.hull.translation().x > thickness / 2 + 25) {
+        rams = attempt;
+      }
+    }
+  }
+
+  return { rams, armor: combat.armorLeft(tank), bitten: combat.walls.damage.rams };
+}
 
 /** Turns `shooter`'s turret onto `target`, fires a shell and lets it land. */
 function fireAt(combat: ReturnType<typeof createCombat>, shooter: Tank, target: { x: number; y: number }) {

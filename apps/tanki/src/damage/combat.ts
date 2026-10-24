@@ -155,6 +155,8 @@ export function createCombat(
   }[] = [];
   let trailId = 0;
   let shellId = 0;
+  // Pairs that crashed this step: two bodies meet over several colliders at once, but crash once.
+  const crashes: [Armored | undefined, Armored | undefined][] = [];
   const shells: Shell[] = [];
   const shellDraw = options.shell ? createShellDraw(renderer) : undefined;
 
@@ -264,6 +266,7 @@ export function createCombat(
       }
 
       world.step(events);
+      crashes.length = 0;
       events.drainCollisionEvents((first, second, started) => {
         if (started) {
           crash(first, second);
@@ -584,6 +587,7 @@ export function createCombat(
       exhaust: random(),
       before: { velocity: { x: 0, y: 0 }, spin: 0 },
       lastShooter: undefined,
+      rammedAt: -Infinity,
       respawn
     };
     armored.push(entry);
@@ -648,12 +652,15 @@ export function createCombat(
     renderer.uploadField(body.slot, body.field);
   }
 
-  /** Dents both bodies of a new contact in proportion to how fast they met. */
+  /**
+   * Dents both bodies of a new contact in proportion to how fast they met. A body that crashes
+   * into something that does not move rams it instead (see `ramWall`).
+   */
   function crash(firstHandle: number, secondHandle: number) {
     const first = owners.get(firstHandle);
     const second = owners.get(secondHandle);
 
-    if (!first && !second) {
+    if ((!first && !second) || crashes.some(([a, b]) => (a === first && b === second) || (a === second && b === first))) {
       return;
     }
 
@@ -680,26 +687,51 @@ export function createCombat(
     const secondVelocity = second ? velocityAt(second, point) : { x: 0, y: 0 };
     const speed = (firstVelocity.x - secondVelocity.x) * normal.x + (firstVelocity.y - secondVelocity.y) * normal.y;
 
-    if (speed < CRASH_SPEED) {
+    if (speed < (first && second ? CRASH_SPEED : RAM_SPEED)) {
       return;
     }
 
-    const firstMass = first?.body.mass() ?? Infinity;
-    const secondMass = second?.body.mass() ?? Infinity;
-    const depth = (speed - CRASH_SPEED) * CRASH_DEPTH_PER_SPEED;
+    crashes.push([first, second]);
 
-    if (first) {
+    if (first && second) {
+      const firstMass = first.body.mass();
+      const secondMass = second.body.mass();
+      const depth = (speed - CRASH_SPEED) * CRASH_DEPTH_PER_SPEED;
       dentAt(first, point, { x: -normal.x, y: -normal.y }, depth * share(firstMass, secondMass));
-    }
-
-    if (second) {
       dentAt(second, point, normal, depth * share(secondMass, firstMass));
+    } else {
+      ramWall(first ? secondHandle : firstHandle, (first ?? second)!, point, first ? normal : { x: -normal.x, y: -normal.y }, speed);
     }
 
     for (let index = 0; index < Math.min(Math.round(speed / 60), 8); index++) {
       const angle = Math.atan2(normal.y, normal.x) + Math.PI / 2 + between(-0.6, 0.6) + (index % 2) * Math.PI;
       const sparkSpeed = between(80, 220);
       renderer.spawn(PARTICLE_SPARK, point.x, point.y, Math.cos(angle) * sparkSpeed, Math.sin(angle) * sparkSpeed, between(0.1, 0.25), 2, SPARK_COLOR);
+    }
+  }
+
+  /**
+   * A body that crashed at `speed` into something that does not move: the blow, its approach
+   * speed above `RAM_SPEED` times its mass, dents its armor, less against a softer wall, and bites
+   * into a breakable wall, which throws up dust of its material. A body rams once per run-up:
+   * contacts within `RAM_COOLDOWN` s of its last ram leave no mark.
+   *
+   * @param direction - Unit direction from the rammer into what it hit.
+   */
+  function ramWall(handle: number, rammer: Armored, point: Point, direction: Point, speed: number) {
+    // Pressing on into a wall that just gave way is not another ram.
+    if (clock - rammer.rammedAt < RAM_COOLDOWN) {
+      return;
+    }
+
+    rammer.rammedAt = clock;
+    const at = rammer.body.translation();
+    const blow = (speed - RAM_SPEED) * rammer.body.mass();
+    const material = walls.ram(handle, { field: rammer.field, x: at.x, y: at.y, angle: rammer.body.rotation() }, direction, blow);
+    dentAt(rammer, point, { x: -direction.x, y: -direction.y }, blow * RAM_DENT * (material?.ram.hardness ?? 1));
+
+    if (material) {
+      spawnDust(point, direction, material.color.map((channel) => channel * 0.6));
     }
   }
 
@@ -1307,6 +1339,8 @@ type Armored = {
   before: { velocity: Point; spin: number };
   /** Tank whose shot hit this body last, credited if it falls apart. */
   lastShooter: Tank | undefined;
+  /** Battle time of the body's last ram into something that does not move. */
+  rammedAt: number;
   respawn: (() => void) | undefined;
 };
 
@@ -1401,9 +1435,20 @@ const SHAKE_DECAY = 12;
 /** Shots and blasts within this many pixels of the camera shake it fully, and beyond `SHAKE_FAR` not at all. */
 const SHAKE_NEAR = 200;
 const SHAKE_FAR = 700;
-/** Approach speed in pixels per second below which a crash leaves no dent. */
+/**
+ * Approach speed in pixels per second below which a crash of two bodies leaves no dent. Speeds
+ * here are as Rapier reports them, after the hull's damping: a hull moving at 250 px/s reads 136.
+ */
 const CRASH_SPEED = 110;
 const CRASH_DEPTH_PER_SPEED = 0.012;
+/**
+ * Approach speed, as Rapier reports it, below which a crash into something that does not move
+ * leaves no mark: about half a tank's top speed. Above it each unit of blow dents the rammer by
+ * `RAM_DENT` px against steel, so a ram at full speed dents a medium tank's nose by about 3.5 px.
+ */
+const RAM_SPEED = 70;
+const RAM_DENT = 0.055;
+const RAM_COOLDOWN = 0.5;
 const MAX_CRASH_DEPTH = 4;
 const CRASH_RADIUS = 7;
 const MIN_FRAGMENT_CELLS = 6;
@@ -1459,10 +1504,6 @@ function blockCells(field: DamageField) {
 
 /** Share of a crash's dent taken by a body of `mass` against `otherMass`: the lighter body dents more. */
 function share(mass: number, otherMass: number) {
-  if (!Number.isFinite(otherMass)) {
-    return 1.6;
-  }
-
   return Math.min((2 * otherMass) / (mass + otherMass), 1.6);
 }
 

@@ -1,7 +1,7 @@
 import type { Collider, Rapier } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
 import type { CombatLayout, WallMaterial, WallPlacement } from './combat';
-import { carve, CHANNELS, createField, detachLoosePieces, FAR, shatter, solidBoxes, type DamageField, type Fragment } from './field';
+import { carve, CHANNELS, createField, detachLoosePieces, FAR, sampleField, shatter, solidBoxes, type DamageField, type Fragment } from './field';
 import { KIND_BLOCK, KIND_FIELD, type createRangeRenderer } from './renderer';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
@@ -16,6 +16,8 @@ type Point = { x: number; y: number };
  * and its own colliders built from the field, so a hit changes only the tiles it touches:
  *
  * - `chip` cuts a crater into every tile around the hit point, its size set by the material.
+ * - `ram` lets a hull that crashed into a wall bite into it, as deep as the blow and the material
+ *   allow, in the outline of the hull's front.
  * - `refresh` then rebuilds each changed tile: pieces cut off from the rest of the wall fly away
  *   as debris, and a tile that has lost the material's `collapse` share falls apart altogether,
  *   leaving a gap a tank can drive through. A tile of a building leaves rubble behind, which tanks
@@ -51,7 +53,7 @@ export function createWalls(
   const owners = new Map<number, Tile>();
   const buckets = new Map<number, Tile[]>();
   const steelDraws = steel.map(steelDraw);
-  const damage = { hits: 0, collapsed: 0 };
+  const damage = { hits: 0, collapsed: 0, rams: 0 };
   // Bounds of tiles changed since the last report.
   const changed: Bounds[] = [];
 
@@ -72,7 +74,7 @@ export function createWalls(
     /** Tiles of breakable walls, live: their bounds, material and whether they fell. */
     tiles: tiles as readonly Readonly<Tile>[],
 
-    /** How many hits chipped walls and how many tiles fell since the walls were built or reset. */
+    /** How many hits chipped walls, how many rams bit into them and how many tiles fell since the walls were built or reset. */
     get damage() {
       return { ...damage };
     },
@@ -132,6 +134,59 @@ export function createWalls(
         near.changed = true;
         near.pristine = false;
         near.push = direction;
+      }
+
+      return tile.material;
+    },
+
+    /**
+     * Lets a body that crashed into a breakable wall bite into it: the wall gives way wherever the
+     * body's armor would be if it drove on along `direction` for the depth the blow reaches, which
+     * is `blow` times the material's `ram.bite`. The bite is cut into every tile it reaches, with a
+     * ragged edge. Steel, the border and campfire stones never give way.
+     *
+     * @param handle - The wall collider the body touched.
+     * @param rammer - The ramming body's armor field and where it is.
+     * @param direction - Unit direction into the wall.
+     * @param blow - Approach speed above `RAM_SPEED` in pixels per second, times the body's mass;
+     *   nothing bites at 0 or less.
+     * @returns The material of the wall, for how much the rammer dents; `undefined` for steel, the
+     *   border and campfire stones.
+     */
+    ram(handle: number, rammer: { field: DamageField; x: number; y: number; angle: number }, direction: Point, blow: number) {
+      const tile = owners.get(handle);
+
+      if (!tile || (tile.fallen && !tile.rubble)) {
+        return undefined;
+      }
+
+      const depth = Math.min(Math.max(blow, 0) * tile.material.ram.bite, MAX_BITE);
+
+      if (depth < MIN_BITE) {
+        return tile.material;
+      }
+
+      const reach = Math.hypot(rammer.field.cols, rammer.field.rows) * rammer.field.cell * 0.5;
+      const ends = [rammer, { x: rammer.x + direction.x * depth, y: rammer.y + direction.y * depth }];
+      const bounds = {
+        minX: Math.min(...ends.map((end) => end.x)) - reach,
+        minY: Math.min(...ends.map((end) => end.y)) - reach,
+        maxX: Math.max(...ends.map((end) => end.x)) + reach,
+        maxY: Math.max(...ends.map((end) => end.y)) + reach
+      };
+      const bite = createBite(rammer, direction, depth, options.random);
+      damage.rams++;
+
+      for (const near of tilesNear(bounds)) {
+        if ((near.fallen && !near.rubble) || near.material.ram.bite === 0) {
+          continue;
+        }
+
+        if (cutBite(near, bounds, bite)) {
+          near.changed = true;
+          near.pristine = false;
+          near.push = direction;
+        }
       }
 
       return tile.material;
@@ -210,6 +265,7 @@ export function createWalls(
     reset() {
       damage.hits = 0;
       damage.collapsed = 0;
+      damage.rams = 0;
 
       for (const tile of tiles) {
         tile.changed = false;
@@ -491,6 +547,12 @@ export type WallMaterialSpec = {
   crater?: { hole: number; depth: number };
   /** Share of a tile's material whose loss brings the whole tile down. */
   collapse: number;
+  /**
+   * How the material takes a ram: `bite` pixels of wall give way per unit of blow (see `ram`), and
+   * `hardness` scales the dent the rammer takes against steel's: a fence gives way and spares the
+   * hull, brick dents it almost as much as steel.
+   */
+  ram: { bite: number; hardness: number };
   /** Whether a fallen tile of a building of this material leaves rubble. */
   rubble: boolean;
 };
@@ -498,14 +560,16 @@ export type WallMaterialSpec = {
 /**
  * The wall materials. A wooden fence 14 px thick is shot through in two hits, a brick wall 24 px
  * thick in four, a concrete wall 30 px thick in nine, and a tile of a fence falls after about
- * three hits; steel stands forever. Fallen tiles of brick and concrete buildings leave rubble.
- * Wood is drawn with planks, brick with courses of bricks, concrete as slabs and steel hatched.
+ * three hits; steel stands forever. A medium tank ramming at full speed breaks through a fence at
+ * once, needs two or three rams for a tile of a brick wall and barely scratches concrete. Fallen
+ * tiles of brick and concrete buildings leave rubble. Wood is drawn with planks, brick with
+ * courses of bricks, concrete as slabs and steel hatched.
  */
 export const WALL_MATERIALS: Record<WallMaterial, WallMaterialSpec> = {
-  steel: { color: [0.31, 0.33, 0.37], height: 10, collapse: 0, rubble: false },
-  concrete: { color: [0.62, 0.62, 0.6], height: 10, crater: { hole: 3.5, depth: 0 }, collapse: 0.5, rubble: true },
-  brick: { color: [0.68, 0.39, 0.3], height: 10, crater: { hole: 5, depth: 2 }, collapse: 0.35, rubble: true },
-  wood: { color: [0.64, 0.47, 0.29], height: 7, crater: { hole: 6, depth: 2.5 }, collapse: 0.3, rubble: false }
+  steel: { color: [0.31, 0.33, 0.37], height: 10, collapse: 0, rubble: false, ram: { bite: 0, hardness: 1 } },
+  concrete: { color: [0.62, 0.62, 0.6], height: 10, crater: { hole: 3.5, depth: 0 }, collapse: 0.5, rubble: true, ram: { bite: 0.035, hardness: 1 } },
+  brick: { color: [0.68, 0.39, 0.3], height: 10, crater: { hole: 5, depth: 2 }, collapse: 0.35, rubble: true, ram: { bite: 0.15, hardness: 0.85 } },
+  wood: { color: [0.64, 0.47, 0.29], height: 7, crater: { hole: 6, depth: 2.5 }, collapse: 0.3, rubble: false, ram: { bite: 0.27, hardness: 0.3 } }
 };
 
 /**
@@ -543,6 +607,14 @@ const TILE = 72;
 /** Pixels of field around a tile's own rectangle, shared with its neighbors. */
 const MARGIN = 2;
 const MIN_PIECE_CELLS = 12;
+/**
+ * A ram bites at most `MAX_BITE` px deep and nothing under `MIN_BITE` px; the bite's outline is
+ * traced every `BITE_STEP` px along the push and wobbles by up to `BITE_ROUGHNESS` px.
+ */
+const MAX_BITE = 28;
+const MIN_BITE = 0.6;
+const BITE_STEP = 2;
+const BITE_ROUGHNESS = 1.1;
 /**
  * Rubble: only tiles at least `RUBBLE_THICKNESS` px thick leave it, a heap is cleared away once
  * less than `RUBBLE_LEFT` square pixels of it are left, and it is drawn low and a little darker.
@@ -708,6 +780,70 @@ function createRubbleField(tile: Tile, random: () => number) {
 
     return [Math.max(armor, rectDistance(rect, x, y)), pattern(x, y), FAR, 0.35];
   });
+}
+
+/**
+ * The hole a ram leaves: the signed distance from a world point to everything the rammer's armor
+ * covers on its way `depth` px further along `direction`, negative inside, its edge wobbling so
+ * the bite looks broken rather than cut.
+ */
+function createBite(rammer: { field: DamageField; x: number; y: number; angle: number }, direction: Point, depth: number, random: () => number) {
+  const cos = Math.cos(rammer.angle);
+  const sin = Math.sin(rammer.angle);
+  const along = { x: direction.x * cos + direction.y * sin, y: -direction.x * sin + direction.y * cos };
+  const steps = Math.max(Math.ceil(depth / BITE_STEP), 1);
+  const reach = Math.hypot(rammer.field.cols, rammer.field.rows) * rammer.field.cell * 0.5 + BITE_ROUGHNESS + 1;
+  const phases = [random(), random(), random()].map((value) => value * Math.PI * 2);
+  const sample = new Float32Array(CHANNELS);
+
+  return (x: number, y: number) => {
+    const dx = x - rammer.x;
+    const dy = y - rammer.y;
+    const localX = dx * cos + dy * sin;
+    const localY = -dx * sin + dy * cos;
+    // Points beyond the rammer's reach of its path are far from the bite; most cells are.
+    const t = Math.min(Math.max(localX * along.x + localY * along.y, 0), depth);
+
+    if (Math.hypot(localX - along.x * t, localY - along.y * t) > reach) {
+      return FAR;
+    }
+
+    let nearest = FAR;
+
+    for (let step = 0; step <= steps; step++) {
+      const shift = (depth * step) / steps;
+      nearest = Math.min(nearest, sampleField(rammer.field, localX - along.x * shift, localY - along.y * shift, sample)[0]);
+    }
+
+    const wobble = Math.sin(x * 0.45 + phases[0]) * Math.cos(y * 0.38 + phases[1]) + 0.5 * Math.sin(x * 1.1 + y * 0.9 + phases[2]);
+    return nearest + (wobble / 1.5) * BITE_ROUGHNESS;
+  };
+}
+
+/** Cuts a ram's bite into the cells of `tile` whose world positions lie within `bounds`; returns whether any changed. */
+function cutBite(tile: Tile, bounds: Bounds, bite: (x: number, y: number) => number) {
+  const { field, wall } = tile;
+  let cut = false;
+
+  for (let row = 0; row < field.rows; row++) {
+    for (let col = 0; col < field.cols; col++) {
+      const at = toWorld(wall, { x: field.originX + col * field.cell, y: field.originY + row * field.cell });
+
+      if (at.x < bounds.minX || at.x > bounds.maxX || at.y < bounds.minY || at.y > bounds.maxY) {
+        continue;
+      }
+
+      const index = (row * field.cols + col) * CHANNELS;
+      const hole = bite(at.x, at.y);
+
+      if (-hole > field.data[index]) {
+        field.data[index] = -hole;
+        cut = true;
+      }
+    }
+  }
+
+  return cut;
 }
 
 /** Solid area within a tile's own rectangle, in square pixels. */
