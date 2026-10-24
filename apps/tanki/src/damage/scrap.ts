@@ -432,6 +432,8 @@ const NO_COLOR = [0, 0, 0];
 const TURRET_DRAW = { kind: KIND_TURRET, originX: -10.5, originY: -10.5, cell: 1, cols: 42, rows: 22 };
 
 let turret: DamageField | undefined;
+/** Soot on a turret lying on the ground, which the blast that threw it off burnt. */
+const TURRET_SOOT = 0.45;
 
 /** The field of a turret lying on the ground, the shape `KIND_TURRET` draws: a cupola and a barrel along +x. */
 function turretField() {
@@ -439,7 +441,7 @@ function turretField() {
     const qx = Math.abs(x - 18.55) - 11.25 + 1;
     const qy = Math.abs(y) - 3.75 + 1;
     const barrel = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - 1;
-    return [Math.min(barrel, Math.hypot(x, y) - 9.6), FAR, FAR, 0];
+    return [Math.min(barrel, Math.hypot(x, y) - 9.6), FAR, FAR, TURRET_SOOT];
   });
 
   return turret;

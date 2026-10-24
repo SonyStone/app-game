@@ -1261,7 +1261,8 @@ export function createCombat(
         vx: velocity.x + Math.cos(angle) * 90 + direction.x * 60,
         vy: velocity.y + Math.sin(angle) * 90 + direction.y * 60,
         spin: between(-12, 12),
-        color: rgb(body.color),
+        // Blown off by the blast, the turret is as burnt as the wreck it came from.
+        color: rgb(body.color).map((channel) => channel * TURRET_SHADE),
         material: 'metal'
       });
     }
@@ -1398,6 +1399,8 @@ type Shell = {
 };
 
 const STOP = { x: 0, y: 0 };
+/** Darkening of a turret blown off a tank. */
+const TURRET_SHADE = 0.55;
 /** A piece of scrap landing this many pixels inside a wall or a wreck is buried and gone. */
 const BURIED = 3;
 /** A tank coming back to its spot lets any wreck this close to it fall apart. */
