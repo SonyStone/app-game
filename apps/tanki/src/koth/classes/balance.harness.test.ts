@@ -10,7 +10,9 @@ import { TANK_CLASSES } from './classes';
 /**
  * Balance metrics of the tank classes, printed as tables: a matrix of bot duels, class against
  * class, from several starting ranges and seeds, and per-class results of full eight-bot matches
- * on the king of the hill map, with the repair kits each class took and the walls each match broke.
+ * on the king of the hill map, with the repair kits each class took and the walls each match broke,
+ * and for the matches together: the breaches bots made, by class, material and method, how they
+ * ended, the wrecks and scrap left and how often and how long drivers got stuck.
  * Slow, so it runs only with `TANKI_BALANCE=1 pnpm exec vitest run src/koth/classes/balance.harness.test.ts`.
  * `TANKI_MEDIUM_SPEED` sets the medium tank's speed the classes' speeds are shares of; defaults to 250.
  * `TANKI_SEEDS` replaces the matches' twelve seeds with a comma-separated list: a class's kills
@@ -77,6 +79,9 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
   it('plays eight-bot matches and sums up every class', () => {
     const totals = new Map<TankClassId, { seats: number; kills: number; deaths: number; life: number; lives: number; damage: number; point: number; kits: number }>();
     const matches: string[] = [];
+    const breaches = new Map<string, { passed: number; opened: number; abandoned: number; spent: number; reasons: Record<string, number> }>();
+    const weighed = new Map<string, { considered: number; exposed: number; short: number; chosen: number }>();
+    const debris = { wrecks: 0, pieces: 0, area: 0, chunks: 0, metal: 0 };
     let stalls = 0;
     let longest = 0;
 
@@ -149,11 +154,39 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
       for (const bot of match.bots.values()) {
         stalls += bot.driver.stalls;
         longest = Math.max(longest, bot.driver.longestStall);
+
+        for (const entry of bot.breach.stats.log) {
+          const key = `${entry.tankClass} ${entry.material} ${entry.method}`;
+          const tally = breaches.get(key) ?? { passed: 0, opened: 0, abandoned: 0, spent: 0, reasons: {} };
+          tally[entry.outcome]++;
+          tally.spent += entry.spent;
+
+          if (entry.reason) {
+            tally.reasons[entry.reason] = (tally.reasons[entry.reason] ?? 0) + 1;
+          }
+
+          breaches.set(key, tally);
+        }
+
+        for (const [key, counts] of bot.breach.stats.weighed) {
+          const tally = weighed.get(key) ?? { considered: 0, exposed: 0, short: 0, chosen: 0 };
+          tally.considered += counts.considered;
+          tally.exposed += counts.exposed;
+          tally.short += counts.short;
+          tally.chosen += counts.chosen;
+          weighed.set(key, tally);
+        }
       }
+
+      debris.wrecks += match.combat.wrecks.made;
+      debris.pieces += match.combat.scrap.pieces.length;
+      debris.chunks += match.combat.scrap.chunks;
+      debris.area += match.combat.scrap.pieces.reduce((total, piece) => total + piece.area, 0);
+      debris.metal += match.combat.scrap.pieces.filter((piece) => piece.material === 'metal').length;
 
       const roster = (team: 'red' | 'blue') => match.members.filter((member) => member.team === team).map((member) => member.tankClass.id[0].toUpperCase() + member.tankClass.id.slice(1, 3));
       matches.push(
-        `seed ${seed}: ${roster('red').join(' ')} vs ${roster('blue').join(' ')} -> ${match.capture.winner ?? 'none'} at ${match.time.toFixed(0)} s, first capture ${firstCapture?.toFixed(0) ?? '-'} s, kills ${match.members.reduce((sum, member) => sum + member.kills, 0)}, wall hits ${match.combat.walls.damage.hits}, tiles fallen ${match.combat.walls.damage.collapsed}`
+        `seed ${seed}: ${roster('red').join(' ')} vs ${roster('blue').join(' ')} -> ${match.capture.winner ?? 'none'} at ${match.time.toFixed(0)} s, first capture ${firstCapture?.toFixed(0) ?? '-'} s, kills ${match.members.reduce((sum, member) => sum + member.kills, 0)}, wall hits ${match.combat.walls.damage.hits}, rams ${match.combat.walls.damage.rams}, tiles fallen ${match.combat.walls.damage.collapsed}, wrecks ${match.combat.wrecks.made}`
       );
     }
 
@@ -166,6 +199,24 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
     }
 
     lines.push(`driver stalls ${stalls}, longest ${longest.toFixed(2)} s`);
+    lines.push(
+      `wrecks left ${debris.wrecks}, scrap lying at the end ${debris.pieces} pieces (${debris.metal} metal) of ${debris.area.toFixed(0)} px² in ${debris.chunks} chunks, per match ${(debris.pieces / seeds.length).toFixed(1)} pieces`
+    );
+    lines.push('', 'ways through weighed by bots: class material method  weighed seen-by-enemy too-little-saved taken');
+
+    for (const [key, tally] of [...weighed].sort(([a], [b]) => a.localeCompare(b))) {
+      lines.push(`${key.padEnd(24)} ${String(tally.considered).padStart(7)} ${String(tally.exposed).padStart(13)} ${String(tally.short).padStart(16)} ${String(tally.chosen).padStart(5)}`);
+    }
+
+    lines.push('', 'breaches by bots: class material method  passed opened abandoned  mean s  why abandoned');
+
+    for (const [key, tally] of [...breaches].sort(([a], [b]) => a.localeCompare(b))) {
+      const count = tally.passed + tally.opened + tally.abandoned;
+      lines.push(
+        `${key.padEnd(24)} ${String(tally.passed).padStart(6)} ${String(tally.opened).padStart(6)} ${String(tally.abandoned).padStart(9)}  ${(tally.spent / count).toFixed(1).padStart(6)}  ${JSON.stringify(tally.reasons)}`
+      );
+    }
+
     console.log(lines.join('\n'));
   }, 900_000);
 });

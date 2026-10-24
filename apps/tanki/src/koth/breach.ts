@@ -76,6 +76,11 @@ export function createBreacher(member: Member, context: BreachContext) {
     shots: 0,
     /** Seconds saved in all by the breaches driven through, against driving around. */
     saved: 0,
+    /**
+     * Ways through weighed, by the class that weighed them and what blocked them: how many, and how
+     * many were turned down as seen by enemies or saving too little, or taken.
+     */
+    weighed: new Map<string, { considered: number; exposed: number; short: number; chosen: number }>(),
     log: [] as BreachLog[]
   };
 
@@ -98,8 +103,10 @@ export function createBreacher(member: Member, context: BreachContext) {
       if (plan && plan.phase !== 'through') {
         const elsewhere = !travel.allowed || !travel.destination || distance(travel.destination, plan.destination) > MOVED_ON;
 
-        if (elsewhere || (plan.forced ? underFire(now) : threatened(position, now)) || now - plan.startedAt > plan.deadline) {
-          finish('abandoned', now);
+        const threat = plan.forced ? underFire(now) : threatened(position, now);
+
+        if (elsewhere || threat || now - plan.startedAt > plan.deadline) {
+          finish('abandoned', now, elsewhere ? 'elsewhere' : threat ? 'threat' : 'late');
         }
       }
 
@@ -158,9 +165,14 @@ export function createBreacher(member: Member, context: BreachContext) {
       return undefined;
     }
 
+    const key = `${member.tankClass.id} ${crossing.material} ${crossing.method}`;
+    const tally = stats.weighed.get(key) ?? { considered: 0, exposed: 0, short: 0, chosen: 0 };
+    stats.weighed.set(key, tally);
+    tally.considered++;
     const spot = crossing.method === 'ram' ? crossing.runup : crossing.stand;
 
     if (!forced && (board.danger(cellAt(grid, spot)) > 0 || enemyNear(spot))) {
+      tally.exposed++;
       return undefined;
     }
 
@@ -171,10 +183,12 @@ export function createBreacher(member: Member, context: BreachContext) {
     const saving = detour - toGap - fromGap;
 
     if (saving < Math.max(MIN_SAVING, detour * MIN_SHARE)) {
+      tally.short++;
       return undefined;
     }
 
     stats.chosen++;
+    tally.chosen++;
 
     return {
       ...crossing,
@@ -335,7 +349,7 @@ export function createBreacher(member: Member, context: BreachContext) {
     stats.shots += fired;
 
     if (current.shots >= current.maxShots) {
-      finish('abandoned', now);
+      finish('abandoned', now, 'spent');
       return { move: STOP };
     }
 
@@ -401,7 +415,7 @@ export function createBreacher(member: Member, context: BreachContext) {
         stats.rams++;
 
         if (current.rams >= current.maxRams) {
-          finish('abandoned', now);
+          finish('abandoned', now, 'spent');
           return undefined;
         }
 
@@ -423,8 +437,8 @@ export function createBreacher(member: Member, context: BreachContext) {
     return way !== undefined && pathLength(way) < distance(current.entry, current.exit) * OPEN_DETOUR + grid.cell * 2;
   }
 
-  /** Ends the breach under way, records how it went and, if it was given up, keeps away from the spot for a while. */
-  function finish(outcome: BreachLog['outcome'], now: number) {
+  /** Ends the breach under way, records how it went and, if it was given up, why, and keeps away from the spot for a while. */
+  function finish(outcome: BreachLog['outcome'], now: number, reason?: BreachLog['reason']) {
     const current = plan!;
     const spent = now - current.startedAt;
     plan = undefined;
@@ -445,6 +459,7 @@ export function createBreacher(member: Member, context: BreachContext) {
       material: current.material,
       method: current.method,
       outcome,
+      reason,
       detour: round(current.estimate.detour),
       planned: round(current.estimate.toGap + current.estimate.fromGap),
       spent: round(spent),
@@ -498,6 +513,11 @@ export type BreachLog = {
   material: string;
   method: 'ram' | 'shoot';
   outcome: 'passed' | 'opened' | 'abandoned';
+  /**
+   * Why a breach was given up: the bot was going `elsewhere` now, a `threat` came, enemies near or
+   * fire, it took too `late`, or it `spent` the shots or rams it had for it.
+   */
+  reason?: 'elsewhere' | 'threat' | 'late' | 'spent';
   /** Seconds of the way around, and of the way through as planned, both from where the bot decided. */
   detour: number;
   planned: number;
