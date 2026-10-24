@@ -28,8 +28,8 @@ import {
 import type { createBoard } from './createBoard';
 import { swatchPanelParts, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
-import { resolveLook } from './looks';
-import { boxKinds, kindLabel, partLooks, PartView, type Popup, type Session } from './parts';
+import { lookOf, partLooks, PartView, type Popup, type Session } from './parts';
+import { BlockView, PartsDrawer } from './PartsDrawer';
 
 /**
  * The board over the drawing: its panels, and in edit mode the studs, the box of parts and kits, and the drags that
@@ -58,6 +58,8 @@ export function BoardView(props: {
 }) {
   const [layer, setLayer] = createSignal<HTMLElement>();
   const [box, setBox] = createSignal<HTMLElement>();
+  /** Whether the box of parts is pulled up; see `PartsDrawer`. */
+  const [drawer, setDrawer] = createSignal(true);
   const [drag, setDrag] = createSignal<Drag>();
 
   /** The view's size, which the board covers, and where it lies on the page. */
@@ -329,52 +331,20 @@ export function BoardView(props: {
       </Show>
 
       <Show when={props.editing}>
-        <aside ref={setBox} class={styles.box} aria-label="Box of parts" data-keeps-panel>
-          <p class={styles.boxTitle}>Drag parts and kits out. Drop one here to put it away.</p>
-          <div class={styles.boxGrid}>
-            <For each={[...boxKinds, ...props.session.library.presets().map((preset) => `preset:${preset.id}`)]}>
-              {(kind) => (
-                <div
-                  class={styles.part}
-                  title={kindLabel(kind, props.session)}
-                  style={{ position: 'relative', width: `${cellSize}px`, height: `${cellSize}px` }}
-                  onPointerDown={(event) =>
-                    startPartDrag(event, { id: newId('part'), kind, span: { columns: 1, rows: 1 } }, { fromBox: true })
-                  }
-                >
-                  <div class={styles.content} inert>
-                    <PartView kind={kind} span={{ columns: 1, rows: 1 }} session={props.session} onPopup={() => {}} />
-                  </div>
-                </div>
-              )}
-            </For>
-            <For each={props.kits.kits()}>
-              {(kit) => (
-                <div
-                  class={[styles.part, styles.kitTile]}
-                  title={`Kit: ${kit.name}`}
-                  onPointerDown={(event) => startKitDrag(event, kit)}
-                >
-                  <span class={styles.name}>{kit.name}</span>
-                  <Show when={props.kits.isSaved(kit.id)}>
-                    <button
-                      type="button"
-                      class={styles.kitRemove}
-                      aria-label={`Delete kit ${kit.name}`}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={() => props.kits.remove(kit.id)}
-                    >
-                      ×
-                    </button>
-                  </Show>
-                </div>
-              )}
-            </For>
-          </div>
-          <button type="button" class={styles.boxButton} onClick={() => props.board.reset()}>
-            Reset
-          </button>
-        </aside>
+        <PartsDrawer
+          ref={setBox}
+          session={props.session}
+          kits={props.kits}
+          open={drawer()}
+          onOpen={setDrawer}
+          carrying={drag()?.type === 'part'}
+          over={lifted() !== undefined && overBox(lifted()!.point)}
+          onLift={(event, kind) =>
+            startPartDrag(event, { id: newId('part'), kind, span: { columns: 1, rows: 1 } }, { fromBox: true })
+          }
+          onLiftKit={startKitDrag}
+          onReset={() => props.board.reset()}
+        />
       </Show>
     </div>
   );
@@ -542,31 +512,6 @@ export function BoardView(props: {
   }
 }
 
-/** A kit's parts laid out as on a panel, for the block being carried. */
-function BlockView(props: { parts: Part[]; session: Session }) {
-  const bounds = () => partsBounds(props.parts);
-
-  return (
-    <For each={props.parts}>
-      {(part) => (
-        <div
-          class={styles.part}
-          style={{
-            left: `${(part.cell.column - bounds().column) * pitch}px`,
-            top: `${(part.cell.row - bounds().row) * pitch}px`,
-            width: `${part.span.columns * pitch - cellGap}px`,
-            height: `${part.span.rows * pitch - cellGap}px`
-          }}
-        >
-          <div class={styles.content} inert>
-            <PartView kind={part.kind} span={part.span} look={lookOf(part)} session={props.session} onPopup={() => {}} />
-          </div>
-        </div>
-      )}
-    </For>
-  );
-}
-
 /**
  * The panels of `board` on screen, in paint order, with where each lies: the free ones, then the open swatch's panel
  * and the panels of the swatches it lies in, outermost first. While editing, an open swatch without a panel shows an
@@ -656,12 +601,6 @@ type Drag = { pointer: number; point: Point; base: Board } & (
 
 /** A part as it is carried: everything but the cell it will land on. */
 type Lifted = Omit<Part, 'cell'>;
-
-/** The look a part shows at its span, for kinds with several; see `looks.ts`. */
-function lookOf(part: Lifted) {
-  const options = partLooks(part.kind);
-  return options && resolveLook(part.looks, part.span, options.looks, options.auto(part.span));
-}
 
 /** CSS pixels a press may move and still be a tap, which opens a swatch's panel while editing. */
 const tapDistance = 6;

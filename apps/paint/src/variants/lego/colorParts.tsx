@@ -1,7 +1,16 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { ColorWheel, createColorWheelSettings } from '../../features/color-wheel';
+import {
+  createColorWheelSettings,
+  HarmonyField,
+  hexToWheel,
+  MaskField,
+  WheelDisk,
+  wheelToHex,
+  type WheelColor
+} from '../../features/color-wheel';
+import wheelStyles from '../../features/color-wheel/ColorWheel.module.css';
 import { createRecentColors } from '../../features/color/createRecentColors';
 import { hexToHsv, hsvToHex, luminance, type Hsv } from '../../features/color/hsv';
 import { CoolorusWheel, defaultCoolorusSettings, type CoolorusSettings } from '../../features/coolorus-wheel';
@@ -21,14 +30,15 @@ import type { LookSpec } from './looks';
  */
 
 /**
- * The picker's looks: Zen's disc and the saturation and brightness square at any size, the hue triangle, the OKLCH
- * wheel and Coolorus once there is room for their controls.
+ * The picker's looks: Zen's disc, the saturation and brightness square and the OKLCH disk at any size, the hue
+ * triangle and Coolorus once there is room for their controls. The OKLCH disk's lightness, harmony and gamut mask
+ * are parts of their own (`value:lightness`, `color:harmony`, `color:mask`).
  */
 export const wheelLooks: readonly WheelLook[] = [
   { id: 'disc', label: 'Disc', min: { columns: 1, rows: 1 }, width: 232, Picker: Disc },
   { id: 'square', label: 'Square', min: { columns: 1, rows: 1 }, Picker: Square },
   { id: 'triangle', label: 'Triangle', min: { columns: 3, rows: 3 }, width: 236, Picker: Triangle },
-  { id: 'wheel', label: 'OKLCH wheel', min: { columns: 4, rows: 5 }, width: 268, Picker: Wheel },
+  { id: 'wheel', label: 'OKLCH disk', min: { columns: 1, rows: 1 }, width: 248, Picker: OklchDisk },
   { id: 'coolorus', label: 'Coolorus', min: { columns: 4, rows: 4 }, width: 240, Picker: Coolorus }
 ];
 
@@ -193,6 +203,70 @@ export function recentFor(session: PaintSession) {
 
 const recentColors = new WeakMap<PaintSession, ReturnType<typeof createRecentColors>>();
 
+/** The OKLCH disk's harmony list, filling the part; its caption shows once the part is two cells tall. */
+export function HarmonyPart(props: { span: Span; session: PaintSession }) {
+  const oklch = oklchFor(props.session);
+
+  return (
+    <div class={[wheelStyles.guides, styles.wheelField]} data-captioned={props.span.rows >= 2 ? '' : undefined}>
+      <HarmonyField settings={oklch.settings()} onSettings={oklch.update} />
+    </div>
+  );
+}
+
+/** The OKLCH disk's gamut mask list, filling the part; its caption shows once the part is two cells tall. */
+export function MaskPart(props: { span: Span; session: PaintSession }) {
+  const oklch = oklchFor(props.session);
+
+  return (
+    <div class={[wheelStyles.guides, styles.wheelField]} data-captioned={props.span.rows >= 2 ? '' : undefined}>
+      <MaskField settings={oklch.settings()} onSettings={oklch.update} />
+    </div>
+  );
+}
+
+/**
+ * The session's color in OKLCH and the OKLCH disk's guides, one for every part on it, so the disk, the lightness and
+ * the guides apart act as one wheel. The color keeps the hue and chroma it was reached from while it still produces
+ * the brush color, so lightness can pass black and come back; the guides are Paint's on this device.
+ */
+export function oklchFor(session: PaintSession) {
+  let found = oklchs.get(session);
+  if (!found) {
+    const settings = createColorWheelSettings();
+    let last: WheelColor | undefined;
+    const recent = recentFor(session);
+    found = {
+      wheel() {
+        const color = session.brush().color;
+        last = last && wheelToHex(last) === color ? last : hexToWheel(color, last);
+        return last;
+      },
+      edit(next: WheelColor) {
+        last = next;
+        setColor(session, wheelToHex(next));
+      },
+      settle: () => recent.remember(session.brush().color),
+      settings: settings.settings,
+      update: settings.update
+    };
+    oklchs.set(session, found);
+  }
+
+  return found;
+}
+
+const oklchs = new WeakMap<
+  PaintSession,
+  {
+    wheel: () => WheelColor;
+    edit: (next: WheelColor) => void;
+    settle: () => void;
+    settings: ReturnType<typeof createColorWheelSettings>['settings'];
+    update: ReturnType<typeof createColorWheelSettings>['update'];
+  }
+>();
+
 /** Paints in `color` (`#rrggbb` or HSV) from now on; the eraser gives way to the brush. */
 export function setColor(session: PaintSession, color: string | Hsv) {
   if (session.tool() === 'eraser') {
@@ -300,19 +374,19 @@ function Triangle(props: { session: PaintSession }) {
   );
 }
 
-/** The OKLCH wheel with the harmony and gamut mask Paint keeps on this device. */
-function Wheel(props: { session: PaintSession }) {
-  const recent = recentFor(props.session);
-  const settings = createColorWheelSettings();
+/** The OKLCH disk alone, on the session's shared OKLCH color and guides; see `oklchFor`. */
+function OklchDisk(props: { session: PaintSession }) {
+  const oklch = oklchFor(props.session);
 
   return (
     <div class={styles.pickerSurface}>
-      <ColorWheel
+      <WheelDisk
+        wheel={oklch.wheel()}
         color={props.session.brush().color}
-        onChange={(color) => setColor(props.session, color)}
-        onSettle={() => recent.remember(props.session.brush().color)}
-        settings={settings.settings()}
-        onSettings={settings.update}
+        onEdit={oklch.edit}
+        onSettle={oklch.settle}
+        settings={oklch.settings()}
+        onSettings={oklch.update}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import type { Brush } from '@app-game/paint-core/brush';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import { maxBrushSize } from '../../features/brush';
+import { wheelToHex } from '../../features/color-wheel';
 import { hexToHsv, hsvToHex, luminance, type Hsv } from '../../features/color/hsv';
 import type { PaintSession } from '../../features/session';
 import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
@@ -8,10 +9,13 @@ import { ScrubNumber } from '../../shared/ui/ScrubNumber';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { geometricFraction, geometricValue, linearFraction, linearValue } from '../procreate/sliderScale';
 import { PresetStroke } from '../zen/PresetStroke';
-import { cellGap, pitch, type Span } from './board';
+import { cellGap, pitch, type Part, type Span } from './board';
 import {
   autoWheelLook,
+  HarmonyPart,
   HexPart,
+  MaskPart,
+  oklchFor,
   HistoryPart,
   PairPart,
   PalettePart,
@@ -22,13 +26,14 @@ import {
   wheelLooks
 } from './colorParts';
 import styles from './LegoStudio.module.css';
-import type { LookSpec } from './looks';
+import { resolveLook, type LookSpec } from './looks';
 
 /** The drawing session the parts work on. */
 export type Session = PaintSession;
 
 /** Brush values a value part shows and sets. */
-export type ValueKind = 'size' | 'opacity' | 'hue' | 'saturation' | 'brightness';
+/** `lightness` is OKLCH's, the OKLCH disk's own (see `oklchFor`). */
+export type ValueKind = 'size' | 'opacity' | 'hue' | 'saturation' | 'brightness' | 'lightness';
 
 /** CSS pixels a knob is dragged to go through its whole range. */
 const scrubLength = 300;
@@ -37,7 +42,7 @@ const scrubLength = 300;
 export type ActionKind = 'undo' | 'redo' | 'eraser' | 'local-undo' | 'mixing';
 
 /** The color parts; see `colorParts.tsx`. */
-export type ColorKind = 'swatch' | 'wheel' | 'pair' | 'hex' | 'history' | 'palette';
+export type ColorKind = 'swatch' | 'wheel' | 'pair' | 'hex' | 'history' | 'palette' | 'harmony' | 'mask';
 
 /** What floats over the board: a value as a full slider, or the chooser of part `id`'s looks. */
 export type Popup = { kind: 'value'; value: ValueKind } | { kind: 'looks'; id: string };
@@ -102,6 +107,12 @@ export function PartView(props: {
             <Match when={color() === 'palette'}>
               <PalettePart span={props.span} session={props.session} />
             </Match>
+            <Match when={color() === 'harmony'}>
+              <HarmonyPart span={props.span} session={props.session} />
+            </Match>
+            <Match when={color() === 'mask'}>
+              <MaskPart span={props.span} session={props.session} />
+            </Match>
           </Switch>
         )}
       </Match>
@@ -109,25 +120,33 @@ export function PartView(props: {
   );
 }
 
-/** The kinds the box offers besides the brush presets, in box order. */
-export const boxKinds = [
-  'action:undo',
-  'action:redo',
-  'action:eraser',
-  'action:local-undo',
-  'color:swatch',
-  'color:wheel',
-  'color:pair',
-  'color:hex',
-  'color:history',
-  'color:palette',
-  'action:mixing',
-  'value:size',
-  'value:opacity',
-  'value:hue',
-  'value:saturation',
-  'value:brightness'
+/** The kinds the box offers besides the brush presets, by family, in box order. */
+export const boxSections: readonly { title: string; kinds: readonly string[] }[] = [
+  { title: 'Tools', kinds: ['action:undo', 'action:redo', 'action:eraser', 'action:local-undo', 'action:mixing'] },
+  {
+    title: 'Color',
+    kinds: [
+      'color:swatch',
+      'color:wheel',
+      'color:pair',
+      'color:hex',
+      'color:history',
+      'color:palette',
+      'color:harmony',
+      'color:mask'
+    ]
+  },
+  {
+    title: 'Values',
+    kinds: ['value:size', 'value:opacity', 'value:hue', 'value:saturation', 'value:brightness', 'value:lightness']
+  }
 ];
+
+/** The look a part shows at its span, for kinds with several; see `looks.ts`. */
+export function lookOf(part: Pick<Part, 'kind' | 'span' | 'looks'>) {
+  const options = partLooks(part.kind);
+  return options && resolveLook(part.looks, part.span, options.looks, options.auto(part.span));
+}
 
 /**
  * The looks a part of `kind` can take (see `looks.ts`), with the look it shows for a span until one is chosen;
@@ -160,12 +179,14 @@ export function kindLabel(kind: string, session: Session) {
 }
 
 const colorLabels: Record<ColorKind, string> = {
-  swatch: 'Color swatch: opens its own panel',
-  wheel: 'Color picker',
-  pair: 'Foreground and background',
-  hex: 'Hex color',
-  history: 'Color history',
-  palette: 'Palette'
+  swatch: 'Swatch',
+  wheel: 'Picker',
+  pair: 'Fore/back',
+  hex: 'Hex',
+  history: 'History',
+  palette: 'Palette',
+  harmony: 'Harmony',
+  mask: 'Gamut mask'
 };
 
 /** How a value shows: a knob at any size, a slider along the longer side, or a number to drag or type. */
@@ -252,11 +273,11 @@ const values: Record<
   ValueKind,
   {
     label: string;
-    read: (brush: Brush, hsv: Hsv) => number;
+    read: (brush: Brush, hsv: Hsv, session: Session) => number;
     write: (fraction: number, session: Session, hsv: Hsv) => void;
     text: (fraction: number, session: Session) => string;
     /** The track's background; plain when absent. */
-    track?: (hsv: Hsv) => string;
+    track?: (hsv: Hsv, session: Session) => string;
     /** The value as the number look shows and takes it, with a `short` caption for a part two cells wide. */
     number: {
       short: string;
@@ -265,7 +286,7 @@ const values: Record<
       min?: number;
       scale?: 'log';
       wrap?: boolean;
-      get: (brush: Brush, hsv: Hsv) => number;
+      get: (brush: Brush, hsv: Hsv, session: Session) => number;
       set: (value: number, session: Session, hsv: Hsv) => void;
     };
   }
@@ -345,6 +366,24 @@ const values: Record<
     },
     track: (hsv) =>
       `linear-gradient(to var(--track-to), ${hsvToHex({ ...hsv, v: 0 })}, ${hsvToHex({ ...hsv, v: 1 })})`
+  },
+  lightness: {
+    label: 'Lightness',
+    read: (_, __, session) => oklchFor(session).wheel().l,
+    write: (fraction, session) => oklchFor(session).edit({ ...oklchFor(session).wheel(), l: fraction }),
+    text: (fraction) => `${Math.round(fraction * 100)}%`,
+    track: (_, session) => {
+      const wheel = oklchFor(session).wheel();
+      const stops = Array.from({ length: 11 }, (_, index) => wheelToHex({ ...wheel, l: index / 10 }));
+      return `linear-gradient(to var(--track-to), ${stops.join(', ')})`;
+    },
+    number: {
+      short: 'L',
+      unit: '%',
+      max: () => 100,
+      get: (_, __, session) => Math.round(oklchFor(session).wheel().l * 100),
+      set: (value, session) => oklchFor(session).edit({ ...oklchFor(session).wheel(), l: value / 100 })
+    }
   }
 };
 
@@ -373,7 +412,7 @@ export function ValuePart(props: {
 }) {
   const hsv = createBrushHsv(props.session);
   const spec = () => values[props.value];
-  const fraction = () => spec().read(props.session.brush(), hsv());
+  const fraction = () => spec().read(props.session.brush(), hsv(), props.session);
   const knob = () => props.look === 'knob';
   const vertical = () => props.span.rows > props.span.columns;
   /**
@@ -418,7 +457,7 @@ export function ValuePart(props: {
       : (press.point.x - rect.left) / Math.max(1, rect.width);
   }
 
-  const track = () => spec().track?.(hsv());
+  const track = () => spec().track?.(hsv(), props.session);
   /** Color knobs show the brush color in their middle. */
   const swatched = () => track() !== undefined;
 
@@ -436,7 +475,7 @@ export function ValuePart(props: {
           </Show>
           <ScrubNumber
             label={spec().label}
-            value={number().get(props.session.brush(), hsv())}
+            value={number().get(props.session.brush(), hsv(), props.session)}
             min={number().min ?? 0}
             max={number().max(props.session)}
             unit={props.span.columns >= 2 ? number().unit : undefined}
@@ -502,7 +541,7 @@ const actions: Record<ActionKind, { label: string; icon: 'undo' | 'redo' | 'eras
   redo: { label: 'Redo', icon: 'redo' },
   eraser: { label: 'Eraser', icon: 'erase' },
   'local-undo': { label: 'Local undo', icon: 'localUndo' },
-  mixing: { label: 'Mixing palette', icon: 'fill' }
+  mixing: { label: 'Mixing', icon: 'fill' }
 };
 
 function ActionPart(props: { action: ActionKind; span: Span; session: Session }) {

@@ -2,33 +2,27 @@ import type { JSX } from '@solidjs/web';
 import { For, Show } from 'solid-js';
 import { cellGap, pitch, type Part, type Span } from './board';
 import styles from './LegoStudio.module.css';
-import { lookChoicesBut, lookFits, resolveLook, spanKey } from './looks';
+import { lookFits, resolveLook } from './looks';
 import { PartView, partLooks, type Session } from './parts';
 
 /**
  * Chooses how `part` looks at its current size, showing every choice live and in miniature, like Android's widget
- * picker. "Auto" forgets the choice at this size; looks that do not fit it show the size they need and stay disabled
- * until the part grows. Choices apply at once, so the part behind shows them too.
+ * picker; the look it shows is marked. Looks that do not fit it show the size they need and stay disabled until the
+ * part grows. Choices apply at once, so the part behind shows them too.
  */
 export function LookChooser(props: {
   part: Part;
   session: Session;
-  /** Shows `look` at the part's size; `undefined` goes back to automatic. */
-  onLook: (look: string | undefined) => void;
+  /** Shows `look` at the part's size. */
+  onLook: (look: string) => void;
 }) {
   const options = () => partLooks(props.part.kind);
   const span = () => props.part.span;
-  const chosenHere = () => props.part.looks?.[spanKey(span())];
-  /** What the part shows at this size with no choice made here. */
-  const autoLook = () => {
+  /** What the part shows at this size, chosen here, at a smaller size or automatically. */
+  const shown = () => {
     const found = options();
-    if (!found) {
-      return '';
-    }
-
-    return resolveLook(lookChoicesBut(props.part.looks, span()), span(), found.looks, found.auto(span()));
+    return found ? resolveLook(props.part.looks, span(), found.looks, found.auto(span())) : '';
   };
-  const label = (id: string) => options()?.looks.find((look) => look.id === id)?.label ?? id;
 
   return (
     <Show when={options()}>
@@ -38,9 +32,6 @@ export function LookChooser(props: {
             Look at {span().columns}×{span().rows}
           </h3>
           <div class={styles.choices}>
-            <Choice label={`Auto: ${label(autoLook())}`} selected={!chosenHere()} onChoose={() => props.onLook(undefined)}>
-              <PartPreview kind={props.part.kind} span={span()} look={autoLook()} session={props.session} />
-            </Choice>
             <For each={found().looks}>
               {(look) => {
                 const fitting = () => lookFits(look, span());
@@ -48,7 +39,7 @@ export function LookChooser(props: {
                   <Choice
                     label={look.label}
                     note={fitting() ? undefined : `from ${look.min.columns}×${look.min.rows}`}
-                    selected={chosenHere() === look.id}
+                    selected={shown() === look.id}
                     disabled={!fitting()}
                     onChoose={() => props.onLook(look.id)}
                   >

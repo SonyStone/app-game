@@ -112,8 +112,8 @@ export const swatchPanelParts: Part[] = [
 
 /**
  * The ready kits, each one of the library's color panels taken apart: Procreate's Colors (the pair, the Classic
- * square and sliders, history and palette), the Desktop color panel (pair and hex, the triangle, H/S/V numbers,
- * history), and the panel a new swatch opens.
+ * square and sliders, history and palette), the OKLCH wheel (disk, lightness, harmony, gamut mask), the Desktop
+ * color panel (pair and hex, the triangle, H/S/V numbers, history), and the panel a new swatch opens.
  */
 const readyKits: Kit[] = [
   { id: 'ready:swatch-panel', name: 'Color panel', parts: swatchPanelParts, owned: [] },
@@ -130,6 +130,17 @@ const readyKits: Kit[] = [
       part('history', 'color:history', 0, 8, 5, 1),
       part('palette', 'color:palette', 0, 9, 5, 2),
       part('mixing', 'action:mixing', 0, 11, 5, 1)
+    ],
+    owned: []
+  },
+  {
+    id: 'ready:oklch-wheel',
+    name: 'OKLCH wheel',
+    parts: [
+      part('disk', 'color:wheel', 0, 0, 5, 5, 'wheel'),
+      part('lightness', 'value:lightness', 0, 5, 5, 1),
+      part('harmony', 'color:harmony', 0, 6, 5, 1),
+      part('mask', 'color:mask', 0, 7, 5, 1)
     ],
     owned: []
   },
