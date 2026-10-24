@@ -37,7 +37,8 @@ describe('battle core', () => {
   it('mends chipped armor back toward new', () => {
     const { combat } = createBattle();
     const shooter = combat.spawnTank({ x: -200, y: 0, rotation: 0 }, { color: 0 });
-    const target = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0 });
+    // Facing the shooter, so the shots chip the thick front and never reach the core behind the thin rear.
+    const target = combat.spawnTank({ x: 0, y: 0, rotation: Math.PI }, { color: 0 });
 
     for (let shot = 0; shot < 10; shot++) {
       shooter.turretAngle = (shot - 5) * 0.01;
