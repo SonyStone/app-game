@@ -827,7 +827,7 @@ const MIN_PIECE_CELLS = 12;
  * A ram bites at most `MAX_BITE` px deep and nothing under `MIN_BITE` px; the bite's outline is
  * traced every `BITE_STEP` px along the push and wobbles by up to `BITE_ROUGHNESS` px.
  */
-const MAX_BITE = 28;
+export const MAX_BITE = 28;
 const MIN_BITE = 0.6;
 const BITE_STEP = 2;
 const BITE_ROUGHNESS = 1.1;

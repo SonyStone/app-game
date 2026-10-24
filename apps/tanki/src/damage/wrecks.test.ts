@@ -2,7 +2,10 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { pullSpeedFor, type Tank } from '../arena/bodies';
 import { createNavGrid, isOpenAt, updateNavGrid } from '../koth/navigation';
 import type { Rapier } from '../physics/Rapier2D';
-import { createCombat, type CombatLayout, type ShellSpec } from './combat';
+import { TANK_CLASSES } from '../koth/classes/classes';
+import { chargedShell } from '../koth/classes/weapon';
+import { MEDIUM_TANK, TANK_CLASS_IDS, type TankClassId } from '../koth/tanks';
+import { createCombat, type CombatLayout, type ShellSpec, type Shot } from './combat';
 import { carve } from './field';
 import type { createRangeRenderer } from './renderer';
 import { HULL_CORE } from './shapes';
@@ -149,6 +152,158 @@ describe('wrecks', () => {
   });
 });
 
+describe('wrecks of the classes', () => {
+  it('keep the size of their class: a Heavy leaves a big wreck and its gatling turret, a Scout a small one', () => {
+    const left = TANK_CLASS_IDS.map((id) => {
+      const { combat } = createBattle();
+      const shooter = combat.spawnTank({ x: -200, y: 0, rotation: 0 }, { color: 0xff0000 });
+      const target = spawnClass(combat, id, { x: 0, y: 0, rotation: 0 });
+      blowUp(combat, shooter, target, TANK_CLASSES[id].hull.core);
+      settle(combat);
+      const [wreck] = combat.wrecks.list;
+      const metal = combat.scrap.near(wreck, 150).filter((piece) => piece.material === 'metal');
+      return { id, wreck, scrap: metal.reduce((total, piece) => total + piece.area, 0) };
+    });
+    const of = (id: string) => left.find((entry) => entry.id === id)!;
+
+    expect(left.every((entry) => entry.wreck !== undefined)).toBe(true);
+    expect(of('heavy').wreck.area).toBeGreaterThan(of('soldier').wreck.area * 1.3);
+    expect(of('soldier').wreck.area).toBeGreaterThan(of('scout').wreck.area * 1.3);
+    // The turret blown off lies as scrap: the Heavy's broad gatling turret outweighs the Scout's small twin one.
+    expect(of('heavy').scrap).toBeGreaterThan(of('scout').scrap * 1.5);
+  });
+
+  it('crumble under blasts and rockets as under shells, and what the blasts knock off lands as scrap', () => {
+    const { combat } = createBattle();
+    const shooter = combat.spawnTank({ x: -260, y: 0, rotation: 0 }, { color: 0xff0000 });
+    const target = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0x0000ff });
+    blowUp(combat, shooter, target);
+    settle(combat);
+    const [wreck] = combat.wrecks.list;
+    const scrap = combat.scrap.pieces.length;
+
+    // A rocket's blast beside the wreck, missing it, chips the face toward it.
+    combat.blast({ x: wreck.x, y: wreck.y - 26 }, MEDIUM_TANK.shell.blast!, shooter);
+    combat.step(1 / 60);
+
+    expect(combat.wrecks.list[0].area).toBeLessThan(wreck.area - 20);
+
+    let rockets = 0;
+
+    while (combat.wrecks.list.length > 0 && rockets < 12) {
+      fireAt(combat, shooter, { x: wreck.x, y: wreck.y + [0, 7, -7][rockets % 3] }, { shell: MEDIUM_TANK.shell });
+      rockets++;
+    }
+
+    settle(combat);
+
+    // A medium tank's wreck takes about five rockets, against seven of the old shells.
+    expect(combat.wrecks.list).toHaveLength(0);
+    expect(rockets).toBeLessThanOrEqual(7);
+    expect(combat.scrap.pieces.length).toBeGreaterThanOrEqual(scrap + 3);
+    expect(combat.scrap.near(wreck, 120).every((piece) => piece.material === 'metal')).toBe(true);
+  });
+
+  it('turn a grenade rolling into them back, as walls do, but not one thrown high over them', () => {
+    const grenade = TANK_CLASSES.demoman.shell;
+    const ends = (reach: number, wreckThere: boolean) => {
+      const { combat } = createBattle();
+      const shooter = combat.spawnTank({ x: -150, y: 100, rotation: 0 }, { color: 0xff0000, team: 'red' });
+
+      if (wreckThere) {
+        const target = combat.spawnTank({ x: 0, y: 0, rotation: Math.PI / 2 }, { color: 0x0000ff, team: 'blue' });
+        blowUp(combat, shooter, target);
+        settle(combat);
+      }
+
+      shooter.hull.setTranslation({ x: -150, y: 0 }, true);
+      shooter.pull.setTranslation({ x: -135, y: 0 }, true);
+      combat.step(1 / 60);
+      shooter.turretAngle = 0;
+      combat.fire(shooter, { shell: grenade, reach });
+      let last = { x: 0, y: 0 };
+      let turned = false;
+
+      for (let step = 0; step < 120 && (step === 0 || combat.shells.length > 0); step++) {
+        combat.step(1 / 60);
+        const shell = combat.shells.find((candidate) => candidate.lobbed);
+
+        if (shell) {
+          last = { x: shell.x, y: shell.y };
+          turned ||= shell.direction.x < 0;
+        }
+      }
+
+      return { last, turned };
+    };
+    const low = ends(70, true);
+    const open = ends(70, false);
+    const high = ends(420, true);
+
+    // Thrown short, it rolls into the wreck, bounces back off it and goes off on the near side.
+    expect(low.turned).toBe(true);
+    expect(low.last.x).toBeLessThan(-15);
+    // Without the wreck it rolls on past where the wreck stood.
+    expect(open.turned).toBe(false);
+    expect(open.last.x).toBeGreaterThan(20);
+    // Thrown far, it flies high over the wreck and lands well beyond it.
+    expect(high.turned).toBe(false);
+    expect(high.last.x).toBeGreaterThan(150);
+  });
+
+  it('let a fully charged round through where they are thin, and stop it where they are thick', () => {
+    const sniper = TANK_CLASSES.sniper;
+    const full = { ...chargedShell(sniper.shell, sniper.weapon.kind === 'charge' ? sniper.weapon.full : sniper.shell, 1), range: 600 };
+    const through = (id: TankClassId, rotation: number, line: number) => {
+      const paths: { x: number; y: number }[][] = [];
+      const { combat } = createBattle({ onShot: (_, path) => paths.push([...path]) });
+      const shooter = combat.spawnTank({ x: -200, y: 120, rotation: 0 }, { color: 0xff0000 });
+      const target = spawnClass(combat, id, { x: 0, y: 0, rotation });
+      blowUp(combat, shooter, target, TANK_CLASSES[id].hull.core);
+      settle(combat);
+      shooter.hull.setTranslation({ x: -200, y: line }, true);
+      shooter.pull.setTranslation({ x: -185, y: line }, true);
+      combat.step(1 / 60);
+      paths.length = 0;
+      fireAt(combat, shooter, { x: 0, y: line }, { shell: full });
+      return paths[0].at(-1)!.x;
+    };
+
+    // A Scout's wreck side on is 20 px of armor: the round bores through and flies on.
+    expect(through('scout', Math.PI / 2, 5)).toBeGreaterThan(200);
+    // A Heavy's wreck lengthwise is 48 px: the round stops in it.
+    expect(through('heavy', 0, 8)).toBeLessThan(25);
+  });
+
+  it("give way to a heavy tank's ram more than to a light one's, and a heavy wreck less than a light one", () => {
+    const shove = (rammer: TankClassId, wreckOf: TankClassId) => {
+      const { combat } = createBattle({}, { halfWidth: 600 });
+      const shooter = combat.spawnTank({ x: -300, y: 200, rotation: 0 }, { color: 0xff0000 });
+      const target = spawnClass(combat, wreckOf, { x: 0, y: 0, rotation: Math.PI / 2 });
+      blowUp(combat, shooter, target, TANK_CLASSES[wreckOf].hull.core);
+      settle(combat);
+      const before = combat.wrecks.list[0];
+      const tank = spawnClass(combat, rammer, { x: -200, y: 0, rotation: 0 });
+
+      for (let step = 0; step < 90; step++) {
+        combat.drive(tank, { x: 1, y: 0 });
+        combat.step(1 / 60);
+      }
+
+      return combat.wrecks.list[0].x - before.x;
+    };
+
+    const heavy = shove('heavy', 'soldier');
+    const soldier = shove('soldier', 'soldier');
+    const scout = shove('scout', 'soldier');
+
+    expect(heavy).toBeGreaterThan(soldier + 5);
+    expect(soldier).toBeGreaterThan(3);
+    expect(scout).toBeLessThan(0.5);
+    expect(shove('heavy', 'heavy')).toBeLessThan(heavy * 0.8);
+  });
+});
+
 describe('scrap', () => {
   it('lands where pieces of armor and turrets fell and stays, listed with its material and area, until taken', () => {
     const { combat } = createBattle();
@@ -188,24 +343,50 @@ describe('scrap', () => {
 });
 
 /**
- * Opens a hole from `target`'s rear onto its core and shoots the core from where `shooter` stands,
- * which blows the target up.
+ * Opens a hole from `target`'s rear onto its `core`, by default the medium tank's, and shoots the
+ * core, which blows the target up. A target turned away from `shooter` is shot from behind: the
+ * shooter is put there for the shot and back where it stood after.
  */
-function blowUp(combat: ReturnType<typeof createCombat>, shooter: Tank, target: Tank) {
-  carve(combat.armorOf(target)!, { x: HULL_CORE.x - 12, y: 0 }, 9, 0, 1);
+function blowUp(combat: ReturnType<typeof createCombat>, shooter: Tank, target: Tank, core = HULL_CORE) {
+  carve(combat.armorOf(target)!, { x: core.x - 12, y: 0 }, 9, 0, 1);
   // Mending by a hair makes the battle refresh the tank's shape with the next step.
   combat.repair(target, 1e-9);
   combat.step(1 / 60);
   const angle = target.hull.rotation();
-  const core = target.hull.translation();
-  fireAt(combat, shooter, { x: core.x + HULL_CORE.x * Math.cos(angle), y: core.y + HULL_CORE.x * Math.sin(angle) });
+  const center = target.hull.translation();
+  const stood = { ...shooter.hull.translation() };
+  const behind = { x: center.x - Math.cos(angle) * 150, y: center.y - Math.sin(angle) * 150 };
+  const turned = (stood.x - center.x) * Math.cos(angle) + (stood.y - center.y) * Math.sin(angle) > -100;
+
+  if (turned) {
+    place(shooter, behind);
+  }
+
+  fireAt(combat, shooter, { x: center.x + core.x * Math.cos(angle), y: center.y + core.x * Math.sin(angle) });
+
+  if (turned) {
+    place(shooter, stood);
+  }
 }
 
-/** Turns `shooter`'s turret onto `target`, fires a shell and lets it land. */
-function fireAt(combat: ReturnType<typeof createCombat>, shooter: Tank, target: { x: number; y: number }) {
+/** Puts a tank and its tow point at `spot`, at rest. */
+function place(tank: Tank, spot: { x: number; y: number }) {
+  tank.hull.setTranslation(spot, true);
+  tank.hull.setLinvel({ x: 0, y: 0 }, true);
+  tank.pull.setTranslation({ x: spot.x + 15, y: spot.y }, true);
+}
+
+/** Spawns a tank of class `id` with its hull, mass, look and speed. */
+function spawnClass(combat: ReturnType<typeof createCombat>, id: TankClassId, placement: { x: number; y: number; rotation: number }) {
+  const tankClass = TANK_CLASSES[id];
+  return combat.spawnTank(placement, { color: 0x3355cc, pullSpeed: pullSpeedFor(tankClass.speed), hull: tankClass.hull, mass: tankClass.mass, look: tankClass.look });
+}
+
+/** Turns `shooter`'s turret onto `target`, fires a shell, the battle's or the shot's, and lets it land. */
+function fireAt(combat: ReturnType<typeof createCombat>, shooter: Tank, target: { x: number; y: number }, shot: Shot = {}) {
   const at = shooter.hull.translation();
   shooter.turretAngle = Math.atan2(target.y - at.y, target.x - at.x);
-  combat.fire(shooter);
+  combat.fire(shooter, shot);
 
   for (let step = 0; step < 30; step++) {
     combat.drive(shooter, { x: 0, y: 0 });

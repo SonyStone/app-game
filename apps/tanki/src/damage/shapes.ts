@@ -1,4 +1,5 @@
-import { createField, FAR } from './field';
+import { CHANNELS, createField, FAR, type DamageField } from './field';
+import { TURRET_CASEMATE, TURRET_GATLING, TURRET_LONG_GUN, TURRET_MEDIUM, TURRET_MORTAR, TURRET_QUADS, TURRET_TWIN } from './renderer';
 
 /**
  * Destructible fields of the arena objects, matching their drawings in `../arena/draw.ts`:
@@ -111,6 +112,75 @@ export function createShellField() {
 /** A grenade in flight: a ball 9 px across with a band painted around it. */
 export function createGrenadeField() {
   return createField({ minX: -6.5, minY: -6.5, maxX: 6.5, maxY: 6.5 }, 0.5, (x, y) => [Math.hypot(x, y) - 4.5, Math.abs(x) - 0.5, FAR, 0]);
+}
+
+/**
+ * A turret of `style`, one of the renderer's `TURRET_*` looks, as it lies on the ground blown off
+ * its tank: the parts the renderer draws for that look, joined into one outline, the edge of its
+ * cupola or drum painted across the barrel, a gatling's barrels at rest, and `soot` over all of
+ * it; +x along the barrel. Mirrors the renderer's `turretPart`.
+ */
+export function createTurretField(style: number, soot: number) {
+  const quad = TURRET_QUADS[style] ?? TURRET_QUADS[TURRET_MEDIUM];
+  const bounds = { minX: quad.originX - 0.5, minY: quad.originY - 0.5, maxX: quad.originX - 0.5 + quad.cols * quad.cell, maxY: quad.originY - 0.5 + quad.rows * quad.cell };
+
+  return createField(bounds, 0.5, (x, y) => {
+    const { outline, seam } = turretShape(style, x, y);
+    return [outline, Math.abs(seam) - LINE_HALF_WIDTH, FAR, soot];
+  });
+}
+
+/** Distance to a turret of `style` at a local point, and to the edge of its topmost part, which is drawn over the rest. */
+function turretShape(style: number, x: number, y: number) {
+  switch (style) {
+    case TURRET_TWIN: {
+      const cupola = Math.hypot(x, y) - 7.2;
+      return { outline: Math.min(roundedBox(x - 14, y + 2.9, 8, 1.7, 0.8), roundedBox(x - 14, y - 2.9, 8, 1.7, 0.8), cupola), seam: cupola };
+    }
+
+    case TURRET_GATLING: {
+      const drum = roundedBox(x - 15, y, 5.5, 5.4, 1.5);
+      const barrels = Math.min(...[0, 3.1, 0, -3.1].map((across) => roundedBox(x - 26, y - across, 7, 1.05, 0.5)));
+      return { outline: Math.min(roundedBox(x + 1, y, 12, 10.5, 4), drum, barrels, roundedBox(x - 30.5, y, 1.3, 4.6, 0.6)), seam: drum };
+    }
+
+    case TURRET_MORTAR: {
+      const cupola = Math.hypot(x, y) - 9.2;
+      return { outline: Math.min(roundedBox(x - 12, y, 6.5, 6.2, 2.5), roundedBox(x - 18.8, y, 2, 7.6, 1.2), cupola), seam: cupola };
+    }
+
+    case TURRET_CASEMATE: {
+      const plate = roundedBox(x - 4, y, 7.5, 6.2, 1.5);
+      return { outline: roundedBox(x - 3, y, 12, 10, 2.5), seam: plate };
+    }
+
+    case TURRET_LONG_GUN: {
+      const mantlet = roundedBox(x - 9, y, 4, 5.6, 2);
+      return { outline: Math.min(roundedBox(x - 28, y, 20, 2.4, 1), roundedBox(x - 47, y, 2.6, 3.9, 0.8), mantlet), seam: mantlet };
+    }
+
+    default: {
+      const cupola = Math.hypot(x, y) - 9.6;
+      return { outline: Math.min(roundedBox(x - 18.55, y, 11.25, 3.75, 1), cupola), seam: cupola };
+    }
+  }
+}
+
+/**
+ * Paints the casemate of a casemate gun onto its hull's field, as lines: the outline of the
+ * superstructure the renderer draws over the hull and of the plate in its face. A wreck keeps its
+ * casemate this way, burnt onto the hull, and shots chip it away with the armor.
+ */
+export function paintCasemate(field: DamageField) {
+  for (let row = 0; row < field.rows; row++) {
+    for (let col = 0; col < field.cols; col++) {
+      const index = (row * field.cols + col) * CHANNELS + 1;
+      const x = field.originX + col * field.cell;
+      const y = field.originY + row * field.cell;
+      const { outline, seam } = turretShape(TURRET_CASEMATE, x, y);
+      field.data[index] = Math.min(field.data[index], Math.abs(outline) - LINE_HALF_WIDTH, Math.abs(seam) - LINE_HALF_WIDTH);
+    }
+  }
 }
 
 const LINE_HALF_WIDTH = 0.5;

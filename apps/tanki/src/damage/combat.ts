@@ -36,7 +36,7 @@ import {
   TURRET_QUADS,
   type createRangeRenderer
 } from './renderer';
-import { createCrateField, createGrenadeField, createHullField, createShellField, MEDIUM_HULL, type HullSpec } from './shapes';
+import { createCrateField, createGrenadeField, createHullField, createShellField, MEDIUM_HULL, paintCasemate, type HullSpec } from './shapes';
 import { createScrap } from './scrap';
 import { createWalls, RUBBLE_HEIGHT, WALL_BLOW, type Bounds, type Tile } from './walls';
 import { isRolling, launchLob, stepLob, type LobSpec, type LobState } from './weapons/lob';
@@ -255,6 +255,8 @@ export function createCombat(
   let shellId = 0;
   // Pairs that crashed this step: two bodies meet over several colliders at once, but crash once.
   const crashes: [Armored | undefined, Armored | undefined][] = [];
+  // Wrecks left this step, which the blast of the shot that made them tore open already.
+  const freshWrecks = new Set<number>();
   const shells: Shell[] = [];
   const shellDraw = createShellDraw(renderer, createShellField());
   const grenadeDraw = createShellDraw(renderer, createGrenadeField());
@@ -357,6 +359,12 @@ export function createCombat(
       return byTank.get(tank)?.field;
     },
 
+    /** The shape of `tank`'s hull as it was spawned, with its core; `undefined` once the tank is destroyed. */
+    hullOf(tank: Tank): HullSpec | undefined {
+      const body = byTank.get(tank);
+      return body && (body.hull ?? MEDIUM_HULL);
+    },
+
     /** World position of `tank`'s core, under its armor; `undefined` once the tank is destroyed. */
     coreOf(tank: Tank) {
       const body = byTank.get(tank);
@@ -426,6 +434,7 @@ export function createCombat(
      */
     step(dt: number) {
       clock += dt;
+      freshWrecks.clear();
 
       for (const body of armored) {
         if (body.tank && body.airborne) {
@@ -515,15 +524,15 @@ export function createCombat(
 
     /**
      * What blocks the way at `point` within `reach` px, if it can be broken: the nearest standing
-     * tile of a breakable wall, with the wall's material and thickness, or a wreck; `undefined`
-     * when nothing breakable is that near.
+     * tile of a breakable wall, with the wall's material and thickness, or a wreck with its armor
+     * area; `undefined` when nothing breakable is that near.
      */
-    breakableNear(point: Point, reach: number): { material: WallMaterial; thickness: number; wall: WallPlacement } | { material: 'wreck' } | undefined {
+    breakableNear(point: Point, reach: number): { material: WallMaterial; thickness: number; wall: WallPlacement } | { material: 'wreck'; area: number } | undefined {
       const wall = walls.nearest(point, reach);
       const wreck = wrecks.nearest(point, reach);
 
       if (wreck && wreck.distance < (wall?.distance ?? Infinity)) {
-        return { material: 'wreck' };
+        return { material: 'wreck', area: wreck.wreck.area };
       }
 
       return wall && { material: wall.tile.wall.material ?? 'steel', thickness: Math.min(wall.tile.wall.halfWidth, wall.tile.wall.halfHeight) * 2, wall: wall.tile.wall };
@@ -958,25 +967,30 @@ export function createCombat(
 
   /**
    * A body that crashed at `speed` into something tanks cannot push. A tank driving straight into
-   * it nose first rams it: the blow, its approach speed above `RAM_SPEED`, up to a tank's top speed, times its mass,
-   * dents its armor, less against a softer wall, bites into a breakable wall and may shove a wreck,
-   * which throws up dust of their material. A tank rams once per run-up: contacts within
-   * `RAM_COOLDOWN` s of its last ram leave no mark. A body thrown against it, by a hit or a crash,
-   * brushing it with a corner or a side, or swinging into it on a turn, only dents, as two bodies
-   * do when they crash.
+   * it nose first, at `RAM_SPEED` or faster, rams it. The blow is the tank's momentum, its mass
+   * times its approach speed up to `RAM_TOP_SPEED`, beyond what a medium tank carries at
+   * `RAM_SPEED`: a slow heavy tank rams about two and a half times as hard as a medium one at full
+   * speed, a fast light one less than half as hard. The blow bites into a breakable wall, may shove
+   * a wreck and dents the rammer's own nose in proportion, less against a softer wall, which throws
+   * up dust of its material. A tank rams once per run-up: contacts within `RAM_COOLDOWN` s of its
+   * last ram leave no mark. A body thrown against it, by a hit, a blast or a crash, brushing it
+   * with a corner or a side, or swinging into it on a turn, only dents, as two bodies do when they
+   * crash.
    *
    * @param direction - Unit direction from the rammer into what it hit.
    */
   function ramWall(handle: number, rammer: Armored, point: Point, direction: Point, speed: number) {
     // A body thrown against a wall, by a hit or by another, or brushing it with a corner or a side
-    // as it turns, only dents, as in a crash of two bodies.
+    // as it turns, only dents, as in a crash of two bodies; so does a tank flying from a blast,
+    // whatever its tracks were doing as it took off.
     const heading = { x: Math.cos(rammer.body.rotation()), y: Math.sin(rammer.body.rotation()) };
     const nose = toLocal(rammer.body, point).x > RAM_NOSE;
     const facing = heading.x * direction.x + heading.y * direction.y > RAM_FACING;
     // Driving straight ahead: a hull swinging round a corner toward its next turn does not ram.
     const straight = heading.x * rammer.move.x + heading.y * rammer.move.y > RAM_STRAIGHT;
+    const driven = rammer.airborne === undefined && rammer.move.x * direction.x + rammer.move.y * direction.y >= RAM_AIM;
 
-    if (!nose || !facing || !straight || rammer.move.x * direction.x + rammer.move.y * direction.y < RAM_AIM) {
+    if (!nose || !facing || !straight || !driven) {
       if (speed >= CRASH_SPEED) {
         dentAt(rammer, point, { x: -direction.x, y: -direction.y }, (speed - CRASH_SPEED) * CRASH_DEPTH_PER_SPEED * THROWN_SHARE);
       }
@@ -991,19 +1005,20 @@ export function createCombat(
 
     rammer.rammedAt = clock;
     const at = rammer.body.translation();
-    const blow = (Math.min(speed, RAM_TOP_SPEED) - RAM_SPEED) * rammer.body.mass();
+    const blow = blowOf(rammer.body.mass(), speed);
     const material = walls.ram(handle, { field: rammer.field, x: at.x, y: at.y, angle: rammer.body.rotation() }, direction, blow);
     const wreck = material ? undefined : wrecks.ram(handle, point, direction, blow);
     const dust = material?.color ?? wreck?.color;
-    dentAt(rammer, point, { x: -direction.x, y: -direction.y }, blow * RAM_DENT * (material?.ram.hardness ?? wreck?.hardness ?? 1));
+    dentAt(rammer, point, { x: -direction.x, y: -direction.y }, ramDent(blow, material?.ram.hardness ?? wreck?.hardness ?? 1), MAX_RAM_DENT);
 
     if (dust) {
       spawnDust(point, direction, dust.map((channel) => channel * 0.6));
     }
   }
 
-  function dentAt(body: Armored, point: Point, direction: Point, depth: number) {
-    dent(body.field, toLocal(body.body, point), rotateInto(body.body, direction), Math.min(depth, MAX_CRASH_DEPTH), CRASH_RADIUS);
+  /** Dents `body` at `point` along `direction` by `depth` px, at most `most`. */
+  function dentAt(body: Armored, point: Point, direction: Point, depth: number, most = MAX_CRASH_DEPTH) {
+    dent(body.field, toLocal(body.body, point), rotateInto(body.body, direction), Math.min(depth, most), CRASH_RADIUS);
     body.changed = true;
   }
 
@@ -1076,10 +1091,20 @@ export function createCombat(
     shell?: Shell
   ) {
     if (hit.wreck) {
-      wrecks.chip(hit.wreck, end, direction, blow);
+      // A piercing round bores through a wreck where it is no thicker than the armor the round
+      // still punches through, as through a tank's; a thicker one only takes a deep crater.
+      const bored = shell && shell.pierce.armor > 0 ? wrecks.bore(hit.wreck, end, direction, shell.pierce.armor, blow.hole) : undefined;
       impact(end, { x: -direction.x, y: -direction.y });
       spawnDust(end, direction, hit.wreck.color);
-      return undefined;
+
+      if (!bored || !shell) {
+        wrecks.chip(hit.wreck, end, direction, blow);
+        return undefined;
+      }
+
+      shell.pierce.armor -= bored.armor;
+      spawnDust(bored.exit, { x: -direction.x, y: -direction.y }, hit.wreck.color);
+      return { direction, from: bored.exit, ricochet: false };
     }
 
     if (!hit.target) {
@@ -1374,13 +1399,21 @@ export function createCombat(
   }
 
   /**
-   * The first wall, or body taller than a lobbed shell flies, within `maxDistance` of it, with the
-   * wall's normal: the slope of a breakable wall's surface where it has one. Rubble is low, as
-   * crates are: a grenade in the air flies over it and one rolling on the ground bounces off it.
-   * It passes its own tank until its first bounce and teammates without friendly fire.
+   * The first wall, wreck or body taller than a lobbed shell flies, within `maxDistance` of it,
+   * with the wall's or wreck's normal: the slope of a breakable wall's surface where it has one.
+   * Rubble is low, as crates are: a grenade in the air flies over it and one rolling on the ground
+   * bounces off it. A wreck stands as tall as the tank it was, its torn plates sticking up where
+   * the turret was. It passes its own tank until its first bounce and teammates without friendly fire.
    */
   function castLob(shell: Shell, lob: LobState, from: Point, maxDistance: number) {
-    const hit = castShot(from, shell.direction, (body) => body.top <= lob.height || passesShell(shell, body), maxDistance, lob.height > RUBBLE_HEIGHT ? Infinity : 0);
+    const hit = castShot(
+      from,
+      shell.direction,
+      (body) => body.top <= lob.height || passesShell(shell, body),
+      maxDistance,
+      lob.height > RUBBLE_HEIGHT ? Infinity : 0,
+      lob.height >= WRECK_TOP
+    );
 
     if (!hit.tile) {
       return hit;
@@ -1502,8 +1535,9 @@ export function createCombat(
    *
    * @param overRubble - Pixels from the start over which the ray passes over rubble; `Infinity`
    *   passes over all of it, as a lobbed grenade does.
+   * @param overWrecks - Whether the ray passes over wrecks, as a grenade flying higher than they stand.
    */
-  function castShot(start: Point, direction: Point, skip: (body: Armored) => boolean, maxDistance: number, overRubble = 0) {
+  function castShot(start: Point, direction: Point, skip: (body: Armored) => boolean, maxDistance: number, overRubble = 0, overWrecks = false) {
     let best: { distance: number; target?: Armored; part?: 'armor' | 'core'; tile?: Tile; wreck?: WreckHit; normal?: Point } = { distance: maxDistance };
 
     for (const body of armored) {
@@ -1518,10 +1552,10 @@ export function createCombat(
       }
     }
 
-    const wreck = wrecks.cast(start, direction, best.distance);
+    const wreck = overWrecks ? undefined : wrecks.cast(start, direction, best.distance);
 
     if (wreck) {
-      best = { distance: wreck.distance, wreck: wreck.wreck };
+      best = { distance: wreck.distance, wreck: wreck.wreck, normal: wreck.normal };
     }
 
     const wall = walls.cast(start, direction, best.distance, overRubble);
@@ -1736,7 +1770,7 @@ export function createCombat(
     if (body.tank) {
       const angle = between(0, Math.PI * 2);
       scrap.launch({
-        shape: 'turret',
+        shape: { turret: (body.look ?? MEDIUM_LOOK).turret },
         x: center.x,
         y: center.y,
         angle: body.tank.turretAngle,
@@ -1753,8 +1787,19 @@ export function createCombat(
     burning.ignite(center, WRECK_FIRE_SPREAD, options.wreckFire ?? WRECK_FIRE_LIFE, WRECK_FIRE_LIGHT, 0.5);
 
     const at = { x: center.x, y: center.y, angle: body.body.rotation() };
+    const mass = body.density * body.fullArea;
     remove(body);
-    wrecks.add({ field: body.field, ...at, color: rgb(body.color), team: body.team, core: (body.hull ?? MEDIUM_HULL).core, direction });
+
+    // A casemate gun's superstructure stays on its wreck, burnt onto the hull; its gun flies off as a turret does.
+    if (body.look?.casemate) {
+      paintCasemate(body.field);
+    }
+
+    const wreck = wrecks.add({ field: body.field, ...at, color: rgb(body.color), team: body.team, core: (body.hull ?? MEDIUM_HULL).core, direction, mass });
+
+    if (wreck !== undefined) {
+      freshWrecks.add(wreck);
+    }
     scheduleRespawn(body);
     reportDestroyed(body);
   }
@@ -1789,6 +1834,8 @@ export function createCombat(
    */
   function explode(at: Point, spec: BlastSpec, shooter: Tank | undefined, team: string | undefined) {
     const source = shooter && byTank.get(shooter);
+    // Wrecks that stood before the shot; one it leaves now was torn open by the blast already.
+    const standing = wrecks.facesNear(at, spec.radius).filter((face) => !freshWrecks.has(face.wreck.id));
     blastEffects(at, spec.radius);
 
     for (const body of [...armored]) {
@@ -1832,6 +1879,7 @@ export function createCombat(
     }
 
     blastWalls(at, spec);
+    blastWrecks(at, spec, standing);
   }
 
   /**
@@ -1853,6 +1901,29 @@ export function createCombat(
       const scale = { hole: (spec.hole * falloff * Math.sqrt(structures)) / WALL_BLOW.hole, depth: (spec.depth * falloff * structures) / WALL_BLOW.depth };
       const material = walls.chip(face.point, face.direction, face.tile, scale);
       spawnDust(face.point, face.direction, material.color.map((channel) => channel * 0.6));
+    }
+  }
+
+  /**
+   * Chips the wrecks a blast at `at` reaches in the open, of those `faces` found standing there: each
+   * takes a crater on the face toward the blast, falling off with distance and grown by
+   * `structures`, as a wall's does, for a wreck has no core left. Pieces cut loose fall off as
+   * scrap, and a wreck shot down far enough falls apart.
+   */
+  function blastWrecks(at: Point, spec: BlastSpec, faces: ReturnType<Wrecks['facesNear']>) {
+    const structures = spec.structures ?? 1;
+
+    for (const face of faces) {
+      const cover = castShot(at, face.direction, (body) => body.tank !== undefined, face.distance);
+
+      if (cover.distance < face.distance - BLAST_COVER && cover.wreck !== face.wreck) {
+        continue;
+      }
+
+      const falloff = 1 - 0.5 * (face.distance / spec.radius);
+      const inward = face.normal ? { x: -face.normal.x, y: -face.normal.y } : face.direction;
+      wrecks.chip(face.wreck, face.point, inward, { hole: spec.hole * falloff * Math.sqrt(structures), depth: spec.depth * falloff * structures });
+      spawnDust(face.point, inward, face.wreck.color);
     }
   }
 
@@ -1920,6 +1991,9 @@ export function createCombat(
 
     // The pull flies along at the hull's speed and slows with it, so it neither drags nor brakes the hull.
     body.body.setLinearDamping(AIR_DAMPING);
+    // Sweeping the hull's motion stops it at a wall it is thrown at, but not at one it already
+    // touches, as a second blast throws it; contacts predicted along its way stop it there too.
+    body.body.setSoftCcdPrediction(AIR_CCD);
     body.tank.pull.setLinearDamping(AIR_DAMPING);
     body.tank.pull.setLinvel(body.body.linvel(), true);
   }
@@ -1945,6 +2019,7 @@ export function createCombat(
 
     body.airborne = undefined;
     body.body.setLinearDamping(HULL_LINEAR_DAMPING);
+    body.body.setSoftCcdPrediction(0);
     body.tank?.pull.setLinearDamping(0);
     spawnDust(body.body.translation(), normalize(body.body.linvel()), FALL_DUST.slice(0, 3));
     shakeFrom(body.body.translation(), LANDING_SHAKE);
@@ -2171,8 +2246,9 @@ const CORE_LIGHT = 32;
 const CORE_HEIGHT = 3;
 const HULL_HEIGHT = 6;
 const CRATE_HEIGHT = 8;
-/** A tank's top, its turret included, which a lobbed shell must clear to fly over it. */
+/** A tank's top, its turret included, which a lobbed shell must clear to fly over it; a wreck's torn plates stand as tall. */
 const TANK_TOP = 12;
+const WRECK_TOP = TANK_TOP;
 const CASEMATE_HEIGHT = 9;
 const MUZZLE_LIGHT_LIFE = 0.16;
 const MUZZLE_LIGHT_SPEED = 1100;
@@ -2198,6 +2274,8 @@ const AIR_TIME_PER_SPEED = 0.0003;
 const MAX_AIR_TIME = 0.4;
 const AIR_DAMPING = 7;
 const AIR_RISE = 90;
+/** Pixels ahead along a thrown hull's way within which contacts are predicted: a step's flight at the fastest throws. */
+const AIR_CCD = 40;
 /** Shadows of things in the air: a translucent dark copy of their shape on the ground. */
 const SHADOW_COLOR = [0.05, 0.05, 0.06];
 const SHADOW_ALPHA = 0.32;
@@ -2228,16 +2306,21 @@ const CRASH_SPEED = 110;
 const CRASH_DEPTH_PER_SPEED = 0.012;
 /**
  * Approach speed, as Rapier reports it, below which a crash into something that does not move
- * leaves no mark: about half a tank's top speed. Above it each unit of blow dents the rammer by
- * `RAM_DENT` px against steel, so a ram at full speed dents a medium tank's nose by about 3.5 px.
+ * leaves no mark: about half a medium tank's top speed. Rapier reports a medium tank at full speed
+ * at 136, a Heavy at 104 and a Scout at 193, so their blows are about 66, 160 and 27. Each unit of
+ * blow dents the rammer by `RAM_DENT` px against steel, at most `MAX_RAM_DENT`: a ram at full speed
+ * dents a medium tank's nose by about 3.5 px, a Heavy's by 6 and a Scout's by 1.5.
  */
 const RAM_SPEED = 70;
 const RAM_DENT = 0.055;
+const MAX_RAM_DENT = 6;
+/** Share of the speed a hull is towed at that Rapier reports for it, after the hull's damping. */
+const REPORTED_SPEED = 0.545;
 const RAM_COOLDOWN = 0.5;
 /**
  * A tank rams only while it drives into the wall, its drive input at most about 50 degrees off the
  * contact's normal, and no harder than at `RAM_TOP_SPEED`, a little over a medium tank's top speed,
- * however hard a hit threw it. Thrown against something that does not move, a body dents
+ * however fast it goes. Thrown against something that does not move, a body dents
  * `THROWN_SHARE` times as deep as in a crash with another body.
  */
 const RAM_AIM = 0.6;
@@ -2271,6 +2354,24 @@ const SHELL_LIGHT = 34;
 const SHELL_LIGHT_HEIGHT = 24;
 /** Puffs take their colors from their layer. */
 const NO_COLOR = [0, 0, 0, 0];
+
+/**
+ * The blow of a ram by a tank of `mass` towed at its top speed of `speed` px/s, as the battle
+ * deals it when the tank drives straight into a wall from a run-up long enough to reach that speed.
+ */
+export function ramBlow(mass: number, speed: number) {
+  return blowOf(mass, speed * REPORTED_SPEED);
+}
+
+/** Pixels a ram of `blow` dents the rammer's nose against a wall of `hardness`, 1 for steel. */
+export function ramDent(blow: number, hardness: number) {
+  return Math.min(blow * RAM_DENT * hardness, MAX_RAM_DENT);
+}
+
+/** The blow of a ram by a body of `mass` meeting a wall at `speed`, as Rapier reports it. */
+function blowOf(mass: number, speed: number) {
+  return mass * Math.min(speed, RAM_TOP_SPEED) - TANK_MASS * RAM_SPEED;
+}
 
 /** Draw fields of a turret of `style`, one of the renderer's `TURRET_*` looks. */
 function turretDraw(style: number) {
