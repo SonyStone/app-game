@@ -14,6 +14,11 @@ const tankiPages = [
     component: lazy(() => import('./damage/DamageRoute'))
   },
   {
+    path: '/editor',
+    name: 'Map editor',
+    component: lazy(() => import('./editor/EditorRoute'))
+  },
+  {
     path: '/tilt',
     name: 'Tilt sandbox',
     component: lazy(() => import('./tilt/TiltSandbox'))
