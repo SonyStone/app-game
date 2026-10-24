@@ -29,7 +29,8 @@ export function createGun(spec: GunSpec) {
     /** Lets `dt` seconds pass: the wait after a shot runs out, then rounds load one by one. */
     step(dt: number) {
       const quiet = Math.max(dt - cooldown, 0);
-      cooldown = Math.max(cooldown - dt, 0);
+      // Six steps of 1/60 s fall a hair short of 0.1 s in floating point; that hair must not cost a seventh step.
+      cooldown = cooldown - dt > EPSILON ? cooldown - dt : 0;
 
       if (rounds >= spec.clip || quiet === 0) {
         return;
@@ -66,3 +67,6 @@ export function createGun(spec: GunSpec) {
 
 /** A tank's gun as returned by `createGun`. */
 export type Gun = ReturnType<typeof createGun>;
+
+/** Seconds of wait so short they count as none. */
+const EPSILON = 1e-9;

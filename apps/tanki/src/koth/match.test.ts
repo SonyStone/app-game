@@ -3,8 +3,10 @@ import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import { inBase, onPoint } from './map';
 import { createKothMatch } from './match';
+import { TANK_CLASSES } from './classes/classes';
+import { TACTICS } from './classes/tactics';
 import { CAPTURE_RULES } from './rules';
-import { MEDIUM_TANK } from './tanks';
+import { MEDIUM_TANK, type TankClassId } from './tanks';
 
 let rapier: Rapier;
 
@@ -48,30 +50,39 @@ describe('king of the hill with eight bots', () => {
     expect(watch.longest).toBeLessThan(2);
   }, 60_000);
 
-  it('fires only at enemies in sight within the reach of a screen, at a measured pace', () => {
+  it('fires only at enemies within its reach, in sight unless it lobs grenades over cover, at a measured pace', () => {
     const match = createMatch(11);
-    const ranges: number[] = [];
+    const shots: { tankClass: TankClassId; range: number }[] = [];
     const fire = match.combat.fire;
-    match.combat.fire = (tank) => {
+    match.combat.fire = (tank, shot) => {
       const shooter = match.members.find((member) => member.tank === tank)!;
       const at = tank.hull.translation();
+      const lobs = shooter.tankClass.weapon.kind === 'lob';
       const seen = match.members
         .filter((member) => member.team !== shooter.team && member.tank)
         .map((member) => member.tank!.hull.translation())
-        .filter((enemy) => match.combat.lineOfSight(at, enemy))
+        .filter((enemy) => lobs || match.combat.lineOfSight(at, enemy))
         .map((enemy) => Math.hypot(enemy.x - at.x, enemy.y - at.y));
-      ranges.push(Math.min(...seen));
-      fire(tank);
+      shots.push({ tankClass: shooter.tankClass.id, range: Math.min(...seen) });
+      fire(tank, shot);
     };
 
     while (match.time < 120) {
       tick(match);
     }
 
-    // The point opens at 30 s; from then on the eight tanks fight on and off.
-    expect(ranges.length).toBeGreaterThan(40);
-    expect(ranges.length / 8 / 2).toBeLessThan(30);
-    expect(Math.max(...ranges)).toBeLessThan(500);
+    const classes = new Set(shots.map((shot) => shot.tankClass));
+    const aimed = shots.filter((shot) => shot.tankClass !== 'heavy');
+
+    // The point opens at 30 s; from then on the eight tanks fight on and off, every class firing.
+    expect(classes.size).toBeGreaterThanOrEqual(3);
+    expect(aimed.length).toBeGreaterThan(40);
+    expect(aimed.length / 8 / 2).toBeLessThan(30);
+
+    for (const shot of shots) {
+      const reach = TANK_CLASSES[shot.tankClass].weapon.kind === 'lob' ? TANK_CLASSES[shot.tankClass].shell.range : TACTICS[shot.tankClass].reach;
+      expect(shot.range).toBeLessThan(reach + 80);
+    }
   }, 60_000);
 
   it('brings destroyed tanks back at their base in waves', () => {
@@ -98,7 +109,8 @@ describe('king of the hill with eight bots', () => {
       }
     }
 
-    expect(respawned).toBe(3);
+    // A wave may bring several back in the same step.
+    expect(respawned).toBeGreaterThanOrEqual(3);
   }, 60_000);
 
   it('declares the team that held the point long enough the winner, and starts over', () => {
