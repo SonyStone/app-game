@@ -1,6 +1,7 @@
 import type { Collider, Rapier, RigidBody } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
-import { carve, CHANNELS, crack, dent, detachLoosePieces, FAR, raycastField, sampleField, shatter, solidBoxes, surfaceNormal, type DamageField, type Fragment } from './field';
+import { carve, CHANNELS, crack, dent, detachLoosePieces, FAR, raycastField, shatter, solidBoxes, surfaceNormal, type DamageField, type Fragment } from './field';
+import { cutRail, traceRail } from './rail';
 import { KIND_FIELD, PARTICLE_DUST, PARTICLE_SMOKE, type createRangeRenderer } from './renderer';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
@@ -17,8 +18,8 @@ type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
  *   shot down to `CRUMBLE_AT` of its armor falls apart.
  * - A ram dents it a little; a hard one, near a tank's full speed, shoves it a few pixels, a wreck
  *   of a heavier tank less (`ram`).
- * - A blast chips the face it meets, which `facesNear` finds; a piercing round bores through it
- *   where it is thin (`bore`).
+ * - A blast chips the face it meets, which `facesNear` finds; a rail cuts its slit through it as
+ *   far as its power takes it (`rail`).
  * - `cast` finds it along a shot and `distance` gives it to navigation; `onChange` reports where a
  *   wreck appeared, moved, changed shape or went.
  * - At most `limit` wrecks stand: when one more comes, the oldest falls apart into a heap of
@@ -188,47 +189,36 @@ export function createWrecks(
     },
 
     /**
-     * Bores a piercing round through a wreck from where it met the wreck at `entry` along
-     * `direction`, if the wreck is thin there: the armor on the round's line, gaps not counted, is
-     * at most `maxArmor` pixels. It cuts a tunnel of holes of `hole` px along the line and returns
-     * where the round comes out and how much armor it went through; `undefined`, cutting nothing,
-     * where the wreck is thicker.
+     * Runs a rail's line through a wreck from where it met the wreck at `entry` along `direction`
+     * (see `traceRail`): it cuts the rail's slit, `slit` px wide with holes of `hole` px, through
+     * the wreck's armor as far as `power` px of it take it.
+     *
+     * @returns Where the line came out of the wreck, or where it stopped inside when `through` is
+     *   false, and how many pixels of armor it went through; `undefined` for a wreck gone already.
      */
-    bore(wreck: Readonly<Wreck>, entry: Point, direction: Point, maxArmor: number, hole: number) {
+    rail(wreck: Readonly<Wreck>, entry: Point, direction: Point, cut: { power: number; slit: number; hole: number }) {
       const target = wreck as Wreck;
 
       if (!wrecks.includes(target)) {
         return undefined;
       }
-      const start = toLocal(target.body, entry);
+
+      // The march starts a hair before the surface the cast found, so it finds the surface itself.
+      const back = 1;
+      const start = toLocal(target.body, { x: entry.x - direction.x * back, y: entry.y - direction.y * back });
       const inward = rotateInto(target.body, direction);
-      const sample = new Float32Array(CHANNELS);
-      let armor = 0;
-      let last = 0;
+      const trace = traceRail(target.field, start, inward, { power: cut.power });
 
-      // Past the reach of its center on the far side, nothing of the wreck is left.
-      for (let along = 0; along <= target.reach * 2; along += BORE_STEP) {
-        if (sampleField(target.field, start.x + inward.x * along, start.y + inward.y * along, sample)[0] < 0) {
-          armor += BORE_STEP;
-          last = along;
-
-          if (armor > maxArmor) {
-            return undefined;
-          }
-        }
+      if (!trace) {
+        return { end: entry, through: true, armor: 0 };
       }
 
-      const seed = options.random() * 1000;
-
-      for (let along = 0; along <= last; along += hole * 0.7) {
-        carve(target.field, { x: start.x + inward.x * along, y: start.y + inward.y * along }, hole * 0.8, 0.3, seed + along);
-      }
-
+      cutRail(target.field, start, inward, trace, { slit: cut.slit, hole: cut.hole, seed: options.random() * 1000 });
       target.push = direction;
       target.flash = 1;
       target.changed = true;
-      const out = last + BORE_STEP + 0.5;
-      return { exit: { x: entry.x + direction.x * out, y: entry.y + direction.y * out }, armor };
+      const end = { x: entry.x + direction.x * (trace.end - back), y: entry.y + direction.y * (trace.end - back) };
+      return { end, through: trace.through, armor: trace.armor };
     },
 
     /**
@@ -614,8 +604,6 @@ const MAX_SHOVE = 270;
 /** Turn rate of a shove per pixel of arm and pixel per second of speed. */
 const SHOVE_TURN = 0.0012;
 const SLIDE_DRAG = 9;
-/** Step in pixels a piercing round bores through a wreck in. */
-const BORE_STEP = 0.5;
 const SLIDE_STOP = 4;
 const DUST_COLOR = [0.3, 0.29, 0.27, 1];
 const NO_COLOR = [0, 0, 0, 0];

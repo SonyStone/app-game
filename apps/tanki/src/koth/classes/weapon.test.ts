@@ -36,7 +36,7 @@ describe('the weapons of the classes', () => {
     expect(hold(weapon, { fire: true }, 1 / 60)).toHaveLength(1);
   });
 
-  it('charge a Sniper shot while the trigger is held and fire it when let go, stronger and piercing at full charge', () => {
+  it('charge a Sniper shot while the trigger is held and fire it when let go, a rail growing in power to the full one', () => {
     const weapon = createWeapon(TANK_CLASSES.sniper, Math.random);
     const time = TANK_CLASSES.sniper.weapon.kind === 'charge' ? TANK_CLASSES.sniper.weapon.time : NaN;
 
@@ -47,8 +47,8 @@ describe('the weapons of the classes', () => {
 
     const [early] = weapon.step(1 / 60, { fire: false });
 
-    expect(early.shell!.pierce).toBeUndefined();
-    expect(early.shell!.speed).toBeLessThan(1800);
+    expect(early.shell!.rail!.power).toBeLessThan(15);
+    expect(early.shell!.speed).toBe(Infinity);
 
     hold(weapon, { fire: false }, 2.5);
     hold(weapon, { fire: true }, 3);
@@ -57,7 +57,7 @@ describe('the weapons of the classes', () => {
 
     const [full] = weapon.step(1 / 60, { fire: false });
 
-    expect(full.shell!.pierce).toBeDefined();
+    expect(full.shell!.rail!.power).toBe(40);
     expect(full.shell!.range).toBe(1300);
   });
 
@@ -80,14 +80,16 @@ describe('the weapons of the classes', () => {
 });
 
 describe('a charged shell', () => {
-  it('grows from the empty shell to the full one, piercing only at full charge', () => {
+  it("grows from the empty shell to the full one, a rail's power with it, full from a full charge on", () => {
     const { shell, weapon } = TANK_CLASSES.sniper;
     const full = weapon.kind === 'charge' ? weapon.full : shell;
 
     expect(chargedShell(shell, full, 0).hole).toBe(shell.hole);
     expect(chargedShell(shell, full, 0.5).depth).toBeCloseTo((shell.depth + full.depth) / 2);
-    expect(chargedShell(shell, full, FULL_CHARGE - 0.01).pierce).toBeUndefined();
-    expect(chargedShell(shell, full, FULL_CHARGE).pierce).toEqual(full.pierce);
+    expect(chargedShell(shell, full, 0.5).rail!.power).toBeCloseTo((shell.rail!.power + full.rail!.power) / 2);
+    expect(chargedShell(shell, full, 0.5).speed).toBe(Infinity);
+    expect(chargedShell(shell, full, FULL_CHARGE - 0.01).rail!.power).toBeLessThan(full.rail!.power);
+    expect(chargedShell(shell, full, FULL_CHARGE).rail).toEqual(full.rail);
   });
 });
 

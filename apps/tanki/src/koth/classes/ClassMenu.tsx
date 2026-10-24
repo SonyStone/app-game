@@ -83,6 +83,7 @@ function StatBar(props: { label: string; value: number }) {
 export function ClassSilhouette(props: { tankClass: TankClass; color: string; width: number; height: number }) {
   const hull = () => props.tankClass.hull;
   const turret = () => props.tankClass.look.turret;
+  const mount = () => props.tankClass.look.mount ?? { x: 0, y: 0 };
 
   return (
     <svg width={props.width} height={props.height} viewBox="-30 -21 84 42" class="block">
@@ -90,7 +91,7 @@ export function ClassSilhouette(props: { tankClass: TankClass; color: string; wi
         <rect x={-hull().halfLength} y={-hull().halfWidth} width={hull().halfLength * 2} height={hull().halfWidth * 2} rx={hull().corner} />
         <For each={hullLines(hull())}>{(line) => <path d={line} fill="none" stroke-width="0.8" />}</For>
         <Show when={props.tankClass.look.casemate}>{turretShape(TURRET_CASEMATE)}</Show>
-        {turretShape(turret())}
+        <g transform={`translate(${mount().x} ${mount().y})`}>{turretShape(turret())}</g>
       </g>
     </svg>
   );
@@ -132,17 +133,21 @@ function turretShape(style: number) {
     case TURRET_CASEMATE:
       return (
         <>
-          <rect x="-9" y="-10" width="24" height="20" rx="2.5" />
-          <rect x="-3.5" y="-6.2" width="15" height="12.4" rx="1.5" fill="none" />
+          <rect x="-6.5" y="-9.5" width="23" height="19" rx="3" />
+          <g fill="none">
+            <rect x="-5" y="-6" width="8" height="12" rx="1" />
+            <path d="M 3 6 L 15.2 8.2 M 3 -6 L 15.2 -8.2 M -5 6 L -6 9 M -5 -6 L -6 -9" />
+            <circle cx="-2.4" cy="-2.6" r="1.9" stroke-width="0.9" />
+          </g>
         </>
       );
 
     case TURRET_LONG_GUN:
       return (
         <>
-          <rect x="8" y="-2.4" width="40" height="4.8" rx="1" />
-          <rect x="44.4" y="-3.9" width="5.2" height="7.8" rx="0.8" />
-          <rect x="5" y="-5.6" width="8" height="11.2" rx="2" />
+          <rect x="2" y="-1.9" width="24" height="3.8" rx="1" />
+          <rect x="24.4" y="-3" width="4" height="6" rx="0.7" />
+          <rect x="-3" y="-4.1" width="9" height="8.2" rx="3.4" />
         </>
       );
 

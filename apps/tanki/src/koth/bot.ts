@@ -6,7 +6,7 @@ import { planBot, type BotAction, type BotFact, type BotGoal, type Situation } f
 import { findBankShot } from './classes/bank';
 import { angleBetween, inArc, turnInPlace } from './classes/casemate';
 import { TACTICS, TOUGHNESS } from './classes/tactics';
-import type { Trigger } from './classes/weapon';
+import { chargedShell, type Trigger } from './classes/weapon';
 import { createDriver, type Obstacle } from './driver';
 import type { Kit } from './kits';
 import { inBase, onPoint, type KothMap } from './map';
@@ -79,7 +79,7 @@ export function createBot(member: Member, context: BotContext) {
   let replanDue = false;
   let cover: Point | undefined;
   let kit: Readonly<Kit> | undefined;
-  let gun: Aim = { target: undefined, since: 0, reaction: 0, offset: undefined, shots: 0, seenAt: -Infinity };
+  let gun: Aim = { target: undefined, since: 0, reaction: 0, offset: undefined, shots: 0, seenAt: -Infinity, settledFrom: 0, lag: undefined };
   let dodge: { until: number; direction: Point } | undefined;
   /** The drive direction the driver planned last step, where an idle turret looks. */
   let lastMove: Point = { x: 0, y: 0 };
@@ -136,7 +136,7 @@ export function createBot(member: Member, context: BotContext) {
       replanDue = false;
       cover = undefined;
       kit = undefined;
-      gun = { target: undefined, since: 0, reaction: 0, offset: undefined, shots: 0, seenAt: -Infinity };
+      gun = { target: undefined, since: 0, reaction: 0, offset: undefined, shots: 0, seenAt: -Infinity, settledFrom: 0, lag: undefined };
       dodge = undefined;
       lastMove = { x: 0, y: 0 };
       judged.clear();
@@ -971,7 +971,8 @@ export function createBot(member: Member, context: BotContext) {
    * the shell's flight time, but misjudges that spot: the error grows with range, with the target's
    * speed and while the bot drives, and it is drawn anew for every shot. It holds fire for its
    * reaction time after picking a target, and while the shell would likely miss. Without a target
-   * the turret watches the latest known threat or looks where the tank drives.
+   * the turret watches the latest known threat or looks where the tank drives. A rail hits at
+   * once, so there is no lead to misjudge; a hand aiming it is human anyway (see `railSpot`).
    *
    * Each weapon is worked its own way: a gatling spins up while an enemy is near and fires once
    * spun; a grenade is thrown to land on its target, onto two enemies at once when it can, and
@@ -990,14 +991,13 @@ export function createBot(member: Member, context: BotContext) {
     const target = preferred ?? focus ?? nearestVisible(position);
     const lobbing = tankClass.weapon.kind === 'lob';
 
-    // Every shot draws a new misjudgement.
+    // Every shot draws a new misjudgement, and the gun settles on its target anew after the kick.
     if (weapon && weapon.shots !== gun.shots) {
-      gun.shots = weapon.shots;
-      gun.offset = undefined;
+      gun = { ...gun, shots: weapon.shots, offset: undefined, lag: undefined, settledFrom: now };
     }
 
     if (target !== gun.target) {
-      gun = { ...gun, target, since: now, reaction: REACTION_MIN + context.random() * (REACTION_MAX - REACTION_MIN), offset: undefined };
+      gun = { ...gun, target, since: now, reaction: REACTION_MIN + context.random() * (REACTION_MAX - REACTION_MIN), offset: undefined, lag: undefined, settledFrom: now };
     }
 
     if (!target) {
@@ -1006,13 +1006,23 @@ export function createBot(member: Member, context: BotContext) {
 
     gun.seenAt = now;
     const velocity = target.hull.linvel();
-    const course = intercept(position, combat.coreOf(target) ?? target.hull.translation(), velocity, shellSpeed(), tactics.reach);
+    const core = combat.coreOf(target) ?? target.hull.translation();
+    const course = intercept(position, core, velocity, shellSpeed(), tactics.reach);
     const range = distance(position, course.point);
     const own = tank.hull.linvel();
-    const error = aimError(range, Math.hypot(velocity.x, velocity.y) * course.time, Math.hypot(own.x, own.y) / tankClass.speed) * tactics.steadiness;
-    gun.offset ??= { x: gaussian(context.random) * error, y: gaussian(context.random) * error };
-    const spot = lobbing ? groupSpot(target, { x: course.point.x + gun.offset.x, y: course.point.y + gun.offset.y }) : { x: course.point.x + gun.offset.x, y: course.point.y + gun.offset.y };
-    const goal = Math.atan2(spot.y - position.y, spot.x - position.x);
+    const rail = tankClass.shell.rail !== undefined;
+    const settling = rail ? 1 + UNSETTLED * Math.exp(-(now - gun.settledFrom) / SETTLE_TIME) : 1;
+    const error = aimError(range, Math.hypot(velocity.x, velocity.y) * course.time, Math.hypot(own.x, own.y) / tankClass.speed) * tactics.steadiness * settling;
+    // A rail's misjudgement is drawn in units of the error, which shrinks as the bot settles.
+    gun.offset ??= rail ? { x: gaussian(context.random), y: gaussian(context.random) } : { x: gaussian(context.random) * error, y: gaussian(context.random) * error };
+    const spot = lobbing
+      ? groupSpot(target, { x: course.point.x + gun.offset.x, y: course.point.y + gun.offset.y })
+      : rail
+        ? railSpot(core, velocity, gun.offset, error)
+        : { x: course.point.x + gun.offset.x, y: course.point.y + gun.offset.y };
+    // From where the gun turns, so its line passes through the spot.
+    const pivot = combat.gunPivotOf(tank);
+    const goal = Math.atan2(spot.y - pivot.y, spot.x - pivot.x);
     turnTurret(tank, goal, dt, tankClass.turretSpeed);
     const aligned = Math.abs(angleBetween(tank.turretAngle, goal)) < Math.max(Math.atan2(AIM_TOLERANCE * tactics.aimError, range), 0.01);
     const full = weapon?.rounds === weapon?.clip;
@@ -1149,17 +1159,24 @@ export function createBot(member: Member, context: BotContext) {
     return outside ? { turnTo: goal } : { hold: true };
   }
 
-  /** Speed of the bot's next shell: its class's, at the charge it is likely to fire with. */
+  /**
+   * Where a bot aims a rail, which hits at once, at a target whose core is at `core` moving at
+   * `velocity`: a human hand trails a moving target, so it aims where the core was `gun.lag`
+   * seconds ago, drawn anew for every shot, and misses by `error` times its draw `wobble`, an
+   * error that starts `UNSETTLED` times larger as it picks a target or fires and shrinks as it
+   * settles over `SETTLE_TIME` s. A still target held for a full charge is hit well; one crossing
+   * the line, as a tank dodging off a laser does, is trailed and mostly missed.
+   */
+  function railSpot(core: Point, velocity: Point, wobble: Point, error: number) {
+    gun.lag ??= LAG_MIN + context.random() * (LAG_MAX - LAG_MIN);
+    return { x: core.x - velocity.x * gun.lag + wobble.x * error, y: core.y - velocity.y * gun.lag + wobble.y * error };
+  }
+
+  /** Speed of the bot's next shell: its class's, at the charge it is likely to fire with; infinite for a rail. */
   function shellSpeed() {
     const tankClass = member.tankClass;
     const weapon = tankClass.weapon;
-
-    if (weapon.kind === 'charge') {
-      const level = member.weapon?.charge ?? 0.5;
-      return tankClass.shell.speed + (weapon.full.speed - tankClass.shell.speed) * level;
-    }
-
-    return tankClass.shell.speed;
+    return weapon.kind === 'charge' ? chargedShell(tankClass.shell, weapon.full, member.weapon?.charge ?? 0.5).speed : tankClass.shell.speed;
   }
 
   function nearestVisible(position: Point) {
@@ -1188,11 +1205,16 @@ type Aim = {
   target: Tank | undefined;
   since: number;
   reaction: number;
+  /** How far off the aim is, in pixels; for a rail, in units of its aim error at the moment. */
   offset: Point | undefined;
   /** The weapon's shot count when the offset was drawn, to draw anew after each shot. */
   shots: number;
   /** When a target was last in the gun's sights. */
   seenAt: number;
+  /** When the gun began to settle on its target, at picking it or after the last shot, for a rail's aim. */
+  settledFrom: number;
+  /** Seconds a rail's aim trails a moving target this shot; drawn when first needed. */
+  lag: number | undefined;
 };
 
 /** The running behavior of a plan action and its memory. */
@@ -1383,6 +1405,15 @@ const AIM_BASE = 3;
 const AIM_PER_PIXEL = 0.01;
 const LEAD_ERROR = 0.3;
 const DRIVING_ERROR = 0.02;
+/**
+ * A rail's aim, which hits at once: it trails a moving target by `LAG_MIN` to `LAG_MAX` s, and its
+ * error starts `UNSETTLED` times larger than settled and settles with a time constant of
+ * `SETTLE_TIME` s, half the extra gone in about 0.5 s.
+ */
+const LAG_MIN = 0.05;
+const LAG_MAX = 0.15;
+const UNSETTLED = 2;
+const SETTLE_TIME = 0.8;
 
 
 /** A standard normal sample by the Box-Muller transform. */

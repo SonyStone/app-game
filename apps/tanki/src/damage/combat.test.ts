@@ -205,34 +205,47 @@ describe('blasts', () => {
   });
 });
 
-describe('piercing shells', () => {
-  const piercing: ShellSpec = { speed: 3000, range: 1300, hole: 5, depth: 9, knockback: 1300, pierce: { armor: 28, thin: true } };
+describe('rails', () => {
+  const rail: ShellSpec = { speed: Infinity, range: 1300, hole: 2.6, depth: 2, knockback: 700, rail: { power: 40, slit: 1.5 } };
 
-  it('go clean through a crate and hit the tank behind it', () => {
+  it('hit at once, through a crate, the tank behind it', () => {
     const { combat, hits } = createBattle({}, { crates: [{ x: 0, y: 0, rotation: 0 }] });
     const shooter = combat.spawnTank({ x: -250, y: 0, rotation: 0 }, { color: 0 });
     const target = combat.spawnTank({ x: 150, y: 0, rotation: Math.PI / 2 }, { color: 0 });
     combat.step(1 / 60);
 
-    combat.fire(shooter, { shell: piercing });
-    run(combat, 0.3);
+    combat.fire(shooter, { shell: rail });
 
+    expect(combat.shells).toHaveLength(0);
     expect(hits.some((hit) => hit.target === target)).toBe(true);
   });
 
-  it('bore into the core of a tank from the side, where a shell as large that does not pierce only chips', () => {
-    const shoot = (shell: ShellSpec) => {
+  it('blow up a tank whose core their line crosses from the side, and leave one they pass beside it standing, slit', () => {
+    const shoot = (across: number) => {
       const { combat } = createBattle();
-      const shooter = combat.spawnTank({ x: -250, y: -11, rotation: 0 }, { color: 0 });
+      const shooter = combat.spawnTank({ x: -250, y: across, rotation: 0 }, { color: 0 });
+      // Side on, its rear up: the core lies 11 px above the center.
       const target = combat.spawnTank({ x: 0, y: 0, rotation: Math.PI / 2 }, { color: 0 });
       combat.step(1 / 60);
-      combat.fire(shooter, { shell });
+      combat.fire(shooter, { shell: rail });
       run(combat, 0.3);
-      return combat.armorOf(target) === undefined;
+      return combat.armorOf(target) === undefined ? 0 : combat.armorLeft(target);
     };
 
-    expect(shoot(piercing)).toBe(true);
-    expect(shoot({ ...piercing, pierce: undefined })).toBe(false);
+    expect(shoot(-11)).toBe(0);
+    expect(shoot(-3)).toBeGreaterThan(0.9);
+    expect(shoot(-3)).toBeLessThan(0.98);
+  });
+
+  it('go on through one tank into the next with the power left, and stop in a second one side on', () => {
+    const { combat, hits } = createBattle();
+    const shooter = combat.spawnTank({ x: -250, y: 0, rotation: 0 }, { color: 0 });
+    const targets = [0, 60, 120].map((x) => combat.spawnTank({ x, y: 0, rotation: Math.PI / 2 }, { color: 0 }));
+    combat.step(1 / 60);
+
+    combat.fire(shooter, { shell: rail });
+
+    expect(targets.map((target) => hits.some((hit) => hit.target === target))).toEqual([true, true, false]);
   });
 });
 

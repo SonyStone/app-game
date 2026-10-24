@@ -8,7 +8,7 @@ import { angleBetween, clampGun, turnInPlace } from './classes/casemate';
 import { TANK_CLASSES } from './classes/classes';
 import { pickRoster, rebalance } from './classes/roster';
 import { drawSight } from './classes/sight';
-import { createWeapon, type Trigger } from './classes/weapon';
+import { chargedShell, createWeapon, type Trigger } from './classes/weapon';
 import { createKits } from './kits';
 import { inBase, KOTH_MAP, onPoint, type KothMap } from './map';
 import { createNavGrid, updateNavGrid } from './navigation';
@@ -460,13 +460,17 @@ export function createKothMatch(
     }
   }
 
-  /** The laser sight of every casemate gun charging a shot, which everyone sees, as the Sniper's dot. */
+  /**
+   * The laser sight of every casemate gun charging a shot, which everyone sees, as the Sniper's
+   * dot, as far as the shot would reach if fired now.
+   */
   function drawSights() {
     for (const member of members) {
       const charge = member.weapon?.charge;
+      const weapon = member.tankClass.weapon;
 
-      if (member.tank && charge !== undefined) {
-        drawSight(renderer, combat, member.tank, charge, member.tankClass.shell.range, rgb(TEAM_SIGHT[member.team]));
+      if (member.tank && charge !== undefined && weapon.kind === 'charge') {
+        drawSight(renderer, combat, member.tank, charge, chargedShell(member.tankClass.shell, weapon.full, charge).range, rgb(TEAM_SIGHT[member.team]));
       }
     }
   }

@@ -12,8 +12,9 @@ import type { TankClass } from '../tanks';
  *   off. Spinning, and spinning up, slows the tank to `slowdown` of its speed.
  * - `lob`: a grenade thrown to where the gun is aimed.
  * - `charge`: holding the trigger charges the shot for up to `time` seconds and letting go fires
- *   it: from the class's `shell` with no charge to `full` at full charge, which pierces only when
- *   fully charged. Charging slows the tank to `slowdown` of its speed.
+ *   it: from the class's `shell` with no charge to `full` at full charge (see `chargedShell`), a
+ *   rail for the Sniper whose power grows with the charge. Charging slows the tank to `slowdown`
+ *   of its speed.
  */
 export type WeaponSpec =
   | { kind: 'single' }
@@ -162,10 +163,12 @@ export type Weapon = ReturnType<typeof createWeapon>;
 
 /**
  * The shell a charged shot fires at `charge` 0-1: speed, range, hole, depth, knockback and size
- * grow from `empty` to `full`, and only a full charge, 95% and up, pierces.
+ * grow from `empty` to `full`, and so do a rail's power and the width of its slit, a rail of
+ * `full`'s power from `FULL_CHARGE` on. A rail's infinite speed stays infinite.
  */
 export function chargedShell(empty: ShellSpec, full: ShellSpec, charge: number): ShellSpec {
-  const mix = (from: number, to: number) => from + (to - from) * charge;
+  const mix = (from: number, to: number) => (from === to ? from : from + (to - from) * charge);
+  const rail = empty.rail && full.rail && (charge >= FULL_CHARGE ? full.rail : { power: mix(empty.rail.power, full.rail.power), slit: mix(empty.rail.slit, full.rail.slit) });
 
   return {
     ...empty,
@@ -175,9 +178,9 @@ export function chargedShell(empty: ShellSpec, full: ShellSpec, charge: number):
     depth: mix(empty.depth, full.depth),
     knockback: mix(empty.knockback, full.knockback),
     size: mix(empty.size ?? 1, full.size ?? 1),
-    pierce: charge >= FULL_CHARGE ? full.pierce : undefined
+    rail
   };
 }
 
-/** Charge from which a charged shot counts as full. */
+/** Charge from which a charged shot counts as full, as the display shows it. */
 export const FULL_CHARGE = 0.95;
