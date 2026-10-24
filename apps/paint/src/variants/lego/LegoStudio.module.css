@@ -794,10 +794,10 @@
   white-space: nowrap;
 }
 
+/* The workbench, a divider, and the parts over the kits; the dividers share the room as the user drags them. */
 .trayContent {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 40%);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 12px minmax(240px, var(--shelf-width, 40%));
   min-height: 0;
   padding: 4px 12px 12px;
 }
@@ -807,14 +807,57 @@
   .trayContent {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(150px, 45%) minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .splitter[data-axis='x'] {
+    display: none;
+  }
+}
+
+/* A divider: a strip between two boxes, its grip lit while hovered or dragged. */
+.splitter {
+  position: relative;
+  touch-action: none;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 50% auto auto 50%;
+    translate: -50% -50%;
+    border-radius: 2px;
+    background: rgb(255 255 255 / 0.18);
+    transition: background 120ms;
+  }
+
+  &:hover::after,
+  &:active::after {
+    background: var(--lego-accent);
+  }
+
+  &[data-axis='x'] {
+    cursor: col-resize;
+
+    &::after {
+      width: 4px;
+      height: 40px;
+    }
+  }
+
+  &[data-axis='y'] {
+    cursor: row-resize;
+
+    &::after {
+      width: 40px;
+      height: 4px;
+    }
   }
 }
 
 /* Beside the workbench, the parts over the kits: two boxes, one that puts away what is dropped, one that keeps it. */
 .trayShelves {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(170px, 38%);
-  gap: 10px;
+  grid-template-rows: minmax(0, 1fr) 12px minmax(110px, var(--kits-height, 38%));
   min-height: 0;
 }
 

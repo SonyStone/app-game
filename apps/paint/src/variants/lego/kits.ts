@@ -82,34 +82,6 @@ export function unpackKit(kit: Pick<Kit, 'parts' | 'owned'>) {
   return { parts, panels };
 }
 
-/**
- * A short name for a kit of `parts`, after what it holds: the largest parts first by `label`, at most two, and how
- * many more there are, such as "Picker + Hue +2". Hue, saturation and brightness together read "HSB", and parts of
- * one kind are named once.
- */
-export function describeKit(parts: readonly Part[], label: (kind: string) => string) {
-  const kinds = [...parts]
-    .sort((a, b) => b.span.columns * b.span.rows - a.span.columns * a.span.rows)
-    .map((part) => part.kind)
-    .filter((kind, index, all) => all.indexOf(kind) === index);
-  const hsb = ['value:hue', 'value:saturation', 'value:brightness'];
-  const together = hsb.every((kind) => kinds.includes(kind));
-  // The three as one name where the first of them ranks.
-  const names = kinds.flatMap((kind) => {
-    if (!together || !hsb.includes(kind)) {
-      return [label(kind)];
-    }
-
-    return kinds.find((other) => hsb.includes(other)) === kind ? ['HSB'] : [];
-  });
-  if (names.length === 0) {
-    return 'Kit';
-  }
-
-  const shown = names.slice(0, 2).join(' + ');
-  return names.length > 2 ? `${shown} +${names.length - 2}` : shown;
-}
-
 /** `panel` of `board` as a kit, its cells counted from its top-left, with the panels its swatches own, nested too. */
 function kitOf(board: Board, panel: Panel, name: string): Kit {
   const owned: Kit['owned'] = [];

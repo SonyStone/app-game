@@ -34,6 +34,7 @@ export function PartsTray(props: {
 }) {
   const [body, setBody] = createSignal<HTMLElement>();
   const [shelf, setShelf] = createSignal<HTMLElement>();
+  const split = createSplit();
   const closed = () => props.sheet.height() <= 0 && !props.sheet.sunk();
   const shownHeight = () => (props.sheet.sunk() ? sunkHeight : Math.max(barHeight, props.sheet.height()));
 
@@ -85,8 +86,17 @@ export function PartsTray(props: {
           <span class={styles.trayTitle}>{props.over ? 'Drop to put it away' : 'Drop here to put it away'}</span>
         </Show>
       </div>
-      <div class={styles.trayContent}>
+      <div
+        class={styles.trayContent}
+        style={{ '--shelf-width': `${split.shelf() * 100}%`, '--kits-height': `${split.kits() * 100}%` }}
+      >
         <div ref={props.benchRef} class={styles.benchSlot} />
+        <div
+          class={styles.splitter}
+          data-axis="x"
+          aria-hidden="true"
+          onPointerDown={(event) => split.drag(event, 'shelf')}
+        />
         <div class={styles.trayShelves}>
           <div ref={setBody} class={styles.trayBody} data-over={props.over && !props.sheet.sunk() ? '' : undefined}>
             <span class={styles.zoneLabel}>{props.over ? 'Drop to put it away' : 'Parts'}</span>
@@ -108,6 +118,12 @@ export function PartsTray(props: {
               Reset board
             </button>
           </div>
+          <div
+            class={styles.splitter}
+            data-axis="y"
+            aria-hidden="true"
+            onPointerDown={(event) => split.drag(event, 'kits')}
+          />
           <div
             ref={(element) => {
               setShelf(element);
@@ -135,6 +151,65 @@ export function PartsTray(props: {
     </aside>
   );
 }
+
+/**
+ * How the sheet's room is shared, kept on this device: `shelf` is the share of its width the parts and kits take
+ * beside the workbench, `kits` the share of their height the kits take. A divider between them is dragged to change
+ * a share, within bounds that leave each box some room.
+ */
+function createSplit() {
+  const stored = readSplit();
+  const [shelf, setShelf] = createSignal(stored.shelf);
+  const [kits, setKits] = createSignal(stored.kits);
+
+  return {
+    shelf,
+    kits,
+    /** Follows the press `event` on the divider of `share` until it lifts, then keeps the shares. */
+    drag(event: PointerEvent, share: 'shelf' | 'kits') {
+      const divider = event.currentTarget as HTMLElement;
+      const box = divider.parentElement!.getBoundingClientRect();
+      divider.setPointerCapture(event.pointerId);
+      event.preventDefault();
+
+      const move = (next: PointerEvent) => {
+        if (share === 'shelf') {
+          setShelf(Math.max(0.2, Math.min(0.75, (box.right - next.clientX) / box.width)));
+        } else {
+          setKits(Math.max(0.15, Math.min(0.85, (box.bottom - next.clientY) / box.height)));
+        }
+      };
+      const end = () => {
+        divider.removeEventListener('pointermove', move);
+        divider.removeEventListener('pointerup', end);
+        divider.removeEventListener('pointercancel', end);
+        try {
+          localStorage.setItem(splitKey, JSON.stringify({ shelf: shelf(), kits: kits() }));
+        } catch {
+          // The shares still apply until the page closes.
+        }
+      };
+      divider.addEventListener('pointermove', move);
+      divider.addEventListener('pointerup', end);
+      divider.addEventListener('pointercancel', end);
+    }
+  };
+}
+
+function readSplit() {
+  const fallback = { shelf: 0.4, kits: 0.38 };
+  try {
+    const stored = JSON.parse(localStorage.getItem(splitKey) ?? 'null') as Partial<typeof fallback> | null;
+    return {
+      shelf: typeof stored?.shelf === 'number' ? stored.shelf : fallback.shelf,
+      kits: typeof stored?.kits === 'number' ? stored.kits : fallback.kits
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+const splitKey = 'paint.lego.tray';
 
 /**
  * Moves the sheet's edge with the press `event` on its handle until it lifts, then settles it the way it was flung,

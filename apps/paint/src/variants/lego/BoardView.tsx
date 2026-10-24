@@ -33,7 +33,8 @@ import {
   type Span
 } from './board';
 import type { createBoard } from './createBoard';
-import { describeKit, swatchPanelParts, unpackKit, type createKits, type Kit } from './kits';
+import { nameKit } from './kitNames';
+import { swatchPanelParts, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { kindLabel, lookOf, partLooks, PartView, type Popup, type Session } from './parts';
 import type { createSheet } from './createSheet';
@@ -309,6 +310,11 @@ export function BoardView(props: {
       const end = inBench(point) ?? current.point;
       const tapped = Math.hypot(end.x - current.start.x, end.y - current.start.y) < tapDistance;
       setSelected(tapped ? new Set<string>() : selection());
+      // A tap on the bench's free studs also closes a swatch's open panel.
+      if (tapped) {
+        props.onOpenPanel(undefined);
+      }
+
       return;
     }
 
@@ -320,6 +326,14 @@ export function BoardView(props: {
       }
 
       return;
+    }
+
+    // A tap on a board panel's free studs closes a swatch's open panel, even one lying over its swatch.
+    if (current.type === 'panel' && !current.owned) {
+      if (Math.hypot(point.x - current.start.x, point.y - current.start.y) < tapDistance) {
+        props.onOpenPanel(undefined);
+        return;
+      }
     }
 
     if (current.type !== 'part') {
@@ -756,6 +770,7 @@ export function BoardView(props: {
       grab: { x: pressed.x - origin.x, y: pressed.y - origin.y },
       base: props.board.latest(),
       panel: panel.id,
+      start: point,
       owned: {
         anchor: {
           x: host.frame.origin.x + anchor.cell.column * pitch,
@@ -776,7 +791,8 @@ export function BoardView(props: {
       point,
       grab: { x: pressed.x - origin.x, y: pressed.y - origin.y },
       base: props.board.latest(),
-      panel: panel.id
+      panel: panel.id,
+      start: point
     });
   }
 
@@ -1062,9 +1078,10 @@ export function BoardView(props: {
     props.kits.save(drag.before, { id: 'kept', at: { x: 0, y: 0 }, parts }, kitName(parts));
   }
 
-  /** A name for a new kit of `parts`, after what it holds and unlike the user's other kits; see `describeKit`. */
+  /** A name for a new kit of `parts`, after what it holds and unlike the user's other kits; see `nameKit`. */
   function kitName(parts: readonly Part[]) {
-    return props.kits.uniqueName(describeKit(parts, (kind) => kindLabel(kind, props.session)));
+    const label = (kind: string) => kindLabel(kind, props.session);
+    return props.kits.uniqueName(nameKit(parts, { label, color: props.session.brush().color }));
   }
 }
 
@@ -1294,6 +1311,8 @@ type Drag = { pointer: number; point: Point; base: Board } & (
       type: 'panel';
       panel: string;
       grab: Point;
+      /** Where the press began, to tell a tap on free studs from a move. */
+      start: Point;
       /** For a swatch's panel: where its swatch's top-left cell starts, on the board or the workbench. */
       owned?: { anchor: Point; onBench: boolean };
     }
