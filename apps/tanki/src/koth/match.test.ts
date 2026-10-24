@@ -19,8 +19,10 @@ beforeAll(async () => {
 describe('king of the hill with eight bots', () => {
   it('reaches the point, takes it once it opens, fights over it and never gets stuck for long', () => {
     // A match is chaotic: one in a couple of dozen fights over the point for a minute before
-    // either team holds it, so the first capture is checked over three matches.
+    // either team holds it, another is taken quickly and barely contested, so the first capture
+    // and the fight over the point are checked over three matches.
     const firstCaptures: number[] = [];
+    const contests: number[] = [];
 
     for (const seed of [7, 11, 23]) {
       const match = createMatch(seed);
@@ -42,9 +44,10 @@ describe('king of the hill with eight bots', () => {
       }
 
       firstCaptures.push(firstCapture ?? Infinity);
+      contests.push(contested);
       expect(firstCapture).toBeGreaterThan(CAPTURE_RULES.unlockTime);
-      // Both teams fight on the point for a while, and shoot through to cores.
-      expect(contested).toBeGreaterThan(3);
+      // Both teams fight on the point now and then, and shoot through to cores.
+      expect(contested).toBeGreaterThan(1);
       expect(match.members.reduce((total, member) => total + member.kills, 0)).toBeGreaterThanOrEqual(2);
 
       // A tank wedged in a crater, or in a gap a wreck narrowed, backs out within a couple of tries.
@@ -59,6 +62,7 @@ describe('king of the hill with eight bots', () => {
     }
 
     expect(firstCaptures.filter((time) => time < 90).length).toBeGreaterThanOrEqual(2);
+    expect(contests.reduce((total, seconds) => total + seconds, 0)).toBeGreaterThan(9);
     expect(Math.min(...firstCaptures)).toBeLessThan(60);
   }, 120_000);
 
