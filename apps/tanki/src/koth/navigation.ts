@@ -8,7 +8,9 @@ type Point = { x: number; y: number };
  * the nearest obstacle; a tank's center may stand in cells at least `clearance` away, so paths
  * through open cells keep the whole hull off the walls. Moving bodies such as tanks and crates
  * are not part of the grid: callers add them as path costs and steer around them. When walls are
- * shot apart, `updateNavGrid` follows them where they changed.
+ * shot apart or wrecks are left, `updateNavGrid` follows them where they changed. A second layer
+ * keeps the distance to what never breaks, so a way may also be planned through breakable walls
+ * (`findBreachPath`).
  */
 export type NavGrid = {
   /** Cell size in pixels. */
@@ -25,6 +27,12 @@ export type NavGrid = {
    * that `updateNavGrid` recomputed may hold less than the true distance where it is large.
    */
   readonly distance: Float32Array;
+  /**
+   * Distance from each cell center to the nearest obstacle that never breaks: the border, steel
+   * walls and campfire stones. A closed cell that is open here is closed only by breakable walls
+   * or wrecks, which a tank could break through.
+   */
+  readonly hard: Float32Array;
   /** Counts the updates that opened or closed a cell, so paths planned before can be planned again. */
   revision: number;
 };
@@ -43,26 +51,35 @@ export function createNavGrid(layout: CombatLayout, options: { cell?: number; cl
   const originX = -layout.halfWidth + cell / 2;
   const originY = -layout.halfHeight + cell / 2;
   const distance = new Float32Array(cols * rows);
+  const hard = new Float32Array(cols * rows);
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const x = originX + col * cell;
       const y = originY + row * cell;
-      let nearest = Math.min(layout.halfWidth - Math.abs(x), layout.halfHeight - Math.abs(y));
+      let unbreakable = Math.min(layout.halfWidth - Math.abs(x), layout.halfHeight - Math.abs(y));
+      let breakable = Infinity;
 
       for (const wall of layout.walls ?? []) {
-        nearest = Math.min(nearest, boxDistance({ x, y }, wall));
+        const gap = boxDistance({ x, y }, wall);
+
+        if ((wall.material ?? 'steel') === 'steel') {
+          unbreakable = Math.min(unbreakable, gap);
+        } else {
+          breakable = Math.min(breakable, gap);
+        }
       }
 
       for (const campfire of layout.campfires ?? []) {
-        nearest = Math.min(nearest, Math.hypot(x - campfire.x, y - campfire.y) - CAMPFIRE_RADIUS);
+        unbreakable = Math.min(unbreakable, Math.hypot(x - campfire.x, y - campfire.y) - CAMPFIRE_RADIUS);
       }
 
-      distance[row * cols + col] = nearest;
+      distance[row * cols + col] = Math.min(unbreakable, breakable);
+      hard[row * cols + col] = unbreakable;
     }
   }
 
-  return { cell, cols, rows, originX, originY, clearance: options.clearance ?? 24, distance, revision: 0 };
+  return { cell, cols, rows, originX, originY, clearance: options.clearance ?? 24, distance, hard, revision: 0 };
 }
 
 /**
@@ -157,6 +174,63 @@ export function findPath(
   const points = [from, ...cells.slice(1, -1).map((cell) => cellCenter(grid, cell)), end];
 
   return smoothPath(grid, points, options.cost);
+}
+
+/**
+ * Finds a short way from `from` to `to` that may break through walls: as `findPath`, but cells
+ * closed only by breakable walls and wrecks (open in `grid.hard`) may be entered at the extra cost
+ * `through` gives them, as for `options.cost`; `Infinity` keeps a cell closed. The way is
+ * straightened on either side of the first stretch of closed cells it crosses, which it drives
+ * straight through.
+ *
+ * @returns The way from `from` to the goal and its first crossing of closed cells, if it has one:
+ *   the cells in order, the last open cell's center before them and the first after them;
+ *   `undefined` when the goal cannot be reached even so.
+ */
+export function findBreachPath(
+  grid: NavGrid,
+  from: Point,
+  to: Point,
+  options: { cost?: (cell: number) => number; through: (cell: number) => number }
+): { path: Point[]; crossing?: { cells: number[]; entry: Point; exit: Point } } | undefined {
+  const start = nearestOpen(grid, from, grid.cols + grid.rows);
+  const goal = nearestOpen(grid, to, 3);
+  const passable = (cell: number) => isOpenCell(grid, cell) || (grid.hard[cell] >= grid.clearance && Number.isFinite(options.through(cell)));
+  const extra = (cell: number) => (options.cost?.(cell) ?? 0) + (isOpenCell(grid, cell) ? 0 : options.through(cell));
+
+  if (start === undefined || goal === undefined) {
+    return undefined;
+  }
+
+  const cells = searchPath(grid, start, goal, extra, passable);
+
+  if (!cells) {
+    return undefined;
+  }
+
+  const end = isOpenAt(grid, to) ? to : cellCenter(grid, goal);
+  const first = cells.findIndex((cell) => !isOpenCell(grid, cell));
+
+  if (first < 0) {
+    return { path: smoothPath(grid, [from, ...cells.slice(1, -1).map((cell) => cellCenter(grid, cell)), end], options.cost) };
+  }
+
+  let last = first;
+
+  while (last + 1 < cells.length && !isOpenCell(grid, cells[last + 1])) {
+    last++;
+  }
+
+  // The start and the goal are open, so open cells bound the crossing on both sides.
+  const entry = cellCenter(grid, cells[first - 1]);
+  const exit = cellCenter(grid, cells[last + 1]);
+  const before = smoothPath(grid, [from, ...cells.slice(1, first).map((cell) => cellCenter(grid, cell))], options.cost);
+  const after = smoothPath(grid, [exit, ...cells.slice(last + 2, -1).map((cell) => cellCenter(grid, cell)), end], options.cost);
+
+  return {
+    path: [...(first > 1 ? before : [from]), ...after],
+    crossing: { cells: cells.slice(first, last + 1), entry: first > 1 ? entry : from, exit }
+  };
 }
 
 /**
@@ -488,8 +562,12 @@ const SQRT2 = Math.SQRT2;
 const WALL_MARGIN = 16;
 const WALL_PENALTY = 0.6;
 
-/** A* over cell indices from `start` to `goal`, with the octile distance as its estimate. */
-function searchPath(grid: NavGrid, start: number, goal: number, cost: ((cell: number) => number) | undefined) {
+/**
+ * A* over cell indices from `start` to `goal`, with the octile distance as its estimate.
+ *
+ * @param passable - Cells the search may enter; open cells by default.
+ */
+function searchPath(grid: NavGrid, start: number, goal: number, cost: ((cell: number) => number) | undefined, passable?: (cell: number) => boolean) {
   const count = grid.cols * grid.rows;
   const costs = new Float32Array(count).fill(Infinity);
   const parents = new Int32Array(count).fill(-1);
@@ -530,7 +608,7 @@ function searchPath(grid: NavGrid, start: number, goal: number, cost: ((cell: nu
         return;
       }
 
-      const margin = grid.distance[neighbor] - grid.clearance;
+      const margin = Math.max(grid.distance[neighbor] - grid.clearance, 0);
       const penalty = margin < WALL_MARGIN ? WALL_PENALTY * (1 - margin / WALL_MARGIN) : 0;
       const next = costs[cell] + length * (1 + penalty + (cost?.(neighbor) ?? 0));
 
@@ -539,14 +617,17 @@ function searchPath(grid: NavGrid, start: number, goal: number, cost: ((cell: nu
         parents[neighbor] = cell;
         heap.push(neighbor, next + estimate(neighbor));
       }
-    });
+    }, passable);
   }
 
   return undefined;
 }
 
-/** Calls `visit` with each open neighbor of `cell` and the step length; diagonals may not cut a blocked corner. */
-function forNeighbors(grid: NavGrid, cell: number, visit: (neighbor: number, length: number) => void) {
+/**
+ * Calls `visit` with each neighbor of `cell` the tank may enter, open ones unless `passable` says
+ * otherwise, and the step length; diagonals may not cut a corner it may not enter.
+ */
+function forNeighbors(grid: NavGrid, cell: number, visit: (neighbor: number, length: number) => void, passable = (other: number) => isOpenCell(grid, other)) {
   const col = cell % grid.cols;
   const row = Math.floor(cell / grid.cols);
 
@@ -565,11 +646,11 @@ function forNeighbors(grid: NavGrid, cell: number, visit: (neighbor: number, len
 
       const neighbor = y * grid.cols + x;
 
-      if (!isOpenCell(grid, neighbor)) {
+      if (!passable(neighbor)) {
         continue;
       }
 
-      if (dx !== 0 && dy !== 0 && (!isOpenCell(grid, row * grid.cols + x) || !isOpenCell(grid, y * grid.cols + col))) {
+      if (dx !== 0 && dy !== 0 && (!passable(row * grid.cols + x) || !passable(y * grid.cols + col))) {
         continue;
       }
 

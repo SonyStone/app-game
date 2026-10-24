@@ -366,6 +366,22 @@ export function createCombat(
     },
 
     /**
+     * What blocks the way at `point` within `reach` px, if it can be broken: the nearest standing
+     * tile of a breakable wall, with the wall's material and thickness, or a wreck; `undefined`
+     * when nothing breakable is that near.
+     */
+    breakableNear(point: Point, reach: number): { material: WallMaterial; thickness: number; wall: WallPlacement } | { material: 'wreck' } | undefined {
+      const wall = walls.nearest(point, reach);
+      const wreck = wrecks.nearest(point, reach);
+
+      if (wreck && wreck.distance < (wall?.distance ?? Infinity)) {
+        return { material: 'wreck' };
+      }
+
+      return wall && { material: wall.tile.wall.material ?? 'steel', thickness: Math.min(wall.tile.wall.halfWidth, wall.tile.wall.halfHeight) * 2, wall: wall.tile.wall };
+    },
+
+    /**
      * Mends `tank`'s armor toward its factory shape, filling holes and dents and wiping soot.
      *
      * @param amount - Share of the remaining damage to undo, 0-1.

@@ -262,6 +262,25 @@ export function createWrecks(
       return nearest;
     },
 
+    /** The wreck nearest to `point` within `reach` px, and how far it is, negative inside it; `undefined` when none is that near. */
+    nearest(point: Point, reach: number) {
+      let best: { wreck: WreckView; distance: number } | undefined;
+
+      for (const wreck of wrecks) {
+        const local = toLocal(wreck.body, point);
+
+        for (const box of wreck.boxes) {
+          const distance = boxDistance(local.x - box.x, local.y - box.y, box.halfWidth, box.halfHeight);
+
+          if (distance < reach && distance < (best?.distance ?? Infinity)) {
+            best = { wreck: { id: wreck.id, ...wreck.body.translation(), angle: wreck.body.rotation(), team: wreck.team, area: wreck.area }, distance };
+          }
+        }
+      }
+
+      return best;
+    },
+
     /** Lets every wreck within `radius` px of `point` fall apart, as a tank coming back there would push it aside. */
     clear(point: Point, radius: number) {
       for (const wreck of [...wrecks]) {

@@ -1,6 +1,7 @@
 import type { Tank } from '../arena/bodies';
 import type { Combat } from '../damage/combat';
 import { HULL_CORE } from '../damage/shapes';
+import { createBreacher } from './breach';
 import { planBot, type BotAction, type BotFact, type BotGoal, type Situation } from './brain';
 import { createDriver, type Obstacle } from './driver';
 import type { Kit } from './kits';
@@ -50,7 +51,8 @@ export type BotContext = {
  * 4. Drives there with its driver, unless it sidesteps a shell flying at it, and works the gun:
  *    the turret swings toward the preferred enemy, or the team's focus, at where the shell would
  *    meet the core under its rear armor, and fires when on target, nothing is in the way and the
- *    shot is likely to hit.
+ *    shot is likely to hit. On its way somewhere, it breaks through a wall when that beats
+ *    driving around (see `./breach`), and the breach takes over its driving and gun meanwhile.
  *
  * A bot knows only what a player would: it sees as far as a player's screen reaches and not
  * through walls, takes a moment to react to a new target, and misjudges a moving target's lead.
@@ -58,6 +60,7 @@ export type BotContext = {
 export function createBot(member: Member, context: BotContext) {
   const { combat, grid, map, board } = context;
   const driver = createDriver(grid);
+  const breacher = createBreacher(member, context);
   const visible = new Set<Tank>();
   let facts: Partial<Record<BotFact, boolean>> = {};
   let plan: { goal: BotGoal; steps: BotAction[]; index: number } | undefined;
@@ -84,6 +87,9 @@ export function createBot(member: Member, context: BotContext) {
     /** The driver, for its path and stall statistics. */
     driver,
 
+    /** The bot's sense for breaking through walls, for its breach under way and its statistics. */
+    breach: breacher,
+
     /** How often the bot planned and changed its goal, and how each action it started ended. */
     stats,
 
@@ -97,7 +103,8 @@ export function createBot(member: Member, context: BotContext) {
         path: driver.path,
         destination: task?.destination,
         target: task?.target ?? gun.target,
-        covering: board.coverOf(member)
+        covering: board.coverOf(member),
+        breach: breacher.plan
       };
     },
 
@@ -107,6 +114,7 @@ export function createBot(member: Member, context: BotContext) {
      */
     reset() {
       driver.reset();
+      breacher.reset();
       visible.clear();
       plan = undefined;
       task = undefined;
@@ -163,14 +171,24 @@ export function createBot(member: Member, context: BotContext) {
       }
 
       const position = tank.hull.translation();
-      const planned = driver.steer(now, position, task?.hold ? undefined : task?.destination, obstacles(tank), {
-        arrive: task?.arrive,
-        cost: costFor(task?.route ?? 'normal'),
-        heading: tank.hull.rotation()
-      });
-      const move = sidestep(position, now) ?? planned;
+      const travel = task?.hold ? undefined : task?.destination;
+      const cost = costFor(task?.route ?? 'normal');
+      const breach = breacher.step(now, tank, { destination: travel, allowed: task !== undefined && BREACH_ACTIONS.has(task.action), cost, route: driver.path });
+      const planned =
+        breach?.move ??
+        driver.steer(now, position, breach ? breach.destination : travel, obstacles(tank), {
+          arrive: breach ? breach.arrive : task?.arrive,
+          cost,
+          heading: tank.hull.rotation()
+        });
+      const move = (breach ? undefined : sidestep(position, now)) ?? planned;
       combat.drive(tank, move);
-      aim(tank, dt, now, move);
+
+      if (breach?.aim !== undefined) {
+        turnTurret(tank, breach.aim, dt);
+      } else {
+        aim(tank, dt, now, move);
+      }
     }
   };
 
@@ -908,6 +926,9 @@ export type Bot = ReturnType<typeof createBot>;
 
 /** How a route weighs the danger of being seen by known enemies. */
 type Route = 'normal' | 'sneaky' | 'safe';
+
+/** Actions on the way somewhere, during which a bot may break through a wall that is in the way. */
+const BREACH_ACTIONS = new Set<BotAction>(['goToPoint', 'stage', 'flank', 'retreat', 'repair', 'pickUpKit', 'regroup', 'moveToSupport']);
 
 /**
  * The gun's hold on a target: since when the bot has it, how long it takes to react, and how far

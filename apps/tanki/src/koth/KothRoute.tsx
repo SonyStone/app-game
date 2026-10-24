@@ -224,7 +224,7 @@ function thoughtsOnScreen(match: KothMatch, camera: ReturnType<typeof createCame
       name: thought.member.name,
       role: thought.member.role,
       goal: thought.goal ?? '',
-      action: thought.action ?? '',
+      action: thought.breach ? `${thought.action ?? ''} · breach: ${thought.breach.method} ${thought.breach.phase}` : (thought.action ?? ''),
       steps: thought.steps.join(' → '),
       covering: thought.covering?.name,
       x: label.x,

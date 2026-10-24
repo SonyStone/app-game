@@ -262,6 +262,33 @@ export function createWalls(
       return nearest;
     },
 
+    /**
+     * The standing tile of a breakable wall nearest to `point` within `reach` px, and how far it
+     * is, negative inside it; `undefined` when none is that near. Rubble is not counted: tanks
+     * drive over it.
+     */
+    nearest(point: Point, reach: number) {
+      let best: { tile: Readonly<Tile>; distance: number } | undefined;
+
+      for (const tile of tilesNear({ minX: point.x - reach, minY: point.y - reach, maxX: point.x + reach, maxY: point.y + reach })) {
+        if (tile.fallen) {
+          continue;
+        }
+
+        const local = toLocal(tile.wall, point);
+
+        for (const box of tile.boxes) {
+          const distance = boxDistance(local.x - box.x, local.y - box.y, box.halfWidth, box.halfHeight);
+
+          if (distance < reach && distance < (best?.distance ?? Infinity)) {
+            best = { tile, distance };
+          }
+        }
+      }
+
+      return best;
+    },
+
     /** Puts every tile back as it was built. */
     reset() {
       damage.hits = 0;
