@@ -1,18 +1,23 @@
-import { PARTICLE_FIRE, PARTICLE_SPARK, SUN, type ColumnPoint, type createRangeRenderer } from './renderer';
+import { PARTICLE_FIRE, PARTICLE_SPARK, SUN, type createRangeRenderer, type SmokeBall } from './renderer';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
 type Point = { x: number; y: number };
 
 /**
  * Everything that burns, after satellite photos of fires: patches of flame on the ground, a
- * dense column of smoke that hides most of the flames, embers, and a flickering light that throws
- * shadows. A fire of limited life dies down toward its end.
+ * dense plume of smoke that hides most of the flames, embers, and a flickering light that throws
+ * shadows. A fire of limited life dies down toward its end, and its last smoke drifts away after it.
  *
- * The smoke column rises toward the camera. Its axis climbs to `COLUMN_HEIGHT`, swaying, and the
- * wind leans it over more the higher it gets. The camera looks down from `CAMERA_HEIGHT`, so a
- * point of the column appears pushed away from the middle of the screen and larger the higher it
- * is, and the column shifts against the ground as the camera moves. Its shadow is the axis cast
- * onto the ground along the sun, longer for higher points. See `addSmokeColumn` in the renderer.
+ * Smoke leaves a fire as a steady stream of parcels. Each rises toward the camera, quickly at
+ * first and then levelling off, while the wind, stronger higher up, carries it off and gusts push
+ * it aside; it swells, its billows roll, and it thins out until it is gone. Every parcel's place
+ * and size are smooth functions of its age, so the plume flows without jumps at any frame rate.
+ * A parcel is a ball with smaller balls heaped on top; laid over each other, younger and lower
+ * parcels first, they read as cauliflower billows.
+ *
+ * The camera looks down from `CAMERA_HEIGHT`, so a parcel appears pushed away from the middle of
+ * the screen and larger the higher it is, and the plume shifts against the ground as the camera
+ * moves. Each ball casts its shadow onto the ground along the sun.
  */
 export function createBurning(renderer: Renderer) {
   const fires: Fire[] = [];
@@ -22,28 +27,52 @@ export function createBurning(renderer: Renderer) {
      * Sets something on fire.
      *
      * @param spread - Radius in world pixels over which flames appear; bigger fires also smoke more.
-     * @param life - Seconds until the fire is out; `Infinity` keeps it burning.
+     * @param life - Seconds until the flames are out; `Infinity` keeps it burning.
      * @param light - Reach of its light in world pixels.
      * @param brightness - Intensity of its light, 0-1.
      */
     ignite(at: Point, spread: number, life: number, light: number, brightness: number) {
-      fires.push({ x: at.x, y: at.y, spread, life, light, brightness, age: 0, flames: 0, embers: 0, seed: Math.random() * 100 });
+      fires.push({
+        x: at.x,
+        y: at.y,
+        spread,
+        life,
+        light,
+        brightness,
+        age: 0,
+        flames: 0,
+        embers: 0,
+        smoke: 0,
+        parcels: [],
+        seed: Math.random() * 100
+      });
     },
 
-    /** Feeds every fire's flames and embers over a frame of `dt` seconds, and puts out spent ones. */
+    /**
+     * Feeds every fire's flames, embers and smoke over a frame of `dt` seconds, and removes fires
+     * whose last smoke is gone.
+     */
     update(dt: number) {
       for (let index = fires.length - 1; index >= 0; index--) {
         const fire = fires[index];
         fire.age += dt;
 
+        while (fire.parcels.length > 0 && fire.age - fire.parcels[0].born >= smokeLife(fire)) {
+          fire.parcels.shift();
+        }
+
         if (fire.age >= fire.life) {
-          fires.splice(index, 1);
+          if (fire.parcels.length === 0) {
+            fires.splice(index, 1);
+          }
+
           continue;
         }
 
         const strength = vigor(fire);
         fire.flames += dt * (FLAME_RATE + fire.spread * FLAME_RATE_PER_SPREAD) * strength;
         fire.embers += dt * EMBER_RATE * strength;
+        fire.smoke += dt * (SMOKE_RATE + fire.spread * SMOKE_RATE_PER_SPREAD);
 
         for (; fire.flames >= 1; fire.flames--) {
           const at = scatter(fire);
@@ -55,26 +84,32 @@ export function createBurning(renderer: Renderer) {
           const speed = random(20, 60);
           renderer.spawn(PARTICLE_SPARK, fire.x, fire.y, Math.cos(angle) * speed + WIND.x, Math.sin(angle) * speed + WIND.y, random(0.4, 0.9), 1.2, EMBER_COLOR);
         }
+
+        // Parcels leave at an even pace whatever the frame rate: each is born when its share of smoke was due.
+        for (; fire.smoke >= 1; fire.smoke--) {
+          const born = fire.age - fire.smoke / (SMOKE_RATE + fire.spread * SMOKE_RATE_PER_SPREAD);
+          fire.parcels.push(releaseParcel(fire, born, strength));
+        }
       }
     },
 
     /**
-     * Adds every fire's smoke column and flickering light to this frame.
+     * Adds every fire's smoke and flickering light to this frame.
      *
-     * @param camera - Point on the ground under the camera, which smoke columns lean away from.
+     * @param camera - Point on the ground under the camera, which rising smoke leans away from.
      */
     draw(camera: Point) {
       for (const fire of fires) {
-        const time = fire.age + fire.seed;
-        const axis = columnAxis(fire, time);
-        renderer.addSmokeColumn(
-          axis.map((point) => seenFrom(camera, point)),
-          axis.map(castOnGround),
-          RISE_SPEED,
-          fire.seed
-        );
-        const flicker = 0.8 + 0.1 * Math.sin(time * 13) + 0.07 * Math.sin(time * 23.7 + 1) + 0.05 * Math.random();
-        renderer.addLight(fire.x, fire.y, fire.light + 6 * Math.sin(time * 7), flicker * fire.brightness * vigor(fire), FIRE_LIGHT, LIGHT_HEIGHT);
+        // Younger parcels are lower, so they go first; a parcel's place in this order never changes.
+        for (let index = fire.parcels.length - 1; index >= 0; index--) {
+          drawParcel(renderer, camera, fire, fire.parcels[index]);
+        }
+
+        if (fire.age < fire.life) {
+          const time = fire.age + fire.seed;
+          const flicker = 0.8 + 0.1 * Math.sin(time * 13) + 0.07 * Math.sin(time * 23.7 + 1) + 0.05 * Math.random();
+          renderer.addLight(fire.x, fire.y, fire.light + 6 * Math.sin(time * 7), flicker * fire.brightness * vigor(fire), FIRE_LIGHT, LIGHT_HEIGHT);
+        }
       }
     }
   };
@@ -88,17 +123,47 @@ type Fire = {
   light: number;
   brightness: number;
   age: number;
+  /** Flames, embers and smoke parcels owed, accumulated between frames. */
   flames: number;
   embers: number;
-  /** Offsets the flicker so fires do not pulse in step. */
+  smoke: number;
+  /** Smoke in the air, oldest first. */
+  parcels: Parcel[];
+  /** Varies flicker and gusts so fires do not move in step. */
   seed: number;
 };
+
+/** A parcel of smoke: where and when it left the fire, and what makes it unlike its neighbours. */
+type Parcel = {
+  /** Age of the fire when the parcel left it. */
+  born: number;
+  /** Vigor of the fire then: weaker fires give off thinner, smaller smoke that rises less. */
+  strength: number;
+  /** Where in the flames it rose from, relative to the fire's center. */
+  start: Point;
+  /** Velocity of the gust that carries it, on top of the wind; neighbours share gusts, so the plume meanders. */
+  gust: Point;
+  /** Its own slow wander, in world pixels per second. */
+  wander: Point;
+  /** Scales of its size and of how high it climbs. */
+  size: number;
+  climb: number;
+  /** Brightness of its smoke, about 1: some smoke is denser and darker than the rest. */
+  tone: number;
+  /** Angle of its billows and how fast they roll, in radians per second. */
+  phase: number;
+  roll: number;
+  billows: Billow[];
+};
+
+/** A smaller ball heaped on a parcel; lengths are shares of the parcel's radius. */
+type Billow = { angle: number; offset: number; radius: number; lift: number; tone: number };
 
 /** Wind, in world pixels per second: carries smoke and embers to the upper right. */
 export const WIND = { x: 22, y: -16 };
 const WIND_SPEED = Math.hypot(WIND.x, WIND.y);
-/** Speed at which smoke rises, in world pixels per second; billows travel up the column at it. */
-const RISE_SPEED = 30;
+const DOWNWIND = { x: WIND.x / WIND_SPEED, y: WIND.y / WIND_SPEED };
+const CROSSWIND = { x: -DOWNWIND.y, y: DOWNWIND.x };
 /** Height above the ground the camera looks down from, in world pixels: sets the strength of parallax. */
 const CAMERA_HEIGHT = 600;
 
@@ -107,62 +172,156 @@ const LIGHT_HEIGHT = 8;
 const FIRE_LIGHT = [1, 0.62, 0.3];
 const FLAME_RATE = 18;
 const FLAME_RATE_PER_SPREAD = 4;
-/** Height of a smoke column in world pixels, plus more for wider fires. */
-const COLUMN_HEIGHT = 140;
-const COLUMN_HEIGHT_PER_SPREAD = 3;
-/** Radius of a column at its base and at its top. */
-const COLUMN_BASE = 6;
-const COLUMN_TOP = 34;
-/** Sideways drift per pixel of height: smoke rises much faster than the wind carries it off. */
-const LEAN = 0.35;
-const SPINE_POINTS = 18;
 const EMBER_RATE = 3;
 /** Seconds over which a dying fire weakens. */
 const DYING = 4;
 const EMBER_COLOR = [1, 0.6, 0.2, 1];
 const NO_COLOR = [0, 0, 0, 0];
 
+/** Smoke parcels per second, plus more for wider fires. */
+const SMOKE_RATE = 14;
+const SMOKE_RATE_PER_SPREAD = 0.4;
+/** Seconds a parcel lives, plus more for wider fires. */
+const SMOKE_LIFE = 7;
+const SMOKE_LIFE_PER_SPREAD = 0.3;
+/** Height smoke levels off at, in world pixels, plus more for wider fires. */
+const SMOKE_HEIGHT = 120;
+const SMOKE_HEIGHT_PER_SPREAD = 6;
+/** Seconds over which a parcel climbs about two thirds of its way up; it rises fastest at the start. */
+const RISE_TIME = 2.2;
+/** Share of the wind missing near the ground; a parcel drifts at the full wind once it levels off. */
+const SHEAR = 0.7;
+/**
+ * Radius of a parcel leaving the fire and once it levels off, plus more for wider fires; it keeps
+ * swelling at `SWELL`, so the plume fans out downwind.
+ */
+const SMOKE_BASE = 2.5;
+const SMOKE_BASE_PER_SPREAD = 0.4;
+const SMOKE_TOP = 11;
+const SMOKE_TOP_PER_SPREAD = 0.8;
+/** World pixels per second. */
+const SWELL = 2;
+/** Strongest gust across the wind and along it, in world pixels per second. */
+const GUST_ACROSS = 9;
+const GUST_ALONG = 5;
+/** Strongest wander of a single parcel, in world pixels per second. */
+const WANDER = 8;
+/**
+ * Seconds after leaving the fire over which a parcel thickens: smoke right over the flames is thin,
+ * so they show through it.
+ */
+const THICKENING = { from: 0.35, to: 2 };
+/** Share of its life after which a parcel starts thinning out. */
+const THINNING = 0.5;
+/** Seconds over which a parcel stops glowing with the flames below it. */
+const HEAT_TIME = 0.8;
+/** Fewest and most billows heaped on a parcel. */
+const MIN_BILLOWS = 3;
+const MAX_BILLOWS = 6;
+
 /** Strength of a fire, 1 while it burns and falling to 0 over its last seconds. */
 function vigor(fire: Fire) {
-  return Number.isFinite(fire.life) ? Math.min((fire.life - fire.age) / DYING, 1) : 1;
+  return Number.isFinite(fire.life) ? Math.max(Math.min((fire.life - fire.age) / DYING, 1), 0) : 1;
+}
+
+/** Seconds a parcel of this fire's smoke lives. */
+function smokeLife(fire: Fire) {
+  return SMOKE_LIFE + fire.spread * SMOKE_LIFE_PER_SPREAD;
 }
 
 /**
- * Axis of a fire's smoke column in 3D, with its radius: climbing from the fire, leaning downwind
- * the higher it gets, swaying with two waves that travel up it, wider up high, and lower and
- * thinner as the fire dies.
+ * A new parcel. Gusts are smooth functions of the time it leaves, so parcels leaving together
+ * travel together and the plume bends in waves that run downwind.
  */
-function columnAxis(fire: Fire, time: number) {
-  const strength = vigor(fire);
-  const along = { x: WIND.x / WIND_SPEED, y: WIND.y / WIND_SPEED };
-  const across = { x: -along.y, y: along.x };
-  const top = (COLUMN_HEIGHT + fire.spread * COLUMN_HEIGHT_PER_SPREAD) * (0.4 + 0.6 * strength);
-  const base = COLUMN_BASE + fire.spread * 0.3;
+function releaseParcel(fire: Fire, born: number, strength: number): Parcel {
+  const time = born + fire.seed;
+  const across = (Math.sin(time * 0.7) * 0.6 + Math.sin(time * 1.9 + 2) * 0.4) * GUST_ACROSS;
+  const along = Math.sin(time * 1.1 + 4) * GUST_ALONG;
+  const angle = Math.random() * Math.PI * 2;
+  const reach = Math.sqrt(Math.random()) * fire.spread * 0.6;
+  const wanderAngle = Math.random() * Math.PI * 2;
+  const wander = Math.random() * WANDER;
 
-  return Array.from({ length: SPINE_POINTS + 1 }, (_, index) => {
-    const u = index / SPINE_POINTS;
-    const height = u * top;
-    const drift = height * LEAN;
-    const sway = (Math.sin(height * 0.05 - time * 1.1) * 10 + Math.sin(height * 0.12 - time * 1.9 + 2) * 4) * u ** 1.2;
-    return {
-      x: fire.x + along.x * drift + across.x * sway,
-      y: fire.y + along.y * drift + across.y * sway,
-      height,
-      radius: (base + (COLUMN_TOP - base) * u ** 0.7) * (0.6 + 0.4 * strength)
-    };
+  return {
+    born,
+    strength,
+    start: { x: Math.cos(angle) * reach, y: Math.sin(angle) * reach },
+    gust: { x: CROSSWIND.x * across + DOWNWIND.x * along, y: CROSSWIND.y * across + DOWNWIND.y * along },
+    wander: { x: Math.cos(wanderAngle) * wander, y: Math.sin(wanderAngle) * wander },
+    size: random(0.65, 1.35),
+    climb: random(0.85, 1.15),
+    tone: random(0.85, 1.15),
+    phase: Math.random() * Math.PI * 2,
+    roll: random(-0.5, 0.5),
+    billows: Array.from({ length: Math.floor(random(MIN_BILLOWS, MAX_BILLOWS + 1)) }, () => ({
+      angle: Math.random() * Math.PI * 2,
+      offset: random(0.5, 0.75),
+      radius: random(0.3, 0.55),
+      lift: random(0.35, 0.6),
+      tone: random(0.9, 1.1)
+    }))
+  };
+}
+
+/** Adds a parcel's balls to the frame: one large ball and smaller billows heaped on its top. */
+function drawParcel(renderer: Renderer, camera: Point, fire: Fire, parcel: Parcel) {
+  const age = fire.age - parcel.born;
+  const life = smokeLife(fire);
+  const strength = parcel.strength;
+  const risen = 1 - Math.exp(-age / RISE_TIME);
+  const height = (SMOKE_HEIGHT + fire.spread * SMOKE_HEIGHT_PER_SPREAD) * parcel.climb * (0.4 + 0.6 * strength) * risen;
+  const downwind = WIND_SPEED * (age - SHEAR * RISE_TIME * risen);
+  const x = fire.x + parcel.start.x + DOWNWIND.x * downwind + (parcel.gust.x + parcel.wander.x) * age;
+  const y = fire.y + parcel.start.y + DOWNWIND.y * downwind + (parcel.gust.y + parcel.wander.y) * age;
+  const base = SMOKE_BASE + fire.spread * SMOKE_BASE_PER_SPREAD;
+  const top = SMOKE_TOP + fire.spread * SMOKE_TOP_PER_SPREAD;
+  const radius = (base + (top - base) * risen + SWELL * age) * parcel.size * (0.5 + 0.5 * strength);
+  const thick = 1 - smoothstep(life * THINNING, life, age);
+  const opacity = smoothstep(THICKENING.from, THICKENING.to, age) * thick * Math.min(strength * 1.5, 1);
+  // Dense smoke has a crisp edge; thinning smoke goes soft, so overlapping balls do not show as rings.
+  const softness = 0.12 + 0.6 * (1 - thick);
+  const heat = Math.exp(-age / HEAT_TIME) * strength;
+  const turn = parcel.phase + parcel.roll * age;
+
+  addBall(renderer, camera, { x, y, height, radius, opacity, softness, heat, turn, tone: parcel.tone });
+
+  for (const [index, billow] of parcel.billows.entries()) {
+    const angle = billow.angle + turn;
+    const swell = 1 + 0.12 * Math.sin(age * 0.9 + index * 2.1 + parcel.phase);
+    addBall(renderer, camera, {
+      x: x + Math.cos(angle) * radius * billow.offset,
+      y: y + Math.sin(angle) * radius * billow.offset,
+      height: height + radius * billow.lift,
+      radius: radius * billow.radius * swell,
+      opacity,
+      softness,
+      heat,
+      turn: angle * 2,
+      tone: parcel.tone * billow.tone
+    });
+  }
+}
+
+/** A ball of smoke at a height above the ground, with the look the renderer takes as it is. */
+type Ball = Point & {
+  height: number;
+  radius: number;
+} & Pick<SmokeBall, 'opacity' | 'softness' | 'heat' | 'turn' | 'tone'>;
+
+/** Adds a ball at a height to the frame, as the camera sees it and with its shadow along the sun. */
+function addBall(renderer: Renderer, camera: Point, ball: Ball) {
+  const scale = CAMERA_HEIGHT / (CAMERA_HEIGHT - ball.height);
+  const seen = { x: camera.x + (ball.x - camera.x) * scale, y: camera.y + (ball.y - camera.y) * scale };
+  const cast = ball.height * SUN.shadowLength;
+  renderer.addSmokeBall({
+    seen: { ...seen, radius: ball.radius * scale },
+    shadow: { x: ball.x + SUN.direction.x * cast, y: ball.y + SUN.direction.y * cast, radius: ball.radius },
+    opacity: ball.opacity,
+    softness: ball.softness,
+    heat: ball.heat,
+    turn: ball.turn,
+    tone: ball.tone
   });
-}
-
-/** Where a point at a height appears from the camera, and how large a radius there looks. */
-function seenFrom(camera: Point, point: Point & { height: number; radius: number }): ColumnPoint {
-  const scale = CAMERA_HEIGHT / (CAMERA_HEIGHT - point.height);
-  return { x: camera.x + (point.x - camera.x) * scale, y: camera.y + (point.y - camera.y) * scale, radius: point.radius * scale };
-}
-
-/** Where a point at a height casts its shadow on the ground, along the sun. */
-function castOnGround(point: Point & { height: number; radius: number }): ColumnPoint {
-  const length = point.height * SUN.shadowLength;
-  return { x: point.x + SUN.direction.x * length, y: point.y + SUN.direction.y * length, radius: point.radius };
 }
 
 function scatter(fire: Fire) {
@@ -173,4 +332,9 @@ function scatter(fire: Fire) {
 
 function random(min: number, max: number) {
   return min + Math.random() * (max - min);
+}
+
+function smoothstep(edge0: number, edge1: number, value: number) {
+  const t = Math.min(Math.max((value - edge0) / (edge1 - edge0), 0), 1);
+  return t * t * (3 - 2 * t);
 }

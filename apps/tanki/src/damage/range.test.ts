@@ -23,7 +23,7 @@ describe('damage range', () => {
   });
 
   it('destroys a target whose core it keeps shooting and leaves its wreck burning', () => {
-    const { range, columns } = createRange();
+    const { range, smoke } = createRange();
     const player = range.player;
     let destroyed = false;
 
@@ -50,20 +50,21 @@ describe('damage range', () => {
 
     expect(destroyed).toBe(true);
 
-    columns.length = 0;
+    smoke.length = 0;
     range.update(1);
     range.draw(wreck);
 
-    expect(columns.some((column) => Math.hypot(column.x - wreck.x, column.y - wreck.y) < 5)).toBe(true);
+    // Seen from right above the wreck, its youngest smoke rises from the flames.
+    expect(smoke.some((ball) => Math.hypot(ball.x - wreck.x, ball.y - wreck.y) < 12)).toBe(true);
   });
 });
 
-/** Builds a range on a real Rapier world with a renderer that only records where smoke columns rise. */
+/** Builds a range on a real Rapier world with a renderer that only records where balls of smoke are seen. */
 function createRange() {
   const world = new rapier.World({ x: 0, y: 0 });
   world.lengthUnit = 100;
   const slots: number[] = Array.from({ length: 64 }, (_, index) => 63 - index);
-  const columns: { x: number; y: number }[] = [];
+  const smoke: { x: number; y: number }[] = [];
   const renderer = {
     allocateField: () => slots.pop(),
     releaseField: (slot: number) => slots.push(slot),
@@ -71,15 +72,15 @@ function createRange() {
     beginBodies() {},
     addBody() {},
     spawn() {},
-    addSmokeColumn(spine: readonly { x: number; y: number }[]) {
-      columns.push(spine[0]);
+    addSmokeBall(ball: { seen: { x: number; y: number } }) {
+      smoke.push(ball.seen);
     },
     addLight() {},
     render() {}
   };
   const range = createDamageRange(rapier, world, renderer as unknown as ReturnType<typeof createRangeRenderer>);
 
-  return { range, columns };
+  return { range, smoke };
 }
 
 /** Counts armor cells in a field's raw data. */

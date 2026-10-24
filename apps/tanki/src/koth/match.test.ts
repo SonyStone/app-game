@@ -167,7 +167,7 @@ function createMatch(seed: number, rules = CAPTURE_RULES, human = false) {
     beginBodies() {},
     addBody() {},
     spawn() {},
-    addSmokeColumn() {},
+    addSmokeBall() {},
     addLight() {},
     render() {}
   };

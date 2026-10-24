@@ -5,7 +5,7 @@ import { CHANNELS, type DamageField } from './field';
 /**
  * WebGPU renderer of the damage range, written with TypeGPU.
  *
- * Two kinds of things are drawn, both as instanced quads:
+ * Three kinds of things are drawn, all as instanced quads:
  *
  * - Bodies: each quad shades one shape. Destructible shapes read their distance field from a
  *   shared storage buffer, where every field owns a fixed slot; turrets and the floor are drawn
@@ -13,9 +13,14 @@ import { CHANNELS, type DamageField } from './field';
  *   edges stay sharp at any zoom.
  * - Particles: sparks, puffs, dust and trail points live in a ring buffer that a compute shader
  *   advances every frame. The CPU only writes newly spawned particles.
+ * - Smoke plumes: balls that the CPU places anew every frame, already seen from the camera, so
+ *   the renderer knows nothing of their motion. Each ball is shaded as a sphere lit by the sun
+ *   and laid over the plume texture in the order given; balls heaped on balls read as cauliflower
+ *   billows. The same balls, cast along the sun, sum their density into a smoke shadow map.
  *
  * Shadows come from a screen-sized height map that bodies are also drawn into. The sun casts
- * a hard drop shadow from everything in one fixed direction, as on a map with building shadows.
+ * a hard drop shadow from everything in one fixed direction, as on a map with building shadows,
+ * and smoke overhead shades the ground as deeply, without stacking with the shadows of bodies.
  * Point lights, such as flashes and fires, hang at their own height: each light's quad walks the
  * height map from every pixel toward the light, and whatever rises above the line between them
  * shades the pixel, so turrets shade their hulls and shadows grow longer the lower the light.
@@ -23,14 +28,15 @@ import { CHANNELS, type DamageField } from './field';
  * (the strongest claim wins) and how much light reaches each pixel (summed over lights). Applying
  * them multiplies the scene, so black outlines stay black; shadows of several lights do not stack,
  * and one light's shadow is filled by another light. Lights also add a glow to the air. Fire is
- * drawn under the smoke but keeps its own brightness through the light passes, and sparks are
- * drawn after all shading.
+ * drawn under the smoke but keeps its own brightness through the light passes; plumes hang high
+ * above the lights and keep their own shading too; sparks are drawn after all shading.
  *
- * Everything keeps the look of a vector illustration with hard outlines. Puffs of soot and fire
- * are not drawn one by one: each is written as a distance into a screen-sized texture with `max`
+ * Bodies keep the look of a vector illustration with hard outlines. Puffs of soot and fire are
+ * not drawn one by one: each is written as a distance into a screen-sized texture with `max`
  * blending, which merges overlapping puffs into one shape per layer, and a full-screen pass then
  * fills each layer and outlines its merged contour. Shot trails go into the same texture as
- * coverage, so the joints of a trail's segments never darken where they overlap.
+ * coverage, so the joints of a trail's segments never darken where they overlap. Plumes are soft
+ * by default, after satellite photos of fires; `PLUME_INKED` outlines their dense billows instead.
  */
 export function createRangeRenderer(gpu: GpuContext) {
   const { root, device, format } = gpu;
@@ -43,7 +49,7 @@ export function createRangeRenderer(gpu: GpuContext) {
   // Vertex shaders may not bind writable storage, so drawing reads the same buffer through a read-only view.
   const particlesView = root.createReadonly(d.arrayOf(Particle, MAX_PARTICLES), root.unwrap(particles.buffer));
   const lights = root.createReadonly(d.arrayOf(Light, MAX_LIGHTS));
-  const columns = root.createReadonly(d.arrayOf(ColumnSegment, MAX_COLUMN_SEGMENTS));
+  const plumeBalls = root.createReadonly(d.arrayOf(PlumeBall, MAX_PLUME_BALLS));
 
   /** Signed coverage of a distance at the current zoom: 1 inside, 0 outside, smooth over a screen pixel. */
   const coverage = (distance: number) => {
@@ -336,55 +342,114 @@ export function createRangeRenderer(gpu: GpuContext) {
     return d.vec4f(opacity, FAR_OUTSIDE, FAR_OUTSIDE, FAR_OUTSIDE);
   });
 
-  /** One segment of a smoke column: a capsule from `start` to `end` widened by lumps around it. */
-  const columnVertex = tgpu.vertexFn({
+  /** Quad around a plume ball as seen from the camera; `offset` is in world pixels from its center. */
+  const plumeVertex = tgpu.vertexFn({
     in: { vertex: d.builtin.vertexIndex, instance: d.builtin.instanceIndex },
-    out: { position: d.builtin.position, world: d.vec2f, instance: d.interpolate('flat', d.u32) }
+    out: { position: d.builtin.position, offset: d.vec2f, instance: d.interpolate('flat', d.u32) }
   })((input) => {
     'use gpu';
-    const segment = columns.$[input.instance]!;
-    const reach = std.max(segment.start.w, segment.end.w) * 1.6 + 2;
-    const low = std.sub(std.min(segment.start.xy, segment.end.xy), reach);
-    const high = std.add(std.max(segment.start.xy, segment.end.xy), reach);
-    const world = std.mix(low, high, quadCorner(input.vertex));
-    return { position: project(world), world, instance: input.instance };
+    const ball = plumeBalls.$[input.instance]!;
+    const offset = std.mul(std.sub(std.mul(quadCorner(input.vertex), 2), 1), ball.seen.z * (1 + PLUME_LUMPS) + 1);
+    return { position: project(std.add(ball.seen.xy, offset)), offset, instance: input.instance };
+  });
+
+  /** Quad around the shadow a plume ball casts on the ground. */
+  const plumeShadowVertex = tgpu.vertexFn({
+    in: { vertex: d.builtin.vertexIndex, instance: d.builtin.instanceIndex },
+    out: { position: d.builtin.position, offset: d.vec2f, instance: d.interpolate('flat', d.u32) }
+  })((input) => {
+    'use gpu';
+    const ball = plumeBalls.$[input.instance]!;
+    const offset = std.mul(std.sub(std.mul(quadCorner(input.vertex), 2), 1), ball.shadow.z * (1 + PLUME_LUMPS) + 1);
+    return { position: project(std.add(ball.shadow.xy, offset)), offset, instance: input.instance };
   });
 
   /**
-   * Writes how far inside a smoke column this pixel is: into the soot layer for the column itself,
-   * or into the smoke shadow map for its shadow on the ground. The column is a tube around its
-   * spine, thickening upward, with a rounded profile so its shading has no crease along the
-   * middle. Lumps come from round noise measured from the column's base and drifting the way the
-   * column rises on screen, the same for every segment of a column, so overlapping segments
-   * agree and billows travel up the column without seams or streaks. Lumps grow with the column.
+   * A plume ball at `offset` from its center: how far up its dome the point is (1 on top, 0 at
+   * the rim), its density there, which stays full in the middle and falls off over the outer
+   * `softness` of the radius, and its radius in this direction. The rim is lumpy rather than
+   * round, turned by the ball's `turn` (`look.w`). A soft edge is ragged too, with noise that
+   * turns with the ball, so thinning smoke frays instead of blurring; `grain` picks the noise.
    */
-  const columnFragment = tgpu.fragmentFn({
-    in: { world: d.vec2f, instance: d.interpolate('flat', d.u32) },
+  const ballAt = (offset: d.v2f, radius: number, look: d.v4f, softness: number, grain: number) => {
+    'use gpu';
+    const angle = std.atan2(offset.y, offset.x);
+    const lumps =
+      std.sin(angle * 3 + look.w) * 0.5 +
+      std.sin(angle * 5 - look.w * 1.7) * 0.3 +
+      std.sin(angle * 9 + look.w * 2.3) * 0.2;
+    const reach = radius * (1 + PLUME_LUMPS * lumps);
+    const r = std.length(offset) / reach;
+    const dome = std.sqrt(std.max(1 - r * r, 0));
+    const turned = rotate(std.div(offset, radius), d.vec2f(std.cos(look.w), std.sin(look.w)));
+    const local = std.add(std.mul(turned, PLUME_FRAY_SCALE), grain * 37);
+    // Fraying only eats into the edge, so the ball never spills out of its quad.
+    const fray = valueNoise(local) * softness * PLUME_FRAY;
+    const density = std.smoothstep(1, 1 - softness, r + fray) * look.x;
+    return d.vec3f(dome, density, reach);
+  };
+
+  /**
+   * Lays a ball over the plume, premultiplied: its shade (0 dark to 1 sunlit), heat and ink, and
+   * its density as opacity. Shading is the ball's own, as a sphere: sunlit on the side facing the
+   * sun, darker toward its rim, where neighbours crowd it, so billows heaped on billows read as
+   * cauliflower. Inked plumes (`PLUME_INKED`) shade dense balls in flat bands and outline them;
+   * the balls above cover the outlines below, so only the arcs of the cloud's billows show. As a
+   * ball thins out, its outline fades and its edge and shading go soft, so thin smoke never shows
+   * outlines through each other.
+   */
+  const plumeFragment = tgpu.fragmentFn({
+    in: { offset: d.vec2f, instance: d.interpolate('flat', d.u32) },
     out: d.vec4f
   })((input) => {
     'use gpu';
-    const segment = columns.$[input.instance]!;
-    const step = std.sub(segment.end.xy, segment.start.xy);
-    const length = std.max(std.length(step), 0.0001);
-    const direction = std.div(step, length);
-    const offset = std.sub(input.world, segment.start.xy);
-    const t = std.saturate(std.dot(offset, direction) / length);
-    const nearest = std.add(segment.start.xy, std.mul(step, t));
-    const distance = std.length(std.sub(input.world, nearest));
-    const u = std.mix(segment.start.z, segment.end.z, t);
-    const radius = std.mix(segment.start.w, segment.end.w, t);
-    const seed = segment.shape.y;
-    const drift = std.mul(segment.origin.zw, simulation.$.time * segment.shape.z);
-    const point = std.add(std.sub(std.sub(input.world, segment.origin.xy), drift), d.vec2f(seed * 7.3, seed * 3.1));
-    const coarse = valueNoise(std.mul(point, 0.06));
-    const fine = valueNoise(std.add(std.mul(point, 0.15), 17));
-    const lumps = ((coarse - 0.5) * 0.9 + (fine - 0.5) * 0.4) * radius * (0.4 + 0.6 * u);
-    const inside = (radius * radius - distance * distance) / (2 * radius) + lumps;
-    return std.select(
-      d.vec4f(FAR_OUTSIDE, inside, FAR_OUTSIDE, FAR_OUTSIDE),
-      d.vec4f(inside, 0, 0, 0),
-      segment.shape.w > 0.5
-    );
+    const ball = plumeBalls.$[input.instance]!;
+    // Derivatives must be taken before any branch.
+    const aa = std.fwidth(std.length(input.offset) / ball.seen.z);
+    const inking = std.select(0, std.smoothstep(PLUME_INKED_FROM, 1, ball.look.x), PLUME_INKED);
+    const shape = ballAt(input.offset, ball.seen.z, ball.look, std.mix(ball.look.y, aa * 1.5, inking), ball.seen.w);
+    const r = std.length(input.offset) / shape.z;
+    const normal = d.vec3f(std.div(input.offset, shape.z), shape.x);
+    const sunlit = std.saturate((std.dot(normal, SUN_TOWARD) - PLUME_TERMINATOR) / (1 - PLUME_TERMINATOR));
+    let shade = (sunlit * PLUME_SUNLIGHT + 1 - PLUME_SUNLIGHT) * std.mix(PLUME_RIM, 1, std.sqrt(shape.x)) * ball.seen.w;
+    const band = std.fwidth(shade);
+    let ink = d.f32(0);
+
+    if (PLUME_INKED) {
+      const bands =
+        0.15 +
+        0.4 * std.smoothstep(0.3 - band, 0.3 + band, shade) +
+        0.45 * std.smoothstep(0.62 - band, 0.62 + band, shade);
+      const line = PLUME_INK_WIDTH / shape.z;
+      shade = std.mix(shade, bands, inking);
+      ink = std.smoothstep(1 - line - aa, 1 - line + aa, r) * inking;
+    }
+
+    const alpha = shape.y;
+
+    // Corners of the quad outside the ball would only blend in nothing.
+    if (alpha <= 0) {
+      std.discard();
+    }
+
+    return d.vec4f(shade * alpha, ball.look.z * alpha, ink * alpha, alpha);
+  });
+
+  /** Adds a ball's shadow to the density of smoke over the ground; shadows are softer than the balls. */
+  const plumeShadowFragment = tgpu.fragmentFn({
+    in: { offset: d.vec2f, instance: d.interpolate('flat', d.u32) },
+    out: d.vec4f
+  })((input) => {
+    'use gpu';
+    const ball = plumeBalls.$[input.instance]!;
+    const softness = std.max(ball.look.y, PLUME_SHADOW_SOFTNESS);
+    const shape = ballAt(input.offset, ball.shadow.z, ball.look, softness, ball.seen.w);
+
+    if (shape.y <= 0) {
+      std.discard();
+    }
+
+    return d.vec4f(shape.y, 0, 0, 0);
   });
 
   const screenVertex = tgpu.vertexFn({ in: { index: d.builtin.vertexIndex }, out: { position: d.builtin.position } })(
@@ -440,18 +505,29 @@ export function createRangeRenderer(gpu: GpuContext) {
     return d.vec2f(small, small + large);
   };
 
-  /** How much of a pixel shows fire not covered by soot; such pixels keep their own light. */
-  const fireShows = (pixel: d.v2i) => {
+  /** Opacity of the plume at a pixel. */
+  const plumeOpacity = (pixel: d.v2i) => {
     'use gpu';
-    const layers = std.textureLoad(puffLayout.$.puffs, pixel, 0);
-    return coverage(-layers.z) * (1 - coverage(-layers.y));
+    return std.textureLoad(puffLayout.$.plume, pixel, 0).w;
   };
 
   /**
-   * Trails, gun smoke, fire and soot, in that order, all before point lights, over the shadows of
-   * smoke columns. Soot is lumpy and shaded in two tones, lighter where a lump faces the sun, so
-   * dense smoke reads as billows. Fire lies under the soot and peeks out of it; light passes leave
-   * it alone, so it still glows.
+   * How much of a pixel keeps its own light, which point lights leave alone: fire that soot and
+   * plumes do not cover still glows, and a plume hangs high above the lights near the ground.
+   */
+  const keepsOwnLight = (pixel: d.v2i) => {
+    'use gpu';
+    const layers = std.textureLoad(puffLayout.$.puffs, pixel, 0);
+    const plume = plumeOpacity(pixel);
+    return coverage(-layers.z) * (1 - coverage(-layers.y)) * (1 - plume) + plume;
+  };
+
+  /**
+   * Trails, gun smoke, fire, soot and smoke plumes, in that order, all before point lights. Soot is
+   * lumpy and shaded in two tones, lighter where a lump faces the sun. Fire lies under the soot and
+   * the plumes and peeks out of them; light passes leave it alone, so it still glows. Plumes go on
+   * top, since they hang in the air: charcoal, with paler sunlit billows, and warm low down where
+   * the flames light them.
    */
   const smokeComposite = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
     'use gpu';
@@ -462,9 +538,7 @@ export function createRangeRenderer(gpu: GpuContext) {
     const layers = std.textureLoad(puffLayout.$.puffs, pixel, 0);
     const towardSun = rotate(std.neg(SUN_DIRECTION), camera.$.rotation);
 
-    const shadowed = std.textureLoad(puffLayout.$.smokeShadows, pixel, 0).x;
-    let result = over(d.vec4f(0), d.vec3f(0), coverage(-shadowed) * (1 - SUN_SHADE));
-    result = over(result, TRAIL_COLOR, std.saturate(layers.x));
+    let result = over(d.vec4f(0), TRAIL_COLOR, std.saturate(layers.x));
     result = puffLayer(result, layers.w, d.vec3f(0.84), d.vec3f(0.5), 0.6, 0.9);
 
     const fire = std.mix(FIRE_EDGE, FIRE_CORE, std.smoothstep(1, 3.5, layers.z));
@@ -487,13 +561,25 @@ export function createRangeRenderer(gpu: GpuContext) {
       result = puffLayer(result, layers.y + lumps.x, soot, d.vec3f(0.03), 0.7, d.f32(1));
     }
 
+    const plume = std.textureLoad(puffLayout.$.plume, pixel, 0);
+
+    if (plume.w > PLUME_MIN_OPACITY) {
+      const shade = std.saturate(plume.x / plume.w);
+      const heat = std.saturate(plume.y / plume.w);
+      const ink = std.saturate(plume.z / plume.w);
+      const smoke = std.add(std.mix(PLUME_SHADE, PLUME_LIGHT, shade), std.mul(PLUME_HEAT, heat));
+      const color = std.mix(smoke, PLUME_INK, ink);
+      result = over(result, color, plume.w);
+    }
+
     return result;
   });
 
   /**
-   * Sunlight: darkens this pixel when something in the height map stands between it and the sun.
-   * Walks the map toward the sun, along `SUN_DIRECTION` reversed, for as far as the tallest body
-   * can throw a shadow; the line to the sun rises `1 / SUN_SHADOW_LENGTH` pixels per pixel.
+   * Sunlight: darkens this pixel when something in the height map stands between it and the sun,
+   * or as far as smoke overhead blocks the sun. Walks the map toward the sun, along
+   * `SUN_DIRECTION` reversed, for as far as the tallest body can throw a shadow; the line to the
+   * sun rises `1 / SUN_SHADOW_LENGTH` pixels per pixel. Shadows of bodies and of smoke do not stack.
    */
   const sunShadowFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
     'use gpu';
@@ -504,7 +590,9 @@ export function createRangeRenderer(gpu: GpuContext) {
     const height = std.textureLoad(occluderLayout.$.occluders, d.vec2i(std.floor(pixel)), 0).x;
     const reach = (MAX_HEIGHT - height) * SUN_SHADOW_LENGTH;
     const steps = std.clamp(d.i32((reach * pixelsPerWorld) / 1.5), 1, MAX_SUN_STEPS);
-    let shade = d.f32(1);
+    const smokeDensity = std.textureLoad(puffLayout.$.smokeShadows, d.vec2i(std.floor(pixel)), 0).x;
+    const smoke = 1 - std.exp(-smokeDensity * SMOKE_SHADOW_DENSITY);
+    let shade = std.mix(1, SUN_SHADE, smoke);
 
     for (let step = d.i32(1); step <= steps; step++) {
       const distance = (reach * d.f32(step)) / d.f32(steps);
@@ -610,7 +698,7 @@ export function createRangeRenderer(gpu: GpuContext) {
   const lightDarkenFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
     'use gpu';
     const pixel = d.vec2i(std.floor(input.position.xy));
-    const dim = std.textureLoad(lightLayout.$.dims, pixel, 0).x * (1 - fireShows(pixel));
+    const dim = std.textureLoad(lightLayout.$.dims, pixel, 0).x * (1 - keepsOwnLight(pixel));
     return d.vec4f(d.vec3f(1 - dim), 1);
   });
 
@@ -626,10 +714,13 @@ export function createRangeRenderer(gpu: GpuContext) {
     const given = std.textureLoad(lightLayout.$.lights, pixel, 0);
     const restored = std.add(d.vec3f(std.min(given.w, dim)), given.xyz);
     const gain = std.min(std.div(restored, std.max(1 - dim, 0.05)), d.vec3f(1));
-    return d.vec4f(std.mul(gain, 1 - fireShows(pixel)), 0);
+    return d.vec4f(std.mul(gain, 1 - keepsOwnLight(pixel)), 0);
   });
 
-  /** Glow of the air around a light, added on top. Shadowed air does not glow, so bodies cut shafts through it. */
+  /**
+   * Glow of the air around a light, added on top. Shadowed air does not glow, so bodies cut shafts
+   * through it, and smoke plumes above hide it.
+   */
   const lightGlowFragment = tgpu.fragmentFn({
     in: { position: d.builtin.position, world: d.vec2f, instance: d.interpolate('flat', d.u32) },
     out: d.vec4f
@@ -637,7 +728,8 @@ export function createRangeRenderer(gpu: GpuContext) {
     'use gpu';
     const light = lights.$[input.instance]!;
     const reach = lightReach(input.position.xy, input.world, input.instance);
-    const glow = reach.x * reach.x * reach.x * reach.y * light.shape.w * LIGHT_GLOW;
+    const plume = plumeOpacity(d.vec2i(std.floor(input.position.xy)));
+    const glow = reach.x * reach.x * reach.x * reach.y * light.shape.w * LIGHT_GLOW * (1 - plume);
     return d.vec4f(std.mul(light.color.xyz, glow), 0);
   });
 
@@ -767,27 +859,19 @@ export function createRangeRenderer(gpu: GpuContext) {
       }
     }
   });
-  const columnPipeline = root.createRenderPipeline({
-    vertex: columnVertex,
-    fragment: columnFragment,
-    targets: {
-      format: PUFF_FORMAT,
-      blend: {
-        color: { srcFactor: 'one', dstFactor: 'one', operation: 'max' },
-        alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'max' }
-      }
-    }
+  const additive = {
+    color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+    alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' }
+  } as const;
+  const plumePipeline = root.createRenderPipeline({
+    vertex: plumeVertex,
+    fragment: plumeFragment,
+    targets: { format: PLUME_FORMAT, blend: premultiplied }
   });
-  const columnShadowPipeline = root.createRenderPipeline({
-    vertex: columnVertex,
-    fragment: columnFragment,
-    targets: {
-      format: SMOKE_SHADOW_FORMAT,
-      blend: {
-        color: { srcFactor: 'one', dstFactor: 'one', operation: 'max' },
-        alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'max' }
-      }
-    }
+  const plumeShadowPipeline = root.createRenderPipeline({
+    vertex: plumeShadowVertex,
+    fragment: plumeShadowFragment,
+    targets: { format: SMOKE_SHADOW_FORMAT, blend: additive }
   });
   const smokePipeline = root.createRenderPipeline({
     vertex: screenVertex,
@@ -802,8 +886,9 @@ export function createRangeRenderer(gpu: GpuContext) {
   let targets: ReturnType<typeof createTargets> | undefined;
 
   /**
-   * Screen-sized textures: puffs merged one layer per channel, the height map for shadows, and the
-   * light buffers (strongest ambient claim, summed light given back).
+   * Screen-sized textures: puffs merged one layer per channel, smoke plumes and the density of
+   * smoke over the ground, the height map for shadows, and the light buffers (strongest ambient
+   * claim, summed light given back).
    */
   function createTargets(width: number, height: number) {
     const size: [number, number] = [width, height];
@@ -812,16 +897,22 @@ export function createRangeRenderer(gpu: GpuContext) {
     const lightDims = root.createTexture({ size, format: LIGHT_DIM_FORMAT }).$usage('sampled', 'render');
     const lightSums = root.createTexture({ size, format: LIGHT_FORMAT }).$usage('sampled', 'render');
     const smokeShadows = root.createTexture({ size, format: SMOKE_SHADOW_FORMAT }).$usage('sampled', 'render');
+    const plume = root.createTexture({ size, format: PLUME_FORMAT }).$usage('sampled', 'render');
     return {
       width,
       height,
-      textures: [puffs, occluders, lightDims, lightSums, smokeShadows],
+      textures: [puffs, occluders, lightDims, lightSums, smokeShadows, plume],
       puffView: root.unwrap(puffs).createView(),
       occluderView: root.unwrap(occluders).createView(),
       lightDimView: root.unwrap(lightDims).createView(),
       lightSumView: root.unwrap(lightSums).createView(),
       smokeShadowView: root.unwrap(smokeShadows).createView(),
-      puffGroup: root.createBindGroup(puffLayout, { puffs: puffs.createView(), smokeShadows: smokeShadows.createView() }),
+      plumeView: root.unwrap(plume).createView(),
+      puffGroup: root.createBindGroup(puffLayout, {
+        puffs: puffs.createView(),
+        smokeShadows: smokeShadows.createView(),
+        plume: plume.createView()
+      }),
       occluderGroup: root.createBindGroup(occluderLayout, { occluders: occluders.createView() }),
       lightGroup: root.createBindGroup(lightLayout, { dims: lightDims.createView(), lights: lightSums.createView() })
     };
@@ -833,38 +924,8 @@ export function createRangeRenderer(gpu: GpuContext) {
   const spawnData = new Float32Array(MAX_SPAWNS_PER_FRAME * PARTICLE_FLOATS);
   const freeSlots = Array.from({ length: FIELD_SLOTS }, (_, slot) => FIELD_SLOTS - 1 - slot);
   let bodyCount = 0;
-  const columnData = new Float32Array(MAX_COLUMN_SEGMENTS * COLUMN_FLOATS);
-  let columnSegmentCount = 0;
-  let shadowSegmentCount = 0;
-
-  /**
-   * Packs a column's segments after the `count` already in its region of the segment buffer, the
-   * column's own or its shadow's; returns the new count. Lumps drift from the base toward the top
-   * as it appears, or along the wind when the top sits right over the base.
-   *
-   * @param mode - 0 for the column itself, 1 for its shadow.
-   */
-  function writeColumn(points: readonly ColumnPoint[], rise: number, seed: number, mode: number, count: number, capacity: number) {
-    const base = mode === 1 ? SHADOW_SEGMENTS_START : 0;
-    const first = points[0];
-    const last = points[points.length - 1];
-    const reach = Math.hypot(last.x - first.x, last.y - first.y);
-    const flow = reach > 1 ? { x: (last.x - first.x) / reach, y: (last.y - first.y) / reach } : { x: 0.8, y: -0.6 };
-
-    for (let index = 1; index < points.length && count < capacity; index++) {
-      const a = points[index - 1];
-      const b = points[index];
-      const u0 = (index - 1) / (points.length - 1);
-      const u1 = index / (points.length - 1);
-      columnData.set(
-        [a.x, a.y, u0, a.radius, b.x, b.y, u1, b.radius, 0, seed, rise, mode, first.x, first.y, flow.x, flow.y],
-        (base + count) * COLUMN_FLOATS
-      );
-      count++;
-    }
-
-    return count;
-  }
+  const plumeData = new Float32Array(MAX_PLUME_BALLS * PLUME_BALL_FLOATS);
+  let plumeBallCount = 0;
   let time = 0;
   let nextParticle = 0;
   let spawnCount = 0;
@@ -911,29 +972,39 @@ export function createRangeRenderer(gpu: GpuContext) {
     beginBodies() {
       bodyCount = 0;
       lightCount = 0;
-      columnSegmentCount = 0;
-      shadowSegmentCount = 0;
+      plumeBallCount = 0;
     },
 
     /**
-     * Adds a column of smoke to this frame. It merges with soot and is drawn like it: outlined,
-     * lumpy, shaded toward the sun. Its shadow is drawn from a second spine, where the column's
-     * points fall on the ground along the sun, and darkens whatever lies under it.
-     *
-     * @param spine - Points of the column's axis, base to top, as seen from the camera, with the
-     *   column's apparent radius there, in world pixels.
-     * @param shadow - The same points cast onto the ground along the sun, with their true radius.
-     * @param rise - Speed in world pixels per second at which billows travel up the column.
-     * @param seed - Varies the lumps between columns.
+     * Adds a ball of a smoke plume to this frame; balls beyond the limit are dropped. Balls are laid
+     * over each other in the order they are added, so add lower ones first, and keep the order of
+     * overlapping balls from frame to frame: swapping two would make their overlap jump. The plume
+     * covers everything on the ground, fire included, and its shadow darkens the ground like the
+     * shadow of a body.
      */
-    addSmokeColumn(
-      spine: readonly ColumnPoint[],
-      shadow: readonly ColumnPoint[],
-      rise: number,
-      seed: number
-    ) {
-      columnSegmentCount = writeColumn(spine, rise, seed, 0, columnSegmentCount, SHADOW_SEGMENTS_START);
-      shadowSegmentCount = writeColumn(shadow, rise, seed, 1, shadowSegmentCount, MAX_COLUMN_SEGMENTS - SHADOW_SEGMENTS_START);
+    addSmokeBall(ball: SmokeBall) {
+      if (plumeBallCount >= MAX_PLUME_BALLS) {
+        return;
+      }
+
+      plumeData.set(
+        [
+          ball.seen.x,
+          ball.seen.y,
+          ball.seen.radius,
+          ball.tone,
+          ball.shadow.x,
+          ball.shadow.y,
+          ball.shadow.radius,
+          0,
+          ball.opacity,
+          ball.softness,
+          ball.heat,
+          ball.turn
+        ],
+        plumeBallCount * PLUME_BALL_FLOATS
+      );
+      plumeBallCount++;
     },
 
     /**
@@ -1026,14 +1097,7 @@ export function createRangeRenderer(gpu: GpuContext) {
     ) {
       device.queue.writeBuffer(root.unwrap(bodies.buffer), 0, bodyData, 0, bodyCount * BODY_FLOATS);
       device.queue.writeBuffer(root.unwrap(lights.buffer), 0, lightData, 0, lightCount * LIGHT_FLOATS);
-      device.queue.writeBuffer(root.unwrap(columns.buffer), 0, columnData, 0, columnSegmentCount * COLUMN_FLOATS);
-      device.queue.writeBuffer(
-        root.unwrap(columns.buffer),
-        SHADOW_SEGMENTS_START * COLUMN_FLOATS * 4,
-        columnData,
-        SHADOW_SEGMENTS_START * COLUMN_FLOATS,
-        shadowSegmentCount * COLUMN_FLOATS
-      );
+      device.queue.writeBuffer(root.unwrap(plumeBalls.buffer), 0, plumeData, 0, plumeBallCount * PLUME_BALL_FLOATS);
       camera.write({
         center: d.vec2f(view.x, view.y),
         zoom: view.zoom,
@@ -1066,26 +1130,26 @@ export function createRangeRenderer(gpu: GpuContext) {
       });
       puffPipeline.with(puffPass).draw(6, MAX_PARTICLES);
       trailPipeline.with(puffPass).draw(6, MAX_PARTICLES);
+      puffPass.end();
 
-      if (columnSegmentCount > 0) {
-        columnPipeline.with(puffPass).draw(6, columnSegmentCount);
+      const plumePass = encoder.beginRenderPass({
+        colorAttachments: [{ view: targets.plumeView, clearValue: [0, 0, 0, 0], loadOp: 'clear', storeOp: 'store' }]
+      });
+
+      if (plumeBallCount > 0) {
+        plumePipeline.with(plumePass).draw(6, plumeBallCount);
       }
 
-      puffPass.end();
+      plumePass.end();
 
       const smokeShadowPass = encoder.beginRenderPass({
         colorAttachments: [
-          {
-            view: targets.smokeShadowView,
-            clearValue: { r: FAR_OUTSIDE, g: 0, b: 0, a: 0 },
-            loadOp: 'clear',
-            storeOp: 'store'
-          }
+          { view: targets.smokeShadowView, clearValue: [0, 0, 0, 0], loadOp: 'clear', storeOp: 'store' }
         ]
       });
 
-      if (shadowSegmentCount > 0) {
-        columnShadowPipeline.with(smokeShadowPass).draw(6, shadowSegmentCount, 0, SHADOW_SEGMENTS_START);
+      if (plumeBallCount > 0) {
+        plumeShadowPipeline.with(smokeShadowPass).draw(6, plumeBallCount);
       }
 
       smokeShadowPass.end();
@@ -1128,13 +1192,13 @@ export function createRangeRenderer(gpu: GpuContext) {
         bodyPipeline.with(pass).draw(6, bodyCount);
       }
 
-      sunPipeline.with(pass).with(targets.occluderGroup).draw(3);
+      sunPipeline.with(pass).with(targets.occluderGroup).with(targets.puffGroup).draw(3);
       smokePipeline.with(pass).with(targets.puffGroup).draw(3);
 
       if (lightCount > 0) {
         lightDarkenPipeline.with(pass).with(targets.lightGroup).with(targets.puffGroup).draw(3);
         lightBrightenPipeline.with(pass).with(targets.lightGroup).with(targets.puffGroup).draw(3);
-        lightGlowPipeline.with(pass).with(targets.occluderGroup).draw(6, lightCount);
+        lightGlowPipeline.with(pass).with(targets.occluderGroup).with(targets.puffGroup).draw(6, lightCount);
       }
 
       particlePipeline.with(pass).draw(6, MAX_PARTICLES);
@@ -1263,9 +1327,48 @@ const FIRE_OUTLINE = d.vec3f(0.4, 0.06, 0.02);
 const FAR_OUTSIDE = -1000;
 const puffLayout = tgpu.bindGroupLayout({
   puffs: { texture: d.texture2d(d.f32) },
-  smokeShadows: { texture: d.texture2d(d.f32) }
+  smokeShadows: { texture: d.texture2d(d.f32) },
+  plume: { texture: d.texture2d(d.f32) }
 });
+/** Density of plume smoke over the ground, summed over the balls' shadows. */
 const SMOKE_SHADOW_FORMAT = 'r16float';
+/** Opacity of a smoke shadow per unit of density. */
+const SMOKE_SHADOW_DENSITY = 3;
+/** Plumes, premultiplied: shade, heat, ink, opacity. */
+const PLUME_FORMAT = 'rgba16float';
+/**
+ * Style of smoke plumes: soft shaded billows, as on satellite photos (`false`), or billows in flat
+ * tones with an ink outline each, like the vector art of the bodies (`true`).
+ */
+const PLUME_INKED = false;
+/** Width of the ink outline of a billow in world pixels, and its color. */
+const PLUME_INK_WIDTH = 0.8;
+const PLUME_INK = d.vec3f(0.02);
+/** Opacity of a ball below which an inked ball turns soft; fully inked at opacity 1. */
+const PLUME_INKED_FROM = 0.7;
+const PLUME_MIN_OPACITY = 0.002;
+/** Unit vector toward the sun in world axes, with z up: shadows fall `SUN.shadowLength` per unit of height. */
+const SUN_TOWARD = std.normalize(d.vec3f(-SUN.direction.x, -SUN.direction.y, 1 / SUN.shadowLength));
+/**
+ * Share of a ball's light that comes from the sun; the rest is sky. Both dim toward its rim, to
+ * `PLUME_RIM`, where neighbours crowd it. The sun lights only parts turned toward it further than
+ * `PLUME_TERMINATOR`, the cosine of the angle to it, so billows show a bright and a dark side.
+ */
+const PLUME_SUNLIGHT = 0.9;
+const PLUME_RIM = 0.3;
+const PLUME_TERMINATOR = 0.45;
+/** How far a ball's rim bulges in and out, as a share of its radius. */
+const PLUME_LUMPS = 0.12;
+/** How far noise frays a soft edge, as a share of its width, and how fine the noise is across a ball. */
+const PLUME_FRAY = 1.2;
+const PLUME_FRAY_SCALE = 2.5;
+/** Shadows of balls fall off over at least this outer fraction of their radius. */
+const PLUME_SHADOW_SOFTNESS = 0.6;
+/** Plume smoke in its own shade and fully sunlit, after satellite photos of burning oil: charcoal with grey tops. */
+const PLUME_SHADE = d.vec3f(0.035, 0.035, 0.04);
+const PLUME_LIGHT = d.vec3f(0.56, 0.55, 0.53);
+/** Glow added to smoke right above the flames. */
+const PLUME_HEAT = d.vec3f(0.3, 0.1, 0.02);
 
 const Camera = d.struct({
   center: d.vec2f,
@@ -1298,24 +1401,36 @@ const Particle = d.struct({
 });
 const PARTICLE_FLOATS = 12;
 
-/** A point on a smoke column's axis with the column's radius there. */
-export type ColumnPoint = { x: number; y: number; radius: number };
+/** A ball of a smoke plume. Lengths are in world pixels. */
+export type SmokeBall = {
+  /** Center as seen from the camera, and how large its radius looks there. */
+  seen: { x: number; y: number; radius: number };
+  /** Where the ball's shadow falls on the ground, and the ball's true radius. */
+  shadow: { x: number; y: number; radius: number };
+  /** Opacity at the middle, 0-1. */
+  opacity: number;
+  /** Outer fraction of the radius over which the opacity falls to 0, from 0 (a hard edge) to 1. */
+  softness: number;
+  /** How strongly the flames below light the ball, 0-1. */
+  heat: number;
+  /** Angle in radians that turns the lumps of its rim; change it slowly to roll the ball. */
+  turn: number;
+  /** Brightness of its smoke, about 1; also picks the noise that frays its edge, so give neighbours different tones. */
+  tone: number;
+};
 
 /**
- * One segment of a smoke column: `start` and `end` = position, fraction of the way up the column,
- * radius; `shape` = unused, seed, rise speed, and 1 for a segment of the column's shadow;
- * `origin` = the column's base and the direction its lumps drift in.
+ * A ball of a smoke plume: `seen` = center as seen from the camera, apparent radius, tone;
+ * `shadow` = where its shadow falls on the ground, true radius, unused; `look` = opacity,
+ * softness, heat, turn.
  */
-const ColumnSegment = d.struct({
-  start: d.vec4f,
-  end: d.vec4f,
-  shape: d.vec4f,
-  origin: d.vec4f
+const PlumeBall = d.struct({
+  seen: d.vec4f,
+  shadow: d.vec4f,
+  look: d.vec4f
 });
-const COLUMN_FLOATS = 16;
-const MAX_COLUMN_SEGMENTS = 512;
-/** Shadow segments live in the upper half of the segment buffer. */
-const SHADOW_SEGMENTS_START = 256;
+const PLUME_BALL_FLOATS = 12;
+const MAX_PLUME_BALLS = 8192;
 
 /** `shape` = position, radius, intensity; `color` = RGB and the light's height. */
 const Light = d.struct({

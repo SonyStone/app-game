@@ -67,7 +67,7 @@ function createBattle(options: Parameters<typeof createCombat>[4] = {}, layout: 
     beginBodies() {},
     addBody() {},
     spawn() {},
-    addSmokeColumn() {},
+    addSmokeBall() {},
     addLight() {},
     render() {}
   };
