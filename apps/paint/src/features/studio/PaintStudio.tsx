@@ -631,7 +631,11 @@ export function PaintStudio(props: {
                         onChange={palmSettings.update}
                       />
                     }
-                    penHover={<FreshTabControls auto={freshTab.auto()} onChange={freshTab.setAuto} />}
+                    penHover={
+                      session.nativeShell.active ? undefined : (
+                        <FreshTabControls auto={freshTab.auto()} onChange={freshTab.setAuto} />
+                      )
+                    }
                     applicationControls={props.applicationControls}
                     experimentsHref={props.experimentsHref}
                   />
