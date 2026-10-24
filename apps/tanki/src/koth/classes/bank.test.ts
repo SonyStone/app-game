@@ -31,4 +31,11 @@ describe('a bank shot', () => {
   it('finds none beyond its reach', () => {
     expect(findBankShot(grid, layout.walls, { x: -200, y: 40 }, { x: 200, y: 40 }, 400, 0.7)).toBeUndefined();
   });
+
+  it('passes up a face shot away since the walls were built', () => {
+    // The north wall stands but for a gap round the middle.
+    const standing = (point: { x: number; y: number }) => Math.abs(point.x) > 40;
+
+    expect(findBankShot(grid, layout.walls, { x: -200, y: 40 }, { x: 200, y: 40 }, 800, 0.7, standing)).toBeUndefined();
+  });
 });

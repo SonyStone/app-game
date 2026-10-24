@@ -7,10 +7,23 @@ type Point = { x: number; y: number };
  * A bank shot for a grenade from `from` to `to`, off one face of one of `walls`, as a Demoman
  * banks pipes around a corner: the direction to throw in and how far, `reach`, to throw so that
  * the grenade, slowed by its bounce to `rebound` of its speed, comes down at `to`. Only faces
- * that both points lie in front of count, and both legs must pass every wall. Returns the bank
- * with the shortest throw within `maxReach`, or `undefined` when there is none.
+ * that both points lie in front of count, both legs must pass every wall as `grid` has them now,
+ * and the face must still stand where the grenade meets it. Returns the bank with the shortest
+ * throw within `maxReach`, or `undefined` when there is none.
+ *
+ * @param walls - The walls as built, whose faces are tried.
+ * @param standing - Whether wall stands at a point of a face now, for walls shot apart since they
+ *   were built; defaults to everywhere.
  */
-export function findBankShot(grid: NavGrid, walls: readonly WallPlacement[], from: Point, to: Point, maxReach: number, rebound: number) {
+export function findBankShot(
+  grid: NavGrid,
+  walls: readonly WallPlacement[],
+  from: Point,
+  to: Point,
+  maxReach: number,
+  rebound: number,
+  standing: (point: Point) => boolean = () => true
+) {
   let best: { angle: number; reach: number; at: Point } | undefined;
 
   for (const wall of walls) {
@@ -43,6 +56,13 @@ export function findBankShot(grid: NavGrid, walls: readonly WallPlacement[], fro
       const reach = first + second / rebound;
 
       if (reach > maxReach || (best && reach >= best.reach) || !sightClear(grid, from, off) || !sightClear(grid, off, to)) {
+        continue;
+      }
+
+      // A grenade meeting a gap or a crater there would fly on or bounce off somewhere else.
+      const spots = [-FACE_MARGIN / 2, 0, FACE_MARGIN / 2].map((shift) => ({ x: at.x + face.tangent.x * shift, y: at.y + face.tangent.y * shift }));
+
+      if (!spots.every(standing)) {
         continue;
       }
 

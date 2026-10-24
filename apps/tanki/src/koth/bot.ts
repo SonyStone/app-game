@@ -1075,7 +1075,8 @@ export function createBot(member: Member, context: BotContext) {
     }
 
     const spot = known.position;
-    const bank = sightClear(grid, position, spot) ? undefined : findBankShot(grid, map.walls ?? [], position, spot, shell.range, shell.lob!.rebound);
+    const standing = (point: Point) => combat.obstacleDistance(point, BANK_FACE) < BANK_FACE;
+    const bank = sightClear(grid, position, spot) ? undefined : findBankShot(grid, map.walls ?? [], position, spot, shell.range, shell.lob!.rebound, standing);
     const throwable = bank !== undefined || sightClear(grid, position, spot);
     const goal = bank?.angle ?? Math.atan2(spot.y - position.y, spot.x - position.x);
     turnTurret(tank, goal, dt, member.tankClass.turretSpeed);
@@ -1261,6 +1262,8 @@ const MAX_AIM_ERROR = 32;
 const SPIN_AHEAD = 150;
 /** Seconds a Demoman keeps lobbing at where an enemy out of sight was last seen. */
 const LOB_MEMORY = 1.5;
+/** A wall's face counts as standing for a bank shot where a wall lies within this many pixels of it now. */
+const BANK_FACE = 4;
 /** A second enemy this many blast radii from the target makes a Demoman throw between them. */
 const GROUP_REACH = 1.2;
 /**
