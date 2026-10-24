@@ -59,6 +59,7 @@
     "./tile-cluster-mockup": "./src/mockups/tile-cluster/TileClusterMockup.tsx",
     "./puck-gallery": "./src/mockups/puck-gallery/PuckGallery.tsx",
     "./variants": "./src/variants/index.ts",
+    "./native-shell": "./src/features/native-shell/index.ts",
     "./component-canvas": "./src/component-canvas/ComponentCanvas.tsx"
   }
 }

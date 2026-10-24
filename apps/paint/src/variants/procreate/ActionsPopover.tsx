@@ -22,7 +22,8 @@ export function ActionsPopover(props: {
   mirrored: boolean;
   symmetry: PaintSymmetry['mode'];
   sidebar: 'left' | 'right';
-  fullscreen: { active: boolean; supported: boolean };
+  /** `shown` is false where full screen is not a choice, such as the Android shell app. */
+  fullscreen: { active: boolean; supported: boolean; shown: boolean };
   onInsertPhoto: (file: File) => void;
   onSelectionAction: (action: SelectionAction) => void;
   onFlip: () => void;
@@ -151,18 +152,20 @@ export function ActionsPopover(props: {
               <span class={menu.label}>Right-hand interface</span>
               <span class={menu.switch} />
             </button>
-            <button
-              class={menu.row}
-              role="switch"
-              aria-checked={props.fullscreen.active ? 'true' : 'false'}
-              disabled={!props.fullscreen.supported}
-              onClick={() => props.onFullscreen()}
-            >
-              <span class={menu.label}>Full screen</span>
-              <Show when={props.fullscreen.supported} fallback={<span class={menu.detail}>Unavailable</span>}>
-                <span class={menu.switch} />
-              </Show>
-            </button>
+            <Show when={props.fullscreen.shown}>
+              <button
+                class={menu.row}
+                role="switch"
+                aria-checked={props.fullscreen.active ? 'true' : 'false'}
+                disabled={!props.fullscreen.supported}
+                onClick={() => props.onFullscreen()}
+              >
+                <span class={menu.label}>Full screen</span>
+                <Show when={props.fullscreen.supported} fallback={<span class={menu.detail}>Unavailable</span>}>
+                  <span class={menu.switch} />
+                </Show>
+              </button>
+            </Show>
             <button class={menu.row} onClick={() => props.onPen()}>
               <span class={menu.label}>Pen</span>
               <span class={menu.detail}>Palm rejection, pen hover</span>

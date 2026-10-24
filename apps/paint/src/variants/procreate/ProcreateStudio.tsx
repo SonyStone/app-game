@@ -430,7 +430,7 @@ export function ProcreateStudio(props: PaintVariantProps) {
                       mirrored={camera.camera().mirrored}
                       symmetry={symmetry.symmetry().mode}
                       sidebar={sidebar()}
-                      fullscreen={{ active: fullscreen.isActive(), supported: document.fullscreenEnabled }}
+                      fullscreen={{ active: fullscreen.isActive(), supported: document.fullscreenEnabled, shown: fullscreen.shown }}
                       onInsertPhoto={(file) => {
                         setPopover(undefined);
                         images.place(file);

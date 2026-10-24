@@ -229,10 +229,12 @@ export function LegoStudio(props: PaintVariantProps) {
               </a>
             )}
           </Show>
-          {/* On a tablet, full screen also hides Android's bars and makes its edge swipes take two tries. */}
-          <button type="button" class={[styles.editButton, styles.iconButton]} {...session.fullscreen.props}>
-            <SketchIcon name={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={18} />
-          </button>
+          <Show when={session.fullscreen.shown}>
+            {/* On a tablet, full screen also hides Android's bars and makes its edge swipes take two tries. */}
+            <button type="button" class={[styles.editButton, styles.iconButton]} {...session.fullscreen.props}>
+              <SketchIcon name={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={18} />
+            </button>
+          </Show>
           <button
             type="button"
             class={styles.editButton}

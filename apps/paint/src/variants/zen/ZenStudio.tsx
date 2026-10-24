@@ -263,7 +263,10 @@ export function ZenStudio(props: PaintVariantProps) {
                           session.chooseLocalUndo();
                         }
                       }}
-                      fullscreen={{ active: fullscreen.isActive(), supported: document.fullscreenEnabled }}
+                      fullscreen={{
+                        active: fullscreen.isActive(),
+                        supported: fullscreen.shown && document.fullscreenEnabled
+                      }}
                       onFullscreen={() => void fullscreen.props.onClick()}
                       experimentsHref={props.experimentsHref}
                     />

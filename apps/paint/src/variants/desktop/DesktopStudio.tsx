@@ -189,13 +189,15 @@ export function DesktopStudio(props: PaintVariantProps) {
               disabled={!session.ready() || !engine.state().canRedo}
               onClick={session.redo}
             />
-            <IconButton
-              icon={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'}
-              label="Full screen"
-              pressed={session.fullscreen.isActive()}
-              disabled={!document.fullscreenEnabled}
-              onClick={() => void session.fullscreen.props.onClick()}
-            />
+            <Show when={session.fullscreen.shown}>
+              <IconButton
+                icon={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'}
+                label="Full screen"
+                pressed={session.fullscreen.isActive()}
+                disabled={!document.fullscreenEnabled}
+                onClick={() => void session.fullscreen.props.onClick()}
+              />
+            </Show>
           </MenuBar>
         </Errored>
       </div>

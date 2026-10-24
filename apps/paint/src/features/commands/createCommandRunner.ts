@@ -345,6 +345,10 @@ export function createCommandRunner(options: {
         return done(mirrored ? 'View mirrored' : 'View not mirrored');
       }
       case 'fullscreen':
+        if (!session.fullscreen.shown) {
+          return refuse('Paint always runs full screen in the app.');
+        }
+
         if (!document.fullscreenEnabled) {
           return refuse('Full screen is unavailable in this browser.');
         }
