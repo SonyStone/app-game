@@ -12,7 +12,6 @@ import {
   ownedFrame,
   ownedPanel,
   panelFrame,
-  panelPadding,
   partsBounds,
   pinPanels,
   pitch,
@@ -88,6 +87,10 @@ export function BoardView(props: {
   const benchSize = createElementSize(bench);
   /** The kits in the box, where a part or group from the board or the workbench is dropped to be kept as a kit. */
   const [kitShelf, setKitShelf] = createSignal<HTMLElement>();
+  /** The kit just kept, or the one a kept part or group already matched, lit for a moment; see `keepKit`. */
+  const [flashKit, setFlashKit] = createSignal<string>();
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(flashTimer));
   /** The parts on the workbench selected to be carried together or kept as a kit. */
   const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set());
   /** The open spawn menu: where it was opened, and the pointer of the press while it is held. */
@@ -145,6 +148,8 @@ export function BoardView(props: {
     const height = benchSize.height ?? 0;
     return Math.min(1, width > 0 ? width / used.width : 1, height > 0 ? height / used.height : 1);
   });
+  /** The workbench's studs; they follow its place's size, not what lies on it, so parts keep still on them. */
+  const benchGrid = createMemo(() => benchLayout(benchView()));
   const benchEntry = createMemo(() => {
     const panel = benchOf(shown());
     return { panel, frame: benchFrame(panel, benchView()) };
@@ -322,7 +327,7 @@ export function BoardView(props: {
     if (current.type === 'panel' && !current.owned && overKits(point)) {
       const panel = current.base.panels.find((candidate) => candidate.id === current.panel);
       if (panel) {
-        props.kits.save(current.base, panel, kitName(panel.parts));
+        keepKit(current.base, panel);
       }
 
       return;
@@ -343,9 +348,16 @@ export function BoardView(props: {
     }
 
     const tapped = Math.hypot(point.x - current.start.x, point.y - current.start.y) < tapDistance;
-    if (tapped && !current.fromBox) {
-      if (current.kind === 'color:swatch') {
-        toggle(current.id);
+    // A tap on a part of the workbench selects it alone, as a band around it would; a swatch also opens or closes.
+    const tappedId = tapped ? (current.fromBox ? current.pressed : current.id) : undefined;
+    if (tappedId !== undefined) {
+      const part = findPart(current.before, tappedId);
+      if (part?.panel.bench) {
+        setSelected(new Set([tappedId]));
+      }
+
+      if (part?.part.kind === 'color:swatch') {
+        toggle(tappedId);
       }
 
       return;
@@ -409,7 +421,10 @@ export function BoardView(props: {
           width: `${frame().rect.width}px`,
           height: `${frame().rect.height}px`,
           '--stud-x': `${frame().origin.x - frame().rect.left}px`,
-          '--stud-y': `${frame().origin.y - frame().rect.top}px`
+          '--stud-y': `${frame().origin.y - frame().rect.top}px`,
+          // The workbench shows studs only over its whole cells.
+          '--studs-width': panel().bench ? `${benchStuds(panel()).columns * pitch}px` : undefined,
+          '--studs-height': panel().bench ? `${benchStuds(panel()).rows * pitch}px` : undefined
         }}
         onPointerDown={(event) => {
           if (!props.editing || event.target !== event.currentTarget) {
@@ -459,7 +474,7 @@ export function BoardView(props: {
                   }
 
                   if (panel().bench && selection().has(part().id)) {
-                    startSelectionDrag(event);
+                    startSelectionDrag(event, part().id);
                     return;
                   }
 
@@ -589,6 +604,7 @@ export function BoardView(props: {
           kits={props.kits}
           sheet={props.sheet}
           kitsRef={setKitShelf}
+          flashKit={flashKit()}
           overKits={keepsOverKits()}
           over={lifted() !== undefined && overBox(lifted()!.point)}
           onLift={(event, kind) => startNewPart(event, kind)}
@@ -686,6 +702,8 @@ export function BoardView(props: {
       grab?: Point;
       /** The board it is carried over, instead of the board without it. */
       base?: Board;
+      /** For a selection carried from the workbench, the selected part the press was on, if any. */
+      pressed?: string;
     } = {}
   ) {
     event.preventDefault();
@@ -715,6 +733,7 @@ export function BoardView(props: {
       fromBox: from.fromBox ?? false,
       block: from.block,
       spawnAt: from.spawnAt,
+      pressed: from.pressed,
       carried: false,
       ...part
     });
@@ -820,7 +839,7 @@ export function BoardView(props: {
    * Carries the selected parts of the workbench as one block, as a kit is carried, held where the press is; they land
    * as a panel, in a panel, or elsewhere on the bench.
    */
-  function startSelectionDrag(event: PointerEvent) {
+  function startSelectionDrag(event: PointerEvent, pressed?: string) {
     const board = props.board.latest();
     const panel = benchOf(board);
     const parts = panel.parts.filter((part) => selected().has(part.id));
@@ -830,7 +849,7 @@ export function BoardView(props: {
     }
 
     const bounds = partsBounds(parts);
-    const origin = benchOrigin;
+    const { origin } = benchGrid();
     const rest = { ...panel, parts: panel.parts.filter((part) => !selected().has(part.id)) };
     startPartDrag(
       event,
@@ -846,7 +865,8 @@ export function BoardView(props: {
           panels: []
         },
         grab: { x: at.x - origin.x - bounds.column * pitch, y: at.y - origin.y - bounds.row * pitch },
-        base: putPanel({ panels: board.panels.filter((other) => !other.bench) }, rest)
+        base: putPanel({ panels: board.panels.filter((other) => !other.bench) }, rest),
+        pressed
       }
     );
   }
@@ -856,6 +876,17 @@ export function BoardView(props: {
     const panel = benchOf(board);
     const bench = { panel, frame: benchFrame(panel, benchView()) };
     return visiblePanels(board, props.openPanel, props.editing, benchView(), pins, bench);
+  }
+
+  /** The cells of workbench `panel` that show studs: those that fit its place, and any its parts reach past them. */
+  function benchStuds(panel: Panel) {
+    const { columns, rows } = benchGrid();
+    const bounds = partsBounds(panel.parts);
+    const any = panel.parts.length > 0;
+    return {
+      columns: Math.max(columns, any ? bounds.column + bounds.columns : 0),
+      rows: Math.max(rows, any ? bounds.row + bounds.rows : 0)
+    };
   }
 
   /** How large a part carried at `point` shows: as the workbench under it, the board, or at full size once carried. */
@@ -1001,7 +1032,7 @@ export function BoardView(props: {
         return { where: 'bench' as const, ...placeOn(into.panel, nearestCell(into.frame.origin, corner)) };
       }
 
-      const nearest = nearestCell(benchOrigin, corner);
+      const nearest = nearestCell(benchGrid().origin, corner);
       const cell = { column: Math.max(0, nearest.column), row: Math.max(0, nearest.row) };
       return { where: 'bench' as const, ...placeOn(benchOf(drag.base), cell) };
     }
@@ -1075,7 +1106,23 @@ export function BoardView(props: {
    */
   function keepAsKit(drag: Extract<Drag, { type: 'part' }>) {
     const parts = drag.block?.parts ?? [{ id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks, cell: { column: 0, row: 0 } }];
-    props.kits.save(drag.before, { id: 'kept', at: { x: 0, y: 0 }, parts }, kitName(parts));
+    keepKit(drag.before, { id: 'kept', at: { x: 0, y: 0 }, parts });
+  }
+
+  /**
+   * Keeps `panel` of `board` as a new kit, named after what it holds, unless a kit of the same parts laid out the
+   * same way is there already: that one lights up instead, as does a new one.
+   */
+  function keepKit(board: Board, panel: Panel) {
+    const same = props.kits.findSame(panel.parts);
+    if (!same) {
+      props.kits.save(board, panel, kitName(panel.parts));
+    }
+
+    const kit = same ?? props.kits.findSame(panel.parts);
+    clearTimeout(flashTimer);
+    setFlashKit(kit?.id);
+    flashTimer = setTimeout(() => setFlashKit(undefined), flashTime);
   }
 
   /** A name for a new kit of `parts`, after what it holds and unlike the user's other kits; see `nameKit`. */
@@ -1212,35 +1259,45 @@ function benchOf(board: Board): Panel {
 }
 
 /**
- * Where the workbench `panel` lies in its place of `size` (before it is shrunk to fit), in the bench's pixels: one
- * plate filling the place `benchInset` in from its edges, its cell (0, 0) in the top-left corner, larger if its parts
- * reach further.
+ * The studs of a workbench place of `size` (before it is shrunk to fit), in the bench's pixels: as many whole
+ * `columns` and `rows` of cells as fit with at least `benchMargin` around them, centered, cell (0, 0) at `origin`.
+ */
+function benchLayout(size: { width: number; height: number }) {
+  const fit = (length: number) => Math.max(1, Math.floor((length - benchMargin * 2 + cellGap) / pitch));
+  const columns = fit(size.width);
+  const rows = fit(size.height);
+  const origin = {
+    x: Math.max(benchMargin, (size.width - (columns * pitch - cellGap)) / 2),
+    y: Math.max(benchMargin, (size.height - (rows * pitch - cellGap)) / 2)
+  };
+  return { columns, rows, origin };
+}
+
+/**
+ * Where the workbench `panel` lies in its place of `size`, in the bench's pixels: one plate filling the place edge
+ * to edge, as its neighbouring boxes do, with its studs laid out by `benchLayout`, larger if its parts reach further.
  */
 function benchFrame(panel: Panel, size: { width: number; height: number }) {
-  // Whole cells only, so the plate ends with its padding rather than mid-stud.
+  const { origin } = benchLayout(size);
   const bounds = partsBounds(panel.parts);
-  const fit = (length: number) => Math.floor((length - (benchInset + panelPadding) * 2 + cellGap) / pitch);
-  const columns = Math.max(1, fit(size.width), panel.parts.length > 0 ? bounds.column + bounds.columns : 0);
-  const rows = Math.max(1, fit(size.height), panel.parts.length > 0 ? bounds.row + bounds.rows : 0);
+  const reach = (start: number, cells: number) => start * 2 + cells * pitch - cellGap;
+  const used = panel.parts.length > 0
+    ? { width: reach(origin.x, bounds.column + bounds.columns), height: reach(origin.y, bounds.row + bounds.rows) }
+    : { width: 0, height: 0 };
   return {
-    origin: benchOrigin,
-    rect: {
-      left: benchInset,
-      top: benchInset,
-      width: columns * pitch - cellGap + panelPadding * 2,
-      height: rows * pitch - cellGap + panelPadding * 2
-    }
+    origin,
+    rect: { left: 0, top: 0, width: Math.max(size.width, used.width), height: Math.max(size.height, used.height) }
   };
 }
 
-/** How far the parts of workbench `panel` reach from its place's top-left, with its insets and padding. */
+/** How far the parts of workbench `panel` reach from its place's top-left, with the margin around its studs. */
 function benchReach(panel: Panel) {
   if (panel.parts.length === 0) {
     return { width: 0, height: 0 };
   }
 
   const bounds = partsBounds(panel.parts);
-  const reach = (cells: number) => cells * pitch - cellGap + (panelPadding + benchInset) * 2;
+  const reach = (cells: number) => cells * pitch - cellGap + benchMargin * 2;
   return { width: reach(bounds.column + bounds.columns), height: reach(bounds.row + bounds.rows) };
 }
 
@@ -1301,6 +1358,8 @@ type Drag = { pointer: number; point: Point; base: Board } & (
       block?: { parts: Part[]; panels: Panel[] };
       /** Where the spawn menu it came from was opened, where a tap puts it. */
       spawnAt?: Point;
+      /** For a selection carried from the workbench, the selected part the press was on, if any. */
+      pressed?: string;
       /** Whether it moved off where it was pressed. */
       carried: boolean;
     })
@@ -1324,11 +1383,11 @@ type Lifted = Omit<Part, 'cell'>;
 /** CSS pixels a press may move and still be a tap, which opens a swatch's panel while editing. */
 const tapDistance = 6;
 
-/** CSS pixels between the workbench's place in the box and the bench panel. */
-const benchInset = 16;
+/** The least CSS pixels between the workbench plate's edge and its studs. */
+const benchMargin = 12;
 
-/** Where the workbench's cell (0, 0) starts in its place, which does not move as parts come and go. */
-const benchOrigin = { x: benchInset + panelPadding, y: benchInset + panelPadding };
+/** Milliseconds a kit just kept, or matched, stays lit. */
+const flashTime = 1400;
 
 /** CSS pixels the selection's outline lies out from the selected parts. */
 const selectionPadding = 4;

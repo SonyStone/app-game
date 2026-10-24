@@ -35,6 +35,11 @@ export function createKits() {
   return {
     /** Every kit, the ready ones first. */
     kits: () => [...readyKits, ...saved()],
+    /** The kit, ready or the user's, of just these `parts` laid out the same way, if there is one; see `sameLayout`. */
+    findSame(parts: readonly Part[]) {
+      const layout = sameLayout(parts);
+      return [...readyKits, ...saved()].find((kit) => sameLayout(kit.parts) === layout);
+    },
     /** Whether kit `id` is the user's, which they may delete. */
     isSaved: (id: string) => saved().some((kit) => kit.id === id),
     /** Keeps `panel` of `board`, with the panels of its swatches, as a kit named `name`. */
@@ -80,6 +85,20 @@ export function unpackKit(kit: Pick<Kit, 'parts' | 'owned'>) {
   });
 
   return { parts, panels };
+}
+
+/**
+ * `parts` as a key that two sets of parts share when they are the same kinds and looks in the same sizes, laid out
+ * the same way whatever their ids or where they lie.
+ */
+export function sameLayout(parts: readonly Part[]) {
+  return fromOrigin(parts)
+    .map((part) => {
+      const looks = Object.entries(part.looks ?? {}).sort(([a], [b]) => a.localeCompare(b));
+      return `${part.kind}@${part.cell.column},${part.cell.row}:${part.span.columns}x${part.span.rows}${JSON.stringify(looks)}`;
+    })
+    .sort()
+    .join('|');
 }
 
 /** `panel` of `board` as a kit, its cells counted from its top-left, with the panels its swatches own, nested too. */

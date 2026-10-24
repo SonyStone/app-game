@@ -23,15 +23,29 @@ it('names a color by its hue, or black, white or gray', () => {
 });
 
 it('names a kit from its parts, shape, color and family, drawn at random', () => {
-  const parts = [part('color:hex', 2, 1), part('value:hue', 5, 1)];
-  const names = (draws: number[]) => {
+  // Hue over Hex make a 3×2 block, a shape that does not stand out.
+  const parts = [part('color:hex', 2, 1), { ...part('value:hue', 3, 1), cell: { column: 0, row: 1 } }];
+  // The series is drawn first (word, then noun), the combination last.
+  const named = (choice: number) => {
+    const draws = [0, 0, choice];
     let index = 0;
     return nameKit(parts, { label, color: '#d03030', random: () => draws[index++] ?? 0 });
   };
 
-  // Hue and Hex lie in a 5×2 strip: no shape word; the color part brings the color.
-  expect(names([0])).toBe('Huex Red');
-  // The series is drawn first (word, then noun), the combination last.
-  expect(names([0, 0, 0.99])).toBe('Red Dial Station');
-  expect(nameKit([part('color:wheel', 2, 6)], { label, random: () => 0.5 })).toBe('Tall Chroma Studio');
+  // The hex brings the color.
+  expect(named(0)).toBe('Huex Red');
+  expect(named(0.5)).toBe('Hue Dial Station');
+  expect(named(0.99)).toBe('Red Hue');
+  expect(nameKit([part('color:wheel', 2, 6)], { label, random: () => 0.7 })).toBe('Tall Picker');
+});
+
+it('nearly always names a kit after a part it holds', () => {
+  const parts = [part('color:wheel', 5, 5), part('preset:eraser', 5, 4)];
+  const eraserLabel = (kind: string) => (kind === 'preset:eraser' ? 'Eraser' : 'Picker');
+  const names = Array.from({ length: 40 }, (_, index) =>
+    nameKit(parts, { label: eraserLabel, color: '#4360a1', random: () => ((index * 7919) % 97) / 97 })
+  );
+
+  expect(names.filter((name) => /Picker|Eraser|Pick/.test(name)).length).toBeGreaterThan(30);
+  expect(names.some((name) => name.includes('Eraser'))).toBe(true);
 });

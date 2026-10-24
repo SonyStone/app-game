@@ -7,8 +7,9 @@ import { partsBounds, type Part } from './board';
  * - a series after the family most of it belongs to, such as "Dial Station" for values;
  * - its shape when it stands out, "Tall", "Wide", "Square" or "Tiny";
  * - the current `color`'s name when the kit holds color parts, such as "Red".
- * So a kit may be "Huex Red", "Wheelness Tall", "Picker Dial Station" or "Square Prism Cruiser". `label` gives a
- * part kind's name; `random` returns numbers in [0, 1), `Math.random` by default.
+ * Nearly every name holds a part's name, so a kit may be "Huex Red", "Wheelness Tall", "Picker Dial Station", "Tall
+ * Eraser" or, now and then, "Square Prism Cruiser". `label` gives a part kind's name; `random` returns numbers in
+ * [0, 1), `Math.random` by default.
  */
 export function nameKit(
   parts: readonly Part[],
@@ -25,17 +26,21 @@ export function nameKit(
   }
 
   const first = names[0]!;
-  const blended = names.length > 1 ? blend(first, names[1]!) : first;
+  const second = names[1];
+  const blended = second ? blend(first, second) : first;
   const series = `${pick(seriesWords[family(parts)])} ${pick(seriesNouns)}`;
   const shape = shapeWord(parts);
   const color = parts.some((part) => part.kind.startsWith('color:')) && options.color ? colorName(options.color) : undefined;
+  // Nearly every name holds a part's name, whole or run together, so the kit reads as what it holds.
   const choices = [
     color && [blended, color],
     shape && [blended, shape],
-    [first, series],
-    shape && [shape, series],
     [blended, series],
-    color && [color, series]
+    [first, series],
+    second && [second, series],
+    shape && [shape, second ?? first],
+    color && [color, first],
+    shape && [shape, series]
   ].filter((words): words is string[] => Array.isArray(words));
 
   return pick(choices).join(' ');

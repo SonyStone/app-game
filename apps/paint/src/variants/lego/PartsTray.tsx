@@ -1,5 +1,5 @@
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createSignal, For, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import { cellGap, cellSize, partsBounds, pitch, type Part } from './board';
 import type { createSheet } from './createSheet';
 import type { createKits, Kit } from './kits';
@@ -31,6 +31,8 @@ export function PartsTray(props: {
   kitsRef: (element: HTMLElement) => void;
   /** Whether something carried over the kits would be kept as one. */
   overKits: boolean;
+  /** The kit to light up and bring into view: one just kept, or the one a kept part or group matched. */
+  flashKit: string | undefined;
 }) {
   const [body, setBody] = createSignal<HTMLElement>();
   const [shelf, setShelf] = createSignal<HTMLElement>();
@@ -140,6 +142,7 @@ export function PartsTray(props: {
                     kit={kit}
                     kits={props.kits}
                     session={props.session}
+                    flash={props.flashKit === kit.id}
                     onLift={(event) => props.onLiftKit(event, kit)}
                   />
                 )}
@@ -299,10 +302,20 @@ export function KitTile(props: {
   kits: ReturnType<typeof createKits>;
   session: Session;
   cells?: number;
+  /** Lights the kit up and scrolls it into view. */
+  flash?: boolean;
   onLift: (event: PointerEvent) => void;
 }) {
+  const [tile, setTile] = createSignal<HTMLElement>();
+  createEffect(
+    () => (props.flash ? tile() : undefined),
+    (element) => {
+      element?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  );
+
   return (
-    <div class={styles.trayItem}>
+    <div ref={setTile} class={styles.trayItem} data-flash={props.flash ? '' : undefined}>
       <div class={styles.kitPreview} title={`Kit: ${props.kit.name}`} onPointerDown={(event) => props.onLift(event)}>
         <KitPreview parts={props.kit.parts} session={props.session} cells={props.cells ?? 3} />
         <Show when={props.kits.isSaved(props.kit.id)}>
