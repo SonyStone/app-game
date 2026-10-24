@@ -4,10 +4,11 @@ type Point = { x: number; y: number };
 
 /**
  * Where a tank can drive, as a grid over the battlefield built from its static obstacles: the
- * border walls, concrete walls and campfire stones. Each cell stores the distance from its center
- * to the nearest obstacle; a tank's center may stand in cells at least `clearance` away, so paths
+ * border walls, the walls and campfire stones. Each cell stores the distance from its center to
+ * the nearest obstacle; a tank's center may stand in cells at least `clearance` away, so paths
  * through open cells keep the whole hull off the walls. Moving bodies such as tanks and crates
- * are not part of the grid: callers add them as path costs and steer around them.
+ * are not part of the grid: callers add them as path costs and steer around them. When walls are
+ * shot apart, `updateNavGrid` follows them where they changed.
  */
 export type NavGrid = {
   /** Cell size in pixels. */
@@ -19,8 +20,13 @@ export type NavGrid = {
   readonly originY: number;
   /** Distance from a tank's center to obstacles that the hull needs, in pixels. */
   readonly clearance: number;
-  /** Distance from each cell center to the nearest obstacle in pixels, negative inside one. */
+  /**
+   * Distance from each cell center to the nearest obstacle in pixels, negative inside one. Cells
+   * that `updateNavGrid` recomputed may hold less than the true distance where it is large.
+   */
   readonly distance: Float32Array;
+  /** Counts the updates that opened or closed a cell, so paths planned before can be planned again. */
+  revision: number;
 };
 
 /**
@@ -56,7 +62,41 @@ export function createNavGrid(layout: CombatLayout, options: { cell?: number; cl
     }
   }
 
-  return { cell, cols, rows, originX, originY, clearance: options.clearance ?? 24, distance };
+  return { cell, cols, rows, originX, originY, clearance: options.clearance ?? 24, distance, revision: 0 };
+}
+
+/**
+ * Recomputes the cells whose centers lie within `bounds` from `distanceAt`, after obstacles there
+ * changed, such as a wall shot apart. Bumps the grid's `revision` when a cell opened or closed.
+ *
+ * @param distanceAt - Distance from a point to the nearest obstacle as they stand now; it may cap
+ *   large distances, as long as the cap exceeds the clearance with room to spare.
+ * @returns How many cells opened or closed.
+ */
+export function updateNavGrid(grid: NavGrid, bounds: { minX: number; minY: number; maxX: number; maxY: number }, distanceAt: (point: Point) => number) {
+  const minCol = Math.max(Math.ceil((bounds.minX - grid.originX) / grid.cell), 0);
+  const maxCol = Math.min(Math.floor((bounds.maxX - grid.originX) / grid.cell), grid.cols - 1);
+  const minRow = Math.max(Math.ceil((bounds.minY - grid.originY) / grid.cell), 0);
+  const maxRow = Math.min(Math.floor((bounds.maxY - grid.originY) / grid.cell), grid.rows - 1);
+  let flipped = 0;
+
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) {
+      const cell = row * grid.cols + col;
+      const open = isOpenCell(grid, cell);
+      grid.distance[cell] = distanceAt(cellCenter(grid, cell));
+
+      if (open !== isOpenCell(grid, cell)) {
+        flipped++;
+      }
+    }
+  }
+
+  if (flipped > 0) {
+    grid.revision++;
+  }
+
+  return flipped;
 }
 
 /**

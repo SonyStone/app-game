@@ -132,6 +132,19 @@ export function createRangeRenderer(gpu: GpuContext) {
     return std.mix(top, bottom, t.y);
   };
 
+  /**
+   * Where a pixel lies on a `KIND_BLOCK` body: its offset from the block's center, and the block's
+   * half size, the quad less `extra.y` pixels of margin on every side.
+   */
+  const steelBlock = (item: d.Infer<typeof BodyInstance>, local: d.v2f) => {
+    'use gpu';
+    const quadHalf = std.mul(item.grid.xy, item.field.z / 2);
+    const center = std.add(std.sub(item.field.xy, item.field.z / 2), quadHalf);
+    const offset = std.sub(local, center);
+    const half = std.sub(quadHalf, d.vec2f(item.extra.y));
+    return d.vec4f(offset.x, offset.y, half.x, half.y);
+  };
+
   const bodyVertex = tgpu.vertexFn({
     in: { vertex: d.builtin.vertexIndex, instance: d.builtin.instanceIndex },
     out: { position: d.builtin.position, local: d.vec2f, instance: d.interpolate('flat', d.u32) }
@@ -176,6 +189,16 @@ export function createRangeRenderer(gpu: GpuContext) {
       const fill = std.mix(item.color.xyz, d.vec3f(1), flash * 0.6);
       result = over(result, std.mix(fill, black, edgeBand(barrel, d.f32(OUTLINE))), coverage(barrel));
       result = over(result, std.mix(fill, black, edgeBand(cupola, d.f32(OUTLINE))), coverage(cupola));
+    } else if (kind === KIND_BLOCK) {
+      const block = steelBlock(item, input.local);
+      // A plate with a seam inside its edge, hatched across like steel on a plan.
+      const inner = roundedBox(block.xy, std.sub(block.zw, d.vec2f(BLOCK_SEAM)), d.f32(0));
+      const seam = std.abs(inner) - BLOCK_LINE;
+      const across = (0.5 - std.abs(std.fract((block.x + block.y) / BLOCK_HATCH) - 0.5)) * BLOCK_HATCH * 0.7071;
+      const hatch = std.max(across - BLOCK_LINE, inner);
+      const distance = roundedBox(block.xy, block.zw, d.f32(0));
+      const lines = std.max(edgeBand(distance, d.f32(OUTLINE)), coverage(std.min(seam, hatch)));
+      result = over(result, std.mix(item.color.xyz, black, lines), coverage(distance));
     } else {
       const half = std.mul(item.grid.xy, item.field.z / 2);
       const center = std.add(std.sub(item.field.xy, item.field.z / 2), half);
@@ -920,6 +943,9 @@ export function createRangeRenderer(gpu: GpuContext) {
     } else if (kind === KIND_TURRET) {
       const barrel = roundedBox(std.sub(input.local, d.vec2f(18.55, 0)), d.vec2f(11.25, 3.75), d.f32(1));
       cover = coverage(std.min(barrel, std.length(input.local) - 9.6));
+    } else if (kind === KIND_BLOCK) {
+      const block = steelBlock(item, input.local);
+      cover = coverage(roundedBox(block.xy, block.zw, d.f32(0)));
     }
 
     return d.vec4f(cover * item.field.w * item.extra.x, 0, 0, 0);
@@ -1415,7 +1441,7 @@ export function createRangeRenderer(gpu: GpuContext) {
           body.color[2],
           body.flash ?? 0,
           body.height ?? (body.kind === KIND_TURRET ? TURRET_HEIGHT : body.kind === KIND_RECT ? 0 : HULL_HEIGHT),
-          0,
+          body.margin ?? 0,
           0,
           0
         ],
@@ -1576,6 +1602,8 @@ export type BodyDraw = {
   flash?: number;
   alpha?: number;
   height?: number;
+  /** Pixels of the quad around a `KIND_BLOCK` outside the block, room for its antialiased edge. */
+  margin?: number;
 };
 
 /** A body shaded from its distance field, its core hidden under armor. */
@@ -1589,6 +1617,12 @@ export const KIND_RECT = 2;
 
 /** A body shaded from its distance field whose core shows through a hole. */
 export const KIND_FIELD_OPEN = 3;
+
+/**
+ * A block of steel shaded from a formula, at any size and without a field slot: a hatched plate
+ * filling the quad less its `margin`, with an outline.
+ */
+export const KIND_BLOCK = 4;
 
 /** A tapered streak along its velocity. */
 export const PARTICLE_SPARK = 0;
@@ -1622,11 +1656,19 @@ export type SmokeStyle = (typeof SMOKE_STYLES)[number];
 /** Field cells per slot: enough for a 0.5 px hull or a 1 px crate. */
 export const SLOT_CELLS = 96 * 64;
 
-const FIELD_SLOTS = 256;
+/**
+ * Field slots: enough for every tile of the walls of a battlefield, the bodies on it and the
+ * debris flying about.
+ */
+const FIELD_SLOTS = 512;
 const MAX_BODIES = 1024;
 const MAX_PARTICLES = 65536;
 const MAX_SPAWNS_PER_FRAME = 4096;
 const OUTLINE = 1;
+/** Steel blocks: the seam's distance inside the edge, the spacing of the hatch and the half width of both lines. */
+const BLOCK_SEAM = 4;
+const BLOCK_HATCH = 9;
+const BLOCK_LINE = 0.45;
 const CORE_COLOR = d.vec3f(1, 0.55, 0.15);
 const PUFF_FORMAT = 'rgba16float';
 const OCCLUDER_FORMAT = 'r16float';
@@ -1783,7 +1825,8 @@ const Simulation = d.struct({ dt: d.f32, time: d.f32 });
 /**
  * One body on screen, as five vec4s so the CPU can pack it by hand:
  * `placement` = position, cos and sin of the angle; `field` = first cell center, cell size, alpha;
- * `grid` = columns, rows, field slot, kind; `color` = fill RGB and hit flash; `extra` = height.
+ * `grid` = columns, rows, field slot, kind; `color` = fill RGB and hit flash; `extra` = height and
+ * the margin of a steel block.
  */
 const BodyInstance = d.struct({
   placement: d.vec4f,

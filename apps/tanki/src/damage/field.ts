@@ -331,24 +331,41 @@ export type Fragment = {
 
 /**
  * Splits off armor that no longer connects to the main body and removes it from `field`.
- * The main body is the largest connected piece. Pieces of at least `minCells` cells are returned
- * as fragments; smaller crumbs are only removed.
+ * Pieces of at least `minCells` cells are returned as fragments; smaller crumbs are only removed.
+ *
+ * @param anchored - Cells that hold whatever touches them in place, such as cells shared with a
+ *   neighboring piece of the same wall. Every piece touching one stays and the rest come off;
+ *   without anchored cells, or when no piece touches one, the main body is the largest piece.
  */
-export function detachLoosePieces(field: DamageField, minCells: number) {
+export function detachLoosePieces(field: DamageField, minCells: number, anchored?: (cell: number) => boolean) {
   const labels = labelArmor(field);
   const sizes = countLabels(labels);
-  // Label 0 counts the empty cells, so it never competes for the main body.
-  let main = 0;
-  let mainSize = 0;
+  const held = new Set<number>();
 
-  sizes.forEach((size, label) => {
-    if (label > 0 && size > mainSize) {
-      main = label;
-      mainSize = size;
-    }
-  });
+  if (anchored) {
+    labels.forEach((label, cell) => {
+      if (label > 0 && !held.has(label) && anchored(cell)) {
+        held.add(label);
+      }
+    });
+  }
 
-  return removeLabels(field, labels, sizes, (label) => label !== main, minCells);
+  if (held.size === 0) {
+    // Label 0 counts the empty cells, so it never competes for the main body.
+    let main = 0;
+    let mainSize = 0;
+
+    sizes.forEach((size, label) => {
+      if (label > 0 && size > mainSize) {
+        main = label;
+        mainSize = size;
+      }
+    });
+
+    held.add(main);
+  }
+
+  return removeLabels(field, labels, sizes, (label) => !held.has(label), minCells);
 }
 
 /**
