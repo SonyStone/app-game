@@ -78,21 +78,23 @@ export function createWalls(
     },
 
     /**
-     * The first wall or rubble along a ray within `maxDistance`, with the tile hit, if the wall is
-     * breakable; `undefined` when the ray meets neither.
+     * The first wall or rubble along a ray within `maxDistance`, with the outward normal of the
+     * collider hit and the tile hit, if the wall is breakable; `undefined` when the ray meets
+     * neither.
      *
      * @param direction - Unit direction.
      * @param overRubble - Pixels from the start within which the ray passes over rubble, as a shot
-     *   from a tank right behind rubble does, while shots from afar meet it.
+     *   from a tank right behind rubble does, while shots from afar meet it; `Infinity` passes over
+     *   all of it.
      */
     cast(start: Point, direction: Point, maxDistance: number, overRubble = 0) {
       const solid = castRay(start, direction, maxDistance, false);
       const reach = solid?.timeOfImpact ?? maxDistance;
       const from = { x: start.x + direction.x * overRubble, y: start.y + direction.y * overRubble };
       const rubble = overRubble < reach ? castRay(from, direction, reach - overRubble, true) : undefined;
-      const hit = rubble ? { timeOfImpact: overRubble + rubble.timeOfImpact, collider: rubble.collider } : solid;
+      const hit = rubble ? { timeOfImpact: overRubble + rubble.timeOfImpact, collider: rubble.collider, normal: rubble.normal } : solid;
 
-      return hit ? { distance: hit.timeOfImpact, tile: owners.get(hit.collider.handle) } : undefined;
+      return hit ? { distance: hit.timeOfImpact, tile: owners.get(hit.collider.handle), normal: { x: hit.normal.x, y: hit.normal.y } } : undefined;
     },
 
     /**
@@ -290,7 +292,7 @@ export function createWalls(
 
   /** Casts a ray against the walls, or only against rubble. */
   function castRay(start: Point, direction: Point, maxDistance: number, rubble: boolean) {
-    return world.castRay(
+    return world.castRayAndGetNormal(
       new rapier.Ray(start, direction),
       maxDistance,
       true,

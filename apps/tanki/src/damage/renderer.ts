@@ -134,15 +134,86 @@ export function createRangeRenderer(gpu: GpuContext) {
 
   /**
    * Where a pixel lies on a `KIND_BLOCK` body: its offset from the block's center, and the block's
-   * half size, the quad less `extra.y` pixels of margin on every side.
+   * half size, the quad less `extra.w` pixels of margin on every side.
    */
   const steelBlock = (item: d.Infer<typeof BodyInstance>, local: d.v2f) => {
     'use gpu';
     const quadHalf = std.mul(item.grid.xy, item.field.z / 2);
     const center = std.add(std.sub(item.field.xy, item.field.z / 2), quadHalf);
     const offset = std.sub(local, center);
-    const half = std.sub(quadHalf, d.vec2f(item.extra.y));
+    const half = std.sub(quadHalf, d.vec2f(item.extra.w));
     return d.vec4f(offset.x, offset.y, half.x, half.y);
+  };
+
+  /**
+   * Signed distance to part `part` of a turret of `style` (one of the `TURRET_*` constants) at a
+   * local point, +x along the barrel. Parts are drawn in order, so later ones overlap earlier ones;
+   * parts a style lacks lie `TURRET_FAR` away. `spin` turns the gatling's barrels about their axis.
+   */
+  const turretPart = (point: d.v2f, style: number, part: number, spin: number) => {
+    'use gpu';
+    let distance = d.f32(TURRET_FAR);
+
+    if (style === TURRET_TWIN) {
+      // The light tank: a small cupola with two short barrels side by side.
+      if (part === 0) {
+        const upper = roundedBox(std.sub(point, d.vec2f(14, -2.9)), d.vec2f(8, 1.7), 0.8);
+        const lower = roundedBox(std.sub(point, d.vec2f(14, 2.9)), d.vec2f(8, 1.7), 0.8);
+        distance = std.min(upper, lower);
+      } else if (part === 1) {
+        distance = std.length(point) - 7.2;
+      }
+    } else if (style === TURRET_GATLING) {
+      // The heavy tank: a broad turret, the gun's drum in front of it and four barrels turning in a cluster.
+      if (part === 0) {
+        distance = roundedBox(std.sub(point, d.vec2f(-1, 0)), d.vec2f(12, 10.5), d.f32(4));
+      } else if (part === 1) {
+        distance = roundedBox(std.sub(point, d.vec2f(15, 0)), d.vec2f(5.5, 5.4), 1.5);
+      } else if (part === 2) {
+        let barrels = d.f32(TURRET_FAR);
+
+        for (let barrel = d.u32(0); barrel < 4; barrel++) {
+          const across = std.sin(spin + d.f32(barrel) * 1.5707963) * 3.1;
+          barrels = std.min(barrels, roundedBox(std.sub(point, d.vec2f(26, across)), d.vec2f(7, 1.05), 0.5));
+        }
+
+        distance = barrels;
+      } else {
+        distance = roundedBox(std.sub(point, d.vec2f(30.5, 0)), d.vec2f(1.3, 4.6), 0.6);
+      }
+    } else if (style === TURRET_MORTAR) {
+      // The grenadier: a cupola with a short, fat mortar tube and a lip at its mouth.
+      if (part === 0) {
+        distance = roundedBox(std.sub(point, d.vec2f(12, 0)), d.vec2f(6.5, 6.2), d.f32(2.5));
+      } else if (part === 1) {
+        distance = roundedBox(std.sub(point, d.vec2f(18.8, 0)), d.vec2f(2, 7.6), d.f32(1.2));
+      } else if (part === 2) {
+        distance = std.length(point) - 9.2;
+      }
+    } else if (style === TURRET_CASEMATE) {
+      // A casemate gun's fixed superstructure, turned with the hull, with the slope of its plates.
+      if (part === 0) {
+        distance = roundedBox(std.sub(point, d.vec2f(3, 0)), d.vec2f(12, 10), 2.5);
+      } else if (part === 1) {
+        distance = std.abs(roundedBox(std.sub(point, d.vec2f(4, 0)), d.vec2f(7.5, 6.2), 1.5)) - 0.5;
+      }
+    } else if (style === TURRET_LONG_GUN) {
+      // A casemate gun's long barrel with a muzzle brake, from a mantlet in the casemate's face.
+      if (part === 0) {
+        distance = roundedBox(std.sub(point, d.vec2f(28, 0)), d.vec2f(20, 2.4), d.f32(1));
+      } else if (part === 1) {
+        distance = roundedBox(std.sub(point, d.vec2f(47, 0)), d.vec2f(2.6, 3.9), 0.8);
+      } else if (part === 2) {
+        distance = roundedBox(std.sub(point, d.vec2f(9, 0)), d.vec2f(4, 5.6), d.f32(2));
+      }
+    } else if (part === 0) {
+      // The medium tank: a cupola and one barrel.
+      distance = roundedBox(std.sub(point, d.vec2f(18.55, 0)), d.vec2f(11.25, 3.75), d.f32(1));
+    } else if (part === 1) {
+      distance = std.length(point) - 9.6;
+    }
+
+    return distance;
   };
 
   const bodyVertex = tgpu.vertexFn({
@@ -184,11 +255,14 @@ export function createRangeRenderer(gpu: GpuContext) {
 
       result = over(result, armor, coverage(armorDistance));
     } else if (kind === KIND_TURRET) {
-      const barrel = roundedBox(std.sub(input.local, d.vec2f(18.55, 0)), d.vec2f(11.25, 3.75), d.f32(1));
-      const cupola = std.length(input.local) - 9.6;
       const fill = std.mix(item.color.xyz, d.vec3f(1), flash * 0.6);
-      result = over(result, std.mix(fill, black, edgeBand(barrel, d.f32(OUTLINE))), coverage(barrel));
-      result = over(result, std.mix(fill, black, edgeBand(cupola, d.f32(OUTLINE))), coverage(cupola));
+      const style = d.u32(item.extra.y);
+
+      // Parts are drawn back to front, each with its own outline, so a cupola overlaps its barrel.
+      for (let part = d.u32(0); part < TURRET_PARTS; part++) {
+        const distance = turretPart(input.local, style, part, item.extra.z);
+        result = over(result, std.mix(fill, black, edgeBand(distance, d.f32(OUTLINE))), coverage(distance));
+      }
     } else if (kind === KIND_BLOCK) {
       const block = steelBlock(item, input.local);
       // A plate with a seam inside its edge, hatched across like steel on a plan.
@@ -941,8 +1015,14 @@ export function createRangeRenderer(gpu: GpuContext) {
       const sample = sampleField(item, input.local);
       cover = coverage(std.min(sample.x, sample.z));
     } else if (kind === KIND_TURRET) {
-      const barrel = roundedBox(std.sub(input.local, d.vec2f(18.55, 0)), d.vec2f(11.25, 3.75), d.f32(1));
-      cover = coverage(std.min(barrel, std.length(input.local) - 9.6));
+      const style = d.u32(item.extra.y);
+      let distance = d.f32(TURRET_FAR);
+
+      for (let part = d.u32(0); part < TURRET_PARTS; part++) {
+        distance = std.min(distance, turretPart(input.local, style, part, item.extra.z));
+      }
+
+      cover = coverage(distance);
     } else if (kind === KIND_BLOCK) {
       const block = steelBlock(item, input.local);
       cover = coverage(roundedBox(block.xy, block.zw, d.f32(0)));
@@ -1441,9 +1521,9 @@ export function createRangeRenderer(gpu: GpuContext) {
           body.color[2],
           body.flash ?? 0,
           body.height ?? (body.kind === KIND_TURRET ? TURRET_HEIGHT : body.kind === KIND_RECT ? 0 : HULL_HEIGHT),
-          body.margin ?? 0,
-          0,
-          0
+          body.style ?? TURRET_MEDIUM,
+          body.spin ?? 0,
+          body.margin ?? 0
         ],
         offset
       );
@@ -1602,6 +1682,10 @@ export type BodyDraw = {
   flash?: number;
   alpha?: number;
   height?: number;
+  /** Look of a `KIND_TURRET`: one of the `TURRET_*` constants; defaults to `TURRET_MEDIUM`. */
+  style?: number;
+  /** Angle in radians the barrels of a `TURRET_GATLING` have turned about their axis. */
+  spin?: number;
   /** Pixels of the quad around a `KIND_BLOCK` outside the block, room for its antialiased edge. */
   margin?: number;
 };
@@ -1623,6 +1707,37 @@ export const KIND_FIELD_OPEN = 3;
  * filling the quad less its `margin`, with an outline.
  */
 export const KIND_BLOCK = 4;
+
+/** Looks of a `KIND_TURRET`: the medium tank's cupola with one barrel. */
+export const TURRET_MEDIUM = 0;
+
+/** The light tank's small cupola with two short barrels. */
+export const TURRET_TWIN = 1;
+
+/** The heavy tank's broad turret with a gatling of four barrels; `spin` turns them. */
+export const TURRET_GATLING = 2;
+
+/** A cupola with a short, fat mortar tube. */
+export const TURRET_MORTAR = 3;
+
+/** A casemate gun's fixed superstructure, drawn turned with the hull. */
+export const TURRET_CASEMATE = 4;
+
+/** A casemate gun's long barrel with its mantlet and muzzle brake. */
+export const TURRET_LONG_GUN = 5;
+
+/**
+ * Quads that hold each turret look with room for its outline, in turret coordinates, to spread
+ * into a `KIND_TURRET` body: the quad starts half a cell before `originX`, `originY`.
+ */
+export const TURRET_QUADS: Record<number, Pick<BodyDraw, 'originX' | 'originY' | 'cell' | 'cols' | 'rows'>> = {
+  [TURRET_MEDIUM]: { originX: -10.5, originY: -10.5, cell: 1, cols: 42, rows: 22 },
+  [TURRET_TWIN]: { originX: -8.5, originY: -8.5, cell: 1, cols: 33, rows: 18 },
+  [TURRET_GATLING]: { originX: -14.5, originY: -12.5, cell: 1, cols: 50, rows: 26 },
+  [TURRET_MORTAR]: { originX: -10.5, originY: -10.5, cell: 1, cols: 35, rows: 22 },
+  [TURRET_CASEMATE]: { originX: -10.5, originY: -11.5, cell: 1, cols: 28, rows: 24 },
+  [TURRET_LONG_GUN]: { originX: 3.5, originY: -6.5, cell: 1, cols: 49, rows: 14 }
+};
 
 /** A tapered streak along its velocity. */
 export const PARTICLE_SPARK = 0;
@@ -1669,6 +1784,9 @@ const OUTLINE = 1;
 const BLOCK_SEAM = 4;
 const BLOCK_HATCH = 9;
 const BLOCK_LINE = 0.45;
+/** Parts a turret look may have, and the distance of the parts it lacks. */
+const TURRET_PARTS = 4;
+const TURRET_FAR = 1000;
 const CORE_COLOR = d.vec3f(1, 0.55, 0.15);
 const PUFF_FORMAT = 'rgba16float';
 const OCCLUDER_FORMAT = 'r16float';
@@ -1736,7 +1854,7 @@ const PLUME_FORMAT = 'rgba16float';
 const PLUME_LIGHT_FORMAT = 'r16float';
 const plumeLightLayout = tgpu.bindGroupLayout({ plumeLight: { texture: d.texture2d(d.f32) } });
 /** Height above the ground the camera looks down from, in world pixels: sets the strength of parallax. */
-const CAMERA_HEIGHT = 600;
+export const CAMERA_HEIGHT = 600;
 /** Unit vector toward the sun in world axes, with z up: shadows fall `SUN.shadowLength` per unit of height. */
 const SUN_TOWARD = std.normalize(d.vec3f(-SUN.direction.x, -SUN.direction.y, 1 / SUN.shadowLength));
 /** How far a ball's rim bulges in and out, as a share of its radius. */
@@ -1825,8 +1943,8 @@ const Simulation = d.struct({ dt: d.f32, time: d.f32 });
 /**
  * One body on screen, as five vec4s so the CPU can pack it by hand:
  * `placement` = position, cos and sin of the angle; `field` = first cell center, cell size, alpha;
- * `grid` = columns, rows, field slot, kind; `color` = fill RGB and hit flash; `extra` = height and
- * the margin of a steel block.
+ * `grid` = columns, rows, field slot, kind; `color` = fill RGB and hit flash; `extra` = height, a
+ * turret's look and the turn of its barrels, and the margin of a steel block.
  */
 const BodyInstance = d.struct({
   placement: d.vec4f,

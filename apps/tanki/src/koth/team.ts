@@ -1,10 +1,12 @@
 import type { Tank } from '../arena/bodies';
 import type { Combat } from '../damage/combat';
-import type { Gun } from './gun';
 import type { Role } from './brain';
+import type { Trigger, Weapon } from './classes/weapon';
 import type { KothMap } from './map';
-import { cellCenter, sightReach, traceClear, type NavGrid } from './navigation';
+import { findPerches } from './classes/perch';
+import { cellAt, cellCenter, sightReach, traceClear, type NavGrid } from './navigation';
 import { rivalOf, type CaptureState, type TeamId } from './rules';
+import type { TankClass, TankClassId } from './tanks';
 
 type Point = { x: number; y: number };
 
@@ -19,9 +21,17 @@ export type Member = {
   human: boolean;
   /** The member's tank; `undefined` while it waits to respawn. */
   tank: Tank | undefined;
-  /** The gun of the member's tank, while it has one. */
-  gun: Gun | undefined;
-  /** Job the team gave the member; humans always count as assault. */
+  /** The class of the member's tank, or of its next one while it waits. */
+  tankClass: TankClass;
+  /** The class the member asked for, which it takes at its next respawn. */
+  nextClass: TankClassId | undefined;
+  /** The weapon of the member's tank, while it has one. */
+  weapon: Weapon | undefined;
+  /** How the member works the trigger this step; the match fires and then lets go. */
+  trigger: Trigger;
+  /** Where a casemate gun's hull began to turn in place, while it turns. */
+  pivot: Point | undefined;
+  /** Job the member does for the team, from its class. */
   role: Role;
   /** Match time at which a destroyed tank comes back. */
   respawnAt: number | undefined;
@@ -88,6 +98,8 @@ export function createTeamBoard(
   let intent: 'push' | 'hold' | 'regroup' = 'push';
   let push: { phase: 'none' | 'gather' | 'go'; since: number; lane: 'north' | 'south' } = { phase: 'none', since: 0, lane: 'north' };
   let focus: Tank | undefined;
+  const perches = findPerches(grid, map, team);
+  const perchOf = new Map<Member, Point>();
   // Teams update half an interval apart, so their work falls on different steps.
   let nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
 
@@ -179,11 +191,22 @@ export function createTeamBoard(
       staging.set(member, { arrived, at: context.clock() });
     },
 
-    /** The member's spot on the point, on its own side and spread out from the others. */
+    /**
+     * The member's spot on the point, on its own side and spread out from the others: an anchor
+     * near its middle, and a sniper on its perch, from where it watches the point.
+     */
     pointSpot(member: Member) {
       const side = team === 'red' ? Math.PI : 0;
       const spread = member.index % 2 === 0 ? 1 : -1;
       let angle = side + spread * 0.45;
+
+      if (member.role === 'sniper') {
+        return perchSpot(member);
+      }
+
+      if (member.role === 'anchor') {
+        return { x: map.point.x + Math.cos(side + spread * 0.3) * POINT_SPOT * 0.4, y: map.point.y + Math.sin(side + spread * 0.3) * POINT_SPOT * 0.4 };
+      }
 
       if (member.role === 'support') {
         angle = side + spread * 1.1;
@@ -194,10 +217,17 @@ export function createTeamBoard(
       return { x: map.point.x + Math.cos(angle) * POINT_SPOT, y: map.point.y + Math.sin(angle) * POINT_SPOT };
     },
 
-    /** Where the member waits before a coordinated push: assaults and supports in the middle lane, the flanker in a side lane. */
+    /**
+     * Where the member waits before a coordinated push: assaults and supports in the middle lane,
+     * the flanker in a side lane, a sniper on its perch.
+     */
     stagingSpot(member: Member): Point {
       const lanes = map.lanes[team];
       const back = team === 'red' ? -1 : 1;
+
+      if (member.role === 'sniper') {
+        return perchSpot(member);
+      }
 
       if (member.role === 'flank') {
         return lanes[push.lane];
@@ -208,6 +238,14 @@ export function createTeamBoard(
       }
 
       return { x: lanes.center.x, y: lanes.center.y + (member.index % 2 === 0 ? 75 : -75) };
+    },
+
+    /**
+     * Where a sniper watches the point from: the team's best perch in least danger from the
+     * enemies it knows of, kept while it stays out of their sight.
+     */
+    perchSpot(member: Member): Point {
+      return perchSpot(member);
     },
 
     /** Where the team regroups. */
@@ -251,12 +289,27 @@ export function createTeamBoard(
       intent = 'push';
       push = { phase: 'none', since: 0, lane: 'north' };
       focus = undefined;
+      perchOf.clear();
       nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
     }
   };
 
   function alive(tank: Tank) {
     return combat.armorOf(tank) !== undefined;
+  }
+
+  function perchSpot(member: Member): Point {
+    const exposure = (spot: Point) => danger[cellAt(grid, spot)];
+    const current = perchOf.get(member);
+
+    if (current && exposure(current) < PERCH_DANGER) {
+      return current;
+    }
+
+    const taken = new Set([...perchOf.entries()].filter(([other]) => other !== member && other.tank).map(([, spot]) => spot));
+    const best = perches.filter((spot) => !taken.has(spot)).sort((a, b) => exposure(a) - exposure(b))[0] ?? map.lanes[team].center;
+    perchOf.set(member, best);
+    return best;
   }
 
   function record(tank: Tank) {
@@ -375,30 +428,10 @@ export function createTeamBoard(
     }
   }
 
-  /**
-   * Fills the roles assault, flank, support, assault in that order from the living members.
-   * A member keeps its role while that role is still wanted; the rest take the missing roles.
-   */
+  /** Gives every member the role of its class: see `ROLE_OF_CLASS`. */
   function assignRoles() {
-    const living = members.filter((member) => member.tank);
-    const wanted = ROLE_ORDER.slice(0, living.length);
-    const open = [...wanted];
-    const unassigned: Member[] = [];
-
-    for (const member of [...living].sort((a, b) => Number(b.human) - Number(a.human))) {
-      const role = member.human ? 'assault' : member.role;
-      const index = open.indexOf(role);
-
-      if (index >= 0) {
-        open.splice(index, 1);
-        member.role = role;
-      } else {
-        unassigned.push(member);
-      }
-    }
-
-    for (const member of unassigned) {
-      member.role = open.shift() ?? 'assault';
+    for (const member of members) {
+      member.role = ROLE_OF_CLASS[member.tankClass.id];
     }
   }
 
@@ -532,8 +565,12 @@ export function createTeamBoard(
 /** A team's board as returned by `createTeamBoard`. */
 export type TeamBoard = ReturnType<typeof createTeamBoard>;
 
-/** Roles in the order living members fill them. */
-const ROLE_ORDER: Role[] = ['assault', 'flank', 'support', 'assault'];
+/**
+ * The job of each class, after its part in a Team Fortress 2 team: the Scout flanks, the Soldier
+ * assaults the point, the Heavy anchors on it, the Demoman supports the others with grenades
+ * and the Sniper watches the point from afar.
+ */
+export const ROLE_OF_CLASS: Record<TankClassId, Role> = { scout: 'flank', soldier: 'assault', heavy: 'anchor', demoman: 'support', sniper: 'sniper' };
 const UPDATE_INTERVAL = 0.25;
 /** Seconds the team remembers an enemy it no longer sees. */
 const MEMORY = 4;
@@ -553,6 +590,8 @@ const HELP_WINDOW = 1.5;
 const HELP_RANGE = 700;
 /** Distance of the members' spots from the point's center. */
 const POINT_SPOT = 45;
+/** Danger at its perch from which a sniper moves to another. */
+const PERCH_DANGER = 1.5;
 /** Half size of a crate's armor. */
 const CRATE_HALF = { x: 21.25, y: 46.25 };
 const CRATE_COST = 3;
