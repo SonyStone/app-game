@@ -28,7 +28,6 @@ import {
   PARTICLE_FIRE,
   PARTICLE_SMOKE,
   PARTICLE_TRAIL,
-  PARTICLE_SOOT,
   PARTICLE_SPARK,
   SLOT_CELLS,
   type createRangeRenderer
@@ -325,17 +324,17 @@ export function createCombat(
           while (body.exhaust >= 1) {
             body.exhaust -= 1;
             const at = toWorld(body.body, EXHAUST_OFFSET);
-            renderer.spawn(PARTICLE_SOOT, at.x, at.y, between(-6, 6), between(-6, 6), 1.5, between(1.2, 2.2), NO_COLOR);
+            burning.puff(at.x, at.y, between(-6, 6), between(-6, 6), 1.5, between(1.2, 2.2));
           }
         }
       }
     },
 
     /**
-     * Queues the floor, walls, every body, turret, debris piece, smoke column and light for
+     * Queues the floor, walls, every body, turret, debris piece, smoke and light for
      * drawing, bottom to top. Also makes `view` the point that hears shots, for camera shake.
      *
-     * @param view - Point on the ground under the camera, for the parallax of rising smoke.
+     * @param view - Point on the ground under the camera.
      * @param underlay - Adds markings on the floor, drawn after the floor and before anything on it.
      */
     draw(view: Point, underlay?: () => void) {
@@ -400,7 +399,7 @@ export function createCombat(
         }
       }
 
-      burning.draw(view);
+      burning.draw();
 
       for (const light of flashes) {
         const fade = 1 - light.age / light.life;
@@ -912,7 +911,7 @@ export function createCombat(
     for (let index = 0; index < 30; index++) {
       const angle = between(0, Math.PI * 2);
       const speed = between(10, 70);
-      renderer.spawn(PARTICLE_SOOT, center.x + between(-8, 8), center.y + between(-8, 8), Math.cos(angle) * speed, Math.sin(angle) * speed, between(1.5, 3.5), between(5, 9), NO_COLOR);
+      burning.puff(center.x + between(-8, 8), center.y + between(-8, 8), Math.cos(angle) * speed, Math.sin(angle) * speed, between(1.5, 3.5), between(5, 9));
     }
 
     for (const fragment of shatter(body.field, 7, MIN_FRAGMENT_CELLS, random)) {

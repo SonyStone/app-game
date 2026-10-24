@@ -1,26 +1,26 @@
-import { PARTICLE_FIRE, PARTICLE_SPARK, SUN, type createRangeRenderer, type SmokeBall } from './renderer';
+import { PARTICLE_FIRE, PARTICLE_SPARK, type createRangeRenderer } from './renderer';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
 type Point = { x: number; y: number };
 
 /**
- * Everything that burns, after satellite photos of fires: patches of flame on the ground, a
- * dense plume of smoke that hides most of the flames, embers, and a flickering light that throws
- * shadows. A fire of limited life dies down toward its end, and its last smoke drifts away after it.
+ * Everything that burns and smokes, after satellite photos of fires: patches of flame on the
+ * ground, a dense plume of smoke that drifts off the flames, embers, a flickering light that
+ * throws shadows, and puffs of soot from exhausts and blasts. A fire of limited life dies down
+ * toward its end, and its last smoke drifts away after it.
  *
  * Smoke leaves a fire as a steady stream of parcels. Each rises toward the camera, quickly at
  * first and then levelling off, while the wind, stronger higher up, carries it off and gusts push
  * it aside; it swells, its billows roll, and it thins out until it is gone. Every parcel's place
  * and size are smooth functions of its age, so the plume flows without jumps at any frame rate.
- * A parcel is a ball with smaller balls heaped on top; laid over each other, younger and lower
- * parcels first, they read as cauliflower billows.
+ * A parcel is a body with billows heaped on top and smaller billows on those: cauliflower.
  *
- * The camera looks down from `CAMERA_HEIGHT`, so a parcel appears pushed away from the middle of
- * the screen and larger the higher it is, and the plume shifts against the ground as the camera
- * moves. Each ball casts its shadow onto the ground along the sun.
+ * All smoke goes to the renderer as balls placed where they are in the air (`addSmokeBall`); the
+ * renderer shows them as the camera sees them, in its current style, with their shadows.
  */
 export function createBurning(renderer: Renderer) {
   const fires: Fire[] = [];
+  const soot: Soot[] = [];
 
   return {
     /**
@@ -49,10 +49,45 @@ export function createBurning(renderer: Renderer) {
     },
 
     /**
-     * Feeds every fire's flames, embers and smoke over a frame of `dt` seconds, and removes fires
-     * whose last smoke is gone.
+     * Gives off a puff of soot, such as exhaust or the smoke of a blast. It drifts off at `vx`,
+     * `vy` world pixels per second, slowing down; it swells, rises a little, bigger puffs higher,
+     * and fades away over the second half of its `life` in seconds. Puffs of `size` world pixels
+     * and more glow at first with the fireball they came from.
+     */
+    puff(x: number, y: number, vx: number, vy: number, life: number, size: number) {
+      soot.push({
+        x,
+        y,
+        vx,
+        vy,
+        age: 0,
+        life,
+        size,
+        tone: random(0.9, 1.1),
+        turn: Math.random() * Math.PI * 2
+      });
+    },
+
+    /**
+     * Feeds every fire's flames, embers and smoke and moves soot over a frame of `dt` seconds;
+     * removes fires whose last smoke is gone and soot that has faded away.
      */
     update(dt: number) {
+      const drag = Math.exp(-SOOT_DRAG * dt);
+
+      for (let index = soot.length - 1; index >= 0; index--) {
+        const puff = soot[index];
+        puff.age += dt;
+        puff.x += puff.vx * dt;
+        puff.y += puff.vy * dt;
+        puff.vx *= drag;
+        puff.vy *= drag;
+
+        if (puff.age >= puff.life) {
+          soot.splice(index, 1);
+        }
+      }
+
       for (let index = fires.length - 1; index >= 0; index--) {
         const fire = fires[index];
         fire.age += dt;
@@ -93,16 +128,13 @@ export function createBurning(renderer: Renderer) {
       }
     },
 
-    /**
-     * Adds every fire's smoke and flickering light to this frame.
-     *
-     * @param camera - Point on the ground under the camera, which rising smoke leans away from.
-     */
-    draw(camera: Point) {
+    /** Adds every fire's smoke and flickering light, and all soot, to this frame. */
+    draw() {
+      soot.forEach((puff) => drawSoot(renderer, puff));
+
       for (const fire of fires) {
-        // Younger parcels are lower, so they go first; a parcel's place in this order never changes.
-        for (let index = fire.parcels.length - 1; index >= 0; index--) {
-          drawParcel(renderer, camera, fire, fire.parcels[index]);
+        for (const parcel of fire.parcels) {
+          drawParcel(renderer, fire, parcel);
         }
 
         if (fire.age < fire.life) {
@@ -156,16 +188,29 @@ type Parcel = {
   billows: Billow[];
 };
 
-/** A smaller ball heaped on a parcel; lengths are shares of the parcel's radius. */
-type Billow = { angle: number; offset: number; radius: number; lift: number; tone: number };
+/**
+ * A smaller ball heaped on a parcel's body (`level` 1) or on one of its billows (`level` 2, on
+ * billow `parent`). Lengths are shares of the radius of the ball it sits on, `angle` turns with
+ * the parcel's billows.
+ */
+type Billow = { level: 1 | 2; parent: number; angle: number; offset: number; radius: number; lift: number; tone: number };
+
+/** A puff of soot; `tone` and `turn` as in `SmokeBall`. */
+type Soot = Point & {
+  vx: number;
+  vy: number;
+  age: number;
+  life: number;
+  size: number;
+  tone: number;
+  turn: number;
+};
 
 /** Wind, in world pixels per second: carries smoke and embers to the upper right. */
 export const WIND = { x: 22, y: -16 };
 const WIND_SPEED = Math.hypot(WIND.x, WIND.y);
 const DOWNWIND = { x: WIND.x / WIND_SPEED, y: WIND.y / WIND_SPEED };
 const CROSSWIND = { x: -DOWNWIND.y, y: DOWNWIND.x };
-/** Height above the ground the camera looks down from, in world pixels: sets the strength of parallax. */
-const CAMERA_HEIGHT = 600;
 
 /** Height of flames above the floor: above hulls, below turrets. */
 const LIGHT_HEIGHT = 8;
@@ -179,8 +224,8 @@ const EMBER_COLOR = [1, 0.6, 0.2, 1];
 const NO_COLOR = [0, 0, 0, 0];
 
 /** Smoke parcels per second, plus more for wider fires. */
-const SMOKE_RATE = 14;
-const SMOKE_RATE_PER_SPREAD = 0.4;
+const SMOKE_RATE = 8;
+const SMOKE_RATE_PER_SPREAD = 0.25;
 /** Seconds a parcel lives, plus more for wider fires. */
 const SMOKE_LIFE = 7;
 const SMOKE_LIFE_PER_SPREAD = 0.3;
@@ -211,13 +256,23 @@ const WANDER = 8;
  * so they show through it.
  */
 const THICKENING = { from: 0.35, to: 2 };
-/** Share of its life after which a parcel starts thinning out. */
-const THINNING = 0.5;
+/** Share of its life after which a parcel starts fading away, and the share of the fading before it thins. */
+const THINNING = 0.6;
+const FADE_FROM = 0.3;
 /** Seconds over which a parcel stops glowing with the flames below it. */
 const HEAT_TIME = 0.8;
-/** Fewest and most billows heaped on a parcel. */
-const MIN_BILLOWS = 3;
-const MAX_BILLOWS = 6;
+/** Slowing of soot, per second, as in `PARTICLE_*` drags; how far it rises over its life and swells, per world pixel of its size. */
+const SOOT_DRAG = 1.5;
+const SOOT_RISE = 2.5;
+const SOOT_SWELL = 1.5;
+/** Soot at least this many world pixels across comes from blasts and glows for about `SOOT_HEAT_TIME` seconds. */
+const SOOT_GLOWING = 3;
+const SOOT_HEAT_TIME = 0.35;
+/** Fewest and most billows heaped on a parcel's body. */
+const MIN_BILLOWS = 4;
+const MAX_BILLOWS = 5;
+/** Share of billows that carry two smaller billows instead of one. */
+const SECOND_BILLOW = 0.3;
 
 /** Strength of a fire, 1 while it burns and falling to 0 over its last seconds. */
 function vigor(fire: Fire) {
@@ -253,18 +308,50 @@ function releaseParcel(fire: Fire, born: number, strength: number): Parcel {
     tone: random(0.85, 1.15),
     phase: Math.random() * Math.PI * 2,
     roll: random(-0.5, 0.5),
-    billows: Array.from({ length: Math.floor(random(MIN_BILLOWS, MAX_BILLOWS + 1)) }, () => ({
-      angle: Math.random() * Math.PI * 2,
-      offset: random(0.5, 0.75),
-      radius: random(0.3, 0.55),
-      lift: random(0.35, 0.6),
-      tone: random(0.9, 1.1)
-    }))
+    billows: heapBillows()
   };
 }
 
-/** Adds a parcel's balls to the frame: one large ball and smaller billows heaped on its top. */
-function drawParcel(renderer: Renderer, camera: Point, fire: Fire, parcel: Parcel) {
+/**
+ * Billows for a parcel: a ring of them on its body, spread around it so they cover its top, and
+ * one smaller one on each of those, sometimes two, which makes the cauliflower of thick smoke.
+ */
+function heapBillows() {
+  const count = Math.floor(random(MIN_BILLOWS, MAX_BILLOWS + 1));
+  const start = Math.random() * Math.PI * 2;
+  const billows: Billow[] = [];
+
+  for (let index = 0; index < count; index++) {
+    billows.push({
+      level: 1,
+      parent: -1,
+      angle: start + ((index + random(-0.3, 0.3)) / count) * Math.PI * 2,
+      offset: random(0.45, 0.7),
+      radius: random(0.4, 0.55),
+      lift: random(0.3, 0.45),
+      tone: random(0.92, 1.08)
+    });
+  }
+
+  for (let parent = 0; parent < count; parent++) {
+    for (let index = Math.random() < SECOND_BILLOW ? 2 : 1; index > 0; index--) {
+      billows.push({
+        level: 2,
+        parent,
+        angle: Math.random() * Math.PI * 2,
+        offset: random(0.45, 0.7),
+        radius: random(0.45, 0.6),
+        lift: random(0.2, 0.35),
+        tone: random(0.94, 1.06)
+      });
+    }
+  }
+
+  return billows;
+}
+
+/** Adds a parcel's balls to the frame: its body, billows heaped on its top and smaller billows on those. */
+function drawParcel(renderer: Renderer, fire: Fire, parcel: Parcel) {
   const age = fire.age - parcel.born;
   const life = smokeLife(fire);
   const strength = parcel.strength;
@@ -276,52 +363,57 @@ function drawParcel(renderer: Renderer, camera: Point, fire: Fire, parcel: Parce
   const base = SMOKE_BASE + fire.spread * SMOKE_BASE_PER_SPREAD;
   const top = SMOKE_TOP + fire.spread * SMOKE_TOP_PER_SPREAD;
   const radius = (base + (top - base) * risen + SWELL * age) * parcel.size * (0.5 + 0.5 * strength);
-  const thick = 1 - smoothstep(life * THINNING, life, age);
-  const opacity = smoothstep(THICKENING.from, THICKENING.to, age) * thick * Math.min(strength * 1.5, 1);
-  // Dense smoke has a crisp edge; thinning smoke goes soft, so overlapping balls do not show as rings.
-  const softness = 0.12 + 0.6 * (1 - thick);
+  const opacity = smoothstep(THICKENING.from, THICKENING.to, age) * thinning(age / life) * Math.min(strength * 1.5, 1);
   const heat = Math.exp(-age / HEAT_TIME) * strength;
   const turn = parcel.phase + parcel.roll * age;
 
-  addBall(renderer, camera, { x, y, height, radius, opacity, softness, heat, turn, tone: parcel.tone });
+  const body = { x, y, height, bodyHeight: height, radius, opacity, heat, turn, tone: parcel.tone };
+  const balls: (typeof body)[] = [];
+  renderer.addSmokeBall(body);
 
   for (const [index, billow] of parcel.billows.entries()) {
-    const angle = billow.angle + turn;
+    const under = billow.level === 1 ? body : balls[billow.parent];
+    const angle = billow.angle + turn * billow.level;
     const swell = 1 + 0.12 * Math.sin(age * 0.9 + index * 2.1 + parcel.phase);
-    addBall(renderer, camera, {
-      x: x + Math.cos(angle) * radius * billow.offset,
-      y: y + Math.sin(angle) * radius * billow.offset,
-      height: height + radius * billow.lift,
-      radius: radius * billow.radius * swell,
+    const ball = {
+      x: under.x + Math.cos(angle) * under.radius * billow.offset,
+      y: under.y + Math.sin(angle) * under.radius * billow.offset,
+      height: under.height + under.radius * billow.lift,
+      bodyHeight: height,
+      radius: under.radius * billow.radius * swell,
       opacity,
-      softness,
       heat,
       turn: angle * 2,
       tone: parcel.tone * billow.tone
-    });
+    };
+    balls.push(ball);
+    renderer.addSmokeBall(ball);
   }
 }
 
-/** A ball of smoke at a height above the ground, with the look the renderer takes as it is. */
-type Ball = Point & {
-  height: number;
-  radius: number;
-} & Pick<SmokeBall, 'opacity' | 'softness' | 'heat' | 'turn' | 'tone'>;
-
-/** Adds a ball at a height to the frame, as the camera sees it and with its shadow along the sun. */
-function addBall(renderer: Renderer, camera: Point, ball: Ball) {
-  const scale = CAMERA_HEIGHT / (CAMERA_HEIGHT - ball.height);
-  const seen = { x: camera.x + (ball.x - camera.x) * scale, y: camera.y + (ball.y - camera.y) * scale };
-  const cast = ball.height * SUN.shadowLength;
+/** Adds a puff of soot to the frame as one ball of smoke. */
+function drawSoot(renderer: Renderer, puff: Soot) {
+  const t = puff.age / puff.life;
+  const height = SOOT_RISE * puff.size * t;
   renderer.addSmokeBall({
-    seen: { ...seen, radius: ball.radius * scale },
-    shadow: { x: ball.x + SUN.direction.x * cast, y: ball.y + SUN.direction.y * cast, radius: ball.radius },
-    opacity: ball.opacity,
-    softness: ball.softness,
-    heat: ball.heat,
-    turn: ball.turn,
-    tone: ball.tone
+    x: puff.x,
+    y: puff.y,
+    height,
+    bodyHeight: height,
+    radius: puff.size * (0.8 + SOOT_SWELL * t),
+    opacity: smoothstep(0, 0.12, t) * (1 - smoothstep(0.45, 1, t)),
+    heat: Math.exp(-puff.age / SOOT_HEAT_TIME) * Math.min(Math.max((puff.size - SOOT_GLOWING) / 3, 0), 1),
+    tone: puff.tone,
+    turn: puff.turn + puff.age * 0.3
   });
+}
+
+/**
+ * Opacity left to smoke that has lived `share` of its life: full until `THINNING`, then thinning
+ * out to nothing, slowly at first.
+ */
+function thinning(share: number) {
+  return 1 - smoothstep(THINNING + (1 - THINNING) * FADE_FROM, 1, share);
 }
 
 function scatter(fire: Fire) {

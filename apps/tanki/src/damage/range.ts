@@ -69,9 +69,9 @@ export function createDamageRange(rapier: Rapier, world: World, renderer: Return
     },
 
     /**
-     * Queues every body, turret, debris piece, smoke column and light for drawing, bottom to top.
+     * Queues every body, turret, debris piece, smoke and light for drawing, bottom to top.
      *
-     * @param view - Point on the ground under the camera, for the parallax of rising smoke.
+     * @param view - Point on the ground under the camera.
      */
     draw(view: Point) {
       combat.draw(view);

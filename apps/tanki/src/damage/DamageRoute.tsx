@@ -8,17 +8,29 @@ import { makeArenaInput } from '../arena/input';
 import { Rapier2D, useRapier2D } from '../physics/Rapier2D';
 import { createWorld } from '../physics/World';
 import { createDamageRange } from './range';
-import { createRangeRenderer } from './renderer';
+import { createRangeRenderer, SMOKE_STYLES, type SmokeStyle } from './renderer';
 
 /**
  * The damage range on WebGPU: drive into targets to dent them, shoot their armor off and hit
- * the glowing core at the rear to blow them up. R or the Reset button rebuilds the range.
+ * the glowing core at the rear to blow them up. R or the Reset button rebuilds the range. V
+ * switches the style of smoke, which the address keeps as `?smoke=`.
  */
 export default function DamageRoute() {
   const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
   const [resetCount, setResetCount] = createSignal(0);
+  const [smoke, setSmoke] = createSignal(smokeFromAddress());
   let stick!: HTMLDivElement;
   let knob!: HTMLDivElement;
+
+  makeEventListener(window, 'keydown', (event) => {
+    if (event.code === 'KeyV') {
+      const next = SMOKE_STYLES[(SMOKE_STYLES.indexOf(smoke()) + 1) % SMOKE_STYLES.length];
+      const address = new URL(location.href);
+      address.searchParams.set('smoke', next);
+      history.replaceState(history.state, '', address);
+      setSmoke(next);
+    }
+  });
 
   return (
     <div class="fixed inset-0 overflow-hidden select-none">
@@ -29,7 +41,7 @@ export default function DamageRoute() {
         error={(error) => <p class="absolute inset-0 m-0 grid place-items-center text-white font-sans">{error.message}</p>}
       >
         <Rapier2D>
-          <DamageScene canvas={canvas()!} resets={resetCount()} stick={stick} knob={knob} />
+          <DamageScene canvas={canvas()!} resets={resetCount()} smoke={smoke()} stick={stick} knob={knob} />
         </Rapier2D>
       </GpuCanvas>
       <div ref={(element) => (stick = element)} class="pointer-events-none absolute hidden rounded-full border-2 border-white/35" />
@@ -42,10 +54,16 @@ export default function DamageRoute() {
       </button>
       <p class="pointer-events-none absolute bottom-3 left-4 m-0 text-xs text-white/60 font-sans">
         WASD drive · mouse aims · click fires · ram to dent · the core sits under the rear armor · glancing shots ricochet · wheel zooms · Q/E turn
-        the view
+        the view · V smoke: {smoke()} ({SMOKE_STYLES.join(' / ')}, or ?smoke=…)
       </p>
     </div>
   );
+}
+
+/** The style of smoke the address asks for with `?smoke=`, or the first style. */
+function smokeFromAddress(): SmokeStyle {
+  const requested = new URLSearchParams(location.search).get('smoke');
+  return SMOKE_STYLES.find((style) => style === requested) ?? SMOKE_STYLES[0];
 }
 
 /** Rapier tolerances assume meters; Godot's Rapier plugin likewise treats 100 px as a meter. */
@@ -56,9 +74,10 @@ const PIXELS_PER_METER = 100;
  * scene owns its physics world, so remounting it starts from an empty world.
  *
  * @param resets - Rebuilds the range whenever it changes after mount.
+ * @param smoke - Style of smoke to draw.
  * @param stick - Ring of the touch drive stick; `knob` is its handle. Both are positioned here.
  */
-function DamageScene(props: { canvas: HTMLCanvasElement; resets: number; stick: HTMLDivElement; knob: HTMLDivElement }) {
+function DamageScene(props: { canvas: HTMLCanvasElement; resets: number; smoke: SmokeStyle; stick: HTMLDivElement; knob: HTMLDivElement }) {
   const canvas = untrack(() => props.canvas);
   const rapier = useRapier2D();
   const world = createWorld(rapier, { gravity: { x: 0, y: 0 }, lengthUnit: PIXELS_PER_METER });
@@ -130,6 +149,11 @@ function DamageScene(props: { canvas: HTMLCanvasElement; resets: number; stick: 
     range.update(dt);
     followTarget(camera, range.player.hull.translation(), screen);
     range.draw(camera);
+
+    if (renderer.smokeStyle !== props.smoke) {
+      renderer.smokeStyle = props.smoke;
+    }
+
     const shake = range.shake;
     const view = { ...camera, x: camera.x + (Math.random() * 2 - 1) * shake, y: camera.y + (Math.random() * 2 - 1) * shake };
     renderer.render(view, screen, BACKGROUND, dt);

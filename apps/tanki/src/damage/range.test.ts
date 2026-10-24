@@ -54,12 +54,12 @@ describe('damage range', () => {
     range.update(1);
     range.draw(wreck);
 
-    // Seen from right above the wreck, its youngest smoke rises from the flames.
+    // The wreck's youngest smoke rises from its flames.
     expect(smoke.some((ball) => Math.hypot(ball.x - wreck.x, ball.y - wreck.y) < 12)).toBe(true);
   });
 });
 
-/** Builds a range on a real Rapier world with a renderer that only records where balls of smoke are seen. */
+/** Builds a range on a real Rapier world with a renderer that only records where balls of smoke are. */
 function createRange() {
   const world = new rapier.World({ x: 0, y: 0 });
   world.lengthUnit = 100;
@@ -72,8 +72,8 @@ function createRange() {
     beginBodies() {},
     addBody() {},
     spawn() {},
-    addSmokeBall(ball: { seen: { x: number; y: number } }) {
-      smoke.push(ball.seen);
+    addSmokeBall(ball: { x: number; y: number }) {
+      smoke.push(ball);
     },
     addLight() {},
     render() {}
