@@ -320,6 +320,32 @@ export function createCombat(
       body.changed = true;
     },
 
+    /**
+     * Chips `tank`'s armor where `point` lies on or in it, as a shot flying along `direction`
+     * would: a hole of `blow.hole` px reaching `blow.depth` px inward, a slight dent and a knock
+     * back of `blow.knockback`. Nothing happens to a destroyed tank.
+     */
+    chip(tank: Tank, point: Point, direction: Point, blow: Pick<ShellSpec, 'hole' | 'depth' | 'knockback'>) {
+      const body = byTank.get(tank);
+
+      if (body) {
+        damage(body, point, direction, blow);
+      }
+    },
+
+    /**
+     * Blows `tank` up from its core, as a shot reaching the core does, throwing its pieces along
+     * `direction`, and credits `killer` in `onDestroyed`. Nothing happens to a destroyed tank.
+     */
+    detonate(tank: Tank, direction: Point, killer?: Tank) {
+      const body = byTank.get(tank);
+
+      if (body) {
+        body.lastShooter = killer;
+        destroy(body, direction);
+      }
+    },
+
     /** Moves debris, emits exhaust, feeds fires and fades hit flashes over a frame of `dt` seconds. */
     update(dt: number) {
       burning.update(dt);

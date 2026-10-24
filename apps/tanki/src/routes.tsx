@@ -19,6 +19,11 @@ const tankiPages = [
     component: lazy(() => import('./koth/KothRoute'))
   },
   {
+    path: '/spy',
+    name: 'Spy sandbox',
+    component: lazy(() => import('./spy/SpyRoute'))
+  },
+  {
     path: '/editor',
     name: 'Map editor',
     component: lazy(() => import('./editor/EditorRoute'))
