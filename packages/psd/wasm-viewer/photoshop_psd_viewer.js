@@ -619,8 +619,10 @@ export class PsdDocumentHandle {
      * standalone active fonts using `add`. No system inventory is read. An empty library preserves existing
      * cached rendering and abstains from font-dependent witnesses. A partial library checks uniquely supplied
      * faces without treating absent names as missing fonts; it never certifies every imported layout as valid.
-     * Conflicts throw in strict mode. In `approximate`, supported global-style cmap or coherent descender
-     * conflicts select ordinary document mixing and retain the cached raster and CachedRaster diagnostic.
+     * A supplied-font glyph conflict with the bounded direct-Latin certificate admits the ordinary cached
+     * return without a diagnostic, unless `typeLayers` requests regeneration. Other conflicts throw in strict
+     * mode. In `approximate`, supported global-style cmap or coherent descender conflicts select ordinary
+     * document mixing and retain the cached raster and CachedRaster diagnostic.
      * Other imports stay unresolved and keep their existing mixing and reporting.
      * `grayProfile` optionally supplies caller-owned working-Gray ICC bytes as a `Uint8Array`.
      * Modern transparent rectangle gradients require the admitted Dot Gain 20% profile explicitly;
@@ -688,7 +690,8 @@ export class PsdFontLibrary {
      * decisions also pass a trustworthy `availableFonts` PostScript-name inventory; omit unknown inventories.
      * `availableFonts` is ignored without active bytes, preserving previous name-only viewer behavior.
      * Supported RGB8 schema-7 global-style cmap or coherent descender conflicts use ordinary document mixing,
-     * retaining the cached raster and CachedRaster diagnostic. Strict rendering still refuses these conflicts.
+     * retaining the cached raster. A bounded direct-Latin glyph-conflict certificate admits this cached return
+     * in strict mode with `typeLayers: false`; other conflicts retain the CachedRaster diagnostic or refusal.
      * Absence of a conflict stays unresolved. Without active bytes the previous rendering behavior is preserved.
      * This does not add raster fonts or install fonts. CFF, invalid indices and unreadable/unnamed faces throw.
      * Repeated identical bytes/index deduplicate; distinct faces under one name abstain. Partial face input

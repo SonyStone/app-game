@@ -1,14 +1,14 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- */
-export function readPsd(bytes: Uint8Array): any;
-/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
 export function writePsd(document: any, composite: Uint8Array): Uint8Array;
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ */
+export function readPsd(bytes: Uint8Array): any;
 /**
  * Rasterizes one upright stem-free CFF2 glyph with Strong AA at 13.375..47.5625 px.
  * The caller supplies actual single-face OTTO font bytes, a complete signed 16.16 design tuple
@@ -18,6 +18,29 @@ export function writePsd(document: any, composite: Uint8Array): Uint8Array;
  * Returns coverage and document-space bounds only. This does not admit CFF2 to addTextFont or SetText.
  */
 export function rasterizeCff2Strong(font_bytes: Uint8Array, design_coordinates: readonly number[], character: string, size: number, origin_x: number, origin_y: number): PsdCff2Coverage;
+/**
+ * Check prepared native-layout bytes under the closed Photoshop 26 v1 contract.
+ * Throws on unsupported metadata layouts. A false result grants no save certificate.
+ */
+export function checkPhotoshop26Save(left: Uint8Array, right: Uint8Array): any;
+/**
+ * Write one saved-history event using explicit retained metadata state.
+ * If retained_instance_id matches the final event's instanceID, updates only action,
+ * instanceID, when and softwareAgent. Otherwise appends a saved event. Earlier events
+ * and unrelated fields survive. Omit retained_instance_id for an empty retained state.
+ * After success the caller retains context.instanceId for the next writer call.
+ * Returns independent XMP bytes and never mutates a session. This is a writer primitive,
+ * not a save certificate: longer histories still refuse editRasterTreeExact because
+ * fresh save-copy import does not yet establish the retained state. No clock or ID is
+ * generated. Invalid native element-form XMP or context throws TypeError.
+ */
+export function writeSavedHistory(xmp: Uint8Array, context: PsdPhotoshop26SaveContext, retained_instance_id?: string | null): Uint8Array;
+/**
+ * Generate an independent baseline JPEG in Photoshop 26's resource-1036 envelope.
+ * Complete sRGB8 RGBA canvas pixels and explicit resolution are required. Resizing
+ * refuses. This proves thumbnail generation only, never editor-save equivalence.
+ */
+export function generatePhotoshop26Thumbnail(width: number, height: number, resolution: number, rgba: Uint8Array): Uint8Array;
 /**
  * Reads persisted styles, vectors, locks, labels, metadata and XMP without renderer admission.
  * Vector frame queries are separate from stored values and report malformed-name/rectangle refusals.
@@ -205,6 +228,12 @@ export interface PsdAllocationError extends Error {
 export type PsdCarrierEdit =
   | { readonly kind: 'effectsVisible'; readonly visible: boolean }
   | { readonly kind: 'dissolveOpacity'; readonly recordIndex: number; /** Integral 0..255. */ readonly opacity: number };
+/** Explicit-context reopen-equivalent requests. Context-free nonempty batches refuse.
+ * Empty context-free batches certify no save. IDs and payloads keep their semantic meanings. */
+export type PsdExactRasterTreeEdit =
+  | Extract<M01Edit, { readonly kind: 'replacePixels' | 'paintPixels' | 'insertRaster' | 'insertGroup'
+      | 'delete' | 'move' | 'rename' | 'opacity' | 'fill' | 'blend' | 'visible' | 'setMask' }>
+  | Extract<PsdProcessEdit, { readonly kind: 'replaceProcessPlanes' | 'renameProcessLayer' | 'setProcessOpacity' }>;
 /** Native source metadata only. Inspection grants no edit admission and performs no display conversion. */
 export interface PsdProcessSource {
   /** PSD color-mode number. */ readonly mode: number;
@@ -255,6 +284,16 @@ export type PsdCmykPhotoFilterPatch = {
       readonly lab?: never;
     }
 );
+/** Native lifecycle supplied by the save host. No system clock or random identities are implicit.
+ * Replaces the final existing saved history event in the admitted canonical PS26 packet. */
+export type PsdMetadataSaveContext = {
+  /** Local timestamp with seconds and explicit offset, YYYY-MM-DDTHH:MM:SS+HH:MM. Updates XMP dates and EXIF DateTime. */
+  readonly modifiedAt: string;
+  /** xmp.iid: followed by a lowercase UUID. Also replaces the final saved history instance. */
+  readonly instanceId: string;
+  /** adobe:docid:photoshop: followed by a lowercase UUID, supplied by the save host. */
+  readonly documentId: string;
+};
 /** Nonvisual metadata writes. Every failed batch preserves revision and source bytes. */
 export type PsdStateMetadataEdit =
   | { readonly kind: 'compHeader'; readonly compId: number; readonly name?: string; readonly comment?: string }
@@ -277,7 +316,16 @@ export type PsdStateMetadataEdit =
   /** Positive exact signed-16.16 ppi without resampling. Plain RGB8 PSD rasters without XMP.
    * Coordinates existing resolution/print/EXIF carriers and preserves units, unknown bytes and caches.
    * Text/smart/vector/style/mask/state content and unsupported companion layouts refuse atomically. */
-  | { readonly kind: 'rasterResolution'; readonly ppi: number }
+  | { readonly kind: 'rasterResolution' | 'resolutionNoResample'; readonly ppi: number }
+  /** Only publicDomain is admitted, with supplied lifecycle and canonical simple PS26 companions.
+   * Other transitions and missing context return Dependency. Untouched packet setters are separate. */
+  | { readonly kind: 'fileInfoCopyright'; readonly status: 'copyrightedWork' | 'publicDomain' | 'unmarked'; readonly saveContext?: PsdMetadataSaveContext }
+  /** Typed dependency refusals until complete companion serialization is certified. */
+  | { readonly kind: 'fileInfoTitle'; readonly title: string }
+  /** Refuses until XMP aliases, mappings, digests and lifecycle can be reconciled together. */
+  | { readonly kind: 'xmpProperty'; readonly namespace: string; readonly name: string; readonly value: string }
+  /** Refuses until automatic partitions and caller-supplied process IDs can be saved together. */
+  | { readonly kind: 'rebuildAutomaticSlices' }
   /** Named refusals until complete dependent writers have native acceptance. */
   | { readonly kind: 'applyComp' | 'captureComp' | 'slices' | 'xmp' | 'printOptions' | 'resolution' };
 
@@ -366,6 +414,82 @@ export interface PsdContextualSave {
 export interface M01Snapshot { readonly revision: bigint; readonly width: number; readonly height: number; readonly identityFloor: number; readonly saveBlocked: boolean; readonly selected: readonly number[]; readonly layers: readonly M01Layer[]; }
 /** Group children are bottom-to-top; endId is reserved and cannot be edited. */
 export interface M01Layer { readonly id: number; readonly endId: number | null; readonly name: string; readonly visible: boolean; readonly opacity: number; readonly fill: number; readonly blend: string; readonly clipped: boolean; readonly link: number | null; readonly linkEnabled: boolean | null; readonly children: readonly M01Layer[]; }
+/** Explicit save-copy operands. The transaction generates no timestamps or identities. */
+export interface PsdPhotoshop26SaveContext {
+  /** Opened document basename without extension, not the output destination. */
+  readonly basename: string;
+  /** ISO8601 current-save timestamp with seconds and an explicit timezone. */
+  readonly saveTime: string;
+  /** Local EXIF current-save timestamp in YYYY:MM:DD HH:MM:SS format. */
+  readonly exifTime: string;
+  /** Current-save UUID prefixed with xmp.iid:. */
+  readonly instanceId: string;
+  /** Save-copy UUID prefixed with adobe:docid:photoshop:. */
+  readonly documentId: string;
+  /** Native Photoshop agent string, such as Adobe Photoshop 26.0 (Macintosh). */
+  readonly softwareAgent: string;
+  /** Explicit host RGB gamma-1 blending setting, which PSD does not store. */
+  readonly linearBlending: boolean;
+}
+export interface PsdEditorSession {
+  /**
+   * Apply a bounded Photoshop 26 reopen-equivalent transaction with explicit host operands.
+   * RGB8 PSD/PSB admits selected-raster properties, opaque same-bounds pixels and
+   * raster insertion/deletion/reorder inside the measured one-level group domain.
+   * RGB16 PSD admits native rename/opacity. Gray8 and embedded-SWOP CMYK8 admit
+   * native rename/opacity/opaque process-plane replacement, with explicit preview context.
+   * Same-target scalar batches admit flat plain RGB8 sources and one final target time.
+   * setMask replaces an existing enabled independent RGB8 mask's samples at the same
+   * rectangle, retaining its default, all other streams and source alpha. It needs a target time.
+   * Retained effects admit the measured drop-shadow and two Bevel modern/legacy pairs.
+   * The measured shadow admits Fill and Normal-to-Screen/Multiply; other styled blends refuse.
+   * Sources require one created and one saved XMP event, measured embedded profiles,
+   * native-default metadata, 72 ppi, opaque samples/output and an unscaled preview.
+   * Positions are bottom to top, after removal. Insert allocates above resource 1044 and
+   * every physical ID, including group ends, selects it and returns it in created. Resource
+   * 1024 counts zero-based physical indices including group markers; 1069 stores selected IDs.
+   * Insert requires the new ID's explicit time. Delete selects the survivor below, falling back
+   * above. Reorder/delete/hide preserve times. Other edits require explicit target times.
+   * Nested groups, group creation/subtree changes, longer source history, RGB16 pixels,
+   * density/feather/vector-mask editing, auxiliary channels, custom metadata, mixed-target
+   * or structural batches, other profiles and active OCIO retain named atomic refusals.
+   * Success freezes complete prepared bytes at either later gamma. Failure preserves
+   * source, selection, allocation and revision. Missing context retains the earlier refusal.
+   * JPEG entropy bytes and Adobe container serialization are outside this contract.
+   */
+  editRasterTreeExact(batch: readonly PsdExactRasterTreeEdit[], context?: PsdReopenSaveContext): M01EditOutcome;
+}
+/** Versioned opt-in with explicit current-save and per-edit layerTime values. */
+export interface PsdReopenSaveContext {
+  /** Selects the bounded Photoshop 26 reopen-equivalent contract. */
+  readonly contract: "photoshop26.reopen-equivalent/v1";
+  /** Current-save values and the blending operand used to prepare the frozen source. */
+  readonly save: PsdPhotoshop26SaveContext;
+  /** Required for RGB16, Gray8 and CMYK8. The source ICC stays embedded and byte-preserved.
+   * Missing or unverified conversion operands refuse atomically. RGB8 callers may omit it. */
+  readonly preview?: {
+    /** Original destination sRGB ICC bytes; no substitute profile is generated. */
+    readonly srgbProfile: Uint8Array;
+    /** Only the measured relative-colorimetric route is admitted. */
+    readonly intent: 'relativeColorimetric';
+    /** Must be true for native preview conversion. */
+    readonly blackPointCompensation: boolean;
+    /** Must be false; preview conversion dither is unverified. */
+    readonly dither: boolean;
+    /** Must be false; active OCIO conversion is unverified. */
+    readonly ocio: boolean;
+  };
+  /** Exactly one target time for rename/opacity/Fill/blend/pixels/mask or the new ID
+   * for insertion. Empty for hide, deletion and movement, which preserve surviving times.
+   * Times must be finite and positive. Other, duplicate or missing layer IDs refuse.
+   */
+  readonly layerTimes: readonly {
+    /** Target identity, or the allocated new identity for insertion. */
+    readonly layerId: number;
+    /** Explicit native edit-time value in seconds; no clock is read. */
+    readonly time: number;
+  }[];
+}
 /** IDs correspond to insertions in batch order; refusals leave all state unchanged. */
 export interface M01EditOutcome { readonly revision: bigint; readonly created: readonly number[]; readonly diagnostics: readonly never[]; }
 /** Absolute raster source mask; defaultColor is 0 or 255. Extents/samples remain untrimmed. */
@@ -1024,7 +1148,9 @@ export class PsdEditorSession {
    * Requires no XMP; coordinates existing 1005, optional 1083/Rslt and one in-place EXIF companion.
    * Source units, unknown bytes and encoded pixels/previews survive. Unsupported companions and
    * text/smart/vector/style/mask/state dependencies refuse; pending visual edits retain strict preparation.
-   * General comp application/capture, slice partitions, print/resolution and XMP throw Dependency errors.
+   * fileInfoCopyright admits publicDomain in canonical simple PS26 XMP/IIM/MD5/EXIF with explicit
+   * saveContext timestamps and generated identities. Other copyright transitions, File Info titles,
+   * scalar XMP intents, automatic slices and general comp/print/resolution dependencies refuse.
    * Pending visual changes still require a strict render on prepareSave. Failure preserves revision/bytes.
    */
   editStateMetadata(edits: readonly PsdStateMetadataEdit[]): M01EditOutcome;
@@ -1053,6 +1179,20 @@ export class PsdEditorSession {
    * graphs throw named errors atomically. Omitted patch fields preserve their exact source values.
    */
   setCmykPhotoFilter(record_index: number, patch: PsdCmykPhotoFilterPatch, linear_blending: boolean): M01EditOutcome;
+  /**
+   * Requests Photoshop 26 complete save preparation with explicit host operands.
+   * Requires every named context field and rejects extras. This research endpoint
+   * returns Dependency at save.thumbnail.adobe-jpeg without changing the session.
+   */
+  preparePhotoshop26Save(context: any): PsdPreparedSave;
+  /**
+   * Prepares a research candidate for photoshop26.reopen-equivalent/v1.
+   * Requires explicit save context and per-layer edit times. It supplies no
+   * equivalence certificate or new edit admission. RGB8, measured sRGB profile,
+   * opaque 72-ppi canvases fitting the native preview without resizing only.
+   * Other cases throw a typed dependency and leave the session unchanged.
+   */
+  prepareReopenCandidate(context: any, layer_times: any): PsdPreparedSave;
   /**
    * Freezes the same strict save as prepareSave and records the consumed RGB blending operand.
    * Omission assumes encoded blending, false. A supplied Boolean records host input without verifying it.
@@ -1207,6 +1347,8 @@ export interface InitOutput {
   readonly __wbg_psdeditorsession_free: (a: number, b: number) => void;
   readonly __wbg_psdpreparedsave_free: (a: number, b: number) => void;
   readonly __wbg_psdsourcehandle_free: (a: number, b: number) => void;
+  readonly checkPhotoshop26Save: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly generatePhotoshop26Thumbnail: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
   readonly psdallocationcontext_new: (a: any) => [number, number, number];
   readonly psdallocationcontext_retainedBytes: (a: number) => bigint;
   readonly psdeditorsession_addTextFont: (a: number, b: number, c: number, d: number) => [number, number];
@@ -1217,6 +1359,7 @@ export interface InitOutput {
   readonly psdeditorsession_editChannels: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_editGeometry: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editProcess: (a: number, b: any, c: any) => [number, number, number];
+  readonly psdeditorsession_editRasterTreeExact: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editSmart: (a: number, b: any, c: number) => [number, number, number];
   readonly psdeditorsession_editSource: (a: number, b: any) => [number, number, number];
   readonly psdeditorsession_editStateMetadata: (a: number, b: any) => [number, number, number];
@@ -1227,6 +1370,8 @@ export interface InitOutput {
   readonly psdeditorsession_new: (a: number, b: number) => [number, number, number];
   readonly psdeditorsession_planCffText: (a: number, b: number, c: number, d: number) => [number, number, number];
   readonly psdeditorsession_prepareContainerMutation: (a: number, b: bigint, c: number, d: number, e: number) => [number, number, number];
+  readonly psdeditorsession_preparePhotoshop26Save: (a: number, b: any) => [number, number, number];
+  readonly psdeditorsession_prepareReopenCandidate: (a: number, b: any, c: any) => [number, number, number];
   readonly psdeditorsession_prepareSave: (a: number, b: number) => [number, number, number];
   readonly psdeditorsession_prepareSaveWithContext: (a: number, b: number) => [number, number, number];
   readonly psdeditorsession_renameInContext: (a: number, b: any, c: number) => [number, number, number];
@@ -1253,6 +1398,7 @@ export interface InitOutput {
   readonly readPsdMetadataQueries: (a: number, b: number) => [number, number, number];
   readonly readPsdSource: (a: number, b: number) => [number, number, number];
   readonly writePsd: (a: any, b: number, c: number) => [number, number, number, number];
+  readonly writeSavedHistory: (a: number, b: number, c: any, d: number, e: number) => [number, number, number, number];
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_2: WebAssembly.Table;

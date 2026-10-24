@@ -114,20 +114,6 @@ function takeFromExternrefTable0(idx) {
     wasm.__externref_table_dealloc(idx);
     return value;
 }
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- * @param {Uint8Array} bytes
- * @returns {any}
- */
-export function readPsd(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readPsd(ptr0, len0);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
-}
 
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -150,6 +136,21 @@ export function writePsd(document, composite) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * @param {Uint8Array} bytes
+ * @returns {any}
+ */
+export function readPsd(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsd(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
 }
 
 /**
@@ -182,6 +183,76 @@ function _assertClass(instance, klass) {
         throw new Error(`expected instance of ${klass.name}`);
     }
 }
+/**
+ * Check prepared native-layout bytes under the closed Photoshop 26 v1 contract.
+ * Throws on unsupported metadata layouts. A false result grants no save certificate.
+ * @param {Uint8Array} left
+ * @param {Uint8Array} right
+ * @returns {any}
+ */
+export function checkPhotoshop26Save(left, right) {
+    const ptr0 = passArray8ToWasm0(left, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(right, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.checkPhotoshop26Save(ptr0, len0, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Write one saved-history event using explicit retained metadata state.
+ * If retained_instance_id matches the final event's instanceID, updates only action,
+ * instanceID, when and softwareAgent. Otherwise appends a saved event. Earlier events
+ * and unrelated fields survive. Omit retained_instance_id for an empty retained state.
+ * After success the caller retains context.instanceId for the next writer call.
+ * Returns independent XMP bytes and never mutates a session. This is a writer primitive,
+ * not a save certificate: longer histories still refuse editRasterTreeExact because
+ * fresh save-copy import does not yet establish the retained state. No clock or ID is
+ * generated. Invalid native element-form XMP or context throws TypeError.
+ * @param {Uint8Array} xmp
+ * @param {PsdPhotoshop26SaveContext} context
+ * @param {string | null} [retained_instance_id]
+ * @returns {Uint8Array}
+ */
+export function writeSavedHistory(xmp, context, retained_instance_id) {
+    const ptr0 = passArray8ToWasm0(xmp, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    var ptr1 = isLikeNone(retained_instance_id) ? 0 : passStringToWasm0(retained_instance_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    var len1 = WASM_VECTOR_LEN;
+    const ret = wasm.writeSavedHistory(ptr0, len0, context, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Generate an independent baseline JPEG in Photoshop 26's resource-1036 envelope.
+ * Complete sRGB8 RGBA canvas pixels and explicit resolution are required. Resizing
+ * refuses. This proves thumbnail generation only, never editor-save equivalence.
+ * @param {number} width
+ * @param {number} height
+ * @param {number} resolution
+ * @param {Uint8Array} rgba
+ * @returns {Uint8Array}
+ */
+export function generatePhotoshop26Thumbnail(width, height, resolution, rgba) {
+    const ptr0 = passArray8ToWasm0(rgba, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.generatePhotoshop26Thumbnail(width, height, resolution, ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
 /**
  * Reads persisted styles, vectors, locks, labels, metadata and XMP without renderer admission.
  * Vector frame queries are separate from stored values and report malformed-name/rectangle refusals.
@@ -595,7 +666,9 @@ export class PsdEditorSession {
      * Requires no XMP; coordinates existing 1005, optional 1083/Rslt and one in-place EXIF companion.
      * Source units, unknown bytes and encoded pixels/previews survive. Unsupported companions and
      * text/smart/vector/style/mask/state dependencies refuse; pending visual edits retain strict preparation.
-     * General comp application/capture, slice partitions, print/resolution and XMP throw Dependency errors.
+     * fileInfoCopyright admits publicDomain in canonical simple PS26 XMP/IIM/MD5/EXIF with explicit
+     * saveContext timestamps and generated identities. Other copyright transitions, File Info titles,
+     * scalar XMP intents, automatic slices and general comp/print/resolution dependencies refuse.
      * Pending visual changes still require a strict render on prepareSave. Failure preserves revision/bytes.
      * @param {readonly PsdStateMetadataEdit[]} edits
      * @returns {M01EditOutcome}
@@ -660,6 +733,54 @@ export class PsdEditorSession {
             throw takeFromExternrefTable0(ret[1]);
         }
         return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Apply the bounded reopen-equivalent operations documented in the generated JSDoc.
+     * Native mode/depth needs explicit preview conversion operands. Mask source samples,
+     * measured retained styles and same-target scalar batches have distinct bounded paths.
+     * Every refusal preserves source, selection, allocation and revision.
+     * Missing context retains the earlier refusal. Success freezes complete prepared bytes.
+     * @param {readonly PsdExactRasterTreeEdit[]} batch
+     * @param {PsdReopenSaveContext | undefined} context
+     * @returns {any}
+     */
+    editRasterTreeExact(batch, context) {
+        const ret = wasm.psdeditorsession_editRasterTreeExact(this.__wbg_ptr, batch, isLikeNone(context) ? 0 : addToExternrefTable0(context));
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Requests Photoshop 26 complete save preparation with explicit host operands.
+     * Requires every named context field and rejects extras. This research endpoint
+     * returns Dependency at save.thumbnail.adobe-jpeg without changing the session.
+     * @param {any} context
+     * @returns {PsdPreparedSave}
+     */
+    preparePhotoshop26Save(context) {
+        const ret = wasm.psdeditorsession_preparePhotoshop26Save(this.__wbg_ptr, context);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return PsdPreparedSave.__wrap(ret[0]);
+    }
+    /**
+     * Prepares a research candidate for photoshop26.reopen-equivalent/v1.
+     * Requires explicit save context and per-layer edit times. It supplies no
+     * equivalence certificate or new edit admission. RGB8, measured sRGB profile,
+     * opaque 72-ppi canvases fitting the native preview without resizing only.
+     * Other cases throw a typed dependency and leave the session unchanged.
+     * @param {any} context
+     * @param {any} layer_times
+     * @returns {PsdPreparedSave}
+     */
+    prepareReopenCandidate(context, layer_times) {
+        const ret = wasm.psdeditorsession_prepareReopenCandidate(this.__wbg_ptr, context, layer_times);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return PsdPreparedSave.__wrap(ret[0]);
     }
     /**
      * Freezes the same strict save as prepareSave and records the consumed RGB blending operand.
