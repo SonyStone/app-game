@@ -3,7 +3,7 @@ import type { JSX } from '@solidjs/web';
 import type { Container as PixiContainer, Graphics as PixiGraphics, Ticker } from 'pixi.js';
 import { onCleanup } from 'solid-js';
 import { Rapier2D, type RigidBody, useRapier2D } from '../physics/Rapier2D';
-import { useWorld, World } from '../physics/World';
+import { createWorld } from '../physics/World';
 import {
   addHullBox,
   castShot,
@@ -39,9 +39,7 @@ export default function ArenaRoute() {
       >
         <Stage>
           <Rapier2D>
-            <World gravity={{ x: 0, y: 0 }} lengthUnit={PIXELS_PER_METER}>
-              <ArenaScene />
-            </World>
+            <ArenaScene />
           </Rapier2D>
         </Stage>
       </Application>
@@ -58,12 +56,13 @@ const PIXELS_PER_METER = 100;
 
 /**
  * Builds the arena's bodies and runs the game loop on the Pixi ticker: input, fixed 60 Hz physics
- * steps, effects and the camera. Children views sync themselves to their bodies afterward.
+ * steps, effects and the camera. Children views sync themselves to their bodies afterward. The
+ * scene owns its physics world, so remounting it starts from an empty world.
  */
 function ArenaScene() {
   const app = useApplication();
   const rapier = useRapier2D();
-  const world = useWorld();
+  const world = createWorld(rapier, { gravity: { x: 0, y: 0 }, lengthUnit: PIXELS_PER_METER });
   const input = makeArenaInput(app.canvas);
 
   createArenaWalls(rapier, world);

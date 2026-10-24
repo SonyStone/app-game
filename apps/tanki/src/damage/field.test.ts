@@ -72,6 +72,19 @@ describe('detachLoosePieces', () => {
     expect(sampleField(fragments[0].field, 17, 0)[0]).toBeLessThan(0);
     expect(sampleField(field, 0, 0)[0]).toBeLessThan(0);
   });
+
+  it('keeps the main body when it covers less of the field than the empty cells', () => {
+    const field = createHullField();
+
+    for (let x = 2; x <= 24; x += 2) {
+      for (let y = -16; y <= 16; y += 2) {
+        carve(field, { x, y }, 3, 0, x * 100 + y);
+      }
+    }
+
+    expect(detachLoosePieces(field, 4)).toHaveLength(0);
+    expect(sampleField(field, -15, 0)[0]).toBeLessThan(0);
+  });
 });
 
 describe('shatter', () => {

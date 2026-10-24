@@ -337,11 +337,14 @@ export type Fragment = {
 export function detachLoosePieces(field: DamageField, minCells: number) {
   const labels = labelArmor(field);
   const sizes = countLabels(labels);
+  // Label 0 counts the empty cells, so it never competes for the main body.
   let main = 0;
+  let mainSize = 0;
 
   sizes.forEach((size, label) => {
-    if (label > 0 && size > (sizes[main] ?? 0)) {
+    if (label > 0 && size > mainSize) {
       main = label;
+      mainSize = size;
     }
   });
 

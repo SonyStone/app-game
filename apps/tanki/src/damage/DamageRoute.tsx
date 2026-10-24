@@ -6,7 +6,7 @@ import { applyAim } from '../arena/aim';
 import { createCamera, followTarget, screenToWorldDirection, zoomCamera } from '../arena/camera';
 import { makeArenaInput } from '../arena/input';
 import { Rapier2D, useRapier2D } from '../physics/Rapier2D';
-import { useWorld, World } from '../physics/World';
+import { createWorld } from '../physics/World';
 import { createDamageRange } from './range';
 import { createRangeRenderer } from './renderer';
 
@@ -29,9 +29,7 @@ export default function DamageRoute() {
         error={(error) => <p class="absolute inset-0 m-0 grid place-items-center text-white font-sans">{error.message}</p>}
       >
         <Rapier2D>
-          <World gravity={{ x: 0, y: 0 }} lengthUnit={PIXELS_PER_METER}>
-            <DamageScene canvas={canvas()!} resets={resetCount()} stick={stick} knob={knob} />
-          </World>
+          <DamageScene canvas={canvas()!} resets={resetCount()} stick={stick} knob={knob} />
         </Rapier2D>
       </GpuCanvas>
       <div ref={(element) => (stick = element)} class="pointer-events-none absolute hidden rounded-full border-2 border-white/35" />
@@ -54,7 +52,8 @@ export default function DamageRoute() {
 const PIXELS_PER_METER = 100;
 
 /**
- * Runs the range on the canvas's GPU: input, fixed 60 Hz physics steps, damage and drawing.
+ * Runs the range on the canvas's GPU: input, fixed 60 Hz physics steps, damage and drawing. The
+ * scene owns its physics world, so remounting it starts from an empty world.
  *
  * @param resets - Rebuilds the range whenever it changes after mount.
  * @param stick - Ring of the touch drive stick; `knob` is its handle. Both are positioned here.
@@ -62,7 +61,7 @@ const PIXELS_PER_METER = 100;
 function DamageScene(props: { canvas: HTMLCanvasElement; resets: number; stick: HTMLDivElement; knob: HTMLDivElement }) {
   const canvas = untrack(() => props.canvas);
   const rapier = useRapier2D();
-  const world = useWorld();
+  const world = createWorld(rapier, { gravity: { x: 0, y: 0 }, lengthUnit: PIXELS_PER_METER });
   const renderer = createRangeRenderer(useGpuCanvas());
   const range = createDamageRange(rapier, world, renderer);
   const input = makeArenaInput(canvas);

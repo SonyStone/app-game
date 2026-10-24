@@ -7,7 +7,7 @@ import { createCamera, followTarget, screenToWorldDirection, worldToScreen, zoom
 import { makeArenaInput } from '../arena/input';
 import { createRangeRenderer } from '../damage/renderer';
 import { Rapier2D, useRapier2D } from '../physics/Rapier2D';
-import { useWorld, World } from '../physics/World';
+import { createWorld } from '../physics/World';
 import { BotThoughts, KothHud, MatchResult, type HudState, type ThoughtView } from './Hud';
 import { createKothMatch, type KothMatch } from './match';
 import { CAPTURE_RULES } from './rules';
@@ -48,18 +48,16 @@ export default function KothRoute() {
         error={(error) => <p class="absolute inset-0 m-0 grid place-items-center text-white">{error.message}</p>}
       >
         <Rapier2D>
-          <World gravity={{ x: 0, y: 0 }} lengthUnit={PIXELS_PER_METER}>
-            <KothScene
-              canvas={canvas()!}
-              restarts={restarts()}
-              watching={watching()}
-              thoughts={showThoughts() || watching()}
-              onFrame={(frame) => {
-                setState(frame.state);
-                setThoughts(frame.thoughts);
-              }}
-            />
-          </World>
+          <KothScene
+            canvas={canvas()!}
+            restarts={restarts()}
+            watching={watching()}
+            thoughts={showThoughts() || watching()}
+            onFrame={(frame) => {
+              setState(frame.state);
+              setThoughts(frame.thoughts);
+            }}
+          />
         </Rapier2D>
       </GpuCanvas>
       <BotThoughts thoughts={thoughts()} />
@@ -78,7 +76,8 @@ const PIXELS_PER_METER = 100;
 
 /**
  * Runs the match on the canvas's GPU: input, fixed 60 Hz physics steps, the camera and drawing,
- * and reports the display state every frame.
+ * and reports the display state every frame. The scene owns its physics world, so remounting it
+ * starts from an empty world.
  *
  * @param restarts - Starts a new match whenever it changes after mount.
  * @param watching - The player's seat is driven by a bot and the camera shows the whole map, or follows a chosen tank.
@@ -94,7 +93,7 @@ function KothScene(props: {
 }) {
   const canvas = untrack(() => props.canvas);
   const rapier = useRapier2D();
-  const world = useWorld();
+  const world = createWorld(rapier, { gravity: { x: 0, y: 0 }, lengthUnit: PIXELS_PER_METER });
   const renderer = createRangeRenderer(useGpuCanvas());
   const match = createKothMatch(rapier, world, renderer, { rules: rulesFromAddress() });
   const input = makeArenaInput(canvas);
