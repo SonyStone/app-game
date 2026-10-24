@@ -198,6 +198,7 @@ export function ComponentCanvas() {
       <Show when={freshTab.offered() && !stage()}>
         <FreshTabNotice
           size={{ width: innerWidth, height: innerHeight }}
+          hand={palmOptions().hand}
           blocked={freshTab.blocked()}
           onMove={freshTab.move}
           onDismiss={freshTab.dismiss}

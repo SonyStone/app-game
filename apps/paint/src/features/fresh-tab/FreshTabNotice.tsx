@@ -7,12 +7,22 @@ import styles from './FreshTab.module.css';
  * A small pill at the top of the canvas once Chrome stops seeing the pen above the screen: a picture of the pen over
  * the screen, crossed out, and one button that fixes it by continuing in a new tab, with a close button. Testers did
  * not read a sentence, so the words are two; the full story is the button's tooltip. `blocked` says Chrome refused
- * to open the tab by itself, so a tap is needed. Moving by itself from now on is a pen setting, not offered here. See
+ * to open the tab by itself, so a tap is needed. It lies on the free hand's side, a quarter of the view in from that
+ * edge, away from the hand holding the pen. Moving by itself from now on is a pen setting, not offered here. See
  * `createFreshTab`.
  */
-export function FreshTabNotice(props: { size: ViewSize; blocked: boolean; onMove: () => void; onDismiss: () => void }) {
+export function FreshTabNotice(props: {
+  size: ViewSize;
+  /** The hand holding the pen, as palm rejection knows it; the notice goes to the other side. */
+  hand: 'left' | 'right';
+  blocked: boolean;
+  onMove: () => void;
+  onDismiss: () => void;
+}) {
+  const left = () => props.size.width * (props.hand === 'left' ? 0.75 : 0.25);
+
   return (
-    <FloatingBar placement={{ left: props.size.width / 2, top: noticeTop }} label="Pen hover lost">
+    <FloatingBar placement={{ left: left(), top: noticeTop }} label="Pen hover lost">
       <PenHoverLostIcon />
       <button
         class={`${floatingBarPrimary} ${styles.text}`}

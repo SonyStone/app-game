@@ -45,6 +45,7 @@ export function SessionNotices(props: { session: PaintSession }) {
       <Show when={freshTab.offered()}>
         <FreshTabNotice
           size={size()}
+          hand={props.session.palmSettings.settings().hand}
           blocked={freshTab.blocked()}
           onMove={freshTab.move}
           onDismiss={freshTab.dismiss}
