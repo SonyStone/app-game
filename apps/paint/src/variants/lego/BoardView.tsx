@@ -29,11 +29,13 @@ import type { createBoard } from './createBoard';
 import { swatchPanelParts, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { lookOf, partLooks, PartView, type Popup, type Session } from './parts';
-import { BlockView, PartsDrawer } from './PartsDrawer';
+import { BlockView, PartsTray } from './PartsTray';
+import { SpawnMenu } from './SpawnMenu';
 
 /**
  * The board over the drawing: its panels, and in edit mode the studs, the box of parts and kits, and the drags that
- * change them.
+ * change them. While editing, the drawing and the board shrink to a card (see `.editor[data-editing]`) with the box
+ * docked in the room left beside it, so nothing covers the board; the drawing then takes no strokes.
  *
  * While editing, a part dragged anywhere lifts and follows the pointer: over a panel (or one cell beside it) it takes
  * the nearest cell and pushes the parts in its way aside, which also grows the panel; over the bare drawing it starts
@@ -45,6 +47,9 @@ import { BlockView, PartsDrawer } from './PartsDrawer';
  * it, while editing too, and a press elsewhere closes it (while editing, only a press on the bare drawing does, so
  * parts can be carried into it). Parts are carried into and out of it as into any panel; a new swatch comes with
  * the default one. Each drag shows its result while it lasts and is kept on lift. Outside edit mode parts simply work.
+ *
+ * A long press on the bare drawing or on a panel's free cells (or a right click) opens the `SpawnMenu` there; a part
+ * tapped in it lands at the press, as if dropped there.
  */
 export function BoardView(props: {
   board: ReturnType<typeof createBoard>;
@@ -58,15 +63,29 @@ export function BoardView(props: {
 }) {
   const [layer, setLayer] = createSignal<HTMLElement>();
   const [box, setBox] = createSignal<HTMLElement>();
-  /** Whether the box of parts is pulled up; see `PartsDrawer`. It starts closed and closes once a part is taken. */
-  const [drawer, setDrawer] = createSignal(false);
   const [drag, setDrag] = createSignal<Drag>();
+  /** The open spawn menu: where it was opened, and the pointer of the press while it is held. */
+  const [spawn, setSpawn] = createSignal<{ at: Point; held?: number }>();
 
-  /** The view's size, which the board covers, and where it lies on the page. */
+  /**
+   * The view's size, which the board covers, where it lies on the page and how much it is scaled down there; the
+   * board's own pixels are the view's, unscaled.
+   */
   const view = () => {
     const { width, height } = props.session.size();
     const rect = layer()?.getBoundingClientRect();
-    return { left: rect?.left ?? 0, top: rect?.top ?? 0, width, height };
+    const scale = rect && width > 0 ? rect.width / width : 1;
+    return { left: rect?.left ?? 0, top: rect?.top ?? 0, width, height, scale };
+  };
+  /** `point` on the page in the view's pixels. */
+  const toView = (point: Point) => {
+    const { left, top, scale } = view();
+    return { x: (point.x - left) / scale, y: (point.y - top) / scale };
+  };
+  /** Where the layer the ghost, the box and the menu lie in starts on the page. */
+  const overlay = () => {
+    const rect = layer()?.parentElement?.getBoundingClientRect();
+    return { x: rect?.left ?? 0, y: rect?.top ?? 0 };
   };
   const shown = createMemo(() => {
     const current = drag();
@@ -87,6 +106,14 @@ export function BoardView(props: {
     pending = undefined;
   };
   onCleanup(stopWaiting);
+
+  /** A press waiting to become long enough to open the spawn menu; see `armLongPress`. */
+  let press: { pointer: number; start: Point; timer: ReturnType<typeof setTimeout> } | undefined;
+  const stopPress = () => {
+    clearTimeout(press?.timer);
+    press = undefined;
+  };
+  onCleanup(stopPress);
   const lifted = () => {
     const current = drag();
     return current?.type === 'part' ? current : undefined;
@@ -111,6 +138,12 @@ export function BoardView(props: {
   );
 
   createEventListener(window, 'pointermove', (event) => {
+    if (press && event.pointerId === press.pointer) {
+      if (Math.hypot(event.clientX - press.start.x, event.clientY - press.start.y) >= tapDistance) {
+        stopPress();
+      }
+    }
+
     const current = drag();
     if (!current || event.pointerId !== current.pointer) {
       return;
@@ -122,16 +155,19 @@ export function BoardView(props: {
       return;
     }
 
-    // A swatch carried off closes its panel.
-    if (chain().has(current.id) && Math.hypot(point.x - current.start.x, point.y - current.start.y) >= tapDistance) {
+    // A swatch carried off closes its panel; a part carried off the spawn menu hides it.
+    const moved = Math.hypot(point.x - current.start.x, point.y - current.start.y) >= tapDistance;
+    if (moved && chain().has(current.id)) {
       props.onOpenPanel(findPart(props.board.board(), current.id)?.panel.owner);
     }
+
+    const carried = current.carried || moved;
 
     // A place with room shows at once; one that pushes parts aside waits until the part rests over it.
     const drop = partDrop(current, point);
     if (!drop.pushes) {
       stopWaiting();
-      setDrag({ ...current, point, settled: point });
+      setDrag({ ...current, point, settled: point, carried });
       return;
     }
 
@@ -149,10 +185,14 @@ export function BoardView(props: {
       };
     }
 
-    setDrag({ ...current, point });
+    setDrag({ ...current, point, carried });
   });
   // A lift drops where the part is, without waiting; a press that did not move is a tap.
   const finish = (event: PointerEvent) => {
+    if (press && event.pointerId === press.pointer) {
+      stopPress();
+    }
+
     const current = drag();
     if (!current || event.pointerId !== current.pointer) {
       return;
@@ -160,13 +200,14 @@ export function BoardView(props: {
 
     stopWaiting();
     setDrag(undefined);
-    const point = { x: event.clientX, y: event.clientY };
+    let point = { x: event.clientX, y: event.clientY };
     if (current.type !== 'part') {
       props.board.set(result({ ...current, point }));
       return;
     }
 
-    if (!current.fromBox && Math.hypot(point.x - current.start.x, point.y - current.start.y) < tapDistance) {
+    const tapped = Math.hypot(point.x - current.start.x, point.y - current.start.y) < tapDistance;
+    if (tapped && !current.fromBox) {
       if (current.kind === 'color:swatch') {
         toggle(current.id);
       }
@@ -174,8 +215,12 @@ export function BoardView(props: {
       return;
     }
 
-    if (current.fromBox) {
-      setDrawer(false);
+    // A part tapped in the spawn menu lands where the menu was opened; one tapped in the box stays there.
+    if (current.spawnAt) {
+      setSpawn(undefined);
+      point = tapped ? current.spawnAt : point;
+    } else if (tapped) {
+      return;
     }
 
     let next = partDrop(current, point).board;
@@ -188,6 +233,10 @@ export function BoardView(props: {
   };
   createEventListener(window, 'pointerup', finish);
   createEventListener(window, 'pointercancel', (event) => {
+    if (event.pointerId === press?.pointer) {
+      stopPress();
+    }
+
     if (event.pointerId === drag()?.pointer) {
       stopWaiting();
       setDrag(undefined);
@@ -195,112 +244,133 @@ export function BoardView(props: {
   });
 
   return (
-    <div ref={setLayer} class={styles.board} data-editing={props.editing ? '' : undefined}>
-      <For each={visible()} keyed={(entry) => entry.panel.id}>
-        {(entry) => {
-          const panel = () => entry().panel;
-          const frame = () => entry().frame;
-          return (
-            <div
-              class={[styles.panel, panel().owner !== undefined && styles.owned]}
-              data-owned={panel().owner !== undefined ? '' : undefined}
-              data-keeps-panel
-              style={{
-                left: `${frame().rect.left}px`,
-                top: `${frame().rect.top}px`,
-                width: `${frame().rect.width}px`,
-                height: `${frame().rect.height}px`,
-                '--stud-x': `${frame().origin.x - frame().rect.left}px`,
-                '--stud-y': `${frame().origin.y - frame().rect.top}px`
-              }}
-              onPointerDown={(event) => {
-                if (props.editing && event.target === event.currentTarget && panel().owner === undefined) {
-                  startPanelDrag(event, panel(), frame().origin);
-                }
-              }}
-            >
-              <Show when={panel().parts.length === 0}>
-                <span class={styles.emptyPanel}>Drop parts here</span>
-              </Show>
-              <For each={panel().parts} keyed={(part) => part.id}>
-                {(part) => {
-                  const isLifted = () => lifted()?.id === part().id;
-                  return (
-                    <div
-                      class={styles.part}
-                      data-part={part().id}
-                      data-lifted={isLifted() ? '' : undefined}
-                      data-open={chain().has(part().id) ? '' : undefined}
-                      style={{
-                        left: `${frame().origin.x - frame().rect.left + part().cell.column * pitch}px`,
-                        top: `${frame().origin.y - frame().rect.top + part().cell.row * pitch}px`,
-                        width: `${part().span.columns * pitch - cellGap}px`,
-                        height: `${part().span.rows * pitch - cellGap}px`
-                      }}
-                      onPointerDown={(event) => {
-                        if (props.editing) {
-                          const { id, kind, span, looks } = part();
-                          startPartDrag(event, { id, kind, span, looks });
-                        }
-                      }}
-                    >
-                      <Show when={!isLifted()}>
-                        <div class={styles.content} inert={props.editing || undefined}>
-                          <PartView
-                            kind={part().kind}
-                            span={part().span}
-                            look={lookOf(part())}
-                            session={props.session}
-                            onPopup={props.onPopup}
-                            onOpen={() => toggle(part().id)}
-                          />
-                        </div>
-                      </Show>
-                      <Show when={props.editing && !isLifted() && partLooks(part().kind)}>
-                        <button
-                          type="button"
-                          class={styles.looksHandle}
-                          aria-label="Choose look"
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={(event) =>
-                            props.onPopup(event.currentTarget.parentElement!, { kind: 'looks', id: part().id })
-                          }
-                        >
-                          ⇄
-                        </button>
-                      </Show>
-                      <Show when={props.editing && !isLifted()}>
-                        <span
-                          class={styles.corner}
-                          aria-label="Resize"
-                          onPointerDown={(event) => {
-                            event.stopPropagation();
-                            startResize(event, panel().id, part().id, part().span);
-                          }}
-                        />
-                      </Show>
-                    </div>
-                  );
+    <>
+      <div ref={setLayer} class={styles.board} data-editing={props.editing ? '' : undefined}>
+        <Show when={props.editing}>
+          <div
+            class={styles.bare}
+            onPointerDown={armLongPress}
+            onContextMenu={openSpawnFromMenuKey}
+          />
+        </Show>
+        <For each={visible()} keyed={(entry) => entry.panel.id}>
+          {(entry) => {
+            const panel = () => entry().panel;
+            const frame = () => entry().frame;
+            return (
+              <div
+                class={[styles.panel, panel().owner !== undefined && styles.owned]}
+                data-owned={panel().owner !== undefined ? '' : undefined}
+                data-keeps-panel
+                style={{
+                  left: `${frame().rect.left}px`,
+                  top: `${frame().rect.top}px`,
+                  width: `${frame().rect.width}px`,
+                  height: `${frame().rect.height}px`,
+                  '--stud-x': `${frame().origin.x - frame().rect.left}px`,
+                  '--stud-y': `${frame().origin.y - frame().rect.top}px`
                 }}
-              </For>
-              <Show when={props.editing && panel().parts.length > 0 && !drag()}>
-                <button
-                  type="button"
-                  class={styles.saveKit}
-                  onClick={() => {
-                    const name = window.prompt('Name the kit', 'My panel');
-                    if (name) {
-                      props.kits.save(props.board.latest(), panel(), name);
-                    }
+                onPointerDown={(event) => {
+                  if (!props.editing || event.target !== event.currentTarget) {
+                    return;
+                  }
+
+                  if (panel().owner === undefined) {
+                    startPanelDrag(event, panel(), frame().origin);
+                  }
+
+                  armLongPress(event);
+                }}
+                onContextMenu={(event) => {
+                  if (props.editing && event.target === event.currentTarget) {
+                    openSpawnFromMenuKey(event);
+                  }
+                }}
+              >
+                <Show when={panel().parts.length === 0}>
+                  <span class={styles.emptyPanel}>Drop parts here</span>
+                </Show>
+                <For each={panel().parts} keyed={(part) => part.id}>
+                  {(part) => {
+                    const isLifted = () => lifted()?.id === part().id;
+                    return (
+                      <div
+                        class={styles.part}
+                        data-part={part().id}
+                        data-lifted={isLifted() ? '' : undefined}
+                        data-open={chain().has(part().id) ? '' : undefined}
+                        style={{
+                          left: `${frame().origin.x - frame().rect.left + part().cell.column * pitch}px`,
+                          top: `${frame().origin.y - frame().rect.top + part().cell.row * pitch}px`,
+                          width: `${part().span.columns * pitch - cellGap}px`,
+                          height: `${part().span.rows * pitch - cellGap}px`
+                        }}
+                        onPointerDown={(event) => {
+                          if (props.editing) {
+                            const { id, kind, span, looks } = part();
+                            startPartDrag(event, { id, kind, span, looks });
+                          }
+                        }}
+                      >
+                        <Show when={!isLifted()}>
+                          <div class={styles.content} inert={props.editing || undefined}>
+                            <PartView
+                              kind={part().kind}
+                              span={part().span}
+                              look={lookOf(part())}
+                              session={props.session}
+                              onPopup={props.onPopup}
+                              onOpen={() => toggle(part().id)}
+                            />
+                          </div>
+                        </Show>
+                        <Show when={props.editing && !isLifted() && partLooks(part().kind)}>
+                          <button
+                            type="button"
+                            class={styles.looksHandle}
+                            aria-label="Choose look"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) =>
+                              props.onPopup(event.currentTarget.parentElement!, { kind: 'looks', id: part().id })
+                            }
+                          >
+                            ⇄
+                          </button>
+                        </Show>
+                        <Show when={props.editing && !isLifted()}>
+                          <span
+                            class={styles.corner}
+                            aria-label="Resize"
+                            onPointerDown={(event) => {
+                              event.stopPropagation();
+                              startResize(event, panel().id, part().id, part().span);
+                            }}
+                          />
+                        </Show>
+                      </div>
+                    );
                   }}
-                >
-                  Save as kit
-                </button>
-              </Show>
-            </div>
-          );
-        }}
-      </For>
+                </For>
+                <Show when={props.editing && panel().parts.length > 0 && !drag()}>
+                  <button
+                    type="button"
+                    class={styles.saveKit}
+                    onClick={() => {
+                      const name = window.prompt('Name the kit', 'My panel');
+                      if (name) {
+                        props.kits.save(props.board.latest(), panel(), name);
+                      }
+                    }}
+                  >
+                    Save as kit
+                  </button>
+                </Show>
+              </div>
+            );
+          }}
+        </For>
+
+      </div>
 
       <Show when={lifted()}>
         {(current) => (
@@ -308,10 +378,13 @@ export function BoardView(props: {
             class={[styles.ghost, current().block ? styles.ghostBlock : styles.part]}
             data-discard={overBox(current().point) ? '' : undefined}
             style={{
-              left: `${current().point.x - current().grab.x - view().left}px`,
-              top: `${current().point.y - current().grab.y - view().top}px`,
+              left: `${current().point.x - overlay().x - current().grab.x}px`,
+              top: `${current().point.y - overlay().y - current().grab.y}px`,
               width: `${current().span.columns * pitch - cellGap}px`,
-              height: `${current().span.rows * pitch - cellGap}px`
+              height: `${current().span.rows * pitch - cellGap}px`,
+              // As large as it will be on the board, held where it was taken.
+              'transform-origin': `${current().grab.x}px ${current().grab.y}px`,
+              scale: `${view().scale * 1.06}`
             }}
           >
             <Show
@@ -335,23 +408,83 @@ export function BoardView(props: {
       </Show>
 
       <Show when={props.editing}>
-        <PartsDrawer
+        <PartsTray
           ref={setBox}
           session={props.session}
           kits={props.kits}
-          open={drawer()}
-          onOpen={setDrawer}
-          carrying={drag()?.type === 'part'}
           over={lifted() !== undefined && overBox(lifted()!.point)}
-          onLift={(event, kind) =>
-            startPartDrag(event, { id: newId('part'), kind, span: { columns: 1, rows: 1 } }, { fromBox: true })
-          }
-          onLiftKit={startKitDrag}
+          onLift={(event, kind) => startNewPart(event, kind)}
+          onLiftKit={(event, kit) => startKitDrag(event, kit)}
           onReset={() => props.board.reset()}
         />
       </Show>
-    </div>
+
+      <Show when={props.editing && spawn()}>
+        {(open) => (
+          <SpawnMenu
+            at={{ x: open().at.x - overlay().x, y: open().at.y - overlay().y }}
+            held={open().held}
+            view={props.session.size()}
+            hidden={lifted()?.carried === true}
+            session={props.session}
+            kits={props.kits}
+            onLift={(event, kind) => startNewPart(event, kind, open().at)}
+            onLiftKit={(event, kit) => startKitDrag(event, kit, open().at)}
+            onClose={() => setSpawn(undefined)}
+          />
+        )}
+      </Show>
+    </>
   );
+
+  /**
+   * Waits for the press `event` on the bare drawing or a panel's free cells to last `longPress` without moving, then
+   * opens the spawn menu there, dropping the panel drag the press began.
+   */
+  function armLongPress(event: PointerEvent) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    stopPress();
+    const pointer = event.pointerId;
+    const start = { x: event.clientX, y: event.clientY };
+    press = {
+      pointer,
+      start,
+      timer: setTimeout(() => {
+        press = undefined;
+        if (drag()?.pointer === pointer) {
+          stopWaiting();
+          setDrag(undefined);
+        }
+
+        setSpawn({ at: start, held: pointer });
+      }, longPress)
+    };
+  }
+
+  /** Opens the spawn menu at a right click, or at a touch's long press when the browser tells of it first. */
+  function openSpawnFromMenuKey(event: MouseEvent) {
+    event.preventDefault();
+    if (spawn()) {
+      return;
+    }
+
+    const held = press?.pointer;
+    stopPress();
+    if (held !== undefined && drag()?.pointer === held) {
+      stopWaiting();
+      setDrag(undefined);
+    }
+
+    setSpawn({ at: { x: event.clientX, y: event.clientY }, held });
+  }
+
+  /** Lifts a new part of `kind` from the box, or from the spawn menu opened at `spawnAt`. */
+  function startNewPart(event: PointerEvent, kind: string, spawnAt?: Point) {
+    startPartDrag(event, { id: newId('part'), kind, span: { columns: 1, rows: 1 } }, { fromBox: true, spawnAt });
+  }
 
   /** Opens swatch `id`'s panel, or closes it, leaving open the panels it lies in. */
   function toggle(id: string) {
@@ -367,16 +500,20 @@ export function BoardView(props: {
   function startPartDrag(
     event: PointerEvent,
     part: Lifted,
-    from: { fromBox?: boolean; block?: { parts: Part[]; panels: Panel[] } } = {}
+    from: { fromBox?: boolean; block?: { parts: Part[]; panels: Panel[] }; spawnAt?: Point } = {}
   ) {
     event.preventDefault();
     const rect = (event.currentTarget as Element).getBoundingClientRect();
     const board = props.board.latest();
     const point = { x: event.clientX, y: event.clientY };
-    // A block is held by the middle of its first cell, as small as the box's tile it came from.
-    const grab = from.block
-      ? { x: Math.min(event.clientX - rect.left, cellSize / 2), y: Math.min(event.clientY - rect.top, cellSize / 2) }
-      : { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    // In the board's pixels: a part on the board is scaled with it, the box's and the menu's tiles are not.
+    const scale = from.fromBox ? 1 : view().scale;
+    const offset = { x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale };
+    // A block, or a part from the menu, is held by the middle of its first cell, so it lands around the press.
+    const grab =
+      from.block || from.spawnAt
+        ? { x: Math.min(offset.x, cellSize / 2), y: Math.min(offset.y, cellSize / 2) }
+        : offset;
     setDrag({
       type: 'part',
       pointer: event.pointerId,
@@ -388,17 +525,20 @@ export function BoardView(props: {
       newPanel: newId('panel'),
       fromBox: from.fromBox ?? false,
       block: from.block,
+      spawnAt: from.spawnAt,
+      carried: false,
       ...part
     });
   }
 
-  function startKitDrag(event: PointerEvent, kit: Kit) {
+  /** Lifts a copy of `kit` from the box, or from the spawn menu opened at `spawnAt`. */
+  function startKitDrag(event: PointerEvent, kit: Kit, spawnAt?: Point) {
     const block = unpackKit(kit);
     const bounds = partsBounds(block.parts);
     startPartDrag(
       event,
       { id: newId('block'), kind: 'kit', span: { columns: bounds.columns, rows: bounds.rows } },
-      { fromBox: true, block }
+      { fromBox: true, block, spawnAt }
     );
   }
 
@@ -418,11 +558,13 @@ export function BoardView(props: {
 
   function startPanelDrag(event: PointerEvent, panel: Panel, origin: Point) {
     event.preventDefault();
+    const point = { x: event.clientX, y: event.clientY };
+    const pressed = toView(point);
     setDrag({
       type: 'panel',
       pointer: event.pointerId,
-      point: { x: event.clientX, y: event.clientY },
-      grab: { x: event.clientX - view().left - origin.x, y: event.clientY - view().top - origin.y },
+      point,
+      grab: { x: pressed.x - origin.x, y: pressed.y - origin.y },
       base: props.board.latest(),
       panel: panel.id
     });
@@ -438,7 +580,10 @@ export function BoardView(props: {
         return drag.base;
       }
 
-      const span = spanAfter(drag.span, { x: drag.point.x - drag.start.x, y: drag.point.y - drag.start.y });
+      const span = spanAfter(drag.span, {
+        x: (drag.point.x - drag.start.x) / size.scale,
+        y: (drag.point.y - drag.start.y) / size.scale
+      });
       return replacePanel(drag.base, panel.id, { ...panel, parts: resizePart(panel.parts, drag.id, span) });
     }
 
@@ -447,10 +592,8 @@ export function BoardView(props: {
       return drag.base;
     }
 
-    const at = {
-      x: (drag.point.x - size.left - drag.grab.x) / size.width,
-      y: (drag.point.y - size.top - drag.grab.y) / size.height
-    };
+    const pointer = toView(drag.point);
+    const at = { x: (pointer.x - drag.grab.x) / size.width, y: (pointer.y - drag.grab.y) / size.height };
     return replacePanel(drag.base, panel.id, { ...panel, at });
   }
 
@@ -465,7 +608,8 @@ export function BoardView(props: {
     }
 
     // The lifted part's top-left corner, in view pixels.
-    const corner = { x: point.x - size.left - drag.grab.x, y: point.y - size.top - drag.grab.y };
+    const pointer = toView(point);
+    const corner = { x: pointer.x - drag.grab.x, y: pointer.y - drag.grab.y };
     const center = {
       x: corner.x + (drag.span.columns * pitch) / 2,
       y: corner.y + (drag.span.rows * pitch) / 2
@@ -598,6 +742,10 @@ type Drag = { pointer: number; point: Point; base: Board } & (
       fromBox: boolean;
       /** A kit's parts and owned panels, carried as one block of `span`. */
       block?: { parts: Part[]; panels: Panel[] };
+      /** Where the spawn menu it came from was opened, where a tap puts it. */
+      spawnAt?: Point;
+      /** Whether it moved off where it was pressed. */
+      carried: boolean;
     })
   | { type: 'resize'; panel: string; id: string; span: Span; start: Point }
   | { type: 'panel'; panel: string; grab: Point }
@@ -608,6 +756,9 @@ type Lifted = Omit<Part, 'cell'>;
 
 /** CSS pixels a press may move and still be a tap, which opens a swatch's panel while editing. */
 const tapDistance = 6;
+
+/** Milliseconds a still press on the bare drawing or a panel's free cells takes to open the spawn menu. */
+const longPress = 420;
 
 /**
  * Milliseconds a lifted part must rest over a spot before the parts in its way move aside, after Android's launcher:

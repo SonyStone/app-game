@@ -28,8 +28,9 @@ import { ValuePart, type Popup } from './parts';
  * the one chosen for its size. A color swatch opens a panel of its own, built like any other; panels can be kept as
  * kits and placed again.
  *
- * "Edit" shows the studs and the box of parts: drag parts out of the box, between panels and back, size them by
- * their corner and move panels by their rim (see `BoardView`). The board is kept per device.
+ * "Edit" shrinks the drawing to a card and shows the studs and, beside the card, the box of parts: drag parts out of
+ * the box, between panels and back, size them by their corner and move panels by their rim; a long press on a free
+ * spot offers the parts right there (see `BoardView`). The board is kept per device.
  */
 export function LegoStudio(props: PaintVariantProps) {
   const [editing, setEditing] = createSignal(false);
@@ -90,8 +91,8 @@ export function LegoStudio(props: PaintVariantProps) {
   };
 
   return (
-    <PaintEditor session={session} class={styles.editor}>
-      <PaintStage session={session}>
+    <PaintEditor session={session} class={`${styles.editor} ${editing() ? styles.cardMode : ''}`}>
+      <PaintStage session={session} class={styles.workspace}>
         <StageGuides session={session} />
         <StageOverlays session={session} />
       </PaintStage>

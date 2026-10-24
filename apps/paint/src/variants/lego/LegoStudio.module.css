@@ -697,77 +697,127 @@
   color: var(--lego-quiet);
 }
 
-/* The box of parts: a drawer pulled up from the bottom edge, sinking to its bar while something is carried. */
-.drawer {
-  --drawer-bar: 48px;
+/*
+ * Edit mode: the drawing and the board shrink to a card, as Android's home screen does while widgets are arranged,
+ * leaving room for the box of parts beside it (landscape) or below it (portrait). Both scale from their top-left
+ * corner, which BoardView measures to map presses to cells.
+ */
+.workspace,
+.board {
+  transform-origin: 0 0;
+  transition:
+    scale 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    translate 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-radius 260ms;
+}
 
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  /* Pulled up on purpose, so over the session's floating windows (900); popups stay over it. */
-  z-index: 920;
-  display: grid;
-  grid-template-rows: var(--drawer-bar) minmax(0, 1fr);
-  width: min(100% - 24px, 1040px);
-  height: min(56vh, 520px);
-  translate: -50% calc(100% - var(--drawer-bar));
-  border-radius: 18px 18px 0 0;
-  background: rgb(20 21 25 / 0.97);
-  color: #ffffff;
-  box-shadow: 0 -8px 30px rgb(0 0 0 / 0.25);
-  pointer-events: auto;
-  transition: translate 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+.cardMode {
+  --card-scale: 0.72;
+  --card-margin: 16px;
 
-  &[data-open] {
-    translate: -50% 0;
+  background: #d6d3cc;
+
+  .workspace,
+  .board {
+    scale: var(--card-scale);
   }
 
-  &[data-carrying] .drawerBar {
-    background: rgb(255 255 255 / 0.06);
-  }
-
-  &[data-over] .drawerBar {
-    background: rgb(230 70 60 / 0.55);
+  .workspace {
+    border-radius: calc(18px / var(--card-scale));
+    box-shadow: 0 16px 60px rgb(0 0 0 / 0.3);
   }
 }
 
-.drawerBar {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 0 12px;
-  border-radius: 18px 18px 0 0;
-  cursor: pointer;
+@media (orientation: landscape) {
+  .cardMode .workspace,
+  .cardMode .board {
+    translate: var(--card-margin) calc((1 - var(--card-scale)) * 50%);
+  }
+
+  .tray {
+    top: 64px;
+    right: var(--card-margin);
+    bottom: var(--card-margin);
+    left: calc(var(--card-scale) * 100% + 2 * var(--card-margin));
+  }
+}
+
+@media (orientation: portrait) {
+  .cardMode .workspace,
+  .cardMode .board {
+    translate: calc((1 - var(--card-scale)) * 50%) var(--card-margin);
+  }
+
+  .tray {
+    top: calc(var(--card-scale) * 100% + 2 * var(--card-margin));
+    right: var(--card-margin);
+    bottom: var(--card-margin);
+    left: var(--card-margin);
+  }
+}
+
+/* The drawing under the board while editing: it takes no strokes, and a long press there opens the spawn menu. */
+.bare {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
   touch-action: none;
-  user-select: none;
+}
+
+/* The box of parts, docked beside the card; something dropped on it is put away. */
+.tray {
+  position: absolute;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-radius: 18px;
+  background: rgb(20 21 25 / 0.97);
+  color: #ffffff;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.25);
+  animation: tray-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+  &[data-over] {
+    outline: 3px solid rgb(230 70 60 / 0.8);
+    outline-offset: -3px;
+
+    .trayBar {
+      background: rgb(230 70 60 / 0.55);
+    }
+  }
+}
+
+@keyframes tray-in {
+  from {
+    opacity: 0;
+    translate: 24px 0;
+  }
+}
+
+.trayBar {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 12px 12px 8px 18px;
+  border-radius: 18px 18px 0 0;
 
   .boxButton {
-    position: absolute;
-    right: 12px;
+    margin-left: auto;
     padding: 5px 10px;
     font-size: 12px;
   }
 }
 
-.drawerGrip {
-  position: absolute;
-  top: 6px;
-  width: 40px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgb(255 255 255 / 0.35);
-}
-
-.drawerTitle {
-  margin-top: 6px;
-  color: rgb(255 255 255 / 0.75);
-  font-size: 12px;
+.trayTitle {
+  color: rgb(255 255 255 / 0.85);
+  font-size: 13px;
   font-weight: 600;
 }
 
-.drawerBody {
+.trayHint {
+  color: rgb(255 255 255 / 0.45);
+  font-size: 11px;
+}
+
+.trayBody {
   display: grid;
   align-content: start;
   gap: 14px;
@@ -775,25 +825,26 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
-
-  h4 {
-    margin: 0 0 8px;
-    color: rgb(255 255 255 / 0.55);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
 }
 
-.drawerItems {
+.tray h4,
+.spawnCard h4 {
+  margin: 0 0 8px;
+  color: rgb(255 255 255 / 0.55);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.trayItems {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 10px 8px;
 }
 
-.drawerItem {
+.trayItem {
   display: grid;
   justify-items: center;
   gap: 4px;
@@ -801,7 +852,7 @@
   max-width: 150px;
 }
 
-.drawerTile {
+.trayTile {
   position: relative;
   width: 44px;
   height: 44px;
@@ -813,7 +864,7 @@
   touch-action: none;
 }
 
-.drawerCaption {
+.trayCaption {
   max-width: 100%;
   overflow: hidden;
   color: rgb(255 255 255 / 0.85);
@@ -823,7 +874,84 @@
   white-space: nowrap;
 }
 
-/* A kit in the drawer: its parts in miniature on a plate. */
+/* The spawn menu: families in a ring around a long press, the chosen family's parts in a card beside it. */
+.spawn {
+  position: absolute;
+  inset: 0;
+  z-index: 940;
+  pointer-events: none !important;
+  transition: opacity 120ms;
+
+  > * {
+    pointer-events: auto;
+  }
+
+  &[data-hidden] {
+    opacity: 0;
+
+    > * {
+      pointer-events: none;
+    }
+  }
+}
+
+.spawnRing {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.spawnCenter {
+  position: absolute;
+  left: -7px;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--lego-accent);
+  box-shadow: 0 0 0 6px rgb(61 126 255 / 0.25);
+  animation: spawn-pop 160ms ease-out both;
+}
+
+.spawnFamily {
+  position: absolute;
+  translate: -50% -50%;
+  padding: 8px 13px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(20 21 25 / 0.95);
+  color: #ffffff !important;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--lego-shadow);
+  cursor: pointer;
+  touch-action: none;
+  animation: spawn-pop 180ms cubic-bezier(0.2, 0.8, 0.2, 1.2) both;
+
+  &[aria-pressed='true'] {
+    background: var(--lego-accent);
+  }
+}
+
+@keyframes spawn-pop {
+  from {
+    opacity: 0;
+    scale: 0.5;
+  }
+}
+
+.spawnCard {
+  position: absolute;
+  max-width: 340px;
+  padding: 10px 12px 12px;
+  border-radius: 14px;
+  background: rgb(20 21 25 / 0.97);
+  color: #ffffff;
+  box-shadow: var(--lego-shadow);
+}
+
+/* A kit in the box: its parts in miniature on a plate. */
 .kitPreview {
   position: relative;
   cursor: grab;
