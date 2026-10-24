@@ -122,6 +122,31 @@ describe('king of the hill with eight bots', () => {
     expect(match.members.every((member) => member.tank && member.kills === 0)).toBe(true);
     expect(match.members.every((member) => !onPoint(match.map, member.tank!.hull.translation()))).toBe(true);
   }, 60_000);
+
+  it('keeps fighting after a restart, which turns the clock back', () => {
+    const match = createMatch(5);
+    const shotsUntil = (time: number) => {
+      let shots = 0;
+      const fire = match.combat.fire;
+      match.combat.fire = (tank) => {
+        shots++;
+        fire(tank);
+      };
+
+      while (match.time < time) {
+        tick(match);
+      }
+
+      match.combat.fire = fire;
+      return shots;
+    };
+
+    expect(shotsUntil(90)).toBeGreaterThan(20);
+
+    match.restart();
+
+    expect(shotsUntil(90)).toBeGreaterThan(20);
+  }, 60_000);
 });
 
 describe('king of the hill with the player', () => {
@@ -131,6 +156,9 @@ describe('king of the hill with the player', () => {
     const enemy = match.members.find((member) => member.team === 'blue')!.tank!;
     const at = player.hull.translation();
     const away = { hull: enemy.hull.translation(), pull: enemy.pull.translation() };
+
+    // Bots stay out of it, so red's bots in the base do not shoot the visitor first.
+    match.bots.clear();
 
     // A blue tank, facing west like at its spawn, drops by and puts a few shells into the front of
     // the player's tank in red's base.
@@ -164,7 +192,12 @@ describe('king of the hill with the player', () => {
     const start = match.player!.hull.translation();
     const turret = match.player!.turretAngle;
 
-    for (let step = 0; step < 60; step++) {
+    match.step(1 / 60, { drive: { x: 0, y: 1 }, aim: turret + Math.PI, fire: false });
+
+    // The turret follows the aim at once, as in a shooter.
+    expect(match.player!.turretAngle).toBeCloseTo(turret + Math.PI);
+
+    for (let step = 1; step < 60; step++) {
       match.step(1 / 60, { drive: { x: 0, y: 1 }, aim: turret + Math.PI, fire: false });
     }
 
@@ -172,8 +205,6 @@ describe('king of the hill with the player', () => {
 
     expect(match.bots.has(match.seat)).toBe(false);
     expect(moved.y - start.y).toBeGreaterThan(100);
-    // Half a turn takes the turret longer than a second.
-    expect(Math.abs(match.player!.turretAngle - turret)).toBeCloseTo(MEDIUM_TANK.turretSpeed, 1);
 
     match.spectate(true);
 

@@ -115,7 +115,7 @@ export function createKothMatch(
      *
      * @param input.drive - Player's drive direction in world axes, length up to 1.
      * @param input.aim - Direction the player wants the turret to point, in world radians; the
-     *   turret turns toward it no faster than its tank class allows. Without it the turret stays.
+     *   turret follows it at once, as in a shooter. Without it the turret stays.
      * @param input.fire - Whether the player holds the trigger.
      */
     step(dt: number, input: { drive: Point; aim?: number; fire: boolean } = { drive: STOP, fire: false }) {
@@ -137,7 +137,7 @@ export function createKothMatch(
         combat.drive(player.tank, input.drive);
 
         if (input.aim !== undefined) {
-          turnTurret(player.tank, input.aim, MEDIUM_TANK.turretSpeed * dt);
+          player.tank.turretAngle = input.aim;
         }
 
         if (input.fire) {
@@ -262,6 +262,7 @@ export function createKothMatch(
       combat.reset();
       byTank.clear();
       time = 0;
+      nextRepair = 0;
       capture = createCaptureState(rules);
       feed.length = 0;
       boards.red.reset();
@@ -473,12 +474,6 @@ function createMembers(human: boolean): Member[] {
 /** The first respawn wave at or after match time `time`. */
 function nextWave(time: number) {
   return Math.ceil(time / RESPAWN_WAVE) * RESPAWN_WAVE;
-}
-
-/** Turns a turret toward `goal` by at most `step` radians. */
-function turnTurret(tank: Tank, goal: number, step: number) {
-  const delta = Math.atan2(Math.sin(goal - tank.turretAngle), Math.cos(goal - tank.turretAngle));
-  tank.turretAngle += Math.abs(delta) <= step ? delta : Math.sign(delta) * step;
 }
 
 function distance(a: Point, b: Point) {

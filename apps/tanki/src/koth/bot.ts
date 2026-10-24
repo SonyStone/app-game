@@ -94,14 +94,20 @@ export function createBot(member: Member, context: BotContext) {
       };
     },
 
-    /** Forgets the old tank's plan, for a respawned tank. */
+    /**
+     * Forgets the old tank's plan and every timer, for a respawned tank or a new match. A restart
+     * turns the match clock back to 0, so no timer may keep a time from the match before.
+     */
     reset() {
       driver.reset();
       visible.clear();
       plan = undefined;
       task = undefined;
       facts = {};
+      nextPerceive = 0;
       nextReplan = 0;
+      lastPlan = -Infinity;
+      cover = undefined;
       gun = { target: undefined, since: 0, reaction: 0, offset: undefined };
       dodge = undefined;
       judged.clear();

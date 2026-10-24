@@ -103,12 +103,13 @@ export function createDriver(grid: NavGrid) {
       return { x: steered.x * throttle, y: steered.y * throttle };
     },
 
-    /** Forgets the path and the stall history, for a new tank. */
+    /** Forgets the path and the stall history, for a new tank; the clock may have started over. */
     reset() {
       path = [];
       next = 1;
       goal = undefined;
       plannedAt = -Infinity;
+      skipCheckAt = 0;
       check = undefined;
       stuckSince = undefined;
       unstick = undefined;

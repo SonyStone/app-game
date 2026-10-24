@@ -8,7 +8,10 @@ import type { ShellSpec } from '../damage/combat';
 export type TankClass = {
   /** Hull speed at full input on a straight run, in pixels per second. */
   speed: number;
-  /** Fastest turn of the turret, in radians per second. */
+  /**
+   * Fastest turn of a bot's turret, in radians per second. The player's turret follows the aim at
+   * once, as in a shooter, so this only keeps bots from snapping round faster than a hand would.
+   */
   turretSpeed: number;
   gun: GunSpec;
   shell: ShellSpec;
@@ -34,8 +37,8 @@ export type GunSpec = {
  *
  * - It drives at 200 px/s, about the Soldier's 240 units per second; crossing the map takes as
  *   long as walking a king of the hill map.
- * - Its turret turns at 2.6 rad/s, half a turn in 1.2 s: a tank that circles another at 150 px
- *   can just be followed, and one that comes from behind gets a moment before the turret is round.
+ * - A bot's turret turns at 10 rad/s, half a turn in 0.3 s, about a quick flick of the mouse;
+ *   reaction time and aim error, not the turret, are what make bots beatable.
  * - Its gun is the rocket launcher: four rounds 0.8 s apart, each reloaded in 0.8 s.
  * - Its shell flies at 900 px/s, the rocket's 1100 units per second, slow enough to be seen and
  *   dodged at range, and falls after 700 px, about the width of the screen. A hit chips a crater
@@ -43,7 +46,7 @@ export type GunSpec = {
  */
 export const MEDIUM_TANK: TankClass = {
   speed: 200,
-  turretSpeed: 2.6,
+  turretSpeed: 10,
   gun: { interval: 0.8, clip: 4, firstReload: 0.92, reload: 0.8 },
   shell: { speed: 900, range: 700, hole: 4.5, depth: 3, knockback: 700 }
 };
