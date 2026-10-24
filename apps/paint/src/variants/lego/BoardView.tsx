@@ -121,6 +121,11 @@ export function BoardView(props: {
 
     return current.type === 'part' ? partDrop(current, current.settled).board : result(current);
   });
+  /** The workbench's place in its own pixels, before it is shrunk to fit. */
+  const benchView = () => ({
+    width: (benchSize.width ?? 0) / benchScale(),
+    height: (benchSize.height ?? 0) / benchScale()
+  });
   /** Whether something lifted is being carried; it shows at full size. */
   const carrying = () => lifted()?.carried === true;
   /** The panels on screen, with where each lies; see `visiblePanels`. */
@@ -138,9 +143,12 @@ export function BoardView(props: {
   });
   const benchEntry = createMemo(() => {
     const panel = benchOf(shown());
-    const size = { width: (benchSize.width ?? 0) / benchScale(), height: (benchSize.height ?? 0) / benchScale() };
-    return { panel, frame: benchFrame(panel, size) };
+    return { panel, frame: benchFrame(panel, benchView()) };
   });
+  /** The workbench and the open panels of a swatch on it, with where each lies in its pixels. */
+  const benchPanels = createMemo(() =>
+    benchVisible(shown(), pinned(drag()))
+  );
   /** The band being dragged across the workbench, in its place's pixels. */
   const band = () => {
     const current = drag();
@@ -501,7 +509,9 @@ export function BoardView(props: {
         {(slot) => (
           <Portal mount={slot()}>
             <div class={styles.benchPlate} style={{ scale: `${benchScale()}` }}>
-              <PanelView entry={benchEntry()} />
+              <For each={benchPanels()} keyed={(entry) => entry.panel.id}>
+                {(entry) => <PanelView entry={entry()} />}
+              </For>
               <Show when={benchEntry().panel.parts.length === 0}>
                 <span class={styles.benchHint}>Workbench: lay parts out, drag across them to select</span>
               </Show>
@@ -801,6 +811,13 @@ export function BoardView(props: {
     }
   }
 
+  /** The workbench of `board` and the open chain of a swatch on it; see `visiblePanels`. */
+  function benchVisible(board: Board, pins?: ReadonlyMap<string, Point>) {
+    const panel = benchOf(board);
+    const bench = { panel, frame: benchFrame(panel, benchView()) };
+    return visiblePanels(board, props.openPanel, props.editing, benchView(), pins, bench);
+  }
+
   /** How large a part carried at `point` shows: as the workbench under it, the board, or at full size once carried. */
   function ghostScale(point: Point) {
     if (overBench(point)) {
@@ -851,7 +868,7 @@ export function BoardView(props: {
 
   /** Where each panel on screen has its cell (0, 0) now, to keep it there through a drag; see `frameAt`. */
   function origins(board: Board) {
-    const frames = visiblePanels(board, props.openPanel, props.editing, view());
+    const frames = [...visiblePanels(board, props.openPanel, props.editing, view()), ...benchVisible(board)];
     return new Map(frames.map(({ panel, frame }) => [panel.id, frame.origin]));
   }
 
@@ -865,8 +882,9 @@ export function BoardView(props: {
         return drag.base;
       }
 
-      // The workbench is at full size whatever the board's scale.
-      const scale = panel.bench ? benchScale() : size.scale;
+      // The workbench, with the panels of its swatches, is sized apart from the board.
+      const inBenchPlace = benchPanels().some((entry) => entry.panel.id === panel.id);
+      const scale = inBenchPlace ? benchScale() : size.scale;
       const span = spanAfter(drag.span, {
         x: (drag.point.x - drag.start.x) / scale,
         y: (drag.point.y - drag.start.y) / scale
@@ -906,14 +924,36 @@ export function BoardView(props: {
       };
     };
 
+    /**
+     * The panel among `entries` the part with its top-left at `corner` covers most of, counting half a cell around
+     * it, so a part, however long, joins a panel as soon as an edge of it touches; on a tie the top-most one.
+     */
+    const touched = (entries: ReturnType<typeof visiblePanels>, corner: Point) => {
+      const lifted = { left: corner.x, top: corner.y, width: drag.span.columns * pitch, height: drag.span.rows * pitch };
+      return entries.reduce<{ entry?: (typeof entries)[number]; area: number }>(
+        (best, entry) => {
+          const area = overlap(lifted, grow(entry.frame.rect, pitch / 2));
+          return area > 0 && area >= best.area ? { entry, area } : best;
+        },
+        { area: 0 }
+      ).entry;
+    };
+
     // Anywhere over the workbench lands on the bench where it is, at full size, in the place's own pixels; its
     // plate starts at cell (0, 0).
     const at = overBench(point) ? inBench(point) : undefined;
     if (at) {
-      const panel = benchOf(drag.base);
-      const nearest = nearestCell(benchOrigin, { x: at.x - drag.grab.x, y: at.y - drag.grab.y });
+      // An open swatch panel on the bench takes what touches it, as on the board; the bench takes the rest.
+      const corner = { x: at.x - drag.grab.x, y: at.y - drag.grab.y };
+      const owned = benchVisible(drag.base, drag.pinned).filter((entry) => !entry.panel.bench);
+      const into = touched(owned, corner);
+      if (into) {
+        return { where: 'bench' as const, ...placeOn(into.panel, nearestCell(into.frame.origin, corner)) };
+      }
+
+      const nearest = nearestCell(benchOrigin, corner);
       const cell = { column: Math.max(0, nearest.column), row: Math.max(0, nearest.row) };
-      return { where: 'bench' as const, ...placeOn(panel, cell) };
+      return { where: 'bench' as const, ...placeOn(benchOf(drag.base), cell) };
     }
 
     if (overBox(point)) {
@@ -924,17 +964,7 @@ export function BoardView(props: {
     const pointer = toView(point);
     const corner = { x: pointer.x - drag.grab.x, y: pointer.y - drag.grab.y };
 
-    // The panel the part covers most of, counting half a cell around it, so a part, however long, joins a panel as
-    // soon as an edge of it touches; on a tie the top-most one.
-    const lifted = { left: corner.x, top: corner.y, width: drag.span.columns * pitch, height: drag.span.rows * pitch };
-    const panels = visiblePanels(drag.base, props.openPanel, props.editing, size, drag.pinned);
-    const target = panels.reduce<{ entry?: (typeof panels)[number]; area: number }>(
-      (best, entry) => {
-        const area = overlap(lifted, grow(entry.frame.rect, pitch / 2));
-        return area > 0 && area >= best.area ? { entry, area } : best;
-      },
-      { area: 0 }
-    ).entry;
+    const target = touched(visiblePanels(drag.base, props.openPanel, props.editing, size, drag.pinned), corner);
     if (target) {
       return { where: 'board' as const, ...placeOn(target.panel, nearestCell(target.frame.origin, corner)) };
     }
@@ -967,22 +997,27 @@ export function BoardView(props: {
  * The panels of `board` on screen, in paint order, with where each lies: the free ones, then the open swatch's panel
  * and the panels of the swatches it lies in, outermost first. While editing, an open swatch without a panel shows an
  * empty one to drop parts into. The panels in `pinned` keep their cell (0, 0) at its origin there. The workbench lies
- * in the box instead; see `benchFrame`.
+ * in the box instead (see `benchFrame`): given as `bench`, the panels are it and the open chain of a swatch on it,
+ * in its pixels within a `view` its size.
  */
 function visiblePanels(
   board: Board,
   open: string | undefined,
   editing: boolean,
   view: { width: number; height: number },
-  pinned?: ReadonlyMap<string, Point>
+  pinned?: ReadonlyMap<string, Point>,
+  bench?: { panel: Panel; frame: ReturnType<typeof panelFrame> }
 ) {
-  const owned = [...openChain(board, open)]
-    .reverse()
+  // An open chain shows where its outermost swatch lies: on the board, or on the workbench.
+  const chain = [...openChain(board, open)].reverse();
+  const onBench = chain.length > 0 && findPart(board, chain[0]!)?.panel.bench === true;
+  const owned = (onBench === (bench !== undefined) ? chain : [])
     .map((owner) => ownedPanel(board, owner) ?? (editing ? emptyPanel(owner) : undefined))
     .filter((panel): panel is Panel => panel !== undefined);
-  const panels = [...board.panels.filter((panel) => panel.owner === undefined && !panel.bench), ...owned];
+  const roots = bench ? [bench.panel] : board.panels.filter((panel) => panel.owner === undefined && !panel.bench);
+  const panels = [...roots, ...owned];
 
-  const frames = new Map<string, ReturnType<typeof panelFrame>>();
+  const frames = new Map<string, ReturnType<typeof panelFrame>>(bench ? [[bench.panel.id, bench.frame]] : []);
   const frameOf = (panel: Panel, depth = 0): ReturnType<typeof panelFrame> => {
     const known = frames.get(panel.id);
     if (known) {

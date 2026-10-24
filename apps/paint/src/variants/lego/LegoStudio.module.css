@@ -845,7 +845,8 @@
   border-radius: 12px;
   touch-action: none;
 
-  .panel {
+  /* The bench itself is the place; a swatch's panel open on it stands out as on the board. */
+  .panel:not([data-owned]) {
     outline: none;
     box-shadow: none;
     cursor: crosshair;
