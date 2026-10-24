@@ -46,9 +46,7 @@ export function SessionNotices(props: { session: PaintSession }) {
         <FreshTabNotice
           size={size()}
           blocked={freshTab.blocked()}
-          auto={freshTab.auto()}
           onMove={freshTab.move}
-          onAutoChange={freshTab.setAuto}
           onDismiss={freshTab.dismiss}
         />
       </Show>

@@ -199,9 +199,7 @@ export function ComponentCanvas() {
         <FreshTabNotice
           size={{ width: innerWidth, height: innerHeight }}
           blocked={freshTab.blocked()}
-          auto={freshTab.auto()}
           onMove={freshTab.move}
-          onAutoChange={freshTab.setAuto}
           onDismiss={freshTab.dismiss}
         />
       </Show>

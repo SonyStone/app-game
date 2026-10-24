@@ -5,16 +5,11 @@
   font-size: 13px;
 }
 
-/* The notice's "Always" checkbox. */
-.auto {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 38px;
-  padding: 0 8px;
-  color: var(--muted);
-  font-size: 13px;
-  white-space: nowrap;
+/* The notice's picture of the pen hover lost. */
+.icon {
+  flex: none;
+  margin: 0 4px;
+  color: #444;
 }
 
 /* Laid out as the other Drawing menu sections. */
