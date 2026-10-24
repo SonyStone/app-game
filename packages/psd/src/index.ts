@@ -1,6 +1,7 @@
 // Layered Photoshop documents, read and written by the Rust/WASM codec built in photoshop-analysis/psd-wasm.
 import type { PsdDocument } from './psd';
 
+export * from './editor';
 export * from './psd';
 
 /**
