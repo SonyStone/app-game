@@ -707,7 +707,10 @@ export function createCombat(
         .setAngularDamping(25)
     );
 
-    register(body, createCrateField(), PROP_COLOR, CRATE_MASS, () => spawnCrate(placement)).thin = true;
+    // A crate is thin enough for a piercing round and low enough for a grenade to fly over.
+    const entry = register(body, createCrateField(), PROP_COLOR, CRATE_MASS, () => spawnCrate(placement));
+    entry.thin = true;
+    entry.top = CRATE_HEIGHT;
   }
 
   /**
@@ -755,7 +758,8 @@ export function createCombat(
       hull: undefined,
       look: undefined,
       thin: false,
-      top: tank ? TANK_TOP : CRATE_HEIGHT,
+      // Bodies are tall unless said otherwise, so a grenade bounces off any new kind, such as a wall.
+      top: tank ? TANK_TOP : Infinity,
       airborne: undefined,
       spin: 0
     };
