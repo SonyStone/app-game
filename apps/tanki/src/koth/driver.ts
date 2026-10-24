@@ -1,4 +1,4 @@
-import { canDrive, findPath, type NavGrid } from './navigation';
+import { canDrive, findPath, isOpenAt, sampleDistance, type NavGrid } from './navigation';
 
 type Point = { x: number; y: number };
 
@@ -14,7 +14,8 @@ export type Obstacle = { x: number; y: number; radius: number };
  *
  * A tank that wants to move but has not for a while is stuck, for example against a crate it
  * cannot shove or another tank: it backs off to one side for a moment, alternating sides, and
- * then plans again.
+ * then plans again. A tank stuck closer to walls than its hull needs, as in a crater shot into a
+ * building, drives straight away from them instead.
  */
 export function createDriver(grid: NavGrid) {
   let path: Point[] = [];
@@ -97,8 +98,9 @@ export function createDriver(grid: NavGrid) {
 
       if (stuckSince !== undefined && now - stuckSince >= STUCK_TIME) {
         stalls++;
-        // Back away from whatever blocks the way, to one side, then think again.
-        unstick = { until: now + UNSTICK_TIME, direction: rotate({ x: -toward.x, y: -toward.y }, side * UNSTICK_ANGLE) };
+        // Back away from whatever blocks the way, to one side, then think again; out of a pocket among walls, away from them.
+        const away = isOpenAt(grid, position) ? undefined : awayFromWalls(grid, position);
+        unstick = { until: now + UNSTICK_TIME, direction: away ?? rotate({ x: -toward.x, y: -toward.y }, side * UNSTICK_ANGLE) };
         side = -side;
         plannedAt = -Infinity;
         return unstick.direction;
@@ -219,6 +221,14 @@ function avoid(position: Point, toward: Point, obstacles: readonly Obstacle[]) {
   }
 
   return normalize({ x, y });
+}
+
+/** The direction in which the distance to walls grows fastest at `point`; `undefined` where it is flat. */
+function awayFromWalls(grid: NavGrid, point: Point) {
+  const step = grid.cell / 2;
+  const at = (dx: number, dy: number) => sampleDistance(grid, grid.distance, { x: point.x + dx, y: point.y + dy });
+  const slope = { x: at(step, 0) - at(-step, 0), y: at(0, step) - at(0, -step) };
+  return Math.hypot(slope.x, slope.y) > 1e-3 ? normalize(slope) : undefined;
 }
 
 function distance(a: Point, b: Point) {

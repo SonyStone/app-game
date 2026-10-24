@@ -718,6 +718,8 @@ export function createCombat(
     const mass = options.mass ?? TANK_MASS;
     // The pull weighs as many times more as the hull, so every hull is towed alike.
     const tank = createTank(rapier, world, placement, options.color, options.pullSpeed, mass / TANK_MASS);
+    // A blast throws a light tank a wall's thickness in one step; sweeping its motion keeps it out of walls.
+    tank.hull.enableCcd(true);
     tank.turretAngle = placement.turret ?? placement.rotation;
     const field = createHullField(options.hull);
     const respawn = options.respawn ? () => spawnTank(placement, options) : undefined;

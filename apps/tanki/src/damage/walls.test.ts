@@ -153,6 +153,31 @@ describe('breakable walls', () => {
   });
 });
 
+describe('a light tank thrown by a blast', () => {
+  it.each(['steel', 'brick'] as const)('lands against a %s wall, not inside it', (material) => {
+    const { combat } = createBattle({ walls: [{ x: 70, y: 0, halfWidth: 12, halfHeight: 150, material }] });
+    const tank = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0, mass: 0.65 });
+    combat.step(1 / 60);
+    // As hard as two grenades going off together: about 1800 px/s, a wall's thickness a step.
+    combat.blast({ x: -26, y: 0 }, { radius: 95, hole: 0, depth: 0, knockback: 1200 });
+
+    expect(combat.isAirborne(tank)).toBe(true);
+
+    let closest = Infinity;
+    let farthest = -Infinity;
+
+    for (let step = 0; step < 60; step++) {
+      combat.step(1 / 60);
+      closest = Math.min(closest, combat.obstacleDistance(tank.hull.translation(), 100));
+      farthest = Math.max(farthest, tank.hull.translation().x);
+    }
+
+    // It flew into the wall, whose face is at x = 58, and its center stayed half a hull's width off it.
+    expect(farthest).toBeGreaterThan(36);
+    expect(closest).toBeGreaterThan(10.5);
+  });
+});
+
 /** Turns `shooter`'s turret onto `target`, fires a shell and lets it land. */
 function fireAt(combat: ReturnType<typeof createCombat>, shooter: Tank, target: { x: number; y: number }) {
   const at = shooter.hull.translation();
