@@ -1,6 +1,6 @@
 import type { Collider, Rapier, RigidBody } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
-import { carve, CHANNELS, crack, dent, detachLoosePieces, FAR, raycastField, shatter, solidBoxes, type DamageField, type Fragment } from './field';
+import { carve, CHANNELS, crack, dent, detachLoosePieces, FAR, raycastField, sampleField, shatter, solidBoxes, surfaceNormal, type DamageField, type Fragment } from './field';
 import { KIND_FIELD, PARTICLE_DUST, PARTICLE_SMOKE, type createRangeRenderer } from './renderer';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
@@ -10,11 +10,15 @@ type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 /**
  * Wrecks of destroyed tanks. A wreck keeps the hull's armor as the blast left it, charred, on a
  * Rapier body of its own that tanks cannot push: it stands where the tank died, as heavy as a
- * wall, and is cover from shots and sight.
+ * wall, and is cover from shots and sight. It keeps the hull's shape and painted lines, so a
+ * heavy tank's wreck is big and a light one's small, each recognizably of its class.
  *
  * - Shots chip it like armor (`chip`); pieces cut loose fall off as scrap (`onDebris`), and a wreck
  *   shot down to `CRUMBLE_AT` of its armor falls apart.
- * - A ram dents it a little; a hard one, near a tank's full speed, shoves it a few pixels (`ram`).
+ * - A ram dents it a little; a hard one, near a tank's full speed, shoves it a few pixels, a wreck
+ *   of a heavier tank less (`ram`).
+ * - A blast chips the face it meets, which `facesNear` finds; a piercing round bores through it
+ *   where it is thin (`bore`).
  * - `cast` finds it along a shot and `distance` gives it to navigation; `onChange` reports where a
  *   wreck appeared, moved, changed shape or went.
  * - At most `limit` wrecks stand: when one more comes, the oldest falls apart into a heap of
@@ -68,8 +72,10 @@ export function createWrecks(
      * @param wreck.color - The tank's color, components 0-1.
      * @param wreck.core - Center of the core in the field's coordinates, where the blast starts.
      * @param wreck.direction - Unit direction of the shot that destroyed the tank.
-     * @returns Whether the wreck was left: without a free field slot it is not, and a hull with
-     *   less than `MIN_AREA` of armor left falls apart into scrap at once.
+     * @param wreck.mass - Mass of the tank, 1 for the medium tank's; a heavier wreck takes a harder
+     *   ram to shove. Defaults to 1.
+     * @returns The id of the wreck left, or `undefined` when none was: without a free field slot
+     *   none is, and a hull with less than `MIN_AREA` of armor left falls apart into scrap at once.
      */
     add(wreck: {
       field: DamageField;
@@ -80,11 +86,12 @@ export function createWrecks(
       team: string | undefined;
       core: Point;
       direction: Point;
+      mass?: number;
     }) {
       const slot = renderer.allocateField();
 
       if (slot === undefined) {
-        return false;
+        return undefined;
       }
 
       blast(wreck.field, wreck.core, options.random);
@@ -101,6 +108,8 @@ export function createWrecks(
         boxes: [],
         area: 0,
         fullArea: 0,
+        mass: wreck.mass ?? 1,
+        reach: reachOf(wreck.field),
         changed: false,
         flash: 0,
         slide: undefined
@@ -118,7 +127,7 @@ export function createWrecks(
 
       if (entry.area < MIN_AREA || entry.boxes.length === 0) {
         crumble(entry);
-        return false;
+        return undefined;
       }
 
       options.onChange(boundsOf(entry));
@@ -127,12 +136,12 @@ export function createWrecks(
         crumble(wrecks[0]);
       }
 
-      return true;
+      return entry.id;
     },
 
     /**
-     * The first wreck along a ray within `maxDistance`, and how far along it is; `undefined` when
-     * the ray meets none.
+     * The first wreck along a ray within `maxDistance`, how far along it is and the outward normal
+     * of its armor there, which a bounce turns off; `undefined` when the ray meets none.
      *
      * @param direction - Unit direction.
      */
@@ -147,17 +156,94 @@ export function createWrecks(
         }
       }
 
-      return best;
+      return best && { ...best, normal: normalAt(best.wreck, { x: start.x + direction.x * best.distance, y: start.y + direction.y * best.distance }) };
+    },
+
+    /**
+     * The wrecks within `radius` of `at`, for a blast there: for each, where the line from `at` to
+     * the wreck's center first meets its armor, how far away that is, the line's unit direction
+     * and the armor's outward normal there.
+     */
+    facesNear(at: Point, radius: number) {
+      const faces: { wreck: Readonly<Wreck>; point: Point; distance: number; direction: Point; normal: Point | undefined }[] = [];
+
+      for (const wreck of wrecks) {
+        const center = wreck.body.translation();
+        const length = Math.hypot(center.x - at.x, center.y - at.y);
+
+        if (length - wreck.reach > radius) {
+          continue;
+        }
+
+        const direction = length > 1e-6 ? { x: (center.x - at.x) / length, y: (center.y - at.y) / length } : { x: 1, y: 0 };
+        const hit = raycastField(wreck.field, toLocal(wreck.body, at), rotateInto(wreck.body, direction), radius);
+
+        if (hit) {
+          const point = { x: at.x + direction.x * hit.distance, y: at.y + direction.y * hit.distance };
+          faces.push({ wreck, point, distance: hit.distance, direction, normal: normalAt(wreck, point) });
+        }
+      }
+
+      return faces;
+    },
+
+    /**
+     * Bores a piercing round through a wreck from where it met the wreck at `entry` along
+     * `direction`, if the wreck is thin there: the armor on the round's line, gaps not counted, is
+     * at most `maxArmor` pixels. It cuts a tunnel of holes of `hole` px along the line and returns
+     * where the round comes out and how much armor it went through; `undefined`, cutting nothing,
+     * where the wreck is thicker.
+     */
+    bore(wreck: Readonly<Wreck>, entry: Point, direction: Point, maxArmor: number, hole: number) {
+      const target = wreck as Wreck;
+
+      if (!wrecks.includes(target)) {
+        return undefined;
+      }
+      const start = toLocal(target.body, entry);
+      const inward = rotateInto(target.body, direction);
+      const sample = new Float32Array(CHANNELS);
+      let armor = 0;
+      let last = 0;
+
+      // Past the reach of its center on the far side, nothing of the wreck is left.
+      for (let along = 0; along <= target.reach * 2; along += BORE_STEP) {
+        if (sampleField(target.field, start.x + inward.x * along, start.y + inward.y * along, sample)[0] < 0) {
+          armor += BORE_STEP;
+          last = along;
+
+          if (armor > maxArmor) {
+            return undefined;
+          }
+        }
+      }
+
+      const seed = options.random() * 1000;
+
+      for (let along = 0; along <= last; along += hole * 0.7) {
+        carve(target.field, { x: start.x + inward.x * along, y: start.y + inward.y * along }, hole * 0.8, 0.3, seed + along);
+      }
+
+      target.push = direction;
+      target.flash = 1;
+      target.changed = true;
+      const out = last + BORE_STEP + 0.5;
+      return { exit: { x: entry.x + direction.x * out, y: entry.y + direction.y * out }, armor };
     },
 
     /**
      * Chips a shot's crater into a wreck where it hit, as into armor: a row of holes inward from
-     * the surface. Pieces cut loose fall off with the next `refresh`.
+     * the surface. Pieces cut loose fall off with the next `refresh`. A wreck gone already is left be.
      *
      * @param blow - The shot's hole radius and how far past the surface its hole reaches, in pixels.
      */
     chip(wreck: Readonly<Wreck>, point: Point, direction: Point, blow: { hole: number; depth: number }) {
       const target = wreck as Wreck;
+
+      // A wreck that fell apart meanwhile, as when a new one took its place, is gone.
+      if (!wrecks.includes(target)) {
+        return;
+      }
       const local = toLocal(target.body, point);
       const inward = rotateInto(target.body, direction);
       const craters = Math.ceil(blow.depth / (blow.hole * 0.5));
@@ -176,7 +262,8 @@ export function createWrecks(
 
     /**
      * A body crashed into a wreck: the wreck dents a little where it was hit, and a blow above
-     * `SHOVE_BLOW` shoves it along `direction`, turning it if the hit was off its center.
+     * `SHOVE_BLOW` per unit of the wreck's mass shoves it along `direction`, turning it if the hit
+     * was off its center: a heavy tank shoves a light wreck far, a light tank a heavy one not at all.
      *
      * @param handle - The collider the body touched; nothing happens unless it is a wreck's.
      * @param direction - Unit direction from the rammer into the wreck.
@@ -196,9 +283,9 @@ export function createWrecks(
         wreck.changed = true;
       }
 
-      if (blow > SHOVE_BLOW) {
+      if (blow > SHOVE_BLOW * wreck.mass) {
         const center = wreck.body.translation();
-        const speed = (blow - SHOVE_BLOW) * SHOVE_SPEED;
+        const speed = Math.min((blow / wreck.mass - SHOVE_BLOW) * SHOVE_SPEED, MAX_SHOVE);
         const arm = { x: point.x - center.x, y: point.y - center.y };
         wreck.slide = { vx: direction.x * speed, vy: direction.y * speed, spin: (arm.x * direction.y - arm.y * direction.x) * speed * SHOVE_TURN, from: boundsOf(wreck) };
       }
@@ -255,7 +342,7 @@ export function createWrecks(
       for (const wreck of wrecks) {
         const center = wreck.body.translation();
 
-        if (Math.hypot(point.x - center.x, point.y - center.y) - WRECK_REACH >= nearest) {
+        if (Math.hypot(point.x - center.x, point.y - center.y) - wreck.reach >= nearest) {
           continue;
         }
 
@@ -346,6 +433,12 @@ export function createWrecks(
       made = 0;
     }
   };
+
+  /** Outward normal of a wreck's armor at a world point on it, in world axes; `undefined` where the field is flat. */
+  function normalAt(wreck: Wreck, point: Point) {
+    const local = surfaceNormal(wreck.field, toLocal(wreck.body, point));
+    return local && rotateOut(wreck.body, local);
+  }
 
   /** Builds a wreck's colliders and boxes from its field and uploads the field. */
   function rebuild(wreck: Wreck) {
@@ -473,6 +566,10 @@ type Wreck = {
   /** Solid area now and when left, in square pixels. */
   area: number;
   fullArea: number;
+  /** Mass of the tank it was, 1 for the medium tank's. */
+  mass: number;
+  /** Distance from the center within which all of it lies, in pixels. */
+  reach: number;
   changed: boolean;
   flash: number;
   /** Direction of the last hit, which pieces fly along. */
@@ -496,15 +593,13 @@ const BLAST_SPEED = 200;
  * A wreck shot down to `CRUMBLE_AT` of its armor falls apart, and so does one with less than
  * `MIN_AREA` square pixels of it, a few percent of a hull, which would be no cover.
  */
-const CRUMBLE_AT = 0.4;
+export const CRUMBLE_AT = 0.4;
 const MIN_AREA = 120;
 const MIN_PIECE_CELLS = 6;
 /** Wrecks are darker than the tanks they were, and charred all over. */
 const WRECK_SHADE = 0.55;
 const CHAR = 0.55;
 const WRECK_HEIGHT = 6;
-/** Distance from a wreck's center within which all of it lies, in pixels. */
-const WRECK_REACH = 26;
 /**
  * A ram dents a wreck by `WRECK_DENT` px per unit of blow, and the rammer about as much as against
  * steel. A blow above `SHOVE_BLOW`, close to a medium tank's full speed, shoves the wreck at
@@ -514,9 +609,13 @@ const WRECK_DENT = 0.02;
 const WRECK_HARDNESS = 0.9;
 const SHOVE_BLOW = 45;
 const SHOVE_SPEED = 6;
+/** Fastest shove, about 30 px before the wreck grinds to a stop, however light it is. */
+const MAX_SHOVE = 270;
 /** Turn rate of a shove per pixel of arm and pixel per second of speed. */
 const SHOVE_TURN = 0.0012;
 const SLIDE_DRAG = 9;
+/** Step in pixels a piercing round bores through a wreck in. */
+const BORE_STEP = 0.5;
 const SLIDE_STOP = 4;
 const DUST_COLOR = [0.3, 0.29, 0.27, 1];
 const NO_COLOR = [0, 0, 0, 0];
@@ -559,7 +658,14 @@ function char(field: DamageField, random: () => number) {
 
 /** World bounds of a wreck, at its position or at `at`, with a little room. */
 function boundsOf(wreck: Wreck, at = wreck.body.translation()): Bounds {
-  return { minX: at.x - WRECK_REACH, minY: at.y - WRECK_REACH, maxX: at.x + WRECK_REACH, maxY: at.y + WRECK_REACH };
+  return { minX: at.x - wreck.reach, minY: at.y - wreck.reach, maxX: at.x + wreck.reach, maxY: at.y + wreck.reach };
+}
+
+/** Distance from a field's local origin within which all of its grid lies, in pixels. */
+function reachOf(field: DamageField) {
+  const x = Math.max(Math.abs(field.originX), Math.abs(field.originX + field.cols * field.cell));
+  const y = Math.max(Math.abs(field.originY), Math.abs(field.originY + field.rows * field.cell));
+  return Math.hypot(x, y);
 }
 
 /**

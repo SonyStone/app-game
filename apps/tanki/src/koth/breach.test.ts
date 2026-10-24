@@ -4,12 +4,14 @@ import { createCombat, type CombatLayout, type WallPlacement } from '../damage/c
 import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import { createBreacher } from './breach';
+import { clampGun, inArc, turnInPlace } from './classes/casemate';
+import { TANK_CLASSES } from './classes/classes';
+import { createWeapon, type Trigger } from './classes/weapon';
 import { createDriver } from './driver';
-import { createGun } from './gun';
 import { KOTH_MAP } from './map';
 import { createNavGrid, updateNavGrid } from './navigation';
 import { CAPTURE_RULES, createCaptureState } from './rules';
-import { MEDIUM_TANK } from './tanks';
+import { MEDIUM_TANK, type TankClass } from './tanks';
 import { createTeamBoard, type Member } from './team';
 
 let rapier: Rapier;
@@ -46,7 +48,7 @@ describe('breaking through walls', () => {
     expect(run.arrivedAt).toBeLessThan(6);
   });
 
-  it('shoots its way out through brick when there is no other way, and never through steel', () => {
+  it('breaks its way out through brick when there is no other way, as its class does best, and never through steel', () => {
     // A room of steel with one brick wall, on the side the bot wants to go.
     const room = (material: 'brick' | 'steel') => [
       { x: -200, y: -110, halfWidth: 100, halfHeight: 10, material: 'steel' as const },
@@ -54,16 +56,48 @@ describe('breaking through walls', () => {
       { x: -310, y: 0, halfWidth: 10, halfHeight: 120, material: 'steel' as const },
       { x: -88, y: 0, halfWidth: 12, halfHeight: 100, material }
     ];
-    const brick = drive({ walls: room('brick') }, { x: -200, y: 0 }, { x: 200, y: 0 }, 40);
+    const rammed = drive({ walls: room('brick') }, { x: -200, y: 0 }, { x: 200, y: 0 }, 40);
+    const shot = drive({ walls: room('brick') }, { x: -200, y: 0 }, { x: 200, y: 0 }, 40, undefined, TANK_CLASSES.demoman);
     const steel = drive({ walls: room('steel') }, { x: -200, y: 0 }, { x: 200, y: 0 }, 8);
 
-    expect(brick.stats.chosen).toBe(1);
-    expect(brick.stats.shots).toBeGreaterThanOrEqual(6);
-    expect(brick.stats.passed).toBe(1);
-    expect(brick.arrivedAt).toBeLessThan(40);
+    // A Soldier rams brick open in a couple of runs; a Demoman blows it apart with a few grenades.
+    expect(rammed.stats.chosen).toBe(1);
+    expect(rammed.stats.rams).toBeGreaterThanOrEqual(1);
+    expect(rammed.stats.shots).toBe(0);
+    expect(rammed.stats.passed).toBe(1);
+    expect(rammed.arrivedAt).toBeLessThan(20);
+    expect(shot.stats.chosen).toBe(1);
+    expect(shot.stats.shots).toBeGreaterThanOrEqual(3);
+    expect(shot.stats.rams).toBe(0);
+    expect(shot.stats.passed).toBe(1);
+    expect(shot.arrivedAt).toBeLessThan(20);
     expect(steel.stats.considered).toBe(0);
     expect(steel.stats.shots).toBe(0);
   }, 30_000);
+
+  it('breaks through brick by its class: a Heavy rams it, a Demoman blows it apart, a Scout drives round', () => {
+    // A brick wall across a tall field, with a way round at the bottom.
+    const layout = { halfHeight: 1500, walls: [{ x: 0, y: -50, halfWidth: 12, halfHeight: 1450, material: 'brick' as const }] };
+    const heavy = drive(layout, { x: -200, y: -300 }, { x: 200, y: -300 }, 30, undefined, TANK_CLASSES.heavy);
+    const demoman = drive(layout, { x: -200, y: -300 }, { x: 200, y: -300 }, 30, undefined, TANK_CLASSES.demoman);
+    const scout = drive(layout, { x: -200, y: -300 }, { x: 200, y: -300 }, 30, undefined, TANK_CLASSES.scout);
+
+    expect(heavy.stats.chosen).toBe(1);
+    expect(heavy.stats.rams).toBeGreaterThanOrEqual(1);
+    expect(heavy.stats.shots).toBe(0);
+    expect(heavy.stats.passed).toBe(1);
+    expect(demoman.stats.chosen).toBe(1);
+    expect(demoman.stats.shots).toBeGreaterThanOrEqual(3);
+    expect(demoman.stats.rams).toBe(0);
+    expect(demoman.stats.passed).toBe(1);
+    // Both got through straight, well before driving round would have brought them there.
+    expect(Math.max(heavy.lowest, demoman.lowest)).toBeLessThan(-150);
+    expect(Math.max(heavy.arrivedAt, demoman.arrivedAt)).toBeLessThan(15);
+    // Shooting its way through with a scattergun takes longer than the drive round.
+    expect(scout.stats.chosen).toBe(0);
+    expect(scout.walls.hits).toBe(0);
+    expect(scout.lowest).toBeGreaterThan(1300);
+  }, 60_000);
 
   it('does not stand and break a wall with an enemy near', () => {
     const run = drive({ walls: [fence(400)] }, { x: -200, y: -300 }, { x: 200, y: -300 }, 6, { x: 150, y: 50 });
@@ -74,13 +108,21 @@ describe('breaking through walls', () => {
 });
 
 /**
- * Drives a medium tank from `from` to `to` for up to `seconds` the way a bot does: with its driver,
- * a gun, and a breacher that may take over, on a field whose grid follows the walls as they break.
+ * Drives a tank of `tankClass`, by default the medium tank, from `from` to `to` for up to
+ * `seconds` the way a bot does: with its driver, its class's weapon, and a breacher that may take
+ * over, on a field whose grid follows the walls as they break.
  *
  * @param enemy - Where a known enemy stands, if anywhere.
  * @returns The breacher's statistics, how far down the tank ever went, when it arrived and the walls' damage.
  */
-function drive(layout: Partial<CombatLayout>, from: { x: number; y: number }, to: { x: number; y: number }, seconds = 10, enemy?: { x: number; y: number }) {
+function drive(
+  layout: Partial<CombatLayout>,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  seconds = 10,
+  enemy?: { x: number; y: number },
+  tankClass: TankClass = MEDIUM_TANK
+) {
   const world = new rapier.World({ x: 0, y: 0 });
   world.lengthUnit = 100;
   const slots = Array.from({ length: 128 }, (_, index) => 127 - index);
@@ -108,10 +150,31 @@ function drive(layout: Partial<CombatLayout>, from: { x: number; y: number }, to
     random,
     onWallsChanged: (bounds) => changes.push(bounds)
   });
-  const tank = combat.spawnTank({ ...from, rotation: 0 }, { color: 0, team: 'red', pullSpeed: pullSpeedFor(MEDIUM_TANK.speed) });
+  const tank = combat.spawnTank(
+    { ...from, rotation: 0 },
+    { color: 0, team: 'red', pullSpeed: pullSpeedFor(tankClass.speed), hull: tankClass.hull, mass: tankClass.mass, look: tankClass.look }
+  );
   const rival = enemy && combat.spawnTank({ ...enemy, rotation: 0 }, { color: 0, team: 'blue' });
-  const member: Member = { id: 0, team: 'red', index: 0, name: 'Red', human: false, tank, gun: createGun(MEDIUM_TANK.gun), role: 'assault', respawnAt: undefined, shotAt: -Infinity, attacker: undefined, kills: 0, deaths: 0 };
-  const rivals: Member[] = rival ? [{ ...member, id: 1, team: 'blue', tank: rival, gun: undefined }] : [];
+  const member: Member = {
+    id: 0,
+    team: 'red',
+    index: 0,
+    name: 'Red',
+    human: false,
+    tank,
+    tankClass,
+    nextClass: undefined,
+    weapon: createWeapon(tankClass, random),
+    trigger: { fire: false },
+    pivot: undefined,
+    role: 'assault',
+    respawnAt: undefined,
+    shotAt: -Infinity,
+    attacker: undefined,
+    kills: 0,
+    deaths: 0
+  };
+  const rivals: Member[] = rival ? [{ ...member, id: 1, team: 'blue', tank: rival, weapon: undefined }] : [];
   let time = 0;
   const board = createTeamBoard('red', [member], {
     combat,
@@ -122,15 +185,10 @@ function drive(layout: Partial<CombatLayout>, from: { x: number; y: number }, to
     capture: () => createCaptureState(CAPTURE_RULES),
     holdTime: CAPTURE_RULES.holdTime
   });
-  const fire = (shooter: Member) => {
-    if (!shooter.gun?.fire()) {
-      return false;
-    }
-
-    combat.fire(shooter.tank!);
-    return true;
+  const trigger = (shooter: Member, pull: Trigger) => {
+    shooter.trigger = pull;
   };
-  const breacher = createBreacher(member, { combat, grid, board, clock: () => time, fire });
+  const breacher = createBreacher(member, { combat, grid, board, clock: () => time, trigger });
   const driver = createDriver(grid);
   let lowest = -Infinity;
   let arrivedAt = Infinity;
@@ -141,16 +199,32 @@ function drive(layout: Partial<CombatLayout>, from: { x: number; y: number }, to
     }
 
     board.update();
-    member.gun!.step(1 / 60);
     const position = tank.hull.translation();
     const order = breacher.step(time, tank, { destination: to, allowed: true, cost: () => 0 });
-    const move =
+    let move =
       order?.move ?? driver.steer(time, position, order ? order.destination : to, [], { arrive: order ? order.arrive : 20, heading: tank.hull.rotation() });
 
     if (order?.aim !== undefined) {
       tank.turretAngle = order.aim;
+
+      // A casemate gun turns its hull onto the wall it shoots, as a bot's does.
+      if (tankClass.mount.kind === 'casemate' && !inArc(tank, order.aim, tankClass.mount.arc - 0.03)) {
+        member.pivot ??= { ...position };
+        move = turnInPlace(tank, member.pivot, order.aim, tankClass.mount.traverse, tank.pullSpeed);
+      }
     }
 
+    if (tankClass.mount.kind === 'casemate') {
+      clampGun(tank, tankClass.mount.arc);
+    }
+
+    // The weapon fires after the bot's step, as the match's does.
+    for (const shot of member.weapon!.step(1 / 60, member.trigger)) {
+      combat.fire(tank, { ...shot, angle: tank.turretAngle + (shot.angle ?? 0) });
+    }
+
+    member.trigger = { fire: false };
+    tank.pullSpeed = pullSpeedFor(tankClass.speed) * member.weapon!.speedShare;
     combat.drive(tank, move);
     combat.step(1 / 60);
     combat.update(1 / 60);

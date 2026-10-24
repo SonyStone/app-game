@@ -4,42 +4,64 @@ import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
 import { createBot, type Bot } from './bot';
-import { createGun } from './gun';
+import { angleBetween, clampGun, turnInPlace } from './classes/casemate';
+import { TANK_CLASSES } from './classes/classes';
+import { pickRoster, rebalance } from './classes/roster';
+import { drawSight } from './classes/sight';
+import { createWeapon, type Trigger } from './classes/weapon';
 import { createKits } from './kits';
 import { inBase, KOTH_MAP, onPoint, type KothMap } from './map';
 import { createNavGrid, updateNavGrid } from './navigation';
 import { advanceCapture, CAPTURE_RULES, createCaptureState, rivalOf, TEAMS, type CaptureRules, type TeamId } from './rules';
 import { createScenery } from './scenery';
-import { MEDIUM_TANK } from './tanks';
-import { createTeamBoard, type Member, type TeamBoard } from './team';
+import { MEDIUM_TANK, type TankClassId } from './tanks';
+import { createTeamBoard, ROLE_OF_CLASS, type Member, type TeamBoard } from './team';
 
 type Point = { x: number; y: number };
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
 /**
  * A king of the hill match, red against blue, four tanks a side: the player and three bots for
- * red, four bots for blue. Every tank is a `MEDIUM_TANK` firing shells on the battle core of
- * `createCombat`, without friendly fire. The point in the middle opens after a while and is taken
- * by standing on it (see `./rules`); the first team to hold it for the hold time wins. Destroyed
- * tanks come back at their base in waves, as in Team Fortress 2. A tank in its own base has its
- * armor mended, and repair kits on the map mend it on the way (see `./kits`).
+ * red, four bots for blue. Every tank is of one of the classes of `./classes/classes`, after
+ * Team Fortress 2, firing its own weapon on the battle core of `createCombat`, without friendly
+ * fire. Bots fill their teams with classes as a sensible team would (see `./classes/roster`); the
+ * player picks a class with `chooseClass`, which takes effect at once in the player's base and
+ * otherwise at the next respawn. The point in the middle opens after a while and is taken by
+ * standing on it (see `./rules`), a Scout counting double; the first team to hold it for the hold
+ * time wins. Destroyed tanks come back at their base in waves, as in Team Fortress 2. A tank in
+ * its own base has its armor mended, and repair kits on the map mend it on the way (see
+ * `./kits`). Walls shot apart change the navigation grid every class drives by.
  *
  * The match owns its Rapier bodies and renderer slots; `restart` begins a new match on the same map.
  *
  * @param options.human - Whether red's first seat is the player's; without one all eight tanks are bots.
  * @param options.random - Source of randomness in [0, 1) for bots and damage; defaults to `Math.random`.
  * @param options.rules - Capture timings; defaults to `CAPTURE_RULES`.
+ * @param options.roster - Classes of every seat of a team, which also sets the team's size, for
+ *   tests and duels; bots then keep their classes. Teams without one get four seats picked by
+ *   `pickRoster`.
+ * @param options.playerClass - The player's first class; defaults to the Soldier.
+ * @param options.onHit - Called for every hit, as the battle core's `onHit`, for tools that measure the fighting.
  */
 export function createKothMatch(
   rapier: Rapier,
   world: World,
   renderer: ReturnType<typeof createRangeRenderer>,
-  options: { human?: boolean; random?: () => number; rules?: CaptureRules; map?: KothMap } = {}
+  options: {
+    human?: boolean;
+    random?: () => number;
+    rules?: CaptureRules;
+    map?: KothMap;
+    roster?: Partial<Record<TeamId, readonly TankClassId[]>>;
+    playerClass?: TankClassId;
+    onHit?: NonNullable<Parameters<typeof createCombat>[4]>['onHit'];
+  } = {}
 ) {
   const map = options.map ?? KOTH_MAP;
   const rules = options.rules ?? CAPTURE_RULES;
   const random = options.random ?? Math.random;
-  const members = createMembers(options.human ?? true);
+  const hasPlayer = options.human ?? true;
+  const members = createMembers(hasPlayer, options.roster ?? {}, options.playerClass ?? 'soldier', random);
   const teams = { red: members.filter((member) => member.team === 'red'), blue: members.filter((member) => member.team === 'blue') };
   // Destroyed tanks stay here, so a shell still flying from one is credited to its member.
   const byTank = new Map<Tank, Member>();
@@ -49,7 +71,10 @@ export function createKothMatch(
     // Wrecks burn out quicker than on the range, so their smoke does not hide the point for long.
     wreckFire: WRECK_FIRE,
     random,
-    onHit: (target, shooter) => noteShot(byTank.get(target), shooter),
+    onHit: (target, shooter, part) => {
+      noteShot(byTank.get(target), shooter);
+      options.onHit?.(target, shooter, part);
+    },
     onDestroyed: destroyed,
     // Shot-apart walls open new ways and lines of fire, wrecks close some; the grid follows where they changed.
     onWallsChanged: (bounds) => navChanges.push({ area: grow(bounds, NAV_REACH), changed: bounds })
@@ -70,6 +95,8 @@ export function createKothMatch(
     blue: createBoard('blue')
   };
   const bots = new Map<Member, Bot>();
+  /** Angle the gatling barrels of each member have turned, for drawing. */
+  const barrels = new Map<Member, number>();
 
   for (const member of members) {
     if (!member.human) {
@@ -121,23 +148,25 @@ export function createKothMatch(
     kits,
 
     /**
-     * Advances the match by one fixed physics step: the player's input, every bot, physics,
-     * respawns, repairs and the capture. After a win tanks stop and only the wreckage moves.
+     * Advances the match by one fixed physics step: the player's input, every bot, the weapons,
+     * physics, respawns, repairs and the capture. After a win tanks stop and only the wreckage moves.
      *
      * @param input.drive - Player's drive direction in world axes, length up to 1.
      * @param input.aim - Direction the player wants the turret to point, in world radians; the
-     *   turret follows it at once, as in a shooter. Without it the turret stays.
+     *   turret follows it at once, as in a shooter, and a casemate gun as far as its arc lets it.
+     *   Without it the turret stays.
      * @param input.fire - Whether the player holds the trigger.
+     * @param input.rev - Whether the player spins a gatling up without firing.
+     * @param input.reach - How far away the player aims, in pixels, where a grenade should land.
+     * @param input.turn - Whether a casemate gun turns its hull on the spot toward the aim instead
+     *   of driving.
      */
-    step(dt: number, input: { drive: Point; aim?: number; fire: boolean } = { drive: STOP, fire: false }) {
+    step(dt: number, input: PlayerInput = { drive: STOP, fire: false }) {
       time += dt;
-
-      for (const member of members) {
-        member.gun?.step(dt);
-      }
 
       if (capture.winner) {
         members.forEach((member) => member.tank && combat.drive(member.tank, STOP));
+        arm(dt);
         combat.step(dt);
         return;
       }
@@ -145,15 +174,7 @@ export function createKothMatch(
       const player = members.find((member) => member.human && !bots.has(member));
 
       if (player?.tank) {
-        combat.drive(player.tank, input.drive);
-
-        if (input.aim !== undefined) {
-          player.tank.turretAngle = input.aim;
-        }
-
-        if (input.fire) {
-          fire(player);
-        }
+        steerPlayer(player, input);
       }
 
       boards.red.update();
@@ -170,21 +191,45 @@ export function createKothMatch(
         }
       }
 
+      arm(dt);
       combat.step(dt);
       updateGrid();
       nearMisses();
       respawn();
       repair();
 
+      // A tank on the point counts as many tanks as its class does there, a Scout twice.
       const presence = { red: 0, blue: 0 };
 
       for (const member of members) {
         if (member.tank && onPoint(map, member.tank.hull.translation())) {
-          presence[member.team]++;
+          presence[member.team] += member.tankClass.capture;
         }
       }
 
       capture = advanceCapture(capture, presence, dt, rules);
+    },
+
+    /**
+     * Picks the player's class. In the player's own base the tank is swapped for one of the new
+     * class at once, as in a Team Fortress 2 spawn room; elsewhere, or while waiting to respawn,
+     * the new class comes with the next respawn.
+     */
+    chooseClass(id: TankClassId) {
+      const seat = members[0];
+
+      if (!hasPlayer) {
+        return;
+      }
+
+      const tank = seat.tank;
+      seat.nextClass = id === seat.tankClass.id && !tank ? undefined : id;
+
+      if (tank && id !== seat.tankClass.id && inBase(map.bases[seat.team], tank.hull.translation())) {
+        combat.removeTank(tank);
+        spawn(seat);
+        bots.get(seat)?.reset();
+      }
     },
 
     /** Moves debris and effects over a frame of `dt` seconds. */
@@ -198,10 +243,14 @@ export function createKothMatch(
      * @param view - Point on the ground under the camera.
      */
     draw(view: Point) {
-      combat.draw(view, () => {
-        scenery.draw(capture);
-        kits.draw(time);
-      });
+      combat.draw(
+        view,
+        () => {
+          scenery.draw(capture);
+          kits.draw(time);
+        },
+        () => drawSights()
+      );
     },
 
     /** What the heads-up display shows. */
@@ -224,6 +273,7 @@ export function createKothMatch(
                 name: member.name,
                 human: member.human,
                 role: member.role,
+                tankClass: member.tankClass.id,
                 alive: member.tank !== undefined,
                 respawnIn: member.respawnAt === undefined ? 0 : Math.max(member.respawnAt - time, 0),
                 kills: member.kills,
@@ -235,9 +285,15 @@ export function createKothMatch(
         player: {
           alive: human.tank !== undefined,
           respawnIn: human.respawnAt === undefined ? 0 : Math.max(human.respawnAt - time, 0),
-          rounds: human.gun?.rounds ?? 0,
-          clip: MEDIUM_TANK.gun.clip,
-          loading: human.gun?.loading ?? 0,
+          tankClass: human.tankClass.id,
+          nextClass: human.nextClass,
+          weapon: human.tankClass.weapon.kind,
+          rounds: human.weapon?.rounds ?? 0,
+          clip: human.tankClass.gun.clip,
+          loading: human.weapon?.loading ?? 0,
+          spin: human.weapon?.spin ?? 0,
+          charge: human.weapon?.charge,
+          airborne: human.tank ? combat.isAirborne(human.tank) : false,
           armor: human.tank ? combat.armorLeft(human.tank) : 0,
           coreOpen: human.tank ? combat.isCoreOpen(human.tank) : false,
           mending:
@@ -301,7 +357,9 @@ export function createKothMatch(
 
       for (const member of members) {
         member.tank = undefined;
-        member.gun = undefined;
+        member.weapon = undefined;
+        member.trigger = RELEASED;
+        member.pivot = undefined;
         member.kills = 0;
         member.deaths = 0;
         member.shotAt = -Infinity;
@@ -336,38 +394,117 @@ export function createKothMatch(
       rules,
       clock: () => time,
       random,
-      fire,
+      trigger: (member: Member, trigger: Trigger) => {
+        member.trigger = trigger;
+      },
       kits: kits.kits
     };
   }
 
-  /** Fires the member's gun if it is ready. */
-  function fire(member: Member) {
-    const tank = member.tank;
+  /**
+   * Drives and aims the player's tank from the input. A casemate gun's gun follows the aim within
+   * its arc; when the player does not drive and aims outside the arc, or asks to turn, the hull
+   * turns on the spot toward the aim instead, until it points there.
+   */
+  function steerPlayer(player: Member, input: PlayerInput) {
+    const tank = player.tank!;
+    const mount = player.tankClass.mount;
+    const idle = Math.hypot(input.drive.x, input.drive.y) < IDLE_DRIVE;
+    const off = input.aim === undefined ? 0 : Math.abs(angleBetween(tank.hull.rotation(), input.aim));
+    const turning = input.turn || (idle && (off > (mount.kind === 'casemate' ? mount.arc : Infinity) || (player.pivot !== undefined && off > SETTLED)));
 
-    if (!tank || !member.gun?.fire()) {
-      return false;
+    if (mount.kind === 'casemate' && turning && input.aim !== undefined) {
+      player.pivot ??= { ...tank.hull.translation() };
+      combat.drive(tank, turnInPlace(tank, player.pivot, input.aim, mount.traverse, tank.pullSpeed));
+    } else {
+      player.pivot = undefined;
+      combat.drive(tank, input.drive);
     }
 
-    combat.fire(tank);
-    return true;
+    if (input.aim !== undefined) {
+      tank.turretAngle = input.aim;
+    }
+
+    player.trigger = { fire: input.fire, rev: input.rev, reach: input.reach };
   }
 
-  /** Puts the member's tank on a free spawn spot of its base. */
+  /**
+   * Works every tank's weapon for a step with the trigger its member set: fires the shots it
+   * gives along the gun, keeps casemate guns inside their arcs, slows tanks whose weapon slows
+   * them and turns the gatlings. Then lets go of every trigger.
+   */
+  function arm(dt: number) {
+    for (const member of members) {
+      const tank = member.tank;
+      const weapon = member.weapon;
+
+      if (!tank || !weapon) {
+        continue;
+      }
+
+      const tankClass = member.tankClass;
+
+      if (tankClass.mount.kind === 'casemate') {
+        clampGun(tank, tankClass.mount.arc);
+      }
+
+      for (const shot of weapon.step(dt, capture.winner ? RELEASED : member.trigger)) {
+        combat.fire(tank, { ...shot, angle: tank.turretAngle + (shot.angle ?? 0) });
+      }
+
+      member.trigger = RELEASED;
+      tank.pullSpeed = pullSpeedFor(tankClass.speed) * weapon.speedShare;
+      const turned = (barrels.get(member) ?? 0) + weapon.spin * BARREL_TURN * dt;
+      barrels.set(member, turned);
+      combat.spinBarrels(tank, turned);
+    }
+  }
+
+  /** The laser sight of every casemate gun charging a shot, which everyone sees, as the Sniper's dot. */
+  function drawSights() {
+    for (const member of members) {
+      const charge = member.weapon?.charge;
+
+      if (member.tank && charge !== undefined) {
+        drawSight(renderer, combat, member.tank, charge, member.tankClass.shell.range, rgb(TEAM_SIGHT[member.team]));
+      }
+    }
+  }
+
+  /**
+   * Puts the member's tank on a free spawn spot of its base, of the class it asked for, if any.
+   * A bot whose class no longer fits its team, as after the player took it, switches to the
+   * class the team needs.
+   */
   function spawn(member: Member) {
     const spawns = map.bases[member.team].spawns;
     const taken = (spot: Point) => combat.tanks.some((tank) => distance(tank.hull.translation(), spot) < SPAWN_CLEARANCE);
     const placement =
       [...spawns.slice(member.index % spawns.length), ...spawns.slice(0, member.index % spawns.length)].find((spot) => !taken(spot)) ??
       spawns[member.index % spawns.length];
+
+    if (!member.human && !options.roster?.[member.team]) {
+      const team = teams[member.team].filter((other) => other !== member).map((other) => other.nextClass ?? other.tankClass.id);
+      member.nextClass = rebalance(team, member.nextClass ?? member.tankClass.id, teams[member.team].length, random);
+    }
+
+    const tankClass = TANK_CLASSES[member.nextClass ?? member.tankClass.id];
     const tank = combat.spawnTank(placement, {
       color: member.index === 0 && member.team === 'red' ? PLAYER_COLOR : TEAM_COLORS[member.team],
       team: member.team,
-      pullSpeed: pullSpeedFor(MEDIUM_TANK.speed)
+      pullSpeed: pullSpeedFor(tankClass.speed),
+      hull: tankClass.hull,
+      mass: tankClass.mass,
+      look: tankClass.look
     });
 
     member.tank = tank;
-    member.gun = createGun(MEDIUM_TANK.gun);
+    member.tankClass = tankClass;
+    member.role = ROLE_OF_CLASS[tankClass.id];
+    member.nextClass = undefined;
+    member.weapon = createWeapon(tankClass, random);
+    member.trigger = RELEASED;
+    member.pivot = undefined;
     member.respawnAt = undefined;
     byTank.set(tank, member);
   }
@@ -407,7 +544,7 @@ export function createKothMatch(
     }
 
     member.tank = undefined;
-    member.gun = undefined;
+    member.weapon = undefined;
     member.respawnAt = nextWave(time + MIN_RESPAWN);
     member.deaths++;
 
@@ -450,12 +587,16 @@ export function createKothMatch(
 /** A king of the hill match as returned by `createKothMatch`. */
 export type KothMatch = ReturnType<typeof createKothMatch>;
 
+/** The player's input for a step, as `KothMatch['step']` describes it. */
+export type PlayerInput = { drive: Point; aim?: number; fire: boolean; rev?: boolean; reach?: number; turn?: boolean };
+
 /** One member's line on the heads-up display. */
 export type MemberHud = {
   id: number;
   name: string;
   human: boolean;
   role: Member['role'];
+  tankClass: TankClassId;
   alive: boolean;
   respawnIn: number;
   kills: number;
@@ -466,7 +607,16 @@ export type MemberHud = {
 export const TEAM_COLORS: Record<TeamId, number> = { red: 0xc9473b, blue: 0x3b73c9 };
 export const PLAYER_COLOR = 0xf0773a;
 
+/** Colors of the teams' laser sights: brighter than their hulls, to stand out on the ground. */
+const TEAM_SIGHT: Record<TeamId, number> = { red: 0xff3b2e, blue: 0x3fa2ff };
+
 const STOP = { x: 0, y: 0 };
+const RELEASED: Trigger = { fire: false };
+/** Drive input below which the player counts as not driving, and how near the aim a casemate's hull stops turning, in radians. */
+const IDLE_DRIVE = 0.1;
+const SETTLED = 0.03;
+/** Radians per second the barrels of a fully spun gatling turn. */
+const BARREL_TURN = 40;
 /**
  * Destroyed tanks come back in waves every `RESPAWN_WAVE` seconds, after at least `MIN_RESPAWN`:
  * between 5 and 11 s, 8 s on average, so the dead of a lost fight return together.
@@ -500,30 +650,46 @@ function describePlan(board: TeamBoard) {
   return board.phase === 'gather' ? 'push · gathering' : board.phase === 'go' ? 'push · going in' : 'push';
 }
 
-function createMembers(human: boolean): Member[] {
-  return TEAMS.flatMap((team, teamIndex) =>
-    [0, 1, 2, 3].map((index) => ({
-      id: teamIndex * 4 + index,
+/**
+ * The seats of both teams, red's first: the classes of `roster`, or four seats each with the
+ * player's class for the player's seat and `pickRoster`'s for the bots.
+ */
+function createMembers(human: boolean, roster: Partial<Record<TeamId, readonly TankClassId[]>>, playerClass: TankClassId, random: () => number): Member[] {
+  let id = 0;
+
+  return TEAMS.flatMap((team) => {
+    const taken = team === 'red' && human ? [playerClass] : [];
+    const classes = roster[team] ?? [...taken, ...pickRoster(TEAM_SIZE, taken, random)];
+
+    return classes.map((classId, index) => ({
+      id: id++,
       team,
       index,
       name: team === 'red' && index === 0 && human ? 'You' : `${team === 'red' ? 'Red' : 'Blue'} ${index + 1}`,
       human: team === 'red' && index === 0 && human,
       tank: undefined,
-      gun: undefined,
-      role: 'assault' as const,
+      tankClass: TANK_CLASSES[classId],
+      nextClass: undefined,
+      weapon: undefined,
+      trigger: RELEASED,
+      pivot: undefined,
+      role: ROLE_OF_CLASS[classId],
       respawnAt: undefined,
       shotAt: -Infinity,
       attacker: undefined,
       kills: 0,
       deaths: 0
-    }))
-  );
+    }));
+  });
 }
 
 /** `bounds` grown by `margin` on every side. */
 function grow(bounds: Bounds, margin: number) {
   return { minX: bounds.minX - margin, minY: bounds.minY - margin, maxX: bounds.maxX + margin, maxY: bounds.maxY + margin };
 }
+
+/** Seats of a team without a roster of its own. */
+const TEAM_SIZE = 4;
 
 /** The first respawn wave at or after match time `time`. */
 function nextWave(time: number) {

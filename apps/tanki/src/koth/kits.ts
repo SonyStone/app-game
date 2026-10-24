@@ -2,6 +2,7 @@ import type { Tank } from '../arena/bodies';
 import type { Combat } from '../damage/combat';
 import { createField, FAR, type DamageField } from '../damage/field';
 import { KIND_FIELD, type createRangeRenderer } from '../damage/renderer';
+import type { HullSpec } from '../damage/shapes';
 import type { KitPlacement } from './map';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
@@ -47,7 +48,7 @@ export function createKits(renderer: Renderer, placements: readonly KitPlacement
           continue;
         }
 
-        const taker = tanks.find((tank) => touches(tank, kit) && combat.armorLeft(tank) < WHOLE);
+        const taker = tanks.find((tank) => touches(tank, combat.hullOf(tank), kit) && combat.armorLeft(tank) < WHOLE);
 
         if (taker) {
           combat.repair(taker, KIT_REPAIR[kit.size], kit);
@@ -113,11 +114,10 @@ export const KIT_REPAIR = { small: 0.3, large: 1 };
 export const KIT_RESPAWN = 10;
 
 /**
- * A tank takes a kit when the outline of its hull, a box of `HULL_HALF` half size, comes within
- * `PICKUP_REACH` px of the kit's center, as close as the edge of a large kit's box.
+ * A tank takes a kit when the outline of its hull, of whatever class, comes within `PICKUP_REACH`
+ * px of the kit's center, as close as the edge of a large kit's box.
  */
 export const PICKUP_REACH = 9;
-const HULL_HALF = { x: 20, y: 12.5 };
 
 /** Armor share at and above which a tank leaves a kit lying. */
 const WHOLE = 0.999;
@@ -131,15 +131,19 @@ const KIT_COLOR = [0.3, 0.62, 0.32];
 const CROSS_COLOR = [0.97, 0.97, 0.93];
 const PAD_COLOR = [0.9, 0.95, 0.88];
 
-/** Whether the outline of `tank`'s hull touches `kit`. */
-function touches(tank: Tank, kit: KitPlacement) {
+/** Whether the outline of `tank`'s hull, of `hull`'s size, touches `kit`; a destroyed tank's never does. */
+function touches(tank: Tank, hull: HullSpec | undefined, kit: KitPlacement) {
+  if (!hull) {
+    return false;
+  }
+
   const center = tank.hull.translation();
   const angle = tank.hull.rotation();
   const dx = kit.x - center.x;
   const dy = kit.y - center.y;
   const along = dx * Math.cos(angle) + dy * Math.sin(angle);
   const across = -dx * Math.sin(angle) + dy * Math.cos(angle);
-  return roundedBox(along, across, HULL_HALF.x, HULL_HALF.y, 0) < PICKUP_REACH;
+  return roundedBox(along, across, hull.halfLength, hull.halfWidth, 0) < PICKUP_REACH;
 }
 
 /** A box of side `size` with rounded corners. */

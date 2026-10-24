@@ -15,7 +15,9 @@ type Point = { x: number; y: number };
  * into tiles of at most `TILE` pixels a side, each with its own distance field in a renderer slot
  * and its own colliders built from the field, so a hit changes only the tiles it touches:
  *
- * - `chip` cuts a crater into every tile around the hit point, its size set by the material.
+ * - `chip` cuts a crater into every tile around the hit point, its size set by the material and
+ *   the blow: a blast chips each wall it reaches at the point `facesNear` finds, and a piercing
+ *   round may `punch` clean through a thin wall instead.
  * - `ram` lets a hull that crashed into a wall bite into it, as deep as the blow and the material
  *   allow, in the outline of the hull's front.
  * - `refresh` then rebuilds each changed tile: pieces cut off from the rest of the wall fly away
@@ -55,6 +57,7 @@ export function createWalls(
   const buckets = new Map<number, Tile[]>();
   const steelDraws = steel.map(steelDraw);
   const damage = { hits: 0, collapsed: 0, rams: 0 };
+  const sample = new Float32Array(CHANNELS);
   // Bounds of tiles changed since the last report.
   const changed: Bounds[] = [];
 
@@ -81,50 +84,159 @@ export function createWalls(
     },
 
     /**
-     * The first wall or rubble along a ray within `maxDistance`, with the tile hit, if the wall is
-     * breakable; `undefined` when the ray meets neither.
+     * The first wall or rubble along a ray within `maxDistance`, with the outward normal of the
+     * collider hit and the tile hit, if the wall is breakable; `undefined` when the ray meets
+     * neither.
      *
      * @param direction - Unit direction.
      * @param overRubble - Pixels from the start within which the ray passes over rubble, as a shot
-     *   from a tank right behind rubble does, while shots from afar meet it.
+     *   from a tank right behind rubble does, while shots from afar meet it; `Infinity` passes over
+     *   all of it.
      */
     cast(start: Point, direction: Point, maxDistance: number, overRubble = 0) {
       const solid = castRay(start, direction, maxDistance, false);
       const reach = solid?.timeOfImpact ?? maxDistance;
       const from = { x: start.x + direction.x * overRubble, y: start.y + direction.y * overRubble };
       const rubble = overRubble < reach ? castRay(from, direction, reach - overRubble, true) : undefined;
-      const hit = rubble ? { timeOfImpact: overRubble + rubble.timeOfImpact, collider: rubble.collider } : solid;
+      const hit = rubble ? { timeOfImpact: overRubble + rubble.timeOfImpact, collider: rubble.collider, normal: rubble.normal } : solid;
 
-      return hit ? { distance: hit.timeOfImpact, tile: owners.get(hit.collider.handle) } : undefined;
+      return hit ? { distance: hit.timeOfImpact, tile: owners.get(hit.collider.handle), normal: { x: hit.normal.x, y: hit.normal.y } } : undefined;
     },
 
     /**
-     * Chips a crater where a hit met a breakable wall: a row of holes reaching inward from `point`
-     * along `direction`, cut into every tile they reach. Steel and the border never change.
+     * Outward normal of the breakable walls at `point` on their surface, from the slope of their
+     * fields, so a crater's round edge turns a bounce as it would; `undefined` where no standing
+     * tile or heap of rubble lies, such as on steel. Smoother than a collider's normal, whose
+     * blocks make steps along a crater.
+     */
+    surfaceNormal(point: Point) {
+      const step = 1;
+      const x = solidDistance({ x: point.x + step, y: point.y }) - solidDistance({ x: point.x - step, y: point.y });
+      const y = solidDistance({ x: point.x, y: point.y + step }) - solidDistance({ x: point.x, y: point.y - step });
+      const length = Math.hypot(x, y);
+
+      return length > 1e-6 && length < FAR ? { x: x / length, y: y / length } : undefined;
+    },
+
+    /**
+     * The breakable walls within `radius` of `at`, for a blast there: for each wall its standing
+     * tile nearest `at` and the point of it nearest `at`, as a blast meets a wall on the face
+     * toward it, and the same for each heap of rubble. Each comes with its distance and the unit
+     * direction from `at` to the point, which digs into the wall.
+     */
+    facesNear(at: Point, radius: number) {
+      const nearest = new Map<WallPlacement | Tile, { tile: Tile; point: Point; distance: number }>();
+
+      for (const tile of tilesNear({ minX: at.x - radius, minY: at.y - radius, maxX: at.x + radius, maxY: at.y + radius })) {
+        if ((tile.fallen && !tile.rubble) || !tile.material.crater || boundsDistance(tile.bounds, at) > radius) {
+          continue;
+        }
+
+        const local = toLocal(tile.wall, at);
+        const key = tile.rubble ? tile : tile.wall;
+
+        for (const box of tile.boxes) {
+          const x = Math.min(Math.max(local.x, box.x - box.halfWidth), box.x + box.halfWidth);
+          const y = Math.min(Math.max(local.y, box.y - box.halfHeight), box.y + box.halfHeight);
+          const distance = Math.hypot(x - local.x, y - local.y);
+
+          if (distance <= radius && distance < (nearest.get(key)?.distance ?? Infinity)) {
+            nearest.set(key, { tile, point: toWorld(tile.wall, { x, y }), distance });
+          }
+        }
+      }
+
+      return [...nearest.values()].map((face) => {
+        const center = toWorld(face.tile.wall, { x: (face.tile.rect.minX + face.tile.rect.maxX) / 2, y: (face.tile.rect.minY + face.tile.rect.maxY) / 2 });
+        // A blast inside a wall's blocks, as in a crater, digs toward the middle of the tile.
+        const toward = face.distance > 1e-3 ? { x: face.point.x - at.x, y: face.point.y - at.y } : { x: center.x - at.x, y: center.y - at.y };
+        return { ...face, direction: normalize(toward) };
+      });
+    },
+
+    /**
+     * Bores a piercing round clean through a thin wall, such as a wooden fence, from where it met
+     * the wall at `entry`: a tunnel of the material's crater holes along `direction`, cut into
+     * every tile it passes. Returns where the round comes out, or `undefined`, cutting nothing,
+     * when more than `maxDepth` pixels of wall or a wall of another material lie in its way.
      *
-     * @param scale - Size of the blow against a shell's, which chips the material's full crater.
+     * @param scale - Size of the blow against `WALL_BLOW`, as for `chip`.
+     */
+    punch(entry: Point, direction: Point, maxDepth: number, scale: { hole: number; depth: number }) {
+      const at = (along: number) => ({ x: entry.x + direction.x * along, y: entry.y + direction.y * along });
+      // The colliders' blocks reach a little past the fields, so the round may meet them just before the material.
+      const surface = surfaceAlong(entry, direction);
+      const start = Math.hypot(surface.x - entry.x, surface.y - entry.y);
+      let depth = start;
+
+      for (let tile = solidTileAt(at(depth)); tile; tile = solidTileAt(at(depth))) {
+        if (!tile.material.thin || depth - start > maxDepth) {
+          return undefined;
+        }
+
+        depth += PUNCH_STEP;
+      }
+
+      if (depth === start) {
+        return undefined;
+      }
+
+      const seed = options.random() * 1000;
+      damage.hits++;
+
+      for (let along = start; along <= depth; along += PUNCH_STEP * 2) {
+        const point = at(along);
+
+        for (const near of tilesNear({ minX: point.x - 8, minY: point.y - 8, maxX: point.x + 8, maxY: point.y + 8 })) {
+          const crater = near.material.crater;
+
+          if (near.fallen || !near.material.thin || !crater) {
+            continue;
+          }
+
+          carve(near.field, toLocal(near.wall, point), crater.hole * scale.hole * 0.8, 0.3, seed + along);
+          near.changed = true;
+          near.pristine = false;
+          near.push = direction;
+        }
+      }
+
+      // Out past the old colliders' blocks too, which stand until the next refresh.
+      return at(depth + COLLIDER_BLOCK);
+    },
+
+    /**
+     * Chips a crater where a hit met a breakable wall: a row of holes reaching inward along
+     * `direction` from the material's surface at `point`, cut into every tile they reach. The
+     * crater starts where the material does, a little past the colliders' blocks the hit met, so
+     * small blows dig on into the craters before them. Steel and the border never change.
+     *
+     * @param scale - Size of the blow against `WALL_BLOW`, whose hole and depth chip the
+     *   material's full crater: the crater's holes grow with `scale.hole` and it reaches deeper
+     *   with `scale.depth`.
      * @returns The material hit, for the dust it throws.
      */
-    chip(point: Point, direction: Point, tile: Tile, scale = 1) {
+    chip(point: Point, direction: Point, tile: Tile, scale = { hole: 1, depth: 1 }) {
       const crater = tile.material.crater;
 
       if (!crater || (tile.fallen && !tile.rubble)) {
         return tile.material;
       }
 
-      const hole = crater.hole * scale;
-      const depth = crater.depth * scale;
+      const hole = crater.hole * scale.hole;
+      const depth = crater.depth * scale.depth;
       const craters = Math.ceil(depth / (hole * 0.5));
       const seed = options.random() * 1000;
       const reach = hole * 1.4 + depth + 4;
       damage.hits++;
+      const surface = surfaceAlong(point, direction);
 
-      for (const near of tilesNear({ minX: point.x - reach, minY: point.y - reach, maxX: point.x + reach, maxY: point.y + reach })) {
+      for (const near of tilesNear({ minX: surface.x - reach, minY: surface.y - reach, maxX: surface.x + reach, maxY: surface.y + reach })) {
         if ((near.fallen && !near.rubble) || !near.material.crater) {
           continue;
         }
 
-        const local = toLocal(near.wall, point);
+        const local = toLocal(near.wall, surface);
         const inward = rotateInto(near.wall, direction);
 
         for (let index = 0; index <= craters; index++) {
@@ -374,7 +486,7 @@ export function createWalls(
 
   /** Casts a ray against the walls, or only against rubble. */
   function castRay(start: Point, direction: Point, maxDistance: number, rubble: boolean) {
-    return world.castRay(
+    return world.castRayAndGetNormal(
       new rapier.Ray(start, direction),
       maxDistance,
       true,
@@ -411,8 +523,11 @@ export function createWalls(
     }
 
     renderer.uploadField(tile.slot!, tile.field);
-    rebuildColliders(tile);
-    changed.push(tile.bounds);
+
+    // A chip too small to change the colliders' blocks, as most of a gatling's are, changes no way or line of fire.
+    if (rebuildColliders(tile)) {
+      changed.push(tile.bounds);
+    }
   }
 
   /**
@@ -514,9 +629,20 @@ export function createWalls(
     );
   }
 
+  /**
+   * Builds a tile's colliders from its field anew, unless the field's blocks are the ones its
+   * standing colliders were built of.
+   *
+   * @returns Whether the colliders changed.
+   */
   function rebuildColliders(tile: Tile) {
-    removeColliders(tile);
     const { boxes } = solidBoxes(tile.field, COLLIDER_BLOCK);
+
+    if (tile.colliders.length > 0 && sameBoxes(boxes, tile.boxes)) {
+      return false;
+    }
+
+    removeColliders(tile);
     const angle = tile.wall.rotation ?? 0;
     tile.boxes = boxes;
     tile.colliders = boxes.map((box) => {
@@ -529,6 +655,8 @@ export function createWalls(
       owners.set(collider.handle, tile);
       return collider;
     });
+
+    return true;
   }
 
   function removeColliders(tile: Tile) {
@@ -539,6 +667,55 @@ export function createWalls(
 
     tile.colliders = [];
     tile.boxes = [];
+  }
+
+  /**
+   * Where the material of the walls begins along `direction` from `point`, a point where a ray met
+   * the colliders: within the colliders' block of it, or `point` itself if none is found there.
+   */
+  function surfaceAlong(point: Point, direction: Point) {
+    for (let along = 0; along <= COLLIDER_BLOCK + 1; along += PUNCH_STEP / 2) {
+      const at = { x: point.x + direction.x * along, y: point.y + direction.y * along };
+
+      if (solidDistance(at) < 0) {
+        return at;
+      }
+    }
+
+    return point;
+  }
+
+  /** The standing tile whose material lies at `point`, if any; heaps of rubble do not count. */
+  function solidTileAt(point: Point) {
+    for (const tile of tilesNear({ minX: point.x, minY: point.y, maxX: point.x, maxY: point.y })) {
+      if (!tile.fallen && fieldValue(tile, point) < 0) {
+        return tile;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Distance from `point` to the material of the standing tiles and heaps of rubble whose fields
+   * cover it, as their fields hold it; `FAR` where none does.
+   */
+  function solidDistance(point: Point) {
+    let nearest = FAR;
+
+    for (const tile of tilesNear({ minX: point.x, minY: point.y, maxX: point.x, maxY: point.y })) {
+      if (!tile.fallen || tile.rubble) {
+        nearest = Math.min(nearest, fieldValue(tile, point));
+      }
+    }
+
+    return nearest;
+  }
+
+  /** Armor distance of `tile`'s field at a world point; `FAR` outside the field. */
+  function fieldValue(tile: Tile, point: Point) {
+    const local = toLocal(tile.wall, point);
+    return sampleField(tile.field, local.x, local.y, sample)[0];
   }
 
   /** Tiles whose bounds overlap `bounds`, each once. */
@@ -584,22 +761,32 @@ export type WallMaterialSpec = {
   ram: { bite: number; hardness: number };
   /** Whether a fallen tile of a building of this material leaves rubble. */
   rubble: boolean;
+  /** A thin wall, such as a wooden fence, that a piercing round bores clean through, as through a crate. */
+  thin: boolean;
 };
 
 /**
- * The wall materials. A wooden fence 14 px thick is shot through in two hits, a brick wall 24 px
- * thick in four, a concrete wall 30 px thick in nine, and a tile of a fence falls after about
- * three hits; steel stands forever. A medium tank ramming at full speed breaks through a fence at
- * once, needs two or three rams for a tile of a brick wall and barely scratches concrete. Fallen
- * tiles of brick and concrete buildings leave rubble. Wood is drawn with planks, brick with
- * courses of bricks, concrete as slabs and steel hatched.
+ * The wall materials. By blows of `WALL_BLOW`, a wooden fence 14 px thick is shot through in two
+ * hits, a brick wall 24 px thick in four, a concrete wall 30 px thick in nine, and a tile of a
+ * fence falls after about three hits; steel stands forever. A medium tank ramming at full speed
+ * breaks through a fence at once, needs two or three rams for a tile of a brick wall and barely
+ * scratches concrete. Fallen tiles of brick and concrete buildings leave rubble. Wood is thin: a
+ * piercing round bores through it. Wood is drawn with planks, brick with courses of bricks,
+ * concrete as slabs and steel hatched.
  */
 export const WALL_MATERIALS: Record<WallMaterial, WallMaterialSpec> = {
-  steel: { color: [0.31, 0.33, 0.37], height: 10, collapse: 0, rubble: false, ram: { bite: 0, hardness: 1 } },
-  concrete: { color: [0.62, 0.62, 0.6], height: 10, crater: { hole: 3.5, depth: 0 }, collapse: 0.5, rubble: true, ram: { bite: 0.035, hardness: 1 } },
-  brick: { color: [0.68, 0.39, 0.3], height: 10, crater: { hole: 5, depth: 2 }, collapse: 0.35, rubble: true, ram: { bite: 0.15, hardness: 0.85 } },
-  wood: { color: [0.64, 0.47, 0.29], height: 7, crater: { hole: 6, depth: 2.5 }, collapse: 0.3, rubble: false, ram: { bite: 0.27, hardness: 0.3 } }
+  steel: { color: [0.31, 0.33, 0.37], height: 10, collapse: 0, rubble: false, thin: false, ram: { bite: 0, hardness: 1 } },
+  concrete: { color: [0.62, 0.62, 0.6], height: 10, crater: { hole: 2.6, depth: 0 }, collapse: 0.5, rubble: true, thin: false, ram: { bite: 0.035, hardness: 1 } },
+  brick: { color: [0.68, 0.39, 0.3], height: 10, crater: { hole: 4.2, depth: 1.4 }, collapse: 0.35, rubble: true, thin: false, ram: { bite: 0.15, hardness: 0.85 } },
+  wood: { color: [0.64, 0.47, 0.29], height: 7, crater: { hole: 6, depth: 2.5 }, collapse: 0.3, rubble: false, thin: true, ram: { bite: 0.27, hardness: 0.3 } }
 };
+
+/**
+ * The blow that chips a wall material's full crater: a hole of 4.5 px, 3 px deep, as the medium
+ * tank's shell chipped before it fired rockets. Walls take every other blow in proportion, as tank
+ * armor does: a gatling round's small hole chips a small crater, a rocket's blast a second one.
+ */
+export const WALL_BLOW = { hole: 4.5, depth: 3 };
 
 /**
  * A piece of a breakable wall with its own field, in the wall's local coordinates. Its field
@@ -640,7 +827,7 @@ const MIN_PIECE_CELLS = 12;
  * A ram bites at most `MAX_BITE` px deep and nothing under `MIN_BITE` px; the bite's outline is
  * traced every `BITE_STEP` px along the push and wobbles by up to `BITE_ROUGHNESS` px.
  */
-const MAX_BITE = 28;
+export const MAX_BITE = 28;
 const MIN_BITE = 0.6;
 const BITE_STEP = 2;
 const BITE_ROUGHNESS = 1.1;
@@ -657,7 +844,8 @@ const FULL_MARGIN_DEPTH = 8;
  */
 const RUBBLE_THICKNESS = 40;
 const RUBBLE_LEFT = 150;
-const RUBBLE_HEIGHT = 4;
+/** Height of a heap of rubble for shadows, and what a lobbed grenade must clear to fly over it. */
+export const RUBBLE_HEIGHT = 4;
 const RUBBLE_SHADE = 0.85;
 /** Pixels from a chunk's center within which a rubble field holds the true distance to it. */
 const CHUNK_REACH = 18;
@@ -666,6 +854,8 @@ const CHUNK_REACH = 18;
  * stacks of boxes a pixel thin, which push a tank shoved into them every which way and can trap it.
  */
 const COLLIDER_BLOCK = 3;
+/** Step in pixels a piercing round bores through a thin wall in. */
+const PUNCH_STEP = 1;
 const CAMPFIRE_RADIUS = 13;
 /** Size of the buckets that index tiles by place, in pixels. */
 const BUCKET = 128;
@@ -967,6 +1157,13 @@ function worldBounds(wall: WallPlacement, rect: Bounds, margin: number): Bounds 
     maxX: Math.max(...corners.map((corner) => corner.x)),
     maxY: Math.max(...corners.map((corner) => corner.y))
   };
+}
+
+function sameBoxes(a: readonly Tile['boxes'][number][], b: readonly Tile['boxes'][number][]) {
+  return (
+    a.length === b.length &&
+    a.every((box, index) => box.x === b[index].x && box.y === b[index].y && box.halfWidth === b[index].halfWidth && box.halfHeight === b[index].halfHeight)
+  );
 }
 
 function overlaps(a: Bounds, b: Bounds) {

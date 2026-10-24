@@ -3,7 +3,10 @@ import { pullSpeedFor, type Tank } from '../arena/bodies';
 import { createDriver } from '../koth/driver';
 import { createNavGrid, findPath, pathLength, updateNavGrid } from '../koth/navigation';
 import type { Rapier } from '../physics/Rapier2D';
+import { TANK_CLASSES } from '../koth/classes/classes';
+import { MEDIUM_TANK, type TankClass } from '../koth/tanks';
 import { createCombat, type CombatLayout, type ShellSpec, type WallMaterial } from './combat';
+import { carve } from './field';
 import type { createRangeRenderer } from './renderer';
 
 let rapier: Rapier;
@@ -154,6 +157,92 @@ describe('breakable walls', () => {
     expect(steel.armor).toBeLessThan(fence.armor);
   });
 
+  it('give way to rams by the mass of the class: a Heavy breaks brick in fewer runs than a Soldier, a Scout in more, and dents its nose more', () => {
+    const heavy = ram('brick', 24, 6, TANK_CLASSES.heavy);
+    const soldier = ram('brick', 24, 6, TANK_CLASSES.soldier);
+    const scout = ram('brick', 24, 6, TANK_CLASSES.scout);
+
+    expect(heavy.rams).toBe(1);
+    expect(soldier.rams).toBeGreaterThan(heavy.rams);
+    expect(scout.rams).toBeGreaterThan(soldier.rams);
+    // A thicker wall the Heavy still rams open; the Scout's light blows never get through it.
+    expect(ram('brick', 40, 4, TANK_CLASSES.heavy).rams).toBeLessThanOrEqual(2);
+    expect(ram('brick', 40, 6, TANK_CLASSES.scout).rams).toBe(Infinity);
+    // The harder blow caves in the rammer's own nose more, ram for ram.
+    expect(heavy.lost / heavy.bitten).toBeGreaterThan((scout.lost / scout.bitten) * 2);
+  });
+
+  it('take no ram from a tank thrown into them by a blast, whatever its tracks do, and the next ram once it drives again', () => {
+    const { combat } = createBattle({ walls: [{ x: 70, y: 0, halfWidth: 12, halfHeight: 150, material: 'brick' }] });
+    const tank = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0, pullSpeed: pullSpeedFor(250) });
+    combat.drive(tank, { x: 1, y: 0 });
+    combat.step(1 / 60);
+    combat.blast({ x: -26, y: 0 }, { radius: 95, hole: 0, depth: 0, knockback: 1500 });
+
+    expect(combat.isAirborne(tank)).toBe(true);
+
+    let closest = Infinity;
+    let dented = 1;
+
+    for (let step = 0; step < 60 && combat.isAirborne(tank); step++) {
+      combat.drive(tank, { x: 1, y: 0 });
+      combat.step(1 / 60);
+      closest = Math.min(closest, combat.obstacleDistance(tank.hull.translation(), 100));
+      dented = combat.armorLeft(tank);
+    }
+
+    // It slammed nose first into the wall, whose face is at x = 58, bounced off and landed, and
+    // only dented: no bite. Its pull rode along on its anchor, so the joint never dragged the hull
+    // into the wall.
+    expect(combat.isAirborne(tank)).toBe(false);
+    expect(dented).toBeLessThan(0.999);
+    expect(combat.walls.damage.rams).toBe(0);
+    expect(closest).toBeGreaterThan(10);
+
+    // On the ground again, from a run-up, its tracks drive it into the wall: a ram.
+    tank.hull.setTranslation({ x: -100, y: 0 }, true);
+    tank.hull.setRotation(0, true);
+    tank.hull.setLinvel({ x: 0, y: 0 }, true);
+    tank.pull.setTranslation({ x: -85, y: 0 }, true);
+
+    for (let step = 0; step < 60; step++) {
+      combat.drive(tank, { x: 1, y: 0 });
+      combat.step(1 / 60);
+    }
+
+    expect(combat.walls.damage.rams).toBe(1);
+  });
+
+  it('drop the pieces blasts knock off them as scrap of their material, as tanks drop theirs', () => {
+    const { combat } = createBattle({ walls: [{ x: 0, y: 0, halfWidth: 7, halfHeight: 120, material: 'wood' }] });
+    const tank = combat.spawnTank({ x: -200, y: 150, rotation: 0 }, { color: 0 });
+    const grenade = TANK_CLASSES.demoman.shell.blast!;
+
+    for (let blast = 0; blast < 3; blast++) {
+      combat.blast({ x: -30, y: 10 + blast * 6 }, grenade);
+      settle(combat);
+    }
+
+    expect(combat.walls.damage.collapsed).toBeGreaterThan(0);
+    expect(combat.scrap.pieces.filter((piece) => piece.material === 'wood').length).toBeGreaterThanOrEqual(2);
+    expect(combat.scrap.pieces.some((piece) => piece.material === 'metal')).toBe(false);
+
+    // A groove across the tank's front corner leaves it hanging by a bridge, which a blast there cuts.
+    for (let along = 0; along <= 1; along += 0.04) {
+      carve(combat.armorOf(tank)!, { x: 2 + 15 * along, y: 13.5 - 15 * along }, 1.4, 0, 1);
+    }
+
+    combat.repair(tank, 1e-9);
+    settle(combat);
+
+    expect(combat.scrap.pieces.some((piece) => piece.material === 'metal')).toBe(false);
+
+    combat.blast({ x: -174, y: 147 }, grenade);
+    settle(combat);
+
+    expect(combat.scrap.pieces.some((piece) => piece.material === 'metal' && Math.hypot(piece.x + 200, piece.y - 150) < 120)).toBe(true);
+  });
+
   it('stand again, whole, after a reset', () => {
     const { combat } = createBattle({ walls: [{ x: 0, y: 0, halfWidth: 7, halfHeight: 120, material: 'wood' }] });
     const shooter = combat.spawnTank({ x: -250, y: 0, rotation: 0 }, { color: 0 });
@@ -173,15 +262,21 @@ describe('breakable walls', () => {
 });
 
 /**
- * Rams a wall of `material` and `thickness` across the field with a medium tank at full speed, from
- * a run-up of 120 px, up to `most` times, until the tank breaks through.
+ * Rams a wall of `material` and `thickness` across the field with a tank of `tankClass`, by default
+ * the medium tank, at full speed, from a run-up of 120 px, up to `most` times, until the tank breaks
+ * through.
  *
- * @returns The ram that broke through, `Infinity` if none did; the rammer's armor left; and how
- *   many rams bit into the wall.
+ * @returns The ram that broke through, `Infinity` if none did; the rammer's armor left, and the
+ *   square pixels of it lost; and how many rams bit into the wall.
  */
-function ram(material: WallMaterial, thickness: number, most: number) {
+function ram(material: WallMaterial, thickness: number, most: number, tankClass: TankClass = MEDIUM_TANK) {
   const { combat } = createBattle({ walls: [{ x: 0, y: 0, halfWidth: thickness / 2, halfHeight: 120, material }] });
-  const tank = combat.spawnTank({ x: -150, y: 10, rotation: 0 }, { color: 0, pullSpeed: pullSpeedFor(250) });
+  const tank = combat.spawnTank(
+    { x: -150, y: 10, rotation: 0 },
+    { color: 0, pullSpeed: pullSpeedFor(tankClass.speed), hull: tankClass.hull, mass: tankClass.mass, look: tankClass.look }
+  );
+  const solid = () => armorArea(combat.armorOf(tank)!);
+  const whole = solid();
   let rams = Infinity;
 
   for (let attempt = 1; attempt <= most && rams === Infinity; attempt++) {
@@ -201,8 +296,56 @@ function ram(material: WallMaterial, thickness: number, most: number) {
     }
   }
 
-  return { rams, armor: combat.armorLeft(tank), bitten: combat.walls.damage.rams };
+  return { rams, armor: combat.armorLeft(tank), lost: whole - solid(), bitten: combat.walls.damage.rams };
 }
+
+/** Lets everything flying come to rest. */
+function settle(combat: ReturnType<typeof createCombat>) {
+  for (let step = 0; step < 240; step++) {
+    combat.step(1 / 60);
+    combat.update(1 / 60);
+  }
+}
+
+/** Square pixels of armor in a field. */
+function armorArea(field: { data: Float32Array; cell: number }) {
+  let cells = 0;
+
+  for (let index = 0; index < field.data.length; index += 4) {
+    cells += field.data[index] < 0 ? 1 : 0;
+  }
+
+  return cells * field.cell * field.cell;
+}
+
+describe('a light tank thrown by a blast', () => {
+  it.each([
+    ['steel', 12],
+    ['brick', 12],
+    ['wood', 7]
+  ] as const)('lands against a %s wall, not inside it', (material, halfWidth) => {
+    const { combat } = createBattle({ walls: [{ x: 58 + halfWidth, y: 0, halfWidth, halfHeight: 150, material }] });
+    const tank = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0, mass: 0.65 });
+    combat.step(1 / 60);
+    // As hard as two grenades going off together: about 1800 px/s, a wall's thickness a step.
+    combat.blast({ x: -26, y: 0 }, { radius: 95, hole: 0, depth: 0, knockback: 1200 });
+
+    expect(combat.isAirborne(tank)).toBe(true);
+
+    let closest = Infinity;
+    let farthest = -Infinity;
+
+    for (let step = 0; step < 60; step++) {
+      combat.step(1 / 60);
+      closest = Math.min(closest, combat.obstacleDistance(tank.hull.translation(), 100));
+      farthest = Math.max(farthest, tank.hull.translation().x);
+    }
+
+    // It flew into the wall, whose face is at x = 58, and its center stayed half a hull's width off it.
+    expect(farthest).toBeGreaterThan(36);
+    expect(closest).toBeGreaterThan(10.5);
+  });
+});
 
 /** Turns `shooter`'s turret onto `target`, fires a shell and lets it land. */
 function fireAt(combat: ReturnType<typeof createCombat>, shooter: Tank, target: { x: number; y: number }) {

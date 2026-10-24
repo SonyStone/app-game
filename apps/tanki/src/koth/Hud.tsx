@@ -1,6 +1,9 @@
-import { For, Show } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
+import { ClassSilhouette } from './classes/ClassMenu';
+import { TANK_CLASSES } from './classes/classes';
 import type { KothMatch, MemberHud } from './match';
 import type { TeamId } from './rules';
+import type { TankClassId } from './tanks';
 
 /** What the heads-up display shows, from `KothMatch['hud']`. */
 export type HudState = ReturnType<KothMatch['hud']>;
@@ -80,18 +83,18 @@ function TeamPanel(props: { team: TeamId; state: HudState }) {
   );
 }
 
-/** A member of a team: its seat number, a ring for the player, a countdown while respawning. */
+/** A member of a team: its class, a ring for the player, a countdown while respawning. */
 function MemberPip(props: { team: TeamId; member: MemberHud }) {
   return (
     <div
-      class="grid h-6 w-6 place-items-center rounded text-[11px] font-bold tabular-nums"
-      title={`${props.member.name} · ${props.member.role} · ${props.member.kills}/${props.member.deaths}`}
+      class="grid h-6 w-7 place-items-center rounded text-[11px] font-bold tabular-nums"
+      title={`${props.member.name} · ${TANK_CLASSES[props.member.tankClass].name} · ${props.member.role} · ${props.member.kills}/${props.member.deaths}`}
       style={{
         background: props.member.alive ? TEAM_CSS[props.team] : 'rgba(0, 0, 0, 0.45)',
         border: `2px solid ${props.member.human ? '#ffffff' : props.member.alive ? 'rgba(0, 0, 0, 0.35)' : TEAM_CSS[props.team]}`
       }}
     >
-      {props.member.alive ? (props.member.human ? 'You' : props.member.role[0].toUpperCase()) : Math.ceil(props.member.respawnIn)}
+      {props.member.alive ? CLASS_ABBREVIATIONS[props.member.tankClass] : Math.ceil(props.member.respawnIn)}
     </div>
   );
 }
@@ -157,13 +160,26 @@ function KillFeed(props: { feed: HudState['feed'] }) {
   );
 }
 
-/** The player's armor, rounds in the clip and warnings, or the countdown to respawning. */
+/**
+ * The player's class, armor, weapon and warnings, or the countdown to respawning with the class
+ * that comes next.
+ */
 function PlayerPanel(props: { player: HudState['player'] }) {
+  const tankClass = () => TANK_CLASSES[props.player.tankClass];
+  const next = () => props.player.nextClass && TANK_CLASSES[props.player.nextClass];
+
   return (
     <div class="pointer-events-none absolute bottom-10 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1 text-white">
       <Show
         when={props.player.alive}
-        fallback={<div class="rounded bg-black/55 px-4 py-2 text-xl font-bold">Respawning in {Math.ceil(props.player.respawnIn)}</div>}
+        fallback={
+          <div class="flex flex-col items-center gap-1 rounded bg-black/55 px-4 py-2">
+            <div class="text-xl font-bold">
+              Respawning in {Math.ceil(props.player.respawnIn)} as {(next() ?? tankClass()).name}
+            </div>
+            <div class="text-xs text-white/70">C or 1-5: change class</div>
+          </div>
+        }
       >
         <Show when={props.player.coreOpen}>
           <div class="rounded bg-[#e0662a] px-2 py-0.5 text-sm font-bold">Core exposed — get to cover or your base</div>
@@ -171,11 +187,60 @@ function PlayerPanel(props: { player: HudState['player'] }) {
         <Show when={props.player.mending}>
           <div class="rounded bg-black/45 px-2 py-0.5 text-xs">Mending armor</div>
         </Show>
-        <div class="h-2 w-48 overflow-hidden rounded bg-black/45">
-          <div class="h-full bg-white/85" style={{ width: `${Math.round(props.player.armor * 100)}%` }} />
+        <div class="flex items-end gap-3 rounded bg-black/35 px-3 py-1.5">
+          <div class="flex flex-col items-center">
+            <ClassSilhouette tankClass={tankClass()} color={PLAYER_CSS} width={64} height={32} />
+            <div class="text-xs font-bold">{tankClass().name}</div>
+          </div>
+          <div class="flex flex-col items-center gap-1">
+            <div class="h-2 w-48 overflow-hidden rounded bg-black/45">
+              <div class="h-full bg-white/85" style={{ width: `${Math.round(props.player.armor * 100)}%` }} />
+            </div>
+            <WeaponState player={props.player} />
+          </div>
         </div>
-        <Clip rounds={props.player.rounds} clip={props.player.clip} loading={props.player.loading} />
+        <Show when={next()}>
+          {(after) => <div class="rounded bg-black/45 px-2 py-0.5 text-xs">Next respawn: {after().name}</div>}
+        </Show>
       </Show>
+    </div>
+  );
+}
+
+/**
+ * The state of the player's weapon: rounds in the clip for most guns; the gatling's belt and how
+ * far it has spun up; the charge of a casemate gun's shot, marked full once it pierces.
+ */
+function WeaponState(props: { player: HudState['player'] }) {
+  return (
+    <Switch fallback={<Clip rounds={props.player.rounds} clip={props.player.clip} loading={props.player.loading} />}>
+      <Match when={props.player.weapon === 'spin'}>
+        <div class="flex flex-col items-center gap-0.5">
+          <Gauge label="Spin" value={props.player.spin} color={props.player.spin >= 1 ? '#ffd27a' : '#c8c8c8'} />
+          <Gauge label="Belt" value={props.player.rounds / props.player.clip} color="#ffd27a" />
+        </div>
+      </Match>
+      <Match when={props.player.weapon === 'charge'}>
+        <div class="flex flex-col items-center gap-0.5">
+          <Gauge
+            label={props.player.charge === undefined ? (props.player.rounds > 0 ? 'Hold' : 'Load') : (props.player.charge ?? 0) >= 0.95 ? 'FULL' : 'Charge'}
+            value={props.player.charge ?? (props.player.rounds > 0 ? 0 : props.player.loading)}
+            color={props.player.charge === undefined ? '#8a8a8a' : (props.player.charge ?? 0) >= 0.95 ? '#ff5a3c' : '#ffd27a'}
+          />
+        </div>
+      </Match>
+    </Switch>
+  );
+}
+
+/** A bar 0-1 with a label before it. */
+function Gauge(props: { label: string; value: number; color: string }) {
+  return (
+    <div class="flex items-center gap-1.5 text-[10px] font-bold">
+      <div class="w-10 text-right">{props.label}</div>
+      <div class="h-3 w-36 overflow-hidden rounded-sm bg-black/45">
+        <div class="h-full" style={{ width: `${Math.round(Math.min(Math.max(props.value, 0), 1) * 100)}%`, background: props.color }} />
+      </div>
     </div>
   );
 }
@@ -301,8 +366,11 @@ export function BotThoughts(props: { thoughts: readonly ThoughtView[] }) {
   );
 }
 
-/** Team colors for panels, as CSS, matching the hulls. */
+/** Team colors for panels, as CSS, matching the hulls, and the player's own hull color. */
 const TEAM_CSS: Record<TeamId, string> = { red: '#c9473b', blue: '#3b73c9' };
+const PLAYER_CSS = '#f0773a';
+/** Short names of the classes for the team panels. */
+const CLASS_ABBREVIATIONS: Record<TankClassId, string> = { scout: 'Sc', soldier: 'So', heavy: 'Hv', demoman: 'De', sniper: 'Sn' };
 /** Lighter team colors for text on dark backgrounds. */
 const TEAM_TEXT: Record<TeamId, string> = { red: '#ff8a7a', blue: '#8ab4ff' };
 

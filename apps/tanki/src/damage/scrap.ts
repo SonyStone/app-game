@@ -1,6 +1,7 @@
 import type { WallMaterial } from './combat';
 import { CHANNELS, createField, FAR, sampleField, type DamageField } from './field';
-import { KIND_FIELD, KIND_SCRAP, KIND_TURRET, packColor, type createRangeRenderer } from './renderer';
+import { KIND_FIELD, KIND_SCRAP, KIND_TURRET, packColor, TURRET_MEDIUM, TURRET_QUADS, type createRangeRenderer } from './renderer';
+import { createTurretField } from './shapes';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
 type Point = { x: number; y: number };
@@ -51,13 +52,14 @@ export function createScrap(
     /**
      * Sends a piece flying from where it is, at `vx`, `vy` px/s, spinning at `spin` rad/s.
      *
-     * @param piece.shape - The piece's field, centered on the piece's center, or `'turret'` for a
-     *   turret blown off, which is drawn from its formula while it flies. A piece with a field
-     *   takes a field slot while it flies; without a free slot it lands where it is at once.
+     * @param piece.shape - The piece's field, centered on the piece's center, or the look of a
+     *   turret blown off, one of the renderer's `TURRET_*`, which is drawn from its formula while it
+     *   flies and lies in its own shape. A piece with a field takes a field slot while it flies;
+     *   without a free slot it lands where it is at once.
      * @param piece.color - Fill color, components 0-1.
      */
     launch(piece: {
-      shape: DamageField | 'turret';
+      shape: ScrapShape;
       x: number;
       y: number;
       angle: number;
@@ -67,16 +69,17 @@ export function createScrap(
       color: readonly number[];
       material: ScrapMaterial;
     }) {
-      const slot = piece.shape === 'turret' ? undefined : renderer.allocateField();
+      const field = 'turret' in piece.shape ? undefined : piece.shape;
+      const slot = field ? renderer.allocateField() : undefined;
       const entry: Flying = { ...piece, slot, age: 0, air: AIR_TIME.min + options.random() * (AIR_TIME.max - AIR_TIME.min) };
 
-      if (piece.shape !== 'turret' && slot === undefined) {
+      if (field && slot === undefined) {
         settle(entry);
         return;
       }
 
-      if (piece.shape !== 'turret') {
-        renderer.uploadField(slot!, piece.shape);
+      if (field) {
+        renderer.uploadField(slot!, field);
       }
 
       flying.push(entry);
@@ -165,8 +168,18 @@ export function createScrap(
         // A piece drops from the height it was knocked off at to the ground.
         const height = LYING_HEIGHT + (FLIGHT_HEIGHT - LYING_HEIGHT) * Math.max(1 - piece.age / piece.air, 0);
 
-        if (piece.shape === 'turret') {
-          renderer.addBody({ ...TURRET_DRAW, x: piece.x, y: piece.y, angle: piece.angle, color: piece.color, height: Math.max(height, TURRET_LYING) });
+        if ('turret' in piece.shape) {
+          const style = piece.shape.turret;
+          renderer.addBody({
+            kind: KIND_TURRET,
+            ...(TURRET_QUADS[style] ?? TURRET_QUADS[TURRET_MEDIUM]),
+            style,
+            x: piece.x,
+            y: piece.y,
+            angle: piece.angle,
+            color: piece.color,
+            height: Math.max(height, TURRET_LYING)
+          });
         } else {
           const field = piece.shape;
           renderer.addBody({
@@ -235,7 +248,7 @@ export function createScrap(
       piece.slot = undefined;
     }
 
-    const field = piece.shape === 'turret' ? turretField() : piece.shape;
+    const field = 'turret' in piece.shape ? turretField(piece.shape.turret) : piece.shape;
     const area = solidArea(field);
 
     if (area < MIN_AREA || options.buried?.(piece)) {
@@ -358,6 +371,9 @@ export function createScrap(
 /** The scrap layer as returned by `createScrap`. */
 export type Scrap = ReturnType<typeof createScrap>;
 
+/** The shape of a piece of scrap: its own field, or the look of a turret, one of the renderer's `TURRET_*`. */
+export type ScrapShape = DamageField | { turret: number };
+
 /** What a piece of scrap is made of: armor plate off a tank, or the stuff of a wall. */
 export type ScrapMaterial = 'metal' | WallMaterial;
 
@@ -381,7 +397,7 @@ type Piece = ScrapPiece & { field: DamageField; chunks: Chunk[] };
 
 /** A piece in the air; `air` is the seconds until it touches the ground. */
 type Flying = {
-  shape: DamageField | 'turret';
+  shape: ScrapShape;
   slot: number | undefined;
   x: number;
   y: number;
@@ -428,23 +444,20 @@ const FLIGHT_HEIGHT = 6;
 const LYING_HEIGHT = 1;
 const TURRET_LYING = 3;
 const NO_COLOR = [0, 0, 0];
-/** Draw fields of a turret, as the battle draws turrets: a quad from (-11, -11) to (31, 11). */
-const TURRET_DRAW = { kind: KIND_TURRET, originX: -10.5, originY: -10.5, cell: 1, cols: 42, rows: 22 };
-
-let turret: DamageField | undefined;
+const turrets = new Map<number, DamageField>();
 /** Soot on a turret lying on the ground, which the blast that threw it off burnt. */
 const TURRET_SOOT = 0.45;
 
-/** The field of a turret lying on the ground, the shape `KIND_TURRET` draws: a cupola and a barrel along +x. */
-function turretField() {
-  turret ??= createField({ minX: -11, minY: -11, maxX: 31, maxY: 11 }, 0.5, (x, y) => {
-    const qx = Math.abs(x - 18.55) - 11.25 + 1;
-    const qy = Math.abs(y) - 3.75 + 1;
-    const barrel = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - 1;
-    return [Math.min(barrel, Math.hypot(x, y) - 9.6), FAR, FAR, TURRET_SOOT];
-  });
+/** The field of a turret of `style` lying on the ground, the shape `KIND_TURRET` draws for it, made once per look. */
+function turretField(style: number) {
+  let field = turrets.get(style);
 
-  return turret;
+  if (!field) {
+    field = createTurretField(style, TURRET_SOOT);
+    turrets.set(style, field);
+  }
+
+  return field;
 }
 
 /** An empty chunk whose top left corner is at `left`, `top`. */

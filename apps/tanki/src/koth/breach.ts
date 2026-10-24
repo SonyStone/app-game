@@ -1,7 +1,8 @@
 import type { Tank } from '../arena/bodies';
 import type { Combat } from '../damage/combat';
 import { canDrive, cellAt, cellCenter, findBreachPath, findPath, isOpenAt, pathLength, type NavGrid } from './navigation';
-import { MEDIUM_TANK } from './tanks';
+import type { Trigger, Weapon } from './classes/weapon';
+import { openingFor, type Blocker } from './opening';
 import type { Member, TeamBoard } from './team';
 
 type Point = { x: number; y: number };
@@ -14,8 +15,8 @@ export type BreachContext = {
   board: TeamBoard;
   /** Match time in seconds. */
   clock: () => number;
-  /** Fires the member's gun if it has reloaded; returns whether it fired. */
-  fire: (member: Member) => boolean;
+  /** Sets how the member works its trigger this step; the match fires what the weapon gives. */
+  trigger: (member: Member, trigger: Trigger) => void;
 };
 
 /**
@@ -41,21 +42,25 @@ export type BreachOrder = { destination?: Point; arrive?: number; move?: Point; 
  *
  * Deciding, about once a second while the bot travels: it plans the way to where it is going
  * twice, around everything and through what breaks (`findBreachPath`), where a crossing costs
- * the time to open it: a wooden fence a ram from a run-up, other walls and wrecks the shots their
- * material and thickness need, fired at the gun's pace with its reloads (`secondsToOpen`). Standing
- * still to break adds risk. The bot breaks through only where it saves at least `MIN_SAVING` s and
- * a quarter of the drive around, never through steel or concrete, never under fire, with known
- * enemies within `VETO_RANGE` px or where they could see the spot it would break from.
+ * the time its class needs to open it, by ramming or by its own gun, whichever is quicker
+ * (`openingFor`): a Heavy rams brick open, a Demoman blows it apart, a Scout shoots a wreck to
+ * pieces. Standing still to break adds risk. The bot breaks through only where it saves at least
+ * `MIN_SAVING` s and a quarter of the drive around, never through steel or concrete, never under
+ * fire, with known enemies within `VETO_RANGE` px or where they could see the spot it would
+ * break from; but when wrecks and walls have closed every way there, it breaks through wherever
+ * the enemy is, unless under fire.
  *
- * Doing (`step`): the bot drives to a spot in front of the wall square to it. A fence it rams:
- * back to a run-up, full ahead into the wall, again if need be. Anything else it shoots, spreading
- * the shots over the crossing where material is left. Once the grid shows the way open, the bot
- * drives on, through it. It gives up when enemies show up or it comes under fire, when breaking
+ * Doing (`step`): the bot drives to a spot in front of the wall square to it. A wall it rams: back
+ * to a run-up, full ahead into the wall, again if need be. Anything else it shoots, spreading the
+ * shots over the crossing where material is left. Once the grid shows the way open, the bot drives
+ * on, through it. It gives up when enemies show up or it comes under fire, when breaking
  * takes far longer than planned, or when the bot is going elsewhere now; it does not try the same
  * spot again for a while.
  */
 export function createBreacher(member: Member, context: BreachContext) {
   const { combat, grid, board } = context;
+  /** Share of its class's top speed a tank keeps along a way, as the bots' travel estimates take it. */
+  const pace = () => member.tankClass.speed * PACE_SHARE;
   const refused: { at: Point; until: number }[] = [];
   let plan: Plan | undefined;
   let nextThought = (member.id * 0.37) % CONSIDER_INTERVAL;
@@ -71,6 +76,11 @@ export function createBreacher(member: Member, context: BreachContext) {
     shots: 0,
     /** Seconds saved in all by the breaches driven through, against driving around. */
     saved: 0,
+    /**
+     * Ways through weighed, by the class that weighed them and what blocked them: how many, and how
+     * many were turned down as seen by enemies or saving too little, or taken.
+     */
+    weighed: new Map<string, { considered: number; exposed: number; short: number; chosen: number }>(),
     log: [] as BreachLog[]
   };
 
@@ -93,8 +103,10 @@ export function createBreacher(member: Member, context: BreachContext) {
       if (plan && plan.phase !== 'through') {
         const elsewhere = !travel.allowed || !travel.destination || distance(travel.destination, plan.destination) > MOVED_ON;
 
-        if (elsewhere || threatened(position, now) || now - plan.startedAt > plan.deadline) {
-          finish('abandoned', now);
+        const threat = plan.forced ? underFire(now) : threatened(position, now);
+
+        if (elsewhere || threat || now - plan.startedAt > plan.deadline) {
+          finish('abandoned', now, elsewhere ? 'elsewhere' : threat ? 'threat' : 'late');
         }
       }
 
@@ -121,15 +133,22 @@ export function createBreacher(member: Member, context: BreachContext) {
   function consider(position: Point, destination: Point, cost: (cell: number) => number, now: number, route?: readonly Point[]): Plan | undefined {
     const straight = distance(position, destination);
 
-    if (straight < MIN_TRIP || threatened(position, now)) {
+    if (straight < MIN_TRIP || underFire(now)) {
       return undefined;
     }
 
     const known = route && route.length > 1 && distance(route[route.length - 1], destination) < ROUTE_MATCH ? remaining(route, position) : undefined;
     const around = known ?? pathLength(findPath(grid, position, destination, { cost }) ?? []);
-    const detour = around > 0 ? around / PACE : Infinity;
+    const detour = around > 0 ? around / pace() : Infinity;
+    // Wrecks and walls may close every way there; then the bot breaks through even where enemies
+    // may see it do so, for waiting gets it nowhere.
+    const forced = !Number.isFinite(detour);
 
-    if (detour - straight / PACE < Math.max(MIN_SAVING, detour * MIN_SHARE)) {
+    if (!forced && enemyNear(position)) {
+      return undefined;
+    }
+
+    if (detour - straight / pace() < Math.max(MIN_SAVING, detour * MIN_SHARE)) {
       return undefined;
     }
 
@@ -146,23 +165,30 @@ export function createBreacher(member: Member, context: BreachContext) {
       return undefined;
     }
 
+    const key = `${member.tankClass.id} ${crossing.material} ${crossing.method}`;
+    const tally = stats.weighed.get(key) ?? { considered: 0, exposed: 0, short: 0, chosen: 0 };
+    stats.weighed.set(key, tally);
+    tally.considered++;
     const spot = crossing.method === 'ram' ? crossing.runup : crossing.stand;
 
-    if (board.danger(cellAt(grid, spot)) > 0 || enemyNear(spot)) {
+    if (!forced && (board.danger(cellAt(grid, spot)) > 0 || enemyNear(spot))) {
+      tally.exposed++;
       return undefined;
     }
 
     const split = way.path.indexOf(way.crossing.exit);
     const setup = crossing.method === 'ram' ? 0 : SETUP;
-    const toGap = (pathLength(way.path.slice(0, split)) + distance(way.path[split - 1] ?? position, spot)) / PACE + setup + crossing.seconds * (1 + STAND_RISK);
-    const fromGap = (distance(crossing.face, way.crossing.exit) + pathLength(way.path.slice(split))) / PACE;
+    const toGap = (pathLength(way.path.slice(0, split)) + distance(way.path[split - 1] ?? position, spot)) / pace() + setup + crossing.seconds * (1 + STAND_RISK);
+    const fromGap = (distance(crossing.face, way.crossing.exit) + pathLength(way.path.slice(split))) / pace();
     const saving = detour - toGap - fromGap;
 
     if (saving < Math.max(MIN_SAVING, detour * MIN_SHARE)) {
+      tally.short++;
       return undefined;
     }
 
     stats.chosen++;
+    tally.chosen++;
 
     return {
       ...crossing,
@@ -170,12 +196,14 @@ export function createBreacher(member: Member, context: BreachContext) {
       entry: way.crossing.entry,
       exit: way.crossing.exit,
       phase: crossing.method === 'ram' ? 'runup' : 'approach',
+      forced,
       startedAt: now,
       deadline: toGap * 2 + DEADLINE_SLACK,
       estimate: { detour, toGap, fromGap },
       rams: 0,
       shots: 0,
       aims: 0,
+      seenShots: undefined,
       charge: undefined,
       openedAt: 0,
       checkedAt: -Infinity
@@ -184,8 +212,8 @@ export function createBreacher(member: Member, context: BreachContext) {
 
   /**
    * How to break through a crossing: what blocks it, the direction square through the wall, the
-   * wall's near face, the spots to ram from or shoot from and the seconds it takes; `undefined`
-   * when nothing breakable blocks it.
+   * wall's near face, the spots to ram from or shoot from, the method and the seconds it takes;
+   * `undefined` when nothing breakable blocks it or the class cannot open it in a useful time.
    */
   function describe(crossing: { cells: number[]; entry: Point; exit: Point }) {
     const middle = { x: (crossing.entry.x + crossing.exit.x) / 2, y: (crossing.entry.y + crossing.exit.y) / 2 };
@@ -193,11 +221,12 @@ export function createBreacher(member: Member, context: BreachContext) {
       combat.breakableNear(middle, grid.clearance + 8) ??
       crossing.cells.map((cell) => combat.breakableNear(cellCenter(grid, cell), grid.clearance + 2)).find(Boolean);
 
-    if (!blocker) {
+    const opening = blocker && openingFor(blocker, member.tankClass);
+
+    if (!blocker || !opening) {
       return undefined;
     }
 
-    const seconds = secondsToOpen(blocker);
     let dir = normalize({ x: crossing.exit.x - crossing.entry.x, y: crossing.exit.y - crossing.entry.y });
 
     if (blocker.material !== 'wreck') {
@@ -210,27 +239,25 @@ export function createBreacher(member: Member, context: BreachContext) {
 
     const face = nearFace(middle, dir);
 
-    if (!face || !Number.isFinite(seconds)) {
+    if (!face) {
       return undefined;
     }
 
     const back = (gap: number) => ({ x: face.x - dir.x * gap, y: face.y - dir.y * gap });
     const stand = [STAND_GAP, STAND_GAP - 14, grid.clearance + 2].map(back).find((spot) => isOpenAt(grid, spot)) ?? crossing.entry;
     const runup = [RUNUP_GAP, RUNUP_GAP - 20, RUNUP_GAP - 40].map(back).find((spot) => isOpenAt(grid, spot)) ?? stand;
-    const method: 'ram' | 'shoot' = blocker.material === 'wood' ? 'ram' : 'shoot';
-
     return {
       material: blocker.material,
-      method,
-      seconds,
+      method: opening.method,
+      seconds: opening.seconds,
       dir,
       across: { x: -dir.y, y: dir.x },
       face,
       stand,
       runup,
       cells: crossing.cells,
-      maxShots: Math.ceil(shotsToOpen(blocker) * 2) + 4,
-      maxRams: RAMS_TO_OPEN + 2
+      maxShots: Math.ceil(opening.shots * 2) + 4,
+      maxRams: opening.rams + 2
     };
   }
 
@@ -307,28 +334,35 @@ export function createBreacher(member: Member, context: BreachContext) {
     }
   }
 
-  /** Holds still and shoots the crossing, each shot at the next spot across it where material is left. */
+  /**
+   * Holds still and shoots the crossing, each shot at the next spot across it where material is
+   * left, working the trigger as the class's weapon wants it: a gatling spun up, a shot charged
+   * in full, a grenade thrown as far as the spot. The match fires after the bot's step, so a shot
+   * is counted on the step after it went.
+   */
   function shoot(current: Plan, tank: Tank, position: Point, now: number): BreachOrder {
+    const weapon = member.weapon;
+    const fired = weapon && current.seenShots !== undefined ? weapon.shots - current.seenShots : 0;
+    current.seenShots = weapon?.shots;
+    current.shots += fired;
+    current.aims += fired;
+    stats.shots += fired;
+
     if (current.shots >= current.maxShots) {
-      finish('abandoned', now);
+      finish('abandoned', now, 'spent');
       return { move: STOP };
     }
 
     const target = nextTarget(current);
 
-    if (!target) {
+    if (!target || !weapon) {
       return { move: STOP };
     }
 
     const aim = Math.atan2(target.y - position.y, target.x - position.x);
-    const off = Math.abs(angleBetween(tank.turretAngle, aim));
-
-    if (off < Math.max(Math.atan2(AIM_TOLERANCE, distance(position, target)), 0.01) && member.gun?.ready && context.fire(member)) {
-      current.shots++;
-      current.aims++;
-      stats.shots++;
-    }
-
+    const range = distance(position, target);
+    const aligned = Math.abs(angleBetween(tank.turretAngle, aim)) < Math.max(Math.atan2(AIM_TOLERANCE, range), 0.01);
+    context.trigger(member, triggerFor(weapon, aligned, range));
     return { move: STOP, aim };
   }
 
@@ -381,7 +415,7 @@ export function createBreacher(member: Member, context: BreachContext) {
         stats.rams++;
 
         if (current.rams >= current.maxRams) {
-          finish('abandoned', now);
+          finish('abandoned', now, 'spent');
           return undefined;
         }
 
@@ -403,8 +437,8 @@ export function createBreacher(member: Member, context: BreachContext) {
     return way !== undefined && pathLength(way) < distance(current.entry, current.exit) * OPEN_DETOUR + grid.cell * 2;
   }
 
-  /** Ends the breach under way, records how it went and, if it was given up, keeps away from the spot for a while. */
-  function finish(outcome: BreachLog['outcome'], now: number) {
+  /** Ends the breach under way, records how it went and, if it was given up, why, and keeps away from the spot for a while. */
+  function finish(outcome: BreachLog['outcome'], now: number, reason?: BreachLog['reason']) {
     const current = plan!;
     const spent = now - current.startedAt;
     plan = undefined;
@@ -421,9 +455,11 @@ export function createBreacher(member: Member, context: BreachContext) {
 
     stats.log.push({
       at: now,
+      tankClass: member.tankClass.id,
       material: current.material,
       method: current.method,
       outcome,
+      reason,
       detour: round(current.estimate.detour),
       planned: round(current.estimate.toGap + current.estimate.fromGap),
       spent: round(spent),
@@ -434,7 +470,11 @@ export function createBreacher(member: Member, context: BreachContext) {
 
   /** Whether the bot is under fire or known enemies are near: no time to stand and break walls. */
   function threatened(position: Point, now: number) {
-    return now - member.shotAt < UNDER_FIRE || enemyNear(position);
+    return underFire(now) || enemyNear(position);
+  }
+
+  function underFire(now: number) {
+    return now - member.shotAt < UNDER_FIRE;
   }
 
   function enemyNear(point: Point) {
@@ -442,19 +482,20 @@ export function createBreacher(member: Member, context: BreachContext) {
   }
 
   /**
-   * Extra cost of driving into a closed cell for `findBreachPath`: the seconds to open a crossing
-   * of whatever blocks it, spread over the cells a crossing of it takes, as a multiple of a step's
-   * length; `Infinity` for cells nothing breakable blocks. Shared by the bots of a match and
-   * worked out anew when the grid's cells open or close.
+   * Extra cost of driving into a closed cell for `findBreachPath`: the seconds the bot's class
+   * needs to open a crossing of whatever blocks it, spread over the cells a crossing of it takes,
+   * as a multiple of a step's length; `Infinity` for cells nothing breakable blocks. Shared by the
+   * bots of a match that drive the same class, and worked out anew when the grid's cells open or close.
    */
   function priceOf(cell: number) {
-    const prices = pricesFor(grid);
+    const prices = pricesFor(grid, member.tankClass.id);
     let price = prices[cell];
 
     if (Number.isNaN(price)) {
-      const blocker = combat.breakableNear(cellCenter(grid, cell), grid.clearance + 2);
+      const blocker: Blocker | undefined = combat.breakableNear(cellCenter(grid, cell), grid.clearance + 2);
       const thickness = !blocker ? 0 : blocker.material === 'wreck' ? WRECK_THICKNESS : blocker.thickness;
-      price = blocker ? (secondsToOpen(blocker) * PACE) / (thickness + grid.clearance * 2) : Infinity;
+      const seconds = blocker ? (openingFor(blocker, member.tankClass)?.seconds ?? Infinity) : Infinity;
+      price = (seconds * pace()) / (thickness + grid.clearance * 2);
       prices[cell] = price;
     }
 
@@ -465,12 +506,18 @@ export function createBreacher(member: Member, context: BreachContext) {
 /** A breacher as returned by `createBreacher`. */
 export type Breacher = ReturnType<typeof createBreacher>;
 
-/** How one breach went: what was broken and how, when it ended and how, and the seconds planned against those spent. */
+/** How one breach went: which class broke what and how, when it ended and how, and the seconds planned against those spent. */
 export type BreachLog = {
   at: number;
+  tankClass: string;
   material: string;
   method: 'ram' | 'shoot';
   outcome: 'passed' | 'opened' | 'abandoned';
+  /**
+   * Why a breach was given up: the bot was going `elsewhere` now, a `threat` came, enemies near or
+   * fire, it took too `late`, or it `spent` the shots or rams it had for it.
+   */
+  reason?: 'elsewhere' | 'threat' | 'late' | 'spent';
   /** Seconds of the way around, and of the way through as planned, both from where the bot decided. */
   detour: number;
   planned: number;
@@ -479,50 +526,6 @@ export type BreachLog = {
   rams: number;
   shots: number;
 };
-
-/**
- * Seconds a medium tank needs to open a way through what blocks a crossing: a ram for a wooden
- * fence; for anything else, the shots its material and thickness need (`shotsToOpen`), at the
- * gun's pace with its reloads. `Infinity` for what does not break in any useful time.
- */
-export function secondsToOpen(blocker: { material: string; thickness?: number }) {
-  if (blocker.material === 'wood') {
-    return RAMS_TO_OPEN * RAM_TIME;
-  }
-
-  const shots = shotsToOpen(blocker);
-
-  if (!Number.isFinite(shots)) {
-    return Infinity;
-  }
-
-  const { interval, clip, firstReload, reload } = MEDIUM_TANK.gun;
-  const reloads = Math.max(Math.ceil(shots / clip) - 1, 0);
-  return shots * interval + reloads * (firstReload + (clip - 1) * reload);
-}
-
-/**
- * Shots of a medium tank's gun that open a way a tank fits through, measured on walls like those
- * of the king of the hill map: three for a fence, ten for a brick wall up to 30 px thick, fifteen
- * up to 60 px, about seven to shoot a wreck apart; thicker brick, concrete and steel do not open.
- */
-export function shotsToOpen(blocker: { material: string; thickness?: number }) {
-  const thickness = blocker.thickness ?? 0;
-
-  if (blocker.material === 'wood') {
-    return 3;
-  }
-
-  if (blocker.material === 'wreck') {
-    return WRECK_SHOTS;
-  }
-
-  if (blocker.material === 'brick') {
-    return thickness <= 30 ? 10 : thickness <= 60 ? 15 : Infinity;
-  }
-
-  return Infinity;
-}
 
 /** A breach under way. */
 type Plan = {
@@ -545,6 +548,8 @@ type Plan = {
   /** Where the bot was going when it decided. */
   destination: Point;
   phase: 'approach' | 'shoot' | 'runup' | 'charge' | 'through';
+  /** No way round was left, so only coming under fire stops the breach. */
+  forced: boolean;
   startedAt: number;
   /** Seconds after which the breach is given up. */
   deadline: number;
@@ -556,21 +561,44 @@ type Plan = {
   maxShots: number;
   /** Shots aimed so far, which picks the next spot across the crossing. */
   aims: number;
+  /** The weapon's shot count at the last step of shooting, to count the shots it fired since. */
+  seenShots: number | undefined;
   /** The run at the wall under way, and where the tank was at the last check for a stop. */
   charge: { startedAt: number; check: { at: number; position: Point } } | undefined;
   openedAt: number;
   checkedAt: number;
 };
 
-/** The cost of a step into each closed cell, per grid, worked out as needed and anew with each revision. */
-const priceCache = new WeakMap<NavGrid, { revision: number; prices: Float32Array }>();
+/**
+ * How to work the trigger of `weapon` at a wall `range` px away, on target when `aligned`: a
+ * gatling spins all the while and fires on target; a charged shot is held until full and let go on
+ * target; anything else fires on target once loaded, a grenade thrown that far.
+ */
+function triggerFor(weapon: Weapon, aligned: boolean, range: number): Trigger {
+  const spec = weapon.tankClass.weapon;
 
-function pricesFor(grid: NavGrid) {
-  let entry = priceCache.get(grid);
+  if (spec.kind === 'spin') {
+    return { fire: aligned, rev: true };
+  }
+
+  if (spec.kind === 'charge') {
+    return { fire: !(aligned && (weapon.charge ?? 0) >= 1) };
+  }
+
+  return { fire: aligned && weapon.ready, reach: range };
+}
+
+/** The cost of a step into each closed cell, per grid and class, worked out as needed and anew with each revision. */
+const priceCache = new WeakMap<NavGrid, Map<string, { revision: number; prices: Float32Array }>>();
+
+function pricesFor(grid: NavGrid, tankClass: string) {
+  const byClass = priceCache.get(grid) ?? new Map<string, { revision: number; prices: Float32Array }>();
+  let entry = byClass.get(tankClass);
+  priceCache.set(grid, byClass);
 
   if (!entry || entry.revision !== grid.revision) {
     entry = { revision: grid.revision, prices: new Float32Array(grid.cols * grid.rows).fill(Number.NaN) };
-    priceCache.set(grid, entry);
+    byClass.set(tankClass, entry);
   }
 
   return entry.prices;
@@ -603,8 +631,8 @@ const ROUTE_MATCH = 40;
 /** A breach must save at least this many seconds, and this share of the drive around. */
 const MIN_SAVING = 2;
 const MIN_SHARE = 0.25;
-/** Share of a medium tank's top speed it keeps along a way, as the bots' travel estimates take it. */
-const PACE = MEDIUM_TANK.speed * 0.85;
+/** Share of a tank's top speed it keeps along a way, as the bots' travel estimates take it. */
+const PACE_SHARE = 0.85;
 /** Seconds of getting into place to shoot, and the share of the breaking time added for the risk of standing still. */
 const SETUP = 1;
 const STAND_RISK = 0.25;
@@ -634,12 +662,6 @@ const AIM_DEPTH = 2;
 const AIM_REACH = 70;
 const AIM_OFFSETS = [0, 12, -12, 22, -22, 30, -30];
 const AIM_TOLERANCE = 3;
-/**
- * A ram: rams a fence takes, and the seconds each costs over driving on: stopping at the run-up,
- * running into the wall, which is on the way, and getting going again.
- */
-const RAMS_TO_OPEN = 1;
-const RAM_TIME = 1.2;
 /** A charge counts as done once the tank moved less than `STALL_DISTANCE` px in `STALL_CHECK` s after `CHARGE_MIN` s, or after `CHARGE_MAX` s. */
 const STALL_CHECK = 0.1;
 const STALL_DISTANCE = 2;
@@ -651,7 +673,7 @@ const OPEN_DETOUR = 1.6;
 /** Once open, the bot has `THROUGH_TIME` s to get `PASSED` px past the face. */
 const THROUGH_TIME = 8;
 const PASSED = 25;
-const WRECK_SHOTS = 7;
+/** Thickness of a wreck across which a crossing's cost is spread, a medium tank's hull's width. */
 const WRECK_THICKNESS = 25;
 
 function distance(a: Point, b: Point) {

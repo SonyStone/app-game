@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { Rapier } from '../physics/Rapier2D';
-import { createCombat, type ShellSpec } from './combat';
+import { createCombat, type BlastSpec, type ShellSpec } from './combat';
 import type { createRangeRenderer } from './renderer';
 
 let rapier: Rapier;
@@ -37,7 +37,8 @@ describe('battle core', () => {
   it('mends chipped armor back toward new', () => {
     const { combat } = createBattle();
     const shooter = combat.spawnTank({ x: -200, y: 0, rotation: 0 }, { color: 0 });
-    const target = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0 });
+    // Facing the shooter, so the shots chip the thick front and never reach the core behind the thin rear.
+    const target = combat.spawnTank({ x: 0, y: 0, rotation: Math.PI }, { color: 0 });
 
     for (let shot = 0; shot < 10; shot++) {
       shooter.turretAngle = (shot - 5) * 0.01;
@@ -105,6 +106,189 @@ describe('shells', () => {
     expect(shots[0]).toHaveLength(3);
     expect(pathLength(shots[0])).toBeLessThanOrEqual(shell.range + 1e-6);
     expect(combat.armorLeft(target)).toBeGreaterThan(0.99);
+  });
+});
+
+describe('blasts', () => {
+  const blast: BlastSpec = { radius: 80, hole: 4, depth: 1.5, knockback: 400 };
+
+  it('chip and push every tank in reach on the side facing them, but not one behind a wall', () => {
+    const { combat, hits } = createBattle({}, { walls: [{ x: 0, y: 110, halfWidth: 80, halfHeight: 8 }] });
+    const near = combat.spawnTank({ x: 45, y: 0, rotation: 0 }, { color: 0 });
+    const far = combat.spawnTank({ x: 250, y: 0, rotation: 0 }, { color: 0 });
+    const hidden = combat.spawnTank({ x: 0, y: 150, rotation: 0 }, { color: 0 });
+    combat.step(1 / 60);
+    const before = near.hull.translation().x;
+
+    combat.blast({ x: 0, y: 0 }, blast);
+    run(combat, 0.3);
+
+    expect(combat.armorLeft(near)).toBeLessThan(0.995);
+    expect(near.hull.translation().x).toBeGreaterThan(before + 3);
+    expect(combat.armorLeft(far)).toBe(1);
+    expect(combat.armorLeft(hidden)).toBe(1);
+    expect(hits).toEqual([{ target: near, shooter: undefined }]);
+  });
+
+  it('reach crates too, which they shove, harder for a heavier blast', () => {
+    const shoved = (knockback: number) => {
+      const { combat } = createBattle({}, { crates: [{ x: 50, y: 0, rotation: 0 }] });
+      combat.step(1 / 60);
+      combat.blast({ x: 0, y: 0 }, { ...blast, knockback, structures: 3 });
+      run(combat, 0.3);
+      return combat.crates[0].x - 50;
+    };
+
+    expect(shoved(4000)).toBeGreaterThan(shoved(400));
+    expect(shoved(400)).toBeGreaterThan(0);
+  });
+
+  it('spare teammates, and only push their own tank, which a hard enough push throws into the air', () => {
+    const { combat } = createBattle({ friendlyFire: false });
+    const shooter = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0, team: 'red' });
+    const mate = combat.spawnTank({ x: 0, y: 60, rotation: 0 }, { color: 0, team: 'red' });
+    combat.step(1 / 60);
+
+    combat.blast({ x: -28, y: 0 }, { ...blast, knockback: 450, self: 2.8 }, shooter);
+
+    expect(combat.isAirborne(shooter)).toBe(true);
+    run(combat, 0.6);
+
+    expect(combat.isAirborne(shooter)).toBe(false);
+    expect(shooter.hull.translation().x).toBeGreaterThan(80);
+    expect(combat.armorLeft(shooter)).toBe(1);
+    expect(combat.armorLeft(mate)).toBe(1);
+  });
+
+  it('destroy a core that a hole had opened before, but not through the hole they chip themselves', () => {
+    const { combat } = createBattle();
+    const shooter = combat.spawnTank({ x: -250, y: 0, rotation: 0 }, { color: 0 });
+    const target = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0 });
+    combat.step(1 / 60);
+
+    combat.blast({ x: -23, y: 0 }, { ...blast, hole: 6, depth: 4, knockback: 0 });
+    combat.step(1 / 60);
+
+    expect(combat.isCoreOpen(target)).toBe(true);
+    expect(combat.armorOf(target)).toBeDefined();
+
+    target.hull.setTranslation({ x: 0, y: 0 }, true);
+    combat.blast({ x: -32, y: 0 }, { ...blast, knockback: 0 }, shooter);
+
+    expect(combat.armorOf(target)).toBeUndefined();
+  });
+
+  it('go off where a rocket hits and throw out its shrapnel', () => {
+    const rocket: ShellSpec = {
+      speed: 900,
+      range: 700,
+      hole: 3.5,
+      depth: 2,
+      knockback: 350,
+      ricochet: false,
+      blast,
+      fragments: { count: 6, shell: { speed: 650, range: 75, hole: 1.3, depth: 0, knockback: 40, size: 0.35 } }
+    };
+    const { combat } = createBattle({}, { walls: [{ x: 100, y: 0, halfWidth: 10, halfHeight: 100 }] });
+    const shooter = combat.spawnTank({ x: -100, y: 0, rotation: 0 }, { color: 0 });
+
+    combat.fire(shooter, { shell: rocket });
+    let shrapnel = 0;
+
+    for (let step = 0; step < 30; step++) {
+      combat.step(1 / 60);
+      shrapnel = Math.max(shrapnel, combat.shells.length);
+    }
+
+    expect(shrapnel).toBe(6);
+    expect(combat.shells).toHaveLength(0);
+  });
+});
+
+describe('piercing shells', () => {
+  const piercing: ShellSpec = { speed: 3000, range: 1300, hole: 5, depth: 9, knockback: 1300, pierce: { armor: 28, thin: true } };
+
+  it('go clean through a crate and hit the tank behind it', () => {
+    const { combat, hits } = createBattle({}, { crates: [{ x: 0, y: 0, rotation: 0 }] });
+    const shooter = combat.spawnTank({ x: -250, y: 0, rotation: 0 }, { color: 0 });
+    const target = combat.spawnTank({ x: 150, y: 0, rotation: Math.PI / 2 }, { color: 0 });
+    combat.step(1 / 60);
+
+    combat.fire(shooter, { shell: piercing });
+    run(combat, 0.3);
+
+    expect(hits.some((hit) => hit.target === target)).toBe(true);
+  });
+
+  it('bore into the core of a tank from the side, where a shell as large that does not pierce only chips', () => {
+    const shoot = (shell: ShellSpec) => {
+      const { combat } = createBattle();
+      const shooter = combat.spawnTank({ x: -250, y: -11, rotation: 0 }, { color: 0 });
+      const target = combat.spawnTank({ x: 0, y: 0, rotation: Math.PI / 2 }, { color: 0 });
+      combat.step(1 / 60);
+      combat.fire(shooter, { shell });
+      run(combat, 0.3);
+      return combat.armorOf(target) === undefined;
+    };
+
+    expect(shoot(piercing)).toBe(true);
+    expect(shoot({ ...piercing, pierce: undefined })).toBe(false);
+  });
+});
+
+describe('lobbed grenades', () => {
+  const grenade: ShellSpec = {
+    speed: 900,
+    range: 520,
+    hole: 3,
+    depth: 1,
+    knockback: 250,
+    ricochet: false,
+    lob: { fuse: 1.5, gravity: 1500, bounce: 0.45, rebound: 0.7, roll: 4, minReach: 70 },
+    blast: { radius: 95, hole: 5.5, depth: 2.5, knockback: 600 }
+  };
+
+  it('bounce off a wall and go off when the fuse burns down', () => {
+    const { combat, shots } = createBattle({}, { walls: [{ x: 150, y: 0, halfWidth: 10, halfHeight: 100 }] });
+    const shooter = combat.spawnTank({ x: -100, y: 0, rotation: 0 }, { color: 0 });
+
+    combat.fire(shooter, { shell: grenade, reach: 400 });
+    run(combat, 0.5);
+
+    expect(combat.shells).toHaveLength(1);
+    expect(combat.shells[0].direction.x).toBeLessThan(0);
+
+    run(combat, 0.9);
+
+    expect(combat.shells).toHaveLength(1);
+
+    run(combat, 0.2);
+
+    expect(combat.shells).toHaveLength(0);
+    expect(shots[0].some((point) => point.x > 130)).toBe(true);
+  });
+
+  it('go off at once when they hit an enemy tank before they land', () => {
+    const { combat, hits } = createBattle();
+    const shooter = combat.spawnTank({ x: -100, y: 0, rotation: 0 }, { color: 0 });
+    const target = combat.spawnTank({ x: 70, y: 0, rotation: Math.PI / 2 }, { color: 0 });
+
+    combat.fire(shooter, { shell: grenade, reach: 170 });
+    run(combat, 0.4);
+
+    expect(combat.shells).toHaveLength(0);
+    expect(hits.some((hit) => hit.target === target)).toBe(true);
+  });
+
+  it('fly over a crate that stops a shell flying straight', () => {
+    const { combat } = createBattle({}, { crates: [{ x: 80, y: 0, rotation: 0 }] });
+    const shooter = combat.spawnTank({ x: -100, y: 0, rotation: 0 }, { color: 0 });
+    combat.step(1 / 60);
+
+    combat.fire(shooter, { shell: grenade, reach: 380 });
+    run(combat, 0.35);
+
+    expect(combat.shells[0].x).toBeGreaterThan(110);
   });
 });
 

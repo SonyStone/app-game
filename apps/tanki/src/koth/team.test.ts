@@ -8,6 +8,7 @@ import type { Rapier } from '../physics/Rapier2D';
 import { KOTH_MAP } from './map';
 import { cellAt, createNavGrid, updateNavGrid } from './navigation';
 import { createCaptureState, CAPTURE_RULES } from './rules';
+import { MEDIUM_TANK } from './tanks';
 import { createTeamBoard, type Member } from './team';
 
 let rapier: Rapier;
@@ -92,7 +93,24 @@ function boardFor(combat: ReturnType<typeof createCombat>, grid: ReturnType<type
 }
 
 function seat(team: 'red' | 'blue', id: number): Omit<Member, 'tank'> {
-  return { id, team, index: 0, name: team, human: false, gun: undefined, role: 'assault', respawnAt: undefined, shotAt: -Infinity, attacker: undefined, kills: 0, deaths: 0 };
+  return {
+    id,
+    team,
+    index: 0,
+    name: team,
+    human: false,
+    tankClass: MEDIUM_TANK,
+    nextClass: undefined,
+    weapon: undefined,
+    trigger: { fire: false },
+    pivot: undefined,
+    role: 'assault',
+    respawnAt: undefined,
+    shotAt: -Infinity,
+    attacker: undefined,
+    kills: 0,
+    deaths: 0
+  };
 }
 
 function place(tank: Tank, spot: { x: number; y: number }) {

@@ -36,13 +36,16 @@ export type Tank = ReturnType<typeof createTank>;
  * @param placement - Hull center and heading.
  * @param color - Hull and turret fill color.
  * @param pullSpeed - Pull speed in pixels per second at full input.
+ * @param pullMass - Mass of the pull; Godot's is 1. A heavier hull needs a pull as many times
+ *   heavier to tow it the same way, at the same share of the pull's speed, and then pushes harder.
  */
 export function createTank(
   rapier: Rapier,
   world: World,
   placement: Placement,
   color: number,
-  pullSpeed = DEFAULT_PULL_SPEED
+  pullSpeed = DEFAULT_PULL_SPEED,
+  pullMass = 1
 ) {
   const hull = world.createRigidBody(
     rapier.RigidBodyDesc.dynamic()
@@ -53,7 +56,7 @@ export function createTank(
   );
   const pullStart = toWorld(placement, PULL_ANCHOR);
   const pull = world.createRigidBody(
-    rapier.RigidBodyDesc.dynamic().setTranslation(pullStart.x, pullStart.y).setAdditionalMass(1).lockRotations()
+    rapier.RigidBodyDesc.dynamic().setTranslation(pullStart.x, pullStart.y).setAdditionalMass(pullMass).lockRotations()
   );
   world.createImpulseJoint(rapier.JointData.revolute(PULL_ANCHOR, { x: 0, y: 0 }), hull, pull, true);
 
@@ -156,11 +159,11 @@ export const HULL_SIZE = { x: 42, y: 26 };
 export const CRATE_SIZE = { x: 44, y: 94 };
 
 /** Rapier's velocity damping on hulls and crates: `v *= 1 / (1 + dt * damping)` per step. */
-const HULL_LINEAR_DAMPING = 50;
+export const HULL_LINEAR_DAMPING = 50;
 const HULL_ANGULAR_DAMPING = 25;
 
 /** Pin joint position in hull coordinates, ahead of the center. */
-const PULL_ANCHOR = { x: 15, y: 0 };
+export const PULL_ANCHOR = { x: 15, y: 0 };
 
 const MUZZLE_OFFSET = 30;
 const SHOT_RANGE = 1000;
