@@ -47,8 +47,9 @@ describe('king of the hill with eight bots', () => {
       expect(contested).toBeGreaterThan(3);
       expect(match.members.reduce((total, member) => total + member.kills, 0)).toBeGreaterThanOrEqual(2);
 
+      // A tank wedged in a crater, or in a gap a wreck narrowed, backs out within a couple of tries.
       for (const bot of match.bots.values()) {
-        expect(bot.driver.longestStall).toBeLessThan(1.5);
+        expect(bot.driver.longestStall).toBeLessThan(2);
       }
 
       // A bot that wants to go somewhere far gets there: it rarely spends a whole window of four
@@ -61,12 +62,19 @@ describe('king of the hill with eight bots', () => {
     expect(Math.min(...firstCaptures)).toBeLessThan(60);
   }, 120_000);
 
-  it('fires only at enemies within its reach, in sight unless it lobs grenades over cover, at a measured pace', () => {
+  it('fires only at enemies within its reach, in sight unless it lobs grenades over cover, or at a wall it breaks, at a measured pace', () => {
     const match = createMatch(11);
     const shots: { tankClass: TankClassId; range: number }[] = [];
     const fire = match.combat.fire;
     match.combat.fire = (tank, shot) => {
       const shooter = match.members.find((member) => member.tank === tank)!;
+
+      // A bot breaking through a wall shoots the wall, not an enemy.
+      if (match.bots.get(shooter)?.breach.plan?.phase === 'shoot') {
+        fire(tank, shot);
+        return;
+      }
+
       const at = tank.hull.translation();
       const lobs = shooter.tankClass.weapon.kind === 'lob';
       const seen = match.members
@@ -90,8 +98,10 @@ describe('king of the hill with eight bots', () => {
     expect(aimed.length).toBeGreaterThan(40);
     expect(aimed.length / 8 / 2).toBeLessThan(30);
 
+    // A grenade may be lobbed at where the team saw an enemy a moment ago, which has driven on since.
     for (const shot of shots) {
-      const reach = TANK_CLASSES[shot.tankClass].weapon.kind === 'lob' ? TANK_CLASSES[shot.tankClass].shell.range : TACTICS[shot.tankClass].reach;
+      const lob = TANK_CLASSES[shot.tankClass].weapon.kind === 'lob';
+      const reach = lob ? TANK_CLASSES[shot.tankClass].shell.range + LOB_MEMORY * MEDIUM_TANK.speed : TACTICS[shot.tankClass].reach;
       expect(shot.range).toBeLessThan(reach + 80);
     }
   }, 60_000);
@@ -367,6 +377,9 @@ describe('king of the hill with the player', () => {
 });
 
 /** A match on a real Rapier world with a renderer that only hands out field slots, seeded for repeatable runs. */
+/** Seconds a Demoman bot keeps lobbing at where an enemy out of sight was last seen, as the bot's `LOB_MEMORY`. */
+const LOB_MEMORY = 1.5;
+
 function createMatch(seed: number, rules = CAPTURE_RULES, human = false) {
   const world = new rapier.World({ x: 0, y: 0 });
   world.lengthUnit = 100;

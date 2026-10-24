@@ -196,7 +196,8 @@ export function createBot(member: Member, context: BotContext) {
         driver.steer(now, position, breach ? breach.destination : steady ? undefined : travel, obstacles(tank), {
           arrive: breach ? breach.arrive : task?.arrive,
           cost,
-          heading: tank.hull.rotation()
+          heading: tank.hull.rotation(),
+          nose: member.tankClass.hull.halfLength + NOSE_MARGIN
         });
       let move = (breach ? undefined : sidestep(position, now)) ?? planned;
       const mount = member.tankClass.mount;
@@ -1176,6 +1177,8 @@ type Route = 'normal' | 'sneaky' | 'safe';
 const BREACH_ACTIONS = new Set<BotAction>(['goToPoint', 'stage', 'flank', 'retreat', 'repair', 'pickUpKit', 'regroup', 'moveToSupport']);
 
 const STOP = { x: 0, y: 0 };
+/** Pixels past the hull's front at which the driver checks for a wall ahead. */
+const NOSE_MARGIN = 2;
 
 /**
  * The gun's hold on a target: since when the bot has it, how long it takes to react, and how far

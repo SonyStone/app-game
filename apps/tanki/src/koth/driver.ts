@@ -1,4 +1,4 @@
-import { canDrive, findPath, isOpenAt, obstacleDistance, sampleDistance, type NavGrid } from './navigation';
+import { canDrive, findBreachPath, findPath, isOpenAt, obstacleDistance, sampleDistance, type NavGrid } from './navigation';
 
 type Point = { x: number; y: number };
 
@@ -32,6 +32,8 @@ export function createDriver(grid: NavGrid) {
   let stuckSince: number | undefined;
   let unstick: { until: number; direction: Point } | undefined;
   let side = 1;
+  // Ways out tried since the tank last moved.
+  let tries = 0;
   let longestStall = 0;
   let stalls = 0;
   let last: { at: number; position: Point } | undefined;
@@ -65,13 +67,15 @@ export function createDriver(grid: NavGrid) {
      * @param options.arrive - Distance from the destination at which the tank stops; defaults to 14 px.
      * @param options.cost - Extra cell costs for planning, as for `findPath`.
      * @param options.heading - The hull's heading in radians, for easing off before a wall ahead.
+     * @param options.nose - How far the hull's nose is ahead of its center, in pixels; defaults to
+     *   the medium tank's, `NOSE`.
      */
     steer(
       now: number,
       position: Point,
       destination: Point | undefined,
       obstacles: readonly Obstacle[],
-      options: { arrive?: number; cost?: (cell: number) => number; heading?: number } = {}
+      options: { arrive?: number; cost?: (cell: number) => number; heading?: number; nose?: number } = {}
     ): Point {
       const arrive = options.arrive ?? 14;
 
@@ -104,9 +108,13 @@ export function createDriver(grid: NavGrid) {
 
       if (stuckSince !== undefined && now - stuckSince >= STUCK_TIME) {
         stalls++;
-        // Back away from whatever blocks the way, to one side, then think again; out of a pocket among walls, away from them.
+        // Back away from whatever blocks the way, to one side, then think again. Out of a pocket
+        // among walls and wrecks it backs away from them, and if that did not free it, off to
+        // either side of that in turn.
         const away = isOpenAt(grid, position) ? undefined : awayFromWalls(grid, position);
-        unstick = { until: now + UNSTICK_TIME, direction: away ?? rotate({ x: -toward.x, y: -toward.y }, side * UNSTICK_ANGLE) };
+        const direction = away && tries === 0 ? away : rotate(away ?? { x: -toward.x, y: -toward.y }, side * UNSTICK_ANGLE);
+        unstick = { until: now + UNSTICK_TIME, direction };
+        tries++;
         side = -side;
         plannedAt = -Infinity;
         return unstick.direction;
@@ -114,7 +122,7 @@ export function createDriver(grid: NavGrid) {
 
       const speed = last && now > last.at ? distance(position, last.position) / (now - last.at) : 0;
       last = { at: now, position: { x: position.x, y: position.y } };
-      const ease = options.heading === undefined || speed < BRAKE_SPEED ? 1 : easeBeforeWall(position, options.heading, steered);
+      const ease = options.heading === undefined || speed < BRAKE_SPEED ? 1 : easeBeforeWall(position, options.heading, options.nose ?? NOSE, steered);
       return { x: steered.x * throttle * ease, y: steered.y * throttle * ease };
     },
 
@@ -129,18 +137,19 @@ export function createDriver(grid: NavGrid) {
       check = undefined;
       stuckSince = undefined;
       unstick = undefined;
+      tries = 0;
     }
   };
 
   /** Throttle for driving along `toward`: eased off when the hull's nose, heading that way, is about to meet an obstacle. */
-  function easeBeforeWall(position: Point, heading: number, toward: Point) {
+  function easeBeforeWall(position: Point, heading: number, reach: number, toward: Point) {
     const ahead = { x: Math.cos(heading), y: Math.sin(heading) };
 
     if (ahead.x * toward.x + ahead.y * toward.y < 0.5) {
       return 1;
     }
 
-    const nose = { x: position.x + ahead.x * NOSE, y: position.y + ahead.y * NOSE };
+    const nose = { x: position.x + ahead.x * reach, y: position.y + ahead.y * reach };
     return obstacleDistance(grid, nose) < BRAKE_GAP ? BRAKE_THROTTLE : 1;
   }
 
@@ -148,8 +157,9 @@ export function createDriver(grid: NavGrid) {
     goal = { x: destination.x, y: destination.y };
     plannedAt = now;
     plannedRevision = grid.revision;
-    // Without a way there, head straight for it and let steering and unsticking cope.
-    path = findPath(grid, position, destination, { cost }) ?? [position, destination];
+    // With every way closed, as wrecks may close the ways of a small map, head for what breaks on
+    // the shortest way through, where a breach opens it; without even that, straight for it.
+    path = findPath(grid, position, destination, { cost }) ?? findBreachPath(grid, position, destination, { cost, through: () => THROUGH_COST })?.path ?? [position, destination];
     next = 1;
   }
 
@@ -185,6 +195,7 @@ export function createDriver(grid: NavGrid) {
       longestStall = Math.max(longestStall, now - stuckSince);
     } else {
       stuckSince = undefined;
+      tries = 0;
     }
 
     check = { at: now, position };
@@ -208,10 +219,13 @@ const STALL_CHECK = 0.4;
 const STALL_DISTANCE = 6;
 const STUCK_TIME = 1.2;
 const UNSTICK_TIME = 0.7;
+/** Extra cost of a step into a cell only something breakable closes, on a way planned when every way is closed. */
+const THROUGH_COST = 4;
 const UNSTICK_ANGLE = 0.9;
 /**
- * A tank faster than `BRAKE_SPEED` px/s whose nose, `NOSE` px ahead of its center, is closer than
- * `BRAKE_GAP` px to an obstacle drives at `BRAKE_THROTTLE`, slow enough that touching a wall is no ram.
+ * A tank faster than `BRAKE_SPEED` px/s whose nose, `NOSE` px ahead of a medium tank's center, is
+ * closer than `BRAKE_GAP` px to an obstacle drives at `BRAKE_THROTTLE`, slow enough that touching a
+ * wall is no ram.
  */
 const NOSE = 22;
 const BRAKE_GAP = 8;
