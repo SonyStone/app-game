@@ -1616,6 +1616,27 @@ test('uses in-app confirmation and supports persistent delete Undo and Redo', as
   await expect(nativeDialogs).toEqual([]);
 });
 
+test('undoes consecutive persistent tree changes one change at a time', async ({ page }) => {
+  await page.goto('/browser-atlas');
+  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const undo = leftPane.getByTitle('Undo the latest persistent tree change');
+  const designTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-design"]');
+  const chromeTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-chrome"]');
+
+  await designTab.getByRole('button', { name: 'Delete Tabs Outliner architecture notes' }).click();
+  await expect(designTab).toHaveCount(0);
+  await chromeTab.getByRole('button', { name: 'Delete Chrome Extensions API' }).click();
+  await expect(chromeTab).toHaveCount(0);
+
+  await undo.click();
+  await expect(chromeTab).toBeVisible();
+  await expect(designTab).toHaveCount(0);
+
+  await undo.click();
+  await expect(designTab).toBeVisible();
+  await expect(undo).toBeDisabled();
+});
+
 test('promotes children of expanded deletions, removes collapsed subtrees, and undoes both in the mock', async ({ page }) => {
   await page.goto('/browser-atlas');
   const leftPane = page.getByRole('region', { name: 'Left explorer pane' });

@@ -1,7 +1,7 @@
 import { createVirtualNestedList } from '@app-game/solid-virtual';
 import type { JSX } from '@solidjs/web';
 import type { Accessor } from 'solid-js';
-import { createMemo, createSignal, createTrackedEffect, For, Match, onCleanup, Show, Switch } from 'solid-js';
+import { createEffect, createMemo, createSignal, createTrackedEffect, For, Match, onCleanup, onSettled, Show, Switch } from 'solid-js';
 import type { DocumentExplorerBackend } from './backends/document/createDocumentExplorerBackend';
 import { createDocumentExplorerBackend } from './backends/document/createDocumentExplorerBackend';
 import styles from './App.module.css';
@@ -730,7 +730,13 @@ function ExplorerPane(props: {
     },
     defaultPosition: () => (selectedSource() === 'explore' ? 'end' : 'start')
   });
-  props.registerController({ applyClone, revealBrowserWindow });
+  // The owner may answer registration with a pending reveal, which writes pane state; Solid forbids
+  // writes during setup, so register only after the first settled render.
+  onSettled(() => {
+    props.registerController({ applyClone, revealBrowserWindow });
+
+    return () => props.registerController(null);
+  });
   createTrackedEffect(() => {
     const clone = pendingClone();
     if (
@@ -754,35 +760,42 @@ function ExplorerPane(props: {
       });
     });
   });
-  createTrackedEffect(() => {
-    const windowId = pendingBrowserWindowReveal();
-    const backend = selectedBackend();
-    if (
-      !windowId ||
-      selectedBackendId() !== props.initialBackendId ||
-      selectedSource() !== 'explore' ||
-      backend.sources.loading('explore')
-    ) {
-      return;
-    }
-    const path = browserWindowPath(windowId);
-    const browserWindow = path.at(-1);
-    if (!browserWindow) {
-      return;
-    }
-    setPendingBrowserWindowReveal(null);
-    for (const ancestor of path.slice(0, -1)) {
-      ancestor.setExpanded(true);
-    }
-    requestAnimationFrame(() => {
-      const refreshedWindow = browserWindowPath(windowId).at(-1);
-      if (!refreshedWindow) {
+  // Tracks the request before the pane registers, so a reveal requested from the first settle is seen.
+  createEffect(
+    () => {
+      const windowId = pendingBrowserWindowReveal();
+      if (
+        !windowId ||
+        selectedBackendId() !== props.initialBackendId ||
+        selectedSource() !== 'explore' ||
+        selectedBackend().sources.loading('explore')
+      ) {
+        return null;
+      }
+
+      const path = browserWindowPath(windowId);
+      return path.length > 0 ? { windowId, path } : null;
+    },
+    (reveal) => {
+      if (!reveal) {
         return;
       }
-      virtualTree.scrollTo(refreshedWindow, { align: 'start' });
-      navigation.focus(refreshedWindow);
-    });
-  });
+
+      const { windowId, path } = reveal;
+      setPendingBrowserWindowReveal(null);
+      for (const ancestor of path.slice(0, -1)) {
+        ancestor.setExpanded(true);
+      }
+      requestAnimationFrame(() => {
+        const refreshedWindow = browserWindowPath(windowId).at(-1);
+        if (!refreshedWindow) {
+          return;
+        }
+        virtualTree.scrollTo(refreshedWindow, { align: 'start' });
+        navigation.focus(refreshedWindow);
+      });
+    }
+  );
   createTrackedEffect(() => {
     selectedBackendId();
     selectedSource();
@@ -823,7 +836,6 @@ function ExplorerPane(props: {
     revealFocusedWindow(false);
   });
   onCleanup(() => {
-    props.registerController(null);
     if (scrollHistoryTimer !== undefined) {
       clearTimeout(scrollHistoryTimer);
     }

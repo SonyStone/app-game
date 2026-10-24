@@ -1,5 +1,5 @@
 import { createUndoHistory } from '@solid-primitives/history';
-import { createSignal } from 'solid-js';
+import { createSignal, flush } from 'solid-js';
 import type { ExplorerCommand } from '../explorer/backend';
 import type { PersistentTreeDeletion } from './deletions';
 import type { PersistentTreeDocument } from './model';
@@ -24,6 +24,10 @@ export type PersistentTreeHistoryTabPlacement = Readonly<{
 export type PersistentTreeUndoHistory = Readonly<{
   canUndo: () => boolean;
   canRedo: () => boolean;
+  /**
+   * Records a history position and discards any redo branch. A snapshot equal to the current
+   * position is ignored, so a command's before state does not repeat the previous after state.
+   */
   capture: (snapshot: PersistentTreeHistorySnapshot) => void;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
@@ -35,6 +39,7 @@ export function createPersistentTreeUndoHistory(
   limit = 50
 ): PersistentTreeUndoHistory {
   const [snapshot, setSnapshot] = createSignal<PersistentTreeHistorySnapshot>();
+  let currentPosition: string | undefined;
   let pendingApply = Promise.resolve();
   const history = createUndoHistory(() => {
     const captured = snapshot();
@@ -42,6 +47,7 @@ export function createPersistentTreeUndoHistory(
       return;
     }
     return () => {
+      currentPosition = JSON.stringify(captured);
       setSnapshot(captured);
       pendingApply = Promise.resolve(apply(captured));
     };
@@ -51,9 +57,15 @@ export function createPersistentTreeUndoHistory(
     canUndo: history.canUndo,
     canRedo: history.canRedo,
     capture(nextSnapshot) {
-      setSnapshot(nextSnapshot);
-      history.canUndo();
-      history.canRedo();
+      const position = JSON.stringify(nextSnapshot);
+      if (position === currentPosition) {
+        return;
+      }
+
+      currentPosition = position;
+      // Backends capture the before and after states in one synchronous tick. Solid batches signal
+      // writes until the next flush, so flush each capture or the after state hides the before state.
+      flush(() => setSnapshot(nextSnapshot));
     },
     async undo() {
       if (!history.canUndo()) {

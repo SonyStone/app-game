@@ -12,5 +12,11 @@ if (!root) {
 
 render(() => <BrowserAtlas backend={createChromeExplorerBackend()} backendLabel="Chrome" />, root);
 
+const resetClass = reset.root;
+
+if (!resetClass) {
+  throw new Error('Reset stylesheet has no root class');
+}
+
 // Scope the utility baseline to this standalone document.
-document.body.classList.add(reset.root, 'app-utilities');
+document.body.classList.add(resetClass, 'app-utilities');
