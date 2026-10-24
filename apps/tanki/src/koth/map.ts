@@ -1,4 +1,4 @@
-import type { CombatLayout, Placement, WallPlacement } from '../damage/combat';
+import type { CombatLayout, Placement, WallMaterial, WallPlacement } from '../damage/combat';
 import type { TeamId } from './rules';
 
 type Point = { x: number; y: number };
@@ -21,94 +21,112 @@ export type KothMap = CombatLayout & {
   point: Point & { radius: number };
   bases: Record<TeamId, KothBase>;
   lanes: Record<TeamId, KothLanes>;
+  /** Spots where repair kits lie, picked up by driving over them. */
+  kits: readonly KitPlacement[];
 };
 
+/** Where a repair kit lies, and whether it is a small or a large one. */
+export type KitPlacement = Point & { size: 'small' | 'large' };
+
 /**
- * The king of the hill map, laid out after the king of the hill maps of Team Fortress 2 and
- * scaled to a hull of 40 px: about ten seconds of driving from a spawn to the point, as there.
+ * The king of the hill map, laid out after the king of the hill maps of Team Fortress 2 but
+ * compact, as top-down shooters keep theirs: 2600 x 920 px, about five seconds of driving from a
+ * spawn to the point, about two screens of the way.
  *
- * - Each team spawns in a room at a short end with three doors: two lead into the hall toward the
- *   point, behind a shield that hides the room from the hall, and one leads to the north street.
- * - Three routes lead to the point: the hall and the approach in the middle, and the north and
- *   south streets, which are longer. The north street joins the approach; the south street enters
- *   the plaza from below, through an entry the teams share.
- * - Buildings, teeth jutting into the streets and pillars in the hall break up the lines of fire:
- *   no straight line across the drivable ground is much longer than the 700 px a shell flies,
- *   except lines across the point itself.
- * - The point is open, with a fin between the teams' bays north of it, a post at the edge of each
- *   bay and walls beside and below it for cover.
+ * - Each team spawns in a room of steel, which no shot breaks, at a short end. It has a door to
+ *   the north street and one to the hall behind a shield that hides the room from the hall.
+ * - Three routes lead to the point: the hall in the middle, which winds between teeth and a
+ *   pillar, and the north and south streets, which are longer. The south street is reached from
+ *   the yard in front of the room. The streets enter the plaza by doorways beside its edge.
+ * - Buildings, teeth jutting into the streets from either side in turn and the pillars break up
+ *   the lines of fire: no straight line across the drivable ground is longer than the 700 px a
+ *   shell flies, except lines across the point itself. Shots break them up less in time: wood
+ *   breaks after a few hits, brick after more, concrete after many.
+ * - Alleys between the buildings beside the hall are shut by a wooden fence in the north and a
+ *   brick wall in the south: shooting one open joins the hall to a street.
+ * - The point is open, with posts north and south of it and low walls on either side of the way
+ *   in from the hall for cover.
+ * - Large repair kits lie in the streets and small ones in the plaza by the doorways.
  *
- * The teams' halves are mirror images. The north and south of a half differ, so that the entries
- * of the two teams never face each other across the point. Kept as plain data so a map from the
- * editor can replace it later.
+ * The teams' halves are mirror images. Kept as plain data so a map from the editor can replace
+ * it later.
  */
 export const KOTH_MAP: KothMap = createMap();
 
 function createMap(): KothMap {
   // Red's half; blue's is its mirror image.
   const red: WallPlacement[] = [
-    // Spawn room: a pillar beside its north door, the building below it, the front wall with the
-    // middle and south doors, and the shield in front of the doors.
-    block(-1810, -835, -1700, -200),
-    block(-1810, 200, -1460, 835),
-    block(-1600, -230, -1575, -50),
-    block(-1600, 50, -1575, 100),
-    block(-1480, -110, -1455, 110),
-    // Caps over the passages from the spawn to the streets.
-    block(-1810, -835, -1550, -690),
-    block(-1470, 680, -1260, 835),
-    // Buildings along the hall in front of the spawn, and the teeth and pillar in the hall.
-    block(-1600, -560, -660, -220),
-    block(-1340, 220, -650, 560),
-    block(-1350, 60, -1290, 230),
-    block(-1190, -230, -1130, -40),
-    block(-1000, -110, -940, 110),
-    block(-860, -230, -800, -40),
-    // Approach: the block south of it and the block north of it.
-    block(-700, -110, -385, 560),
-    block(-540, -835, -300, -290),
-    // Teeth in the north street.
-    block(-1350, -835, -1200, -670),
-    block(-1120, -715, -1000, -550),
-    block(-880, -835, -730, -670),
-    // Teeth in the south street.
-    block(-1250, 670, -1100, 835),
-    block(-950, 550, -830, 715),
-    block(-650, 670, -530, 835),
-    block(-350, 550, -230, 715),
-    // Block west of the south entry, cover beside the point that ends at the south shield, and a
-    // post at the near edge of the bay.
-    block(-385, 330, -150, 560),
-    block(-260, 10, -235, 215),
-    block(-150, -110, -120, -15)
+    // Spawn room of steel with doors to the north and the east, the shield in front of the east
+    // door, and the annex below the room, which leaves a passage from the yard to the south street.
+    block(-1300, -200, -1200, -170, 'steel'),
+    block(-1300, 170, -1110, 200, 'steel'),
+    block(-1110, -200, -1080, -35, 'steel'),
+    block(-1110, 35, -1080, 200, 'steel'),
+    block(-990, -60, -960, 60, 'steel'),
+    block(-1300, 200, -1080, 460, 'steel'),
+    block(-1080, 125, -1000, 460, 'steel'),
+    // North buildings with a fenced alley between them, and a nub at the corner by the spawn that
+    // hides the space north of the room from the street.
+    block(-1080, -280, -650, -125, 'concrete'),
+    block(-1080, -360, -1050, -280, 'brick'),
+    block(-650, -210, -570, -196, 'wood'),
+    block(-570, -280, -330, -125, 'brick'),
+    // South buildings with a walled alley between them.
+    block(-910, 125, -600, 280, 'brick'),
+    block(-600, 196, -520, 220, 'brick'),
+    block(-520, 125, -330, 280, 'concrete'),
+    // Teeth and a pillar in the hall.
+    block(-720, -125, -690, 20, 'brick'),
+    block(-610, -50, -550, 50, 'concrete'),
+    block(-450, -20, -420, 125, 'brick'),
+    // Teeth in the streets, from either side in turn.
+    block(-920, -460, -870, -365, 'wood'),
+    block(-760, -375, -710, -280, 'brick'),
+    block(-570, -460, -520, -365, 'brick'),
+    block(-400, -375, -360, -280, 'wood'),
+    block(-860, 365, -810, 460, 'brick'),
+    block(-720, 280, -670, 375, 'wood'),
+    block(-540, 365, -490, 460, 'wood'),
+    block(-400, 280, -360, 375, 'brick'),
+    // Edge of the plaza beside the doorways from the streets, and low walls on either side of the
+    // way from the hall to the point.
+    block(-340, -280, -300, -250, 'concrete'),
+    block(-340, 250, -300, 280, 'concrete'),
+    block(-300, -145, -140, -85, 'brick'),
+    block(-300, 85, -140, 145, 'brick')
   ];
   // Pieces on the middle column, symmetric by themselves.
   const middle: WallPlacement[] = [
-    // Block north of the plaza with a fin down toward the point.
-    block(-300, -835, 300, -290),
-    block(-15, -300, 15, -110),
-    // Wall between the teams' south entries and the shield in front of them.
-    block(-30, 330, 30, 835),
-    block(-240, 190, 240, 215)
+    block(-220, -460, 220, -250, 'concrete'),
+    block(-220, 250, 220, 460, 'brick'),
+    block(-30, -160, 30, -92, 'concrete'),
+    block(-30, 92, 30, 160, 'concrete')
   ];
-  const redCrates: Placement[] = [{ x: -1000, y: 640, rotation: Math.PI / 2 }];
-  const redSpawns = [-105, -35, 35, 105].map((y) => ({ x: -1700, y, rotation: 0 }));
-  const redLanes = { center: { x: -750, y: 0 }, north: { x: -600, y: -420 }, south: { x: -700, y: 620 } };
+  const redCrates: Placement[] = [{ x: -1200, y: -340, rotation: 0 }];
+  const redSpawns = [-105, -35, 35, 105].map((y) => ({ x: -1205, y, rotation: 0 }));
+  const redLanes = { center: { x: -660, y: 0 }, north: { x: -815, y: -410 }, south: { x: -765, y: 330 } };
+  const redKits: KitPlacement[] = [
+    { x: -650, y: -400, size: 'large' },
+    { x: -620, y: 330, size: 'large' },
+    { x: -260, y: -215, size: 'small' },
+    { x: -260, y: 215, size: 'small' }
+  ];
 
   return {
-    halfWidth: 1800,
-    halfHeight: 825,
+    halfWidth: 1300,
+    halfHeight: 460,
     walls: [...red, ...red.map(mirrorWall), ...middle],
     crates: [...redCrates, ...redCrates.map(mirrorPlacement)],
     point: { x: 0, y: 0, radius: 90 },
     bases: {
-      red: { zone: { x: -1700, y: 0, halfWidth: 100, halfHeight: 200 }, spawns: redSpawns },
-      blue: { zone: { x: 1700, y: 0, halfWidth: 100, halfHeight: 200 }, spawns: redSpawns.map(mirrorPlacement) }
+      red: { zone: { x: -1205, y: 0, halfWidth: 95, halfHeight: 170 }, spawns: redSpawns },
+      blue: { zone: { x: 1205, y: 0, halfWidth: 95, halfHeight: 170 }, spawns: redSpawns.map(mirrorPlacement) }
     },
     lanes: {
       red: redLanes,
       blue: { center: mirrorPoint(redLanes.center), north: mirrorPoint(redLanes.north), south: mirrorPoint(redLanes.south) }
-    }
+    },
+    kits: [...redKits, ...redKits.map((kit) => ({ ...kit, x: -kit.x }))]
   };
 }
 
@@ -122,9 +140,9 @@ export function onPoint(map: KothMap, point: Point) {
   return Math.hypot(point.x - map.point.x, point.y - map.point.y) <= map.point.radius;
 }
 
-/** A wall or building filling the axis-aligned box between two corners. */
-function block(left: number, top: number, right: number, bottom: number): WallPlacement {
-  return { x: (left + right) / 2, y: (top + bottom) / 2, halfWidth: (right - left) / 2, halfHeight: (bottom - top) / 2 };
+/** A wall or building of `material` filling the axis-aligned box between two corners. */
+function block(left: number, top: number, right: number, bottom: number, material: WallMaterial): WallPlacement {
+  return { x: (left + right) / 2, y: (top + bottom) / 2, halfWidth: (right - left) / 2, halfHeight: (bottom - top) / 2, material };
 }
 
 function mirrorPoint(point: Point) {

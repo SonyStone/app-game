@@ -6,10 +6,8 @@ import { createBurning } from './burning';
 import { createCampfire } from './campfire';
 import {
   carve,
-  createField,
   dent,
   detachLoosePieces,
-  FAR,
   isCoreExposed,
   raycastField,
   scorch,
@@ -29,10 +27,10 @@ import {
   PARTICLE_SMOKE,
   PARTICLE_TRAIL,
   PARTICLE_SPARK,
-  SLOT_CELLS,
   type createRangeRenderer
 } from './renderer';
 import { createCrateField, createHullField, createShellField, HULL_CORE } from './shapes';
+import { createWalls, type Bounds, type Tile } from './walls';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
 type Point = { x: number; y: number };
@@ -40,8 +38,14 @@ type Point = { x: number; y: number };
 /** A position and heading on the battlefield; `turret` defaults to the heading. */
 export type Placement = { x: number; y: number; rotation: number; turret?: number };
 
-/** A fixed concrete wall: a box around its center, turned by `rotation`, that stops tanks and shots. */
-export type WallPlacement = { x: number; y: number; halfWidth: number; halfHeight: number; rotation?: number };
+/**
+ * A fixed wall or building: a box around its center, turned by `rotation`, that stops tanks and
+ * shots. Shots chip walls of every material but steel, which is the default; see `WALL_MATERIALS`.
+ */
+export type WallPlacement = { x: number; y: number; halfWidth: number; halfHeight: number; rotation?: number; material?: WallMaterial };
+
+/** What a wall is built of: `steel` stands forever, the others break after more or fewer hits. */
+export type WallMaterial = 'steel' | 'concrete' | 'brick' | 'wood';
 
 /**
  * A gun that fires shells instead of hitscan shots: a visible shell flies at `speed`, leaving the
@@ -62,8 +66,8 @@ export type ShellSpec = {
 };
 
 /**
- * Static layout of a battlefield in pixels around the origin: a walled floor, concrete walls,
- * crates and campfires. Tanks are spawned separately with `spawnTank`.
+ * Static layout of a battlefield in pixels around the origin: a walled floor, walls of steel,
+ * concrete, brick or wood, crates and campfires. Tanks are spawned separately with `spawnTank`.
  */
 export type CombatLayout = {
   halfWidth: number;
@@ -76,10 +80,11 @@ export type CombatLayout = {
 
 /**
  * The core of a tank battle with destructible armor: tanks and crates whose armor is a distance
- * field, on a walled floor with concrete walls. Shots chip holes, dent the armor and knock bodies
- * back; shots that meet armor at a glancing angle ricochet. Crashes dent both bodies, armor cut
- * loose falls off as debris, and a shot that reaches a tank's core, hidden until a hole opens onto
- * it, blows the tank apart. Crates come back after a few seconds; tanks only when spawned with
+ * field, on a walled floor among walls (see `./walls`). Shots chip holes, dent the armor and
+ * knock bodies back; shots that meet armor at a glancing angle ricochet. Crashes dent both bodies,
+ * armor cut loose falls off as debris, and a shot that reaches a tank's core, hidden until a hole
+ * opens onto it, blows the tank apart. Shots chip craters into walls of every material but steel
+ * until pieces of them fall. Crates come back after a few seconds; tanks only when spawned with
  * `respawn`.
  *
  * Any number of tanks can be driven at once: `drive` sets a tank's input until changed, `fire`
@@ -99,6 +104,8 @@ export type CombatLayout = {
  *   whose shot did it, if any. The tank is already out of `tanks`.
  * @param options.onShot - Called for every shot with its path: the muzzle, each ricochet and the end.
  *   A shell reports its path when it stops.
+ * @param options.onWallsChanged - Called with the world bounds of a piece of wall whose shape
+ *   changed, during the step that changed it.
  */
 export function createCombat(
   rapier: Rapier,
@@ -113,6 +120,7 @@ export function createCombat(
     onHit?: (target: Tank, shooter: Tank | undefined, part: 'armor' | 'core' | 'ricochet') => void;
     onDestroyed?: (victim: Tank, killer: Tank | undefined) => void;
     onShot?: (shooter: Tank, path: readonly Point[]) => void;
+    onWallsChanged?: (bounds: Bounds) => void;
   } = {}
 ) {
   const random = options.random ?? Math.random;
@@ -123,8 +131,11 @@ export function createCombat(
   const byTank = new Map<Tank, Armored>();
   const debris: Debris[] = [];
   const respawns: { at: number; spawn: () => void }[] = [];
-  const walls = createWalls(rapier, world, layout);
-  const wallDraws = createWallDraws(renderer, layout.walls ?? []);
+  const walls = createWalls(rapier, world, renderer, layout, {
+    random,
+    onDebris: addWallDebris,
+    onChange: (bounds) => options.onWallsChanged?.(bounds)
+  });
   const burning = createBurning(renderer);
   const campfires = (layout.campfires ?? []).map((at) => createCampfire(renderer, burning, at));
   let clock = 0;
@@ -163,6 +174,11 @@ export function createCombat(
     /** Every tank in play. */
     get tanks() {
       return armored.flatMap((body) => (body.tank ? [body.tank] : []));
+    },
+
+    /** The walls' breakable tiles, live, and how many hits chipped them and how many tiles fell. */
+    get walls() {
+      return { tiles: walls.tiles, damage: walls.damage };
     },
 
     /** Centers of every crate in play, with their headings. */
@@ -264,6 +280,8 @@ export function createCombat(
         }
       }
 
+      walls.refresh();
+
       for (const respawn of respawns.filter((item) => item.at <= clock)) {
         respawns.splice(respawns.indexOf(respawn), 1);
         respawn.spawn();
@@ -285,7 +303,8 @@ export function createCombat(
 
     /**
      * Whether a straight line from `from` to `to` is clear of walls and crates. Tanks never block
-     * it, and neither do holes shot through a crate.
+     * it, and neither do holes shot through a crate, nor rubble within the reach of a tank's gun
+     * of `from`: a tank sees and shoots over rubble right in front of it.
      */
     lineOfSight(from: Point, to: Point) {
       const length = Math.hypot(to.x - from.x, to.y - from.y);
@@ -295,7 +314,15 @@ export function createCombat(
       }
 
       const direction = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
-      return castShot(from, direction, (body) => body.tank !== undefined, length).distance >= length;
+      return castShot(from, direction, (body) => body.tank !== undefined, length, BARREL + OVER_RUBBLE).distance >= length;
+    },
+
+    /**
+     * Distance from `point` to the nearest wall, the border or a campfire's stones as they stand
+     * now, negative inside one; at most `cap`. Tanks and crates are not obstacles here.
+     */
+    obstacleDistance(point: Point, cap: number) {
+      return walls.distance(point, cap);
     },
 
     /**
@@ -416,9 +443,7 @@ export function createCombat(
         }
       }
 
-      for (const wall of wallDraws) {
-        renderer.addBody(wall);
-      }
+      walls.draw();
 
       for (const body of armored) {
         const position = body.body.translation();
@@ -473,7 +498,10 @@ export function createCombat(
       }
     },
 
-    /** Removes every tank, crate and debris piece, cancels pending respawns and puts the layout's crates back. */
+    /**
+     * Removes every tank, crate and debris piece, cancels pending respawns, mends the walls and puts
+     * the layout's crates back.
+     */
     reset() {
       for (const body of [...armored]) {
         remove(body);
@@ -484,6 +512,8 @@ export function createCombat(
           renderer.releaseField(piece.slot);
         }
       }
+
+      walls.reset();
 
       respawns.length = 0;
       shells.length = 0;
@@ -696,10 +726,10 @@ export function createCombat(
     const passes = (body: Armored, first: boolean) => (first && body === shooter) || passesAsTeammate(shooter?.team, shooter, body);
 
     shooter?.body.applyImpulse({ x: -direction.x * RECOIL, y: -direction.y * RECOIL }, true);
-    muzzleBlast(start, direction, shooter, castShot(start, direction, (body) => passes(body, true), SHOT_RANGE).distance);
+    muzzleBlast(start, direction, shooter, castShot(start, direction, (body) => passes(body, true), SHOT_RANGE, OVER_RUBBLE).distance);
 
     for (let bounce = 0; bounce <= MAX_RICOCHETS; bounce++) {
-      const hit = castShot(start, direction, (body) => passes(body, bounce === 0), remaining);
+      const hit = castShot(start, direction, (body) => passes(body, bounce === 0), remaining, bounce === 0 ? OVER_RUBBLE : 0);
       const end = { x: start.x + direction.x * hit.distance, y: start.y + direction.y * hit.distance };
       smokeTrail(start, end);
       path.push(end);
@@ -743,8 +773,9 @@ export function createCombat(
     canBounce: boolean
   ) {
     if (!hit.target) {
+      const material = hit.tile && walls.chip(end, direction, hit.tile, blow.hole / SHELL_HOLE);
       impact(end, { x: -direction.x, y: -direction.y });
-      spawnDust(end, direction, WALL_DUST);
+      spawnDust(end, direction, material ? material.color.map((channel) => channel * 0.6) : WALL_DUST);
       return undefined;
     }
 
@@ -808,7 +839,7 @@ export function createCombat(
     // A shell bouncing in a corner could strike over and over within one step; a few strikes are plenty.
     for (let strikes = 0; strikes < 4 && step > 1e-6; strikes++) {
       const from = { x: shell.x, y: shell.y };
-      const hit = castShot(from, shell.direction, (body) => passesShell(shell, body), step);
+      const hit = castShot(from, shell.direction, (body) => passesShell(shell, body), step, overRubble(shell));
       const end = { x: from.x + shell.direction.x * hit.distance, y: from.y + shell.direction.y * hit.distance };
       shellTrail(shell, from, end);
       shell.x = end.x;
@@ -853,8 +884,13 @@ export function createCombat(
 
   /** How far the shell's current leg will likely reach, for the fade along its trail. */
   function expectedLeg(shell: Shell) {
-    const distance = castShot({ x: shell.x, y: shell.y }, shell.direction, (body) => passesShell(shell, body), shell.remaining).distance;
+    const distance = castShot({ x: shell.x, y: shell.y }, shell.direction, (body) => passesShell(shell, body), shell.remaining, overRubble(shell)).distance;
     return Math.max(distance, 1);
+  }
+
+  /** Pixels ahead of a shell over which it still passes over rubble: the first few after the muzzle. */
+  function overRubble(shell: Shell) {
+    return Math.max(OVER_RUBBLE - (options.shell!.range - shell.remaining), 0);
   }
 
   /**
@@ -913,11 +949,13 @@ export function createCombat(
   }
 
   /**
-   * Finds the first armor, core or wall within `maxDistance` along a ray, skipping bodies for
-   * which `skip` returns true.
+   * Finds the first armor, core, wall or rubble within `maxDistance` along a ray, skipping bodies
+   * for which `skip` returns true.
+   *
+   * @param overRubble - Pixels from the start over which the ray passes over rubble.
    */
-  function castShot(start: Point, direction: Point, skip: (body: Armored) => boolean, maxDistance: number) {
-    let best: { distance: number; target?: Armored; part?: 'armor' | 'core' } = { distance: maxDistance };
+  function castShot(start: Point, direction: Point, skip: (body: Armored) => boolean, maxDistance: number, overRubble = 0) {
+    let best: { distance: number; target?: Armored; part?: 'armor' | 'core'; tile?: Tile } = { distance: maxDistance };
 
     for (const body of armored) {
       if (skip(body)) {
@@ -931,18 +969,9 @@ export function createCombat(
       }
     }
 
-    const wall = world.castRay(
-      new rapier.Ray(start, direction),
-      best.distance,
-      true,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      (collider) => collider.parent() === walls
-    );
+    const wall = walls.cast(start, direction, best.distance, overRubble);
 
-    return wall ? { distance: wall.timeOfImpact } : best;
+    return wall ? { distance: wall.distance, tile: wall.tile } : best;
   }
 
   /**
@@ -1169,6 +1198,18 @@ export function createCombat(
     reportDestroyed(body);
   }
 
+  /** Turns a piece knocked out of a wall into debris, if a field slot is free for it. */
+  function addWallDebris(piece: { field: DamageField; x: number; y: number; angle: number; vx: number; vy: number; color: readonly number[] }) {
+    const slot = renderer.allocateField();
+
+    if (slot === undefined) {
+      return;
+    }
+
+    renderer.uploadField(slot, piece.field);
+    debris.push({ ...piece, slot, spin: between(-5, 5), age: 0, life: between(2.5, 4) });
+  }
+
   /** Turns a cut-off piece into debris flying away from `from`'s center. */
   function launchFragment(from: Armored, fragment: Fragment, at: Point, speed: number, push?: Point) {
     const slot = renderer.allocateField();
@@ -1309,7 +1350,6 @@ const STOP = { x: 0, y: 0 };
 const WRECK_FIRE_SPREAD = 10;
 const WRECK_FIRE_LIFE = 12;
 const WRECK_FIRE_LIGHT = 140;
-const CAMPFIRE_RADIUS = 13;
 const TANK_MASS = 1;
 const CRATE_MASS = 10;
 const SHOT_RANGE = 1000;
@@ -1318,6 +1358,15 @@ const SHOT_RANGE = 1000;
  * its damping.
  */
 const HITSCAN_HIT = { hole: 2.3, depth: 0, knockback: 300 };
+/** Hole of a medium tank's shell, the blow that chips a wall material's full crater. */
+const SHELL_HOLE = 4.5;
+/**
+ * A shot passes over rubble for this many pixels past the muzzle, about the depth of a heap, so a
+ * tank right behind rubble shoots over it, while shots from farther away meet it. The muzzle is
+ * `BARREL` px from a hull's center.
+ */
+const OVER_RUBBLE = 64;
+const BARREL = 30;
 /** Share of a hit's impulse applied again at the hit point, which turns the body a little. */
 const KNOCKBACK_SPIN_SHARE = 1 / 15;
 const RECOIL = 25;
@@ -1339,8 +1388,6 @@ const CORE_LIGHT = 32;
 const CORE_HEIGHT = 3;
 const HULL_HEIGHT = 6;
 const CRATE_HEIGHT = 8;
-/** Walls stand as tall as the tallest shadow caster. */
-const WALL_HEIGHT = 10;
 const DEBRIS_HEIGHT = 2;
 const MUZZLE_LIGHT_LIFE = 0.16;
 const MUZZLE_LIGHT_SPEED = 1100;
@@ -1366,7 +1413,6 @@ const RESPAWN_DELAY = 5;
 const EXHAUST_RATE = 8 / 1.5;
 const EXHAUST_OFFSET = { x: -16, y: -8 };
 const FLOOR_COLOR = [0.514, 0.514, 0.514];
-const WALL_COLOR = [0.42, 0.42, 0.43];
 const WALL_DUST = [0.35, 0.35, 0.35];
 const SPARK_COLOR = [1, 0.9, 0.55, 1];
 const FALL_DUST = [0.62, 0.6, 0.56, 1];
@@ -1384,56 +1430,6 @@ const NO_COLOR = [0, 0, 0, 0];
 /** Draw fields of a turret: a quad from (-11, -11) to (31, 11) in turret coordinates. */
 const TURRET_DRAW = { kind: KIND_TURRET, originX: -10.5, originY: -10.5, cell: 1, cols: 42, rows: 22 };
 
-/** Creates the fixed body holding the floor's border walls, the concrete walls and the campfires' stones. */
-function createWalls(rapier: Rapier, world: World, layout: CombatLayout) {
-  const walls = world.createRigidBody(rapier.RigidBodyDesc.fixed());
-  const thickness = 40;
-  const { halfWidth, halfHeight } = layout;
-
-  for (const [x, y, hw, hh] of [
-    [0, -halfHeight - thickness, halfWidth + thickness * 2, thickness],
-    [0, halfHeight + thickness, halfWidth + thickness * 2, thickness],
-    [-halfWidth - thickness, 0, thickness, halfHeight],
-    [halfWidth + thickness, 0, thickness, halfHeight]
-  ]) {
-    world.createCollider(rapier.ColliderDesc.cuboid(hw, hh).setTranslation(x, y), walls);
-  }
-
-  for (const wall of layout.walls ?? []) {
-    world.createCollider(
-      rapier.ColliderDesc.cuboid(wall.halfWidth, wall.halfHeight)
-        .setTranslation(wall.x, wall.y)
-        .setRotation(wall.rotation ?? 0),
-      walls
-    );
-  }
-
-  // A campfire's ring of stones stops tanks.
-  for (const campfire of layout.campfires ?? []) {
-    world.createCollider(rapier.ColliderDesc.ball(CAMPFIRE_RADIUS).setTranslation(campfire.x, campfire.y), walls);
-  }
-
-  return walls;
-}
-
-/**
- * Builds the drawing of every concrete wall once: a slab with an inset seam, uploaded into a
- * field slot it keeps for the renderer's life.
- */
-function createWallDraws(renderer: Renderer, walls: readonly WallPlacement[]) {
-  return walls.map((wall) => {
-    const field = createWallField(wall.halfWidth, wall.halfHeight);
-    const slot = renderer.allocateField();
-
-    if (slot === undefined) {
-      throw new Error('The battle ran out of field slots for its walls.');
-    }
-
-    renderer.uploadField(slot, field);
-    return { ...fieldDraw(field, slot), x: wall.x, y: wall.y, angle: wall.rotation ?? 0, color: WALL_COLOR, height: WALL_HEIGHT };
-  });
-}
-
 /** Uploads the shape of a shell into a field slot it keeps for the renderer's life, ready to draw at any spot. */
 function createShellDraw(renderer: Renderer) {
   const field = createShellField();
@@ -1445,38 +1441,6 @@ function createShellDraw(renderer: Renderer) {
 
   renderer.uploadField(slot, field);
   return { draw: fieldDraw(field, slot) };
-}
-
-/**
- * A concrete slab of the given half size with a seam 3 px inside its edge. Cells grow in half
- * pixels until the slab fits a slot; on a slab as large as a building they grow so coarse that so
- * fine a seam would smear into the outline, so there it lies two cells in and is a little wider.
- */
-function createWallField(halfWidth: number, halfHeight: number) {
-  const margin = 2;
-  const width = (halfWidth + margin) * 2;
-  const height = (halfHeight + margin) * 2;
-  let cell = 1;
-
-  while (Math.ceil(width / cell) * Math.ceil(height / cell) > SLOT_CELLS) {
-    cell += 0.5;
-  }
-
-  const inset = Math.max(3, cell * 2);
-  const seamWidth = Math.max(0.4, cell * 0.3);
-
-  return createField({ minX: -width / 2, minY: -height / 2, maxX: width / 2, maxY: height / 2 }, cell, (x, y) => {
-    const armor = box(x, y, halfWidth, halfHeight);
-    const seam = Math.abs(box(x, y, halfWidth - inset, halfHeight - inset)) - seamWidth;
-    return [armor, seam, FAR, 0];
-  });
-}
-
-/** Signed distance to an axis-aligned box of half size `halfX` x `halfY`. */
-function box(x: number, y: number, halfX: number, halfY: number) {
-  const qx = Math.abs(x) - halfX;
-  const qy = Math.abs(y) - halfY;
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
 }
 
 function fieldDraw(field: DamageField, slot: number) {

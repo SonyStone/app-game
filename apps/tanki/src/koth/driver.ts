@@ -9,7 +9,8 @@ export type Obstacle = { x: number; y: number; radius: number };
  * Drives a bot's tank to a destination through the tow mechanic: it plans a path on the grid,
  * turns the next waypoint into a drive direction for `driveTank`, which moves the pull point
  * the hull trails behind, and bends that direction away from tanks and crates nearby. The path is
- * planned again when the destination moves, every couple of seconds and after the tank got stuck.
+ * planned again when the destination moves, when walls opened or closed a way, every couple of
+ * seconds and after the tank got stuck.
  *
  * A tank that wants to move but has not for a while is stuck, for example against a crate it
  * cannot shove or another tank: it backs off to one side for a moment, alternating sides, and
@@ -20,6 +21,7 @@ export function createDriver(grid: NavGrid) {
   let next = 1;
   let goal: Point | undefined;
   let plannedAt = -Infinity;
+  let plannedRevision = grid.revision;
   let skipCheckAt = 0;
   let check: { at: number; position: Point } | undefined;
   let stuckSince: number | undefined;
@@ -81,7 +83,9 @@ export function createDriver(grid: NavGrid) {
 
       unstick = undefined;
 
-      if (!goal || distance(goal, destination) > REPLAN_SHIFT || now - plannedAt > REPLAN_INTERVAL || path.length === 0) {
+      const stale = now - plannedAt > REPLAN_INTERVAL || grid.revision !== plannedRevision;
+
+      if (!goal || distance(goal, destination) > REPLAN_SHIFT || stale || path.length === 0) {
         plan(now, position, destination, options.cost);
       }
 
@@ -119,6 +123,7 @@ export function createDriver(grid: NavGrid) {
   function plan(now: number, position: Point, destination: Point, cost: ((cell: number) => number) | undefined) {
     goal = { x: destination.x, y: destination.y };
     plannedAt = now;
+    plannedRevision = grid.revision;
     // Without a way there, head straight for it and let steering and unsticking cope.
     path = findPath(grid, position, destination, { cost }) ?? [position, destination];
     next = 1;

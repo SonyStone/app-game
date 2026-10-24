@@ -3,6 +3,7 @@ import type { Combat } from '../damage/combat';
 import { HULL_CORE } from '../damage/shapes';
 import { planBot, type BotAction, type BotFact, type BotGoal, type Situation } from './brain';
 import { createDriver, type Obstacle } from './driver';
+import type { Kit } from './kits';
 import { inBase, onPoint, type KothMap } from './map';
 import { cellAt, floodCosts, isOpenAt, searchNearest, cellCenter, type NavGrid } from './navigation';
 import { captureRate, rivalOf, type CaptureRules, type CaptureState } from './rules';
@@ -30,6 +31,8 @@ export type BotContext = {
   random: () => number;
   /** Fires the member's gun if it has reloaded; returns whether it fired. */
   fire: (member: Member) => boolean;
+  /** The repair kits on the map, live. */
+  kits: readonly Readonly<Kit>[];
 };
 
 /**
@@ -39,8 +42,9 @@ export type BotContext = {
  *    its team's board.
  * 2. Describes its situation as GOAP facts and estimates (see `./brain`) and plans when something
  *    important changed, such as a target coming into view, a hit, an open core or the point
- *    changing hands, when an action finished or failed, and otherwise every few seconds. A new
- *    plan that starts with the action under way keeps it going, so plans do not stutter.
+ *    changing hands, when an action finished or failed, and otherwise every few seconds. A change
+ *    soon after a plan waits a moment before it is planned for, so plans do not churn. A new plan
+ *    that starts with the action under way keeps it going, so plans do not stutter.
  * 3. Carries out the current action: each action is a behavior that picks where to drive, which
  *    enemy to prefer and when it is done.
  * 4. Drives there with its driver, unless it sidesteps a shell flying at it, and works the gun:
@@ -61,7 +65,10 @@ export function createBot(member: Member, context: BotContext) {
   let nextPerceive = context.random() * PERCEIVE_INTERVAL;
   let nextReplan = 0;
   let lastPlan = -Infinity;
+  // Something worth planning for happened too soon after the last plan; plan once allowed.
+  let replanDue = false;
   let cover: Point | undefined;
+  let kit: Readonly<Kit> | undefined;
   let gun: Aim = { target: undefined, since: 0, reaction: 0, offset: undefined };
   let dodge: { until: number; direction: Point } | undefined;
   const judged = new Set<number>();
@@ -107,7 +114,9 @@ export function createBot(member: Member, context: BotContext) {
       nextPerceive = 0;
       nextReplan = 0;
       lastPlan = -Infinity;
+      replanDue = false;
       cover = undefined;
+      kit = undefined;
       gun = { target: undefined, since: 0, reaction: 0, offset: undefined };
       dodge = undefined;
       judged.clear();
@@ -135,8 +144,9 @@ export function createBot(member: Member, context: BotContext) {
         perceive(tank);
         const before = facts;
         facts = observe(tank);
+        replanDue ||= worthReplanning(before, facts);
 
-        if ((worthReplanning(before, facts) && now - lastPlan > MIN_REPLAN) || now >= nextReplan) {
+        if ((replanDue && now - lastPlan > MIN_REPLAN) || now >= nextReplan) {
           replan(tank, now);
         }
       }
@@ -310,6 +320,7 @@ export function createBot(member: Member, context: BotContext) {
   /** Plans afresh, keeping the action under way when the new plan starts with it. */
   function replan(tank: Tank, now: number) {
     lastPlan = now;
+    replanDue = false;
     nextReplan = now + REPLAN_INTERVAL + context.random() * REPLAN_JITTER;
     const situation = describe(tank);
     const choice = planBot(situation);
@@ -370,6 +381,8 @@ export function createBot(member: Member, context: BotContext) {
     const progress = capture.capturer === member.team ? capture.progress : 0;
     const targetAt = target && whereIs(target);
     cover = findCover(position);
+    const choice = chooseKit(costs);
+    kit = choice?.kit;
 
     return {
       role: member.role,
@@ -382,7 +395,8 @@ export function createBot(member: Member, context: BotContext) {
         support: help ? travel(supportSpot(help.ally)) : Infinity,
         cover: cover ? travel(cover) : Infinity,
         base: travel(board.baseSpot(member)),
-        rally: travel(board.rally())
+        rally: travel(board.rally()),
+        kit: choice?.travel ?? Infinity
       },
       kill: { front: killTime(position, target, false), rear: killTime(position, target, true) },
       capture: ((1 - progress) * context.rules.captureTime) / captureRate(alliesOn + 1),
@@ -421,6 +435,29 @@ export function createBot(member: Member, context: BotContext) {
     return shots * interval + reloads * (firstReload + (clip - 1) * reload) + exposure;
   }
 
+  /**
+   * The repair kit most worth driving to, with the seconds that take: of the kits that lie there
+   * or will be back by the time the bot arrives, the nearest, a small kit counting
+   * `SMALL_KIT_PENALTY` seconds longer for mending less.
+   *
+   * @param costs - Driving costs from the bot to every cell, from `floodCosts`.
+   */
+  function chooseKit(costs: Float32Array) {
+    const now = context.clock();
+    let best: { kit: Readonly<Kit>; travel: number; score: number } | undefined;
+
+    for (const candidate of context.kits) {
+      const travel = costs[cellAt(grid, candidate)] / (MEDIUM_TANK.speed * TRAVEL_SHARE);
+      const score = Math.max(travel, candidate.readyAt - now) + (candidate.size === 'small' ? SMALL_KIT_PENALTY : 0);
+
+      if (Number.isFinite(travel) && candidate.readyAt - now < travel + KIT_WAIT && (!best || score < best.score)) {
+        best = { kit: candidate, travel: score, score };
+      }
+    }
+
+    return best;
+  }
+
   /** The nearest spot out of every known enemy's sight, close to something to hide behind. */
   function findCover(position: Point) {
     if (board.known().length === 0) {
@@ -452,6 +489,10 @@ export function createBot(member: Member, context: BotContext) {
 
     if (action === 'takeCover') {
       task.destination = cover ?? findCover(position);
+    }
+
+    if (action === 'pickUpKit') {
+      task.kit = kit && { kit, readyAt: kit.readyAt, armor: combat.armorLeft(tank) };
     }
 
     if (action === 'moveToSupport' || action === 'suppress') {
@@ -629,6 +670,22 @@ export function createBot(member: Member, context: BotContext) {
         task.destination = board.baseSpot(member);
         task.arrive = 40;
         return !combat.isCoreOpen(tank) && combat.armorLeft(tank) > REPAIRED ? 'done' : 'running';
+      }
+
+      case 'pickUpKit': {
+        if (!task.kit) {
+          return 'failed';
+        }
+
+        // Taken since the bot set out: by the bot, if its armor is better, or else by someone else.
+        if (task.kit.kit.readyAt !== task.kit.readyAt && task.kit.kit.readyAt > now) {
+          return combat.armorLeft(tank) > task.kit.armor + 0.005 ? 'done' : 'failed';
+        }
+
+        task.destination = task.kit.kit;
+        task.route = 'safe';
+        task.arrive = 4;
+        return now - task.startedAt > KIT_TIMEOUT ? 'failed' : 'running';
       }
 
       case 'regroup': {
@@ -877,6 +934,8 @@ type Task = {
   arrivedAt?: number;
   orbit?: { spot: Point; until: number };
   wander?: { spot: Point; until: number };
+  /** The repair kit driven to, when it was due back as the bot set out, and the bot's armor then. */
+  kit?: { kit: Readonly<Kit>; readyAt: number; armor: number };
 };
 
 const PERCEIVE_INTERVAL = 0.1;
@@ -897,6 +956,13 @@ const UNDER_FIRE = 1.5;
 /** Armor shares below which a bot counts as badly damaged, and above which as mended. */
 const ARMOR_LOW = 0.72;
 const REPAIRED = 0.96;
+/**
+ * Seconds a small repair kit counts as farther than it is, for mending less than a large one;
+ * seconds a bot would wait at a kit that is not back yet; and how long it tries to reach one.
+ */
+const SMALL_KIT_PENALTY = 1.5;
+const KIT_WAIT = 2;
+const KIT_TIMEOUT = 12;
 /** Share of its top speed a tank keeps on average along a path, slowing for turns, for travel estimates. */
 const TRAVEL_SHARE = 0.85;
 /** Hits a bot expects to need to reach a core from behind, from the side and from the front. */

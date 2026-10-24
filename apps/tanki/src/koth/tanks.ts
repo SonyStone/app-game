@@ -35,8 +35,9 @@ export type GunSpec = {
  * The medium tank, the Soldier of tanks. A hull of 40 px stands for about 48 Hammer units, the
  * width of a player in Team Fortress 2, so a pixel is about 1.2 units:
  *
- * - It drives at 200 px/s, about the Soldier's 240 units per second; crossing the map takes as
- *   long as walking a king of the hill map.
+ * - It drives at 250 px/s, a little faster than the Soldier's 240 units per second: a top-down
+ *   view shows less of the way ahead than a shooter's, so the drive to the point is kept to about
+ *   five seconds, about two screens of driving.
  * - A bot's turret turns at 10 rad/s, half a turn in 0.3 s, about a quick flick of the mouse;
  *   reaction time and aim error, not the turret, are what make bots beatable.
  * - Its gun is the rocket launcher: four rounds 0.8 s apart, each reloaded in 0.8 s.
@@ -45,7 +46,7 @@ export type GunSpec = {
  *   that takes several hits from the side or behind to reach the core and many more from the front.
  */
 export const MEDIUM_TANK: TankClass = {
-  speed: 200,
+  speed: 250,
   turretSpeed: 10,
   gun: { interval: 0.8, clip: 4, firstReload: 0.92, reload: 0.8 },
   shell: { speed: 900, range: 700, hole: 4.5, depth: 3, knockback: 700 }
