@@ -2,6 +2,7 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintVariantProps } from '..';
+import { LayersPanel } from '../../features/layers';
 import {
   createPaintSession,
   PaintEditor,
@@ -11,6 +12,9 @@ import {
   StageOverlays
 } from '../../features/session';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
+import { BrushLibrary } from '../procreate/BrushLibrary';
+import popover from '../procreate/Popover.module.css';
+import procreate from '../procreate/ProcreateStudio.module.css';
 import { besideRect, findPart } from './board';
 import { BoardView } from './BoardView';
 import { createBoard } from './createBoard';
@@ -169,6 +173,37 @@ export function LegoStudio(props: PaintVariantProps) {
                       </Show>
                     );
                   }}
+                </Match>
+                <Match when={popup()?.popup.kind === 'layers'}>
+                  <div class={styles.studioCard}>
+                    <LayersPanel
+                      state={session.engine.state()}
+                      ready={session.ready()}
+                      onAction={(action) => session.edit({ type: 'layer', action })}
+                      onLinearBlending={(linear) => session.edit({ type: 'blending', linear })}
+                    />
+                  </div>
+                </Match>
+                <Match when={popup()?.popup.kind === 'brushes'}>
+                  <div class={procreate.editor}>
+                    <section class={[popover.popover, styles.brushesCard]}>
+                      <div class={popover.body}>
+                        <BrushLibrary
+                          title="Brushes"
+                          presets={session.library.presets()}
+                          recent={[session.tools.preset(), ...session.recentPresets.recent(7)]}
+                          preset={session.tools.preset()}
+                          disabled={!session.ready()}
+                          onChoose={(id) => {
+                            void session.usePreset(id);
+                          }}
+                        />
+                      </div>
+                    </section>
+                  </div>
+                </Match>
+                <Match when={popup()?.popup.kind === 'note' && popup()!.popup}>
+                  {(open) => <p class={styles.note}>{(open() as Extract<Popup, { kind: 'note' }>).text}</p>}
                 </Match>
                 <Match when={popup()?.popup.kind === 'value' && popup()!.popup}>
                   {(open) => (

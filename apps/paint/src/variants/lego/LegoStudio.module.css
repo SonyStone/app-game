@@ -348,6 +348,44 @@
   box-shadow: var(--lego-shadow);
 }
 
+/* The layers in a popup, as Studio's side panel shows them, with its tokens. */
+.studioCard {
+  --ink: #444;
+  --muted: #777;
+  --line: #dedede;
+  --accent: #237aab;
+  --surface: #f8f8f8;
+  width: 284px;
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fafafa;
+  color: var(--ink);
+  font:
+    12px/1.45 Arial,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+
+/* Procreate's brush library in a popup: placed by the popup, not by its own stylesheet. */
+.brushesCard:is(section) {
+  position: relative;
+  width: min(470px, 80vw);
+  max-height: min(70vh, 560px);
+  animation: none;
+}
+
+/* A short note on how to use a part, such as the fill without a selection. */
+.note {
+  max-width: 260px;
+  margin: 4px;
+  color: #ffffff;
+  font-weight: 600;
+}
+
 .popupSlider {
   position: relative;
   display: grid;

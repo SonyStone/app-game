@@ -97,22 +97,28 @@ function swatchPanel(owner: string): Board['panels'][number] {
 }
 
 /**
- * The board a first visit sees: brushes, eraser, undo, redo and local undo on the left, the color across the top (a
- * swatch opening its panel of pickers, hue and brightness) and the size and opacity standing on the right, in a mix
- * of sizes that shows how a part changes as it grows.
+ * The board a first visit sees: on the left everything a sketch, a fill and layers take (a brush, the brush library,
+ * the eraser, the lasso, the fill and the transform, undo and redo with the size, the layers and the local undo); the
+ * color across the top (a swatch opening its panel of pickers, hue and brightness) and the size and opacity standing
+ * on the right, in a mix of sizes that shows how a part changes as it grows.
  */
 export const defaultBoard: Board = {
   panels: [
     {
       id: 'tools',
-      at: { x: 0.02, y: 0.2 },
+      at: { x: 0.02, y: 0.12 },
       parts: [
         { id: 'soft', kind: 'preset:builtin:soft-round', cell: { column: 0, row: 0 }, span: { columns: 3, rows: 2 } },
-        { id: 'eraser', kind: 'action:eraser', cell: { column: 0, row: 2 }, span: { columns: 3, rows: 1 } },
-        { id: 'undo', kind: 'action:undo', cell: { column: 0, row: 3 }, span: { columns: 1, rows: 1 } },
-        { id: 'redo', kind: 'action:redo', cell: { column: 1, row: 3 }, span: { columns: 1, rows: 1 } },
-        { id: 'size-knob', kind: 'value:size', cell: { column: 2, row: 3 }, span: { columns: 1, rows: 1 } },
-        { id: 'local-undo', kind: 'action:local-undo', cell: { column: 0, row: 4 }, span: { columns: 3, rows: 1 } }
+        { id: 'brushes', kind: 'action:brushes', cell: { column: 0, row: 2 }, span: { columns: 3, rows: 1 } },
+        { id: 'eraser', kind: 'action:eraser', cell: { column: 0, row: 3 }, span: { columns: 3, rows: 1 } },
+        { id: 'lasso', kind: 'action:lasso', cell: { column: 0, row: 4 }, span: { columns: 1, rows: 1 } },
+        { id: 'fill', kind: 'action:fill', cell: { column: 1, row: 4 }, span: { columns: 1, rows: 1 } },
+        { id: 'transform', kind: 'action:transform', cell: { column: 2, row: 4 }, span: { columns: 1, rows: 1 } },
+        { id: 'undo', kind: 'action:undo', cell: { column: 0, row: 5 }, span: { columns: 1, rows: 1 } },
+        { id: 'redo', kind: 'action:redo', cell: { column: 1, row: 5 }, span: { columns: 1, rows: 1 } },
+        { id: 'size-knob', kind: 'value:size', cell: { column: 2, row: 5 }, span: { columns: 1, rows: 1 } },
+        { id: 'layers', kind: 'action:layers', cell: { column: 0, row: 6 }, span: { columns: 3, rows: 1 } },
+        { id: 'local-undo', kind: 'action:local-undo', cell: { column: 0, row: 7 }, span: { columns: 3, rows: 1 } }
       ]
     },
     {

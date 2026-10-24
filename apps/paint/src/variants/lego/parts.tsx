@@ -6,7 +6,7 @@ import { hexToHsv, hsvToHex, luminance, type Hsv } from '../../features/color/hs
 import type { PaintSession } from '../../features/session';
 import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
 import { ScrubNumber } from '../../shared/ui/ScrubNumber';
-import { SketchIcon } from '../../shared/ui/SketchIcon';
+import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import { geometricFraction, geometricValue, linearFraction, linearValue } from '../procreate/sliderScale';
 import { PresetStroke } from '../zen/PresetStroke';
 import { cellGap, pitch, type Part, type Span } from './board';
@@ -38,14 +38,35 @@ export type ValueKind = 'size' | 'opacity' | 'hue' | 'saturation' | 'brightness'
 /** CSS pixels a knob is dragged to go through its whole range. */
 const scrubLength = 300;
 
-/** Single-button actions. */
-export type ActionKind = 'undo' | 'redo' | 'eraser' | 'local-undo' | 'mixing';
+/**
+ * Single-button actions: commands, tools to switch to, and the panels a button opens beside itself (the layers and
+ * the brush library).
+ */
+export type ActionKind =
+  | 'undo'
+  | 'redo'
+  | 'eraser'
+  | 'local-undo'
+  | 'mixing'
+  | 'lasso'
+  | 'fill'
+  | 'transform'
+  | 'layers'
+  | 'brushes';
 
 /** The color parts; see `colorParts.tsx`. */
 export type ColorKind = 'swatch' | 'wheel' | 'pair' | 'hex' | 'history' | 'palette' | 'harmony' | 'mask';
 
-/** What floats over the board: a value as a full slider, or the chooser of part `id`'s looks. */
-export type Popup = { kind: 'value'; value: ValueKind } | { kind: 'looks'; id: string };
+/**
+ * What floats over the board: a value as a full slider, the chooser of part `id`'s looks, the layers, the brush
+ * library, or a short note on how to use a part.
+ */
+export type Popup =
+  | { kind: 'value'; value: ValueKind }
+  | { kind: 'looks'; id: string }
+  | { kind: 'layers' }
+  | { kind: 'brushes' }
+  | { kind: 'note'; text: string };
 
 /**
  * One part of the board at its size, like an Android widget: the more cells it covers, the more it shows. A brush is
@@ -84,7 +105,7 @@ export function PartView(props: {
         )}
       </Match>
       <Match when={parsed()?.type === 'action' && (parsed()!.id as ActionKind)}>
-        {(action) => <ActionPart action={action()} span={props.span} session={props.session} />}
+        {(action) => <ActionPart action={action()} span={props.span} session={props.session} onPopup={props.onPopup} />}
       </Match>
       <Match when={parsed()?.type === 'color' && (parsed()!.id as ColorKind)}>
         {(color) => (
@@ -122,7 +143,21 @@ export function PartView(props: {
 
 /** The kinds the box offers besides the brush presets, by family, in box order. */
 export const boxSections: readonly { title: string; kinds: readonly string[] }[] = [
-  { title: 'Tools', kinds: ['action:undo', 'action:redo', 'action:eraser', 'action:local-undo', 'action:mixing'] },
+  {
+    title: 'Tools',
+    kinds: [
+      'action:brushes',
+      'action:eraser',
+      'action:lasso',
+      'action:fill',
+      'action:transform',
+      'action:layers',
+      'action:undo',
+      'action:redo',
+      'action:local-undo',
+      'action:mixing'
+    ]
+  },
   {
     title: 'Color',
     kinds: [
@@ -532,24 +567,50 @@ export function ValuePart(props: {
   );
 }
 
-const actions: Record<ActionKind, { label: string; icon: 'undo' | 'redo' | 'erase' | 'localUndo' | 'fill' }> = {
+const actions: Record<ActionKind, { label: string; icon: SketchIconName }> = {
   undo: { label: 'Undo', icon: 'undo' },
   redo: { label: 'Redo', icon: 'redo' },
   eraser: { label: 'Eraser', icon: 'erase' },
   'local-undo': { label: 'Local undo', icon: 'localUndo' },
-  mixing: { label: 'Mixing', icon: 'fill' }
+  mixing: { label: 'Mixing', icon: 'picker' },
+  lasso: { label: 'Lasso', icon: 'lasso' },
+  fill: { label: 'Fill', icon: 'fill' },
+  transform: { label: 'Transform', icon: 'move' },
+  layers: { label: 'Layers', icon: 'layers' },
+  brushes: { label: 'Brushes', icon: 'brush' }
 };
 
-function ActionPart(props: { action: ActionKind; span: Span; session: Session }) {
+/**
+ * A button that runs `action`: a command, a tool it switches to and, pressed again, back from, or a panel it opens
+ * beside itself. The fill paints only inside a selection, so without one it switches to the lasso and says so.
+ */
+function ActionPart(props: {
+  action: ActionKind;
+  span: Span;
+  session: Session;
+  onPopup: (anchor: Element, popup: Popup) => void;
+}) {
   const spec = () => actions[props.action];
   const state = () => props.session.engine.state();
   const disabled = () =>
     (props.action === 'undo' && !(state().canUndo && props.session.ready())) ||
     (props.action === 'redo' && !(state().canRedo && props.session.ready()));
-  const active = () =>
-    props.action === 'mixing'
-      ? props.session.windows.isOpen('palette')
-      : (props.action === 'eraser' || props.action === 'local-undo') && props.session.tool() === props.action;
+  const active = () => {
+    const tool = props.session.tool();
+    switch (props.action) {
+      case 'mixing':
+        return props.session.windows.isOpen('palette');
+      case 'transform':
+        return props.session.transform.active();
+      case 'eraser':
+      case 'local-undo':
+      case 'lasso':
+      case 'fill':
+        return tool === props.action;
+      default:
+        return false;
+    }
+  };
   const iconSize = () => Math.min(40, 20 + (Math.min(props.span.columns, props.span.rows) - 1) * 10);
 
   return (
@@ -559,7 +620,7 @@ function ActionPart(props: { action: ActionKind; span: Span; session: Session })
       data-active={active() ? '' : undefined}
       disabled={disabled()}
       aria-label={spec().label}
-      onClick={() => run()}
+      onClick={(event) => run(event.currentTarget)}
     >
       <SketchIcon name={spec().icon} size={iconSize()} />
       <Show when={props.span.columns >= 2}>
@@ -568,19 +629,55 @@ function ActionPart(props: { action: ActionKind; span: Span; session: Session })
     </button>
   );
 
-  function run() {
-    if (props.action === 'undo') {
-      props.session.undo();
-    } else if (props.action === 'redo') {
-      props.session.redo();
-    } else if (props.action === 'mixing') {
-      props.session.windows.toggle('palette');
-    } else if (props.action === 'eraser') {
-      props.session.chooseTool(props.session.tool() === 'eraser' ? 'brush' : 'eraser');
-    } else if (props.session.tool() === 'local-undo') {
-      props.session.chooseTool(props.session.tools.slot());
-    } else {
-      props.session.chooseLocalUndo();
+  function run(anchor: Element) {
+    const { session } = props;
+    switch (props.action) {
+      case 'undo':
+        session.undo();
+        return;
+      case 'redo':
+        session.redo();
+        return;
+      case 'mixing':
+        session.windows.toggle('palette');
+        return;
+      case 'transform':
+        session.toggleTransform();
+        return;
+      case 'layers':
+      case 'brushes':
+        props.onPopup(anchor, { kind: props.action });
+        return;
+      case 'local-undo':
+        if (active()) {
+          session.chooseTool(session.tools.slot());
+        } else {
+          session.chooseLocalUndo();
+        }
+
+        return;
+      default:
+        chooseTool(props.action, anchor);
     }
   }
+
+  /** Switches to `tool`, or back to the brush or eraser it was chosen over. */
+  function chooseTool(tool: 'eraser' | 'lasso' | 'fill', anchor: Element) {
+    const { session } = props;
+    if (session.tool() === tool) {
+      session.chooseTool(tool === 'eraser' ? 'brush' : session.tools.slot());
+      return;
+    }
+
+    if (tool === 'fill' && !session.selection.selected()) {
+      session.chooseTool('lasso');
+      props.onPopup(anchor, { kind: 'note', text: fillNote });
+      return;
+    }
+
+    session.chooseTool(tool);
+  }
 }
+
+/** What the fill says when pressed without a selection. */
+const fillNote = 'Fill paints inside a selection: circle an area with the lasso, then tap Fill and tap inside it.';
