@@ -1,8 +1,9 @@
 /**
  * King of the hill rules, after Team Fortress 2: a single control point is captured by standing
- * on it. A team alone on the point raises its capture progress, faster the more of it stand
- * there; with both teams on it the capture stalls. When progress fills, the team owns the point,
- * and its clock runs for as long as it keeps the point. The first team whose clock reaches the
+ * on it. The point stays locked for the first seconds of a match, while both teams drive up to
+ * it. Once it opens, a team alone on the point raises its capture progress, faster the more of it
+ * stand there; with both teams on it the capture stalls. When progress fills, the team owns the
+ * point, and its clock runs for as long as it keeps the point. The first team whose clock reaches the
  * hold time wins, unless the enemy is on the point or has capture progress at that moment: then
  * the match goes into overtime until one of them clears.
  *
@@ -15,10 +16,12 @@ export const TEAMS = ['red', 'blue'] as const;
 /** One of `TEAMS`. */
 export type TeamId = (typeof TEAMS)[number];
 
-/** Timings of the rules, in seconds. */
+/** Timings of the rules, in seconds, those of Team Fortress 2. */
 export const CAPTURE_RULES = {
+  /** Time from the start of a match until the point can be captured. */
+  unlockTime: 30,
   /** Total time a team must own the point to win. */
-  holdTime: 90,
+  holdTime: 180,
   /** Time one tank alone takes to capture the point. */
   captureTime: 8,
   /** Time an abandoned capture takes to fall from full back to nothing. */
@@ -30,6 +33,8 @@ export type CaptureRules = typeof CAPTURE_RULES;
 
 /** State of the control point and the teams' clocks. */
 export type CaptureState = {
+  /** Seconds until the point opens; 0 once it is open. */
+  locked: number;
   /** Team that owns the point; nobody at the start. */
   owner: TeamId | undefined;
   /** Team whose capture is under way, with `progress` from 0 to 1. */
@@ -44,13 +49,22 @@ export type CaptureState = {
   winner: TeamId | undefined;
 };
 
-/** A neutral point and stopped clocks. */
-export function createCaptureState(): CaptureState {
-  return { owner: undefined, capturer: undefined, progress: 0, contested: false, held: { red: 0, blue: 0 }, overtime: false, winner: undefined };
+/** A neutral point, locked for the unlock time of `rules`, and stopped clocks. */
+export function createCaptureState(rules: CaptureRules = CAPTURE_RULES): CaptureState {
+  return {
+    locked: rules.unlockTime,
+    owner: undefined,
+    capturer: undefined,
+    progress: 0,
+    contested: false,
+    held: { red: 0, blue: 0 },
+    overtime: false,
+    winner: undefined
+  };
 }
 
 /**
- * Advances the point by `dt` seconds.
+ * Advances the point by `dt` seconds. While the point is locked only the lock runs down.
  *
  * @param presence - Live tanks of each team standing on the point.
  * @returns The next state; `state` is left unchanged. A decided match does not change.
@@ -58,6 +72,10 @@ export function createCaptureState(): CaptureState {
 export function advanceCapture(state: CaptureState, presence: Record<TeamId, number>, dt: number, rules: CaptureRules = CAPTURE_RULES): CaptureState {
   if (state.winner) {
     return state;
+  }
+
+  if (state.locked > 0) {
+    return { ...state, locked: Math.max(state.locked - dt, 0) };
   }
 
   const next: CaptureState = { ...state, held: { ...state.held }, contested: presence.red > 0 && presence.blue > 0 };

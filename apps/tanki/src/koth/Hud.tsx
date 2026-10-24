@@ -99,6 +99,7 @@ function MemberPip(props: { team: TeamId; member: MemberHud }) {
 /**
  * The control point: a disc in the owner's color with a ring that fills in the capturing team's
  * color, how many tanks of each team stand on it, and whether it is contested or in overtime.
+ * While the point is locked the disc counts down the seconds until it opens.
  */
 function PointDial(props: { state: HudState }) {
   const capture = () => props.state.capture;
@@ -119,11 +120,19 @@ function PointDial(props: { state: HudState }) {
           transform="rotate(-90 28 28)"
         />
         <text x="28" y="33" text-anchor="middle" font-size="15" font-weight="bold" fill="#ffffff" stroke="rgba(0,0,0,0.5)" stroke-width="0.6">
-          {capture().contested ? '⚔' : capture().capturer && props.state.teams[capture().capturer!].onPoint > 0 ? `×${props.state.teams[capture().capturer!].onPoint}` : ''}
+          {capture().locked > 0
+            ? Math.ceil(capture().locked)
+            : capture().contested
+              ? '⚔'
+              : capture().capturer && props.state.teams[capture().capturer!].onPoint > 0
+                ? `×${props.state.teams[capture().capturer!].onPoint}`
+                : ''}
         </text>
       </svg>
-      <Show when={capture().contested || capture().overtime}>
-        <div class="rounded bg-black/55 px-2 py-0.5 text-xs font-bold tracking-wide">{capture().overtime ? 'OVERTIME' : 'CONTESTED'}</div>
+      <Show when={capture().locked > 0 || capture().contested || capture().overtime}>
+        <div class="rounded bg-black/55 px-2 py-0.5 text-xs font-bold tracking-wide">
+          {capture().locked > 0 ? 'LOCKED' : capture().overtime ? 'OVERTIME' : 'CONTESTED'}
+        </div>
       </Show>
     </div>
   );
@@ -148,7 +157,7 @@ function KillFeed(props: { feed: HudState['feed'] }) {
   );
 }
 
-/** The player's armor and warnings, or the countdown to respawning. */
+/** The player's armor, rounds in the clip and warnings, or the countdown to respawning. */
 function PlayerPanel(props: { player: HudState['player'] }) {
   return (
     <div class="pointer-events-none absolute bottom-10 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1 text-white">
@@ -165,7 +174,31 @@ function PlayerPanel(props: { player: HudState['player'] }) {
         <div class="h-2 w-48 overflow-hidden rounded bg-black/45">
           <div class="h-full bg-white/85" style={{ width: `${Math.round(props.player.armor * 100)}%` }} />
         </div>
+        <Clip rounds={props.player.rounds} clip={props.player.clip} loading={props.player.loading} />
       </Show>
+    </div>
+  );
+}
+
+/**
+ * Rounds in the gun: a bar for each round of the clip, filled while loaded; the round being
+ * loaded fills up as it loads.
+ *
+ * @param loading - Progress of the round being loaded, 0-1.
+ */
+function Clip(props: { rounds: number; clip: number; loading: number }) {
+  return (
+    <div class="flex gap-1">
+      <For each={Array.from({ length: props.clip }, (_, index) => index)}>
+        {(slot) => (
+          <div class="h-3 w-5 overflow-hidden rounded-sm bg-black/45">
+            <div
+              class="h-full bg-[#ffd27a]"
+              style={{ width: `${slot < props.rounds ? 100 : slot === props.rounds ? Math.round(props.loading * 100) : 0}%` }}
+            />
+          </div>
+        )}
+      </For>
     </div>
   );
 }

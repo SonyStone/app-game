@@ -27,8 +27,20 @@ describe('bot plans', () => {
     expect(names(situation({ facts: { coreOpen: true, underFire: true } }))).toEqual(['survive', 'takeCover']);
   });
 
-  it('drives home to mend badly chipped armor once out of fire', () => {
-    expect(names(situation({ facts: { armorLow: true, inCover: true } }))).toEqual(['repair', 'retreat', 'repair']);
+  it('drives home to mend an open core once out of fire', () => {
+    expect(names(situation({ facts: { coreOpen: true, inCover: true } }))).toEqual(['repair', 'retreat', 'repair']);
+  });
+
+  it('keeps fighting for the point with armor merely chipped, and mends it once the point is held', () => {
+    expect(names(situation({ facts: { armorLow: true } }))[0]).toBe('capture');
+    expect(names(situation({ facts: { armorLow: true, pointOurs: true } }))[0]).toBe('repair');
+  });
+
+  it('finishes off a target whose core is open before going for the point', () => {
+    const target = { hasTarget: true, targetVisible: true, inFireZone: true };
+
+    expect(names(situation({ facts: target }))[0]).toBe('capture');
+    expect(names(situation({ facts: { ...target, targetCoreOpen: true } }))[0]).toBe('kill');
   });
 
   it('stays on the point to the end when the enemy is about to win', () => {

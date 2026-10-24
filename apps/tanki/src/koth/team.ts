@@ -1,5 +1,6 @@
 import type { Tank } from '../arena/bodies';
 import type { Combat } from '../damage/combat';
+import type { Gun } from './gun';
 import type { Role } from './brain';
 import type { KothMap } from './map';
 import { cellCenter, sightReach, traceClear, type NavGrid } from './navigation';
@@ -18,6 +19,8 @@ export type Member = {
   human: boolean;
   /** The member's tank; `undefined` while it waits to respawn. */
   tank: Tank | undefined;
+  /** The gun of the member's tank, while it has one. */
+  gun: Gun | undefined;
   /** Job the team gave the member; humans always count as assault. */
   role: Role;
   /** Match time at which a destroyed tank comes back. */
@@ -536,8 +539,8 @@ const UPDATE_INTERVAL = 0.25;
 const MEMORY = 4;
 /** Directions in which an enemy's view is traced for the danger map. */
 const SIGHT_RAYS = 360;
-/** Enemies beyond this many pixels are no danger: too far to aim at. */
-export const DANGER_RANGE = 650;
+/** Enemies beyond this many pixels are no danger: too far to see a tank to aim at. */
+export const DANGER_RANGE = 520;
 /** The point counts as defended when an enemy was seen this close to it. */
 const DEFENDED_RADIUS = 350;
 /** Seconds the team waits for stragglers before it pushes anyway, and how long a push lasts. */
