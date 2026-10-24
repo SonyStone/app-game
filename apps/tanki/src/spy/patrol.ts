@@ -30,7 +30,7 @@ export type PatrolSenses = {
  * Turrets turn at a limited speed, which is what lets the spider slip behind a tank.
  */
 export function createPatrolBot(patrol: Patrol, random: () => number) {
-  let next = 1 % patrol.route.length;
+  let next = 0;
   let post = 0;
   let sweep = random() * Math.PI * 2;
   let checkSixIn = between(CHECK_SIX_EVERY.min, CHECK_SIX_EVERY.max);
@@ -87,8 +87,7 @@ export function createPatrolBot(patrol: Patrol, random: () => number) {
 
       if (spider?.visible) {
         const distance = Math.hypot(spider.position.x - position.x, spider.position.y - position.y);
-        const closeness = 1 + Math.max(CLOSE_RANGE - distance, 0) / CLOSE_RANGE;
-        suspicion = Math.min(suspicion + (dt / REACTION_TIME) * closeness, 1);
+        suspicion = Math.min(suspicion + (dt / REACTION_TIME) * noticing(distance), 1);
 
         if (suspicion >= 1) {
           alert = { at: { ...spider.position }, lost: 0 };
@@ -234,11 +233,21 @@ export type PatrolBot = ReturnType<typeof createPatrolBot>;
 /** What a patrolling tank does: drives, stands at a post, checks behind, listens, searches, fights or is jammed or stunned. */
 export type PatrolMode = 'patrol' | 'post' | 'check six' | 'listen' | 'search' | 'alert' | 'jammed' | 'stunned';
 
-/** Seconds a spider must stay in sight at middle distance before the tank fights it. */
-export const REACTION_TIME = 0.45;
+/** How far a patrolling tank sweeps its turret to either side of its hull, in radians. */
+export const SWEEP_ANGLE = 0.85;
+
+/** Seconds a spider must stay in sight at `CLOSE_RANGE` before the tank fights it. */
+export const REACTION_TIME = 0.8;
+
+/**
+ * How fast suspicion rises at `distance` against `REACTION_TIME`: twice as fast right next to the
+ * tank, as fast at `CLOSE_RANGE`, then slower down to half as fast from `CLOSE_RANGE + 300` on.
+ */
+export function noticing(distance: number) {
+  return distance < CLOSE_RANGE ? 2 - distance / CLOSE_RANGE : Math.max(1 - (distance - CLOSE_RANGE) / 600, 0.5);
+}
 
 const STOP = { x: 0, y: 0 };
-/** Within this distance in pixels suspicion rises faster, up to twice as fast right next to the tank. */
 const CLOSE_RANGE = 200;
 const SUSPICION_FADE = 0.4;
 /** Seconds out of sight before a fighting tank searches instead. */
@@ -251,7 +260,6 @@ const TURRET_SPEED = 2;
 const ALERT_TURRET_SPEED = 3.1;
 const AIM_TOLERANCE = 0.05;
 const RELOAD_TIME = 0.9;
-const SWEEP_ANGLE = 0.85;
 const SWEEP_RATE = 0.8;
 const CHECK_SIX_EVERY = { min: 6, max: 11 };
 const CHECK_SIX_TIME = 1.6;

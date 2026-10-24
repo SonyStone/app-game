@@ -1,19 +1,22 @@
 import { BARRIER_HALF_WIDTH, type SpyArena } from './arena';
 import type { Gait } from './variants';
 
+/** What walks the grid: a spider of either build, which climbs rubble, or a tank, which does not. */
+export type Walker = Gait | 'tank';
+
 type Point = { x: number; y: number };
 
 /**
- * A grid over the arena for the bot spider to plan on. Walls and the arena's edge always block
- * it, barriers only the low spider; crates and tanks move, so each plan marks them anew. Each
- * cell also has a cost of standing in it, raised where tanks look.
+ * A grid over the arena for bots to plan on. Walls and the arena's edge always block it,
+ * barriers the low spider and tanks, rubble only tanks; crates and tanks move, so each plan marks
+ * them anew. Each cell also has a cost of standing in it, raised where tanks look.
  *
  * `plan` runs Dijkstra from one cell over the whole grid at once, so a single plan answers how
  * far every cell is and how to get there.
  *
  * @param clearance - How far from a wall a cell's center must be, about the spider's radius.
  */
-export function createNavGrid(arena: SpyArena, gait: Gait, clearance: number, cell = NAV_CELL) {
+export function createNavGrid(arena: SpyArena, walker: Walker, clearance: number, cell = NAV_CELL) {
   const cols = Math.ceil((arena.halfWidth * 2) / cell);
   const rows = Math.ceil((arena.halfHeight * 2) / cell);
   const fixed = new Uint8Array(cols * rows);
@@ -26,18 +29,20 @@ export function createNavGrid(arena: SpyArena, gait: Gait, clearance: number, ce
     const center = centerOf(index);
     const edge = Math.min(arena.halfWidth - Math.abs(center.x), arena.halfHeight - Math.abs(center.y));
     const wall = arena.walls.some((wall) => boxDistance(center, wall, wall.halfWidth, wall.halfHeight, wall.rotation ?? 0) < clearance);
-    const barrier =
-      gait === 'low' &&
-      arena.obstacles.some(
-        (obstacle) => obstacle.kind === 'barrier' && boxDistance(center, obstacle, obstacle.halfLength, BARRIER_HALF_WIDTH, obstacle.rotation) < clearance
-      );
-    fixed[index] = edge < clearance || wall || barrier ? 1 : 0;
+    const obstacle = arena.obstacles.some((obstacle) =>
+      obstacle.kind === 'barrier'
+        ? walker !== 'tall' && boxDistance(center, obstacle, obstacle.halfLength, BARRIER_HALF_WIDTH, obstacle.rotation) < clearance
+        : walker === 'tank' && Math.hypot(center.x - obstacle.x, center.y - obstacle.y) < obstacle.radius + clearance
+    );
+    fixed[index] = edge < clearance || wall || obstacle ? 1 : 0;
   }
 
   return {
     cols,
     rows,
     cell,
+    /** How far from walls the cells keep the spider's center. */
+    clearance,
 
     /** Index of the cell holding `point`, clamped to the grid. */
     indexOf(point: Point) {
@@ -66,18 +71,19 @@ export function createNavGrid(arena: SpyArena, gait: Gait, clearance: number, ce
     /**
      * Plans from `start` over the grid as it stands now.
      *
-     * @param boxes - Moving things that block cells this time: crates and tanks, as turned boxes.
+     * @param boxes - Moving things in the way this time, as turned boxes: crates block their cells,
+     *   boxes with a `cost` only make them dearer, as tanks do, which the spider can slip past.
      * @param danger - Extra cost of passing through a cell's center, in pixels of detour.
      */
     plan(start: Point, boxes: readonly MovingBox[], danger: (point: Point) => number) {
       blocked.set(fixed);
 
-      for (const box of boxes) {
-        markBox(box);
-      }
-
       for (let index = 0; index < cost.length; index++) {
         cost[index] = blocked[index] ? 0 : danger(centerOf(index));
+      }
+
+      for (const box of boxes) {
+        markBox(box);
       }
 
       const from = this.indexOf(start);
@@ -151,7 +157,11 @@ export function createNavGrid(arena: SpyArena, gait: Gait, clearance: number, ce
         const index = row * cols + col;
 
         if (boxDistance(centerOf(index), box, box.halfWidth, box.halfHeight, box.rotation) < clearance) {
-          blocked[index] = 1;
+          if (box.cost === undefined) {
+            blocked[index] = 1;
+          } else {
+            cost[index] += box.cost;
+          }
         }
       }
     }
@@ -205,8 +215,11 @@ export function createNavGrid(arena: SpyArena, gait: Gait, clearance: number, ce
 /** The planning grid from `createNavGrid`. */
 export type NavGrid = ReturnType<typeof createNavGrid>;
 
-/** Something that moves and blocks the spider's way this plan: a box around its center, turned by `rotation`. */
-export type MovingBox = Point & { halfWidth: number; halfHeight: number; rotation: number };
+/**
+ * Something that moves and stands in the spider's way this plan: a box around its center,
+ * turned by `rotation`. With a `cost` the cells it covers only cost that much more to cross.
+ */
+export type MovingBox = Point & { halfWidth: number; halfHeight: number; rotation: number; cost?: number };
 
 /** Cell size of the planning grid, in pixels. */
 const NAV_CELL = 16;

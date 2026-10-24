@@ -2,7 +2,7 @@ import type { Tank } from '../arena/bodies';
 import type { MovingBox, NavGrid } from './navgrid';
 import { canGrab, sternOf, type Spider } from './spider';
 import type { VisibilityRule } from './variants';
-import { angleBetween, inFan, type SightFan } from './visibility';
+import { inFan, type SightFan } from './visibility';
 
 type Point = { x: number; y: number };
 
@@ -13,6 +13,8 @@ export type Prey = {
   grabbable: boolean;
   /** Where the tank looks, a little wider than it sees; `undefined` when it sees nothing. Cast on demand, as it costs rays. */
   fan: () => SightFan | undefined;
+  /** Everything its turret sweeps over while it patrols, ahead of its hull; cast on demand too. */
+  sweep: () => SightFan | undefined;
 };
 
 /** The world as the bot spider sees it this step. */
@@ -58,6 +60,8 @@ export function createStalker(grid: NavGrid, random: () => number, events: Attem
   let calm = 0;
   let hideUntil = 1;
   let shelter: Point | undefined;
+  let stuck = 0;
+  let intended = false;
 
   return {
     /** What the spider is up to, for display. */
@@ -83,30 +87,13 @@ export function createStalker(grid: NavGrid, random: () => number, events: Attem
      */
     think(dt: number, spider: Spider, view: StalkerView) {
       const position = spider.position;
+      const velocity = spider.body.linvel();
       calm = view.hunted ? 0 : calm + dt;
-
-      if (spider.holding) {
-        phase = phase === 'ride' ? 'ride' : 'hold';
-        return { move: STOP, face: undefined, hold: phase === 'hold' };
-      }
-
-      if (phase === 'hold' || phase === 'ride') {
-        return flee(view, position);
-      }
-
-      if (phase === 'stalk') {
-        return stalk(dt, position, view);
-      }
-
-      if (phase === 'flee') {
-        return goToShelter(position, view);
-      }
-
-      if (view.clock >= hideUntil && calm > CALM_TIME) {
-        pick(position, view);
-      }
-
-      return { move: STOP, face: undefined, hold: false };
+      // Running but hardly moving means a corner holds the spider: follow the grid cell by cell for a while.
+      stuck = intended && Math.hypot(velocity.x, velocity.y) < STUCK_SPEED ? stuck + dt : Math.max(stuck - dt * 0.5, 0);
+      const intent = decide(dt, spider, position, view);
+      intended = Math.hypot(intent.move.x, intent.move.y) > 0.5;
+      return intent;
     },
 
     /** The ability worked; after infecting the spider rides the tank until it jumps off. */
@@ -126,6 +113,32 @@ export function createStalker(grid: NavGrid, random: () => number, events: Attem
       target = undefined;
     }
   };
+
+  /** What to do this step, by phase. */
+  function decide(dt: number, spider: Spider, position: Point, view: StalkerView) {
+    if (spider.holding) {
+      phase = phase === 'ride' ? 'ride' : 'hold';
+      return { move: STOP, face: undefined, hold: phase === 'hold' };
+    }
+
+    if (phase === 'hold' || phase === 'ride') {
+      return flee(view, position);
+    }
+
+    if (phase === 'stalk') {
+      return stalk(dt, position, view);
+    }
+
+    if (phase === 'flee') {
+      return goToShelter(position, view);
+    }
+
+    if (view.clock >= hideUntil && calm > CALM_TIME) {
+      pick(position, view);
+    }
+
+    return { move: STOP, face: undefined, hold: false };
+  }
 
   /** Sets out for the tank whose stern it reaches soonest, or hides when there is none. */
   function pick(position: Point, view: StalkerView) {
@@ -275,6 +288,7 @@ export function createStalker(grid: NavGrid, random: () => number, events: Attem
     const tanks = view.prey.map((prey) => prey.tank.hull.translation());
 
     const fans = view.prey.map((prey) => prey.fan());
+    const sweeps = view.prey.map((prey) => prey.sweep());
 
     grid.plan(position, view.boxes, (point) => {
       let cost = 0;
@@ -282,6 +296,12 @@ export function createStalker(grid: NavGrid, random: () => number, events: Attem
       for (const [index, fan] of fans.entries()) {
         if (fan && inFan(fan, point)) {
           cost += DANGER_COST;
+        }
+
+        const sweep = sweeps[index];
+
+        if (sweep && inFan(sweep, point)) {
+          cost += SWEEP_COST;
         }
 
         const gap = Math.hypot(point.x - tanks[index].x, point.y - tanks[index].y);
@@ -292,20 +312,33 @@ export function createStalker(grid: NavGrid, random: () => number, events: Attem
     });
   }
 
-  /** The farthest of the next few waypoints the spider can run to in a straight line. */
+  /**
+   * The farthest of the next few waypoints the spider's whole body can run to in a straight line;
+   * just the next one while it is stuck against a corner.
+   */
   function nextWaypoint(position: Point, view: StalkerView) {
     while (path.length > 0 && Math.hypot(path[0].x - position.x, path[0].y - position.y) < ARRIVE_RADIUS) {
       path.shift();
     }
 
-    for (let index = Math.min(path.length, LOOKAHEAD) - 1; index > 0; index--) {
-      if (view.lineOfSight(position, path[index])) {
+    for (let index = Math.min(path.length, LOOKAHEAD) - 1; index > 0 && stuck < STUCK_TIME; index--) {
+      if (wideOpen(position, path[index], view)) {
         path.splice(0, index);
         break;
       }
     }
 
     return path[0];
+  }
+
+  /** Whether a band as wide as the spider runs clear from `from` to `to`: its middle and both edges. */
+  function wideOpen(from: Point, to: Point, view: StalkerView) {
+    const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+    const side = { x: (-(to.y - from.y) / length) * grid.clearance, y: ((to.x - from.x) / length) * grid.clearance };
+
+    return [0, 1, -1].every((offset) =>
+      view.lineOfSight({ x: from.x + side.x * offset, y: from.y + side.y * offset }, { x: to.x + side.x * offset, y: to.y + side.y * offset })
+    );
   }
 
   /** How many other tanks have the stern of `tank` in plain view within `WATCH_RANGE`. */
@@ -329,32 +362,6 @@ export type Stalker = ReturnType<typeof createStalker>;
 /** What the bot spider is up to: picking prey after hiding, stalking it, holding its stern, riding it, fleeing or hiding. */
 export type StalkerPhase = 'hide' | 'stalk' | 'hold' | 'ride' | 'flee';
 
-/**
- * Drives a hijacked tank for the bot spider: it turns on the nearest tank of its old team it
- * can see, closes in to a middle distance and fires once the turret points at it.
- *
- * @param victims - Tanks of the hijacked tank's team in play.
- * @returns Drive direction in world axes, the turret heading to turn to and whether the turret is on target.
- */
-export function hijackControls(tank: Tank, victims: readonly Tank[], lineOfSight: (from: Point, to: Point) => boolean) {
-  const position = tank.hull.translation();
-  const seen = victims
-    .map((victim) => ({ victim, at: victim.hull.translation() }))
-    .filter((item) => lineOfSight(position, item.at))
-    .sort((a, b) => Math.hypot(a.at.x - position.x, a.at.y - position.y) - Math.hypot(b.at.x - position.x, b.at.y - position.y))[0];
-  const goal = seen?.at ?? victims[0]?.hull.translation();
-
-  if (!goal) {
-    return { move: STOP, aim: tank.turretAngle, onTarget: false };
-  }
-
-  const aim = Math.atan2(goal.y - position.y, goal.x - position.x);
-  const distance = Math.hypot(goal.x - position.x, goal.y - position.y);
-  const move = distance > HIJACK_RANGE ? towards(position, goal, HIJACK_THROTTLE) : STOP;
-
-  return { move, aim, onTarget: seen !== undefined && Math.abs(angleBetween(tank.turretAngle, aim)) < 0.05 };
-}
-
 const STOP = { x: 0, y: 0 };
 /** Seconds without any tank fighting the spider before it sets out again. */
 const CALM_TIME = 1.5;
@@ -368,6 +375,8 @@ const ARRIVE_RADIUS = 10;
 const LOOKAHEAD = 5;
 /** Extra cost of a cell a tank looks at, in pixels of detour. */
 const DANGER_COST = 400;
+/** Extra cost of a cell a tank's turret sweeps over now and then. */
+const SWEEP_COST = 120;
 /** Cells at least this costly are worth waiting outside of. */
 const WAIT_DANGER = DANGER_COST;
 /** Seconds the spider waits in cover for a sweep to pass before it runs anyway. */
@@ -381,8 +390,6 @@ const WATCH_RANGE = 450;
 const WATCHED_PENALTY = 300;
 /** A hiding place this far from every tank is as good as any farther one. */
 const SHELTER_SAFE = 320;
-const HIJACK_RANGE = 220;
-const HIJACK_THROTTLE = 0.8;
 
 /** The point just behind `tank`'s stern the spider makes for, ahead of where the tank moves. */
 function rearOf(tank: Tank) {
@@ -407,6 +414,11 @@ function towards(from: Point, to: Point, throttle: number) {
   const scale = Math.min(length / SLOW_RADIUS, 1) * throttle;
   return { x: (dx / length) * scale, y: (dy / length) * scale };
 }
+
+/** Below this speed in pixels per second a running spider counts as stuck, */
+const STUCK_SPEED = 20;
+/** and after this many seconds of it, it follows its plan cell by cell. */
+const STUCK_TIME = 0.4;
 
 /** Within this distance of where it runs to the spider slows down, so it stops on the spot. */
 const SLOW_RADIUS = 12;

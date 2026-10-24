@@ -226,7 +226,7 @@ export const BUILDS = {
     /** Collider radius. */
     radius: 7,
     /** Top speed in pixels per second. */
-    speed: 150,
+    speed: 155,
     /** Height of the body's top over what its feet stand on. */
     height: 4.5,
     /** How far below the body's top the hips sit. */
@@ -255,12 +255,12 @@ export const BUILDS = {
       lift: 4,
       slowStep: 0.16,
       fastStep: 0.08,
-      fullSpeed: 150
+      fullSpeed: 155
     } satisfies LegSpec
   },
   tall: {
     radius: 8.5,
-    speed: 115,
+    speed: 130,
     height: 7.5,
     hipDrop: 2,
     head: 5.4,
@@ -286,7 +286,7 @@ export const BUILDS = {
       lift: 6,
       slowStep: 0.2,
       fastStep: 0.12,
-      fullSpeed: 115
+      fullSpeed: 130
     } satisfies LegSpec
   }
 };

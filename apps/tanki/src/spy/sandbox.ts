@@ -6,10 +6,11 @@ import type { World } from '../physics/World';
 import { createObstacles, SPY_ARENA, type Patrol, type SpyArena } from './arena';
 import { createConeDraw } from './cones';
 import { createNavGrid, type MovingBox } from './navgrid';
-import { createPatrolBot, type PatrolBot, type PatrolSenses } from './patrol';
+import { createPatrolBot, SWEEP_ANGLE, type PatrolBot, type PatrolSenses } from './patrol';
 import { canGrab, createSpider, sternOf } from './spider';
 import { createSpiderDraw } from './spiderDraw';
-import { createStalker, hijackControls, type AttemptFailure, type Prey } from './stalker';
+import { createHijacker } from './hijack';
+import { createStalker, type AttemptFailure, type Prey } from './stalker';
 import type { Ability, Variant } from './variants';
 import { angleBetween, sees, sightFan, VIEW } from './visibility';
 
@@ -53,7 +54,8 @@ export function createSpySandbox(
     random,
     wreckFire: 6,
     onShot: (shooter, path) => shotPassed(shooter, path),
-    onDestroyed: (victim) => tankDestroyed(victim)
+    onHit: (target, shooter) => tankHit(target, shooter),
+    onDestroyed: (victim, killer) => tankDestroyed(victim, killer)
   });
   const obstacles = createObstacles(rapier, world, renderer, arena.obstacles);
   const spiderDraw = createSpiderDraw(renderer);
@@ -61,6 +63,7 @@ export function createSpySandbox(
   const tallies = new Map<string, Tally>();
   const lights: { at: Point; radius: number; color: readonly number[]; life: number; age: number; height: number }[] = [];
   let spider = createSpider(rapier, world, variant.gait, arena.spiderStart, obstacles.heightAt);
+  const hijacker = createHijacker(createNavGrid(arena, 'tank', TANK_CLEARANCE));
   let stalker = makeStalker();
   let units = arena.patrols.map((patrol, index) => spawnUnit(patrol, index));
   let spy = freshSpy();
@@ -257,7 +260,9 @@ export function createSpySandbox(
           infection: infection ? { left: infection.left, exposed: infection.exposed } : undefined,
           revealLeft: Math.max(spy.revealUntil - clock, 0),
           position: spider.position,
-          phase: stalker.phase
+          phase: stalker.phase,
+          /** The bot spider's planned way, from where it is. */
+          path: variant.role === 'spy' ? [] : [spider.position, ...stalker.path]
         },
         watchers: units.flatMap((unit) =>
           unit.tank ? [{ index: unit.index, position: unit.tank.hull.translation(), suspicion: unit.bot.suspicion, sees: unit.sees, alerted: unit.bot.alerted, mode: unit.bot.mode }] : []
@@ -389,6 +394,8 @@ export function createSpySandbox(
 
     if (ability === 'infect') {
       spy.infection = { unit, left: INFECT_TIME, exposed: false, armed: false, reload: 0 };
+      // The spider's mind replaces the crew's: whatever the crew saw or feared is gone.
+      unit.bot = createPatrolBot(unit.patrol, random);
       stalker.succeeded(true);
       return;
     }
@@ -402,6 +409,8 @@ export function createSpySandbox(
       letGo(BLAST_JUMP_SPEED);
     } else {
       unit.jammedUntil = combat.clock + JAM_TIME;
+      unit.immuneUntil = unit.jammedUntil + IMMUNITY;
+      unit.alarmAt = unit.jammedUntil;
       flash(sternOf(tank), 60, [0.45, 0.75, 1], 0.3, 9);
       letGo(LET_GO_SPEED * 1.5);
     }
@@ -428,11 +437,10 @@ export function createSpySandbox(
     }
 
     const angle = tank.hull.rotation();
-    const stern = sternOf(tank);
-    combat.chip(tank, stern, { x: Math.cos(angle), y: Math.sin(angle) }, EXIT_SCRATCH);
+    combat.chip(tank, sternOf(tank), { x: Math.cos(angle), y: Math.sin(angle) }, EXIT_SCRATCH);
     infection.unit.stunnedUntil = combat.clock + EXIT_STUN;
     infection.unit.immuneUntil = combat.clock + IMMUNITY;
-    infection.unit.bot.startle({ x: stern.x - Math.cos(angle) * 50, y: stern.y - Math.sin(angle) * 50 });
+    infection.unit.bot.startle(behind(tank, 50));
   }
 
   /** The spider lets go of the stern it holds and drops off behind it. */
@@ -469,6 +477,11 @@ export function createSpySandbox(
 
       unit.reload = Math.max(unit.reload - dt, 0);
       const jammed = unit.jammedUntil > clock;
+
+      if (unit.alarmAt !== undefined && clock >= unit.alarmAt) {
+        unit.alarmAt = undefined;
+        unit.bot.startle(behind(tank, 50));
+      }
 
       if (unit === hijacked) {
         driveHijacked(dt, unit, tank, input);
@@ -512,12 +525,20 @@ export function createSpySandbox(
     }
 
     const victims = units.flatMap((other) => (other !== unit && other.tank ? [other.tank] : []));
-    const controls = hijackControls(tank, victims, combat.lineOfSight);
+    const controls = hijacker.drive(combat.clock, tank, victims, movingBoxes(tank), combat.lineOfSight);
+
+    // With no one in sight the hijacked tank drives its usual patrol, as its team expects.
+    if (!controls) {
+      const senses = { ...sensesOf(unit, tank), spider: undefined, enemy: undefined };
+      combat.drive(tank, unit.bot.think(dt, tank, senses, { jammed: false, stunned: false }).move);
+      return;
+    }
+
     combat.drive(tank, controls.move);
     const error = angleBetween(tank.turretAngle, controls.aim);
     tank.turretAngle += Math.sign(error) * Math.min(Math.abs(error), HIJACK_TURRET_SPEED * dt);
 
-    if (controls.onTarget && infection.reload === 0) {
+    if (controls.fire && infection.reload === 0) {
       infection.reload = BOT_HIJACK_RELOAD;
       fireTank(unit, tank);
     }
@@ -625,17 +646,37 @@ export function createSpySandbox(
     }
 
     flash(at, 90, [1, 0.6, 0.3], 0.35, 10);
+    tallyOf(variant).deaths += variant.role === 'spy' ? 0 : 1;
     spy.dead = true;
     spy.deadUntil = combat.clock + SPIDER_RESPAWN;
     spider.place(arena.spiderStart);
   }
 
+  /** Tallies the hits a hijacked tank lands on its old team and takes from it. */
+  function tankHit(target: Tank, shooter: Tank | undefined) {
+    const hijacked = spy.infection?.unit.tank;
+
+    if (!hijacked || variant.role === 'spy' || target === shooter) {
+      return;
+    }
+
+    if (shooter === hijacked) {
+      tallyOf(variant).hijackHits++;
+    } else if (target === hijacked) {
+      tallyOf(variant).hitsTaken++;
+    }
+  }
+
   /** A tank blew up or fell apart: it waits to respawn, and the spider falls off or out of it. */
-  function tankDestroyed(victim: Tank) {
+  function tankDestroyed(victim: Tank, killer: Tank | undefined) {
     const unit = units.find((item) => item.tank === victim);
 
     if (!unit) {
       return;
+    }
+
+    if (killer && killer === spy.infection?.unit.tank && variant.role !== 'spy') {
+      tallyOf(variant).hijackKills++;
     }
 
     unit.tank = undefined;
@@ -661,6 +702,8 @@ export function createSpySandbox(
         unit.bot = createPatrolBot(unit.patrol, random);
         unit.jammedUntil = 0;
         unit.stunnedUntil = 0;
+        unit.immuneUntil = 0;
+        unit.alarmAt = undefined;
       }
     }
 
@@ -680,6 +723,7 @@ export function createSpySandbox(
       jammedUntil: 0,
       stunnedUntil: 0,
       immuneUntil: 0,
+      alarmAt: undefined,
       reload: 0,
       sees: false
     };
@@ -742,7 +786,7 @@ export function createSpySandbox(
     let tally = tallies.get(key);
 
     if (!tally) {
-      tally = { attempts: 0, successes: 0, times: [], failures: { spotted: 0, timeout: 0, 'lost target': 0, killed: 0, 'knocked off': 0 } };
+      tally = { attempts: 0, successes: 0, times: [], failures: { spotted: 0, timeout: 0, 'lost target': 0, killed: 0, 'knocked off': 0 }, deaths: 0, hijackKills: 0, hijackHits: 0, hitsTaken: 0 };
       tallies.set(key, tally);
     }
 
@@ -752,30 +796,38 @@ export function createSpySandbox(
   /** Whether `unit`'s tank can be grabbed for the current ability. */
   function grabbableFor(unit: Unit) {
     const clock = combat.clock;
-    return unit.immuneUntil <= clock && unit !== spy.infection?.unit && (variant.ability !== 'jam' || unit.jammedUntil <= clock);
+    return unit.immuneUntil <= clock && unit !== spy.infection?.unit;
   }
 
   function preyOf(unit: Unit, tank: Tank): Prey {
     let fan: ReturnType<typeof sightFan> | null = null;
+    let sweep: ReturnType<typeof sightFan> | null = null;
+    const revealed = combat.clock < spy.revealUntil;
+    const at = tank.hull.translation();
 
     return {
       tank,
       grabbable: grabbableFor(unit),
       fan: () => {
         const reach = sightReach();
-        const at = tank.hull.translation();
-        fan ??= sightFan(variant.visibility, watcherOf(tank), combat.clock < spy.revealUntil, (angle, limit) => reach(at, angle, limit), 24, DANGER_WIDEN);
+        fan ??= sightFan(variant.visibility, watcherOf(tank), revealed, (angle, limit) => reach(at, angle, limit), 24, DANGER_WIDEN);
         return fan;
+      },
+      sweep: () => {
+        const reach = sightReach();
+        const heading = { ...at, facing: tank.hull.rotation() };
+        sweep ??= sightFan(variant.visibility, heading, revealed, (angle, limit) => reach(at, angle, limit), 32, SWEEP_ANGLE);
+        return sweep;
       }
     };
   }
 
-  /** Crates and tanks as boxes, for the bot spider's plan; the tank it hunts leaves its stern free. */
-  function movingBoxes(): MovingBox[] {
+  /** Crates and tanks but `except` as boxes, for the bots' plans; tanks only cost, as they move. */
+  function movingBoxes(except?: Tank): MovingBox[] {
     const crates = combat.crates.map((crate) => ({ ...crate, halfWidth: 22, halfHeight: 47 }));
     const tanks = units.flatMap((unit) => {
       const tank = unit.tank;
-      return tank ? [{ ...tank.hull.translation(), rotation: tank.hull.rotation(), halfWidth: 21, halfHeight: 13 }] : [];
+      return tank && tank !== except ? [{ ...tank.hull.translation(), rotation: tank.hull.rotation(), halfWidth: 21, halfHeight: 13, cost: TANK_CELL_COST }] : [];
     });
 
     return [...crates, ...tanks];
@@ -897,6 +949,13 @@ export type Tally = {
   /** Seconds from setting out to the ability working, for every success. */
   times: number[];
   failures: Record<AttemptFailure, number>;
+  /** Times the bot spider died, in an attempt or not. */
+  deaths: number;
+  /** Tanks destroyed by tanks the bot spider hijacked. */
+  hijackKills: number;
+  /** Hits hijacked tanks landed on their own team, and took from it. */
+  hijackHits: number;
+  hitsTaken: number;
 };
 
 /** How long each ability must be held on a stern, in seconds. */
@@ -923,8 +982,10 @@ type Unit = {
   respawnAt: number;
   jammedUntil: number;
   stunnedUntil: number;
-  /** Until then the tank cannot be infected again. */
+  /** Until then the spider cannot use an ability on the tank again. */
   immuneUntil: number;
+  /** When a jammed tank comes to and turns on whatever jammed it from behind. */
+  alarmAt: number | undefined;
   reload: number;
   /** The tank sees the spider this step. */
   sees: boolean;
@@ -939,7 +1000,7 @@ const GHOST_COLOR = [0.62, 0.52, 0.52];
 const SPIDER_DUST = [0.4, 0.13, 0.1, 1];
 const PLAYER_RELOAD = 0.6;
 const BOT_RELOAD = 0.9;
-const BOT_HIJACK_RELOAD = 1;
+const BOT_HIJACK_RELOAD = PLAYER_RELOAD;
 const HIJACK_TURRET_SPEED = 3;
 const SPIDER_RESPAWN = 3;
 const TANK_RESPAWN = 5;
@@ -959,6 +1020,10 @@ const IMMUNITY = 8;
 /** How far the sounds of the abilities and of shots carry, in pixels. */
 const ACT_NOISE = 420;
 const SHOT_NOISE = 300;
+/** How far from walls and rubble a tank's planning cells keep its center: half its length. */
+const TANK_CLEARANCE = 22;
+/** Extra cost, in pixels of detour, of a planning cell beside a tank. */
+const TANK_CELL_COST = 250;
 /** Radians a tank's cone is widened by for the bot spider's caution. */
 const DANGER_WIDEN = 0.3;
 const NEAR_CONES = 650;
@@ -966,6 +1031,13 @@ const JAM_SPARKS = 30;
 const JAM_SPARK_COLOR = [0.55, 0.85, 1, 1];
 const JAM_LIGHT = 34;
 const HIJACK_LIGHT = 24;
+
+/** The point `distance` pixels behind `tank`'s stern. */
+function behind(tank: Tank, distance: number) {
+  const stern = sternOf(tank);
+  const angle = tank.hull.rotation();
+  return { x: stern.x - Math.cos(angle) * distance, y: stern.y - Math.sin(angle) * distance };
+}
 
 /** A tank's position and the way its barrel points, as `sees` takes them. */
 function watcherOf(tank: Tank) {

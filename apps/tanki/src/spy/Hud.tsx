@@ -7,6 +7,8 @@ export type SpyHudState = ReturnType<SpySandbox['hud']> & {
   spiderOnScreen: { x: number; y: number };
   /** Each tank's position on screen. */
   watchersOnScreen: { x: number; y: number }[];
+  /** The bot spider's planned way on screen, as SVG polyline points. */
+  pathOnScreen: string;
 };
 
 /**
@@ -15,7 +17,7 @@ export type SpyHudState = ReturnType<SpySandbox['hud']> & {
  * ring at a stern it can grab, and the time left in a tank it infected; an eye over every tank
  * that suspects it, and a red rim around the screen while one sees it. Playing a tank: its armor,
  * and whether the spider jammed or hijacked it. Whenever the bot spider plays, its attempts
- * under the current variant.
+ * under the current variant; watching, also the way it plans to go.
  */
 export function SpyHud(props: { state: SpyHudState | undefined }) {
   return (
@@ -31,6 +33,9 @@ export function SpyHud(props: { state: SpyHudState | undefined }) {
             <TankPanel state={state()} />
           </Show>
           <Show when={state().variant.role === 'watch'}>
+            <svg class="pointer-events-none absolute inset-0 h-full w-full">
+              <polyline points={state().pathOnScreen} fill="none" stroke="rgba(201, 71, 59, 0.85)" stroke-width="2" stroke-dasharray="6 4" />
+            </svg>
             <Eyes state={state()} />
             <div class="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded bg-black/45 px-3 py-1 text-sm text-white">
               Watching the bot spider: {state().spider.phase}

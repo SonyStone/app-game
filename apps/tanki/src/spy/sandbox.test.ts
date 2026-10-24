@@ -72,14 +72,14 @@ describe('the spider among obstacles', () => {
 });
 
 describe('abilities', () => {
-  /** One tank in an open yard; it patrols back and forth between two points unless it stands at its post. */
-  function yard(posts: Record<number, number> = { 1: 60 }): SpyArena {
+  /** One tank in an open yard; it patrols back and forth through the middle unless it stands at its post there. */
+  function yard(posts: Record<number, number> = { 0: 60 }): SpyArena {
     return {
       halfWidth: 500,
       halfHeight: 300,
       walls: [],
       obstacles: [],
-      patrols: [{ start: { x: 0, y: 0, rotation: 0 }, route: [{ x: 300, y: 0 }, { x: 0, y: 0 }, { x: -300, y: 0 }, { x: 0, y: 0 }], posts }],
+      patrols: [{ start: { x: 0, y: 0, rotation: 0 }, route: [{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 0, y: 0 }, { x: -300, y: 0 }], posts }],
       spiderStart: { x: -400, y: 250, rotation: 0 }
     };
   }

@@ -193,7 +193,11 @@ function SpyScene(props: { canvas: HTMLCanvasElement; variant: Variant; resets: 
     props.onFrame({
       ...state,
       spiderOnScreen: worldToScreen(camera, state.spider.position, screen),
-      watchersOnScreen: state.watchers.map((watcher) => worldToScreen(camera, watcher.position, screen))
+      watchersOnScreen: state.watchers.map((watcher) => worldToScreen(camera, watcher.position, screen)),
+      pathOnScreen: state.spider.path
+        .map((point) => worldToScreen(camera, point, screen))
+        .map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`)
+        .join(' ')
     });
   }
 

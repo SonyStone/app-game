@@ -22,8 +22,8 @@ export type Obstacle = { kind: 'rubble'; x: number; y: number; radius: number; s
 };
 
 /**
- * A tank's patrol: a closed loop of waypoints it drives around, and the waypoints where it stops
- * and looks around for a while.
+ * A tank's patrol: a closed loop of waypoints it drives around from the first, and the waypoints
+ * where it stops and looks around for a while.
  */
 export type Patrol = {
   start: Placement;
