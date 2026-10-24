@@ -645,6 +645,13 @@ const MIN_BITE = 0.6;
 const BITE_STEP = 2;
 const BITE_ROUGHNESS = 1.1;
 /**
+ * A bite `FULL_MARGIN_DEPTH` px deep or more is `BITE_MARGIN` px wider than the rammer at its
+ * bottom and `BITE_FLARE` px more at its mouth; shallower bites widen in proportion.
+ */
+const BITE_MARGIN = 2;
+const BITE_FLARE = 3;
+const FULL_MARGIN_DEPTH = 8;
+/**
  * Rubble: only tiles at least `RUBBLE_THICKNESS` px thick leave it, a heap is cleared away once
  * less than `RUBBLE_LEFT` square pixels of it are left, and it is drawn low and a little darker.
  */
@@ -813,17 +820,20 @@ function createRubbleField(tile: Tile, random: () => number) {
 
 /**
  * The hole a ram leaves: the signed distance from a world point to everything the rammer's armor
- * covers on its way `depth` px further along `direction`, negative inside, its edge wobbling so
- * the bite looks broken rather than cut.
+ * covers on its way `depth` px further along `direction`, negative inside, a little wider than the
+ * armor and flaring toward the mouth, so the rammer backs out without wedging, its edge wobbling
+ * so the bite looks broken rather than cut.
  */
 function createBite(rammer: { field: DamageField; x: number; y: number; angle: number }, direction: Point, depth: number, random: () => number) {
   const cos = Math.cos(rammer.angle);
   const sin = Math.sin(rammer.angle);
   const along = { x: direction.x * cos + direction.y * sin, y: -direction.x * sin + direction.y * cos };
   const steps = Math.max(Math.ceil(depth / BITE_STEP), 1);
-  const reach = Math.hypot(rammer.field.cols, rammer.field.rows) * rammer.field.cell * 0.5 + BITE_ROUGHNESS + 1;
+  const reach = Math.hypot(rammer.field.cols, rammer.field.rows) * rammer.field.cell * 0.5 + BITE_ROUGHNESS + BITE_MARGIN + BITE_FLARE + 1;
   const phases = [random(), random(), random()].map((value) => value * Math.PI * 2);
   const sample = new Float32Array(CHANNELS);
+  // A scratch leaves no pocket to wedge in, so only a deep bite gets the full margin.
+  const widen = Math.min(depth / FULL_MARGIN_DEPTH, 1);
 
   return (x: number, y: number) => {
     const dx = x - rammer.x;
@@ -841,7 +851,8 @@ function createBite(rammer: { field: DamageField; x: number; y: number; angle: n
 
     for (let step = 0; step <= steps; step++) {
       const shift = (depth * step) / steps;
-      nearest = Math.min(nearest, sampleField(rammer.field, localX - along.x * shift, localY - along.y * shift, sample)[0]);
+      const margin = (BITE_MARGIN + BITE_FLARE * (1 - step / steps)) * widen;
+      nearest = Math.min(nearest, sampleField(rammer.field, localX - along.x * shift, localY - along.y * shift, sample)[0] - margin);
     }
 
     const wobble = Math.sin(x * 0.45 + phases[0]) * Math.cos(y * 0.38 + phases[1]) + 0.5 * Math.sin(x * 1.1 + y * 0.9 + phases[2]);
