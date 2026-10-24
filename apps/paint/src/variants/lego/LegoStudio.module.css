@@ -54,7 +54,8 @@
   touch-action: none;
 }
 
-.board[data-editing] .panel {
+.board[data-editing] .panel,
+.benchSlot .panel {
   cursor: grab;
   background-color: var(--lego-plate);
   background-image: radial-gradient(circle, rgb(255 255 255 / 0.22) 0 9px, rgb(255 255 255 / 0.07) 10px, transparent 11px);
@@ -78,7 +79,8 @@
     height 120ms ease-out;
 }
 
-.board[data-editing] .part {
+.board[data-editing] .part,
+.benchSlot .part {
   cursor: grab;
   touch-action: none;
   box-shadow: 0 2px 0 rgb(0 0 0 / 0.25);
@@ -699,63 +701,31 @@
 }
 
 /*
- * The card: while the box of parts is half out, the drawing and the board shrink to a card, as Android's home screen
- * does while widgets are arranged, leaving room for the box beside it (landscape) or below it (portrait). Both scale
- * from their top-left corner, which BoardView measures to map presses to cells.
+ * The card: as the box of parts' sheet rises, the drawing and the board shrink to a card above it, as Android's home
+ * screen does while widgets are arranged. Both scale from their top-left corner, which BoardView measures to map
+ * presses to cells; LegoStudio sets the scale and the offset.
  */
-.editor {
-  --card-scale: 0.72;
-  --card-margin: 16px;
-}
-
 .workspace,
 .board {
   transform-origin: 0 0;
   transition:
-    scale 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    translate 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    scale var(--sheet-time, 260ms) cubic-bezier(0.2, 0.8, 0.2, 1),
+    translate var(--sheet-time, 260ms) cubic-bezier(0.2, 0.8, 0.2, 1),
     border-radius 260ms;
 }
 
-.editor:has(.board[data-card]) {
+.carded {
   background: #d6d3cc;
 
   .workspace,
   .board {
     scale: var(--card-scale);
+    translate: var(--card-x) var(--card-y);
   }
 
   .workspace {
     border-radius: calc(18px / var(--card-scale));
     box-shadow: 0 16px 60px rgb(0 0 0 / 0.3);
-  }
-}
-
-@media (orientation: landscape) {
-  .editor:has(.board[data-card]) .workspace,
-  .editor:has(.board[data-card]) .board {
-    translate: var(--card-margin) calc((1 - var(--card-scale)) * 50%);
-  }
-
-  .tray[data-stop='half'] {
-    top: 64px;
-    right: var(--card-margin);
-    bottom: var(--card-margin);
-    left: calc(var(--card-scale) * 100% + 2 * var(--card-margin));
-  }
-}
-
-@media (orientation: portrait) {
-  .editor:has(.board[data-card]) .workspace,
-  .editor:has(.board[data-card]) .board {
-    translate: calc((1 - var(--card-scale)) * 50%) var(--card-margin);
-  }
-
-  .tray[data-stop='half'] {
-    top: calc(var(--card-scale) * 100% + 2 * var(--card-margin));
-    right: var(--card-margin);
-    bottom: var(--card-margin);
-    left: var(--card-margin);
   }
 }
 
@@ -768,150 +738,122 @@
 }
 
 /*
- * The box of parts: a handle at the bottom while closed, docked beside the card half out, over everything but the
- * edit button fully out, and a strip along the bottom while something is carried; dropped on, it puts parts away.
+ * The box of parts: a sheet risen from the bottom edge to the height BoardView's sheet gives, a short handle while
+ * closed and a strip that puts things away while sunk. It holds the workbench beside the parts (above them when the
+ * view is upright).
  */
 .tray {
   position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
   /* Over the session's floating windows (900); popups and the carried part stay over it. */
   z-index: 920;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  border-radius: 18px;
-  background: rgb(20 21 25 / 0.97);
+  grid-template-rows: 24px minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 18px 18px 0 0;
+  /* Opaque: the white card behind would show through even a slightly clear sheet. */
+  background: rgb(20 21 25);
   color: #ffffff;
-  box-shadow: 0 8px 30px rgb(0 0 0 / 0.25);
-  animation: tray-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  box-shadow: 0 -8px 30px rgb(0 0 0 / 0.25);
+  transition:
+    height var(--sheet-time, 260ms) cubic-bezier(0.2, 0.8, 0.2, 1),
+    left 200ms,
+    right 200ms;
 
-  &[data-stop='closed'] {
-    bottom: 12px;
-    left: 50%;
-    translate: -50% 0;
-    border-radius: 999px;
-
-    .trayBar {
-      padding: 14px 22px 10px;
-    }
-
-    .trayBody {
-      display: none;
-    }
-  }
-
-  &[data-stop='full'] {
-    inset: 64px 12px 12px;
-    grid-template-rows: auto minmax(220px, 1fr) minmax(0, 42%);
+  &[data-closed] {
+    right: calc(50% - 60px);
+    left: calc(50% - 60px);
+    border-radius: 12px 12px 0 0;
   }
 
   &[data-sunk] {
-    top: auto;
-    right: 12px;
-    bottom: 12px;
-    left: 12px;
-    height: 56px;
-    translate: none;
-    border-radius: 14px;
+    grid-template-rows: minmax(0, 1fr) 0;
 
-    .trayBar {
-      justify-content: center;
-      padding-top: 18px;
-    }
-
-    .trayBody {
-      display: none;
+    .trayContent {
+      visibility: hidden;
     }
   }
 
-  &[data-over] {
-    outline: 3px solid rgb(230 70 60 / 0.8);
-    outline-offset: -3px;
-
-    .trayBar {
-      background: rgb(230 70 60 / 0.55);
-    }
-  }
-}
-
-@keyframes tray-in {
-  from {
-    opacity: 0;
+  &[data-over] .trayBar {
+    background: rgb(230 70 60 / 0.55);
   }
 }
 
 .trayBar {
   position: relative;
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 16px 12px 8px 18px;
-  border-radius: inherit;
-  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
   touch-action: none;
   user-select: none;
-
-  .boxButton {
-    flex: none;
-    padding: 5px 10px;
-    font-size: 12px;
-  }
-
-  .boxButton:first-of-type {
-    margin-left: auto;
-  }
 }
 
 .trayGrip {
   position: absolute;
-  top: 6px;
+  top: 9px;
   left: 50%;
   width: 36px;
   height: 4px;
   translate: -50% 0;
   border-radius: 2px;
-  background: rgb(255 255 255 / 0.35);
+  background: rgb(255 255 255 / 0.4);
 }
 
 .trayTitle {
+  margin-top: 8px;
   color: rgb(255 255 255 / 0.85);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
 }
 
-.trayHint {
-  min-width: 0;
-  overflow: hidden;
-  color: rgb(255 255 255 / 0.45);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.trayContent {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 40%);
+  gap: 12px;
+  min-height: 0;
+  padding: 4px 12px 12px;
+}
+
+@media (orientation: portrait) {
+  .trayContent {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(150px, 45%) minmax(0, 1fr);
+  }
 }
 
 .trayBody {
   display: grid;
   align-content: start;
+  justify-items: start;
   gap: 14px;
-  padding: 4px 18px 18px;
+  padding: 4px 6px;
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
 }
 
-/* The workbench's place in the fully pulled-out box; the board puts the bench panel over it. */
+/* The workbench's place: the board renders the bench panel into it at full size; its free space drags the sheet. */
 .benchSlot {
-  display: grid;
-  place-items: center;
-  margin: 4px 12px 8px;
-  color: rgb(255 255 255 / 0.3);
-  font-size: 12px;
+  position: relative;
+  min-height: 0;
+  overflow: auto;
   border: 1.5px dashed rgb(255 255 255 / 0.18);
   border-radius: 12px;
   background: rgb(255 255 255 / 0.03);
+  touch-action: none;
 }
 
-/* The bench panel, over the box it lies in. */
-.bench {
-  z-index: 925;
+.benchHint {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  color: rgb(255 255 255 / 0.3);
+  font-size: 12px;
+  pointer-events: none;
 }
 
 .tray h4,

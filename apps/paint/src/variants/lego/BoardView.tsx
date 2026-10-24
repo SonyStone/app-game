@@ -1,5 +1,5 @@
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { Portal } from '@solidjs/web';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import {
   cellGap,
@@ -34,16 +34,18 @@ import type { createBoard } from './createBoard';
 import { swatchPanelParts, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { lookOf, partLooks, PartView, type Popup, type Session } from './parts';
-import { BlockView, PartsTray, type TrayStop } from './PartsTray';
+import type { createSheet } from './createSheet';
+import { BlockView, PartsTray } from './PartsTray';
 import { SpawnMenu } from './SpawnMenu';
 
 /**
  * The board over the drawing: its panels, and in edit mode the studs, the box of parts and kits, and the drags that
- * change them. While editing the drawing takes no strokes. The box is pulled out in stops (see `PartsTray`): half
- * out, the drawing and the board shrink to a card beside it (`data-card`), but whatever is carried is placed at full
- * size, the card springing back while it lasts, and a part taken from the box closes it, as Android's widget picker
- * does. Fully out, the box holds the workbench: the board's bench panel, built like any other and dragged out by its
- * rim onto the drawing as a panel of its own.
+ * change them. While editing the drawing takes no strokes. The box is a sheet pulled up from the bottom (see
+ * `PartsTray`), the drawing shrinking to a card above it, but whatever is carried off it is placed at full size: the
+ * sheet sinks to a put-away strip and the card springs back while it lasts, and a part taken from the box and placed
+ * on the board closes it, as Android's widget picker does. Held over the strip a while, the sheet rises again, so a
+ * part from the board can reach the workbench: the board's bench panel, which lies in the sheet at full size, built
+ * like any other; carried by its rim, it is a block of its parts, as a kit is.
  *
  * While editing, a part dragged anywhere lifts and follows the pointer: over a panel, or touching one by an edge, it
  * takes the nearest cell and pushes the parts in its way aside, which also grows the panel; panels keep still on
@@ -69,15 +71,14 @@ export function BoardView(props: {
   openPanel: string | undefined;
   onOpenPanel: (owner: string | undefined) => void;
   onPopup: (anchor: Element, popup: Popup) => void;
-  /** How far the box of parts is pulled out while editing. */
-  stop: TrayStop;
-  onStop: (stop: TrayStop) => void;
+  /** The box of parts' sheet; this sinks it while something is carried and closes it once a part is taken. */
+  sheet: ReturnType<typeof createSheet>;
 }) {
   const [layer, setLayer] = createSignal<HTMLElement>();
   const [box, setBox] = createSignal<HTMLElement>();
   const [drag, setDrag] = createSignal<Drag>();
+  /** The workbench's place in the sheet, which the bench panel is rendered into. */
   const [bench, setBench] = createSignal<HTMLElement>();
-  const benchSize = createElementSize(bench);
   /** The open spawn menu: where it was opened, and the pointer of the press while it is held. */
   const [spawn, setSpawn] = createSignal<{ at: Point; held?: number }>();
 
@@ -109,28 +110,15 @@ export function BoardView(props: {
 
     return current.type === 'part' ? partDrop(current, current.settled).board : result(current);
   });
-  /** Whether something lifted is being carried; it shows at full size, the box sunk to a strip. */
+  /** Whether something lifted is being carried; it shows at full size. */
   const carrying = () => lifted()?.carried === true;
-  /** Whether the drawing shows as a card beside the half-open box. */
-  const card = () => props.editing && props.stop === 'half' && !carrying();
-  /**
-   * Where the workbench starts, in the board's pixels, while the box is fully out: the board is then at full size,
-   * so its pixels are the overlay's.
-   */
-  const benchAt = createMemo(() => {
-    const element = bench();
-    if (!props.editing || props.stop !== 'full' || !element || !benchSize.width) {
-      return undefined;
-    }
-
-    const rect = element.getBoundingClientRect();
-    const origin = overlay();
-    return { x: rect.left - origin.x + benchInset, y: rect.top - origin.y + benchInset };
-  });
   /** The panels on screen, with where each lies; see `visiblePanels`. */
-  const visible = createMemo(() =>
-    visiblePanels(shown(), props.openPanel, props.editing, view(), pinned(drag()), benchAt())
-  );
+  const visible = createMemo(() => visiblePanels(shown(), props.openPanel, props.editing, view(), pinned(drag())));
+  /** The workbench as shown, with where it lies in its place in the sheet. */
+  const benchEntry = createMemo(() => {
+    const panel = benchOf(shown());
+    return { panel, frame: benchFrame(panel, pinned(drag())?.get(panel.id)) };
+  });
   const chain = () => openChain(props.board.board(), props.openPanel);
 
   /** The drop a lifted part waits on before the parts in its way move aside; see `reorderDelay`. */
@@ -140,6 +128,14 @@ export function BoardView(props: {
     pending = undefined;
   };
   onCleanup(stopWaiting);
+
+  /** The wait of a part held over the sunk sheet's strip before the sheet rises again; see `followSheet`. */
+  let spring: ReturnType<typeof setTimeout> | undefined;
+  const stopSpring = () => {
+    clearTimeout(spring);
+    spring = undefined;
+  };
+  onCleanup(stopSpring);
 
   /** A press waiting to become long enough to open the spawn menu; see `armLongPress`. */
   let press: { pointer: number; start: Point; timer: ReturnType<typeof setTimeout> } | undefined;
@@ -196,6 +192,9 @@ export function BoardView(props: {
     }
 
     const carried = current.carried || moved;
+    if (carried) {
+      followSheet(point);
+    }
 
     // A place with room shows at once; one that pushes parts aside waits until the part rests over it.
     const drop = partDrop(current, point);
@@ -233,6 +232,7 @@ export function BoardView(props: {
     }
 
     stopWaiting();
+    stopSpring();
     setDrag(undefined);
     let point = { x: event.clientX, y: event.clientY };
     if (current.type !== 'part') {
@@ -258,11 +258,13 @@ export function BoardView(props: {
       return;
     }
 
-    if (current.fromBox && !current.spawnAt && props.stop === 'half') {
-      props.onStop('closed');
+    const drop = partDrop(current, point);
+    props.sheet.setSunk(false);
+    if (current.fromBox && !current.spawnAt && drop.where === 'board') {
+      props.sheet.to('closed');
     }
 
-    let next = partDrop(current, point).board;
+    let next = drop.board;
     if (current.fromBox && current.kind === 'color:swatch' && findPart(next, current.id)) {
       const { parts } = unpackKit({ parts: swatchPanelParts, owned: [] });
       next = putPanel(next, { id: newId('panel'), at: { x: 0, y: 0 }, owner: current.id, parts });
@@ -278,18 +280,133 @@ export function BoardView(props: {
 
     if (event.pointerId === drag()?.pointer) {
       stopWaiting();
+      stopSpring();
       setDrag(undefined);
+      props.sheet.setSunk(false);
     }
   });
 
+  /** A panel of the board, or the workbench, with its parts and, while editing, their handles. */
+  function PanelView(entryProps: { entry: { panel: Panel; frame: ReturnType<typeof panelFrame> } }) {
+    const panel = () => entryProps.entry.panel;
+    const frame = () => entryProps.entry.frame;
+    return (
+      <div
+        class={[styles.panel, panel().owner !== undefined && styles.owned]}
+        data-owned={panel().owner !== undefined ? '' : undefined}
+        data-keeps-panel
+        style={{
+          left: `${frame().rect.left}px`,
+          top: `${frame().rect.top}px`,
+          width: `${frame().rect.width}px`,
+          height: `${frame().rect.height}px`,
+          '--stud-x': `${frame().origin.x - frame().rect.left}px`,
+          '--stud-y': `${frame().origin.y - frame().rect.top}px`
+        }}
+        onPointerDown={(event) => {
+          if (!props.editing || event.target !== event.currentTarget) {
+            return;
+          }
+
+          if (panel().bench) {
+            startBenchDrag(event, panel());
+          } else if (panel().owner === undefined) {
+            startPanelDrag(event, panel(), frame().origin);
+          }
+
+          armLongPress(event);
+        }}
+        onContextMenu={(event) => {
+          if (props.editing && event.target === event.currentTarget) {
+            openSpawnFromMenuKey(event);
+          }
+        }}
+      >
+        <Show when={panel().parts.length === 0 && !panel().bench}>
+          <span class={styles.emptyPanel}>Drop parts here</span>
+        </Show>
+        <For each={panel().parts} keyed={(part) => part.id}>
+          {(part) => {
+            const isLifted = () => lifted()?.id === part().id;
+            return (
+              <div
+                class={styles.part}
+                data-part={part().id}
+                data-lifted={isLifted() ? '' : undefined}
+                data-open={chain().has(part().id) ? '' : undefined}
+                style={{
+                  left: `${frame().origin.x - frame().rect.left + part().cell.column * pitch}px`,
+                  top: `${frame().origin.y - frame().rect.top + part().cell.row * pitch}px`,
+                  width: `${part().span.columns * pitch - cellGap}px`,
+                  height: `${part().span.rows * pitch - cellGap}px`
+                }}
+                onPointerDown={(event) => {
+                  if (props.editing) {
+                    const { id, kind, span, looks } = part();
+                    startPartDrag(event, { id, kind, span, looks });
+                  }
+                }}
+              >
+                <Show when={!isLifted()}>
+                  <div class={styles.content} inert={props.editing || undefined}>
+                    <PartView
+                      kind={part().kind}
+                      span={part().span}
+                      look={lookOf(part())}
+                      session={props.session}
+                      onPopup={props.onPopup}
+                      onOpen={() => toggle(part().id)}
+                    />
+                  </div>
+                </Show>
+                <Show when={props.editing && !isLifted() && partLooks(part().kind)}>
+                  <button
+                    type="button"
+                    class={styles.looksHandle}
+                    aria-label="Choose look"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) =>
+                      props.onPopup(event.currentTarget.parentElement!, { kind: 'looks', id: part().id })
+                    }
+                  >
+                    ⇄
+                  </button>
+                </Show>
+                <Show when={props.editing && !isLifted()}>
+                  <span
+                    class={styles.corner}
+                    aria-label="Resize"
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+                      startResize(event, panel().id, part().id, part().span);
+                    }}
+                  />
+                </Show>
+              </div>
+            );
+          }}
+        </For>
+        <Show when={props.editing && panel().parts.length > 0 && !drag()}>
+          <button
+            type="button"
+            class={styles.saveKit}
+            onClick={() => {
+              const name = window.prompt('Name the kit', 'My panel');
+              if (name) {
+                props.kits.save(props.board.latest(), panel(), name);
+              }
+            }}
+          >
+            Save as kit
+          </button>
+        </Show>
+      </div>
+    );
+  }
+
   return (
     <>
-      <div
-        ref={setLayer}
-        class={styles.board}
-        data-editing={props.editing ? '' : undefined}
-        data-card={card() ? '' : undefined}
-      >
+      <div ref={setLayer} class={styles.board} data-editing={props.editing ? '' : undefined}>
         <Show when={props.editing}>
           <div
             class={styles.bare}
@@ -298,125 +415,17 @@ export function BoardView(props: {
           />
         </Show>
         <For each={visible()} keyed={(entry) => entry.panel.id}>
-          {(entry) => {
-            const panel = () => entry().panel;
-            const frame = () => entry().frame;
-            return (
-              <div
-                class={[styles.panel, panel().owner !== undefined && styles.owned, panel().bench && styles.bench]}
-                data-owned={panel().owner !== undefined ? '' : undefined}
-                data-keeps-panel
-                style={{
-                  left: `${frame().rect.left}px`,
-                  top: `${frame().rect.top}px`,
-                  width: `${frame().rect.width}px`,
-                  height: `${frame().rect.height}px`,
-                  '--stud-x': `${frame().origin.x - frame().rect.left}px`,
-                  '--stud-y': `${frame().origin.y - frame().rect.top}px`
-                }}
-                onPointerDown={(event) => {
-                  if (!props.editing || event.target !== event.currentTarget) {
-                    return;
-                  }
-
-                  if (panel().bench) {
-                    takeBenchOut(event, panel(), frame().origin);
-                  } else if (panel().owner === undefined) {
-                    startPanelDrag(event, panel(), frame().origin);
-                  }
-
-                  armLongPress(event);
-                }}
-                onContextMenu={(event) => {
-                  if (props.editing && event.target === event.currentTarget) {
-                    openSpawnFromMenuKey(event);
-                  }
-                }}
-              >
-                <Show when={panel().parts.length === 0 && !panel().bench}>
-                  <span class={styles.emptyPanel}>Drop parts here</span>
-                </Show>
-                <For each={panel().parts} keyed={(part) => part.id}>
-                  {(part) => {
-                    const isLifted = () => lifted()?.id === part().id;
-                    return (
-                      <div
-                        class={styles.part}
-                        data-part={part().id}
-                        data-lifted={isLifted() ? '' : undefined}
-                        data-open={chain().has(part().id) ? '' : undefined}
-                        style={{
-                          left: `${frame().origin.x - frame().rect.left + part().cell.column * pitch}px`,
-                          top: `${frame().origin.y - frame().rect.top + part().cell.row * pitch}px`,
-                          width: `${part().span.columns * pitch - cellGap}px`,
-                          height: `${part().span.rows * pitch - cellGap}px`
-                        }}
-                        onPointerDown={(event) => {
-                          if (props.editing) {
-                            const { id, kind, span, looks } = part();
-                            startPartDrag(event, { id, kind, span, looks });
-                          }
-                        }}
-                      >
-                        <Show when={!isLifted()}>
-                          <div class={styles.content} inert={props.editing || undefined}>
-                            <PartView
-                              kind={part().kind}
-                              span={part().span}
-                              look={lookOf(part())}
-                              session={props.session}
-                              onPopup={props.onPopup}
-                              onOpen={() => toggle(part().id)}
-                            />
-                          </div>
-                        </Show>
-                        <Show when={props.editing && !isLifted() && partLooks(part().kind)}>
-                          <button
-                            type="button"
-                            class={styles.looksHandle}
-                            aria-label="Choose look"
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={(event) =>
-                              props.onPopup(event.currentTarget.parentElement!, { kind: 'looks', id: part().id })
-                            }
-                          >
-                            ⇄
-                          </button>
-                        </Show>
-                        <Show when={props.editing && !isLifted()}>
-                          <span
-                            class={styles.corner}
-                            aria-label="Resize"
-                            onPointerDown={(event) => {
-                              event.stopPropagation();
-                              startResize(event, panel().id, part().id, part().span);
-                            }}
-                          />
-                        </Show>
-                      </div>
-                    );
-                  }}
-                </For>
-                <Show when={props.editing && panel().parts.length > 0 && !drag()}>
-                  <button
-                    type="button"
-                    class={styles.saveKit}
-                    onClick={() => {
-                      const name = window.prompt('Name the kit', 'My panel');
-                      if (name) {
-                        props.kits.save(props.board.latest(), panel(), name);
-                      }
-                    }}
-                  >
-                    Save as kit
-                  </button>
-                </Show>
-              </div>
-            );
-          }}
+          {(entry) => <PanelView entry={entry()} />}
         </For>
-
       </div>
+
+      <Show when={props.editing && bench()}>
+        {(slot) => (
+          <Portal mount={slot()}>
+            <PanelView entry={benchEntry()} />
+          </Portal>
+        )}
+      </Show>
 
       <Show when={lifted()}>
         {(current) => (
@@ -430,7 +439,7 @@ export function BoardView(props: {
               height: `${current().span.rows * pitch - cellGap}px`,
               // As large as it will be on the board, held where it was taken.
               'transform-origin': `${current().grab.x}px ${current().grab.y}px`,
-              scale: `${view().scale * 1.06}`
+              scale: `${(carrying() ? 1 : view().scale) * 1.06}`
             }}
           >
             <Show
@@ -459,9 +468,7 @@ export function BoardView(props: {
           benchRef={setBench}
           session={props.session}
           kits={props.kits}
-          stop={props.stop}
-          onStop={props.onStop}
-          carrying={carrying()}
+          sheet={props.sheet}
           over={lifted() !== undefined && overBox(lifted()!.point)}
           onLift={(event, kind) => startNewPart(event, kind)}
           onLiftKit={(event, kit) => startKitDrag(event, kit)}
@@ -550,20 +557,29 @@ export function BoardView(props: {
   function startPartDrag(
     event: PointerEvent,
     part: Lifted,
-    from: { fromBox?: boolean; block?: { parts: Part[]; panels: Panel[] }; spawnAt?: Point } = {}
+    from: {
+      fromBox?: boolean;
+      block?: { parts: Part[]; panels: Panel[] };
+      spawnAt?: Point;
+      /** Where it is held, from its top-left corner, instead of where the press is on the pressed element. */
+      grab?: Point;
+      /** The board it is carried over, instead of the board without it. */
+      base?: Board;
+    } = {}
   ) {
     event.preventDefault();
-    const rect = (event.currentTarget as Element).getBoundingClientRect();
+    const element = event.currentTarget as Element;
+    const rect = element.getBoundingClientRect();
     const board = props.board.latest();
     const point = { x: event.clientX, y: event.clientY };
-    // In the board's pixels: a part on the board is scaled with it, the box's and the menu's tiles are not.
-    const scale = from.fromBox ? 1 : view().scale;
+    // In the board's pixels: a part on the board is scaled with it; the box's and the menu's tiles and the workbench
+    // are not.
+    const scale = from.fromBox || bench()?.contains(element) ? 1 : view().scale;
     const offset = { x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale };
     // A block, or a part from the menu, is held by the middle of its first cell, so it lands around the press.
     const grab =
-      from.block || from.spawnAt
-        ? { x: Math.min(offset.x, cellSize / 2), y: Math.min(offset.y, cellSize / 2) }
-        : offset;
+      from.grab ??
+      (from.block || from.spawnAt ? { x: Math.min(offset.x, cellSize / 2), y: Math.min(offset.y, cellSize / 2) } : offset);
     setDrag({
       type: 'part',
       pointer: event.pointerId,
@@ -571,7 +587,7 @@ export function BoardView(props: {
       start: point,
       grab,
       settled: point,
-      base: findPart(board, part.id) ? removePart(board, part.id) : board,
+      base: from.base ?? (findPart(board, part.id) ? removePart(board, part.id) : board),
       pinned: origins(board),
       newPanel: newId('panel'),
       fromBox: from.fromBox ?? false,
@@ -623,30 +639,64 @@ export function BoardView(props: {
   }
 
   /**
-   * Turns the workbench pressed by its rim into a panel on the drawing where it lies, closes the box and moves the
-   * panel with the press. An empty bench stays.
+   * Carries the workbench pressed by its rim as a block of its parts, as a kit is carried, held where it was pressed;
+   * it lands as a panel, in a panel, or back on the bench. An empty bench stays.
    */
-  function takeBenchOut(event: PointerEvent, panel: Panel, origin: Point) {
+  function startBenchDrag(event: PointerEvent, panel: Panel) {
     if (panel.parts.length === 0) {
       return;
     }
 
-    const size = view();
-    const out: Panel = {
-      id: newId('panel'),
-      at: { x: origin.x / size.width, y: origin.y / size.height },
-      parts: panel.parts
-    };
+    const rect = (event.currentTarget as Element).getBoundingClientRect();
+    const bounds = partsBounds(panel.parts);
     const board = props.board.latest();
-    props.board.set({ panels: [...board.panels.filter((other) => !other.bench), out] });
-    props.onStop('closed');
-    startPanelDrag(event, out, origin);
+    startPartDrag(
+      event,
+      { id: newId('block'), kind: 'kit', span: { columns: bounds.columns, rows: bounds.rows } },
+      {
+        fromBox: true,
+        block: { parts: panel.parts, panels: [] },
+        grab: { x: event.clientX - rect.left - panelPadding, y: event.clientY - rect.top - panelPadding },
+        base: { panels: board.panels.filter((other) => !other.bench) }
+      }
+    );
+  }
+
+  /**
+   * Sinks the sheet while a carried part at `point` is above it, so the board shows at full size, and raises it again
+   * once the part rests on the strip it left for `springDelay`, opening a closed sheet to the middle.
+   */
+  function followSheet(point: Point) {
+    const rect = box()?.getBoundingClientRect();
+    const over = rect !== undefined && point.y >= rect.top;
+    if (!props.sheet.sunk()) {
+      if (!over) {
+        props.sheet.setSunk(true);
+      }
+
+      return;
+    }
+
+    if (!over) {
+      stopSpring();
+      return;
+    }
+
+    spring ??= setTimeout(() => {
+      spring = undefined;
+      props.sheet.setSunk(false);
+      if (props.sheet.height() <= 0) {
+        props.sheet.to('middle');
+      }
+    }, springDelay);
   }
 
   /** Where each panel on screen has its cell (0, 0) now, to keep it there through a drag; see `frameAt`. */
   function origins(board: Board) {
-    const frames = visiblePanels(board, props.openPanel, props.editing, view(), undefined, benchAt());
-    return new Map(frames.map(({ panel, frame }) => [panel.id, frame.origin]));
+    const frames = visiblePanels(board, props.openPanel, props.editing, view());
+    const origins = new Map(frames.map(({ panel, frame }) => [panel.id, frame.origin]));
+    const panel = benchOf(board);
+    return origins.set(panel.id, benchFrame(panel).origin);
   }
 
   /** The board a resize or a panel move would leave if it ended now. */
@@ -659,9 +709,11 @@ export function BoardView(props: {
         return drag.base;
       }
 
+      // The workbench is at full size whatever the board's scale.
+      const scale = panel.bench ? 1 : size.scale;
       const span = spanAfter(drag.span, {
-        x: (drag.point.x - drag.start.x) / size.scale,
-        y: (drag.point.y - drag.start.y) / size.scale
+        x: (drag.point.x - drag.start.x) / scale,
+        y: (drag.point.y - drag.start.y) / scale
       });
       return replacePanel(drag.base, panel.id, { ...panel, parts: resizePart(panel.parts, drag.id, span) });
     }
@@ -677,36 +729,17 @@ export function BoardView(props: {
   }
 
   /**
-   * Where a lifted part or block held at `point` would land: the board with it there, a `key` naming the spot, and
-   * whether it `pushes` other parts aside to fit.
+   * Where a lifted part or block held at `point` would land: the board with it there, `where` it lands (on the
+   * workbench, in the box, put away, or on the board), a `key` naming the spot, and whether it `pushes` other parts
+   * aside to fit.
    */
   function partDrop(drag: Extract<Drag, { type: 'part' }>, point: Point) {
     const size = view();
-    if (overBox(point)) {
-      return { board: drag.base, key: 'box', pushes: false };
-    }
-
-    // The lifted part's top-left corner, in view pixels.
-    const pointer = toView(point);
-    const corner = { x: pointer.x - drag.grab.x, y: pointer.y - drag.grab.y };
     const part = { id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks };
     const withOwned = (board: Board) => (drag.block ? { panels: [...board.panels, ...drag.block.panels] } : board);
-
-    // The panel the part covers most of, counting half a cell around it, so a part, however long, joins a panel as
-    // soon as an edge of it touches; on a tie the top-most one.
-    const lifted = { left: corner.x, top: corner.y, width: drag.span.columns * pitch, height: drag.span.rows * pitch };
-    const panels = visiblePanels(drag.base, props.openPanel, props.editing, size, drag.pinned, benchAt());
-    // Over the workbench, the bench is all there is to land on.
-    const target = benchAt() ? panels[0] : panels.reduce<{ entry?: (typeof panels)[number]; area: number }>(
-      (best, entry) => {
-        const area = overlap(lifted, grow(entry.frame.rect, pitch / 2));
-        return area > 0 && area >= best.area ? { entry, area } : best;
-      },
-      { area: 0 }
-    ).entry;
-    if (target) {
-      const { panel, frame } = target;
-      const cell = nearestCell(frame.origin, corner);
+    /** `drag` placed on `panel`, whose cell (0, 0) starts at `origin`, its top-left corner at `corner`. */
+    const placeOn = (panel: Panel, origin: Point, corner: Point) => {
+      const cell = nearestCell(origin, corner);
       const placed = drag.block
         ? placeBlock(panel.parts, drag.block.parts, cell)
         : placePart(panel.parts, { ...part, cell });
@@ -716,49 +749,79 @@ export function BoardView(props: {
         key: `${panel.id}:${cell.column},${cell.row}`,
         pushes: placed.some((other) => before.has(other.id) && before.get(other.id) !== other.cell)
       };
+    };
+
+    // Anywhere over the workbench lands on the bench, at full size in the place's own pixels.
+    const slot = overBench(point);
+    if (slot) {
+      const panel = benchOf(drag.base);
+      const corner = {
+        x: point.x - slot.left + (bench()?.scrollLeft ?? 0) - drag.grab.x,
+        y: point.y - slot.top + (bench()?.scrollTop ?? 0) - drag.grab.y
+      };
+      return { where: 'bench' as const, ...placeOn(panel, benchFrame(panel, drag.pinned.get(panel.id)).origin, corner) };
+    }
+
+    if (overBox(point)) {
+      return { where: 'box' as const, board: drag.base, key: 'box', pushes: false };
+    }
+
+    // The lifted part's top-left corner, in view pixels.
+    const pointer = toView(point);
+    const corner = { x: pointer.x - drag.grab.x, y: pointer.y - drag.grab.y };
+
+    // The panel the part covers most of, counting half a cell around it, so a part, however long, joins a panel as
+    // soon as an edge of it touches; on a tie the top-most one.
+    const lifted = { left: corner.x, top: corner.y, width: drag.span.columns * pitch, height: drag.span.rows * pitch };
+    const panels = visiblePanels(drag.base, props.openPanel, props.editing, size, drag.pinned);
+    const target = panels.reduce<{ entry?: (typeof panels)[number]; area: number }>(
+      (best, entry) => {
+        const area = overlap(lifted, grow(entry.frame.rect, pitch / 2));
+        return area > 0 && area >= best.area ? { entry, area } : best;
+      },
+      { area: 0 }
+    ).entry;
+    if (target) {
+      return { where: 'board' as const, ...placeOn(target.panel, target.frame.origin, corner) };
     }
 
     const at = { x: corner.x / size.width, y: corner.y / size.height };
     const parts = drag.block ? drag.block.parts : [{ ...part, cell: { column: 0, row: 0 } }];
     return {
+      where: 'board' as const,
       board: withOwned({ panels: [...drag.base.panels, { id: drag.newPanel, at, parts }] }),
       key: 'new',
       pushes: false
     };
   }
 
+  /** The workbench's place on the page if `point` is over it while the sheet shows it, otherwise undefined. */
+  function overBench(point: Point) {
+    const rect = bench()?.getBoundingClientRect();
+    const shown = !props.sheet.sunk() && props.sheet.height() > 0;
+    return shown && rect && inside(point, rect) ? rect : undefined;
+  }
+
   /** Whether `point` on the page is over the box, where a part is put away; the workbench in it is not. */
   function overBox(point: Point) {
-    const inside = (rect: DOMRect | undefined) =>
-      rect !== undefined && point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
-    return inside(box()?.getBoundingClientRect()) && !(benchAt() && inside(bench()?.getBoundingClientRect()));
+    const rect = box()?.getBoundingClientRect();
+    return rect !== undefined && inside(point, rect) && !overBench(point);
   }
 }
 
 /**
  * The panels of `board` on screen, in paint order, with where each lies: the free ones, then the open swatch's panel
  * and the panels of the swatches it lies in, outermost first. While editing, an open swatch without a panel shows an
- * empty one to drop parts into. The panels in `pinned` keep their cell (0, 0) at its origin there. While the box is
- * fully out, only the workbench shows, its top-left at `benchAt`, an empty one if the board has none.
+ * empty one to drop parts into. The panels in `pinned` keep their cell (0, 0) at its origin there. The workbench lies
+ * in the box instead; see `benchFrame`.
  */
 function visiblePanels(
   board: Board,
   open: string | undefined,
   editing: boolean,
   view: { width: number; height: number },
-  pinned?: ReadonlyMap<string, Point>,
-  benchAt?: Point
+  pinned?: ReadonlyMap<string, Point>
 ) {
-  if (benchAt) {
-    const panel = board.panels.find((candidate) => candidate.bench) ?? emptyBench;
-    const bounds = partsBounds(panel.parts);
-    const origin = pinned?.get(panel.id) ?? {
-      x: benchAt.x + panelPadding - bounds.column * pitch,
-      y: benchAt.y + panelPadding - bounds.row * pitch
-    };
-    return [{ panel, frame: frameAt(panel, origin) }];
-  }
-
   const owned = [...openChain(board, open)]
     .reverse()
     .map((owner) => ownedPanel(board, owner) ?? (editing ? emptyPanel(owner) : undefined))
@@ -830,8 +893,33 @@ function pinned(drag: Drag | undefined) {
   return drag?.type === 'part' || drag?.type === 'resize' ? drag.pinned : undefined;
 }
 
+/** The workbench of `board`, an empty one if nothing is on it yet. */
+function benchOf(board: Board) {
+  return board.panels.find((panel) => panel.bench) ?? emptyBench;
+}
+
+/**
+ * Where the workbench `panel` lies in its place in the sheet, in that place's pixels: its top-left `benchInset` in
+ * from the place's, or with its cell (0, 0) at `pinned` through a drag.
+ */
+function benchFrame(panel: Panel, pinned?: Point) {
+  const bounds = partsBounds(panel.parts);
+  return frameAt(
+    panel,
+    pinned ?? {
+      x: benchInset + panelPadding - bounds.column * pitch,
+      y: benchInset + panelPadding - bounds.row * pitch
+    }
+  );
+}
+
 /** The workbench before anything is put on it. */
 const emptyBench: Panel = { id: 'bench', at: { x: 0, y: 0 }, parts: [], bench: true };
+
+/** Whether `point` lies in `rect`. */
+function inside(point: Point, rect: DOMRect) {
+  return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
+}
 
 function emptyPanel(owner: string): Panel {
   return { id: `${owner}-panel`, at: { x: 0, y: 0 }, owner, parts: [] };
@@ -875,6 +963,9 @@ const tapDistance = 6;
 
 /** CSS pixels between the workbench's place in the box and the bench panel. */
 const benchInset = 16;
+
+/** Milliseconds a carried part rests on the sunk sheet's strip before the sheet rises again. */
+const springDelay = 450;
 
 /** Milliseconds a still press on the bare drawing or a panel's free cells takes to open the spawn menu. */
 const longPress = 420;

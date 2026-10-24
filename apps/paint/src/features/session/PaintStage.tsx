@@ -28,10 +28,12 @@ export function PaintEditor(props: {
   class?: string;
   /** Whether the editor shows the session's windows over the variant's UI; true by default. */
   windows?: boolean;
+  /** Inline style for the variant's own look, such as custom properties its stylesheet reads. */
+  style?: JSX.HTMLAttributes<HTMLDivElement>['style'];
   children: JSX.Element;
 }) {
   return (
-    <div ref={props.session.setEditor} class={`${styles.editor} ${props.class ?? ''}`}>
+    <div ref={props.session.setEditor} class={`${styles.editor} ${props.class ?? ''}`} style={props.style}>
       {props.children}
       <Show when={props.windows ?? true}>
         <SessionWindows session={props.session} />

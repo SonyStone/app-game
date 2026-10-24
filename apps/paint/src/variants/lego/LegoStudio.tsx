@@ -16,7 +16,7 @@ import styles from './LegoStudio.module.css';
 import { besideRect, findPart } from './board';
 import { createKits } from './kits';
 import { LookChooser } from './LookChooser';
-import type { TrayStop } from './PartsTray';
+import { createSheet } from './createSheet';
 import { chooseLook } from './looks';
 import { ValuePart, type Popup } from './parts';
 
@@ -29,23 +29,36 @@ import { ValuePart, type Popup } from './parts';
  * the one chosen for its size. A color swatch opens a panel of its own, built like any other; panels can be kept as
  * kits and placed again.
  *
- * "Edit" shows the studs and the handle of the box of parts, pulled out halfway to look through it beside the drawing
- * shrunk to a card, or all the way to build a kit on the workbench: drag parts out of the box, between panels and
- * back, size them by their corner and move panels by their rim; a long press on a free spot offers the parts right
- * there (see `BoardView`). The board is kept per device.
+ * "Edit" shows the studs and the handle of the box of parts, a sheet pulled up by a wheel or a drag, the drawing
+ * shrinking to a card above it, with the workbench to build a kit on at full size: drag parts out of the box, between
+ * panels and back, size them by their corner and move panels by their rim; a long press on a free spot offers the
+ * parts right there (see `BoardView`). The board is kept per device.
  */
 export function LegoStudio(props: PaintVariantProps) {
   const [editing, setEditing] = createSignal(false);
   /** The swatch whose panel is open; see `BoardView`. */
   const [openPanel, setOpenPanel] = createSignal<string>();
-  /** How far the box of parts is pulled out while editing; each edit starts with it closed. */
-  const [tray, setTray] = createSignal<TrayStop>('closed');
   const [popup, setPopup] = createSignal<{ popup: Popup; rect: DOMRect }>();
   const [popupElement, setPopupElement] = createSignal<HTMLElement>();
   const popupSize = createElementSize(popupElement);
   const session = createPaintSession({ panel: () => popup()?.popup.kind });
   const board = createBoard();
   const kits = createKits();
+  /** The box of parts while editing; each edit starts with it closed. */
+  const sheet = createSheet(() => session.size().height);
+  /**
+   * How the drawing and the board shrink to a card above the sheet: by how much of the way to its middle stop the
+   * sheet is up (`progress`), the most there, centered across and a margin down; at full size while it is sunk.
+   */
+  const card = () => {
+    const { width, height } = session.size();
+    const middle = sheet.middle();
+    const up = editing() && !sheet.sunk() ? sheet.height() : 0;
+    const progress = middle > 0 ? Math.min(up, middle) / middle : 0;
+    const smallest = Math.max(0.3, (height - middle - cardMargin * 2) / height);
+    const scale = 1 - progress * (1 - smallest);
+    return { progress, scale, x: (width * (1 - scale)) / 2, y: cardMargin * progress };
+  };
 
   session.createShortcuts({
     closePanel() {
@@ -59,8 +72,7 @@ export function LegoStudio(props: PaintVariantProps) {
         return true;
       }
 
-      if (editing() && tray() !== 'closed') {
-        setTray(tray() === 'full' ? 'half' : 'closed');
+      if (editing() && sheet.back()) {
         return true;
       }
 
@@ -100,7 +112,17 @@ export function LegoStudio(props: PaintVariantProps) {
   };
 
   return (
-    <PaintEditor session={session} class={styles.editor}>
+    <PaintEditor
+      session={session}
+      class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''}`}
+      style={{
+        '--card-scale': `${card().scale}`,
+        '--card-x': `${card().x}px`,
+        '--card-y': `${card().y}px`,
+        // The card follows a wheel or a finger closely, and moves to a stop or springs back slower.
+        '--sheet-time': sheet.settling() ? '260ms' : '70ms'
+      }}
+    >
       <PaintStage session={session} class={styles.workspace}>
         <StageGuides session={session} />
         <StageOverlays session={session} />
@@ -113,8 +135,7 @@ export function LegoStudio(props: PaintVariantProps) {
           editing={editing()}
           openPanel={openPanel()}
           onOpenPanel={setOpenPanel}
-          stop={tray()}
-          onStop={setTray}
+          sheet={sheet}
           onPopup={(anchor, next) => setPopup({ popup: next, rect: anchor.getBoundingClientRect() })}
         />
         <Show when={popup() && popupPlace()}>
@@ -177,7 +198,7 @@ export function LegoStudio(props: PaintVariantProps) {
             onClick={() => {
               setPopup(undefined);
               setOpenPanel(undefined);
-              setTray('closed');
+              sheet.to('closed');
               setEditing(!editing());
             }}
           >
@@ -189,3 +210,6 @@ export function LegoStudio(props: PaintVariantProps) {
     </PaintEditor>
   );
 }
+
+/** CSS pixels around the card the drawing shrinks to. */
+const cardMargin = 16;

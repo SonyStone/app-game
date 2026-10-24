@@ -1,143 +1,197 @@
-import { For, Show } from 'solid-js';
+import { createEventListener } from '@solid-primitives/event-listener';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { cellGap, cellSize, partsBounds, pitch, type Part } from './board';
+import type { createSheet } from './createSheet';
 import type { createKits, Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { boxSections, kindLabel, lookOf, PartView, type Session } from './parts';
 
 /**
- * How far the box of parts is pulled out: `closed` leaves only its handle, the board at full size; `half` shrinks the
- * drawing to a card beside the box to look through it; `full` covers the screen with the workbench over the parts.
- */
-export type TrayStop = 'closed' | 'half' | 'full';
-
-/**
- * The box of parts while editing, pulled out in three stops (see `TrayStop`) by its handle, a tap or a swipe: every
- * part by family with its name, the brushes, and the kits as live previews, the user's with a delete button. Fully
- * pulled out it holds the workbench, a place the board puts its bench panel to build a kit at full size. While
- * something is carried from the board or the half-open box it sinks to a strip along the bottom, so the board shows
- * at full size; dropping something on it puts it away.
+ * The box of parts while editing, a sheet pulled up from the bottom edge (see `createSheet`): a wheel turned over the
+ * board or the sheet moves its edge, as does a drag on its handle or on the workbench's free space, and a tap on the
+ * handle opens or closes it. It holds the workbench, where the board puts its bench panel to build a kit at full
+ * size, beside every part by family with its name, the brushes, and the kits as live previews, the user's with a
+ * delete button. While it is sunk, the strip it leaves puts away what is dropped on it.
  */
 export function PartsTray(props: {
   session: Session;
   kits: ReturnType<typeof createKits>;
-  stop: TrayStop;
-  onStop: (stop: TrayStop) => void;
-  /** Whether a part or kit is being carried, and whether it is over the box, to be put away. */
-  carrying: boolean;
+  sheet: ReturnType<typeof createSheet>;
+  /** Whether a part or kit carried over the sheet would be put away there. */
   over: boolean;
   /** Lifts a new part of `kind`, or a copy of `kit`, from the press `event`. */
   onLift: (event: PointerEvent, kind: string) => void;
   onLiftKit: (event: PointerEvent, kit: Kit) => void;
   onReset: () => void;
   ref: (element: HTMLElement) => void;
-  /** The workbench's place, shown while the box is fully out. */
-  benchRef: (element: HTMLElement | undefined) => void;
+  /** The workbench's place in the sheet. */
+  benchRef: (element: HTMLElement) => void;
 }) {
-  /** Where a press on the handle began, to tell a swipe from a tap. */
-  let pressY: number | undefined;
-  const sunk = () => props.carrying && props.stop !== 'full';
-  const pull = (moved: number) => {
-    const order: TrayStop[] = ['closed', 'half', 'full'];
-    const at = order.indexOf(props.stop);
-    if (Math.abs(moved) < swipeDistance) {
-      return props.stop === 'closed' ? 'half' : props.stop === 'half' ? 'closed' : 'half';
-    }
+  const [body, setBody] = createSignal<HTMLElement>();
+  const closed = () => props.sheet.height() <= 0 && !props.sheet.sunk();
+  const shownHeight = () => (props.sheet.sunk() ? sunkHeight : Math.max(barHeight, props.sheet.height()));
 
-    return order[Math.max(0, Math.min(2, at + (moved < 0 ? 1 : -1)))]!;
-  };
+  // A wheel over the board or the sheet moves its edge, and settles it once the wheel stops; over the parts it first
+  // scrolls them, and moves the sheet only past their ends.
+  let wheelTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(wheelTimer));
+  createEventListener(
+    window,
+    'wheel',
+    (event) => {
+      const target = event.target instanceof Element ? event.target : undefined;
+      if (event.ctrlKey || !target?.closest(`.${styles.board}, .${styles.tray}`)) {
+        return;
+      }
+
+      const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+      const list = body();
+      if (list?.contains(target)) {
+        const atTop = list.scrollTop <= 0;
+        const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
+        if (!(delta < 0 && atTop) && !(delta > 0 && atBottom)) {
+          return;
+        }
+      }
+
+      event.preventDefault();
+      props.sheet.follow(props.sheet.height() + delta);
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(() => props.sheet.settle(delta > 0 ? 1 : -1), wheelSettle);
+    },
+    { passive: false }
+  );
 
   return (
     <aside
       ref={props.ref}
       class={styles.tray}
       aria-label="Box of parts"
-      data-stop={props.stop}
-      data-sunk={sunk() ? '' : undefined}
+      data-closed={closed() ? '' : undefined}
+      data-sunk={props.sheet.sunk() ? '' : undefined}
       data-over={props.over ? '' : undefined}
       data-keeps-panel
+      style={{ height: `${shownHeight()}px` }}
     >
-      <header
-        class={styles.trayBar}
-        onPointerDown={(event) => {
-          // Held, so a swipe that leaves the handle still ends on it.
-          event.currentTarget.setPointerCapture(event.pointerId);
-          pressY = event.clientY;
-        }}
-        onPointerUp={(event) => {
-          if (pressY === undefined || props.carrying) {
-            return;
-          }
-
-          const moved = event.clientY - pressY;
-          pressY = undefined;
-          props.onStop(pull(moved));
-        }}
-      >
+      <div class={styles.trayBar} onPointerDown={(event) => dragSheet(event, props.sheet, true)}>
         <span class={styles.trayGrip} aria-hidden="true" />
-        <span class={styles.trayTitle}>
-          {props.over ? 'Drop to put it away' : sunk() ? 'Drop here to put it away' : 'Box of parts'}
-        </span>
-        <Show when={props.stop !== 'closed' && !sunk()}>
-          <span class={styles.trayHint}>
-            {props.stop === 'full' ? 'build a kit on the bench, drag it out by its rim' : 'or hold the drawing'}
-          </span>
-          <button
-            type="button"
-            class={styles.boxButton}
-            onPointerDown={(event) => event.stopPropagation()}
-            onPointerUp={(event) => event.stopPropagation()}
-            onClick={() => props.onStop(props.stop === 'full' ? 'half' : 'full')}
-          >
-            {props.stop === 'full' ? 'Back to the board' : 'Workbench'}
-          </button>
-          <button
-            type="button"
-            class={styles.boxButton}
-            onPointerDown={(event) => event.stopPropagation()}
-            onPointerUp={(event) => event.stopPropagation()}
-            onClick={() => props.onReset()}
-          >
+        <Show when={props.sheet.sunk()}>
+          <span class={styles.trayTitle}>{props.over ? 'Drop to put it away' : 'Drop here to put it away'}</span>
+        </Show>
+      </div>
+      <div class={styles.trayContent}>
+        <div
+          ref={props.benchRef}
+          class={styles.benchSlot}
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) {
+              dragSheet(event, props.sheet, false);
+            }
+          }}
+        >
+          <span class={styles.benchHint}>Workbench: build a kit here</span>
+        </div>
+        <div ref={setBody} class={styles.trayBody}>
+          <For each={partFamilies(props.session)}>
+            {(family) => (
+              <section>
+                <h4>{family.title}</h4>
+                <div class={styles.trayItems}>
+                  <For each={family.kinds}>
+                    {(kind) => (
+                      <PartTile kind={kind} session={props.session} onLift={(event) => props.onLift(event, kind)} />
+                    )}
+                  </For>
+                </div>
+              </section>
+            )}
+          </For>
+          <section>
+            <h4>Kits</h4>
+            <div class={styles.trayItems}>
+              <For each={props.kits.kits()}>
+                {(kit) => (
+                  <KitTile
+                    kit={kit}
+                    kits={props.kits}
+                    session={props.session}
+                    onLift={(event) => props.onLiftKit(event, kit)}
+                  />
+                )}
+              </For>
+            </div>
+          </section>
+          <button type="button" class={styles.boxButton} onClick={() => props.onReset()}>
             Reset board
           </button>
-        </Show>
-      </header>
-      <Show when={props.stop === 'full'}>
-        <div ref={props.benchRef} class={styles.benchSlot}>
-          <span>Workbench: drop parts here to build a kit at full size</span>
         </div>
-      </Show>
-      <div class={styles.trayBody}>
-        <For each={partFamilies(props.session)}>
-          {(family) => (
-            <section>
-              <h4>{family.title}</h4>
-              <div class={styles.trayItems}>
-                <For each={family.kinds}>
-                  {(kind) => (
-                    <PartTile kind={kind} session={props.session} onLift={(event) => props.onLift(event, kind)} />
-                  )}
-                </For>
-              </div>
-            </section>
-          )}
-        </For>
-        <section>
-          <h4>Kits</h4>
-          <div class={styles.trayItems}>
-            <For each={props.kits.kits()}>
-              {(kit) => (
-                <KitTile kit={kit} kits={props.kits} session={props.session} onLift={(event) => props.onLiftKit(event, kit)} />
-              )}
-            </For>
-          </div>
-        </section>
       </div>
     </aside>
   );
 }
 
-/** CSS pixels a press on the handle must travel to pull the box a stop further or push it back one. */
-const swipeDistance = 24;
+/**
+ * Moves the sheet's edge with the press `event` until it lifts, then settles it the way it was flung, or on the
+ * nearest stop. A press on the handle (`tappable`) that does not move opens a closed sheet to the middle and closes
+ * an open one.
+ */
+function dragSheet(event: PointerEvent, sheet: ReturnType<typeof createSheet>, tappable: boolean) {
+  const element = event.currentTarget as HTMLElement;
+  element.setPointerCapture(event.pointerId);
+  const start = { y: event.clientY, height: sheet.height() };
+  let last = { y: event.clientY, time: event.timeStamp };
+  let speed = 0;
+  let moved = false;
+
+  const move = (next: PointerEvent) => {
+    if (next.pointerId !== event.pointerId) {
+      return;
+    }
+
+    moved ||= Math.abs(next.clientY - start.y) >= tapDistance;
+    if (moved) {
+      sheet.follow(start.height + start.y - next.clientY);
+    }
+
+    const time = Math.max(1, next.timeStamp - last.time);
+    speed = (last.y - next.clientY) / time;
+    last = { y: next.clientY, time: next.timeStamp };
+  };
+  const end = (next: PointerEvent) => {
+    if (next.pointerId !== event.pointerId) {
+      return;
+    }
+
+    element.removeEventListener('pointermove', move);
+    element.removeEventListener('pointerup', end);
+    element.removeEventListener('pointercancel', end);
+    if (!moved) {
+      if (tappable) {
+        sheet.to(sheet.height() > 0 ? 'closed' : 'middle');
+      }
+
+      return;
+    }
+
+    sheet.settle(speed > flingSpeed ? 1 : speed < -flingSpeed ? -1 : 0);
+  };
+  element.addEventListener('pointermove', move);
+  element.addEventListener('pointerup', end);
+  element.addEventListener('pointercancel', end);
+}
+
+/** CSS pixels of the handle a closed sheet shows, and of the strip a sunk one leaves. */
+const barHeight = 24;
+const sunkHeight = 56;
+
+/** CSS pixels a press on the handle may move and still be a tap. */
+const tapDistance = 6;
+
+/** CSS pixels per millisecond a drag must end at to fling the sheet to the next stop rather than the nearest. */
+const flingSpeed = 0.3;
+
+/** Milliseconds after the last wheel turn the sheet settles on a stop. */
+const wheelSettle = 160;
 
 /** The families of parts the box and the spawn menu offer: the box's sections, then the user's brushes. */
 export function partFamilies(session: Session) {
