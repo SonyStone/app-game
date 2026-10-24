@@ -154,8 +154,12 @@ describe('breakable walls', () => {
 });
 
 describe('a light tank thrown by a blast', () => {
-  it.each(['steel', 'brick'] as const)('lands against a %s wall, not inside it', (material) => {
-    const { combat } = createBattle({ walls: [{ x: 70, y: 0, halfWidth: 12, halfHeight: 150, material }] });
+  it.each([
+    ['steel', 12],
+    ['brick', 12],
+    ['wood', 7]
+  ] as const)('lands against a %s wall, not inside it', (material, halfWidth) => {
+    const { combat } = createBattle({ walls: [{ x: 58 + halfWidth, y: 0, halfWidth, halfHeight: 150, material }] });
     const tank = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0, mass: 0.65 });
     combat.step(1 / 60);
     // As hard as two grenades going off together: about 1800 px/s, a wall's thickness a step.

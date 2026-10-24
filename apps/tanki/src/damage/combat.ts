@@ -1,4 +1,4 @@
-import { createTank, driveTank, HULL_LINEAR_DAMPING, type Tank } from '../arena/bodies';
+import { createTank, driveTank, HULL_LINEAR_DAMPING, PULL_ANCHOR, type Tank } from '../arena/bodies';
 import { PROP_COLOR } from '../arena/draw';
 import type { Collider, Rapier, RigidBody } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
@@ -1836,10 +1836,20 @@ export function createCombat(
     body.tank.pull.setLinvel(body.body.linvel(), true);
   }
 
-  /** Counts down a tank's time in the air; once it lands, the ground holds it again and its tracks raise dust. */
+  /**
+   * Counts down a tank's time in the air; once it lands, the ground holds it again and its tracks
+   * raise dust. In the air the pull rides on its anchor at the front of the hull: flying on by
+   * itself, it would pass through a wall that stopped the hull and its joint would drag the hull
+   * in after it.
+   */
   function fly(body: Armored, dt: number) {
     const air = body.airborne!;
     air.left -= dt;
+
+    if (body.tank) {
+      body.tank.pull.setTranslation(toWorld(body.body, PULL_ANCHOR), true);
+      body.tank.pull.setLinvel(body.body.linvel(), true);
+    }
 
     if (air.left > 0) {
       return;

@@ -163,7 +163,7 @@ export const HULL_LINEAR_DAMPING = 50;
 const HULL_ANGULAR_DAMPING = 25;
 
 /** Pin joint position in hull coordinates, ahead of the center. */
-const PULL_ANCHOR = { x: 15, y: 0 };
+export const PULL_ANCHOR = { x: 15, y: 0 };
 
 const MUZZLE_OFFSET = 30;
 const SHOT_RANGE = 1000;
