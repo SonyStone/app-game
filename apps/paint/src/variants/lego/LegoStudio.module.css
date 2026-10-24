@@ -71,6 +71,13 @@
   outline-offset: 3px;
 }
 
+/* A panel's cell (0, 0), its parts' origin: a point, so presses between parts reach the panel. */
+.cells {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
 /* A part: a flat tile on the studs, its print filling it edge to edge. */
 .part {
   position: absolute;

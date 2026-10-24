@@ -476,82 +476,95 @@ export function BoardView(props: {
         <Show when={panel().parts.length === 0 && !panel().bench}>
           <span class={styles.emptyPanel}>Drop parts here</span>
         </Show>
-        <For each={panel().parts} keyed={(part) => part.id}>
-          {(part) => {
-            // The lifted part, or a carried block's parts, show only where they would land.
-            const isLifted = () =>
-              lifted()?.id === part().id || lifted()?.block?.parts.some((inBlock) => inBlock.id === part().id) === true;
-            return (
-              <div
-                class={styles.part}
-                data-part={part().id}
-                data-lifted={isLifted() ? '' : undefined}
-                data-open={chain().has(part().id) ? '' : undefined}
-                data-selected={props.editing && !isLifted() && selection().has(part().id) ? '' : undefined}
-                style={{
-                  left: `${frame().origin.x - frame().rect.left + part().cell.column * pitch}px`,
-                  top: `${frame().origin.y - frame().rect.top + part().cell.row * pitch}px`,
-                  width: `${part().span.columns * pitch - cellGap}px`,
-                  height: `${part().span.rows * pitch - cellGap}px`
-                }}
-                onPointerDown={(event) => {
-                  if (!props.editing) {
-                    return;
-                  }
-
-                  if (selection().has(part().id)) {
-                    if (panel().bench) {
-                      startSelectionDrag(event, part().id);
-                    } else {
-                      startBoardSelectionDrag(event, part().id);
-                    }
-
-                    return;
-                  }
-
-                  const { id, kind, span, looks } = part();
-                  startPartDrag(event, { id, kind, span, looks });
-                }}
-              >
-                <Show when={!isLifted()}>
-                  <div class={styles.content} inert={props.editing || undefined}>
-                    <PartView
-                      kind={part().kind}
-                      span={part().span}
-                      look={lookOf(part())}
-                      session={props.session}
-                      onPopup={props.onPopup}
-                      onOpen={() => toggle(part().id)}
-                    />
-                  </div>
-                </Show>
-                <Show when={props.editing && !isLifted() && partLooks(part().kind)}>
-                  <button
-                    type="button"
-                    class={styles.looksHandle}
-                    aria-label="Choose look"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) =>
-                      props.onPopup(event.currentTarget.parentElement!, { kind: 'looks', id: part().id })
-                    }
-                  >
-                    ⇄
-                  </button>
-                </Show>
-                <Show when={props.editing && !isLifted()}>
-                  <span
-                    class={styles.corner}
-                    aria-label="Resize"
-                    onPointerDown={(event) => {
-                      event.stopPropagation();
-                      startResize(event, panel().id, part().id, part().span);
-                    }}
-                  />
-                </Show>
-              </div>
-            );
+        {/*
+         * The parts lie from the panel's cell (0, 0), which stays still while the panel grows or shrinks around a
+         * carried part: the panel's edge moves at once, and only parts that change cells slide.
+         */}
+        <div
+          class={styles.cells}
+          style={{
+            left: `${frame().origin.x - frame().rect.left}px`,
+            top: `${frame().origin.y - frame().rect.top}px`
           }}
-        </For>
+        >
+          <For each={panel().parts} keyed={(part) => part.id}>
+            {(part) => {
+              // The lifted part, or a carried block's parts, show only where they would land.
+              const isLifted = () =>
+                lifted()?.id === part().id ||
+                lifted()?.block?.parts.some((inBlock) => inBlock.id === part().id) === true;
+              return (
+                <div
+                  class={styles.part}
+                  data-part={part().id}
+                  data-lifted={isLifted() ? '' : undefined}
+                  data-open={chain().has(part().id) ? '' : undefined}
+                  data-selected={props.editing && !isLifted() && selection().has(part().id) ? '' : undefined}
+                  style={{
+                    left: `${part().cell.column * pitch}px`,
+                    top: `${part().cell.row * pitch}px`,
+                    width: `${part().span.columns * pitch - cellGap}px`,
+                    height: `${part().span.rows * pitch - cellGap}px`
+                  }}
+                  onPointerDown={(event) => {
+                    if (!props.editing) {
+                      return;
+                    }
+
+                    if (selection().has(part().id)) {
+                      if (panel().bench) {
+                        startSelectionDrag(event, part().id);
+                      } else {
+                        startBoardSelectionDrag(event, part().id);
+                      }
+
+                      return;
+                    }
+
+                    const { id, kind, span, looks } = part();
+                    startPartDrag(event, { id, kind, span, looks });
+                  }}
+                >
+                  <Show when={!isLifted()}>
+                    <div class={styles.content} inert={props.editing || undefined}>
+                      <PartView
+                        kind={part().kind}
+                        span={part().span}
+                        look={lookOf(part())}
+                        session={props.session}
+                        onPopup={props.onPopup}
+                        onOpen={() => toggle(part().id)}
+                      />
+                    </div>
+                  </Show>
+                  <Show when={props.editing && !isLifted() && partLooks(part().kind)}>
+                    <button
+                      type="button"
+                      class={styles.looksHandle}
+                      aria-label="Choose look"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) =>
+                        props.onPopup(event.currentTarget.parentElement!, { kind: 'looks', id: part().id })
+                      }
+                    >
+                      ⇄
+                    </button>
+                  </Show>
+                  <Show when={props.editing && !isLifted()}>
+                    <span
+                      class={styles.corner}
+                      aria-label="Resize"
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
+                        startResize(event, panel().id, part().id, part().span);
+                      }}
+                    />
+                  </Show>
+                </div>
+              );
+            }}
+          </For>
+        </div>
       </div>
     );
   }
