@@ -10,6 +10,7 @@ import {
   StageGuides,
   StageOverlays
 } from '../../features/session';
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { besideRect, findPart } from './board';
 import { BoardView } from './BoardView';
 import { createBoard } from './createBoard';
@@ -193,6 +194,10 @@ export function LegoStudio(props: PaintVariantProps) {
               </a>
             )}
           </Show>
+          {/* On a tablet, full screen also hides Android's bars and makes its edge swipes take two tries. */}
+          <button type="button" class={[styles.editButton, styles.iconButton]} {...session.fullscreen.props}>
+            <SketchIcon name={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={18} />
+          </button>
           <button
             type="button"
             class={styles.editButton}

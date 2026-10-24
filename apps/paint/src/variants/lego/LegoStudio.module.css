@@ -389,6 +389,14 @@
   cursor: pointer;
 }
 
+/* A round button holding an icon, such as full screen. */
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  padding: 0;
+}
+
 .editButton[data-active] {
   background: var(--lego-accent);
 }
