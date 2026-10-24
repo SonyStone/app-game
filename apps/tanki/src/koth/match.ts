@@ -51,8 +51,10 @@ export function createKothMatch(
     onHit: (target, shooter) => noteShot(byTank.get(target), shooter),
     onDestroyed: destroyed,
     // Shot-apart walls open new ways and lines of fire; the grid follows where they changed.
-    onWallsChanged: (bounds) => updateNavGrid(grid, grow(bounds, NAV_REACH), (point) => combat.obstacleDistance(point, NAV_CAP))
+    onWallsChanged: (bounds) => navChanges.push(grow(bounds, NAV_REACH))
   });
+  // Areas of the grid to bring up to date with the walls, one a step so no step does much work.
+  const navChanges: { minX: number; minY: number; maxX: number; maxY: number }[] = [];
   const grid = createNavGrid(map);
   const scenery = createScenery(renderer, map, { red: rgb(TEAM_COLORS.red), blue: rgb(TEAM_COLORS.blue) });
   const kits = createKits(renderer, map.kits, combat);
@@ -168,6 +170,7 @@ export function createKothMatch(
       }
 
       combat.step(dt);
+      updateGrid();
       nearMisses();
       respawn();
       repair();
@@ -281,6 +284,11 @@ export function createKothMatch(
     restart() {
       combat.reset();
       kits.reset();
+
+      while (navChanges.length > 0) {
+        updateGrid();
+      }
+
       byTank.clear();
       time = 0;
       nextRepair = 0;
@@ -407,6 +415,15 @@ export function createKothMatch(
     }
 
     feed.push({ id: feedId++, at: time, killer: credited, victim: member });
+  }
+
+  /** Brings the oldest changed area of the grid up to date with the walls. */
+  function updateGrid() {
+    const area = navChanges.shift();
+
+    if (area) {
+      updateNavGrid(grid, area, (point) => combat.obstacleDistance(point, NAV_CAP));
+    }
   }
 
   /** Marks a member as under fire from `shooter`. */

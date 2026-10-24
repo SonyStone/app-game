@@ -425,9 +425,11 @@ function labelArmor(field: DamageField) {
     while (stack.length > 0) {
       const cell = stack.pop()!;
       const col = cell % cols;
-      const neighbors = [col > 0 ? cell - 1 : -1, col < cols - 1 ? cell + 1 : -1, cell - cols, cell + cols];
 
-      for (const neighbor of neighbors) {
+      // The four neighbors, without allocating: left, right, up, down.
+      for (let side = 0; side < 4; side++) {
+        const neighbor = side === 0 ? (col > 0 ? cell - 1 : -1) : side === 1 ? (col < cols - 1 ? cell + 1 : -1) : side === 2 ? cell - cols : cell + cols;
+
         if (neighbor < 0 || neighbor >= cols * rows || labels[neighbor] !== 0 || data[neighbor * CHANNELS] >= 0) {
           continue;
         }

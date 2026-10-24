@@ -30,7 +30,8 @@ type Point = { x: number; y: number };
  * @param options.random - Source of randomness in [0, 1) for crater outlines and breakage.
  * @param options.onDebris - Receives a piece of wall knocked loose, with its field centered on
  *   its own center, where that center is in the world, the wall's angle and the piece's velocity.
- * @param options.onChange - Called with the world bounds of a tile whose shape changed.
+ * @param options.onChange - Called after a refresh or reset with the world bounds of an area where
+ *   walls changed shape; neighboring changed tiles are reported together.
  */
 export function createWalls(
   rapier: Rapier,
@@ -51,6 +52,8 @@ export function createWalls(
   const buckets = new Map<number, Tile[]>();
   const steelDraws = steel.map(steelDraw);
   const damage = { hits: 0, collapsed: 0 };
+  // Bounds of tiles changed since the last report.
+  const changed: Bounds[] = [];
 
   createFixedColliders();
 
@@ -136,16 +139,15 @@ export function createWalls(
 
     /**
      * Rebuilds every tile changed since the last call: drops loose pieces and fallen tiles as
-     * debris, rebuilds colliders, uploads fields and reports each changed area.
+     * debris, rebuilds colliders, uploads fields and reports each changed area. The neighbors of
+     * a tile that fell are cut back now and rebuilt with the next call, which spreads the work.
      */
     refresh() {
-      for (let pass = 0; pass < 4 && tiles.some((tile) => tile.changed); pass++) {
-        for (const tile of tiles) {
-          if (tile.changed) {
-            update(tile);
-          }
-        }
+      for (const tile of tiles.filter((candidate) => candidate.changed)) {
+        update(tile);
       }
+
+      reportChanges();
     },
 
     /** Queues every wall for drawing. */
@@ -190,7 +192,7 @@ export function createWalls(
       }
 
       for (const tile of tilesNear({ minX: point.x - cap, minY: point.y - cap, maxX: point.x + cap, maxY: point.y + cap })) {
-        if (tile.fallen) {
+        if (tile.fallen || boundsDistance(tile.bounds, point) >= nearest) {
           continue;
         }
 
@@ -218,11 +220,33 @@ export function createWalls(
           tile.rubble = false;
           tile.pristine = true;
           build(tile);
-          options.onChange(tile.bounds);
+          changed.push(tile.bounds);
         }
       }
+
+      reportChanges();
     }
   };
+
+  /** Reports the changed areas, overlapping ones merged into one. */
+  function reportChanges() {
+    const areas: Bounds[] = [];
+
+    for (const bounds of changed.splice(0)) {
+      let area = { ...bounds };
+
+      for (let index = areas.length - 1; index >= 0; index--) {
+        if (overlaps(areas[index], area)) {
+          area = union(areas[index], area);
+          areas.splice(index, 1);
+        }
+      }
+
+      areas.push(area);
+    }
+
+    areas.forEach(options.onChange);
+  }
 
   /** The border walls just outside the floor, steel walls and campfire stones, which never change. */
   function createFixedColliders() {
@@ -304,7 +328,7 @@ export function createWalls(
 
     renderer.uploadField(tile.slot!, tile.field);
     rebuildColliders(tile);
-    options.onChange(tile.bounds);
+    changed.push(tile.bounds);
   }
 
   /**
@@ -341,7 +365,7 @@ export function createWalls(
       }
     }
 
-    options.onChange(tile.bounds);
+    changed.push(tile.bounds);
   }
 
   /** Rebuilds a heap of rubble after a hit, or clears it away once little of it is left. */
@@ -383,9 +407,17 @@ export function createWalls(
    * it in place.
    */
   function isAnchored(tile: Tile, cell: number) {
-    const x = tile.field.originX + (cell % tile.field.cols) * tile.field.cell;
-    const y = tile.field.originY + Math.floor(cell / tile.field.cols) * tile.field.cell;
-    const { rect } = tile;
+    const { field, rect } = tile;
+    const col = cell % field.cols;
+    const row = Math.floor(cell / field.cols);
+
+    // Edges shared with neighbors are edges of the field.
+    if (col > 0 && row > 0 && col < field.cols - 1 && row < field.rows - 1) {
+      return false;
+    }
+
+    const x = field.originX + col * field.cell;
+    const y = field.originY + row * field.cell;
 
     return tile.neighbors.some(
       (neighbor) =>
@@ -519,6 +551,8 @@ const RUBBLE_THICKNESS = 40;
 const RUBBLE_LEFT = 150;
 const RUBBLE_HEIGHT = 4;
 const RUBBLE_SHADE = 0.85;
+/** Pixels from a chunk's center within which a rubble field holds the true distance to it. */
+const CHUNK_REACH = 18;
 /**
  * Side of the blocks colliders are built of, in cells: ragged crater edges would otherwise make
  * stacks of boxes a pixel thin, which push a tank shoved into them every which way and can trap it.
@@ -665,7 +699,11 @@ function createRubbleField(tile: Tile, random: () => number) {
     for (const chunk of chunks) {
       const dx = x - chunk.x;
       const dy = y - chunk.y;
-      armor = Math.min(armor, boxDistance(dx * chunk.cos + dy * chunk.sin, -dx * chunk.sin + dy * chunk.cos, chunk.halfX, chunk.halfY));
+
+      // Far from every chunk only "far" matters, which saves most of the work.
+      if (Math.abs(dx) < CHUNK_REACH && Math.abs(dy) < CHUNK_REACH) {
+        armor = Math.min(armor, boxDistance(dx * chunk.cos + dy * chunk.sin, -dx * chunk.sin + dy * chunk.cos, chunk.halfX, chunk.halfY));
+      }
     }
 
     return [Math.max(armor, rectDistance(rect, x, y)), pattern(x, y), FAR, 0.35];
@@ -753,6 +791,15 @@ function worldBounds(wall: WallPlacement, rect: Bounds, margin: number): Bounds 
 
 function overlaps(a: Bounds, b: Bounds) {
   return a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
+}
+
+function union(a: Bounds, b: Bounds): Bounds {
+  return { minX: Math.min(a.minX, b.minX), minY: Math.min(a.minY, b.minY), maxX: Math.max(a.maxX, b.maxX), maxY: Math.max(a.maxY, b.maxY) };
+}
+
+/** Distance from a point to a box, 0 inside it. */
+function boundsDistance(bounds: Bounds, point: Point) {
+  return Math.hypot(Math.max(bounds.minX - point.x, 0, point.x - bounds.maxX), Math.max(bounds.minY - point.y, 0, point.y - bounds.maxY));
 }
 
 function inside(rect: Bounds, x: number, y: number) {
