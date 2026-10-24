@@ -725,23 +725,26 @@ export function createCombat(
   }
 
   /**
-   * A body that crashed at `speed` into something tanks cannot push. A tank driving into it nose
-   * first rams it: the blow, its approach speed above `RAM_SPEED`, up to a tank's top speed, times its mass,
+   * A body that crashed at `speed` into something tanks cannot push. A tank driving straight into
+   * it nose first rams it: the blow, its approach speed above `RAM_SPEED`, up to a tank's top speed, times its mass,
    * dents its armor, less against a softer wall, bites into a breakable wall and may shove a wreck,
    * which throws up dust of their material. A tank rams once per run-up: contacts within
    * `RAM_COOLDOWN` s of its last ram leave no mark. A body thrown against it, by a hit or a crash,
-   * or brushing it with a corner or a side, only dents, as two bodies do when they crash.
+   * brushing it with a corner or a side, or swinging into it on a turn, only dents, as two bodies
+   * do when they crash.
    *
    * @param direction - Unit direction from the rammer into what it hit.
    */
   function ramWall(handle: number, rammer: Armored, point: Point, direction: Point, speed: number) {
     // A body thrown against a wall, by a hit or by another, or brushing it with a corner or a side
     // as it turns, only dents, as in a crash of two bodies.
-    const heading = rammer.body.rotation();
+    const heading = { x: Math.cos(rammer.body.rotation()), y: Math.sin(rammer.body.rotation()) };
     const nose = toLocal(rammer.body, point).x > RAM_NOSE;
-    const facing = Math.cos(heading) * direction.x + Math.sin(heading) * direction.y > RAM_FACING;
+    const facing = heading.x * direction.x + heading.y * direction.y > RAM_FACING;
+    // Driving straight ahead: a hull swinging round a corner toward its next turn does not ram.
+    const straight = heading.x * rammer.move.x + heading.y * rammer.move.y > RAM_STRAIGHT;
 
-    if (!nose || !facing || rammer.move.x * direction.x + rammer.move.y * direction.y < RAM_AIM) {
+    if (!nose || !facing || !straight || rammer.move.x * direction.x + rammer.move.y * direction.y < RAM_AIM) {
       if (speed >= CRASH_SPEED) {
         dentAt(rammer, point, { x: -direction.x, y: -direction.y }, (speed - CRASH_SPEED) * CRASH_DEPTH_PER_SPEED * THROWN_SHARE);
       }
@@ -1487,6 +1490,8 @@ const RAM_AIM = 0.6;
  */
 const RAM_NOSE = 8;
 const RAM_FACING = 0.86;
+/** A ram is driven straight ahead: full input within about 25 degrees of the hull's heading. */
+const RAM_STRAIGHT = 0.9;
 const RAM_TOP_SPEED = 150;
 const THROWN_SHARE = 1.6;
 const MAX_CRASH_DEPTH = 4;
