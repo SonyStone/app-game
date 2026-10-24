@@ -7,6 +7,7 @@ import { createDocumentExplorerBackend } from './backends/document/createDocumen
 import styles from './App.module.css';
 import type {
   ExplorerBackend,
+  ExplorerBatchableCommand,
   ExplorerCloudBackupAttempt,
   ExplorerCloudBackupConfiguration,
   ExplorerCloudBackupStatus,
@@ -21,10 +22,12 @@ import type {
   PersistentMovePlacement,
   PersistentOrganizerPlacement
 } from './explorer/backend';
+import { batchExplorerCommands } from './explorer/backend';
 import { readExplorerClipboard, serializeClipboardText, writeExplorerClipboard } from './explorer/clipboard';
 import type { ExplorerOrganizerKind } from './explorer/createExplorerDragAndDrop';
 import { affectedSources, createExplorerDragAndDrop } from './explorer/createExplorerDragAndDrop';
 import { createExplorerSources } from './explorer/createExplorerSources';
+import { createMetroTreeLines } from './explorer/createMetroTreeLines';
 import { ExplorerTreeRow } from './explorer/ExplorerTreeRow';
 import type { ExplorerHtmlRow } from './explorer/files';
 import {
@@ -50,11 +53,17 @@ import {
 } from './settings';
 import type { TreeKeyboardMoveDirection, TreeKeyboardOrganizerRequest } from './tree-view/createTreeKeyboardNavigation';
 import { createTreeKeyboardNavigation } from './tree-view/createTreeKeyboardNavigation';
+import { createTreeMarqueeSelection } from './tree-view/createTreeMarqueeSelection';
+import { createTreePathHighlight } from './tree-view/createTreePathHighlight';
 import { createTreeScrollRestoration } from './tree-view/createTreeScrollRestoration';
+import { createTreeSelection } from './tree-view/createTreeSelection';
 import type { TreeExpansionSnapshot, TreeViewItem } from './tree-view/createTreeView';
 import { createTreeView } from './tree-view/createTreeView';
 import { TreeDropIndicator } from './tree-view/TreeDropIndicator';
-import { TreeSelectionIndicator } from './tree-view/TreeSelectionIndicator';
+import { TreeFocusIndicator } from './tree-view/TreeFocusIndicator';
+import { TreeMarquee } from './tree-view/TreeMarquee';
+import { TreeSelectionHighlight } from './tree-view/TreeSelectionHighlight';
+import { classicTreeConnector, TreeAnchorBox } from './tree-view/treeLines';
 import type { TreeCollapsedSummary } from './tree-view/TreeView';
 import { TreeView } from './tree-view/TreeView';
 
@@ -267,8 +276,11 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
     if (!binding) {
       throw new Error('The destination backend is no longer available.');
     }
-    if (!binding.backend.capabilities.commands[command.kind]) {
-      throw new Error(`${binding.label()} cannot execute ${command.kind}.`);
+    const kinds =
+      command.kind === 'batch' ? ['batch' as const, ...command.commands.map(({ kind }) => kind)] : [command.kind];
+    const unsupportedKind = kinds.find((kind) => !binding.backend.capabilities.commands[kind]);
+    if (unsupportedKind) {
+      throw new Error(`${binding.label()} cannot execute ${unsupportedKind}.`);
     }
     await binding.backend.execute(command);
     for (const source of affectedSources(command)) {
@@ -407,6 +419,29 @@ function BrowserAtlasSettingsPanel(props: {
         description="Use the original extension's experimental light color scheme."
         checked={props.settings.appearance.lightBackground}
         onChange={(checked) => updateAppearance('lightBackground', checked)}
+      />
+      <label class="mb-3 flex items-center gap-2">
+        <span class="flex-1">
+          <span class="block text-neutral-100">Tree lines</span>
+          <span class="block text-neutral-400">Classic connectors, or a metro map with a line per window.</span>
+        </span>
+        <select
+          class="h-6 rounded border border-neutral-700 bg-neutral-950 px-1 text-xs text-neutral-200"
+          aria-label="Tree lines"
+          value={props.settings.appearance.treeStyle}
+          onChange={(event) =>
+            updateAppearance('treeStyle', event.currentTarget.value === 'metro' ? 'metro' : 'classic')
+          }
+        >
+          <option value="classic">Classic</option>
+          <option value="metro">Metro</option>
+        </select>
+      </label>
+      <SettingsCheckbox
+        label="Highlight the path to a row"
+        description="Light up the lines to the row under the pointer, or to the focused row."
+        checked={props.settings.appearance.pathHighlight}
+        onChange={(checked) => updateAppearance('pathHighlight', checked)}
       />
       <SettingsColorOverride
         label="Saved tab"
@@ -649,8 +684,12 @@ function ExplorerPane(props: {
     const root = tree.children()[0];
     return root ? props.dragAndDrop.dropZoneProps(root.item, selectedBackendId()) : undefined;
   });
+  const selection = createTreeSelection({ tree });
   const navigation = createTreeKeyboardNavigation({
     tree,
+    selection,
+    // Ctrl/Cmd/Shift+click on a link title opens it elsewhere, as in Tabs Outliner.
+    acceptsSelectionModifiers: (event) => !(event.target instanceof Element && event.target.closest('a[href]')),
     scrollTo: (item) => virtualTree.scrollTo(item),
     onActivate(node, alternative) {
       void activateNode(node, alternative);
@@ -667,19 +706,11 @@ function ExplorerPane(props: {
         editInlineTabNote(node);
       }
     },
-    onSaveClose(node) {
-      if (node.kind !== 'message' && (node.reference.kind === 'tab' || node.reference.kind === 'window')) {
-        const item = findTreeItemPath(tree.children(), (candidate) => candidate.item.id === node.id).at(-1);
-        handleNodeAction(node, item);
-      }
+    onSaveClose(nodes) {
+      saveCloseNodes(nodes);
     },
-    onDelete(node) {
-      if (node.kind !== 'message') {
-        const item = findTreeItemPath(tree.children(), (candidate) => candidate.item.id === node.id).at(-1);
-        if (item) {
-          handleNodeDelete(node, item);
-        }
-      }
+    onDelete(nodes) {
+      deleteNodes(nodes);
     },
     onUndo() {
       if (canUndoTree()) {
@@ -716,6 +747,28 @@ function ExplorerPane(props: {
     },
     onFlatten(node) {
       return flattenTabsFromKeyboard(node);
+    }
+  });
+  const pathHighlight = createTreePathHighlight({
+    tree,
+    fallbackTarget: navigation.focusedId,
+    enabled: () => props.settings().appearance.pathHighlight
+  });
+  const metroLines = createMetroTreeLines({
+    tree,
+    storageScope: () => `${selectedBackend().kind}:${selectedBackend().label()}:${selectedSource()}`,
+    path: pathHighlight
+  });
+  const marquee = createTreeMarqueeSelection({
+    tree,
+    selection,
+    element: scrollElement,
+    rowHeight: TREE_ROW_HEIGHT,
+    dragsFromEmptySpace: (item) => selection.isSelected(item) && props.dragAndDrop.canDrag(item.item),
+    onFinish(item) {
+      if (item) {
+        navigation.focus(item, 'keep');
+      }
     }
   });
   const scrollRestoration = createTreeScrollRestoration({
@@ -1109,7 +1162,14 @@ function ExplorerPane(props: {
         style={{ 'overflow-anchor': 'none' }}
         onScroll={handleTreeScroll}
         onWheel={scrollRestoration.onUserInteraction}
-        onPointerDown={scrollRestoration.onUserInteraction}
+        onPointerDown={(event) => {
+          scrollRestoration.onUserInteraction();
+          marquee.onPointerDown(event);
+        }}
+        onPointerOver={pathHighlight.onPointerOver}
+        onPointerLeave={pathHighlight.onPointerLeave}
+        onFocusIn={pathHighlight.onFocusIn}
+        onFocusOut={pathHighlight.onFocusOut}
         onTouchStart={scrollRestoration.onUserInteraction}
         onKeyDown={scrollRestoration.onUserInteraction}
         onDragEnter={handlePaneDragEnter}
@@ -1121,13 +1181,31 @@ function ExplorerPane(props: {
         onPaste={handleClipboardPaste}
       >
         <Show when={selectedBackend().sources.tree(selectedSource())} fallback={<UnavailableTreeStatus />}>
+          <TreeSelectionHighlight runs={selection.selectedRuns()} rowHeight={TREE_ROW_HEIGHT} virtual={virtualTree} />
           <TreeView
             virtual={virtualTree}
             isProtected={(item) => item.item.kind !== 'message' && item.item.protectedFromClose === true}
             collapsedSummary={(item) => createExplorerCollapsedSummary(item.item)}
+            connector={(item) =>
+              props.settings().appearance.treeStyle === 'metro'
+                ? metroLines.connector(item)
+                : classicTreeConnector(pathHighlight.state(item))
+            }
+            anchor={(item) =>
+              props.settings().appearance.treeStyle === 'metro' ? (
+                metroLines.anchor(item)
+              ) : (
+                <TreeAnchorBox
+                  expanded={item.childCount > 0 ? item.isExpanded : undefined}
+                  protected={item.item.kind !== 'message' && item.item.protectedFromClose === true}
+                  highlighted={pathHighlight.state(item) === 'path'}
+                />
+              )
+            }
             rowProps={(item) => ({
-              ...props.dragAndDrop.rowProps(item.item, selectedBackendId()),
+              ...props.dragAndDrop.rowProps(item.item, selectedBackendId(), () => dragNodesFor(item)),
               ...navigation.rowProps(item),
+              'data-tree-path': pathHighlight.state(item),
               onContextMenu: (event) => handleRowContextMenu(event, item)
             })}
             rowClass={(item) =>
@@ -1136,9 +1214,10 @@ function ExplorerPane(props: {
           >
             {(item) => (
               <>
-                <TreeSelectionIndicator selected={navigation.isSelected(item)} focused={navigation.isFocused(item)} />
+                <TreeFocusIndicator focused={navigation.isFocused(item)} selected={navigation.isSelected(item)} />
                 <ExplorerTreeRow
                   node={item.item}
+                  selected={navigation.isSelected(item)}
                   activateOnSingleClick={props.settings().oneClickActivation}
                   appearance={props.settings().appearance}
                   onActivate={(node, alternativeRestore) => void activateNode(node, alternativeRestore)}
@@ -1150,6 +1229,7 @@ function ExplorerPane(props: {
             )}
           </TreeView>
         </Show>
+        <Show when={marquee.rect()}>{(rect) => <TreeMarquee rect={rect()} />}</Show>
       </div>
 
       <Show when={contextMenu()}>
@@ -1157,7 +1237,7 @@ function ExplorerPane(props: {
           <ExplorerContextMenu
             x={menu().x}
             y={menu().y}
-            sections={contextMenuSections(menu().item)}
+            sections={menu().multiple ? selectionContextMenuSections() : contextMenuSections(menu().item)}
             onClose={() => setContextMenu(null)}
           />
         )}
@@ -1589,6 +1669,79 @@ function ExplorerPane(props: {
     runDeleteCommand({ kind: 'delete-tree-item', target, mode });
   }
 
+  /** Nodes a drag from a row carries: the selected hierarchies when the row is selected, else the row alone. */
+  function dragNodesFor(item: TreeViewItem<ExplorerTreeNode>): readonly ExplorerTreeNode[] {
+    return selection.isSelected(item) ? selection.selectedRoots().map((root) => root.item) : [item.item];
+  }
+
+  /**
+   * Deletes nodes as one undoable change, each by the single-row rule: a collapsed branch with its
+   * hierarchy, an expanded one alone while its children stay. Descendants go before ancestors.
+   */
+  function deleteNodes(nodes: readonly ExplorerTreeNode[]): void {
+    const deletions = nodes.flatMap((node) => {
+      const item = node.kind === 'message' ? undefined : treeItemForNode(node);
+      const target = node.kind === 'message' ? undefined : deleteTargetForNode(node);
+      return item && target ? [{ item, target }] : [];
+    });
+    const [deletion] = deletions;
+    if (deletions.length === 1 && deletion && deletion.item.item.kind !== 'message') {
+      handleNodeDelete(deletion.item.item, deletion.item);
+      return;
+    }
+    if (deletions.length === 0 || !selectedBackend().backend.capabilities.commands['delete-tree-item']) {
+      return;
+    }
+
+    navigation.clearSelection();
+    runDeleteCommand(
+      batchExplorerCommands(
+        deletions
+          .map(({ item, target }) => ({
+            kind: 'delete-tree-item' as const,
+            target,
+            mode: persistentDeleteMode(target, item)
+          }))
+          .reverse()
+      )
+    );
+  }
+
+  /**
+   * Saves and closes live tabs and windows as one undoable change. A collapsed branch includes its
+   * hidden descendants, as for one row; tabs of a window that closes too are left to the window.
+   */
+  function saveCloseNodes(nodes: readonly ExplorerTreeNode[]): void {
+    const closable = nodes.filter(
+      (node): node is Exclude<ExplorerTreeNode, { kind: 'message' }> =>
+        node.kind !== 'message' && (node.reference.kind === 'tab' || node.reference.kind === 'window')
+    );
+    const [node] = closable;
+    if (closable.length === 1 && node) {
+      handleNodeAction(node, treeItemForNode(node));
+      return;
+    }
+
+    const closingWindowIds = new Set(
+      closable.flatMap((candidate) => (candidate.reference.kind === 'window' ? [candidate.reference.id] : []))
+    );
+    const commands = closable.flatMap((candidate) => {
+      if (candidate.reference.kind === 'tab' && closingWindowIds.has(candidate.reference.windowId)) {
+        return [];
+      }
+      const item = treeItemForNode(candidate);
+      const command = createNodeActionCommand(candidate, item !== undefined && item.childCount > 0 && !item.isExpanded);
+      return command ? [command] : [];
+    });
+    if (commands.length > 0) {
+      void props.onCommand(selectedBackendId(), batchExplorerCommands(commands)).catch(props.onError);
+    }
+  }
+
+  function treeItemForNode(node: ExplorerTreeNode): TreeViewItem<ExplorerTreeNode> | undefined {
+    return findTreeItemPath(tree.children(), (candidate) => candidate.item.id === node.id).at(-1);
+  }
+
   function canCreateWindow(): boolean {
     return selectedSource() === 'explore' && selectedBackend().backend.capabilities.commands['create-window'];
   }
@@ -1731,7 +1884,7 @@ function ExplorerPane(props: {
     }
   }
 
-  function runDeleteCommand(command: Extract<ExplorerCommand, { kind: 'delete-tree-item' }>): void {
+  function runDeleteCommand(command: ExplorerCommand): void {
     void props
       .onCommand(selectedBackendId(), command)
       .then(() => (deletionHistory().status === 'closed' ? undefined : loadDeletionHistory()))
@@ -2326,11 +2479,14 @@ function ExplorerPane(props: {
     }
     event.preventDefault();
     event.stopPropagation();
-    navigation.focus(item);
+    // As in file managers, a right-click inside a multi-row selection acts on the whole selection.
+    const multiple = selection.isSelected(item) && selection.selectedItems().length > 1;
+    navigation.focus(item, multiple ? 'keep' : 'replace');
     setContextMenu({
       x: Math.max(0, Math.min(event.clientX, window.innerWidth - CONTEXT_MENU_WIDTH)),
       y: Math.max(0, Math.min(event.clientY, window.innerHeight - CONTEXT_MENU_MIN_VISIBLE_HEIGHT)),
-      item
+      item,
+      multiple
     });
   }
 
@@ -2339,36 +2495,50 @@ function ExplorerPane(props: {
   }
 
   function handleClipboardCut(event: ClipboardEvent): void {
-    const node = navigation.selectedItem();
-    const target = node && node.kind !== 'message' ? deleteTargetForNode(node) : undefined;
-    if (
-      !target ||
-      !selectedBackend().backend.capabilities.commands['delete-tree-item'] ||
-      !writeSelectedNodeToClipboard(event)
-    ) {
+    const nodes = selectedHierarchies();
+    const deletions = cutDeletions(nodes);
+    if (!deletions || !writeSelectedNodeToClipboard(event)) {
       return;
     }
     navigation.clearSelection();
-    runDeleteCommand({ kind: 'delete-tree-item', target, mode: 'subtree' });
+    runDeleteCommand(batchExplorerCommands(deletions));
   }
 
   function writeSelectedNodeToClipboard(event: ClipboardEvent): boolean {
-    const node = navigation.selectedItem();
+    const portableNodes = selectedHierarchies().flatMap((node) => createPortableExplorerNode(node) ?? []);
     const clipboardData = event.clipboardData;
-    if (!node || !clipboardData) {
+    if (portableNodes.length === 0 || !clipboardData) {
       return false;
     }
-    const portableNode = createPortableExplorerNode(node);
-    if (!portableNode) {
+    if (!writeExplorerClipboard(clipboardData, portableNodes)) {
       return false;
     }
-    if (!writeExplorerClipboard(clipboardData, [portableNode])) {
-      return false;
-    }
-    rememberClipboardItems([portableNode]);
+    rememberClipboardItems(portableNodes);
     event.preventDefault();
     event.stopPropagation();
     return true;
+  }
+
+  /** Selected hierarchies in document order, without rows already inside a selected hierarchy. */
+  function selectedHierarchies(): Exclude<ExplorerTreeNode, { kind: 'message' }>[] {
+    return selection.selectedRoots().flatMap(({ item }) => (item.kind === 'message' ? [] : [item]));
+  }
+
+  /** Commands removing complete cut hierarchies, or undefined when any of them cannot be removed. */
+  function cutDeletions(
+    nodes: readonly Exclude<ExplorerTreeNode, { kind: 'message' }>[]
+  ): Extract<ExplorerCommand, { kind: 'delete-tree-item' }>[] | undefined {
+    const targets = nodes.map(deleteTargetForNode);
+    if (
+      targets.length === 0 ||
+      !selectedBackend().backend.capabilities.commands['delete-tree-item'] ||
+      targets.some((target) => target === undefined)
+    ) {
+      return undefined;
+    }
+    return targets.flatMap((target) =>
+      target ? [{ kind: 'delete-tree-item' as const, target, mode: 'subtree' as const }] : []
+    );
   }
 
   function handleClipboardPaste(event: ClipboardEvent): void {
@@ -2397,10 +2567,10 @@ function ExplorerPane(props: {
 
     const clipboardActions: ExplorerContextMenuAction[] = [];
     if (createPortableExplorerNode(node)) {
-      clipboardActions.push({ label: 'Copy hierarchy', shortcut: 'Ctrl/Cmd+C', run: () => copyContextNode(node) });
+      clipboardActions.push({ label: 'Copy hierarchy', shortcut: 'Ctrl/Cmd+C', run: () => copyNodes([node]) });
     }
     if (deleteTargetForNode(node) && selectedBackend().backend.capabilities.commands['delete-tree-item']) {
-      clipboardActions.push({ label: 'Cut hierarchy', shortcut: 'Ctrl/Cmd+X', run: () => cutContextNode(node) });
+      clipboardActions.push({ label: 'Cut hierarchy', shortcut: 'Ctrl/Cmd+X', run: () => cutNodes([node]) });
     }
     if (
       selectedBackend().backend.capabilities.commands['import-items'] &&
@@ -2476,6 +2646,53 @@ function ExplorerPane(props: {
       { label: 'Move hierarchy', actions: moveActions },
       { label: 'Utilities', actions: utilityActions },
       { label: 'Global', actions: globalActions }
+    ].filter((section) => section.actions.length > 0);
+  }
+
+  /** Commands for a right-click inside a multi-row selection; each acts on every selected row. */
+  function selectionContextMenuSections(): readonly ExplorerContextMenuSection[] {
+    const nodes = selection.selectedItems().flatMap(({ item }) => (item.kind === 'message' ? [] : [item]));
+    const hierarchies = selectedHierarchies();
+    const clipboardActions: ExplorerContextMenuAction[] = [];
+    if (hierarchies.some((node) => createPortableExplorerNode(node))) {
+      clipboardActions.push({
+        label: `Copy ${hierarchies.length} hierarchies`,
+        shortcut: 'Ctrl/Cmd+C',
+        run: () => copyNodes(hierarchies)
+      });
+    }
+    if (cutDeletions(hierarchies)) {
+      clipboardActions.push({
+        label: `Cut ${hierarchies.length} hierarchies`,
+        shortcut: 'Ctrl/Cmd+X',
+        run: () => cutNodes(hierarchies)
+      });
+    }
+
+    const generalActions: ExplorerContextMenuAction[] = [];
+    const closableCount = nodes.filter(
+      (node) => node.reference.kind === 'tab' || node.reference.kind === 'window'
+    ).length;
+    if (closableCount > 0) {
+      generalActions.push({
+        label: `Save & Close ${closableCount} items`,
+        shortcut: 'Backspace',
+        run: () => saveCloseNodes(nodes)
+      });
+    }
+    const deletableCount = nodes.filter((node) => deleteTargetForNode(node)).length;
+    if (deletableCount > 0 && selectedBackend().backend.capabilities.commands['delete-tree-item']) {
+      generalActions.push({
+        label: `Delete ${deletableCount} items`,
+        shortcut: 'Delete',
+        run: () => deleteNodes(nodes)
+      });
+    }
+
+    return [
+      { label: 'Clipboard', actions: clipboardActions },
+      { label: 'General', actions: generalActions },
+      { label: 'Global', actions: createContextGlobalActions() }
     ].filter((section) => section.actions.length > 0);
   }
 
@@ -2609,25 +2826,25 @@ function ExplorerPane(props: {
     return actions;
   }
 
-  function copyContextNode(node: Exclude<ExplorerTreeNode, { kind: 'message' }>): void {
-    const portableNode = createPortableExplorerNode(node);
-    if (!portableNode) {
+  function copyNodes(nodes: readonly Exclude<ExplorerTreeNode, { kind: 'message' }>[]): void {
+    const portableNodes = nodes.flatMap((node) => createPortableExplorerNode(node) ?? []);
+    if (portableNodes.length === 0) {
       return;
     }
-    rememberClipboardItems([portableNode]);
-    void writeSystemClipboardText(serializeClipboardText([portableNode])).catch(() => undefined);
+    rememberClipboardItems(portableNodes);
+    void writeSystemClipboardText(serializeClipboardText(portableNodes)).catch(() => undefined);
   }
 
-  function cutContextNode(node: Exclude<ExplorerTreeNode, { kind: 'message' }>): void {
-    const target = deleteTargetForNode(node);
-    const portableNode = createPortableExplorerNode(node);
-    if (!target || !portableNode || !selectedBackend().backend.capabilities.commands['delete-tree-item']) {
+  function cutNodes(nodes: readonly Exclude<ExplorerTreeNode, { kind: 'message' }>[]): void {
+    const deletions = cutDeletions(nodes);
+    const portableNodes = nodes.flatMap((node) => createPortableExplorerNode(node) ?? []);
+    if (!deletions || portableNodes.length !== nodes.length) {
       return;
     }
-    rememberClipboardItems([portableNode]);
-    void writeSystemClipboardText(serializeClipboardText([portableNode])).catch(() => undefined);
+    rememberClipboardItems(portableNodes);
+    void writeSystemClipboardText(serializeClipboardText(portableNodes)).catch(() => undefined);
     navigation.clearSelection();
-    runDeleteCommand({ kind: 'delete-tree-item', target, mode: 'subtree' });
+    runDeleteCommand(batchExplorerCommands(deletions));
   }
 
   async function pasteContextNode(node: Exclude<ExplorerTreeNode, { kind: 'message' }>): Promise<void> {
@@ -2674,6 +2891,8 @@ type ExplorerContextMenuState = Readonly<{
   x: number;
   y: number;
   item: TreeViewItem<ExplorerTreeNode>;
+  /** Whether the menu acts on the whole multi-row selection instead of the clicked row alone. */
+  multiple: boolean;
 }>;
 
 type ExplorerPrintDocument = Readonly<{
@@ -3074,7 +3293,7 @@ function resolveSavedOrganizerDraft(
 function createNodeActionCommand(
   node: Exclude<ExplorerTreeNode, { kind: 'message' }>,
   includeDescendants = false
-): ExplorerCommand | undefined {
+): ExplorerBatchableCommand | undefined {
   switch (node.reference.kind) {
     case 'tab':
       return { kind: 'save-close-tab', tabId: node.reference.id, includeDescendants };

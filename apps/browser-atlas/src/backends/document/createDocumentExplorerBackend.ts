@@ -68,6 +68,11 @@ export function createDocumentExplorerBackend(initialDocument = createEmptyExplo
       case 'delete-tree-item':
         deleteNode(command);
         return;
+      case 'batch':
+        for (const batchedCommand of command.commands) {
+          executeDocumentCommand(batchedCommand);
+        }
+        return;
       case 'activate-tab':
       case 'activate-window':
       case 'create-window':
@@ -461,6 +466,7 @@ const DOCUMENT_EXPLORER_CAPABILITIES = {
     'move-bookmark': false,
     'create-bookmark': false,
     'import-items': true,
-    'move-document-node': true
+    'move-document-node': true,
+    batch: true
   }
 } as const satisfies ExplorerBackend['capabilities'];

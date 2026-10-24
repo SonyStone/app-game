@@ -93,6 +93,8 @@ export function commandTracksPersistentTreeHistory(command: ExplorerCommand): bo
         command.target.kind === 'live-window';
     case 'import-items':
       return command.target.kind === 'persistent';
+    case 'batch':
+      return command.commands.some(commandTracksPersistentTreeHistory);
     default:
       return PERSISTENT_TREE_HISTORY_POLICY[command.kind] === 'track';
   }
@@ -174,5 +176,6 @@ const PERSISTENT_TREE_HISTORY_POLICY = {
   'move-bookmark': 'ignore',
   'create-bookmark': 'ignore',
   'import-items': 'conditional',
-  'move-document-node': 'ignore'
+  'move-document-node': 'ignore',
+  batch: 'conditional'
 } as const satisfies Record<ExplorerCommand['kind'], 'track' | 'ignore' | 'conditional'>;

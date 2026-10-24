@@ -7,6 +7,8 @@ import type { ExplorerTreeGroupNode, ExplorerTreeLinkNode, ExplorerTreeNode } fr
 export type ExplorerTreeRowProps = {
   /** Normalized node rendered in the row. */
   node: ExplorerTreeNode;
+  /** Whether the row is selected: its title turns white over the selection fill, as in Finder. */
+  selected?: boolean;
   /** Whether a live or saved browser item activates on its first unmodified click. */
   activateOnSingleClick?: boolean;
   /** Theme and optional semantic label colors. */
@@ -21,7 +23,11 @@ export type ExplorerTreeRowProps = {
   onDelete?: (node: ExplorerTreeGroupNode | ExplorerTreeLinkNode) => void;
 };
 
-/** Renders explorer-specific content without owning generic tree structure or interactions. */
+/**
+ * Renders explorer-specific content without owning generic tree structure or interactions. The
+ * icon and title carry the row's clicks and native drag; the empty space after them is marked as
+ * a drag-to-select zone, where a double click activates the row in either activation mode.
+ */
 export function ExplorerTreeRow(props: ExplorerTreeRowProps) {
   return (
     <Switch>
@@ -29,6 +35,7 @@ export function ExplorerTreeRow(props: ExplorerTreeRowProps) {
         {(node) => (
           <GroupLabel
             node={node()}
+            selected={props.selected === true}
             activateOnSingleClick={props.activateOnSingleClick}
             onActivate={props.onActivate}
             onAction={props.onAction}
@@ -40,7 +47,9 @@ export function ExplorerTreeRow(props: ExplorerTreeRowProps) {
         {(node) => (
           <LinkLabel
             node={node()}
+            selected={props.selected === true}
             appearance={props.appearance}
+            onActivate={props.onActivate}
             onLinkClick={props.onLinkClick}
             onAction={props.onAction}
             onDelete={props.onDelete}
@@ -56,6 +65,7 @@ export function ExplorerTreeRow(props: ExplorerTreeRowProps) {
 
 function GroupLabel(props: {
   node: ExplorerTreeGroupNode;
+  selected: boolean;
   activateOnSingleClick: boolean | undefined;
   onActivate: ExplorerTreeRowProps['onActivate'];
   onAction: ExplorerTreeRowProps['onAction'];
@@ -63,19 +73,29 @@ function GroupLabel(props: {
 }) {
   return (
     <div
-      class="flex min-w-0 flex-1 items-center overflow-hidden font-medium text-neutral-200"
-      title={groupTitle(props.node)}
+      class="flex min-w-0 flex-1 items-center self-stretch overflow-hidden font-medium text-neutral-200"
       data-transient-status={props.node.transientStatus}
-      style={{ color: props.node.transientStatus ? '#86f98e' : undefined }}
-      onClick={(event) => activateWindowOnSingleClick(event, props)}
-      onDblClick={(event) => activateGroupOnDoubleClick(event, props)}
+      style={{ color: props.selected ? SELECTED_TEXT_COLOR : props.node.transientStatus ? '#86f98e' : undefined }}
     >
-      <span class="mr-1 inline-block w-4 flex-none text-center" aria-hidden="true">
-        {groupIcon(props.node.groupKind)}
+      <span
+        class="flex min-w-0 items-center overflow-hidden"
+        title={groupTitle(props.node)}
+        onClick={(event) => activateWindowOnSingleClick(event, props)}
+        onDblClick={(event) => activateGroupOnDoubleClick(event, props)}
+      >
+        <span class="mr-1 inline-block w-4 flex-none text-center" aria-hidden="true">
+          {groupIcon(props.node.groupKind)}
+        </span>
+        <span class="truncate">{props.node.title}</span>
       </span>
-      <span class="truncate">{props.node.title}</span>
-      <NodeActionButton node={props.node} onAction={props.onAction} />
-      <NodeDeleteButton node={props.node} onDelete={props.onDelete} />
+      <NodeActionButton node={props.node} selected={props.selected} onAction={props.onAction} />
+      <NodeDeleteButton node={props.node} selected={props.selected} onDelete={props.onDelete} />
+      <EmptyRowSpace
+        node={props.node}
+        selected={props.selected}
+        onActivate={props.onActivate}
+        onAction={props.onAction}
+      />
     </div>
   );
 }
@@ -124,7 +144,9 @@ function activateGroupOnDoubleClick(
 
 function LinkLabel(props: {
   node: ExplorerTreeLinkNode;
+  selected: boolean;
   appearance: BrowserAtlasAppearanceSettings;
+  onActivate: ExplorerTreeRowProps['onActivate'];
   onLinkClick: ExplorerTreeRowProps['onLinkClick'];
   onAction: ExplorerTreeRowProps['onAction'];
   onDelete: ExplorerTreeRowProps['onDelete'];
@@ -140,7 +162,7 @@ function LinkLabel(props: {
             'text-blue-400': props.node.keepOnClose === true
           }
         ]}
-        style={{ color: explorerLinkTitleColor(props.node, props.appearance) }}
+        style={{ color: props.selected ? SELECTED_TEXT_COLOR : explorerLinkTitleColor(props.node, props.appearance) }}
       >
         {props.node.title}
       </span>
@@ -148,13 +170,13 @@ function LinkLabel(props: {
   );
 
   return (
-    <div
-      class="flex min-w-0 flex-1 items-center overflow-hidden"
-      onDblClick={(event) => activateOrganizerAction(event, props.node, props.onAction)}
-    >
+    <div class="flex min-w-0 flex-1 items-center self-stretch overflow-hidden">
       {props.node.url ? (
         <a
-          class="flex min-w-0 flex-1 items-center text-neutral-200 hover:bg-neutral-800 hover:text-white"
+          class={[
+            'flex min-w-0 items-center text-neutral-200',
+            { 'hover:bg-neutral-800 hover:text-white': !props.selected }
+          ]}
           href={props.node.url}
           title={props.node.description}
           target="_blank"
@@ -162,17 +184,56 @@ function LinkLabel(props: {
           draggable="false"
           onClick={(event) => props.onLinkClick?.(props.node, event)}
           onAuxClick={(event) => props.onLinkClick?.(props.node, event)}
+          onDblClick={(event) => activateOrganizerAction(event, props.node, props.onAction)}
         >
           {content}
         </a>
       ) : (
-        <span class="flex min-w-0 flex-1 items-center text-neutral-400" title={props.node.description}>
+        <span
+          class="flex min-w-0 items-center text-neutral-400"
+          title={props.node.description}
+          onDblClick={(event) => activateOrganizerAction(event, props.node, props.onAction)}
+        >
           {content}
         </span>
       )}
-      <NodeActionButton node={props.node} onAction={props.onAction} />
-      <NodeDeleteButton node={props.node} onDelete={props.onDelete} />
+      <EmptyRowSpace
+        node={props.node}
+        selected={props.selected}
+        onActivate={props.onActivate}
+        onAction={props.onAction}
+      />
+      <NodeActionButton node={props.node} selected={props.selected} onAction={props.onAction} />
+      <NodeDeleteButton node={props.node} selected={props.selected} onDelete={props.onDelete} />
     </div>
+  );
+}
+
+/**
+ * Fills the row after its title. Drag-to-select starts here instead of a native drag, except on a
+ * selected row, whose empty space drags the selection like its title and keeps the row's cursor. A
+ * double click does what a double click on the title does, whichever activation mode is set.
+ */
+function EmptyRowSpace(props: {
+  node: ExplorerTreeGroupNode | ExplorerTreeLinkNode;
+  selected: boolean;
+  onActivate: ExplorerTreeRowProps['onActivate'];
+  onAction: ExplorerTreeRowProps['onAction'];
+}) {
+  return (
+    <span
+      class={['h-full min-w-6 flex-1', { 'cursor-default': !props.selected }]}
+      data-tree-marquee-zone
+      onDblClick={(event) => {
+        event.preventDefault();
+        if (isSavedOrganizer(props.node)) {
+          props.onAction?.(props.node);
+          return;
+        }
+
+        props.onActivate?.(props.node, event.altKey);
+      }}
+    />
   );
 }
 
@@ -210,13 +271,17 @@ function isNote(node: ExplorerTreeLinkNode): boolean {
 
 function NodeDeleteButton(props: {
   node: ExplorerTreeGroupNode | ExplorerTreeLinkNode;
+  selected: boolean;
   onDelete: ExplorerTreeRowProps['onDelete'];
 }) {
   return (
     <Show when={isDeletablePersistentItem(props.node)}>
       <button
         type="button"
-        class="h-4 flex-none px-1 leading-4 text-red-500 hover:bg-red-950 hover:text-red-200"
+        class={[
+          'h-4 flex-none px-1 leading-4 hover:bg-red-950 hover:text-red-200',
+          props.selected ? 'text-[#fff]' : 'text-red-500'
+        ]}
         title={
           props.node.reference.kind === 'tab' || props.node.reference.kind === 'window'
             ? 'Permanently close this browser item'
@@ -239,6 +304,7 @@ function NodeDeleteButton(props: {
 
 function NodeActionButton(props: {
   node: ExplorerTreeGroupNode | ExplorerTreeLinkNode;
+  selected: boolean;
   onAction: ExplorerTreeRowProps['onAction'];
 }) {
   const action = () => nodeAction(props.node);
@@ -248,7 +314,10 @@ function NodeActionButton(props: {
         {(currentAction) => (
           <button
             type="button"
-            class="ml-1 h-4 flex-none px-1 leading-4 text-emerald-400 hover:bg-emerald-950 hover:text-emerald-200"
+            class={[
+              'ml-1 h-4 flex-none px-1 leading-4 hover:bg-emerald-950 hover:text-emerald-200',
+              props.selected ? 'text-[#fff]' : 'text-emerald-400'
+            ]}
             title={currentAction().title}
             aria-label={`${currentAction().label} ${props.node.title}`}
             draggable="false"
@@ -411,6 +480,7 @@ function groupIcon(kind: ExplorerTreeGroupNode['groupKind']): string {
   }
 }
 
+const SELECTED_TEXT_COLOR = '#ffffff';
 const faviconLoaders = new Map<Element, () => void>();
 const FAVICON_LOAD_MARGIN = 160;
 let faviconObserver: IntersectionObserver | undefined;

@@ -1,21 +1,40 @@
 import type { JSX } from '@solidjs/web';
 import { createMemo, createSignal } from 'solid-js';
+import { treeSelectionModifiers, type TreeSelection } from './createTreeSelection';
 import type { TreeViewItem, TreeViewModel } from './createTreeView';
 
-/** Creates optional roving focus, single selection, and keyboard navigation for a headless tree. */
+/**
+ * Creates optional roving focus, click and keyboard selection, and keyboard navigation for a
+ * headless tree. Clicks follow file managers: Ctrl/Cmd toggles a row, Shift selects a range from
+ * the anchor, and Shift+arrow or Page keys extend that range; Ctrl/Cmd+A selects every visible row.
+ */
 export function createTreeKeyboardNavigation<T>(props: {
   /** Headless tree whose visible order and expansion state drive navigation. */
   tree: TreeViewModel<T>;
+  /** Multi-row selection changed by clicks and keyboard ranges. */
+  selection: TreeSelection<T>;
+  /**
+   * Whether a click with Ctrl/Cmd/Shift may change the multi-selection. Return `false` for row
+   * content that gives these modifiers its own meaning, such as a link that opens elsewhere; such
+   * a click selects only its row, like an unmodified click. Defaults to accepting every click.
+   */
+  acceptsSelectionModifiers?: (event: MouseEvent) => boolean;
   /** Ensures a destination is mounted before focus moves, for example in a virtual tree. */
   scrollTo?: (item: TreeViewItem<T>) => void;
   /** Invoked by Space, including Alt+Space for the original alternative restore. */
   onActivate?: (item: T, alternative: boolean) => void;
   /** Invoked when F2 requests editing for the focused item. */
   onEdit?: (item: T) => void;
-  /** Invoked when Backspace or Alt+Delete requests save-and-close for the focused item. */
-  onSaveClose?: (item: T) => void;
-  /** Invoked when Delete requests permanent removal for the focused item. */
-  onDelete?: (item: T) => void;
+  /**
+   * Invoked when Backspace or Alt+Delete requests save-and-close. Receives the selected items in
+   * document order, or the focused item alone when nothing is selected.
+   */
+  onSaveClose?: (items: readonly T[]) => void;
+  /**
+   * Invoked when Delete requests permanent removal. Receives the selected items in document
+   * order, or the focused item alone when nothing is selected.
+   */
+  onDelete?: (items: readonly T[]) => void;
   /** Invoked when Ctrl/Cmd+Z requests restoration of the latest deletion. */
   onUndo?: () => void;
   /** Invoked when Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y requests repeating an undone tree change. */
@@ -32,14 +51,16 @@ export function createTreeKeyboardNavigation<T>(props: {
   onCloneView?: () => void;
   /** Invoked by the original Tabs Outliner Enter/Insert/G/L organizer shortcuts. */
   onInsertOrganizer?: (item: T, request: TreeKeyboardOrganizerRequest) => boolean;
-  /** Invoked by original structural-move keys, including E for the containing organizer. */
+  /**
+   * Invoked by original structural-move keys, including E for the containing organizer. They move
+   * only the focused item, so an accepted move collapses the selection to it.
+   */
   onMoveItem?: (item: T, direction: TreeKeyboardMoveDirection) => boolean;
   /** Invoked by / to flatten nested tabs without crossing organizer boundaries. */
   onFlatten?: (item: T) => boolean;
 }) {
   const elements = new Map<string, HTMLElement>();
   const [focusedId, setFocusedId] = createSignal<string | null>(null);
-  const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const tabStopId = createMemo(() => {
     const visibleItems = props.tree.visibleItems();
     const currentFocusedId = focusedId();
@@ -52,34 +73,46 @@ export function createTreeKeyboardNavigation<T>(props: {
       return {
         ref: (element) => elements.set(item.id, element),
         tabindex: isTabStop(item) ? 0 : -1,
-        'aria-selected': selectedId() === item.id ? 'true' : 'false',
+        'aria-selected': props.selection.isSelected(item) ? 'true' : 'false',
         onFocus: () => setFocusedId(item.id),
-        onClick: () => {
-          setSelectedId(item.id);
-          focusItem(item);
+        onClick: (event) => {
+          if (props.acceptsSelectionModifiers?.(event) === false) {
+            focusItem(item, 'replace');
+            return;
+          }
+
+          props.selection.click(item, treeSelectionModifiers(event));
+          focusItem(item, 'keep');
         },
         onKeyDown: (event) => handleKeyDown(event, item)
       };
     },
+    /** ID of the row that owns roving focus, or `null` before any row was focused. */
+    focusedId,
     /** Whether the row currently owns roving focus. */
     isFocused(item: TreeViewItem<T>): boolean {
       return focusedId() === item.id;
     },
-    /** Whether the row is the current single selection. */
+    /** Whether the row is selected. */
     isSelected(item: TreeViewItem<T>): boolean {
-      return selectedId() === item.id;
+      return props.selection.isSelected(item);
     },
-    /** Returns the currently selected item, or undefined when selection is empty or no longer visible. */
+    /**
+     * Returns the primary selected item for single-target commands, or undefined when the
+     * selection is empty or no longer visible.
+     */
     selectedItem(): T | undefined {
-      const currentSelectedId = selectedId();
-      return props.tree.visibleItems().find((item) => item.id === currentSelectedId)?.item;
+      return props.selection.primaryItem()?.item;
     },
-    /** Moves DOM focus and selection to an item when it is currently visible. */
-    focus(item: TreeViewItem<T>): boolean {
+    /**
+     * Moves DOM focus to an item when it is currently visible. By default the item also becomes
+     * the only selected row; `'keep'` leaves the selection as it is, as after drag-to-select.
+     */
+    focus(item: TreeViewItem<T>, selection: 'replace' | 'keep' = 'replace'): boolean {
       if (!props.tree.visibleItems().some((candidate) => candidate.id === item.id)) {
         return false;
       }
-      focusItem(item);
+      focusItem(item, selection);
       return true;
     },
     /** Selects and scrolls to a visible item without stealing focus from transient UI such as search. */
@@ -88,12 +121,12 @@ export function createTreeKeyboardNavigation<T>(props: {
         return false;
       }
       props.scrollTo?.(item);
-      setSelectedId(item.id);
+      props.selection.selectOnly(item);
       return true;
     },
     /** Clears the current selection without changing focus. */
     clearSelection(): void {
-      setSelectedId(null);
+      props.selection.clear();
     }
   } as const;
 
@@ -117,6 +150,11 @@ export function createTreeKeyboardNavigation<T>(props: {
     }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
       props.onRedo?.();
+      consumeKeyboardEvent(event);
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'a') {
+      props.selection.selectAll();
       consumeKeyboardEvent(event);
       return;
     }
@@ -159,18 +197,21 @@ export function createTreeKeyboardNavigation<T>(props: {
     }
     if (!event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'e') {
       if (props.onMoveItem?.(item.item, 'tree-end')) {
+        props.selection.selectOnly(item);
         consumeKeyboardEvent(event);
       }
       return;
     }
     if (!event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && event.key === '/') {
       if (props.onFlatten?.(item.item)) {
+        props.selection.selectOnly(item);
         consumeKeyboardEvent(event);
       }
       return;
     }
     const moveDirection = keyboardMoveDirection(event);
     if (moveDirection && props.onMoveItem?.(item.item, moveDirection)) {
+      props.selection.selectOnly(item);
       consumeKeyboardEvent(event);
       return;
     }
@@ -178,12 +219,13 @@ export function createTreeKeyboardNavigation<T>(props: {
       return;
     }
 
+    const focusSelection = event.shiftKey ? 'range' : 'replace';
     switch (event.key) {
       case 'ArrowDown':
-        focusByOffset(item, 1);
+        focusByOffset(item, 1, focusSelection);
         break;
       case 'ArrowUp':
-        focusByOffset(item, -1);
+        focusByOffset(item, -1, focusSelection);
         break;
       case 'ArrowRight':
         focusRight(item);
@@ -192,16 +234,16 @@ export function createTreeKeyboardNavigation<T>(props: {
         focusLeft(item);
         break;
       case 'Home':
-        focusSibling(item, 'first');
+        focusSibling(item, 'first', focusSelection);
         break;
       case 'End':
-        focusSibling(item, 'last');
+        focusSibling(item, 'last', focusSelection);
         break;
       case 'PageUp':
-        focusByOffset(item, -PAGE_ROW_OFFSET);
+        focusByOffset(item, -PAGE_ROW_OFFSET, focusSelection);
         break;
       case 'PageDown':
-        focusByOffset(item, PAGE_ROW_OFFSET);
+        focusByOffset(item, PAGE_ROW_OFFSET, focusSelection);
         break;
       case 'Enter':
         if (
@@ -242,13 +284,13 @@ export function createTreeKeyboardNavigation<T>(props: {
         props.onEdit?.(item.item);
         break;
       case 'Backspace':
-        props.onSaveClose?.(item.item);
+        props.onSaveClose?.(commandTargets(item));
         break;
       case 'Delete':
         if (event.altKey) {
-          props.onSaveClose?.(item.item);
+          props.onSaveClose?.(commandTargets(item));
         } else {
-          props.onDelete?.(item.item);
+          props.onDelete?.(commandTargets(item));
         }
         break;
       case '+':
@@ -261,7 +303,7 @@ export function createTreeKeyboardNavigation<T>(props: {
         }
         break;
       case ' ':
-        setSelectedId(item.id);
+        props.selection.selectOnly(item);
         props.onActivate?.(item.item, event.altKey);
         break;
       default:
@@ -271,18 +313,26 @@ export function createTreeKeyboardNavigation<T>(props: {
     consumeKeyboardEvent(event);
   }
 
+  function commandTargets(focused: TreeViewItem<T>): readonly T[] {
+    const selected = props.selection.selectedItems();
+    return selected.length > 0 ? selected.map((selectedItem) => selectedItem.item) : [focused.item];
+  }
+
   function consumeKeyboardEvent(event: KeyboardEvent): void {
     event.preventDefault();
     event.stopPropagation();
   }
 
-  function focusByOffset(item: TreeViewItem<T>, offset: number): void {
+  function focusByOffset(item: TreeViewItem<T>, offset: number, selection: FocusSelection): void {
     const items = props.tree.visibleItems();
     const index = items.findIndex((candidate) => candidate.id === item.id);
-    focusAt(index + offset);
+    const destination = items[index + offset];
+    if (destination) {
+      focusItem(destination, selection);
+    }
   }
 
-  function focusSibling(item: TreeViewItem<T>, position: 'first' | 'last'): void {
+  function focusSibling(item: TreeViewItem<T>, position: 'first' | 'last', selection: FocusSelection): void {
     const items = props.tree.visibleItems();
     const currentIndex = items.findIndex((candidate) => candidate.id === item.id);
     if (currentIndex < 0) {
@@ -303,7 +353,7 @@ export function createTreeKeyboardNavigation<T>(props: {
         destination = candidate;
       }
     }
-    focusItem(destination);
+    focusItem(destination, selection);
   }
 
   function focusRight(item: TreeViewItem<T>): void {
@@ -318,7 +368,7 @@ export function createTreeKeyboardNavigation<T>(props: {
 
     const child = item.children()[0];
     if (child) {
-      focusItem(child);
+      focusItem(child, 'replace');
     }
   }
 
@@ -333,23 +383,20 @@ export function createTreeKeyboardNavigation<T>(props: {
     for (let candidateIndex = index - 1; candidateIndex >= 0; candidateIndex -= 1) {
       const candidate = items[candidateIndex];
       if (candidate && candidate.depth === item.depth - 1) {
-        focusItem(candidate);
+        focusItem(candidate, 'replace');
         return;
       }
     }
   }
 
-  function focusAt(index: number): void {
-    const item = props.tree.visibleItems()[index];
-    if (item) {
-      focusItem(item);
-    }
-  }
-
-  function focusItem(item: TreeViewItem<T>): void {
+  function focusItem(item: TreeViewItem<T>, selection: FocusSelection): void {
     props.scrollTo?.(item);
     setFocusedId(item.id);
-    setSelectedId(item.id);
+    if (selection === 'replace') {
+      props.selection.selectOnly(item);
+    } else if (selection === 'range') {
+      props.selection.selectRange(item);
+    }
     queueMicrotask(() => {
       if (focusedId() !== item.id) {
         return;
@@ -373,6 +420,9 @@ export function createTreeKeyboardNavigation<T>(props: {
     return true;
   }
 }
+
+/** How moving focus changes the selection: select only the row, extend the range to it, or keep it. */
+type FocusSelection = 'replace' | 'range' | 'keep';
 
 /** Props accepted by {@link createTreeKeyboardNavigation}. */
 export type CreateTreeKeyboardNavigationProps<T> = Parameters<typeof createTreeKeyboardNavigation<T>>[0];

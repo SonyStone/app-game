@@ -18,6 +18,8 @@ const testServerOrigin = 'http://127.0.0.1:3161';
 const sourceUrl = `${testServerOrigin}/source`;
 const targetUrl = `${testServerOrigin}/target`;
 const CLIPBOARD_MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control';
+/** Grabs a row by its title: a drag from the empty space after the title selects rows instead. */
+const ROW_TITLE_POSITION = { x: 48, y: 10 };
 
 test('opens current Help, About, and Cloud dialogs in Chromium', async ({}, testInfo) => {
   const session = await launchBrowserAtlas(testInfo);
@@ -296,7 +298,7 @@ test('manages tabs, windows, groups, notes, and separators', async ({}, testInfo
     await expect(sourceRow).toBeVisible();
     await expect(targetWindowRow).toBeVisible();
 
-    await sourceRow.dragTo(targetWindowRow, { targetPosition: { x: 48, y: 10 } });
+    await sourceRow.dragTo(targetWindowRow, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
     await expect
       .poll(() => readTabState(session.serviceWorker, state.sourceTabId))
       .toEqual({
@@ -428,13 +430,22 @@ test('manages tabs, windows, groups, notes, and separators', async ({}, testInfo
       .filter({ hasText: 'E2E archive' });
     await expect(rightArchiveGroupRow).toBeVisible();
 
-    await savedNoteRow.dragTo(rightArchiveGroupRow, { targetPosition: { x: 48, y: 10 } });
-    await savedSeparatorRow.dragTo(rightArchiveGroupRow, { targetPosition: { x: 48, y: 10 } });
+    await savedNoteRow.dragTo(rightArchiveGroupRow, {
+      sourcePosition: ROW_TITLE_POSITION,
+      targetPosition: { x: 48, y: 10 }
+    });
+    await savedSeparatorRow.dragTo(rightArchiveGroupRow, {
+      sourcePosition: ROW_TITLE_POSITION,
+      targetPosition: { x: 48, y: 10 }
+    });
     const rightSavedNoteRow = rightPane
       .locator('[data-node-id^="explore-saved-note-"]')
       .filter({ hasText: 'Renamed E2E note' });
     const rightSavedSeparatorRow = rightPane.locator('[data-node-id^="explore-saved-separator-"]');
-    await rightSavedSeparatorRow.dragTo(rightSavedNoteRow, { targetPosition: { x: 48, y: 2 } });
+    await rightSavedSeparatorRow.dragTo(rightSavedNoteRow, {
+      sourcePosition: ROW_TITLE_POSITION,
+      targetPosition: { x: 48, y: 2 }
+    });
     await expect
       .poll(() => readSavedOrganizerState(session.serviceWorker))
       .toEqual({
@@ -462,7 +473,10 @@ test('manages tabs, windows, groups, notes, and separators', async ({}, testInfo
 
     await leftPane.getByRole('button', { name: 'Close and save Browser Atlas E2E Source' }).click();
     const nestedSavedTabRow = leftPane.locator('[data-node-id^="explore-saved-tab-"]');
-    await nestedSavedTabRow.dragTo(rightResearchGroupRow, { targetPosition: { x: 48, y: 10 } });
+    await nestedSavedTabRow.dragTo(rightResearchGroupRow, {
+      sourcePosition: ROW_TITLE_POSITION,
+      targetPosition: { x: 48, y: 10 }
+    });
 
     const controlledTabs = await readControlledTabsState(session.serviceWorker);
     if (controlledTabs.windowId === null) {
@@ -471,8 +485,14 @@ test('manages tabs, windows, groups, notes, and separators', async ({}, testInfo
     const liveTargetWindowRow = leftPane.locator(`[data-node-id="explore-window-${controlledTabs.windowId}"]`);
     await liveTargetWindowRow.getByTitle('Close this window and keep its tabs in Browser Atlas').click();
     const nestedSavedWindowRow = leftPane.locator('[data-node-id^="explore-saved-window-"]');
-    await nestedSavedWindowRow.dragTo(rightArchiveGroupRow, { targetPosition: { x: 48, y: 10 } });
-    await rightArchiveGroupRow.dragTo(rightResearchGroupRow, { targetPosition: { x: 48, y: 2 } });
+    await nestedSavedWindowRow.dragTo(rightArchiveGroupRow, {
+      sourcePosition: ROW_TITLE_POSITION,
+      targetPosition: { x: 48, y: 10 }
+    });
+    await rightArchiveGroupRow.dragTo(rightResearchGroupRow, {
+      sourcePosition: ROW_TITLE_POSITION,
+      targetPosition: { x: 48, y: 2 }
+    });
     await expect
       .poll(() => readSavedOrganizerState(session.serviceWorker))
       .toEqual({
@@ -494,7 +514,10 @@ test('manages tabs, windows, groups, notes, and separators', async ({}, testInfo
       });
 
     const rightNestedSavedWindowRow = rightPane.locator('[data-node-id^="explore-saved-window-"]');
-    await rightNestedSavedWindowRow.dragTo(rightSavedSeparatorRow, { targetPosition: { x: 48, y: 10 } });
+    await rightNestedSavedWindowRow.dragTo(rightSavedSeparatorRow, {
+      sourcePosition: ROW_TITLE_POSITION,
+      targetPosition: { x: 48, y: 10 }
+    });
     await expect
       .poll(() => hasPersistentParentChild(session.serviceWorker, 'separator', 'window'))
       .toBe(true);
@@ -801,6 +824,65 @@ test('uses expanded versus collapsed deletion semantics and exact Undo/Redo in C
   }
 });
 
+test('moves and deletes a multi-row selection as one undoable Chromium change', async ({}, testInfo) => {
+  const session = await launchBrowserAtlas(testInfo);
+  let browserState: TestBrowserState | undefined;
+
+  try {
+    const state = await createTestBrowserState(session.serviceWorker);
+    browserState = state;
+    const firstSiblingTabId = await createSiblingTab(session.serviceWorker, state.sourceWindowId);
+    await createSiblingTab(session.serviceWorker, state.sourceWindowId);
+    await session.page.reload();
+    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    await rightPane.getByRole('tab', { name: 'Explore' }).click();
+    const undo = leftPane.getByTitle('Undo the latest persistent tree change');
+    const sourceTab = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
+    const firstSiblingTab = leftPane.locator(`[data-node-id="explore-tab-${firstSiblingTabId}"]`);
+    const readMovedWindowIds = async () => [
+      (await readTabState(session.serviceWorker, state.sourceTabId)).windowId,
+      (await readTabState(session.serviceWorker, firstSiblingTabId)).windowId
+    ];
+
+    await clickEmptyRowSpace(sourceTab);
+    await clickEmptyRowSpace(firstSiblingTab, ['Shift']);
+    await firstSiblingTab.dragTo(rightPane.locator(`[data-node-id="explore-window-${state.targetWindowId}"]`), {
+      sourcePosition: ROW_TITLE_POSITION,
+      targetPosition: { x: 48, y: 10 }
+    });
+    await expect.poll(readMovedWindowIds).toEqual([state.targetWindowId, state.targetWindowId]);
+    await undo.click();
+    await expect.poll(readMovedWindowIds).toEqual([state.sourceWindowId, state.sourceWindowId]);
+
+    const root = leftPane.locator('[data-node-id="explore-root"]');
+    for (const title of ['Batch note A', 'Batch note B']) {
+      await selectTreeRow(root);
+      await acceptNextPrompt(session.page, title, () => leftPane.getByTitle('Create a saved note').click());
+    }
+    const noteA = leftPane.locator('[data-node-id^="explore-saved-note-"]').filter({ hasText: 'Batch note A' });
+    const noteB = leftPane.locator('[data-node-id^="explore-saved-note-"]').filter({ hasText: 'Batch note B' });
+    await expect.poll(() => readChromeRootLabels(session.serviceWorker)).toEqual(
+      expect.arrayContaining(['Batch note A', 'Batch note B'])
+    );
+    await clickEmptyRowSpace(noteA);
+    await clickEmptyRowSpace(noteB, [CLIPBOARD_MODIFIER]);
+    await noteB.press('Delete');
+    await expect.poll(() => readChromeRootLabels(session.serviceWorker)).not.toContain('Batch note A');
+    await expect.poll(() => readChromeRootLabels(session.serviceWorker)).not.toContain('Batch note B');
+    await undo.click();
+    await expect.poll(() => readChromeRootLabels(session.serviceWorker)).toEqual(
+      expect.arrayContaining(['Batch note A', 'Batch note B'])
+    );
+  } finally {
+    if (browserState) {
+      await removeTestWindows(session.serviceWorker, browserState);
+    }
+    await session.context.close();
+    await removeTemporaryProfile(session.userDataDirectory);
+  }
+});
+
 test('promotes or removes inline context when deleting live Chromium tabs', async ({}, testInfo) => {
   const session = await launchBrowserAtlas(testInfo);
   let browserState: TestBrowserState | undefined;
@@ -871,7 +953,7 @@ test('keeps a live tab inside a saved note across Chrome moves and reloads', asy
     const organizer = rightPane
       .locator('[data-node-id^="explore-saved-note-"]')
       .filter({ hasText: 'Organized live work' });
-    await liveTab.dragTo(organizer, { targetPosition: { x: 48, y: 10 } });
+    await liveTab.dragTo(organizer, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
     await expect
       .poll(() => readOrganizedLiveTab(session.serviceWorker, 'Organized live work', state.sourceTabId))
       .toEqual({ state: 'live', windowId: state.sourceWindowId });
@@ -1069,7 +1151,7 @@ test('turns a saved group into a real Chromium window when a live tab is dropped
     }
     await leftPane
       .locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`)
-      .dragTo(savedGroup, { targetPosition: { x: 48, y: 10 } });
+      .dragTo(savedGroup, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
 
     await expect
       .poll(() => readPersistentWindowTitleState(session.serviceWorker, treeNodeId))
@@ -1300,7 +1382,9 @@ test('persists Chromium settings and applies one-click activation to a real save
         savedTab: { enabled: false, color: '#606060' },
         openTab: { enabled: false, color: '#9CB7D3' },
         activeTab: { enabled: true, color: '#112233' },
-        note: { enabled: false, color: '#DAD2B4' }
+        note: { enabled: false, color: '#DAD2B4' },
+        treeStyle: 'classic',
+        pathHighlight: true
       }
     });
 
@@ -1346,6 +1430,7 @@ test('liberates a live Chromium tab into a new window by dropping it on the Expl
     await selectTreeRow(liveTab);
     await acceptNextPrompt(session.page, 'Liberated Chromium context', () => liveTab.press('F2'));
     await liveTab.dragTo(rightPane.locator('[data-node-id="explore-root"]'), {
+      sourcePosition: ROW_TITLE_POSITION,
       targetPosition: { x: 48, y: 10 }
     });
 
@@ -1417,7 +1502,7 @@ test('restores a saved tab into the window where it is dropped', async ({}, test
       .locator('[data-node-id^="explore-saved-tab-"]')
       .filter({ hasText: 'Browser Atlas E2E Source' });
     const targetWindow = rightPane.locator(`[data-node-id="explore-window-${state.targetWindowId}"]`);
-    await savedTab.dragTo(targetWindow, { targetPosition: { x: 48, y: 10 } });
+    await savedTab.dragTo(targetWindow, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
 
     await expect
       .poll(() => readTabByUrl(session.serviceWorker, sourceUrl))
@@ -2801,6 +2886,15 @@ async function dispatchDragWrite(target: Locator): Promise<Record<string, string
   });
 }
 
+/** Clicks a row's empty space after its title and buttons, where clicks only change the selection. */
+async function clickEmptyRowSpace(row: Locator, modifiers: ('Meta' | 'Control' | 'Shift')[] = []): Promise<void> {
+  const bounds = await row.boundingBox();
+  if (!bounds) {
+    throw new Error('The tree row is not visible.');
+  }
+  await row.click({ position: { x: bounds.width - 80, y: bounds.height / 2 }, modifiers });
+}
+
 async function selectTreeRow(target: Locator): Promise<void> {
   await target.focus();
   await target.evaluate((element) => {
@@ -2817,7 +2911,7 @@ async function selectTreeRow(target: Locator): Promise<void> {
 async function copyDragTo(page: Page, source: Locator, target: Locator): Promise<void> {
   await page.keyboard.down('Alt');
   try {
-    await source.dragTo(target, { targetPosition: { x: 48, y: 10 } });
+    await source.dragTo(target, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
   } finally {
     await page.keyboard.up('Alt');
   }

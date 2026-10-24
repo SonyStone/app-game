@@ -1,18 +1,14 @@
 import type { VirtualNestedItem, VirtualNestedList } from '@app-game/solid-virtual';
 import type { JSX } from '@solidjs/web';
 import { For, Show } from 'solid-js';
-import {
-  lineVerticalUrl,
-  linetoLastSubnodeUrl,
-  linetoSubnodeUrl,
-  nodeAnchorCollapsedProtectedUrl,
-  nodeAnchorCollapsedUrl,
-  nodeAnchorExpandedProtectedUrl,
-  nodeAnchorExpandedUrl,
-  nodeAnchorNoSubnodesProtectedUrl,
-  nodeAnchorNoSubnodesUrl
-} from '../assets';
 import type { TreeViewItem } from './createTreeView';
+import {
+  classicTreeConnector,
+  TreeAnchorBox,
+  treeConnectorBackground,
+  treeConnectorHead,
+  type TreeConnector
+} from './treeLines';
 
 /** Renders a generic connected virtual tree without requiring selection, keyboard, or drag-and-drop behavior. */
 export function TreeView<T>(props: {
@@ -28,6 +24,13 @@ export function TreeView<T>(props: {
   isProtected?: (item: TreeViewItem<T>) => boolean;
   /** Describes application-specific recursive counts rendered while a branch is collapsed. */
   collapsedSummary?: (item: TreeViewItem<T>) => TreeCollapsedSummary;
+  /**
+   * Draws the line joining each non-root row to its parent's line, or nothing for `undefined`.
+   * Defaults to classic thin lines.
+   */
+  connector?: (item: TreeViewItem<T>) => TreeConnector | undefined;
+  /** Draws the face of each row's expansion anchor. Defaults to a box with − or +, a dot for leaves. */
+  anchor?: (item: TreeViewItem<T>) => JSX.Element;
 }) {
   return (
     <TreeLevel
@@ -37,6 +40,8 @@ export function TreeView<T>(props: {
       rowClass={props.rowClass}
       isProtected={props.isProtected}
       collapsedSummary={props.collapsedSummary}
+      connector={props.connector}
+      anchor={props.anchor}
       children={props.children}
     />
   );
@@ -68,8 +73,10 @@ function TreeLevel<T>(props: {
   rowClass: ((item: TreeViewItem<T>) => string | undefined) | undefined;
   isProtected: ((item: TreeViewItem<T>) => boolean) | undefined;
   collapsedSummary: ((item: TreeViewItem<T>) => TreeCollapsedSummary) | undefined;
+  connector: ((item: TreeViewItem<T>) => TreeConnector | undefined) | undefined;
+  anchor: ((item: TreeViewItem<T>) => JSX.Element) | undefined;
 }) {
-  const verticalInset = () => (props.root ? ROOT_VERTICAL_INSET : 0);
+  const verticalInset = () => (props.root ? TREE_VIEW_VERTICAL_INSET : 0);
 
   return (
     <ul
@@ -88,6 +95,8 @@ function TreeLevel<T>(props: {
             rowClass={props.rowClass}
             isProtected={props.isProtected}
             collapsedSummary={props.collapsedSummary}
+            connector={props.connector}
+            anchor={props.anchor}
           >
             {props.children}
           </TreeBranch>
@@ -104,18 +113,23 @@ function TreeBranch<T>(props: {
   rowClass: ((item: TreeViewItem<T>) => string | undefined) | undefined;
   isProtected: ((item: TreeViewItem<T>) => boolean) | undefined;
   collapsedSummary: ((item: TreeViewItem<T>) => TreeCollapsedSummary) | undefined;
+  connector: ((item: TreeViewItem<T>) => TreeConnector | undefined) | undefined;
+  anchor: ((item: TreeViewItem<T>) => JSX.Element) | undefined;
 }) {
   const item = () => props.node.item;
   const isProtected = () => props.isProtected?.(item()) === true;
-  const anchorUrl = () => {
-    if (item().childCount === 0) {
-      return isProtected() ? nodeAnchorNoSubnodesProtectedUrl : nodeAnchorNoSubnodesUrl;
-    }
-
-    if (item().isExpanded) {
-      return isProtected() ? nodeAnchorExpandedProtectedUrl : nodeAnchorExpandedUrl;
-    }
-    return isProtected() ? nodeAnchorCollapsedProtectedUrl : nodeAnchorCollapsedUrl;
+  const connectorFor = (target: TreeViewItem<T>) =>
+    props.connector ? props.connector(target) : classicTreeConnector('none');
+  // The branch's own connector, plus the start of its children's line below its anchor.
+  const connectorStyle = () => {
+    const firstChild = item().isExpanded ? item().children()[0] : undefined;
+    const childLine = firstChild ? connectorFor(firstChild) : undefined;
+    const ownLine = item().depth > 0 ? connectorFor(item()) : undefined;
+    const layers = [
+      ...(childLine ? [treeConnectorHead(childLine)] : []),
+      ...(ownLine ? [treeConnectorBackground(ownLine, item().isLast)] : [])
+    ];
+    return layers.length > 0 ? { background: layers.join(', ') } : undefined;
   };
   const anchorLabel = () => {
     if (isProtected()) {
@@ -129,26 +143,32 @@ function TreeBranch<T>(props: {
   };
 
   return (
-    <li class="flex min-w-0 flex-col overflow-hidden ps-4 text-xs" role="none" style={treeConnectorStyle(item())}>
+    <li class="flex min-w-0 flex-col overflow-hidden ps-4 text-xs" role="none" style={connectorStyle()}>
       <div
         {...props.rowProps?.(item())}
         data-node-id={item().id}
         role="treeitem"
         aria-expanded={item().childCount > 0 ? (item().isExpanded ? 'true' : 'false') : undefined}
         aria-level={item().depth + 1}
-        class={`relative flex h-5 min-w-0 items-center overflow-hidden ${props.rowClass?.(item()) ?? ''}`}
+        class={`relative isolate flex h-5 min-w-0 items-center overflow-hidden ${props.rowClass?.(item()) ?? ''}`}
       >
         <button
           type="button"
           aria-label={anchorLabel()}
-          class="h-4 w-4 flex-none bg-no-repeat"
-          style={{
-            'background-image': `url(${anchorUrl()})`,
-            'background-position': '0 1px'
-          }}
+          class="h-4 w-4 flex-none"
           disabled={item().childCount === 0}
           onClick={item().toggle}
-        />
+        >
+          {props.anchor ? (
+            props.anchor(item())
+          ) : (
+            <TreeAnchorBox
+              expanded={item().childCount > 0 ? item().isExpanded : undefined}
+              protected={isProtected()}
+              highlighted={false}
+            />
+          )}
+        </button>
 
         <Show when={item().childCount > 0 && !item().isExpanded}>
           <CollapsedSummaryButton item={item()} summary={props.collapsedSummary?.(item())} />
@@ -164,6 +184,8 @@ function TreeBranch<T>(props: {
           rowClass={props.rowClass}
           isProtected={props.isProtected}
           collapsedSummary={props.collapsedSummary}
+          connector={props.connector}
+          anchor={props.anchor}
         >
           {props.children}
         </TreeLevel>
@@ -197,20 +219,8 @@ function CollapsedSummaryButton<T>(props: { item: TreeViewItem<T>; summary: Tree
   );
 }
 
-function treeConnectorStyle<T>(item: TreeViewItem<T>) {
-  if (item.depth === 0) {
-    return {};
-  }
+/** Space above the first row and below the last one, inside the root list. */
+export const TREE_VIEW_VERTICAL_INSET = 2;
 
-  return item.isLast ? lastTreeConnectorStyle : treeConnectorStyleWithSibling;
-}
-
-const treeConnectorStyleWithSibling = {
-  background: `url(${linetoSubnodeUrl}) 7px 10px no-repeat, url(${lineVerticalUrl}) 6px 2px repeat-y`
-};
-
-const lastTreeConnectorStyle = {
-  background: `url(${linetoLastSubnodeUrl}) 0 0 no-repeat`
-};
-
-const ROOT_VERTICAL_INSET = 2;
+/** Indentation added by each tree level: the `ps-4` padding of every branch. */
+export const TREE_VIEW_INDENT = 16;

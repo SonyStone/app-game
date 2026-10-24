@@ -19,6 +19,8 @@
   "dependencies": {
     "@app-game/solid-virtual": "workspace:*",
     "@solid-primitives/history": "catalog:",
+    "@solid-primitives/raf": "catalog:",
+    "@solid-primitives/set": "catalog:",
     "solid-js": "catalog:"
   },
   "devDependencies": {
