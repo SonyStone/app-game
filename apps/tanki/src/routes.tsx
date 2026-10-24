@@ -14,6 +14,11 @@ const tankiPages = [
     component: lazy(() => import('./damage/DamageRoute'))
   },
   {
+    path: '/koth',
+    name: 'King of the hill',
+    component: lazy(() => import('./koth/KothRoute'))
+  },
+  {
     path: '/tilt',
     name: 'Tilt sandbox',
     component: lazy(() => import('./tilt/TiltSandbox'))

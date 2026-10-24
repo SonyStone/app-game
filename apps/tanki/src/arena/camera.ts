@@ -54,6 +54,13 @@ export function screenToWorld(camera: Camera, point: Point, screen: Size) {
   return { x: camera.x + local.x, y: camera.y + local.y };
 }
 
+/** Converts a point in world coordinates to screen pixels, the inverse of `screenToWorld`. */
+export function worldToScreen(camera: Camera, point: Point, screen: Size) {
+  const local = rotate({ x: point.x - camera.x, y: point.y - camera.y }, camera.rotation);
+
+  return { x: screen.width / 2 + local.x * camera.zoom, y: screen.height / 2 + local.y * camera.zoom };
+}
+
 /** Converts a direction in screen axes to world axes, so "up" on screen stays up when the view turns. */
 export function screenToWorldDirection(camera: Camera, direction: Point) {
   return rotate(direction, -camera.rotation);

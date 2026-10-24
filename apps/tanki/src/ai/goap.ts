@@ -31,6 +31,10 @@ export type GoapGoal<Name extends string = string> = {
  * Finds the cheapest sequence of `actions` that makes every fact in `goal` hold, starting from
  * `state`. Returns an empty plan when the goal already holds and `undefined` when no plan of at
  * most `maxSteps` actions exists.
+ *
+ * The search estimates the rest of the way as the cost of the cheapest action while any wanted
+ * fact is missing, which never overestimates, so the plan found is the cheapest even when one
+ * cheap action settles several facts.
  */
 export function plan<Name extends string>(
   state: Facts,
@@ -38,14 +42,22 @@ export function plan<Name extends string>(
   actions: readonly GoapAction<Name>[],
   maxSteps = 6
 ): GoapAction<Name>[] | undefined {
-  type Node = { facts: Facts; cost: number; estimate: number; steps: GoapAction<Name>[] };
-  const open: Node[] = [{ facts: state, cost: 0, estimate: unmet(state, goal), steps: [] }];
+  type Node = { facts: Facts; cost: number; priority: number; steps: GoapAction<Name>[] };
+  const cheapest = actions.reduce((lowest, action) => Math.min(lowest, action.cost), Infinity);
+  const estimate = (facts: Facts) => (unmet(facts, goal) > 0 ? cheapest : 0);
+  const open: Node[] = [];
   const best = new Map<string, number>([[key(state), 0]]);
   let expansions = 0;
 
+  push({ facts: state, cost: 0, priority: estimate(state), steps: [] });
+
   while (open.length > 0 && expansions < MAX_EXPANSIONS) {
-    open.sort((a, b) => a.cost + a.estimate - (b.cost + b.estimate));
-    const node = open.shift()!;
+    const node = pop();
+
+    if ((best.get(key(node.facts)) ?? Infinity) < node.cost) {
+      continue;
+    }
+
     expansions++;
 
     if (unmet(node.facts, goal) === 0) {
@@ -70,16 +82,63 @@ export function plan<Name extends string>(
       }
 
       best.set(id, cost);
-      open.push({ facts, cost, estimate: unmet(facts, goal), steps: [...node.steps, action] });
+      push({ facts, cost, priority: cost + estimate(facts), steps: [...node.steps, action] });
     }
   }
 
   return undefined;
+
+  /** Adds a node to the binary min-heap `open`, ordered by priority. */
+  function push(node: Node) {
+    let index = open.length;
+    open.push(node);
+
+    while (index > 0) {
+      const parent = (index - 1) >> 1;
+
+      if (open[parent].priority <= node.priority) {
+        break;
+      }
+
+      open[index] = open[parent];
+      index = parent;
+    }
+
+    open[index] = node;
+  }
+
+  /** Removes and returns the node of lowest priority. */
+  function pop() {
+    const top = open[0];
+    const last = open.pop()!;
+
+    if (open.length > 0) {
+      let index = 0;
+
+      while (true) {
+        const left = index * 2 + 1;
+        const smaller = left + 1 < open.length && open[left + 1].priority < open[left].priority ? left + 1 : left;
+
+        if (smaller >= open.length || open[smaller].priority >= last.priority) {
+          break;
+        }
+
+        open[index] = open[smaller];
+        index = smaller;
+      }
+
+      open[index] = last;
+    }
+
+    return top;
+  }
 }
 
 /**
  * Picks the goal to pursue: the highest-priority goal that does not hold yet and has a plan.
- * Returns the goal with its plan, or `undefined` when every goal holds or none can be reached.
+ * Returns the goal with its plan and the plan's total cost, or `undefined` when every goal holds
+ * or none can be reached. Actions whose cost is not finite are left out, so an agent can price an
+ * action it cannot take at `Infinity`.
  */
 export function chooseGoal<Name extends string, Action extends string>(
   state: Facts,
@@ -87,16 +146,17 @@ export function chooseGoal<Name extends string, Action extends string>(
   actions: readonly GoapAction<Action>[]
 ) {
   const ranked = [...goals].sort((a, b) => b.priority - a.priority);
+  const usable = actions.filter((action) => Number.isFinite(action.cost));
 
   for (const goal of ranked) {
     if (holds(state, goal.wants)) {
       continue;
     }
 
-    const steps = plan(state, goal.wants, actions);
+    const steps = plan(state, goal.wants, usable);
 
     if (steps) {
-      return { goal, steps };
+      return { goal, steps, cost: steps.reduce((total, step) => total + step.cost, 0) };
     }
   }
 
@@ -109,7 +169,7 @@ export function holds(facts: Facts, wanted: Facts) {
 }
 
 /** Search budget per plan, so a hopeless goal cannot stall a frame. */
-const MAX_EXPANSIONS = 512;
+const MAX_EXPANSIONS = 2048;
 
 function unmet(facts: Facts, goal: Facts) {
   return Object.entries(goal).filter(([name, value]) => (facts[name] ?? false) !== value).length;
