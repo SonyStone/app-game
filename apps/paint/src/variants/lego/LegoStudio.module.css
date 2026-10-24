@@ -132,16 +132,29 @@
 }
 
 /* The resize handle in a part's bottom-right corner. */
+/*
+ * The resize handle of the one selected part, centered on its bottom-right corner in the panel's cells: a knob drawn
+ * small, pressed by a finger-sized area around it that reaches past a small part.
+ */
 .corner {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 18px;
-  height: 18px;
+  z-index: 3;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
   cursor: nwse-resize;
   touch-action: none;
-  background: linear-gradient(135deg, transparent 50%, var(--lego-accent) 50%);
-  border-bottom-right-radius: 7px;
+  pointer-events: auto;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 12px;
+    border: 3px solid #ffffff;
+    border-radius: 50%;
+    background: var(--lego-accent);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+  }
 }
 
 .unknown {
@@ -401,26 +414,6 @@
   padding: 10px;
   border-radius: 10px;
   background: var(--lego-tile);
-}
-
-/* The handle opening a part's looks, in its top-right corner while editing. */
-.looksHandle {
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--lego-accent);
-  color: #ffffff !important;
-  font-size: 10px;
-  line-height: 1;
-  cursor: pointer;
-  touch-action: none;
 }
 
 .chooser {
@@ -1035,6 +1028,49 @@
 
 .selection {
   border: 2px dashed var(--lego-accent);
+}
+
+/* What can be done with the selected parts, floating over their outline; see `SelectionBar`. */
+.selectionBar {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgb(36 38 44);
+  box-shadow: var(--lego-shadow);
+  pointer-events: auto;
+  touch-action: none;
+  white-space: nowrap;
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: #ffffff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background: rgb(255 255 255 / 0.1);
+  }
+
+  button[data-done] {
+    color: #7fd18b;
+  }
+}
+
+.looksGlyph {
+  font-size: 16px;
+  line-height: 1;
 }
 
 .tray h4,

@@ -102,7 +102,7 @@ export function sameLayout(parts: readonly Part[]) {
 }
 
 /** `panel` of `board` as a kit, its cells counted from its top-left, with the panels its swatches own, nested too. */
-function kitOf(board: Board, panel: Panel, name: string): Kit {
+export function kitOf(board: Board, panel: Panel, name: string): Kit {
   const owned: Kit['owned'] = [];
   const collect = (parts: readonly Part[]) => {
     for (const part of parts) {

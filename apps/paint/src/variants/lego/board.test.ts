@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import {
+  edgeInset,
   frameAt,
   panelFrame,
   partsBounds,
@@ -70,7 +71,7 @@ it('shifts a panel that would leave the view back in without changing its cells'
     { width: 800, height: 600 }
   );
 
-  expect(frame.rect.left + frame.rect.width).toBe(800);
+  expect(frame.rect.left + frame.rect.width).toBe(800 - edgeInset);
   expect(frame.origin.x).toBe(frame.rect.left + 6);
 });
 

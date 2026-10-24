@@ -5,6 +5,7 @@ import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import {
   cellGap,
   cellSize,
+  edgeInset,
   findPart,
   frameAt,
   nearestCell,
@@ -12,6 +13,7 @@ import {
   ownedFrame,
   ownedPanel,
   panelFrame,
+  panelPadding,
   partsBounds,
   pinPanels,
   pitch,
@@ -34,10 +36,11 @@ import {
 import type { createBoard } from './createBoard';
 import type { createSheet } from './createSheet';
 import { nameKit } from './kitNames';
-import { swatchPanelParts, unpackKit, type createKits, type Kit } from './kits';
+import { kitOf, swatchPanelParts, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { kindLabel, lookOf, partLooks, PartView, type Popup, type Session } from './parts';
 import { BlockView, PartsTray } from './PartsTray';
+import { SelectionBar } from './SelectionBar';
 import { SpawnMenu } from './SpawnMenu';
 
 /**
@@ -57,8 +60,9 @@ import { SpawnMenu } from './SpawnMenu';
  * takes the nearest cell and pushes the parts in its way aside, which also grows the panel; panels keep still on
  * screen until the drag ends, even at the view's edge. Over the bare drawing it starts a panel of its own; over the
  * box it is put away. A kit from the box lands the same way, as one block of its parts.
- * Its corner handle sizes a part in whole cells, pushing neighbours right and down; a part with several looks also
- * has a handle opening their chooser. A panel dragged by its rim moves freely, and its button keeps it as a kit.
+ * A tap selects a part; the one selected part alone shows a finger-sized handle on its corner, which sizes it in whole
+ * cells, pushing neighbours right and down. A bar over any selection puts it away, duplicates it, keeps it as a kit
+ * and, for one part with several looks, opens their chooser. A panel dragged by its rim moves freely.
  *
  * A swatch owns a panel of its own, which lies beside it while open, like an Android folder: a tap opens and closes
  * it, while editing too, and a press elsewhere closes it (while editing, only a press on the bare drawing does, so
@@ -176,6 +180,23 @@ export function BoardView(props: {
       )
     );
   });
+  /**
+   * The one part selected while editing, with the panel it lies on as shown: it alone has a resize handle, and its
+   * look is chosen from the selection's bar. None while several are selected, a band is dragged or a part carried.
+   */
+  const sizable = () => {
+    const ids = selection();
+    if (!props.editing || band() || lifted() || ids.size !== 1) {
+      return undefined;
+    }
+
+    return findPart(shown(), [...ids][0]!);
+  };
+  /** Whether the selection lies on the workbench rather than on the board; a band selects on one of them only. */
+  const selectionOnBench = () => {
+    const board = props.board.board();
+    return [...selected()].some((id) => findPart(board, id)?.panel.bench === true);
+  };
   /** Where the selected parts on the board lie together, in its pixels, while nothing is carried. */
   const boardSelectionRect = () => {
     const rects = visible().flatMap(({ panel, frame }) =>
@@ -537,35 +558,51 @@ export function BoardView(props: {
                       />
                     </div>
                   </Show>
-                  <Show when={props.editing && !isLifted() && partLooks(part().kind)}>
-                    <button
-                      type="button"
-                      class={styles.looksHandle}
-                      aria-label="Choose look"
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) =>
-                        props.onPopup(event.currentTarget.parentElement!, { kind: 'looks', id: part().id })
-                      }
-                    >
-                      ⇄
-                    </button>
-                  </Show>
-                  <Show when={props.editing && !isLifted()}>
-                    <span
-                      class={styles.corner}
-                      aria-label="Resize"
-                      onPointerDown={(event) => {
-                        event.stopPropagation();
-                        startResize(event, panel().id, part().id, part().span);
-                      }}
-                    />
-                  </Show>
                 </div>
               );
             }}
           </For>
+          {/* Outside the part, which clips its print, so the handle can be larger than a small part's corner. */}
+          <Show when={sizable()?.panel.id === panel().id && sizable()?.part}>
+            {(part) => (
+              <span
+                class={styles.corner}
+                aria-label="Resize"
+                style={{
+                  left: `${(part().cell.column + part().span.columns) * pitch - cellGap}px`,
+                  top: `${(part().cell.row + part().span.rows) * pitch - cellGap}px`
+                }}
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  startResize(event, panel().id, part().id, part().span);
+                }}
+              />
+            )}
+          </Show>
         </div>
       </div>
+    );
+  }
+
+  /** The selection's bar over its outline in a place of `area` size, the board's view or the workbench. */
+  function Bar(barProps: { rect: Rect; area: { width: number; height: number } }) {
+    return (
+      <SelectionBar
+        rect={barProps.rect}
+        area={barProps.area}
+        looks={partLooks(sizable()?.part.kind ?? '') !== undefined}
+        kept={flashKit() !== undefined}
+        onPutAway={putAwaySelected}
+        onDuplicate={duplicateSelected}
+        onKeep={keepSelected}
+        onLooks={() => {
+          const id = sizable()?.part.id;
+          const element = id ? document.querySelector(`[data-part="${CSS.escape(id)}"]`) : undefined;
+          if (id && element) {
+            props.onPopup(element, { kind: 'looks', id });
+          }
+        }}
+      />
     );
   }
 
@@ -590,7 +627,14 @@ export function BoardView(props: {
             {(dragged) => <div class={styles.band} style={rectStyle(dragged().rect)} />}
           </Show>
           <Show when={!band() && boardSelectionRect()}>
-            {(rect) => <div class={styles.selection} style={rectStyle(rect())} />}
+            {(rect) => (
+              <>
+                <div class={styles.selection} style={rectStyle(rect())} />
+                <Show when={!drag()}>
+                  <Bar rect={rect()} area={view()} />
+                </Show>
+              </>
+            )}
           </Show>
         </Show>
       </div>
@@ -609,7 +653,14 @@ export function BoardView(props: {
                 {(dragged) => <div class={styles.band} style={rectStyle(dragged().rect)} />}
               </Show>
               <Show when={!band() && selectionRect()}>
-                {(rect) => <div class={styles.selection} style={rectStyle(rect())} />}
+                {(rect) => (
+                  <>
+                    <div class={styles.selection} style={rectStyle(rect())} />
+                    <Show when={!drag()}>
+                      <Bar rect={rect()} area={benchView()} />
+                    </Show>
+                  </>
+                )}
               </Show>
             </div>
           </Portal>
@@ -928,7 +979,29 @@ export function BoardView(props: {
    * out as they lie on screen in whole cells; they land as a panel, in a panel, on the workbench or in the box.
    */
   function startBoardSelectionDrag(event: PointerEvent, pressed?: string) {
-    const board = props.board.latest();
+    const block = boardSelectionBlock();
+    if (!block) {
+      return;
+    }
+
+    const pressedAt = toView({ x: event.clientX, y: event.clientY });
+    startPartDrag(
+      event,
+      { id: newId('block'), kind: 'kit', span: block.span },
+      {
+        block: { parts: block.parts, panels: [] },
+        grab: { x: pressedAt.x - block.origin.x, y: pressedAt.y - block.origin.y },
+        base: block.ids.reduce((next, id) => removePart(next, id), props.board.latest()),
+        pressed
+      }
+    );
+  }
+
+  /**
+   * The selected parts on the board as one block, laid out as they lie on screen in whole cells and counted from its
+   * top-left at cell (0, 0), with where that cell lies in view pixels; undefined while none on the board is selected.
+   */
+  function boardSelectionBlock() {
     const chosen = visible().flatMap(({ panel, frame }) =>
       panel.parts
         .filter((part) => selected().has(part.id))
@@ -938,7 +1011,7 @@ export function BoardView(props: {
         }))
     );
     if (chosen.length === 0) {
-      return;
+      return undefined;
     }
 
     const left = Math.min(...chosen.map(({ at }) => at.x));
@@ -953,23 +1026,80 @@ export function BoardView(props: {
       []
     );
     const bounds = partsBounds(laid);
-    const pressedAt = toView({ x: event.clientX, y: event.clientY });
-    startPartDrag(
-      event,
-      { id: newId('block'), kind: 'kit', span: { columns: bounds.columns, rows: bounds.rows } },
-      {
-        block: {
-          parts: laid.map((part) => ({
-            ...part,
-            cell: { column: part.cell.column - bounds.column, row: part.cell.row - bounds.row }
-          })),
-          panels: []
-        },
-        grab: { x: pressedAt.x - left - bounds.column * pitch, y: pressedAt.y - top - bounds.row * pitch },
-        base: chosen.reduce((next, { part }) => removePart(next, part.id), board),
-        pressed
+    return {
+      parts: fromOrigin(laid),
+      origin: { x: left + bounds.column * pitch, y: top + bounds.row * pitch },
+      span: { columns: bounds.columns, rows: bounds.rows },
+      ids: chosen.map(({ part }) => part.id)
+    };
+  }
+
+  /**
+   * The selected parts on the workbench as one block counted from its top-left at cell (0, 0), with the bench cell
+   * that top-left lies on; undefined while none there is selected.
+   */
+  function benchSelectionBlock() {
+    const parts = benchOf(props.board.latest()).parts.filter((part) => selected().has(part.id));
+    if (parts.length === 0) {
+      return undefined;
+    }
+
+    const bounds = partsBounds(parts);
+    return {
+      parts: fromOrigin(parts),
+      cell: { column: bounds.column, row: bounds.row },
+      span: { columns: bounds.columns, rows: bounds.rows }
+    };
+  }
+
+  /** Puts the selected parts away, with the panels of the swatches among them. */
+  function putAwaySelected() {
+    const next = [...selected()].reduce((board, id) => removePart(board, id), props.board.latest());
+    props.board.set(pruneOwned(next));
+    setSelected(new Set<string>());
+  }
+
+  /**
+   * Places a copy of the selected parts, with their swatches' panels, beside them: on the workbench right of them,
+   * pushing what is there aside; on the board as a panel of its own where there is room. The copy is selected, to be
+   * carried on.
+   */
+  function duplicateSelected() {
+    const board = props.board.latest();
+    const copyOf = (parts: Part[]) => unpackKit(kitOf(board, { id: 'copy', at: { x: 0, y: 0 }, parts }, ''));
+    let copy: ReturnType<typeof unpackKit>;
+    let next: Board;
+    if (selectionOnBench()) {
+      const block = benchSelectionBlock();
+      if (!block) {
+        return;
       }
-    );
+
+      copy = copyOf(block.parts);
+      const bench = benchOf(board);
+      const cell = { column: block.cell.column + block.span.columns, row: block.cell.row };
+      next = putPanel(board, { ...bench, parts: placeBlock(bench.parts, copy.parts, cell) });
+    } else {
+      const block = boardSelectionBlock();
+      if (!block) {
+        return;
+      }
+
+      copy = copyOf(block.parts);
+      const at = besideBlock(block.origin, block.span, view());
+      next = { panels: [...board.panels, { id: newId('panel'), at, parts: copy.parts }] };
+    }
+
+    props.board.set({ panels: [...next.panels, ...copy.panels] });
+    setSelected(new Set(copy.parts.map((part) => part.id)));
+  }
+
+  /** Keeps the selected parts, with their swatches' panels, as a kit; they stay where they are. */
+  function keepSelected() {
+    const block = selectionOnBench() ? benchSelectionBlock() : boardSelectionBlock();
+    if (block) {
+      keepKit(props.board.latest(), { id: 'kept', at: { x: 0, y: 0 }, parts: block.parts });
+    }
   }
 
   /**
@@ -1366,6 +1496,39 @@ function visiblePanels(
   };
 
   return panels.map((panel) => ({ panel, frame: frameOf(panel) }));
+}
+
+/** `parts` moved so that their bounds start at cell (0, 0). */
+function fromOrigin(parts: readonly Part[]) {
+  const bounds = partsBounds(parts);
+  return parts.map((part) => ({
+    ...part,
+    cell: { column: part.cell.column - bounds.column, row: part.cell.row - bounds.row }
+  }));
+}
+
+/**
+ * Where a copy of a block of `span` whose cell (0, 0) lies at `origin` goes, as a panel's `at` in a view of `view`
+ * size: right of it where there is room, else left, below or above it; right of it, shifted into the view, if
+ * nowhere.
+ */
+function besideBlock(origin: Point, span: Span, view: { width: number; height: number }) {
+  const width = span.columns * pitch - cellGap;
+  const height = span.rows * pitch - cellGap;
+  const gap = pitch / 2 + panelPadding * 2;
+  const candidates = [
+    { x: origin.x + width + gap, y: origin.y },
+    { x: origin.x - width - gap, y: origin.y },
+    { x: origin.x, y: origin.y + height + gap },
+    { x: origin.x, y: origin.y - height - gap }
+  ];
+  const fits = ({ x, y }: Point) =>
+    x - panelPadding >= edgeInset &&
+    x + width + panelPadding <= view.width - edgeInset &&
+    y - panelPadding >= 0 &&
+    y + height + panelPadding <= view.height - edgeInset;
+  const at = candidates.find(fits) ?? candidates[0]!;
+  return { x: at.x / view.width, y: at.y / view.height };
 }
 
 /** `frame` moved the least it takes to lie inside `view`, as far as it fits. */
