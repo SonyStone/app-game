@@ -1,7 +1,7 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Portal } from '@solidjs/web';
-import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import {
   cellGap,
   cellSize,
@@ -35,6 +35,7 @@ import {
 } from './board';
 import type { createBoard } from './createBoard';
 import type { createSheet } from './createSheet';
+import { createTwoFingerSheet } from './createTwoFingerSheet';
 import { nameKit } from './kitNames';
 import { kitOf, swatchPanelParts, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
@@ -98,6 +99,21 @@ export function BoardView(props: {
   onCleanup(() => clearTimeout(flashTimer));
   /** The parts on the workbench selected to be carried together or kept as a kit. */
   const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set());
+  /** Whether the edit mode's hint still shows; it goes for good once something is selected. */
+  const [hinted, setHinted] = createSignal(readHinted());
+  createEffect(
+    () => !hinted() && selected().size > 0,
+    (learned) => {
+      if (learned) {
+        setHinted(true);
+        try {
+          localStorage.setItem(hintKey, '1');
+        } catch {
+          // The hint shows again on the next visit.
+        }
+      }
+    }
+  );
   /** The open spawn menu: where it was opened, and the pointer of the press while it is held. */
   const [spawn, setSpawn] = createSignal<{ at: Point; held?: number }>();
 
@@ -262,6 +278,22 @@ export function BoardView(props: {
     const current = drag();
     return current?.type === 'part' ? current : undefined;
   };
+
+  // Two fingers pull the box up or down while editing; the second one landing drops what the first one began.
+  createTwoFingerSheet({
+    enabled: () => props.editing,
+    sheet: props.sheet,
+    onStart() {
+      stopWaiting();
+      stopSpring();
+      stopPress();
+      setSpawn(undefined);
+      if (drag()) {
+        setDrag(undefined);
+        props.sheet.setSunk(false);
+      }
+    }
+  });
 
   // A press outside the open panels and their swatches closes them; while editing only one on the bare drawing.
   createEventListener(
@@ -623,6 +655,11 @@ export function BoardView(props: {
           {(entry) => <PanelView entry={entry()} />}
         </For>
         <Show when={props.editing}>
+          <Show when={!hinted() && !drag()}>
+            <p class={styles.editHint} role="status">
+              Tap a part to select it · drag to move · two fingers up open the box
+            </p>
+          </Show>
           <Show when={band()?.place === 'board' && band()}>
             {(dragged) => <div class={styles.band} style={rectStyle(dragged().rect)} />}
           </Show>
@@ -1497,6 +1534,17 @@ function visiblePanels(
 
   return panels.map((panel) => ({ panel, frame: frameOf(panel) }));
 }
+
+/** Whether the edit mode's hint was learned on this device. */
+function readHinted() {
+  try {
+    return localStorage.getItem(hintKey) === '1';
+  } catch {
+    return false;
+  }
+}
+
+const hintKey = 'paint.lego.hinted';
 
 /** `parts` moved so that their bounds start at cell (0, 0). */
 function fromOrigin(parts: readonly Part[]) {

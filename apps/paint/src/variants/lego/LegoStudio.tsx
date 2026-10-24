@@ -13,7 +13,7 @@ import {
 import { besideRect, findPart } from './board';
 import { BoardView } from './BoardView';
 import { createBoard } from './createBoard';
-import { createSheet } from './createSheet';
+import { closedHeight, createSheet } from './createSheet';
 import { createKits } from './kits';
 import styles from './LegoStudio.module.css';
 import { LookChooser } from './LookChooser';
@@ -29,8 +29,9 @@ import { ValuePart, type Popup } from './parts';
  * the one chosen for its size. A color swatch opens a panel of its own, built like any other; panels can be kept as
  * kits and placed again.
  *
- * "Edit" shows the studs and the handle of the box of parts, a sheet pulled up by a wheel or a drag, the drawing
- * shrinking to a card above it, with the workbench to build a kit on at full size: drag parts out of the box, between
+ * "Edit" shows the studs and the handle of the box of parts in a strip along the bottom, the drawing shrinking to a
+ * card above it; the box is a sheet pulled up by a wheel, its handle or two fingers anywhere, the card shrinking
+ * further, with the workbench to build a kit on at full size: drag parts out of the box, between
  * panels and back, size them by their corner and move panels by their rim; a long press on a free spot offers the
  * parts right there (see `BoardView`). The board is kept per device.
  */
@@ -47,13 +48,14 @@ export function LegoStudio(props: PaintVariantProps) {
   /** The box of parts while editing; each edit starts with it closed. */
   const sheet = createSheet(() => session.size().height);
   /**
-   * How the drawing and the board shrink to a card above the sheet: by how much of the way to its middle stop the
-   * sheet is up (`progress`), the most there, centered across and a margin down; at full size while it is sunk.
+   * How the drawing and the board shrink to a card above the sheet while editing: by how much of the way to its middle
+   * stop the sheet is up (`progress`), the most there, centered across and a margin down; a little above a closed
+   * sheet's strip, and at full size while the sheet is sunk.
    */
   const card = () => {
     const { width, height } = session.size();
     const middle = sheet.middle();
-    const up = editing() && !sheet.sunk() ? sheet.height() : 0;
+    const up = editing() && !sheet.sunk() ? Math.max(closedHeight, sheet.height()) : 0;
     const progress = middle > 0 ? Math.min(up, middle) / middle : 0;
     const smallest = Math.max(0.3, (height - middle - cardMargin * 2) / height);
     const scale = 1 - progress * (1 - smallest);

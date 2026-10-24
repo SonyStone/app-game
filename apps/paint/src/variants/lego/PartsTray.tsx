@@ -1,7 +1,7 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import { cellGap, cellSize, partsBounds, pitch, type Part } from './board';
-import type { createSheet } from './createSheet';
+import { closedHeight, type createSheet } from './createSheet';
 import type { createKits, Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { boxSections, kindLabel, lookOf, PartView, type Session } from './parts';
@@ -38,7 +38,7 @@ export function PartsTray(props: {
   const [shelf, setShelf] = createSignal<HTMLElement>();
   const split = createSplit();
   const closed = () => props.sheet.height() <= 0 && !props.sheet.sunk();
-  const shownHeight = () => (props.sheet.sunk() ? sunkHeight : Math.max(barHeight, props.sheet.height()));
+  const shownHeight = () => (props.sheet.sunk() ? sunkHeight : Math.max(closedHeight, props.sheet.height()));
 
   // A wheel over the board or the sheet moves its edge, and settles it once the wheel stops; over the parts it first
   // scrolls them, and moves the sheet only past their ends.
@@ -86,6 +86,9 @@ export function PartsTray(props: {
         <span class={styles.trayGrip} aria-hidden="true" />
         <Show when={props.sheet.sunk()}>
           <span class={styles.trayTitle}>{props.over ? 'Drop to put it away' : 'Drop here to put it away'}</span>
+        </Show>
+        <Show when={closed()}>
+          <span class={styles.trayTitle}>Parts</span>
         </Show>
       </div>
       <div
@@ -262,8 +265,7 @@ function dragSheet(event: PointerEvent, sheet: ReturnType<typeof createSheet>) {
   element.addEventListener('pointercancel', end);
 }
 
-/** CSS pixels of the handle a closed sheet shows, and of the strip a sunk one leaves. */
-const barHeight = 24;
+/** CSS pixels of the strip a sunk sheet leaves. */
 const sunkHeight = 56;
 
 /** CSS pixels a press on the handle may move and still be a tap. */

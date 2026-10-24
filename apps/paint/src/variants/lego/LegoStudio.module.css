@@ -752,10 +752,16 @@
     left 200ms,
     right 200ms;
 
+  /* A tab in the strip the drawing leaves above the bottom edge: a grip with its name, to tap or pull. */
   &[data-closed] {
-    right: calc(50% - 60px);
-    left: calc(50% - 60px);
-    border-radius: 12px 12px 0 0;
+    right: calc(50% - 80px);
+    left: calc(50% - 80px);
+    grid-template-rows: minmax(0, 1fr);
+    border-radius: 14px 14px 0 0;
+
+    .trayContent {
+      display: none;
+    }
   }
 
   &[data-sunk] {
@@ -1028,6 +1034,22 @@
 
 .selection {
   border: 2px dashed var(--lego-accent);
+}
+
+/* How to start editing, at the bottom of the board until something is first selected. */
+.editHint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  margin: 0;
+  padding: 10px 16px;
+  translate: -50% 0;
+  border-radius: 999px;
+  background: rgb(36 38 44 / 0.9);
+  color: #ffffff;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* What can be done with the selected parts, floating over their outline; see `SelectionBar`. */

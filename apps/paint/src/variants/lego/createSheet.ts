@@ -83,6 +83,13 @@ export function settledHeight(height: number, stops: readonly number[], directio
   return stops.reduce((best, stop) => (Math.abs(stop - height) < Math.abs(best - height) ? stop : best));
 }
 
+/**
+ * CSS pixels of the strip a closed sheet keeps along the bottom while editing, its handle in it: the drawing shrinks
+ * above it, so the handle never covers parts, and the handle's grip lies above the edge where Android's home swipe
+ * starts.
+ */
+export const closedHeight = 48;
+
 /** CSS pixels of the view left above the full sheet, for the edit button. */
 const fullGap = 64;
 
