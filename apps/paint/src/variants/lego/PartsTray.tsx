@@ -5,36 +5,107 @@ import styles from './LegoStudio.module.css';
 import { boxSections, kindLabel, lookOf, PartView, type Session } from './parts';
 
 /**
- * The box of parts, docked beside the drawing while editing, in the room the drawing leaves as it shrinks to a card,
- * like Android's home screen while its widgets are arranged: every part by family with its name, the brushes, and
- * the kits as live previews, the user's with a delete button. Dropping something on it puts it away.
+ * How far the box of parts is pulled out: `closed` leaves only its handle, the board at full size; `half` shrinks the
+ * drawing to a card beside the box to look through it; `full` covers the screen with the workbench over the parts.
+ */
+export type TrayStop = 'closed' | 'half' | 'full';
+
+/**
+ * The box of parts while editing, pulled out in three stops (see `TrayStop`) by its handle, a tap or a swipe: every
+ * part by family with its name, the brushes, and the kits as live previews, the user's with a delete button. Fully
+ * pulled out it holds the workbench, a place the board puts its bench panel to build a kit at full size. While
+ * something is carried from the board or the half-open box it sinks to a strip along the bottom, so the board shows
+ * at full size; dropping something on it puts it away.
  */
 export function PartsTray(props: {
   session: Session;
   kits: ReturnType<typeof createKits>;
-  /** Whether a part or kit is being carried over the tray, to be put away. */
+  stop: TrayStop;
+  onStop: (stop: TrayStop) => void;
+  /** Whether a part or kit is being carried, and whether it is over the box, to be put away. */
+  carrying: boolean;
   over: boolean;
   /** Lifts a new part of `kind`, or a copy of `kit`, from the press `event`. */
   onLift: (event: PointerEvent, kind: string) => void;
   onLiftKit: (event: PointerEvent, kit: Kit) => void;
   onReset: () => void;
   ref: (element: HTMLElement) => void;
+  /** The workbench's place, shown while the box is fully out. */
+  benchRef: (element: HTMLElement | undefined) => void;
 }) {
+  /** Where a press on the handle began, to tell a swipe from a tap. */
+  let pressY: number | undefined;
+  const sunk = () => props.carrying && props.stop !== 'full';
+  const pull = (moved: number) => {
+    const order: TrayStop[] = ['closed', 'half', 'full'];
+    const at = order.indexOf(props.stop);
+    if (Math.abs(moved) < swipeDistance) {
+      return props.stop === 'closed' ? 'half' : props.stop === 'half' ? 'closed' : 'half';
+    }
+
+    return order[Math.max(0, Math.min(2, at + (moved < 0 ? 1 : -1)))]!;
+  };
+
   return (
     <aside
       ref={props.ref}
       class={styles.tray}
       aria-label="Box of parts"
+      data-stop={props.stop}
+      data-sunk={sunk() ? '' : undefined}
       data-over={props.over ? '' : undefined}
       data-keeps-panel
     >
-      <header class={styles.trayBar}>
-        <span class={styles.trayTitle}>{props.over ? 'Drop to put it away' : 'Box of parts'}</span>
-        <span class={styles.trayHint}>or hold the drawing</span>
-        <button type="button" class={styles.boxButton} onClick={() => props.onReset()}>
-          Reset board
-        </button>
+      <header
+        class={styles.trayBar}
+        onPointerDown={(event) => {
+          // Held, so a swipe that leaves the handle still ends on it.
+          event.currentTarget.setPointerCapture(event.pointerId);
+          pressY = event.clientY;
+        }}
+        onPointerUp={(event) => {
+          if (pressY === undefined || props.carrying) {
+            return;
+          }
+
+          const moved = event.clientY - pressY;
+          pressY = undefined;
+          props.onStop(pull(moved));
+        }}
+      >
+        <span class={styles.trayGrip} aria-hidden="true" />
+        <span class={styles.trayTitle}>
+          {props.over ? 'Drop to put it away' : sunk() ? 'Drop here to put it away' : 'Box of parts'}
+        </span>
+        <Show when={props.stop !== 'closed' && !sunk()}>
+          <span class={styles.trayHint}>
+            {props.stop === 'full' ? 'build a kit on the bench, drag it out by its rim' : 'or hold the drawing'}
+          </span>
+          <button
+            type="button"
+            class={styles.boxButton}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onClick={() => props.onStop(props.stop === 'full' ? 'half' : 'full')}
+          >
+            {props.stop === 'full' ? 'Back to the board' : 'Workbench'}
+          </button>
+          <button
+            type="button"
+            class={styles.boxButton}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onClick={() => props.onReset()}
+          >
+            Reset board
+          </button>
+        </Show>
       </header>
+      <Show when={props.stop === 'full'}>
+        <div ref={props.benchRef} class={styles.benchSlot}>
+          <span>Workbench: drop parts here to build a kit at full size</span>
+        </div>
+      </Show>
       <div class={styles.trayBody}>
         <For each={partFamilies(props.session)}>
           {(family) => (
@@ -64,6 +135,9 @@ export function PartsTray(props: {
     </aside>
   );
 }
+
+/** CSS pixels a press on the handle must travel to pull the box a stop further or push it back one. */
+const swipeDistance = 24;
 
 /** The families of parts the box and the spawn menu offer: the box's sections, then the user's brushes. */
 export function partFamilies(session: Session) {

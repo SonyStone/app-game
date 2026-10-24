@@ -24,6 +24,11 @@ export type Panel = {
    * and shows only while open, like an Android folder.
    */
   owner?: string;
+  /**
+   * Whether this is the workbench: the plate in the fully pulled-out box where a kit is built at full size, shown
+   * only there; dragged out by its rim it becomes a panel on the drawing.
+   */
+  bench?: true;
 };
 
 /**

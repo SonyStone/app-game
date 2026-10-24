@@ -34,7 +34,15 @@ const storageKey = 'paint.lego';
 
 const point = z.object({ x: z.number(), y: z.number() });
 const boardSchema = z.object({
-  panels: z.array(z.object({ id: z.string(), at: point, parts: z.array(storedPart), owner: z.string().optional() }))
+  panels: z.array(
+    z.object({
+      id: z.string(),
+      at: point,
+      parts: z.array(storedPart),
+      owner: z.string().optional(),
+      bench: z.literal(true).optional()
+    })
+  )
 });
 
 function read(): Board {
