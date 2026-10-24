@@ -123,7 +123,7 @@ export type LaneEnd = {
   /** Unit direction the shell flies in as it stops. */
   heading: Point;
   meets: 'tank' | 'crate' | 'wreck' | 'wall' | 'nothing';
-  /** The enemy tank met. */
+  /** The enemy tank met; never the shooter's own, which a grenade bouncing back can meet. */
   tank?: Tank;
   /** The shell meets the tank's open core, which destroys it. */
   core: boolean;
@@ -195,9 +195,10 @@ function lobLane(combat: ForecastCombat, tank: Tank, angle: number, shell: Shell
   let speed = shell.speed;
   let bounced = false;
   let landing: Point | undefined;
+  // A grenade bouncing back into its thrower goes off there, which is no hit on an enemy.
   const end = (at: Point, meets: LaneEnd['meets'], target?: Tank, core = false): Lane => ({
     path: [...path, { ...at, height: state.height }],
-    end: { at, heading: direction, meets, tank: target, core, breakable: false, glancing: false },
+    end: { at, heading: direction, meets, tank: target === tank ? undefined : target, core: core && target !== tank, breakable: false, glancing: false },
     weight: 1,
     landing
   });

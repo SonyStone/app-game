@@ -142,6 +142,18 @@ describe('the aim forecast', () => {
     expect(distance(direct.lanes[0].landing ?? { x: Infinity, y: 0 }, shooter.hull.translation())).toBeGreaterThan(190);
   });
 
+  it('marks no hit when a grenade thrown point-blank at a wall bounces back into its thrower', () => {
+    const { combat } = createBattle({ walls: [{ x: 60, y: 0, halfWidth: 12, halfHeight: 80, material: 'steel' }] });
+    const shooter = spawn(combat, 'demoman', { x: 20, y: 0 }, 'red');
+    settle(combat);
+
+    const forecast = forecastShot(combat, shooter, TANK_CLASSES.demoman, 0, 80)!;
+
+    expect(forecast.lanes[0].end.meets).toBe('tank');
+    expect(forecast.lanes[0].end.tank).toBeUndefined();
+    expect(forecast.verdict).toBe('blocked');
+  });
+
   it('ends where shells and grenades fired along it stop, all over the king of the hill map', () => {
     const { combat, shots } = createBattle(KOTH_MAP);
     // In the hall, on the plaza, in the north and the south street, among walls of every material.
