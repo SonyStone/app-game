@@ -126,9 +126,20 @@ export function BoardView(props: {
   /** The panels on screen, with where each lies; see `visiblePanels`. */
   const visible = createMemo(() => visiblePanels(shown(), props.openPanel, props.editing, view(), pinned(drag())));
   /** The workbench as shown, with where it lies in its place in the sheet. */
+  /**
+   * How much the workbench is shrunk to show all its parts in its place, which never scrolls: 1 while they fit. It
+   * follows the kept bench, not a drag's preview, so the plate keeps still under a carried part.
+   */
+  const benchScale = createMemo(() => {
+    const used = benchReach(benchOf(props.board.board()));
+    const width = benchSize.width ?? 0;
+    const height = benchSize.height ?? 0;
+    return Math.min(1, width > 0 ? width / used.width : 1, height > 0 ? height / used.height : 1);
+  });
   const benchEntry = createMemo(() => {
     const panel = benchOf(shown());
-    return { panel, frame: benchFrame(panel, { width: benchSize.width ?? 0, height: benchSize.height ?? 0 }) };
+    const size = { width: (benchSize.width ?? 0) / benchScale(), height: (benchSize.height ?? 0) / benchScale() };
+    return { panel, frame: benchFrame(panel, size) };
   });
   /** The band being dragged across the workbench, in its place's pixels. */
   const band = () => {
@@ -384,14 +395,16 @@ export function BoardView(props: {
         </Show>
         <For each={panel().parts} keyed={(part) => part.id}>
           {(part) => {
-            const isLifted = () => lifted()?.id === part().id;
+            // The lifted part, or a carried block's parts, show only where they would land.
+            const isLifted = () =>
+              lifted()?.id === part().id || lifted()?.block?.parts.some((inBlock) => inBlock.id === part().id) === true;
             return (
               <div
                 class={styles.part}
                 data-part={part().id}
                 data-lifted={isLifted() ? '' : undefined}
                 data-open={chain().has(part().id) ? '' : undefined}
-                data-selected={panel().bench && selection().has(part().id) ? '' : undefined}
+                data-selected={panel().bench && !isLifted() && selection().has(part().id) ? '' : undefined}
                 style={{
                   left: `${frame().origin.x - frame().rect.left + part().cell.column * pitch}px`,
                   top: `${frame().origin.y - frame().rect.top + part().cell.row * pitch}px`,
@@ -487,22 +500,27 @@ export function BoardView(props: {
       <Show when={props.editing && bench()}>
         {(slot) => (
           <Portal mount={slot()}>
-            <PanelView entry={benchEntry()} />
-            <Show when={band()}>{(rect) => <div class={styles.band} style={rectStyle(rect())} />}</Show>
-            <Show when={!band() && selectionRect()}>
-              {(rect) => (
-                <div class={styles.selection} style={rectStyle(rect())}>
-                  <button
-                    type="button"
-                    class={styles.saveKit}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={saveSelection}
-                  >
-                    Save as kit
-                  </button>
-                </div>
-              )}
-            </Show>
+            <div class={styles.benchPlate} style={{ scale: `${benchScale()}` }}>
+              <PanelView entry={benchEntry()} />
+              <Show when={benchEntry().panel.parts.length === 0}>
+                <span class={styles.benchHint}>Workbench: lay parts out, drag across them to select</span>
+              </Show>
+              <Show when={band()}>{(rect) => <div class={styles.band} style={rectStyle(rect())} />}</Show>
+              <Show when={!band() && selectionRect()}>
+                {(rect) => (
+                  <div class={styles.selection} style={rectStyle(rect())}>
+                    <button
+                      type="button"
+                      class={styles.saveKit}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={saveSelection}
+                    >
+                      Save as kit
+                    </button>
+                  </div>
+                )}
+              </Show>
+            </div>
           </Portal>
         )}
       </Show>
@@ -519,7 +537,7 @@ export function BoardView(props: {
               height: `${current().span.rows * pitch - cellGap}px`,
               // As large as it will be on the board, held where it was taken.
               'transform-origin': `${current().grab.x}px ${current().grab.y}px`,
-              scale: `${(carrying() ? 1 : view().scale) * 1.06}`
+              scale: `${ghostScale(current().point) * 1.06}`
             }}
           >
             <Show
@@ -654,7 +672,7 @@ export function BoardView(props: {
     const point = { x: event.clientX, y: event.clientY };
     // In the board's pixels: a part on the board is scaled with it; the box's and the menu's tiles and the workbench
     // are not.
-    const scale = from.fromBox || bench()?.contains(element) ? 1 : view().scale;
+    const scale = from.fromBox ? 1 : bench()?.contains(element) ? benchScale() : view().scale;
     const offset = { x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale };
     // A block, or a part from the menu, is held by the middle of its first cell, so it lands around the press.
     const grab =
@@ -783,15 +801,23 @@ export function BoardView(props: {
     }
   }
 
-  /** `point` on the page in the workbench's place's own pixels, scrolled with it, if the place is there. */
+  /** How large a part carried at `point` shows: as the workbench under it, the board, or at full size once carried. */
+  function ghostScale(point: Point) {
+    if (overBench(point)) {
+      return benchScale();
+    }
+
+    return carrying() ? 1 : view().scale;
+  }
+
+  /** `point` on the page in the workbench's own pixels, before it is shrunk to fit, if its place is there. */
   function inBench(point: Point) {
-    const element = bench();
-    if (!element) {
+    const rect = bench()?.getBoundingClientRect();
+    if (!rect) {
       return undefined;
     }
 
-    const rect = element.getBoundingClientRect();
-    return { x: point.x - rect.left + element.scrollLeft, y: point.y - rect.top + element.scrollTop };
+    return { x: (point.x - rect.left) / benchScale(), y: (point.y - rect.top) / benchScale() };
   }
 
   /**
@@ -840,7 +866,7 @@ export function BoardView(props: {
       }
 
       // The workbench is at full size whatever the board's scale.
-      const scale = panel.bench ? 1 : size.scale;
+      const scale = panel.bench ? benchScale() : size.scale;
       const span = spanAfter(drag.span, {
         x: (drag.point.x - drag.start.x) / scale,
         y: (drag.point.y - drag.start.y) / scale
@@ -1043,22 +1069,32 @@ function benchOf(board: Board): Panel {
 }
 
 /**
- * Where the workbench `panel` lies in its place in the sheet of `size`, in that place's pixels: one plate filling the
- * place `benchInset` in from its edges, its cell (0, 0) in the top-left corner, larger if its parts reach further.
+ * Where the workbench `panel` lies in its place of `size` (before it is shrunk to fit), in the bench's pixels: one
+ * plate filling the place `benchInset` in from its edges, its cell (0, 0) in the top-left corner, larger if its parts
+ * reach further.
  */
 function benchFrame(panel: Panel, size: { width: number; height: number }) {
-  const bounds = partsBounds(panel.parts);
-  const reach = (cells: number) => cells * pitch - cellGap + panelPadding * 2;
-  const used = panel.parts.length > 0 ? { width: reach(bounds.column + bounds.columns), height: reach(bounds.row + bounds.rows) } : { width: 0, height: 0 };
+  const used = benchReach(panel);
   return {
     origin: benchOrigin,
     rect: {
       left: benchInset,
       top: benchInset,
-      width: Math.max(size.width - benchInset * 2, used.width),
-      height: Math.max(size.height - benchInset * 2, used.height)
+      width: Math.max(size.width, used.width) - benchInset * 2,
+      height: Math.max(size.height, used.height) - benchInset * 2
     }
   };
+}
+
+/** How far the parts of workbench `panel` reach from its place's top-left, with its insets and padding. */
+function benchReach(panel: Panel) {
+  if (panel.parts.length === 0) {
+    return { width: 0, height: 0 };
+  }
+
+  const bounds = partsBounds(panel.parts);
+  const reach = (cells: number) => cells * pitch - cellGap + (panelPadding + benchInset) * 2;
+  return { width: reach(bounds.column + bounds.columns), height: reach(bounds.row + bounds.rows) };
 }
 
 /** Where `part` lies on a plate whose cell (0, 0) starts at `origin`. */

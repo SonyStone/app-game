@@ -80,9 +80,7 @@ export function PartsTray(props: {
         </Show>
       </div>
       <div class={styles.trayContent}>
-        <div ref={props.benchRef} class={styles.benchSlot}>
-          <span class={styles.benchHint}>Workbench: lay parts out, drag across them to select</span>
-        </div>
+        <div ref={props.benchRef} class={styles.benchSlot} />
         <div ref={setBody} class={styles.trayBody}>
           <For each={partFamilies(props.session)}>
             {(family) => (

@@ -841,7 +841,7 @@
 .benchSlot {
   position: relative;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   border-radius: 12px;
   touch-action: none;
 
@@ -855,6 +855,14 @@
     outline: 2px solid var(--lego-accent);
     outline-offset: 1px;
   }
+}
+
+/* The bench and its selection, shrunk from the top-left corner when its parts would not fit. */
+.benchPlate {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  transition: scale 200ms;
 }
 
 .benchHint {
