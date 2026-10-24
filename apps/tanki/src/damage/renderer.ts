@@ -122,9 +122,12 @@ export function createRangeRenderer(gpu: GpuContext) {
     const base = d.u32(item.grid.z) * SLOT_CELLS;
     const position = std.div(std.sub(point, item.field.xy), item.field.z);
     const floor = std.floor(position);
-    const t = std.clamp(std.sub(position, floor), d.vec2f(0), d.vec2f(1));
     const x0 = std.clamp(d.i32(floor.x), 0, d.i32(cols) - 1);
     const y0 = std.clamp(d.i32(floor.y), 0, d.i32(rows) - 1);
+    // Measured from the clamped cell: the half cell before a grid's first cell center reads that
+    // cell, as the CPU's `sampleField` does, instead of the cell after it. Tiles of a wall meet
+    // there without a margin, and the old reach showed as a doubled line along their seam.
+    const t = std.clamp(std.sub(position, d.vec2f(d.f32(x0), d.f32(y0))), d.vec2f(0), d.vec2f(1));
     const x1 = std.min(x0 + 1, d.i32(cols) - 1);
     const y1 = std.min(y0 + 1, d.i32(rows) - 1);
     const top = std.mix(texel(base, cols, x0, y0), texel(base, cols, x1, y0), t.x);
