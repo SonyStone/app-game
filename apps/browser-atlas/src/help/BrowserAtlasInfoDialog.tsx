@@ -32,6 +32,26 @@ export function BrowserAtlasHelpDialog(props: { onClose: () => void }) {
         </p>
       </HelpDetails>
 
+      <HelpDetails title="Select several rows">
+        <p>
+          Drag from the empty space to the right of an unselected row's title to draw a selection rectangle; dragging a
+          title or icon, or any part of a selected row, moves the row or the whole selection. The tree scrolls while the
+          rectangle reaches past its edge, and Escape cancels it. Holding Shift adds the rectangle's rows to the
+          selection, and Ctrl or Cmd toggles them.
+        </p>
+        <ul class="list-disc space-y-1 pl-5">
+          <li>
+            In a row's empty space, Ctrl/Cmd-click toggles the row, Shift-click selects a range, and a double click
+            activates it. On a link title these modifiers keep opening the link elsewhere.
+          </li>
+          <li>Dragging a selected row moves every selected hierarchy; they arrive side by side in their order.</li>
+          <li>
+            Delete, Backspace, Copy, Cut, and the right-click menu act on the whole selection, and one Undo reverts the
+            change. Structural shortcuts and F2 act on the focused row only.
+          </li>
+        </ul>
+      </HelpDetails>
+
       <HelpDetails title="Save, restore, and recover">
         <ul class="list-disc space-y-1 pl-5">
           <li>
@@ -108,6 +128,10 @@ export function BrowserAtlasHelpDialog(props: { onClose: () => void }) {
           <li>Shift-click opens a saved link in a new window without consuming it.</li>
           <li>Ctrl/Cmd-click or middle-click opens a saved link in the last focused window.</li>
           <li>Tree Style Tabs nests a newly opened tab beneath the live tab that opened it.</li>
+          <li>
+            Hovering a row lights the lines from the root to it. Settings → Tree lines can draw the tree as a metro map,
+            where every window or group is a colored line that keeps its color.
+          </li>
           <li>
             Search and structural HTML export include every visible row, including rows outside the virtualized
             viewport.
@@ -211,8 +235,10 @@ function HelpDetails(props: { title: string; children: JSX.Element }) {
 const HELP_SHORTCUTS = [
   { keys: 'Space', action: 'Activate a live item or restore a saved tab, window, or group.' },
   { keys: 'Alt+Space', action: 'Restore only the latest saved session of a retained window.' },
-  { keys: 'Backspace', action: 'Save and close the item, or its complete hierarchy when collapsed.' },
-  { keys: 'Delete', action: 'Delete using the branch’s expanded or collapsed semantics.' },
+  { keys: 'Backspace', action: 'Save and close the selected items; a collapsed row includes its hierarchy.' },
+  { keys: 'Delete', action: 'Delete the selected items using each branch’s expanded or collapsed semantics.' },
+  { keys: 'Shift+↑/↓', action: 'Extend the selection to the previous or next row.' },
+  { keys: 'Ctrl/Cmd+A', action: 'Select every visible row.' },
   { keys: 'Ctrl/Cmd+Z', action: 'Undo the latest persistent tree change.' },
   { keys: 'Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y', action: 'Redo the latest undone tree change.' },
   { keys: 'F2', action: 'Edit a title, group, note, or inline tab note.' },

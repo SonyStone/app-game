@@ -652,6 +652,12 @@ importers:
       '@solid-primitives/history':
         specifier: 'catalog:'
         version: 1.0.0-next.3(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
+      '@solid-primitives/raf':
+        specifier: 'catalog:'
+        version: 4.0.0-next.2(patch_hash=fe02f6a045310f51f4c8b03273171a830ec7fe41060f2132686977ec36523abf)(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
+      '@solid-primitives/set':
+        specifier: 'catalog:'
+        version: 1.0.0-next.2(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
       solid-js:
         specifier: 'catalog:'
         version: 2.0.0-rc.13

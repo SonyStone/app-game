@@ -26,7 +26,14 @@ export type BrowserAtlasAppearanceSettings = Readonly<{
   activeTab: BrowserAtlasColorOverride;
   /** Optional color for saved and imported notes. */
   note: BrowserAtlasColorOverride;
+  /** How tree lines are drawn: thin classic connectors, or a metro map with one colored line per window. */
+  treeStyle: BrowserAtlasTreeStyle;
+  /** Light up the lines from the root to the row under the pointer, or to the focused row. */
+  pathHighlight: boolean;
 }>;
+
+/** Tree line styles offered in the appearance settings. */
+export type BrowserAtlasTreeStyle = 'classic' | 'metro';
 
 /** A remembered six-digit color whose effect can be independently enabled. */
 export type BrowserAtlasColorOverride = Readonly<{
@@ -46,7 +53,9 @@ export const DEFAULT_BROWSER_ATLAS_SETTINGS = {
     savedTab: { enabled: false, color: '#606060' },
     openTab: { enabled: false, color: '#9CB7D3' },
     activeTab: { enabled: false, color: '#ffffff' },
-    note: { enabled: false, color: '#DAD2B4' }
+    note: { enabled: false, color: '#DAD2B4' },
+    treeStyle: 'classic',
+    pathHighlight: true
   }
 } as const satisfies BrowserAtlasSettings;
 
@@ -93,7 +102,11 @@ export function subscribeBrowserAtlasSettings(listener: (settings: BrowserAtlasS
       return;
     }
     try {
-      listener(event.newValue ? parseBrowserAtlasSettings(JSON.parse(event.newValue) as unknown) : DEFAULT_BROWSER_ATLAS_SETTINGS);
+      listener(
+        event.newValue
+          ? parseBrowserAtlasSettings(JSON.parse(event.newValue) as unknown)
+          : DEFAULT_BROWSER_ATLAS_SETTINGS
+      );
     } catch {
       listener(DEFAULT_BROWSER_ATLAS_SETTINGS);
     }
@@ -124,9 +137,7 @@ function parseBrowserAtlasSettings(value: unknown): BrowserAtlasSettings {
         ? value.oneClickActivation
         : DEFAULT_BROWSER_ATLAS_SETTINGS.oneClickActivation,
     openOnStartup:
-      typeof value.openOnStartup === 'boolean'
-        ? value.openOnStartup
-        : DEFAULT_BROWSER_ATLAS_SETTINGS.openOnStartup,
+      typeof value.openOnStartup === 'boolean' ? value.openOnStartup : DEFAULT_BROWSER_ATLAS_SETTINGS.openOnStartup,
     nestNewTabsUnderOpener:
       typeof value.nestNewTabsUnderOpener === 'boolean'
         ? value.nestNewTabsUnderOpener
@@ -151,7 +162,15 @@ function parseAppearanceSettings(value: unknown): BrowserAtlasAppearanceSettings
     savedTab: parseColorOverride(value.savedTab, DEFAULT_BROWSER_ATLAS_SETTINGS.appearance.savedTab),
     openTab: parseColorOverride(value.openTab, DEFAULT_BROWSER_ATLAS_SETTINGS.appearance.openTab),
     activeTab: parseColorOverride(value.activeTab, DEFAULT_BROWSER_ATLAS_SETTINGS.appearance.activeTab),
-    note: parseColorOverride(value.note, DEFAULT_BROWSER_ATLAS_SETTINGS.appearance.note)
+    note: parseColorOverride(value.note, DEFAULT_BROWSER_ATLAS_SETTINGS.appearance.note),
+    treeStyle:
+      value.treeStyle === 'classic' || value.treeStyle === 'metro'
+        ? value.treeStyle
+        : DEFAULT_BROWSER_ATLAS_SETTINGS.appearance.treeStyle,
+    pathHighlight:
+      typeof value.pathHighlight === 'boolean'
+        ? value.pathHighlight
+        : DEFAULT_BROWSER_ATLAS_SETTINGS.appearance.pathHighlight
   };
 }
 
@@ -196,10 +215,7 @@ type ExtensionStorage = Readonly<{
   }>;
 }>;
 
-type ExtensionStorageListener = (
-  changes: Record<string, ExtensionStorageChange>,
-  areaName: string
-) => void;
+type ExtensionStorageListener = (changes: Record<string, ExtensionStorageChange>, areaName: string) => void;
 
 type ExtensionStorageChange = Readonly<{ newValue?: unknown }>;
 

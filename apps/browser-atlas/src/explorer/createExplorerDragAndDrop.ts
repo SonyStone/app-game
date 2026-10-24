@@ -5,16 +5,19 @@ import {
   type TreeDropPlacement
 } from '../tree-view/createTreeDragAndDrop';
 import type {
+  ExplorerBatchableCommand,
   ExplorerCommand,
   PersistentItemTarget,
   PersistentMovePlacement,
   PersistentOrganizerPlacement
 } from './backend';
+import { batchExplorerCommands } from './backend';
 import type { ExplorerSourceId, ExplorerTreeNode, SavedParentKind } from './model';
 import type { PortableExplorerNode } from './portable';
 import { serializeClipboardHtml, serializeClipboardText } from './clipboard';
 import { executeAcknowledgedHandoff } from './crossBackendHandoff';
 import { parseExplorerHtmlDocument } from './files';
+import { planSequentialInsertion } from './sequentialInsertion';
 import {
   createEmptyExplorerDocument,
   createPortableExplorerNode,
@@ -40,7 +43,11 @@ const EXTERNAL_URL_PROTOCOLS = new Set([
   'mailto:'
 ]);
 
-/** Composes generic tree drag gestures with portable cross-backend explorer transfers. */
+/**
+ * Composes generic tree drag gestures with portable cross-backend explorer transfers. A row may
+ * drag several hierarchies at once, such as the selection it belongs to; they are dropped side by
+ * side in document order, and each one moves or copies as it would when dragged alone.
+ */
 export function createExplorerDragAndDrop(props: {
   onCommand: (backendId: string, command: ExplorerCommand) => Promise<void>;
   /** Whether two backend identities represent browsers that support acknowledged handoff. */
@@ -50,68 +57,43 @@ export function createExplorerDragAndDrop(props: {
     placement: PersistentOrganizerPlacement
   ) => Extract<ExplorerCommand, { kind: 'create-saved-organizer' }> | null | Promise<Extract<ExplorerCommand, { kind: 'create-saved-organizer' }> | null>;
 }) {
-  const dragAndDrop = createTreeDragAndDrop<ExplorerDragNode, ExplorerTransfer, ExplorerDropTarget>({
+  const dragAndDrop = createTreeDragAndDrop<ExplorerDragNode, ExplorerTransferSet, ExplorerDropTarget>({
     dataType: EXPLORER_DRAG_DATA_TYPE,
-    createItem: ({ node, backendId }) => createTransfer(node, backendId),
+    createItem: ({ node, backendId, dragNodes }) => createTransferSet(dragNodes?.() ?? [node], backendId),
     canDrag: ({ node }) => canDragNode(node),
-    getItemLabel: (transfer) => portableNodeTitle(transfer.item),
-    serializeItem: JSON.stringify,
-    parseItem: parseTransfer,
+    getItemLabel: (transfers) =>
+      transfers.length === 1 && transfers[0] ? portableNodeTitle(transfers[0].item) : `${transfers.length} items`,
+    serializeItem: serializeTransferSet,
+    parseItem: parseTransferSet,
     additionalDataTypes: ['application/json', 'text/uri-list', 'text/plain', 'text/html'],
     writeItem: writeInteroperableTransfer,
     readItem: readInteroperableTransfer,
     resolveTarget: ({ node, backendId }, pointerRatio) => resolveDropTarget(node, backendId, pointerRatio),
-    canDrop,
-    getDropEffect: (transfer, target, modifiers) =>
-      getDropEffect(transfer, target, modifiers, props.canMoveAcrossBackends),
+    canDrop: (transfers, target) => transfers.every((transfer) => canDrop(transfer, target)),
+    getDropEffect: (transfers, target, modifiers) =>
+      transfers.some((transfer) => getDropEffect(transfer, target, modifiers, props.canMoveAcrossBackends) === 'move')
+        ? 'move'
+        : 'copy',
     getPlacement: (target) => target.placement,
-    onDrop: async (transfer, target, effect) => {
-      if (transfer.origin.kind === 'new-window') {
-        await props.onCommand(target.backendId, {
-          kind: 'create-window-at-placement',
-          placement: organizerPlacementForDrop(target)
-        });
-        return;
+    onDrop: (transfers, target, effect) => {
+      const [transfer] = transfers;
+      if (transfers.length === 1 && transfer) {
+        return dropTransfer(transfer, target, effect);
       }
-      if (transfer.origin.kind === 'new-google-doc') {
-        await props.onCommand(target.backendId, {
-          kind: 'create-google-doc-at-placement',
-          placement: organizerPlacementForDrop(target)
-        });
-        return;
-      }
-      if (transfer.origin.kind === 'new-organizer') {
-        const command = await props.createOrganizerCommand(
-          transfer.origin.itemKind,
-          organizerPlacementForDrop(target)
-        );
-        if (command) {
-          await props.onCommand(target.backendId, command);
-        }
-        return;
-      }
-      const sourceOrigin = transfer.origin;
-      if (
-        effect === 'move' &&
-        sourceOrigin.backendId !== target.backendId &&
-        canRemoveSourceAfterImport(sourceOrigin)
-      ) {
-        await executeAcknowledgedHandoff(
-          () => props.onCommand(target.backendId, createDropCommand(transfer, target, 'copy')),
-          () => props.onCommand(sourceOrigin.backendId, createSourceRemovalCommand(sourceOrigin, transfer.item))
-        );
-        return;
-      }
-      await props.onCommand(target.backendId, createDropCommand(transfer, target, effect));
+      return dropTransfers(transfers, target, effect);
     },
     formatError: (reason) => (reason instanceof Error ? reason.message : 'The explorer could not complete the drop.')
   });
 
   return {
     ...dragAndDrop,
-    /** Native drag and drop properties bound to the backend rendering this node. */
-    rowProps(node: ExplorerTreeNode, backendId: string) {
-      return dragAndDrop.rowProps({ node, backendId });
+    /**
+     * Native drag and drop properties bound to the backend rendering this node. `dragNodes`
+     * returns the nodes a drag from this row carries, such as the selected hierarchies, when the
+     * drag starts; by default a row drags only its own node.
+     */
+    rowProps(node: ExplorerTreeNode, backendId: string, dragNodes?: () => readonly ExplorerTreeNode[]) {
+      return dragAndDrop.rowProps({ node, backendId, ...(dragNodes ? { dragNodes } : {}) });
     },
     /** Native drop events bound to a node without making the surface draggable. */
     dropZoneProps(node: ExplorerTreeNode, backendId: string) {
@@ -119,21 +101,130 @@ export function createExplorerDragAndDrop(props: {
     },
     /** Drag properties for an original-style toolbar organizer fabric. */
     organizerDragProps(itemKind: ExplorerOrganizerKind, backendId: string) {
-      return dragAndDrop.dragSourceProps(createOrganizerTransfer(itemKind, backendId));
+      return dragAndDrop.dragSourceProps([createOrganizerTransfer(itemKind, backendId)]);
     },
     /** Drag properties for the original-style new-window toolbar fabric. */
     windowDragProps(backendId: string) {
-      return dragAndDrop.dragSourceProps(createWindowTransfer(backendId));
+      return dragAndDrop.dragSourceProps([createWindowTransfer(backendId)]);
     },
     /** Drag properties for the original-style Google Doc toolbar fabric. */
     googleDocDragProps(backendId: string) {
-      return dragAndDrop.dragSourceProps(createGoogleDocTransfer(backendId));
+      return dragAndDrop.dragSourceProps([createGoogleDocTransfer(backendId)]);
     },
     /** Whether a normalized node contains portable data that can be dragged. */
     canDrag(node: ExplorerTreeNode): boolean {
       return canDragNode(node);
     }
   } as const;
+
+  async function dropTransfer(transfer: ExplorerTransfer, target: ExplorerDropTarget, effect: TreeDropEffect) {
+    if (transfer.origin.kind === 'new-window') {
+      await props.onCommand(target.backendId, {
+        kind: 'create-window-at-placement',
+        placement: organizerPlacementForDrop(target)
+      });
+      return;
+    }
+    if (transfer.origin.kind === 'new-google-doc') {
+      await props.onCommand(target.backendId, {
+        kind: 'create-google-doc-at-placement',
+        placement: organizerPlacementForDrop(target)
+      });
+      return;
+    }
+    if (transfer.origin.kind === 'new-organizer') {
+      const command = await props.createOrganizerCommand(
+        transfer.origin.itemKind,
+        organizerPlacementForDrop(target)
+      );
+      if (command) {
+        await props.onCommand(target.backendId, command);
+      }
+      return;
+    }
+    const sourceOrigin = transfer.origin;
+    if (
+      effect === 'move' &&
+      sourceOrigin.backendId !== target.backendId &&
+      canRemoveSourceAfterImport(sourceOrigin)
+    ) {
+      await executeAcknowledgedHandoff(
+        () => props.onCommand(target.backendId, createDropCommand(transfer, target, 'copy')),
+        () => props.onCommand(sourceOrigin.backendId, createSourceRemovalCommand(sourceOrigin, transfer.item))
+      );
+      return;
+    }
+    await props.onCommand(target.backendId, createDropCommand(transfer, target, effect));
+  }
+
+  /**
+   * Drops several hierarchies as one change per browser. Same-browser moves run first, each right
+   * after the previous one; copies and moves from other browsers are imported after them in one
+   * command, and those other browsers remove their sources only after the import succeeded.
+   */
+  async function dropTransfers(
+    transfers: ExplorerTransferSet,
+    target: ExplorerDropTarget,
+    effect: TreeDropEffect
+  ): Promise<void> {
+    const entryEffect = (transfer: ExplorerTransfer): TreeDropEffect =>
+      effect === 'copy'
+        ? 'copy'
+        : getDropEffect(transfer, target, { copyRequested: false }, props.canMoveAcrossBackends);
+    const moves = transfers.flatMap((transfer) =>
+      entryEffect(transfer) === 'move' &&
+      transfer.origin.backendId === target.backendId &&
+      canRemoveSourceAfterImport(transfer.origin)
+        ? [{ transfer, origin: transfer.origin }]
+        : []
+    );
+    const imports = transfers.filter((transfer) => !moves.some((move) => move.transfer === transfer));
+    const handoffs = imports.flatMap((transfer) =>
+      entryEffect(transfer) === 'move' && canRemoveSourceAfterImport(transfer.origin)
+        ? [{ origin: transfer.origin, item: transfer.item }]
+        : []
+    );
+
+    const plan = planSequentialInsertion(
+      moves.map(({ origin }) => ({ key: transferParentKey(origin), index: origin.index })),
+      { key: dropTargetParentKey(target), index: target.index }
+    );
+    const commands = moves.map(({ transfer, origin }, moveNumber): ExplorerBatchableCommand => {
+      const position = plan.positions[moveNumber]!;
+      return createDropCommand(
+        { ...transfer, origin: { ...origin, index: position.sourceIndex } },
+        { ...target, index: position.targetIndex },
+        'move'
+      );
+    });
+    if (imports.length > 0) {
+      commands.push(
+        createImportCommand(
+          { ...target, index: plan.nextIndex },
+          imports.map((transfer) => transfer.item),
+          imports.some((transfer) => transfer.hasLinks)
+        )
+      );
+    }
+
+    const receive = () => props.onCommand(target.backendId, batchExplorerCommands(commands));
+    if (handoffs.length === 0) {
+      await receive();
+      return;
+    }
+    await executeAcknowledgedHandoff(receive, () => removeHandoffSources(handoffs));
+  }
+
+  async function removeHandoffSources(
+    handoffs: readonly Readonly<{ origin: RemovableTransferOrigin; item: PortableExplorerNode }>[]
+  ): Promise<void> {
+    for (const backendId of new Set(handoffs.map(({ origin }) => origin.backendId))) {
+      const removals = handoffs
+        .filter(({ origin }) => origin.backendId === backendId)
+        .map(({ origin, item }) => createSourceRemovalCommand(origin, item));
+      await props.onCommand(backendId, batchExplorerCommands(removals));
+    }
+  }
 }
 
 /** Collections affected by a successful command and requiring refresh. */
@@ -181,6 +272,8 @@ export function affectedSources(command: ExplorerCommand): readonly ExplorerSour
       return command.source.source === command.target.source
         ? [command.source.source]
         : [command.source.source, command.target.source];
+    case 'batch':
+      return [...new Set(command.commands.flatMap(affectedSources))];
     default: {
       const exhaustiveCommand: never = command;
       return exhaustiveCommand;
@@ -188,7 +281,15 @@ export function affectedSources(command: ExplorerCommand): readonly ExplorerSour
   }
 }
 
-type ExplorerDragNode = { node: ExplorerTreeNode; backendId: string };
+type ExplorerDragNode = {
+  node: ExplorerTreeNode;
+  backendId: string;
+  /** Nodes a drag from this row carries, in document order; defaults to the row's own node. */
+  dragNodes?: () => readonly ExplorerTreeNode[];
+};
+
+/** Hierarchies dragged together in document order; a plain row or toolbar drag carries one. */
+type ExplorerTransferSet = readonly ExplorerTransfer[];
 
 /** Persistent organizer kind that can be dragged from the explorer toolbar. */
 export type ExplorerOrganizerKind = Extract<ExplorerCommand, { kind: 'create-saved-organizer' }>['itemKind'];
@@ -328,6 +429,11 @@ function createTransfer(node: ExplorerTreeNode, backendId: string): ExplorerTran
     item,
     hasLinks: hasPortableLink(item)
   };
+}
+
+function createTransferSet(nodes: readonly ExplorerTreeNode[], backendId: string): ExplorerTransferSet | null {
+  const transfers = nodes.flatMap((node) => createTransfer(node, backendId) ?? []);
+  return transfers.length > 0 ? transfers : null;
 }
 
 function canDragNode(node: ExplorerTreeNode): node is Exclude<ExplorerTreeNode, { kind: 'message' }> {
@@ -879,7 +985,7 @@ function createDropCommand(
   transfer: ExplorerTransfer,
   target: ExplorerDropTarget,
   effect: TreeDropEffect
-): ExplorerCommand {
+): ExplorerBatchableCommand {
   if (
     transfer.origin.kind === 'new-window' ||
     transfer.origin.kind === 'new-google-doc' ||
@@ -1003,9 +1109,17 @@ function createDropCommand(
     }
   }
 
+  return createImportCommand(target, [transfer.item], transfer.hasLinks);
+}
+
+function createImportCommand(
+  target: ExplorerDropTarget,
+  items: readonly PortableExplorerNode[],
+  hasLinks: boolean
+): Extract<ExplorerCommand, { kind: 'import-items' }> {
   return {
     kind: 'import-items',
-    target: target.kind === 'tabs' && transfer.hasLinks
+    target: target.kind === 'tabs' && hasLinks
       ? { kind: 'window', id: target.windowId }
       : target.kind === 'bookmarks'
         ? { kind: 'bookmark-folder', id: target.folderId }
@@ -1013,8 +1127,52 @@ function createDropCommand(
           ? { kind: 'document', source: target.source, parentId: target.parentId }
           : { kind: 'persistent', target: persistentTargetForDrop(target) },
     index: target.index,
-    items: [transfer.item]
+    items: [...items]
   };
+}
+
+/**
+ * Names the sibling list a dragged item leaves, matching the parent identities that single-item
+ * drops compare when they shift an index within one list.
+ */
+function transferParentKey(origin: RemovableTransferOrigin): string {
+  switch (origin.kind) {
+    case 'tab':
+      return `tabs:${origin.parentId ?? ''}`;
+    case 'window':
+    case 'saved':
+      return `saved:${origin.parentId ?? ''}`;
+    case 'bookmark':
+      return `bookmarks:${origin.parentId ?? ''}`;
+    case 'document':
+      return `document:${origin.source}:${origin.parentId ?? ''}`;
+    default: {
+      const exhaustiveOrigin: never = origin;
+      return exhaustiveOrigin;
+    }
+  }
+}
+
+/** Names the sibling list a drop inserts into, in the same terms as {@link transferParentKey}. */
+function dropTargetParentKey(target: ExplorerDropTarget): string {
+  switch (target.kind) {
+    case 'explore-root':
+      return 'saved:';
+    case 'tabs':
+      return `tabs:${target.windowId}`;
+    case 'live-tab':
+      return `live-tab:${target.tabId}`;
+    case 'bookmarks':
+      return `bookmarks:${target.folderId}`;
+    case 'document':
+      return `document:${target.source}:${target.parentId ?? ''}`;
+    case 'saved':
+      return `saved:${target.parentId ?? ''}`;
+    default: {
+      const exhaustiveTarget: never = target;
+      return exhaustiveTarget;
+    }
+  }
 }
 
 function adjustSameParentIndex(
@@ -1062,6 +1220,44 @@ function savedReferenceParentKind(
   }
 }
 
+/**
+ * Serializes a single transfer in the version 2 format every Browser Atlas reads, and several in
+ * version 3, which older versions reject so they fall back to the plain-text and HTML copies.
+ */
+function serializeTransferSet(transfers: ExplorerTransferSet): string {
+  const [transfer] = transfers;
+  if (transfers.length === 1 && transfer) {
+    return JSON.stringify(transfer);
+  }
+  return JSON.stringify({
+    format: 'browser-atlas-transfer',
+    version: 3,
+    entries: transfers.map(({ origin, item }) => ({ origin, item }))
+  });
+}
+
+function parseTransferSet(serialized: string): ExplorerTransferSet | null {
+  try {
+    const value: unknown = JSON.parse(serialized);
+    if (!isRecord(value) || value.format !== 'browser-atlas-transfer') {
+      return null;
+    }
+    if (value.version === 2) {
+      const transfer = parseTransfer(serialized);
+      return transfer ? [transfer] : null;
+    }
+    if (value.version !== 3 || !Array.isArray(value.entries) || value.entries.length === 0) {
+      return null;
+    }
+    const transfers = value.entries.map((entry: unknown) =>
+      parseTransfer(JSON.stringify({ ...(isRecord(entry) ? entry : {}), format: 'browser-atlas-transfer', version: 2 }))
+    );
+    return transfers.every((transfer) => transfer !== null) ? transfers : null;
+  } catch {
+    return null;
+  }
+}
+
 function parseTransfer(serialized: string): ExplorerTransfer | null {
   try {
     const value: unknown = JSON.parse(serialized);
@@ -1087,21 +1283,22 @@ function parseTransfer(serialized: string): ExplorerTransfer | null {
 
 function writeInteroperableTransfer(
   dataTransfer: DataTransfer,
-  transfer: ExplorerTransfer,
+  transfers: ExplorerTransferSet,
   serializedTransfer: string
 ): () => void {
+  const items = transfers.map((transfer) => transfer.item);
   setTransferData(dataTransfer, 'application/json', serializedTransfer);
-  setTransferData(dataTransfer, 'text/plain', serializeClipboardText([transfer.item]));
+  setTransferData(dataTransfer, 'text/plain', serializeClipboardText(items));
   setTransferData(
     dataTransfer,
     'text/html',
-    `${serializeHtmlTransferEnvelope(serializedTransfer)}${serializeClipboardHtml([transfer.item])}`
+    `${serializeHtmlTransferEnvelope(serializedTransfer)}${serializeClipboardHtml(items)}`
   );
-  const firstUrl = firstPortableUrl(transfer.item);
-  if (firstUrl) {
-    setTransferData(dataTransfer, 'text/uri-list', firstUrl);
+  const urls = items.flatMap((item) => firstPortableUrl(item) ?? []);
+  if (urls.length > 0) {
+    setTransferData(dataTransfer, 'text/uri-list', urls.join('\r\n'));
   }
-  const download = createDownload(transfer);
+  const download = createDownload(transfers);
   setTransferData(dataTransfer, 'DownloadURL', download.value);
   return download.release;
 }
@@ -1124,10 +1321,13 @@ function firstPortableUrl(node: PortableExplorerNode): string | null {
   return null;
 }
 
-function createDownload(transfer: ExplorerTransfer): { value: string; release: () => void } {
-  const title = portableNodeTitle(transfer.item);
+function createDownload(transfers: ExplorerTransferSet): { value: string; release: () => void } {
+  const [first] = transfers;
+  const title = first && transfers.length === 1 ? portableNodeTitle(first.item) : 'Browser Atlas items';
   const document = createEmptyExplorerDocument(title);
-  document.sources[transferSource(transfer.origin)] = [transfer.item];
+  for (const transfer of transfers) {
+    document.sources[transferSource(transfer.origin)].push(transfer.item);
+  }
   const filename = `${safeTransferFilename(title)}.browser-atlas.json`;
   const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(document)], { type: 'application/json' }));
   return {
@@ -1163,31 +1363,31 @@ function safeTransferFilename(value: string): string {
   return filename || 'browser-atlas-item';
 }
 
-function readInteroperableTransfer(dataTransfer: DataTransfer): ExplorerTransfer | null {
+function readInteroperableTransfer(dataTransfer: DataTransfer): ExplorerTransferSet | null {
   const serializedJson = dataTransfer.getData('application/json');
   if (serializedJson) {
-    const transfer = parseTransfer(serializedJson);
-    if (transfer) {
-      return transfer;
+    const transfers = parseTransferSet(serializedJson);
+    if (transfers) {
+      return transfers;
     }
   }
 
   const plainText = dataTransfer.getData('text/plain');
   if (plainText.startsWith(EXPLORER_TEXT_TRANSFER_PREFIX)) {
-    const transfer = parseTransfer(plainText.slice(EXPLORER_TEXT_TRANSFER_PREFIX.length));
-    if (transfer) {
-      return transfer;
+    const transfers = parseTransferSet(plainText.slice(EXPLORER_TEXT_TRANSFER_PREFIX.length));
+    if (transfers) {
+      return transfers;
     }
   }
 
   const html = dataTransfer.getData('text/html');
-  const htmlTransfer = parseHtmlTransferEnvelope(html);
-  if (htmlTransfer) {
-    return htmlTransfer;
+  const htmlTransfers = parseHtmlTransferEnvelope(html);
+  if (htmlTransfers) {
+    return htmlTransfers;
   }
   const htmlDocumentTransfer = parseExplorerHtmlDocumentTransfer(html);
   if (htmlDocumentTransfer) {
-    return htmlDocumentTransfer;
+    return [htmlDocumentTransfer];
   }
 
   const serializedLinks = dataTransfer.getData('text/uri-list') || plainText;
@@ -1197,16 +1397,20 @@ function readInteroperableTransfer(dataTransfer: DataTransfer): ExplorerTransfer
         parseExplorerText(serializedLinks, 'Dropped links').sources.explore,
         html
       );
-      return createExternalTransfer(nodes, 'external-urls');
+      return asTransferSet(createExternalTransfer(nodes, 'external-urls'));
     } catch {
       if (plainText.trim()) {
-        return createExternalTransfer([createPortableTextNote(plainText)], 'external-text');
+        return asTransferSet(createExternalTransfer([createPortableTextNote(plainText)], 'external-text'));
       }
     }
   }
 
   const htmlNodes = parseExternalHtml(html);
-  return htmlNodes.length > 0 ? createExternalTransfer(htmlNodes, 'external-html') : null;
+  return htmlNodes.length > 0 ? asTransferSet(createExternalTransfer(htmlNodes, 'external-html')) : null;
+}
+
+function asTransferSet(transfer: ExplorerTransfer | null): ExplorerTransferSet | null {
+  return transfer ? [transfer] : null;
 }
 
 function parseExplorerHtmlDocumentTransfer(html: string): ExplorerTransfer | null {
@@ -1232,7 +1436,7 @@ function parseExplorerHtmlDocumentTransfer(html: string): ExplorerTransfer | nul
   }
 }
 
-function parseHtmlTransferEnvelope(html: string): ExplorerTransfer | null {
+function parseHtmlTransferEnvelope(html: string): ExplorerTransferSet | null {
   if (!html.startsWith(EXPLORER_HTML_TRANSFER_PREFIX)) {
     return null;
   }
@@ -1242,7 +1446,7 @@ function parseHtmlTransferEnvelope(html: string): ExplorerTransfer | null {
   }
   try {
     const encoded = html.slice(EXPLORER_HTML_TRANSFER_PREFIX.length, suffixIndex);
-    return parseTransfer(decodeURIComponent(encoded));
+    return parseTransferSet(decodeURIComponent(encoded));
   } catch {
     return null;
   }

@@ -226,7 +226,25 @@ export type ExplorerCommand =
       kind: 'move-document-node';
       source: { source: ExplorerSourceId; nodeId: string; parentId: string | null; index: number };
       target: { source: ExplorerSourceId; parentId: string | null; index: number };
+    }
+  | {
+      /**
+       * Runs commands in order as one change: a persistent-tree Undo reverts all of them at once.
+       * The backend must support `batch` and every contained command kind. A failing command
+       * stops the batch; the commands before it stay applied and remain undoable.
+       */
+      kind: 'batch';
+      commands: ExplorerBatchableCommand[];
     };
+
+/** Any explorer command that a {@link ExplorerCommand} batch may contain. */
+export type ExplorerBatchableCommand = Exclude<ExplorerCommand, { kind: 'batch' }>;
+
+/** Wraps commands into one batch, so they form a single persistent-tree change; one command stays as it is. */
+export function batchExplorerCommands(commands: readonly ExplorerBatchableCommand[]): ExplorerCommand {
+  const [command] = commands;
+  return commands.length === 1 && command ? command : { kind: 'batch', commands: [...commands] };
+}
 
 /** Browser-independent destination for persistent organizers and retained hierarchies. */
 export type PersistentItemTarget =
@@ -306,6 +324,7 @@ export const FULL_EXPLORER_CAPABILITIES = {
     'move-bookmark': true,
     'create-bookmark': true,
     'import-items': true,
-    'move-document-node': false
+    'move-document-node': false,
+    batch: true
   }
 } as const satisfies ExplorerBackendCapabilities;

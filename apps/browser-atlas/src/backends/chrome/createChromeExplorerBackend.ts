@@ -1,4 +1,4 @@
-import type { ExplorerBackend, ExplorerCommand } from '../../explorer/backend';
+import type { ExplorerBackend, ExplorerBatchableCommand, ExplorerCommand } from '../../explorer/backend';
 import { FULL_EXPLORER_CAPABILITIES } from '../../explorer/backend';
 import type {
   ExplorerSourceId,
@@ -181,6 +181,10 @@ async function executeChromeCommand(
       await undoHistory.redo();
       return;
     }
+    if (command.kind === 'batch') {
+      await executeChromeBatchUnlocked(chromeApi, command.commands, undoHistory);
+      return;
+    }
     const tracksHistory = commandTracksPersistentTreeHistory(command);
     let beforeSnapshot: Awaited<ReturnType<typeof readPersistentTreeHistorySnapshot>> | undefined;
     if (tracksHistory) {
@@ -210,6 +214,33 @@ async function executeChromeCommand(
       undoHistory.capture(recordClosedLiveHistoryNodes(beforeSnapshot, afterSnapshot));
     }
   });
+}
+
+/**
+ * Runs batched commands as one history change. The snapshots record every live tab's placement,
+ * so Undo returns each tab a batch moved; a failing command still records the commands before it.
+ */
+async function executeChromeBatchUnlocked(
+  chromeApi: typeof chrome,
+  commands: readonly ExplorerBatchableCommand[],
+  undoHistory: ReturnType<typeof createPersistentTreeUndoHistory>
+): Promise<void> {
+  const beforeSnapshot = commands.some(commandTracksPersistentTreeHistory)
+    ? await readPersistentTreeHistorySnapshot(chromeApi)
+    : undefined;
+  if (beforeSnapshot) {
+    undoHistory.capture(beforeSnapshot);
+  }
+  try {
+    for (const command of commands) {
+      await executeChromeCommandUnlocked(chromeApi, command);
+    }
+  } finally {
+    if (beforeSnapshot) {
+      const afterSnapshot = await readPersistentTreeHistorySnapshot(chromeApi);
+      undoHistory.capture(recordClosedLiveHistoryNodes(beforeSnapshot, afterSnapshot));
+    }
+  }
 }
 
 async function executeChromeCommandUnlocked(chromeApi: typeof chrome, command: ExplorerCommand): Promise<void> {
@@ -283,6 +314,8 @@ async function executeChromeCommandUnlocked(chromeApi: typeof chrome, command: E
     case 'undo-persistent-tree':
     case 'redo-persistent-tree':
       throw new Error('Undo and Redo must be handled by the persistent-tree history controller.');
+    case 'batch':
+      throw new Error('Batches must be handled by the persistent-tree mutation lock.');
     case 'move-saved-item':
       await moveSavedItem(chromeApi, command.itemId, command.target, command.targetIndex);
       return;
