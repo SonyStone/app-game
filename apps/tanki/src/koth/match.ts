@@ -4,7 +4,7 @@ import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
 import { createBot, type Bot } from './bot';
-import { clampGun, turnInPlace } from './classes/casemate';
+import { angleBetween, clampGun, turnInPlace } from './classes/casemate';
 import { TANK_CLASSES } from './classes/classes';
 import { pickRoster, rebalance } from './classes/roster';
 import { drawSight } from './classes/sight';
@@ -369,14 +369,18 @@ export function createKothMatch(
   }
 
   /**
-   * Drives and aims the player's tank from the input: a casemate gun asked to turn turns its hull
-   * on the spot toward the aim instead of driving, and its gun follows the aim within its arc.
+   * Drives and aims the player's tank from the input. A casemate gun's gun follows the aim within
+   * its arc; when the player does not drive and aims outside the arc, or asks to turn, the hull
+   * turns on the spot toward the aim instead, until it points there.
    */
   function steerPlayer(player: Member, input: PlayerInput) {
     const tank = player.tank!;
     const mount = player.tankClass.mount;
+    const idle = Math.hypot(input.drive.x, input.drive.y) < IDLE_DRIVE;
+    const off = input.aim === undefined ? 0 : Math.abs(angleBetween(tank.hull.rotation(), input.aim));
+    const turning = input.turn || (idle && (off > (mount.kind === 'casemate' ? mount.arc : Infinity) || (player.pivot !== undefined && off > SETTLED)));
 
-    if (mount.kind === 'casemate' && input.turn && input.aim !== undefined) {
+    if (mount.kind === 'casemate' && turning && input.aim !== undefined) {
       player.pivot ??= { ...tank.hull.translation() };
       combat.drive(tank, turnInPlace(tank, player.pivot, input.aim, mount.traverse, tank.pullSpeed));
     } else {
@@ -566,6 +570,9 @@ const TEAM_SIGHT: Record<TeamId, number> = { red: 0xff3b2e, blue: 0x3fa2ff };
 
 const STOP = { x: 0, y: 0 };
 const RELEASED: Trigger = { fire: false };
+/** Drive input below which the player counts as not driving, and how near the aim a casemate's hull stops turning, in radians. */
+const IDLE_DRIVE = 0.1;
+const SETTLED = 0.03;
 /** Radians per second the barrels of a fully spun gatling turn. */
 const BARREL_TURN = 40;
 /**

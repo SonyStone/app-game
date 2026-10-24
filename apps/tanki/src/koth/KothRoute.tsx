@@ -24,7 +24,8 @@ import { TANK_CLASS_IDS, type TankClassId } from './tanks';
  * Keys: 1-5 pick a class and C opens the class menu, R restarts, B shows what the bots think, V
  * hands the player's tank to a bot and shows the whole map (1-8 follow a tank, 0 shows the whole
  * map again). The right mouse button or Shift spins a Heavy's gatling up without firing and turns
- * a Sniper's hull on the spot toward the cursor. In the address, `?watch` starts watching right
+ * a Sniper's hull on the spot toward the cursor, which it also does by itself when the player
+ * stops driving and aims outside its gun's arc. In the address, `?watch` starts watching right
  * away, `?hold=30` shortens the hold time that wins to 30 seconds, `?class=scout` starts as
  * that class with the menu closed and `?slow=4` runs the game four times slower, to look at
  * effects frame by frame.

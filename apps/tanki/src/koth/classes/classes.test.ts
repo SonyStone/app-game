@@ -77,6 +77,23 @@ describe('a casemate gun', () => {
   });
 });
 
+describe('the player in a casemate gun', () => {
+  it('turns the hull toward the aim by itself when not driving, so the gun can follow', () => {
+    const match = createMatch();
+    match.chooseClass('sniper');
+    const tank = match.player!;
+    const aim = tank.hull.rotation() + 2.2;
+    const off = (angle: number) => Math.abs(Math.atan2(Math.sin(angle - aim), Math.cos(angle - aim)));
+
+    for (let step = 0; step < 120; step++) {
+      match.step(1 / 60, { drive: { x: 0, y: 0 }, aim, fire: false });
+    }
+
+    expect(off(tank.hull.rotation())).toBeLessThan(0.16);
+    expect(off(tank.turretAngle)).toBeLessThan(0.01);
+  });
+});
+
 describe('the bots pick a team', () => {
   it('of four with one Sniper and one Heavy at most, something to break Heavies and a quick capper', () => {
     let state = 7;
