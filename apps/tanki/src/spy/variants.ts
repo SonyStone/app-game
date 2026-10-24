@@ -38,11 +38,11 @@ export type VisibilityRule = (typeof VISIBILITY_RULES)[number];
 /**
  * What the spider does once it holds on to a tank's stern:
  *
- * - `infect`: takes the tank over for `ABILITY.infectTime` seconds; its own team takes it for a
- *   friend until it fires.
+ * - `infect`: takes the tank over for a few seconds; its own team takes it for a friend until
+ *   it fires.
  * - `backstab`: drills through the rear armor into the core, which destroys the tank.
  * - `jam`: plants a magnetic charge that stops the tank from driving, turning its turret and
- *   firing for `ABILITY.jamTime` seconds.
+ *   firing for a few seconds.
  */
 export const ABILITIES = ['infect', 'backstab', 'jam'] as const;
 

@@ -18,17 +18,18 @@ type Point = { x: number; y: number };
 type Renderer = ReturnType<typeof createRangeRenderer>;
 
 /**
- * The Spy sandbox: a yard of buildings, crates and low obstacles with a patrol of tanks and one
- * spider, on the battle core of `createCombat`. The variant decides who the player is, by what
+ * The Spy sandbox: a town quarter of buildings, crates and low obstacles with a patrol of tanks
+ * and one spider, on the battle core of `createCombat`. The variant decides who the player is, by what
  * rule the tanks see the spider and what the spider does from a stern (see `Variant`); it can
  * change at any time.
  *
  * - The spider grabs a tank's stern from behind while the ability key is held, and keeps
  *   holding for the ability's time: `infect` then hides it inside the tank, which it drives for
- *   `ABILITY.infectTime` seconds (the tank's team takes it for a friend until it fires) before
- *   it jumps out, scratching the hull and leaving the tank stunned and alert; `backstab` drills
- *   into the core, which blows the tank up; `jam` plants a charge that stops the tank for
- *   `ABILITY.jamTime` seconds. Letting go early drops the spider off.
+ *   `INFECT_TIME` seconds (the tank's team takes it for a friend until it fires) before it jumps
+ *   out, scratching the hull and leaving the tank stunned and alert; `backstab` drills into the
+ *   core, which blows the tank up; `jam` plants a charge that stops the tank for `JAM_TIME`
+ *   seconds, after which it turns on whatever was behind it. A tank is immune for a while after
+ *   an ability. Letting go early drops the spider off.
  * - Tanks see the spider by the variant's rule; under `hidden` grabbing, jumping off, a blast or
  *   a charge shows it for `VIEW.revealTime` seconds. Shots that pass through the spider hurt it;
  *   after `SPIDER_HP` hits it dies and comes back at its start.
@@ -115,13 +116,11 @@ export function createSpySandbox(
 
     /** Where the camera should look: what the player controls, or the spider while watching. */
     get focus() {
-      const controlled = variant.role === 'tank' ? units[PLAYER_UNIT].tank : spy.infection?.unit.tank;
-
       if (variant.role === 'tank') {
-        return controlled?.hull.translation() ?? arena.patrols[PLAYER_UNIT].start;
+        return units[PLAYER_UNIT].tank?.hull.translation() ?? arena.patrols[PLAYER_UNIT].start;
       }
 
-      return controlled?.hull.translation() ?? spider.position;
+      return spy.infection?.unit.tank?.hull.translation() ?? spider.position;
     },
 
     /** Camera shake in world pixels, from shots and explosions. */
@@ -594,17 +593,22 @@ export function createSpySandbox(
     });
   }
 
-  /** A shot hurts the spider if any of its segments passes within the spider's reach. */
-  function shotPassed(_shooter: Tank, path: readonly Point[]) {
+  /**
+   * A shot hurts the spider if it passes within the spider's reach anywhere from the shooter's
+   * turret on: along the barrel, whose blast catches a spider right behind the muzzle such as one
+   * on the shooter's own stern, and along each segment of its flight.
+   */
+  function shotPassed(shooter: Tank, path: readonly Point[]) {
     if (!spiderInPlay() || spy.infection) {
       return;
     }
 
     const center = spider.position;
     const reach = spider.build.radius + SHOT_SLACK;
+    const points = [shooter.hull.translation(), ...path];
 
-    for (let index = 1; index < path.length; index++) {
-      if (segmentDistance(center, path[index - 1], path[index]) < reach) {
+    for (let index = 1; index < points.length; index++) {
+      if (segmentDistance(center, points[index - 1], points[index]) < reach) {
         hurtSpider();
         return;
       }
@@ -967,7 +971,7 @@ export const INFECT_TIME = 8;
 /** Seconds a charge keeps a tank from driving, turning its turret and firing. */
 export const JAM_TIME = 2.5;
 
-/** Hits the spider survives, less one. */
+/** Hits that kill the spider. */
 export const SPIDER_HP = 2;
 
 /** The patrol whose tank the player drives as the tank. */

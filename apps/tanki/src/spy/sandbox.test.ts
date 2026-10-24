@@ -157,6 +157,21 @@ describe('abilities', () => {
     world.free();
   });
 
+  it('a tank that turns its barrel to its stern can shoot the spider off it', () => {
+    const { sandbox, world } = createHeadlessSandbox(rapier, variant({ ability: 'infect' }), { arena: yard(), tankBots: false });
+    const tank = sandbox.tanks[0]!;
+    grab(sandbox);
+    runSandbox(sandbox, 0.3, { ...IDLE, fire: true });
+    tank.turretAngle = tank.hull.rotation() + Math.PI;
+    sandbox.combat.fire(tank);
+    runSandbox(sandbox, 0.1, { ...IDLE, fire: true });
+
+    expect(sandbox.spider.holding).toBeUndefined();
+    expect(sandbox.infected).toBeUndefined();
+    expect(sandbox.hud().spider.hp).toBe(1);
+    world.free();
+  });
+
   it('a backstab blows the tank up through its core; letting go early does not', () => {
     const { sandbox, world } = createHeadlessSandbox(rapier, variant({ ability: 'backstab' }), { arena: yard(), tankBots: false });
     grab(sandbox);

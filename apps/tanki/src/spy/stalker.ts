@@ -80,7 +80,7 @@ export function createStalker(grid: NavGrid, random: () => number, events: Attem
     },
 
     /**
-     * Decides this step's run and heading, whether to hold on to a stern and whether to let go.
+     * Decides this step's run and heading and whether to hold on to a stern.
      *
      * @returns Run direction in world axes with length up to 1, heading in world radians and
      *   whether to hold the ability key.
@@ -131,6 +131,11 @@ export function createStalker(grid: NavGrid, random: () => number, events: Attem
 
     if (phase === 'flee') {
       return goToShelter(position, view);
+    }
+
+    // Found while hiding: get out of sight again.
+    if (view.hunted) {
+      return flee(view, position);
     }
 
     if (view.clock >= hideUntil && calm > CALM_TIME) {
