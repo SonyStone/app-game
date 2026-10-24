@@ -134,7 +134,9 @@ export function PartsTray(props: {
             class={styles.kitShelf}
             data-over={props.overKits ? '' : undefined}
           >
-            <span class={styles.zoneLabel}>{props.overKits ? 'Drop to keep as a kit' : 'Kits · drop here to keep'}</span>
+            <span class={styles.zoneLabel}>
+              {props.overKits ? 'Drop to keep as a kit' : 'Kits · drop here to keep'}
+            </span>
             <div class={styles.trayItems}>
               <For each={props.kits.kits()}>
                 {(kit) => (
@@ -283,7 +285,11 @@ export function partFamilies(session: Session) {
 export function PartTile(props: { kind: string; session: Session; onLift: (event: PointerEvent) => void }) {
   return (
     <div class={styles.trayItem}>
-      <div class={styles.trayTile} title={kindLabel(props.kind, props.session)} onPointerDown={(event) => props.onLift(event)}>
+      <div
+        class={styles.trayTile}
+        title={kindLabel(props.kind, props.session)}
+        onPointerDown={(event) => props.onLift(event)}
+      >
         <div class={styles.content} inert>
           <PartView kind={props.kind} span={{ columns: 1, rows: 1 }} session={props.session} onPopup={() => {}} />
         </div>
@@ -352,7 +358,12 @@ function KitName(props: { name: string; onRename: (name: string) => void }) {
     <Show
       when={editing()}
       fallback={
-        <button type="button" class={[styles.trayCaption, styles.kitName]} title="Rename" onClick={() => setEditing(true)}>
+        <button
+          type="button"
+          class={[styles.trayCaption, styles.kitName]}
+          title="Rename"
+          onClick={() => setEditing(true)}
+        >
           {props.name}
         </button>
       }
@@ -397,7 +408,13 @@ export function BlockView(props: { parts: readonly Part[]; session: Session }) {
           }}
         >
           <div class={styles.content} inert>
-            <PartView kind={part.kind} span={part.span} look={lookOf(part)} session={props.session} onPopup={() => {}} />
+            <PartView
+              kind={part.kind}
+              span={part.span}
+              look={lookOf(part)}
+              session={props.session}
+              onPopup={() => {}}
+            />
           </div>
         </div>
       )}

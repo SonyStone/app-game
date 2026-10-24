@@ -31,7 +31,11 @@ it('skips a chosen look that does not fit the size', () => {
 it('forgets a choice, dropping the empty map', () => {
   const board: Board = {
     panels: [
-      { id: 'p', at: { x: 0, y: 0 }, parts: [{ id: 'a', kind: 'color', cell: { column: 0, row: 0 }, span: span(2, 2) }] }
+      {
+        id: 'p',
+        at: { x: 0, y: 0 },
+        parts: [{ id: 'a', kind: 'color', cell: { column: 0, row: 0 }, span: span(2, 2) }]
+      }
     ]
   };
 

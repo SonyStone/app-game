@@ -97,10 +97,7 @@ function PartPreview(props: { kind: string; span: Span; look: string; session: S
 
   return (
     <div class={styles.preview} inert>
-      <div
-        class={styles.previewTile}
-        style={{ width: `${width()}px`, height: `${height()}px`, scale: `${scale()}` }}
-      >
+      <div class={styles.previewTile} style={{ width: `${width()}px`, height: `${height()}px`, scale: `${scale()}` }}>
         <div class={styles.content}>
           <PartView kind={props.kind} span={props.span} look={props.look} session={props.session} onPopup={() => {}} />
         </div>

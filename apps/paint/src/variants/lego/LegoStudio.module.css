@@ -58,7 +58,12 @@
 .benchSlot .panel {
   cursor: grab;
   background-color: var(--lego-plate);
-  background-image: radial-gradient(circle, rgb(255 255 255 / 0.22) 0 9px, rgb(255 255 255 / 0.07) 10px, transparent 11px);
+  background-image: radial-gradient(
+    circle,
+    rgb(255 255 255 / 0.22) 0 9px,
+    rgb(255 255 255 / 0.07) 10px,
+    transparent 11px
+  );
   background-size: 48px 48px;
   /* Stud centers on the cells' centers: the cell (0, 0) corner plus half a cell, less half the 48 px tile. */
   background-position: calc(var(--stud-x) - 2px) calc(var(--stud-y) - 2px);
@@ -310,7 +315,6 @@
   cursor: pointer;
   font-family: ui-monospace, monospace;
 }
-
 
 /* Popups: the only things that float over parts. */
 
@@ -605,7 +609,9 @@
     border: 1px solid #d6d3cc;
     border-radius: 6px;
     background: #ffffff;
-    font: 600 13px ui-monospace, monospace;
+    font:
+      600 13px ui-monospace,
+      monospace;
   }
 }
 
@@ -934,12 +940,16 @@
       top: calc(var(--stud-y) - 2px);
       width: var(--studs-width);
       height: var(--studs-height);
-      background-image: radial-gradient(circle, rgb(255 255 255 / 0.22) 0 9px, rgb(255 255 255 / 0.07) 10px, transparent 11px);
+      background-image: radial-gradient(
+        circle,
+        rgb(255 255 255 / 0.22) 0 9px,
+        rgb(255 255 255 / 0.07) 10px,
+        transparent 11px
+      );
       background-size: 48px 48px;
       pointer-events: none;
     }
   }
-
 }
 
 /* The bench and its selection, shrunk from the top-left corner when its parts would not fit. */

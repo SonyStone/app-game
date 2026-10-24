@@ -32,11 +32,11 @@ import {
   type Span
 } from './board';
 import type { createBoard } from './createBoard';
+import type { createSheet } from './createSheet';
 import { nameKit } from './kitNames';
 import { swatchPanelParts, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { kindLabel, lookOf, partLooks, PartView, type Popup, type Session } from './parts';
-import type { createSheet } from './createSheet';
 import { BlockView, PartsTray } from './PartsTray';
 import { SpawnMenu } from './SpawnMenu';
 
@@ -154,13 +154,13 @@ export function BoardView(props: {
     return { panel, frame: benchFrame(panel, benchView()) };
   });
   /** The workbench and the open panels of a swatch on it, with where each lies in its pixels. */
-  const benchPanels = createMemo(() =>
-    benchVisible(shown(), pinned(drag()))
-  );
+  const benchPanels = createMemo(() => benchVisible(shown(), pinned(drag())));
   /** The band being dragged across the workbench or the board, in the pixels of the place it is dragged in. */
   const band = () => {
     const current = drag();
-    return current?.type === 'select' ? { place: current.place, rect: bandRect(current.start, current.point) } : undefined;
+    return current?.type === 'select'
+      ? { place: current.place, rect: bandRect(current.start, current.point) }
+      : undefined;
   };
   /** The selected parts, or those the band touches while it is dragged. */
   const selection = createMemo<ReadonlySet<string>>(() => {
@@ -596,9 +596,7 @@ export function BoardView(props: {
                 {(dragged) => <div class={styles.band} style={rectStyle(dragged().rect)} />}
               </Show>
               <Show when={!band() && selectionRect()}>
-                {(rect) => (
-                  <div class={styles.selection} style={rectStyle(rect())} />
-                )}
+                {(rect) => <div class={styles.selection} style={rectStyle(rect())} />}
               </Show>
             </div>
           </Portal>
@@ -762,7 +760,9 @@ export function BoardView(props: {
     // A block, or a part from the menu, is held by the middle of its first cell, so it lands around the press.
     const grab =
       from.grab ??
-      (from.block || from.spawnAt ? { x: Math.min(offset.x, cellSize / 2), y: Math.min(offset.y, cellSize / 2) } : offset);
+      (from.block || from.spawnAt
+        ? { x: Math.min(offset.x, cellSize / 2), y: Math.min(offset.y, cellSize / 2) }
+        : offset);
     setDrag({
       type: 'part',
       pointer: event.pointerId,
@@ -877,7 +877,14 @@ export function BoardView(props: {
     }
 
     event.preventDefault();
-    setDrag({ type: 'select', place: 'bench', pointer: event.pointerId, point: at, start: at, base: props.board.latest() });
+    setDrag({
+      type: 'select',
+      place: 'bench',
+      pointer: event.pointerId,
+      point: at,
+      start: at,
+      base: props.board.latest()
+    });
   }
 
   /**
@@ -893,7 +900,14 @@ export function BoardView(props: {
     }
 
     event.preventDefault();
-    setDrag({ type: 'select', place: 'board', pointer: event.pointerId, point: at, start: at, base: props.board.latest() });
+    setDrag({
+      type: 'select',
+      place: 'board',
+      pointer: event.pointerId,
+      point: at,
+      start: at,
+      base: props.board.latest()
+    });
   }
 
   /**
@@ -905,7 +919,10 @@ export function BoardView(props: {
     const chosen = visible().flatMap(({ panel, frame }) =>
       panel.parts
         .filter((part) => selected().has(part.id))
-        .map((part) => ({ part, at: { x: frame.origin.x + part.cell.column * pitch, y: frame.origin.y + part.cell.row * pitch } }))
+        .map((part) => ({
+          part,
+          at: { x: frame.origin.x + part.cell.column * pitch, y: frame.origin.y + part.cell.row * pitch }
+        }))
     );
     if (chosen.length === 0) {
       return;
@@ -1113,7 +1130,12 @@ export function BoardView(props: {
      * it, so a part, however long, joins a panel as soon as an edge of it touches; on a tie the top-most one.
      */
     const touched = (entries: ReturnType<typeof visiblePanels>, corner: Point) => {
-      const lifted = { left: corner.x, top: corner.y, width: drag.span.columns * pitch, height: drag.span.rows * pitch };
+      const lifted = {
+        left: corner.x,
+        top: corner.y,
+        width: drag.span.columns * pitch,
+        height: drag.span.rows * pitch
+      };
       return entries.reduce<{ entry?: (typeof entries)[number]; area: number }>(
         (best, entry) => {
           const area = overlap(lifted, grow(entry.frame.rect, pitch / 2));
@@ -1241,7 +1263,9 @@ export function BoardView(props: {
    * board stays as it was.
    */
   function keepAsKit(drag: Extract<Drag, { type: 'part' }>) {
-    const parts = drag.block?.parts ?? [{ id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks, cell: { column: 0, row: 0 } }];
+    const parts = drag.block?.parts ?? [
+      { id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks, cell: { column: 0, row: 0 } }
+    ];
     keepKit(drag.before, { id: 'kept', at: { x: 0, y: 0 }, parts });
   }
 
@@ -1308,7 +1332,10 @@ function visiblePanels(
       const at = { x: origin.x + anchor.cell.column * pitch, y: origin.y + anchor.cell.row * pitch };
       // Where the user put it from its swatch, kept in view; otherwise beside the swatch where there is room.
       frame = panel.offset
-        ? keptInView(frameAt(panel, { x: at.x + panel.offset.column * pitch, y: at.y + panel.offset.row * pitch }), view)
+        ? keptInView(
+            frameAt(panel, { x: at.x + panel.offset.column * pitch, y: at.y + panel.offset.row * pitch }),
+            view
+          )
         : ownedFrame(
             panel,
             {
@@ -1417,9 +1444,10 @@ function benchFrame(panel: Panel, size: { width: number; height: number }) {
   const { origin } = benchLayout(size);
   const bounds = partsBounds(panel.parts);
   const reach = (start: number, cells: number) => start * 2 + cells * pitch - cellGap;
-  const used = panel.parts.length > 0
-    ? { width: reach(origin.x, bounds.column + bounds.columns), height: reach(origin.y, bounds.row + bounds.rows) }
-    : { width: 0, height: 0 };
+  const used =
+    panel.parts.length > 0
+      ? { width: reach(origin.x, bounds.column + bounds.columns), height: reach(origin.y, bounds.row + bounds.rows) }
+      : { width: 0, height: 0 };
   return {
     origin,
     rect: { left: 0, top: 0, width: Math.max(size.width, used.width), height: Math.max(size.height, used.height) }

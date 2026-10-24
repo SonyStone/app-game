@@ -14,16 +14,16 @@ import {
   autoWheelLook,
   HarmonyPart,
   HexPart,
+  HistoryPart,
   MaskPart,
   oklchFor,
-  HistoryPart,
   PairPart,
   PalettePart,
   recentFor,
   setColor,
   SwatchPart,
-  WheelPart,
-  wheelLooks
+  wheelLooks,
+  WheelPart
 } from './colorParts';
 import styles from './LegoStudio.module.css';
 import { resolveLook, type LookSpec } from './looks';
@@ -349,8 +349,7 @@ const values: Record<
       get: (_, hsv) => Math.round(hsv.s * 100),
       set: (value, session, hsv) => setColor(session, { ...hsv, s: value / 100 })
     },
-    track: (hsv) =>
-      `linear-gradient(to var(--track-to), ${hsvToHex({ ...hsv, s: 0 })}, ${hsvToHex({ ...hsv, s: 1 })})`
+    track: (hsv) => `linear-gradient(to var(--track-to), ${hsvToHex({ ...hsv, s: 0 })}, ${hsvToHex({ ...hsv, s: 1 })})`
   },
   brightness: {
     label: 'Brightness',
@@ -364,8 +363,7 @@ const values: Record<
       get: (_, hsv) => Math.round(hsv.v * 100),
       set: (value, session, hsv) => setColor(session, { ...hsv, v: value / 100 })
     },
-    track: (hsv) =>
-      `linear-gradient(to var(--track-to), ${hsvToHex({ ...hsv, v: 0 })}, ${hsvToHex({ ...hsv, v: 1 })})`
+    track: (hsv) => `linear-gradient(to var(--track-to), ${hsvToHex({ ...hsv, v: 0 })}, ${hsvToHex({ ...hsv, v: 1 })})`
   },
   lightness: {
     label: 'Lightness',
@@ -469,9 +467,7 @@ export function ValuePart(props: {
       fallback={
         <div class={styles.number}>
           <Show when={props.span.columns >= 2}>
-            <span class={styles.numberCaption}>
-              {props.span.columns >= 3 ? spec().label : number().short}
-            </span>
+            <span class={styles.numberCaption}>{props.span.columns >= 3 ? spec().label : number().short}</span>
           </Show>
           <ScrubNumber
             label={spec().label}

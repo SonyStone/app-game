@@ -105,7 +105,12 @@ export function PairPart(props: { span: Span; session: PaintSession }) {
 
   return (
     <div class={[styles.pair, props.span.columns >= 2 && styles.pairWide]}>
-      <span class={styles.pairForeground} style={{ background: brush().color }} role="img" aria-label="Foreground color">
+      <span
+        class={styles.pairForeground}
+        style={{ background: brush().color }}
+        role="img"
+        aria-label="Foreground color"
+      >
         <Show when={named()}>
           <span style={{ color: luminance(brush().color) > 0.4 ? '#1c1c1e' : '#ffffff' }}>Foreground</span>
         </Show>

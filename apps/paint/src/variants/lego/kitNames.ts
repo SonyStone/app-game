@@ -30,7 +30,8 @@ export function nameKit(
   const blended = second ? blend(first, second) : first;
   const series = `${pick(seriesWords[family(parts)])} ${pick(seriesNouns)}`;
   const shape = shapeWord(parts);
-  const color = parts.some((part) => part.kind.startsWith('color:')) && options.color ? colorName(options.color) : undefined;
+  const color =
+    parts.some((part) => part.kind.startsWith('color:')) && options.color ? colorName(options.color) : undefined;
   // Nearly every name holds a part's name, whole or run together, so the kit reads as what it holds.
   const choices = [
     color && [blended, color],
@@ -81,8 +82,7 @@ export function colorName(hex: string) {
   }
 
   const delta = max - min;
-  const hue =
-    max === r ? ((g - b) / delta + 6) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+  const hue = max === r ? ((g - b) / delta + 6) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
   const degrees = hue * 60;
   return hueNames.find(([until]) => degrees < until)?.[1] ?? 'Red';
 }

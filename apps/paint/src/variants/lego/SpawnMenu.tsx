@@ -36,7 +36,10 @@ export function SpawnMenu(props: {
   const cardSize = createElementSize(card);
   const [chosen, setChosen] = createSignal<string>();
   const [holding, setHolding] = createSignal(props.held !== undefined);
-  const families = () => [...partFamilies(props.session).filter((family) => family.kinds.length > 0), { title: kitsTitle, kinds: [] }];
+  const families = () => [
+    ...partFamilies(props.session).filter((family) => family.kinds.length > 0),
+    { title: kitsTitle, kinds: [] }
+  ];
   const family = () => families().find((candidate) => candidate.title === chosen());
 
   // While the opening press is held, its direction from the center chooses a family.
@@ -85,7 +88,12 @@ export function SpawnMenu(props: {
 
   const cardPlace = () =>
     besideRect(
-      { left: props.at.x - ringRadius - 44, top: props.at.y - ringRadius - 16, width: ringRadius * 2 + 88, height: ringRadius * 2 + 32 },
+      {
+        left: props.at.x - ringRadius - 44,
+        top: props.at.y - ringRadius - 16,
+        width: ringRadius * 2 + 88,
+        height: ringRadius * 2 + 32
+      },
       { width: cardSize.width ?? 0, height: cardSize.height ?? 0 },
       props.view
     );
@@ -149,7 +157,9 @@ export function SpawnMenu(props: {
                 }
               >
                 <For each={shown().kinds}>
-                  {(kind) => <PartTile kind={kind} session={props.session} onLift={(event) => props.onLift(event, kind)} />}
+                  {(kind) => (
+                    <PartTile kind={kind} session={props.session} onLift={(event) => props.onLift(event, kind)} />
+                  )}
                 </For>
               </Show>
             </div>

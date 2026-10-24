@@ -7,7 +7,8 @@ const part = (kind: string, columns: number, rows: number) => ({
   cell: { column: 0, row: 0 },
   span: { columns, rows }
 });
-const label = (kind: string) => ({ 'value:hue': 'Hue', 'color:hex': 'Hex', 'color:wheel': 'Picker' })[kind] ?? 'Brightness';
+const label = (kind: string) =>
+  ({ 'value:hue': 'Hue', 'color:hex': 'Hex', 'color:wheel': 'Picker' })[kind] ?? 'Brightness';
 
 it('runs two names together into one word', () => {
   expect(blend('Hue', 'Hex')).toBe('Huex');

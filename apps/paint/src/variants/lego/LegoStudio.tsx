@@ -10,13 +10,13 @@ import {
   StageGuides,
   StageOverlays
 } from '../../features/session';
+import { besideRect, findPart } from './board';
 import { BoardView } from './BoardView';
 import { createBoard } from './createBoard';
-import styles from './LegoStudio.module.css';
-import { besideRect, findPart } from './board';
-import { createKits } from './kits';
-import { LookChooser } from './LookChooser';
 import { createSheet } from './createSheet';
+import { createKits } from './kits';
+import styles from './LegoStudio.module.css';
+import { LookChooser } from './LookChooser';
 import { chooseLook } from './looks';
 import { ValuePart, type Popup } from './parts';
 

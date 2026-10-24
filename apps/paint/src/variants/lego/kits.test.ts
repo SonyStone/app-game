@@ -3,7 +3,10 @@ import { sameLayout, unpackKit } from './kits';
 
 it('copies a kit with fresh ids, its owned panels pointed at the copies of their owners', () => {
   const part = (id: string, kind: string) => ({ id, kind, cell: { column: 0, row: 0 }, span: { columns: 1, rows: 1 } });
-  const kit = { parts: [part('swatch', 'color:swatch')], owned: [{ owner: 'swatch', parts: [part('disc', 'color:wheel')] }] };
+  const kit = {
+    parts: [part('swatch', 'color:swatch')],
+    owned: [{ owner: 'swatch', parts: [part('disc', 'color:wheel')] }]
+  };
 
   const first = unpackKit(kit);
   const second = unpackKit(kit);

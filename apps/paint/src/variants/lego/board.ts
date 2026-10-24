@@ -200,7 +200,10 @@ export function pinPanels(board: Board, origins: ReadonlyMap<string, Point>, vie
  */
 export function ownedFrame(panel: Panel, anchor: Rect, view: { width: number; height: number }) {
   const bounds = partsBounds(panel.parts);
-  const size = { width: bounds.columns * pitch - cellGap + panelPadding * 2, height: bounds.rows * pitch - cellGap + panelPadding * 2 };
+  const size = {
+    width: bounds.columns * pitch - cellGap + panelPadding * 2,
+    height: bounds.rows * pitch - cellGap + panelPadding * 2
+  };
   const { x: left, y: top } = besideRect(anchor, size, view);
   const origin = { x: left - bounds.column * pitch + panelPadding, y: top - bounds.row * pitch + panelPadding };
 
@@ -213,7 +216,11 @@ export type Rect = { left: number; top: number; width: number; height: number };
  * Where a box of `size` goes beside `anchor`: to its right, else its left, else below or above it, and always inside
  * `view`. Popups and owned panels go there: over other parts, but never over the part that opened them.
  */
-export function besideRect(anchor: Rect, size: { width: number; height: number }, view: { width: number; height: number }) {
+export function besideRect(
+  anchor: Rect,
+  size: { width: number; height: number },
+  view: { width: number; height: number }
+) {
   const gap = 10;
   const right = anchor.left + anchor.width;
   const bottom = anchor.top + anchor.height;
@@ -277,7 +284,10 @@ export function placeBlock(parts: readonly Part[], block: readonly Part[], cell:
       ? [part]
       : block.map((inBlock) => ({
           ...inBlock,
-          cell: { column: cell.column + inBlock.cell.column - bounds.column, row: cell.row + inBlock.cell.row - bounds.row }
+          cell: {
+            column: cell.column + inBlock.cell.column - bounds.column,
+            row: cell.row + inBlock.cell.row - bounds.row
+          }
         }))
   );
 }

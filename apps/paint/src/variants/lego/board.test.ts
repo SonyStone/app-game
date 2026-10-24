@@ -65,7 +65,10 @@ it('sizes a panel to its parts, negative cells included', () => {
 });
 
 it('shifts a panel that would leave the view back in without changing its cells', () => {
-  const frame = panelFrame({ id: 'p', at: { x: 1, y: 0.5 }, parts: [part('a', 0, 0, 2, 1)] }, { width: 800, height: 600 });
+  const frame = panelFrame(
+    { id: 'p', at: { x: 1, y: 0.5 }, parts: [part('a', 0, 0, 2, 1)] },
+    { width: 800, height: 600 }
+  );
 
   expect(frame.rect.left + frame.rect.width).toBe(800);
   expect(frame.origin.x).toBe(frame.rect.left + 6);
