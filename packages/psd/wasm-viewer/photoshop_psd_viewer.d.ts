@@ -1,6 +1,78 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
+ * arrays, including a supplied uniform shadow scale for strike descent. This imports source
+ * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
+ */
+export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
+ */
+export function formatTypeEngineReal26(value: number): Uint8Array;
+/**
+ * Converts modern horizontal cache origins through the native visual-origin addition before
+ * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
+ * import/layout dependencies still require comparison; no editor admission changes.
+ */
+export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
+ * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
+ * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
+ * document identities. Supply actual face versions, never guesses based only on PostScript names.
+ * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
+ */
+export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Converts measured modern major-axis caches and segment indices into schema 7.
+ * Vertical caches require zero major origins and retain source layout and glyph IDs. Metric-box
+ * rotation uses binary32 arithmetic. Malformed packets, unsupported layouts or font contexts throw.
+ * Supply actual face versions as for `projectTypeEngineSave26`. Returns a diagnostic engine packet;
+ * it does not shape text, compute vertical font geometry or authorize edited saves.
+ */
+export function projectTypeEngineLayoutCache26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
+ * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
+ * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
+ */
+export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
+/**
+ * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
+ * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
+ */
+export function readTypeFontMetrics26(bytes: Uint8Array, face_index: number): any;
+/**
+ * Computes ordinary TrueType box/point baselines from supplied bytes and explicit manual leading.
+ * The caller establishes line breaks; `count` is at most 1,000,000 and `leading` is finite/positive.
+ * Size must be in 0.5..=32767 points.
+ * Box text starts at the normalized lowercase-d baseline; point text starts at zero. Returns local
+ * binary32 point coordinates. Invalid operands, missing markers and unsupported contexts throw.
+ * Does not choose automatic leading, shape text, query host fonts or authorize edited saves.
+ */
+export function computeTypeManualBaselines26(bytes: Uint8Array, face_index: number, size: number, leading: number, count: number, boxed: boolean): Float32Array;
+/**
+ * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
+ * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
+ * unsupported outline programs throw. Does not shape text or authorize a document save.
+ */
+export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], tx: number, ty: number): Float32Array;
+/**
+ * Accumulates nominal hmtx advances with explicit shaped design adjustments and point spacing.
+ * Supply glyph IDs, signed design-unit adjustments and point spacing with equal lengths, plus a
+ * size in 0.5..=32767 points. Returns one binary32 point pen per glyph and a terminal pen, starting
+ * at zero. Base and spacing sums accumulate separately. Invalid operands or font programs throw.
+ * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
+ */
+export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: number, glyphs: Uint16Array, size: number, adjustments: Int32Array, spacing: Float32Array): Float32Array;
+/**
+ * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
+ * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
+ * source-dependent; a returned packet is not an editor admission certificate.
+ */
+export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
+/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side.
  */
@@ -32,6 +104,39 @@ export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
  * reconcile copyright or normalize a document for saving.
  */
 export function readPsdMetadataQueries(bytes: Uint8Array): PsdMetadataQueries;
+
+/** An actual face-context leaf for diagnostic engine serialization. No font lookup is performed. */
+export interface TypeEngineFontVersion {
+    /** Exact document PostScript name. The caller binds the program and design coordinates. */
+    name: string;
+    /** Actual current face version string. A name-based guess is invalid. */
+    version: string;
+}
+
+
+
+/** Exact caller-supplied static TrueType program, read in place by the caller. */
+export interface TypeGlyphFont26 {
+    /** Exact font program bytes; no host lookup or fallback is performed. */
+    bytes: Uint8Array;
+    /** Zero-based TTC face index, or zero for a standalone sfnt font. */
+    faceIndex: number;
+}
+/** Glyph after caller-established shaping, mark positioning and line layout, in local points. */
+export interface TypePositionedGlyph26 {
+    /** Index into the supplied TypeGlyphFont26 array. */
+    font: number;
+    /** Font-specific glyph ID from caller-established shaping. */
+    glyph: number;
+    /** Effective outline size in points, including caller-established scaling. */
+    size: number;
+    /** Exact binary32 local baseline x, including caller-established mark placement. */
+    x: number;
+    /** Exact binary32 local baseline y, including caller-established mark placement. */
+    y: number;
+}
+
+
 
 /** Stored vector carriers. Missing fields stay null; unknown entries and suffixes stay in sourceBlock.
  * This inspection admits no new line/star/frame edit, generated geometry or stroke rendering. */
@@ -895,6 +1000,14 @@ export interface InitOutput {
   readonly __wbg_psdfontlibrary_free: (a: number, b: number) => void;
   readonly __wbg_psdsourcehandle_free: (a: number, b: number) => void;
   readonly __wbg_renderedimage_free: (a: number, b: number) => void;
+  readonly computeTypeGlyphInk26: (a: any, b: any, c: number, d: number) => [number, number, number, number];
+  readonly computeTypeHorizontalPens26: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
+  readonly computeTypeManualBaselines26: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+  readonly formatTypeEngineReal26: (a: number) => [number, number, number, number];
+  readonly projectTypeEngineGeometry26: (a: number, b: number, c: any) => [number, number, number, number];
+  readonly projectTypeEngineLayoutCache26: (a: number, b: number, c: any) => [number, number, number, number];
+  readonly projectTypeEngineSave26: (a: number, b: number, c: any) => [number, number, number, number];
+  readonly projectTypeEngineSelection26: (a: number, b: number, c: any) => [number, number, number, number];
   readonly psddocumenthandle_difference: (a: number, b: number) => [number, number, number];
   readonly psddocumenthandle_documentFonts: (a: number, b: number) => any;
   readonly psddocumenthandle_info: (a: number) => any;
@@ -929,12 +1042,15 @@ export interface InitOutput {
   readonly readPsd: (a: number, b: number) => [number, number, number];
   readonly readPsdMetadataQueries: (a: number, b: number) => [number, number, number];
   readonly readPsdSource: (a: number, b: number) => [number, number, number];
+  readonly readTypeFontMetrics26: (a: number, b: number, c: number) => [number, number, number];
   readonly renderedimage_approximations: (a: number) => any;
   readonly renderedimage_depth: (a: number) => number;
   readonly renderedimage_height: (a: number) => number;
   readonly renderedimage_rgba8: (a: number) => any;
   readonly renderedimage_width: (a: number) => number;
   readonly writePsd: (a: any, b: number, c: number) => [number, number, number, number];
+  readonly writeTypeEngineValues26: (a: number, b: number) => [number, number, number, number];
+  readonly writeTypeLayerGlyphs26: (a: number, b: number, c: any, d: any, e: number) => [number, number, number, number];
   readonly __wbindgen_exn_store: (a: number) => void;
   readonly __externref_table_alloc: () => number;
   readonly __wbindgen_export_2: WebAssembly.Table;
