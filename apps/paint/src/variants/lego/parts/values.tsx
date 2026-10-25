@@ -51,7 +51,7 @@ const channels = [
   {
     id: 'layer-opacity',
     label: 'Layer opacity',
-    short: 'Op',
+    short: 'Layer',
     unit: '%',
     min: 0,
     max: () => 100,
@@ -318,10 +318,9 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
       channel.write(services, next, hsv);
     }
   };
-  const commit = () => {
-    const next = draft();
+  const commit = (next = draft()) => {
     setDraft(undefined);
-    if (channel.deferred && next !== undefined && next !== start?.value) {
+    if (channel.deferred && next !== undefined && next !== (captured ? start.value : channel.read(services))) {
       (captured ?? ((value: number, hsv: Hsv) => channel.write(services, value, hsv)))(next, color.hsv());
     }
 
@@ -373,9 +372,9 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
     onNumberInput: frame.command((next: number) => write(next, start.hsv)),
     onNumberCommit: frame.command((next: number) => {
       write(next, color.hsv());
-      commit();
+      commit(next);
     }),
-    onCommit: frame.command(commit),
+    onCommit: frame.command(() => commit()),
     onCancel: frame.command(() => {
       if (channel.deferred) {
         setDraft(undefined);
