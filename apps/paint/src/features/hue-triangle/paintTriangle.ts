@@ -1,17 +1,16 @@
-import { triangleCorners } from './triangleGeometry';
+import { size, triangleCorners, triangleRadius } from './triangleGeometry';
 
 /**
  * Paints the triangle into the canvas with its hue corner toward `angle` on the ring and the pure color of RGB hue
  * `hue` there: each pixel mixes the hue, white and black by its barycentric weights, in encoded sRGB as HSV defines
  * it; edges are antialiased over one canvas pixel.
  */
-export function paintTriangle(canvas: HTMLCanvasElement, angle: number, hue = angle) {
+export function paintTriangle(canvas: HTMLCanvasElement, angle: number, hue = angle, pixels = canvas.width) {
   const context = canvas.getContext('2d');
   if (!context) {
     return;
   }
 
-  const pixels = canvas.width;
   let image = images.get(canvas);
   if (!image || image.width !== pixels) {
     image = context.createImageData(pixels, pixels);
@@ -57,9 +56,11 @@ export function paintTriangle(canvas: HTMLCanvasElement, angle: number, hue = an
     }
   }
 
+  if (canvas.width !== pixels || canvas.height !== pixels) {
+    canvas.width = canvas.height = pixels;
+  }
+
   context.putImageData(image, 0, 0);
 }
 
-const size = 220;
-const triangleRadius = 84;
 const images = new WeakMap<HTMLCanvasElement, ImageData>();

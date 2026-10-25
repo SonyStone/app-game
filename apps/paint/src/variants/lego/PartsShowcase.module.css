@@ -17,14 +17,14 @@
     background: #faf8f4f5;
   }
 
-  label {
+  header label {
     display: inline-flex;
     gap: 8px;
     align-items: center;
     margin-right: 16px;
   }
 
-  select {
+  header select {
     padding: 6px;
   }
 }

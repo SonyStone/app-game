@@ -81,3 +81,9 @@ function polar(degrees: number, radius: number): Point {
   const angle = (degrees * Math.PI) / 180;
   return { x: Math.sin(angle) * radius, y: -Math.cos(angle) * radius };
 }
+
+/** Shared HSV wheel view-box side in CSS units. */
+export const size = 220;
+
+/** Distance from the HSV triangle center to each corner, in view-box units. */
+export const triangleRadius = 84;

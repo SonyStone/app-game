@@ -320,10 +320,20 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 0 6px;
+  padding: 0 4px;
   border: 0;
   background: none;
   cursor: pointer;
+
+  .name {
+    font-size: 11px;
+    letter-spacing: -0.25px;
+  }
+
+  &:has(.name) svg {
+    width: 20px;
+    flex-shrink: 0;
+  }
 }
 
 .action:disabled {
@@ -692,18 +702,19 @@
 .hex {
   display: grid;
   align-items: center;
-  padding: 6px;
+  container-type: inline-size;
+  padding: 3px;
 
   input {
     width: 100%;
     min-width: 0;
     height: 100%;
-    padding: 0 8px;
+    padding: 0 3px;
     border: 1px solid #d6d3cc;
     border-radius: 6px;
     background: #ffffff;
     font:
-      600 13px ui-monospace,
+      600 clamp(7px, 14cqi, 12px) ui-monospace,
       monospace;
   }
 }
@@ -769,6 +780,16 @@
   --scrub-width: 100%;
   --scrub-height: 100%;
   --scrub-fill: #d6e2ff;
+
+  &[data-compact] {
+    padding: 2px;
+    font-size: 11px;
+
+    input {
+      padding: 0 1px;
+      text-align: center;
+    }
+  }
 
   > :last-child {
     flex: 1;

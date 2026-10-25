@@ -12,5 +12,5 @@ if (!element) {
 const PartsShowcase = lazy(() =>
   import('./variants/lego/PartsShowcase').then(({ PartsShowcase }) => ({ default: PartsShowcase }))
 );
-render(() => (location.pathname === '/paint/lego/parts' ? <PartsShowcase /> : <PaintApp />), element);
+render(() => (/^\/paint\/lego\/parts\/?$/.test(location.pathname) ? <PartsShowcase /> : <PaintApp />), element);
 document.body.classList.add('app-utilities');

@@ -2,9 +2,9 @@ import type { Point } from '@app-game/paint-core/camera';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { createPickerPixels } from '../../shared/ui/createPickerPixels';
 import { hexToHsv, hsvToHex, type Hsv } from '../color/hsv';
-import { paintTriangle } from '../hue-triangle/paintTriangle';
 import styles from './HueTriangle.module.css';
-import { hueAt, pointFromSv, svFromPoint } from './triangleGeometry';
+import { paintTriangle } from './paintTriangle';
+import { hueAt, pointFromSv, size, svFromPoint, triangleRadius } from './triangleGeometry';
 
 /**
  * The classic color wheel: a hue ring around a triangle of saturation and value whose corners are the pure hue, white
@@ -35,7 +35,7 @@ export function HueTriangle(props: { color: string; onChange: (color: string) =>
       frame ??= requestAnimationFrame(() => {
         frame = undefined;
         if (pixels() > 0) {
-          paintTriangle(canvas, pending!);
+          paintTriangle(canvas, pending!, pending!, pixels());
         }
       });
     }
@@ -84,7 +84,7 @@ export function HueTriangle(props: { color: string; onChange: (color: string) =>
   return (
     <div class={styles.triangle} role="group" aria-label="Hue triangle">
       <div class={styles.ring} aria-hidden="true" />
-      <canvas ref={canvas} class={styles.canvas} width={pixels()} height={pixels()} aria-hidden="true" />
+      <canvas ref={canvas} class={styles.canvas} aria-hidden="true" />
       <svg
         ref={svg}
         class={styles.overlay}
@@ -167,9 +167,6 @@ export function HueTriangle(props: { color: string; onChange: (color: string) =>
   );
 }
 
-/** The view box side, in CSS pixels at the component's natural size. */
-const size = 220;
+/** Outer and inner hue-ring radii in view-box units. */
 const ringOuter = 110;
 const ringInner = 88;
-/** Center to each corner of the triangle, inside the ring with a small gap. */
-const triangleRadius = 84;

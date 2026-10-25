@@ -2,6 +2,7 @@
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { WheelDisk } from '../../features/color-wheel/ColorWheel';
 import { CoolorusWheel } from '../../features/coolorus-wheel/CoolorusWheel';
 import { HueTriangle } from '../../features/hue-triangle/HueTriangle';
 import { ColorDisc } from '../../variants/zen/ColorDisc';
@@ -96,6 +97,9 @@ it.each([ColorDisc, HueTriangle, CoolorusWheel])(
     expect(allocate).not.toHaveBeenCalled();
 
     setScale(0.25);
+    flush();
+    // A flush must retain the old bitmap until rAF can upload the replacement.
+    expect(canvas.width).toBe(160);
     drain();
     expect(canvas.width).toBe(80);
     const notify = resized.get(canvas)!;
@@ -119,6 +123,45 @@ it.each([ColorDisc, HueTriangle, CoolorusWheel])(
     expect(painted).not.toHaveBeenCalled();
   }
 );
+
+it('caps OKLCH backing at 600 device pixels and retains its bitmap until the resized paint', () => {
+  vi.stubGlobal('devicePixelRatio', 3);
+  const painted = vi.fn();
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+    createImageData: (width: number, height: number) => ({
+      width,
+      height,
+      data: new Uint8ClampedArray(width * height * 4)
+    }),
+    putImageData: painted
+  } as unknown as ReturnType<HTMLCanvasElement['getContext']>);
+  const [scale, setScale] = createSignal(2);
+  dispose = render(
+    () => (
+      <PickerScale value={scale}>
+        <WheelDisk
+          wheel={{ h: 0, s: 0.5, l: 0.5 }}
+          color="#cc0000"
+          onEdit={() => {}}
+          onSettle={() => {}}
+          settings={{ harmony: 'none', mask: 'none', maskAngle: 0, customMask: [] }}
+          onSettings={() => {}}
+        />
+      </PickerScale>
+    ),
+    document.body
+  );
+  drain();
+  const canvas = document.querySelector('canvas')!;
+  expect(canvas.width).toBe(600);
+  setScale(0.5);
+  flush();
+  expect(canvas.width).toBe(600);
+  painted.mockClear();
+  drain();
+  expect(canvas.width).toBe(240);
+  expect(painted).toHaveBeenCalledOnce();
+});
 
 function drain() {
   flush();

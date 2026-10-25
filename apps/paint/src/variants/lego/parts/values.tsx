@@ -213,7 +213,7 @@ function ValueControl(
     <Show
       when={props.look !== 'number'}
       fallback={
-        <div class={styles.number}>
+        <div class={styles.number} data-compact={!props.caption ? '' : undefined}>
           <Show when={props.caption}>
             <span class={styles.numberCaption}>{props.caption}</span>
           </Show>

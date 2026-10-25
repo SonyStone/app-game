@@ -148,7 +148,6 @@ export function LegoStudio(props: PaintVariantProps) {
             kits={kits}
             session={session}
             editing={editing()}
-            scale={card().scale}
             openPanel={openPanel()}
             onOpenPanel={setOpenPanel}
             sheet={sheet}

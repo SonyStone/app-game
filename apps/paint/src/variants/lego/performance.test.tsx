@@ -2,16 +2,19 @@
 import { defaultCamera } from '@app-game/paint-core/camera';
 import { attachInput } from '@app-game/paint-core/input';
 import { render } from '@solidjs/web';
+import 'fake-indexeddb/auto';
 import { createRoot, createSignal, flush, getOwner, OBSERVE, type Owner } from 'solid-js';
-import { attribution, costs } from 'solid-js/attribution';
+import { attribution } from 'solid-js/attribution';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PreviewAttachment } from '../../features/brush-library/previewAttachment';
+import { createPaintSession } from '../../features/session';
 import { BoardView } from './BoardView';
 import { createBoard } from './createBoard';
 import { attachCataloguePreview, createCatalogueFixture } from './createCatalogueFixture';
 import { createSheet } from './createSheet';
 import { createKits } from './kits';
-import { LegoServicesContext } from './LegoServices';
+import { createLegoServices, LegoServicesContext } from './LegoServices';
+import { PartFrame } from './PartFrame';
 import { partDefinitions } from './parts';
 import { catalogueSpecimens } from './PartsShowcase';
 
@@ -21,9 +24,22 @@ const disposers: (() => void)[] = [];
 const pickerPaints = vi.fn();
 const presetRenders = vi.fn();
 const colorOwners = new Set<Owner>();
+const partOwners = new Set<Owner>();
 let frameId = 0;
 beforeEach(() => {
+  Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null });
   vi.stubGlobal('devicePixelRatio', 2);
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string) =>
+      Object.assign(new EventTarget(), {
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener() {},
+        removeListener() {}
+      }) satisfies MediaQueryList
+  );
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     frames.set(++frameId, callback);
     return frameId;
@@ -71,10 +87,13 @@ beforeEach(() => {
   );
   Element.prototype.setPointerCapture = () => {};
   Element.prototype.hasPointerCapture = () => false;
-  for (const definition of partDefinitions.filter((definition) => definition.family === 'color')) {
+  for (const definition of partDefinitions) {
     const render = definition.render;
     vi.spyOn(definition, 'render').mockImplementation((...args) => {
-      colorOwners.add(getOwner()!);
+      partOwners.add(getOwner()!);
+      if (definition.family === 'color') {
+        colorOwners.add(getOwner()!);
+      }
       return render(...args);
     });
   }
@@ -89,6 +108,7 @@ afterEach(() => {
   frames.clear();
   intersections.clear();
   colorOwners.clear();
+  partOwners.clear();
   pickerPaints.mockClear();
   presetRenders.mockClear();
   document.body.replaceChildren();
@@ -100,6 +120,16 @@ afterEach(() => {
 it('keeps the complete mounted catalogue quiet during pen input and unrelated brush changes', async () => {
   const fixture = owned(createCatalogueFixture);
   await fixture.tools.loaded;
+  const session = owned(createPaintSession);
+  const services = owned(() =>
+    createLegoServices({
+      ...session,
+      tools: fixture.tools,
+      brush: fixture.tools.brush,
+      library: fixture.library,
+      setColor: fixture.services.color.set
+    })
+  );
   const board = owned(createBoard);
   const sheet = owned(() => createSheet(() => 900));
   const kits = owned(createKits);
@@ -118,7 +148,7 @@ it('keeps the complete mounted catalogue quiet during pen input and unrelated br
   disposers.push(
     render(
       () => (
-        <LegoServicesContext value={fixture.services}>
+        <LegoServicesContext value={services}>
           <PreviewAttachment
             value={(canvas) => {
               const connection = attachCataloguePreview(canvas);
@@ -160,15 +190,19 @@ it('keeps the complete mounted catalogue quiet during pen input and unrelated br
   expect(pickerPaints.mock.calls.length).toBeGreaterThanOrEqual(4);
 
   const canvas = document.body.appendChild(document.createElement('canvas'));
-  const send = vi.fn();
+  const input = session.canvasInput();
+  const send = vi.fn(input.send);
+  const drawn = vi.fn(input.drawn);
   disposers.push(
     attachInput(canvas, {
+      ...input,
       camera: defaultCamera,
       size: () => ({ width: 1200, height: 900 }),
       brush: fixture.tools.brush,
       ready: () => true,
       navigate: () => {},
-      cursor: () => {},
+      showPenCursor: () => true,
+      drawn,
       send
     })
   );
@@ -197,7 +231,48 @@ it('keeps the complete mounted catalogue quiet during pen input and unrelated br
     }
   });
   expect(send.mock.calls.filter(([command]) => command.type === 'samples')).toHaveLength(100);
-  expect(pen).toEqual({ reruns: 0, colorReruns: 0, domWrites: 0, pickerPaints: 0, presetRenders: 0 });
+  expect(session.cursor()).toEqual({ x: 700, y: 450 });
+  expect(drawn).toHaveBeenCalledTimes(101);
+  expectPenBudget(pen);
+
+  // A deliberately bad part captures the same session cursor reachable by an app binding.
+  // The identical budget must reject that per-move dependency.
+  const badDefinition = partDefinitions.find((definition) => definition.kind === 'color:swatch')!;
+  const healthyRender = vi.mocked(badDefinition.render).getMockImplementation()!;
+  vi.mocked(badDefinition.render).mockImplementation((...args) => {
+    const view = healthyRender(...args);
+    return (
+      <>
+        {view}
+        <BadCursorPart />
+      </>
+    );
+  });
+  function BadCursorPart() {
+    partOwners.add(getOwner()!);
+    colorOwners.add(getOwner()!);
+    return <span>{session.cursor()?.x}</span>;
+  }
+  const stopBadPart = render(
+    () => (
+      <LegoServicesContext value={services}>
+        <PartFrame kind="color:swatch" span={{ columns: 2, rows: 2 }} mode="live" immediate />
+      </LegoServicesContext>
+    ),
+    document.body.appendChild(document.createElement('div'))
+  );
+  await drain();
+  const negative = await measure(() => {
+    for (let i = 0; i < 100; i++) {
+      pointer('pointermove', 701 + i);
+    }
+  });
+  expect(negative.reruns).toBeGreaterThanOrEqual(100);
+  expect(negative.colorReruns).toBeGreaterThanOrEqual(100);
+  expect(negative.domWrites).toBeGreaterThanOrEqual(100);
+  expect(() => expectPenBudget(negative)).toThrow();
+  stopBadPart();
+  vi.mocked(badDefinition.render).mockImplementation(healthyRender);
   pointer('pointerup', 701);
   await drain();
 
@@ -208,10 +283,10 @@ it('keeps the complete mounted catalogue quiet during pen input and unrelated br
   expect(size.presetRenders).toBe(0);
   expect(size.pickerPaints).toBe(0);
   const color = await measure(() => {
-    fixture.services.color.set('#c4463a');
+    services.color.set('#c4463a');
   });
   console.log('LEGO budgets', { pen, size, color });
-  // RC.13 baseline: color 139 reruns / 263 writes; size 13 reruns / 7 writes.
+  // RC.13 ceilings include facade work; reruns now count only descendants of mounted part bindings.
   // Ceilings leave 20% room; positive controls prove the counters see real updates.
   expect(size.reruns).toBeGreaterThan(0);
   expect(size.domWrites).toBeGreaterThan(0);
@@ -244,8 +319,15 @@ async function measure(action: () => void) {
   pickerPaints.mockClear();
   presetRenders.mockClear();
   let colorReruns = 0;
+  let reruns = 0;
   expect(OBSERVE).toBeDefined();
   const unsubscribe = OBSERVE!.records.subscribe('rerun', (_event, node) => {
+    for (let owner: Owner | null = node; owner; owner = owner._parent) {
+      if (partOwners.has(owner)) {
+        reruns++;
+        break;
+      }
+    }
     for (let owner: Owner | null = node; owner; owner = owner._parent) {
       if (colorOwners.has(owner)) {
         colorReruns++;
@@ -259,7 +341,7 @@ async function measure(action: () => void) {
   records.push(...recording.takeRecords());
   recording.disconnect();
   const result = {
-    reruns: costs().scopes.reduce((sum, scope) => sum + scope.runs, 0),
+    reruns,
     colorReruns,
     domWrites: records.length,
     pickerPaints: pickerPaints.mock.calls.length,
@@ -294,4 +376,9 @@ async function drain() {
   }
   flush();
   expect(frames.size).toBe(0);
+}
+
+/** No mounted part may react to drawing-only input. Also used by the deliberately failing control. */
+function expectPenBudget(result: Awaited<ReturnType<typeof measure>>) {
+  expect(result).toEqual({ reruns: 0, colorReruns: 0, domWrites: 0, pickerPaints: 0, presetRenders: 0 });
 }

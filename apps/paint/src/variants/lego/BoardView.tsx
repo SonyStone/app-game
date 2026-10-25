@@ -83,8 +83,6 @@ export function BoardView(props: {
   kits: ReturnType<typeof createKits>;
   session: Pick<PaintSession, 'size' | 'library' | 'brush'>;
   editing: boolean;
-  /** CSS scale applied to the board by the editing card. Defaults to 1. */
-  scale?: number;
   /** The swatch whose panel is open; the panels of the swatches it lies in show too. */
   openPanel: string | undefined;
   onOpenPanel: (owner: string | undefined) => void;
@@ -660,11 +658,9 @@ export function BoardView(props: {
             onContextMenu={openSpawnFromMenuKey}
           />
         </Show>
-        <PickerScale value={() => props.scale ?? 1}>
-          <For each={visible()} keyed={(entry) => entry.panel.id}>
-            {(entry) => <PanelView entry={entry()} />}
-          </For>
-        </PickerScale>
+        <For each={visible()} keyed={(entry) => entry.panel.id}>
+          {(entry) => <PanelView entry={entry()} />}
+        </For>
         <Show when={props.editing}>
           <Show when={!hinted() && !drag()}>
             <p class={styles.editHint} role="status">
@@ -732,8 +728,7 @@ export function BoardView(props: {
               scale: `${ghostScale(current().point) * 1.06}`
             }}
           >
-            <PickerScale value={() => ghostScale(current().point) * 1.06}>
-              {' '}
+            <PickerScale value={() => 1}>
               <Show
                 when={current().block}
                 fallback={

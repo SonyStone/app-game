@@ -5,8 +5,11 @@ import { createContext, createEffect, createMemo, createSignal, onSettled, useCo
 /** Uniform CSS transform applied by a fitted picker host. ResizeObserver reports sizes before this transform. */
 export const PickerScale = createContext<Accessor<number>>(() => 1);
 
-/** Observes a square picker's displayed width and density. Zero-sized/unmounted canvases do no bitmap work. */
-export function createPickerPixels(canvas: Accessor<HTMLCanvasElement | undefined>) {
+/**
+ * Observes a square picker's displayed width and density. `maxPixels` caps device pixels, uncapped by default.
+ * Zero-sized or unmounted canvases do no bitmap work.
+ */
+export function createPickerPixels(canvas: Accessor<HTMLCanvasElement | undefined>, maxPixels = Infinity) {
   const scale = useContext(PickerScale);
   const [target, setTarget] = createSignal<HTMLCanvasElement>();
   const [width, setWidth] = createSignal(0);
@@ -40,5 +43,5 @@ export function createPickerPixels(canvas: Accessor<HTMLCanvasElement | undefine
     };
   });
 
-  return createMemo(() => Math.max(0, Math.round(width() * scale() * dpr())));
+  return createMemo(() => Math.min(maxPixels, Math.max(0, Math.round(width() * scale() * dpr()))));
 }

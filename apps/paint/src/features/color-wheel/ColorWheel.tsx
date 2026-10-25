@@ -86,7 +86,7 @@ export function WheelDisk(props: {
   const mask = () => maskPolygon(props.settings.mask, props.settings.maskAngle, props.settings.customMask);
   let canvas!: HTMLCanvasElement;
   let disk!: SVGSVGElement;
-  const pixels = createPickerPixels(() => canvas);
+  const pixels = createPickerPixels(() => canvas, 600);
   /** The lightness waiting to be painted at the next animation frame. */
   let pending: number | undefined;
   let frame: number | undefined;
@@ -99,7 +99,7 @@ export function WheelDisk(props: {
       frame ??= requestAnimationFrame(() => {
         frame = undefined;
         if (pixels() > 0) {
-          paintDisk(canvas, pending!);
+          paintDisk(canvas, pending!, pixels());
         }
       });
     }
@@ -119,10 +119,7 @@ export function WheelDisk(props: {
       y: (event.clientY - box.top - box.height / 2) / scale
     };
   };
-  const pickDisk = drag(
-    (event) => edit({ ...props.wheel, ...fromDisk(clampToPolygon(diskPoint(event), mask())) }),
-    props
-  );
+  const pickDisk = drag((event) => edit({ ...props.wheel, ...fromDisk(clampToPolygon(diskPoint(event), mask())) }), props);
   const turnMask = drag((event) => {
     const { h } = fromDisk(diskPoint(event));
     props.onSettings({ maskAngle: Math.round(h) });
@@ -130,7 +127,7 @@ export function WheelDisk(props: {
 
   return (
     <div class={styles.disk}>
-      <canvas ref={canvas} width={pixels()} height={pixels()} aria-hidden="true" />
+      <canvas ref={canvas} aria-hidden="true" />
       <svg
         ref={disk}
         viewBox={`${-1 / diskScale} ${-1 / diskScale} ${2 / diskScale} ${2 / diskScale}`}
@@ -273,13 +270,7 @@ export function WheelDisk(props: {
             />
           )}
         </For>
-        <circle
-          class={styles.thumb}
-          cx={toDisk(props.wheel).x}
-          cy={toDisk(props.wheel).y}
-          r={0.075}
-          fill={props.color}
-        />
+        <circle class={styles.thumb} cx={toDisk(props.wheel).x} cy={toDisk(props.wheel).y} r={0.075} fill={props.color} />
       </svg>
     </div>
   );
@@ -315,10 +306,7 @@ export function WheelLightness(props: {
         const delta = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[event.key];
         if (delta !== undefined) {
           event.preventDefault();
-          edit({
-            ...props.wheel,
-            l: Math.min(1, Math.max(0, props.wheel.l + (delta * (event.shiftKey ? 10 : 1)) / 100))
-          });
+          edit({ ...props.wheel, l: Math.min(1, Math.max(0, props.wheel.l + (delta * (event.shiftKey ? 10 : 1)) / 100)) });
         }
       }}
       onBlur={() => props.onSettle()}

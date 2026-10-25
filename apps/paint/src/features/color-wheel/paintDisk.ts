@@ -1,40 +1,57 @@
 import { maxChroma } from './oklch';
 
-/** Paints the OKLCH disk, reusing geometry and ImageData until its backing width changes. */
-export function paintDisk(canvas: HTMLCanvasElement, lightness: number) {
+/**
+ * Paints the OKLCH disk. Four backing sizes share geometry and the last bitmap across instances.
+ * The picker caps its backing at 600 device pixels to keep DPR 3 lightness edits below 4 ms;
+ * CSS scales the bitmap beyond that size. Resizing and uploading happen together to avoid a blank frame.
+ */
+export function paintDisk(canvas: HTMLCanvasElement, lightness: number, pixels = canvas.width) {
   const context = canvas.getContext('2d');
-  if (!context || !canvas.width) {
+  if (!context || !pixels) {
     return;
   }
 
-  let cache = disks.get(canvas);
-  if (!cache || cache.image.width !== canvas.width) {
-    cache = prepareDisk(context, canvas.width);
-    disks.set(canvas, cache);
+  let cache = disks.get(pixels);
+  disks.delete(pixels);
+  if (!cache) {
+    cache = prepareDisk(context, pixels);
+  }
+
+  disks.set(pixels, cache);
+  if (disks.size > 4) {
+    disks.delete(disks.keys().next().value!);
   }
 
   const { image, coefficients, hues, most } = cache;
-  for (let h = 0; h <= 360; h++) {
-    most[h] = maxChroma(lightness, h);
-  }
-
-  const data = image.data;
-  for (let i = 0; i < hues.length; i++) {
-    const at = i * 4;
-    if (!data[at + 3]) {
-      continue;
+  if (cache.lightness !== lightness) {
+    for (let h = 0; h <= 360; h++) {
+      most[h] = maxChroma(lightness, h);
     }
 
-    const chroma = most[hues[i]!]!;
-    const a = lightness + coefficients[i * 3]! * chroma;
-    const b = lightness + coefficients[i * 3 + 1]! * chroma;
-    const c = lightness + coefficients[i * 3 + 2]! * chroma;
-    const l = a * a * a;
-    const m = b * b * b;
-    const s = c * c * c;
-    data[at] = encoded(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s);
-    data[at + 1] = encoded(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s);
-    data[at + 2] = encoded(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s);
+    const data = image.data;
+    for (let i = 0; i < hues.length; i++) {
+      const at = i * 4;
+      if (!data[at + 3]) {
+        continue;
+      }
+
+      const chroma = most[hues[i]!]!;
+      const a = lightness + coefficients[i * 3]! * chroma;
+      const b = lightness + coefficients[i * 3 + 1]! * chroma;
+      const c = lightness + coefficients[i * 3 + 2]! * chroma;
+      const l = a * a * a;
+      const m = b * b * b;
+      const s = c * c * c;
+      data[at] = encoded(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s);
+      data[at + 1] = encoded(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s);
+      data[at + 2] = encoded(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s);
+    }
+
+    cache.lightness = lightness;
+  }
+
+  if (canvas.width !== pixels || canvas.height !== pixels) {
+    canvas.width = canvas.height = pixels;
   }
 
   context.putImageData(image, 0, 0);
@@ -63,10 +80,10 @@ function prepareDisk(context: CanvasRenderingContext2D, size: number) {
     }
   }
 
-  return { image, coefficients, hues, most: new Float64Array(361) };
+  return { image, coefficients, hues, most: new Float64Array(361), lightness: undefined as number | undefined };
 }
 
-const disks = new WeakMap<HTMLCanvasElement, ReturnType<typeof prepareDisk>>();
+const disks = new Map<number, ReturnType<typeof prepareDisk>>();
 
 /** A 16-bit linear-light table limits encoded-channel error to less than 0.03 of an 8-bit step. */
 const transfer = Float32Array.from({ length: 65537 }, (_, i) => {

@@ -72,3 +72,32 @@ function expectPixels(expected: ImageData, actual: ImageData) {
 
   expect(max).toBeLessThanOrEqual(1);
 }
+
+it('shares OKLCH preparation across canvases and evicts the least recently used backing size', () => {
+  const allocations = vi.fn((width: number, height: number) => ({
+    width,
+    height,
+    data: new Uint8ClampedArray(width * height * 4)
+  }));
+  const painted = vi.fn();
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+    createImageData: allocations,
+    putImageData: painted
+  } as unknown as ReturnType<HTMLCanvasElement['getContext']>);
+  const a = document.createElement('canvas');
+  const b = document.createElement('canvas');
+  paintDisk(a, 0.4, 31);
+  paintDisk(b, 0.6, 31);
+  expect(allocations).toHaveBeenCalledTimes(1);
+  expect(a.width).toBe(31);
+  expect(b.width).toBe(31);
+  for (const size of [32, 33, 34]) {
+    paintDisk(a, 0.4, size);
+  }
+  paintDisk(b, 0.5, 31); // Touch 31, so 32 is now oldest.
+  paintDisk(a, 0.4, 35);
+  paintDisk(b, 0.6, 31);
+  expect(allocations).toHaveBeenCalledTimes(5);
+  paintDisk(a, 0.4, 32);
+  expect(allocations).toHaveBeenCalledTimes(6);
+});

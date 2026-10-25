@@ -5,6 +5,7 @@ import { createPickerPixels } from '../../shared/ui/createPickerPixels';
 import { hexToHsv, hsvToHex, type Hsv } from '../color/hsv';
 import { hueAt, pointFromSv, svFromPoint } from '../hue-triangle';
 import { paintTriangle } from '../hue-triangle/paintTriangle';
+import { size, triangleRadius } from '../hue-triangle/triangleGeometry';
 import styles from './CoolorusWheel.module.css';
 import { keepLightness, rgbToRybHue, rybToRgbHue } from './coolorusColor';
 
@@ -47,7 +48,7 @@ export function CoolorusWheel(props: {
       frame ??= requestAnimationFrame(() => {
         frame = undefined;
         if (pixels() > 0) {
-          paintTriangle(canvas, pending!.angle, pending!.hue);
+          paintTriangle(canvas, pending!.angle, pending!.hue, pixels());
         }
       });
     }
@@ -102,7 +103,7 @@ export function CoolorusWheel(props: {
     <div class={styles.coolorus}>
       <div class={styles.wheel} role="group" aria-label="Coolorus wheel">
         <div class={styles.ring} style={{ background: ryb() ? rybRing : rgbRing }} aria-hidden="true" />
-        <canvas ref={canvas} class={styles.canvas} width={pixels()} height={pixels()} aria-hidden="true" />
+        <canvas ref={canvas} class={styles.canvas} aria-hidden="true" />
         <svg
           ref={svg}
           class={styles.overlay}
@@ -212,12 +213,9 @@ export type CoolorusSettings = { hues: 'ryb' | 'rgb'; lockLightness: boolean };
 /** Coolorus's own start: the painter's wheel, lightness free. */
 export const defaultCoolorusSettings: CoolorusSettings = { hues: 'ryb', lockLightness: false };
 
-/** The view box side, in CSS pixels at the component's natural size; the same as `HueTriangle`. */
-const size = 220;
+/** Outer and inner hue-ring radii in view-box units, shared with the HueTriangle layout. */
 const ringOuter = 110;
 const ringInner = 88;
-/** Center to each corner of the triangle, inside the ring with a small gap. */
-const triangleRadius = 84;
 
 /** The ring's colors from the top, clockwise, every 15° of its own hue, for a CSS conic gradient. */
 function ringGradient(toRgb: (angle: number) => number) {

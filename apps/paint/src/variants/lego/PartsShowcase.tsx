@@ -10,13 +10,17 @@ import { partDefinitions } from './parts';
 import type { PartMode } from './parts/definition';
 import styles from './PartsShowcase.module.css';
 
-/** Registry-driven specimens at their minimum size, or any supported grid size selected in the toolbar. */
+/** Registry-driven specimens at representative size steps, or a supported grid size selected in the toolbar. */
 export function PartsShowcase() {
   const fixture = createCatalogueFixture();
   const [columns, setColumns] = createSignal(0);
   const [rows, setRows] = createSignal(0);
   const specimens = createMemo(() =>
-    catalogueSpecimens(fixture.presets[0]!.id, columns() && rows() ? { columns: columns(), rows: rows() } : undefined)
+    catalogueSpecimens(
+      fixture.presets[0]!.id,
+      columns() && rows() ? { columns: columns(), rows: rows() } : undefined,
+      true
+    )
   );
 
   return (
@@ -35,7 +39,7 @@ export function PartsShowcase() {
                   setColumns(Number(event.currentTarget.value));
                 }}
               >
-                <option value="0">Minimum</option>
+                <option value="0">Size steps</option>
                 <For each={sizes}>{(size) => <option value={size}>{size}</option>}</For>
               </select>
             </label>
@@ -48,11 +52,14 @@ export function PartsShowcase() {
                   setRows(Number(event.currentTarget.value));
                 }}
               >
-                <option value="0">Minimum</option>
+                <option value="0">Size steps</option>
                 <For each={sizes}>{(size) => <option value={size}>{size}</option>}</For>
               </select>
             </label>
-            <p>Choose both dimensions to compare all looks that fit. Edit and preview tiles are inert.</p>
+            <p>
+              Size steps show compact, wide, square and natural layouts. Choose both dimensions to compare all looks
+              that fit. Edit and preview tiles are inert.
+            </p>
           </header>
           <For each={modes}>
             {(mode) => (
@@ -107,23 +114,42 @@ export function PartsShowcase() {
   );
 }
 
-/** All kind/look pairs. Size choices use the same fit predicate as the board's look chooser. */
-export function catalogueSpecimens(presetId: string, span?: Span) {
+/** All kind/look pairs, optionally at representative size steps. Uses the board look chooser's fit predicate. */
+export function catalogueSpecimens(presetId: string, span?: Span, sizeSteps = false) {
   return partDefinitions.flatMap((definition) =>
     (definition.looks?.looks ?? [undefined]).flatMap((look) => {
-      if (span && look && !lookFits(look, span)) {
-        return [];
-      }
+      const minimum = look?.min ?? { columns: 1, rows: 1 };
+      const natural =
+        definition.kind === 'color:wheel'
+          ? { columns: 5, rows: 5 }
+          : definition.family === 'value'
+            ? { columns: 4, rows: 1 }
+            : definition.family === 'action'
+              ? { columns: 3, rows: 2 }
+              : { columns: 4, rows: 2 };
+      const candidates = span
+        ? [span]
+        : sizeSteps
+          ? [minimum, { columns: 2, rows: 1 }, { columns: 2, rows: 2 }, natural]
+          : [look?.min ?? { columns: 2, rows: 2 }];
+      const seen = new Set<string>();
+      return candidates
+        .filter((size) => {
+          const key = `${size.columns}x${size.rows}`;
+          if (seen.has(key) || (look && !lookFits(look, size))) {
+            return false;
+          }
 
-      return [
-        {
-          id: `${definition.kind}:${look?.id ?? 'default'}`,
+          seen.add(key);
+          return true;
+        })
+        .map((size) => ({
+          id: `${definition.kind}:${look?.id ?? 'default'}:${size.columns}x${size.rows}`,
           kind: definition.family === 'preset' ? `preset:${presetId}` : definition.kind,
           label: `${definition.label}${look ? ` / ${look.label}` : ''}`,
           look: look?.id,
-          span: span ?? look?.min ?? { columns: 2, rows: 2 }
-        }
-      ];
+          span: size
+        }));
     })
   );
 }

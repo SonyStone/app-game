@@ -161,15 +161,13 @@ export function attachInput(
     stopHold();
     touchSession = undefined;
   };
-  const detachPuck =
-    options.puck &&
-    attachNavigationPuck(canvas, options.puck, {
-      busy: () => !!gesture || touches.size > 0,
-      ready: options.ready,
-      onOpen: () => options.cursor(undefined),
-      ...(options.puckPicker ? { pick: options.puckPicker } : {}),
-      ...(options.puckSurface ? { surface: options.puckSurface } : {})
-    });
+  const detachPuck = options.puck && attachNavigationPuck(canvas, options.puck, {
+    busy: () => !!gesture || touches.size > 0,
+    ready: options.ready,
+    onOpen: () => options.cursor(undefined),
+    ...(options.puckPicker ? { pick: options.puckPicker } : {}),
+    ...(options.puckSurface ? { surface: options.puckSurface } : {})
+  });
   const local = (event: { clientX: number; clientY: number }, rect = canvas.getBoundingClientRect()): Point => {
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
@@ -540,12 +538,7 @@ export function attachInput(
         const session = touchSession;
         if (!touches.size && session) {
           endTouchSession();
-          if (
-            !session.moved &&
-            !session.held &&
-            session.fingers >= 2 &&
-            event.timeStamp - session.start <= touchTapMs
-          ) {
+          if (!session.moved && !session.held && session.fingers >= 2 && event.timeStamp - session.start <= touchTapMs) {
             options.navigate(session.camera);
             options.touchGestures?.tap(session.fingers);
           }
@@ -704,13 +697,7 @@ export function editable(target: EventTarget | null): boolean {
 /** Raw/coalesced events retain stylus axes without routing high-frequency samples through signals. */
 function tabletAxes(event: PointerEvent) {
   return event.pointerType === 'pen'
-    ? {
-        pointerType: event.pointerType,
-        tiltX: event.tiltX,
-        tiltY: event.tiltY,
-        rotation: event.twist,
-        tangentialPressure: event.tangentialPressure
-      }
+    ? { pointerType: event.pointerType, tiltX: event.tiltX, tiltY: event.tiltY, rotation: event.twist, tangentialPressure: event.tangentialPressure }
     : { pointerType: event.pointerType };
 }
 

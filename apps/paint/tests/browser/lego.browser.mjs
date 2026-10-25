@@ -138,6 +138,7 @@ try {
   console.log('PASS chooser renders five previews and applies a look');
 
   const box = page.getByRole('complementary', { name: 'Box of parts' });
+  await checkSheetDrag(page, box);
   await box.locator('[class*="trayBar"]').click();
   const kit = page.locator('[title^="Kit:"]').first();
   await kit.waitFor();
@@ -175,18 +176,30 @@ try {
   const showcaseWorkers = [];
   page.on('worker', (worker) => showcaseWorkers.push(worker.url()));
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(`${url}/paint/lego/parts`);
+  await page.goto(`${url}/paint/lego/parts/`);
   await page.locator('[data-parts-showcase]').waitFor();
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(() =>
     [...document.querySelectorAll('[data-part-kind="color:wheel"] canvas')].every((canvas) => canvas.width > 0)
   );
   await checkShowcase(page);
+  await checkValueText(page);
+  // Keep each complete section in the viewport so screenshots include offscreen canvas layers.
+  await page.locator('header').evaluate((element) => {
+    element.style.position = 'static';
+  });
   for (const mode of ['live', 'edit', 'preview']) {
-    await page
-      .getByRole('region', { name: `${mode} specimens` })
-      .screenshot({ path: path.join(output, `parts-${mode}.png`) });
+    const section = page.getByRole('region', { name: `${mode} specimens` });
+    const height = Math.ceil((await section.boundingBox()).height) + 80;
+    await page.setViewportSize({ width: 1920, height });
+    await section.scrollIntoViewIfNeeded();
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await section.screenshot({ path: path.join(output, `parts-${mode}.png`) });
   }
+  await page.locator('header').evaluate((element) => {
+    element.style.position = '';
+  });
+  await page.setViewportSize({ width: 1920, height: 1200 });
   // This gallery has one shared fixture and must not mutate any existing editor preferences.
   for (const columns of [1, 2, 3, 4, 10]) {
     for (const rows of [1, 2, 3, 4, 10]) {
@@ -364,6 +377,7 @@ async function checkShowcase(tab) {
         hostHeight: host?.height ?? 0,
         canvases: [...figure.querySelectorAll('[data-part-kind="color:wheel"] canvas')].map((canvas) => ({
           backing: canvas.width,
+          capped: !!canvas.parentElement.querySelector('[aria-label="Hue and saturation"]'),
           displayed: Math.round(canvas.getBoundingClientRect().width * devicePixelRatio)
         }))
       };
@@ -378,9 +392,153 @@ async function checkShowcase(tab) {
     );
     for (const canvas of specimen.canvases) {
       assert.ok(
-        Math.abs(canvas.backing - canvas.displayed) <= 1,
+        Math.abs(canvas.backing - Math.min(canvas.capped ? 600 : Infinity, canvas.displayed)) <= 1,
         `picker backing must follow displayed CSS size × DPR: ${JSON.stringify({ specimen: specimen.id, ...canvas })}`
       );
     }
   }
+}
+
+/** Real animated sheet drag must reuse every already-mounted board picker bitmap. */
+async function checkSheetDrag(tab, box) {
+  await tab.evaluate(
+    () =>
+      new Promise((resolve) => {
+        let remaining = 10;
+        const settle = () => (--remaining ? requestAnimationFrame(settle) : resolve());
+        requestAnimationFrame(settle);
+      })
+  );
+  const handle = await box.locator('[class*="trayBar"]').boundingBox();
+  await tab.evaluate(() => {
+    const canvases = [...document.querySelectorAll('[data-part] [data-part-kind="color:wheel"] canvas')];
+    window.pickerDrag = { reallocations: 0, changes: [], blankFrames: 0, frames: 0, costs: [], canvases };
+    for (const name of ['width', 'height']) {
+      const descriptor = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, name);
+      for (const canvas of canvases) {
+        Object.defineProperty(canvas, name, {
+          configurable: true,
+          get() {
+            return descriptor.get.call(this);
+          },
+          set(value) {
+            window.pickerDrag.reallocations++;
+            window.pickerDrag.changes.push({
+              name,
+              old: descriptor.get.call(this),
+              next: value,
+              part: this.closest('[data-part]').dataset.part
+            });
+            descriptor.set.call(this, value);
+          }
+        });
+      }
+    }
+    const raf = window.requestAnimationFrame;
+    window.pickerDrag.raf = raf;
+    window.requestAnimationFrame = (callback) =>
+      raf.call(window, (time) => {
+        const start = performance.now();
+        callback(time);
+        if (callback !== inspect) {
+          window.pickerDrag.costs.push({ time, duration: performance.now() - start });
+        }
+      });
+    const inspect = () => {
+      const state = window.pickerDrag;
+      if (!state.running) {
+        return;
+      }
+      state.frames++;
+      for (const canvas of canvases) {
+        const probe = document.createElement('canvas');
+        probe.width = probe.height = 8;
+        const context = probe.getContext('2d');
+        context.drawImage(canvas, 0, 0, 8, 8);
+        if (!context.getImageData(0, 0, 8, 8).data.some((value, i) => i % 4 === 3 && value > 0)) {
+          state.blankFrames++;
+        }
+      }
+      requestAnimationFrame(inspect);
+    };
+    window.pickerDrag.running = true;
+    requestAnimationFrame(inspect);
+  });
+  const cdp = await tab.context().newCDPSession(tab);
+  await cdp.send('Performance.enable');
+  const metrics = async () =>
+    Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map(({ name, value }) => [name, value]));
+  const before = await metrics();
+  await tab.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await tab.mouse.down();
+  for (let i = 1; i <= 80; i++) {
+    await tab.mouse.move(
+      handle.x + handle.width / 2,
+      handle.y + handle.height / 2 - 400 * Math.sin((Math.PI * i) / 80)
+    );
+    await tab.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+  }
+  await tab.mouse.up();
+  const after = await metrics();
+  await cdp.detach();
+  const result = await tab.evaluate(() => {
+    const state = window.pickerDrag;
+    state.running = false;
+    window.requestAnimationFrame = state.raf;
+    for (const canvas of state.canvases) {
+      delete canvas.width;
+      delete canvas.height;
+    }
+    const costs = new Map();
+    for (const { time, duration } of state.costs) {
+      costs.set(time, (costs.get(time) ?? 0) + duration);
+    }
+    const times = [...costs.values()].sort((a, b) => a - b);
+    return {
+      reallocations: state.reallocations,
+      changes: state.changes,
+      blankFrames: state.blankFrames,
+      frames: state.frames,
+      pickers: state.canvases.length,
+      rafMedianMs: times[Math.floor(times.length / 2)],
+      rafMaxMs: times.at(-1),
+      rafMeanMs: times.reduce((a, b) => a + b, 0) / times.length
+    };
+  });
+  result.scriptMsPerMove = ((after.ScriptDuration - before.ScriptDuration) * 1000) / 80;
+  result.taskMsPerMove = ((after.TaskDuration - before.TaskDuration) * 1000) / 80;
+  assert.ok(result.pickers >= 4, 'drag must exercise mounted picker looks');
+  assert.equal(result.reallocations, 0, 'sheet drag must not resize picker bitmaps');
+  assert.equal(result.blankFrames, 0, 'sheet drag must never expose an empty picker bitmap');
+  await writeFile(path.join(output, 'sheet-drag.json'), JSON.stringify(result, null, 2));
+  console.log('PASS 80-frame sheet drag', result);
+}
+
+/** Minimum-size hex and number fields must display their complete value, including inputs with no overflow metrics. */
+async function checkValueText(tab) {
+  const measurements = await tab
+    .locator('[data-part-kind="color:hex"] input, [data-part-kind^="value:"] input')
+    .evaluateAll((inputs) =>
+      inputs.map((input) => {
+        const style = getComputedStyle(input);
+        const context = document.createElement('canvas').getContext('2d');
+        context.font = style.font;
+        return {
+          specimen: input.closest('[data-specimen]').dataset.specimen,
+          value: input.value,
+          scroll: input.scrollWidth,
+          client: input.clientWidth,
+          text: context.measureText(input.value).width,
+          available: input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+        };
+      })
+    );
+  assert.ok(measurements.length > 30, 'check all value looks and modes');
+  for (const measurement of measurements) {
+    assert.ok(
+      measurement.scroll <= measurement.client && measurement.text <= measurement.available + 1,
+      `clipped value: ${JSON.stringify(measurement)}`
+    );
+  }
+  await writeFile(path.join(output, 'value-text.json'), JSON.stringify(measurements, null, 2));
 }
