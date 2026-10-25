@@ -121,9 +121,11 @@ it('keeps the complete mounted catalogue quiet during pen input and unrelated br
   const fixture = owned(createCatalogueFixture);
   await fixture.tools.loaded;
   const session = owned(createPaintSession);
+  const [layerState, setLayerState] = owned(() => createSignal(session.engine.state()));
   const services = owned(() =>
     createLegoServices({
       ...session,
+      engine: { ...session.engine, state: layerState },
       tools: fixture.tools,
       brush: fixture.tools.brush,
       library: fixture.library,
@@ -282,10 +284,16 @@ it('keeps the complete mounted catalogue quiet during pen input and unrelated br
   expect(size.colorReruns).toBe(0);
   expect(size.presetRenders).toBe(0);
   expect(size.pickerPaints).toBe(0);
+  const layers = await measure(() => {
+    setLayerState((state) => ({ ...state, layers: state.layers.map((layer) => ({ ...layer, name: 'Renamed' })) }));
+  });
+  expect(layers.colorReruns).toBe(0);
+  expect(layers.pickerPaints).toBe(0);
+  expect(layers.presetRenders).toBe(0);
   const color = await measure(() => {
     services.color.set('#c4463a');
   });
-  console.log('LEGO budgets', { pen, size, color });
+  console.log('LEGO budgets', { pen, size, layers, color });
   // RC.13 ceilings include facade work; reruns now count only descendants of mounted part bindings.
   // Ceilings leave 20% room; positive controls prove the counters see real updates.
   expect(size.reruns).toBeGreaterThan(0);

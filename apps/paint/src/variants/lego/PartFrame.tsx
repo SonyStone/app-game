@@ -29,6 +29,8 @@ export function PartFrame(props: {
   popup?: boolean;
   onPopup?: (anchor: Element, popup: Popup) => void;
   onOpen?: (anchor: Element) => void;
+  /** Owned panel state, resolved by the board rather than the document services. */
+  open?: boolean;
   onDone?: () => void;
   children?: JSX.Element;
 }) {
@@ -102,6 +104,9 @@ function Binding(props: Parameters<typeof PartFrame>[0]) {
       if (frame.mode === 'live') {
         services.run(() => props.onPopup?.(anchor, popup));
       }
+    },
+    get open() {
+      return props.open ?? false;
     },
     onOpen: (anchor) => {
       if (frame.mode === 'live') {

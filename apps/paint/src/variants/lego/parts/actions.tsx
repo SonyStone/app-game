@@ -1,11 +1,11 @@
-import { For, merge, onSettled, Show } from 'solid-js';
-import { LayersPanel } from '../../../features/layers';
+import { For, merge, Show } from 'solid-js';
 import { SketchIcon, type SketchIconName } from '../../../shared/ui/SketchIcon';
 import { BrushLibrary } from '../../procreate/BrushLibrary';
 import popover from '../../procreate/Popover.module.css';
 import procreate from '../../procreate/ProcreateStudio.module.css';
 import type { Span } from '../board';
 import { FileMenu } from '../FileMenu';
+import { layersKit } from '../layersKit';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
 import { definePart, type PartBinding } from './definition';
@@ -110,35 +110,18 @@ export const actionParts = [
     section: 'Tools',
     label: 'Layers',
     icon: 'layers',
-    looks: {
-      looks: [
-        { id: 'button', label: 'Button', min: { columns: 1, rows: 1 } },
-        { id: 'panel', label: 'Panel', min: { columns: 7, rows: 8 } }
-      ],
-      auto: (span) => (span.columns >= 7 && span.rows >= 8 ? 'panel' : 'button')
-    },
-    needs: (s, f) =>
-      merge(layerNeeds(s, f), {
-        get span() {
-          return f.span;
-        },
-        get full() {
-          return f.look === 'panel';
-        },
-        onPress: (anchor: Element) => f.onPopup(anchor, { kind: 'part', partKind: f.kind })
-      }),
-    View: (props) => (
-      <Show
-        when={props.full}
-        fallback={<ActionPart label="Layers" icon="layers" span={props.span} onPress={props.onPress} />}
-      >
-        <LayerPanelPart {...props} fillContainer />
-      </Show>
-    ),
-    popup: {
-      needs: layerNeeds,
-      View: LayerPanelPart
-    }
+    owned: { parts: layersKit.parts, window: { name: layersKit.name } },
+    looks: { looks: [{ id: 'button', label: 'Button', min: { columns: 1, rows: 1 } }], auto: () => 'button' },
+    needs: (_s, f) => ({
+      get span() {
+        return f.span;
+      },
+      get active() {
+        return f.open;
+      },
+      onPress: f.onOpen
+    }),
+    View: (props) => <ActionPart {...props} label="Layers" icon="layers" />
   }),
   action('undo', 'Undo', 'undo', (s, f) => ({
     get disabled() {
@@ -297,41 +280,3 @@ const symmetryModes = [
   { id: 'radial', label: 'Radial' },
   { id: 'mandala', label: 'Mandala' }
 ] as const;
-
-/** Both layer presentations use guarded document edits and acquire images only outside previews. */
-function layerNeeds(services: LegoServices, frame: PartBinding) {
-  return {
-    get state() {
-      return services.layers.state();
-    },
-    get ready() {
-      return services.layers.ready();
-    },
-    get acquireThumbnails() {
-      return frame.mode !== 'preview';
-    },
-    onAction: frame.command(services.layers.action),
-    onLinearBlending: frame.command(services.layers.blending),
-    wantThumbnails: services.layers.wantThumbnails,
-    thumbnail: services.layers.thumbnail
-  };
-}
-
-/** Owns thumbnails for the mounted panel lifetime outside previews, including compact/full resize transitions. */
-function LayerPanelPart(props: ReturnType<typeof layerNeeds> & { fillContainer?: boolean }) {
-  return (
-    <div class={[styles.studioCard, { [styles.inlineLayers!]: props.fillContainer }]}>
-      <Show when={props.acquireThumbnails}>
-        <WantLayerThumbnails want={props.wantThumbnails} />
-      </Show>
-      <LayersPanel {...props} thumbnail={props.acquireThumbnails ? props.thumbnail : undefined} />
-    </div>
-  );
-}
-
-/** Resource acquisition writes session state, so it belongs after settlement in the non-preview subtree. */
-function WantLayerThumbnails(props: { want: LegoServices['layers']['wantThumbnails'] }) {
-  onSettled(() => props.want(26));
-
-  return undefined;
-}

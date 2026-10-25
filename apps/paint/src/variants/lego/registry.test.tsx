@@ -91,7 +91,11 @@ it.each(['edit', 'preview'] satisfies PartMode[])(
   '%s bindings never run commands or write preferences, even with scripted events',
   (mode) => {
     const { services } = owned(createTestServices);
-    const mutations = collectMocks(services);
+    const mutations = collectMocks(services).filter(
+      (command) =>
+        mode === 'preview' ||
+        (!Object.is(command, services.layers.wantThumbnails) && !Object.is(command, services.layers.thumbnail))
+    );
     const storage = vi.spyOn(Storage.prototype, 'setItem');
     const timers = vi.spyOn(globalThis, 'setTimeout');
     for (const definition of partDefinitions) {
@@ -154,74 +158,70 @@ it.each(['live', 'edit', 'preview'] satisfies PartMode[])('renders each definiti
   expect(errors).not.toHaveBeenCalled();
 });
 
-it('keeps thumbnails through Edit, releases on resize and renders previews without acquiring', () => {
+it('owns list thumbnails through Edit and resize, releases in previews, and guards list commands', () => {
   const { services } = owned(createTestServices);
   const release = vi.fn();
   services.layers.wantThumbnails = vi.fn(() => release);
-  const [span, setSpan] = createSignal({ columns: 7, rows: 8 });
+  const [span, setSpan] = createSignal({ columns: 5, rows: 5 });
   const [mode, setMode] = createSignal<PartMode>('preview');
-  mount(() => (
+  const dispose = mount(() => (
     <LegoServicesContext value={services}>
-      <PartFrame kind="action:layers" span={span()} mode={mode()} immediate />
+      <PartFrame kind="layers:list" span={span()} mode={mode()} immediate />
     </LegoServicesContext>
   ));
   expect(services.layers.wantThumbnails).not.toHaveBeenCalled();
-  expect(document.querySelector('[aria-label="Add layer"]')).not.toBeNull();
-  document.querySelector<HTMLButtonElement>('[aria-label="Add layer"]')!.click();
+  document.querySelector<HTMLButtonElement>('[aria-label^="Select "]')!.click();
   expect(services.layers.action).not.toHaveBeenCalled();
   setMode('live');
   flush();
-  expect(document.querySelector('[aria-label="Add layer"]')).not.toBeNull();
   expect(services.layers.wantThumbnails).toHaveBeenCalledExactlyOnceWith(26);
-  setSpan({ columns: 3, rows: 1 });
-  flush();
-  expect(release).toHaveBeenCalledOnce();
-  expect(document.querySelector('[aria-label="Add layer"]')).toBeNull();
-  setSpan({ columns: 7, rows: 8 });
-  flush();
-  expect(services.layers.wantThumbnails).toHaveBeenCalledTimes(2);
+  setSpan({ columns: 1, rows: 3 });
   setMode('edit');
   flush();
-  expect(release).toHaveBeenCalledOnce();
-  expect(services.layers.wantThumbnails).toHaveBeenCalledTimes(2);
-  expect(document.querySelector('[aria-label="Add layer"]')).not.toBeNull();
-  setMode('live');
-  flush();
-  expect(release).toHaveBeenCalledOnce();
-  expect(services.layers.wantThumbnails).toHaveBeenCalledTimes(2);
+  expect(services.layers.wantThumbnails).toHaveBeenCalledOnce();
+  expect(release).not.toHaveBeenCalled();
   setMode('preview');
   flush();
-  expect(release).toHaveBeenCalledTimes(2);
+  expect(release).toHaveBeenCalledOnce();
 });
 
-it('routes one layer opacity change per scrub gesture through the guarded layer command', () => {
-  const { services } = owned(createTestServices);
-  mount(() => (
-    <LegoServicesContext value={services}>
-      <PartFrame kind="action:layers" span={{ columns: 7, rows: 8 }} />
-    </LegoServicesContext>
-  ));
-  const input = document.querySelector<HTMLInputElement>('[aria-label="Layer opacity"]')!;
-  input.setPointerCapture = vi.fn();
-  input.hasPointerCapture = vi.fn(() => true);
-  const pointer = (type: string, x: number) => {
-    const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x });
-    Object.defineProperties(event, { pointerId: { value: 1 }, pointerType: { value: 'pen' } });
-    input.dispatchEvent(event);
-    flush();
-  };
-  pointer('pointerdown', 200);
-  pointer('pointermove', 180);
-  pointer('pointermove', 160);
-  expect(services.layers.action).not.toHaveBeenCalled();
-  pointer('pointerup', 160);
-  expect(services.layers.action).toHaveBeenCalledOnce();
-  expect(services.layers.action).toHaveBeenCalledWith({
-    type: 'update',
-    id: services.layers.state().activeId,
-    patch: { opacity: expect.any(Number) }
-  });
-});
+it.each(['number', 'knob', 'slider'])(
+  'routes one layer opacity change per %s gesture through the guarded layer command',
+  (look) => {
+    const { services } = owned(createTestServices);
+    mount(() => (
+      <LegoServicesContext value={services}>
+        <PartFrame kind="value:layer-opacity" span={{ columns: 2, rows: 1 }} look={look} />
+      </LegoServicesContext>
+    ));
+    const input = document.querySelector<HTMLInputElement>('[aria-label="Layer opacity"]')!;
+    input.getBoundingClientRect = () => new DOMRect(0, 0, 240, 44);
+    input.setPointerCapture = vi.fn();
+    input.hasPointerCapture = vi.fn(() => true);
+    const pointer = (type: string, x: number) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x });
+      Object.defineProperties(event, { pointerId: { value: 1 }, pointerType: { value: 'pen' } });
+      input.dispatchEvent(event);
+      flush();
+    };
+    pointer('pointerdown', 200);
+    pointer('pointermove', 180);
+    pointer('pointermove', 160);
+    expect(services.layers.action).not.toHaveBeenCalled();
+    pointer('pointerup', 160);
+    expect(services.layers.action).toHaveBeenCalledOnce();
+    expect(services.layers.action).toHaveBeenCalledWith({
+      type: 'update',
+      id: services.layers.state().activeId,
+      patch: { opacity: expect.any(Number) }
+    });
+    vi.mocked(services.layers.action).mockClear();
+    pointer('pointerdown', 200);
+    pointer('pointermove', 140);
+    pointer('pointercancel', 140);
+    expect(services.layers.action).not.toHaveBeenCalled();
+  }
+);
 
 it('binds symmetry modes, QuickShape and pressure through their narrow commands', () => {
   const { services } = owned(createTestServices);
@@ -370,6 +370,7 @@ it('adds a channel using one spec, including fraction edits, number edits and ex
   } satisfies ValueChannel;
   const definition = defineValuePart(channel);
   const frame: PartBinding = {
+    open: false,
     kind: 'value:flow',
     span: { columns: 3, rows: 1 },
     look: 'slider',

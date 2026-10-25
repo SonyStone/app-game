@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { wheelToHex } from '../../../features/color-wheel';
 import { hsvToHex, luminance, type Hsv } from '../../../features/color/hsv';
 import { pressHandlers, type Press } from '../../../shared/ui/pressHandlers';
@@ -30,6 +30,11 @@ export type ValueChannel = {
   read: (services: LegoServices) => number;
   write: (services: LegoServices, value: number, hsv: Hsv) => void;
   colored: boolean;
+  /** Holds input locally and sends one undoable command at gesture completion. */
+  deferred?: boolean;
+  /** Captures the target identity at gesture start, so a selection change cannot redirect a pending edit. */
+  capture?: (services: LegoServices) => (value: number, hsv: Hsv) => void;
+  section?: 'Layers';
   scale?: 'log';
   wrap?: boolean;
   /** Defaults to linear interpolation between min and max. */
@@ -43,6 +48,24 @@ export type ValueChannel = {
 };
 
 const channels = [
+  {
+    id: 'layer-opacity',
+    label: 'Layer opacity',
+    short: 'Op',
+    unit: '%',
+    min: 0,
+    max: () => 100,
+    read: (s) => s.layers.state().layers.find((layer) => layer.id === s.layers.state().activeId)!.opacity * 100,
+    write: (s, value) =>
+      s.layers.action({ type: 'update', id: s.layers.state().activeId, patch: { opacity: value / 100 } }),
+    capture: (s) => {
+      const id = s.layers.state().activeId;
+      return (value) => s.layers.action({ type: 'update', id, patch: { opacity: value / 100 } });
+    },
+    colored: false,
+    deferred: true,
+    section: 'Layers'
+  },
   {
     id: 'size',
     label: 'Size',
@@ -137,7 +160,7 @@ export function defineValuePart(channel: ValueChannel) {
   return definePart({
     kind: `value:${channel.id}`,
     family: 'value',
-    section: 'Values',
+    section: channel.section ?? 'Values',
     label: channel.label,
     looks: { looks, auto: (span) => (span.columns === 1 && span.rows === 1 ? 'knob' : 'slider') },
     needs: (services, frame) => valueNeeds(services, frame, channel),
@@ -282,12 +305,27 @@ function ValueControl(
 /** Selects one channel's observations and guarded edits, preserving exact gesture cancellation. */
 function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueChannel) {
   const { color } = services;
-  const value = () => channel.read(services);
+  const [draft, setDraft] = createSignal<number>();
+  const value = () => draft() ?? channel.read(services);
   const max = () => channel.max(services);
   const fraction = () => channel.toFraction?.(value(), max()) ?? (value() - channel.min) / (max() - channel.min);
   let start: { value: number; hsv: Hsv; color: string };
-  const write = (next: number, hsv: Hsv) => channel.write(services, next, hsv);
+  let captured: ReturnType<NonNullable<ValueChannel['capture']>> | undefined;
+  const write = (next: number, hsv: Hsv) => {
+    if (channel.deferred) {
+      setDraft(next);
+    } else {
+      channel.write(services, next, hsv);
+    }
+  };
   const commit = () => {
+    const next = draft();
+    setDraft(undefined);
+    if (channel.deferred && next !== undefined && next !== start?.value) {
+      (captured ?? ((value: number, hsv: Hsv) => channel.write(services, value, hsv)))(next, color.hsv());
+    }
+
+    captured = undefined;
     if (channel.colored) {
       color.recent.remember(color.value());
     }
@@ -325,6 +363,8 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
       return channel.track?.(services);
     },
     onStart: frame.command(() => {
+      setDraft(undefined);
+      captured = channel.capture?.(services);
       start = { value: value(), hsv: color.hsv(), color: color.value() };
     }),
     onInput: frame.command((next: number) =>
@@ -337,7 +377,10 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
     }),
     onCommit: frame.command(commit),
     onCancel: frame.command(() => {
-      if (channel.colored) {
+      if (channel.deferred) {
+        setDraft(undefined);
+        captured = undefined;
+      } else if (channel.colored) {
         channel.cancel?.(services, start.value);
         color.restore(start.color);
       } else {

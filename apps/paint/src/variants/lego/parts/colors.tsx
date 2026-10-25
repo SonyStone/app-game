@@ -12,6 +12,7 @@ import {
   WheelPart
 } from '../colorParts';
 import type { LegoServices } from '../LegoServices';
+import { swatchPanelParts } from '../swatchPanelParts';
 import { definePart, type PartBinding } from './definition';
 
 /** Static color definitions. The views receive controlled colors/settings and guarded commands only. */
@@ -21,6 +22,7 @@ export const colorParts = [
     family: 'color',
     section: 'Color',
     label: 'Swatch',
+    owned: { parts: swatchPanelParts },
     needs: (s, f) => ({
       get color() {
         return s.color.value();

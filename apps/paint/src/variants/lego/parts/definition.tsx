@@ -1,7 +1,7 @@
 import type { JSX } from '@solidjs/web';
 import type { Component } from 'solid-js';
 import type { SketchIconName } from '../../../shared/ui/SketchIcon';
-import type { Span } from '../board';
+import type { Panel, Span } from '../board';
 import type { LegoServices } from '../LegoServices';
 import type { LookSpec } from '../looks';
 
@@ -23,6 +23,8 @@ export type PartBinding = {
   onPopup: (anchor: Element, popup: Popup) => void;
   /** Opens the part's owned panel in live mode. */
   onOpen: (anchor: Element) => void;
+  /** Whether this part's owned folder or window is currently open. */
+  open: boolean;
   /** Closes the current popup after a live command or file selection. */
   onDone: () => void;
 };
@@ -39,7 +41,9 @@ export function definePart<N extends object, P extends object = N>(spec: {
   family: 'color' | 'value' | 'action' | 'preset';
   label: string;
   icon?: SketchIconName;
-  section: 'Tools' | 'Color' | 'Values' | 'Brushes';
+  section: 'Tools' | 'Color' | 'Values' | 'Brushes' | 'Layers';
+  /** Composition supplied once when a new owner is taken from the box or spawn menu. */
+  owned?: Pick<Panel, 'parts' | 'window'>;
   looks?: { looks: readonly LookSpec[]; auto: (span: Span) => string };
   needs: (services: LegoServices, frame: PartBinding) => N;
   View: Component<N>;
@@ -69,5 +73,5 @@ export function definePart<N extends object, P extends object = N>(spec: {
 /** The uniform registry entry erases props only after `definePart` has checked needs against its view. */
 export type PartDefinition = Pick<
   ReturnType<typeof definePart>,
-  'kind' | 'family' | 'label' | 'icon' | 'section' | 'looks' | 'hasPopup' | 'render'
+  'kind' | 'family' | 'label' | 'icon' | 'section' | 'looks' | 'owned' | 'hasPopup' | 'render'
 >;
