@@ -77,6 +77,11 @@ export interface PsdEditorSession {
    * v2-carried-type additionally requires text gamma and the complete active PostScript inventory. Untouched
    * type records/caches/Txt2 stay byte-identical and compare against Photoshop's reopening of the source;
    * remaining observations keep v1's native edit/save reference. Type targets/ancestors and prior revisions refuse.
+   * v3-carried-untouched carries independent complete layer records and channel streams byte-identically.
+   * Edited subtrees, ancestors and clipping chains remain dependent. It requires writers, the full active-font
+   * inventory and a localized Background name. Single top-layer structural edits keep existing clipping runs;
+   * hidden RGB8 pixels and selected-hidden opacity retain named refusals. Visible same-bounds opaque RGB16
+   * process replacement retains admitted metadata. No contract falls back to another after refusal.
    * v2 also admits bounded Background lifecycles, including opacity promotion with the actual localized name
    * and the resulting ID's explicit time. Lock-protected operations, hidden unselected targets, Background moves/grouping,
    * unsupported histories/profiles, mixed-target/structural batches and active OCIO return named atomic refusals.
@@ -151,7 +156,7 @@ export type PsdExactRasterTreeEdit = Parameters<EditorHandle['editRasterTreeExac
 /** Explicit host save operands, per-layer edit times and optional original sRGB preview profile. No defaults are invented. */
 export type PsdReopenSaveContext = NonNullable<Parameters<EditorHandle['editRasterTreeExact']>[1]>;
 
-/** v1 native edit/save reference or v2 source-relative carried type; callers opt in explicitly. */
+/** v1 native save, v2 carried type or v3 carried untouched layers; callers opt in explicitly. */
 export type PsdReopenSaveContract = PsdReopenSaveContext['contract'];
 
 /**
