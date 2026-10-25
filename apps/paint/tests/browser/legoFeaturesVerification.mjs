@@ -1,3 +1,4 @@
+import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 
@@ -60,6 +61,10 @@ async function verifyControls(page, context, url, output) {
   const box = page.getByRole('complementary', { name: 'Box of parts' });
   // Each placement closes the sheet. Drag the actual box tiles into free board space.
   for (const [i, title] of ['Symmetry', 'QuickShape', 'Pressure calibration', 'Layers'].entries()) {
+    const placed = page.locator(
+      `[data-part-kind="action:${['symmetry', 'quickshape', 'pressure', 'layers'][i]}"][data-mode="edit"]`
+    );
+    const previous = await placed.count();
     await box.locator('[class*="trayBar"]').click();
     const tile = box.locator(`div[title="${title}"]`);
     await tile.scrollIntoViewIfNeeded();
@@ -68,7 +73,8 @@ async function verifyControls(page, context, url, output) {
     await page.mouse.down();
     await page.mouse.move(600 + i * 130, 350, { steps: 16 });
     await page.mouse.up();
-    await page.waitForTimeout(300);
+    await expect(box).toHaveAttribute('data-closed', '');
+    await expect(placed).toHaveCount(previous + 1);
   }
   await page.screenshot({ path: `${output}/features-placed-from-box.png` });
   const board = await page.evaluate(() => JSON.parse(localStorage.getItem('paint.lego')).board);
@@ -128,7 +134,7 @@ async function verifyControls(page, context, url, output) {
     await quick.click();
   }
 
-  assert.equal(await quick.getAttribute('aria-pressed'), 'false');
+  await expect(quick).toHaveAttribute('aria-pressed', 'false');
   await stroke(true);
   assert.equal(await page.evaluate(() => window.paintCommands.filter((c) => c.type === 'replace-stroke').length), 0);
   await quick.click();
@@ -268,19 +274,19 @@ async function verifyLayers(page, context, url, output) {
   assert.ok(geometry.bottom <= 992 && geometry.right <= 1432, JSON.stringify(geometry));
   await page.screenshot({ path: `${output}/layers-blend-top-layer.png` });
   await page.keyboard.press('ArrowDown');
-  assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Multiply');
+  await expect(menu.getByRole('option', { name: 'Multiply', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   await menu.waitFor({ state: 'detached' });
   await page.waitForFunction(
     () =>
       window.paintState.document.layers.find((l) => l.id === window.paintState.document.activeId).blend === 'multiply'
   );
-  assert.equal(await blend.innerText(), 'Multiply');
+  await expect(blend).toHaveText('Multiply');
   await blend.click();
   await menu.waitFor();
   await page.keyboard.press('Escape');
   await menu.waitFor({ state: 'detached' });
-  assert.equal(await blend.evaluate((e) => e === document.activeElement), true);
+  await expect(blend).toBeFocused();
   await blend.click();
   await menu.waitFor();
   await page.mouse.click(500, 500);
@@ -327,11 +333,11 @@ async function verifyLayers(page, context, url, output) {
     await page.waitForTimeout(16);
   }
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await page.waitForTimeout(350);
+  await expect.poll(() => list.evaluate((element) => element.scrollTop)).toBeGreaterThan(30);
   const scrollTop = await list.evaluate((e) => e.scrollTop);
   assert.ok(scrollTop > 30, `touch scrollTop=${scrollTop}`);
   await page.screenshot({ path: `${output}/layers-touch-scroll.png` });
-  assert.ok((await panel.locator('img').count()) > 0, 'live thumbnails arrive');
+  await expect(panel.locator('img')).toHaveCount(await page.evaluate(() => window.paintState.document.layers.length));
   const thumbnails = await panel.locator('img').evaluateAll((images) => images.map((image) => image.src));
   await panel.locator('img').evaluateAll((images) =>
     images.forEach((image) => {
@@ -349,21 +355,33 @@ async function verifyLayers(page, context, url, output) {
   await page.getByRole('button', { name: 'Look', exact: true }).click();
   const choices = page.locator('[data-part-kind="Looks"]');
   await choices.getByRole('heading', { name: 'Look at 7×8' }).waitFor();
-  assert.equal(await choices.locator('[data-part-kind="action:layers"] .paint-layers').count(), 1);
+  // Previews mount once the visibility observer sees them, so wait instead of counting at once.
+  const panelPreview = choices.locator('[data-part-kind="action:layers"] .paint-layers');
+  await panelPreview.waitFor();
+  assert.equal(await panelPreview.count(), 1);
   await page.screenshot({ path: `${output}/layers-look-chooser.png` });
   await page.keyboard.press('Escape');
   const handle = page.getByLabel('Resize', { exact: true });
   const resize = async (dx, dy) => {
+    const previous = await page.evaluate(
+      () => JSON.parse(localStorage.getItem('paint.lego')).board.panels[0].parts[0].span
+    );
     const r = await handle.boundingBox();
     await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
     await page.mouse.down();
     await page.mouse.move(r.x + r.width / 2 + dx, r.y + r.height / 2 + dy, { steps: 20 });
     await page.mouse.up();
-    await page.waitForTimeout(250);
+    await page.waitForFunction(
+      ({ columns, rows }) => {
+        const span = JSON.parse(localStorage.getItem('paint.lego')).board.panels[0].parts[0].span;
+        return span.columns === columns && span.rows === rows;
+      },
+      { columns: previous.columns + dx / 48, rows: previous.rows + dy / 48 }
+    );
   };
   await resize(-288, -336);
   await page.getByRole('button', { name: 'Done', exact: true }).click();
-  assert.equal(await add.count(), 0);
+  await expect(add).toHaveCount(0);
   await panel.getByRole('button', { name: 'Layers', exact: true }).click();
   await page.getByRole('button', { name: 'Add layer', exact: true }).waitFor();
   await page.screenshot({ path: `${output}/layers-compact-popup.png` });
@@ -374,7 +392,7 @@ async function verifyLayers(page, context, url, output) {
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await add.waitFor();
   await page.screenshot({ path: `${output}/layers-inline-restored.png` });
-  await page.waitForTimeout(500);
+  await expect(panel.locator('img')).toHaveCount(await page.evaluate(() => window.paintState.document.layers.length));
   await page.evaluate(() => {
     window.paintEvents = [];
   });
@@ -605,15 +623,23 @@ async function verifySymmetrySizes(page, url, output) {
       ),
     spans
   );
-  await page.goto(`${url}/variants.html#lego`);
   await page.reload();
-  const chooser = page.getByRole('combobox', { name: 'Paint symmetry mode' });
-  await chooser.waitFor();
-  await page.waitForFunction(() => window.paintState?.document.layers.length);
+  const chooser = page
+    .locator('[data-part="symmetry-2"]')
+    .getByRole('combobox', { name: 'Paint symmetry mode', exact: true });
+  await expect(chooser).toHaveCount(1);
+  // Enabled follows canUpdateSymmetry, after restoration and startup brush preparation.
+  await page.waitForFunction(() => !document.querySelector('[data-part="symmetry-2"] select')?.disabled);
   await chooser.selectOption('off');
+  const buttons = page.locator('[data-part] [data-mode="live"]').getByRole('button', { name: 'Symmetry', exact: true });
+  await expect(buttons).toHaveCount(spans.length);
+  await expect(chooser).toHaveValue('off');
+  for (const button of await buttons.all()) {
+    await expect(button).toHaveAttribute('aria-pressed', 'false');
+  }
   await page.waitForFunction(() =>
-    [...document.querySelectorAll('[aria-label="Symmetry"]')].every(
-      (button) => button.getAttribute('aria-pressed') === 'false'
+    window.paintCommands.some(
+      (command) => command.type === 'feature' && command.feature === 'symmetry' && command.command.mode === 'off'
     )
   );
   for (const [i, span] of spans.entries()) {
@@ -624,9 +650,7 @@ async function verifySymmetrySizes(page, url, output) {
     await part.screenshot({ path: `${output}/symmetry-${span.columns}x${span.rows}-off.png` });
   }
   await chooser.selectOption('horizontal');
-  await page.waitForFunction(
-    () => document.querySelector('[data-part="symmetry-1"] button').textContent === 'Horizontal'
-  );
+  await expect(page.locator('[data-part="symmetry-1"] button')).toHaveText('Horizontal');
   assert.equal(await page.locator('[data-part="symmetry-1"] button').innerText(), 'Horizontal');
   assert.equal(await page.locator('[data-part="symmetry-2"] button').innerText(), 'Symmetry');
   await page.screenshot({ path: `${output}/symmetry-sizes-active.png` });

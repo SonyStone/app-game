@@ -90,7 +90,12 @@ export function createCatalogueFixture() {
     },
     tools: { current: createMemo(tools.tool), preset: createMemo(tools.preset), toggle: () => true },
     history: { canUndo: createMemo(() => true), canRedo: createMemo(() => false), undo: () => {}, redo: () => {} },
-    symmetry: { mode: createMemo(() => 'off' as const), setMode: () => {}, toggle: () => {} },
+    symmetry: {
+      mode: createMemo(() => 'off' as const),
+      canUpdate: createMemo(() => true),
+      setMode: () => {},
+      toggle: () => {}
+    },
     quickShape: { enabled: createMemo(() => true), toggle: () => {} },
     windows: { isOpen: () => false, toggle: () => {} },
     presets: {

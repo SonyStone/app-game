@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test';
+import { chromium, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer as createNetServer } from 'node:net';
@@ -130,8 +130,10 @@ try {
   await page.getByRole('button', { name: 'Look', exact: true }).click();
   await page.getByRole('heading', { name: 'Look at 2×2' }).waitFor();
   const choices = page.locator('[data-part-kind="Looks"] [data-mode="preview"]');
-  await choices.first().locator(':scope > *').waitFor();
-  assert.equal(await choices.count(), 5);
+  await expect(choices).toHaveCount(5);
+  for (const choice of await choices.all()) {
+    await choice.locator(':scope > *').waitFor();
+  }
   await page.screenshot({ path: path.join(output, 'look-chooser.png') });
   await page
     .locator('[data-part-kind="Looks"] button')
@@ -182,15 +184,14 @@ try {
   await page.goto(`${url}/paint/lego/parts/`);
   await page.locator('[data-parts-showcase]').waitFor();
   await page.evaluate(() => document.fonts.ready);
-  await page.waitForFunction(() =>
-    [...document.querySelectorAll('[data-part-kind="color:wheel"] canvas')].every((canvas) => canvas.width > 0)
-  );
+
   await checkShowcase(page);
   const panelPreview = page
     .getByRole('region', { name: 'preview specimens' })
     .locator('[data-specimen]')
     .filter({ has: page.locator('[data-part-kind="action:layers"] .paint-layers') });
-  assert.equal(await panelPreview.count(), 1, 'Panel look renders the inline panel in preview');
+  await expect(panelPreview).toHaveCount(1);
+  await panelPreview.waitFor();
   await panelPreview.screenshot({ path: path.join(output, 'layers-panel-preview.png') });
   await checkValueText(page);
   // Keep each complete section in the viewport so screenshots include offscreen canvas layers.
@@ -369,6 +370,18 @@ async function startServer(appRoot) {
 
 /** Checks real specimen content, including transformed backing sizes; error and missing tiles stay measurable. */
 async function checkShowcase(tab) {
+  // ResizeObserver and picker rendering can finish after the control's change event.
+  await tab.waitForFunction(() => {
+    const canvases = [...document.querySelectorAll('[data-part-kind="color:wheel"] canvas')];
+    return (
+      canvases.length > 0 &&
+      canvases.every((canvas) => {
+        const capped = !!canvas.parentElement.querySelector('[aria-label="Hue and saturation"]');
+        const displayed = Math.round(canvas.getBoundingClientRect().width * devicePixelRatio);
+        return Math.abs(canvas.width - Math.min(capped ? 600 : Infinity, displayed)) <= 1;
+      })
+    );
+  });
   assert.equal(
     await tab.locator('[aria-label^="Broken part:"]').count(),
     3,

@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { defaultCamera } from '@app-game/paint-core/camera';
+import { createDocument } from '@app-game/paint-core/document';
+import { defaultPaintSymmetry } from '@app-game/paint-core/symmetry';
 import { render } from '@solidjs/web';
 import 'fake-indexeddb/auto';
 import { ok } from 'neverthrow';
@@ -329,6 +332,70 @@ it('session color commands keep picker and mixing-palette policies distinct', ()
   session.setColor('#654321');
   flush();
   expect(session.tool()).toBe('brush');
+});
+
+it('disables symmetry until the restored document accepts commands, including after a renderer failure', async () => {
+  storeParts(['action:symmetry', 'action:symmetry']);
+  const saved = JSON.parse(localStorage.getItem('paint.lego')!);
+  saved.board.panels[0].parts[1].span = { columns: 2, rows: 2 };
+  localStorage.setItem('paint.lego', JSON.stringify(saved));
+  mount();
+  const session = wiring.session!;
+  const chooser = document.querySelector<HTMLSelectElement>('[aria-label="Paint symmetry mode"]')!;
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="Symmetry"]')];
+
+  // The worker reports document state before ready; restored layers alone cannot authorize edits.
+  wiring.handlers!.message({
+    type: 'state',
+    document: createDocument().state(),
+    camera: defaultCamera(),
+    features: { symmetry: { ...defaultPaintSymmetry(), mode: 'mandala' } },
+    saved: true,
+    saveState: 'saved',
+    gpuBytes: 0,
+    residentTiles: 0,
+    renderMs: 0
+  });
+  flush();
+  expect(session.engine.state().layers).toHaveLength(1);
+  expect(session.canUpdateSymmetry()).toBe(false);
+  expect(chooser.value).toBe('mandala');
+  expect(chooser.disabled).toBe(true);
+
+  for (const button of buttons) {
+    expect(button.disabled).toBe(true);
+    button.click();
+  }
+
+  flush();
+  expect(session.symmetry.symmetry().mode).toBe('mandala');
+  wiring.handlers!.message({ type: 'ready' });
+  flush();
+  expect(chooser.disabled).toBe(true);
+  await vi.waitFor(() => {
+    flush();
+    expect(chooser.disabled).toBe(false);
+  });
+  chooser.value = 'off';
+  chooser.dispatchEvent(new Event('change', { bubbles: true }));
+  flush();
+  expect(session.symmetry.symmetry().mode).toBe('off');
+
+  for (const button of buttons) {
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+  }
+
+  buttons[0]!.click();
+  flush();
+  expect(chooser.value).toBe('vertical');
+  wiring.handlers!.message({ type: 'error', recoverable: true, message: 'Renderer stopped' });
+  flush();
+  expect(chooser.disabled).toBe(true);
+
+  for (const button of buttons) {
+    expect(button.disabled).toBe(true);
+  }
 });
 
 it.each(['file', 'layers', 'brushes'])('records the actual %s part popup name', (name) => {

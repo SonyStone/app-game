@@ -72,6 +72,9 @@ export const actionParts = [
       get mode() {
         return s.symmetry.mode();
       },
+      get disabled() {
+        return !s.symmetry.canUpdate();
+      },
       get showModes() {
         return f.look === 'modes';
       },
@@ -243,6 +246,8 @@ function SymmetryPart(props: {
   span: Span;
   mode: ReturnType<LegoServices['symmetry']['mode']>;
   showModes: boolean;
+  /** Prevents native input changes while the session rejects document commands. */
+  disabled: boolean;
   onToggle: () => void;
   onMode: LegoServices['symmetry']['setMode'];
 }) {
@@ -253,6 +258,7 @@ function SymmetryPart(props: {
         icon="symmetry"
         span={props.span}
         active={props.mode !== 'off'}
+        disabled={props.disabled}
         status={
           props.mode === 'off' || props.showModes
             ? undefined
@@ -263,6 +269,7 @@ function SymmetryPart(props: {
       <Show when={props.showModes}>
         <select
           aria-label="Paint symmetry mode"
+          disabled={props.disabled}
           value={props.mode}
           onChange={(event) => {
             const mode = symmetryModes.find((mode) => mode.id === event.currentTarget.value);

@@ -42,7 +42,12 @@ export function createTestServices() {
     },
     tools: { current: createMemo(() => 'brush' as const), preset: createMemo(() => ''), toggle: vi.fn(() => true) },
     history: { canUndo: createMemo(() => true), canRedo: createMemo(() => true), undo: vi.fn(), redo: vi.fn() },
-    symmetry: { mode: createMemo(() => 'off' as const), setMode: vi.fn(), toggle: vi.fn() },
+    symmetry: {
+      mode: createMemo(() => 'off' as const),
+      canUpdate: createMemo(() => true),
+      setMode: vi.fn(),
+      toggle: vi.fn()
+    },
     quickShape: { enabled: createMemo(() => true), toggle: vi.fn() },
     windows: { isOpen: () => false, toggle: vi.fn() },
     presets: {

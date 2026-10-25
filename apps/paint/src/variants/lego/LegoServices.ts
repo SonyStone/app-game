@@ -81,6 +81,8 @@ export function createLegoServices(session: PaintSession) {
     windows,
     symmetry: {
       mode: symmetryMode,
+      /** Document commands are accepted, including completion of startup preparation. */
+      canUpdate: createMemo(session.canUpdateSymmetry),
       setMode: setSymmetryMode,
       toggle: () => {
         const mode = symmetryMode();
