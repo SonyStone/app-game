@@ -1,4 +1,4 @@
-import { merge, Show } from 'solid-js';
+import { For, merge, Show } from 'solid-js';
 import { LayersPanel } from '../../../features/layers';
 import { SketchIcon, type SketchIconName } from '../../../shared/ui/SketchIcon';
 import { BrushLibrary } from '../../procreate/BrushLibrary';
@@ -52,6 +52,46 @@ export const actionParts = [
       </div>
     )
   }),
+  definePart({
+    kind: 'action:symmetry',
+    family: 'action',
+    section: 'Tools',
+    label: 'Symmetry',
+    icon: 'symmetry',
+    looks: {
+      looks: [
+        { id: 'button', label: 'Button', min: { columns: 1, rows: 1 } },
+        { id: 'modes', label: 'Modes', min: { columns: 2, rows: 2 } }
+      ],
+      auto: (span) => (span.columns >= 2 && span.rows >= 2 ? 'modes' : 'button')
+    },
+    needs: (s, f) => ({
+      get span() {
+        return f.span;
+      },
+      get mode() {
+        return s.symmetry.mode();
+      },
+      get showModes() {
+        return f.look === 'modes';
+      },
+      onToggle: f.command(s.symmetry.toggle),
+      onMode: f.command(s.symmetry.setMode)
+    }),
+    View: SymmetryPart
+  }),
+  action('quickshape', 'QuickShape', 'quickshape', (s, f) => ({
+    get active() {
+      return s.quickShape.enabled();
+    },
+    onPress: f.command(s.quickShape.toggle)
+  })),
+  action('pressure', 'Pressure calibration', 'pressure', (s, f) => ({
+    get active() {
+      return s.windows.isOpen('pressure');
+    },
+    onPress: f.command(() => s.windows.toggle('pressure'))
+  })),
   tool('eraser', 'Eraser', 'erase'),
   tool('lasso', 'Lasso', 'lasso'),
   tool('fill', 'Fill', 'fill'),
@@ -107,6 +147,7 @@ function ActionPart(props: {
   active?: boolean;
   disabled?: boolean;
   onPress: (anchor: Element) => void;
+  status?: string;
 }) {
   return (
     <button
@@ -114,6 +155,8 @@ function ActionPart(props: {
       class={styles.action}
       data-active={props.active ? '' : undefined}
       disabled={props.disabled}
+      aria-pressed={props.active === undefined ? undefined : props.active ? 'true' : 'false'}
+      title={props.status ? `${props.label}: ${props.status}` : props.label}
       aria-label={props.label}
       onClick={(event) => props.onPress(event.currentTarget)}
     >
@@ -122,7 +165,7 @@ function ActionPart(props: {
         size={Math.min(40, 20 + (Math.min(props.span.columns, props.span.rows) - 1) * 10)}
       />
       <Show when={props.span.columns >= 2}>
-        <span class={styles.name}>{props.label}</span>
+        <span class={styles.name}>{props.status ? `${props.label}: ${props.status}` : props.label}</span>
       </Show>
     </button>
   );
@@ -175,3 +218,52 @@ function tool(id: Parameters<LegoServices['tools']['toggle']>[0], label: string,
 }
 
 const fillNote = 'Fill paints inside a selection: circle an area with the lasso, then tap Fill and tap inside it.';
+
+/** Compact toggle with a mode label; the larger look also chooses the symmetry axes. */
+function SymmetryPart(props: {
+  span: Span;
+  mode: ReturnType<LegoServices['symmetry']['mode']>;
+  showModes: boolean;
+  onToggle: () => void;
+  onMode: LegoServices['symmetry']['setMode'];
+}) {
+  return (
+    <div class={styles.symmetryPart} data-modes={props.showModes ? '' : undefined}>
+      <ActionPart
+        label="Symmetry"
+        icon="symmetry"
+        span={props.span}
+        active={props.mode !== 'off'}
+        status={symmetryModes.find((mode) => mode.id === props.mode)?.label}
+        onPress={props.onToggle}
+      />
+      <Show when={props.showModes}>
+        <select
+          aria-label="Paint symmetry mode"
+          value={props.mode}
+          onChange={(event) => {
+            const mode = symmetryModes.find((mode) => mode.id === event.currentTarget.value);
+
+            if (mode) {
+              props.onMode(mode.id);
+            }
+          }}
+        >
+          <For each={symmetryModes} keyed={(mode) => mode.id}>
+            {(mode) => <option value={mode().id}>{mode().label}</option>}
+          </For>
+        </select>
+      </Show>
+    </div>
+  );
+}
+
+const symmetryModes = [
+  { id: 'off', label: 'Off' },
+  { id: 'vertical', label: 'Vertical' },
+  { id: 'horizontal', label: 'Horizontal' },
+  { id: 'dual', label: 'Dual axis' },
+  { id: 'diagonal', label: 'Diagonal' },
+  { id: 'radial', label: 'Radial' },
+  { id: 'mandala', label: 'Mandala' }
+] as const;

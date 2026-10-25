@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { render } from '@solidjs/web';
-import { createRoot, createSignal, flush, Show } from 'solid-js';
+import { createMemo, createRoot, createSignal, flush, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi, type MockInstance } from 'vitest';
 import { builtInPresets } from '../../features/brush-library';
 import { StrokePreview } from '../../features/brush-library/StrokePreview';
@@ -152,6 +152,35 @@ it.each(['live', 'edit', 'preview'] satisfies PartMode[])('renders each definiti
   intersectAll(true);
   expect(document.querySelector('[aria-label^="Broken part:"]')).toBeNull();
   expect(errors).not.toHaveBeenCalled();
+});
+
+it('binds symmetry modes, QuickShape and pressure through their narrow commands', () => {
+  const { services } = owned(createTestServices);
+  const [mode, setMode] = owned(() => createSignal<ReturnType<typeof services.symmetry.mode>>('vertical'));
+  services.symmetry.mode = owned(() => createMemo(mode));
+  services.symmetry.setMode = vi.fn(setMode);
+  mount(() => (
+    <LegoServicesContext value={services}>
+      <PartFrame kind="action:symmetry" span={{ columns: 2, rows: 2 }} />
+      <PartFrame kind="action:quickshape" />
+      <PartFrame kind="action:pressure" />
+    </LegoServicesContext>
+  ));
+  const symmetry = document.querySelector<HTMLButtonElement>('[aria-label="Symmetry"]')!;
+  expect(symmetry.title).toBe('Symmetry: Vertical');
+  expect(symmetry.getAttribute('aria-pressed')).toBe('true');
+  symmetry.click();
+  expect(services.symmetry.toggle).toHaveBeenCalledOnce();
+  const select = document.querySelector<HTMLSelectElement>('[aria-label="Paint symmetry mode"]')!;
+  select.value = 'radial';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  flush();
+  expect(services.symmetry.setMode).toHaveBeenCalledWith('radial');
+  expect(symmetry.title).toBe('Symmetry: Radial');
+  document.querySelector<HTMLButtonElement>('[aria-label="QuickShape"]')!.click();
+  expect(services.quickShape.toggle).toHaveBeenCalledOnce();
+  document.querySelector<HTMLButtonElement>('[aria-label="Pressure calibration"]')!.click();
+  expect(services.windows.toggle).toHaveBeenCalledWith('pressure');
 });
 
 it('binds the controlled foreground/background pair to its narrow swap command', () => {

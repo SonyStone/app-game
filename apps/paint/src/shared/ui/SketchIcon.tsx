@@ -29,6 +29,8 @@ const paths = {
   rotate: 'M20 9a8 8 0 0 0-14-3L3 9m0-6v6h6M4 15a8 8 0 0 0 14 3l3-3m0 6v-6h-6',
   tools: 'M4 4h5v5H4ZM15 4h5v5h-5ZM4 15h5v5H4ZM15 15h5v5h-5Z',
   paper: 'M4 3h16v18H4ZM8 8h8M8 12h5',
+  quickshape: 'M3 17 9 5l6 12ZM15 6h6v6h-6ZM4 21h16',
+  pressure: 'M4 3v17h17M4 20C15 20 9 4 21 4',
   symmetry:
     'M12 3v18M12 9C9 2 2 2 3 9c0 3 4 4 9 3C5 11 3 16 5 20c3 2 5-2 7-6M12 9c3-7 10-7 9 0 0 3-4 4-9 3 7-1 9 4 7 8-3 2-5-2-7-6',
   mirror: 'M12 2v20M3 5v14l6-7-6-7Zm18 0v14l-6-7 6-7Z',

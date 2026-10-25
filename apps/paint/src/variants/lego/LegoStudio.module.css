@@ -1426,3 +1426,26 @@
 .part[data-lifted] > .content {
   visibility: hidden;
 }
+
+/* The axes chooser belongs to the larger symmetry look. */
+.symmetryPart {
+  display: grid;
+  min-width: 0;
+
+  &[data-modes] {
+    grid-template-rows: minmax(0, 1fr) 30px;
+    padding-bottom: 4px;
+  }
+
+  select {
+    width: calc(100% - 8px);
+    min-width: 0;
+    margin: 0 4px;
+    border: 1px solid var(--lego-quiet);
+    border-radius: 4px;
+    background: var(--lego-tile);
+    color: var(--lego-ink);
+    font: inherit;
+    font-size: 11px;
+  }
+}

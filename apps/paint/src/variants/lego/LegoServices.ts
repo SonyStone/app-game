@@ -28,6 +28,24 @@ export function createLegoServices(session: PaintSession) {
     return kept && wheelToHex(kept) === hex ? kept : hexToWheel(hex, kept);
   });
 
+  const symmetryMode = createMemo(() => session.symmetry.symmetry().mode);
+  let lastSymmetryMode: Exclude<ReturnType<typeof symmetryMode>, 'off'> = 'vertical';
+  const setSymmetryMode = (mode: ReturnType<typeof symmetryMode>) => {
+    const current = session.symmetry.symmetry();
+    const center = current.mode === 'off' ? session.camera.camera() : current;
+    const accepted = session.symmetry.update({
+      ...current,
+      x: center.x,
+      y: center.y,
+      mode,
+      segments: mode === 'mandala' ? Math.max(3, Math.min(10, current.segments)) : current.segments
+    });
+
+    if (accepted && mode !== 'off') {
+      lastSymmetryMode = mode;
+    }
+  };
+
   const windows: Pick<PaintSession['windows'], 'isOpen' | 'toggle'> = session.windows;
 
   return {
@@ -60,6 +78,23 @@ export function createLegoServices(session: PaintSession) {
       redo: session.redo
     },
     windows,
+    symmetry: {
+      mode: symmetryMode,
+      setMode: setSymmetryMode,
+      toggle: () => {
+        const mode = symmetryMode();
+
+        if (mode !== 'off') {
+          lastSymmetryMode = mode;
+        }
+
+        setSymmetryMode(mode === 'off' ? lastSymmetryMode : 'off');
+      }
+    },
+    quickShape: {
+      enabled: createMemo(() => session.quickShape.settings().enabled),
+      toggle: () => session.quickShape.update({ enabled: !session.quickShape.settings().enabled })
+    },
     presets: {
       all: session.library.presets,
       resources: session.library.resources,
