@@ -1383,3 +1383,8 @@
   width: 100%;
   height: 100%;
 }
+
+/* Preserve the part owner and local gesture state while its drag placeholder is shown. */
+.part[data-lifted] > .content {
+  visibility: hidden;
+}

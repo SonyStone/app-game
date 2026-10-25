@@ -145,6 +145,10 @@ export function BoardView(props: {
       return props.board.board();
     }
 
+    if (current.type === 'part' && !current.carried) {
+      return current.before;
+    }
+
     if (current.type === 'select') {
       return props.board.board();
     }
@@ -545,8 +549,9 @@ export function BoardView(props: {
             {(part) => {
               // The lifted part, or a carried block's parts, show only where they would land.
               const isLifted = () =>
-                lifted()?.id === part().id ||
-                lifted()?.block?.parts.some((inBlock) => inBlock.id === part().id) === true;
+                lifted()?.carried === true &&
+                (lifted()?.id === part().id ||
+                  lifted()?.block?.parts.some((inBlock) => inBlock.id === part().id) === true);
               return (
                 <div
                   class={styles.part}
@@ -578,19 +583,17 @@ export function BoardView(props: {
                     startPartDrag(event, part());
                   }}
                 >
-                  <Show when={!isLifted()}>
-                    <div class={styles.content} inert={props.editing || undefined}>
-                      <PartView
-                        mode={props.editing ? 'edit' : 'live'}
-                        kind={part().kind}
-                        missing={!!part()[partData]?.invalid}
-                        span={part().span}
-                        look={lookOf(part())}
-                        onPopup={props.onPopup}
-                        onOpen={() => toggle(part().id)}
-                      />
-                    </div>
-                  </Show>
+                  <div class={styles.content}>
+                    <PartView
+                      mode={props.editing ? 'edit' : 'live'}
+                      kind={part().kind}
+                      missing={!!part()[partData]?.invalid}
+                      span={part().span}
+                      look={lookOf(part())}
+                      onPopup={props.onPopup}
+                      onOpen={() => toggle(part().id)}
+                    />
+                  </div>
                 </div>
               );
             }}
@@ -677,7 +680,7 @@ export function BoardView(props: {
         </Show>
       </div>
 
-      <Show when={props.editing && bench()}>
+      <Show when={props.editing && props.sheet.height() > 0 && !props.sheet.sunk() && bench()}>
         {(slot) => (
           <Portal mount={slot()}>
             <div class={styles.benchPlate} style={{ scale: `${benchScale()}` }}>
@@ -705,7 +708,7 @@ export function BoardView(props: {
         )}
       </Show>
 
-      <Show when={lifted()}>
+      <Show when={lifted()?.carried && lifted()}>
         {(current) => (
           <div
             class={[styles.ghost, current().block ? styles.ghostBlock : styles.part]}

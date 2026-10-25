@@ -31,18 +31,18 @@ export function LookChooser(props: {
             Look at {span().columns}×{span().rows}
           </h3>
           <div class={styles.choices}>
-            <For each={found().looks}>
+            <For each={found().looks} keyed={(look) => look.id}>
               {(look) => {
-                const fitting = () => lookFits(look, span());
+                const fitting = () => lookFits(look(), span());
                 return (
                   <Choice
-                    label={look.label}
-                    note={fitting() ? undefined : `from ${look.min.columns}×${look.min.rows}`}
-                    selected={shown() === look.id}
+                    label={look().label}
+                    note={fitting() ? undefined : `from ${look().min.columns}×${look().min.rows}`}
+                    selected={shown() === look().id}
                     disabled={!fitting()}
-                    onChoose={() => props.onLook(look.id)}
+                    onChoose={() => props.onLook(look().id)}
                   >
-                    <PartPreview kind={props.part.kind} span={fitting() ? span() : look.min} look={look.id} />
+                    <PartPreview kind={props.part.kind} span={fitting() ? span() : look().min} look={look().id} />
                   </Choice>
                 );
               }}

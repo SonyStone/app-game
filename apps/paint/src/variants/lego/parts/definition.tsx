@@ -48,11 +48,17 @@ export function definePart<N extends object, P extends object = N>(spec: {
     render(services: LegoServices, frame: PartBinding, popup = false): JSX.Element {
       if (popup) {
         const Popup = spec.popup?.View;
-        return Popup && spec.popup ? <Popup {...spec.popup.needs(services, frame)} /> : undefined;
+        if (Popup && spec.popup) {
+          const bound = spec.popup.needs(services, frame);
+          return <Popup {...bound} />;
+        }
+
+        return undefined;
       }
 
       const View = spec.View;
-      return <View {...spec.needs(services, frame)} />;
+      const bound = spec.needs(services, frame);
+      return <View {...bound} />;
     }
   };
 }

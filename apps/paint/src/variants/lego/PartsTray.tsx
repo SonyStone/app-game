@@ -1,5 +1,5 @@
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, For, onCleanup, onSettled, Show } from 'solid-js';
 import { cellGap, cellSize, partData, partsBounds, pitch, type Part } from './board';
 import { closedHeight, type createSheet } from './createSheet';
 import type { createKits, Kit } from './kits';
@@ -28,9 +28,9 @@ export function PartsTray(props: {
   onReset: () => void;
   ref: (element: HTMLElement) => void;
   /** The workbench's place in the sheet. */
-  benchRef: (element: HTMLElement) => void;
+  benchRef: (element: HTMLElement | undefined) => void;
   /** The kits, where a part or group from the board or the workbench is dropped to be kept as a kit. */
-  kitsRef: (element: HTMLElement) => void;
+  kitsRef: (element: HTMLElement | undefined) => void;
   /** Whether something carried over the kits would be kept as one. */
   overKits: boolean;
   /** The kit to light up and bring into view: one just kept, or the one a kept part or group matched. */
@@ -93,6 +93,22 @@ export function PartsTray(props: {
           <span class={styles.trayTitle}>Parts</span>
         </Show>
       </div>
+      <Show when={props.sheet.height() > 0 && !props.sheet.sunk()}>
+        <Contents />
+      </Show>
+    </aside>
+  );
+
+  /** Owns the sheet's mounted refs, clearing portals and hit targets when closed or sunk. */
+  function Contents() {
+    onSettled(() => () => {
+      props.benchRef(undefined);
+      props.kitsRef(undefined);
+      setBody(undefined);
+      setShelf(undefined);
+    });
+
+    return (
       <div
         class={styles.trayContent}
         style={{ '--shelf-width': `${split.shelf() * 100}%`, '--kits-height': `${split.kits() * 100}%` }}
@@ -143,13 +159,13 @@ export function PartsTray(props: {
               {props.overKits ? 'Drop to keep as a kit' : 'Kits · drop here to keep'}
             </span>
             <div class={styles.trayItems}>
-              <For each={props.kits.kits()}>
+              <For each={props.kits.kits()} keyed={(kit) => kit.id}>
                 {(kit) => (
                   <KitTile
-                    kit={kit}
+                    kit={kit()}
                     kits={props.kits}
-                    flash={props.flashKit === kit.id}
-                    onLift={(event) => props.onLiftKit(event, kit)}
+                    flash={props.flashKit === kit().id}
+                    onLift={(event) => props.onLiftKit(event, kit())}
                   />
                 )}
               </For>
@@ -157,8 +173,8 @@ export function PartsTray(props: {
           </div>
         </div>
       </div>
-    </aside>
-  );
+    );
+  }
 }
 
 /**
@@ -417,24 +433,24 @@ export function BlockView(props: { parts: readonly Part[] }) {
   const bounds = () => partsBounds(props.parts);
 
   return (
-    <For each={props.parts}>
+    <For each={props.parts} keyed={(part) => part.id}>
       {(part) => (
         <div
           class={styles.part}
           style={{
-            left: `${(part.cell.column - bounds().column) * pitch}px`,
-            top: `${(part.cell.row - bounds().row) * pitch}px`,
-            width: `${part.span.columns * pitch - cellGap}px`,
-            height: `${part.span.rows * pitch - cellGap}px`
+            left: `${(part().cell.column - bounds().column) * pitch}px`,
+            top: `${(part().cell.row - bounds().row) * pitch}px`,
+            width: `${part().span.columns * pitch - cellGap}px`,
+            height: `${part().span.rows * pitch - cellGap}px`
           }}
         >
           <div class={styles.content} inert>
             <PartView
               mode="preview"
-              kind={part.kind}
-              missing={!!part[partData]?.invalid}
-              span={part.span}
-              look={lookOf(part)}
+              kind={part().kind}
+              missing={!!part()[partData]?.invalid}
+              span={part().span}
+              look={lookOf(part())}
               onPopup={() => {}}
             />
           </div>

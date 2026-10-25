@@ -143,9 +143,14 @@ export function SpawnMenu(props: {
               <Show
                 when={shown().title !== kitsTitle}
                 fallback={
-                  <For each={props.kits.kits()}>
+                  <For each={props.kits.kits()} keyed={(kit) => kit.id}>
                     {(kit) => (
-                      <KitTile kit={kit} kits={props.kits} cells={2} onLift={(event) => props.onLiftKit(event, kit)} />
+                      <KitTile
+                        kit={kit()}
+                        kits={props.kits}
+                        cells={2}
+                        onLift={(event) => props.onLiftKit(event, kit())}
+                      />
                     )}
                   </For>
                 }

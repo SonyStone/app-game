@@ -66,7 +66,7 @@ export function ValuePart(props: ReturnType<typeof valueNeeds>) {
  * Controlled knob, slider or scrub field. Input callbacks edit live; commit records the settled edit; cancel
  * restores the exact captured value. This component has no session, registry, cells or storage knowledge.
  */
-function ValueControl(
+export function ValueControl(
   props: Omit<ReturnType<typeof valueNeeds>, 'span'> & {
     vertical: boolean;
     caption?: string;
