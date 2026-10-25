@@ -3,11 +3,11 @@ import type { JSX } from '@solidjs/web';
 import type { Result } from 'neverthrow';
 import { createSignal, For, Show } from 'solid-js';
 import type { BrushPreset } from '../../features/brush-library';
+import { StrokePreview } from '../../features/brush-library/StrokePreview';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './BrushLibrary.module.css';
 import { brushSets, setOf } from './brushSets';
 import { PopoverHeader } from './Popover';
-import { StrokePreview } from './StrokePreview';
 
 /**
  * Procreate's Brush Library: brush sets in a column on the left, the chosen set's brushes on the right as their names

@@ -1,9 +1,9 @@
 import { createSignal, For, untrack } from 'solid-js';
+import { PresetStroke } from '../../features/brush-library/PresetStroke';
 import type { PaintSession } from '../../features/session';
 import { brushSets, setOf, type BrushSet } from './brushSets';
 import { Choice, IconButton } from './controls';
 import styles from './panels.module.css';
-import { PresetStroke } from './PresetStroke';
 
 /**
  * The brush presets of one set, each as its name beside a sample stroke, the preset in use lighter, with the set

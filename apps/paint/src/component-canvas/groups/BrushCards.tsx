@@ -10,10 +10,10 @@ import {
   presetSettings,
   type BrushPreset
 } from '../../features/brush-library';
+import { DabPresetStroke as PresetStroke } from '../../features/brush-library/DabPresetStroke';
 import { BrushOpacityPopup, BrushSizePopup, type OpacityTarget } from '../../variants/infinite/BrushPopups';
 import { BrushSelector } from '../../variants/infinite/BrushSelector';
 import { BrushLibrary } from '../../variants/procreate/BrushLibrary';
-import { PresetStroke } from '../../variants/puck/PresetStroke';
 import { PresetChooser } from '../../variants/zen/PresetChooser';
 import styles from '../ComponentCanvas.module.css';
 import { DesktopFrame, InfiniteFrame, ZenFrame } from '../frames';

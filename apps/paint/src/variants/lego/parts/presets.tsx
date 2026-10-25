@@ -1,5 +1,5 @@
 import { createSignal, onSettled, Show } from 'solid-js';
-import { PresetStroke } from '../../desktop/PresetStroke';
+import { PresetStroke } from '../../../features/brush-library/PresetStroke';
 import { cellGap, pitch } from '../board';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';

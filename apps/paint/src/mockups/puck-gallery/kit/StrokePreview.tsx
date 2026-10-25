@@ -1,4 +1,4 @@
-import { StrokePreview as PaintStrokePreview } from '../../../variants/procreate/StrokePreview';
+import { StrokePreview as PaintStrokePreview } from '../../../features/brush-library/StrokePreview';
 import type { Preset } from './catalog';
 
 /** Gallery settings adapter for Paint's shared engine preview. */

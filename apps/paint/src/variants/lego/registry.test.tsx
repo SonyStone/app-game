@@ -3,7 +3,7 @@ import { render } from '@solidjs/web';
 import { createRoot, createSignal, flush, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi, type MockInstance } from 'vitest';
 import { builtInPresets } from '../../features/brush-library';
-import { StrokePreview } from '../procreate/StrokePreview';
+import { StrokePreview } from '../../features/brush-library/StrokePreview';
 import { createSheet } from './createSheet';
 import { createKits } from './kits';
 import { LegoServicesContext } from './LegoServices';

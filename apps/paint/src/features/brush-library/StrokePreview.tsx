@@ -1,7 +1,7 @@
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { Brush } from '@app-game/paint-core/brush';
 import { createEffect, createSignal, onSettled, Show, untrack, useContext } from 'solid-js';
-import { PreviewAttachment } from '../../features/brush-library/previewAttachment';
+import { PreviewAttachment } from './previewAttachment';
 
 /** Replays the shared tablet sample through Paint's real preset engine at its current size and saved color. */
 export function StrokePreview(props: {

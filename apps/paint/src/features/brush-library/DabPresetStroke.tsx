@@ -2,7 +2,7 @@ import type { BrushResource } from '@app-game/abr-paint/resources';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import type { Result } from 'neverthrow';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
-import type { BrushPreset } from '../../features/brush-library';
+import type { BrushPreset } from './brushPresets';
 
 /**
  * A brush preset's sample stroke: an S-curve across the whole width, stamped dab by dab with the preset's spacing,
@@ -11,7 +11,7 @@ import type { BrushPreset } from '../../features/brush-library';
  * map to the strip's height geometrically, keeping the presets' relative sizes. Sizes itself to its box's CSS width
  * and `height`.
  */
-export function PresetStroke(props: {
+export function DabPresetStroke(props: {
   preset: BrushPreset;
   /** Reads the preset's tip images; see `BrushLibrary.resources`. */
   resources: (preset: BrushPreset) => Promise<Result<BrushResource[], unknown>>;
@@ -64,7 +64,7 @@ export function PresetStroke(props: {
 }
 
 /** The primary tip of a preset with images, as a small white coverage mask; none for round brushes. */
-function tipOf(preset: BrushPreset, resources: Parameters<typeof PresetStroke>[0]['resources']) {
+function tipOf(preset: BrushPreset, resources: Parameters<typeof DabPresetStroke>[0]['resources']) {
   const id = preset.resourceIds[0];
   if (!id) {
     return Promise.resolve(undefined);
