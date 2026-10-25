@@ -1,5 +1,6 @@
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import styles from './LegoStudio.module.css';
+import { runPartCommand } from './partCommand';
 import type { Session } from './parts';
 
 /**
@@ -12,10 +13,12 @@ export function FileMenu(props: { session: Session; onDone: () => void }) {
   let drawing!: HTMLInputElement;
   let image!: HTMLInputElement;
   const ready = () => props.session.ready();
-  const run = (command: () => void) => {
-    command();
-    props.onDone();
-  };
+  const run = (command: () => unknown) =>
+    runPartCommand(props.session, () => {
+      const result = command();
+      props.onDone();
+      return result;
+    });
 
   return (
     <div class={styles.fileMenu} role="menu" aria-label="File">
@@ -48,9 +51,15 @@ export function FileMenu(props: { session: Session; onDone: () => void }) {
         label="Open drawing"
         detail=".paint, .psd"
         disabled={!ready()}
-        onSelect={() => drawing.click()}
+        onSelect={() => runPartCommand(props.session, () => drawing.click())}
       />
-      <Item icon="newLayer" label="Place image" detail="New layer" disabled={!ready()} onSelect={() => image.click()} />
+      <Item
+        icon="newLayer"
+        label="Place image"
+        detail="New layer"
+        disabled={!ready()}
+        onSelect={() => runPartCommand(props.session, () => image.click())}
+      />
       <Item
         icon="check"
         label="Save drawing"

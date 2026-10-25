@@ -21,6 +21,7 @@ import { ColorDisc } from '../zen/ColorDisc';
 import { cellGap, pitch, type Span } from './board';
 import styles from './LegoStudio.module.css';
 import type { LookSpec } from './looks';
+import { runPartCommand } from './partCommand';
 
 /**
  * The color parts, Procreate's Colors and the Desktop color panel taken apart: a swatch that opens a panel of its
@@ -85,7 +86,7 @@ export function SwatchPart(props: { span: Span; session: PaintSession; onOpen: (
       class={styles.color}
       style={{ background: color(), color: luminance(color()) > 0.4 ? '#1c1c1e' : '#ffffff' }}
       aria-label={`Color ${color()}`}
-      onClick={(event) => props.onOpen(event.currentTarget)}
+      onClick={(event) => runPartCommand(props.session, () => props.onOpen(event.currentTarget))}
     >
       <Show when={props.span.columns >= 2}>
         <span class={styles.name}>{color()}</span>
@@ -121,7 +122,7 @@ export function PairPart(props: { span: Span; session: PaintSession }) {
         style={{ background: background() }}
         aria-label="Background color: swap with the foreground"
         title="Background color · tap to swap"
-        onClick={() => props.session.tools.swapColors()}
+        onClick={() => runPartCommand(props.session, () => props.session.tools.swapColors())}
       >
         <Show when={named()}>
           <span style={{ color: luminance(background()) > 0.4 ? '#1c1c1e' : '#ffffff' }}>Background</span>
@@ -141,14 +142,16 @@ export function HexPart(props: { session: PaintSession }) {
         aria-label="Hex color"
         spellcheck={false}
         value={props.session.brush().color}
-        onChange={(event) => {
-          const parsed = parseHex(event.currentTarget.value);
-          event.currentTarget.value = parsed ?? props.session.brush().color;
-          if (parsed) {
-            setColor(props.session, parsed);
-            recent.remember(parsed);
-          }
-        }}
+        onChange={(event) =>
+          runPartCommand(props.session, () => {
+            const parsed = parseHex(event.currentTarget.value);
+            event.currentTarget.value = parsed ?? props.session.brush().color;
+            if (parsed) {
+              setColor(props.session, parsed);
+              recent.remember(parsed);
+            }
+          })
+        }
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
             event.currentTarget.blur();
@@ -214,7 +217,10 @@ export function HarmonyPart(props: { span: Span; session: PaintSession }) {
 
   return (
     <div class={[wheelStyles.guides, styles.wheelField]} data-captioned={props.span.rows >= 2 ? '' : undefined}>
-      <HarmonyField settings={oklch.settings()} onSettings={oklch.update} />
+      <HarmonyField
+        settings={oklch.settings()}
+        onSettings={(patch) => runPartCommand(props.session, () => oklch.update(patch))}
+      />
     </div>
   );
 }
@@ -225,7 +231,10 @@ export function MaskPart(props: { span: Span; session: PaintSession }) {
 
   return (
     <div class={[wheelStyles.guides, styles.wheelField]} data-captioned={props.span.rows >= 2 ? '' : undefined}>
-      <MaskField settings={oklch.settings()} onSettings={oklch.update} />
+      <MaskField
+        settings={oklch.settings()}
+        onSettings={(patch) => runPartCommand(props.session, () => oklch.update(patch))}
+      />
     </div>
   );
 }
@@ -274,11 +283,13 @@ const oklchs = new WeakMap<
 
 /** Paints in `color` (`#rrggbb` or HSV) from now on; the eraser gives way to the brush. */
 export function setColor(session: PaintSession, color: string | Hsv) {
-  if (session.tool() === 'eraser') {
-    session.chooseTool('brush');
-  }
+  runPartCommand(session, () => {
+    if (session.tool() === 'eraser') {
+      session.chooseTool('brush');
+    }
 
-  session.tools.updateBrush({ color: typeof color === 'string' ? color : hsvToHex(color) });
+    session.tools.updateBrush({ color: typeof color === 'string' ? color : hsvToHex(color) });
+  });
 }
 
 /** Pixels a part of `cells` cells covers along one side. */
@@ -312,7 +323,7 @@ function Disc(props: { session: PaintSession }) {
       <ColorDisc
         color={props.session.brush().color}
         onInput={(color) => setColor(props.session, color)}
-        onCommit={recent.remember}
+        onCommit={(color) => runPartCommand(props.session, () => recent.remember(color))}
       />
     </div>
   );
@@ -332,20 +343,22 @@ function Square(props: { session: PaintSession }) {
   /** The hue when the press began, which a drag through black must not lose. */
   let hue = 0;
   let latest = '';
-  const apply = (press: Press) => {
-    const rect = press.target.getBoundingClientRect();
-    const s = Math.min(1, Math.max(0, (press.point.x - rect.left) / rect.width));
-    const v = Math.min(1, Math.max(0, 1 - (press.point.y - rect.top) / rect.height));
-    latest = hsvToHex({ h: hue, s, v });
-    setColor(props.session, { h: hue, s, v });
-  };
+  const apply = (press: Press) =>
+    runPartCommand(props.session, () => {
+      const rect = press.target.getBoundingClientRect();
+      const s = Math.min(1, Math.max(0, (press.point.x - rect.left) / rect.width));
+      const v = Math.min(1, Math.max(0, 1 - (press.point.y - rect.top) / rect.height));
+      latest = hsvToHex({ h: hue, s, v });
+      setColor(props.session, { h: hue, s, v });
+    });
   const press = pressHandlers({
-    start(started) {
-      hue = hsv().h;
-      apply(started);
-    },
+    start: (started) =>
+      runPartCommand(props.session, () => {
+        hue = hsv().h;
+        apply(started);
+      }),
     move: apply,
-    end: () => recent.remember(latest),
+    end: () => runPartCommand(props.session, () => recent.remember(latest)),
     tapDistance: 0
   });
 
@@ -373,7 +386,7 @@ function Triangle(props: { session: PaintSession }) {
       <HueTriangle
         color={props.session.brush().color}
         onChange={(color) => setColor(props.session, color)}
-        onSettle={() => recent.remember(props.session.brush().color)}
+        onSettle={() => runPartCommand(props.session, () => recent.remember(props.session.brush().color))}
       />
     </div>
   );
@@ -388,10 +401,10 @@ function OklchDisk(props: { session: PaintSession }) {
       <WheelDisk
         wheel={oklch.wheel()}
         color={props.session.brush().color}
-        onEdit={oklch.edit}
-        onSettle={oklch.settle}
+        onEdit={(next) => runPartCommand(props.session, () => oklch.edit(next))}
+        onSettle={() => runPartCommand(props.session, oklch.settle)}
         settings={oklch.settings()}
-        onSettings={oklch.update}
+        onSettings={(patch) => runPartCommand(props.session, () => oklch.update(patch))}
       />
     </div>
   );
@@ -406,7 +419,7 @@ function Coolorus(props: { session: PaintSession }) {
       <CoolorusWheel
         color={props.session.brush().color}
         onChange={(color) => setColor(props.session, color)}
-        onSettle={() => recent.remember(props.session.brush().color)}
+        onSettle={() => runPartCommand(props.session, () => recent.remember(props.session.brush().color))}
         settings={settings()}
         onSettings={(patch) => setSettings((current) => ({ ...current, ...patch }))}
       />
@@ -440,10 +453,12 @@ function Chip(props: { color: string; session: PaintSession }) {
       style={{ background: props.color }}
       aria-label={props.color}
       title={props.color}
-      onClick={() => {
-        setColor(props.session, props.color);
-        recentFor(props.session).remember(props.color);
-      }}
+      onClick={() =>
+        runPartCommand(props.session, () => {
+          setColor(props.session, props.color);
+          recentFor(props.session).remember(props.color);
+        })
+      }
     />
   );
 }

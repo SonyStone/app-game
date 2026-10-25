@@ -27,6 +27,8 @@ import {
 } from './colorParts';
 import styles from './LegoStudio.module.css';
 import { resolveLook, type LookSpec } from './looks';
+import { runPartCommand } from './partCommand';
+import { MissingPart, PartFrame } from './PartFrame';
 
 /** The drawing session the parts work on. */
 export type Session = PaintSession;
@@ -76,8 +78,21 @@ export type Popup =
  * tall; an action gets its name once two cells wide. Values and color pickers have looks to choose from (see
  * `partLooks`). `kind` is `preset:<id>`, `value:<ValueKind>`, `action:<ActionKind>` or `color:<ColorKind>`.
  */
-export function PartView(props: {
+export function PartView(props: Parameters<typeof PartContent>[0]) {
+  return (
+    <PartFrame kind={props.kind}>
+      <Show when={!props.missing} fallback={<MissingPart kind={props.kind} />}>
+        <PartContent {...props} />
+      </Show>
+    </PartFrame>
+  );
+}
+
+/** Dispatches only validated kinds inside the part's error boundary. */
+function PartContent(props: {
   kind: string;
+  /** A malformed stored part uses its safe layout but never dispatches its kind. */
+  missing?: boolean;
   span: Span;
   session: Session;
   /** The look it shows, for kinds with looks; the kind's automatic look for the span when absent. */
@@ -91,7 +106,7 @@ export function PartView(props: {
   const look = () => props.look ?? partLooks(props.kind)?.auto(props.span) ?? '';
 
   return (
-    <Switch fallback={<span class={styles.unknown}>?</span>}>
+    <Switch fallback={<MissingPart kind={props.kind} />}>
       <Match when={parsed()?.type === 'preset' && parsed()!.id}>
         {(id) => <PresetPart id={id()} span={props.span} session={props.session} />}
       </Match>
@@ -111,7 +126,7 @@ export function PartView(props: {
       </Match>
       <Match when={parsed()?.type === 'color' && (parsed()!.id as ColorKind)}>
         {(color) => (
-          <Switch fallback={<span class={styles.unknown}>?</span>}>
+          <Switch fallback={<MissingPart kind={props.kind} />}>
             <Match when={color() === 'swatch'}>
               <SwatchPart span={props.span} session={props.session} onOpen={(anchor) => props.onOpen?.(anchor)} />
             </Match>
@@ -195,7 +210,7 @@ export function partLooks(kind: string) {
     return { looks: wheelLooks, auto: autoWheelLook };
   }
 
-  return kind.startsWith('value:') ? { looks: valueLooks, auto: autoValueLook } : undefined;
+  return parseKind(kind)?.type === 'value' ? { looks: valueLooks, auto: autoValueLook } : undefined;
 }
 
 /** A part's name, for the box's tooltips and screen readers. */
@@ -246,7 +261,12 @@ const autoValueLook = (span: Span) => (span.columns === 1 && span.rows === 1 ? '
 
 function parseKind(kind: string) {
   const [type, ...rest] = kind.split(':');
-  return type ? { type, id: rest.join(':') } : undefined;
+  const id = rest.join(':');
+  if ((type === 'value' && !Object.hasOwn(values, id)) || (type === 'action' && !Object.hasOwn(actions, id))) {
+    return undefined;
+  }
+
+  return type ? { type, id } : undefined;
 }
 
 /** Pixels a part of `cells` cells covers along one side. */
@@ -268,7 +288,7 @@ function PresetPart(props: { id: string; span: Span; session: Session }) {
       data-active={active() ? '' : undefined}
       aria-label={preset()?.name ?? 'Brush'}
       onClick={() => {
-        void choose();
+        runPartCommand(props.session, choose);
       }}
     >
       <Show when={preset()} fallback={<span class={styles.unknown}>?</span>}>
@@ -455,34 +475,53 @@ export function ValuePart(props: {
    * The value and color when the press began: a press changes one channel, and the others keep their values even
    * where the color alone would lose them, such as the hue while brightness passes black.
    */
-  let start = { fraction: 0, hsv: hsv() };
+  let start = { fraction: 0, hsv: hsv(), brush: props.session.brush() };
 
-  const set = (next: number) => spec().write(Math.max(0, Math.min(1, next)), props.session, start.hsv);
+  const set = (next: number) =>
+    runPartCommand(props.session, () => spec().write(Math.max(0, Math.min(1, next)), props.session, start.hsv));
   /** A color value puts the color a press ends on in the history. */
-  const remember = () => {
-    if (spec().track) {
-      recentFor(props.session).remember(props.session.brush().color);
-    }
-  };
+  const remember = () =>
+    runPartCommand(props.session, () => {
+      if (spec().track) {
+        recentFor(props.session).remember(props.session.brush().color);
+      }
+    });
+  /** Restore exact brush values rather than round-tripping a fraction through a slider's mapping. */
+  const restore = () =>
+    runPartCommand(props.session, () => {
+      if (props.value === 'size' || props.value === 'opacity') {
+        props.session.tools.updateBrush({ [props.value]: start.brush[props.value] });
+      } else {
+        if (props.value === 'lightness') {
+          set(start.fraction);
+        }
+
+        props.session.tools.updateBrush({ color: start.brush.color });
+      }
+    });
   const scrub = pressHandlers({
-    start() {
-      start = { fraction: fraction(), hsv: hsv() };
-    },
+    start: () =>
+      runPartCommand(props.session, () => {
+        start = { fraction: fraction(), hsv: hsv(), brush: props.session.brush() };
+      }),
     move(press) {
       set(start.fraction + (press.point.x - press.start.x - (press.point.y - press.start.y)) / scrubLength);
     },
     end: remember,
-    tap: (press) => props.onPopup?.(press.target)
+    cancel: restore,
+    tap: (press) => runPartCommand(props.session, () => props.onPopup?.(press.target))
   });
   const slide = pressHandlers({
-    start(press) {
-      start = { fraction: fraction(), hsv: hsv() };
-      set(trackFraction(press));
-    },
+    start: (press) =>
+      runPartCommand(props.session, () => {
+        start = { fraction: fraction(), hsv: hsv(), brush: props.session.brush() };
+        set(trackFraction(press));
+      }),
     move(press) {
       set(trackFraction(press));
     },
     end: remember,
+    cancel: restore,
     tapDistance: 0
   });
 
@@ -515,10 +554,12 @@ export function ValuePart(props: {
             unit={props.span.columns >= 2 ? number().unit : undefined}
             scale={number().scale}
             wrap={number().wrap}
-            onInput={(value) => number().set(value, props.session, hsv())}
+            onInput={(value) => runPartCommand(props.session, () => number().set(value, props.session, hsv()))}
             onChange={(value) => {
-              number().set(value, props.session, hsv());
-              remember();
+              runPartCommand(props.session, () => {
+                number().set(value, props.session, hsv());
+                remember();
+              });
             }}
           />
         </div>
@@ -624,7 +665,7 @@ function ActionPart(props: {
       data-active={active() ? '' : undefined}
       disabled={disabled()}
       aria-label={spec().label}
-      onClick={(event) => run(event.currentTarget)}
+      onClick={(event) => runPartCommand(props.session, () => run(event.currentTarget))}
     >
       <SketchIcon name={spec().icon} size={iconSize()} />
       <Show when={props.span.columns >= 2}>

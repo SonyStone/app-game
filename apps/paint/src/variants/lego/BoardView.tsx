@@ -13,6 +13,7 @@ import {
   ownedPanel,
   panelFrame,
   panelPadding,
+  partData,
   partsBounds,
   pinPanels,
   pitch,
@@ -574,14 +575,14 @@ export function BoardView(props: {
                       return;
                     }
 
-                    const { id, kind, span, looks } = part();
-                    startPartDrag(event, { id, kind, span, looks });
+                    startPartDrag(event, part());
                   }}
                 >
                   <Show when={!isLifted()}>
                     <div class={styles.content} inert={props.editing || undefined}>
                       <PartView
                         kind={part().kind}
+                        missing={!!part()[partData]?.invalid}
                         span={part().span}
                         look={lookOf(part())}
                         session={props.session}
@@ -725,6 +726,7 @@ export function BoardView(props: {
                 <div class={styles.content} inert>
                   <PartView
                     kind={current().kind}
+                    missing={!!current()[partData]?.invalid}
                     span={current().span}
                     look={lookOf(current())}
                     session={props.session}
@@ -1290,7 +1292,7 @@ export function BoardView(props: {
    */
   function partDrop(drag: Extract<Drag, { type: 'part' }>, point: Point) {
     const size = view();
-    const part = { id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks };
+    const part = { id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks, [partData]: drag[partData] };
     const withOwned = (board: Board) => (drag.block ? { panels: [...board.panels, ...drag.block.panels] } : board);
     /** `drag` placed on `panel` with its top-left at `cell`. */
     const placeOn = (panel: Panel, cell: Cell) => {
@@ -1444,7 +1446,14 @@ export function BoardView(props: {
    */
   function keepAsKit(drag: Extract<Drag, { type: 'part' }>) {
     const parts = drag.block?.parts ?? [
-      { id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks, cell: { column: 0, row: 0 } }
+      {
+        id: drag.id,
+        kind: drag.kind,
+        span: drag.span,
+        looks: drag.looks,
+        [partData]: drag[partData],
+        cell: { column: 0, row: 0 }
+      }
     ];
     keepKit(drag.before, { id: 'kept', at: { x: 0, y: 0 }, parts });
   }

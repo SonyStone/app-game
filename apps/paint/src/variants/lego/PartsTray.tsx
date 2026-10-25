@@ -1,6 +1,6 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
-import { cellGap, cellSize, partsBounds, pitch, type Part } from './board';
+import { cellGap, cellSize, partData, partsBounds, pitch, type Part } from './board';
 import { closedHeight, type createSheet } from './createSheet';
 import type { createKits, Kit } from './kits';
 import styles from './LegoStudio.module.css';
@@ -412,6 +412,7 @@ export function BlockView(props: { parts: readonly Part[]; session: Session }) {
           <div class={styles.content} inert>
             <PartView
               kind={part.kind}
+              missing={!!part[partData]?.invalid}
               span={part.span}
               look={lookOf(part)}
               session={props.session}

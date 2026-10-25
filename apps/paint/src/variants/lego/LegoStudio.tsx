@@ -24,6 +24,8 @@ import { createKits } from './kits';
 import styles from './LegoStudio.module.css';
 import { LookChooser } from './LookChooser';
 import { chooseLook } from './looks';
+import { runPartCommand } from './partCommand';
+import { PartFrame } from './PartFrame';
 import { ValuePart, type Popup } from './parts';
 
 /**
@@ -158,70 +160,74 @@ export function LegoStudio(props: PaintVariantProps) {
                 visibility: popupSize.width ? undefined : 'hidden'
               }}
             >
-              <Switch>
-                <Match when={popup()?.popup.kind === 'looks' && popup()!.popup}>
-                  {(open) => {
-                    const id = () => (open() as Extract<Popup, { kind: 'looks' }>).id;
-                    return (
-                      <Show when={findPart(board.board(), id())?.part}>
-                        {(part) => (
-                          <LookChooser
-                            part={part()}
-                            session={session}
-                            onLook={(look) => board.set(chooseLook(board.latest(), id(), part().span, look))}
-                          />
-                        )}
-                      </Show>
-                    );
-                  }}
-                </Match>
-                <Match when={popup()?.popup.kind === 'layers'}>
-                  <div class={styles.studioCard}>
-                    <LayersPanel
-                      state={session.engine.state()}
-                      ready={session.ready()}
-                      onAction={(action) => session.edit({ type: 'layer', action })}
-                      onLinearBlending={(linear) => session.edit({ type: 'blending', linear })}
-                    />
-                  </div>
-                </Match>
-                <Match when={popup()?.popup.kind === 'brushes'}>
-                  <div class={procreate.editor}>
-                    <section class={[popover.popover, styles.brushesCard]}>
-                      <div class={popover.body}>
-                        <BrushLibrary
-                          title="Brushes"
-                          presets={session.library.presets()}
-                          recent={[session.tools.preset(), ...session.recentPresets.recent(7)]}
-                          preset={session.tools.preset()}
-                          disabled={!session.ready()}
-                          onChoose={(id) => {
-                            void session.usePreset(id);
-                          }}
-                        />
-                      </div>
-                    </section>
-                  </div>
-                </Match>
-                <Match when={popup()?.popup.kind === 'file'}>
-                  <FileMenu session={session} onDone={() => setPopup(undefined)} />
-                </Match>
-                <Match when={popup()?.popup.kind === 'note' && popup()!.popup}>
-                  {(open) => <p class={styles.note}>{(open() as Extract<Popup, { kind: 'note' }>).text}</p>}
-                </Match>
-                <Match when={popup()?.popup.kind === 'value' && popup()!.popup}>
-                  {(open) => (
-                    <div class={styles.popupSlider}>
-                      <ValuePart
-                        value={(open() as Extract<Popup, { kind: 'value' }>).value}
-                        look="slider"
-                        span={{ columns: 5, rows: 1 }}
-                        session={session}
+              <PartFrame kind="Popup">
+                <Switch>
+                  <Match when={popup()?.popup.kind === 'looks' && popup()!.popup}>
+                    {(open) => {
+                      const id = () => (open() as Extract<Popup, { kind: 'looks' }>).id;
+                      return (
+                        <Show when={findPart(board.board(), id())?.part}>
+                          {(part) => (
+                            <LookChooser
+                              part={part()}
+                              session={session}
+                              onLook={(look) => board.set(chooseLook(board.latest(), id(), part().span, look))}
+                            />
+                          )}
+                        </Show>
+                      );
+                    }}
+                  </Match>
+                  <Match when={popup()?.popup.kind === 'layers'}>
+                    <div class={styles.studioCard}>
+                      <LayersPanel
+                        state={session.engine.state()}
+                        ready={session.ready()}
+                        onAction={(action) => runPartCommand(session, () => session.edit({ type: 'layer', action }))}
+                        onLinearBlending={(linear) =>
+                          runPartCommand(session, () => session.edit({ type: 'blending', linear }))
+                        }
                       />
                     </div>
-                  )}
-                </Match>
-              </Switch>
+                  </Match>
+                  <Match when={popup()?.popup.kind === 'brushes'}>
+                    <div class={procreate.editor}>
+                      <section class={[popover.popover, styles.brushesCard]}>
+                        <div class={popover.body}>
+                          <BrushLibrary
+                            title="Brushes"
+                            presets={session.library.presets()}
+                            recent={[session.tools.preset(), ...session.recentPresets.recent(7)]}
+                            preset={session.tools.preset()}
+                            disabled={!session.ready()}
+                            onChoose={(id) => {
+                              runPartCommand(session, () => session.usePreset(id));
+                            }}
+                          />
+                        </div>
+                      </section>
+                    </div>
+                  </Match>
+                  <Match when={popup()?.popup.kind === 'file'}>
+                    <FileMenu session={session} onDone={() => setPopup(undefined)} />
+                  </Match>
+                  <Match when={popup()?.popup.kind === 'note' && popup()!.popup}>
+                    {(open) => <p class={styles.note}>{(open() as Extract<Popup, { kind: 'note' }>).text}</p>}
+                  </Match>
+                  <Match when={popup()?.popup.kind === 'value' && popup()!.popup}>
+                    {(open) => (
+                      <div class={styles.popupSlider}>
+                        <ValuePart
+                          value={(open() as Extract<Popup, { kind: 'value' }>).value}
+                          look="slider"
+                          span={{ columns: 5, rows: 1 }}
+                          session={session}
+                        />
+                      </div>
+                    )}
+                  </Match>
+                </Switch>
+              </PartFrame>
             </div>
           )}
         </Show>
