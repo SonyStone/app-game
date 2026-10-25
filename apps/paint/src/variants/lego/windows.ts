@@ -12,12 +12,12 @@ import {
 } from './board';
 
 /**
- * The panels of `board` on screen, in paint order, with where each lies: free panels including windows, then the open
+ * The panels of `board` on screen, in paint order, with where each lies: free panels including floating panels, then the open
  * swatch's panel and the panels of the swatches it lies in, outermost first. While editing, an open swatch without
  * a panel shows an empty one to drop parts into. The panels in `pinned` keep cell (0, 0) at their pinned origin.
  * The workbench lies in the box instead (see `benchFrame`): given as `bench`, the panels are it and the open chain
  * of a swatch on it, in its pixels within a `view` its size.
- * Windows are free panels in every mode. A collapsed window hides its parts and any open folders within them.
+ * Floating panels remain visible in every mode.
  */
 export function visiblePanels(
   board: Board,
@@ -52,7 +52,7 @@ export function visiblePanels(
 
     seen.add(panel.id);
     const host = findPart(board, panel.owner)?.panel;
-    return !!host && !host.window?.collapsed && available(host, seen);
+    return !!host && available(host, seen);
   };
   const panels = candidates.filter((panel) => available(panel));
 
@@ -66,7 +66,7 @@ export function visiblePanels(
     const host = board.panels.find((other) => other.parts.some((part) => part.id === panel.owner));
     const anchor = host?.parts.find((part) => part.id === panel.owner);
     const pin = pinned?.get(panel.id);
-    let frame = pin ? frameAt(panel, pin) : panelFrame(panel, view);
+    let frame = pin ? frameAt(panel, pin, editing) : panelFrame(panel, view, editing);
     if (!pin && host && anchor && depth < 8) {
       const { origin } = frameOf(host, depth + 1);
       const at = { x: origin.x + anchor.cell.column * pitch, y: origin.y + anchor.cell.row * pitch };

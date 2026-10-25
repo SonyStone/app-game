@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import type { Board } from './board';
 import { layersKit } from './layersKit';
-import { createPartStorage, migrateParts, migrateWindows, storedPart, storedWindow } from './partStorage';
+import { createPartStorage, migrateParts, migrateWindows, storedPart } from './partStorage';
 import { swatchPanelParts } from './swatchPanelParts';
 
 /**
@@ -38,7 +38,7 @@ const boardSchema = z.looseObject({
       at: point,
       parts: z.array(storedPart),
       owner: z.string().optional(),
-      window: storedWindow.optional(),
+      floating: z.literal(true).optional(),
       offset: z.looseObject({ column: z.number().int(), row: z.number().int() }).optional(),
       bench: z.literal(true).optional()
     })
@@ -116,7 +116,7 @@ export const defaultBoard: Board = {
     {
       id: 'layers-panel',
       at: { x: 0.17, y: 0.5 },
-      window: { ...layersKit.window, collapsed: true },
+      floating: true,
       parts: layersKit.parts.map((part) => ({ ...part, id: `layers-${part.id}` }))
     }
   ]

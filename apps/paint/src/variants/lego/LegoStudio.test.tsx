@@ -148,10 +148,10 @@ afterEach(() => {
 });
 
 it.each([
-  { key: 'paint.lego', payload: { version: 5, board: { panels: [] } }, label: 'Board' },
-  { key: 'paint.lego', payload: { version: 5 }, label: 'Board' },
-  { key: 'paint.lego.kits', payload: { version: 5, kits: [] }, label: 'Kit' },
-  { key: 'paint.lego.kits', payload: { version: 5 }, label: 'Kit' }
+  { key: 'paint.lego', payload: { version: 6, board: { panels: [] } }, label: 'Board' },
+  { key: 'paint.lego', payload: { version: 6 }, label: 'Board' },
+  { key: 'paint.lego.kits', payload: { version: 6, kits: [] }, label: 'Kit' },
+  { key: 'paint.lego.kits', payload: { version: 6 }, label: 'Kit' }
 ])('shows the real session notice for future $key data and keeps Edit reactive', ({ key, payload, label }) => {
   const raw = JSON.stringify(payload);
   localStorage.setItem(key, raw);
@@ -169,8 +169,8 @@ it.each([
 });
 
 it('keeps the app reactive with both future board and kit data', () => {
-  localStorage.setItem('paint.lego', '{"version":5}');
-  localStorage.setItem('paint.lego.kits', '{"version":5}');
+  localStorage.setItem('paint.lego', '{"version":6}');
+  localStorage.setItem('paint.lego.kits', '{"version":6}');
   mount();
   expect(document.querySelector('[role="alert"]')?.textContent).toContain('newer Paint version');
   click('Edit');
@@ -196,7 +196,7 @@ it.each([
   { kind: 'engine', saving: 'failed' }
 ])('keeps an existing $kind failure and its recovery action when saving is $saving', ({ kind, saving }) => {
   if (saving === 'read-only') {
-    localStorage.setItem('paint.lego', JSON.stringify({ version: 5, board: { panels: [] } }));
+    localStorage.setItem('paint.lego', JSON.stringify({ version: 6, board: { panels: [] } }));
   }
 
   mount();

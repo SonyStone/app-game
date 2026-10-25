@@ -1,7 +1,6 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createSignal, For, onCleanup, onSettled, Show } from 'solid-js';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
-import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { cellGap, cellSize, partData, partsBounds, pitch, type Part } from './board';
 import { closedHeight, type createSheet } from './createSheet';
 import type { createKits, Kit } from './kits';
@@ -301,7 +300,7 @@ const wheelSettle = 160;
 export function partFamilies(presets: LegoServices['presets']['all']) {
   const brushes = presets().map((preset) => `preset:${preset.id}`);
   return [
-    { id: 'Plates', title: 'Plates', kinds: ['window'] },
+    { id: 'Plates', title: 'Plates', kinds: ['floating'] },
     ...boxSections,
     { id: 'Brushes', title: 'Brushes', kinds: brushes }
   ];
@@ -317,24 +316,17 @@ export function PartTile(props: {
     <div class={styles.trayItem}>
       <div
         class={styles.trayTile}
-        title={props.kind === 'window' ? 'Window' : kindLabel(props.kind, props.presets())}
+        title={props.kind === 'floating' ? 'Floating panel' : kindLabel(props.kind, props.presets())}
         onPointerDown={(event) => props.onLift(event)}
       >
         <div class={styles.content} inert>
-          <Show
-            when={props.kind !== 'window'}
-            fallback={
-              <span class={styles.windowSample}>
-                <SketchIcon name="window" />
-              </span>
-            }
-          >
+          <Show when={props.kind !== 'floating'} fallback={<span class={styles.floatingSample} />}>
             <PartFrame mode="preview" kind={props.kind} span={{ columns: 1, rows: 1 }} onPopup={() => {}} />
           </Show>
         </div>
       </div>
       <span class={styles.trayCaption}>
-        {props.kind === 'window' ? 'Window' : kindLabel(props.kind, props.presets())}
+        {props.kind === 'floating' ? 'Floating panel' : kindLabel(props.kind, props.presets())}
       </span>
     </div>
   );

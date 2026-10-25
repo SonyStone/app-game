@@ -35,7 +35,7 @@ it('tells parts laid out the same way apart from others, whatever their ids or p
   expect(sameLayout(swapped)).not.toBe(sameLayout(kit));
 });
 
-it('keeps a window name and icon but resets collapse and placement on unpack', async () => {
+it('keeps the floating flag and independent kit name with nested folder placement', async () => {
   const { kitOf } = await import('./kits');
   const part = (id: string) => ({
     id,
@@ -46,7 +46,7 @@ it('keeps a window name and icon but resets collapse and placement on unpack', a
   const panel = {
     id: 'main',
     at: { x: 0.2, y: 0.3 },
-    window: { name: 'My tools', icon: 'layers' as const, collapsed: true as const, future: 7 },
+    floating: true as const,
     parts: [part('owner')]
   };
   const folder = {
@@ -57,21 +57,23 @@ it('keeps a window name and icon but resets collapse and placement on unpack', a
     parts: [part('child')]
   };
   const kit = kitOf({ panels: [panel, folder] }, panel, 'Saved tools');
-  expect(kit.window).toEqual({ name: 'Saved tools', icon: 'layers', future: 7 });
-  expect(kit.owned[0]!.window).toBeUndefined();
+  expect(kit.floating).toBe(true);
+  expect(kit.name).toBe('Saved tools');
+  expect(kit.owned[0]!.floating).toBeUndefined();
   const first = unpackKit(kit);
   const second = unpackKit(kit);
-  expect(first.window).toEqual(kit.window);
+  expect(first.floating).toEqual(kit.floating);
   expect(first.panels[0]!.owner).toBe(first.parts[0]!.id);
   expect(first.panels[0]!.offset).toEqual(folder.offset);
   expect(second.panels[0]!.owner).not.toBe(first.panels[0]!.owner);
 });
 
-it('unpacks migrated free window entries without owners or collapsed state', () => {
+it('unpacks floating entries without owners at a fresh drop position', () => {
   const first = unpackKit({
     parts: [],
-    owned: [{ window: { name: 'Layers', icon: 'layers', collapsed: true }, parts: [] }]
+    owned: [{ floating: true, parts: [] }]
   });
   expect(first.panels[0]!.owner).toBeUndefined();
-  expect(first.panels[0]!.window).toEqual({ name: 'Layers', icon: 'layers' });
+  expect(first.panels[0]!.floating).toBe(true);
+  expect(first.panels[0]!.at).toEqual({ x: 0, y: 0 });
 });

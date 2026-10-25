@@ -1440,22 +1440,26 @@
   }
 }
 
-.windowSample {
-  display: grid;
-  place-items: center;
+.floatingSample {
+  position: relative;
   width: 100%;
   height: 100%;
-  box-sizing: border-box;
-  border-top: 8px solid var(--lego-quiet);
-  color: var(--lego-ink);
-  background: var(--lego-tile);
+  border-radius: 7px;
+  background: var(--lego-plate);
 }
 
-.panel[data-window] {
+.floatingSample::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: calc(50% - 12px);
+  width: 24px;
+  height: 4px;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.7) 1px, transparent 1.5px) 0 0 / 6px 4px;
+  opacity: 0.3;
+}
+
+.panel[data-floating] {
   z-index: 2;
   box-shadow: var(--lego-shadow);
-}
-
-.panel[data-collapsed] {
-  background-image: none;
 }

@@ -2,7 +2,14 @@ import { z } from 'zod';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { newId, partsBounds, type Board, type Panel, type Part } from './board';
 import { layersKit } from './layersKit';
-import { createPartStorage, migrateParts, migrateWindows, opaqueData, storedPart, storedWindow } from './partStorage';
+import {
+  createPartStorage,
+  migrateFloating,
+  migrateParts,
+  migrateWindows,
+  opaqueData,
+  storedPart
+} from './partStorage';
 import { swatchPanelParts } from './swatchPanelParts';
 
 /**
@@ -20,11 +27,11 @@ export type Kit = {
   parts: Part[];
   /**
    * The panels of swatches among the parts, by the owner's id in the kit; owners may lie in other owned panels.
-   * Folders retain their offsets. Legacy opener windows become free entries without an owner.
+   * Folders retain their offsets. Legacy opener panels become floating entries without an owner.
    */
-  owned: (Pick<Panel, 'parts' | 'offset' | 'window' | 'owner'> & { at?: Panel['at'] })[];
-  /** A kit saved from a window creates a named window again when placed on bare drawing. */
-  window?: Panel['window'];
+  owned: (Pick<Panel, 'parts' | 'offset' | 'floating' | 'owner'> & { at?: Panel['at'] })[];
+  /** A kit saved from a floating panel keeps its grip when placed on bare drawing. */
+  floating?: Panel['floating'];
 };
 
 /** The kits on this device, ready ones first. `onSavingError` reports refused or failed local saves. */
@@ -40,14 +47,10 @@ export function createKits(onSavingError?: (message: string) => void) {
     /** Every kit, the ready ones first. */
     kits: () => [...readyKits, ...saved()],
     /** The kit, ready or the user's, of just these `parts` laid out the same way, if there is one; see `sameLayout`. */
-    findSame(parts: readonly Part[], window?: Panel['window']) {
+    findSame(parts: readonly Part[], floating?: Panel['floating']) {
       const layout = sameLayout(parts);
       return [...readyKits, ...saved()].find(
-        (kit) =>
-          !(opaqueData in kit) &&
-          sameLayout(kit.parts) === layout &&
-          kit.window?.name === window?.name &&
-          kit.window?.icon === window?.icon
+        (kit) => !(opaqueData in kit) && sameLayout(kit.parts) === layout && kit.floating === floating
       );
     },
     /** Whether kit `id` is the user's, which they may delete. */
@@ -61,11 +64,7 @@ export function createKits(onSavingError?: (message: string) => void) {
     },
     /** Renames a readable kit; broken kits keep their original record until removed. */
     rename(id: string, name: string) {
-      store(
-        latest().map((kit) =>
-          kit.id === id && !(opaqueData in kit) ? { ...kit, name, window: kit.window && { ...kit.window, name } } : kit
-        )
-      );
+      store(latest().map((kit) => (kit.id === id && !(opaqueData in kit) ? { ...kit, name } : kit)));
     },
     /** `name`, or with the first number after it that no kit of the user's has. */
     uniqueName(name: string) {
@@ -82,10 +81,10 @@ export function createKits(onSavingError?: (message: string) => void) {
 
 /**
  * A fresh copy of `kit` to place: every part gets a new id, so a kit can be placed again and again, with the owned
- * panels, ready to join a board, re-pointed at the new owners. Cells stay as in the kit. Window state is reset even
- * for older saved kits: free windows start expanded at the drop point.
+ * panels, ready to join a board, re-pointed at the new owners. Cells stay as in the kit. Floating panels start
+ * at the drop point.
  */
-export function unpackKit(kit: Pick<Kit, 'parts' | 'owned' | 'window'>) {
+export function unpackKit(kit: Pick<Kit, 'parts' | 'owned' | 'floating'>) {
   const ids = new Map<string, string>();
   const renew = (parts: readonly Part[]) =>
     parts.map((part) => {
@@ -97,21 +96,22 @@ export function unpackKit(kit: Pick<Kit, 'parts' | 'owned' | 'window'>) {
   const owned = kit.owned.map((entry) => ({ ...entry, parts: renew(entry.parts) }));
   const panels: Panel[] = owned.flatMap((entry) => {
     const owner = entry.owner && ids.get(entry.owner);
-    return owner || (entry.owner === undefined && entry.window)
+    return owner || (entry.owner === undefined && entry.floating)
       ? [
           {
+            ...entry,
             id: newId('panel'),
             owner: owner || undefined,
             parts: entry.parts,
-            offset: entry.window ? undefined : entry.offset,
-            window: windowComposition(entry.window),
-            at: entry.window ? { x: 0, y: 0 } : (entry.at ?? { x: 0, y: 0 })
+            offset: entry.floating ? undefined : entry.offset,
+            floating: entry.floating,
+            at: entry.floating ? { x: 0, y: 0 } : (entry.at ?? { x: 0, y: 0 })
           }
         ]
       : [];
   });
 
-  return { parts, panels, window: windowComposition(kit.window) };
+  return { parts, panels, floating: kit.floating };
 }
 
 /**
@@ -152,19 +152,8 @@ export function kitOf(board: Board, panel: Panel, name: string): Kit {
     name,
     parts: fromOrigin(panel.parts),
     owned,
-    window: windowComposition(panel.window && { ...panel.window, name })
+    floating: panel.floating
   };
-}
-
-/** Kits retain a window's name, icon and unknown fields, never its collapse state. */
-function windowComposition(window: Panel['window']) {
-  if (!window) {
-    return undefined;
-  }
-
-  const composition = { ...window };
-  delete composition.collapsed;
-  return composition;
 }
 
 /** `parts` moved so that their bounds start at cell (0, 0). */
@@ -240,11 +229,11 @@ const kitSchema = z.looseObject({
   id: z.string(),
   name: z.string(),
   parts: z.array(storedPart),
-  window: storedWindow.optional(),
+  floating: z.literal(true).optional(),
   owned: z.array(
     z.looseObject({
       owner: z.string().optional(),
-      window: storedWindow.optional(),
+      floating: z.literal(true).optional(),
       at: z.looseObject({ x: z.number(), y: z.number() }).optional(),
       parts: z.array(storedPart),
       offset: z.looseObject({ column: z.number().int(), row: z.number().int() }).optional()
@@ -283,17 +272,18 @@ function read(data: unknown, version: number): Kit[] {
       const owned = kit.owned.map((entry) => ({ ...entry, parts: migrate(entry.parts) }));
 
       if (version >= 4) {
-        return { ...kit, parts, owned: [...owned, ...added] };
+        const current = { ...kit, parts, owned: [...owned, ...added] };
+        return version < 5 ? { ...migrateFloating(current), owned: current.owned.map(migrateFloating) } : current;
       }
 
       return migrateKitWindows(kit, parts, owned, added, version);
     });
 }
 
-/** Converts legacy opener panels to window compositions, promoting a sole window while retaining unknown fields. */
+/** Converts legacy opener kits to floating compositions and retains unknown fields. */
 function migrateKitWindows(kit: Kit, parts: Part[], owned: Kit['owned'], added: Kit['owned'], version: number): Kit {
   const entries = [...owned, ...added.filter((entry) => !owned.some((panel) => panel.owner === entry.owner))];
-  const root = { id: kit.id, at: { x: 0, y: 0 }, parts, window: kit.window };
+  const root = { ...kit, id: kit.id, at: { x: 0, y: 0 }, parts };
   const migrated = migrateWindows(
     {
       panels: [
@@ -309,24 +299,26 @@ function migrateKitWindows(kit: Kit, parts: Part[], owned: Kit['owned'], added: 
   );
   const main = migrated.panels.find((panel) => panel.id === kit.id);
   const remaining = migrated.panels.filter((panel) => panel.id !== kit.id);
-  // A kit consisting only of an opener becomes the window composition itself.
-  const free = remaining.filter((panel) => panel.window && panel.owner === undefined);
+  // A kit consisting only of an opener becomes the floating composition itself.
+  const free = remaining.filter((panel) => panel.floating && panel.owner === undefined);
   const single = !main && free.length === 1 ? free[0] : undefined;
   const composition = single ?? main;
   const fields = Object.fromEntries(
-    Object.entries(single ?? root).filter(([key]) => !['id', 'at', 'parts', 'window'].includes(key))
+    Object.entries(single ?? root).filter(
+      ([key]) => !['id', 'at', 'parts', 'floating', 'window', 'owned', 'name'].includes(key)
+    )
   );
   return {
+    ...migrateFloating(kit),
     ...fields,
-    ...kit,
     parts: composition?.parts ?? [],
-    window: windowComposition(composition?.window),
+    floating: composition?.floating,
     owned: remaining
       .filter((panel) => panel !== single)
       .map(({ id, at, ...entry }) => ({
         ...entry,
-        ...(!entry.window && entries.find((_entry, index) => id === `${kit.id}-owned-${index}`)?.at ? { at } : {}),
-        window: windowComposition(entry.window)
+        ...(!entry.floating && entries.find((_entry, index) => id === `${kit.id}-owned-${index}`)?.at ? { at } : {}),
+        floating: entry.floating
       }))
   };
 }

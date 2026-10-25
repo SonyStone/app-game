@@ -1,5 +1,3 @@
-import type { SketchIconName } from '../../shared/ui/SketchIcon';
-
 /**
  * The LEGO board: panels lie freely on the drawing, each one a grid of studs, and parts sit on a panel's studs like
  * printed tiles. A part covers any whole number of cells; it never overlaps another part, so placing or growing one
@@ -14,24 +12,17 @@ export type Board = { panels: Panel[] };
 
 /**
  * A panel lying on the drawing. `at` places its cell (0, 0) as fractions of the view's width and height, so the
- * layout keeps its proportions when the view resizes or turns. Windows use their plate's top-left instead.
+ * layout keeps its proportions when the view resizes or turns. Floating panels use their plate's top-left instead.
  * Negative cell indices let a panel grow toward the top and left without moving its parts on screen.
  */
 export type Panel = {
   id: string;
   at: Point;
   parts: Part[];
-  /** The swatch whose transient folder this is. Windows are always free panels. */
+  /** The swatch whose transient folder this is. Floating panels are always free panels. */
   owner?: string;
-  /** A persistent free window. Its `at` stores the plate's top-left instead of cell (0, 0). */
-  window?: {
-    /** User-visible title, trimmed and renameable in Edit. */
-    name: string;
-    /** Kit icon; omitted uses the generic window icon. */
-    icon?: SketchIconName;
-    /** Replaces the handle and contents with a one-cell-high icon and name tile. */
-    collapsed?: true;
-  };
+  /** A movable plate with a top grip. `at` stores its top-left; empty plates survive part removal. */
+  floating?: true;
   /**
    * Where an owned panel lies from its part: its cell (0, 0) this many cells from the part's top-left cell, which may
    * put it over the part. Without it the panel lies beside the part where there is room (see `ownedFrame`).
@@ -76,8 +67,8 @@ export const pitch = cellSize + cellGap;
 export const panelPadding = 6;
 /** The largest span of a part in either direction. */
 export const maxSpan = 10;
-/** Height of the window handle, outside the stud cells. */
-export const windowHandleHeight = 36;
+/** Height of the grip strip, outside the stud cells. */
+export const floatingGripHeight = 8;
 
 /**
  * A way a part can be pushed. Only right and down: a push then never moves a panel's parts toward the top or left,
@@ -161,14 +152,14 @@ export function partsBounds(parts: readonly Part[]) {
 /**
  * Where `panel` lies in a view of `view` size, in CSS pixels: `origin` is the top-left of its cell (0, 0) and `rect`
  * its whole box with the padding. A panel partly off screen is shifted back in, so a turned or smaller view never
- * hides parts; its stored `at` is kept.
+ * hides parts; its stored `at` is kept. `editing` defaults to true and reserves an empty floating plate's drop area.
  */
-export function panelFrame(panel: Panel, view: { width: number; height: number }) {
-  const { rect } = frameAt(panel, { x: 0, y: 0 });
+export function panelFrame(panel: Panel, view: { width: number; height: number }, editing = true) {
+  const { rect } = frameAt(panel, { x: 0, y: 0 }, editing);
   const { width, height } = rect;
   const wanted = {
-    x: panel.at.x * view.width + (panel.window ? 0 : rect.left),
-    y: panel.at.y * view.height + (panel.window ? 0 : rect.top)
+    x: panel.at.x * view.width + (panel.floating ? 0 : rect.left),
+    y: panel.at.y * view.height + (panel.floating ? 0 : rect.top)
   };
   const left = Math.max(0, Math.min(wanted.x, view.width - width));
   const top = Math.max(0, Math.min(wanted.y, view.height - height));
@@ -180,31 +171,22 @@ export function panelFrame(panel: Panel, view: { width: number; height: number }
 /**
  * Where `panel` lies when its cell (0, 0) starts at `origin`, as `panelFrame` gives it but not shifted into the view:
  * a panel being edited stays where it was as it grows or shrinks, so the cells under the pointer keep still.
+ * Empty floating plates reserve a drop area by default; pass `false` for their Live strip alone.
  */
-export function frameAt(panel: Panel, origin: Point) {
+export function frameAt(panel: Panel, origin: Point, editing = true) {
   const bounds = partsBounds(panel.parts);
-  const handle = panel.window ? windowHandleHeight : 0;
+  const handle = panel.floating ? floatingGripHeight : 0;
   const rect = {
     left: origin.x + bounds.column * pitch - panelPadding,
     top: origin.y + bounds.row * pitch - panelPadding - handle,
-    width:
-      (panel.window?.collapsed
-        ? windowTileColumns(panel.window.name)
-        : panel.window && panel.parts.length === 0
-          ? 3
-          : bounds.columns) *
-        pitch -
-      cellGap +
-      panelPadding * 2,
-    height: (panel.window?.collapsed ? cellSize : bounds.rows * pitch - cellGap + handle) + panelPadding * 2
+    width: (panel.floating && panel.parts.length === 0 ? 3 : bounds.columns) * pitch - cellGap + panelPadding * 2,
+    height:
+      panel.floating && panel.parts.length === 0 && !editing
+        ? panelPadding + handle
+        : bounds.rows * pitch - cellGap + handle + panelPadding * 2
   };
 
   return { origin, rect };
-}
-
-/** Fits an action-style icon and label into two to four cells, truncating long names. */
-export function windowTileColumns(name: string) {
-  return Math.max(2, Math.min(4, Math.ceil((name.length * 6 + 40) / pitch)));
 }
 
 /**
@@ -224,8 +206,8 @@ export function pinPanels(board: Board, origins: ReadonlyMap<string, Point>, vie
       return {
         ...panel,
         at: {
-          x: (panel.window ? rect.left : origin.x) / view.width,
-          y: (panel.window ? rect.top : origin.y) / view.height
+          x: (panel.floating ? rect.left : origin.x) / view.width,
+          y: (panel.floating ? rect.top : origin.y) / view.height
         }
       };
     })
@@ -290,12 +272,12 @@ export function spanAfter(from: Span, delta: Point): Span {
   };
 }
 
-/** `board` with `panel` replaced by `next`, or removed when `next` has no parts left and no window handle. */
+/** `board` with `panel` replaced by `next`, or removed when `next` has no parts left and no grip strip. */
 export function replacePanel(board: Board, id: string, next: Panel): Board {
   return {
     ...board,
     panels: board.panels.flatMap((panel) =>
-      panel.id !== id ? [panel] : next.parts.length > 0 || next.window ? [next] : []
+      panel.id !== id ? [panel] : next.parts.length > 0 || next.floating ? [next] : []
     )
   };
 }
@@ -306,7 +288,7 @@ export function putPanel(board: Board, next: Panel): Board {
     return replacePanel(board, next.id, next);
   }
 
-  return next.parts.length > 0 || next.window ? { ...board, panels: [...board.panels, next] } : board;
+  return next.parts.length > 0 || next.floating ? { ...board, panels: [...board.panels, next] } : board;
 }
 
 /**
@@ -349,13 +331,13 @@ export function pruneOwned(board: Board): Board {
   }
 }
 
-/** `board` without part `id`; an empty panel without a window handle goes too. */
+/** `board` without part `id`; an empty panel without a grip strip goes too. */
 export function removePart(board: Board, id: string): Board {
   return {
     ...board,
     panels: board.panels.flatMap((panel) => {
       const parts = panel.parts.filter((part) => part.id !== id);
-      return parts.length === 0 && !panel.window
+      return parts.length === 0 && !panel.floating
         ? []
         : [parts.length === panel.parts.length ? panel : { ...panel, parts }];
     })

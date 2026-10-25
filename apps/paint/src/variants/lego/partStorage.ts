@@ -164,29 +164,48 @@ export function migrateParts(parts: Part[], version: number) {
   return { parts: current, owned };
 }
 
-/**
- * Version 4 frees action-owned panels and orphan windows, removes openers, and closes safe toolbar gaps.
- * Swatch-owned windows return to folders; a Layers folder retains its own parts as a collapsed window.
- * Legacy positions use a fixed viewport when no measured view exists. Unknown panel and window fields survive.
- */
+/** Runs legacy opener migrations before replacing window chrome with a floating flag in version 5. */
 export function migrateWindows(board: Board, version: number): Board {
+  const legacy = migrateV4Windows(board, version);
+  return version < 5 ? { ...legacy, panels: legacy.panels.map(migrateFloating) } : legacy;
+}
+
+/**
+ * Converts a legacy window at its stored top-left, discarding its name, icon and visibility state.
+ * Unknown window fields survive under `legacyWindow`; unknown panel fields remain in place.
+ */
+export function migrateFloating<T extends object>(record: T): Omit<T, 'window'> & { floating?: true } {
+  const { window, ...fields } = record as T & { window?: Record<string, unknown> };
+
+  if (!window || typeof window !== 'object') {
+    return record;
+  }
+
+  const unknown = Object.fromEntries(
+    Object.entries(window).filter(([key]) => !['name', 'icon', 'collapsed', 'open', 'placed'].includes(key))
+  );
+  return { ...fields, ...(Object.keys(unknown).length ? { legacyWindow: unknown } : {}), floating: true };
+}
+
+/** Legacy input only. Runtime panels expose just `floating`. */
+type LegacyPanel = Panel & { window?: Record<string, unknown> };
+
+/** Version 4 frees action-owned panels and orphan windows, removes openers, and closes safe toolbar gaps. */
+function migrateV4Windows(board: Board, version: number): Board {
   if (version >= 4) {
     return board;
   }
 
   const view = { width: 1200, height: 900 };
   const removed = new Set<string>();
-  const converted: Panel[] = board.panels.map((panel) => {
+  const converted: LegacyPanel[] = (board.panels as LegacyPanel[]).map((panel) => {
     const { owner } = panel;
     const host = owner ? findPart(board, owner) : undefined;
     if (!panel.window && host?.part.kind !== 'action:layers') {
       return panel;
     }
 
-    const { open, placed, ...window } = (panel.window ?? { name: 'Layers' }) as NonNullable<Panel['window']> & {
-      open?: true;
-      placed?: true;
-    };
+    const window = panel.window ?? { name: 'Layers' };
     const free = { ...panel };
     delete free.owner;
     delete free.offset;
@@ -201,10 +220,10 @@ export function migrateWindows(board: Board, version: number): Board {
       removed.add(owner);
     }
 
-    const legacy = frameAt(panel, { x: 0, y: 0 }).rect;
+    const legacy = legacyFrame(panel).rect;
     const anchor = host && panelFrame(host.panel, view).origin;
     const at =
-      owner && !placed && host && anchor
+      owner && !window.placed && host && anchor
         ? {
             x: (anchor.x + (host.part.cell.column + host.part.span.columns) * pitch + 10) / view.width,
             y: (anchor.y + host.part.cell.row * pitch) / view.height
@@ -213,14 +232,10 @@ export function migrateWindows(board: Board, version: number): Board {
     return {
       ...free,
       at,
-      window: {
-        ...window,
-        ...(host?.part.kind === 'action:layers' ? { icon: 'layers' as const } : {}),
-        collapsed: owner ? (!open || window.collapsed ? (true as const) : undefined) : window.collapsed
-      }
+      window
     };
   });
-  const added: Panel[] = [];
+  const added: LegacyPanel[] = [];
   for (const panel of board.panels) {
     for (const part of panel.parts) {
       if (part.kind !== 'action:layers' || removed.has(part.id) || part[partData]?.invalid) {
@@ -236,7 +251,7 @@ export function migrateWindows(board: Board, version: number): Board {
           y: (origin.y + part.cell.row * pitch) / view.height
         },
         parts: layersKit.parts.map((child) => ({ ...child, id: `${part.id}-${child.id}` })),
-        window: { ...layersKit.window, collapsed: true }
+        window: { name: 'Layers' }
       });
     }
   }
@@ -289,7 +304,7 @@ function closeOpenerGaps(parts: Part[], removed: ReadonlySet<string>) {
 }
 
 /** Migration output shared by board panels and kit-owned panels. */
-type OwnedPanel = Pick<Panel, 'owner' | 'parts' | 'window' | 'offset'> & { owner: string };
+type OwnedPanel = Pick<LegacyPanel, 'owner' | 'parts' | 'window' | 'offset'> & { owner: string };
 
 /** Backs up each distinct raw value once, without overwriting an earlier backup from the same millisecond. */
 function backup(key: string, raw: string) {
@@ -313,14 +328,16 @@ function backup(key: string, raw: string) {
   localStorage.setItem(name, raw);
 }
 
-const currentVersion = 4;
+const currentVersion = 5;
 
-/** Window state is additive; unknown fields survive reads and subsequent edits. */
-export const storedWindow = z.looseObject({
-  name: z.string(),
-  collapsed: z.literal(true).optional(),
-  icon: z.custom<NonNullable<Panel['window']>['icon']>((value) => typeof value === 'string').optional()
-});
+/** Version 4 used a 36px handle when converting cell-origin positions into stored top-left positions. */
+function legacyFrame(panel: LegacyPanel) {
+  const frame = frameAt({ ...panel, floating: undefined }, { x: 0, y: 0 });
+  return {
+    ...frame,
+    rect: { ...frame.rect, top: frame.rect.top - (panel.window ? 36 : 0) }
+  };
+}
 
 const cellSchema = z.object({ column: z.number().int(), row: z.number().int() });
 const spanSchema = z.object({ columns: z.number().int().min(1), rows: z.number().int().min(1) });
