@@ -39,6 +39,7 @@
   background: transparent;
   border: 0;
   padding: 4px;
+  cursor: inherit;
 }
 
 .field {

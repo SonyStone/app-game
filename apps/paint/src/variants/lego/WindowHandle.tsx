@@ -1,16 +1,25 @@
 import { createSignal, Show } from 'solid-js';
+import { pressHandlers } from '../../shared/ui/pressHandlers';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './WindowHandle.module.css';
 
 /** A plate's stud-free handle. Drags in every mode; names become editable only in Edit. */
 export function WindowHandle(props: {
+  /** User-visible title, renamed only in Edit. */
   name: string;
+  /** Hides the plate contents while keeping the handle visible. */
   collapsed: boolean;
+  /** Enables tap-to-rename without restricting handle dragging. */
   editing: boolean;
   /** The fitted plate width; tiny plates use a compact grip and collapse button. */
   width: number;
+  /** CSS pixel movement threshold shared with board taps. */
+  tapDistance: number;
+  /** Starts a board-owned drag immediately; a tap never changes placement. */
   onDrag: (event: PointerEvent) => void;
+  /** Toggles the persisted collapse state. */
   onCollapse: () => void;
+  /** Commits a trimmed, nonempty title on blur or Enter. */
   onRename: (name: string) => void;
 }) {
   const [renaming, setRenaming] = createSignal(false);
@@ -22,6 +31,21 @@ export function WindowHandle(props: {
     }
   };
 
+  let renameOnTap = false;
+  const handlePress = pressHandlers({
+    tapDistance: props.tapDistance,
+    start: (_press, event) => {
+      renameOnTap = event.target instanceof Element && !!event.target.closest('[data-window-name]');
+      event.stopPropagation();
+      props.onDrag(event);
+    },
+    tap: () => {
+      if (props.editing && renameOnTap) {
+        setRenaming(true);
+      }
+    }
+  });
+
   return (
     <div
       class={styles.handle}
@@ -30,14 +54,13 @@ export function WindowHandle(props: {
       data-collapsed={props.collapsed ? '' : undefined}
       role="toolbar"
       aria-label={`${props.name} window`}
+      {...handlePress}
       onPointerDown={(event) => {
-        if (!(event.target instanceof Element) || event.target.closest('button, input')) {
+        if (!(event.target instanceof Element) || event.target.closest('[data-window-collapse], input')) {
           return;
         }
 
-        event.stopPropagation();
-        event.currentTarget.setPointerCapture(event.pointerId);
-        props.onDrag(event);
+        handlePress.onPointerDown(event);
       }}
     >
       <span class={styles.grip} aria-hidden="true">
@@ -49,10 +72,15 @@ export function WindowHandle(props: {
           <Show when={props.editing} fallback={<span class={styles.name}>{props.name}</span>}>
             <button
               class={styles.name}
+              data-window-name
               type="button"
               aria-label={`Rename ${props.name}`}
               title="Rename window"
-              onClick={() => setRenaming(true)}
+              onClick={(event) => {
+                if (event.detail === 0) {
+                  setRenaming(true);
+                }
+              }}
             >
               {props.name}
             </button>
@@ -80,6 +108,7 @@ export function WindowHandle(props: {
       </Show>
       <button
         class={styles.collapse}
+        data-window-collapse
         type="button"
         aria-label={`${props.collapsed ? 'Expand' : 'Collapse'} ${props.name}`}
         aria-expanded={props.collapsed ? 'false' : 'true'}

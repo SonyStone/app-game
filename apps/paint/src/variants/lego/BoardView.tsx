@@ -552,6 +552,7 @@ export function BoardView(props: {
           {(window) => (
             <WindowHandle
               width={frame().rect.width}
+              tapDistance={tapDistance}
               name={window().name}
               collapsed={!!window().collapsed}
               editing={props.editing}
