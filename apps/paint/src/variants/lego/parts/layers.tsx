@@ -13,7 +13,7 @@ export const layerParts = [
     family: 'action',
     section: 'Layers',
     label: 'Layer list',
-    icon: 'layers',
+    icon: 'book',
     looks: {
       looks: [
         { id: 'narrow', label: 'Narrow', min: { columns: 1, rows: 1 } },
@@ -68,7 +68,7 @@ export const layerParts = [
     family: 'action',
     section: 'Layers',
     label: 'Blend mode',
-    icon: 'layers',
+    icon: 'gradient',
     needs: (s, f) => {
       const mode = createMemo(
         () => s.layers.state().layers.find((layer) => layer.id === s.layers.state().activeId)!.blend

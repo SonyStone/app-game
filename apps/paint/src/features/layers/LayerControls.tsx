@@ -1,11 +1,14 @@
 import type { LayerAction, LayerInfo } from '@app-game/paint-core/document';
 import { closestCenter, createDragContext, createDraggable, createDroppable } from '@solid-primitives/drag-drop';
-import { For, Show, untrack } from 'solid-js';
+import { createEffect, createMemo, For, Show, untrack } from 'solid-js';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import type { DocumentState } from './LayersPanel';
 import styles from './LayersPanel.module.css';
 
-/** Shared scrollable layer list. The host owns thumbnail demand and may supply its own classes and compact rows. */
+/**
+ * Shared scrollable layer list. The host owns thumbnail demand and may supply its own classes and compact rows.
+ * Selection and order changes reveal the active row after DOM updates; unrelated reports preserve manual scrolling.
+ */
 export function LayerList(props: {
   state: DocumentState;
   ready: boolean;
@@ -15,6 +18,14 @@ export function LayerList(props: {
   classes?: typeof styles;
   narrow?: boolean;
 }) {
+  let list!: HTMLDivElement;
+  const scrollTarget = createMemo(() =>
+    JSON.stringify([props.state.activeId, props.state.layers.map((layer) => layer.id)])
+  );
+  createEffect(scrollTarget, () => {
+    list.querySelector('[aria-current="true"]')?.parentElement?.scrollIntoView?.({ block: 'nearest' });
+  });
+
   const drag = createDragContext({
     collisionDetection: closestCenter,
     onDragEnd(item, over) {
@@ -27,7 +38,7 @@ export function LayerList(props: {
 
   return (
     <drag.Provider>
-      <div class={(props.classes ?? styles).layerList}>
+      <div ref={list} class={(props.classes ?? styles).layerList}>
         <For
           each={[...props.state.layers].reverse().filter((layer) => props.shown?.(layer.id) ?? true)}
           keyed={(item) => item.id}
@@ -102,7 +113,7 @@ export function layerCommand(command: LayerCommand, state: DocumentState, ready:
     },
     'merge-down': {
       label: 'Merge down',
-      icon: 'layers',
+      icon: 'mergeDown',
       disabled: !ready || !below?.visible || !selected.visible,
       action: { type: 'merge-down', id: state.activeId }
     },
