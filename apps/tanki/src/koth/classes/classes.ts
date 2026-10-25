@@ -25,17 +25,18 @@ export const TANK_CLASSES: Record<TankClassId, TankClass> = {
  *
  * - Speed 1.4 of the medium tank's, 350 px/s at 250, the Scout's 400 units per second against the
  *   Soldier's 240 toned down so a scout stays hittable on a screen this size. Bots driving it
- *   dodge three shells in four they see coming.
+ *   dodge six shells in ten they see coming, down from three in four once shells slowed to the
+ *   pace's 0.8 of their speed and left more time to see one coming.
  * - A 32 x 20 hull with its core 3 px under the rear armor and 6 px under the sides: a rocket in
  *   the back kills it. It weighs 0.65 of a medium tank, so hits shove it around, and a rocket's
  *   blast throws it into the air.
- * - The scattergun: four pellets fanned over 0.16 rad, a volley every 0.75 s for as long as the
+ * - The scattergun: four pellets fanned over 0.16 rad, a volley every 0.85 s for as long as the
  *   trigger is held. Pellets fly 1400 px/s for 300 px and tear at point blank (see `biteAt`):
  *   four times as deep right at the muzzle, falling off to their own small bite at 200 px, and
- *   half that at 300 px. From 80 px one volley into a medium tank's rear blows it up, two open
- *   its side and four its front; from 160 px it takes three into the rear, and beyond 200 px the
- *   pellets only chip, so the Scout has to get close, the way Team Fortress 2's scattergun
- *   kills with a point-blank meatshot.
+ *   half that at 300 px. At the default pace (see `PACE_DEFAULTS`), from 80 px one volley into a
+ *   medium tank's rear blows it up, three open its side and five its front; from 160 px it takes
+ *   three into the rear, and beyond 200 px the pellets only chip, so the Scout has to get close,
+ *   the way Team Fortress 2's scattergun kills with a point-blank meatshot.
  */
 function createScout(): TankClass {
   return {
@@ -47,7 +48,7 @@ function createScout(): TankClass {
     mount: { kind: 'turret' },
     hull: { halfLength: 16, halfWidth: 10, corner: 1, core: { x: -9, y: 0, radius: 4 }, cell: 0.5, pattern: 'dart' },
     mass: 0.65,
-    interval: 0.75,
+    interval: 0.85,
     shell: { speed: 1400, range: 300, hole: 2.8, depth: 1.2, knockback: 90, fade: 0.5, size: 0.45, pointBlank: { range: 200, depth: 4, hole: 1.2 } },
     weapon: { kind: 'volley', pellets: 4, spread: 0.16 },
     capture: 2,
@@ -62,17 +63,20 @@ function createScout(): TankClass {
  *   fires, as the Heavy slows to a crawl with his minigun spinning.
  * - A 48 x 30 hull with its core 8 px under the rear armor, 10 px under the sides and 30 px
  *   behind the front, in coarser 0.6 px cells to fit a slot. Its plates give way to only 0.75 of
- *   a blow (see `HullSpec.plating`): rockets into its side take nine or ten hits instead of a
- *   medium tank's six and grenades eleven, though two rockets into its rear still kill it. It
- *   weighs 2.2 medium tanks: hits barely shove it, and it rams harder than any other class.
+ *   a blow (see `HullSpec.plating`): at the default pace rockets into its side take ten hits
+ *   instead of a medium tank's six or seven and grenades thirteen or so, though two rockets into
+ *   its rear still kill it. It weighs 2.2 medium tanks: hits barely shove it, and it rams harder
+ *   than any other class.
  * - The gatling fires the moment the trigger is pulled, with no spin-up to wait for, ten rounds a
  *   second for as long as it is held. Each round flies 1500 px/s for 520 px, up to 0.05 rad off,
  *   and chips a small hole that shrinks to 0.3 by the end of its range, but the stream drills
  *   (see `DrillSpec`): a round landing within 7 px of the stream's rounds of the last half second
- *   digs 0.8 px deeper for each, up to 6 px. Held on a medium tank from 80 px it opens the side in
- *   about half a second and the front in about a second; from 160 px it takes two to three
- *   seconds; beyond 300 px its rounds scatter too wide to drill and fade, where a Soldier's
- *   rockets and a Sniper's rail still reach.
+ *   digs 0.8 px deeper for each, up to 6 px. A round shoves its target with only 25, against a
+ *   rocket's 350, as a push of 60 spun a tank's hull round under the stream and turned the hole it
+ *   drilled away from the gun. At the default pace, held on a medium tank's side it blows it up
+ *   in under a second from 80 px and in about one and a half from 160 or 280 px, through the
+ *   front in one and a half to three seconds; beyond 400 px its rounds scatter too wide to drill
+ *   and fade, where a Soldier's rockets and a Sniper's rail still reach.
  */
 function createHeavy(): TankClass {
   return {
@@ -85,7 +89,7 @@ function createHeavy(): TankClass {
     hull: { halfLength: 24, halfWidth: 15, corner: 2, core: { x: -11, y: 0, radius: 5 }, cell: 0.6, pattern: 'plated', plating: 0.75 },
     mass: 2.2,
     interval: 0.1,
-    shell: { speed: 1500, range: 520, hole: 2, depth: 1, knockback: 60, fade: 0.7, size: 0.4, drill: { radius: 7, gain: 0.8, most: 6, memory: 0.5 } },
+    shell: { speed: 1500, range: 520, hole: 2, depth: 1, knockback: 25, fade: 0.7, size: 0.4, drill: { radius: 7, gain: 0.8, most: 6, memory: 0.5 } },
     weapon: { kind: 'spin', spread: 0.05, slowdown: 0.55 },
     capture: 1,
     look: { turret: TURRET_GATLING, muzzle: 33 }

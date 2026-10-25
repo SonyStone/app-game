@@ -3,6 +3,7 @@ import { pullSpeedFor } from '../../arena/bodies';
 import { createCombat, type ShellSpec } from '../../damage/combat';
 import type { createRangeRenderer } from '../../damage/renderer';
 import type { Rapier } from '../../physics/Rapier2D';
+import { PACE_DEFAULTS, type Pace } from '../pace';
 import { MEDIUM_TANK, type TankClassId } from '../tanks';
 import { TANK_CLASSES } from './classes';
 import { chargedShell, createWeapon } from './weapon';
@@ -29,17 +30,18 @@ describe("the Scout's scattergun", () => {
 });
 
 describe("the Heavy's gatling", () => {
-  it('drills to the core of a Soldier from its side in far fewer rounds than the same rounds would without drilling', () => {
-    // The median of five streams, each scattered by its own seed.
+  it("drills to a Soldier's core from its side at mid range, aimed by a shaky hand, in a fraction of the rounds the same stream takes without drilling", () => {
+    // The median of five streams at the match's pace, each scattered by its own seed and a hand
+    // missing by up to 4 px, from 250 px, where rounds rarely land in the same hole by chance.
     const rounds = (shell: ShellSpec) => {
-      const counts = [1, 2, 3, 4, 5].map((seed) => createDuel('heavy', 'side', 150, shell, 'soldier', seed).fireUntilDestroyed(100));
+      const counts = [1, 2, 3, 4, 5].map((seed) => createDuel('heavy', 'side', 250, shell, 'soldier', seed, { pace: PACE_DEFAULTS, hand: 4 }).fireUntilDestroyed(150));
       return counts.sort((a, b) => a - b)[2];
     };
     const drilling = rounds(TANK_CLASSES.heavy.shell);
     const scattered = rounds({ ...TANK_CLASSES.heavy.shell, drill: undefined });
 
-    expect(drilling).toBeLessThan(16);
-    expect(scattered).toBeGreaterThan(drilling * 2.5);
+    expect(drilling).toBeLessThan(30);
+    expect(scattered).toBeGreaterThan(drilling * 3);
   });
 
   it("takes a Demoman grenade's blast on its plated side with less armor lost than a Soldier's side", () => {
@@ -85,8 +87,18 @@ describe("the Sniper's rail", () => {
  *
  * @param shell - Replaces the shooter's shell, to weigh a rule against the shell without it.
  * @param seed - Seeds the spread of the shooter's rounds and the outlines of the holes.
+ * @param options.pace - The battle's pace; defaults to shells and hits as their specs say.
+ * @param options.hand - Pixels by which the aim misses the core at most, drawn anew every 0.3 s; defaults to 0.
  */
-function createDuel(id: TankClassId, side: 'rear' | 'side' | 'front', range: number, shell?: ShellSpec, targetId: TankClassId = 'soldier', seed = 1) {
+function createDuel(
+  id: TankClassId,
+  side: 'rear' | 'side' | 'front',
+  range: number,
+  shell?: ShellSpec,
+  targetId: TankClassId = 'soldier',
+  seed = 1,
+  options: { pace?: Pace; hand?: number } = {}
+) {
   const world = new rapier.World({ x: 0, y: 0 });
   world.lengthUnit = 100;
   let state = seed * 4242;
@@ -94,7 +106,8 @@ function createDuel(id: TankClassId, side: 'rear' | 'side' | 'front', range: num
     state = (state * 16807) % 2147483647;
     return (state - 1) / 2147483646;
   };
-  const combat = createCombat(rapier, world, fakeRenderer(), { halfWidth: 1200, halfHeight: 900 }, { shell: MEDIUM_TANK.shell, friendlyFire: false, random });
+  const pace = options.pace;
+  const combat = createCombat(rapier, world, fakeRenderer(), { halfWidth: 1200, halfHeight: 900 }, { shell: MEDIUM_TANK.shell, friendlyFire: false, random, pace: pace && (() => pace) });
   const spawn = (classId: TankClassId, at: { x: number; y: number }, rotation: number, team: string) => {
     const tankClass = TANK_CLASSES[classId];
     return combat.spawnTank({ ...at, rotation }, { color: 0, team, pullSpeed: pullSpeedFor(tankClass.speed), hull: tankClass.hull, mass: tankClass.mass, look: tankClass.look });
@@ -105,6 +118,8 @@ function createDuel(id: TankClassId, side: 'rear' | 'side' | 'front', range: num
   const tankClass = shell ? { ...TANK_CLASSES[id], shell } : TANK_CLASSES[id];
   const weapon = createWeapon(tankClass, random);
   let shots = 0;
+  let steps = 0;
+  let miss = { x: 0, y: 0 };
 
   return {
     combat,
@@ -132,10 +147,15 @@ function createDuel(id: TankClassId, side: 'rear' | 'side' | 'front', range: num
 
   function stepOnce(fire: boolean) {
     const core = combat.coreOf(target);
+    const hand = options.hand ?? 0;
+
+    if (steps++ % HAND_STEPS === 0) {
+      miss = { x: (random() * 2 - 1) * hand, y: (random() * 2 - 1) * hand };
+    }
 
     if (core) {
       const pivot = combat.gunPivotOf(shooter);
-      shooter.turretAngle = Math.atan2(core.y - pivot.y, core.x - pivot.x);
+      shooter.turretAngle = Math.atan2(core.y + miss.y - pivot.y, core.x + miss.x - pivot.x);
       combat.drive(target, { x: 0, y: 0 });
     }
 
@@ -147,6 +167,9 @@ function createDuel(id: TankClassId, side: 'rear' | 'side' | 'front', range: num
     combat.step(1 / 60);
   }
 }
+
+/** Steps a hand holds one miss for. */
+const HAND_STEPS = 18;
 
 function fakeRenderer() {
   const slots = Array.from({ length: 256 }, (_, index) => 255 - index);

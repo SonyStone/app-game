@@ -5,6 +5,7 @@ import type { createRangeRenderer } from '../../damage/renderer';
 import type { Rapier } from '../../physics/Rapier2D';
 import type { KothMap } from '../map';
 import { createKothMatch, type KothMatch } from '../match';
+import { PACE_DEFAULTS } from '../pace';
 import { CAPTURE_RULES } from '../rules';
 import { MEDIUM_TANK, TANK_CLASS_IDS, type TankClassId } from '../tanks';
 import type { Member } from '../team';
@@ -14,22 +15,23 @@ import { pickRoster } from './roster';
 import { createWeapon } from './weapon';
 
 /**
- * Balance metrics of the tank classes, printed as tables: how long every class takes to destroy
- * a still tank from behind, the side and the front at several ranges with a perfect aim; a matrix
- * of bot duels, class against class, from several starting ranges and seeds; and per-class
- * results of full eight-bot matches on the king of the hill map, with the repair kits each class
- * took and the walls each match broke, and for the matches together: the breaches bots made, by
- * class, material and method, how they ended, the wrecks and scrap left and how often and how
- * long drivers got stuck.
+ * Balance metrics of the tank classes at the match's default pace (`PACE_DEFAULTS`), printed as
+ * tables: how long every class takes to destroy a still tank from behind, the side and the front
+ * at several ranges with a perfect aim; each class played from the player's seat as a mouse aims;
+ * a matrix of bot duels, class against class, from several starting ranges and seeds; and
+ * per-class results of full eight-bot matches on the king of the hill map, with the repair kits
+ * each class took and the walls each match broke, and for the matches together: the breaches bots
+ * made, by class, material and method, how they ended, the wrecks and scrap left and how often
+ * and how long drivers got stuck.
  *
  * Slow, so it runs only with
  * `TANKI_BALANCE=1 pnpm exec vitest run src/koth/classes/balance.harness.test.ts --reporter=verbose`;
- * vitest's default reporter leaves out what passing tests print. `-t kills`, `-t duels` or
- * `-t matches` runs one part. `TANKI_MEDIUM_SPEED` sets the medium tank's speed the classes' speeds
- * are shares of; defaults to 250. `TANKI_SEEDS` replaces the matches' twelve seeds with a
- * comma-separated list: a class's kills against deaths moves by 0.2-0.5 from one set of twelve to
- * another, so a change is worth checking on a second set. `TANKI_VICTIMS` lists the classes the
- * kill times are taken against; defaults to `soldier,heavy,scout`.
+ * vitest's default reporter leaves out what passing tests print. `-t kills`, `-t player`,
+ * `-t duels` or `-t matches` runs one part. `TANKI_MEDIUM_SPEED` sets the medium tank's speed
+ * the classes' speeds are shares of; defaults to 250. `TANKI_SEEDS` replaces the matches' twelve
+ * seeds with a comma-separated list: a class's kills against deaths moves by 0.2-0.5 from one set
+ * of twelve to another, so a change is worth checking on a second set. `TANKI_VICTIMS` lists the
+ * classes the kill times are taken against; defaults to `soldier,heavy,scout`.
  */
 describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
   let rapier: Rapier;
@@ -293,7 +295,7 @@ const KILL_SEEDS = 5;
 
 /**
  * Seconds a tank of class `id` takes to destroy a still tank of class `victim`, and the shots it
- * fires: the victim at the origin facing +x, the shooter standing `range` px behind it, at its side
+ * fires, at the match's default pace (`PACE_DEFAULTS`): the victim at the origin facing +x, the shooter standing `range` px behind it, at its side
  * or in front, its gun aimed at the victim's core every step, the trigger held, and a charged shot
  * let go once full. Hits shove the victim, which then stays where it was shoved. `Infinity` when the
  * victim stands after 20 s.
@@ -302,7 +304,7 @@ function timeToKill(rapier: Rapier, id: TankClassId, victim: TankClassId, side: 
   const world = new rapier.World({ x: 0, y: 0 });
   world.lengthUnit = 100;
   const random = seeded(seed * 7919);
-  const combat = createCombat(rapier, world, fakeRenderer(), { halfWidth: 1500, halfHeight: 1500 }, { shell: MEDIUM_TANK.shell, friendlyFire: false, random });
+  const combat = createCombat(rapier, world, fakeRenderer(), { halfWidth: 1500, halfHeight: 1500 }, { shell: MEDIUM_TANK.shell, friendlyFire: false, random, pace: () => PACE_DEFAULTS });
   const spawn = (classId: TankClassId, at: { x: number; y: number }, rotation: number, team: string) => {
     const tankClass = TANK_CLASSES[classId];
     return combat.spawnTank({ ...at, rotation }, { color: 0, team, pullSpeed: pullSpeedFor(tankClass.speed), hull: tankClass.hull, mass: tankClass.mass, look: tankClass.look });

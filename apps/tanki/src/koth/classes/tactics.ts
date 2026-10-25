@@ -26,7 +26,7 @@ export type ClassTactics = {
 
 /** Tactics of every class; see `ClassTactics`. */
 export const TACTICS: Record<TankClassId, ClassTactics> = {
-  scout: { reach: 230, duel: { min: 40, max: 110 }, hits: { rear: 1, side: 2, front: 3 }, aimError: 2, dodge: 0.75, steadiness: 1 },
+  scout: { reach: 230, duel: { min: 40, max: 110 }, hits: { rear: 1, side: 2, front: 3 }, aimError: 2, dodge: 0.6, steadiness: 1 },
   soldier: { reach: 470, duel: { min: 200, max: 380 }, hits: { rear: 2, side: 3, front: 4 }, aimError: 1, dodge: 0.5, steadiness: 1 },
   heavy: { reach: 380, duel: { min: 90, max: 240 }, hits: { rear: 4, side: 8, front: 16 }, aimError: 3, dodge: 0.3, steadiness: 1 },
   demoman: { reach: 480, duel: { min: 290, max: 450 }, hits: { rear: 2, side: 3, front: 5 }, aimError: 1.3, dodge: 0.5, steadiness: 1 },
