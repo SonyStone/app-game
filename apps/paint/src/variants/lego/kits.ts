@@ -13,6 +13,8 @@ import { swatchPanelParts } from './swatchPanelParts';
 export type Kit = {
   id: string;
   name: string;
+  /** Present only on broken kits, which retain their original record until explicitly removed. */
+  [opaqueData]?: unknown;
   /** The parts, their cells counted from the kit's top-left at (0, 0). */
   parts: Part[];
   /**
@@ -32,14 +34,12 @@ export function createKits(onSavingError?: (message: string) => void) {
   };
 
   return {
-    /** Local save availability and the result of the last save attempt. */
-    saving: storage.saving,
     /** Every kit, the ready ones first. */
     kits: () => [...readyKits, ...saved()],
     /** The kit, ready or the user's, of just these `parts` laid out the same way, if there is one; see `sameLayout`. */
     findSame(parts: readonly Part[]) {
       const layout = sameLayout(parts);
-      return [...readyKits, ...saved()].find((kit) => sameLayout(kit.parts) === layout);
+      return [...readyKits, ...saved()].find((kit) => !(opaqueData in kit) && sameLayout(kit.parts) === layout);
     },
     /** Whether kit `id` is the user's, which they may delete. */
     isSaved: (id: string) => saved().some((kit) => kit.id === id),
@@ -50,8 +50,9 @@ export function createKits(onSavingError?: (message: string) => void) {
     remove(id: string) {
       store(latest().filter((kit) => kit.id !== id));
     },
+    /** Renames a readable kit; broken kits keep their original record until removed. */
     rename(id: string, name: string) {
-      store(latest().map((kit) => (kit.id === id ? { ...kit, name } : kit)));
+      store(latest().map((kit) => (kit.id === id && !(opaqueData in kit) ? { ...kit, name } : kit)));
     },
     /** `name`, or with the first number after it that no kit of the user's has. */
     uniqueName(name: string) {

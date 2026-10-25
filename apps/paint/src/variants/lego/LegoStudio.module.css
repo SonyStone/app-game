@@ -1308,6 +1308,22 @@
   touch-action: none;
 }
 
+.kitPreview[data-broken] {
+  cursor: default;
+  touch-action: auto;
+}
+
+.brokenKit {
+  display: grid;
+  min-height: 64px;
+  padding: 16px;
+  place-items: center;
+  border-radius: 8px;
+  background: #443a35;
+  color: #fff1df;
+  font-size: 12px;
+}
+
 .kitPlate {
   position: relative;
   border-radius: 8px;

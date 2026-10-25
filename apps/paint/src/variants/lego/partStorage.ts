@@ -1,4 +1,4 @@
-import { createSignal, onSettled } from 'solid-js';
+import { onSettled } from 'solid-js';
 import { z } from 'zod';
 import { maxSpan, newId, partData, type Part } from './board';
 import { swatchPanelParts } from './swatchPanelParts';
@@ -44,8 +44,6 @@ export function createPartStorage<T>(
   parse: (data: unknown, version: number) => T,
   onSavingError?: (message: string) => void
 ) {
-  type SavingState = 'ready' | 'read-only' | 'failed';
-  let initialSaving: SavingState = 'ready';
   let writable = true;
   let envelope: Record<string, unknown> = {};
   const label = field === 'board' ? 'Board' : 'Kit';
@@ -70,7 +68,6 @@ export function createPartStorage<T>(
         if (version > currentVersion) {
           writable = false;
           message = `${label} changes can't be saved because this data was saved by a newer Paint version. Open it in that version to save changes.`;
-          initialSaving = 'read-only';
         }
 
         return parse(envelope[field], version);
@@ -90,23 +87,21 @@ export function createPartStorage<T>(
         backup(key, raw);
       } catch {
         writable = false;
-        initialSaving = 'failed';
       }
 
       return fallback;
     }
   };
   const initial = read();
-  const [saving, setSaving] = createSignal<SavingState>(initialSaving);
 
-  if (initialSaving !== 'ready') {
-    onSettled(() => onSavingError?.(message));
+  if (!writable) {
+    onSettled(() => {
+      onSavingError?.(message);
+    });
   }
 
   return {
     initial,
-    /** Whether the last save succeeded, failed, or is forbidden for this instance. */
-    saving,
     /** Stores edits with opaque records intact; reports failures without discarding in-memory edits. */
     write(value: T) {
       if (!writable) {
@@ -119,9 +114,7 @@ export function createPartStorage<T>(
           key,
           JSON.stringify({ ...envelope, version: currentVersion, [field]: value }, preserveRecord)
         );
-        setSaving('ready');
       } catch {
-        setSaving('failed');
         onSavingError?.(message);
       }
     }
@@ -191,6 +184,7 @@ function preserveRecord(_key: string, value: unknown): unknown {
   }
 
   const part = value as Part | null;
+
   if (!part || typeof part !== 'object' || !part[partData]) {
     return value;
   }

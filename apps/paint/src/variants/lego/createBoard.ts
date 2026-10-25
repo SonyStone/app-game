@@ -20,8 +20,6 @@ export function createBoard(onSavingError?: (message: string) => void) {
 
   return {
     board,
-    /** Local save availability and the result of the last save attempt. */
-    saving: storage.saving,
     /** The board as last set, also within the event that set it. */
     latest,
     /** Replaces the board and stores it. */

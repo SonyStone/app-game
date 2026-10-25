@@ -5,6 +5,7 @@ import { closedHeight, type createSheet } from './createSheet';
 import type { createKits, Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { boxSections, kindLabel, lookOf, PartView, type Session } from './parts';
+import { opaqueData } from './partStorage';
 
 /**
  * The box of parts while editing, a sheet pulled up from the bottom edge (see `createSheet`): a wheel turned over the
@@ -303,7 +304,7 @@ export function PartTile(props: { kind: string; session: Session; onLift: (event
 
 /**
  * A kit as the box shows it: its parts in miniature, at most `cells` cells across (three by default), with its
- * name; the user's own kits have a delete button. A press lifts a copy.
+ * name; the user's own kits have a delete button. A press lifts a readable kit. Broken kits can only be removed.
  */
 export function KitTile(props: {
   kit: Kit;
@@ -314,6 +315,7 @@ export function KitTile(props: {
   flash?: boolean;
   onLift: (event: PointerEvent) => void;
 }) {
+  const broken = () => opaqueData in props.kit;
   const [tile, setTile] = createSignal<HTMLElement>();
   createEffect(
     () => (props.flash ? tile() : undefined),
@@ -324,8 +326,19 @@ export function KitTile(props: {
 
   return (
     <div ref={setTile} class={styles.trayItem} data-flash={props.flash ? '' : undefined}>
-      <div class={styles.kitPreview} title={`Kit: ${props.kit.name}`} onPointerDown={(event) => props.onLift(event)}>
-        <KitPreview parts={props.kit.parts} session={props.session} cells={props.cells ?? 3} />
+      <div
+        class={styles.kitPreview}
+        data-broken={broken() ? '' : undefined}
+        title={`${broken() ? 'Broken kit' : 'Kit'}: ${props.kit.name}`}
+        onPointerDown={(event) => {
+          if (!broken()) {
+            props.onLift(event);
+          }
+        }}
+      >
+        <Show when={!broken()} fallback={<span class={styles.brokenKit}>Broken kit</span>}>
+          <KitPreview parts={props.kit.parts} session={props.session} cells={props.cells ?? 3} />
+        </Show>
         <Show when={props.kits.isSaved(props.kit.id)}>
           <button
             type="button"
@@ -338,7 +351,10 @@ export function KitTile(props: {
           </button>
         </Show>
       </div>
-      <Show when={props.kits.isSaved(props.kit.id)} fallback={<span class={styles.trayCaption}>{props.kit.name}</span>}>
+      <Show
+        when={props.kits.isSaved(props.kit.id) && !broken()}
+        fallback={<span class={styles.trayCaption}>{props.kit.name}</span>}
+      >
         <KitName name={props.kit.name} onRename={(name) => props.kits.rename(props.kit.id, name)} />
       </Show>
     </div>

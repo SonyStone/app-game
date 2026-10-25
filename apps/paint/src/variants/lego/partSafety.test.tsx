@@ -9,6 +9,7 @@ import { createKits } from './kits';
 import { LookChooser } from './LookChooser';
 import { PartFrame } from './PartFrame';
 import { kindLabel, PartView, ValuePart, type Session } from './parts';
+import { KitTile } from './PartsTray';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
@@ -179,6 +180,34 @@ it('renders future kinds loaded from both board and kit storage without halting 
 
 it('returns a plain label for inherited color ids', () => {
   expect(kindLabel('color:toString', fakeSession().session)).toBe('color:toString');
+});
+
+it('shows opaque kits as broken and only offers deletion, preserving records until removed', () => {
+  const records = [{ id: 'bad', name: 'Broken kit', parts: 'future shape', owned: [] }, null];
+  localStorage.setItem('paint.lego.kits', JSON.stringify({ version: 2, kits: records }));
+  const kits = owned(createKits);
+  const { session } = fakeSession();
+  const lift = vi.fn();
+
+  for (const kit of kits.kits().filter((kit) => kits.isSaved(kit.id))) {
+    renderOwned(() => <KitTile kit={kit} kits={kits} session={session} onLift={lift} />);
+  }
+
+  const previews = document.querySelectorAll<HTMLElement>('[data-broken]');
+  expect(previews).toHaveLength(2);
+  expect(document.querySelector('[title="Rename"]')).toBeNull();
+  expect(document.querySelector('input')).toBeNull();
+
+  for (const preview of previews) {
+    expect(preview.textContent).toContain('Broken kit');
+    preview.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+  }
+
+  expect(lift).not.toHaveBeenCalled();
+  expect(JSON.parse(localStorage.getItem('paint.lego.kits')!).kits).toEqual(records);
+  document.querySelector<HTMLButtonElement>('[aria-label="Delete kit Broken kit"]')!.click();
+  flush();
+  expect(JSON.parse(localStorage.getItem('paint.lego.kits')!).kits).toEqual([null]);
 });
 
 it('hides the look chooser for an invalid value record', () => {

@@ -127,9 +127,8 @@ it.each([
 ])('keeps newer $key data read-only and reports it, including incompatible shapes', ({ key, field, value }) => {
   const raw = JSON.stringify({ version: 3, [field]: value, futureEnvelope: 'keep' });
   localStorage.setItem(key, raw);
-  const notice = vi.fn();
+  const notice = vi.fn(() => 'callback return value');
   const storage = field === 'board' ? owned(() => createBoard(notice)) : owned(() => createKits(notice));
-  expect(storage.saving()).toBe('read-only');
   expect(notice).toHaveBeenCalledWith(expect.stringContaining('newer Paint version'));
 
   if ('set' in storage) {
@@ -240,8 +239,7 @@ it('reports disabled saving when reads or backups fail', () => {
   const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
     throw new Error('unavailable');
   });
-  const unreadable = owned(() => createBoard(notice));
-  expect(unreadable.saving()).toBe('failed');
+  owned(() => createBoard(notice));
   expect(notice).toHaveBeenCalledWith("Board changes can't be saved on this device.");
   get.mockRestore();
   localStorage.setItem('paint.lego', '{broken');
@@ -250,7 +248,6 @@ it('reports disabled saving when reads or backups fail', () => {
     throw new Error('full');
   });
   const unbacked = owned(() => createBoard(notice));
-  expect(unbacked.saving()).toBe('failed');
   expect(notice).toHaveBeenCalledWith("Board changes can't be saved on this device.");
   set.mockRestore();
   unbacked.reset();
@@ -267,13 +264,26 @@ it('reports quota failures, retains in-memory edits and retries a later save', (
   board.set(edited);
   flush();
   expect(board.latest()).toEqual(edited);
-  expect(board.saving()).toBe('failed');
   expect(notice).toHaveBeenCalledWith("Board changes can't be saved on this device.");
   set.mockRestore();
   board.set(board.latest());
   flush();
-  expect(board.saving()).toBe('ready');
   expect(JSON.parse(localStorage.getItem('paint.lego')!).board).toEqual(edited);
+});
+
+it('keeps opaque kits unchanged until explicitly removed', () => {
+  const broken = { id: 'broken', name: 'Broken kit', parts: 'unreadable', owned: [], future: 42 };
+  localStorage.setItem('paint.lego.kits', JSON.stringify({ version: 2, kits: [broken] }));
+  const kits = owned(createKits);
+  kits.rename('broken', 'Lost rename');
+  flush();
+  expect(kits.kits().find((kit) => kit.id === 'broken')!.name).toBe('Broken kit');
+  expect(kits.findSame([])).toBeUndefined();
+  expect(JSON.parse(localStorage.getItem('paint.lego.kits')!).kits).toEqual([broken]);
+  kits.remove('broken');
+  flush();
+  expect(kits.kits().some((kit) => kit.id === 'broken')).toBe(false);
+  expect(JSON.parse(localStorage.getItem('paint.lego.kits')!).kits).toEqual([]);
 });
 
 it('persists cell/span edits of an opaque part without dropping its unreadable fields', () => {
