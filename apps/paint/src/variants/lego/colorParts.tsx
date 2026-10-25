@@ -1,11 +1,12 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show, useContext } from 'solid-js';
 import { HarmonyField, MaskField, WheelDisk } from '../../features/color-wheel';
 import wheelStyles from '../../features/color-wheel/ColorWheel.module.css';
 import { hexToHsv, hsvToHex, luminance, type Hsv } from '../../features/color/hsv';
 import { CoolorusWheel } from '../../features/coolorus-wheel';
 import { HueTriangle } from '../../features/hue-triangle';
+import { PickerScale } from '../../shared/ui/createPickerPixels';
 import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
 import { ColorDisc } from '../zen/ColorDisc';
 import { cellGap, pitch, type Span } from './board';
@@ -245,15 +246,17 @@ const length = (cells: number) => cells * pitch - cellGap;
  * at any scale.
  */
 function Fitted(props: { width: number; box: { width: number; height: number }; children: JSX.Element }) {
+  const parentScale = useContext(PickerScale);
   const [inner, setInner] = createSignal<HTMLElement>();
   const [height, setHeight] = createSignal(props.width);
   createResizeObserver(inner, (_rect, element) => setHeight(Math.max(1, (element as HTMLElement).offsetHeight)));
-  const scale = () => Math.min(props.box.width / props.width, props.box.height / height(), 1.5);
+  const scale = createMemo(() => Math.min(props.box.width / props.width, props.box.height / height(), 1.5));
+  const displayedScale = createMemo(() => parentScale() * scale());
 
   return (
     <div class={styles.fitted}>
       <div ref={setInner} style={{ width: `${props.width}px`, scale: `${scale()}` }}>
-        {props.children}
+        <PickerScale value={displayedScale}>{props.children}</PickerScale>
       </div>
     </div>
   );

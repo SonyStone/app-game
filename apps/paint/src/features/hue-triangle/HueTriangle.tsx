@@ -1,8 +1,10 @@
 import type { Point } from '@app-game/paint-core/camera';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { createPickerPixels } from '../../shared/ui/createPickerPixels';
 import { hexToHsv, hsvToHex, type Hsv } from '../color/hsv';
+import { paintTriangle } from '../hue-triangle/paintTriangle';
 import styles from './HueTriangle.module.css';
-import { hueAt, pointFromSv, svFromPoint, triangleCorners } from './triangleGeometry';
+import { hueAt, pointFromSv, svFromPoint } from './triangleGeometry';
 
 /**
  * The classic color wheel: a hue ring around a triangle of saturation and value whose corners are the pure hue, white
@@ -19,19 +21,25 @@ export function HueTriangle(props: { color: string; onChange: (color: string) =>
   const hue = createMemo(() => hsv().h);
   let canvas!: HTMLCanvasElement;
   let svg!: SVGSVGElement;
+  const pixels = createPickerPixels(() => canvas);
   let frame: number | undefined;
   let pending: number | undefined;
   /** The part being dragged by the captured pointer. */
   let drag: { pointer: number; part: 'ring' | 'triangle' } | undefined;
 
   // Repaints the triangle at most once per animation frame while the hue changes.
-  createEffect(hue, (h) => {
-    pending = h;
-    frame ??= requestAnimationFrame(() => {
-      frame = undefined;
-      paintTriangle(canvas, pending!);
-    });
-  });
+  createEffect(
+    () => ({ hue: hue(), pixels: pixels() }),
+    (next) => {
+      pending = next.hue;
+      frame ??= requestAnimationFrame(() => {
+        frame = undefined;
+        if (pixels() > 0) {
+          paintTriangle(canvas, pending!);
+        }
+      });
+    }
+  );
   onCleanup(() => {
     if (frame !== undefined) {
       cancelAnimationFrame(frame);
@@ -76,7 +84,7 @@ export function HueTriangle(props: { color: string; onChange: (color: string) =>
   return (
     <div class={styles.triangle} role="group" aria-label="Hue triangle">
       <div class={styles.ring} aria-hidden="true" />
-      <canvas ref={canvas} class={styles.canvas} width={pixels} height={pixels} aria-hidden="true" />
+      <canvas ref={canvas} class={styles.canvas} width={pixels()} height={pixels()} aria-hidden="true" />
       <svg
         ref={svg}
         class={styles.overlay}
@@ -165,51 +173,3 @@ const ringOuter = 110;
 const ringInner = 88;
 /** Center to each corner of the triangle, inside the ring with a small gap. */
 const triangleRadius = 84;
-/** Backing pixels across the triangle canvas: twice the natural size, enough for dense screens. */
-const pixels = size * 2;
-
-/**
- * Paints the triangle for `hue` into the canvas: each pixel mixes the hue, white and black by its barycentric weights,
- * in encoded sRGB as the HSV values define it; edges are antialiased over one canvas pixel.
- */
-function paintTriangle(canvas: HTMLCanvasElement, hue: number) {
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return;
-  }
-
-  const image = context.createImageData(pixels, pixels);
-  const scale = size / pixels;
-  // The pure hue's red, green and blue, as `hsvToHex` computes them at full saturation and value.
-  const [hr, hg, hb] = [5, 3, 1].map((n) => {
-    const k = (n + hue / 60) % 6;
-    return 255 * (1 - Math.max(0, Math.min(k, 4 - k, 1)));
-  }) as [number, number, number];
-  // Barycentric weights, as `triangleWeights` computes them, times the triangle's height are distances to the edges.
-  const { hue: p, white: q, black: r } = triangleCorners(hue, triangleRadius);
-  const area = (q.x - p.x) * (r.y - p.y) - (r.x - p.x) * (q.y - p.y);
-  const height = 1.5 * triangleRadius;
-  for (let y = 0; y < pixels; y++) {
-    const py = (y + 0.5) * scale - size / 2;
-    for (let x = 0; x < pixels; x++) {
-      const px = (x + 0.5) * scale - size / 2;
-      const wa = ((q.x - px) * (r.y - py) - (r.x - px) * (q.y - py)) / area;
-      const wb = ((r.x - px) * (p.y - py) - (p.x - px) * (r.y - py)) / area;
-      const inside = Math.min(wa, wb, 1 - wa - wb) * height;
-      const alpha = Math.min(1, Math.max(0, inside / scale + 0.5));
-      if (!alpha) {
-        continue;
-      }
-
-      const a = Math.max(0, wa),
-        b = Math.max(0, wb);
-      const index = (y * pixels + x) * 4;
-      image.data[index] = a * hr + b * 255;
-      image.data[index + 1] = a * hg + b * 255;
-      image.data[index + 2] = a * hb + b * 255;
-      image.data[index + 3] = alpha * 255;
-    }
-  }
-
-  context.putImageData(image, 0, 0);
-}

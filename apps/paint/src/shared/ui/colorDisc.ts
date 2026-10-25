@@ -29,18 +29,35 @@ export function discColor(u: number, v: number) {
  * circle repeat the rim, so that a CSS circle clip gets a clean edge.
  */
 export function paintDisc(canvas: HTMLCanvasElement, hue: number, size: number) {
-  canvas.width = size;
-  canvas.height = size;
-  const context = canvas.getContext('2d')!;
-  const image = context.createImageData(size, size);
-  const half = size / 2;
-  for (let row = 0; row < size; row++) {
-    for (let column = 0; column < size; column++) {
-      const { saturation, value } = discColor((column + 0.5 - half) / half, (row + 0.5 - half) / half);
-      const at = (row * size + column) * 4;
-      hsvChannels(hue, saturation, value, image.data, at);
-      image.data[at + 3] = 255;
-    }
+  if (canvas.width !== size || canvas.height !== size) {
+    canvas.width = size;
+    canvas.height = size;
+  }
+
+  const context = canvas.getContext('2d');
+  if (!context || !size) {
+    return;
+  }
+
+  let cache = discs.get(canvas);
+  if (!cache || cache.image.width !== size) {
+    cache = prepareDisc(context, size);
+    discs.set(canvas, cache);
+  }
+
+  const { image, values, chromas } = cache;
+  const channel = (n: number) => {
+    const k = (n + hue / 60) % 6;
+    return Math.max(0, Math.min(k, 4 - k, 1));
+  };
+  const r = channel(5);
+  const g = channel(3);
+  const b = channel(1);
+  for (let i = 0; i < values.length; i++) {
+    const at = i * 4;
+    image.data[at] = values[i]! - chromas[i]! * r;
+    image.data[at + 1] = values[i]! - chromas[i]! * g;
+    image.data[at + 2] = values[i]! - chromas[i]! * b;
   }
 
   context.putImageData(image, 0, 0);
@@ -57,13 +74,22 @@ function squareOf(u: number, v: number) {
   return { x: Math.min(1, Math.max(-1, x)), y: Math.min(1, Math.max(-1, y)) };
 }
 
-/** Writes the 8-bit RGB of an HSV color into `target` at `at`. */
-function hsvChannels(hue: number, saturation: number, value: number, target: Uint8ClampedArray, at: number) {
-  const channel = (n: number) => {
-    const k = (n + hue / 60) % 6;
-    return (value - value * saturation * Math.max(0, Math.min(k, 4 - k, 1))) * 255;
-  };
-  target[at] = channel(5);
-  target[at + 1] = channel(3);
-  target[at + 2] = channel(1);
+function prepareDisc(context: CanvasRenderingContext2D, size: number) {
+  const image = context.createImageData(size, size);
+  const values = new Float32Array(size * size);
+  const chromas = new Float32Array(size * size);
+  const half = size / 2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const { saturation, value } = discColor((x + 0.5 - half) / half, (y + 0.5 - half) / half);
+      const i = y * size + x;
+      values[i] = value * 255;
+      chromas[i] = value * saturation * 255;
+      image.data[i * 4 + 3] = 255;
+    }
+  }
+
+  return { image, values, chromas };
 }
+
+const discs = new WeakMap<HTMLCanvasElement, ReturnType<typeof prepareDisc>>();

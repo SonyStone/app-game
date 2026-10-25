@@ -1,5 +1,6 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createSignal, For, onCleanup, onSettled, Show } from 'solid-js';
+import { PickerScale } from '../../shared/ui/createPickerPixels';
 import { cellGap, cellSize, partData, partsBounds, pitch, type Part } from './board';
 import { closedHeight, type createSheet } from './createSheet';
 import type { createKits, Kit } from './kits';
@@ -480,7 +481,9 @@ function KitPreview(props: { parts: readonly Part[]; cells: number }) {
         style={{ width: `${size().width}px`, height: `${size().height}px`, scale: `${scale()}` }}
         inert
       >
-        <BlockView parts={props.parts} />
+        <PickerScale value={scale}>
+          <BlockView parts={props.parts} />
+        </PickerScale>
       </div>
     </div>
   );

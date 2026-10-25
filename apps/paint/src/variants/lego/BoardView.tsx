@@ -3,6 +3,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { Portal } from '@solidjs/web';
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { PaintSession } from '../../features/session';
+import { PickerScale } from '../../shared/ui/createPickerPixels';
 import {
   cellGap,
   cellSize,
@@ -80,8 +81,10 @@ import { swatchPanelParts } from './swatchPanelParts';
 export function BoardView(props: {
   board: ReturnType<typeof createBoard>;
   kits: ReturnType<typeof createKits>;
-  session: PaintSession;
+  session: Pick<PaintSession, 'size' | 'library' | 'brush'>;
   editing: boolean;
+  /** CSS scale applied to the board by the editing card. Defaults to 1. */
+  scale?: number;
   /** The swatch whose panel is open; the panels of the swatches it lies in show too. */
   openPanel: string | undefined;
   onOpenPanel: (owner: string | undefined) => void;
@@ -657,9 +660,11 @@ export function BoardView(props: {
             onContextMenu={openSpawnFromMenuKey}
           />
         </Show>
-        <For each={visible()} keyed={(entry) => entry.panel.id}>
-          {(entry) => <PanelView entry={entry()} />}
-        </For>
+        <PickerScale value={() => props.scale ?? 1}>
+          <For each={visible()} keyed={(entry) => entry.panel.id}>
+            {(entry) => <PanelView entry={entry()} />}
+          </For>
+        </PickerScale>
         <Show when={props.editing}>
           <Show when={!hinted() && !drag()}>
             <p class={styles.editHint} role="status">
@@ -686,9 +691,11 @@ export function BoardView(props: {
         {(slot) => (
           <Portal mount={slot()}>
             <div class={styles.benchPlate} style={{ scale: `${benchScale()}` }}>
-              <For each={benchPanels()} keyed={(entry) => entry.panel.id}>
-                {(entry) => <PanelView entry={entry()} />}
-              </For>
+              <PickerScale value={benchScale}>
+                <For each={benchPanels()} keyed={(entry) => entry.panel.id}>
+                  {(entry) => <PanelView entry={entry()} />}
+                </For>
+              </PickerScale>
               <Show when={benchEntry().panel.parts.length === 0}>
                 <span class={styles.benchHint}>Workbench: lay parts out, drag across them to select</span>
               </Show>
@@ -725,24 +732,27 @@ export function BoardView(props: {
               scale: `${ghostScale(current().point) * 1.06}`
             }}
           >
-            <Show
-              when={current().block}
-              fallback={
-                <div class={styles.content} inert>
-                  <PartFrame
-                    mode="preview"
-                    immediate
-                    kind={current().kind}
-                    missing={!!current()[partData]?.invalid}
-                    span={current().span}
-                    look={lookOf(current())}
-                    onPopup={() => {}}
-                  />
-                </div>
-              }
-            >
-              {(block) => <BlockView parts={block().parts} immediate />}
-            </Show>
+            <PickerScale value={() => ghostScale(current().point) * 1.06}>
+              {' '}
+              <Show
+                when={current().block}
+                fallback={
+                  <div class={styles.content} inert>
+                    <PartFrame
+                      mode="preview"
+                      immediate
+                      kind={current().kind}
+                      missing={!!current()[partData]?.invalid}
+                      span={current().span}
+                      look={lookOf(current())}
+                      onPopup={() => {}}
+                    />
+                  </div>
+                }
+              >
+                {(block) => <BlockView parts={block().parts} immediate />}
+              </Show>
+            </PickerScale>
           </div>
         )}
       </Show>

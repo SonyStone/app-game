@@ -1,7 +1,9 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import { createPickerPixels } from '../../shared/ui/createPickerPixels';
 import styles from './ColorWheel.module.css';
 import type { ColorWheelSettings } from './createColorWheelSettings';
-import { hexToWheel, maxChroma, oklchToRgb, wheelToHex, type WheelColor } from './oklch';
+import { hexToWheel, wheelToHex, type WheelColor } from './oklch';
+import { paintDisk } from './paintDisk';
 import {
   clampToPolygon,
   editableMask,
@@ -84,18 +86,24 @@ export function WheelDisk(props: {
   const mask = () => maskPolygon(props.settings.mask, props.settings.maskAngle, props.settings.customMask);
   let canvas!: HTMLCanvasElement;
   let disk!: SVGSVGElement;
+  const pixels = createPickerPixels(() => canvas);
   /** The lightness waiting to be painted at the next animation frame. */
   let pending: number | undefined;
   let frame: number | undefined;
 
   // Repaints the disk at most once per animation frame while the lightness changes.
-  createEffect(lightness, (l) => {
-    pending = l;
-    frame ??= requestAnimationFrame(() => {
-      frame = undefined;
-      paintDisk(canvas, pending!);
-    });
-  });
+  createEffect(
+    () => ({ lightness: lightness(), pixels: pixels() }),
+    (next) => {
+      pending = next.lightness;
+      frame ??= requestAnimationFrame(() => {
+        frame = undefined;
+        if (pixels() > 0) {
+          paintDisk(canvas, pending!);
+        }
+      });
+    }
+  );
   onCleanup(() => {
     if (frame !== undefined) {
       cancelAnimationFrame(frame);
@@ -111,7 +119,10 @@ export function WheelDisk(props: {
       y: (event.clientY - box.top - box.height / 2) / scale
     };
   };
-  const pickDisk = drag((event) => edit({ ...props.wheel, ...fromDisk(clampToPolygon(diskPoint(event), mask())) }), props);
+  const pickDisk = drag(
+    (event) => edit({ ...props.wheel, ...fromDisk(clampToPolygon(diskPoint(event), mask())) }),
+    props
+  );
   const turnMask = drag((event) => {
     const { h } = fromDisk(diskPoint(event));
     props.onSettings({ maskAngle: Math.round(h) });
@@ -119,7 +130,7 @@ export function WheelDisk(props: {
 
   return (
     <div class={styles.disk}>
-      <canvas ref={canvas} width={diskPixels} height={diskPixels} aria-hidden="true" />
+      <canvas ref={canvas} width={pixels()} height={pixels()} aria-hidden="true" />
       <svg
         ref={disk}
         viewBox={`${-1 / diskScale} ${-1 / diskScale} ${2 / diskScale} ${2 / diskScale}`}
@@ -262,7 +273,13 @@ export function WheelDisk(props: {
             />
           )}
         </For>
-        <circle class={styles.thumb} cx={toDisk(props.wheel).x} cy={toDisk(props.wheel).y} r={0.075} fill={props.color} />
+        <circle
+          class={styles.thumb}
+          cx={toDisk(props.wheel).x}
+          cy={toDisk(props.wheel).y}
+          r={0.075}
+          fill={props.color}
+        />
       </svg>
     </div>
   );
@@ -298,7 +315,10 @@ export function WheelLightness(props: {
         const delta = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[event.key];
         if (delta !== undefined) {
           event.preventDefault();
-          edit({ ...props.wheel, l: Math.min(1, Math.max(0, props.wheel.l + (delta * (event.shiftKey ? 10 : 1)) / 100)) });
+          edit({
+            ...props.wheel,
+            l: Math.min(1, Math.max(0, props.wheel.l + (delta * (event.shiftKey ? 10 : 1)) / 100))
+          });
         }
       }}
       onBlur={() => props.onSettle()}
@@ -393,39 +413,6 @@ function drag(
   };
 }
 
-/** Paints the disk at lightness `l`: hue around it, saturation outwards, with an antialiased rim. */
-function paintDisk(canvas: HTMLCanvasElement, l: number) {
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return;
-  }
-
-  const size = canvas.width;
-  const image = context.createImageData(size, size);
-  const most = Array.from({ length: 361 }, (_, hue) => maxChroma(l, hue));
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx = ((x + 0.5) / size) * 2 - 1,
-        dy = ((y + 0.5) / size) * 2 - 1;
-      const radius = Math.hypot(dx, dy);
-      const coverage = Math.min(1, Math.max(0, (1 - radius) * (size / 2) + 0.5));
-      if (coverage <= 0) {
-        continue;
-      }
-
-      const hue = ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360;
-      const [r, g, b] = oklchToRgb(l, Math.min(1, radius) * most[Math.round(hue)]!, hue);
-      const index = (y * size + x) * 4;
-      image.data[index] = r * 255;
-      image.data[index + 1] = g * 255;
-      image.data[index + 2] = b * 255;
-      image.data[index + 3] = coverage * 255;
-    }
-  }
-
-  context.putImageData(image, 0, 0);
-}
-
 /** A gradient through the lightness range at the color's hue and saturation. */
 function lightnessGradient(color: WheelColor) {
   const stops = Array.from({ length: 11 }, (_, index) => wheelToHex({ ...color, l: index / 10 }));
@@ -436,9 +423,6 @@ function lightnessGradient(color: WheelColor) {
 function path(points: readonly DiskPoint[]) {
   return `M ${points.map(({ x, y }) => `${x.toFixed(4)} ${y.toFixed(4)}`).join(' L ')} Z`;
 }
-
-/** Backing pixels across the disk image, enough for a 240 CSS px disk at twice the density. */
-const diskPixels = 480;
 
 /** Longest pause between the two presses of a double tap on a mask corner. */
 const doubleTapMs = 350;

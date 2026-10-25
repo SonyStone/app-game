@@ -1,5 +1,6 @@
 import type { JSX } from '@solidjs/web';
 import { For, Show } from 'solid-js';
+import { PickerScale } from '../../shared/ui/createPickerPixels';
 import { cellGap, partData, pitch, type Part, type Span } from './board';
 import styles from './LegoStudio.module.css';
 import { lookFits, resolveLook } from './looks';
@@ -94,7 +95,9 @@ function PartPreview(props: { kind: string; span: Span; look: string }) {
     <div class={styles.preview} inert>
       <div class={styles.previewTile} style={{ width: `${width()}px`, height: `${height()}px`, scale: `${scale()}` }}>
         <div class={styles.content}>
-          <PartFrame mode="preview" kind={props.kind} span={props.span} look={props.look} onPopup={() => {}} />
+          <PickerScale value={scale}>
+            <PartFrame mode="preview" kind={props.kind} span={props.span} look={props.look} onPopup={() => {}} />
+          </PickerScale>
         </div>
       </div>
     </div>
