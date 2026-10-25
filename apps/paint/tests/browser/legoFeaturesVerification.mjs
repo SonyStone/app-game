@@ -77,9 +77,9 @@ async function verifyControls(page, context, url, output) {
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const box = page.getByRole('complementary', { name: 'Box of parts' });
   // Each placement closes the sheet. Drag the actual box tiles into free board space.
-  for (const [i, title] of ['Symmetry', 'QuickShape', 'Pressure calibration', 'Layers'].entries()) {
+  for (const [i, title] of ['Symmetry', 'QuickShape', 'Pressure calibration'].entries()) {
     const placed = page.locator(
-      `[data-part-kind="action:${['symmetry', 'quickshape', 'pressure', 'layers'][i]}"][data-mode="edit"]`
+      `[data-part-kind="action:${['symmetry', 'quickshape', 'pressure'][i]}"][data-mode="edit"]`
     );
     const previous = await placed.count();
     await box.locator('[class*="trayBar"]').click();
@@ -96,7 +96,7 @@ async function verifyControls(page, context, url, output) {
   await page.screenshot({ path: `${output}/features-placed-from-box.png` });
   const board = await page.evaluate(() => JSON.parse(localStorage.getItem('paint.lego')).board);
   const added = Object.fromEntries(
-    ['symmetry', 'quickshape', 'pressure', 'layers'].map((id) => [
+    ['symmetry', 'quickshape', 'pressure'].map((id) => [
       id,
       board.panels
         .flatMap((p) => p.parts)
@@ -104,8 +104,6 @@ async function verifyControls(page, context, url, output) {
         .at(-1)
     ])
   );
-  assert.equal(board.panels.find((panel) => panel.owner === added.layers.id)?.window?.name, 'Layers');
-  assert.equal(board.panels.find((panel) => panel.owner === added.layers.id)?.window?.open, undefined);
   for (const part of Object.values(added)) {
     assert.ok(part);
   }
@@ -260,42 +258,86 @@ async function verifyNumberTiles(page, url, output) {
 async function verifyLayers(page, context, url, output) {
   await page.goto(`${url}/variants.html#lego`);
   await page.getByRole('button', { name: 'Edit', exact: true }).waitFor();
-  await page.evaluate(() =>
+  await page.evaluate(async () => {
+    const { layersKit } = await import('/src/variants/lego/layersKit.ts');
+    const part = (id, kind, column = 0) => ({ id, kind, cell: { column, row: 0 }, span: { columns: 2, rows: 1 } });
     localStorage.setItem(
       'paint.lego',
       JSON.stringify({
-        version: 1,
+        version: 3,
         board: {
           panels: [
             {
               id: 'buttons',
-              at: { x: 0.1, y: 0.15 },
+              at: { x: 0.05, y: 0.15 },
               parts: [
-                { id: 'layers', kind: 'action:layers', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 1 } },
-                { id: 'layers-two', kind: 'action:layers', cell: { column: 0, row: 1 }, span: { columns: 2, rows: 1 } },
-                { id: 'swatch', kind: 'color', cell: { column: 0, row: 2 }, span: { columns: 2, rows: 1 } }
+                part('swatch', 'color:swatch'),
+                { ...part('undo', 'action:undo'), cell: { column: 0, row: 1 }, span: { columns: 1, rows: 1 } },
+                { ...part('redo', 'action:redo'), cell: { column: 1, row: 1 }, span: { columns: 1, rows: 1 } },
+                part('layers', 'action:layers', 2),
+                part('layers-two', 'action:layers', 4)
               ]
+            },
+            {
+              id: 'layers-panel',
+              owner: 'layers',
+              at: { x: 0, y: 0 },
+              window: { name: 'Layers' },
+              parts: layersKit.parts
+            },
+            {
+              id: 'layers-two-panel',
+              owner: 'layers-two',
+              at: { x: 0.8, y: 0.1 },
+              window: { name: 'Other Layers', placed: true },
+              parts: layersKit.parts.map((part) => ({ ...part, id: `two-${part.id}` }))
+            },
+            {
+              id: 'swatch-panel',
+              owner: 'swatch',
+              at: { x: 0, y: 0 },
+              window: { name: 'Colors', open: true },
+              parts: [part('hex', 'color:hex')]
             }
           ]
         }
       })
-    )
-  );
+    );
+  });
   await page.reload();
-  const button = page.locator('[data-part="layers"]').getByRole('button', { name: 'Layers', exact: true });
-  const second = page.locator('[data-part="layers-two"]').getByRole('button', { name: 'Layers', exact: true });
   const panel = page.locator('[data-panel="layers-panel"]');
   const panelTwo = page.locator('[data-panel="layers-two-panel"]');
-  await button.waitFor();
-  await expect(panel).toHaveCount(0);
-  await button.click();
-  await expect(panel).toBeVisible();
-  await expect(button).toHaveAttribute('aria-pressed', 'true');
-  await second.click();
-  await expect(panelTwo).toBeVisible();
-  await expect(panel).toBeVisible();
-  await second.click();
-  await expect(panelTwo).toHaveCount(0);
+  const tile = panel.getByRole('button', { name: 'Expand Layers', exact: true });
+  await tile.waitFor();
+  await expect(page.locator('[data-part="layers"], [data-part="layers-two"]')).toHaveCount(0);
+  await expect(panelTwo.locator('[data-window-tile]')).toBeVisible();
+  await expect(page.locator('[data-panel="swatch-panel"] [data-window-handle]')).toHaveCount(0);
+  await page.screenshot({ path: `${output}/collapsed-layers-tile.png` });
+  const tileBefore = await panel.boundingBox();
+  // Drag the collapsed tile in Live without expanding it.
+  await page.mouse.move(tileBefore.x + 24, tileBefore.y + 24);
+  await page.mouse.down();
+  await page.mouse.move(tileBefore.x + 74, tileBefore.y + 54, { steps: 12 });
+  await page.mouse.up();
+  await expect(panel).toHaveAttribute('data-collapsed', '');
+  const movedTile = await panel.boundingBox();
+  assert.equal(Math.round(movedTile.x), Math.round(tileBefore.x + 50));
+  assert.equal(Math.round(movedTile.y), Math.round(tileBefore.y + 30));
+  const storedAt = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('paint.lego')).board.panels.find((panel) => panel.id === 'layers-panel').at
+  );
+  await tile.click();
+  await expect(panel.locator('[data-window-handle]')).toBeVisible();
+  const expanded = await panel.boundingBox();
+  assert.equal(Math.round(expanded.x), Math.round(movedTile.x));
+  assert.equal(Math.round(expanded.y), Math.round(movedTile.y));
+  assert.deepEqual(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem('paint.lego')).board.panels.find((panel) => panel.id === 'layers-panel').at
+    ),
+    storedAt
+  );
+  await page.screenshot({ path: `${output}/expanded-layers-window.png` });
   // A color folder still closes outside; windows remain open while painting.
   await page.locator('[data-part="swatch"] button').click();
   const folder = page.locator('[data-panel="swatch-panel"]');
@@ -311,15 +353,14 @@ async function verifyLayers(page, context, url, output) {
   await page.mouse.up();
   await expect.poll(() => handle.boundingBox().then((rect) => Math.round(rect.x))).toBe(Math.round(initial.x + 180));
   await page.screenshot({ path: `${output}/layers-window-live.png` });
+  const beforeCollapse = await panel.boundingBox();
   await panel.getByRole('button', { name: 'Collapse Layers', exact: true }).click();
   await expect(panel).toHaveAttribute('data-collapsed', '');
   await expect(panel.locator('[data-part]')).toHaveCount(0);
-  await page.screenshot({ path: `${output}/layers-window-collapsed.png` });
+  const afterCollapse = await panel.boundingBox();
+  assert.equal(Math.round(afterCollapse.x), Math.round(beforeCollapse.x));
+  assert.equal(Math.round(afterCollapse.y), Math.round(beforeCollapse.y));
   await panel.getByRole('button', { name: 'Expand Layers', exact: true }).click();
-  await button.click();
-  await expect(panel).toHaveCount(0);
-  await button.click();
-  await expect(panel).toBeVisible();
   await expect.poll(() => handle.boundingBox().then((rect) => Math.round(rect.x))).toBe(Math.round(initial.x + 180));
   const add = panel.getByRole('button', { name: 'Add layer', exact: true });
   await add.waitFor({ timeout: 60000 });
@@ -498,13 +539,12 @@ async function verifyLayers(page, context, url, output) {
   await page
     .locator('div[data-editing]')
     .evaluate((element) => Promise.allSettled(element.getAnimations().map((animation) => animation.finished)));
-  // Closed windows remain recoverable in Edit. Move the second one aside before exercising conversion.
-  await expect(panelTwo).toBeVisible();
-  const secondHandle = await panelTwo.locator('[data-window-handle]').boundingBox();
-  await page.mouse.move(secondHandle.x + 8, secondHandle.y + 18);
-  await page.mouse.down();
-  await page.mouse.move(1100, 100, { steps: 12 });
-  await page.mouse.up();
+  await expect(panelTwo.locator('[data-window-tile]')).toBeVisible();
+  await page.screenshot({ path: `${output}/edit-collapsed-tile.png` });
+  // A tap in Edit expands the tile so its contents can be edited.
+  await panelTwo.locator('[data-window-tile]').click();
+  await expect(panelTwo.locator('[data-window-handle]')).toBeVisible();
+  await panelTwo.getByRole('button', { name: 'Collapse Other Layers', exact: true }).click();
   const name = panel.getByRole('button', { name: 'Rename Layers', exact: true });
   const beforeNameDrag = await handle.boundingBox();
   const nameRect = await name.boundingBox();
@@ -521,37 +561,29 @@ async function verifyLayers(page, context, url, output) {
   await page.keyboard.press('Enter');
   await expect(panel.getByRole('button', { name: 'Rename My Layers', exact: true })).toBeVisible();
   await page.screenshot({ path: `${output}/layers-window-edit.png` });
-  // Select the owner to discover the folder/window conversion action.
-  await page.locator('[data-part="layers"]').click();
-  await page.getByRole('button', { name: 'Make folder', exact: true }).click();
-  await expect(panel.locator('[data-window-handle]')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Make window', exact: true }).click();
-  await expect(panel.locator('[data-window-handle]')).toBeVisible();
-  // Rename again after conversion; the custom name survives reload.
-  await panel.getByRole('button', { name: 'Rename Layers', exact: true }).click();
-  await panel.getByRole('textbox', { name: 'Window name', exact: true }).fill('My Layers');
-  await page.keyboard.press('Enter');
-  const ownerRect = await page.locator('[data-part="layers"]').boundingBox();
-  const ownWindowRect = await panel.boundingBox();
-  await page.mouse.move(ownerRect.x + 22, ownerRect.y + 22);
+  await expect(page.getByRole('button', { name: 'Make folder', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Make window', exact: true })).toHaveCount(0);
+  const box = page.getByRole('complementary', { name: 'Box of parts' });
+  await box.locator('[class*="trayBar"]').click();
+  const layersKit = box.locator('div[title="Kit: Layers"]');
+  await layersKit.scrollIntoViewIfNeeded();
+  const kitRect = await layersKit.boundingBox();
+  await page.mouse.move(kitRect.x + kitRect.width / 2, kitRect.y + kitRect.height / 2);
   await page.mouse.down();
-  await page.mouse.move(ownWindowRect.x + 26, ownWindowRect.y + 65, { steps: 16 });
+  await page.mouse.move(860, 80, { steps: 16 });
   await page.mouse.up();
-  const ownerHost = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('paint.lego')).board.panels.find((panel) =>
-      panel.parts.some((part) => part.id === 'layers')
+  await expect(box).toHaveAttribute('data-closed', '');
+  const placedLayers = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('paint.lego')).board.panels.find(
+      (panel) => panel.window?.name === 'Layers' && panel.id !== 'layers-panel'
     )
   );
-  assert.notEqual(ownerHost.id, 'layers-panel', 'a window cannot receive its own owner');
-  assert.equal(ownerHost.owner, undefined, 'rejected target falls back to a free plate');
-  await page.getByRole('button', { name: 'Done', exact: true }).click();
-  // Use the owner locator, which follows the moved button, to check that neither toggle loses the composition.
-  await button.click();
-  await expect(panel).toHaveCount(0);
-  await button.click();
-  await expect(panel).toBeVisible();
-  await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  const box = page.getByRole('complementary', { name: 'Box of parts' });
+  assert.ok(placedLayers && !placedLayers.owner && !placedLayers.window.collapsed);
+  const placedKit = page.locator(`[data-panel="${placedLayers.id}"]`);
+  await expect(placedKit.locator('[data-window-handle]')).toBeVisible();
+  const kitPlacedRect = await placedKit.boundingBox();
+  assert.ok(Math.abs(kitPlacedRect.x - 860) < 130, `Layers kit lands at the drop: ${JSON.stringify(kitPlacedRect)}`);
+  await placedKit.getByRole('button', { name: 'Collapse Layers', exact: true }).click();
   await box.locator('[class*="trayBar"]').click();
   const windowTile = box.locator('div[title="Window"]');
   await windowTile.scrollIntoViewIfNeeded();
@@ -560,11 +592,26 @@ async function verifyLayers(page, context, url, output) {
   await page.mouse.down();
   await page.mouse.move(1000, 350, { steps: 16 });
   await page.mouse.up();
-  const freeWindow = page
+  const freeWindowId = await page
     .locator('[data-window]')
-    .filter({ has: page.getByRole('toolbar', { name: 'Window window', exact: true }) });
+    .filter({ has: page.getByRole('toolbar', { name: 'Window window', exact: true }) })
+    .getAttribute('data-panel');
+  const freeWindow = page.locator(`[data-panel="${freeWindowId}"]`);
   await expect(freeWindow).toBeVisible();
   await expect(freeWindow).toContainText('Drop parts here');
+  // Finish the box-to-board scale transition before comparing the two window frames.
+  await page
+    .locator('div[data-editing]')
+    .evaluate((element) => Promise.allSettled(element.getAnimations().map((animation) => animation.finished)));
+  await page.screenshot({ path: `${output}/empty-window-expanded.png` });
+  const emptyExpanded = await freeWindow.boundingBox();
+  await freeWindow.getByRole('button', { name: 'Collapse Window', exact: true }).click();
+  await expect(freeWindow.locator('[data-window-tile]')).toBeVisible();
+  const emptyCollapsed = await freeWindow.boundingBox();
+  assert.equal(Math.round(emptyCollapsed.x), Math.round(emptyExpanded.x));
+  assert.equal(Math.round(emptyCollapsed.y), Math.round(emptyExpanded.y));
+  await page.screenshot({ path: `${output}/empty-window-collapsed.png` });
+  await freeWindow.getByRole('button', { name: 'Expand Window', exact: true }).click();
   // A window accepts ordinary parts, and its cells keep the existing resize and transfer behavior.
   const addPart = panel.locator('[data-part]').filter({ has: page.locator('[data-part-kind="layer:add"]') });
   const addId = await addPart.getAttribute('data-part');
@@ -607,7 +654,7 @@ async function verifyLayers(page, context, url, output) {
   await freeWindow
     .locator('..')
     .evaluate((element) => Promise.allSettled(element.getAnimations().map((animation) => animation.finished)));
-  assert.equal(Math.round((await freeWindow.boundingBox()).height), 36, 'an empty Live window shows only its handle');
+  assert.ok((await freeWindow.boundingBox()).height > 36, 'an expanded empty window retains its plate');
   await freeWindow.screenshot({ path: `${output}/empty-free-window-live.png` });
   await page.reload();
   await expect(page.getByRole('toolbar', { name: 'My Layers window', exact: true })).toBeVisible();
@@ -642,7 +689,7 @@ async function verifyLayers(page, context, url, output) {
   await page.waitForFunction(() => window.paintEvents.length > 0);
   console.log('PASS live layer thumbnails arrive after, never during, a stroke');
   console.log(
-    'PASS Layers windows: independent open state, live handle drag, collapse, rename, folder conversion, Window box entry and persistence'
+    'PASS window tiles: expand in place, same-top-left collapse, live tile/handle drag, Edit expansion/rename, box Layers/Window, v3 migration, swatch folder dismissal and persistence'
   );
   console.log(
     'PASS ordinary Layers parts: list/reorder/visibility, opacity one undo, blend menu, smooth color and touch scroll'
