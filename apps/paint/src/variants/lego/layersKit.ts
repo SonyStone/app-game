@@ -4,7 +4,7 @@ import type { Part } from './board';
 export const layersKit = {
   id: 'ready:layers',
   name: 'Layers',
-  window: { name: 'Layers' },
+  window: { name: 'Layers', icon: 'layers' as const },
   parts: [
     part('name', 'layers:name', 0, 0, 5, 1),
     part('blend', 'layers:blend', 0, 1, 3, 1),

@@ -23,7 +23,7 @@ export type PartBinding = {
   onPopup: (anchor: Element, popup: Popup) => void;
   /** Opens the part's owned panel in live mode. */
   onOpen: (anchor: Element) => void;
-  /** Whether this part's owned folder or window is currently open. */
+  /** Whether this part's owned folder is currently open. */
   open: boolean;
   /** Closes the current popup after a live command or file selection. */
   onDone: () => void;
@@ -43,7 +43,7 @@ export function definePart<N extends object, P extends object = N>(spec: {
   icon?: SketchIconName;
   section: 'Tools' | 'Color' | 'Values' | 'Brushes' | 'Layers';
   /** Composition supplied once when a new owner is taken from the box or spawn menu. */
-  owned?: Pick<Panel, 'parts' | 'window'>;
+  owned?: Pick<Panel, 'parts'>;
   looks?: { looks: readonly LookSpec[]; auto: (span: Span) => string };
   needs: (services: LegoServices, frame: PartBinding) => N;
   View: Component<N>;

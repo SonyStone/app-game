@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import type { Board } from './board';
 import { layersKit } from './layersKit';
-import { createPartStorage, migrateParts, storedPart, storedWindow } from './partStorage';
+import { createPartStorage, migrateParts, migrateWindows, storedPart, storedWindow } from './partStorage';
 import { swatchPanelParts } from './swatchPanelParts';
 
 /**
@@ -55,7 +55,7 @@ function read(data: unknown, version: number): Board {
     return { ...panel, parts: result.parts };
   });
 
-  return { ...board, panels: [...panels, ...added] };
+  return migrateWindows({ ...board, panels: [...panels, ...added] }, version);
 }
 
 /** The default panel swatch `owner` opens, its part ids prefixed with the owner's to keep them unique. */
@@ -90,9 +90,8 @@ export const defaultBoard: Board = {
         { id: 'undo', kind: 'action:undo', cell: { column: 0, row: 5 }, span: { columns: 1, rows: 1 } },
         { id: 'redo', kind: 'action:redo', cell: { column: 1, row: 5 }, span: { columns: 1, rows: 1 } },
         { id: 'size-knob', kind: 'value:size', cell: { column: 2, row: 5 }, span: { columns: 1, rows: 1 } },
-        { id: 'layers', kind: 'action:layers', cell: { column: 0, row: 6 }, span: { columns: 3, rows: 1 } },
-        { id: 'local-undo', kind: 'action:local-undo', cell: { column: 0, row: 7 }, span: { columns: 3, rows: 1 } },
-        { id: 'file', kind: 'action:file', cell: { column: 0, row: 8 }, span: { columns: 3, rows: 1 } }
+        { id: 'local-undo', kind: 'action:local-undo', cell: { column: 0, row: 6 }, span: { columns: 3, rows: 1 } },
+        { id: 'file', kind: 'action:file', cell: { column: 0, row: 7 }, span: { columns: 3, rows: 1 } }
       ]
     },
     {
@@ -115,9 +114,8 @@ export const defaultBoard: Board = {
     swatchPanel('color'),
     {
       id: 'layers-panel',
-      owner: 'layers',
-      at: { x: 0, y: 0 },
-      window: { name: layersKit.name },
+      at: { x: 0.17, y: 0.5 },
+      window: { ...layersKit.window, collapsed: true },
       parts: layersKit.parts.map((part) => ({ ...part, id: `layers-${part.id}` }))
     }
   ]

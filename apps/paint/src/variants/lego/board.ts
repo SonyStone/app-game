@@ -1,3 +1,5 @@
+import type { SketchIconName } from '../../shared/ui/SketchIcon';
+
 /**
  * The LEGO board: panels lie freely on the drawing, each one a grid of studs, and parts sit on a panel's studs like
  * printed tiles. A part covers any whole number of cells; it never overlaps another part, so placing or growing one
@@ -12,28 +14,24 @@ export type Board = { panels: Panel[] };
 
 /**
  * A panel lying on the drawing. `at` places its cell (0, 0) as fractions of the view's width and height, so the
- * layout keeps its proportions when the view resizes or turns; cells left of or above it have negative indices,
+ * layout keeps its proportions when the view resizes or turns. Windows use their plate's top-left instead.
+ * Cells left of or above the origin have negative indices,
  * which lets a panel grow toward the top and left without moving its parts on screen.
  */
 export type Panel = {
   id: string;
   at: Point;
   parts: Part[];
-  /**
-   * The part this panel belongs to. Folders follow their owner and the single open chain. Windows persist their
-   * own open state and, after their handle is dragged, lie independently at `at`.
-   */
+  /** The swatch whose transient folder this is. Windows are always free panels. */
   owner?: string;
-  /** A handle turns a plate into a persistent window. Owned windows start closed beside their owner. */
+  /** A persistent free window. Its `at` stores the plate's top-left instead of cell (0, 0). */
   window?: {
     /** User-visible title, trimmed and renameable in Edit. */
     name: string;
-    /** Keeps only the handle visible; omitted means expanded. */
+    /** Kit icon; omitted uses the generic window icon. */
+    icon?: SketchIconName;
+    /** Replaces the handle and contents with a one-cell-high icon and name tile. */
     collapsed?: true;
-    /** Owned windows toggle independently; omitted means closed in Live. Edit shows all windows for recovery. */
-    open?: true;
-    /** Set after dragging the handle: `at` then stays independent of the owner. */
-    placed?: true;
   };
   /**
    * Where an owned panel lies from its part: its cell (0, 0) this many cells from the part's top-left cell, which may
@@ -170,8 +168,8 @@ export function panelFrame(panel: Panel, view: { width: number; height: number }
   const { rect } = frameAt(panel, { x: 0, y: 0 });
   const { width, height } = rect;
   const wanted = {
-    x: panel.at.x * view.width + rect.left,
-    y: panel.at.y * view.height + rect.top
+    x: panel.at.x * view.width + (panel.window ? 0 : rect.left),
+    y: panel.at.y * view.height + (panel.window ? 0 : rect.top)
   };
   const left = Math.max(0, Math.min(wanted.x, view.width - width));
   const top = Math.max(0, Math.min(wanted.y, view.height - height));
@@ -190,11 +188,24 @@ export function frameAt(panel: Panel, origin: Point) {
   const rect = {
     left: origin.x + bounds.column * pitch - panelPadding,
     top: origin.y + bounds.row * pitch - panelPadding - handle,
-    width: (panel.window && panel.parts.length === 0 ? 3 : bounds.columns) * pitch - cellGap + panelPadding * 2,
-    height: panel.window?.collapsed ? handle : bounds.rows * pitch - cellGap + panelPadding * 2 + handle
+    width:
+      (panel.window?.collapsed
+        ? windowTileColumns(panel.window.name)
+        : panel.window && panel.parts.length === 0
+          ? 3
+          : bounds.columns) *
+        pitch -
+      cellGap +
+      panelPadding * 2,
+    height: (panel.window?.collapsed ? cellSize : bounds.rows * pitch - cellGap + handle) + panelPadding * 2
   };
 
   return { origin, rect };
+}
+
+/** Fits an action-style icon and label into two to four cells, truncating long names. */
+export function windowTileColumns(name: string) {
+  return Math.max(2, Math.min(4, Math.ceil((name.length * 6 + 40) / pitch)));
 }
 
 /**
@@ -206,9 +217,18 @@ export function pinPanels(board: Board, origins: ReadonlyMap<string, Point>, vie
     ...board,
     panels: board.panels.map((panel) => {
       const origin = origins.get(panel.id);
-      return origin && (panel.owner === undefined || panel.window?.placed)
-        ? { ...panel, at: { x: origin.x / view.width, y: origin.y / view.height } }
-        : panel;
+      if (!origin || panel.owner !== undefined) {
+        return panel;
+      }
+
+      const rect = frameAt(panel, origin).rect;
+      return {
+        ...panel,
+        at: {
+          x: (panel.window ? rect.left : origin.x) / view.width,
+          y: (panel.window ? rect.top : origin.y) / view.height
+        }
+      };
     })
   };
 }

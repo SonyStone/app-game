@@ -1,13 +1,15 @@
 import { createSignal, Show } from 'solid-js';
 import { pressHandlers } from '../../shared/ui/pressHandlers';
-import { SketchIcon } from '../../shared/ui/SketchIcon';
+import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import styles from './WindowHandle.module.css';
 
-/** A plate's stud-free handle. Drags in every mode; names become editable only in Edit. */
+/** A window's collapsed tile or stud-free handle. Both drag in every mode; handle names rename only in Edit. */
 export function WindowHandle(props: {
   /** User-visible title, renamed only in Edit. */
   name: string;
-  /** Hides the plate contents while keeping the handle visible. */
+  /** Kit icon; omitted uses the generic window icon. */
+  icon?: SketchIconName;
+  /** Replaces the plate and handle with the icon and name tile. */
   collapsed: boolean;
   /** Enables tap-to-rename without restricting handle dragging. */
   editing: boolean;
@@ -40,82 +42,105 @@ export function WindowHandle(props: {
       props.onDrag(event);
     },
     tap: () => {
-      if (props.editing && renameOnTap) {
+      if (props.collapsed) {
+        props.onCollapse();
+      } else if (props.editing && renameOnTap) {
         setRenaming(true);
       }
     }
   });
 
   return (
-    <div
-      class={styles.handle}
-      data-compact={props.width < 100 ? '' : undefined}
-      data-window-handle
-      data-collapsed={props.collapsed ? '' : undefined}
-      role="toolbar"
-      aria-label={`${props.name} window`}
-      {...handlePress}
-      onPointerDown={(event) => {
-        if (!(event.target instanceof Element) || event.target.closest('[data-window-collapse], input')) {
-          return;
-        }
-
-        handlePress.onPointerDown(event);
-      }}
-    >
-      <span class={styles.grip} aria-hidden="true">
-        <SketchIcon name="grip" size={16} />
-      </span>
-      <Show
-        when={renaming() && props.editing}
-        fallback={
-          <Show when={props.editing} fallback={<span class={styles.name}>{props.name}</span>}>
-            <button
-              class={styles.name}
-              data-window-name
-              type="button"
-              aria-label={`Rename ${props.name}`}
-              title="Rename window"
-              onClick={(event) => {
-                if (event.detail === 0) {
-                  setRenaming(true);
-                }
-              }}
-            >
-              {props.name}
-            </button>
-          </Show>
-        }
-      >
-        <input
-          class={styles.field}
-          aria-label="Window name"
-          maxlength={64}
-          value={props.name}
-          ref={(input) => queueMicrotask(() => input.select())}
-          onBlur={(event) => keep(event.currentTarget)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.currentTarget.blur();
-            }
-
-            if (event.key === 'Escape') {
-              event.stopPropagation();
-              setRenaming(false);
+    <Show
+      when={!props.collapsed}
+      fallback={
+        <button
+          type="button"
+          class={styles.tile}
+          data-window-tile
+          aria-label={`Expand ${props.name}`}
+          aria-expanded="false"
+          {...handlePress}
+          onClick={(event) => {
+            if (event.detail === 0) {
+              props.onCollapse();
             }
           }}
-        />
-      </Show>
-      <button
-        class={styles.collapse}
-        data-window-collapse
-        type="button"
-        aria-label={`${props.collapsed ? 'Expand' : 'Collapse'} ${props.name}`}
-        aria-expanded={props.collapsed ? 'false' : 'true'}
-        onClick={props.onCollapse}
+        >
+          <SketchIcon name={props.icon ?? 'window'} size={20} />
+          <span>{props.name}</span>
+        </button>
+      }
+    >
+      <div
+        class={styles.handle}
+        data-compact={props.width < 100 ? '' : undefined}
+        data-window-handle
+        role="toolbar"
+        aria-label={`${props.name} window`}
+        {...handlePress}
+        onPointerDown={(event) => {
+          if (!(event.target instanceof Element) || event.target.closest('[data-window-collapse], input')) {
+            return;
+          }
+
+          handlePress.onPointerDown(event);
+        }}
       >
-        <SketchIcon name={props.collapsed ? 'down' : 'up'} size={18} />
-      </button>
-    </div>
+        <span class={styles.grip} aria-hidden="true">
+          <SketchIcon name="grip" size={16} />
+        </span>
+        <Show
+          when={renaming() && props.editing}
+          fallback={
+            <Show when={props.editing} fallback={<span class={styles.name}>{props.name}</span>}>
+              <button
+                class={styles.name}
+                data-window-name
+                type="button"
+                aria-label={`Rename ${props.name}`}
+                title="Rename window"
+                onClick={(event) => {
+                  if (event.detail === 0) {
+                    setRenaming(true);
+                  }
+                }}
+              >
+                {props.name}
+              </button>
+            </Show>
+          }
+        >
+          <input
+            class={styles.field}
+            aria-label="Window name"
+            maxlength={64}
+            value={props.name}
+            ref={(input) => queueMicrotask(() => input.select())}
+            onBlur={(event) => keep(event.currentTarget)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.currentTarget.blur();
+              }
+
+              if (event.key === 'Escape') {
+                event.stopPropagation();
+                setRenaming(false);
+              }
+            }}
+          />
+        </Show>
+        <button
+          class={styles.collapse}
+          data-window-collapse
+          type="button"
+          aria-label={`Collapse ${props.name}`}
+          aria-expanded="true"
+          onClick={props.onCollapse}
+        >
+          <SketchIcon name="up" size={18} />
+        </button>
+      </div>
+    </Show>
   );
 }

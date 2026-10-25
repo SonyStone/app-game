@@ -1,11 +1,23 @@
 import { expect, it } from 'vitest';
-import { frameAt, panelFrame, pitch, putPanel, removePart, windowHandleHeight, type Board, type Panel } from './board';
+import {
+  cellSize,
+  frameAt,
+  panelFrame,
+  panelPadding,
+  pitch,
+  putPanel,
+  removePart,
+  windowHandleHeight,
+  windowTileColumns,
+  type Board,
+  type Panel
+} from './board';
 import { canDropParts, openChain, visiblePanels } from './windows';
 
 const view = { width: 1400, height: 1000 };
 const tile = (id: string) => ({
   id,
-  kind: 'action:layers',
+  kind: 'color:swatch',
   cell: { column: 0, row: 0 },
   span: { columns: 1, rows: 1 }
 });
@@ -16,117 +28,83 @@ const plate = (id: string, owner?: string): Panel => ({
   parts: [tile(`${id}-part`)]
 });
 
-it('shows independently opened windows together while folders still use one open chain', () => {
-  const root = { ...plate('root'), parts: [tile('a'), tile('b'), tile('folder')] };
-  const a = { ...plate('a-window', 'a'), window: { name: 'A', open: true as const } };
-  const b = { ...plate('b-window', 'b'), window: { name: 'B', open: true as const } };
+it('shows all free windows in every mode while folders still use one open chain', () => {
+  const root = { ...plate('root'), parts: [tile('folder')] };
+  const a = { ...plate('a-window'), window: { name: 'A' } };
+  const b: Panel = { ...plate('b-window'), window: { name: 'B', collapsed: true } };
   const folder = plate('folder-panel', 'folder');
   const board: Board = { panels: [root, a, b, folder] };
-  expect(visiblePanels(board, 'folder', false, view).map(({ panel }) => panel.id)).toEqual([
-    'root',
-    'a-window',
-    'b-window',
-    'folder-panel'
-  ]);
-  expect(visiblePanels(board, undefined, false, view).map(({ panel }) => panel.id)).toEqual([
-    'root',
-    'a-window',
-    'b-window'
-  ]);
+  for (const editing of [false, true]) {
+    expect(visiblePanels(board, 'folder', editing, view).map(({ panel }) => panel.id)).toEqual([
+      'root',
+      'a-window',
+      'b-window',
+      'folder-panel'
+    ]);
+    expect(visiblePanels(board, undefined, editing, view).map(({ panel }) => panel.id)).toEqual([
+      'root',
+      'a-window',
+      'b-window'
+    ]);
+  }
   expect([...openChain(board, 'folder')]).toEqual(['folder']);
-  expect([...openChain(board, 'a')]).toEqual([]);
 });
 
-it('follows an owner before the first handle drag and uses independent at afterwards, kept in view', () => {
-  const root = plate('root');
-  const window = { ...plate('window', 'root-part'), window: { name: 'Layers', open: true as const } };
-  const shown = (root: Panel, panel: Panel) =>
-    visiblePanels({ panels: [root, panel] }, undefined, false, view).find(({ panel }) => panel.id === 'window')!.frame;
-  const moved = { ...root, at: { x: 0.6, y: 0.6 } };
-  expect(shown(root, window).rect).not.toEqual(shown(moved, window).rect);
-  const placed = { ...window, at: { x: 0.8, y: 0.3 }, window: { ...window.window, placed: true as const } };
-  expect(shown(root, placed)).toEqual(shown(moved, placed));
-  const small = panelFrame(placed, { width: 100, height: 100 });
-  expect(small.rect.left).toBeGreaterThanOrEqual(0);
-  expect(small.rect.top).toBeGreaterThanOrEqual(0);
-  expect(small.rect.top + small.rect.height).toBeLessThanOrEqual(100);
-});
-
-it('adds only a handle strip to the fitted plate and collapse preserves the content origin', () => {
+it('uses the same top-left for a tile and expanded plate, including negative content cells', () => {
   const panel: Panel = {
     ...plate('window'),
     parts: [{ ...tile('wide'), cell: { column: -2, row: -1 }, span: { columns: 5, rows: 9 } }],
     window: { name: 'Layers' }
   };
-  const frame = frameAt(panel, { x: 200, y: 200 });
-  const plain = frameAt({ ...panel, window: undefined }, frame.origin);
-  expect(frame.rect.width).toBe(plain.rect.width);
-  expect(frame.rect.height).toBe(plain.rect.height + windowHandleHeight);
-  const collapsed = frameAt({ ...panel, window: { ...panel.window!, collapsed: true } }, frame.origin);
-  expect(collapsed.origin).toEqual(frame.origin);
-  expect(collapsed.rect.height).toBe(windowHandleHeight);
-  expect(collapsed.rect.top).toBe(frame.rect.top);
-  expect(collapsed.rect.width).toBe(frame.rect.width);
+  const expanded = panelFrame(panel, view);
+  const collapsed = panelFrame({ ...panel, window: { ...panel.window!, collapsed: true } }, view);
+  expect(expanded.rect.left).toBe(panel.at.x * view.width);
+  expect(expanded.rect.top).toBe(panel.at.y * view.height);
+  expect(collapsed.rect.left).toBe(expanded.rect.left);
+  expect(collapsed.rect.top).toBe(expanded.rect.top);
+  expect(collapsed.rect.height).toBe(cellSize + panelPadding * 2);
+  expect(collapsed.rect.width).toBe(2 * pitch - 4 + panelPadding * 2);
+  const plain = frameAt({ ...panel, window: undefined }, expanded.origin);
+  expect(expanded.rect.height).toBe(plain.rect.height + windowHandleHeight);
 });
 
-it('retains empty free and owned window plates after their last part moves away', () => {
-  const window: Panel = { ...plate('window', 'owner'), window: { name: 'Window' } };
+it('shifts expanded windows into view without changing stored placement', () => {
+  const panel: Panel = { ...plate('window'), at: { x: 0.99, y: 0.99 }, window: { name: 'Layers' } };
+  const before = { ...panel.at };
+  const frame = panelFrame(panel, view);
+  expect(frame.rect.left + frame.rect.width).toBe(view.width);
+  expect(frame.rect.top + frame.rect.height).toBe(view.height);
+  expect(panel.at).toEqual(before);
+  expect(windowTileColumns('A')).toBe(2);
+  expect(windowTileColumns('A very long window name')).toBe(4);
+});
+
+it('retains an empty free window after its last part moves away', () => {
+  const window: Panel = { ...plate('window'), window: { name: 'Window' } };
   const board = removePart({ panels: [window] }, 'window-part');
   expect(board.panels).toHaveLength(1);
   expect(putPanel(board, { ...window, parts: [] }).panels).toHaveLength(1);
   expect(frameAt({ ...window, parts: [] }, { x: 0, y: 0 }).rect.width).toBe(3 * pitch - 4 + 12);
 });
 
-it('hides a nested folder when its host window collapses or closes', () => {
-  const root = plate('root');
-  const host: Panel = { ...plate('host', 'root-part'), window: { name: 'Host', open: true } };
+it('hides a nested folder when its host window collapses', () => {
+  const host: Panel = { ...plate('host'), window: { name: 'Host' } };
   const folder = plate('folder', 'host-part');
   const visible = (host: Panel) =>
-    visiblePanels({ panels: [root, host, folder] }, 'host-part', false, view).map(({ panel }) => panel.id);
+    visiblePanels({ panels: [host, folder] }, 'host-part', false, view).map(({ panel }) => panel.id);
   expect(visible(host)).toContain('folder');
-  expect(visible({ ...host, window: { name: 'Host', open: true, collapsed: true } })).not.toContain('folder');
-  expect(visible({ ...host, window: { name: 'Host' } })).not.toContain('folder');
+  expect(visible({ ...host, window: { name: 'Host', collapsed: true } })).not.toContain('folder');
 });
 
-it('rejects an owner, a carried block owner, and mutually nested owners as drop targets', () => {
+it('rejects folder descendants and malformed folder cycles as drop targets', () => {
   const root = { ...plate('root'), parts: [tile('a'), tile('b')] };
-  const a = { ...plate('a-window', 'a'), parts: [tile('nested')] };
-  const nested = plate('nested-window', 'nested');
+  const a = { ...plate('a-folder', 'a'), parts: [tile('nested')] };
+  const nested = plate('nested-folder', 'nested');
   const board = { panels: [root, a, nested] };
   expect(canDropParts(board, a, new Set(['a']))).toBe(false);
   expect(canDropParts(board, nested, new Set(['unrelated', 'a']))).toBe(false);
   expect(canDropParts(board, a, new Set(['b']))).toBe(true);
-  const b = { ...plate('b-window', 'b'), parts: [tile('a')] };
+  const b = { ...plate('b-folder', 'b'), parts: [tile('a')] };
   expect(canDropParts({ panels: [a, b] }, a, new Set(['b']))).toBe(false);
   expect(canDropParts(board, root, new Set(['a']))).toBe(true);
-});
-
-it('shows closed and cyclic windows in Edit so persisted parts can be recovered', () => {
-  const a: Panel = { ...plate('a', 'b-part'), window: { name: 'A' } };
-  const b: Panel = { ...plate('b', 'a-part'), window: { name: 'B' } };
-  const board = { panels: [a, b] };
-  expect(visiblePanels(board, undefined, false, view)).toEqual([]);
-  expect(visiblePanels(board, undefined, true, view).map(({ panel }) => panel.id)).toEqual(['a', 'b']);
-});
-
-it('hides unplaced windows behind invisible owners but keeps dragged windows independent', () => {
-  const root = plate('root');
-  const folder = plate('folder', 'root-part');
-  const window: Panel = { ...plate('window', 'folder-part'), window: { name: 'Nested', open: true } };
-  const shown = (open: string | undefined, placed?: true) =>
-    visiblePanels(
-      {
-        panels: [root, folder, { ...window, window: { ...window.window!, placed } }]
-      },
-      open,
-      false,
-      view
-    ).map(({ panel }) => panel.id);
-  expect(shown(undefined)).not.toContain('window');
-  expect(shown('root-part')).toContain('window');
-  expect(shown(undefined, true)).toContain('window');
-  const host = { ...folder, window: { name: 'Host', open: true as const, collapsed: true as const } };
-  expect(
-    visiblePanels({ panels: [root, host, window] }, undefined, false, view).map(({ panel }) => panel.id)
-  ).not.toContain('window');
 });

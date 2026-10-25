@@ -1,6 +1,18 @@
 import { onSettled } from 'solid-js';
 import { z } from 'zod';
-import { maxSpan, newId, partData, placeBlock, type Panel, type Part } from './board';
+import {
+  findPart,
+  frameAt,
+  maxSpan,
+  newId,
+  panelFrame,
+  partData,
+  pitch,
+  placeBlock,
+  type Board,
+  type Panel,
+  type Part
+} from './board';
 import { layersKit } from './layersKit';
 import { swatchPanelParts } from './swatchPanelParts';
 
@@ -152,6 +164,88 @@ export function migrateParts(parts: Part[], version: number) {
   return { parts: current, owned };
 }
 
+/**
+ * Version 4 frees action-owned windows, removes their opener, and restores swatch-owned windows to folders.
+ * Legacy positions use a fixed viewport when no measured view exists. Unknown panel and window fields survive.
+ */
+export function migrateWindows(board: Board, version: number): Board {
+  if (version >= 4) {
+    return board;
+  }
+
+  const view = { width: 1200, height: 900 };
+  const removed = new Set<string>();
+  const converted: Panel[] = board.panels.map((panel) => {
+    if (!panel.window) {
+      return panel;
+    }
+
+    const { open, placed, ...window } = panel.window as Panel['window'] & { open?: true; placed?: true };
+    const { owner, offset: _offset, ...free } = panel;
+    const host = owner ? findPart(board, owner) : undefined;
+    if (owner && !host?.part.kind.startsWith('action:')) {
+      const { window: _window, ...folder } = panel;
+      return folder;
+    }
+
+    if (owner) {
+      removed.add(owner);
+    }
+
+    const legacy = frameAt(panel, { x: 0, y: 0 }).rect;
+    const anchor = host && panelFrame(host.panel, view).origin;
+    const at =
+      owner && !placed && host && anchor
+        ? {
+            x: (anchor.x + (host.part.cell.column + host.part.span.columns) * pitch + 10) / view.width,
+            y: (anchor.y + host.part.cell.row * pitch) / view.height
+          }
+        : { x: panel.at.x + legacy.left / view.width, y: panel.at.y + legacy.top / view.height };
+    return {
+      ...free,
+      at,
+      window: {
+        ...window,
+        ...(host?.part.kind === 'action:layers' ? { icon: 'layers' as const } : {}),
+        collapsed: owner ? (!open || window.collapsed ? (true as const) : undefined) : window.collapsed
+      }
+    };
+  });
+  const added: Panel[] = [];
+  for (const panel of board.panels) {
+    for (const part of panel.parts) {
+      if (part.kind !== 'action:layers' || removed.has(part.id) || part[partData]?.invalid) {
+        continue;
+      }
+
+      removed.add(part.id);
+      const { origin } = panelFrame(panel, view);
+      added.push({
+        id: `${part.id}-window`,
+        at: {
+          x: (origin.x + part.cell.column * pitch) / view.width,
+          y: (origin.y + part.cell.row * pitch) / view.height
+        },
+        parts: layersKit.parts.map((child) => ({ ...child, id: `${part.id}-${child.id}` })),
+        window: { ...layersKit.window, collapsed: true }
+      });
+    }
+  }
+
+  return {
+    ...board,
+    panels: [
+      ...converted.flatMap((panel) => {
+        const parts = panel.parts.filter((part) => !removed.has(part.id));
+        return parts.length || parts.length === panel.parts.length || panel.window || panel.bench
+          ? [{ ...panel, parts }]
+          : [];
+      }),
+      ...added
+    ]
+  };
+}
+
 /** Migration output shared by board panels and kit-owned panels. */
 type OwnedPanel = Pick<Panel, 'owner' | 'parts' | 'window' | 'offset'> & { owner: string };
 
@@ -177,14 +271,13 @@ function backup(key: string, raw: string) {
   localStorage.setItem(name, raw);
 }
 
-const currentVersion = 3;
+const currentVersion = 4;
 
 /** Window state is additive; unknown fields survive reads and subsequent edits. */
 export const storedWindow = z.looseObject({
   name: z.string(),
   collapsed: z.literal(true).optional(),
-  open: z.literal(true).optional(),
-  placed: z.literal(true).optional()
+  icon: z.custom<NonNullable<Panel['window']>['icon']>((value) => typeof value === 'string').optional()
 });
 
 const cellSchema = z.object({ column: z.number().int(), row: z.number().int() });

@@ -13,10 +13,6 @@
   touch-action: none;
   cursor: grab;
   user-select: none;
-
-  &[data-collapsed] {
-    border-radius: 10px;
-  }
 }
 
 .grip {
@@ -75,5 +71,37 @@
   .name,
   .field {
     padding-inline: 0;
+  }
+}
+
+.tile {
+  position: absolute;
+  inset: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--lego-tile);
+  color: var(--lego-ink);
+  box-shadow:
+    0 2px 0 rgb(0 0 0 / 0.25),
+    inset 0 1px 0 rgb(255 255 255 / 0.6);
+  font: inherit;
+  font-size: 11px;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }

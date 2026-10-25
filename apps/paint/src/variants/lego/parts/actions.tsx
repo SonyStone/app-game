@@ -5,7 +5,6 @@ import popover from '../../procreate/Popover.module.css';
 import procreate from '../../procreate/ProcreateStudio.module.css';
 import type { Span } from '../board';
 import { FileMenu } from '../FileMenu';
-import { layersKit } from '../layersKit';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
 import { definePart, type PartBinding } from './definition';
@@ -104,25 +103,6 @@ export const actionParts = [
     },
     onPress: f.command(s.transform.toggle)
   })),
-  definePart({
-    kind: 'action:layers',
-    family: 'action',
-    section: 'Tools',
-    label: 'Layers',
-    icon: 'layers',
-    owned: { parts: layersKit.parts, window: { name: layersKit.name } },
-    looks: { looks: [{ id: 'button', label: 'Button', min: { columns: 1, rows: 1 } }], auto: () => 'button' },
-    needs: (_s, f) => ({
-      get span() {
-        return f.span;
-      },
-      get active() {
-        return f.open;
-      },
-      onPress: f.onOpen
-    }),
-    View: (props) => <ActionPart {...props} label="Layers" icon="layers" />
-  }),
   action('undo', 'Undo', 'undo', (s, f) => ({
     get disabled() {
       return !s.history.canUndo();
