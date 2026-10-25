@@ -28,8 +28,7 @@ import { TANK_CLASS_IDS, type TankClassId } from './tanks';
  * makes a tank whole.
  *
  * The player aims with a crosshair of the game's own instead of the cursor; a line from the gun
- * shows where the next shot goes and what it will hit, and a ring marks the player's tank (see
- * `AimOverlay`).
+ * shows where the next shot goes and what it will hit (see `AimOverlay`).
  *
  * Keys: 1-5 pick a class and C opens the class menu, R restarts, B shows what the bots think, V
  * hands the player's tank to a bot and shows the whole map (1-8 follow a tank, 0 shows the whole

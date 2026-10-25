@@ -23,15 +23,14 @@ type Point = { x: number; y: number };
  *   there: an X on an enemy hit, a bar across the lane at a wall, wreck or crate in the way
  *   (yellow and broken where shots chip it, white and whole where they cannot), or a small ring
  *   where it falls with nothing in range. A shell that goes off shows its blast's reach, red
- *   around every other enemy it reaches.
- * - A ring in the player's color around the player's own tank, outside its hull, so its damage
- *   stays in sight.
+ *   around every other enemy it reaches. The line from the gun also shows where the player's own
+ *   tank is, so the tank needs no marker of its own.
  *
  * Three looks differ in the line and the crosshair's center; X cycles through them and `?aim=`
  * in the address picks one (see `AIM_LOOKS`).
  *
  * @param canvas - The game canvas: the pointer is followed over it, and the cursor is hidden over it while `active`.
- * @param view - Where the aim and the player's tank are on screen this frame, from `aimOnScreen`.
+ * @param view - Where the aim is on screen this frame, from `aimOnScreen`.
  * @param player - The player's weapon as the heads-up display shows it.
  * @param active - Whether the player is playing: without a menu, the match's result or watching
  *   the bots. Otherwise nothing is drawn and the cursor shows as usual.
@@ -77,12 +76,10 @@ export function AimOverlay(props: { canvas: HTMLCanvasElement | undefined; view:
   );
 
   const shot = () => (props.active ? props.view?.shot : undefined);
-  const self = () => (props.active ? props.view?.self : undefined);
 
   return (
     <>
       <svg class="pointer-events-none absolute inset-0 h-full w-full">
-        <Show when={self()}>{(ring) => <SelfRing x={ring().x} y={ring().y} radius={ring().radius} />}</Show>
         <Show when={shot()}>{(shown) => <ShotMarks shot={shown()} look={AIM_LOOKS[look()]} />}</Show>
       </svg>
       <div
@@ -102,9 +99,8 @@ export function AimOverlay(props: { canvas: HTMLCanvasElement | undefined; view:
 }
 
 /**
- * Where the player's aim and tank are on screen this frame: the forecast of the shot the gun
- * would fire now (see `forecastShot`) and the ring around the player's tank, in CSS pixels.
- * `undefined` while the player has no tank.
+ * Where the player's aim is on screen this frame: the forecast of the shot the gun would fire now
+ * (see `forecastShot`), in CSS pixels. `undefined` while the player has no tank.
  *
  * @param input.angle - The direction the player aims, in world radians; defaults to the turret's.
  * @param input.reach - How far from the hull's center the player aims, in world pixels.
@@ -112,24 +108,19 @@ export function AimOverlay(props: { canvas: HTMLCanvasElement | undefined; view:
  */
 export function aimOnScreen(match: KothMatch, input: { angle?: number; reach?: number }, view: Camera, screen: { width: number; height: number }): AimView | undefined {
   const tank = match.player;
-  const hull = tank && match.combat.hullOf(tank);
 
-  if (!tank || !hull) {
+  if (!tank) {
     return undefined;
   }
 
   const toScreen = (point: Point) => worldToScreen(view, point, screen);
-  const center = tank.hull.translation();
   const forecast = forecastShot(match.combat, tank, match.seat.tankClass, input.angle ?? tank.turretAngle, input.reach);
-  const self = { ...toScreen(center), radius: (Math.hypot(hull.halfLength, hull.halfWidth) + SELF_MARGIN) * view.zoom };
 
-  return { self, shot: forecast && shotOnScreen(forecast, input.reach, toScreen, view) };
+  return { shot: forecast && shotOnScreen(forecast, input.reach, toScreen, view) };
 }
 
 /** What `AimOverlay` draws for a frame, from `aimOnScreen`, in CSS pixels. */
 export type AimView = {
-  /** Center of the player's tank and the radius of the ring around it. */
-  self: { x: number; y: number; radius: number };
   /** The forecast of the next shot; `undefined` for a gun with a laser sight of its own. */
   shot: ShotView | undefined;
 };
@@ -228,8 +219,6 @@ function sideOf(origin: Point, point: Point, reference: Point) {
   return Math.atan2(Math.sin(a - b), Math.cos(a - b));
 }
 
-/** World pixels between a hull's corner and the ring around the player's tank. */
-const SELF_MARGIN = 7;
 /** Radius in world pixels of the ring around an enemy a blast reaches. */
 const REACHED_RADIUS = 26;
 
@@ -273,7 +262,6 @@ const KILL = '#ffd23f';
 const GLANCE = '#ffa63d';
 const BREAKS = '#ffd27a';
 const SOLID = '#a3abb5';
-const PLAYER = '#f0773a';
 
 /**
  * A stroke in the game's look: `d` drawn in `color` over a dark outline `outline` pixels wider,
@@ -285,22 +273,6 @@ function Stroke(props: { d: string; color: string; width: number; dash?: string;
       <path d={props.d} stroke={INK} stroke-width={props.width + (props.outline ?? 2)} stroke-dasharray={props.dash} stroke-opacity="0.75" />
       <path d={props.d} stroke={props.color} stroke-width={props.width} stroke-dasharray={props.dash} fill={props.fill ?? 'none'} />
     </g>
-  );
-}
-
-/** The ring around the player's own tank, in the player's color, split in four so it reads as a marker, not a wheel. */
-function SelfRing(props: { x: number; y: number; radius: number }) {
-  const quarter = () => (Math.PI * props.radius) / 2;
-
-  return (
-    <Stroke
-      d={circlePath(props.x, props.y, props.radius)}
-      color={PLAYER}
-      width={2.2}
-      outline={2.4}
-      dash={`${quarter() * 0.62} ${quarter() * 0.38}`}
-      opacity={0.95}
-    />
   );
 }
 
