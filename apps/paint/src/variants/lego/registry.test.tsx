@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render } from '@solidjs/web';
 import { createRoot, createSignal, flush, Show } from 'solid-js';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi, type MockInstance } from 'vitest';
 import { builtInPresets } from '../../features/brush-library';
 import { StrokePreview } from '../procreate/StrokePreview';
 import { createSheet } from './createSheet';
@@ -91,25 +91,7 @@ it.each(['edit', 'preview'] satisfies PartMode[])(
   '%s bindings never run commands or write preferences, even with scripted events',
   (mode) => {
     const { services } = owned(createTestServices);
-    const mutations = [
-      services.color.set,
-      services.color.swap,
-      services.brush.update,
-      services.tools.toggle,
-      services.history.undo,
-      services.history.redo,
-      services.windows.toggle,
-      services.presets.choose,
-      services.presets.use,
-      services.transform.toggle,
-      services.layers.action,
-      services.layers.blending,
-      services.files.import,
-      services.files.download,
-      services.files.png,
-      services.files.psd,
-      services.files.place
-    ];
+    const mutations = collectMocks(services);
     const storage = vi.spyOn(Storage.prototype, 'setItem');
     const timers = vi.spyOn(globalThis, 'setTimeout');
     for (const definition of partDefinitions) {
@@ -411,6 +393,9 @@ it('preserves the shared preview default background and saved-color precedence',
 });
 
 it('samples LEGO presets in the current brush color on their normal and active tile backgrounds', async () => {
+  const palette = document.createElement('style');
+  palette.textContent = 'button { --lego-tile: #faf0e0; --lego-preset-active: #aabbff; }';
+  document.body.append(palette);
   const { services, setBrush } = owned(createTestServices);
   const preset = { ...builtInPresets[0]!, settings: { ...builtInPresets[0]!.settings, color: '#123456' } };
   const [active, setActive] = createSignal('');
@@ -425,7 +410,7 @@ it('samples LEGO presets in the current brush color on their normal and active t
   await vi.waitFor(() =>
     expect(rendering.updates).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        background: '#f4f2ee',
+        background: '#faf0e0',
         brush: expect.objectContaining({ color: '#ff0000' })
       })
     )
@@ -436,12 +421,25 @@ it('samples LEGO presets in the current brush color on their normal and active t
   await vi.waitFor(() =>
     expect(rendering.updates).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        background: '#dde7ff',
+        background: '#aabbff',
         brush: expect.objectContaining({ color: '#00ff00' })
       })
     )
   );
 });
+
+/** Finds every fake capability, including nested commands added after this test was written. */
+function collectMocks(value: unknown): MockInstance[] {
+  if (vi.isMockFunction(value)) {
+    return [value];
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    return Object.values(value).flatMap(collectMocks);
+  }
+
+  return [];
+}
 
 function intersectAll(visible: boolean) {
   for (const [target, callback] of observations) {

@@ -9,14 +9,17 @@ import { createServer } from 'vite';
 
 /**
  * Chrome/WebGPU regression for every LEGO kind and look, box, chooser and carried-kit interactions.
- * Starts Vite on free ports and uses isolated browser storage. PAINT_MASTER_URL optionally compares a separately served baseline. PAINT_SCREENSHOTS defaults to paint-lego-round2 in the system temp directory.
+ * Starts Vite on free ports and uses isolated browser storage.
+ * PAINT_MASTER_URL optionally compares a separately served baseline.
+ * PAINT_SCREENSHOTS defaults to paint-lego-browser in the system temp directory.
  */
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const output = process.env.PAINT_SCREENSHOTS ?? path.join(os.tmpdir(), 'paint-lego-round2');
+const output = process.env.PAINT_SCREENSHOTS ?? path.join(os.tmpdir(), 'paint-lego-browser');
 const servers = [];
 const caches = [];
 let browser;
 let page;
+
 try {
   await mkdir(output, { recursive: true });
   const url = process.env.PAINT_URL ?? (await startServer(root));
@@ -25,6 +28,7 @@ try {
     headless: true,
     args: ['--enable-unsafe-webgpu', '--use-angle=metal']
   });
+
   const context = await browser.newContext({ viewport: { width: 1920, height: 1200 } });
   page = await context.newPage();
   const errors = [];
@@ -35,8 +39,10 @@ try {
       console.error('HTTP', response.status(), response.url());
     }
   });
+
   await openStudio(page, url);
   errors.length = 0;
+
   // Registry metadata automatically brings newly registered kinds and looks into this layout check.
   const parts = await page.evaluate(async () => {
     const { partDefinitions } = await import('/src/variants/lego/parts.tsx');
@@ -44,7 +50,7 @@ try {
     let column = 0;
     let row = 0;
     let rowHeight = 0;
-    return partDefinitions.flatMap((definition) =>
+    const parts = partDefinitions.flatMap((definition) =>
       (definition.looks?.looks ?? [undefined]).map((look) => {
         const span =
           definition.family === 'action'
@@ -69,16 +75,27 @@ try {
         return part;
       })
     );
+    const preset = parts.find((part) => part.kind.startsWith('preset:'));
+    parts.push({
+      ...preset,
+      id: 'check-preset-1x3',
+      cell: { column: 0, row: row + rowHeight + 1 },
+      span: { columns: 1, rows: 3 }
+    });
+    return parts;
   });
+
   await seed(page, parts);
   await checkLayout(page, parts, 'fixed');
   await page.screenshot({ path: path.join(output, 'foundation-fixed.png') });
   console.log(`PASS ${parts.length} kind/look layouts and centred action icons`);
+
   const broken = await page.addStyleTag({ content: '[data-part-kind] { display: block !important; }' });
   await assert.rejects(() => checkLayout(page, parts, 'broken'), /collapsed|fill|centred/);
   await broken.evaluate((element) => element.remove());
   await checkLayout(page, parts, 'fixed');
   console.log('PASS layout check rejects the original collapsed-frame regression');
+
   if (process.env.PAINT_MASTER_URL) {
     const masterUrl = process.env.PAINT_MASTER_URL;
     const master = await context.newPage();
@@ -89,6 +106,21 @@ try {
     await master.close();
     console.log('PASS identical seeded board on master; screenshot saved');
   }
+
+  const presets = parts.filter((part) => part.kind.startsWith('preset:'));
+  await page.locator(`[data-part="${presets[0].id}"] button`).click();
+  for (const preset of presets) {
+    await checkPresetRing(page, preset);
+    await page.locator(`[data-part="${preset.id}"]`).screenshot({
+      path: path.join(output, `active-preset-${preset.span.columns}x${preset.span.rows}.png`)
+    });
+  }
+
+  const hiddenRing = await page.addStyleTag({ content: '[data-active]::after { display: none !important; }' });
+  await assert.rejects(() => checkPresetRing(page, presets[0]), /ring/);
+  await hiddenRing.evaluate((element) => element.remove());
+  console.log('PASS active preset rings at 2×2 and 1×3; check rejects a hidden ring');
+
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const wheel = parts.find((part) => part.kind === 'color:wheel' && part.looks?.['2x2'] === 'square');
   await page.locator(`[data-part="${wheel.id}"]`).click();
@@ -104,11 +136,13 @@ try {
     .click();
   await page.keyboard.press('Escape');
   console.log('PASS chooser renders five previews and applies a look');
+
   const box = page.getByRole('complementary', { name: 'Box of parts' });
   await box.locator('[class*="trayBar"]').click();
   const kit = page.locator('[title^="Kit:"]').first();
   await kit.waitFor();
   await page.screenshot({ path: path.join(output, 'box-open.png') });
+
   const rect = await kit.boundingBox();
   await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2);
   await page.mouse.down();
@@ -117,11 +151,13 @@ try {
   await ghost.waitFor();
   assert.ok((await ghost.locator('[data-mode="preview"] > *').count()) > 0, 'carried kit renders immediately');
   await page.screenshot({ path: path.join(output, 'kit-ghost.png') });
+
   await page.mouse.up();
   await ghost.waitFor({ state: 'detached' });
   await page.waitForFunction(() =>
     document.querySelector('aside[aria-label="Box of parts"]')?.hasAttribute('data-closed')
   );
+
   // A kit drop closes the box; verify the handle can open and close it again too.
   await box.locator('[class*="trayBar"]').click();
   await kit.waitFor();
@@ -129,6 +165,7 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('aside[aria-label="Box of parts"]')?.hasAttribute('data-closed')
   );
+
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await box.waitFor({ state: 'detached' });
   assert.deepEqual(errors, [], 'uncaught page errors');
@@ -167,10 +204,41 @@ async function seed(tab, parts, sharedPreview = true) {
   await tab.reload();
   await tab.locator(`[data-part="${parts.at(-1).id}"]`).waitFor();
   if (sharedPreview) {
-    await tab.locator('[data-part] canvas[data-preview-state="ready"]').waitFor({ timeout: 60000 });
+    await tab.locator('[data-part] canvas[data-preview-state="ready"]').first().waitFor({ timeout: 60000 });
   }
   await tab.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await tab.evaluate(() => document.fonts.ready);
+}
+
+/** Verifies the selected ring covers the tile above its opaque sample without intercepting presses. */
+async function checkPresetRing(tab, part) {
+  const tile = tab.locator(`[data-part="${part.id}"] button[data-active]`);
+  await tile.waitFor();
+  await tile.locator('canvas[data-preview-state="ready"]').waitFor({ timeout: 60000 });
+  const ring = await tile.evaluate((element) => {
+    const style = getComputedStyle(element, '::after');
+    return {
+      content: style.content,
+      display: style.display,
+      visibility: style.visibility,
+      opacity: style.opacity,
+      position: style.position,
+      inset: style.inset,
+      zIndex: style.zIndex,
+      pointerEvents: style.pointerEvents,
+      shadow: style.boxShadow
+    };
+  });
+  const label = `${part.span.columns}×${part.span.rows} active preset ring`;
+  assert.equal(ring.content, '""', `${label} must be generated`);
+  assert.notEqual(ring.display, 'none', `${label} must be displayed`);
+  assert.equal(ring.visibility, 'visible', `${label} must be visible`);
+  assert.equal(ring.opacity, '1', `${label} must be opaque`);
+  assert.equal(ring.position, 'absolute', `${label} must overlay the sample`);
+  assert.equal(ring.inset, '0px', `${label} must cover every edge`);
+  assert.ok(Number(ring.zIndex) > 0, `${label} must paint above the sample`);
+  assert.equal(ring.pointerEvents, 'none', `${label} must let presses reach the tile`);
+  assert.ok(ring.shadow.includes('inset') && ring.shadow.includes('0px 0px 0px 2px'), `${label} must be 2px`);
 }
 
 /** Measures real children and chips, which jsdom cannot lay out, and saves the dimensions for comparison. */
@@ -180,6 +248,7 @@ async function checkLayout(tab, parts, label) {
       parts.map((part) => {
         const content = document.querySelector(`[data-part="${part.id}"]`).firstElementChild;
         const view = content.querySelector('[data-part-kind]')?.firstElementChild ?? content.firstElementChild;
+
         const box = content.getBoundingClientRect();
         const child = view?.getBoundingClientRect();
         const chips = [...content.querySelectorAll('[class*="chip"], [class*="slot"]')].map(

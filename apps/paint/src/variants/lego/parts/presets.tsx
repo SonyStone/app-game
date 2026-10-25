@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { createSignal, onSettled, Show } from 'solid-js';
 import { PresetStroke } from '../../desktop/PresetStroke';
 import { cellGap, pitch } from '../board';
 import type { LegoServices } from '../LegoServices';
@@ -18,11 +18,24 @@ export const presetPart = definePart({
 
 /** Controlled library sample. Its renderer owns only cacheable preview resources and releases them on disposal. */
 function PresetPart(props: ReturnType<typeof presetNeeds>) {
+  let tile!: HTMLButtonElement;
+  const [backgrounds, setBackgrounds] = createSignal<{ normal: string; active: string }>();
   const named = () => props.span.columns >= 2;
   const large = () => props.span.rows >= 2;
   const height = () => length(props.span.rows) - (large() && named() ? 22 : 0);
+
+  // The preview engine accepts hex colors only; read the CSS palette once after the tile is connected.
+  onSettled(() => {
+    const palette = getComputedStyle(tile);
+    setBackgrounds({
+      normal: palette.getPropertyValue('--lego-tile').trim(),
+      active: palette.getPropertyValue('--lego-preset-active').trim()
+    });
+  });
+
   return (
     <button
+      ref={tile}
       type="button"
       class={[styles.preset, large() && styles.large]}
       data-active={props.active ? '' : undefined}
@@ -41,7 +54,7 @@ function PresetPart(props: ReturnType<typeof presetNeeds>) {
                 resources={props.resources}
                 color={props.color}
                 height={height()}
-                background={props.active ? '#dde7ff' : '#f4f2ee'}
+                background={props.active ? backgrounds()?.active : backgrounds()?.normal}
                 overrideColor
               />
             </span>
