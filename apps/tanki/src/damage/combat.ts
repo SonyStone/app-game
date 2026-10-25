@@ -210,6 +210,9 @@ export type CombatLayout = {
  *   A shell reports its path when it stops.
  * @param options.onWallsChanged - Called with the world bounds of a piece of wall or a wreck
  *   that changed shape, appeared, moved or went, during the step or reset that changed it.
+ * @param options.pace - The fight's pace, read anew for every shell and hit: shares of every
+ *   shell's flight speed, a grenade keeping its arc (see `pacedShell`), and of the armor every
+ *   hit on a tank takes away, its craters and how deep a rail cuts. Defaults to 1 for both.
  */
 export function createCombat(
   rapier: Rapier,
@@ -226,9 +229,11 @@ export function createCombat(
     onDestroyed?: (victim: Tank, killer: Tank | undefined) => void;
     onShot?: (shooter: Tank, path: readonly Point[]) => void;
     onWallsChanged?: (bounds: Bounds) => void;
+    pace?: () => { readonly shellSpeed: number; readonly damage: number };
   } = {}
 ) {
   const random = options.random ?? Math.random;
+  const pace = () => options.pace?.() ?? AS_SPECIFIED;
   const friendlyFire = options.friendlyFire ?? true;
   const events = new rapier.EventQueue(true);
   const owners = new Map<number, Armored>();
@@ -1324,7 +1329,8 @@ export function createCombat(
     const back = 1;
     const local = toLocal(body.body, { x: at.x - direction.x * back, y: at.y - direction.y * back });
     const inward = rotateInto(body.body, direction);
-    const cost = body.thin ? WOOD_COST : 1;
+    // Armor a tank's hits take less of costs a rail more power per pixel.
+    const cost = body.thin ? WOOD_COST : body.tank ? 1 / pace().damage : 1;
     const trace = traceRail(body.field, local, inward, { power, cost, graze: rail.graze ?? rail.slit / 2 });
 
     if (!trace) {
@@ -1438,7 +1444,8 @@ export function createCombat(
    * @param options.primary - The shell was fired by a gun rather than thrown out by a blast, so
    *   `onShot` reports its path.
    */
-  function addShell(tank: Tank, team: string | undefined, start: Point, direction: Point, spec: ShellSpec, options: { reach?: number; primary: boolean }) {
+  function addShell(tank: Tank, team: string | undefined, start: Point, direction: Point, specified: ShellSpec, options: { reach?: number; primary: boolean }) {
+    const spec = pacedShell(specified, pace().shellSpeed);
     const shell: Shell = {
       id: shellId++,
       shooter: tank,
@@ -1790,7 +1797,9 @@ export function createCombat(
    * Chips the armor where a shot hit, dents it slightly and knocks the body back. A deep blow
    * chips a row of craters inward from the surface. A hull's plating shrinks the craters.
    */
-  function damage(body: Armored, point: Point, direction: Point, blow: Pick<ShellSpec, 'hole' | 'depth' | 'knockback'>) {
+  function damage(body: Armored, point: Point, direction: Point, struck: Pick<ShellSpec, 'hole' | 'depth' | 'knockback'>) {
+    const share = body.tank ? pace().damage : 1;
+    const blow = { ...struck, hole: struck.hole * share, depth: struck.depth * share };
     const local = toLocal(body.body, point);
     const inward = rotateInto(body.body, direction);
     const plating = body.hull?.plating ?? 1;
@@ -1805,7 +1814,7 @@ export function createCombat(
     }
 
     const spin = blow.knockback * KNOCKBACK_SPIN_SHARE;
-    dent(body.field, local, inward, 0.9, 4.5);
+    dent(body.field, local, inward, 0.9 * share, 4.5);
     body.body.applyImpulse({ x: direction.x * blow.knockback, y: direction.y * blow.knockback }, true);
     body.body.applyImpulseAtPoint({ x: direction.x * spin, y: direction.y * spin }, point, true);
     body.flash = 1;
@@ -2723,3 +2732,22 @@ function normalize(vector: Point) {
 function rgb(color: number) {
   return [((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255];
 }
+
+/**
+ * `spec` flying at `share` of its speed. A lobbed shell keeps its way over the ground and its
+ * arc, only slower, as in slow motion: its gravity scales with the square of the share, its
+ * rolling with the share and its fuse with the inverse, so it lands, bounces, rolls and goes off
+ * where it would have at full speed, and bots and the aim's forecast, which judge its way at full
+ * speed, still judge it right.
+ */
+export function pacedShell(spec: ShellSpec, share: number): ShellSpec {
+  if (share === 1) {
+    return spec;
+  }
+
+  const lob = spec.lob && { ...spec.lob, fuse: spec.lob.fuse / share, gravity: spec.lob.gravity * share * share, roll: spec.lob.roll * share };
+  return { ...spec, speed: spec.speed * share, lob };
+}
+
+/** The pace of a battle without one: shells and hits as their specs say. */
+const AS_SPECIFIED = { shellSpeed: 1, damage: 1 };

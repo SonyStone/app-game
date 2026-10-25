@@ -37,6 +37,11 @@ export type BotContext = {
   trigger: (member: Member, trigger: Trigger) => void;
   /** The repair kits on the map, live. */
   kits: readonly Readonly<Kit>[];
+  /**
+   * The fight's pace, live: shells fly at `shellSpeed` of their class's speed, the bot reacts in
+   * `botReaction` times its time and sees `botSight` pixels around.
+   */
+  pace: () => { readonly shellSpeed: number; readonly botReaction: number; readonly botSight: number };
 };
 
 /**
@@ -329,7 +334,7 @@ export function createBot(member: Member, context: BotContext) {
       const range = distance(position, at);
       const inScope = scoped && range < SCOPE_RANGE && Math.abs(angleBetween(tank.turretAngle, Math.atan2(at.y - position.y, at.x - position.x))) < SCOPE_ARC;
 
-      if ((range < VISION || inScope) && combat.lineOfSight(position, at)) {
+      if ((range < context.pace().botSight || inScope) && combat.lineOfSight(position, at)) {
         visible.add(enemy);
         board.see(enemy);
       }
@@ -387,7 +392,7 @@ export function createBot(member: Member, context: BotContext) {
     const position = tank.hull.translation();
     const focus = board.focus;
 
-    const sight = Math.max(VISION, TACTICS[member.tankClass.id].reach);
+    const sight = Math.max(context.pace().botSight, TACTICS[member.tankClass.id].reach);
 
     if (focus && board.sightingOf(focus) && distance(position, whereIs(focus)) < sight) {
       return focus;
@@ -995,7 +1000,8 @@ export function createBot(member: Member, context: BotContext) {
     }
 
     if (target !== gun.target) {
-      gun = { ...gun, target, since: now, reaction: REACTION_MIN + context.random() * (REACTION_MAX - REACTION_MIN), offset: undefined, lag: undefined, settledFrom: now };
+      const reaction = (REACTION_MIN + context.random() * (REACTION_MAX - REACTION_MIN)) * context.pace().botReaction;
+      gun = { ...gun, target, since: now, reaction, offset: undefined, lag: undefined, settledFrom: now };
     }
 
     if (!target) {
@@ -1009,7 +1015,7 @@ export function createBot(member: Member, context: BotContext) {
     const range = distance(position, course.point);
     const own = tank.hull.linvel();
     const rail = tankClass.shell.rail !== undefined;
-    const settling = rail ? 1 + UNSETTLED * Math.exp(-(now - gun.settledFrom) / SETTLE_TIME) : 1;
+    const settling = rail ? 1 + UNSETTLED * Math.exp(-(now - gun.settledFrom) / (SETTLE_TIME * context.pace().botReaction)) : 1;
     const error = aimError(range, Math.hypot(velocity.x, velocity.y) * course.time, Math.hypot(own.x, own.y) / tankClass.speed) * tactics.steadiness * settling;
     // A rail's misjudgement is drawn in units of the error, which shrinks as the bot settles.
     gun.offset ??= rail ? { x: gaussian(context.random), y: gaussian(context.random) } : { x: gaussian(context.random) * error, y: gaussian(context.random) * error };
@@ -1163,11 +1169,12 @@ export function createBot(member: Member, context: BotContext) {
     return { x: core.x - velocity.x * gun.lag + wobble.x * error, y: core.y - velocity.y * gun.lag + wobble.y * error };
   }
 
-  /** Speed of the bot's next shell: its class's, at the charge it is likely to fire with; infinite for a rail. */
+  /** Speed of the bot's next shell: its class's, at the charge it is likely to fire with, at the fight's pace; infinite for a rail. */
   function shellSpeed() {
     const tankClass = member.tankClass;
     const weapon = tankClass.weapon;
-    return weapon.kind === 'charge' ? chargedShell(tankClass.shell, weapon.full, member.weapon?.charge ?? 0.5).speed : tankClass.shell.speed;
+    const speed = weapon.kind === 'charge' ? chargedShell(tankClass.shell, weapon.full, member.weapon?.charge ?? 0.5).speed : tankClass.shell.speed;
+    return speed * context.pace().shellSpeed;
   }
 
   function nearestVisible(position: Point) {
@@ -1238,11 +1245,10 @@ const MIN_REPLAN = 0.3;
 const REPLAN_INTERVAL = 2.5;
 const REPLAN_JITTER = 1;
 /**
- * How far a bot sees, as far as a player sees on a laptop screen at the default zoom; how far a
- * sniper sees within `SCOPE_ARC` of its gun, as a sniper's player sees with the camera thrown
- * forward; and how close a sniper must be to its perch to be on it.
+ * How far a sniper sees within `SCOPE_ARC` of its gun, as a sniper's player sees with the camera
+ * thrown forward, beyond the pace's `botSight` every bot sees all round; and how close a sniper
+ * must be to its perch to be on it.
  */
-const VISION = 480;
 const SCOPE_RANGE = 900;
 const SCOPE_ARC = 0.45;
 const PERCHED = 30;
@@ -1293,7 +1299,7 @@ const ESCORT_LEAD = 40;
 const NEARBY = 120;
 /** Share of the turret's speed used while just looking around. */
 const IDLE_TURN = 0.6;
-/** Seconds a bot takes to fire at a target it just picked, drawn between these. */
+/** Seconds a bot takes to fire at a target it just picked, drawn between these, times the pace's `botReaction`. */
 const REACTION_MIN = 0.25;
 const REACTION_MAX = 0.5;
 /** Pixels off its aim point at the target's range within which the turret counts as on target. */
@@ -1397,7 +1403,7 @@ const DRIVING_ERROR = 0.02;
 /**
  * A rail's aim, which hits at once: it trails a moving target by `LAG_MIN` to `LAG_MAX` s, and its
  * error starts `UNSETTLED` times larger than settled and settles with a time constant of
- * `SETTLE_TIME` s, half the extra gone in about 0.5 s.
+ * `SETTLE_TIME` s times the pace's `botReaction`, half the extra gone in about 0.5 s.
  */
 const LAG_MIN = 0.05;
 const LAG_MAX = 0.15;

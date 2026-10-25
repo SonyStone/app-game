@@ -12,6 +12,7 @@ import { chargedShell, createWeapon, type Trigger } from './classes/weapon';
 import { createKits } from './kits';
 import { inBase, KOTH_MAP, onPoint, type KothMap } from './map';
 import { createNavGrid, updateNavGrid } from './navigation';
+import { PACE_DEFAULTS, type Pace } from './pace';
 import { advanceCapture, CAPTURE_RULES, createCaptureState, rivalOf, TEAMS, type CaptureRules, type TeamId } from './rules';
 import { createScenery } from './scenery';
 import { MEDIUM_TANK, type TankClassId } from './tanks';
@@ -42,6 +43,9 @@ type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
  *   `pickRoster`.
  * @param options.playerClass - The player's first class; defaults to the Soldier.
  * @param options.onHit - Called for every hit, as the battle core's `onHit`, for tools that measure the fighting.
+ * @param options.pace - The fight's pace, read anew every step and every shot: shares of every
+ *   class's driving and shell speed, of the armor hits take away and of the bots' reaction times,
+ *   and how far bots see (see `Pace`). Defaults to `PACE_DEFAULTS`.
  */
 export function createKothMatch(
   rapier: Rapier,
@@ -55,11 +59,13 @@ export function createKothMatch(
     roster?: Partial<Record<TeamId, readonly TankClassId[]>>;
     playerClass?: TankClassId;
     onHit?: NonNullable<Parameters<typeof createCombat>[4]>['onHit'];
+    pace?: () => MatchPace;
   } = {}
 ) {
   const map = options.map ?? KOTH_MAP;
   const rules = options.rules ?? CAPTURE_RULES;
   const random = options.random ?? Math.random;
+  const pace = options.pace ?? (() => PACE_DEFAULTS);
   const hasPlayer = options.human ?? true;
   const members = createMembers(hasPlayer, options.roster ?? {}, options.playerClass ?? 'soldier', random);
   const teams = { red: members.filter((member) => member.team === 'red'), blue: members.filter((member) => member.team === 'blue') };
@@ -71,6 +77,7 @@ export function createKothMatch(
     // Wrecks burn out quicker than on the range, so their smoke does not hide the point for long.
     wreckFire: WRECK_FIRE,
     random,
+    pace,
     onHit: (target, shooter, part) => {
       noteShot(byTank.get(target), shooter);
       options.onHit?.(target, shooter, part);
@@ -392,7 +399,8 @@ export function createKothMatch(
       trigger: (member: Member, trigger: Trigger) => {
         member.trigger = trigger;
       },
-      kits: kits.kits
+      kits: kits.kits,
+      pace
     };
   }
 
@@ -448,7 +456,7 @@ export function createKothMatch(
       }
 
       member.trigger = RELEASED;
-      tank.pullSpeed = pullSpeedFor(tankClass.speed) * weapon.speedShare;
+      tank.pullSpeed = pullSpeedFor(tankClass.speed) * weapon.speedShare * pace().tankSpeed;
       const turned = (barrels.get(member) ?? 0) + weapon.spin * BARREL_TURN * dt;
       barrels.set(member, turned);
       combat.spinBarrels(tank, turned);
@@ -491,7 +499,7 @@ export function createKothMatch(
     const tank = combat.spawnTank(placement, {
       color: member.index === 0 && member.team === 'red' ? PLAYER_COLOR : TEAM_COLORS[member.team],
       team: member.team,
-      pullSpeed: pullSpeedFor(tankClass.speed),
+      pullSpeed: pullSpeedFor(tankClass.speed) * pace().tankSpeed,
       hull: tankClass.hull,
       mass: tankClass.mass,
       look: tankClass.look
@@ -585,6 +593,9 @@ export function createKothMatch(
 
 /** A king of the hill match as returned by `createKothMatch`. */
 export type KothMatch = ReturnType<typeof createKothMatch>;
+
+/** The knobs of `Pace` a match works by; the rest are the view's and the game clock's. */
+export type MatchPace = Pick<Pace, 'tankSpeed' | 'shellSpeed' | 'damage' | 'botReaction' | 'botSight'>;
 
 /** The player's input for a step, as `KothMatch['step']` describes it. */
 export type PlayerInput = { drive: Point; aim?: number; fire: boolean; reach?: number; turn?: boolean };

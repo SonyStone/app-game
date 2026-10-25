@@ -5,6 +5,7 @@ import { createSignal, onCleanup, onSettled, Show, untrack } from 'solid-js';
 import { aimAngle } from '../arena/aim';
 import { createCamera, DRAG_MARGIN, followTarget, screenToWorld, screenToWorldDirection, worldToScreen, zoomCamera } from '../arena/camera';
 import { makeArenaInput, type Aim } from '../arena/input';
+import { createLookAhead } from '../arena/lookahead';
 import { createRangeRenderer } from '../damage/renderer';
 import { Rapier2D, useRapier2D } from '../physics/Rapier2D';
 import { createWorld } from '../physics/World';
@@ -13,6 +14,8 @@ import { ClassMenu } from './classes/ClassMenu';
 import { createScope } from './classes/scope';
 import { BotThoughts, KothHud, MatchResult, type HudState, type ThoughtView } from './Hud';
 import { createKothMatch, type KothMatch } from './match';
+import { loadPace, savePace, type Pace } from './pace';
+import { PacePanel } from './PacePanel';
 import { CAPTURE_RULES } from './rules';
 import { TANK_CLASS_IDS, type TankClassId } from './tanks';
 
@@ -28,20 +31,26 @@ import { TANK_CLASS_IDS, type TankClassId } from './tanks';
  * makes a tank whole.
  *
  * The player aims with a crosshair of the game's own instead of the cursor; a line from the gun
- * shows where the next shot goes and what it will hit (see `AimOverlay`). Every gun fires at a
+ * shows where the next shot goes and what it will hit (see `AimOverlay`). The view looks ahead
+ * toward the aim: it leads the tank by a share of the cursor's offset from the screen's center, so
+ * the screen shows what lies ahead of the gun rather than behind the tank, and a still cursor
+ * keeps the gun's aim however the view settles (see `createLookAhead`). Every gun fires at a
  * steady cadence for as long as the button is held, with no clip and no reload to keep track of.
  *
  * Keys: 1-5 pick a class and C opens the class menu, R restarts, B shows what the bots think, V
  * hands the player's tank to a bot and shows the whole map (1-8 follow a tank, 0 shows the whole
- * map again), X switches the look of the aim. The right mouse button or Shift turns a Sniper's
- * hull on the spot toward the cursor, which it also does by itself when the player stops driving
- * and aims outside its gun's arc. While a Sniper charges its shot, the view widens about the
- * cursor, which keeps its aim, the cores of the enemies in sight are marked and the crosshair
- * tells when the rail would blow one up; letting go fires the rail, which hits at once along the
- * gun. In the address, `?watch` starts watching right away,
- * `?hold=30` shortens the hold time that wins to 30 seconds, `?class=scout` starts as that class
- * with the menu closed, `?aim=line` picks the aim's look and `?slow=4` runs the game four times
- * slower, to look at effects frame by frame.
+ * map again), X switches the look of the aim, T opens the pace panel (see `PacePanel`), whose
+ * knobs, the game's speed, the tanks' and shells' speeds, the damage, the bots' reaction and how
+ * far they see, the zoom and the view's lead, take effect at once and are kept for the next
+ * visit. The right mouse button or Shift turns a Sniper's hull on the spot toward the cursor,
+ * which it also does by itself when the player stops driving and aims outside its gun's arc.
+ * While a Sniper charges its shot, the view widens about the tank, which keeps the gun's aim, the
+ * cores of the enemies in sight are marked and the crosshair tells when the rail would blow one
+ * up; letting go fires the rail, which hits at once along the gun. In the address, `?watch`
+ * starts watching right away, `?hold=30` shortens the hold time that wins to 30 seconds,
+ * `?class=scout` starts as that class with the menu closed, `?aim=line` picks the aim's look,
+ * `?tune` opens the pace panel and `?slow=4` runs the game four times slower, to look at effects
+ * frame by frame.
  */
 export default function KothRoute() {
   const address = new URLSearchParams(window.location.search);
@@ -54,6 +63,8 @@ export default function KothRoute() {
   const [aim, setAim] = createSignal<AimView>();
   const [menu, setMenu] = createSignal(!address.has('watch') && !address.has('class'));
   const [choice, setChoice] = createSignal<{ id: TankClassId; count: number }>();
+  const [pace, setPace] = createSignal(loadPace());
+  const [tuning, setTuning] = createSignal(address.has('tune'));
 
   makeEventListener(window, 'keydown', (event) => {
     const digit = /^Digit([1-5])$/.exec(event.code);
@@ -65,6 +76,8 @@ export default function KothRoute() {
     } else if (event.code === 'KeyV') {
       setWatching((on) => !on);
       setMenu(false);
+    } else if (event.code === 'KeyT') {
+      setTuning((shown) => !shown);
     } else if (event.code === 'KeyC' && !watching()) {
       setMenu((open) => !open);
     } else if (event.code === 'Escape') {
@@ -90,6 +103,7 @@ export default function KothRoute() {
             thoughts={showThoughts() || watching()}
             choice={choice()}
             playerClass={address.get('class')}
+            pace={pace()}
             onFrame={(frame) => {
               setState(frame.state);
               setThoughts(frame.thoughts);
@@ -102,6 +116,15 @@ export default function KothRoute() {
       <KothHud state={state()} watching={watching()} />
       <AimOverlay canvas={canvas()} view={aim()} player={state()?.player} active={!menu() && !watching() && !state()?.capture.winner} />
       <MatchResult state={state()} onRestart={() => setRestarts((count) => count + 1)} />
+      <Show when={tuning()}>
+        <PacePanel
+          pace={pace()}
+          onChange={(next) => {
+            setPace(next);
+            savePace(next);
+          }}
+        />
+      </Show>
       <Show when={menu() && !watching() && state()}>
         {(shown) => (
           <ClassMenu
@@ -114,9 +137,10 @@ export default function KothRoute() {
         )}
       </Show>
       <p class="pointer-events-none absolute bottom-3 left-4 m-0 text-xs text-white/60">
-        WASD drive · mouse aims: the line shows what the shot hits · hold to fire, no reloads (Sniper: hold to charge, the scope marks enemy
-        cores, let go for an instant rail) · right button or Shift: turn on the spot (Sniper) · C or 1-5 class · walls break, ram fences · wrecks
-        are cover · green kits mend where they touch · X aim look · B bot thoughts · V watch (1-8 follow, 0 map) · R restart
+        WASD drive · mouse aims, the view looks ahead toward it: the line shows what the shot hits · hold to fire, no reloads (Sniper: hold to
+        charge, the scope marks enemy cores, let go for an instant rail) · right button or Shift: turn on the spot (Sniper) · C or 1-5 class ·
+        walls break, ram fences · wrecks are cover · green kits mend where they touch · X aim look · T pace · B bot thoughts · V watch (1-8
+        follow, 0 map) · R restart
       </p>
     </div>
   );
@@ -141,6 +165,8 @@ const PIXELS_PER_METER = 100;
  * @param thoughts - Reports what each bot thinks, placed on screen, with every frame.
  * @param choice - The class the player asked for last, handed to the match whenever it changes after mount.
  * @param playerClass - The player's first class, read once; anything but a class id means the Soldier.
+ * @param pace - The match's pace, read every frame: the game's speed, the zoom it sets when it
+ *   changes, the view's lead, and what the match itself works by.
  * @param onFrame - Receives the display state after each frame, with the player's aim on screen.
  */
 function KothScene(props: {
@@ -150,6 +176,7 @@ function KothScene(props: {
   thoughts: boolean;
   choice: { id: TankClassId; count: number } | undefined;
   playerClass: string | null;
+  pace: Pace;
   onFrame: (frame: { state: HudState; thoughts: ThoughtView[]; aim: AimView | undefined }) => void;
 }) {
   const canvas = untrack(() => props.canvas);
@@ -158,18 +185,20 @@ function KothScene(props: {
   const renderer = createRangeRenderer(useGpuCanvas());
   const first = untrack(() => props.playerClass);
   const playerClass = TANK_CLASS_IDS.find((id) => id === first);
-  const match = createKothMatch(rapier, world, renderer, { rules: rulesFromAddress(), playerClass });
+  const match = createKothMatch(rapier, world, renderer, { rules: rulesFromAddress(), playerClass, pace: () => props.pace });
   const input = makeArenaInput(canvas);
   const camera = createCamera(match.seat.tank?.hull.translation() ?? { x: 0, y: 0 });
+  const lookAhead = createLookAhead();
   let lastTime: number | undefined;
   let pendingStep = 0;
   let seenRestarts = untrack(() => props.restarts);
   let seenChoice = untrack(() => props.choice);
   let watched: number | undefined;
-  let overview = { zoom: START_ZOOM };
+  let zoom = untrack(() => props.pace.zoom);
+  let overview = { zoom };
   const scope = createScope();
 
-  camera.zoom = START_ZOOM;
+  camera.zoom = zoom;
 
   makeEventListener(window, 'keydown', (event) => {
     const digit = /^Digit([0-8])$/.exec(event.code);
@@ -197,7 +226,8 @@ function KothScene(props: {
 
   /** Reads input, steps the match, places the camera, draws and reports one frame. */
   function frame(time: number) {
-    const dt = lastTime === undefined ? 0 : Math.min((time - lastTime) / 1000, MAX_FRAME_TIME) / SLOW_MOTION;
+    const pace = props.pace;
+    const dt = lastTime === undefined ? 0 : (Math.min((time - lastTime) / 1000, MAX_FRAME_TIME) * pace.speed) / SLOW_MOTION;
     lastTime = time;
 
     if (props.restarts !== seenRestarts) {
@@ -219,10 +249,22 @@ function KothScene(props: {
     const controls = input.read();
     const player = match.player;
 
+    // A new zoom on the pace panel takes over the view; the wheel and +/- zoom on from it.
+    if (pace.zoom !== zoom) {
+      zoom = pace.zoom;
+      camera.zoom = props.watching ? camera.zoom : zoom;
+    }
+
     camera.rotation += controls.turn * VIEW_TURN_SPEED * dt;
     zoomCamera(camera, controls.zoom * Math.exp(controls.zoomKeys * KEY_ZOOM_SPEED * dt));
+    const pivot = player && !props.watching ? match.combat.gunPivotOf(player) : undefined;
 
-    const aim = player && !props.watching ? aimAngle(player, controls.aim, camera, screen, match.combat.gunPivotOf(player)) : undefined;
+    // The view goes onto the tank as it stands for the cursor as it is, so the gun aims at the ground the frame shows under the cursor.
+    if (pivot) {
+      lookAhead.place(camera, screen, pivot, controls.aim, { share: pace.lead, dt: 0 });
+    }
+
+    const aim = player && pivot ? aimAngle(player, controls.aim, camera, screen, pivot) : undefined;
     const drive = screenToWorldDirection(camera, controls.move);
     const reach = player && controls.aim?.kind === 'point' ? distanceTo(player.hull.translation(), screenToWorld(camera, controls.aim, screen)) : undefined;
     const alt = controls.alt && !props.watching;
@@ -247,10 +289,11 @@ function KothScene(props: {
   }
 
   /**
-   * Follows the player's tank, a watched tank, or frames the whole map while watching. While the
-   * player's casemate gun charges a shot, the view zooms out about the cursor, as a sniper's scope
-   * shows more, and gives the tank more room before following it, so the ground under a still
-   * cursor, where the gun aims, stays put (see `createScope`).
+   * Leads the player's tank toward the aim (see `createLookAhead`), follows a watched tank, or
+   * frames the whole map while watching. While the player's casemate gun charges a shot, the view
+   * zooms out, as a sniper's scope shows more (see `createScope`), about the tank, which the lead
+   * keeps where it is on the screen: the ground under a still cursor slides out along the gun's
+   * line, and the gun keeps its aim.
    */
   function placeCamera(screen: { width: number; height: number }, dt: number, aim: Aim | undefined) {
     const followed = props.watching ? (watched === undefined ? undefined : match.members[watched]) : match.seat;
@@ -273,18 +316,25 @@ function KothScene(props: {
     overview = { zoom: 0 };
     const hud = match.hud().player;
     const scoped = !props.watching && hud.weapon === 'charge' && hud.charge !== undefined;
-    // A stick's aim is a direction, which the camera does not change: its scope widens about the tank.
-    const anchor = aim?.kind === 'point' ? aim : target ? worldToScreen(camera, target, screen) : { x: screen.width / 2, y: screen.height / 2 };
-    scope.step(camera, screen, anchor, scoped, dt);
+    const pivot = !props.watching && followed?.tank ? match.combat.gunPivotOf(followed.tank) : undefined;
 
-    if (target) {
-      followTarget(camera, target, screen, scope.followMargin(DRAG_MARGIN));
+    // Watching one tank, or waiting to respawn: the view follows as it always has, and the lead starts afresh with the next tank.
+    if (!pivot) {
+      lookAhead.reset();
+      scope.step(camera, screen, target ? worldToScreen(camera, target, screen) : { x: screen.width / 2, y: screen.height / 2 }, scoped, dt);
+
+      if (target) {
+        followTarget(camera, target, screen, scope.followMargin(DRAG_MARGIN));
+      }
+
+      return;
     }
+
+    scope.step(camera, screen, worldToScreen(camera, pivot, screen), scoped, dt);
+    lookAhead.place(camera, screen, pivot, aim, { share: props.pace.lead, dt });
   }
 }
 
-/** About 900 x 560 px of the map on a laptop screen: as far as a bot sees to either side. */
-const START_ZOOM = 1.6;
 /** Zoom when watching one tank. */
 const FOLLOW_ZOOM = 1.6;
 const PHYSICS_STEP = 1 / 60;
