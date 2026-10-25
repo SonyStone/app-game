@@ -609,14 +609,29 @@ async function verifyLayers(page, context, url, output) {
   await expect(panel.locator('[data-floating-grip]')).toBeVisible();
   await expect(freeWindow.locator('[data-floating-grip]')).toBeVisible();
   await page.waitForFunction(() => window.paintState?.document.layers.length);
+  // Finish the initial thumbnail batch before measuring work produced by the next stroke.
+  await expect(panel.locator('img')).toHaveCount(await page.evaluate(() => window.paintState.document.layers.length));
+  const stroke = await page.locator('canvas[aria-label^="Drawing canvas."]').evaluate((canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    for (let y = rect.bottom - 100; y >= rect.top + 100; y -= 40) {
+      for (let x = rect.left + 80; x + 160 <= rect.right - 80; x += 40) {
+        if (Array.from({ length: 21 }, (_, i) => document.elementFromPoint(x + i * 8, y) === canvas).every(Boolean)) {
+          return { x, y };
+        }
+      }
+    }
+
+    throw new Error('No unobstructed drawing path beside the floating plates');
+  });
   await page.evaluate(() => {
     window.paintEvents = [];
+    window.paintCommands = [];
   });
   for (let i = 0; i <= 20; i++) {
     await cdp.send('Input.dispatchMouseEvent', {
       type: i === 0 ? 'mousePressed' : 'mouseMoved',
-      x: 700 + i * 8,
-      y: 600,
+      x: stroke.x + i * 8,
+      y: stroke.y,
       button: 'left',
       buttons: 1,
       clickCount: 1,
@@ -625,11 +640,15 @@ async function verifyLayers(page, context, url, output) {
     });
     await page.waitForTimeout(10);
   }
+  assert.ok(
+    await page.evaluate(() => window.paintCommands.some((command) => command.type === 'begin')),
+    'the pen starts a real stroke'
+  );
   assert.equal(await page.evaluate(() => window.paintEvents.length), 0, 'thumbnails stay idle throughout a stroke');
   await cdp.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
-    x: 860,
-    y: 600,
+    x: stroke.x + 160,
+    y: stroke.y,
     button: 'left',
     buttons: 0,
     clickCount: 1,
