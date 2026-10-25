@@ -984,7 +984,7 @@ export function BoardView(props: {
 
   /** Lifts a copy of `kit` from the box, or from the spawn menu opened at `spawnAt`. */
   function startKitDrag(event: PointerEvent, kit: Kit, spawnAt?: Point) {
-    const block = { ...unpackKit(kit), window: kit.window && { ...kit.window, name: kit.name } };
+    const block = unpackKit({ ...kit, window: kit.window && { ...kit.window, name: kit.name } });
     const bounds = partsBounds(block.parts);
     startPartDrag(
       event,

@@ -53,16 +53,18 @@ it('keeps a saved window and nested owned windows with fresh owners on unpack', 
     id: 'owned',
     owner: 'owner',
     at: { x: 0.7, y: 0.4 },
-    window: { name: 'Layers', open: true as const, placed: true as const },
+    window: { name: 'Layers', open: true as const, placed: true as const, collapsed: true as const, future: 'retained' },
     parts: [part('child')]
   };
   const kit = kitOf({ panels: [panel, owned] }, panel, 'Saved tools');
-  expect(kit.window).toEqual({ name: 'Saved tools', collapsed: true });
-  expect(kit.owned[0]!.window).toEqual(owned.window);
+  expect(kit.window).toEqual({ name: 'Saved tools' });
+  expect(kit.owned[0]!.window).toEqual({ name: 'Layers', future: 'retained' });
+  expect(kit.owned[0]!.at).toBeUndefined();
   const first = unpackKit(kit);
   const second = unpackKit(kit);
-  expect(first.panels[0]!.window).toEqual(owned.window);
-  expect(first.panels[0]!.at).toEqual(owned.at);
+  expect(first.window).toEqual({ name: 'Saved tools' });
+  expect(first.panels[0]!.window).toEqual({ name: 'Layers', future: 'retained' });
+  expect(first.panels[0]!.at).toEqual({ x: 0, y: 0 });
   expect(first.panels[0]!.owner).toBe(first.parts[0]!.id);
   expect(second.panels[0]!.owner).not.toBe(first.panels[0]!.owner);
 });

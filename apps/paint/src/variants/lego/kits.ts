@@ -76,7 +76,7 @@ export function createKits(onSavingError?: (message: string) => void) {
  * A fresh copy of `kit` to place: every part gets a new id, so a kit can be placed again and again, with the owned
  * panels, ready to join a board, re-pointed at the new owners. Cells stay as in the kit.
  */
-export function unpackKit(kit: Pick<Kit, 'parts' | 'owned'>) {
+export function unpackKit(kit: Pick<Kit, 'parts' | 'owned' | 'window'>) {
   const ids = new Map<string, string>();
   const renew = (parts: readonly Part[]) =>
     parts.map((part) => {
@@ -94,15 +94,15 @@ export function unpackKit(kit: Pick<Kit, 'parts' | 'owned'>) {
             id: newId('panel'),
             owner,
             parts: entry.parts,
-            offset: entry.offset,
-            window: entry.window && { ...entry.window },
-            at: entry.at ?? { x: 0, y: 0 }
+            offset: entry.window ? undefined : entry.offset,
+            window: windowComposition(entry.window),
+            at: entry.window ? { x: 0, y: 0 } : (entry.at ?? { x: 0, y: 0 })
           }
         ]
       : [];
   });
 
-  return { parts, panels };
+  return { parts, panels, window: windowComposition(kit.window) };
 }
 
 /**
@@ -126,7 +126,13 @@ export function kitOf(board: Board, panel: Panel, name: string): Kit {
     for (const part of parts) {
       const own = board.panels.find((candidate) => candidate.owner === part.id);
       if (own && !owned.some((entry) => entry.owner === part.id)) {
-        owned.push({ owner: part.id, parts: own.parts, offset: own.offset, window: own.window, at: own.at });
+        owned.push({
+          owner: part.id,
+          parts: own.parts,
+          offset: own.window ? undefined : own.offset,
+          window: windowComposition(own.window),
+          at: own.window ? undefined : own.at
+        });
         collect(own.parts);
       }
     }
@@ -138,8 +144,18 @@ export function kitOf(board: Board, panel: Panel, name: string): Kit {
     name,
     parts: fromOrigin(panel.parts),
     owned,
-    window: panel.window && { ...panel.window, name }
+    window: windowComposition(panel.window && { ...panel.window, name })
   };
+}
+
+/** Kits retain a window's name and unknown fields, never its live placement, open or collapse state. */
+function windowComposition(window: Panel['window']) {
+  if (!window) {
+    return undefined;
+  }
+
+  const { open: _open, placed: _placed, collapsed: _collapsed, ...composition } = window;
+  return composition;
 }
 
 /** `parts` moved so that their bounds start at cell (0, 0). */
