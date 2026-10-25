@@ -21,7 +21,7 @@ import styles from './LegoStudio.module.css';
 import { LookChooser } from './LookChooser';
 import { chooseLook } from './looks';
 import { PartFrame } from './PartFrame';
-import type { Popup } from './parts';
+import type { Popup } from './parts/definition';
 
 /**
  * The LEGO variant, a prototype of a UI built like printed LEGO tiles: panels lie freely on the drawing, each a plate
@@ -45,7 +45,13 @@ export function LegoStudio(props: PaintVariantProps) {
   const [popup, setPopup] = createSignal<{ popup: Popup; rect: DOMRect }>();
   const [popupElement, setPopupElement] = createSignal<HTMLElement>();
   const popupSize = createElementSize(popupElement);
-  const session = createPaintSession({ panel: () => popup()?.popup.kind });
+  const session = createPaintSession({
+    panel: () => {
+      const open = popup()?.popup;
+
+      return open?.kind === 'part' ? open.partKind : open?.kind;
+    }
+  });
   const services = createLegoServices(session);
   const reportSavingError = (message: string) =>
     session.setError((current) => current ?? { kind: 'lego', code: 'storage', message });

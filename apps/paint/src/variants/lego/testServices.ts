@@ -58,7 +58,14 @@ export function createTestServices() {
       action: vi.fn(),
       blending: vi.fn()
     },
-    files: { ready: createMemo(() => true), edit: vi.fn(), place: vi.fn() },
+    files: {
+      ready: createMemo(() => true),
+      import: vi.fn(),
+      download: vi.fn(),
+      png: vi.fn(),
+      psd: vi.fn(),
+      place: vi.fn()
+    },
     run: (command: () => unknown) => runPartCommand({ setError: errors }, command)
   };
   return { services, setBrush, brush, errors };

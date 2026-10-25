@@ -1,12 +1,12 @@
 import { createEffect, createSignal, For, untrack } from 'solid-js';
 import { createRecentColors } from '../../features/color/createRecentColors';
 import { hexToHsv, hsvToHex, type Hsv } from '../../features/color/hsv';
-import { discColor, discPoint, paintDisc } from '../../shared/ui/colorDisc';
-import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
 import css from './cluster.module.css';
 import styles from './ColorCard.module.css';
 import { TapButton } from './controls';
+import { discColor, discPoint, paintDisc } from '../../shared/ui/colorDisc';
 import { placed, type Box } from './layout';
+import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
 
 /**
  * Procreate's Colors popover in Disc mode, on the brush colors: a hue ring around a saturation-and-brightness disc

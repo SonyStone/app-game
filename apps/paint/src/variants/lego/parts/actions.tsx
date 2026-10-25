@@ -17,10 +17,12 @@ export const actionParts = [
       get ready() {
         return s.files.ready();
       },
-      edit: f.command(s.files.edit),
+      import: f.command(s.files.import),
+      download: f.command(s.files.download),
+      png: f.command(s.files.png),
+      psd: f.command(s.files.psd),
       place: f.command(s.files.place),
-      onDone: f.onDone,
-      run: f.command((command: () => unknown) => command())
+      onDone: f.onDone
     }),
     View: FileMenu
   }),

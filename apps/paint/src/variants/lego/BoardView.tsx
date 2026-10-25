@@ -40,7 +40,9 @@ import { createTwoFingerSheet } from './createTwoFingerSheet';
 import { nameKit } from './kitNames';
 import { kitOf, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
-import { kindLabel, lookOf, partLooks, PartView, type Popup } from './parts';
+import { PartFrame } from './PartFrame';
+import { kindLabel, lookOf, partLooks } from './parts';
+import type { Popup } from './parts/definition';
 import { BlockView, PartsTray } from './PartsTray';
 import { SelectionBar } from './SelectionBar';
 import { SpawnMenu } from './SpawnMenu';
@@ -584,7 +586,7 @@ export function BoardView(props: {
                   }}
                 >
                   <div class={styles.content}>
-                    <PartView
+                    <PartFrame
                       mode={props.editing ? 'edit' : 'live'}
                       kind={part().kind}
                       missing={!!part()[partData]?.invalid}
@@ -727,8 +729,9 @@ export function BoardView(props: {
               when={current().block}
               fallback={
                 <div class={styles.content} inert>
-                  <PartView
+                  <PartFrame
                     mode="preview"
+                    immediate
                     kind={current().kind}
                     missing={!!current()[partData]?.invalid}
                     span={current().span}
@@ -738,7 +741,7 @@ export function BoardView(props: {
                 </div>
               }
             >
-              {(block) => <BlockView parts={block().parts} />}
+              {(block) => <BlockView parts={block().parts} immediate />}
             </Show>
           </div>
         )}

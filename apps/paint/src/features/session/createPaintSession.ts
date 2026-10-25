@@ -10,7 +10,13 @@ import { createContextMenuBlock } from '../../shared/ui/createContextMenuBlock';
 import { createPageGestureGuard } from '../../shared/ui/createPageGestureGuard';
 import { createPointerTypeAttribute } from '../../shared/ui/createPointerTypeAttribute';
 import { clearAbrBrush, createAbrPresets } from '../abr';
-import { clearRoundBrush, createBrushAdjust, createBrushTools, createMixerBrush, type PaintTool } from '../brush';
+import {
+  clearRoundBrush,
+  createBrushAdjust,
+  createBrushTools,
+  createMixerBrush,
+  type PaintTool
+} from '../brush';
 import { createBrushLibrary, createBrushStorage, createPresetUploads, createRecentPresets } from '../brush-library';
 import { createPaintCamera, createViewSize } from '../camera';
 import { firstCanvasAction, type CanvasInput } from '../canvas';
@@ -62,17 +68,15 @@ import { createSessionWindows } from './createSessionWindows';
  * variant's open panel (see `createNativeShell`). Must be created within a Solid owner; disposing the owner stops the
  * engine.
  */
-export function createPaintSession(
-  options: {
-    /** The variant's open panel, recorded with input recordings; omitted when the variant has none. */
-    panel?: () => string | undefined;
-    /**
-     * The saved drawing to open, `paint-studio` by default: the one every variant shares. A feature demo passes a
-     * name of its own, so trying it never touches the user's drawing.
-     */
-    storageName?: string;
-  } = {}
-) {
+export function createPaintSession(options: {
+  /** The variant's open panel, recorded with input recordings; omitted when the variant has none. */
+  panel?: () => string | undefined;
+  /**
+   * The saved drawing to open, `paint-studio` by default: the one every variant shares. A feature demo passes a
+   * name of its own, so trying it never touches the user's drawing.
+   */
+  storageName?: string;
+} = {}) {
   const [editor, setEditor] = createSignal<HTMLElement>();
   const [stage, setStage] = createSignal<HTMLElement>();
   const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();

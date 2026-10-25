@@ -3,14 +3,16 @@ import { render } from '@solidjs/web';
 import { createRoot, createSignal, flush, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { builtInPresets } from '../../features/brush-library';
+import { StrokePreview } from '../procreate/StrokePreview';
 import { createSheet } from './createSheet';
 import { createKits } from './kits';
 import { LegoServicesContext } from './LegoServices';
 import { LookChooser } from './LookChooser';
 import { PartFrame } from './PartFrame';
 import { partDefinitions } from './parts';
-import type { PartMode } from './parts/definition';
-import { PartsTray } from './PartsTray';
+import type { PartBinding, PartMode } from './parts/definition';
+import { defineValuePart, type ValueChannel } from './parts/values';
+import { BlockView, PartsTray } from './PartsTray';
 import { createTestServices } from './testServices';
 
 // The renderer is tested in paint-core; this suite exercises every real binding and controlled view.
@@ -102,7 +104,10 @@ it.each(['edit', 'preview'] satisfies PartMode[])(
       services.transform.toggle,
       services.layers.action,
       services.layers.blending,
-      services.files.edit,
+      services.files.import,
+      services.files.download,
+      services.files.png,
+      services.files.psd,
       services.files.place
     ];
     const storage = vi.spyOn(Storage.prototype, 'setItem');
@@ -210,7 +215,7 @@ it('keeps shared Coolorus choices across a look change, lift-style remount and r
   expect(reloaded.services.color.coolorus.settings()).toEqual({ hues: 'rgb', lockLightness: true });
 });
 
-it('pauses and resumes the actual look chooser previews as they scroll out and in', () => {
+it('unmounts and remounts the actual look chooser previews as they scroll out and in', () => {
   const { services } = owned(createTestServices);
   mount(() => (
     <LegoServicesContext value={services}>
@@ -263,6 +268,179 @@ it('keeps brush tile DOM identity when the library list gains a preset', () => {
   setPresets([initial, { ...initial, id: 'another', name: 'Another brush' }]);
   flush();
   expect(document.querySelector(`[title="${initial.name}"]`)).toBe(tile);
+});
+
+it('adds a channel using one spec, including fraction edits, number edits and exact cancellation', () => {
+  const { services } = owned(createTestServices);
+  const [flow, setFlow] = createSignal(25);
+  const channel = {
+    id: 'flow',
+    label: 'Flow',
+    short: 'Fl',
+    unit: '%',
+    min: 10,
+    max: () => 110,
+    read: () => flow(),
+    write: (_services, next) => {
+      setFlow(next);
+    },
+    colored: false,
+    track: () => 'linear-gradient(black, white)'
+  } satisfies ValueChannel;
+  const definition = defineValuePart(channel);
+  const frame: PartBinding = {
+    kind: 'value:flow',
+    span: { columns: 3, rows: 1 },
+    look: 'slider',
+    mode: 'live',
+    command:
+      (command) =>
+      (...args) => {
+        command(...args);
+      },
+    onPopup: vi.fn(),
+    onOpen: vi.fn(),
+    onDone: vi.fn()
+  };
+  const binding = definition.needs(services, frame);
+  expect(definition.kind).toBe('value:flow');
+  expect(binding.fraction).toBe(0.15);
+  expect(binding.track).toBe('linear-gradient(black, white)');
+  binding.onStart();
+  binding.onInput(0.7);
+  flush();
+  expect(binding.number).toBe(80);
+  binding.onCancel();
+  flush();
+  expect(binding.number).toBe(25);
+  binding.onNumberCommit(42);
+  flush();
+  expect(binding.text).toBe('42%');
+  expect(services.color.set).not.toHaveBeenCalled();
+});
+
+it('rejects an unknown channel with no writer instead of silently dropping writes', () => {
+  const channel = {
+    id: 'future',
+    label: 'Future',
+    short: 'F',
+    unit: '',
+    min: 0,
+    max: () => 1,
+    read: () => 0,
+    colored: false
+  };
+  // Untyped registry extensions must fail loudly as well as being rejected by TypeScript.
+  // @ts-expect-error A value spec cannot omit its write command.
+  expect(() => defineValuePart(channel)).toThrow('Value channel future requires a write command');
+});
+
+it('gives FileMenu only the five file commands and closes it after each selection', () => {
+  const { services } = owned(createTestServices);
+  const done = vi.fn();
+  mount(() => (
+    <LegoServicesContext value={services}>
+      <PartFrame kind="action:file" popup onDone={done} />
+    </LegoServicesContext>
+  ));
+  expect(Object.keys(services.files).sort()).toEqual(['download', 'import', 'place', 'png', 'psd', 'ready']);
+  for (const [label, command] of [
+    ['Save drawing', services.files.download],
+    ['Export picture', services.files.png],
+    ['Export layers', services.files.psd]
+  ] as const) {
+    [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+      .find((button) => button.textContent?.includes(label))!
+      .click();
+    expect(command).toHaveBeenCalledOnce();
+  }
+  const file = new File(['drawing'], 'drawing.paint');
+  for (const [index, command] of [services.files.import, services.files.place].entries()) {
+    const input = document.querySelectorAll('input')[index]!;
+    Object.defineProperty(input, 'files', { value: [file] });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(command).toHaveBeenCalledWith(file);
+    expect(input.value).toBe('');
+  }
+  expect(done).toHaveBeenCalledTimes(5);
+});
+
+it('keeps FileMenu commands and completion inert in preview mode', () => {
+  const { services } = owned(createTestServices);
+  const done = vi.fn();
+  mount(() => (
+    <LegoServicesContext value={services}>
+      <PartFrame kind="action:file" popup mode="preview" immediate onDone={done} />
+    </LegoServicesContext>
+  ));
+  document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]').forEach((button) => button.click());
+  expect(services.files.download).not.toHaveBeenCalled();
+  expect(services.files.png).not.toHaveBeenCalled();
+  expect(services.files.psd).not.toHaveBeenCalled();
+  expect(done).not.toHaveBeenCalled();
+});
+
+it('mounts carried parts and kit blocks before any visibility callback, keeping them read-only', () => {
+  const { services } = owned(createTestServices);
+  mount(() => (
+    <LegoServicesContext value={services}>
+      <PartFrame kind="action:undo" mode="preview" immediate />
+      <BlockView
+        immediate
+        parts={[{ id: 'pair', kind: 'color:pair', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 1 } }]}
+      />
+    </LegoServicesContext>
+  ));
+  expect(document.querySelector('[aria-label="Foreground color"]')).not.toBeNull();
+  document.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!.click();
+  expect(services.history.undo).not.toHaveBeenCalled();
+  expect(observations.size).toBe(0);
+});
+
+it('preserves the shared preview default background and saved-color precedence', async () => {
+  mount(() => <StrokePreview settings={{ color: '#123456' }} color="#abcdef" height={80} />);
+  intersectAll(true);
+  await vi.waitFor(() =>
+    expect(rendering.updates).toHaveBeenCalledWith(
+      expect.objectContaining({
+        background: '#333333',
+        brush: expect.objectContaining({ color: '#123456' })
+      })
+    )
+  );
+});
+
+it('samples LEGO presets in the current brush color on their normal and active tile backgrounds', async () => {
+  const { services, setBrush } = owned(createTestServices);
+  const preset = { ...builtInPresets[0]!, settings: { ...builtInPresets[0]!.settings, color: '#123456' } };
+  const [active, setActive] = createSignal('');
+  services.presets.all = () => [preset];
+  services.tools.preset = active;
+  mount(() => (
+    <LegoServicesContext value={services}>
+      <PartFrame kind={`preset:${preset.id}`} span={{ columns: 2, rows: 2 }} />
+    </LegoServicesContext>
+  ));
+  intersectAll(true);
+  await vi.waitFor(() =>
+    expect(rendering.updates).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        background: '#f4f2ee',
+        brush: expect.objectContaining({ color: '#ff0000' })
+      })
+    )
+  );
+  setActive(preset.id);
+  setBrush((brush) => ({ ...brush, color: '#00ff00' }));
+  flush();
+  await vi.waitFor(() =>
+    expect(rendering.updates).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        background: '#dde7ff',
+        brush: expect.objectContaining({ color: '#00ff00' })
+      })
+    )
+  );
 });
 
 function intersectAll(visible: boolean) {

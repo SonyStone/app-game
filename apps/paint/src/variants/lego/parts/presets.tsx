@@ -36,7 +36,14 @@ function PresetPart(props: ReturnType<typeof presetNeeds>) {
               class={styles.sample}
               style={{ width: large() || !named() ? '100%' : `${length(1)}px`, height: `${height()}px` }}
             >
-              <PresetStroke preset={preset()} resources={props.resources} color={props.color} height={height()} />
+              <PresetStroke
+                preset={preset()}
+                resources={props.resources}
+                color={props.color}
+                height={height()}
+                background={props.active ? '#dde7ff' : '#f4f2ee'}
+                overrideColor
+              />
             </span>
             <Show when={named()}>
               <span class={styles.name}>{preset().name}</span>

@@ -37,6 +37,7 @@ export function createLegoServices(session: PaintSession) {
       background,
       hsv,
       set: session.setColor,
+      /** Restores a cancelled color edit, deliberately skipping the eraser-to-brush policy. */
       restore: (hex: string) => session.tools.updateBrush({ color: hex }),
       swap: session.tools.swapColors,
       recent: session.recentColors,
@@ -81,7 +82,14 @@ export function createLegoServices(session: PaintSession) {
         session.edit({ type: 'layer', action }),
       blending: (linear: boolean) => session.edit({ type: 'blending', linear })
     },
-    files: { ready: session.ready, edit: session.edit, place: session.images.place },
+    files: {
+      ready: session.ready,
+      import: (file: File) => session.edit({ type: 'import', file }),
+      download: () => session.edit({ type: 'download' }),
+      png: () => session.edit({ type: 'png' }),
+      psd: () => session.edit({ type: 'psd' }),
+      place: session.images.place
+    },
     run: (command: () => unknown) => runPartCommand(session, command)
   };
 }

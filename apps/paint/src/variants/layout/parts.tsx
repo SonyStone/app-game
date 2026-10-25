@@ -23,8 +23,8 @@ import popover from '../procreate/Popover.module.css';
 import procreate from '../procreate/ProcreateStudio.module.css';
 import cluster from '../puck/cluster.module.css';
 import { ColorCard } from '../puck/ColorCard';
-import { LayersCard } from '../puck/LayersCard';
 import { sizes } from '../puck/layout';
+import { LayersCard } from '../puck/LayersCard';
 import { ColorDisc } from '../zen/ColorDisc';
 import zen from '../zen/ZenStudio.module.css';
 import styles from './parts.module.css';
@@ -343,7 +343,10 @@ function ProcreateCard(props: { width: number; children: JSX.Element }) {
   return (
     <div class={procreate.editor}>
       {/* Inline, as the variant's stylesheet may load later and keep the card absolutely placed. */}
-      <section class={popover.popover} style={{ position: 'relative', animation: 'none', width: `${props.width}px` }}>
+      <section
+        class={popover.popover}
+        style={{ position: 'relative', animation: 'none', width: `${props.width}px` }}
+      >
         <div class={popover.body}>{props.children}</div>
       </section>
     </div>

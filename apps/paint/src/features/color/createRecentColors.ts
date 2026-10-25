@@ -6,11 +6,14 @@ import { parseHex } from './hsv';
  * Most recently applied colors, newest first, persisted in `localStorage` so they survive closing the panel and
  * reloading. Storage failures (private mode, quota) leave the list working for its owning session.
  */
-export function createRecentColors() {
+export function createRecentColors(): {
+  /** Up to twelve distinct lowercase hex colors, newest first. */
+  colors: Accessor<readonly string[]>;
+  /** Moves a color to the front and persists the list when storage allows. */
+  remember: (hex: string) => void;
+} {
   // `remember` builds on the list it last wrote, so repeated calls in one event keep every color.
-  const [storedColors, setColors, latestColors] = createImmediateSignal(read());
-
-  const colors: Accessor<readonly string[]> = storedColors;
+  const [colors, setColors, latestColors] = createImmediateSignal<readonly string[]>(read());
 
   return {
     /** Up to {@link LIMIT} distinct lowercase `#rrggbb` colors. */

@@ -21,10 +21,7 @@ export type ColorInputProps = {
 };
 
 /** Controlled color picker inputs. Commands are supplied by the binding, never by a session read. */
-export type PickerProps = {
-  color: string;
-  onInput: (color: string) => void;
-  onCommit: (color: string) => void;
+export type PickerProps = ColorInputProps & {
   oklch: Pick<LegoServices['color']['oklch'], 'wheel' | 'edit' | 'settle' | 'settings' | 'update'>;
   coolorus: LegoServices['color']['coolorus'];
 };
@@ -145,16 +142,14 @@ export function HexPart(props: ColorInputProps) {
         aria-label="Hex color"
         spellcheck={false}
         value={props.color}
-        onChange={(event) =>
-          (() => {
-            const parsed = parseHex(event.currentTarget.value);
-            event.currentTarget.value = parsed ?? props.color;
-            if (parsed) {
-              props.onInput(parsed);
-              props.onCommit(parsed);
-            }
-          })()
-        }
+        onChange={(event) => {
+          const parsed = parseHex(event.currentTarget.value);
+          event.currentTarget.value = parsed ?? props.color;
+          if (parsed) {
+            props.onInput(parsed);
+            props.onCommit(parsed);
+          }
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
             event.currentTarget.blur();

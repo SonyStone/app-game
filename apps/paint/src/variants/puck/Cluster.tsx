@@ -3,7 +3,6 @@ import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { maxBrushSize, type PaintTool } from '../../features/brush';
 import type { PaintSession } from '../../features/session';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
-import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 import { BrushLibrary, ToolCard } from './BrushCards';
 import css from './cluster.module.css';
 import { ColorCard } from './ColorCard';
@@ -15,6 +14,7 @@ import { placed, type Box, type ClusterLayout, type Point } from './layout';
 import { QuickMenu } from './QuickMenu';
 import { slots, type SlotId } from './slots';
 import { formatValue, percentSetting, sizeSetting } from './values';
+import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 
 /**
  * The open cluster, after Procreate on the iPad: the QuickMenu as the Puck under the pen, with size and opacity

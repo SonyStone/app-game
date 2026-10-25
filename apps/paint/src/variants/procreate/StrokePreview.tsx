@@ -9,6 +9,10 @@ export function StrokePreview(props: {
   height: number;
   /** Fallback stroke color when the preset does not save its own. */
   color?: string;
+  /** Sample background; defaults to the shared preview's dark grey. */
+  background?: string;
+  /** When supplied, overrides the preset's saved color. Other callers keep saved-color precedence. */
+  colorOverride?: string;
   class?: string;
   /** Loads all referenced tip, texture and dual resources, only while visible. */
   resources?: () => Promise<readonly BrushResource[]>;
@@ -17,7 +21,14 @@ export function StrokePreview(props: {
   let canvas!: HTMLCanvasElement;
   let refresh = () => {};
   createEffect(
-    () => [JSON.stringify(props.settings), props.height, props.color, props.resources],
+    () => [
+      JSON.stringify(props.settings),
+      props.height,
+      props.color,
+      props.colorOverride,
+      props.background,
+      props.resources
+    ],
     () => refresh()
   );
   onSettled(() => {
@@ -45,12 +56,16 @@ export function StrokePreview(props: {
             }
             connection.update({
               kind: 'brush',
-              brush: { color: props.color ?? '#ffffff', ...brush },
+              brush: {
+                color: props.color ?? '#ffffff',
+                ...brush,
+                ...(props.colorOverride === undefined ? {} : { color: props.colorOverride })
+              },
               resources,
               width,
               height,
               dpr,
-              background: '#333333',
+              background: props.background ?? '#333333',
               thumbnail: true
             });
           })

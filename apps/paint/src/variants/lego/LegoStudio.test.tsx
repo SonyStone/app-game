@@ -14,6 +14,7 @@ const wiring = vi.hoisted(() => ({
   session: undefined as PaintSession | undefined,
   services: undefined as LegoServices | undefined,
   handlers: undefined as EngineHandlers | undefined,
+  panel: undefined as (() => string | undefined) | undefined,
   partMounts: 0,
   colorReads: 0,
   recentInstances: 0,
@@ -26,6 +27,7 @@ vi.mock('../../features/session', async (importOriginal) => {
   return {
     ...actual,
     createPaintSession: (...args: Parameters<typeof actual.createPaintSession>) => {
+      wiring.panel = args[0]?.panel;
       wiring.session = actual.createPaintSession(...args);
       return wiring.session;
     }
@@ -327,6 +329,30 @@ it('session color commands keep picker and mixing-palette policies distinct', ()
   session.setColor('#654321');
   flush();
   expect(session.tool()).toBe('brush');
+});
+
+it.each(['file', 'layers', 'brushes'])('records the actual %s part popup name', (name) => {
+  storeParts([`action:${name}`]);
+  mount();
+  expect(wiring.panel?.()).toBeUndefined();
+  document.querySelector<HTMLButtonElement>(`[data-part-kind="action:${name}"] button`)!.click();
+  flush();
+  expect(wiring.panel?.()).toBe(`action:${name}`);
+  button('Edit')!.click();
+  flush();
+  expect(wiring.panel?.()).toBeUndefined();
+});
+
+it('records a value popup using its part kind', () => {
+  storeParts(['value:size']);
+  const saved = JSON.parse(localStorage.getItem('paint.lego')!);
+  saved.board.panels[0].parts[0].span = { columns: 1, rows: 1 };
+  localStorage.setItem('paint.lego', JSON.stringify(saved));
+  mount();
+  const knob = document.querySelector('[data-part-kind="value:size"] [role="slider"]')!;
+  pointer(knob, 'pointerdown', 0, 0);
+  pointer(knob, 'pointerup', 0, 0);
+  expect(wiring.panel?.()).toBe('value:size');
 });
 
 /** Writes a small, known board without using the live session or the app's stored drawing. */

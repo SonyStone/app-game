@@ -19,18 +19,122 @@ const looks: readonly LookSpec[] = [
   { id: 'number', label: 'Number', min: { columns: 1, rows: 1 } }
 ];
 
-const channels = [
-  { id: 'size', label: 'Size', short: 'Sz', unit: 'px' },
-  { id: 'opacity', label: 'Opacity', short: 'Op', unit: '%' },
-  { id: 'hue', label: 'Hue', short: 'H', unit: '°' },
-  { id: 'saturation', label: 'Saturation', short: 'S', unit: '%' },
-  { id: 'brightness', label: 'Brightness', short: 'B', unit: '%' },
-  { id: 'lightness', label: 'Lightness', short: 'L', unit: '%' }
-] as const;
+/** A channel's complete read/write, range and presentation contract. Adding a value needs only one spec. */
+export type ValueChannel = {
+  id: string;
+  label: string;
+  short: string;
+  unit: string;
+  min: number;
+  max: (services: LegoServices) => number;
+  read: (services: LegoServices) => number;
+  write: (services: LegoServices, value: number, hsv: Hsv) => void;
+  colored: boolean;
+  scale?: 'log';
+  wrap?: boolean;
+  /** Defaults to linear interpolation between min and max. */
+  toFraction?: (value: number, max: number) => number;
+  /** Maps a normalized gesture to the channel value; defaults to linear min/max interpolation. */
+  fromFraction?: (fraction: number, max: number) => number;
+  track?: (services: LegoServices) => string;
+  format?: (value: number) => string;
+  /** Restores channel-specific intent before the original color is restored without tool policy. */
+  cancel?: (services: LegoServices, value: number) => void;
+};
 
-/** One definition per channel, including its full-slider popup. Bindings are created only under a mounted frame. */
-export const valueParts = channels.map((channel) =>
-  definePart({
+const channels = [
+  {
+    id: 'size',
+    label: 'Size',
+    short: 'Sz',
+    unit: 'px',
+    min: 1,
+    max: (s) => s.brush.maxSize(),
+    read: (s) => s.brush.size(),
+    write: (s, value) => s.brush.update({ size: value }),
+    colored: false,
+    scale: 'log',
+    format: (value) => `${Math.round(value)}`,
+    toFraction: (value, max) => geometricFraction(value, 1, max),
+    fromFraction: (fraction, max) => geometricValue(fraction, 1, max)
+  },
+  {
+    id: 'opacity',
+    label: 'Opacity',
+    short: 'Op',
+    unit: '%',
+    min: 1,
+    max: () => 100,
+    read: (s) => s.brush.opacity() * 100,
+    write: (s, value) => s.brush.update({ opacity: value / 100 }),
+    colored: false,
+    toFraction: (value, max) => value / max,
+    fromFraction: (fraction) => 1 + fraction * 99
+  },
+  {
+    id: 'hue',
+    label: 'Hue',
+    short: 'H',
+    unit: '°',
+    min: 0,
+    max: () => 360,
+    read: (s) => s.color.hsv().h,
+    write: (s, value, hsv) => s.color.set(hsvToHex({ ...hsv, h: value % 360 })),
+    colored: true,
+    wrap: true,
+    fromFraction: (fraction) => Math.min(359.9, fraction * 360),
+    track: (s) => gradient([0, 60, 120, 180, 240, 300, 360].map((h) => hsvToHex({ ...s.color.hsv(), h })))
+  },
+  {
+    id: 'saturation',
+    label: 'Saturation',
+    short: 'S',
+    unit: '%',
+    min: 0,
+    max: () => 100,
+    read: (s) => s.color.hsv().s * 100,
+    write: (s, value, hsv) => s.color.set(hsvToHex({ ...hsv, s: value / 100 })),
+    colored: true,
+    track: (s) => gradient([0, 1].map((v) => hsvToHex({ ...s.color.hsv(), s: v })))
+  },
+  {
+    id: 'brightness',
+    label: 'Brightness',
+    short: 'B',
+    unit: '%',
+    min: 0,
+    max: () => 100,
+    read: (s) => s.color.hsv().v * 100,
+    write: (s, value, hsv) => s.color.set(hsvToHex({ ...hsv, v: value / 100 })),
+    colored: true,
+    track: (s) => gradient([0, 1].map((v) => hsvToHex({ ...s.color.hsv(), v })))
+  },
+  {
+    id: 'lightness',
+    label: 'Lightness',
+    short: 'L',
+    unit: '%',
+    min: 0,
+    max: () => 100,
+    read: (s) => s.color.oklch.wheel().l * 100,
+    write: (s, value) => s.color.oklch.edit({ ...s.color.oklch.wheel(), l: value / 100 }),
+    colored: true,
+    track: (s) =>
+      gradient(Array.from({ length: 11 }, (_, index) => wheelToHex({ ...s.color.oklch.wheel(), l: index / 10 }))),
+    cancel: (s, value) => s.color.oklch.edit({ ...s.color.oklch.wheel(), l: value / 100 })
+  }
+] as const satisfies readonly ValueChannel[];
+
+/** Static definitions and their full-slider popups are generated from the same channel specs. */
+export const valueParts = channels.map(defineValuePart);
+
+/** Defines a value part from one complete channel spec. Missing writers fail immediately, including untyped input. */
+export function defineValuePart(channel: ValueChannel) {
+  if (typeof channel.write !== 'function') {
+    throw new TypeError(`Value channel ${channel.id} requires a write command`);
+  }
+
+  return definePart({
     kind: `value:${channel.id}`,
     family: 'value',
     section: 'Values',
@@ -46,11 +150,11 @@ export const valueParts = channels.map((channel) =>
         </div>
       )
     }
-  })
-);
+  });
+}
 
 /** The LEGO look translates cells into the controlled input's orientation and captions. */
-export function ValuePart(props: ReturnType<typeof valueNeeds>) {
+function ValuePart(props: ReturnType<typeof valueNeeds>) {
   return (
     <ValueControl
       {...props}
@@ -66,10 +170,11 @@ export function ValuePart(props: ReturnType<typeof valueNeeds>) {
  * Controlled knob, slider or scrub field. Input callbacks edit live; commit records the settled edit; cancel
  * restores the exact captured value. This component has no session, registry, cells or storage knowledge.
  */
-export function ValueControl(
-  props: Omit<ReturnType<typeof valueNeeds>, 'span'> & {
+function ValueControl(
+  props: Omit<ReturnType<typeof valueNeeds>, 'span' | 'unit'> & {
     vertical: boolean;
     caption?: string;
+    unit?: string;
     named: boolean;
   }
 ) {
@@ -175,53 +280,15 @@ export function ValueControl(
 }
 
 /** Selects one channel's observations and guarded edits, preserving exact gesture cancellation. */
-function valueNeeds(services: LegoServices, frame: PartBinding, channel: (typeof channels)[number]) {
-  const { id } = channel;
-  const { brush, color } = services;
-  const colored = id !== 'size' && id !== 'opacity';
-  const value = () => {
-    switch (id) {
-      case 'size':
-        return brush.size();
-      case 'opacity':
-        return brush.opacity() * 100;
-      case 'hue':
-        return color.hsv().h;
-      case 'saturation':
-        return color.hsv().s * 100;
-      case 'brightness':
-        return color.hsv().v * 100;
-      case 'lightness':
-        return color.oklch.wheel().l * 100;
-    }
-  };
-  const max = () => (id === 'size' ? brush.maxSize() : id === 'hue' ? 360 : 100);
-  const fraction = () => (id === 'size' ? geometricFraction(value(), 1, max()) : value() / max());
+function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueChannel) {
+  const { color } = services;
+  const value = () => channel.read(services);
+  const max = () => channel.max(services);
+  const fraction = () => channel.toFraction?.(value(), max()) ?? (value() - channel.min) / (max() - channel.min);
   let start: { value: number; hsv: Hsv; color: string };
-  const write = (next: number, hsv: Hsv) => {
-    switch (id) {
-      case 'size':
-        brush.update({ size: next });
-        break;
-      case 'opacity':
-        brush.update({ opacity: next / 100 });
-        break;
-      case 'hue':
-        color.set(hsvToHex({ ...hsv, h: next % 360 }));
-        break;
-      case 'saturation':
-        color.set(hsvToHex({ ...hsv, s: next / 100 }));
-        break;
-      case 'brightness':
-        color.set(hsvToHex({ ...hsv, v: next / 100 }));
-        break;
-      case 'lightness':
-        color.oklch.edit({ ...color.oklch.wheel(), l: next / 100 });
-        break;
-    }
-  };
+  const write = (next: number, hsv: Hsv) => channel.write(services, next, hsv);
   const commit = () => {
-    if (colored) {
+    if (channel.colored) {
       color.recent.remember(color.value());
     }
   };
@@ -229,7 +296,7 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: (typeof
   return {
     label: channel.label,
     short: channel.short,
-    unit: channel.unit as string | undefined,
+    unit: channel.unit,
     get span() {
       return frame.span;
     },
@@ -245,32 +312,23 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: (typeof
     get max() {
       return max();
     },
-    min: id === 'size' || id === 'opacity' ? 1 : 0,
-    scale: id === 'size' ? ('log' as const) : undefined,
-    wrap: id === 'hue',
+    min: channel.min,
+    scale: channel.scale,
+    wrap: channel.wrap,
     get text() {
-      return `${Math.round(id === 'size' ? value() : fraction() * max())}${id === 'size' ? '' : channel.unit}`;
+      return channel.format?.(value()) ?? `${Math.round(value())}${channel.unit}`;
     },
     get color() {
-      return colored ? color.value() : undefined;
+      return channel.colored ? color.value() : undefined;
     },
     get track() {
-      return channelTrack(id, color.hsv, color.oklch.wheel);
+      return channel.track?.(services);
     },
     onStart: frame.command(() => {
       start = { value: value(), hsv: color.hsv(), color: color.value() };
     }),
     onInput: frame.command((next: number) =>
-      write(
-        id === 'size'
-          ? geometricValue(next, 1, max())
-          : id === 'hue'
-            ? Math.min(359.9, next * 360)
-            : id === 'opacity'
-              ? 1 + next * 99
-              : next * 100,
-        start.hsv
-      )
+      write(channel.fromFraction?.(next, max()) ?? channel.min + next * (max() - channel.min), start.hsv)
     ),
     onNumberInput: frame.command((next: number) => write(next, start.hsv)),
     onNumberCommit: frame.command((next: number) => {
@@ -279,34 +337,17 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: (typeof
     }),
     onCommit: frame.command(commit),
     onCancel: frame.command(() => {
-      if (id === 'size' || id === 'opacity') {
-        brush.update({ [id]: id === 'size' ? start.value : start.value / 100 });
-      } else {
-        if (id === 'lightness') {
-          color.oklch.edit({ ...color.oklch.wheel(), l: start.value / 100 });
-        }
-
+      if (channel.colored) {
+        channel.cancel?.(services, start.value);
         color.restore(start.color);
+      } else {
+        write(start.value, start.hsv);
       }
     }),
     onOpen: (anchor: Element) => frame.onPopup(anchor, { kind: 'part', partKind: frame.kind })
   };
 }
 
-function channelTrack(
-  id: ValueKind,
-  hsv: LegoServices['color']['hsv'],
-  wheel: LegoServices['color']['oklch']['wheel']
-) {
-  if (id === 'size' || id === 'opacity') {
-    return undefined;
-  }
-
-  const stops =
-    id === 'lightness'
-      ? Array.from({ length: 11 }, (_, index) => wheelToHex({ ...wheel(), l: index / 10 }))
-      : id === 'hue'
-        ? [0, 60, 120, 180, 240, 300, 360].map((h) => hsvToHex({ ...hsv(), h }))
-        : [0, 1].map((value) => hsvToHex({ ...hsv(), [id === 'saturation' ? 's' : 'v']: value }));
+function gradient(stops: readonly string[]) {
   return `linear-gradient(to var(--track-to), ${stops.join(', ')})`;
 }

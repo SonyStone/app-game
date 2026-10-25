@@ -11,7 +11,7 @@ import type { PartBinding, PartMode, Popup } from './parts/definition';
 /**
  * Common host for board parts, ghosts, box/kit previews, chooser looks and popups. Owns failure isolation and mode,
  * never the session. Edit keeps its view mounted and inert. Preview bindings are read-only and mounted only while
- * visible; observation continues offscreen so they resume on re-entry.
+ * near the viewport; offscreen subtrees are disposed and remounted on re-entry. Carried previews mount immediately.
  *
  * Preview may read state and request cacheable rendering through the shared preview service. Rendering must not
  * change app/document state, and pending results must be cancelled or ignored on disposal or invisibility.
@@ -23,6 +23,8 @@ export function PartFrame(props: {
   span?: Span;
   look?: string;
   mode?: PartMode;
+  /** Mounts carried previews immediately, without waiting for visibility observation. */
+  immediate?: boolean;
   missing?: boolean;
   popup?: boolean;
   onPopup?: (anchor: Element, popup: Popup) => void;
@@ -31,6 +33,7 @@ export function PartFrame(props: {
   children?: JSX.Element;
 }) {
   const [element, setElement] = createSignal<HTMLElement>();
+
   return (
     <div
       ref={setElement}
@@ -56,7 +59,7 @@ export function PartFrame(props: {
           </button>
         )}
       >
-        <Show when={props.mode === 'preview'} fallback={props.children ?? <Binding {...props} />}>
+        <Show when={props.mode === 'preview' && !props.immediate} fallback={props.children ?? <Binding {...props} />}>
           <VisiblePreview element={element}>{props.children ?? <Binding {...props} />}</VisiblePreview>
         </Show>
       </Errored>
@@ -66,7 +69,8 @@ export function PartFrame(props: {
 
 /** Keeps observing the host while its expensive subtree is disposed, then remounts it on re-entry. */
 function VisiblePreview(props: { element: Accessor<HTMLElement | undefined>; children: JSX.Element }) {
-  const visible = createVisibilityObserver(props.element, { initialValue: false });
+  const visible = createVisibilityObserver(props.element, { initialValue: false, rootMargin: '96px' });
+
   return <Show when={visible()}>{props.children}</Show>;
 }
 
@@ -110,6 +114,7 @@ function Binding(props: Parameters<typeof PartFrame>[0]) {
       }
     }
   };
+
   return (
     <Show when={definition()} keyed fallback={<MissingPart kind={frame.kind} span={frame.span} />}>
       {(found) => found.render(services, frame, props.popup)}

@@ -19,8 +19,11 @@ export type PartBinding = {
   mode: PartMode;
   /** Guards commands by mode and reports synchronous and async failures. Read-only modes never invoke them. */
   command: <A extends unknown[]>(command: (...args: A) => unknown) => (...args: A) => void;
+  /** Opens the requested popup in live mode, reporting failures through the session. */
   onPopup: (anchor: Element, popup: Popup) => void;
+  /** Opens the part's owned panel in live mode. */
   onOpen: (anchor: Element) => void;
+  /** Closes the current popup after a live command or file selection. */
   onDone: () => void;
 };
 

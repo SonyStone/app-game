@@ -3,7 +3,8 @@ import { For, Show } from 'solid-js';
 import { cellGap, partData, pitch, type Part, type Span } from './board';
 import styles from './LegoStudio.module.css';
 import { lookFits, resolveLook } from './looks';
-import { PartView, partLooks } from './parts';
+import { PartFrame } from './PartFrame';
+import { partLooks } from './parts';
 
 /**
  * Chooses how `part` looks at its current size, showing every choice live and in miniature, like Android's widget
@@ -93,7 +94,7 @@ function PartPreview(props: { kind: string; span: Span; look: string }) {
     <div class={styles.preview} inert>
       <div class={styles.previewTile} style={{ width: `${width()}px`, height: `${height()}px`, scale: `${scale()}` }}>
         <div class={styles.content}>
-          <PartView mode="preview" kind={props.kind} span={props.span} look={props.look} onPopup={() => {}} />
+          <PartFrame mode="preview" kind={props.kind} span={props.span} look={props.look} onPopup={() => {}} />
         </div>
       </div>
     </div>

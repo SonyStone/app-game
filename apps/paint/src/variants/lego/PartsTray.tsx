@@ -5,7 +5,8 @@ import { closedHeight, type createSheet } from './createSheet';
 import type { createKits, Kit } from './kits';
 import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
-import { boxSections, kindLabel, lookOf, PartView } from './parts';
+import { PartFrame } from './PartFrame';
+import { boxSections, kindLabel, lookOf } from './parts';
 import { opaqueData } from './partStorage';
 
 /**
@@ -314,7 +315,7 @@ export function PartTile(props: {
         onPointerDown={(event) => props.onLift(event)}
       >
         <div class={styles.content} inert>
-          <PartView mode="preview" kind={props.kind} span={{ columns: 1, rows: 1 }} onPopup={() => {}} />
+          <PartFrame mode="preview" kind={props.kind} span={{ columns: 1, rows: 1 }} onPopup={() => {}} />
         </div>
       </div>
       <span class={styles.trayCaption}>{kindLabel(props.kind, props.presets())}</span>
@@ -429,7 +430,7 @@ function KitName(props: { name: string; onRename: (name: string) => void }) {
  * A kit's parts laid out as on a panel at full size, the block being carried; see `KitPreview` for the box's
  * miniature.
  */
-export function BlockView(props: { parts: readonly Part[] }) {
+export function BlockView(props: { parts: readonly Part[]; immediate?: boolean }) {
   const bounds = () => partsBounds(props.parts);
 
   return (
@@ -445,8 +446,9 @@ export function BlockView(props: { parts: readonly Part[] }) {
           }}
         >
           <div class={styles.content} inert>
-            <PartView
+            <PartFrame
               mode="preview"
+              immediate={props.immediate}
               kind={part().kind}
               missing={!!part()[partData]?.invalid}
               span={part().span}

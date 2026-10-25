@@ -8,7 +8,7 @@ import { createKits } from './kits';
 import { LegoServicesContext, type LegoServices } from './LegoServices';
 import { LookChooser } from './LookChooser';
 import { PartFrame } from './PartFrame';
-import { kindLabel, PartView } from './parts';
+import { kindLabel } from './parts';
 import { KitTile } from './PartsTray';
 import { createTestServices } from './testServices';
 
@@ -97,7 +97,7 @@ it.each([
   'value:__proto__',
   'color:toString'
 ])('renders unavailable %s without failing', (kind) => {
-  const { services, errors } = fakeServices();
+  const { services } = fakeServices();
   renderOwned(() => <TestPart kind={kind} span={{ columns: 1, rows: 1 }} services={services} onPopup={() => {}} />);
   expect(document.body.textContent).toContain('?');
   expect(document.body.textContent).not.toContain('Broken part');
@@ -122,7 +122,7 @@ it('reports synchronous and asynchronous part commands through the session notic
 });
 
 it('remembers a settled color after its number field echoes input live', () => {
-  const { services, errors } = fakeServices();
+  const { services } = fakeServices();
   renderOwned(() => (
     <TestPart kind="value:hue" look="number" span={{ columns: 1, rows: 1 }} services={services} onPopup={() => {}} />
   ));
@@ -188,7 +188,6 @@ it('shows opaque kits as broken and only offers deletion, preserving records unt
   const records = [{ id: 'bad', name: 'Broken kit', parts: 'future shape', owned: [] }, null];
   localStorage.setItem('paint.lego.kits', JSON.stringify({ version: 2, kits: records }));
   const kits = owned(createKits);
-  const { services, errors } = fakeServices();
   const lift = vi.fn();
 
   for (const kit of kits.kits().filter((kit) => kits.isSaved(kit.id))) {
@@ -246,7 +245,7 @@ it('renders and runs a healthy action after dropping malformed optional looks', 
     })
   );
   const part = owned(createBoard).latest().panels[0]!.parts[0]!;
-  const { services, errors } = fakeServices();
+  const { services } = fakeServices();
   services.history.undo = vi.fn();
   renderOwned(() => <TestPart {...part} missing={part[partData]?.invalid} services={services} onPopup={() => {}} />);
   document.querySelector('button')!.click();
@@ -297,10 +296,10 @@ function fakeServices() {
 }
 
 /** Supplies fake capabilities only at the frame boundary. */
-function TestPart(props: Parameters<typeof PartView>[0] & { services: LegoServices }) {
+function TestPart(props: Parameters<typeof PartFrame>[0] & { services: LegoServices }) {
   return (
     <LegoServicesContext value={props.services}>
-      <PartView {...props} />
+      <PartFrame {...props} />
     </LegoServicesContext>
   );
 }

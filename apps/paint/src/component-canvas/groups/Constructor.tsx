@@ -95,7 +95,8 @@ export function Constructor() {
           <Show when={status()}>
             {(current) => (
               <span class={styles.constructorStatus}>
-                {current().text} <Show when={current().href}>{(href) => <a href={href()}>{href()}</a>}</Show>
+                {current().text}{' '}
+                <Show when={current().href}>{(href) => <a href={href()}>{href()}</a>}</Show>
               </span>
             )}
           </Show>
