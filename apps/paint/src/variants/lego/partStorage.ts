@@ -165,7 +165,8 @@ export function migrateParts(parts: Part[], version: number) {
 }
 
 /**
- * Version 4 frees action-owned windows, removes their opener, and restores swatch-owned windows to folders.
+ * Version 4 frees action-owned panels and orphan windows, removes openers, and closes safe toolbar gaps.
+ * Swatch-owned windows return to folders; a Layers folder retains its own parts as a collapsed window.
  * Legacy positions use a fixed viewport when no measured view exists. Unknown panel and window fields survive.
  */
 export function migrateWindows(board: Board, version: number): Board {
@@ -176,15 +177,23 @@ export function migrateWindows(board: Board, version: number): Board {
   const view = { width: 1200, height: 900 };
   const removed = new Set<string>();
   const converted: Panel[] = board.panels.map((panel) => {
-    if (!panel.window) {
+    const { owner } = panel;
+    const host = owner ? findPart(board, owner) : undefined;
+    if (!panel.window && host?.part.kind !== 'action:layers') {
       return panel;
     }
 
-    const { open, placed, ...window } = panel.window as Panel['window'] & { open?: true; placed?: true };
-    const { owner, offset: _offset, ...free } = panel;
-    const host = owner ? findPart(board, owner) : undefined;
-    if (owner && !host?.part.kind.startsWith('action:')) {
-      const { window: _window, ...folder } = panel;
+    const { open, placed, ...window } = (panel.window ?? { name: 'Layers' }) as NonNullable<Panel['window']> & {
+      open?: true;
+      placed?: true;
+    };
+    const free = { ...panel };
+    delete free.owner;
+    delete free.offset;
+
+    if (host && !host.part.kind.startsWith('action:')) {
+      const folder = { ...panel };
+      delete folder.window;
       return folder;
     }
 
@@ -236,7 +245,7 @@ export function migrateWindows(board: Board, version: number): Board {
     ...board,
     panels: [
       ...converted.flatMap((panel) => {
-        const parts = panel.parts.filter((part) => !removed.has(part.id));
+        const parts = closeOpenerGaps(panel.parts, removed);
         return parts.length || parts.length === panel.parts.length || panel.window || panel.bench
           ? [{ ...panel, parts }]
           : [];
@@ -244,6 +253,39 @@ export function migrateWindows(board: Board, version: number): Board {
       ...added
     ]
   };
+}
+
+/** Removes openers and shifts parts entirely within their row bands left when the whole shift avoids overlaps. */
+function closeOpenerGaps(parts: Part[], removed: ReadonlySet<string>) {
+  let remaining = [...parts];
+  const openers = parts.filter((part) => removed.has(part.id)).sort((a, b) => b.cell.column - a.cell.column);
+  for (const opener of openers) {
+    remaining = remaining.filter((part) => part.id !== opener.id);
+    const shifted = remaining.map((part) =>
+      part.cell.column >= opener.cell.column + opener.span.columns &&
+      part.cell.row >= opener.cell.row &&
+      part.cell.row + part.span.rows <= opener.cell.row + opener.span.rows
+        ? { ...part, cell: { ...part.cell, column: part.cell.column - opener.span.columns } }
+        : part
+    );
+    const safe = shifted.every(
+      (part, index) =>
+        part === remaining[index] ||
+        shifted.every(
+          (other) =>
+            part.id === other.id ||
+            part.cell.column >= other.cell.column + other.span.columns ||
+            other.cell.column >= part.cell.column + part.span.columns ||
+            part.cell.row >= other.cell.row + other.span.rows ||
+            other.cell.row >= part.cell.row + part.span.rows
+        )
+    );
+    if (safe) {
+      remaining = shifted;
+    }
+  }
+
+  return remaining;
 }
 
 /** Migration output shared by board panels and kit-owned panels. */

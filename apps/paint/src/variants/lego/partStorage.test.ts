@@ -332,9 +332,7 @@ it.each([undefined, 1, 2])(
       future: id
     }));
     const boardData = boardOf(parts);
-    const kitData = [
-      { id: 'kit', name: 'Kit', parts: parts.slice(0, 1), owned: [{ owner: 'first', parts: parts.slice(1) }] }
-    ];
+    const kitData = [{ id: 'kit', name: 'Kit', parts, owned: [] }];
     localStorage.setItem('paint.lego', JSON.stringify(version ? { version, board: boardData } : boardData));
     localStorage.setItem('paint.lego.kits', JSON.stringify(version ? { version, kits: kitData } : kitData));
     const board = owned(createBoard);
@@ -539,4 +537,139 @@ it('promotes a sole window kit while retaining its nested folders and unknown pa
   const saved = JSON.parse(localStorage.getItem('paint.lego.kits')!).kits[0];
   expect(saved.futurePanel).toBe(8);
   expect(saved.owned[0].futureFolder).toBe(9);
+});
+
+it.each([1, 2, 3])('recovers customised Layers folders in v%s boards and kits without adding defaults', (version) => {
+  const opener = part('action:layers');
+  const custom = { ...part('action:undo'), futurePart: 17 };
+  const folder = { owner: opener.id, parts: [custom], offset: { column: 3, row: 2 }, futureFolder: 18 };
+  localStorage.setItem(
+    'paint.lego',
+    JSON.stringify({
+      version,
+      board: {
+        panels: [boardOf([opener]).panels[0], { ...folder, id: 'custom', at: { x: 0.2, y: 0.3 } }]
+      }
+    })
+  );
+  localStorage.setItem(
+    'paint.lego.kits',
+    JSON.stringify({ version, kits: [{ id: 'custom', name: 'Custom', parts: [opener], owned: [folder] }] })
+  );
+  const board = owned(createBoard);
+  const recovered = board.latest().panels;
+  expect(recovered).toHaveLength(1);
+  expect(recovered[0]).toMatchObject({
+    id: 'custom',
+    parts: [custom],
+    window: { name: 'Layers', icon: 'layers', collapsed: true },
+    futureFolder: 18
+  });
+  expect(recovered[0]!.owner).toBeUndefined();
+  expect(recovered[0]!.offset).toBeUndefined();
+  board.set(pruneOwned(board.latest()));
+  expect(owned(createBoard).latest().panels[0]!.parts).toMatchObject([custom]);
+  const kits = owned(createKits);
+  const kit = kits.kits().find((kit) => kit.id === 'custom')!;
+  expect(kit.parts).toMatchObject([custom]);
+  expect(kit.window).toEqual({ name: 'Layers', icon: 'layers' });
+  expect(kit.owned).toEqual([]);
+  expect(unpackKit(kit).parts).toMatchObject([{ kind: custom.kind, futurePart: 17 }]);
+  kits.rename('custom', 'Recovered');
+  expect(JSON.parse(localStorage.getItem('paint.lego.kits')!).kits[0]).toMatchObject({
+    futureFolder: 18,
+    parts: [custom]
+  });
+});
+
+it('frees orphan windows on boards and in mixed kits, retaining their parts through pruning and unpacking', () => {
+  const window = {
+    owner: 'missing',
+    parts: [part('action:redo')],
+    window: { name: 'Recovered', open: true, future: 42 }
+  };
+  localStorage.setItem(
+    'paint.lego',
+    JSON.stringify({
+      version: 3,
+      board: {
+        panels: [{ ...window, id: 'orphan', at: { x: 0.2, y: 0.3 } }]
+      }
+    })
+  );
+  localStorage.setItem(
+    'paint.lego.kits',
+    JSON.stringify({
+      version: 3,
+      kits: [{ id: 'mixed', name: 'Mixed', parts: [part('action:undo')], owned: [window] }]
+    })
+  );
+  const board = owned(createBoard);
+  const recovered = pruneOwned(board.latest()).panels[0]!;
+  expect(recovered.owner).toBeUndefined();
+  expect(recovered.window).toEqual({ name: 'Recovered', collapsed: undefined, future: 42 });
+  expect(recovered.parts).toMatchObject(window.parts);
+  const kit = owned(createKits)
+    .kits()
+    .find((kit) => kit.id === 'mixed')!;
+  expect(kit.owned[0]!.owner).toBeUndefined();
+  expect(unpackKit(kit).panels[0]).toMatchObject({
+    parts: [{ kind: 'action:redo' }],
+    window: { name: 'Recovered', future: 42 }
+  });
+});
+
+it.each([
+  { name: 'same row', extra: [], row: 0, rows: 1, expected: 2 },
+  {
+    name: 'overlap blocked',
+    extra: [{ ...part('action:file'), cell: { column: 4, row: 0 }, span: { columns: 1, rows: 3 } }],
+    row: 1,
+    rows: 1,
+    column: 6,
+    expected: 6
+  },
+  { name: 'spans outside removed rows', extra: [], row: 1, rows: 2, expected: 4 },
+  { name: 'other row', extra: [], row: 3, rows: 1, expected: 4 }
+])('closes only safe opener gaps on boards and kits: $name', ({ extra, row, rows, column = 4, expected }) => {
+  const opener = { ...part('action:layers'), cell: { column: 2, row: 0 }, span: { columns: 2, rows: 2 } };
+  const right = { ...part('action:redo'), cell: { column, row }, span: { columns: 2, rows } };
+  const parts = [part('action:undo'), opener, right, ...extra];
+  localStorage.setItem('paint.lego', JSON.stringify({ version: 3, board: boardOf(parts) }));
+  localStorage.setItem(
+    'paint.lego.kits',
+    JSON.stringify({ version: 3, kits: [{ id: 'gap', name: 'Gap', parts, owned: [] }] })
+  );
+  const board = owned(createBoard);
+  const kit = owned(createKits)
+    .kits()
+    .find((kit) => kit.id === 'gap')!;
+  for (const migrated of [board.latest().panels[0]!.parts, kit.parts]) {
+    expect(migrated.some((part) => part.kind === 'action:layers')).toBe(false);
+    expect(migrated.find((part) => part.id === right.id)?.cell).toEqual({ column: expected, row });
+  }
+});
+
+it('closes consecutive opener gaps from right to left on boards and kits', () => {
+  const parts = [
+    part('action:undo'),
+    ...['one', 'two'].map((id, index) => ({
+      ...part('action:layers'),
+      id,
+      cell: { column: index + 1, row: 0 }
+    })),
+    { ...part('action:redo'), cell: { column: 3, row: 0 } }
+  ];
+  localStorage.setItem('paint.lego', JSON.stringify({ version: 2, board: boardOf(parts) }));
+  localStorage.setItem(
+    'paint.lego.kits',
+    JSON.stringify({ version: 2, kits: [{ id: 'gap', name: 'Gap', parts, owned: [] }] })
+  );
+  const board = owned(createBoard).latest();
+  const kit = owned(createKits)
+    .kits()
+    .find((kit) => kit.id === 'gap')!;
+  for (const migrated of [board.panels[0]!.parts, kit.parts]) {
+    expect(migrated.find((part) => part.kind === 'action:redo')?.cell).toEqual({ column: 1, row: 0 });
+  }
 });

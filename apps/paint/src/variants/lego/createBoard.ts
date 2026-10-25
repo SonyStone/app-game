@@ -55,7 +55,8 @@ function read(data: unknown, version: number): Board {
     return { ...panel, parts: result.parts };
   });
 
-  return migrateWindows({ ...board, panels: [...panels, ...added] }, version);
+  const missing = added.filter((entry) => !panels.some((panel) => panel.owner === entry.owner));
+  return migrateWindows({ ...board, panels: [...panels, ...missing] }, version);
 }
 
 /** The default panel swatch `owner` opens, its part ids prefixed with the owner's to keep them unique. */

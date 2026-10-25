@@ -162,7 +162,8 @@ function windowComposition(window: Panel['window']) {
     return undefined;
   }
 
-  const { collapsed: _collapsed, ...composition } = window;
+  const composition = { ...window };
+  delete composition.collapsed;
   return composition;
 }
 
@@ -285,40 +286,47 @@ function read(data: unknown, version: number): Kit[] {
         return { ...kit, parts, owned: [...owned, ...added] };
       }
 
-      const entries = [...owned, ...added];
-      const root = { id: kit.id, at: { x: 0, y: 0 }, parts, window: kit.window };
-      const migrated = migrateWindows(
-        {
-          panels: [
-            root,
-            ...entries.map((entry, index) => ({
-              ...entry,
-              id: `${kit.id}-owned-${index}`,
-              at: entry.at ?? { x: 0, y: 0 }
-            }))
-          ]
-        },
-        version
-      );
-      const main = migrated.panels.find((panel) => panel.id === kit.id);
-      const remaining = migrated.panels.filter((panel) => panel.id !== kit.id);
-      // A kit consisting only of an opener becomes the window composition itself.
-      const free = remaining.filter((panel) => panel.window && panel.owner === undefined);
-      const single = !main && free.length === 1 ? free[0] : undefined;
-      const composition = single ?? main;
-      const { id: _id, at: _at, parts: _parts, window: _window, ...fields } = single ?? root;
-      return {
-        ...fields,
-        ...kit,
-        parts: composition?.parts ?? [],
-        window: windowComposition(composition?.window),
-        owned: remaining
-          .filter((panel) => panel !== single)
-          .map(({ id, at, ...entry }) => ({
-            ...entry,
-            ...(!entry.window && entries.find((_entry, index) => id === `${kit.id}-owned-${index}`)?.at ? { at } : {}),
-            window: windowComposition(entry.window)
-          }))
-      };
+      return migrateKitWindows(kit, parts, owned, added, version);
     });
+}
+
+/** Converts legacy opener panels to window compositions, promoting a sole window while retaining unknown fields. */
+function migrateKitWindows(kit: Kit, parts: Part[], owned: Kit['owned'], added: Kit['owned'], version: number): Kit {
+  const entries = [...owned, ...added.filter((entry) => !owned.some((panel) => panel.owner === entry.owner))];
+  const root = { id: kit.id, at: { x: 0, y: 0 }, parts, window: kit.window };
+  const migrated = migrateWindows(
+    {
+      panels: [
+        root,
+        ...entries.map((entry, index) => ({
+          ...entry,
+          id: `${kit.id}-owned-${index}`,
+          at: entry.at ?? { x: 0, y: 0 }
+        }))
+      ]
+    },
+    version
+  );
+  const main = migrated.panels.find((panel) => panel.id === kit.id);
+  const remaining = migrated.panels.filter((panel) => panel.id !== kit.id);
+  // A kit consisting only of an opener becomes the window composition itself.
+  const free = remaining.filter((panel) => panel.window && panel.owner === undefined);
+  const single = !main && free.length === 1 ? free[0] : undefined;
+  const composition = single ?? main;
+  const fields = Object.fromEntries(
+    Object.entries(single ?? root).filter(([key]) => !['id', 'at', 'parts', 'window'].includes(key))
+  );
+  return {
+    ...fields,
+    ...kit,
+    parts: composition?.parts ?? [],
+    window: windowComposition(composition?.window),
+    owned: remaining
+      .filter((panel) => panel !== single)
+      .map(({ id, at, ...entry }) => ({
+        ...entry,
+        ...(!entry.window && entries.find((_entry, index) => id === `${kit.id}-owned-${index}`)?.at ? { at } : {}),
+        window: windowComposition(entry.window)
+      }))
+  };
 }
