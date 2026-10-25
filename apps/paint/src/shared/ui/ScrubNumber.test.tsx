@@ -59,7 +59,51 @@ it('wraps angles past their bounds and doubles a logarithmic value every 50 px',
   expect(radius.changes).toEqual([16]);
 });
 
-function mount(options: Partial<Parameters<typeof ScrubNumber>[0]> = {}) {
+it('commits once when a controlled parent echoes every input', () => {
+  const { changes, pointer } = mount({}, true);
+  pointer('pointerdown', 0, 0);
+  pointer('pointermove', 10, 0);
+  pointer('pointermove', 20, 0);
+  pointer('pointerup', 20, 0);
+  pointer('lostpointercapture', 20, 0);
+  expect(changes).toEqual([70]);
+});
+
+it.each(['pointercancel', 'lostpointercapture'])('restores the start value on %s without committing', (event) => {
+  const { input, changes, inputs, pointer } = mount({}, true);
+  pointer('pointerdown', 0, 0);
+  pointer('pointermove', 20, 0);
+  pointer(event, 20, 0);
+  pointer('pointerup', 20, 0);
+  expect(input().value).toBe('50');
+  expect(inputs).toEqual([70, 50]);
+  expect(changes).toEqual([]);
+});
+
+it('does not commit a drag that returns to its start or stays clamped', () => {
+  const { changes, pointer } = mount({ min: 50, max: 290 }, true);
+  pointer('pointerdown', 0, 0);
+  pointer('pointermove', 20, 0);
+  pointer('pointermove', 0, 0);
+  pointer('pointerup', 0, 0);
+  pointer('pointerdown', 0, 0);
+  pointer('pointermove', -20, 0);
+  pointer('pointerup', -20, 0);
+  expect(changes).toEqual([]);
+});
+
+it('restores an echoed draft when disposed during a gesture', () => {
+  const { changes, inputs, pointer } = mount({}, true);
+  pointer('pointerdown', 0, 0);
+  pointer('pointermove', 20, 0);
+  dispose?.();
+  dispose = undefined;
+  flush();
+  expect(inputs).toEqual([70, 50]);
+  expect(changes).toEqual([]);
+});
+
+function mount(options: Partial<Parameters<typeof ScrubNumber>[0]> = {}, echo = false) {
   const host = document.createElement('div');
   document.body.append(host);
   const changes: number[] = [];
@@ -71,7 +115,12 @@ function mount(options: Partial<Parameters<typeof ScrubNumber>[0]> = {}) {
         label="Amount"
         {...options}
         value={value()}
-        onInput={(next) => inputs.push(next)}
+        onInput={(next) => {
+          inputs.push(next);
+          if (echo) {
+            setValue(next);
+          }
+        }}
         onChange={(next) => {
           changes.push(next);
           setValue(next);
