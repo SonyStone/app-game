@@ -1,9 +1,9 @@
-import type { createDocument, LayerAction, LayerInfo } from '@app-game/paint-core/document';
-import { closestCenter, createDragContext, createDraggable, createDroppable } from '@solid-primitives/drag-drop';
-import { For, Show, untrack } from 'solid-js';
+import type { createDocument, LayerAction } from '@app-game/paint-core/document';
+import { Show } from 'solid-js';
 import { ScrubNumber } from '../../shared/ui/ScrubNumber';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { BlendModePicker } from './BlendModePicker';
+import { layerCommand, LayerList, LayerName, type LayerCommand } from './LayerControls';
 import styles from './LayersPanel.module.css';
 
 /**
@@ -35,24 +35,8 @@ export function LayersPanel(props: {
     onShowAllChange: (showAll: boolean) => void;
   };
 }) {
+  const command = (name: LayerCommand) => layerCommand(name, props.state, props.ready);
   const selected = () => props.state.layers.find((item) => item.id === props.state.activeId)!;
-  /** Position of the selected layer, bottom first, for disabling moves past either end. */
-  const selectedIndex = () => props.state.layers.findIndex((item) => item.id === props.state.activeId);
-  // Dropping a row's grip on another row moves the layer to that row's position.
-  const drag = createDragContext({
-    collisionDetection: closestCenter,
-    onDragEnd(item, over) {
-      const index = props.state.layers.findIndex((layer) => layer.id === over?.id);
-      if (index >= 0 && over?.id !== item.id) {
-        props.onAction({ type: 'reorder', id: String(item.id), index });
-      }
-    }
-  });
-  /** A visible layer can be merged into a visible layer below it. */
-  const canMergeDown = () => {
-    const below = props.state.layers[selectedIndex() - 1];
-    return below !== undefined && below.visible && selected().visible;
-  };
 
   return (
     <section class={['paint-layers', { [styles.fillContainer!]: props.fillContainer }]}>
@@ -65,37 +49,15 @@ export function LayersPanel(props: {
             aria-label="Duplicate layer"
             title="Duplicate selected layer"
             disabled={!props.ready}
-            onClick={() => props.onAction({ type: 'duplicate', id: props.state.activeId })}
+            onClick={() => props.onAction(command('duplicate').action)}
           >
             <SketchIcon name="copy" size={18} />
           </button>
-          <button aria-label="Add layer" disabled={!props.ready} onClick={() => props.onAction({ type: 'add' })}>
+          <button aria-label="Add layer" disabled={!props.ready} onClick={() => props.onAction(command('add').action)}>
             <SketchIcon name="plus" size={18} />
           </button>
         </div>
-        <input
-          class={styles.layerName}
-          aria-label="Layer name"
-          maxlength={64}
-          value={selected().name}
-          onChange={(e) => {
-            const name = e.currentTarget.value.trim();
-            if (!name) {
-              // An empty name would leave the layer unlabelled in the list.
-              e.currentTarget.value = selected().name;
-              return;
-            }
-
-            if (name !== selected().name) {
-              props.onAction({ type: 'update', id: props.state.activeId, patch: { name } });
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.currentTarget.blur();
-            }
-          }}
-        />
+        <LayerName layer={selected()} onAction={props.onAction} />
         <Show when={props.fillContainer}>
           <details class={styles.moreSettings}>
             <summary aria-label="Layer settings" title="Layer settings">
@@ -128,9 +90,7 @@ export function LayersPanel(props: {
           aria-label="Lock transparent pixels"
           title="Lock transparent pixels: paint only recolors existing pixels"
           aria-pressed={selected().alphaLock ? 'true' : 'false'}
-          onClick={() =>
-            props.onAction({ type: 'update', id: props.state.activeId, patch: { alphaLock: !selected().alphaLock } })
-          }
+          onClick={() => props.onAction(command('lock').action)}
         >
           <SketchIcon name={selected().alphaLock ? 'lock' : 'unlock'} size={18} />
         </button>
@@ -139,9 +99,7 @@ export function LayersPanel(props: {
           aria-label="Clip to layer below"
           title="Clip to layer below: show this layer only where the layer below has pixels"
           aria-pressed={selected().clipping ? 'true' : 'false'}
-          onClick={() =>
-            props.onAction({ type: 'update', id: props.state.activeId, patch: { clipping: !selected().clipping } })
-          }
+          onClick={() => props.onAction(command('clip').action)}
         >
           <SketchIcon name="clip" size={18} />
         </button>
@@ -149,24 +107,13 @@ export function LayersPanel(props: {
       <Show when={!props.fillContainer}>
         <SmoothColor linear={props.state.linearBlending} onChange={props.onLinearBlending} />
       </Show>
-      <drag.Provider>
-        <div class={styles.layerList}>
-          <For
-            each={[...props.state.layers].reverse().filter((layer) => props.filter?.shown(layer.id) ?? true)}
-            keyed={(item) => item.id}
-          >
-            {(item) => (
-              <LayerRow
-                layer={item()}
-                thumbnail={props.thumbnail?.(item().id)}
-                selected={item().id === props.state.activeId}
-                ready={props.ready}
-                onAction={props.onAction}
-              />
-            )}
-          </For>
-        </div>
-      </drag.Provider>
+      <LayerList
+        state={props.state}
+        ready={props.ready}
+        thumbnail={props.thumbnail}
+        onAction={props.onAction}
+        shown={props.filter?.shown}
+      />
       <Show when={props.filter && props.filter.offScreen > 0 && props.filter}>
         {(filter) => (
           <button class={styles.offScreen} onClick={() => filter().onShowAllChange(!filter().showAll)}>
@@ -179,24 +126,24 @@ export function LayersPanel(props: {
         <button
           aria-label="Move layer up"
           title="Move layer up"
-          disabled={!props.ready || selectedIndex() === props.state.layers.length - 1}
-          onClick={() => props.onAction({ type: 'move', id: props.state.activeId, direction: 1 })}
+          disabled={command('up').disabled}
+          onClick={() => props.onAction(command('up').action)}
         >
           <SketchIcon name="up" size={18} />
         </button>
         <button
           aria-label="Move layer down"
           title="Move layer down"
-          disabled={!props.ready || selectedIndex() === 0}
-          onClick={() => props.onAction({ type: 'move', id: props.state.activeId, direction: -1 })}
+          disabled={command('down').disabled}
+          onClick={() => props.onAction(command('down').action)}
         >
           <SketchIcon name="down" size={18} />
         </button>
         <button
           aria-label="Merge down"
           title="Merge the selected layer into the layer below"
-          disabled={!props.ready || !canMergeDown()}
-          onClick={() => props.onAction({ type: 'merge-down', id: props.state.activeId })}
+          disabled={command('merge-down').disabled}
+          onClick={() => props.onAction(command('merge-down').action)}
         >
           <Show when={props.fillContainer} fallback="Merge down">
             <SketchIcon name="layers" size={18} />
@@ -205,8 +152,8 @@ export function LayersPanel(props: {
         <button
           aria-label="Delete layer"
           title="Delete selected layer"
-          disabled={!props.ready || props.state.layers.length <= 1}
-          onClick={() => props.onAction({ type: 'delete', id: props.state.activeId })}
+          disabled={command('delete').disabled}
+          onClick={() => props.onAction(command('delete').action)}
         >
           <Show when={props.fillContainer} fallback="Delete">
             <SketchIcon name="trash" size={18} />
@@ -227,69 +174,6 @@ function SmoothColor(props: { linear: boolean; onChange: (linear: boolean) => vo
       <input type="checkbox" checked={props.linear} onChange={(event) => props.onChange(event.currentTarget.checked)} />
       Smooth color for all layers
     </label>
-  );
-}
-
-/**
- * One row of the layer list: visibility, selection and a grip that drags the row onto another row's position. The row
- * is a drop target of the panel's drag context; the grip is also keyboard-draggable (Space or Enter, arrows, then
- * Space or Enter). Rows are keyed by layer id, so the drag registration keeps the first id.
- */
-function LayerRow(props: {
-  layer: LayerInfo;
-  thumbnail?: string;
-  selected: boolean;
-  ready: boolean;
-  onAction: (action: LayerAction) => void;
-}) {
-  const id = untrack(() => props.layer.id);
-  const grip = createDraggable(id, undefined, { disabled: () => !props.ready });
-  const drop = createDroppable(id);
-  const offset = () => grip.transform()?.y;
-
-  return (
-    <div
-      ref={drop.ref}
-      class={[
-        styles.layer,
-        {
-          [styles.selected!]: props.selected,
-          [styles.dragging!]: grip.isDragging(),
-          [styles.clipped!]: !!props.layer.clipping,
-          [styles.dropTarget!]: drop.isOver()
-        }
-      ]}
-      style={{ transform: offset() === undefined ? undefined : `translateY(${offset()}px)` }}
-    >
-      <button
-        class={styles.layerEye}
-        aria-label={`${props.layer.visible ? 'Hide' : 'Show'} ${props.layer.name}`}
-        onClick={() => props.onAction({ type: 'update', id: props.layer.id, patch: { visible: !props.layer.visible } })}
-      >
-        <SketchIcon name={props.layer.visible ? 'eye' : 'hidden'} size={18} />
-      </button>
-      <button
-        class={styles.layerSelect}
-        aria-label={`Select ${props.layer.name}`}
-        aria-current={props.selected ? 'true' : undefined}
-        onClick={() => props.onAction({ type: 'select', id: props.layer.id })}
-      >
-        <Show when={props.thumbnail} fallback={<SketchIcon name="paper" size={26} />}>
-          {(src) => <img class={styles.layerThumbnail} src={src()} alt="" draggable={false} />}
-        </Show>
-        <span>
-          {props.layer.name}
-          <small>
-            {[props.layer.clipping ? 'Clipped' : 'Raster layer', props.layer.alphaLock ? 'transparency locked' : '']
-              .filter(Boolean)
-              .join(' · ')}
-          </small>
-        </span>
-      </button>
-      <span ref={grip.ref} class={styles.layerGrip} aria-label={`Reorder ${props.layer.name}`} title="Drag to reorder">
-        <SketchIcon name="grip" size={18} />
-      </span>
-    </div>
   );
 }
 

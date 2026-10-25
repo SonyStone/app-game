@@ -12,6 +12,9 @@ import styles from './LayersPanel.module.css';
  * press outside, window resize or ancestor scroll; arrow keys move through it.
  */
 export function BlendModePicker(props: {
+  /** Host classes theme the trigger and top-layer menu without copying their behavior. */
+  classes?: Record<string, string>;
+  compact?: boolean;
   mode: BlendMode;
   /** Whether the document blends in linear light, which the previews show. */
   linear: boolean;
@@ -62,10 +65,10 @@ export function BlendModePicker(props: {
   });
 
   return (
-    <div class={styles.blendPicker}>
+    <div class={props.classes?.blendPicker ?? styles.blendPicker}>
       <button
         ref={trigger}
-        class={styles.blendTrigger}
+        class={props.classes?.blendTrigger ?? styles.blendTrigger}
         aria-label="Layer blend mode"
         aria-haspopup="listbox"
         aria-expanded={open() ? 'true' : 'false'}
@@ -73,8 +76,10 @@ export function BlendModePicker(props: {
         onClick={() => setOpen(!open())}
       >
         <Preview mode={current().id} linear={props.linear} />
-        <span>{current().label}</span>
-        <svg viewBox="0 0 12 12" aria-hidden="true">
+        <Show when={!props.compact}>
+          <span>{current().label}</span>
+        </Show>
+        <svg style={{ display: props.compact ? 'none' : undefined }} viewBox="0 0 12 12" aria-hidden="true">
           <path d="m3 4.5 3 3 3-3" />
         </svg>
       </button>
@@ -82,7 +87,7 @@ export function BlendModePicker(props: {
         <div
           ref={menu}
           popover="auto"
-          class={styles.blendList}
+          class={[styles.blendList, props.classes?.blendList]}
           onToggle={(event) => {
             if (event.newState === 'closed') {
               setOpen(false);

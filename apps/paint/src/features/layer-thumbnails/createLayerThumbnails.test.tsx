@@ -125,6 +125,12 @@ it('lets a mounted panel want thumbnails, which the engine is asked for whenever
   flush();
   expect(sizes()).toEqual([128, undefined]);
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:1');
+  setOpen(true);
+  flush();
+  expect(sizes()).toEqual([128, undefined, 128]);
+  setOpen(false);
+  flush();
+  expect(sizes()).toEqual([128, undefined, 128, undefined]);
   disconnect();
 });
 

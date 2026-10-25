@@ -13,8 +13,8 @@ import type { LayerThumbnailsEvent } from '../engine';
  * owner; disposing it releases every image.
  */
 export function createLayerThumbnails() {
-  /** Device pixel sizes asked for by each `want` that has not been released. */
-  const [wanted, setWanted] = createSignal<readonly number[]>([]);
+  /** Demand releases run during subtree disposal, including disposal inside an owned computation. */
+  const [wanted, setWanted] = createSignal<readonly number[]>([], { ownedWrite: true });
   const size = createMemo(() => (wanted().length ? Math.max(...wanted()) : undefined));
   const [frame, setFrame] = createSignal<DocumentRect>(emptyFrame, { equals: sameRect });
   const [images, setImages] = createStore<Record<string, LayerThumbnail>>({});
