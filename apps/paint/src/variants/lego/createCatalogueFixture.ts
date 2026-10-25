@@ -105,6 +105,8 @@ export function createCatalogueFixture() {
     transform: { active: () => false, toggle: () => {} },
     selection: { selected: () => false },
     layers: {
+      wantThumbnails: () => () => {},
+      thumbnail: () => undefined,
       state,
       ready: createMemo(() => true),
       action: (action) => {

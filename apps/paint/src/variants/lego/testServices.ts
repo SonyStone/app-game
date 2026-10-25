@@ -55,6 +55,8 @@ export function createTestServices() {
     transform: { active: () => false, toggle: vi.fn() },
     selection: { selected: () => false },
     layers: {
+      wantThumbnails: vi.fn(() => vi.fn()),
+      thumbnail: vi.fn(() => undefined),
       state: createMemo(createDocument().state),
       ready: createMemo(() => true),
       action: vi.fn(),

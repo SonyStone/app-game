@@ -1,4 +1,4 @@
-import type { BlendMode, createDocument, LayerAction, LayerInfo } from '@app-game/paint-core/document';
+import type { createDocument, LayerAction, LayerInfo } from '@app-game/paint-core/document';
 import { closestCenter, createDragContext, createDraggable, createDroppable } from '@solid-primitives/drag-drop';
 import { For, Show, untrack } from 'solid-js';
 import { ScrubNumber } from '../../shared/ui/ScrubNumber';
@@ -15,6 +15,10 @@ export function LayersPanel(props: {
   state: DocumentState;
   /** Adding, moving and deleting layers wait for the engine. */
   ready: boolean;
+  /** Uses the host's height and scrolls the list instead of capping it by the viewport. Defaults to false. */
+  fillContainer?: boolean;
+  /** Read-only thumbnail URL lookup. The caller owns acquiring and releasing the image resource. */
+  thumbnail?: (id: string) => string | undefined;
   onAction: (action: LayerAction) => void;
   /** Makes every layer blend in linear light ("Smooth color") or in encoded sRGB; a setting of the document. */
   onLinearBlending: (linear: boolean) => void;
@@ -51,7 +55,7 @@ export function LayersPanel(props: {
   };
 
   return (
-    <section class="paint-layers">
+    <section class={['paint-layers', { [styles.fillContainer!]: props.fillContainer }]}>
       <div class={styles.sectionHeading}>
         <span>
           {props.state.layers.length} {props.state.layers.length === 1 ? 'layer' : 'layers'}
@@ -150,6 +154,7 @@ export function LayersPanel(props: {
             {(item) => (
               <LayerRow
                 layer={item()}
+                thumbnail={props.thumbnail?.(item().id)}
                 selected={item().id === props.state.activeId}
                 ready={props.ready}
                 onAction={props.onAction}
@@ -210,6 +215,7 @@ export function LayersPanel(props: {
  */
 function LayerRow(props: {
   layer: LayerInfo;
+  thumbnail?: string;
   selected: boolean;
   ready: boolean;
   onAction: (action: LayerAction) => void;
@@ -246,7 +252,9 @@ function LayerRow(props: {
         aria-current={props.selected ? 'true' : undefined}
         onClick={() => props.onAction({ type: 'select', id: props.layer.id })}
       >
-        <SketchIcon name="paper" size={26} />
+        <Show when={props.thumbnail} fallback={<SketchIcon name="paper" size={26} />}>
+          {(src) => <img class={styles.layerThumbnail} src={src()} alt="" draggable={false} />}
+        </Show>
         <span>
           {props.layer.name}
           <small>

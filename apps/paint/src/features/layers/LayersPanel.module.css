@@ -235,12 +235,22 @@
 }
 
 .blendList {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 4px);
-  left: 0;
-  width: max(100%, 220px);
-  display: grid;
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: 260px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  color: var(--ink, #444);
+  font:
+    12px/1.45 Arial,
+    sans-serif;
+  display: none;
+
+  &:popover-open {
+    display: grid;
+  }
   padding: 4px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -276,4 +286,33 @@
     height: 40px;
     border-radius: 4px;
   }
+}
+
+/* Opt-in layout for a resizable host; the default panel keeps its viewport cap. */
+.fillContainer {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+
+  > * {
+    flex-shrink: 0;
+  }
+
+  .layerList {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: none;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+}
+
+.layerThumbnail {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  object-fit: contain;
+  background: repeating-conic-gradient(#ddd 0 25%, #fff 0 50%) 0 / 8px 8px;
+  border: 1px solid var(--line);
 }

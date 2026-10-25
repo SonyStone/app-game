@@ -54,7 +54,7 @@ try {
       (definition.looks?.looks ?? [undefined]).map((look) => {
         const span =
           definition.family === 'action'
-            ? { columns: 1, rows: 1 }
+            ? (look?.min ?? { columns: 1, rows: 1 })
             : definition.family === 'value'
               ? { columns: look?.id === 'knob' ? 1 : 3, rows: 1 }
               : { columns: Math.max(2, look?.min.columns ?? 2), rows: Math.max(2, look?.min.rows ?? 2) };
@@ -303,6 +303,7 @@ async function checkLayout(tab, parts, label) {
         return {
           id: part.id,
           kind: part.kind,
+          compact: part.span.columns === 1 && part.span.rows === 1,
           width: box.width,
           height: box.height,
           childWidth: child?.width,
@@ -327,7 +328,7 @@ async function checkLayout(tab, parts, label) {
       part.chips.every((height) => height > 4),
       `${part.id} has collapsed chips`
     );
-    if (part.kind.startsWith('action:')) {
+    if (part.kind.startsWith('action:') && part.compact) {
       assert.ok(part.iconOffset < 1, `${part.id} icon must be centred: ${part.iconOffset}`);
     }
   }

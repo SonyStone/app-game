@@ -52,11 +52,11 @@
   background: var(--lego-plate);
   box-shadow: var(--lego-shadow);
   pointer-events: auto;
-  touch-action: none;
 }
 
 .board[data-editing] .panel,
 .benchSlot .panel {
+  touch-action: none;
   cursor: grab;
   background-color: var(--lego-plate);
   background-image: radial-gradient(
@@ -1448,4 +1448,15 @@
     font: inherit;
     font-size: 11px;
   }
+}
+
+/* Seven columns give the controls their usable width; eight rows leave room to scroll the list. */
+.inlineLayers {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px;
 }

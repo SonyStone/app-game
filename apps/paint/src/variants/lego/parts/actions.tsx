@@ -1,4 +1,4 @@
-import { For, merge, Show } from 'solid-js';
+import { For, merge, onSettled, Show } from 'solid-js';
 import { LayersPanel } from '../../../features/layers';
 import { SketchIcon, type SketchIconName } from '../../../shared/ui/SketchIcon';
 import { BrushLibrary } from '../../procreate/BrushLibrary';
@@ -101,22 +101,41 @@ export const actionParts = [
     },
     onPress: f.command(s.transform.toggle)
   })),
-  action('layers', 'Layers', 'layers', () => ({}), {
-    needs: (s, f) => ({
-      get state() {
-        return s.layers.state();
-      },
-      get ready() {
-        return s.layers.ready();
-      },
-      onAction: f.command(s.layers.action),
-      onLinearBlending: f.command(s.layers.blending)
-    }),
+  definePart({
+    kind: 'action:layers',
+    family: 'action',
+    section: 'Tools',
+    label: 'Layers',
+    icon: 'layers',
+    looks: {
+      looks: [
+        { id: 'button', label: 'Button', min: { columns: 1, rows: 1 } },
+        { id: 'panel', label: 'Panel', min: { columns: 7, rows: 8 } }
+      ],
+      auto: (span) => (span.columns >= 7 && span.rows >= 8 ? 'panel' : 'button')
+    },
+    needs: (s, f) =>
+      merge(layerNeeds(s, f), {
+        get span() {
+          return f.span;
+        },
+        get full() {
+          return f.look === 'panel' && f.mode !== 'preview';
+        },
+        onPress: (anchor: Element) => f.onPopup(anchor, { kind: 'part', partKind: f.kind })
+      }),
     View: (props) => (
-      <div class={styles.studioCard}>
-        <LayersPanel {...props} />
-      </div>
-    )
+      <Show
+        when={props.full}
+        fallback={<ActionPart label="Layers" icon="layers" span={props.span} onPress={props.onPress} />}
+      >
+        <LayerPanelPart {...props} fillContainer />
+      </Show>
+    ),
+    popup: {
+      needs: layerNeeds,
+      View: LayerPanelPart
+    }
   }),
   action('undo', 'Undo', 'undo', (s, f) => ({
     get disabled() {
@@ -267,3 +286,41 @@ const symmetryModes = [
   { id: 'radial', label: 'Radial' },
   { id: 'mandala', label: 'Mandala' }
 ] as const;
+
+/** Both layer presentations use guarded document edits and acquire images only in a mounted live view. */
+function layerNeeds(services: LegoServices, frame: PartBinding) {
+  return {
+    get state() {
+      return services.layers.state();
+    },
+    get ready() {
+      return services.layers.ready();
+    },
+    get live() {
+      return frame.mode === 'live';
+    },
+    onAction: frame.command(services.layers.action),
+    onLinearBlending: frame.command(services.layers.blending),
+    wantThumbnails: services.layers.wantThumbnails,
+    thumbnail: services.layers.thumbnail
+  };
+}
+
+/** Owns thumbnails for the exact lifetime of the live panel, including compact/full resize transitions. */
+function LayerPanelPart(props: ReturnType<typeof layerNeeds> & { fillContainer?: boolean }) {
+  return (
+    <div class={[styles.studioCard, { [styles.inlineLayers!]: props.fillContainer }]}>
+      <Show when={props.live}>
+        <WantLayerThumbnails want={props.wantThumbnails} />
+      </Show>
+      <LayersPanel {...props} thumbnail={props.live ? props.thumbnail : undefined} />
+    </div>
+  );
+}
+
+/** Resource acquisition writes session state, so it belongs after settlement in the live-only subtree. */
+function WantLayerThumbnails(props: { want: LegoServices['layers']['wantThumbnails'] }) {
+  onSettled(() => props.want(26));
+
+  return undefined;
+}

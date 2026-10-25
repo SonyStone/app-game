@@ -111,6 +111,8 @@ export function createLegoServices(session: PaintSession) {
     transform: { active: session.transform.active, toggle: session.toggleTransform },
     selection: { selected: session.selection.selected },
     layers: {
+      wantThumbnails: session.layerThumbnails.want,
+      thumbnail: (id: string) => session.layerThumbnails.thumbnail(id)?.src,
       state: session.engine.state,
       ready: session.ready,
       action: (action: Extract<Parameters<PaintSession['edit']>[0], { type: 'layer' }>['action']) =>

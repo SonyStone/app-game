@@ -154,6 +154,65 @@ it.each(['live', 'edit', 'preview'] satisfies PartMode[])('renders each definiti
   expect(errors).not.toHaveBeenCalled();
 });
 
+it('releases live layer thumbnails when resized and never acquires them in previews', () => {
+  const { services } = owned(createTestServices);
+  const release = vi.fn();
+  services.layers.wantThumbnails = vi.fn(() => release);
+  const [span, setSpan] = createSignal({ columns: 7, rows: 8 });
+  const [mode, setMode] = createSignal<PartMode>('preview');
+  mount(() => (
+    <LegoServicesContext value={services}>
+      <PartFrame kind="action:layers" span={span()} mode={mode()} immediate />
+    </LegoServicesContext>
+  ));
+  expect(services.layers.wantThumbnails).not.toHaveBeenCalled();
+  expect(document.querySelector('[aria-label="Add layer"]')).toBeNull();
+  setMode('live');
+  flush();
+  expect(document.querySelector('[aria-label="Add layer"]')).not.toBeNull();
+  expect(services.layers.wantThumbnails).toHaveBeenCalledExactlyOnceWith(26);
+  setSpan({ columns: 3, rows: 1 });
+  flush();
+  expect(release).toHaveBeenCalledOnce();
+  expect(document.querySelector('[aria-label="Add layer"]')).toBeNull();
+  setSpan({ columns: 7, rows: 8 });
+  flush();
+  expect(services.layers.wantThumbnails).toHaveBeenCalledTimes(2);
+  setMode('edit');
+  flush();
+  expect(release).toHaveBeenCalledTimes(2);
+  expect(document.querySelector('[aria-label="Add layer"]')).not.toBeNull();
+});
+
+it('routes one layer opacity change per scrub gesture through the guarded layer command', () => {
+  const { services } = owned(createTestServices);
+  mount(() => (
+    <LegoServicesContext value={services}>
+      <PartFrame kind="action:layers" span={{ columns: 7, rows: 8 }} />
+    </LegoServicesContext>
+  ));
+  const input = document.querySelector<HTMLInputElement>('[aria-label="Layer opacity"]')!;
+  input.setPointerCapture = vi.fn();
+  input.hasPointerCapture = vi.fn(() => true);
+  const pointer = (type: string, x: number) => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x });
+    Object.defineProperties(event, { pointerId: { value: 1 }, pointerType: { value: 'pen' } });
+    input.dispatchEvent(event);
+    flush();
+  };
+  pointer('pointerdown', 200);
+  pointer('pointermove', 180);
+  pointer('pointermove', 160);
+  expect(services.layers.action).not.toHaveBeenCalled();
+  pointer('pointerup', 160);
+  expect(services.layers.action).toHaveBeenCalledOnce();
+  expect(services.layers.action).toHaveBeenCalledWith({
+    type: 'update',
+    id: services.layers.state().activeId,
+    patch: { opacity: expect.any(Number) }
+  });
+});
+
 it('binds symmetry modes, QuickShape and pressure through their narrow commands', () => {
   const { services } = owned(createTestServices);
   const [mode, setMode] = owned(() => createSignal<ReturnType<typeof services.symmetry.mode>>('vertical'));

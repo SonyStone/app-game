@@ -17,7 +17,7 @@ export function BlendModePicker(props: {
   onChange: (mode: BlendMode) => void;
 }) {
   const [open, setOpen] = createSignal(false);
-  let root!: HTMLDivElement;
+  let menu!: HTMLDivElement;
   let trigger!: HTMLButtonElement;
   const current = () => modes.find((mode) => mode.id === props.mode) ?? modes[0];
   const choose = (mode: BlendMode) => {
@@ -33,18 +33,18 @@ export function BlendModePicker(props: {
       return;
     }
 
-    root.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
-    const outside = (event: PointerEvent) => {
-      if (!root.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    window.addEventListener('pointerdown', outside, true);
-    return () => window.removeEventListener('pointerdown', outside, true);
+    menu.showPopover();
+    const anchor = trigger.getBoundingClientRect();
+    const { width, height } = menu.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8))}px`;
+    menu.style.top = `${
+      anchor.bottom + height + 4 <= window.innerHeight - 8 ? anchor.bottom + 4 : Math.max(8, anchor.top - height - 4)
+    }px`;
+    menu.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
   });
 
   return (
-    <div class={styles.blendPicker} ref={root}>
+    <div class={styles.blendPicker}>
       <button
         ref={trigger}
         class={styles.blendTrigger}
@@ -62,11 +62,18 @@ export function BlendModePicker(props: {
       </button>
       <Show when={open()}>
         <div
+          ref={menu}
+          popover="auto"
           class={styles.blendList}
+          onToggle={(event) => {
+            if (event.newState === 'closed') {
+              setOpen(false);
+            }
+          }}
           role="listbox"
           aria-label="Layer blend modes"
           onKeyDown={(event) => {
-            const options = [...root.querySelectorAll<HTMLElement>('[role="option"]')];
+            const options = [...menu.querySelectorAll<HTMLElement>('[role="option"]')];
             const index = options.indexOf(document.activeElement as HTMLElement);
             const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
             if (step !== undefined) {
@@ -80,21 +87,25 @@ export function BlendModePicker(props: {
             }
           }}
         >
-          <For each={modes}>
-            {(mode) => (
-              <button
-                role="option"
-                aria-selected={props.mode === mode.id ? 'true' : 'false'}
-                aria-label={mode.name}
-                onClick={() => choose(mode.id)}
-              >
-                <Preview mode={mode.id} linear={props.linear} />
-                <span>
-                  <strong>{mode.name}</strong>
-                  <small>{mode.summary}</small>
-                </span>
-              </button>
-            )}
+          <For each={modes} keyed={(mode) => mode.id}>
+            {(item) => {
+              const mode = item();
+
+              return (
+                <button
+                  role="option"
+                  aria-selected={props.mode === mode.id ? 'true' : 'false'}
+                  aria-label={mode.name}
+                  onClick={() => choose(mode.id)}
+                >
+                  <Preview mode={mode.id} linear={props.linear} />
+                  <span>
+                    <strong>{mode.name}</strong>
+                    <small>{mode.summary}</small>
+                  </span>
+                </button>
+              );
+            }}
           </For>
         </div>
       </Show>
@@ -106,11 +117,15 @@ export function BlendModePicker(props: {
 function Preview(props: { mode: BlendMode; linear: boolean }) {
   let canvas!: HTMLCanvasElement;
   createEffect(
-    () => props.linear,
-    (linear) => {
-      canvas
-        .getContext('2d')
-        ?.putImageData(new ImageData(blendPreview(props.mode, linear), TILE_SIZE, TILE_SIZE), 0, 0);
+    () => blendPreview(props.mode, props.linear),
+    (pixels) => {
+      const context = canvas.getContext('2d');
+
+      if (context) {
+        const image = context.createImageData(TILE_SIZE, TILE_SIZE);
+        image.data.set(pixels);
+        context.putImageData(image, 0, 0);
+      }
     }
   );
 
