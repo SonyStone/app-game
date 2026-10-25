@@ -1,4 +1,4 @@
-import { readPsd, writePsd, type PsdBlend, type PsdLayer } from '@app-game/psd';
+import { readPsd, writePsd, type PsdBlend, type PsdLayer, type PsdNewDocumentContext } from '@app-game/psd';
 import { TILE_SIZE } from './brush';
 import type { Camera, ViewSize } from './camera';
 import type { BlendMode, Layer } from './document';
@@ -13,13 +13,16 @@ import { packTile, unpackTile, type TileData } from './tilePixels';
  * `mergeTilePixels` merges layers down, in linear light with `linearBlending` as the document does; Photoshop keeps no
  * such flag in the file, so it shows the layers blended in encoded sRGB unless set to blend RGB with gamma 1.0. A canvas
  * over 30,000 pixels on a side is written as PSB. Throws when there is nothing to export or the canvas is larger than a
- * PSB allows.
+ * PSB allows. `context` selects complete first-save creation; its caller-owned IDs and layer clocks must follow
+ * `layers` order, including hidden and empty layers. Omission retains the codec's identity-only compatibility mode.
+ * Invalid complete-mode operands throw PsdWriteError; supplied context is never replaced with legacy defaults.
  */
 export async function writePsdFile(
   layers: Layer[],
   read: (data: TileData) => Promise<Uint8Array>,
   region?: DocumentRect,
-  linearBlending = true
+  linearBlending = true,
+  context?: PsdNewDocumentContext
 ): Promise<Blob> {
   const loaded = await Promise.all(
     layers.map(async (layer) => {
@@ -54,7 +57,8 @@ export async function writePsdFile(
   });
   const file = await writePsd(
     { width: canvas.width, height: canvas.height, layers: psdLayers },
-    straightPixels(flatten(loaded, linearBlending), canvas)
+    straightPixels(flatten(loaded, linearBlending), canvas),
+    context
   );
   return new Blob([file as Uint8Array<ArrayBuffer>], { type: 'image/vnd.adobe.photoshop' });
 }
