@@ -191,12 +191,12 @@ function hullLines(hull: HullSpec) {
 /** Speed of the fastest class, which fills the speed bar. */
 const FASTEST = Math.max(...Object.values(TANK_CLASSES).map((tankClass) => tankClass.speed));
 
-/** How thick the armor round the core is on average, against the thickest. */
+/** How thick the armor round the core is on average, as thick again as plating makes it hold, against the thickest. */
 function armorOf(tankClass: TankClass) {
-  const { halfLength, halfWidth, core } = tankClass.hull;
+  const { halfLength, halfWidth, core, plating } = tankClass.hull;
   const rear = halfLength + core.x - core.radius;
   const side = halfWidth - core.radius;
-  return (rear + side * 2) / 3 / 10;
+  return (rear + side * 2) / 3 / (plating ?? 1) / 10;
 }
 
 /** How far the class's gun reaches, against the farthest, at full charge for a charged gun. */

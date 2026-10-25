@@ -1,5 +1,6 @@
 import { ramBlow, ramDent, type WallMaterial } from '../damage/combat';
 import { MAX_BITE, WALL_BLOW, WALL_MATERIALS } from '../damage/walls';
+import { biteAt } from '../damage/weapons/bite';
 import { CRUMBLE_AT } from '../damage/wrecks';
 import { chargedShell } from './classes/weapon';
 import type { TankClass } from './tanks';
@@ -15,8 +16,8 @@ export type Blocker = { material: WallMaterial; thickness: number } | { material
  * - Ramming (`ramsToOpen`): only walls, by the class's blow at full speed, its mass times its speed
  *   (see the battle's `ramBlow`). Each ram costs `RAM_TIME` s and the dent it leaves in the nose,
  *   as a share of the nose's armor in front of the core, at `ARMOR_WORTH` s for all of it.
- * - Shooting (`shotsToOpen`): at the gun's pace with its reloads, a gatling's spin-up and a charged
- *   shot's charging, as the bots' kill times count them.
+ * - Shooting (`shotsToOpen`): at the gun's pace and a charged shot's charging, as the bots' kill
+ *   times count them.
  */
 export function openingFor(blocker: Blocker, tankClass: TankClass): Opening | undefined {
   const rams = ramsToOpen(blocker, tankClass);
@@ -89,8 +90,8 @@ export function shotsToOpen(blocker: Blocker, tankClass: TankClass) {
 
 /**
  * Square pixels one shot of the class's gun chips out of a wall's material, or out of a wreck's
- * armor without `crater`: the craters of its shell or of every pellet of a volley, a little
- * smaller for the fade over `STAND_RANGE` px, and of its blast, grown on walls by its
+ * armor without `crater`: the craters of its shell or of every pellet of a volley, as it bites
+ * from `STAND_RANGE` px (see `biteAt`), and of its blast, grown on walls by its
  * `structures`, as the battle cuts them. A crater of a hole of radius `h` reaching `d` deeper counts `πh² + 2hd`. A
  * charged shot counts at full charge; a grenade bounces back off the wall and goes off a little way
  * from it, so its blast counts at `LOB_FALLOFF`.
@@ -101,8 +102,8 @@ export function shotBite(tankClass: TankClass, crater: { hole: number; depth: nu
   const weapon = tankClass.weapon;
   const shell = weapon.kind === 'charge' ? chargedShell(tankClass.shell, weapon.full, 1) : tankClass.shell;
   const pellets = weapon.kind === 'volley' ? weapon.pellets : 1;
-  const bite = 1 - (shell.fade ?? 0) * Math.min(STAND_RANGE / shell.range, 1);
-  let area = pellets * craterArea(shell.hole * bite, shell.depth * bite, crater);
+  const bite = biteAt(shell, STAND_RANGE);
+  let area = pellets * craterArea(shell.hole * bite.hole, shell.depth * bite.depth, crater);
 
   if (shell.blast) {
     // Walls take a blast grown by its structures factor; a wreck takes it as a tank's armor does.
@@ -121,16 +122,10 @@ function craterArea(hole: number, depth: number, crater: { hole: number; depth: 
   return Math.PI * radius * radius + 2 * radius * reach;
 }
 
-/**
- * Seconds to fire `shots` from the class's gun: one interval apart, with a reload after every clip,
- * plus a gatling's spin-up or each charged shot's charging.
- */
+/** Seconds to fire `shots` from the class's gun: one interval apart, plus each charged shot's charging. */
 function secondsToFire(shots: number, tankClass: TankClass) {
-  const { interval, clip, firstReload, reload } = tankClass.gun;
   const weapon = tankClass.weapon;
-  const reloads = Math.max(Math.ceil(shots / clip) - 1, 0);
-  const extra = weapon.kind === 'spin' ? weapon.spinUp : weapon.kind === 'charge' ? shots * weapon.time : 0;
-  return shots * interval + reloads * (firstReload + (clip - 1) * reload) + extra;
+  return shots * tankClass.interval + (weapon.kind === 'charge' ? shots * weapon.time : 0);
 }
 
 /** The dent one ram leaves in the class's nose, as a share of the armor between the nose and the core. */

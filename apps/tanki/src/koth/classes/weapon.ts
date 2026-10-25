@@ -1,44 +1,46 @@
 import type { ShellSpec, Shot } from '../../damage/combat';
-import { createGun } from '../gun';
 import type { TankClass } from '../tanks';
 
 /**
- * How a class's trigger works; every kind fires from the class's clip (`TankClass.gun`):
+ * How a class's trigger works. Every kind fires at a steady cadence for as long as the trigger is
+ * held, a shot every `TankClass.interval` seconds, with no clip to run dry and no reload to wait
+ * for, so there is nothing to keep count of in a fight:
  *
- * - `single`: a shell per round while the trigger is held, as the Soldier's rocket launcher.
+ * - `single`: a shell per shot, as the Soldier's rocket launcher.
  * - `volley`: `pellets` shells at once, spread evenly over `spread` radians, as a shotgun.
- * - `spin`: a gatling that first spins up for `spinUp` seconds and runs down in `spinDown` when
- *   let go, then fires as fast as its interval allows, each round up to about `spread` radians
- *   off. Spinning, and spinning up, slows the tank to `slowdown` of its speed.
+ * - `spin`: a gatling that fires the moment the trigger is pulled, each round up to about `spread`
+ *   radians off. Its barrels spin while it fires and run down after; firing slows the tank to
+ *   `slowdown` of its speed, as the Heavy slows to a crawl with his minigun spinning.
  * - `lob`: a grenade thrown to where the gun is aimed.
  * - `charge`: holding the trigger charges the shot for up to `time` seconds and letting go fires
  *   it: from the class's `shell` with no charge to `full` at full charge (see `chargedShell`), a
- *   rail for the Sniper whose power grows with the charge. Charging slows the tank to `slowdown`
- *   of its speed.
+ *   rail for the Sniper whose power grows with the charge. The charge is the aiming, not a reload:
+ *   the next one starts as soon as the trigger is held again, once the interval since the last
+ *   shot has passed. Charging slows the tank to `slowdown` of its speed.
  */
 export type WeaponSpec =
   | { kind: 'single' }
   | { kind: 'volley'; pellets: number; spread: number }
-  | { kind: 'spin'; spinUp: number; spinDown: number; spread: number; slowdown: number }
+  | { kind: 'spin'; spread: number; slowdown: number }
   | { kind: 'lob' }
   | { kind: 'charge'; time: number; full: ShellSpec; slowdown: number };
 
 /**
- * What the trigger is doing this step: held, the gatling spun without firing, how far away a
- * grenade should land, and whether letting go drops a charge instead of firing it.
+ * What the trigger is doing this step: held, how far away a grenade should land, and whether
+ * letting go drops a charge instead of firing it.
  */
-export type Trigger = { fire: boolean; rev?: boolean; reach?: number; cancel?: boolean };
+export type Trigger = { fire: boolean; reach?: number; cancel?: boolean };
 
 /**
- * The weapon of a tank of `tankClass`: its clip from `createGun` and the trigger of its
+ * The weapon of a tank of `tankClass`: the wait between its shots and the trigger of its
  * `WeaponSpec`. Call `step` every physics step with the trigger; it returns the shots to fire this
  * step, which the caller aims along the gun and hands to the battle's `fire`.
  *
- * @param random - Source of randomness in [0, 1) for the gatling's spread.
+ * @param random - Source of randomness in [0, 1) for the spread of pellets and gatling rounds.
  */
 export function createWeapon(tankClass: TankClass, random: () => number) {
   const spec = tankClass.weapon;
-  const gun = createGun(tankClass.gun);
+  let cooldown = 0;
   let spin = 0;
   let charged: number | undefined;
   let shots = 0;
@@ -47,24 +49,12 @@ export function createWeapon(tankClass: TankClass, random: () => number) {
     /** The class whose weapon this is. */
     tankClass,
 
-    /** Rounds left in the clip, and its size. */
-    get rounds() {
-      return gun.rounds;
-    },
-
-    clip: tankClass.gun.clip,
-
-    /** How far the round being loaded is, 0-1. */
-    get loading() {
-      return gun.loading;
-    },
-
-    /** Whether a pull of the trigger would fire now, once a gatling has spun up. */
+    /** Whether a pull of the trigger would fire now: the interval since the last shot has passed. */
     get ready() {
-      return gun.ready;
+      return cooldown === 0;
     },
 
-    /** How far a gatling has spun up, 0-1; always 0 for other weapons. */
+    /** How fast a gatling's barrels spin, 0-1, for drawing them and slowing the tank; always 0 for other weapons. */
     get spin() {
       return spin;
     },
@@ -89,29 +79,35 @@ export function createWeapon(tankClass: TankClass, random: () => number) {
     },
 
     /**
-     * Lets `dt` seconds pass with the trigger as given: the clip reloads, a gatling spins, a shot
-     * charges. Returns the shots fired this step, with angles relative to the gun.
+     * Lets `dt` seconds pass with the trigger as given: the wait after the last shot runs out, a
+     * gatling's barrels spin, a shot charges. Returns the shots fired this step, with angles
+     * relative to the gun.
      */
     step(dt: number, trigger: Trigger): Shot[] {
-      gun.step(dt);
+      // Six steps of 1/60 s fall a hair short of 0.1 s in floating point; that hair must not cost a seventh step.
+      cooldown = cooldown - dt > EPSILON ? cooldown - dt : 0;
       const fired = pull(dt, trigger);
       shots += fired.length;
+
+      if (fired.length > 0) {
+        cooldown = tankClass.interval;
+      }
+
       return fired;
     }
   };
 
   function pull(dt: number, trigger: Trigger): Shot[] {
     const shell = tankClass.shell;
+    const ready = cooldown === 0;
 
     switch (spec.kind) {
       case 'single':
-        return trigger.fire && gun.fire() ? [{ shell, reach: trigger.reach }] : [];
-
       case 'lob':
-        return trigger.fire && gun.fire() ? [{ shell, reach: trigger.reach }] : [];
+        return trigger.fire && ready ? [{ shell, reach: trigger.reach }] : [];
 
       case 'volley': {
-        if (!trigger.fire || !gun.fire()) {
+        if (!trigger.fire || !ready) {
           return [];
         }
 
@@ -124,10 +120,9 @@ export function createWeapon(tankClass: TankClass, random: () => number) {
       }
 
       case 'spin': {
-        const spinning = trigger.fire || (trigger.rev ?? false);
-        spin = spinning ? Math.min(spin + dt / spec.spinUp, 1) : Math.max(spin - dt / spec.spinDown, 0);
+        spin = trigger.fire ? Math.min(spin + dt / BARRELS_UP, 1) : Math.max(spin - dt / BARRELS_DOWN, 0);
 
-        if (!trigger.fire || spin < 1 || !gun.fire()) {
+        if (!trigger.fire || !ready) {
           return [];
         }
 
@@ -138,14 +133,14 @@ export function createWeapon(tankClass: TankClass, random: () => number) {
 
       case 'charge': {
         if (trigger.fire) {
-          if (charged !== undefined || gun.ready) {
+          if (charged !== undefined || ready) {
             charged = Math.min((charged ?? 0) + dt, spec.time);
           }
 
           return [];
         }
 
-        if (charged === undefined || trigger.cancel || !gun.fire()) {
+        if (charged === undefined || trigger.cancel) {
           charged = undefined;
           return [];
         }
@@ -161,14 +156,30 @@ export function createWeapon(tankClass: TankClass, random: () => number) {
 /** A tank's weapon as returned by `createWeapon`. */
 export type Weapon = ReturnType<typeof createWeapon>;
 
+/** Seconds of wait so short they count as none. */
+const EPSILON = 1e-9;
+/** Seconds a gatling's barrels take to spin up as it fires, and to run down once it stops. */
+const BARRELS_UP = 0.15;
+const BARRELS_DOWN = 0.5;
+
 /**
  * The shell a charged shot fires at `charge` 0-1: speed, range, hole, depth, knockback and size
- * grow from `empty` to `full`, and so do a rail's power and the width of its slit, a rail of
- * `full`'s power from `FULL_CHARGE` on. A rail's infinite speed stays infinite.
+ * grow from `empty` to `full`, and so do a rail's power, the width of its slit and how near the
+ * core it must pass to blow it, a rail of `full`'s from `FULL_CHARGE` on. A rail's infinite speed stays
+ * infinite.
  */
 export function chargedShell(empty: ShellSpec, full: ShellSpec, charge: number): ShellSpec {
   const mix = (from: number, to: number) => (from === to ? from : from + (to - from) * charge);
-  const rail = empty.rail && full.rail && (charge >= FULL_CHARGE ? full.rail : { power: mix(empty.rail.power, full.rail.power), slit: mix(empty.rail.slit, full.rail.slit) });
+  const rail =
+    empty.rail &&
+    full.rail &&
+    (charge >= FULL_CHARGE
+      ? full.rail
+      : {
+          power: mix(empty.rail.power, full.rail.power),
+          slit: mix(empty.rail.slit, full.rail.slit),
+          graze: mix(empty.rail.graze ?? empty.rail.slit / 2, full.rail.graze ?? full.rail.slit / 2)
+        });
 
   return {
     ...empty,

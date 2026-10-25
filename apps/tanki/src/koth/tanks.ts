@@ -31,7 +31,12 @@ export type TankClass = {
   hull: HullSpec;
   /** Mass of the hull, 1 for the medium tank: heavier tanks shrug off hits and shove harder. */
   mass: number;
-  gun: GunSpec;
+  /**
+   * Seconds between two shots while the trigger is held: every gun fires at this steady cadence
+   * for as long as it is held, with no clip to run dry and no reload to wait for. For a charged
+   * shot, the least time from one shot to the start of the next charge.
+   */
+  interval: number;
   /** The shell the gun fires; a charged weapon fires it with no charge. */
   shell: ShellSpec;
   /** How the trigger works: single shots, volleys, a spinning gatling, lobbed grenades or charged shots. */
@@ -48,20 +53,6 @@ export const TANK_CLASS_IDS = ['scout', 'soldier', 'heavy', 'demoman', 'sniper']
 export type TankClassId = (typeof TANK_CLASS_IDS)[number];
 
 /**
- * How a gun fires and reloads, after the Soldier's rocket launcher: shots at least `interval`
- * apart from a clip of `clip` rounds. Once the gun has been quiet for `interval`, it loads one
- * round every `reload` seconds, the first a little slower; firing breaks off the round being
- * loaded.
- */
-export type GunSpec = {
-  interval: number;
-  clip: number;
-  /** Seconds to load the first round after firing stops, and each following one. */
-  firstReload: number;
-  reload: number;
-};
-
-/**
  * The medium tank, the Soldier of tanks. A hull of 40 px stands for about 48 Hammer units, the
  * width of a player in Team Fortress 2, so a pixel is about 1.2 units:
  *
@@ -70,7 +61,8 @@ export type GunSpec = {
  *   five seconds, about two screens of driving.
  * - A bot's turret turns at 10 rad/s, half a turn in 0.3 s, about a quick flick of the mouse;
  *   reaction time and aim error, not the turret, are what make bots beatable.
- * - Its gun is the rocket launcher: four rounds 0.8 s apart, each reloaded in 0.8 s.
+ * - Its gun is the rocket launcher: a rocket every 0.8 s for as long as the trigger is held, as
+ *   fast as Team Fortress 2's, without its clip of four to reload.
  * - Its shell flies at 900 px/s, the rocket's 1100 units per second, slow enough to be seen and
  *   dodged at range, and falls after 700 px, about the width of the screen. A hit chips a crater
  *   that takes several hits from the side or behind to reach the core and many more from the front.
@@ -84,7 +76,7 @@ export const MEDIUM_TANK: TankClass = {
   mount: { kind: 'turret' },
   hull: MEDIUM_HULL,
   mass: 1,
-  gun: { interval: 0.8, clip: 4, firstReload: 0.92, reload: 0.8 },
+  interval: 0.8,
   shell: rocket(),
   weapon: { kind: 'single' },
   capture: 1,
@@ -95,6 +87,9 @@ export const MEDIUM_TANK: TankClass = {
  * The medium tank's rocket. The rocket itself chips less than the old shell did, since the blast
  * at the spot it hits chips a second crater there:
  *
+ * - A direct hit digs 2.5 px past its 3.5 px hole, up from 2 px when the classes lost their
+ *   reloads and the Scout and the Heavy their weakness up close, so a direct hit stays what the
+ *   Soldier is best at.
  * - The blast reaches 65 px, about one and a half hulls, a little over half the Soldier's splash
  *   of 146 units, so that it hits tanks pressed together and a tank hiding just behind cover
  *   without making near misses as good as hits.
@@ -108,7 +103,7 @@ function rocket(): ShellSpec {
     speed: 900,
     range: 700,
     hole: 3.5,
-    depth: 2,
+    depth: 2.5,
     knockback: 350,
     ricochet: false,
     blast: { radius: 65, hole: 4, depth: 1.5, knockback: 450, self: 2.8 },

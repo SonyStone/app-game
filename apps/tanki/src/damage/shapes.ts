@@ -31,6 +31,12 @@ export type HullSpec = {
    * whose engine grille lies behind the casemate.
    */
   pattern: 'chevron' | 'dart' | 'plated' | 'deck';
+  /**
+   * How much of a blow the armor gives way to, against a medium tank's: the craters shells and
+   * blasts dig into it are this share of their size, so thick plates take more hits to get
+   * through. A rail's line goes through it as through any armor. Defaults to 1.
+   */
+  plating?: number;
 };
 
 /**

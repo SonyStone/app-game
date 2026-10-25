@@ -38,6 +38,7 @@ import { createCrateField, createGrenadeField, createHullField, createShellField
 import { cutRail, traceRail } from './rail';
 import { createScrap } from './scrap';
 import { createWalls, RUBBLE_HEIGHT, WALL_BLOW, type Bounds, type Tile } from './walls';
+import { addDrillMark, biteAt, drillDepth, type DrillMark, type DrillSpec, type PointBlank } from './weapons/bite';
 import { isRolling, launchLob, stepLob, type LobSpec, type LobState } from './weapons/lob';
 import { createWrecks, type Wrecks } from './wrecks';
 
@@ -77,6 +78,10 @@ export type ShellSpec = {
    * distance in Team Fortress 2; defaults to 0, biting as hard at the end as at the muzzle.
    */
   fade?: number;
+  /** Bites harder close to the muzzle, as a scattergun tears at point blank (see `biteAt`). */
+  pointBlank?: PointBlank;
+  /** Rounds of one stream that land near each other on a body dig deeper there, as a gatling drills (see `DrillSpec`). */
+  drill?: DrillSpec;
   /** Drawn size against the 9 px tank shell; defaults to 1. */
   size?: number;
   /** Whether it glances off armor met at a steep angle; defaults to `true`. A shell with a blast goes off instead. */
@@ -92,11 +97,12 @@ export type ShellSpec = {
    * along the line, crates and wooden walls half that, and brick, concrete, steel and rubble stop
    * it. It cuts a slit `slit` px wide through what it goes through, with a hole of `hole` px where
    * it goes in and a ragged one torn open where it comes out, and knocks each body back by
-   * `knockback`. A tank whose core the line crosses before its power is spent blows up, from any
-   * side, as a headshot kills in Team Fortress 2; elsewhere the slit only weakens the armor. Where
-   * it stops in a wall it chips a crater of `hole` and `depth`, as a shell would.
+   * `knockback`. A tank whose core the line crosses, or passes within `graze` px of, before its
+   * power is spent blows up, from any side, as a headshot kills in Team Fortress 2; elsewhere the
+   * slit only weakens the armor. `graze` defaults to half the slit's width. Where it stops in a
+   * wall it chips a crater of `hole` and `depth`, as a shell would.
    */
-  rail?: { power: number; slit: number };
+  rail?: { power: number; slit: number; graze?: number };
   /** Flies in an arc instead of along the ground: over low bodies, bouncing off walls, until its fuse burns down. */
   lob?: LobSpec;
 };
@@ -920,7 +926,8 @@ export function createCombat(
       // Bodies are tall unless said otherwise, so a grenade bounces off any new kind, such as a wall.
       top: tank ? TANK_TOP : Infinity,
       airborne: undefined,
-      spin: 0
+      spin: 0,
+      drill: []
     };
     armored.push(entry);
 
@@ -1324,7 +1331,7 @@ export function createCombat(
     const inward = rotateInto(body.body, direction);
     // Armor a tank's hits take less of costs a rail more power per pixel.
     const cost = body.thin ? WOOD_COST : body.tank ? 1 / pace().damage : 1;
-    const trace = traceRail(body.field, local, inward, { power, cost, graze: rail.slit / 2 });
+    const trace = traceRail(body.field, local, inward, { power, cost, graze: rail.graze ?? rail.slit / 2 });
 
     if (!trace) {
       return { end: at, through: true, spent: 0 };
@@ -1492,8 +1499,8 @@ export function createCombat(
 
       step -= hit.distance;
       shell.path.push(end);
-      const bite = 1 - (spec.fade ?? 0) * Math.min(1 - shell.remaining / spec.range, 1);
-      const blow = { ...spec, hole: spec.hole * bite, depth: spec.depth * bite };
+      const bite = biteAt(spec, spec.range - shell.remaining);
+      const blow = { ...spec, hole: spec.hole * bite.hole, depth: spec.depth * bite.depth + drilled(hit, end, shell.shooter, spec.drill) };
       const onward = strike(hit, end, shell.direction, shell.shooter, blow, shell.bounces < MAX_RICOCHETS);
 
       if (!onward) {
@@ -1515,6 +1522,24 @@ export function createCombat(
     if (shell.remaining <= 1e-6) {
       fall(shell);
     }
+  }
+
+  /**
+   * Pixels deeper a round of `shooter`'s stream digs where it hits a tank's armor at `point`, from
+   * the rounds of that stream that hit near it lately, and marks this round for the ones to come
+   * (see `drillDepth`); 0 for a shell that does not drill or hits anything else.
+   */
+  function drilled(hit: ReturnType<typeof castShot>, point: Point, shooter: Tank, spec: DrillSpec | undefined) {
+    const body = hit.target;
+
+    if (!spec || !body?.tank || hit.part !== 'armor') {
+      return 0;
+    }
+
+    const local = toLocal(body.body, point);
+    const extra = drillDepth(body.drill, local, shooter, clock, spec);
+    addDrillMark(body.drill, local, shooter, clock, spec.memory);
+    return extra;
   }
 
   /**
@@ -1770,19 +1795,22 @@ export function createCombat(
 
   /**
    * Chips the armor where a shot hit, dents it slightly and knocks the body back. A deep blow
-   * chips a row of craters inward from the surface.
+   * chips a row of craters inward from the surface. A hull's plating shrinks the craters.
    */
   function damage(body: Armored, point: Point, direction: Point, struck: Pick<ShellSpec, 'hole' | 'depth' | 'knockback'>) {
     const share = body.tank ? pace().damage : 1;
     const blow = { ...struck, hole: struck.hole * share, depth: struck.depth * share };
     const local = toLocal(body.body, point);
     const inward = rotateInto(body.body, direction);
-    const craters = Math.ceil(blow.depth / (blow.hole * 0.5));
+    const plating = body.hull?.plating ?? 1;
+    const hole = blow.hole * plating;
+    const depth = blow.depth * plating;
+    const craters = Math.ceil(depth / (hole * 0.5));
     const seed = random() * 1000;
 
     for (let crater = 0; crater <= craters; crater++) {
-      const along = 0.6 + (craters > 0 ? (blow.depth * crater) / craters : 0);
-      carve(body.field, { x: local.x + inward.x * along, y: local.y + inward.y * along }, blow.hole, 0.35, seed + crater * 7.31);
+      const along = 0.6 + (craters > 0 ? (depth * crater) / craters : 0);
+      carve(body.field, { x: local.x + inward.x * along, y: local.y + inward.y * along }, hole, 0.35, seed + crater * 7.31);
     }
 
     const spin = blow.knockback * KNOCKBACK_SPIN_SHARE;
@@ -2372,6 +2400,8 @@ type Armored = {
   airborne: { left: number; total: number } | undefined;
   /** Angle the barrels of a gatling turret have turned. */
   spin: number;
+  /** Where the rounds of gatling streams hit the body lately, which drill deeper where they gather. */
+  drill: DrillMark[];
 };
 
 /** A wreck a shot met. */

@@ -336,8 +336,8 @@ export function createBreacher(member: Member, context: BreachContext) {
 
   /**
    * Holds still and shoots the crossing, each shot at the next spot across it where material is
-   * left, working the trigger as the class's weapon wants it: a gatling spun up, a shot charged
-   * in full, a grenade thrown as far as the spot. The match fires after the bot's step, so a shot
+   * left, working the trigger as the class's weapon wants it: a shot charged in full, a grenade
+   * thrown as far as the spot. The match fires after the bot's step, so a shot
    * is counted on the step after it went.
    */
   function shoot(current: Plan, tank: Tank, position: Point, now: number): BreachOrder {
@@ -571,21 +571,17 @@ type Plan = {
 
 /**
  * How to work the trigger of `weapon` at a wall `range` px away, on target when `aligned`: a
- * gatling spins all the while and fires on target; a charged shot is held until full and let go on
- * target; anything else fires on target once loaded, a grenade thrown that far.
+ * charged shot is held until full and let go on target; anything else fires on target, a grenade
+ * thrown that far.
  */
 function triggerFor(weapon: Weapon, aligned: boolean, range: number): Trigger {
   const spec = weapon.tankClass.weapon;
-
-  if (spec.kind === 'spin') {
-    return { fire: aligned, rev: true };
-  }
 
   if (spec.kind === 'charge') {
     return { fire: !(aligned && (weapon.charge ?? 0) >= 1) };
   }
 
-  return { fire: aligned && weapon.ready, reach: range };
+  return { fire: aligned, reach: range };
 }
 
 /** The cost of a step into each closed cell, per grid and class, worked out as needed and anew with each revision. */

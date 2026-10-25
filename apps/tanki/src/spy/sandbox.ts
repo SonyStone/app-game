@@ -395,7 +395,7 @@ export function createSpySandbox(
     recordSuccess();
 
     if (ability === 'infect') {
-      // Inside, the spider works the tank's own gun, a fresh clip of its class's weapon.
+      // Inside, the spider works the tank's own gun, its class's weapon.
       spy.infection = { unit, left: INFECT_TIME, exposed: false, armed: false, weapon: createWeapon(unit.tankClass, random) };
       // The spider's mind replaces the crew's: whatever the crew saw or feared is gone.
       unit.bot = createPatrolBot(unit.patrol, random);
@@ -1081,13 +1081,9 @@ function freshSpy() {
   };
 }
 
-/** How to work the trigger of `weapon` for a shot when `wants`: a gatling spins while wanted, a charged shot is held until full. */
+/** How to work the trigger of `weapon` for a shot when `wants`: held while wanted, a charged shot held until full. */
 function pullFor(weapon: Weapon, wants: boolean): Trigger {
   const spec = weapon.tankClass.weapon;
-
-  if (spec.kind === 'spin') {
-    return { fire: wants, rev: wants };
-  }
 
   if (spec.kind === 'charge') {
     return { fire: !(wants && (weapon.charge ?? 0) >= 1) && (wants || weapon.charge !== undefined) };
