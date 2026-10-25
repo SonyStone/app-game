@@ -25,6 +25,7 @@ export function SessionWindows(props: { session: PaintSession }) {
     nativeShell,
     brush,
     loadColor,
+    recentColors,
     pressureCalibration,
     tools,
     library,
@@ -41,6 +42,7 @@ export function SessionWindows(props: { session: PaintSession }) {
           onClose={() => windows.close('palette')}
           color={brush().color}
           onLoad={loadColor}
+          recentColors={recentColors}
         />
       </Show>
       <Show when={windows.isOpen('pen')}>

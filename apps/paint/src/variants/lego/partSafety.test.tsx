@@ -3,6 +3,7 @@ import { defaultBrush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
 import { createMemo, createRoot, createSignal, flush, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import { createRecentColors } from '../../features/color/createRecentColors';
 import { partData, type Part } from './board';
 import { createBoard } from './createBoard';
 import { createKits } from './kits';
@@ -294,6 +295,8 @@ function fakeSession() {
   const [brush, setBrush] = createSignal({ ...defaultBrush(), color: '#ff0000' });
   const session = {
     brush,
+    recentColors: owned(createRecentColors),
+    setColor: (color: string) => setBrush((current) => ({ ...current, color })),
     tool: () => 'brush',
     tools: {
       preset: () => '',

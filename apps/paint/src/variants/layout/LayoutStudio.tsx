@@ -2,7 +2,6 @@ import { NavigationPuck } from '@app-game/navigation-puck';
 import type { Component } from 'solid-js';
 import { For, Show } from 'solid-js';
 import type { PaintVariantProps } from '..';
-import { createRecentColors } from '../../features/color/createRecentColors';
 import {
   createPaintSession,
   PaintEditor,
@@ -61,7 +60,7 @@ export function layoutPage(layout: PageLayout): Component<PaintVariantProps> {
 
 /** What page parts read and change, from the drawing session. Must be created within a Solid owner. */
 function sessionContext(session: PaintSession): PartContext {
-  const recentColors = createRecentColors();
+  const { recentColors } = session;
 
   return {
     brush: session.brush,

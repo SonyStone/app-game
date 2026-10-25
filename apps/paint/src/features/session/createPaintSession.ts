@@ -10,18 +10,14 @@ import { createContextMenuBlock } from '../../shared/ui/createContextMenuBlock';
 import { createPageGestureGuard } from '../../shared/ui/createPageGestureGuard';
 import { createPointerTypeAttribute } from '../../shared/ui/createPointerTypeAttribute';
 import { clearAbrBrush, createAbrPresets } from '../abr';
-import {
-  clearRoundBrush,
-  createBrushAdjust,
-  createBrushTools,
-  createMixerBrush,
-  type PaintTool
-} from '../brush';
+import { clearRoundBrush, createBrushAdjust, createBrushTools, createMixerBrush, type PaintTool } from '../brush';
 import { createBrushLibrary, createBrushStorage, createPresetUploads, createRecentPresets } from '../brush-library';
 import { createPaintCamera, createViewSize } from '../camera';
 import { firstCanvasAction, type CanvasInput } from '../canvas';
 import { createCanvasColorPicker } from '../color';
 import { createColorWheelSettings } from '../color-wheel';
+import { createRecentColors } from '../color/createRecentColors';
+import { createCoolorusSettings } from '../coolorus-wheel/createCoolorusSettings';
 import { createDeveloperSettings } from '../developer';
 import { createDrawingFolder } from '../drawing-folder';
 import { createPaintEngine } from '../engine';
@@ -66,15 +62,17 @@ import { createSessionWindows } from './createSessionWindows';
  * variant's open panel (see `createNativeShell`). Must be created within a Solid owner; disposing the owner stops the
  * engine.
  */
-export function createPaintSession(options: {
-  /** The variant's open panel, recorded with input recordings; omitted when the variant has none. */
-  panel?: () => string | undefined;
-  /**
-   * The saved drawing to open, `paint-studio` by default: the one every variant shares. A feature demo passes a
-   * name of its own, so trying it never touches the user's drawing.
-   */
-  storageName?: string;
-} = {}) {
+export function createPaintSession(
+  options: {
+    /** The variant's open panel, recorded with input recordings; omitted when the variant has none. */
+    panel?: () => string | undefined;
+    /**
+     * The saved drawing to open, `paint-studio` by default: the one every variant shares. A feature demo passes a
+     * name of its own, so trying it never touches the user's drawing.
+     */
+    storageName?: string;
+  } = {}
+) {
   const [editor, setEditor] = createSignal<HTMLElement>();
   const [stage, setStage] = createSignal<HTMLElement>();
   const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
@@ -267,6 +265,8 @@ export function createPaintSession(options: {
   createContextMenuBlock();
   createPageGestureGuard();
   const colorWheel = createColorWheelSettings();
+  const recentColors = createRecentColors();
+  const coolorus = createCoolorusSettings();
   const windows = createSessionWindows();
   const pressureCalibration = createPressureCalibration();
   const viewOptions = createViewOptions({ ready: engine.canEdit, send: engine.send });
@@ -428,6 +428,8 @@ export function createPaintSession(options: {
     localUndo,
     fullscreen,
     colorWheel,
+    recentColors,
+    coolorus,
     viewOptions,
     drawingFolder,
     frames,
@@ -468,6 +470,8 @@ export function createPaintSession(options: {
     usePreset,
     rememberTools,
     loadColor,
+    setColor,
+    toggleTool,
     setWorkerEnabled,
     restoreRenderer,
     undo: () => edit({ type: 'undo' }),
@@ -712,6 +716,39 @@ export function createPaintSession(options: {
     if (chosen.isErr() && chosen.error.kind !== 'aborted') {
       setError(chosen.error);
     }
+  }
+
+  /** Changes the painting color, leaving only the eraser for the brush. Does not load the Mixer Brush reservoir. */
+  function setColor(color: string) {
+    if (tool() === 'eraser') {
+      chooseTool('brush');
+    }
+
+    tools.updateBrush({ color });
+  }
+
+  /**
+   * Toggles a tool back to the previous brush slot. Fill without a selection chooses the lasso and returns false,
+   * allowing the caller to explain the required selection. Local undo also opens its settings window.
+   */
+  function toggleTool(next: 'eraser' | 'lasso' | 'fill' | 'local-undo') {
+    if (tool() === next) {
+      chooseTool(next === 'eraser' ? 'brush' : tools.slot());
+      return true;
+    }
+
+    if (next === 'fill' && !selection.selected()) {
+      chooseTool('lasso');
+      return false;
+    }
+
+    if (next === 'local-undo') {
+      chooseLocalUndo();
+    } else {
+      chooseTool(next);
+    }
+
+    return true;
   }
 
   /**

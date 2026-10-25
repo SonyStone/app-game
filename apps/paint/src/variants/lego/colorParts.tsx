@@ -2,7 +2,6 @@ import { createResizeObserver } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
-  createColorWheelSettings,
   HarmonyField,
   hexToWheel,
   MaskField,
@@ -11,9 +10,8 @@ import {
   type WheelColor
 } from '../../features/color-wheel';
 import wheelStyles from '../../features/color-wheel/ColorWheel.module.css';
-import { createRecentColors } from '../../features/color/createRecentColors';
 import { hexToHsv, hsvToHex, luminance, type Hsv } from '../../features/color/hsv';
-import { CoolorusWheel, defaultCoolorusSettings, type CoolorusSettings } from '../../features/coolorus-wheel';
+import { CoolorusWheel } from '../../features/coolorus-wheel';
 import { HueTriangle } from '../../features/hue-triangle';
 import type { PaintSession } from '../../features/session';
 import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
@@ -200,16 +198,8 @@ export function PalettePart(props: { span: Span; session: PaintSession }) {
  * Paint's on this address (see `createRecentColors`).
  */
 export function recentFor(session: PaintSession) {
-  let recent = recentColors.get(session);
-  if (!recent) {
-    recent = createRecentColors();
-    recentColors.set(session, recent);
-  }
-
-  return recent;
+  return session.recentColors;
 }
-
-const recentColors = new WeakMap<PaintSession, ReturnType<typeof createRecentColors>>();
 
 /** The OKLCH disk's harmony list, filling the part; its caption shows once the part is two cells tall. */
 export function HarmonyPart(props: { span: Span; session: PaintSession }) {
@@ -247,7 +237,7 @@ export function MaskPart(props: { span: Span; session: PaintSession }) {
 export function oklchFor(session: PaintSession) {
   let found = oklchs.get(session);
   if (!found) {
-    const settings = createColorWheelSettings();
+    const settings = session.colorWheel;
     let last: WheelColor | undefined;
     const recent = recentFor(session);
     found = {
@@ -276,19 +266,15 @@ const oklchs = new WeakMap<
     wheel: () => WheelColor;
     edit: (next: WheelColor) => void;
     settle: () => void;
-    settings: ReturnType<typeof createColorWheelSettings>['settings'];
-    update: ReturnType<typeof createColorWheelSettings>['update'];
+    settings: PaintSession['colorWheel']['settings'];
+    update: PaintSession['colorWheel']['update'];
   }
 >();
 
 /** Paints in `color` (`#rrggbb` or HSV) from now on; the eraser gives way to the brush. */
 export function setColor(session: PaintSession, color: string | Hsv) {
   runPartCommand(session, () => {
-    if (session.tool() === 'eraser') {
-      session.chooseTool('brush');
-    }
-
-    session.tools.updateBrush({ color: typeof color === 'string' ? color : hsvToHex(color) });
+    session.setColor(typeof color === 'string' ? color : hsvToHex(color));
   });
 }
 
@@ -412,7 +398,7 @@ function OklchDisk(props: { session: PaintSession }) {
 
 function Coolorus(props: { session: PaintSession }) {
   const recent = recentFor(props.session);
-  const [settings, setSettings] = createSignal<CoolorusSettings>(defaultCoolorusSettings);
+  const { settings, update } = props.session.coolorus;
 
   return (
     <div class={styles.pickerSurface}>
@@ -421,7 +407,7 @@ function Coolorus(props: { session: PaintSession }) {
         onChange={(color) => setColor(props.session, color)}
         onSettle={() => runPartCommand(props.session, () => recent.remember(props.session.brush().color))}
         settings={settings()}
-        onSettings={(patch) => setSettings((current) => ({ ...current, ...patch }))}
+        onSettings={(patch) => runPartCommand(props.session, () => update(patch))}
       />
     </div>
   );
