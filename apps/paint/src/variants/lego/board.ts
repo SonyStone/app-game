@@ -15,8 +15,7 @@ export type Board = { panels: Panel[] };
 /**
  * A panel lying on the drawing. `at` places its cell (0, 0) as fractions of the view's width and height, so the
  * layout keeps its proportions when the view resizes or turns. Windows use their plate's top-left instead.
- * Cells left of or above the origin have negative indices,
- * which lets a panel grow toward the top and left without moving its parts on screen.
+ * Negative cell indices let a panel grow toward the top and left without moving its parts on screen.
  */
 export type Panel = {
   id: string;

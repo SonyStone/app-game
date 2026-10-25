@@ -90,7 +90,6 @@
     0 2px 0 rgb(0 0 0 / 0.25),
     inset 0 1px 0 rgb(255 255 255 / 0.6);
   font: inherit;
-  font-size: 11px;
   touch-action: none;
   cursor: grab;
   user-select: none;
@@ -100,6 +99,9 @@
   }
 
   span {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: -0.25px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

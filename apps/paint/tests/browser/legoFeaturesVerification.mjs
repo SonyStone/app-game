@@ -1,6 +1,8 @@
+/* global window, performance, localStorage, document, console, getComputedStyle, Event, scrollX, scrollY, visualViewport */
 import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
+import { verifyWindowFixes } from './legoWindowFixesVerification.mjs';
 
 /** Exercises real worker-backed LEGO controls and layer gestures in isolated storage. */
 export async function verifyLegoFeatures(browser, url, output, masterUrl) {
@@ -42,6 +44,7 @@ export async function verifyLegoFeatures(browser, url, output, masterUrl) {
   try {
     await verifyControls(page, context, url, output);
     await verifySymmetrySizes(page, url, output);
+    await verifyWindowFixes(page, url, output);
     await verifyLayers(page, context, url, output);
     await verifyNumberTiles(page, url, output);
     await verifyOtherVariants(page, url, output);

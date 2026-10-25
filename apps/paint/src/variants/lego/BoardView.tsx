@@ -11,6 +11,7 @@ import {
   frameAt,
   nearestCell,
   newId,
+  ownedFrame,
   ownedPanel,
   panelFrame,
   panelPadding,
@@ -93,6 +94,8 @@ export function BoardView(props: {
   const [layer, setLayer] = createSignal<HTMLElement>();
   const [box, setBox] = createSignal<HTMLElement>();
   const [drag, setDrag] = createSignal<Drag>();
+  // Event-only history: layout clamping must not count as a user move before collapsing.
+  const draggedWindows = new Set<string>();
   /** The workbench's place in the sheet, which the bench panel is rendered into. */
   const [bench, setBench] = createSignal<HTMLElement>();
   const benchSize = createElementSize(bench);
@@ -434,6 +437,10 @@ export function BoardView(props: {
 
     if (current.type !== 'part') {
       const ended = result({ ...current, point });
+      if (current.type === 'panel' && current.base.panels.find((panel) => panel.id === current.panel)?.window) {
+        draggedWindows.add(current.panel);
+      }
+
       props.board.set(current.type === 'resize' ? pinPanels(ended, current.pinned, view()) : ended);
       return;
     }
@@ -657,15 +664,22 @@ export function BoardView(props: {
     );
   }
 
-  /** Keeps window state on the board independently of transient popups and folder chains. */
+  /**
+   * Persists window state independently of popups. Collapse restores the stored tile position unless the window
+   * was dragged since expanding; then it keeps the visible top-left, including any viewport clamp.
+   */
   function updateWindow(id: string, window: Panel['window']) {
     const panel = props.board.latest().panels.find((panel) => panel.id === id);
     if (panel) {
       const frame = visible().find((entry) => entry.panel.id === id)?.frame;
       const at =
-        window?.collapsed && !panel.window?.collapsed && frame
+        window?.collapsed && !panel.window?.collapsed && draggedWindows.has(id) && frame
           ? { x: frame.rect.left / view().width, y: frame.rect.top / view().height }
           : panel.at;
+      if (window?.collapsed !== panel.window?.collapsed) {
+        draggedWindows.delete(id);
+      }
+
       props.board.set(putPanel(props.board.latest(), { ...panel, at, window }));
     }
   }
@@ -1384,20 +1398,20 @@ export function BoardView(props: {
     const ancestry = { panels: [...drag.before.panels, ...(drag.block?.panels ?? [])] };
     const accepts = (panel: Panel) => !panel.window?.collapsed && canDropParts(ancestry, panel, carried);
     const part = { id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks, [partData]: drag[partData] };
-    const withOwned = (board: Board) =>
+    const withOwned = (board: Board, anchor: Rect) =>
       drag.block
         ? {
             ...board,
             panels: [
               ...board.panels,
-              ...drag.block.panels.map((panel) =>
-                panel.owner
-                  ? panel
-                  : {
-                      ...panel,
-                      at: { x: toView(point).x / size.width, y: toView(point).y / size.height }
-                    }
-              )
+              ...drag.block.panels.map((panel) => {
+                if (panel.owner) {
+                  return panel;
+                }
+
+                const { rect } = ownedFrame(panel, anchor, size);
+                return { ...panel, at: { x: rect.left / size.width, y: rect.top / size.height } };
+              })
             ]
           }
         : board;
@@ -1407,8 +1421,16 @@ export function BoardView(props: {
         ? placeBlock(panel.parts, drag.block.parts, cell)
         : placePart(panel.parts, { ...part, cell });
       const before = new Map(panel.parts.map((other) => [other.id, other.cell]));
+      const host = { ...panel, parts: placed };
+      const origin = drag.pinned.get(panel.id) ?? panelFrame(host, size).origin;
+      const anchor = {
+        left: origin.x + cell.column * pitch,
+        top: origin.y + cell.row * pitch,
+        width: drag.span.columns * pitch - cellGap,
+        height: drag.span.rows * pitch - cellGap
+      };
       return {
-        board: withOwned(putPanel(drag.base, { ...panel, parts: placed })),
+        board: withOwned(putPanel(drag.base, host), anchor),
         key: `${panel.id}:${cell.column},${cell.row}`,
         pushes: placed.some((other) => before.has(other.id) && before.get(other.id) !== other.cell)
       };
@@ -1480,10 +1502,13 @@ export function BoardView(props: {
     const parts = drag.block ? drag.block.parts : [{ ...part, cell: { column: 0, row: 0 } }];
     return {
       where: 'board' as const,
-      board: withOwned({
-        ...drag.base,
-        panels: [...drag.base.panels, { id: drag.newPanel, at: placedAt, parts, window: drag.block?.window }]
-      }),
+      board: withOwned(
+        {
+          ...drag.base,
+          panels: [...drag.base.panels, { id: drag.newPanel, at: placedAt, parts, window: drag.block?.window }]
+        },
+        panelFrame({ id: drag.newPanel, at: placedAt, parts, window: drag.block?.window }, size).rect
+      ),
       key: 'new',
       pushes: false
     };
