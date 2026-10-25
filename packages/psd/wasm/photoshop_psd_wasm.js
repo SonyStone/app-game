@@ -120,6 +120,28 @@ function getArrayU8FromWasm0(ptr, len) {
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 /**
+ * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
+ * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
+ * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
+ * document identities. Supply actual face versions, never guesses based only on PostScript names.
+ * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
+ * @param {Uint8Array} bytes
+ * @param {TypeEngineFontVersion[]} fonts
+ * @returns {Uint8Array}
+ */
+export function projectTypeEngineSave26(bytes, fonts) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.projectTypeEngineSave26(ptr0, len0, fonts);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
  * arrays, including a supplied uniform shadow scale for strike descent. This imports source
  * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
@@ -162,26 +184,6 @@ export function projectTypeEngineLayoutCache26(bytes, fonts) {
 }
 
 /**
- * Converts modern horizontal cache origins through the native visual-origin addition before
- * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
- * import/layout dependencies still require comparison; no editor admission changes.
- * @param {Uint8Array} bytes
- * @param {TypeEngineFontVersion[]} fonts
- * @returns {Uint8Array}
- */
-export function projectTypeEngineGeometry26(bytes, fonts) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.projectTypeEngineGeometry26(ptr0, len0, fonts);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
  * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
  * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
  * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
@@ -201,19 +203,17 @@ export function writeTypeEngineValues26(bytes) {
 }
 
 /**
- * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
- * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
- * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
- * document identities. Supply actual face versions, never guesses based only on PostScript names.
- * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
+ * Converts modern horizontal cache origins through the native visual-origin addition before
+ * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
+ * import/layout dependencies still require comparison; no editor admission changes.
  * @param {Uint8Array} bytes
  * @param {TypeEngineFontVersion[]} fonts
  * @returns {Uint8Array}
  */
-export function projectTypeEngineSave26(bytes, fonts) {
+export function projectTypeEngineGeometry26(bytes, fonts) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.projectTypeEngineSave26(ptr0, len0, fonts);
+    const ret = wasm.projectTypeEngineGeometry26(ptr0, len0, fonts);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -237,6 +237,90 @@ export function formatTypeEngineReal26(value) {
     return v1;
 }
 
+let cachedUint16ArrayMemory0 = null;
+
+function getUint16ArrayMemory0() {
+    if (cachedUint16ArrayMemory0 === null || cachedUint16ArrayMemory0.byteLength === 0) {
+        cachedUint16ArrayMemory0 = new Uint16Array(wasm.memory.buffer);
+    }
+    return cachedUint16ArrayMemory0;
+}
+
+function passArray16ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 2, 2) >>> 0;
+    getUint16ArrayMemory0().set(arg, ptr / 2);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+let cachedUint32ArrayMemory0 = null;
+
+function getUint32ArrayMemory0() {
+    if (cachedUint32ArrayMemory0 === null || cachedUint32ArrayMemory0.byteLength === 0) {
+        cachedUint32ArrayMemory0 = new Uint32Array(wasm.memory.buffer);
+    }
+    return cachedUint32ArrayMemory0;
+}
+
+function passArray32ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 4, 4) >>> 0;
+    getUint32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+let cachedFloat32ArrayMemory0 = null;
+
+function getFloat32ArrayMemory0() {
+    if (cachedFloat32ArrayMemory0 === null || cachedFloat32ArrayMemory0.byteLength === 0) {
+        cachedFloat32ArrayMemory0 = new Float32Array(wasm.memory.buffer);
+    }
+    return cachedFloat32ArrayMemory0;
+}
+
+function passArrayF32ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 4, 4) >>> 0;
+    getFloat32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+function getArrayF32FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
+}
+/**
+ * Accumulates nominal hmtx advances with explicit shaped design adjustments and point spacing.
+ * Supply glyph IDs, signed design-unit adjustments and point spacing with equal lengths, plus a
+ * size in 0.5..=32767 points. Returns one binary32 point pen per glyph and a terminal pen, starting
+ * at zero. Base and spacing sums accumulate separately. Invalid operands or font programs throw.
+ * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
+ * @param {Uint8Array} bytes
+ * @param {number} face_index
+ * @param {Uint16Array} glyphs
+ * @param {number} size
+ * @param {Int32Array} adjustments
+ * @param {Float32Array} spacing
+ * @returns {Float32Array}
+ */
+export function computeTypeHorizontalPens26(bytes, face_index, glyphs, size, adjustments, spacing) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray16ToWasm0(glyphs, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray32ToWasm0(adjustments, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passArrayF32ToWasm0(spacing, wasm.__wbindgen_malloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.computeTypeHorizontalPens26(ptr0, len0, face_index, ptr1, len1, size, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v5;
+}
+
 /**
  * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
  * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
@@ -254,19 +338,6 @@ export function readTypeFontMetrics26(bytes, face_index) {
     return takeFromExternrefTable0(ret[0]);
 }
 
-let cachedFloat32ArrayMemory0 = null;
-
-function getFloat32ArrayMemory0() {
-    if (cachedFloat32ArrayMemory0 === null || cachedFloat32ArrayMemory0.byteLength === 0) {
-        cachedFloat32ArrayMemory0 = new Float32Array(wasm.memory.buffer);
-    }
-    return cachedFloat32ArrayMemory0;
-}
-
-function getArrayF32FromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
-}
 /**
  * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
  * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
@@ -314,76 +385,6 @@ export function computeTypeManualBaselines26(bytes, face_index, size, leading, c
     return v2;
 }
 
-let cachedUint16ArrayMemory0 = null;
-
-function getUint16ArrayMemory0() {
-    if (cachedUint16ArrayMemory0 === null || cachedUint16ArrayMemory0.byteLength === 0) {
-        cachedUint16ArrayMemory0 = new Uint16Array(wasm.memory.buffer);
-    }
-    return cachedUint16ArrayMemory0;
-}
-
-function passArray16ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 2, 2) >>> 0;
-    getUint16ArrayMemory0().set(arg, ptr / 2);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
-}
-
-let cachedUint32ArrayMemory0 = null;
-
-function getUint32ArrayMemory0() {
-    if (cachedUint32ArrayMemory0 === null || cachedUint32ArrayMemory0.byteLength === 0) {
-        cachedUint32ArrayMemory0 = new Uint32Array(wasm.memory.buffer);
-    }
-    return cachedUint32ArrayMemory0;
-}
-
-function passArray32ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 4, 4) >>> 0;
-    getUint32ArrayMemory0().set(arg, ptr / 4);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
-}
-
-function passArrayF32ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 4, 4) >>> 0;
-    getFloat32ArrayMemory0().set(arg, ptr / 4);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
-}
-/**
- * Accumulates nominal hmtx advances with explicit shaped design adjustments and point spacing.
- * Supply glyph IDs, signed design-unit adjustments and point spacing with equal lengths, plus a
- * size in 0.5..=32767 points. Returns one binary32 point pen per glyph and a terminal pen, starting
- * at zero. Base and spacing sums accumulate separately. Invalid operands or font programs throw.
- * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
- * @param {Uint8Array} bytes
- * @param {number} face_index
- * @param {Uint16Array} glyphs
- * @param {number} size
- * @param {Int32Array} adjustments
- * @param {Float32Array} spacing
- * @returns {Float32Array}
- */
-export function computeTypeHorizontalPens26(bytes, face_index, glyphs, size, adjustments, spacing) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passArray16ToWasm0(glyphs, wasm.__wbindgen_malloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passArray32ToWasm0(adjustments, wasm.__wbindgen_malloc);
-    const len2 = WASM_VECTOR_LEN;
-    const ptr3 = passArrayF32ToWasm0(spacing, wasm.__wbindgen_malloc);
-    const len3 = WASM_VECTOR_LEN;
-    const ret = wasm.computeTypeHorizontalPens26(ptr0, len0, face_index, ptr1, len1, size, ptr2, len2, ptr3, len3);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v5 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
-    return v5;
-}
-
 /**
  * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
  * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
@@ -407,6 +408,28 @@ export function writeTypeLayerGlyphs26(bytes, fonts, glyphs, units_per_pixel) {
 }
 
 /**
+ * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
+ * pixels on a side. Without context, records carry bottom-to-top IDs beginning at 2.
+ * Explicit context supplies IDs/clocks and initializes root XMP/history, host resources and document state.
+ * Resource 1044 carries the largest allocated ID. Inputs and existing preservation saves remain unchanged.
+ * @param {any} document
+ * @param {Uint8Array} composite
+ * @param {any} context
+ * @returns {Uint8Array}
+ */
+export function writePsd(document, composite, context) {
+    const ptr0 = passArray8ToWasm0(composite, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.writePsd(document, ptr0, len0, context);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
  * @param {Uint8Array} bytes
  * @returns {any}
@@ -419,25 +442,6 @@ export function readPsd(bytes) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return takeFromExternrefTable0(ret[0]);
-}
-
-/**
- * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
- * pixels on a side.
- * @param {any} document
- * @param {Uint8Array} composite
- * @returns {Uint8Array}
- */
-export function writePsd(document, composite) {
-    const ptr0 = passArray8ToWasm0(composite, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.writePsd(document, ptr0, len0);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
 }
 
 /**
@@ -470,6 +474,28 @@ function _assertClass(instance, klass) {
         throw new Error(`expected instance of ${klass.name}`);
     }
 }
+/**
+ * Generate an independent baseline JPEG in Photoshop 26's resource-1036 envelope.
+ * Complete sRGB8 RGBA canvas pixels and explicit resolution are required. Resizing
+ * refuses. This proves thumbnail generation only, never editor-save equivalence.
+ * @param {number} width
+ * @param {number} height
+ * @param {number} resolution
+ * @param {Uint8Array} rgba
+ * @returns {Uint8Array}
+ */
+export function generatePhotoshop26Thumbnail(width, height, resolution, rgba) {
+    const ptr0 = passArray8ToWasm0(rgba, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.generatePhotoshop26Thumbnail(width, height, resolution, ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
 /**
  * Check prepared native-layout bytes under the closed Photoshop 26 v1 contract.
  * Throws on unsupported metadata layouts. A false result grants no save certificate.
@@ -516,28 +542,6 @@ export function writeSavedHistory(xmp, context, retained_instance_id) {
     var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v3;
-}
-
-/**
- * Generate an independent baseline JPEG in Photoshop 26's resource-1036 envelope.
- * Complete sRGB8 RGBA canvas pixels and explicit resolution are required. Resizing
- * refuses. This proves thumbnail generation only, never editor-save equivalence.
- * @param {number} width
- * @param {number} height
- * @param {number} resolution
- * @param {Uint8Array} rgba
- * @returns {Uint8Array}
- */
-export function generatePhotoshop26Thumbnail(width, height, resolution, rgba) {
-    const ptr0 = passArray8ToWasm0(rgba, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.generatePhotoshop26Thumbnail(width, height, resolution, ptr0, len0);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
 }
 
 /**
@@ -1023,6 +1027,10 @@ export class PsdEditorSession {
     }
     /**
      * Apply the bounded reopen-equivalent operations documented in the generated JSDoc.
+     * v3 carries complete independent source records and resource 1015 byte-identically.
+     * Edited group subtrees, ancestor composites and complete sibling clipping chains are dependent.
+     * Structural edits with clipping and opaque Fill requiring merged-alpha/resource collapse refuse.
+     * Merged pixels and thumbnails always regenerate. V1/v2 admission stays unchanged.
      * v2 compares untouched type with the reopened source and requires explicit text gamma/fonts.
      * Type targets, ancestors and prior source changes refuse before publication.
      * v2 preserves permitted locks, imports empty selection, and handles measured empty groups.
@@ -1038,9 +1046,40 @@ export class PsdEditorSession {
      * v2 retains raster group masks, successful unchanged-order moves, full-strength Normal
      * adjustments over partial RGB16/CMYK8 alpha, and process-only Gray8/CMYK8 alpha declarations.
      * Source partial alpha is preserved. Deleting the sole physical raster refuses before save preparation.
-     * Closed nonempty or CMYK group Multiply, adjustment/non-Normal descendant caches,
-     * Background-only structural collapse and unselected hidden raster scalars refuse atomically.
+     * Writer-backed Multiply expands plain nonempty closed groups; empty groups retain their state.
+     * CMYK group Multiply, smart-subtree scalar state, adjustment/non-Normal descendant caches,
+     * and unselected hidden raster scalars refuse atomically.
+     * A single RGB8 root deletion or empty ungroup leaving an opaque, unmasked full-canvas
+     * Background emits the native flat layout, omitting unused patterns and sheet resources.
+     * Invalid identities, duplicate resources, unknown or duplicate surviving Background fields,
+     * saved paths and unknown document carriers refuse. Other Background-only scopes remain guarded.
      * Standard Gray halftones use the source-derived resource-1012 writer; other dependencies still refuse.
+     * Finite fxrp coordinates within ±300000 remain byte-preserved through disposable validation.
+     * Restoring active vector paths and Delete beside nested-group siblings refuse atomically.
+     * When empty Ungroup clears selection, resource 1024 records the top physical sheet.
+     * v3 rebuilds dependent lrFX from a complete version-zero lfx2/lrFX pair on an ordinary
+     * layer with unit scale, seven single legacy families, canonical units and RGB colors.
+     * Geometry must be finite and nonnegative; repeated families, gradient glows, textured
+     * Bevel, foreign colors and incomplete or unknown legacy envelopes retain refusals.
+     * Modern descriptors stay intact; dependent lrFX and enclosing Lr16 use canonical padding.
+     * v3 validates unchanged layr only on ordinary records, lset only on section markers,
+     * and cont only beside a typed adjustment or fill. Published names and name-source tags
+     * stay unchanged. Unknown codes refuse; this adds no generated-name setter or path support.
+     * v3 group blend additionally admits one full-strength Pass Through group above an opaque
+     * full-canvas Normal RGB8/16 base, with direct opaque Normal rasters and full-strength
+     * Normal adjustments whose masks are absent or white. Nested/non-Normal/partial-strength
+     * graphs keep the complexChildren cache refusal. V1/v2 retain the earlier boundary.
+     * v3 RGB16 replacement writes only complete native process streams and existing alpha
+     * on a visible ordinary nonempty raster at unchanged bounds. Names, styles, masks,
+     * nonprocess streams, siblings and groups remain intact. Hidden RGB16 Fill refuses with
+     * save.carriedUntouched.hiddenRasterPixels. Source, strict merged-cache, renderer,
+     * dependency-plan and writer checks remain mandatory; no stale-cache bypass is granted.
+     * RGB16 Exposure has no layer-count restriction within the supported profile/render graph.
+     * RGB16 partial layer opacity admits one Normal Drop Shadow, Inner Glow, Color Overlay
+     * or Satin, retaining Fill, mask, geometry and opaque-backdrop guards.
+     * Ungroup selects surviving nested headers and leaves in physical order, excluding
+     * group ends; the top surviving sheet stays active. Empty/mixed subgroup guards remain.
+     * RGB16 type and stale Photo Filter source caches retain their existing refusals.
      * Every refusal preserves source, selection, allocation and revision.
      * Missing context retains the earlier refusal. Success freezes complete prepared bytes.
      * @param {readonly PsdExactRasterTreeEdit[]} batch
@@ -1178,6 +1217,7 @@ export class PsdEditorSession {
      * Prepare resource 1060 from the current source snapshot. No-op preservation is unchanged.
      * Missing identity/import rules or runtime leaves throw without changing revision.
      * The optional initialEvent contains only explicit first-preparation runtime leaves.
+     * Embedded-only linked inventory removes Ingredients; external or unresolved content throws.
      * @param {PsdXmpSaveContext} context
      * @returns {PsdPreparedSave}
      */

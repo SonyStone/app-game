@@ -1,6 +1,26 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
+ * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
+ * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
+ * document identities. Supply actual face versions, never guesses based only on PostScript names.
+ * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
+ */
+export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Converts modern horizontal cache origins through the native visual-origin addition before
+ * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
+ * import/layout dependencies still require comparison; no editor admission changes.
+ */
+export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
+ * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
+ * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
+ */
+export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
+/**
  * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
  * arrays, including a supplied uniform shadow scale for strike descent. This imports source
  * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
@@ -11,20 +31,6 @@ export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngin
  */
 export function formatTypeEngineReal26(value: number): Uint8Array;
 /**
- * Converts modern horizontal cache origins through the native visual-origin addition before
- * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
- * import/layout dependencies still require comparison; no editor admission changes.
- */
-export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
- * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
- * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
- * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
- * document identities. Supply actual face versions, never guesses based only on PostScript names.
- * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
- */
-export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
  * Converts measured modern major-axis caches and segment indices into schema 7.
  * Vertical caches require zero major origins and retain source layout and glyph IDs. Metric-box
  * rotation uses binary32 arithmetic. Malformed packets, unsupported layouts or font contexts throw.
@@ -32,17 +38,6 @@ export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFont
  * it does not shape text, compute vertical font geometry or authorize edited saves.
  */
 export function projectTypeEngineLayoutCache26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
- * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
- * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
- * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
- */
-export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
-/**
- * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
- * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
- */
-export function readTypeFontMetrics26(bytes: Uint8Array, face_index: number): any;
 /**
  * Computes ordinary TrueType box/point baselines from supplied bytes and explicit manual leading.
  * The caller establishes line breaks; `count` is at most 1,000,000 and `leading` is finite/positive.
@@ -52,6 +47,17 @@ export function readTypeFontMetrics26(bytes: Uint8Array, face_index: number): an
  * Does not choose automatic leading, shape text, query host fonts or authorize edited saves.
  */
 export function computeTypeManualBaselines26(bytes: Uint8Array, face_index: number, size: number, leading: number, count: number, boxed: boolean): Float32Array;
+/**
+ * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
+ * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
+ * source-dependent; a returned packet is not an editor admission certificate.
+ */
+export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
+/**
+ * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
+ * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
+ */
+export function readTypeFontMetrics26(bytes: Uint8Array, face_index: number): any;
 /**
  * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
  * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
@@ -66,17 +72,6 @@ export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePosi
  * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
  */
 export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: number, glyphs: Uint16Array, size: number, adjustments: Int32Array, spacing: Float32Array): Float32Array;
-/**
- * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
- * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
- * source-dependent; a returned packet is not an editor admission certificate.
- */
-export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
-/**
- * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
- * pixels on a side.
- */
-export function writePsd(document: any, composite: Uint8Array): Uint8Array;
 /**
  * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
  */
@@ -277,6 +272,108 @@ export interface PsdCff2Coverage {
   /** Signed 16.16 fvar/avar coordinates, distinct from the supplied design tuple. */
   readonly normalizedCoordinates: readonly number[];
 }
+
+
+
+/**
+ * Caller-owned facts for the first save of a new flat RGB8 raster document.
+ * Every operand is required. Supply truthful application, profile and compositor facts.
+ * Creation is separate from imported-file preservation and later editor saves.
+ */
+export interface PsdNewDocumentContext {
+  /** Creation facts retained independently of later save events. */
+  readonly creation: {
+    /** Cryptographic UUID with the xmp.did: prefix. */
+    readonly originalDocumentId: string;
+    /** Created-event UUID with the xmp.iid: prefix, sharing the original creation UUID. */
+    readonly instanceId: string;
+    /** Actual ISO8601 creation clock, including seconds and timezone. */
+    readonly when: string;
+    /** Actual originating application, such as Paint. */
+    readonly creatorTool: string;
+  };
+  /** First-save facts. Generate independent save identities and capture the actual save clock. */
+  readonly save: {
+    /** Final filename without its PSD/PSB extension. */
+    readonly basename: string;
+    /** Actual ISO8601 save clock, including seconds and timezone. */
+    readonly saveTime: string;
+    /** Consistent local save wall time as YYYY:MM:DD HH:MM:SS. */
+    readonly exifTime: string;
+    /** Save-event UUID with the xmp.iid: prefix. */
+    readonly instanceId: string;
+    /** Save document UUID with the adobe:docid:photoshop: prefix. */
+    readonly documentId: string;
+    /** Actual saving application. Do not attribute Paint exports to Adobe. */
+    readonly softwareAgent: string;
+    /** Caller composite policy. PSD cannot persist Photoshop's RGBBlendGamma preference. */
+    readonly linearBlending: boolean;
+  };
+  /** Explicit resource defaults for this document and host. */
+  readonly resources: {
+    /** Actual writer application name. */
+    readonly writerName: string;
+    /** Actual reader application name. */
+    readonly readerName: string;
+    /** Complete creation requires a supplied merged composite. */
+    readonly mergedComposite: true;
+    /** Native display-unit code, 1 or 2. */
+    readonly displayUnit: 1 | 2;
+    /** Unsigned 16.16 resolution and native resolution unit. */
+    readonly missingResolution: readonly [number, number];
+    /** Horizontal and vertical grid spacing in 1/32-pixel units. */
+    readonly missingGrid: readonly [number, number];
+    /** Four ARGB guide-color bytes. */
+    readonly legacyGuideColor: readonly [number, number, number, number];
+    /** Actual localized merged-transparency channel name. */
+    readonly transparencyName: string;
+    /** Whether the supplied RGB profile is tagged as sRGB. */
+    readonly taggedSrgb: boolean;
+  };
+  /** Supported compositor and ICC state. Credential signing is outside this writer. */
+  readonly document: {
+    /** Truthful supported compositor settings for the document. */
+    readonly compositor: {
+      /** Supported compositor engine identifier. */
+      readonly engine: 'compCore' | 'compCoreGPU';
+      /** Host GPU policy. */
+      readonly gpu: 'on' | 'off' | 'feature';
+      /** Host threading policy. */
+      readonly threads: 'on' | 'off' | 'feature';
+      /** This bounded writer accepts the supported GPU-state marker. */
+      readonly gpuSupport: 'supported';
+    };
+    /** Actual ICC display state. */
+    readonly iccDisplay: string;
+    /** Actual ICC view state. */
+    readonly iccView: string;
+    /** Signing credentials must remain disabled. */
+    readonly newCredentialsEnabled: false;
+  };
+  /** Actual document RGB ICC bytes, including the caller's rendering-intent header. */
+  readonly profile: Uint8Array;
+  /** Stable positive unique signed-32-bit IDs in document.layers bottom-to-top order. */
+  readonly layerIds: readonly number[];
+  /** Finite positive layer clocks, one per layer in the same order as layerIds. */
+  readonly layerTimes: readonly number[];
+  /** Global lighting angle in degrees, 0 through 360. */
+  readonly globalAngle: number;
+  /** Global lighting altitude in degrees, 0 through 90. */
+  readonly globalAltitude: number;
+  /** Actual localized built-in CMYK proof-setup name. */
+  readonly proofSetupName: string;
+}
+/**
+ * Write flat RGB8 ordinary rasters and the supplied straight-RGBA composite.
+ * Context initializes complete first-save XMP/history, resources and document state.
+ * Omitting context keeps the identity-only legacy mode with IDs beginning at 2,
+ * no XMP initialization and the largest allocated ID in resource 1044.
+ * Partial alpha, clipping and transparency protection are retained. PSB is selected
+ * above 30000 pixels on either side. The codec preserves caller pixels and does not render.
+ * Invalid facts, unknown context keys, duplicate IDs and invalid clocks throw without
+ * mutating document, context or composite. Imported files use preservation/editor saves.
+ */
+export function writePsd(document: unknown, composite: Uint8Array, context?: PsdNewDocumentContext): Uint8Array;
 
 
 
@@ -1048,7 +1145,7 @@ export interface InitOutput {
   readonly renderedimage_height: (a: number) => number;
   readonly renderedimage_rgba8: (a: number) => any;
   readonly renderedimage_width: (a: number) => number;
-  readonly writePsd: (a: any, b: number, c: number) => [number, number, number, number];
+  readonly writePsd: (a: any, b: number, c: number, d: any) => [number, number, number, number];
   readonly writeTypeEngineValues26: (a: number, b: number) => [number, number, number, number];
   readonly writeTypeLayerGlyphs26: (a: number, b: number, c: any, d: any, e: number) => [number, number, number, number];
   readonly __wbindgen_exn_store: (a: number) => void;
