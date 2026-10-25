@@ -594,6 +594,9 @@ importers:
       '@app-game/chroma':
         specifier: workspace:*
         version: link:../../packages/chroma
+      '@app-game/paint-core':
+        specifier: workspace:*
+        version: link:../../packages/paint-core
       '@solid-primitives/event-listener':
         specifier: 'catalog:'
         version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
@@ -1947,6 +1950,9 @@ importers:
       '@app-game/abr-paint':
         specifier: workspace:*
         version: link:../abr-paint
+      '@app-game/abr-parser':
+        specifier: workspace:*
+        version: link:../abr-parser
       '@app-game/navigation-puck':
         specifier: workspace:*
         version: link:../navigation-puck
@@ -1972,9 +1978,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@app-game/abr-parser':
-        specifier: workspace:*
-        version: link:../abr-parser
       '@types/node':
         specifier: 25.8.0
         version: 25.8.0
