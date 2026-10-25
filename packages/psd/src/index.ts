@@ -19,11 +19,37 @@ export async function readPsd(bytes: ArrayBuffer | Uint8Array): Promise<PsdDocum
  * Writes an 8-bit RGB document of `document.layers`, PackBits-compressed as Photoshop saves them, with `composite`,
  * the straight RGBA flattened canvas shown by programs that read no layers. Canvases over 30000 pixels on a side
  * become PSB. Names are stored as Unicode and as Mac Roman. Throws when the canvas exceeds 300000 pixels on a side
- * or a pixel buffer does not match its size.
+ * or a pixel buffer does not match its size. Context selects complete Photoshop 26 first-save creation, with
+ * caller-owned identity, clocks, profile and layer metadata. Two-argument output uses the codec's identity-only
+ * legacy mode, now with stable layer IDs beginning at 2 and the largest allocated ID in resource 1044.
+ * Imported originals must use preservation/editor saves. Invalid operands throw PsdWriteError without mutation.
  */
-export async function writePsd(document: PsdDocument, composite: Uint8Array): Promise<Uint8Array> {
+export async function writePsd(
+  document: PsdDocument,
+  composite: Uint8Array,
+  context?: PsdNewDocumentContext
+): Promise<Uint8Array> {
   const codec = await loadPsd();
-  return codec.writePsd(document, composite);
+  try {
+    return codec.writePsd(document, composite, context);
+  } catch (cause) {
+    throw new PsdWriteError(cause);
+  }
+}
+
+/** Complete first-save operands. No identities, clocks, profiles or host facts are invented by the facade. */
+export type PsdNewDocumentContext = NonNullable<Parameters<Codec['writePsd']>[2]>;
+
+/** Atomic writer refusal. The binding's original diagnostic remains available as cause. */
+export class PsdWriteError extends Error {
+  readonly name = 'PsdWriteError';
+  /** The document or its caller-owned writer operands failed codec validation. */
+  readonly code = 'InvalidDocument' as const;
+
+  /** Wraps a codec refusal without losing its message or original exception. */
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+  }
 }
 
 /**
