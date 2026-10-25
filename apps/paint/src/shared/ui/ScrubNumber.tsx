@@ -67,9 +67,13 @@ export function ScrubNumber(props: {
   const text = () => `${settle(shown())}`;
   const cancel = () => {
     const cancelled = press;
+    if (!cancelled) {
+      return;
+    }
+
     press = undefined;
     setDraft(undefined);
-    if (cancelled?.scrubbing) {
+    if (cancelled.scrubbing) {
       (props.onCancel ?? props.onInput)?.(cancelled.start);
     }
   };

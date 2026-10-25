@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { render } from '@solidjs/web';
-import { createSignal, flush } from 'solid-js';
+import { createSignal, flush, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ScrubNumber } from './ScrubNumber';
 
@@ -101,6 +101,22 @@ it('restores an echoed draft when disposed during a gesture', () => {
   flush();
   expect(inputs).toEqual([70, 50]);
   expect(changes).toEqual([]);
+});
+
+it('unmounts an idle field during a reactive layout change without writing disposed state', () => {
+  const [visible, setVisible] = createSignal(true);
+  dispose = render(
+    () => (
+      <Show when={visible()}>
+        <ScrubNumber label="Amount" value={50} onChange={() => {}} />
+      </Show>
+    ),
+    document.body
+  );
+  flush();
+  setVisible(false);
+  expect(() => flush()).not.toThrow();
+  expect(document.querySelector('input')).toBeNull();
 });
 
 it('recovers an orphaned press when its pointer is no longer captured', () => {
