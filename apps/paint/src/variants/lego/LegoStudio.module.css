@@ -1334,6 +1334,7 @@
   }
 }
 
+.editor .brokenPart,
 .brokenPart {
   display: flex;
   width: 100%;

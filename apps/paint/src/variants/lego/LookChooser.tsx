@@ -1,6 +1,6 @@
 import type { JSX } from '@solidjs/web';
 import { For, Show } from 'solid-js';
-import { cellGap, pitch, type Part, type Span } from './board';
+import { cellGap, partData, pitch, type Part, type Span } from './board';
 import styles from './LegoStudio.module.css';
 import { lookFits, resolveLook } from './looks';
 import { PartView, partLooks, type Session } from './parts';
@@ -16,7 +16,7 @@ export function LookChooser(props: {
   /** Shows `look` at the part's size. */
   onLook: (look: string) => void;
 }) {
-  const options = () => partLooks(props.part.kind);
+  const options = () => (props.part[partData]?.invalid ? undefined : partLooks(props.part.kind));
   const span = () => props.part.span;
   /** What the part shows at this size, chosen here, at a smaller size or automatically. */
   const shown = () => {

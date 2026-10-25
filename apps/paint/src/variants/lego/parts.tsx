@@ -80,8 +80,8 @@ export type Popup =
  */
 export function PartView(props: Parameters<typeof PartContent>[0]) {
   return (
-    <PartFrame kind={props.kind}>
-      <Show when={!props.missing} fallback={<MissingPart kind={props.kind} />}>
+    <PartFrame kind={props.kind} span={props.span}>
+      <Show when={!props.missing} fallback={<MissingPart kind={props.kind} span={props.span} />}>
         <PartContent {...props} />
       </Show>
     </PartFrame>
@@ -106,7 +106,7 @@ function PartContent(props: {
   const look = () => props.look ?? partLooks(props.kind)?.auto(props.span) ?? '';
 
   return (
-    <Switch fallback={<MissingPart kind={props.kind} />}>
+    <Switch fallback={<MissingPart kind={props.kind} span={props.span} />}>
       <Match when={parsed()?.type === 'preset' && parsed()!.id}>
         {(id) => <PresetPart id={id()} span={props.span} session={props.session} />}
       </Match>
@@ -126,7 +126,7 @@ function PartContent(props: {
       </Match>
       <Match when={parsed()?.type === 'color' && (parsed()!.id as ColorKind)}>
         {(color) => (
-          <Switch fallback={<MissingPart kind={props.kind} />}>
+          <Switch fallback={<MissingPart kind={props.kind} span={props.span} />}>
             <Match when={color() === 'swatch'}>
               <SwatchPart span={props.span} session={props.session} onOpen={(anchor) => props.onOpen?.(anchor)} />
             </Match>
@@ -262,7 +262,11 @@ const autoValueLook = (span: Span) => (span.columns === 1 && span.rows === 1 ? '
 function parseKind(kind: string) {
   const [type, ...rest] = kind.split(':');
   const id = rest.join(':');
-  if ((type === 'value' && !Object.hasOwn(values, id)) || (type === 'action' && !Object.hasOwn(actions, id))) {
+  if (
+    (type === 'value' && !Object.hasOwn(values, id)) ||
+    (type === 'action' && !Object.hasOwn(actions, id)) ||
+    (type === 'color' && !Object.hasOwn(colorLabels, id))
+  ) {
     return undefined;
   }
 
@@ -475,7 +479,11 @@ export function ValuePart(props: {
    * The value and color when the press began: a press changes one channel, and the others keep their values even
    * where the color alone would lose them, such as the hue while brightness passes black.
    */
-  let start = { fraction: 0, hsv: hsv(), brush: props.session.brush() };
+  let start: { fraction: number; hsv: Hsv; brush: Brush };
+  const startGesture = () =>
+    runPartCommand(props.session, () => {
+      start = { fraction: fraction(), hsv: hsv(), brush: props.session.brush() };
+    });
 
   const set = (next: number) =>
     runPartCommand(props.session, () => spec().write(Math.max(0, Math.min(1, next)), props.session, start.hsv));
@@ -500,10 +508,7 @@ export function ValuePart(props: {
       }
     });
   const scrub = pressHandlers({
-    start: () =>
-      runPartCommand(props.session, () => {
-        start = { fraction: fraction(), hsv: hsv(), brush: props.session.brush() };
-      }),
+    start: startGesture,
     move(press) {
       set(start.fraction + (press.point.x - press.start.x - (press.point.y - press.start.y)) / scrubLength);
     },
@@ -514,7 +519,7 @@ export function ValuePart(props: {
   const slide = pressHandlers({
     start: (press) =>
       runPartCommand(props.session, () => {
-        start = { fraction: fraction(), hsv: hsv(), brush: props.session.brush() };
+        startGesture();
         set(trackFraction(press));
       }),
     move(press) {
@@ -554,7 +559,9 @@ export function ValuePart(props: {
             unit={props.span.columns >= 2 ? number().unit : undefined}
             scale={number().scale}
             wrap={number().wrap}
-            onInput={(value) => runPartCommand(props.session, () => number().set(value, props.session, hsv()))}
+            onStart={startGesture}
+            onCancel={restore}
+            onInput={(value) => runPartCommand(props.session, () => number().set(value, props.session, start.hsv))}
             onChange={(value) => {
               runPartCommand(props.session, () => {
                 number().set(value, props.session, hsv());

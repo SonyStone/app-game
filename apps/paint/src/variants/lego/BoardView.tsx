@@ -623,7 +623,7 @@ export function BoardView(props: {
       <SelectionBar
         rect={barProps.rect}
         area={barProps.area}
-        looks={partLooks(sizable()?.part.kind ?? '') !== undefined}
+        looks={!sizable()?.part[partData]?.invalid && partLooks(sizable()?.part.kind ?? '') !== undefined}
         kept={flashKit() !== undefined}
         onPutAway={putAwaySelected}
         onDuplicate={duplicateSelected}

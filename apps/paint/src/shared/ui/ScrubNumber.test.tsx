@@ -103,6 +103,29 @@ it('restores an echoed draft when disposed during a gesture', () => {
   expect(changes).toEqual([]);
 });
 
+it('recovers an orphaned press when its pointer is no longer captured', () => {
+  const { input, changes, inputs, pointer } = mount({}, true);
+  pointer('pointerdown', 0, 0);
+  pointer('pointermove', 20, 0);
+  input().hasPointerCapture = vi.fn(() => false);
+  pointer('pointerdown', 100, 0);
+  pointer('pointermove', 110, 0);
+  pointer('pointerup', 110, 0);
+  expect(inputs).toEqual([70, 50, 60]);
+  expect(changes).toEqual([60]);
+});
+
+it('keeps a captured press and captures caller state only once', () => {
+  const onStart = vi.fn();
+  const { pointer, changes } = mount({ onStart });
+  pointer('pointerdown', 0, 0);
+  pointer('pointerdown', 100, 0);
+  pointer('pointermove', 20, 0);
+  pointer('pointerup', 20, 0);
+  expect(onStart).toHaveBeenCalledOnce();
+  expect(changes).toEqual([70]);
+});
+
 function mount(options: Partial<Parameters<typeof ScrubNumber>[0]> = {}, echo = false) {
   const host = document.createElement('div');
   document.body.append(host);
@@ -131,6 +154,7 @@ function mount(options: Partial<Parameters<typeof ScrubNumber>[0]> = {}, echo = 
   flush();
   const input = () => host.querySelector<HTMLInputElement>('input')!;
   input().setPointerCapture = vi.fn();
+  input().hasPointerCapture = vi.fn(() => true);
   const pointer = (type: string, x: number, y: number) => {
     const event = new MouseEvent(type, { clientX: x, clientY: y, bubbles: true, cancelable: true });
     Object.defineProperty(event, 'pointerId', { value: 1 });

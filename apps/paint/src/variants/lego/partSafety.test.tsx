@@ -3,10 +3,12 @@ import { defaultBrush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
 import { createMemo, createRoot, createSignal, flush, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import { partData, type Part } from './board';
 import { createBoard } from './createBoard';
 import { createKits } from './kits';
+import { LookChooser } from './LookChooser';
 import { PartFrame } from './PartFrame';
-import { PartView, ValuePart, type Session } from './parts';
+import { kindLabel, PartView, ValuePart, type Session } from './parts';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
@@ -41,8 +43,8 @@ it('isolates a throwing part, including one mounted later, and keeps its sibling
   ));
   setDropped(true);
   flush();
-  expect(document.body.textContent).toContain('Broken part');
-  expect(document.body.textContent).toContain('action:undo');
+  expect(document.querySelector('[aria-label="Broken part: action:undo. Retry"] svg')).not.toBeNull();
+  expect(document.body.textContent).not.toContain('Broken part');
   setBrush((brush) => ({ ...brush, color: '#0000ff' }));
   flush();
   expect((document.querySelector('[aria-label="Foreground color"]') as HTMLElement).style.background).toBe(
@@ -89,7 +91,8 @@ it.each([
   'preset:missing',
   'bogus',
   'action:toString',
-  'value:__proto__'
+  'value:__proto__',
+  'color:toString'
 ])('renders unavailable %s without failing', (kind) => {
   const { session } = fakeSession();
   renderOwned(() => <PartView kind={kind} span={{ columns: 1, rows: 1 }} session={session} onPopup={() => {}} />);
@@ -130,23 +133,23 @@ it('remembers a settled color after its number field echoes input live', () => {
   expect(JSON.parse(localStorage.getItem('paint.recentColors')!)).toEqual([session.brush().color]);
 });
 
-it.each(['knob', 'slider'] as const)('restores the exact brush opacity when a %s loses capture', (look) => {
+it.each(['knob', 'slider', 'number'] as const)('restores the exact brush opacity when a %s loses capture', (look) => {
   const { session, setBrush } = fakeSession();
-  setBrush((brush) => ({ ...brush, opacity: 0.5 }));
+  setBrush((brush) => ({ ...brush, opacity: 0.50342 }));
   flush();
   renderOwned(() => (
     <PartFrame kind="value:opacity">
       <ValuePart value="opacity" look={look} span={{ columns: 3, rows: 1 }} session={session} />
     </PartFrame>
   ));
-  const slider = document.querySelector<HTMLElement>('[role="slider"]')!;
+  const slider = document.querySelector<HTMLElement>(look === 'number' ? 'input' : '[role="slider"]')!;
   slider.getBoundingClientRect = () => new DOMRect(0, 0, 100, 40);
   pointer(slider, 'pointerdown', 30);
   pointer(slider, 'pointermove', 60);
-  expect(session.brush().opacity).not.toBe(0.5);
+  expect(session.brush().opacity).not.toBe(0.50342);
   pointer(slider, 'lostpointercapture', 60);
   pointer(slider, 'pointerup', 60);
-  expect(session.brush().opacity).toBe(0.5);
+  expect(session.brush().opacity).toBe(0.50342);
 });
 
 it('renders future kinds loaded from both board and kit storage without halting siblings', () => {
@@ -174,6 +177,65 @@ it('renders future kinds loaded from both board and kit storage without halting 
   );
 });
 
+it('returns a plain label for inherited color ids', () => {
+  expect(kindLabel('color:toString', fakeSession().session)).toBe('color:toString');
+});
+
+it('hides the look chooser for an invalid value record', () => {
+  const part: Part = {
+    id: 'bad',
+    kind: 'value:size',
+    cell: { column: 0, row: 0 },
+    span: { columns: 2, rows: 1 },
+    [partData]: { record: { kind: 'value:size', cell: 'invalid' }, invalid: true }
+  };
+  renderOwned(() => <LookChooser part={part} session={fakeSession().session} onLook={vi.fn()} />);
+  expect(document.querySelector('button')).toBeNull();
+});
+
+it('renders and runs a healthy action after dropping malformed optional looks', () => {
+  localStorage.setItem(
+    'paint.lego',
+    JSON.stringify({
+      panels: [
+        {
+          id: 'panel',
+          at: { x: 0, y: 0 },
+          parts: [
+            {
+              id: 'undo',
+              kind: 'action:undo',
+              cell: { column: 0, row: 0 },
+              span: { columns: 2, rows: 1 },
+              looks: 7
+            }
+          ]
+        }
+      ]
+    })
+  );
+  const part = owned(createBoard).latest().panels[0]!.parts[0]!;
+  const { session } = fakeSession();
+  session.undo = vi.fn();
+  renderOwned(() => <PartView {...part} missing={part[partData]?.invalid} session={session} onPopup={() => {}} />);
+  document.querySelector('button')!.click();
+  expect(session.undo).toHaveBeenCalledOnce();
+  expect(document.querySelector('[aria-label^="Missing part:"]')).toBeNull();
+});
+
+it('shows readable broken-part text from two cells wide', () => {
+  const Broken = () => {
+    throw new Error('broken');
+  };
+  renderOwned(() => (
+    <PartFrame kind="test" span={{ columns: 2, rows: 1 }}>
+      <Broken />
+    </PartFrame>
+  ));
+  expect(document.querySelector('button')!.textContent).toContain('Broken part');
+  expect(document.querySelector('button')!.textContent).toContain('Retry');
+});
+
 /** Runs reactive factories in a disposed test owner. */
 function owned<T>(create: () => T): T {
   return createRoot((dispose) => {
@@ -192,6 +254,7 @@ function renderOwned(view: Parameters<typeof render>[0]) {
 /** Dispatches pointer events with capture mocked, then settles controlled updates. */
 function pointer(target: HTMLElement, type: string, x: number) {
   target.setPointerCapture = vi.fn();
+  target.hasPointerCapture = vi.fn(() => true);
   const event = new MouseEvent(type, { clientX: x, clientY: 0, bubbles: true, cancelable: true });
   Object.defineProperties(event, { pointerId: { value: 1 }, pointerType: { value: 'pen' } });
   target.dispatchEvent(event);

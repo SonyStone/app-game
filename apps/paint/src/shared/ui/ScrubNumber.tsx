@@ -31,6 +31,8 @@ export function ScrubNumber(props: {
   /** Values past `max` continue from `min` and the reverse, as angles do; otherwise they stop at the bounds. */
   wrap?: boolean | undefined;
   disabled?: boolean;
+  /** Captures caller state once when a pointer gesture begins, before any live input. */
+  onStart?: () => void;
   /** The value while it is dragged. */
   onInput?: (value: number) => void;
   /** Restores the gesture start value on cancellation; defaults to `onInput`. */
@@ -92,9 +94,17 @@ export function ScrubNumber(props: {
         disabled={props.disabled}
         value={text()}
         onPointerDown={(event) => {
-          if (press || editing() || props.disabled || (event.pointerType === 'mouse' && event.button !== 0)) {
+          if (
+            (press && input.hasPointerCapture(press.id)) ||
+            editing() ||
+            props.disabled ||
+            (event.pointerType === 'mouse' && event.button !== 0)
+          ) {
             return;
           }
+
+          const start = press?.scrubbing ? press.start : props.value;
+          cancel();
 
           // Neither a caret nor the on-screen keyboard until the press turns out to be a tap.
           event.preventDefault();
@@ -104,10 +114,11 @@ export function ScrubNumber(props: {
             x: event.clientX,
             y: event.clientY,
             lastX: event.clientX,
-            raw: props.value,
-            start: props.value,
+            raw: start,
+            start,
             scrubbing: false
           };
+          props.onStart?.();
         }}
         onPointerMove={(event) => {
           if (press?.id !== event.pointerId) {
