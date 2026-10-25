@@ -117,206 +117,213 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('keeps the complete mounted catalogue quiet during pen input and unrelated brush changes', async () => {
-  const fixture = owned(createCatalogueFixture);
-  await fixture.tools.loaded;
-  const session = owned(createPaintSession);
-  const [layerState, setLayerState] = owned(() => createSignal(session.engine.state()));
-  const services = owned(() =>
-    createLegoServices({
-      ...session,
-      engine: { ...session.engine, state: layerState },
-      tools: fixture.tools,
-      brush: fixture.tools.brush,
-      library: fixture.library,
-      setColor: fixture.services.color.set
-    })
-  );
-  const board = owned(createBoard);
-  const sheet = owned(() => createSheet(() => 900));
-  const kits = owned(createKits);
-  const specimens = catalogueSpecimens(fixture.presets[0]!.id).filter(
-    (specimen) => !specimen.kind.startsWith('preset:')
-  );
-  const parts = [
-    ...specimens.map((specimen) => ({
-      ...specimen,
-      looks: specimen.look ? { [`${specimen.span.columns}x${specimen.span.rows}`]: specimen.look } : undefined
-    })),
-    ...fixture.presets.map((preset) => ({ id: preset.id, kind: `preset:${preset.id}`, span: { columns: 2, rows: 2 } }))
-  ].map((part, index) => ({ ...part, cell: { column: (index % 12) * 5, row: Math.floor(index / 12) * 5 } }));
-  board.set({ panels: [{ id: 'catalogue', at: { x: 0, y: 0 }, parts }] });
-  const [editing, setEditing] = createSignal(false);
-  disposers.push(
-    render(
+it.each([undefined, true] as const)(
+  'keeps the complete mounted catalogue quiet during pen input and unrelated brush changes, floating=%s',
+  async (floating) => {
+    const fixture = owned(createCatalogueFixture);
+    await fixture.tools.loaded;
+    const session = owned(createPaintSession);
+    const [layerState, setLayerState] = owned(() => createSignal(session.engine.state()));
+    const services = owned(() =>
+      createLegoServices({
+        ...session,
+        engine: { ...session.engine, state: layerState },
+        tools: fixture.tools,
+        brush: fixture.tools.brush,
+        library: fixture.library,
+        setColor: fixture.services.color.set
+      })
+    );
+    const board = owned(createBoard);
+    const sheet = owned(() => createSheet(() => 900));
+    const kits = owned(createKits);
+    const specimens = catalogueSpecimens(fixture.presets[0]!.id).filter(
+      (specimen) => !specimen.kind.startsWith('preset:')
+    );
+    const parts = [
+      ...specimens.map((specimen) => ({
+        ...specimen,
+        looks: specimen.look ? { [`${specimen.span.columns}x${specimen.span.rows}`]: specimen.look } : undefined
+      })),
+      ...fixture.presets.map((preset) => ({
+        id: preset.id,
+        kind: `preset:${preset.id}`,
+        span: { columns: 2, rows: 2 }
+      }))
+    ].map((part, index) => ({ ...part, cell: { column: (index % 12) * 5, row: Math.floor(index / 12) * 5 } }));
+    board.set({ panels: [{ id: 'catalogue', at: { x: 0, y: 0 }, floating, parts }] });
+    const [editing, setEditing] = createSignal(false);
+    disposers.push(
+      render(
+        () => (
+          <LegoServicesContext value={services}>
+            <PreviewAttachment
+              value={(canvas) => {
+                const connection = attachCataloguePreview(canvas);
+                return {
+                  ...connection,
+                  update: (configuration) => {
+                    presetRenders(configuration);
+                    connection.update(configuration);
+                  }
+                };
+              }}
+            >
+              <BoardView
+                board={board}
+                sheet={sheet}
+                kits={kits}
+                session={{
+                  size: () => ({ width: 1200, height: 900 }),
+                  library: fixture.library,
+                  brush: fixture.tools.brush
+                }}
+                editing={editing()}
+                openPanel={undefined}
+                onOpenPanel={() => {}}
+                onPopup={() => {}}
+              />
+            </PreviewAttachment>
+          </LegoServicesContext>
+        ),
+        document.body
+      )
+    );
+    await drain();
+    intersectAll();
+    await drain();
+    expect(document.querySelectorAll('[data-part]')).toHaveLength(parts.length);
+    expect(document.querySelector('[aria-label^="Broken part:"]')).toBeNull();
+    expect(presetRenders).toHaveBeenCalledTimes(64);
+    expect(pickerPaints.mock.calls.length).toBeGreaterThanOrEqual(4);
+
+    const canvas = document.body.appendChild(document.createElement('canvas'));
+    const input = session.canvasInput();
+    const send = vi.fn(input.send);
+    const drawn = vi.fn(input.drawn);
+    disposers.push(
+      attachInput(canvas, {
+        ...input,
+        camera: defaultCamera,
+        size: () => ({ width: 1200, height: 900 }),
+        brush: fixture.tools.brush,
+        ready: () => true,
+        navigate: () => {},
+        showPenCursor: () => true,
+        drawn,
+        send
+      })
+    );
+    let time = 1;
+    const pointer = (type: string, x: number) => {
+      const event = new PointerEvent(type, {
+        bubbles: true,
+        pointerId: 7,
+        pointerType: 'pen',
+        button: 0,
+        buttons: 1,
+        pressure: 0.5,
+        clientX: x,
+        clientY: 450
+      });
+      Object.defineProperty(event, 'timeStamp', { value: time++ });
+      canvas.dispatchEvent(event);
+      flush();
+    };
+    pointer('pointerdown', 600);
+    await drain();
+    send.mockClear();
+    const pen = await measure(() => {
+      for (let i = 0; i < 100; i++) {
+        pointer('pointermove', 601 + i);
+      }
+    });
+    expect(send.mock.calls.filter(([command]) => command.type === 'samples')).toHaveLength(100);
+    expect(session.cursor()).toEqual({ x: 700, y: 450 });
+    expect(drawn).toHaveBeenCalledTimes(101);
+    expectPenBudget(pen);
+
+    // A deliberately bad part captures the same session cursor reachable by an app binding.
+    // The identical budget must reject that per-move dependency.
+    const badDefinition = partDefinitions.find((definition) => definition.kind === 'color:swatch')!;
+    const healthyRender = vi.mocked(badDefinition.render).getMockImplementation()!;
+    vi.mocked(badDefinition.render).mockImplementation((...args) => {
+      const view = healthyRender(...args);
+      return (
+        <>
+          {view}
+          <BadCursorPart />
+        </>
+      );
+    });
+    function BadCursorPart() {
+      partOwners.add(getOwner()!);
+      colorOwners.add(getOwner()!);
+      return <span>{session.cursor()?.x}</span>;
+    }
+    const stopBadPart = render(
       () => (
         <LegoServicesContext value={services}>
-          <PreviewAttachment
-            value={(canvas) => {
-              const connection = attachCataloguePreview(canvas);
-              return {
-                ...connection,
-                update: (configuration) => {
-                  presetRenders(configuration);
-                  connection.update(configuration);
-                }
-              };
-            }}
-          >
-            <BoardView
-              board={board}
-              sheet={sheet}
-              kits={kits}
-              session={{
-                size: () => ({ width: 1200, height: 900 }),
-                library: fixture.library,
-                brush: fixture.tools.brush
-              }}
-              editing={editing()}
-              openPanel={undefined}
-              onOpenPanel={() => {}}
-              onPopup={() => {}}
-            />
-          </PreviewAttachment>
+          <PartFrame kind="color:swatch" span={{ columns: 2, rows: 2 }} mode="live" immediate />
         </LegoServicesContext>
       ),
-      document.body
-    )
-  );
-  await drain();
-  intersectAll();
-  await drain();
-  expect(document.querySelectorAll('[data-part]')).toHaveLength(parts.length);
-  expect(document.querySelector('[aria-label^="Broken part:"]')).toBeNull();
-  expect(presetRenders).toHaveBeenCalledTimes(64);
-  expect(pickerPaints.mock.calls.length).toBeGreaterThanOrEqual(4);
-
-  const canvas = document.body.appendChild(document.createElement('canvas'));
-  const input = session.canvasInput();
-  const send = vi.fn(input.send);
-  const drawn = vi.fn(input.drawn);
-  disposers.push(
-    attachInput(canvas, {
-      ...input,
-      camera: defaultCamera,
-      size: () => ({ width: 1200, height: 900 }),
-      brush: fixture.tools.brush,
-      ready: () => true,
-      navigate: () => {},
-      showPenCursor: () => true,
-      drawn,
-      send
-    })
-  );
-  let time = 1;
-  const pointer = (type: string, x: number) => {
-    const event = new PointerEvent(type, {
-      bubbles: true,
-      pointerId: 7,
-      pointerType: 'pen',
-      button: 0,
-      buttons: 1,
-      pressure: 0.5,
-      clientX: x,
-      clientY: 450
-    });
-    Object.defineProperty(event, 'timeStamp', { value: time++ });
-    canvas.dispatchEvent(event);
-    flush();
-  };
-  pointer('pointerdown', 600);
-  await drain();
-  send.mockClear();
-  const pen = await measure(() => {
-    for (let i = 0; i < 100; i++) {
-      pointer('pointermove', 601 + i);
-    }
-  });
-  expect(send.mock.calls.filter(([command]) => command.type === 'samples')).toHaveLength(100);
-  expect(session.cursor()).toEqual({ x: 700, y: 450 });
-  expect(drawn).toHaveBeenCalledTimes(101);
-  expectPenBudget(pen);
-
-  // A deliberately bad part captures the same session cursor reachable by an app binding.
-  // The identical budget must reject that per-move dependency.
-  const badDefinition = partDefinitions.find((definition) => definition.kind === 'color:swatch')!;
-  const healthyRender = vi.mocked(badDefinition.render).getMockImplementation()!;
-  vi.mocked(badDefinition.render).mockImplementation((...args) => {
-    const view = healthyRender(...args);
-    return (
-      <>
-        {view}
-        <BadCursorPart />
-      </>
+      document.body.appendChild(document.createElement('div'))
     );
-  });
-  function BadCursorPart() {
-    partOwners.add(getOwner()!);
-    colorOwners.add(getOwner()!);
-    return <span>{session.cursor()?.x}</span>;
+    await drain();
+    const negative = await measure(() => {
+      for (let i = 0; i < 100; i++) {
+        pointer('pointermove', 701 + i);
+      }
+    });
+    expect(negative.reruns).toBeGreaterThanOrEqual(100);
+    expect(negative.colorReruns).toBeGreaterThanOrEqual(100);
+    expect(negative.domWrites).toBeGreaterThanOrEqual(100);
+    expect(() => expectPenBudget(negative)).toThrow();
+    stopBadPart();
+    vi.mocked(badDefinition.render).mockImplementation(healthyRender);
+    pointer('pointerup', 701);
+    await drain();
+
+    const size = await measure(() => {
+      fixture.tools.updateBrush({ size: 64 });
+    });
+    expect(size.colorReruns).toBe(0);
+    expect(size.presetRenders).toBe(0);
+    expect(size.pickerPaints).toBe(0);
+    const layers = await measure(() => {
+      setLayerState((state) => ({ ...state, layers: state.layers.map((layer) => ({ ...layer, name: 'Renamed' })) }));
+    });
+    expect(layers.colorReruns).toBe(0);
+    expect(layers.pickerPaints).toBe(0);
+    expect(layers.presetRenders).toBe(0);
+    const color = await measure(() => {
+      services.color.set('#c4463a');
+    });
+    console.log('LEGO budgets', { pen, size, layers, color });
+    // RC.13 ceilings include facade work; reruns now count only descendants of mounted part bindings.
+    // Ceilings leave 20% room; positive controls prove the counters see real updates.
+    expect(size.reruns).toBeGreaterThan(0);
+    expect(size.domWrites).toBeGreaterThan(0);
+    expect(color.colorReruns).toBeGreaterThan(0);
+    expect(color.reruns).toBeLessThanOrEqual(167);
+    expect(color.domWrites).toBeLessThanOrEqual(316);
+
+    setEditing(true);
+    await drain();
+    const tray = document.querySelector('[aria-label="Box of parts"]')!;
+    expect(tray.hasAttribute('data-closed')).toBe(true);
+    expect(tray.querySelectorAll('[data-mode="preview"]')).toHaveLength(0);
+    sheet.to('middle');
+    await drain();
+    intersectAll();
+    await drain();
+    expect(tray.querySelectorAll('[data-mode="preview"]').length).toBeGreaterThan(0);
+    sheet.to('closed');
+    await drain();
+    expect(tray.querySelectorAll('[data-mode="preview"]')).toHaveLength(0);
+    expect(fixture.error()).toBeUndefined();
   }
-  const stopBadPart = render(
-    () => (
-      <LegoServicesContext value={services}>
-        <PartFrame kind="color:swatch" span={{ columns: 2, rows: 2 }} mode="live" immediate />
-      </LegoServicesContext>
-    ),
-    document.body.appendChild(document.createElement('div'))
-  );
-  await drain();
-  const negative = await measure(() => {
-    for (let i = 0; i < 100; i++) {
-      pointer('pointermove', 701 + i);
-    }
-  });
-  expect(negative.reruns).toBeGreaterThanOrEqual(100);
-  expect(negative.colorReruns).toBeGreaterThanOrEqual(100);
-  expect(negative.domWrites).toBeGreaterThanOrEqual(100);
-  expect(() => expectPenBudget(negative)).toThrow();
-  stopBadPart();
-  vi.mocked(badDefinition.render).mockImplementation(healthyRender);
-  pointer('pointerup', 701);
-  await drain();
-
-  const size = await measure(() => {
-    fixture.tools.updateBrush({ size: 64 });
-  });
-  expect(size.colorReruns).toBe(0);
-  expect(size.presetRenders).toBe(0);
-  expect(size.pickerPaints).toBe(0);
-  const layers = await measure(() => {
-    setLayerState((state) => ({ ...state, layers: state.layers.map((layer) => ({ ...layer, name: 'Renamed' })) }));
-  });
-  expect(layers.colorReruns).toBe(0);
-  expect(layers.pickerPaints).toBe(0);
-  expect(layers.presetRenders).toBe(0);
-  const color = await measure(() => {
-    services.color.set('#c4463a');
-  });
-  console.log('LEGO budgets', { pen, size, layers, color });
-  // RC.13 ceilings include facade work; reruns now count only descendants of mounted part bindings.
-  // Ceilings leave 20% room; positive controls prove the counters see real updates.
-  expect(size.reruns).toBeGreaterThan(0);
-  expect(size.domWrites).toBeGreaterThan(0);
-  expect(color.colorReruns).toBeGreaterThan(0);
-  expect(color.reruns).toBeLessThanOrEqual(167);
-  expect(color.domWrites).toBeLessThanOrEqual(316);
-
-  setEditing(true);
-  await drain();
-  const tray = document.querySelector('[aria-label="Box of parts"]')!;
-  expect(tray.hasAttribute('data-closed')).toBe(true);
-  expect(tray.querySelectorAll('[data-mode="preview"]')).toHaveLength(0);
-  sheet.to('middle');
-  await drain();
-  intersectAll();
-  await drain();
-  expect(tray.querySelectorAll('[data-mode="preview"]').length).toBeGreaterThan(0);
-  sheet.to('closed');
-  await drain();
-  expect(tray.querySelectorAll('[data-mode="preview"]')).toHaveLength(0);
-  expect(fixture.error()).toBeUndefined();
-});
+);
 
 async function measure(action: () => void) {
   const records: MutationRecord[] = [];

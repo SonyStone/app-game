@@ -1,11 +1,12 @@
-/* global localStorage, document, getComputedStyle, console */
+/* global localStorage, document, window, console */
 import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 
-/** Checks migration recovery, action-label parity, edge collapse and mixed-kit placement in Chrome at 2× scale. */
-export async function verifyWindowFixes(page, url, output) {
+/** Checks migration recovery, v4 floating conversion, grip input and mixed-kit placement in Chrome at 2× scale. */
+export async function verifyWindowFixes(page, context, url, output) {
   await page.goto(`${url}/variants.html#lego`);
   await page.getByRole('button', { name: 'Edit', exact: true }).waitFor();
+  await verifyFloatingGrip(page, context, output);
   const part = (id, kind, column = 0, row = 0) => ({
     id,
     kind,
@@ -28,20 +29,8 @@ export async function verifyWindowFixes(page, url, output) {
   const undoRect = await page.locator('[data-part="undo"]').boundingBox();
   const redoRect = await redo.boundingBox();
   assert.equal(Math.round(redoRect.x - undoRect.x), 96, 'migration closes the two-cell opener gap');
-  const tile = page.getByRole('button', { name: 'Expand Layers', exact: true });
-  await tile.waitFor();
+  await page.locator('[data-floating-grip]').waitFor();
   await page.screenshot({ path: `${output}/v2-toolbar-no-hole.png` });
-  const labels = await page
-    .locator('[data-window-tile] span, [data-part="file"] button span, [data-part="undo"] button span')
-    .evaluateAll((labels) =>
-      labels.map((label) => {
-        const style = getComputedStyle(label);
-        return { size: style.fontSize, weight: style.fontWeight, spacing: style.letterSpacing };
-      })
-    );
-  assert.equal(labels.length, 3);
-  assert.deepEqual(labels, [labels[0], labels[0], labels[0]], 'collapsed window labels match 2×1 action labels');
-  await page.screenshot({ path: `${output}/collapsed-label-comparison.png` });
 
   const custom = [
     part('custom-undo', 'action:undo'),
@@ -51,7 +40,8 @@ export async function verifyWindowFixes(page, url, output) {
     toolbar,
     { id: 'custom-folder', owner: 'opener', at: { x: 0, y: 0 }, parts: custom, futureFolder: 17 }
   ]);
-  await page.getByRole('button', { name: 'Expand Layers', exact: true }).click();
+  await page.locator('[data-panel="custom-folder"] [data-floating-grip]').waitFor();
+  await dragGrip(page, page.locator('[data-panel="custom-folder"]'), 20, 0);
   const recovered = page.locator('[data-panel="custom-folder"]');
   await expect(recovered.locator('[data-part]')).toHaveCount(2);
   const stored = await savedPanel(page, 'custom-folder');
@@ -70,33 +60,15 @@ export async function verifyWindowFixes(page, url, output) {
     }
   ]);
   const edge = page.locator('[data-panel="edge"]');
+  await expect(edge.locator('[data-part]')).toHaveCount(layerParts.length);
   const before = await edge.boundingBox();
-  const at = (await savedPanel(page, 'edge')).at;
-  await page.screenshot({ path: `${output}/edge-before.png` });
-  await edge.getByRole('button', { name: 'Expand Edge', exact: true }).click();
-  const expanded = await edge.boundingBox();
-  assert.ok(expanded.x < before.x && expanded.y < before.y, 'edge expansion clamps into view');
-  assert.deepEqual((await savedPanel(page, 'edge')).at, at, 'clamping does not change storage');
-  await page.screenshot({ path: `${output}/edge-expanded.png` });
-  await edge.getByRole('button', { name: 'Collapse Edge', exact: true }).click();
-  assert.deepEqual((await savedPanel(page, 'edge')).at, at);
-  const collapsed = await edge.boundingBox();
-  assert.equal(Math.round(collapsed.x), Math.round(before.x));
-  assert.equal(Math.round(collapsed.y), Math.round(before.y));
-  await page.screenshot({ path: `${output}/edge-collapsed.png` });
-  await edge.getByRole('button', { name: 'Expand Edge', exact: true }).click();
-  const handle = await edge.locator('[data-window-handle]').boundingBox();
-  await page.mouse.move(handle.x + 8, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(handle.x - 112, handle.y + handle.height / 2 - 80, { steps: 12 });
-  await page.mouse.up();
-  const moved = await edge.boundingBox();
-  assert.ok(moved.x < expanded.x - 100);
-  await edge.getByRole('button', { name: 'Collapse Edge', exact: true }).click();
-  const movedTile = await edge.boundingBox();
-  assert.equal(Math.round(movedTile.x), Math.round(moved.x));
-  assert.equal(Math.round(movedTile.y), Math.round(moved.y));
-  await page.screenshot({ path: `${output}/edge-dragged-collapse.png` });
+  assert.ok(before.x + before.width <= page.viewportSize().width);
+  assert.ok(before.y + before.height <= page.viewportSize().height);
+  await dragGrip(page, edge, -50, -20);
+  const migrated = await savedPanel(page, 'edge');
+  assert.equal(migrated.floating, true);
+  assert.equal(migrated.window, undefined);
+  await page.screenshot({ path: `${output}/v4-edge-floating.png` });
 
   const kits = [
     {
@@ -132,14 +104,14 @@ export async function verifyWindowFixes(page, url, output) {
     await page.mouse.up();
     await expect(box).toHaveAttribute('data-closed', '');
     await page.getByRole('button', { name: 'Done', exact: true }).click();
-    const window = page.getByRole('toolbar', { name: 'Kit Layers window', exact: true }).locator('..');
-    await window.waitFor();
+    const floating = page.locator('[data-floating]');
+    await floating.waitFor();
     const placed = page.locator('[data-part-kind="action:undo"]').locator('..').locator('..');
     await expect(placed).toHaveCount(1);
     await placed.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
     await page.screenshot({ path: `${output}/mixed-kit-${join ? 'panel' : 'bare'}.png` });
     const blockRect = await placed.boundingBox();
-    const windowRect = await window.boundingBox();
+    const windowRect = await floating.boundingBox();
     const overlap =
       Math.min(blockRect.x + blockRect.width, windowRect.x + windowRect.width) - Math.max(blockRect.x, windowRect.x);
     const overlapY =
@@ -160,7 +132,7 @@ export async function verifyWindowFixes(page, url, output) {
     const host = data.panels.find((panel) => panel.parts.some((part) => part.kind === 'action:undo'));
     assert.equal(host.id === 'target', join, 'kit joins the intended panel only on the panel drop');
   }
-  console.log('PASS window fix regressions: recovery, gap compaction, labels, edge collapse, mixed kits');
+  console.log('PASS floating migration regressions: recovery, gap compaction, v4 expanded contents, mixed kits');
 }
 
 /** Installs a legacy/current fixture and waits for a fresh live board. */
@@ -184,4 +156,134 @@ async function savedPanel(page, id) {
     (id) => JSON.parse(localStorage.getItem('paint.lego')).board.panels.find((panel) => panel.id === id),
     id
   );
+}
+
+/** Migrated v4 plates have no chrome, consume pen/touch input, and keep their top-left through reload. */
+async function verifyFloatingGrip(page, context, output) {
+  const parts = await page.evaluate(async () => (await import('/src/variants/lego/layersKit.ts')).layersKit.parts);
+  const toolbar = {
+    id: 'pinned-toolbar',
+    at: { x: 0.07, y: 0.12 },
+    parts: [{ id: 'mixing', kind: 'action:mixing', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 1 } }]
+  };
+  const panels = [
+    toolbar,
+    ...[true, undefined].map((collapsed, index) => ({
+      id: `migrated-${index}`,
+      at: { x: 0.25 + index * 0.35, y: 0.12 },
+      parts: parts.map((part) => ({ ...part, id: `${index}-${part.id}` })),
+      window: { name: index ? 'Expanded' : 'Collapsed', icon: 'layers', collapsed }
+    }))
+  ];
+  await seed(page, 4, panels);
+  const panel = page.locator('[data-panel="migrated-0"]');
+  const grip = panel.locator('[data-floating-grip]');
+  await expect(grip).toBeVisible();
+  for (const [index, fixture] of panels.slice(1).entries()) {
+    const migrated = page.locator(`[data-panel="migrated-${index}"]`);
+    await expect(migrated.locator('[data-part]')).toHaveCount(parts.length);
+    const rect = await migrated.boundingBox();
+    assert.equal(Math.round(rect.x), Math.round(fixture.at.x * 1440));
+    assert.equal(Math.round(rect.y), Math.round(fixture.at.y * 1000));
+    await expect(
+      migrated.locator('input[aria-label="Window name"], [data-window-tile], [data-window-collapse]')
+    ).toHaveCount(0);
+  }
+  await expect(page.locator('[data-panel="pinned-toolbar"] [data-floating-grip]')).toHaveCount(0);
+  await page.waitForFunction(() => window.paintState?.document.layers.length);
+  await page.screenshot({ path: `${output}/floating-next-to-pinned-live.png` });
+  const strip = await grip.boundingBox();
+  assert.equal(strip.height, 14);
+  await page.screenshot({
+    path: `${output}/floating-strip-2x.png`,
+    clip: { x: strip.x - 8, y: strip.y - 12, width: strip.width + 16, height: 68 }
+  });
+  const cdp = await context.newCDPSession(page);
+  const penDrag = async (dx, dy, outside = false) => {
+    const before = await panel.boundingBox();
+    const rect = await grip.boundingBox();
+    const x = rect.x + 30;
+    const y = rect.y + (outside ? -5 : 7);
+    await page.evaluate(() => {
+      window.paintCommands = [];
+    });
+    for (let i = 0; i <= 10; i++) {
+      await cdp.send('Input.dispatchMouseEvent', {
+        type: i === 0 ? 'mousePressed' : 'mouseMoved',
+        x: x + (dx * i) / 10,
+        y: y + (dy * i) / 10,
+        button: 'left',
+        buttons: 1,
+        clickCount: 1,
+        pointerType: 'pen',
+        force: 0.6
+      });
+    }
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: x + dx,
+      y: y + dy,
+      button: 'left',
+      buttons: 0,
+      pointerType: 'pen'
+    });
+    await expect.poll(() => panel.boundingBox().then((rect) => Math.round(rect.x))).toBe(Math.round(before.x + dx));
+    await expect.poll(() => panel.boundingBox().then((rect) => Math.round(rect.y))).toBe(Math.round(before.y + dy));
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.paintCommands.filter((c) => c.type === 'begin' || c.type === 'end' || c.type === 'replace-stroke')
+            .length
+      ),
+      0,
+      'grip never sends stroke commands'
+    );
+  };
+  await penDrag(70, 35, true);
+  const beforeTouch = await panel.boundingBox();
+  const touchGrip = await grip.boundingBox();
+  const x = touchGrip.x + 80;
+  const y = touchGrip.y + 7;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  for (let step = 1; step <= 10; step++) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: x + step * 4, y: y + step * 2 }]
+    });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect.poll(() => panel.boundingBox().then((rect) => Math.round(rect.x))).toBe(Math.round(beforeTouch.x + 40));
+  assert.equal(
+    await page.evaluate(
+      () => window.paintCommands.filter((c) => ['begin', 'end', 'replace-stroke'].includes(c.type)).length
+    ),
+    0,
+    'touch grip sends no stroke'
+  );
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page
+    .locator('div[data-editing]')
+    .evaluate((element) => Promise.allSettled(element.getAnimations().map((a) => a.finished)));
+  await page.screenshot({ path: `${output}/floating-next-to-pinned-edit.png` });
+  await penDrag(40, 20);
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  const stored = await savedPanel(page, 'migrated-0');
+  assert.equal(stored.floating, true);
+  assert.equal(stored.window, undefined);
+  const originalExpanded = await savedPanel(page, 'migrated-1');
+  assert.deepEqual(originalExpanded.at, panels[2].at);
+  await page.reload();
+  await expect(grip).toBeVisible();
+  assert.deepEqual((await savedPanel(page, 'migrated-0')).at, stored.at);
+  await cdp.detach();
+  console.log('PASS v4 collapsed/expanded migration, pen/touch Live grip, pen Edit grip, no stroke, persistence');
+}
+
+/** Moves a plate through the same visible grip used by pen and touch. */
+async function dragGrip(page, panel, dx, dy) {
+  const rect = await panel.locator('[data-floating-grip]').boundingBox();
+  await page.mouse.move(rect.x + 30, rect.y + 7);
+  await page.mouse.down();
+  await page.mouse.move(rect.x + 30 + dx, rect.y + 7 + dy, { steps: 10 });
+  await page.mouse.up();
 }
