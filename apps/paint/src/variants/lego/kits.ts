@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { newId, partsBounds, type Board, type Panel, type Part } from './board';
-import { createPartStorage, migratePart, storedPart } from './partStorage';
+import { createPartStorage, migratePart, opaqueData, storedPart } from './partStorage';
 import { swatchPanelParts } from './swatchPanelParts';
 
 /**
@@ -22,9 +22,9 @@ export type Kit = {
   owned: { owner: string; parts: Part[]; offset?: { column: number; row: number } }[];
 };
 
-/** The kits on this device: the ready ones first, then the user's, kept in `localStorage`. */
-export function createKits() {
-  const storage = createPartStorage('paint.lego.kits', 'kits', [], read);
+/** The kits on this device, ready ones first. `onSavingError` reports refused or failed local saves. */
+export function createKits(onSavingError?: (message: string) => void) {
+  const storage = createPartStorage('paint.lego.kits', 'kits', [], read, onSavingError);
   const [saved, setSaved, latest] = createImmediateSignal<Kit[]>(storage.initial);
   const store = (next: Kit[]) => {
     setSaved(next);
@@ -32,6 +32,8 @@ export function createKits() {
   };
 
   return {
+    /** Local save availability and the result of the last save attempt. */
+    saving: storage.saving,
     /** Every kit, the ready ones first. */
     kits: () => [...readyKits, ...saved()],
     /** The kit, ready or the user's, of just these `parts` laid out the same way, if there is one; see `sameLayout`. */
@@ -185,33 +187,50 @@ const readyKits: Kit[] = [
   }
 ];
 
-const kitsSchema = z.array(
-  z.object({
-    id: z.string(),
-    name: z.string(),
-    parts: z.array(storedPart),
-    owned: z.array(
-      z.object({
-        owner: z.string(),
-        parts: z.array(storedPart),
-        offset: z.object({ column: z.number().int(), row: z.number().int() }).optional()
-      })
-    )
-  })
-);
+const kitSchema = z.looseObject({
+  id: z.string(),
+  name: z.string(),
+  parts: z.array(storedPart),
+  owned: z.array(
+    z.looseObject({
+      owner: z.string(),
+      parts: z.array(storedPart),
+      offset: z.looseObject({ column: z.number().int(), row: z.number().int() }).optional()
+    })
+  )
+});
 
 /** Migrates every kit and its owned panels with the same part migrations as the board. */
 function read(data: unknown, version: number): Kit[] {
-  return kitsSchema.parse(data).map((kit) => {
-    const added: Kit['owned'] = [];
-    const migrate = (parts: Part[]) =>
-      parts.map((part) => {
-        const result = migratePart(part, version);
-        added.push(...result.owned);
-        return result.part;
-      });
-    const parts = migrate(kit.parts);
-    const owned = kit.owned.map((entry) => ({ ...entry, parts: migrate(entry.parts) }));
-    return { ...kit, parts, owned: [...owned, ...added] };
-  });
+  return z
+    .array(z.unknown())
+    .parse(data)
+    .map((record) => {
+      const parsed = kitSchema.safeParse(record);
+
+      if (!parsed.success) {
+        const fields = record !== null && typeof record === 'object' ? record : {};
+
+        return {
+          id: 'id' in fields && typeof fields.id === 'string' ? fields.id : newId('missing-kit'),
+          name: 'name' in fields && typeof fields.name === 'string' ? fields.name : 'Missing kit',
+          parts: [],
+          owned: [],
+          [opaqueData]: record
+        };
+      }
+
+      const kit = parsed.data;
+      const added: Kit['owned'] = [];
+      const migrate = (parts: Part[]) =>
+        parts.map((part) => {
+          const result = migratePart(part, version);
+          added.push(...result.owned);
+          return result.part;
+        });
+      const parts = migrate(kit.parts);
+      const owned = kit.owned.map((entry) => ({ ...entry, parts: migrate(entry.parts) }));
+
+      return { ...kit, parts, owned: [...owned, ...added] };
+    });
 }

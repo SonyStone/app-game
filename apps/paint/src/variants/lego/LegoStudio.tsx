@@ -11,6 +11,7 @@ import {
   StageGuides,
   StageOverlays
 } from '../../features/session';
+import { engineError } from '../../shared/errors';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { BrushLibrary } from '../procreate/BrushLibrary';
 import popover from '../procreate/Popover.module.css';
@@ -51,8 +52,9 @@ export function LegoStudio(props: PaintVariantProps) {
   const [popupElement, setPopupElement] = createSignal<HTMLElement>();
   const popupSize = createElementSize(popupElement);
   const session = createPaintSession({ panel: () => popup()?.popup.kind });
-  const board = createBoard();
-  const kits = createKits();
+  const reportSavingError = (message: string) => session.setError(engineError('failed', message));
+  const board = createBoard(reportSavingError);
+  const kits = createKits(reportSavingError);
   /** The box of parts while editing; each edit starts with it closed. */
   const sheet = createSheet(() => session.size().height);
   /**

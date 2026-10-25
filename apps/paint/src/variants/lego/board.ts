@@ -48,7 +48,7 @@ export type Part = {
   /** Look ids by `spanKey` of the size they were chosen at. */
   looks?: Record<string, string>;
   /** Original persisted data, retained across moves and copies, including fields this version cannot read. */
-  [partData]?: { record: unknown; invalid: boolean };
+  [partData]?: { record: unknown; invalid: boolean; initial?: Pick<Part, 'id' | 'cell' | 'span'> };
 };
 
 /** Internal storage metadata uses a symbol so future JSON fields cannot be mistaken for it. */
@@ -190,6 +190,7 @@ export function frameAt(panel: Panel, origin: Point) {
  */
 export function pinPanels(board: Board, origins: ReadonlyMap<string, Point>, view: { width: number; height: number }) {
   return {
+    ...board,
     panels: board.panels.map((panel) => {
       const origin = origins.get(panel.id);
       return origin && panel.owner === undefined
@@ -263,6 +264,7 @@ export function spanAfter(from: Span, delta: Point): Span {
 /** `board` with `panel` replaced by `next`, or removed when `next` has no parts left. */
 export function replacePanel(board: Board, id: string, next: Panel): Board {
   return {
+    ...board,
     panels: board.panels.flatMap((panel) => (panel.id !== id ? [panel] : next.parts.length > 0 ? [next] : []))
   };
 }
@@ -273,7 +275,7 @@ export function putPanel(board: Board, next: Panel): Board {
     return replacePanel(board, next.id, next);
   }
 
-  return next.parts.length > 0 ? { panels: [...board.panels, next] } : board;
+  return next.parts.length > 0 ? { ...board, panels: [...board.panels, next] } : board;
 }
 
 /**
@@ -312,13 +314,14 @@ export function pruneOwned(board: Board): Board {
       return current;
     }
 
-    current = { panels: kept };
+    current = { ...current, panels: kept };
   }
 }
 
 /** `board` without part `id`; a panel left without parts goes too. */
 export function removePart(board: Board, id: string): Board {
   return {
+    ...board,
     panels: board.panels.flatMap((panel) => {
       const parts = panel.parts.filter((part) => part.id !== id);
       return parts.length === 0 ? [] : [parts.length === panel.parts.length ? panel : { ...panel, parts }];

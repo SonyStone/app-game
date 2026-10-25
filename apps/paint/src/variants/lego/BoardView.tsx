@@ -1126,10 +1126,10 @@ export function BoardView(props: {
 
       copy = copyOf(block.parts);
       const at = besideBlock(block.origin, block.span, view());
-      next = { panels: [...board.panels, { id: newId('panel'), at, parts: copy.parts }] };
+      next = { ...board, panels: [...board.panels, { id: newId('panel'), at, parts: copy.parts }] };
     }
 
-    props.board.set({ panels: [...next.panels, ...copy.panels] });
+    props.board.set({ ...next, panels: [...next.panels, ...copy.panels] });
     setSelected(new Set(copy.parts.map((part) => part.id)));
   }
 
@@ -1171,7 +1171,7 @@ export function BoardView(props: {
           panels: []
         },
         grab: { x: at.x - origin.x - bounds.column * pitch, y: at.y - origin.y - bounds.row * pitch },
-        base: putPanel({ panels: board.panels.filter((other) => !other.bench) }, rest),
+        base: putPanel({ ...board, panels: board.panels.filter((other) => !other.bench) }, rest),
         pressed
       }
     );
@@ -1293,7 +1293,8 @@ export function BoardView(props: {
   function partDrop(drag: Extract<Drag, { type: 'part' }>, point: Point) {
     const size = view();
     const part = { id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks, [partData]: drag[partData] };
-    const withOwned = (board: Board) => (drag.block ? { panels: [...board.panels, ...drag.block.panels] } : board);
+    const withOwned = (board: Board) =>
+      drag.block ? { ...board, panels: [...board.panels, ...drag.block.panels] } : board;
     /** `drag` placed on `panel` with its top-left at `cell`. */
     const placeOn = (panel: Panel, cell: Cell) => {
       const placed = drag.block
@@ -1366,7 +1367,7 @@ export function BoardView(props: {
     const parts = drag.block ? drag.block.parts : [{ ...part, cell: { column: 0, row: 0 } }];
     return {
       where: 'board' as const,
-      board: withOwned({ panels: [...drag.base.panels, { id: drag.newPanel, at: placedAt, parts }] }),
+      board: withOwned({ ...drag.base, panels: [...drag.base.panels, { id: drag.newPanel, at: placedAt, parts }] }),
       key: 'new',
       pushes: false
     };

@@ -7,11 +7,11 @@ import { swatchPanelParts } from './swatchPanelParts';
 /**
  * The LEGO variant's board on this device, kept in `localStorage`; missing or hard-corrupt storage starts from
  * `defaultBoard` after backing up corrupt data. Malformed parts remain on the board. Storage failures keep the
- * board until the page closes.
+ * board until the page closes. `onSavingError` reports refused or failed saves.
  */
-export function createBoard() {
+export function createBoard(onSavingError?: (message: string) => void) {
   // Drags build on the last write, so several in one event compose.
-  const storage = createPartStorage('paint.lego', 'board', defaultBoard, read);
+  const storage = createPartStorage('paint.lego', 'board', defaultBoard, read, onSavingError);
   const [board, setBoard, latest] = createImmediateSignal<Board>(storage.initial);
   const set = (next: Board) => {
     setBoard(next);
@@ -20,6 +20,8 @@ export function createBoard() {
 
   return {
     board,
+    /** Local save availability and the result of the last save attempt. */
+    saving: storage.saving,
     /** The board as last set, also within the event that set it. */
     latest,
     /** Replaces the board and stores it. */
@@ -29,15 +31,15 @@ export function createBoard() {
   };
 }
 
-const point = z.object({ x: z.number(), y: z.number() });
-const boardSchema = z.object({
+const point = z.looseObject({ x: z.number(), y: z.number() });
+const boardSchema = z.looseObject({
   panels: z.array(
-    z.object({
+    z.looseObject({
       id: z.string(),
       at: point,
       parts: z.array(storedPart),
       owner: z.string().optional(),
-      offset: z.object({ column: z.number().int(), row: z.number().int() }).optional(),
+      offset: z.looseObject({ column: z.number().int(), row: z.number().int() }).optional(),
       bench: z.literal(true).optional()
     })
   )
@@ -55,6 +57,7 @@ function read(data: unknown, version: number): Board {
       return result.part;
     })
   }));
+
   return { ...board, panels: [...panels, ...added] };
 }
 
