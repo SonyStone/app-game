@@ -32,18 +32,27 @@ export type Pace = {
 };
 
 /**
- * The pace the game starts with: every share at 1, as the classes and bots say, the zoom of 1.6
- * that shows about 900 x 560 px of the map on a laptop, and a view leading the tank by 0.45 of the
- * cursor's offset.
+ * The pace the game starts with, chosen in 30 matches played from the player's seat on a laptop
+ * screen (`pace.harness.test.ts`) so a player sees an enemy for about a second or more before it
+ * first hits them, while the trip from the base to the point stays 5.5 s:
+ *
+ * - Before, with every share at 1, zoom 1.6 and the view centered on the tank, a tenth of the
+ *   enemies that hit the player did so within 0.38 s of coming onto the screen, 31% within a
+ *   second, and 8% of the hits came from enemies off the screen.
+ * - The view leading toward the aim alone made that 0.80 s, 15% and 2%.
+ * - Bots reacting in 0.4-0.8 s instead of 0.25-0.5 s, shells at 0.8 of their speed, hits taking
+ *   0.8 of the armor (a tank takes half again as many hits) and zoom 1.5 make it 1.08 s, 9% and
+ *   1%, the median 2.9 s; tanks are destroyed a quarter less often, the player 38% less. Bots
+ *   then take longer over a duel too: 11-14 s from 220 px instead of 5-10 s.
  */
 export const PACE_DEFAULTS: Pace = {
   speed: 1,
   tankSpeed: 1,
-  shellSpeed: 1,
-  damage: 1,
-  botReaction: 1,
+  shellSpeed: 0.8,
+  damage: 0.8,
+  botReaction: 1.6,
   botSight: 480,
-  zoom: 1.6,
+  zoom: 1.5,
   lead: 0.45
 };
 
