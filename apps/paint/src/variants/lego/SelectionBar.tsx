@@ -68,7 +68,7 @@ export function SelectionBar(props: {
       </button>
       <Show when={props.onHandle}>
         <button type="button" onClick={() => props.onHandle?.()} aria-pressed={props.handle ? 'true' : 'false'}>
-          <SketchIcon name="layers" size={18} />
+          <SketchIcon name={props.handle ? 'folder' : 'window'} size={18} />
           {props.handle ? 'Make folder' : 'Make window'}
         </button>
       </Show>

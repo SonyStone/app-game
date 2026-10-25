@@ -754,11 +754,21 @@
 .number {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px;
+  gap: 2px;
+  padding: 4px;
   --scrub-width: 100%;
   --scrub-height: 100%;
-  --scrub-fill: #d6e2ff;
+  --scrub-fill: transparent;
+  --scrub-track: transparent;
+  --scrub-focus: var(--lego-accent);
+  --line: transparent;
+  --ink: var(--lego-ink);
+  --muted: var(--lego-quiet);
+
+  input {
+    padding-inline: 0;
+    text-align: right;
+  }
 
   &[data-compact] {
     padding: 2px;
@@ -1443,6 +1453,15 @@
 
 .panel[data-window] {
   z-index: 2;
+  box-shadow: var(--lego-shadow);
+}
+
+.panel[data-handle-only] {
+  background-image: none;
+
+  [data-window-handle] {
+    border-radius: 10px;
+  }
 }
 
 .panel[data-collapsed] {

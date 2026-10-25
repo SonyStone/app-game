@@ -325,7 +325,7 @@ export function PartTile(props: {
             when={props.kind !== 'window'}
             fallback={
               <span class={styles.windowSample}>
-                <SketchIcon name="layers" />
+                <SketchIcon name="window" />
               </span>
             }
           >

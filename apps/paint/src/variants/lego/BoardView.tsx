@@ -25,6 +25,7 @@ import {
   replacePanel,
   resizePart,
   spanAfter,
+  windowHandleHeight,
   type Board,
   type Cell,
   type Panel,
@@ -508,19 +509,21 @@ export function BoardView(props: {
   function PanelView(entryProps: { entry: { panel: Panel; frame: ReturnType<typeof panelFrame> } }) {
     const panel = () => entryProps.entry.panel;
     const frame = () => entryProps.entry.frame;
+    const handleOnly = () => panel().window && !props.editing && panel().parts.length === 0;
     return (
       <div
         class={[styles.panel, panel().owner !== undefined && styles.owned]}
         data-panel={panel().id}
         data-window={panel().window ? '' : undefined}
         data-collapsed={panel().window?.collapsed ? '' : undefined}
+        data-handle-only={handleOnly() ? '' : undefined}
         data-owned={panel().owner !== undefined ? '' : undefined}
         data-keeps-panel
         style={{
           left: `${frame().rect.left}px`,
           top: `${frame().rect.top}px`,
           width: `${frame().rect.width}px`,
-          height: `${frame().rect.height}px`,
+          height: `${handleOnly() ? windowHandleHeight : frame().rect.height}px`,
           '--stud-x': `${frame().origin.x - frame().rect.left}px`,
           '--stud-y': `${frame().origin.y - frame().rect.top}px`,
           // The workbench shows studs only over its whole cells.
@@ -670,6 +673,27 @@ export function BoardView(props: {
     }
   }
 
+  /** Adds or removes the selected owned panel's handle, preserving its folder access when removed. */
+  function toggleWindowHandle() {
+    const panel = handlePanel();
+    if (!panel) {
+      return;
+    }
+
+    const window = panel.window
+      ? undefined
+      : {
+          name: panel.owner
+            ? kindLabel(findPart(shown(), panel.owner)?.part.kind ?? 'Window', props.session.library.presets())
+            : 'Window',
+          open: true as const
+        };
+    props.board.set(putPanel(props.board.latest(), { ...panel, window }));
+    if (!window) {
+      props.onOpenPanel(panel.owner);
+    }
+  }
+
   /** The selection's bar over its outline in a place of `area` size, the board's view or the workbench. */
   function Bar(barProps: { rect: Rect; area: { width: number; height: number } }) {
     return (
@@ -679,28 +703,7 @@ export function BoardView(props: {
         looks={!sizable()?.part[partData]?.invalid && partLooks(sizable()?.part.kind ?? '') !== undefined}
         kept={flashKit() !== undefined}
         handle={handlePanel()?.window !== undefined}
-        onHandle={
-          handlePanel()
-            ? () => {
-                const panel = handlePanel()!;
-                const window = panel.window
-                  ? undefined
-                  : {
-                      name: panel.owner
-                        ? kindLabel(
-                            findPart(shown(), panel.owner)?.part.kind ?? 'Window',
-                            props.session.library.presets()
-                          )
-                        : 'Window',
-                      open: true as const
-                    };
-                props.board.set(putPanel(props.board.latest(), { ...panel, window }));
-                if (!window) {
-                  props.onOpenPanel(panel.owner);
-                }
-              }
-            : undefined
-        }
+        onHandle={handlePanel() ? toggleWindowHandle : undefined}
         onPutAway={putAwaySelected}
         onDuplicate={duplicateSelected}
         onKeep={keepSelected}
