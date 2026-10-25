@@ -305,6 +305,78 @@ describe('lobbed grenades', () => {
   });
 });
 
+describe('the pace', () => {
+  const shell: ShellSpec = { speed: 900, range: 700, hole: 4.5, depth: 3, knockback: 700 };
+
+  it('slows shells down', () => {
+    const { combat, hits } = createBattle({ shell, pace: () => ({ shellSpeed: 0.5, damage: 1 }) });
+    const shooter = combat.spawnTank({ x: -300, y: 0, rotation: 0 }, { color: 0 });
+    combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0 });
+
+    combat.fire(shooter);
+    // At full speed the shell hits within 0.35 s.
+    run(combat, 0.45);
+
+    expect(hits).toHaveLength(0);
+    expect(combat.shells[0].speed).toBe(450);
+
+    run(combat, 0.3);
+
+    expect(hits).toHaveLength(1);
+  });
+
+  it('lobs a slowed grenade along the same way, to go off where it would at full speed', () => {
+    const grenade: ShellSpec = {
+      speed: 900,
+      range: 520,
+      hole: 3,
+      depth: 1,
+      knockback: 250,
+      ricochet: false,
+      lob: { fuse: 1.15, gravity: 1500, bounce: 0.45, rebound: 0.7, roll: 4, minReach: 70 }
+    };
+    const ends = [1, 0.6].map((share) => {
+      const { combat, shots } = createBattle({ pace: () => ({ shellSpeed: share, damage: 1 }) });
+      const shooter = combat.spawnTank({ x: -300, y: 0, rotation: 0 }, { color: 0 });
+      let time = 0;
+
+      combat.fire(shooter, { shell: grenade, reach: 380 });
+
+      while (combat.shells.length > 0) {
+        combat.step(1 / 60);
+        time += 1 / 60;
+      }
+
+      return { at: shots[0].at(-1)!, time };
+    });
+
+    // Within a twentieth of the throw: bounces too low to see end at a fixed climb speed, so a
+    // slowed grenade starts rolling a bounce later, and the 1/60 s steps alone move it more than that.
+    expect(Math.hypot(ends[1].at.x - ends[0].at.x, ends[1].at.y - ends[0].at.y)).toBeLessThan(380 / 20);
+    expect(ends[1].time).toBeCloseTo(ends[0].time / 0.6, 1);
+  });
+
+  it('takes less armor with every hit on a tank at a lower damage share', () => {
+    const left = [1, 0.5].map((share) => {
+      const { combat } = createBattle({ shell, pace: () => ({ shellSpeed: 1, damage: share }) });
+      const shooter = combat.spawnTank({ x: -200, y: 0, rotation: 0 }, { color: 0 });
+      // Facing the shooter, so the shots chip the thick front and never reach the core.
+      const target = combat.spawnTank({ x: 0, y: 0, rotation: Math.PI }, { color: 0 });
+
+      for (let shot = 0; shot < 6; shot++) {
+        shooter.turretAngle = (shot - 3) * 0.01;
+        combat.fire(shooter);
+        run(combat, 0.3);
+      }
+
+      return 1 - combat.armorLeft(target);
+    });
+
+    expect(left[1]).toBeLessThan(left[0] * 0.5);
+    expect(left[1]).toBeGreaterThan(0);
+  });
+});
+
 /** Steps the battle for `seconds`. */
 function run(combat: ReturnType<typeof createCombat>, seconds: number) {
   for (let time = 0; time < seconds - 1e-9; time += 1 / 60) {

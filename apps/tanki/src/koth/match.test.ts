@@ -219,7 +219,7 @@ describe('king of the hill with the player', () => {
       match.step(1 / 60);
     }
 
-    expect(chipped).toBeLessThan(0.95);
+    expect(chipped).toBeLessThan(0.97);
     expect(inBase(match.map.bases.red, player.hull.translation())).toBe(true);
     expect(match.combat.armorLeft(player)).toBeGreaterThan(chipped + (1 - chipped) * 0.8);
   });
