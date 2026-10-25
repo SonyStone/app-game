@@ -4,7 +4,6 @@ import { createEffect, createMemo, createSignal, Errored, Match, onCleanup, Show
 import type { PaintVariantProps } from '..';
 import { AbrViewerDialog } from '../../features/abr';
 import { maxBrushSize } from '../../features/brush';
-import { createRecentColors } from '../../features/color/createRecentColors';
 import {
   createPaintSession,
   PaintEditor,
@@ -49,7 +48,7 @@ export function ZenStudio(props: PaintVariantProps) {
   const { library, tools, brush, tool, engine, ready, camera, mixer, colorPicker, presets, images, fullscreen } =
     session;
   const settings = createZenSettings();
-  const recentColors = createRecentColors();
+  const { recentColors } = session;
   const [ui, setUi] = createSignal<HTMLElement>();
   const [abrOpen, setAbrOpen] = createSignal(false);
   const [abrMounted, setAbrMounted] = createSignal(false);

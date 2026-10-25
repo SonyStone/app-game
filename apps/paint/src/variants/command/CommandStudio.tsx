@@ -6,7 +6,6 @@ import { createEffect, createMemo, createSignal, Errored, onCleanup, Show } from
 import type { PaintVariantProps } from '..';
 import { AbrViewerDialog } from '../../features/abr';
 import type { PaintTool } from '../../features/brush';
-import { createRecentColors } from '../../features/color/createRecentColors';
 import {
   createCommandRunner,
   createPaletteContext,
@@ -63,7 +62,7 @@ export function CommandStudio(props: PaintVariantProps) {
   const [used, setUsed] = createStoredChoice(usedKey, ['no', 'yes'] as const);
   const [abrOpen, setAbrOpen] = createSignal(false);
   const [abrMounted, setAbrMounted] = createSignal(false);
-  const recentColors = createRecentColors();
+  const { recentColors } = session;
   const recents = createRecentCommands();
   const toast = createToast();
   let fileInput!: HTMLInputElement;

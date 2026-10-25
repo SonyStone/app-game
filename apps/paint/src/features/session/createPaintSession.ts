@@ -428,7 +428,9 @@ export function createPaintSession(
     localUndo,
     fullscreen,
     colorWheel,
+    /** Recent colors shared by every picker and mixing palette in this session. */
     recentColors,
+    /** Persisted Coolorus preferences shared by all picker instances. */
     coolorus,
     viewOptions,
     drawingFolder,

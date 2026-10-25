@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { type Brush, defaultBrush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
-import { createSignal, flush } from 'solid-js';
+import { createRoot, createSignal, flush } from 'solid-js';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { ColorPanel } from './ColorPanel';
+import { createRecentColors } from './createRecentColors';
 import { hexToHsv, hsvToHex, parseHex } from './hsv';
 
 let host: HTMLDivElement;
@@ -23,6 +24,38 @@ beforeEach(() => {
 afterEach(() => {
   dispose();
   host.remove();
+});
+
+it('uses an injected history for every panel without overwriting colors from another picker', () => {
+  dispose();
+  host.replaceChildren();
+  let disposeHistory!: () => void;
+  const recentColors = createRoot((dispose) => {
+    disposeHistory = dispose;
+    return createRecentColors();
+  });
+  const disposePanels = render(
+    () => (
+      <>
+        <ColorPanel brush={brush()} onChange={() => {}} recentColors={recentColors} />
+        <ColorPanel brush={brush()} onChange={() => {}} recentColors={recentColors} />
+      </>
+    ),
+    host
+  );
+  dispose = () => {
+    disposePanels();
+    disposeHistory();
+  };
+  recentColors.remember('#abcdef');
+  flush();
+  const hex = host.querySelector<HTMLInputElement>('input[aria-label="Hex color"]')!;
+  hex.value = '#123456';
+  hex.dispatchEvent(new Event('change', { bubbles: true }));
+  flush();
+  expect(recentColors.colors()).toEqual(['#123456', '#abcdef']);
+  expect(host.querySelectorAll('[aria-label="Set color #123456"]')).toHaveLength(2);
+  expect(host.querySelectorAll('[aria-label="Set color #abcdef"]')).toHaveLength(2);
 });
 
 it('converts between hex and HSV, keeping hue and saturation where the color does not determine them', () => {

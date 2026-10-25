@@ -15,10 +15,10 @@ import { FillPanel } from '../fill';
 import { FrameEditor, FramesSection } from '../frames';
 import { FreshTabControls } from '../fresh-tab';
 import { GradientPanel } from '../gradient';
-import { LocalUndoPanel } from '../local-undo';
 import { HueTriangle } from '../hue-triangle';
 import { HistorySourceControl, LayersPanel } from '../layers';
-import { LiveBadge, LiveControls, LiveViewer, liveRelayUrl, watchedRoom, watchLink } from '../live';
+import { LiveBadge, LiveControls, liveRelayUrl, LiveViewer, watchedRoom, watchLink } from '../live';
+import { LocalUndoPanel } from '../local-undo';
 import { PalmRejectionControls } from '../palm-rejection';
 import { PressureCalibrationButton } from '../pressure-calibration';
 import { QuickShapeSettings } from '../quickshape';
@@ -309,7 +309,7 @@ export function PaintStudio(props: {
             <SketchIcon
               name={
                 tool() === 'fill' || tool() === 'gradient'
-                  ? tool() as 'fill' | 'gradient'
+                  ? (tool() as 'fill' | 'gradient')
                   : tool() === 'local-undo'
                     ? 'localUndo'
                     : tool() === 'eraser'
@@ -480,6 +480,7 @@ export function PaintStudio(props: {
                 </Match>
                 <Match when={id === 'color'}>
                   <ColorPanel
+                    recentColors={session.recentColors}
                     brush={brush()}
                     onChange={tools.updateBrush}
                     alternatives={{
@@ -491,7 +492,11 @@ export function PaintStudio(props: {
                           id: 'triangle',
                           label: 'Triangle',
                           render: (control) => (
-                            <HueTriangle color={control.color} onChange={control.onChange} onSettle={control.onSettle} />
+                            <HueTriangle
+                              color={control.color}
+                              onChange={control.onChange}
+                              onSettle={control.onSettle}
+                            />
                           )
                         },
                         {
@@ -644,7 +649,8 @@ export function PaintStudio(props: {
             </StudioPanel>
           )}
         </Show>
-      </div>      <Show when={developerOpen()}>
+      </div>{' '}
+      <Show when={developerOpen()}>
         <DeveloperDialog
           settings={developer}
           ready={ready()}

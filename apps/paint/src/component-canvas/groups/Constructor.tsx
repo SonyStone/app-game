@@ -3,6 +3,7 @@ import { createSignal, For, Show, useContext } from 'solid-js';
 import type { PaintTool } from '../../features/brush';
 import { builtInPresets } from '../../features/brush-library';
 import type { ColorWheelSettings } from '../../features/color-wheel';
+import { defaultCoolorusSettings, type CoolorusSettings } from '../../features/coolorus-wheel';
 import { layoutId, parsePageLayout, type PageLayout } from '../../variants/layout';
 import { layoutParts, type PartContext } from '../../variants/layout/parts';
 import styles from '../ComponentCanvas.module.css';
@@ -94,8 +95,7 @@ export function Constructor() {
           <Show when={status()}>
             {(current) => (
               <span class={styles.constructorStatus}>
-                {current().text}{' '}
-                <Show when={current().href}>{(href) => <a href={href()}>{href()}</a>}</Show>
+                {current().text} <Show when={current().href}>{(href) => <a href={href()}>{href()}</a>}</Show>
               </span>
             )}
           </Show>
@@ -179,6 +179,7 @@ function moveWith(event: PointerEvent, move: (dx: number, dy: number) => void) {
  * tool and the picker settings, all the constructor's own. Must be created within a Solid owner.
  */
 function canvasPartContext(): PartContext {
+  const [coolorus, setCoolorus] = createSignal<CoolorusSettings>(defaultCoolorusSettings);
   const [brush, setBrush] = createSignal<Brush>({ ...defaultBrush(), color: '#c8553d' });
   const [recent, setRecent] = createSignal<readonly string[]>([]);
   const drawing = seededDocument(fourLayers);
@@ -228,6 +229,12 @@ function canvasPartContext(): PartContext {
     mirrored,
     toggleMirror: () => setMirrored((on) => !on),
     palette: { open: paletteOpen, toggle: () => setPaletteOpen((open) => !open) },
+    coolorus: {
+      settings: coolorus,
+      update: (patch) => {
+        setCoolorus((current) => ({ ...current, ...patch }));
+      }
+    },
     wheel: { settings: wheel, update: (patch) => setWheel((current) => ({ ...current, ...patch })) }
   };
 }

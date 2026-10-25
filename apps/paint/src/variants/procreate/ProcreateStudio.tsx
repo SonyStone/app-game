@@ -6,7 +6,6 @@ import { createEffect, createSignal, Errored, Match, Show, Switch } from 'solid-
 import type { PaintVariantProps } from '..';
 import { AbrViewerDialog } from '../../features/abr';
 import { maxBrushSize } from '../../features/brush';
-import { createRecentColors } from '../../features/color/createRecentColors';
 import {
   createPaintSession,
   PaintEditor,
@@ -16,6 +15,7 @@ import {
   StageOverlays
 } from '../../features/session';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
+import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 import { ActionsPopover } from './ActionsPopover';
 import { BrushLibrary } from './BrushLibrary';
 import { ColorsPopover, type ColorMode } from './ColorsPopover';
@@ -36,7 +36,6 @@ import {
   minBrushSize,
   minOpacity
 } from './sliderScale';
-import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 
 /**
  * The Procreate variant: a close copy of Procreate's iPad interface on Paint's engine, as the reference testers
@@ -77,7 +76,7 @@ export function ProcreateStudio(props: PaintVariantProps) {
     choosePreset,
     edit
   } = session;
-  const recentColors = createRecentColors();
+  const { recentColors } = session;
   const [colorMode, setColorMode] = createSignal<ColorMode>('disc');
   const [sidebar, setSidebar] = createInterfaceSide();
   /** The interface is hidden by a four-finger tap, leaving the canvas alone, as Procreate's full-screen mode does. */
@@ -430,7 +429,11 @@ export function ProcreateStudio(props: PaintVariantProps) {
                       mirrored={camera.camera().mirrored}
                       symmetry={symmetry.symmetry().mode}
                       sidebar={sidebar()}
-                      fullscreen={{ active: fullscreen.isActive(), supported: document.fullscreenEnabled, shown: fullscreen.shown }}
+                      fullscreen={{
+                        active: fullscreen.isActive(),
+                        supported: document.fullscreenEnabled,
+                        shown: fullscreen.shown
+                      }}
                       onInsertPhoto={(file) => {
                         setPopover(undefined);
                         images.place(file);

@@ -1,13 +1,16 @@
+import type { Accessor } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { parseHex } from './hsv';
 
 /**
  * Most recently applied colors, newest first, persisted in `localStorage` so they survive closing the panel and
- * reloading. Storage failures (private mode, quota) leave the list working for the current panel only.
+ * reloading. Storage failures (private mode, quota) leave the list working for its owning session.
  */
 export function createRecentColors() {
   // `remember` builds on the list it last wrote, so repeated calls in one event keep every color.
-  const [colors, setColors, latestColors] = createImmediateSignal(read());
+  const [storedColors, setColors, latestColors] = createImmediateSignal(read());
+
+  const colors: Accessor<readonly string[]> = storedColors;
 
   return {
     /** Up to {@link LIMIT} distinct lowercase `#rrggbb` colors. */

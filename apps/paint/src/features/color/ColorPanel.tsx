@@ -12,6 +12,8 @@ import { hexToHsv, type Hsv, hsvToHex, luminance, parseHex } from './hsv';
  * a drag ends, a slider loses focus, or a swatch or hex value is applied.
  */
 export function ColorPanel(props: {
+  /** The session's shared history. Omit only for a standalone picker with its own history; stable until unmount. */
+  recentColors?: ReturnType<typeof createRecentColors>;
   /** Settings captured by the next stroke; `color` and `backgroundColor` are edited. */
   brush: Brush;
   /** Receives `color` or `backgroundColor` patches; the caller merges them into the brush. */
@@ -40,7 +42,7 @@ export function ColorPanel(props: {
     previous && hsvToHex(previous) === hex() ? previous : hexToHsv(hex(), previous)
   );
   const opened = untrack(() => ({ color: hexOf('color'), backgroundColor: hexOf('backgroundColor') }));
-  const recent = createRecentColors();
+  const recent = untrack(() => props.recentColors ?? createRecentColors());
   const [drag, setDrag] = createSignal<{ part: 'plane' | 'hue'; touch: boolean }>();
   /** The color written by the edit in progress; `hex()` shows it only after the next flush. */
   let edited: string | undefined;

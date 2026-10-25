@@ -81,6 +81,7 @@ function sessionContext(session: PaintSession): PartContext {
     mirrored: () => session.camera.camera().mirrored,
     toggleMirror: session.camera.toggleMirror,
     palette: { open: () => session.windows.isOpen('palette'), toggle: () => session.windows.toggle('palette') },
+    coolorus: session.coolorus,
     wheel: session.colorWheel
   };
 }
