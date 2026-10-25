@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { newId, partsBounds, type Board, type Panel, type Part } from './board';
-import { createPartStorage, migratePart, opaqueData, storedPart } from './partStorage';
+import { layersKit } from './layersKit';
+import { createPartStorage, migrateParts, opaqueData, storedPart, storedWindow } from './partStorage';
 import { swatchPanelParts } from './swatchPanelParts';
 
 /**
@@ -21,7 +22,9 @@ export type Kit = {
    * The panels of swatches among the parts, by the owner's id in the kit, with where each lies from its swatch if
    * the user placed it; owners may lie in other owned panels.
    */
-  owned: { owner: string; parts: Part[]; offset?: { column: number; row: number } }[];
+  owned: (Pick<Panel, 'parts' | 'offset' | 'window'> & { at?: Panel['at'] } & { owner: string })[];
+  /** A kit saved from a window creates a named window again when placed on bare drawing. */
+  window?: Panel['window'];
 };
 
 /** The kits on this device, ready ones first. `onSavingError` reports refused or failed local saves. */
@@ -37,9 +40,11 @@ export function createKits(onSavingError?: (message: string) => void) {
     /** Every kit, the ready ones first. */
     kits: () => [...readyKits, ...saved()],
     /** The kit, ready or the user's, of just these `parts` laid out the same way, if there is one; see `sameLayout`. */
-    findSame(parts: readonly Part[]) {
+    findSame(parts: readonly Part[], window?: Panel['window']) {
       const layout = sameLayout(parts);
-      return [...readyKits, ...saved()].find((kit) => !(opaqueData in kit) && sameLayout(kit.parts) === layout);
+      return [...readyKits, ...saved()].find(
+        (kit) => !(opaqueData in kit) && sameLayout(kit.parts) === layout && kit.window?.name === window?.name
+      );
     },
     /** Whether kit `id` is the user's, which they may delete. */
     isSaved: (id: string) => saved().some((kit) => kit.id === id),
@@ -83,7 +88,18 @@ export function unpackKit(kit: Pick<Kit, 'parts' | 'owned'>) {
   const owned = kit.owned.map((entry) => ({ ...entry, parts: renew(entry.parts) }));
   const panels: Panel[] = owned.flatMap((entry) => {
     const owner = ids.get(entry.owner);
-    return owner ? [{ id: newId('panel'), at: { x: 0, y: 0 }, owner, parts: entry.parts, offset: entry.offset }] : [];
+    return owner
+      ? [
+          {
+            id: newId('panel'),
+            owner,
+            parts: entry.parts,
+            offset: entry.offset,
+            window: entry.window && { ...entry.window },
+            at: entry.at ?? { x: 0, y: 0 }
+          }
+        ]
+      : [];
   });
 
   return { parts, panels };
@@ -110,14 +126,20 @@ export function kitOf(board: Board, panel: Panel, name: string): Kit {
     for (const part of parts) {
       const own = board.panels.find((candidate) => candidate.owner === part.id);
       if (own && !owned.some((entry) => entry.owner === part.id)) {
-        owned.push({ owner: part.id, parts: own.parts, offset: own.offset });
+        owned.push({ owner: part.id, parts: own.parts, offset: own.offset, window: own.window, at: own.at });
         collect(own.parts);
       }
     }
   };
   collect(panel.parts);
 
-  return { id: newId('kit'), name, parts: fromOrigin(panel.parts), owned };
+  return {
+    id: newId('kit'),
+    name,
+    parts: fromOrigin(panel.parts),
+    owned,
+    window: panel.window && { ...panel.window, name }
+  };
 }
 
 /** `parts` moved so that their bounds start at cell (0, 0). */
@@ -144,6 +166,7 @@ const part = (id: string, kind: string, column: number, row: number, columns: nu
  * color panel (pair and hex, the triangle, H/S/V numbers, history), and the panel a new swatch opens.
  */
 const readyKits: Kit[] = [
+  layersKit,
   { id: 'ready:swatch-panel', name: 'Color panel', parts: swatchPanelParts, owned: [] },
   {
     id: 'ready:procreate-colors',
@@ -192,9 +215,12 @@ const kitSchema = z.looseObject({
   id: z.string(),
   name: z.string(),
   parts: z.array(storedPart),
+  window: storedWindow.optional(),
   owned: z.array(
     z.looseObject({
       owner: z.string(),
+      window: storedWindow.optional(),
+      at: z.looseObject({ x: z.number(), y: z.number() }).optional(),
       parts: z.array(storedPart),
       offset: z.looseObject({ column: z.number().int(), row: z.number().int() }).optional()
     })
@@ -223,12 +249,11 @@ function read(data: unknown, version: number): Kit[] {
 
       const kit = parsed.data;
       const added: Kit['owned'] = [];
-      const migrate = (parts: Part[]) =>
-        parts.map((part) => {
-          const result = migratePart(part, version);
-          added.push(...result.owned);
-          return result.part;
-        });
+      const migrate = (parts: Part[]) => {
+        const result = migrateParts(parts, version);
+        added.push(...result.owned);
+        return result.parts;
+      };
       const parts = migrate(kit.parts);
       const owned = kit.owned.map((entry) => ({ ...entry, parts: migrate(entry.parts) }));
 

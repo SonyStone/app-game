@@ -34,3 +34,35 @@ it('tells parts laid out the same way apart from others, whatever their ids or p
   expect(sameLayout(moved)).toBe(sameLayout(kit));
   expect(sameLayout(swapped)).not.toBe(sameLayout(kit));
 });
+
+it('keeps a saved window and nested owned windows with fresh owners on unpack', async () => {
+  const { kitOf } = await import('./kits');
+  const part = (id: string) => ({
+    id,
+    kind: 'action:layers',
+    cell: { column: 0, row: 0 },
+    span: { columns: 1, rows: 1 }
+  });
+  const panel = {
+    id: 'main',
+    at: { x: 0.2, y: 0.3 },
+    window: { name: 'My tools', collapsed: true as const },
+    parts: [part('owner')]
+  };
+  const owned = {
+    id: 'owned',
+    owner: 'owner',
+    at: { x: 0.7, y: 0.4 },
+    window: { name: 'Layers', open: true as const, placed: true as const },
+    parts: [part('child')]
+  };
+  const kit = kitOf({ panels: [panel, owned] }, panel, 'Saved tools');
+  expect(kit.window).toEqual({ name: 'Saved tools', collapsed: true });
+  expect(kit.owned[0]!.window).toEqual(owned.window);
+  const first = unpackKit(kit);
+  const second = unpackKit(kit);
+  expect(first.panels[0]!.window).toEqual(owned.window);
+  expect(first.panels[0]!.at).toEqual(owned.at);
+  expect(first.panels[0]!.owner).toBe(first.parts[0]!.id);
+  expect(second.panels[0]!.owner).not.toBe(first.panels[0]!.owner);
+});

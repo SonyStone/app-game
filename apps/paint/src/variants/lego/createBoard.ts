@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import type { Board } from './board';
-import { createPartStorage, migratePart, storedPart } from './partStorage';
+import { layersKit } from './layersKit';
+import { createPartStorage, migrateParts, storedPart, storedWindow } from './partStorage';
 import { swatchPanelParts } from './swatchPanelParts';
 
 /**
@@ -37,6 +38,7 @@ const boardSchema = z.looseObject({
       at: point,
       parts: z.array(storedPart),
       owner: z.string().optional(),
+      window: storedWindow.optional(),
       offset: z.looseObject({ column: z.number().int(), row: z.number().int() }).optional(),
       bench: z.literal(true).optional()
     })
@@ -47,14 +49,11 @@ const boardSchema = z.looseObject({
 function read(data: unknown, version: number): Board {
   const board = boardSchema.parse(data);
   const added: Board['panels'] = [];
-  const panels = board.panels.map((panel) => ({
-    ...panel,
-    parts: panel.parts.map((part) => {
-      const result = migratePart(part, version);
-      added.push(...result.owned.map((entry) => ({ ...entry, id: `${entry.owner}-panel`, at: { x: 0, y: 0 } })));
-      return result.part;
-    })
-  }));
+  const panels = board.panels.map((panel) => {
+    const result = migrateParts(panel.parts, version);
+    added.push(...result.owned.map((entry) => ({ ...entry, id: `${entry.owner}-panel`, at: { x: 0, y: 0 } })));
+    return { ...panel, parts: result.parts };
+  });
 
   return { ...board, panels: [...panels, ...added] };
 }
@@ -113,6 +112,13 @@ export const defaultBoard: Board = {
         { id: 'opacity', kind: 'value:opacity', cell: { column: 1, row: 0 }, span: { columns: 1, rows: 4 } }
       ]
     },
-    swatchPanel('color')
+    swatchPanel('color'),
+    {
+      id: 'layers-panel',
+      owner: 'layers',
+      at: { x: 0, y: 0 },
+      window: { name: layersKit.name },
+      parts: layersKit.parts.map((part) => ({ ...part, id: `layers-${part.id}` }))
+    }
   ]
 };

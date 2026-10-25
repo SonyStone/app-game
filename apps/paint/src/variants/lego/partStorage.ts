@@ -1,6 +1,7 @@
 import { onSettled } from 'solid-js';
 import { z } from 'zod';
-import { maxSpan, newId, partData, type Part } from './board';
+import { maxSpan, newId, partData, placeBlock, type Panel, type Part } from './board';
+import { layersKit } from './layersKit';
 import { swatchPanelParts } from './swatchPanelParts';
 
 /** Reads parts independently, retaining malformed records behind safe layout fields. */
@@ -121,23 +122,38 @@ export function createPartStorage<T>(
   };
 }
 
-/** Applies the shared part migrations, returning any panels the migrated part owns. */
-export function migratePart(part: Part, version: number) {
-  let current = part;
-  const owned: { owner: string; parts: Part[] }[] = [];
+/** Migrates complete panel layouts, so inline replacements use the same block push rules as an edit. */
+export function migrateParts(parts: Part[], version: number) {
+  let current = parts;
+  const owned: OwnedPanel[] = [];
+  for (const migration of migrations) {
+    if (version >= migration.version) {
+      continue;
+    }
 
-  if (!part[partData]?.invalid) {
-    for (const migration of migrations) {
-      if (version < migration.version) {
-        const result = migration.run(current);
-        current = result.part;
-        owned.push(...result.owned);
+    for (const candidate of [...current]) {
+      const part = current.find((part) => part.id === candidate.id)!;
+      if (part[partData]?.invalid) {
+        continue;
       }
+
+      const result = migration.run(part);
+      owned.push(...result.owned);
+      current = result.block
+        ? placeBlock(
+            current.filter((other) => other.id !== part.id),
+            result.block,
+            part.cell
+          )
+        : current.map((other) => (other.id === part.id ? result.part : other));
     }
   }
 
-  return { part: current, owned };
+  return { parts: current, owned };
 }
+
+/** Migration output shared by board panels and kit-owned panels. */
+type OwnedPanel = Pick<Panel, 'owner' | 'parts' | 'window' | 'offset'> & { owner: string };
 
 /** Backs up each distinct raw value once, without overwriting an earlier backup from the same millisecond. */
 function backup(key: string, raw: string) {
@@ -161,7 +177,15 @@ function backup(key: string, raw: string) {
   localStorage.setItem(name, raw);
 }
 
-const currentVersion = 2;
+const currentVersion = 3;
+
+/** Window state is additive; unknown fields survive reads and subsequent edits. */
+export const storedWindow = z.looseObject({
+  name: z.string(),
+  collapsed: z.literal(true).optional(),
+  open: z.literal(true).optional(),
+  placed: z.literal(true).optional()
+});
 
 const cellSchema = z.object({ column: z.number().int(), row: z.number().int() });
 const spanSchema = z.object({ columns: z.number().int().min(1), rows: z.number().int().min(1) });
@@ -216,11 +240,11 @@ function preserveRecord(_key: string, value: unknown): unknown {
   };
 }
 
-/** Version 2 split the old color tile into a picker or a swatch with its own default panel. */
-const migrations = [
+/** Ordered migrations apply equally to board plates, kit parts, and kit-owned plates. */
+const migrations: { version: number; run: (part: Part) => { part: Part; owned: OwnedPanel[]; block?: Part[] } }[] = [
   {
     version: 2,
-    run(part: Part): { part: Part; owned: { owner: string; parts: Part[] }[] } {
+    run(part: Part) {
       if (part.kind !== 'color') {
         return { part, owned: [] };
       }
@@ -239,6 +263,28 @@ const migrations = [
         owned: [
           { owner: part.id, parts: swatchPanelParts.map((child) => ({ ...child, id: `${part.id}-${child.id}` })) }
         ]
+      };
+    }
+  },
+  {
+    version: 3,
+    run(part: Part) {
+      if (part.kind !== 'action:layers') {
+        return { part, owned: [] };
+      }
+
+      const children = layersKit.parts.map((child) => ({ ...child, id: `${part.id}-${child.id}` }));
+      const look = part.looks?.[`${part.span.columns}x${part.span.rows}`];
+      const inline = look === 'panel' || (!look && part.span.columns >= 7 && part.span.rows >= 8);
+      if (inline) {
+        // The first replacement retains the old identity and unknown persisted fields.
+        children[0] = { ...part, ...children[0]!, id: part.id };
+        return { part, owned: [], block: children };
+      }
+
+      return {
+        part: { ...part, looks: undefined },
+        owned: [{ owner: part.id, parts: children, window: { name: layersKit.name } }]
       };
     }
   }

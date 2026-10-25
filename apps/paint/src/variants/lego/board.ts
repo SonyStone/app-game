@@ -24,6 +24,14 @@ export type Panel = {
    * and shows only while open, like an Android folder.
    */
   owner?: string;
+  /** A handle turns a plate into a persistent window. Owned windows start closed beside their owner. */
+  window?: {
+    name: string;
+    collapsed?: true;
+    open?: true;
+    /** Set after dragging the handle: `at` then stays independent of the owner. */
+    placed?: true;
+  };
   /**
    * Where an owned panel lies from its part: its cell (0, 0) this many cells from the part's top-left cell, which may
    * put it over the part. Without it the panel lies beside the part where there is room (see `ownedFrame`).
@@ -68,6 +76,8 @@ export const pitch = cellSize + cellGap;
 export const panelPadding = 6;
 /** The largest span of a part in either direction. */
 export const maxSpan = 10;
+/** Height of the window handle, outside the stud cells. */
+export const windowHandleHeight = 36;
 
 /**
  * A way a part can be pushed. Only right and down: a push then never moves a panel's parts toward the top or left,
@@ -154,16 +164,15 @@ export function partsBounds(parts: readonly Part[]) {
  * hides parts; its stored `at` is kept.
  */
 export function panelFrame(panel: Panel, view: { width: number; height: number }) {
-  const bounds = partsBounds(panel.parts);
-  const width = bounds.columns * pitch - cellGap + panelPadding * 2;
-  const height = bounds.rows * pitch - cellGap + panelPadding * 2;
+  const { rect } = frameAt(panel, { x: 0, y: 0 });
+  const { width, height } = rect;
   const wanted = {
-    x: panel.at.x * view.width + bounds.column * pitch - panelPadding,
-    y: panel.at.y * view.height + bounds.row * pitch - panelPadding
+    x: panel.at.x * view.width + rect.left,
+    y: panel.at.y * view.height + rect.top
   };
   const left = Math.max(0, Math.min(wanted.x, view.width - width));
   const top = Math.max(0, Math.min(wanted.y, view.height - height));
-  const origin = { x: left - bounds.column * pitch + panelPadding, y: top - bounds.row * pitch + panelPadding };
+  const origin = { x: left - rect.left, y: top - rect.top };
 
   return { origin, rect: { left, top, width, height } };
 }
@@ -174,11 +183,12 @@ export function panelFrame(panel: Panel, view: { width: number; height: number }
  */
 export function frameAt(panel: Panel, origin: Point) {
   const bounds = partsBounds(panel.parts);
+  const handle = panel.window ? windowHandleHeight : 0;
   const rect = {
     left: origin.x + bounds.column * pitch - panelPadding,
-    top: origin.y + bounds.row * pitch - panelPadding,
-    width: bounds.columns * pitch - cellGap + panelPadding * 2,
-    height: bounds.rows * pitch - cellGap + panelPadding * 2
+    top: origin.y + bounds.row * pitch - panelPadding - handle,
+    width: (panel.window && panel.parts.length === 0 ? 3 : bounds.columns) * pitch - cellGap + panelPadding * 2,
+    height: panel.window?.collapsed ? handle : bounds.rows * pitch - cellGap + panelPadding * 2 + handle
   };
 
   return { origin, rect };
@@ -193,7 +203,7 @@ export function pinPanels(board: Board, origins: ReadonlyMap<string, Point>, vie
     ...board,
     panels: board.panels.map((panel) => {
       const origin = origins.get(panel.id);
-      return origin && panel.owner === undefined
+      return origin && (panel.owner === undefined || panel.window?.placed)
         ? { ...panel, at: { x: origin.x / view.width, y: origin.y / view.height } }
         : panel;
     })
@@ -205,13 +215,10 @@ export function pinPanels(board: Board, origins: ReadonlyMap<string, Point>, vie
  * `view`.
  */
 export function ownedFrame(panel: Panel, anchor: Rect, view: { width: number; height: number }) {
-  const bounds = partsBounds(panel.parts);
-  const size = {
-    width: bounds.columns * pitch - cellGap + panelPadding * 2,
-    height: bounds.rows * pitch - cellGap + panelPadding * 2
-  };
+  const { rect } = frameAt(panel, { x: 0, y: 0 });
+  const size = { width: rect.width, height: rect.height };
   const { x: left, y: top } = besideRect(anchor, size, view);
-  const origin = { x: left - bounds.column * pitch + panelPadding, y: top - bounds.row * pitch + panelPadding };
+  const origin = { x: left - rect.left, y: top - rect.top };
 
   return { origin, rect: { left, top, ...size } };
 }
@@ -265,7 +272,9 @@ export function spanAfter(from: Span, delta: Point): Span {
 export function replacePanel(board: Board, id: string, next: Panel): Board {
   return {
     ...board,
-    panels: board.panels.flatMap((panel) => (panel.id !== id ? [panel] : next.parts.length > 0 ? [next] : []))
+    panels: board.panels.flatMap((panel) =>
+      panel.id !== id ? [panel] : next.parts.length > 0 || next.window ? [next] : []
+    )
   };
 }
 
@@ -275,7 +284,7 @@ export function putPanel(board: Board, next: Panel): Board {
     return replacePanel(board, next.id, next);
   }
 
-  return next.parts.length > 0 ? { ...board, panels: [...board.panels, next] } : board;
+  return next.parts.length > 0 || next.window ? { ...board, panels: [...board.panels, next] } : board;
 }
 
 /**
@@ -324,7 +333,9 @@ export function removePart(board: Board, id: string): Board {
     ...board,
     panels: board.panels.flatMap((panel) => {
       const parts = panel.parts.filter((part) => part.id !== id);
-      return parts.length === 0 ? [] : [parts.length === panel.parts.length ? panel : { ...panel, parts }];
+      return parts.length === 0 && !panel.window
+        ? []
+        : [parts.length === panel.parts.length ? panel : { ...panel, parts }];
     })
   };
 }

@@ -24,9 +24,9 @@ it('loads unknown kinds in boards and kits and keeps their data on save', () => 
   const kits = owned(createKits);
   board.set(board.latest());
   kits.rename('saved', 'Renamed');
-  expect(JSON.parse(localStorage.getItem('paint.lego')!)).toEqual({ version: 2, board: boardOf(parts) });
+  expect(JSON.parse(localStorage.getItem('paint.lego')!)).toEqual({ version: 3, board: boardOf(parts) });
   expect(JSON.parse(localStorage.getItem('paint.lego.kits')!)).toMatchObject({
-    version: 2,
+    version: 3,
     kits: [{ name: 'Renamed', parts }]
   });
 });
@@ -89,7 +89,7 @@ it.each(['paint.lego', 'paint.lego.kits'])('backs up hard-corrupt %s before defa
   expect(board.latest()).toEqual(defaultBoard);
   board.set(board.latest());
   kits.rename('unused', 'unused');
-  expect(JSON.parse(localStorage.getItem(key)!)).toHaveProperty('version', 2);
+  expect(JSON.parse(localStorage.getItem(key)!)).toHaveProperty('version', 3);
 });
 
 it('does not overwrite corrupt data when its backup cannot be stored', () => {
@@ -125,7 +125,7 @@ it.each([
   { key: 'paint.lego.kits', field: 'kits', value: [{ id: 'future', name: 'Future', parts: [], owned: [] }] },
   { key: 'paint.lego.kits', field: 'kits', value: { futureShape: [] } }
 ])('keeps newer $key data read-only and reports it, including incompatible shapes', ({ key, field, value }) => {
-  const raw = JSON.stringify({ version: 3, [field]: value, futureEnvelope: 'keep' });
+  const raw = JSON.stringify({ version: 4, [field]: value, futureEnvelope: 'keep' });
   localStorage.setItem(key, raw);
   const notice = vi.fn(() => 'callback return value');
   const storage = field === 'board' ? owned(() => createBoard(notice)) : owned(() => createKits(notice));
@@ -154,8 +154,8 @@ it('retains envelope, board, panel, kit and owned-panel fields through edits', (
     owned: [{ owner: 'owner', parts: [], futureOwned: 42 }],
     futureKitField: ['keep']
   };
-  localStorage.setItem('paint.lego', JSON.stringify({ version: 2, board: boardData, futureEnvelope: 23 }));
-  localStorage.setItem('paint.lego.kits', JSON.stringify({ version: 2, kits: [kitData], futureEnvelope: 24 }));
+  localStorage.setItem('paint.lego', JSON.stringify({ version: 3, board: boardData, futureEnvelope: 23 }));
+  localStorage.setItem('paint.lego.kits', JSON.stringify({ version: 3, kits: [kitData], futureEnvelope: 24 }));
   const board = owned(createBoard);
   const kits = owned(createKits);
   const current = board.latest().panels[0]!;
@@ -164,7 +164,7 @@ it('retains envelope, board, panel, kit and owned-panel fields through edits', (
   board.set(pinPanels(next, new Map([['panel', { x: 50, y: 50 }]]), { width: 100, height: 100 }));
   kits.rename('saved', 'Renamed');
   expect(JSON.parse(localStorage.getItem('paint.lego')!)).toEqual({
-    version: 2,
+    version: 3,
     board: {
       ...boardData,
       panels: [{ ...panel, parts: [{ ...part('action:undo'), cell: { column: 3, row: 4 } }], at: { x: 0.5, y: 0.5 } }]
@@ -172,7 +172,7 @@ it('retains envelope, board, panel, kit and owned-panel fields through edits', (
     futureEnvelope: 23
   });
   expect(JSON.parse(localStorage.getItem('paint.lego.kits')!)).toEqual({
-    version: 2,
+    version: 3,
     kits: [{ ...kitData, name: 'Renamed' }],
     futureEnvelope: 24
   });
@@ -183,7 +183,7 @@ it('retains board fields when parts and their owned panels are removed or new pa
   const ownedPanel = { id: 'owned', owner: 'color:swatch', at: { x: 0, y: 0 }, parts: [part('action:undo')] };
   localStorage.setItem(
     'paint.lego',
-    JSON.stringify({ version: 2, board: { panels: [main, ownedPanel], futureBoardField: 'keep' } })
+    JSON.stringify({ version: 3, board: { panels: [main, ownedPanel], futureBoardField: 'keep' } })
   );
   const board = owned(createBoard);
   const removed = pruneOwned(removePart(board.latest(), 'color:swatch'));
@@ -201,7 +201,7 @@ it('loads each kit independently and preserves opaque records when a healthy kit
     ['future kit'],
     { id: 'good', name: 'Good', parts: [part('action:undo')], owned: [] }
   ];
-  localStorage.setItem('paint.lego.kits', JSON.stringify({ version: 2, kits: records }));
+  localStorage.setItem('paint.lego.kits', JSON.stringify({ version: 3, kits: records }));
   const kits = owned(createKits);
   expect(kits.kits().find((kit) => kit.id === 'good')!.parts).toHaveLength(1);
   expect(kits.kits().find((kit) => kit.id === 'bad')!.parts).toEqual([]);
@@ -273,7 +273,7 @@ it('reports quota failures, retains in-memory edits and retries a later save', (
 
 it('keeps opaque kits unchanged until explicitly removed', () => {
   const broken = { id: 'broken', name: 'Broken kit', parts: 'unreadable', owned: [], future: 42 };
-  localStorage.setItem('paint.lego.kits', JSON.stringify({ version: 2, kits: [broken] }));
+  localStorage.setItem('paint.lego.kits', JSON.stringify({ version: 3, kits: [broken] }));
   const kits = owned(createKits);
   kits.rename('broken', 'Lost rename');
   flush();
@@ -321,3 +321,76 @@ function part(kind: string): Part {
 function boardOf<T>(parts: T[]) {
   return { panels: [{ id: 'panel', at: { x: 0, y: 0 }, parts }] };
 }
+
+it.each([undefined, 1, 2])(
+  'migrates every Layers instance to closed windows from version %s and reloads v3 once',
+  (version) => {
+    const parts = ['first', 'second'].map((id, index) => ({
+      ...part('action:layers'),
+      id,
+      cell: { column: index, row: 0 },
+      future: id
+    }));
+    const boardData = boardOf(parts);
+    const kitData = [
+      { id: 'kit', name: 'Kit', parts: parts.slice(0, 1), owned: [{ owner: 'first', parts: parts.slice(1) }] }
+    ];
+    localStorage.setItem('paint.lego', JSON.stringify(version ? { version, board: boardData } : boardData));
+    localStorage.setItem('paint.lego.kits', JSON.stringify(version ? { version, kits: kitData } : kitData));
+    const board = owned(createBoard);
+    const kits = owned(createKits);
+    const windows = board.latest().panels.filter((panel) => panel.window);
+    expect(windows.map((panel) => panel.owner)).toEqual(['first', 'second']);
+    expect(windows.every((panel) => panel.window?.name === 'Layers' && !panel.window.open)).toBe(true);
+    expect(windows.every((panel) => panel.parts.some((part) => part.kind === 'layers:list'))).toBe(true);
+    expect(new Set(windows.flatMap((panel) => panel.parts.map((part) => part.id))).size).toBe(26);
+    const kit = kits.kits().find((kit) => kit.id === 'kit')!;
+    expect(kit.owned.filter((panel) => panel.window).map((panel) => panel.owner)).toEqual(['first', 'second']);
+    board.set(board.latest());
+    kits.rename('kit', 'Kept');
+    expect(owned(createBoard).latest().panels).toHaveLength(3);
+    expect(
+      owned(createKits)
+        .kits()
+        .find((kit) => kit.id === 'kit')!.owned
+    ).toHaveLength(3);
+    expect(JSON.parse(localStorage.getItem('paint.lego')!).board.panels[0].parts[0].future).toBe('first');
+  }
+);
+
+it.each([undefined, 1, 2])('expands an old inline Layers look in place on boards and kits at version %s', (version) => {
+  const inline = {
+    ...part('action:layers'),
+    id: 'inline',
+    cell: { column: 2, row: 3 },
+    span: { columns: 7, rows: 8 },
+    looks: { '7x8': 'panel' },
+    future: 42
+  };
+  const neighbor = { ...part('action:undo'), cell: { column: 2, row: 11 } };
+  const parts = [inline, neighbor];
+  const boardData = boardOf(parts);
+  const kitData = [{ id: 'kit', name: 'Kit', parts, owned: [] }];
+  localStorage.setItem('paint.lego', JSON.stringify(version ? { version, board: boardData } : boardData));
+  localStorage.setItem('paint.lego.kits', JSON.stringify(version ? { version, kits: kitData } : kitData));
+  const board = owned(createBoard);
+  const kits = owned(createKits);
+  const panel = board.latest().panels[0]!;
+  expect(board.latest().panels).toHaveLength(1);
+  expect(panel.window).toBeUndefined();
+  expect(panel.parts.find((part) => part.kind === 'layers:name')?.cell).toEqual({ column: 2, row: 3 });
+  expect(panel.parts.find((part) => part.kind === 'layers:list')?.span).toEqual({ columns: 5, rows: 5 });
+  expect(panel.parts.some((part) => part.kind === 'action:layers')).toBe(false);
+  expect(panel.parts.find((part) => part.id === neighbor.id)?.cell).not.toEqual(neighbor.cell);
+  expect(
+    kits
+      .kits()
+      .find((kit) => kit.id === 'kit')!
+      .parts.map((part) => part.kind)
+  ).toEqual(panel.parts.map((part) => part.kind));
+  board.set(board.latest());
+  expect(
+    JSON.parse(localStorage.getItem('paint.lego')!).board.panels[0].parts.find((part: Part) => part.id === 'inline')
+      .future
+  ).toBe(42);
+});
