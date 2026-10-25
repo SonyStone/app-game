@@ -6,7 +6,9 @@ import {
   readPsd,
   type PsdExactRasterTreeEdit,
   type PsdPreparedSave,
-  type PsdReopenSaveContext
+  type PsdReopenSaveContext,
+  type PsdReopenSaveWriters,
+  type PsdSaveResourceContext
 } from './index';
 import { openPsd } from './viewer';
 
@@ -219,6 +221,153 @@ it('preserves bytes and revision on absent context, invalid times, unsupported s
   }
 });
 
+it('requires both grouping clocks before allocating the measured header and hidden end identities', async () => {
+  const session = value(await openPsdEditor(await fixture('grouping')));
+  try {
+    const before = value(session.sourceSnapshot());
+    const command = [
+      { kind: 'groupSelectedLayers', layerIds: [4], name: 'Group 1', expanded: true }
+    ] satisfies PsdExactRasterTreeEdit[];
+    const saveContext = context('depth0', 5, 1792816939.000644);
+    expect(session.editRasterTreeExact(command, saveContext)).toMatchObject({ ok: false, error: { code: 'Invalid' } });
+    expect(value(session.sourceSnapshot())).toEqual(before);
+    const outcome = value(
+      session.editRasterTreeExact(command, {
+        ...saveContext,
+        layerTimes: [...saveContext.layerTimes, { layerId: 6, time: 1792816939.000662 }]
+      })
+    );
+    expect(outcome).toEqual({ revision: 1n, created: [5], diagnostics: [] });
+    // Research 3ad38efe09, E-structure-3/admissions.json, d0-target-group-retry.
+    expect(sha256(collect(value(session.prepareSave())))).toBe(
+      '3cabde93be8c123d5de3791ffd65e588230c8c65194977e8feb1c6479e105c77'
+    );
+  } finally {
+    session.dispose();
+  }
+});
+
+it('carries untouched type under v2 with actual host writers, working profile, gamma and captured font inventory', async () => {
+  const source = await fixture('carried-type');
+  const session = value(await openPsdEditor(source));
+  try {
+    const before = value(session.sourceSnapshot());
+    const profile = new Uint8Array(await readFile(new URL('../test/editor/working-srgb.icc', import.meta.url)));
+    const fonts: string[] = JSON.parse(
+      await readFile(new URL('../test/editor/active-fonts.json', import.meta.url), 'utf8')
+    );
+    const saveContext = {
+      ...context('document', 3, 1792855634.299563),
+      contract: 'photoshop26.reopen-equivalent/v2-carried-type',
+      writers: writers(),
+      typeRendering: { textGamma: 1.45, availableFonts: fonts },
+      preview: {
+        srgbProfile: new Uint8Array(await readFile(new URL('../test/srgb.icc', import.meta.url))),
+        sourceWorkingProfile: profile,
+        intent: 'relativeColorimetric',
+        blackPointCompensation: true,
+        dither: false,
+        ocio: false
+      }
+    } satisfies PsdReopenSaveContext;
+    const command = [{ kind: 'rename', layerId: 1, name: 'renamed' }] satisfies PsdExactRasterTreeEdit[];
+    const missingFont = session.editRasterTreeExact(command, {
+      ...saveContext,
+      typeRendering: {
+        ...saveContext.typeRendering,
+        availableFonts: fonts.filter((name) => name !== 'MyriadPro-Regular')
+      }
+    });
+    expect(missingFont).toMatchObject({ ok: false, error: { code: 'Dependency', cause: expect.any(Error) } });
+    expect(value(session.sourceSnapshot())).toEqual(before);
+    expect(collect(value(session.prepareSave()))).toEqual(new Uint8Array(source));
+    expect(value(session.editRasterTreeExact(command, saveContext))).toEqual({
+      revision: 1n,
+      created: [3],
+      diagnostics: []
+    });
+    // Research 3ad38efe09, E-type-carry/admissions.json, v2-100 candidate, including untouched type carriers.
+    const saved = collect(value(session.prepareSave()));
+    expect(sha256(saved)).toBe('91bdad4723380b16b6257aa625702fe4901b29b820fcbd01fb59cb9eb7bf257a');
+    expect(session.editRasterTreeExact(command, saveContext)).toMatchObject({
+      ok: false,
+      error: { code: 'Dependency' }
+    });
+    expect(collect(value(session.prepareSave()))).toEqual(saved);
+  } finally {
+    session.dispose();
+  }
+});
+
+it('keeps prepared writer candidates separate from preservation saves and retains partial dependencies and refusal causes', async () => {
+  const source = await fixture('flat-rgb8');
+  const session = value(await openPsdEditor(source));
+  try {
+    const before = value(session.sourceSnapshot());
+    const save = context('flat-rgb8').save;
+    const resources = value(
+      session.preparePhotoshop26ResourceCandidate({
+        ...writers().resources,
+        basename: save.basename,
+        softwareAgent: save.softwareAgent,
+        exifTime: save.exifTime,
+        taggedSrgb: true
+      } satisfies PsdSaveResourceContext)
+    );
+    expect(resources.revision).toBe(0n);
+    expect(resources.bytes).toBeInstanceOf(Uint8Array);
+    expect(resources.dependencies.length).toBeGreaterThan(0);
+    expect(resources.dependencies).toEqual(
+      expect.arrayContaining([expect.objectContaining({ resourceId: expect.any(Number), reason: expect.any(String) })])
+    );
+    const refused = session.preparePhotoshop26Save(save);
+    expect(refused).toMatchObject({
+      ok: false,
+      error: {
+        code: 'Dependency',
+        propertyPath: 'save.thumbnail.adobe-jpeg',
+        capability: expect.any(String),
+        cause: expect.any(Error)
+      }
+    });
+    expect(session.preparePhotoshop26ShapeCacheCandidate(4)).toMatchObject({
+      ok: false,
+      error: { code: 'Container', cause: expect.any(Error) }
+    });
+    expect(session.preparePhotoshop26LayerRecordCandidate(-1)).toMatchObject({ ok: false, error: { code: 'Invalid' } });
+    expect(session.prepareReopenCandidate(save, [])).toMatchObject({
+      ok: false,
+      error: { code: 'Invalid', message: expect.stringContaining('requires an edit') }
+    });
+    const xmp = value(session.preparePhotoshop26XmpCandidate(save));
+    const layer = value(session.preparePhotoshop26LayerRecordCandidate(0));
+    const paths = value(session.preparePhotoshop26EmptyPathsCandidate());
+    expect(value(session.sourceSnapshot())).toEqual(before);
+    expect(collect(value(session.prepareSave()))).toEqual(new Uint8Array(source));
+    session.dispose();
+    for (const prepared of [xmp, layer, paths]) {
+      expect(prepared.revision).toBe(0n);
+      const bytes = collect(prepared);
+      if (prepared === xmp) {
+        expect(new TextDecoder().decode(bytes)).toContain(save.instanceId);
+      }
+
+      expect((await readPsd(bytes)).layers).toHaveLength(3);
+      expect(() => prepared.nextChunk(64)).toThrow('disposed');
+    }
+    expect(
+      session.preparePhotoshop26ResourceCandidate({
+        ...writers().resources,
+        basename: save.basename,
+        softwareAgent: save.softwareAgent,
+        exifTime: save.exifTime
+      })
+    ).toMatchObject({ ok: false, error: { code: 'Disposed' } });
+  } finally {
+    session.dispose();
+  }
+});
+
 it('writes File Info publicDomain with explicit native lifecycle values and refuses unsupported transitions atomically', async () => {
   const session = value(await openPsdEditor(await fixture('metadata')));
   try {
@@ -245,7 +394,7 @@ it('writes File Info publicDomain with explicit native lifecycle values and refu
   }
 });
 
-/** Owned Photoshop 26 controls from research b05b8f3345, E-structure, E-structure-2 and E-metadata. */
+/** Owned Photoshop 26 controls from E-structure/E-metadata at b05b8f3345 and E-structure-3/E-type-carry at 3ad38efe09. */
 function fixture(name: string) {
   return readFile(new URL(`../test/editor/${name}.psd`, import.meta.url));
 }
@@ -264,6 +413,30 @@ function context(basename: string, layerId?: number, time = 1): PsdReopenSaveCon
       linearBlending: false
     },
     layerTimes: layerId === undefined ? [] : [{ layerId, time }]
+  };
+}
+
+/** Actual captured host state from research E-type-carry v2-100, with no inferred application defaults. */
+function writers(): PsdReopenSaveWriters {
+  return {
+    proofSetupName: 'Proof Setup',
+    resources: {
+      writerName: 'Adobe Photoshop',
+      readerName: 'Adobe Photoshop 2025',
+      mergedComposite: true,
+      displayUnit: 1,
+      missingResolution: [4718592, 1],
+      missingGrid: [576, 576],
+      legacyGuideColor: [0, 74, 255, 255],
+      transparencyName: 'Transparency',
+      taggedSrgb: false
+    },
+    document: {
+      compositor: { engine: 'compCoreGPU', gpu: 'feature', threads: 'feature', gpuSupport: 'supported' },
+      iccDisplay: '',
+      iccView: '',
+      newCredentialsEnabled: false
+    }
   };
 }
 
