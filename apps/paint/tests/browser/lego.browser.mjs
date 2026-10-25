@@ -172,6 +172,8 @@ try {
   console.log('PASS box open/close and kit drag-out ghost');
   const stored = await page.evaluate(() => ({ ...localStorage }));
   page = await context.newPage();
+  const showcaseWorkers = [];
+  page.on('worker', (worker) => showcaseWorkers.push(worker.url()));
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`${url}/paint/lego/parts`);
   await page.locator('[data-parts-showcase]').waitFor();
@@ -196,6 +198,7 @@ try {
   }
   assert.deepEqual(await page.evaluate(() => ({ ...localStorage })), stored, 'showcase must not write storage');
   assert.deepEqual(errors, [], 'uncaught showcase errors');
+  assert.deepEqual(showcaseWorkers, [], 'showcase must not start session or preview workers');
   console.log(
     'PASS registry showcase: minimum sizes, 25 size pairs, three modes, missing/broken tiles, displayed backing sizes'
   );
@@ -342,6 +345,11 @@ async function startServer(appRoot) {
 
 /** Checks real specimen content, including transformed backing sizes; error and missing tiles stay measurable. */
 async function checkShowcase(tab) {
+  assert.equal(
+    await tab.locator('[aria-label^="Broken part:"]').count(),
+    3,
+    'only the deliberately broken specimens may fail'
+  );
   const specimens = await tab.locator('[data-specimen]').evaluateAll((figures) =>
     figures.map((figure) => {
       const frame = figure.querySelector('[data-part-kind]');
