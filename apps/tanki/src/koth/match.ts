@@ -156,7 +156,6 @@ export function createKothMatch(
      *   turret follows it at once, as in a shooter, and a casemate gun as far as its arc lets it.
      *   Without it the turret stays.
      * @param input.fire - Whether the player holds the trigger.
-     * @param input.rev - Whether the player spins a gatling up without firing.
      * @param input.reach - How far away the player aims, in pixels, where a grenade should land.
      * @param input.turn - Whether a casemate gun turns its hull on the spot toward the aim instead
      *   of driving.
@@ -288,10 +287,6 @@ export function createKothMatch(
           tankClass: human.tankClass.id,
           nextClass: human.nextClass,
           weapon: human.tankClass.weapon.kind,
-          rounds: human.weapon?.rounds ?? 0,
-          clip: human.tankClass.gun.clip,
-          loading: human.weapon?.loading ?? 0,
-          spin: human.weapon?.spin ?? 0,
           charge: human.weapon?.charge,
           airborne: human.tank ? combat.isAirborne(human.tank) : false,
           armor: human.tank ? combat.armorLeft(human.tank) : 0,
@@ -425,7 +420,7 @@ export function createKothMatch(
       tank.turretAngle = input.aim;
     }
 
-    player.trigger = { fire: input.fire, rev: input.rev, reach: input.reach };
+    player.trigger = { fire: input.fire, reach: input.reach };
   }
 
   /**
@@ -592,7 +587,7 @@ export function createKothMatch(
 export type KothMatch = ReturnType<typeof createKothMatch>;
 
 /** The player's input for a step, as `KothMatch['step']` describes it. */
-export type PlayerInput = { drive: Point; aim?: number; fire: boolean; rev?: boolean; reach?: number; turn?: boolean };
+export type PlayerInput = { drive: Point; aim?: number; fire: boolean; reach?: number; turn?: boolean };
 
 /** One member's line on the heads-up display. */
 export type MemberHud = {

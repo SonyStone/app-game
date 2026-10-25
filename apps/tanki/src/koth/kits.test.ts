@@ -26,9 +26,11 @@ describe('repair kits', () => {
         { color: 0, pullSpeed: pullSpeedFor(tankClass.speed), hull, mass: tankClass.mass, look: tankClass.look }
       );
 
-      // The same holes into the rear of every hull.
+      // The same holes into the rear of every hull, blasts grown to dig them as large into plated armor.
+      const plating = hull.plating ?? 1;
+
       for (let hole = 0; hole < 4; hole++) {
-        combat.blast({ x: -hull.halfLength - 6, y: (hole - 1.5) * 5 }, { radius: 20, hole: 4, depth: 2, knockback: 0 });
+        combat.blast({ x: -hull.halfLength - 6, y: (hole - 1.5) * 5 }, { radius: 20, hole: 4 / plating, depth: 2 / plating, knockback: 0 });
       }
 
       combat.step(1 / 60);

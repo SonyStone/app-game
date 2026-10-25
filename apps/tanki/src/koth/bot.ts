@@ -54,11 +54,11 @@ export type BotContext = {
  * 4. Drives there with its driver, unless it sidesteps a shell flying at it, and works the gun:
  *    the turret swings toward the preferred enemy, or the team's focus, at where the shell would
  *    meet the core under its rear armor, and fires when on target, nothing is in the way and the
- *    shot is likely to hit. Each class works its weapon its own way: a gatling spins up as an
- *    enemy comes near, a grenade is lobbed onto groups, over crates and banked off walls, and a
- *    casemate gun turns its whole hull to aim, holds still and charges its shot. On its way
- *    somewhere, it breaks through a wall when that beats driving around, by its class's weapon or
- *    a ram (see `./breach`), and the breach takes over its driving and gun meanwhile.
+ *    shot is likely to hit. Each class works its weapon its own way: a grenade is lobbed onto
+ *    groups, over crates and banked off walls, and a casemate gun turns its whole hull to aim,
+ *    holds still and charges its shot. On its way somewhere, it breaks through a wall when that
+ *    beats driving around, by its class's weapon or a ram (see `./breach`), and the breach takes
+ *    over its driving and gun meanwhile.
  *
  * A bot knows only what a player would: it sees as far as a player's screen reaches and not
  * through walls, takes a moment to react to a new target, and misjudges a moving target's lead.
@@ -506,8 +506,8 @@ export function createBot(member: Member, context: BotContext) {
   /**
    * Seconds the bot expects to need to destroy `target`, from where it is or from behind: the
    * shots its class takes against the target's class, at the accuracy the range allows within its
-   * reach, fired one interval apart, with a reload after every clip, plus a gatling's spin-up or a
-   * charged shot's charging, and some time exposed to the target's gun.
+   * reach, fired one interval apart, plus each charged shot's charging, and some time exposed to
+   * the target's gun.
    */
   function killTime(position: Point, target: Tank | undefined, fromRear: boolean) {
     if (!target) {
@@ -530,12 +530,10 @@ export function createBot(member: Member, context: BotContext) {
       exposure = 0;
     }
 
-    const { interval, clip, firstReload, reload } = tankClass.gun;
     const weapon = tankClass.weapon;
     const shots = hits / accuracy;
-    const reloads = Math.max(Math.ceil(shots / clip) - 1, 0);
-    const extra = weapon.kind === 'spin' ? weapon.spinUp : weapon.kind === 'charge' ? shots * weapon.time : 0;
-    return shots * interval + reloads * (firstReload + (clip - 1) * reload) + extra + exposure;
+    const charging = weapon.kind === 'charge' ? shots * weapon.time : 0;
+    return shots * tankClass.interval + charging + exposure;
   }
 
   /** The class of an enemy tank. */
@@ -974,10 +972,10 @@ export function createBot(member: Member, context: BotContext) {
    * the turret watches the latest known threat or looks where the tank drives. A rail hits at
    * once, so there is no lead to misjudge; a hand aiming it is human anyway (see `railSpot`).
    *
-   * Each weapon is worked its own way: a gatling spins up while an enemy is near and fires once
-   * spun; a grenade is thrown to land on its target, onto two enemies at once when it can, and
-   * banked off a wall at an enemy round a corner; a casemate gun turns its hull toward a target
-   * outside its arc and charges its shot standing still, letting go once charged and on target.
+   * Each weapon is worked its own way: a grenade is thrown to land on its target, onto two enemies
+   * at once when it can, and banked off a wall at an enemy round a corner; a casemate gun turns its
+   * hull toward a target outside its arc and charges its shot standing still, letting go once
+   * charged and on target.
    *
    * @returns How the gun wants the hull to move: turned on the spot toward `turnTo`, or held still.
    */
@@ -1025,8 +1023,7 @@ export function createBot(member: Member, context: BotContext) {
     const goal = Math.atan2(spot.y - pivot.y, spot.x - pivot.x);
     turnTurret(tank, goal, dt, tankClass.turretSpeed);
     const aligned = Math.abs(angleBetween(tank.turretAngle, goal)) < Math.max(Math.atan2(AIM_TOLERANCE * tactics.aimError, range), 0.01);
-    const full = weapon?.rounds === weapon?.clip;
-    const worth = error < MAX_AIM_ERROR * tactics.aimError || (full && error < MAX_AIM_ERROR * 1.5 * tactics.aimError);
+    const worth = error < MAX_AIM_ERROR * tactics.aimError;
     const reacted = now - gun.since >= gun.reaction;
     const clear = combat.lineOfSight(position, spot) && combat.lineOfSight(position, target.hull.translation());
     const inReach = range < tactics.reach;
@@ -1034,13 +1031,6 @@ export function createBot(member: Member, context: BotContext) {
     const weaponSpec = tankClass.weapon;
 
     switch (weaponSpec.kind) {
-      case 'spin': {
-        // The gatling spins up while an enemy is near, so it is ready to fire when the enemy comes in reach.
-        const near = range < tactics.reach + SPIN_AHEAD;
-        context.trigger(member, { fire: reacted && aligned && worth && inReach && clear, rev: near });
-        return {};
-      }
-
       case 'lob': {
         // A grenade flies over crates, so only walls must not stand between.
         const throwable = sightClear(grid, position, spot) && distance(position, spot) < tankClass.shell.range;
@@ -1052,7 +1042,8 @@ export function createBot(member: Member, context: BotContext) {
         return charge(tank, goal, { reacted, aligned, clear, inReach, worth, range });
 
       default:
-        context.trigger(member, { fire: ready && reacted && aligned && worth && inReach && clear });
+        // Held while the shot is worth it: the gun fires as its cadence allows, and a gatling keeps spinning.
+        context.trigger(member, { fire: reacted && aligned && worth && inReach && clear });
         return {};
     }
   }
@@ -1309,8 +1300,6 @@ const REACTION_MAX = 0.5;
 const AIM_TOLERANCE = 4;
 /** Standard deviation of the aim error, in pixels at the target, beyond which a bot holds fire. */
 const MAX_AIM_ERROR = 32;
-/** How far beyond its reach a gatling starts spinning up for an enemy it sees. */
-const SPIN_AHEAD = 150;
 /** Seconds a Demoman keeps lobbing at where an enemy out of sight was last seen. */
 const LOB_MEMORY = 1.5;
 /** A wall's face counts as standing for a bank shot where a wall lies within this many pixels of it now. */

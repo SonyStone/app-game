@@ -1,7 +1,9 @@
 import { createEventListener, makeEventListener } from '@solid-primitives/event-listener';
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import type { Tank } from '../arena/bodies';
 import { worldToScreen, type Camera } from '../arena/camera';
 import { forecastShot, type Lane, type ShotForecast, type Verdict } from './aim';
+import { FULL_CHARGE } from './classes/weapon';
 import type { HudState } from './Hud';
 import type { KothMatch } from './match';
 
@@ -12,10 +14,10 @@ type Point = { x: number; y: number };
  * explosions included, in the game's look: light strokes with a black outline.
  *
  * - The crosshair replaces the cursor over the canvas. It is moved by every pointer event itself,
- *   not by the game's frame, so it sits under the latest pointer position. Around its center it
- *   shows the weapon at a glance: the rounds in the clip and the one loading, a gatling's belt and
- *   spin, a casemate gun's charge. It turns red when the shot will hit an enemy, orange when it
- *   would only glance off, and fades when the pointer is beyond the shot's reach.
+ *   not by the game's frame, so it sits under the latest pointer position. Every gun fires at a
+ *   steady cadence while the trigger is held, so there is no clip to show; only a casemate gun's
+ *   charge fills a ring around the center. It turns red when the shot will hit an enemy, orange
+ *   when it would only glance off, and fades when the pointer is beyond the shot's reach.
  * - The forecast of the next shot from `aimOnScreen`: the way the shell flies from the muzzle to
  *   where it stops, red where it hits an enemy; a fan for a weapon that spreads its shots, with a
  *   dot where each lane ends; a grenade's way as dots that swell as it flies higher and shrink
@@ -25,6 +27,10 @@ type Point = { x: number; y: number };
  *   where it falls with nothing in range. A shell that goes off shows its blast's reach, red
  *   around every other enemy it reaches. The line from the gun also shows where the player's own
  *   tank is, so the tank needs no marker of its own.
+ * - While a casemate gun charges its rail, whose laser sight draws the line on the ground, only
+ *   the mark where the rail would stop, and a yellow ring where it would blow a core up; and the
+ *   cores of the enemies in the gun's line of sight, hidden under their armor, marked in yellow,
+ *   as a sniper's scope shows where to aim.
  *
  * Three looks differ in the line and the crosshair's center; X cycles through them and `?aim=`
  * in the address picks one (see `AIM_LOOKS`).
@@ -80,6 +86,7 @@ export function AimOverlay(props: { canvas: HTMLCanvasElement | undefined; view:
   return (
     <>
       <svg class="pointer-events-none absolute inset-0 h-full w-full">
+        <Show when={props.active && props.view !== undefined && props.view.cores.length > 0 && props.view.cores}>{(cores) => <CoreMarks cores={cores()} />}</Show>
         <Show when={shot()}>{(shown) => <ShotMarks shot={shown()} look={AIM_LOOKS[look()]} />}</Show>
       </svg>
       <div
@@ -114,16 +121,40 @@ export function aimOnScreen(match: KothMatch, input: { angle?: number; reach?: n
   }
 
   const toScreen = (point: Point) => worldToScreen(view, point, screen);
-  const forecast = forecastShot(match.combat, tank, match.seat.tankClass, input.angle ?? tank.turretAngle, input.reach);
+  const charge = match.seat.weapon?.charge;
+  const forecast = forecastShot(match.combat, tank, match.seat.tankClass, input.angle ?? tank.turretAngle, input.reach, charge);
 
-  return { shot: forecast && shotOnScreen(forecast, input.reach, toScreen, view) };
+  return { shot: forecast && shotOnScreen(forecast, input.reach, toScreen, view), cores: charge === undefined ? [] : coresInSight(match, tank, toScreen, view) };
 }
 
 /** What `AimOverlay` draws for a frame, from `aimOnScreen`, in CSS pixels. */
 export type AimView = {
-  /** The forecast of the next shot; `undefined` for a gun with a laser sight of its own. */
+  /** The forecast of the next shot; `undefined` for a charged shot not charging. */
   shot: ShotView | undefined;
+  /** The cores of the enemy tanks in sight while the player charges a rail, as a sniper's scope shows them; else none. */
+  cores: { x: number; y: number; radius: number }[];
 };
+
+/**
+ * Where the cores of the enemy tanks in the line of sight of `tank`'s gun are on screen, as rings
+ * the size of each core: a charging rail kills by crossing a core, which lies hidden under the
+ * armor, so the scope shows the player where to aim.
+ */
+function coresInSight(match: KothMatch, tank: Tank, toScreen: (point: Point) => Point, view: Camera) {
+  const team = match.combat.teamOf(tank);
+  const pivot = match.combat.gunPivotOf(tank);
+
+  return match.combat.tanks.flatMap((other) => {
+    const core = other !== tank && match.combat.teamOf(other) !== team ? match.combat.coreOf(other) : undefined;
+    const hull = core && match.combat.hullOf(other);
+
+    if (!core || !hull || !match.combat.lineOfSight(pivot, core)) {
+      return [];
+    }
+
+    return [{ ...toScreen(core), radius: hull.core.radius * view.zoom }];
+  });
+}
 
 /** A shot's forecast placed on screen, as `ShotMarks` draws it. */
 type ShotView = {
@@ -261,7 +292,6 @@ const HIT = '#ff3b2f';
 const KILL = '#ffd23f';
 const GLANCE = '#ffa63d';
 const BREAKS = '#ffd27a';
-const SOLID = '#a3abb5';
 
 /**
  * A stroke in the game's look: `d` drawn in `color` over a dark outline `outline` pixels wider,
@@ -306,7 +336,8 @@ function ShotMarks(props: { shot: ShotView; look: AimLook }) {
           />
         )}
       </Show>
-      <Show when={!props.shot.fan && !props.shot.hops}>
+      {/* A rail's laser sight draws its line on the ground already. */}
+      <Show when={!props.shot.fan && !props.shot.hops && props.shot.kind !== 'charge'}>
         <Stroke d={paths().lanes} color={LIGHT} width={props.look.width} dash={props.look.dash} opacity={0.85} />
         <Stroke d={paths().hitLanes} color={HIT} width={props.look.width} dash={props.look.dash} />
       </Show>
@@ -334,6 +365,29 @@ function ShotMarks(props: { shot: ShotView; look: AimLook }) {
       <Stroke d={paths().kills} color={KILL} width={2.4} outline={2.6} />
     </>
   );
+}
+
+/**
+ * The cores of enemy tanks a charging rail could blow up: a small ring the size of each core with
+ * four ticks around it, in the color of a kill, so the player sees where under the armor to aim.
+ */
+function CoreMarks(props: { cores: readonly { x: number; y: number; radius: number }[] }) {
+  const path = () =>
+    props.cores
+      .map((core) => {
+        const ring = Math.max(core.radius, 3);
+        return `${circlePath(core.x, core.y, ring)} ${[0, 1, 2, 3]
+          .map((quarter) => {
+            const angle = (quarter * Math.PI) / 2 + Math.PI / 4;
+            const from = ring + 2;
+            const to = ring + 6;
+            return `M ${core.x + Math.cos(angle) * from} ${core.y + Math.sin(angle) * from} L ${core.x + Math.cos(angle) * to} ${core.y + Math.sin(angle) * to}`;
+          })
+          .join(' ')}`;
+      })
+      .join(' ');
+
+  return <Stroke d={path()} color={KILL} width={1.6} outline={2.2} opacity={0.9} />;
 }
 
 /** The SVG paths of a shot's lanes and end marks, grouped by how they are drawn. */
@@ -397,10 +451,9 @@ function wallMark(end: ScreenEnd, breaks: boolean) {
 }
 
 /**
- * The crosshair: a center that marks the exact aim point, ticks red when the shot will hit and the
- * weapon's state around it: the clip's rounds as segments of a ring, the round loading filling the
- * next one; a gatling's belt as one arc and its spin inside it; a casemate gun's charge filling
- * the ring. It fades when the pointer is beyond the shot's reach.
+ * The crosshair: a center that marks the exact aim point, ticks red when the shot will hit, and
+ * around it the charge of a casemate gun's shot, filling the ring and turning red when full. It
+ * fades when the pointer is beyond the shot's reach.
  */
 function Crosshair(props: { player: HudState['player'] | undefined; verdict: Verdict | undefined; out: boolean; look: AimLook }) {
   const middle = CROSSHAIR_SIZE / 2;
@@ -409,7 +462,9 @@ function Crosshair(props: { player: HudState['player'] | undefined; verdict: Ver
 
   return (
     <svg width={CROSSHAIR_SIZE} height={CROSSHAIR_SIZE} viewBox={`0 0 ${CROSSHAIR_SIZE} ${CROSSHAIR_SIZE}`} class="block overflow-visible" opacity={props.out ? 0.5 : 1}>
-      <Show when={props.player?.alive && props.player}>{(player) => <WeaponRing player={player()} middle={middle} />}</Show>
+      <Show when={props.player?.alive && props.player.charge !== undefined && props.player.charge}>
+        {(charge) => <ChargeRing charge={charge()} middle={middle} />}
+      </Show>
       <Stroke d={center()} color={tint()} width={2.6} outline={2.6} dash={props.out ? '2.5 3' : undefined} />
       <Stroke d={circlePath(middle, middle, 1.2)} color={tint()} width={1.8} fill={tint()} />
     </svg>
@@ -418,9 +473,8 @@ function Crosshair(props: { player: HudState['player'] | undefined; verdict: Ver
 
 /** Width and height of the crosshair's box in CSS pixels. */
 const CROSSHAIR_SIZE = 84;
-/** Radius of the ring of rounds and of the gatling's spin inside it. */
+/** Radius of the ring of a charged shot. */
 const RING_RADIUS = 26;
-const SPIN_RADIUS = 21;
 
 /** The SVG path of the crosshair's center for a look: an upright cross, the corners of brackets around the dot, or a diagonal cross. */
 function crosshairCenter(kind: AimLook['center'], middle: number) {
@@ -441,72 +495,28 @@ function crosshairCenter(kind: AimLook['center'], middle: number) {
 }
 
 /**
- * The weapon's state around the crosshair, read from the heads-up display: rounds of a clip of up
- * to `MAX_PIPS` as segments, a bigger clip, the gatling's belt, as one arc with the spin inside
- * it, and a charged shot as an arc that fills and turns red when full.
+ * The charge of a casemate gun's shot around the crosshair: a dark ring that a light arc fills
+ * clockwise from the top as the shot charges, red once it is full.
+ *
+ * @param charge - How far the shot has charged, 0-1.
  */
-function WeaponRing(props: { player: HudState['player']; middle: number }) {
-  const segments = () => ringSegments(props.player);
+function ChargeRing(props: { charge: number; middle: number }) {
+  const top = -Math.PI / 2;
+  const whole = () => arcPath(props.middle, RING_RADIUS, top, top + Math.PI * 2 - 0.001);
 
   return (
     <>
-      <For each={segments()} keyed={false}>
-        {(segment) => (
-          <>
-            <path
-              d={arcPath(props.middle, segment().radius, segment().from, segment().to)}
-              fill="none"
-              stroke={INK}
-              stroke-opacity="0.45"
-              stroke-width={segment().width + 2.2}
-            />
-            <Show when={segment().filled > segment().from}>
-              <path
-                d={arcPath(props.middle, segment().radius, segment().from, Math.min(segment().filled, segment().to))}
-                fill="none"
-                stroke={segment().color}
-                stroke-width={segment().width}
-              />
-            </Show>
-          </>
-        )}
-      </For>
+      <path d={whole()} fill="none" stroke={INK} stroke-opacity="0.45" stroke-width={5.2} />
+      <Show when={props.charge > 0}>
+        <path
+          d={arcPath(props.middle, RING_RADIUS, top, top + (Math.PI * 2 - 0.001) * Math.min(props.charge, 1))}
+          fill="none"
+          stroke={props.charge >= FULL_CHARGE ? HIT : BREAKS}
+          stroke-width={3}
+        />
+      </Show>
     </>
   );
-}
-
-/** Most rounds a clip may hold to show them one by one around the crosshair. */
-const MAX_PIPS = 12;
-
-/**
- * The arcs of the crosshair's ring for the player's weapon, angles in radians clockwise from the
- * top: each with its radius, the part filled and the fill's color.
- */
-function ringSegments(player: HudState['player']) {
-  const full = Math.PI * 2;
-  const top = -Math.PI / 2;
-
-  if (player.weapon === 'charge') {
-    const charge = player.charge ?? (player.rounds > 0 ? 0 : player.loading);
-    const color = player.charge === undefined ? SOLID : player.charge >= 0.95 ? HIT : BREAKS;
-    return [{ radius: RING_RADIUS, from: top, to: top + full - 0.001, filled: top + full * charge, width: 3, color }];
-  }
-
-  if (player.clip > MAX_PIPS) {
-    const belt = { radius: RING_RADIUS, from: top, to: top + full - 0.001, filled: top + full * (player.rounds / player.clip), width: 3, color: BREAKS };
-    const spin = { radius: SPIN_RADIUS, from: top, to: top + full - 0.001, filled: top + full * player.spin, width: 2, color: player.spin >= 1 ? BREAKS : LIGHT };
-    return player.weapon === 'spin' ? [belt, spin] : [belt];
-  }
-
-  const gap = 0.16;
-  const each = full / player.clip;
-
-  return Array.from({ length: player.clip }, (_, index) => {
-    const from = top + index * each + gap / 2;
-    const to = from + each - gap;
-    const share = index < player.rounds ? 1 : index === player.rounds ? player.loading : 0;
-    return { radius: RING_RADIUS, from, to, filled: from + (to - from) * share, width: 3.2, color: index < player.rounds ? BREAKS : LIGHT };
-  });
 }
 
 /** Milliseconds the notice of a newly picked look stays. */

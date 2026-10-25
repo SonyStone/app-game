@@ -359,27 +359,25 @@ describe('king of the hill with the player', () => {
     expect(match.player).toBe(match.seat.tank);
   });
 
-  it('fires the clip one interval apart and reloads it', () => {
+  it('fires at a steady cadence for as long as the trigger is held, with no clip to run dry', () => {
     const match = createMatch(5, CAPTURE_RULES, true);
     const shots: number[] = [];
 
-    for (let step = 0; step < 300; step++) {
-      const before = match.hud().player.rounds;
+    for (let step = 0; step < 600; step++) {
+      const before = match.seat.weapon!.shots;
       match.step(1 / 60, { drive: { x: 0, y: 0 }, fire: true });
 
-      if (match.hud().player.rounds < before) {
+      if (match.seat.weapon!.shots > before) {
         shots.push(match.time);
       }
     }
 
-    expect(shots).toHaveLength(MEDIUM_TANK.gun.clip);
-    expect(shots[1] - shots[0]).toBeCloseTo(MEDIUM_TANK.gun.interval, 1);
+    const gaps = shots.slice(1).map((time, index) => time - shots[index]);
 
-    for (let step = 0; step < 300; step++) {
-      match.step(1 / 60);
-    }
-
-    expect(match.hud().player.rounds).toBe(MEDIUM_TANK.gun.clip);
+    // The first shot goes on the first step, then one every interval for the ten seconds held.
+    expect(shots.length).toBe(Math.floor(599 / Math.round(MEDIUM_TANK.interval * 60)) + 1);
+    expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThan(1e-6);
+    expect(gaps[0]).toBeCloseTo(MEDIUM_TANK.interval, 5);
   });
 });
 
@@ -466,45 +464,60 @@ function tick(match: ReturnType<typeof createMatch>) {
 }
 
 /**
- * Every four seconds, checks each bot with somewhere far to go: a window in which it moved less
- * than 30 px counts as stuck.
+ * Every four seconds, checks each bot with somewhere far to go: a window in which it never got
+ * 30 px from where it began counts as stuck. A bot that drove off and came back, as one shuttling
+ * between repair kits taken before it got there, moved.
  */
 function watchMovement(match: ReturnType<typeof createMatch>) {
-  const last = new Map<number, { x: number; y: number; streak: number }>();
+  const windows = new Map<number, { x: number; y: number; farthest: number; streak: number }>();
   const result = { windows: 0, stuck: 0, longest: 0, sample };
   let next = 4;
 
   return result;
 
+  /** Call every step: follows how far each tank gets, and judges the window every four seconds. */
   function sample() {
-    if (match.time < next) {
-      return;
-    }
+    const judge = match.time >= next;
 
-    next += 4;
+    if (judge) {
+      next += 4;
+    }
 
     for (const [member, bot] of match.bots) {
       const position = member.tank?.hull.translation();
-      const before = last.get(member.id);
+      const window = windows.get(member.id);
+
+      if (!position) {
+        windows.delete(member.id);
+        continue;
+      }
+
+      if (!window) {
+        windows.set(member.id, { x: position.x, y: position.y, farthest: 0, streak: 0 });
+        continue;
+      }
+
+      window.farthest = Math.max(window.farthest, Math.hypot(position.x - window.x, position.y - window.y));
+
+      if (!judge) {
+        continue;
+      }
+
       const destination = bot.driver.destination;
-      const far = position && destination && Math.hypot(destination.x - position.x, destination.y - position.y) > 80;
+      const far = destination && Math.hypot(destination.x - position.x, destination.y - position.y) > 80;
       let streak = 0;
 
-      if (position && before && far) {
+      if (far) {
         result.windows++;
 
-        if (Math.hypot(position.x - before.x, position.y - before.y) < 30) {
+        if (window.farthest < 30) {
           result.stuck++;
-          streak = before.streak + 1;
+          streak = window.streak + 1;
           result.longest = Math.max(result.longest, streak);
         }
       }
 
-      if (position) {
-        last.set(member.id, { x: position.x, y: position.y, streak });
-      } else {
-        last.delete(member.id);
-      }
+      windows.set(member.id, { x: position.x, y: position.y, farthest: 0, streak });
     }
   }
 }

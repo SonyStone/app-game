@@ -28,15 +28,17 @@ import { TANK_CLASS_IDS, type TankClassId } from './tanks';
  * makes a tank whole.
  *
  * The player aims with a crosshair of the game's own instead of the cursor; a line from the gun
- * shows where the next shot goes and what it will hit (see `AimOverlay`).
+ * shows where the next shot goes and what it will hit (see `AimOverlay`). Every gun fires at a
+ * steady cadence for as long as the button is held, with no clip and no reload to keep track of.
  *
  * Keys: 1-5 pick a class and C opens the class menu, R restarts, B shows what the bots think, V
  * hands the player's tank to a bot and shows the whole map (1-8 follow a tank, 0 shows the whole
- * map again), X switches the look of the aim. The right mouse button or Shift spins a Heavy's
- * gatling up without firing and turns a Sniper's hull on the spot toward the cursor, which it also
- * does by itself when the player stops driving and aims outside its gun's arc. While a Sniper
- * charges its shot, the view widens about the cursor, which keeps its aim, and letting go fires a
- * rail that hits at once along the gun. In the address, `?watch` starts watching right away,
+ * map again), X switches the look of the aim. The right mouse button or Shift turns a Sniper's
+ * hull on the spot toward the cursor, which it also does by itself when the player stops driving
+ * and aims outside its gun's arc. While a Sniper charges its shot, the view widens about the
+ * cursor, which keeps its aim, the cores of the enemies in sight are marked and the crosshair
+ * tells when the rail would blow one up; letting go fires the rail, which hits at once along the
+ * gun. In the address, `?watch` starts watching right away,
  * `?hold=30` shortens the hold time that wins to 30 seconds, `?class=scout` starts as that class
  * with the menu closed, `?aim=line` picks the aim's look and `?slow=4` runs the game four times
  * slower, to look at effects frame by frame.
@@ -112,8 +114,8 @@ export default function KothRoute() {
         )}
       </Show>
       <p class="pointer-events-none absolute bottom-3 left-4 m-0 text-xs text-white/60">
-        WASD drive · mouse aims: the line shows what the shot hits · click fires (Sniper: hold to charge and widen the view, let go for an
-        instant rail) · right button or Shift: spin up (Heavy), turn on the spot (Sniper) · C or 1-5 class · walls break, ram fences · wrecks
+        WASD drive · mouse aims: the line shows what the shot hits · hold to fire, no reloads (Sniper: hold to charge, the scope marks enemy
+        cores, let go for an instant rail) · right button or Shift: turn on the spot (Sniper) · C or 1-5 class · walls break, ram fences · wrecks
         are cover · green kits mend where they touch · X aim look · B bot thoughts · V watch (1-8 follow, 0 map) · R restart
       </p>
     </div>
@@ -228,7 +230,7 @@ function KothScene(props: {
 
     while (pendingStep >= PHYSICS_STEP) {
       pendingStep -= PHYSICS_STEP;
-      match.step(PHYSICS_STEP, { drive, aim, fire: controls.fire && !props.watching, rev: alt, turn: alt, reach });
+      match.step(PHYSICS_STEP, { drive, aim, fire: controls.fire && !props.watching, turn: alt, reach });
     }
 
     match.update(dt);

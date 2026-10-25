@@ -1,6 +1,8 @@
 import type { Tank } from '../arena/bodies';
 import { OVER_RUBBLE, PROXIMITY, RICOCHET_COS, TANK_TOP, type Combat, type ShellSpec } from '../damage/combat';
+import { traceRail } from '../damage/rail';
 import { isRolling, launchLob, stepLob, type LobSpec } from '../damage/weapons/lob';
+import { chargedShell } from './classes/weapon';
 import type { TankClass } from './tanks';
 
 type Point = { x: number; y: number };
@@ -19,7 +21,9 @@ type Point = { x: number; y: number };
  * - A grenade flies its arc, bounces off walls and bodies taller than it flies, lands, bounces and
  *   rolls until its fuse burns down, or goes off at once at an enemy tank it meets or brushes past
  *   before it first lands.
- * - A charged shot, the Sniper's, gets no forecast: its own laser sight shows its line.
+ * - A charged shot, the Sniper's, is foreseen only while it charges, at the charge it has: its own
+ *   laser sight shows the line, so the forecast only tells what the rail would do to the first
+ *   thing it meets, and above all whether it would blow an enemy's core up (see `railLane`).
  *
  * Shots pass through the shooter's teammates, as in the king of the hill without friendly fire,
  * and through the shooter's own tank until they first bounce.
@@ -27,9 +31,18 @@ type Point = { x: number; y: number };
  * @param angle - World direction in radians the gun fires along.
  * @param reach - How far away the player aims, from the hull's center: a grenade first lands that
  *   far past the muzzle. Defaults to the grenade's longest throw.
- * @returns The lanes, a blast's reach, and the verdict for the crosshair; `undefined` for a charged shot.
+ * @param charge - How far a charged shot has charged, 0-1, or `undefined` while it is not charging.
+ * @returns The lanes, a blast's reach, and the verdict for the crosshair; `undefined` for a charged
+ *   shot that is not charging.
  */
-export function forecastShot(combat: ForecastCombat, tank: Tank, tankClass: TankClass, angle: number, reach?: number): ShotForecast | undefined {
+export function forecastShot(
+  combat: ForecastCombat,
+  tank: Tank,
+  tankClass: TankClass,
+  angle: number,
+  reach?: number,
+  charge?: number
+): ShotForecast | undefined {
   const weapon = tankClass.weapon;
   const shell = tankClass.shell;
   const muzzle = tankClass.look.muzzle;
@@ -38,7 +51,12 @@ export function forecastShot(combat: ForecastCombat, tank: Tank, tankClass: Tank
 
   switch (weapon.kind) {
     case 'charge':
-      return undefined;
+      if (charge === undefined) {
+        return undefined;
+      }
+
+      lanes = [railLane(combat, tank, angle, chargedShell(shell, weapon.full, charge), passes)];
+      break;
 
     case 'single':
       lanes = [shellLane(combat, combat.muzzleOf(tank, angle), angle, shell, passes, 1)];
@@ -66,19 +84,20 @@ export function forecastShot(combat: ForecastCombat, tank: Tank, tankClass: Tank
 
   const main = lanes[0];
   const blast = shell.blast && blastAt(combat, main, shell.blast.radius, passes);
-  const reachable = shell.lob ? { min: shell.lob.minReach, max: shell.range } : { min: 0, max: muzzle + shell.range };
+  const range = weapon.kind === 'charge' && charge !== undefined ? chargedShell(shell, weapon.full, charge).range : shell.range;
+  const reachable = shell.lob ? { min: shell.lob.minReach, max: shell.range } : { min: 0, max: muzzle + range };
   const spread = weapon.kind === 'volley' ? weapon.spread / 2 : weapon.kind === 'spin' ? weapon.spread : 0;
 
   return { kind: weapon.kind, lanes, blast, reachable, spread, verdict: verdictOf(lanes, blast) };
 }
 
 /** What `forecastShot` needs of the battle. */
-export type ForecastCombat = Pick<Combat, 'raycast' | 'muzzleOf' | 'teamOf' | 'tanks' | 'hullOf'>;
+export type ForecastCombat = Pick<Combat, 'raycast' | 'muzzleOf' | 'teamOf' | 'tanks' | 'hullOf' | 'armorOf'>;
 
 /** Where the next shot goes, as `forecastShot` foresees it. */
 export type ShotForecast = {
   /** How the weapon fires, as its `WeaponSpec` says. */
-  kind: 'single' | 'volley' | 'spin' | 'lob';
+  kind: TankClass['weapon']['kind'];
   /** Each way the shot's shells may take, the most likely first. */
   lanes: Lane[];
   /** The blast where the first lane ends, for a shell that goes off: its center, radius and the enemy tanks it reaches. */
@@ -156,6 +175,41 @@ function shellLane(combat: ForecastCombat, start: Point, angle: number, shell: S
   const end: LaneEnd = { at, heading: direction, meets: hit.kind ?? 'nothing', tank: hit.tank, core: hit.core, breakable: hit.breakable, glancing };
 
   return { path: [{ ...start, height: 0 }, { ...at, height: 0 }], end, weight };
+}
+
+/**
+ * A rail of `shell` fired from the muzzle along `angle`, which hits at once: a straight line to the
+ * first thing it meets, as `fireRail` finds it, over rubble for `OVER_RUBBLE` px past the muzzle.
+ * On an enemy tank its end tells whether the line passes near enough the core, through armor its
+ * power gets through, to blow it up, as `traceRail` finds it in the tank's armor; what the rail
+ * would go through and hit beyond is not followed.
+ */
+function railLane(combat: ForecastCombat, tank: Tank, angle: number, shell: ShellSpec, passes: Passer): Lane {
+  const start = combat.muzzleOf(tank, angle);
+  const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+  const hit = combat.raycast(start, direction, shell.range, (other) => passes(other, false), { overRubble: OVER_RUBBLE });
+  const at = { x: start.x + direction.x * hit.distance, y: start.y + direction.y * hit.distance };
+  const kills = hit.tank !== undefined && (hit.core || railKills(combat, hit.tank, at, direction, shell.rail!));
+  const end: LaneEnd = { at, heading: direction, meets: hit.kind ?? 'nothing', tank: hit.tank, core: kills, breakable: hit.breakable, glancing: false };
+
+  return { path: [{ ...start, height: 0 }, { ...at, height: 0 }], end, weight: 1 };
+}
+
+/** Whether a rail meeting `target`'s armor at `at` along `direction` blows its core up. */
+function railKills(combat: ForecastCombat, target: Tank, at: Point, direction: Point, rail: NonNullable<ShellSpec['rail']>) {
+  const field = combat.armorOf(target);
+
+  if (!field) {
+    return false;
+  }
+
+  // From a hair before the surface, in the hull's own frame, as the battle traces it.
+  const center = target.hull.translation();
+  const cos = Math.cos(target.hull.rotation());
+  const sin = Math.sin(target.hull.rotation());
+  const into = (vector: Point) => ({ x: vector.x * cos + vector.y * sin, y: -vector.x * sin + vector.y * cos });
+  const local = into({ x: at.x - direction.x - center.x, y: at.y - direction.y - center.y });
+  return traceRail(field, local, into(direction), { power: rail.power, graze: rail.graze ?? rail.slit / 2 })?.core !== undefined;
 }
 
 /**

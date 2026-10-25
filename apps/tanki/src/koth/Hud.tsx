@@ -1,6 +1,7 @@
-import { For, Match, Show, Switch } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { ClassSilhouette } from './classes/ClassMenu';
 import { TANK_CLASSES } from './classes/classes';
+import { FULL_CHARGE } from './classes/weapon';
 import type { KothMatch, MemberHud } from './match';
 import type { TeamId } from './rules';
 import type { TankClassId } from './tanks';
@@ -208,28 +209,21 @@ function PlayerPanel(props: { player: HudState['player'] }) {
 }
 
 /**
- * The state of the player's weapon: rounds in the clip for most guns; the gatling's belt and how
- * far it has spun up; the charge of a casemate gun's shot, marked full once it pierces.
+ * The charge of the player's casemate gun, marked full once it pierces most. The other guns fire
+ * at a steady cadence for as long as the trigger is held, with nothing to keep count of, and show
+ * nothing here.
  */
 function WeaponState(props: { player: HudState['player'] }) {
+  const charge = () => props.player.charge;
+
   return (
-    <Switch fallback={<Clip rounds={props.player.rounds} clip={props.player.clip} loading={props.player.loading} />}>
-      <Match when={props.player.weapon === 'spin'}>
-        <div class="flex flex-col items-center gap-0.5">
-          <Gauge label="Spin" value={props.player.spin} color={props.player.spin >= 1 ? '#ffd27a' : '#c8c8c8'} />
-          <Gauge label="Belt" value={props.player.rounds / props.player.clip} color="#ffd27a" />
-        </div>
-      </Match>
-      <Match when={props.player.weapon === 'charge'}>
-        <div class="flex flex-col items-center gap-0.5">
-          <Gauge
-            label={props.player.charge === undefined ? (props.player.rounds > 0 ? 'Hold' : 'Load') : (props.player.charge ?? 0) >= 0.95 ? 'FULL' : 'Charge'}
-            value={props.player.charge ?? (props.player.rounds > 0 ? 0 : props.player.loading)}
-            color={props.player.charge === undefined ? '#8a8a8a' : (props.player.charge ?? 0) >= 0.95 ? '#ff5a3c' : '#ffd27a'}
-          />
-        </div>
-      </Match>
-    </Switch>
+    <Show when={props.player.weapon === 'charge'}>
+      <Gauge
+        label={charge() === undefined ? 'Hold' : charge()! >= FULL_CHARGE ? 'FULL' : 'Charge'}
+        value={charge() ?? 0}
+        color={charge() === undefined ? '#8a8a8a' : charge()! >= FULL_CHARGE ? '#ff5a3c' : '#ffd27a'}
+      />
+    </Show>
   );
 }
 
@@ -241,29 +235,6 @@ function Gauge(props: { label: string; value: number; color: string }) {
       <div class="h-3 w-36 overflow-hidden rounded-sm bg-black/45">
         <div class="h-full" style={{ width: `${Math.round(Math.min(Math.max(props.value, 0), 1) * 100)}%`, background: props.color }} />
       </div>
-    </div>
-  );
-}
-
-/**
- * Rounds in the gun: a bar for each round of the clip, filled while loaded; the round being
- * loaded fills up as it loads.
- *
- * @param loading - Progress of the round being loaded, 0-1.
- */
-function Clip(props: { rounds: number; clip: number; loading: number }) {
-  return (
-    <div class="flex gap-1">
-      <For each={Array.from({ length: props.clip }, (_, index) => index)}>
-        {(slot) => (
-          <div class="h-3 w-5 overflow-hidden rounded-sm bg-black/45">
-            <div
-              class="h-full bg-[#ffd27a]"
-              style={{ width: `${slot < props.rounds ? 100 : slot === props.rounds ? Math.round(props.loading * 100) : 0}%` }}
-            />
-          </div>
-        )}
-      </For>
     </div>
   );
 }

@@ -200,12 +200,25 @@ describe('the aim forecast', () => {
     expect(worst).toBeLessThan(3);
   });
 
-  it('gives a charged shot no forecast, for its laser sight shows its line', () => {
+  it('foresees a charged rail only while it charges, telling a line that blows the core up from one that only slits the armor', () => {
     const { combat } = createBattle();
+    // Side on to the shooter: its core lies 11 px behind its middle, at y = -11.
+    const enemy = combat.spawnTank({ x: 300, y: 0, rotation: Math.PI / 2 }, { color: 0, team: 'blue' });
     const shooter = spawn(combat, 'sniper', { x: 0, y: 0 }, 'red');
     settle(combat);
+    const along = (y: number, charge: number | undefined) => {
+      // The gun sits 2.5 px right of the hull's middle: move the hull so the gun's line runs at `y`.
+      shooter.hull.setTranslation({ x: 0, y: y - 2.5 }, true);
+      return forecastShot(combat, shooter, TANK_CLASSES.sniper, 0, undefined, charge);
+    };
+    const core = combat.coreOf(enemy)!;
 
-    expect(forecastShot(combat, shooter, TANK_CLASSES.sniper, 0)).toBeUndefined();
+    expect(along(core.y, undefined)).toBeUndefined();
+    expect(along(core.y, 1)!.verdict).toBe('kill');
+    expect(along(core.y, 1)!.lanes[0].end.tank).toBe(enemy);
+    expect(along(core.y + 16, 1)!.verdict).toBe('hit');
+    // With no charge the rail stops in the side armor, short of the core.
+    expect(along(core.y, 0)!.verdict).toBe('hit');
   });
 });
 
