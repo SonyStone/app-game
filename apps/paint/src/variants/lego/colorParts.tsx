@@ -1,25 +1,33 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import {
-  HarmonyField,
-  hexToWheel,
-  MaskField,
-  WheelDisk,
-  wheelToHex,
-  type WheelColor
-} from '../../features/color-wheel';
+import { HarmonyField, MaskField, WheelDisk } from '../../features/color-wheel';
 import wheelStyles from '../../features/color-wheel/ColorWheel.module.css';
 import { hexToHsv, hsvToHex, luminance, type Hsv } from '../../features/color/hsv';
 import { CoolorusWheel } from '../../features/coolorus-wheel';
 import { HueTriangle } from '../../features/hue-triangle';
-import type { PaintSession } from '../../features/session';
 import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
 import { ColorDisc } from '../zen/ColorDisc';
 import { cellGap, pitch, type Span } from './board';
+import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import type { LookSpec } from './looks';
-import { runPartCommand } from './partCommand';
+
+/** Controlled color editing callbacks: input is live, commit records only a settled color. */
+export type ColorInputProps = {
+  color: string;
+  onInput: (color: string) => void;
+  onCommit: (color: string) => void;
+};
+
+/** Controlled color picker inputs. Commands are supplied by the binding, never by a session read. */
+export type PickerProps = {
+  color: string;
+  onInput: (color: string) => void;
+  onCommit: (color: string) => void;
+  oklch: Pick<LegoServices['color']['oklch'], 'wheel' | 'edit' | 'settle' | 'settings' | 'update'>;
+  coolorus: LegoServices['color']['coolorus'];
+};
 
 /**
  * The color parts, Procreate's Colors and the Desktop color panel taken apart: a swatch that opens a panel of its
@@ -45,13 +53,13 @@ export const wheelLooks: readonly WheelLook[] = [
  * A picker look: `width` is its natural width in CSS pixels, at which it lays itself out before being scaled into
  * its cells; a look without one fills its cells as they are.
  */
-type WheelLook = LookSpec & { width?: number; Picker: (props: { session: PaintSession }) => JSX.Element };
+type WheelLook = LookSpec & { width?: number; Picker: (props: PickerProps) => JSX.Element };
 
 /** The picker's look until the user chooses one. */
 export const autoWheelLook = () => 'disc';
 
 /** The picker in `look` (see `wheelLooks`), filling a part of `span`. */
-export function WheelPart(props: { look: string; span: Span; session: PaintSession }) {
+export function WheelPart(props: PickerProps & { look: string; span: Span }) {
   // Keyed: another look is another picker, with state of its own.
   const look = () => wheelLooks.find((candidate) => candidate.id === props.look) ?? wheelLooks[0]!;
 
@@ -60,10 +68,10 @@ export function WheelPart(props: { look: string; span: Span; session: PaintSessi
       {(found) => {
         const Picker = found.Picker;
         return found.width === undefined ? (
-          <Picker session={props.session} />
+          <Picker {...props} />
         ) : (
           <Fitted width={found.width} box={{ width: length(props.span.columns), height: length(props.span.rows) }}>
-            <Picker session={props.session} />
+            <Picker {...props} />
           </Fitted>
         );
       }}
@@ -75,8 +83,8 @@ export function WheelPart(props: { look: string; span: Span; session: PaintSessi
  * The brush color as a swatch, with its hex once two cells wide. A tap opens the swatch's own panel (`onOpen`), which
  * the user fills with parts like any other.
  */
-export function SwatchPart(props: { span: Span; session: PaintSession; onOpen: (anchor: Element) => void }) {
-  const color = () => props.session.brush().color;
+export function SwatchPart(props: { span: Span; color: string; onOpen: (anchor: Element) => void }) {
+  const color = () => props.color;
 
   return (
     <button
@@ -84,7 +92,7 @@ export function SwatchPart(props: { span: Span; session: PaintSession; onOpen: (
       class={styles.color}
       style={{ background: color(), color: luminance(color()) > 0.4 ? '#1c1c1e' : '#ffffff' }}
       aria-label={`Color ${color()}`}
-      onClick={(event) => runPartCommand(props.session, () => props.onOpen(event.currentTarget))}
+      onClick={(event) => props.onOpen(event.currentTarget)}
     >
       <Show when={props.span.columns >= 2}>
         <span class={styles.name}>{color()}</span>
@@ -97,21 +105,20 @@ export function SwatchPart(props: { span: Span; session: PaintSession; onOpen: (
  * The foreground color before the background one, as Photoshop and Procreate show them: overlapping at one cell,
  * side by side when wider, named once four cells wide. Tapping the background color swaps the two.
  */
-export function PairPart(props: { span: Span; session: PaintSession }) {
-  const brush = () => props.session.brush();
-  const background = () => brush().backgroundColor ?? '#ffffff';
+export function PairPart(props: { span: Span; colors: { foreground: string; background: string }; swap: () => void }) {
+  const background = () => props.colors.background;
   const named = () => props.span.columns >= 4;
 
   return (
     <div class={[styles.pair, props.span.columns >= 2 && styles.pairWide]}>
       <span
         class={styles.pairForeground}
-        style={{ background: brush().color }}
+        style={{ background: props.colors.foreground }}
         role="img"
         aria-label="Foreground color"
       >
         <Show when={named()}>
-          <span style={{ color: luminance(brush().color) > 0.4 ? '#1c1c1e' : '#ffffff' }}>Foreground</span>
+          <span style={{ color: luminance(props.colors.foreground) > 0.4 ? '#1c1c1e' : '#ffffff' }}>Foreground</span>
         </Show>
       </span>
       <button
@@ -120,7 +127,7 @@ export function PairPart(props: { span: Span; session: PaintSession }) {
         style={{ background: background() }}
         aria-label="Background color: swap with the foreground"
         title="Background color · tap to swap"
-        onClick={() => runPartCommand(props.session, () => props.session.tools.swapColors())}
+        onClick={props.swap}
       >
         <Show when={named()}>
           <span style={{ color: luminance(background()) > 0.4 ? '#1c1c1e' : '#ffffff' }}>Background</span>
@@ -131,24 +138,22 @@ export function PairPart(props: { span: Span; session: PaintSession }) {
 }
 
 /** The brush color as `#rrggbb` to read or type; Enter or leaving the field applies it, a wrong entry is undone. */
-export function HexPart(props: { session: PaintSession }) {
-  const recent = recentFor(props.session);
-
+export function HexPart(props: ColorInputProps) {
   return (
     <label class={styles.hex}>
       <input
         aria-label="Hex color"
         spellcheck={false}
-        value={props.session.brush().color}
+        value={props.color}
         onChange={(event) =>
-          runPartCommand(props.session, () => {
+          (() => {
             const parsed = parseHex(event.currentTarget.value);
-            event.currentTarget.value = parsed ?? props.session.brush().color;
+            event.currentTarget.value = parsed ?? props.color;
             if (parsed) {
-              setColor(props.session, parsed);
-              recent.remember(parsed);
+              props.onInput(parsed);
+              props.onCommit(parsed);
             }
-          })
+          })()
         }
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
@@ -164,14 +169,24 @@ export function HexPart(props: { session: PaintSession }) {
  * The recently used colors, newest first, as round chips filling the part two to a cell each way, the places no color
  * has taken yet outlined; a tap paints in one.
  */
-export function HistoryPart(props: { span: Span; session: PaintSession }) {
-  const recent = recentFor(props.session);
+export function HistoryPart(props: ColorInputProps & { span: Span; colors: readonly string[] }) {
   const count = () => props.span.columns * props.span.rows * 4;
-  const colors = () => recent.colors().slice(0, count());
+  const colors = () => props.colors.slice(0, count());
 
   return (
     <Chips span={props.span} label="Color history" round>
-      <For each={colors()}>{(color) => <Chip color={color} session={props.session} />}</For>
+      <For each={colors()}>
+        {(color) => (
+          <Chip
+            color={color}
+            current={props.color}
+            onChoose={() => {
+              props.onInput(color);
+              props.onCommit(color);
+            }}
+          />
+        )}
+      </For>
       <For each={Array.from({ length: count() - colors().length })}>
         {() => <span class={[styles.chip, styles.slot]} aria-hidden="true" />}
       </For>
@@ -183,99 +198,47 @@ export function HistoryPart(props: { span: Span; session: PaintSession }) {
  * Procreate's default palette, two chips to a cell across, as many as fit at two rows to a cell; when they run out
  * first, the rows grow to fill the part.
  */
-export function PalettePart(props: { span: Span; session: PaintSession }) {
+export function PalettePart(props: ColorInputProps & { span: Span }) {
   const colors = () => defaultPalette.slice(0, props.span.columns * props.span.rows * 4);
 
   return (
     <Chips span={props.span} label="Palette" rows={Math.ceil(colors().length / (props.span.columns * 2))}>
-      <For each={colors()}>{(color) => <Chip color={color} session={props.session} />}</For>
+      <For each={colors()}>
+        {(color) => (
+          <Chip
+            color={color}
+            current={props.color}
+            onChoose={() => {
+              props.onInput(color);
+              props.onCommit(color);
+            }}
+          />
+        )}
+      </For>
     </Chips>
   );
 }
 
-/**
- * The session's recent colors, one list for every part on it, so the history shows what any picker set; kept with
- * Paint's on this address (see `createRecentColors`).
- */
-export function recentFor(session: PaintSession) {
-  return session.recentColors;
-}
-
 /** The OKLCH disk's harmony list, filling the part; its caption shows once the part is two cells tall. */
-export function HarmonyPart(props: { span: Span; session: PaintSession }) {
-  const oklch = oklchFor(props.session);
-
+export function HarmonyPart(props: {
+  span: Span;
+  settings: ReturnType<LegoServices['color']['oklch']['settings']>;
+  onSettings: LegoServices['color']['oklch']['update'];
+}) {
   return (
     <div class={[wheelStyles.guides, styles.wheelField]} data-captioned={props.span.rows >= 2 ? '' : undefined}>
-      <HarmonyField
-        settings={oklch.settings()}
-        onSettings={(patch) => runPartCommand(props.session, () => oklch.update(patch))}
-      />
+      <HarmonyField settings={props.settings} onSettings={props.onSettings} />
     </div>
   );
 }
 
 /** The OKLCH disk's gamut mask list, filling the part; its caption shows once the part is two cells tall. */
-export function MaskPart(props: { span: Span; session: PaintSession }) {
-  const oklch = oklchFor(props.session);
-
+export function MaskPart(props: Parameters<typeof HarmonyPart>[0]) {
   return (
     <div class={[wheelStyles.guides, styles.wheelField]} data-captioned={props.span.rows >= 2 ? '' : undefined}>
-      <MaskField
-        settings={oklch.settings()}
-        onSettings={(patch) => runPartCommand(props.session, () => oklch.update(patch))}
-      />
+      <MaskField settings={props.settings} onSettings={props.onSettings} />
     </div>
   );
-}
-
-/**
- * The session's color in OKLCH and the OKLCH disk's guides, one for every part on it, so the disk, the lightness and
- * the guides apart act as one wheel. The color keeps the hue and chroma it was reached from while it still produces
- * the brush color, so lightness can pass black and come back; the guides are Paint's on this device.
- */
-export function oklchFor(session: PaintSession) {
-  let found = oklchs.get(session);
-  if (!found) {
-    const settings = session.colorWheel;
-    let last: WheelColor | undefined;
-    const recent = recentFor(session);
-    found = {
-      wheel() {
-        const color = session.brush().color;
-        last = last && wheelToHex(last) === color ? last : hexToWheel(color, last);
-        return last;
-      },
-      edit(next: WheelColor) {
-        last = next;
-        setColor(session, wheelToHex(next));
-      },
-      settle: () => recent.remember(session.brush().color),
-      settings: settings.settings,
-      update: settings.update
-    };
-    oklchs.set(session, found);
-  }
-
-  return found;
-}
-
-const oklchs = new WeakMap<
-  PaintSession,
-  {
-    wheel: () => WheelColor;
-    edit: (next: WheelColor) => void;
-    settle: () => void;
-    settings: PaintSession['colorWheel']['settings'];
-    update: PaintSession['colorWheel']['update'];
-  }
->();
-
-/** Paints in `color` (`#rrggbb` or HSV) from now on; the eraser gives way to the brush. */
-export function setColor(session: PaintSession, color: string | Hsv) {
-  runPartCommand(session, () => {
-    session.setColor(typeof color === 'string' ? color : hsvToHex(color));
-  });
 }
 
 /** Pixels a part of `cells` cells covers along one side. */
@@ -301,16 +264,10 @@ function Fitted(props: { width: number; box: { width: number; height: number }; 
   );
 }
 
-function Disc(props: { session: PaintSession }) {
-  const recent = recentFor(props.session);
-
+function Disc(props: PickerProps) {
   return (
     <div class={styles.pickerSurface}>
-      <ColorDisc
-        color={props.session.brush().color}
-        onInput={(color) => setColor(props.session, color)}
-        onCommit={(color) => runPartCommand(props.session, () => recent.remember(color))}
-      />
+      <ColorDisc color={props.color} onInput={props.onInput} onCommit={props.onCommit} />
     </div>
   );
 }
@@ -319,32 +276,27 @@ function Disc(props: { session: PaintSession }) {
  * Saturation left to right and brightness bottom to top for the brush color's hue, filling the part, as in
  * Procreate's Classic picker. Greys and black keep the hue they were reached from.
  */
-function Square(props: { session: PaintSession }) {
-  const recent = recentFor(props.session);
+function Square(props: PickerProps) {
   const hsv = createMemo<Hsv>((previous) =>
-    previous && hsvToHex(previous) === props.session.brush().color
-      ? previous
-      : hexToHsv(props.session.brush().color, previous)
+    previous && hsvToHex(previous) === props.color ? previous : hexToHsv(props.color, previous)
   );
   /** The hue when the press began, which a drag through black must not lose. */
   let hue = 0;
   let latest = '';
-  const apply = (press: Press) =>
-    runPartCommand(props.session, () => {
-      const rect = press.target.getBoundingClientRect();
-      const s = Math.min(1, Math.max(0, (press.point.x - rect.left) / rect.width));
-      const v = Math.min(1, Math.max(0, 1 - (press.point.y - rect.top) / rect.height));
-      latest = hsvToHex({ h: hue, s, v });
-      setColor(props.session, { h: hue, s, v });
-    });
+  const apply = (press: Press) => {
+    const rect = press.target.getBoundingClientRect();
+    const s = Math.min(1, Math.max(0, (press.point.x - rect.left) / rect.width));
+    const v = Math.min(1, Math.max(0, 1 - (press.point.y - rect.top) / rect.height));
+    latest = hsvToHex({ h: hue, s, v });
+    props.onInput(latest);
+  };
   const press = pressHandlers({
-    start: (started) =>
-      runPartCommand(props.session, () => {
-        hue = hsv().h;
-        apply(started);
-      }),
+    start: (started) => {
+      hue = hsv().h;
+      apply(started);
+    },
     move: apply,
-    end: () => runPartCommand(props.session, () => recent.remember(latest)),
+    end: () => props.onCommit(latest),
     tapDistance: 0
   });
 
@@ -358,56 +310,49 @@ function Square(props: { session: PaintSession }) {
     >
       <span
         class={styles.squareThumb}
-        style={{ left: `${hsv().s * 100}%`, top: `${(1 - hsv().v) * 100}%`, background: props.session.brush().color }}
+        style={{ left: `${hsv().s * 100}%`, top: `${(1 - hsv().v) * 100}%`, background: props.color }}
       />
     </div>
   );
 }
 
-function Triangle(props: { session: PaintSession }) {
-  const recent = recentFor(props.session);
-
+function Triangle(props: PickerProps) {
   return (
     <div class={styles.pickerSurface}>
-      <HueTriangle
-        color={props.session.brush().color}
-        onChange={(color) => setColor(props.session, color)}
-        onSettle={() => runPartCommand(props.session, () => recent.remember(props.session.brush().color))}
-      />
+      <HueTriangle color={props.color} onChange={props.onInput} onSettle={() => props.onCommit(props.color)} />
     </div>
   );
 }
 
-/** The OKLCH disk alone, on the session's shared OKLCH color and guides; see `oklchFor`. */
-function OklchDisk(props: { session: PaintSession }) {
-  const oklch = oklchFor(props.session);
+/** The OKLCH disk alone, on the session's shared OKLCH color and guides; see the session-owned OKLCH binding. */
+function OklchDisk(props: PickerProps) {
+  const oklch = props.oklch;
 
   return (
     <div class={styles.pickerSurface}>
       <WheelDisk
         wheel={oklch.wheel()}
-        color={props.session.brush().color}
-        onEdit={(next) => runPartCommand(props.session, () => oklch.edit(next))}
-        onSettle={() => runPartCommand(props.session, oklch.settle)}
+        color={props.color}
+        onEdit={oklch.edit}
+        onSettle={oklch.settle}
         settings={oklch.settings()}
-        onSettings={(patch) => runPartCommand(props.session, () => oklch.update(patch))}
+        onSettings={oklch.update}
       />
     </div>
   );
 }
 
-function Coolorus(props: { session: PaintSession }) {
-  const recent = recentFor(props.session);
-  const { settings, update } = props.session.coolorus;
+function Coolorus(props: PickerProps) {
+  const { settings, update } = props.coolorus;
 
   return (
     <div class={styles.pickerSurface}>
       <CoolorusWheel
-        color={props.session.brush().color}
-        onChange={(color) => setColor(props.session, color)}
-        onSettle={() => runPartCommand(props.session, () => recent.remember(props.session.brush().color))}
+        color={props.color}
+        onChange={props.onInput}
+        onSettle={() => props.onCommit(props.color)}
         settings={settings()}
-        onSettings={(patch) => runPartCommand(props.session, () => update(patch))}
+        onSettings={update}
       />
     </div>
   );
@@ -430,21 +375,16 @@ function Chips(props: { span: Span; label: string; round?: boolean; rows?: numbe
   );
 }
 
-function Chip(props: { color: string; session: PaintSession }) {
+function Chip(props: { color: string; current: string; onChoose: () => void }) {
   return (
     <button
       type="button"
       class={styles.chip}
-      data-current={props.color.toLowerCase() === props.session.brush().color.toLowerCase() ? '' : undefined}
+      data-current={props.color.toLowerCase() === props.current.toLowerCase() ? '' : undefined}
       style={{ background: props.color }}
       aria-label={props.color}
       title={props.color}
-      onClick={() =>
-        runPartCommand(props.session, () => {
-          setColor(props.session, props.color);
-          recentFor(props.session).remember(props.color);
-        })
-      }
+      onClick={props.onChoose}
     />
   );
 }

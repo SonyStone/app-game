@@ -28,6 +28,7 @@
     "@solid-primitives/drag-drop": "catalog:",
     "@solid-primitives/event-listener": "catalog:",
     "@solid-primitives/fullscreen": "catalog:",
+    "@solid-primitives/intersection-observer": "catalog:",
     "@solid-primitives/media": "catalog:",
     "@solid-primitives/page-utilities": "catalog:",
     "@solid-primitives/resize-observer": "catalog:",

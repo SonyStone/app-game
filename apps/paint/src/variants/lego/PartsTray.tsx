@@ -3,8 +3,9 @@ import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import { cellGap, cellSize, partData, partsBounds, pitch, type Part } from './board';
 import { closedHeight, type createSheet } from './createSheet';
 import type { createKits, Kit } from './kits';
+import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
-import { boxSections, kindLabel, lookOf, PartView, type Session } from './parts';
+import { boxSections, kindLabel, lookOf, PartView } from './parts';
 import { opaqueData } from './partStorage';
 
 /**
@@ -16,7 +17,7 @@ import { opaqueData } from './partStorage';
  * kept as a kit (the workbench above both in a narrow view). While it is sunk, the strip it leaves puts away what is dropped on it.
  */
 export function PartsTray(props: {
-  session: Session;
+  presets: LegoServices['presets']['all'];
   kits: ReturnType<typeof createKits>;
   sheet: ReturnType<typeof createSheet>;
   /** Whether a part or kit carried over the sheet would be put away there. */
@@ -106,14 +107,14 @@ export function PartsTray(props: {
         <div class={styles.trayShelves}>
           <div ref={setBody} class={styles.trayBody} data-over={props.over && !props.sheet.sunk() ? '' : undefined}>
             <span class={styles.zoneLabel}>{props.over ? 'Drop to put it away' : 'Parts'}</span>
-            <For each={partFamilies(props.session)}>
+            <For each={partFamilies(props.presets)} keyed={(family) => family.id}>
               {(family) => (
                 <section>
-                  <h4>{family.title}</h4>
+                  <h4>{family().title}</h4>
                   <div class={styles.trayItems}>
-                    <For each={family.kinds}>
+                    <For each={family().kinds}>
                       {(kind) => (
-                        <PartTile kind={kind} session={props.session} onLift={(event) => props.onLift(event, kind)} />
+                        <PartTile kind={kind} presets={props.presets} onLift={(event) => props.onLift(event, kind)} />
                       )}
                     </For>
                   </div>
@@ -147,7 +148,6 @@ export function PartsTray(props: {
                   <KitTile
                     kit={kit}
                     kits={props.kits}
-                    session={props.session}
                     flash={props.flashKit === kit.id}
                     onLift={(event) => props.onLiftKit(event, kit)}
                   />
@@ -279,25 +279,29 @@ const flingSpeed = 0.3;
 const wheelSettle = 160;
 
 /** The families of parts the box and the spawn menu offer: the box's sections, then the user's brushes. */
-export function partFamilies(session: Session) {
-  const brushes = session.library.presets().map((preset) => `preset:${preset.id}`);
-  return [...boxSections, { title: 'Brushes', kinds: brushes }];
+export function partFamilies(presets: LegoServices['presets']['all']) {
+  const brushes = presets().map((preset) => `preset:${preset.id}`);
+  return [...boxSections, { id: 'Brushes', title: 'Brushes', kinds: brushes }];
 }
 
 /** A part of `kind` as the box shows it: a one-cell sample with its name below; a press lifts a new one. */
-export function PartTile(props: { kind: string; session: Session; onLift: (event: PointerEvent) => void }) {
+export function PartTile(props: {
+  kind: string;
+  presets: LegoServices['presets']['all'];
+  onLift: (event: PointerEvent) => void;
+}) {
   return (
     <div class={styles.trayItem}>
       <div
         class={styles.trayTile}
-        title={kindLabel(props.kind, props.session)}
+        title={kindLabel(props.kind, props.presets())}
         onPointerDown={(event) => props.onLift(event)}
       >
         <div class={styles.content} inert>
-          <PartView kind={props.kind} span={{ columns: 1, rows: 1 }} session={props.session} onPopup={() => {}} />
+          <PartView mode="preview" kind={props.kind} span={{ columns: 1, rows: 1 }} onPopup={() => {}} />
         </div>
       </div>
-      <span class={styles.trayCaption}>{kindLabel(props.kind, props.session)}</span>
+      <span class={styles.trayCaption}>{kindLabel(props.kind, props.presets())}</span>
     </div>
   );
 }
@@ -309,7 +313,6 @@ export function PartTile(props: { kind: string; session: Session; onLift: (event
 export function KitTile(props: {
   kit: Kit;
   kits: ReturnType<typeof createKits>;
-  session: Session;
   cells?: number;
   /** Lights the kit up and scrolls it into view. */
   flash?: boolean;
@@ -337,7 +340,7 @@ export function KitTile(props: {
         }}
       >
         <Show when={!broken()} fallback={<span class={styles.brokenKit}>Broken kit</span>}>
-          <KitPreview parts={props.kit.parts} session={props.session} cells={props.cells ?? 3} />
+          <KitPreview parts={props.kit.parts} cells={props.cells ?? 3} />
         </Show>
         <Show when={props.kits.isSaved(props.kit.id)}>
           <button
@@ -410,7 +413,7 @@ function KitName(props: { name: string; onRename: (name: string) => void }) {
  * A kit's parts laid out as on a panel at full size, the block being carried; see `KitPreview` for the box's
  * miniature.
  */
-export function BlockView(props: { parts: readonly Part[]; session: Session }) {
+export function BlockView(props: { parts: readonly Part[] }) {
   const bounds = () => partsBounds(props.parts);
 
   return (
@@ -427,11 +430,11 @@ export function BlockView(props: { parts: readonly Part[]; session: Session }) {
         >
           <div class={styles.content} inert>
             <PartView
+              mode="preview"
               kind={part.kind}
               missing={!!part[partData]?.invalid}
               span={part.span}
               look={lookOf(part)}
-              session={props.session}
               onPopup={() => {}}
             />
           </div>
@@ -442,7 +445,7 @@ export function BlockView(props: { parts: readonly Part[]; session: Session }) {
 }
 
 /** A kit scaled down to at most `cells` cells either way, on a plate like a panel's. */
-function KitPreview(props: { parts: readonly Part[]; session: Session; cells: number }) {
+function KitPreview(props: { parts: readonly Part[]; cells: number }) {
   const size = () => {
     const bounds = partsBounds(props.parts);
     return { width: bounds.columns * pitch - cellGap, height: bounds.rows * pitch - cellGap };
@@ -459,7 +462,7 @@ function KitPreview(props: { parts: readonly Part[]; session: Session; cells: nu
         style={{ width: `${size().width}px`, height: `${size().height}px`, scale: `${scale()}` }}
         inert
       >
-        <BlockView parts={props.parts} session={props.session} />
+        <BlockView parts={props.parts} />
       </div>
     </div>
   );

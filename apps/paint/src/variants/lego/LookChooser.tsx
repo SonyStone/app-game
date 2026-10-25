@@ -3,7 +3,7 @@ import { For, Show } from 'solid-js';
 import { cellGap, partData, pitch, type Part, type Span } from './board';
 import styles from './LegoStudio.module.css';
 import { lookFits, resolveLook } from './looks';
-import { PartView, partLooks, type Session } from './parts';
+import { PartView, partLooks } from './parts';
 
 /**
  * Chooses how `part` looks at its current size, showing every choice live and in miniature, like Android's widget
@@ -12,7 +12,6 @@ import { PartView, partLooks, type Session } from './parts';
  */
 export function LookChooser(props: {
   part: Part;
-  session: Session;
   /** Shows `look` at the part's size. */
   onLook: (look: string) => void;
 }) {
@@ -43,12 +42,7 @@ export function LookChooser(props: {
                     disabled={!fitting()}
                     onChoose={() => props.onLook(look.id)}
                   >
-                    <PartPreview
-                      kind={props.part.kind}
-                      span={fitting() ? span() : look.min}
-                      look={look.id}
-                      session={props.session}
-                    />
+                    <PartPreview kind={props.part.kind} span={fitting() ? span() : look.min} look={look.id} />
                   </Choice>
                 );
               }}
@@ -90,7 +84,7 @@ function Choice(props: {
 }
 
 /** The part as it would show `look` at `span`, scaled down into a preview and not pressable. */
-function PartPreview(props: { kind: string; span: Span; look: string; session: Session }) {
+function PartPreview(props: { kind: string; span: Span; look: string }) {
   const width = () => props.span.columns * pitch - cellGap;
   const height = () => props.span.rows * pitch - cellGap;
   const scale = () => Math.min(1, previewSize / width(), previewSize / height());
@@ -99,7 +93,7 @@ function PartPreview(props: { kind: string; span: Span; look: string; session: S
     <div class={styles.preview} inert>
       <div class={styles.previewTile} style={{ width: `${width()}px`, height: `${height()}px`, scale: `${scale()}` }}>
         <div class={styles.content}>
-          <PartView kind={props.kind} span={props.span} look={props.look} session={props.session} onPopup={() => {}} />
+          <PartView mode="preview" kind={props.kind} span={props.span} look={props.look} onPopup={() => {}} />
         </div>
       </div>
     </div>

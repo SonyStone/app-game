@@ -1,4 +1,5 @@
 import { partsBounds, type Part } from './board';
+import { partDefinition } from './parts';
 
 /**
  * A short, playful name for a new kit of `parts`, in the manner of LEGO sets: two or three plain words drawn at
@@ -31,7 +32,9 @@ export function nameKit(
   const series = `${pick(seriesWords[family(parts)])} ${pick(seriesNouns)}`;
   const shape = shapeWord(parts);
   const color =
-    parts.some((part) => part.kind.startsWith('color:')) && options.color ? colorName(options.color) : undefined;
+    parts.some((part) => partDefinition(part.kind)?.family === 'color') && options.color
+      ? colorName(options.color)
+      : undefined;
   // Nearly every name holds a part's name, whole or run together, so the kit reads as what it holds.
   const choices = [
     color && [blended, color],
@@ -89,14 +92,14 @@ export function colorName(hex: string) {
 
 /** The family most of `parts` belongs to by the cells they cover. */
 function family(parts: readonly Part[]): keyof typeof seriesWords {
-  const cells = new Map<string, number>();
+  const cells = new Map<keyof typeof seriesWords, number>();
   for (const part of parts) {
-    const name = part.kind.split(':')[0]!;
+    const name = partDefinition(part.kind)?.family ?? 'color';
     cells.set(name, (cells.get(name) ?? 0) + part.span.columns * part.span.rows);
   }
 
-  const [largest] = [...cells].sort((a, b) => b[1] - a[1])[0] ?? ['color'];
-  return largest in seriesWords ? (largest as keyof typeof seriesWords) : 'color';
+  const [largest] = [...cells].sort((a, b) => b[1] - a[1])[0] ?? ['color' as const];
+  return largest ?? 'color';
 }
 
 /** A word for the shape `parts` take together when it stands out, otherwise undefined. */

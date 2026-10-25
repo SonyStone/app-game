@@ -3,7 +3,7 @@ import type { PaintSession } from '../../features/session';
 import { engineError } from '../../shared/errors';
 
 /** Reports synchronous and asynchronous part command failures through the session's error notice. */
-export function runPartCommand(session: PaintSession, command: () => unknown) {
+export function runPartCommand(session: Pick<PaintSession, 'setError'>, command: () => unknown) {
   const report = (cause: unknown) => session.setError(engineError('failed', errorMessage(cause), cause));
 
   try {

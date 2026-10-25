@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
-import { defaultBrush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
 import { createMemo, createRoot, createSignal, flush, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createRecentColors } from '../../features/color/createRecentColors';
 import { partData, type Part } from './board';
 import { createBoard } from './createBoard';
 import { createKits } from './kits';
+import { LegoServicesContext, type LegoServices } from './LegoServices';
 import { LookChooser } from './LookChooser';
 import { PartFrame } from './PartFrame';
-import { kindLabel, PartView, ValuePart, type Session } from './parts';
+import { kindLabel, PartView } from './parts';
 import { KitTile } from './PartsTray';
+import { createTestServices } from './testServices';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
@@ -25,21 +25,22 @@ afterEach(() => {
 });
 
 it('isolates a throwing part, including one mounted later, and keeps its sibling updating', () => {
-  const { session, setBrush } = fakeSession();
+  const { services, setBrush } = fakeServices();
   const [dropped, setDropped] = createSignal(false);
   const broken = {
-    ...session,
-    engine: {
-      state: () => {
+    ...services,
+    history: {
+      ...services.history,
+      canUndo: createMemo(() => {
         throw new Error('broken engine read');
-      }
+      })
     }
-  } as unknown as Session;
+  } satisfies LegoServices;
   renderOwned(() => (
     <>
-      <PartView kind="color:pair" span={{ columns: 2, rows: 1 }} session={session} onPopup={() => {}} />
+      <TestPart kind="color:pair" span={{ columns: 2, rows: 1 }} services={services} onPopup={() => {}} />
       <Show when={dropped()}>
-        <PartView kind="action:undo" span={{ columns: 1, rows: 1 }} session={broken} onPopup={() => {}} />
+        <TestPart kind="action:undo" span={{ columns: 1, rows: 1 }} services={broken} onPopup={() => {}} />
       </Show>
     </>
   ));
@@ -96,62 +97,60 @@ it.each([
   'value:__proto__',
   'color:toString'
 ])('renders unavailable %s without failing', (kind) => {
-  const { session } = fakeSession();
-  renderOwned(() => <PartView kind={kind} span={{ columns: 1, rows: 1 }} session={session} onPopup={() => {}} />);
+  const { services, errors } = fakeServices();
+  renderOwned(() => <TestPart kind={kind} span={{ columns: 1, rows: 1 }} services={services} onPopup={() => {}} />);
   expect(document.body.textContent).toContain('?');
   expect(document.body.textContent).not.toContain('Broken part');
 });
 
 it('reports synchronous and asynchronous part commands through the session notice', async () => {
-  const { session } = fakeSession();
-  session.undo = () => {
+  const { services, errors } = fakeServices();
+  services.history.undo = () => {
     throw new Error('undo failed');
   };
   renderOwned(() => (
-    <PartView kind="action:undo" span={{ columns: 1, rows: 1 }} session={session} onPopup={() => {}} />
+    <TestPart kind="action:undo" span={{ columns: 1, rows: 1 }} services={services} onPopup={() => {}} />
   ));
   document.querySelector('button')!.click();
-  expect(session.setError).toHaveBeenCalledWith(expect.objectContaining({ message: 'undo failed' }));
-  session.choosePreset = vi.fn().mockRejectedValue(new Error('preset failed'));
+  expect(errors).toHaveBeenCalledWith(expect.objectContaining({ message: 'undo failed' }));
+  services.presets.choose = vi.fn().mockRejectedValue(new Error('preset failed'));
   renderOwned(() => (
-    <PartView kind="preset:found" span={{ columns: 1, rows: 1 }} session={session} onPopup={() => {}} />
+    <TestPart kind="preset:found" span={{ columns: 1, rows: 1 }} services={services} onPopup={() => {}} />
   ));
   document.querySelectorAll('button')[1]!.click();
-  await vi.waitFor(() =>
-    expect(session.setError).toHaveBeenCalledWith(expect.objectContaining({ message: 'preset failed' }))
-  );
+  await vi.waitFor(() => expect(errors).toHaveBeenCalledWith(expect.objectContaining({ message: 'preset failed' })));
 });
 
 it('remembers a settled color after its number field echoes input live', () => {
-  const { session } = fakeSession();
+  const { services, errors } = fakeServices();
   renderOwned(() => (
-    <PartView kind="value:hue" look="number" span={{ columns: 1, rows: 1 }} session={session} onPopup={() => {}} />
+    <TestPart kind="value:hue" look="number" span={{ columns: 1, rows: 1 }} services={services} onPopup={() => {}} />
   ));
   const input = document.querySelector('input')!;
   pointer(input, 'pointerdown', 0);
   pointer(input, 'pointermove', 20);
   expect(localStorage.getItem('paint.recentColors')).toBeNull();
   pointer(input, 'pointerup', 20);
-  expect(JSON.parse(localStorage.getItem('paint.recentColors')!)).toEqual([session.brush().color]);
+  expect(JSON.parse(localStorage.getItem('paint.recentColors')!)).toEqual([services.color.value()]);
 });
 
 it.each(['knob', 'slider', 'number'] as const)('restores the exact brush opacity when a %s loses capture', (look) => {
-  const { session, setBrush } = fakeSession();
+  const { services, setBrush } = fakeServices();
   setBrush((brush) => ({ ...brush, opacity: 0.50342 }));
   flush();
   renderOwned(() => (
     <PartFrame kind="value:opacity">
-      <ValuePart value="opacity" look={look} span={{ columns: 3, rows: 1 }} session={session} />
+      <TestPart kind="value:opacity" look={look} span={{ columns: 3, rows: 1 }} services={services} />
     </PartFrame>
   ));
   const slider = document.querySelector<HTMLElement>(look === 'number' ? 'input' : '[role="slider"]')!;
   slider.getBoundingClientRect = () => new DOMRect(0, 0, 100, 40);
   pointer(slider, 'pointerdown', 30);
   pointer(slider, 'pointermove', 60);
-  expect(session.brush().opacity).not.toBe(0.50342);
+  expect(services.brush.opacity()).not.toBe(0.50342);
   pointer(slider, 'lostpointercapture', 60);
   pointer(slider, 'pointerup', 60);
-  expect(session.brush().opacity).toBe(0.50342);
+  expect(services.brush.opacity()).toBe(0.50342);
 });
 
 it('renders future kinds loaded from both board and kit storage without halting siblings', () => {
@@ -165,10 +164,12 @@ it('renders future kinds loaded from both board and kit storage without halting 
   localStorage.setItem('paint.lego.kits', JSON.stringify([{ id: 'saved', name: 'Saved', parts, owned: [] }]));
   const board = owned(createBoard);
   const kits = owned(createKits);
-  const { session, setBrush } = fakeSession();
-  renderOwned(() => <PartView kind="color:pair" span={{ columns: 2, rows: 1 }} session={session} onPopup={() => {}} />);
+  const { services, setBrush } = fakeServices();
+  renderOwned(() => (
+    <TestPart kind="color:pair" span={{ columns: 2, rows: 1 }} services={services} onPopup={() => {}} />
+  ));
   for (const found of [...board.latest().panels[0]!.parts, ...kits.kits().find((kit) => kit.id === 'saved')!.parts]) {
-    renderOwned(() => <PartView kind={found.kind} span={found.span} session={session} onPopup={() => {}} />);
+    renderOwned(() => <TestPart kind={found.kind} span={found.span} services={services} onPopup={() => {}} />);
   }
 
   setBrush((brush) => ({ ...brush, color: '#0000ff' }));
@@ -180,18 +181,18 @@ it('renders future kinds loaded from both board and kit storage without halting 
 });
 
 it('returns a plain label for inherited color ids', () => {
-  expect(kindLabel('color:toString', fakeSession().session)).toBe('color:toString');
+  expect(kindLabel('color:toString', [])).toBe('color:toString');
 });
 
 it('shows opaque kits as broken and only offers deletion, preserving records until removed', () => {
   const records = [{ id: 'bad', name: 'Broken kit', parts: 'future shape', owned: [] }, null];
   localStorage.setItem('paint.lego.kits', JSON.stringify({ version: 2, kits: records }));
   const kits = owned(createKits);
-  const { session } = fakeSession();
+  const { services, errors } = fakeServices();
   const lift = vi.fn();
 
   for (const kit of kits.kits().filter((kit) => kits.isSaved(kit.id))) {
-    renderOwned(() => <KitTile kit={kit} kits={kits} session={session} onLift={lift} />);
+    renderOwned(() => <KitTile kit={kit} kits={kits} onLift={lift} />);
   }
 
   const previews = document.querySelectorAll<HTMLElement>('[data-broken]');
@@ -219,7 +220,7 @@ it('hides the look chooser for an invalid value record', () => {
     span: { columns: 2, rows: 1 },
     [partData]: { record: { kind: 'value:size', cell: 'invalid' }, invalid: true }
   };
-  renderOwned(() => <LookChooser part={part} session={fakeSession().session} onLook={vi.fn()} />);
+  renderOwned(() => <LookChooser part={part} onLook={vi.fn()} />);
   expect(document.querySelector('button')).toBeNull();
 });
 
@@ -245,11 +246,11 @@ it('renders and runs a healthy action after dropping malformed optional looks', 
     })
   );
   const part = owned(createBoard).latest().panels[0]!.parts[0]!;
-  const { session } = fakeSession();
-  session.undo = vi.fn();
-  renderOwned(() => <PartView {...part} missing={part[partData]?.invalid} session={session} onPopup={() => {}} />);
+  const { services, errors } = fakeServices();
+  services.history.undo = vi.fn();
+  renderOwned(() => <TestPart {...part} missing={part[partData]?.invalid} services={services} onPopup={() => {}} />);
   document.querySelector('button')!.click();
-  expect(session.undo).toHaveBeenCalledOnce();
+  expect(services.history.undo).toHaveBeenCalledOnce();
   expect(document.querySelector('[aria-label^="Missing part:"]')).toBeNull();
 });
 
@@ -291,22 +292,15 @@ function pointer(target: HTMLElement, type: string, x: number) {
   flush();
 }
 
-function fakeSession() {
-  const [brush, setBrush] = createSignal({ ...defaultBrush(), color: '#ff0000' });
-  const session = {
-    brush,
-    recentColors: owned(createRecentColors),
-    setColor: (color: string) => setBrush((current) => ({ ...current, color })),
-    tool: () => 'brush',
-    tools: {
-      preset: () => '',
-      updateBrush: vi.fn((patch) => setBrush((current) => ({ ...current, ...patch }))),
-      swapColors: vi.fn()
-    },
-    library: { presets: () => [] },
-    engine: { state: () => ({ canUndo: true, canRedo: true }) },
-    ready: () => true,
-    setError: vi.fn()
-  } as unknown as Session;
-  return { session, setBrush };
+function fakeServices() {
+  return owned(createTestServices);
+}
+
+/** Supplies fake capabilities only at the frame boundary. */
+function TestPart(props: Parameters<typeof PartView>[0] & { services: LegoServices }) {
+  return (
+    <LegoServicesContext value={props.services}>
+      <PartView {...props} />
+    </LegoServicesContext>
+  );
 }

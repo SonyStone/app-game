@@ -1,7 +1,6 @@
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
+import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
-import { runPartCommand } from './partCommand';
-import type { Session } from './parts';
 
 /**
  * The drawing's file commands, which the File part opens beside itself: open a drawing (`.paint` or Photoshop), place
@@ -9,12 +8,18 @@ import type { Session } from './parts';
  * exported files are browser downloads, or land in Downloads/Paint in the Android app. Each command waits for the
  * engine; `onDone` closes the menu once one ran or a file was picked.
  */
-export function FileMenu(props: { session: Session; onDone: () => void }) {
+export function FileMenu(props: {
+  ready: boolean;
+  edit: LegoServices['files']['edit'];
+  place: LegoServices['files']['place'];
+  onDone: () => void;
+  run: (command: () => unknown) => void;
+}) {
   let drawing!: HTMLInputElement;
   let image!: HTMLInputElement;
-  const ready = () => props.session.ready();
+  const ready = () => props.ready;
   const run = (command: () => unknown) =>
-    runPartCommand(props.session, () => {
+    props.run(() => {
       const result = command();
       props.onDone();
       return result;
@@ -30,7 +35,7 @@ export function FileMenu(props: { session: Session; onDone: () => void }) {
         onChange={(event) => {
           const picked = takeFile(event.currentTarget);
           if (picked) {
-            run(() => props.session.edit({ type: 'import', file: picked }));
+            run(() => props.edit({ type: 'import', file: picked }));
           }
         }}
       />
@@ -42,7 +47,7 @@ export function FileMenu(props: { session: Session; onDone: () => void }) {
         onChange={(event) => {
           const picked = takeFile(event.currentTarget);
           if (picked) {
-            run(() => props.session.images.place(picked));
+            run(() => props.place(picked));
           }
         }}
       />
@@ -51,35 +56,35 @@ export function FileMenu(props: { session: Session; onDone: () => void }) {
         label="Open drawing"
         detail=".paint, .psd"
         disabled={!ready()}
-        onSelect={() => runPartCommand(props.session, () => drawing.click())}
+        onSelect={() => props.run(() => drawing.click())}
       />
       <Item
         icon="newLayer"
         label="Place image"
         detail="New layer"
         disabled={!ready()}
-        onSelect={() => runPartCommand(props.session, () => image.click())}
+        onSelect={() => props.run(() => image.click())}
       />
       <Item
         icon="check"
         label="Save drawing"
         detail=".paint"
         disabled={!ready()}
-        onSelect={() => run(() => props.session.edit({ type: 'download' }))}
+        onSelect={() => run(() => props.edit({ type: 'download' }))}
       />
       <Item
         icon="scene"
         label="Export picture"
         detail="PNG"
         disabled={!ready()}
-        onSelect={() => run(() => props.session.edit({ type: 'png' }))}
+        onSelect={() => run(() => props.edit({ type: 'png' }))}
       />
       <Item
         icon="layers"
         label="Export layers"
         detail="PSD"
         disabled={!ready()}
-        onSelect={() => run(() => props.session.edit({ type: 'psd' }))}
+        onSelect={() => run(() => props.edit({ type: 'psd' }))}
       />
     </div>
   );

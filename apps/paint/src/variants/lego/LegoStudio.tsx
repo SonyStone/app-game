@@ -2,7 +2,6 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintVariantProps } from '..';
-import { LayersPanel } from '../../features/layers';
 import {
   createPaintSession,
   PaintEditor,
@@ -12,21 +11,17 @@ import {
   StageOverlays
 } from '../../features/session';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
-import { BrushLibrary } from '../procreate/BrushLibrary';
-import popover from '../procreate/Popover.module.css';
-import procreate from '../procreate/ProcreateStudio.module.css';
 import { besideRect, findPart } from './board';
 import { BoardView } from './BoardView';
 import { createBoard } from './createBoard';
 import { closedHeight, createSheet } from './createSheet';
-import { FileMenu } from './FileMenu';
 import { createKits } from './kits';
+import { createLegoServices, LegoServicesContext } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { LookChooser } from './LookChooser';
 import { chooseLook } from './looks';
-import { runPartCommand } from './partCommand';
 import { PartFrame } from './PartFrame';
-import { ValuePart, type Popup } from './parts';
+import type { Popup } from './parts';
 
 /**
  * The LEGO variant, a prototype of a UI built like printed LEGO tiles: panels lie freely on the drawing, each a plate
@@ -51,6 +46,7 @@ export function LegoStudio(props: PaintVariantProps) {
   const [popupElement, setPopupElement] = createSignal<HTMLElement>();
   const popupSize = createElementSize(popupElement);
   const session = createPaintSession({ panel: () => popup()?.popup.kind });
+  const services = createLegoServices(session);
   const reportSavingError = (message: string) =>
     session.setError((current) => current ?? { kind: 'lego', code: 'storage', message });
   const board = createBoard(reportSavingError);
@@ -124,146 +120,115 @@ export function LegoStudio(props: PaintVariantProps) {
   };
 
   return (
-    <PaintEditor
-      session={session}
-      class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''}`}
-      style={{
-        '--card-scale': `${card().scale}`,
-        '--card-x': `${card().x}px`,
-        '--card-y': `${card().y}px`,
-        // The card follows a wheel or a finger closely, and moves to a stop or springs back slower.
-        '--sheet-time': sheet.settling() ? '260ms' : '70ms'
-      }}
-    >
-      <PaintStage session={session} class={styles.workspace}>
-        <StageGuides session={session} />
-        <StageOverlays session={session} />
-      </PaintStage>
-      <div class={styles.ui}>
-        <BoardView
-          board={board}
-          kits={kits}
-          session={session}
-          editing={editing()}
-          openPanel={openPanel()}
-          onOpenPanel={setOpenPanel}
-          sheet={sheet}
-          onPopup={(anchor, next) => setPopup({ popup: next, rect: anchor.getBoundingClientRect() })}
-        />
-        <Show when={popup() && popupPlace()}>
-          {(place) => (
-            <div
-              ref={setPopupElement}
-              class={styles.popup}
-              data-keeps-panel
-              style={{
-                left: `${place().x}px`,
-                top: `${place().y}px`,
-                visibility: popupSize.width ? undefined : 'hidden'
-              }}
-            >
-              <PartFrame kind="Popup">
+    <LegoServicesContext value={services}>
+      <PaintEditor
+        session={session}
+        class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''}`}
+        style={{
+          '--card-scale': `${card().scale}`,
+          '--card-x': `${card().x}px`,
+          '--card-y': `${card().y}px`,
+          // The card follows a wheel or a finger closely, and moves to a stop or springs back slower.
+          '--sheet-time': sheet.settling() ? '260ms' : '70ms'
+        }}
+      >
+        <PaintStage session={session} class={styles.workspace}>
+          <StageGuides session={session} />
+          <StageOverlays session={session} />
+        </PaintStage>
+        <div class={styles.ui}>
+          <BoardView
+            board={board}
+            kits={kits}
+            session={session}
+            editing={editing()}
+            openPanel={openPanel()}
+            onOpenPanel={setOpenPanel}
+            sheet={sheet}
+            onPopup={(anchor, next) => setPopup({ popup: next, rect: anchor.getBoundingClientRect() })}
+          />
+          <Show when={popup() && popupPlace()}>
+            {(place) => (
+              <div
+                ref={setPopupElement}
+                class={styles.popup}
+                data-keeps-panel
+                style={{
+                  left: `${place().x}px`,
+                  top: `${place().y}px`,
+                  visibility: popupSize.width ? undefined : 'hidden'
+                }}
+              >
                 <Switch>
                   <Match when={popup()?.popup.kind === 'looks' && popup()!.popup}>
                     {(open) => {
                       const id = () => (open() as Extract<Popup, { kind: 'looks' }>).id;
                       return (
-                        <Show when={findPart(board.board(), id())?.part}>
-                          {(part) => (
-                            <LookChooser
-                              part={part()}
-                              session={session}
-                              onLook={(look) => board.set(chooseLook(board.latest(), id(), part().span, look))}
-                            />
-                          )}
-                        </Show>
+                        <PartFrame kind="Looks">
+                          <Show when={findPart(board.board(), id())?.part}>
+                            {(part) => (
+                              <LookChooser
+                                part={part()}
+                                onLook={(look) => board.set(chooseLook(board.latest(), id(), part().span, look))}
+                              />
+                            )}
+                          </Show>
+                        </PartFrame>
                       );
                     }}
                   </Match>
-                  <Match when={popup()?.popup.kind === 'layers'}>
-                    <div class={styles.studioCard}>
-                      <LayersPanel
-                        state={session.engine.state()}
-                        ready={session.ready()}
-                        onAction={(action) => runPartCommand(session, () => session.edit({ type: 'layer', action }))}
-                        onLinearBlending={(linear) =>
-                          runPartCommand(session, () => session.edit({ type: 'blending', linear }))
-                        }
+                  <Match when={popup()?.popup.kind === 'part' && popup()!.popup}>
+                    {(open) => (
+                      <PartFrame
+                        kind={(open() as Extract<Popup, { kind: 'part' }>).partKind}
+                        popup
+                        onDone={() => setPopup(undefined)}
                       />
-                    </div>
-                  </Match>
-                  <Match when={popup()?.popup.kind === 'brushes'}>
-                    <div class={procreate.editor}>
-                      <section class={[popover.popover, styles.brushesCard]}>
-                        <div class={popover.body}>
-                          <BrushLibrary
-                            title="Brushes"
-                            presets={session.library.presets()}
-                            recent={[session.tools.preset(), ...session.recentPresets.recent(7)]}
-                            preset={session.tools.preset()}
-                            disabled={!session.ready()}
-                            onChoose={(id) => {
-                              runPartCommand(session, () => session.usePreset(id));
-                            }}
-                          />
-                        </div>
-                      </section>
-                    </div>
-                  </Match>
-                  <Match when={popup()?.popup.kind === 'file'}>
-                    <FileMenu session={session} onDone={() => setPopup(undefined)} />
+                    )}
                   </Match>
                   <Match when={popup()?.popup.kind === 'note' && popup()!.popup}>
-                    {(open) => <p class={styles.note}>{(open() as Extract<Popup, { kind: 'note' }>).text}</p>}
-                  </Match>
-                  <Match when={popup()?.popup.kind === 'value' && popup()!.popup}>
                     {(open) => (
-                      <div class={styles.popupSlider}>
-                        <ValuePart
-                          value={(open() as Extract<Popup, { kind: 'value' }>).value}
-                          look="slider"
-                          span={{ columns: 5, rows: 1 }}
-                          session={session}
-                        />
-                      </div>
+                      <PartFrame kind="Note">
+                        <p class={styles.note}>{(open() as Extract<Popup, { kind: 'note' }>).text}</p>
+                      </PartFrame>
                     )}
                   </Match>
                 </Switch>
-              </PartFrame>
-            </div>
-          )}
-        </Show>
-        <div class={styles.controls}>
-          <Show when={props.experimentsHref}>
-            {(href) => (
-              <a class={styles.editButton} href={href()}>
-                Exit
-              </a>
+              </div>
             )}
           </Show>
-          <Show when={session.fullscreen.shown}>
-            {/* On a tablet, full screen also hides Android's bars and makes its edge swipes take two tries. */}
-            <button type="button" class={[styles.editButton, styles.iconButton]} {...session.fullscreen.props}>
-              <SketchIcon name={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={18} />
+          <div class={styles.controls}>
+            <Show when={props.experimentsHref}>
+              {(href) => (
+                <a class={styles.editButton} href={href()}>
+                  Exit
+                </a>
+              )}
+            </Show>
+            <Show when={session.fullscreen.shown}>
+              {/* On a tablet, full screen also hides Android's bars and makes its edge swipes take two tries. */}
+              <button type="button" class={[styles.editButton, styles.iconButton]} {...session.fullscreen.props}>
+                <SketchIcon name={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={18} />
+              </button>
+            </Show>
+            <button
+              type="button"
+              class={styles.editButton}
+              data-active={editing() ? '' : undefined}
+              onClick={() => {
+                setPopup(undefined);
+                setOpenPanel(undefined);
+                sheet.to('closed');
+                setEditing(!editing());
+              }}
+            >
+              {editing() ? 'Done' : 'Edit'}
             </button>
-          </Show>
-          <button
-            type="button"
-            class={styles.editButton}
-            data-active={editing() ? '' : undefined}
-            onClick={() => {
-              setPopup(undefined);
-              setOpenPanel(undefined);
-              sheet.to('closed');
-              setEditing(!editing());
-            }}
-          >
-            {editing() ? 'Done' : 'Edit'}
-          </button>
+          </div>
+          <SessionNotices session={session} />
         </div>
-        <SessionNotices session={session} />
-      </div>
-    </PaintEditor>
+      </PaintEditor>
+    </LegoServicesContext>
   );
 }
 

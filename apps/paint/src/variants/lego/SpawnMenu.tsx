@@ -3,8 +3,8 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, For, Show } from 'solid-js';
 import { besideRect, type Point } from './board';
 import type { createKits, Kit } from './kits';
+import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
-import type { Session } from './parts';
 import { KitTile, partFamilies, PartTile } from './PartsTray';
 
 /**
@@ -24,7 +24,7 @@ export function SpawnMenu(props: {
   view: { width: number; height: number };
   /** Hides the menu while a part taken from it is carried. */
   hidden: boolean;
-  session: Session;
+  presets: LegoServices['presets']['all'];
   kits: ReturnType<typeof createKits>;
   /** Lifts a new part of `kind`, or a copy of `kit`, from the press `event`. */
   onLift: (event: PointerEvent, kind: string) => void;
@@ -37,8 +37,8 @@ export function SpawnMenu(props: {
   const [chosen, setChosen] = createSignal<string>();
   const [holding, setHolding] = createSignal(props.held !== undefined);
   const families = () => [
-    ...partFamilies(props.session).filter((family) => family.kinds.length > 0),
-    { title: kitsTitle, kinds: [] }
+    ...partFamilies(props.presets).filter((family) => family.kinds.length > 0),
+    { id: kitsTitle, title: kitsTitle, kinds: [] }
   ];
   const family = () => families().find((candidate) => candidate.title === chosen());
 
@@ -102,26 +102,26 @@ export function SpawnMenu(props: {
     <div ref={setRoot} class={styles.spawn} data-hidden={props.hidden ? '' : undefined} data-keeps-panel>
       <div class={styles.spawnRing} style={{ left: `${props.at.x}px`, top: `${props.at.y}px` }}>
         <span class={styles.spawnCenter} />
-        <For each={families()}>
+        <For each={families()} keyed={(family) => family.id}>
           {(entry, index) => {
             const angle = () => (index() / families().length) * Math.PI * 2 - Math.PI / 2;
             return (
               <button
                 type="button"
                 class={styles.spawnFamily}
-                aria-pressed={chosen() === entry.title ? 'true' : 'false'}
+                aria-pressed={chosen() === entry().title ? 'true' : 'false'}
                 style={{
                   left: `${Math.cos(angle()) * ringRadius}px`,
                   top: `${Math.sin(angle()) * ringRadius}px`
                 }}
                 onPointerEnter={(event) => {
                   if (event.pointerType === 'mouse') {
-                    setChosen(entry.title);
+                    setChosen(entry().title);
                   }
                 }}
-                onClick={() => setChosen(entry.title)}
+                onClick={() => setChosen(entry().title)}
               >
-                {entry.title}
+                {entry().title}
               </button>
             );
           }}
@@ -145,20 +145,14 @@ export function SpawnMenu(props: {
                 fallback={
                   <For each={props.kits.kits()}>
                     {(kit) => (
-                      <KitTile
-                        kit={kit}
-                        kits={props.kits}
-                        session={props.session}
-                        cells={2}
-                        onLift={(event) => props.onLiftKit(event, kit)}
-                      />
+                      <KitTile kit={kit} kits={props.kits} cells={2} onLift={(event) => props.onLiftKit(event, kit)} />
                     )}
                   </For>
                 }
               >
                 <For each={shown().kinds}>
                   {(kind) => (
-                    <PartTile kind={kind} session={props.session} onLift={(event) => props.onLift(event, kind)} />
+                    <PartTile kind={kind} presets={props.presets} onLift={(event) => props.onLift(event, kind)} />
                   )}
                 </For>
               </Show>

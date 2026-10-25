@@ -1377,3 +1377,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The frame owns the part's mode without changing the host's size or drag target. */
+.partFrame {
+  width: 100%;
+  height: 100%;
+}

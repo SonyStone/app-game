@@ -2,6 +2,7 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Portal } from '@solidjs/web';
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import type { PaintSession } from '../../features/session';
 import {
   cellGap,
   cellSize,
@@ -39,7 +40,7 @@ import { createTwoFingerSheet } from './createTwoFingerSheet';
 import { nameKit } from './kitNames';
 import { kitOf, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
-import { kindLabel, lookOf, partLooks, PartView, type Popup, type Session } from './parts';
+import { kindLabel, lookOf, partLooks, PartView, type Popup } from './parts';
 import { BlockView, PartsTray } from './PartsTray';
 import { SelectionBar } from './SelectionBar';
 import { SpawnMenu } from './SpawnMenu';
@@ -77,7 +78,7 @@ import { swatchPanelParts } from './swatchPanelParts';
 export function BoardView(props: {
   board: ReturnType<typeof createBoard>;
   kits: ReturnType<typeof createKits>;
-  session: Session;
+  session: PaintSession;
   editing: boolean;
   /** The swatch whose panel is open; the panels of the swatches it lies in show too. */
   openPanel: string | undefined;
@@ -157,7 +158,6 @@ export function BoardView(props: {
   });
   /** The panels on screen, with where each lies; see `visiblePanels`. */
   const visible = createMemo(() => visiblePanels(shown(), props.openPanel, props.editing, view(), pinned(drag())));
-  /** The workbench as shown, with where it lies in its place in the sheet. */
   /**
    * How much the workbench is shrunk to show all its parts in its place, which never scrolls: 1 while they fit. It
    * follows the kept bench, not a drag's preview, so the plate keeps still under a carried part.
@@ -581,11 +581,11 @@ export function BoardView(props: {
                   <Show when={!isLifted()}>
                     <div class={styles.content} inert={props.editing || undefined}>
                       <PartView
+                        mode={props.editing ? 'edit' : 'live'}
                         kind={part().kind}
                         missing={!!part()[partData]?.invalid}
                         span={part().span}
                         look={lookOf(part())}
-                        session={props.session}
                         onPopup={props.onPopup}
                         onOpen={() => toggle(part().id)}
                       />
@@ -725,17 +725,17 @@ export function BoardView(props: {
               fallback={
                 <div class={styles.content} inert>
                   <PartView
+                    mode="preview"
                     kind={current().kind}
                     missing={!!current()[partData]?.invalid}
                     span={current().span}
                     look={lookOf(current())}
-                    session={props.session}
                     onPopup={() => {}}
                   />
                 </div>
               }
             >
-              {(block) => <BlockView parts={block().parts} session={props.session} />}
+              {(block) => <BlockView parts={block().parts} />}
             </Show>
           </div>
         )}
@@ -745,7 +745,7 @@ export function BoardView(props: {
         <PartsTray
           ref={setBox}
           benchRef={setBench}
-          session={props.session}
+          presets={props.session.library.presets}
           kits={props.kits}
           sheet={props.sheet}
           kitsRef={setKitShelf}
@@ -765,7 +765,7 @@ export function BoardView(props: {
             held={open().held}
             view={props.session.size()}
             hidden={lifted()?.carried === true}
-            session={props.session}
+            presets={props.session.library.presets}
             kits={props.kits}
             onLift={(event, kind) => startNewPart(event, kind, open().at)}
             onLiftKit={(event, kit) => startKitDrag(event, kit, open().at)}
@@ -1477,7 +1477,7 @@ export function BoardView(props: {
 
   /** A name for a new kit of `parts`, after what it holds and unlike the user's other kits; see `nameKit`. */
   function kitName(parts: readonly Part[]) {
-    const label = (kind: string) => kindLabel(kind, props.session);
+    const label = (kind: string) => kindLabel(kind, props.session.library.presets());
     return props.kits.uniqueName(nameKit(parts, { label, color: props.session.brush().color }));
   }
 }
