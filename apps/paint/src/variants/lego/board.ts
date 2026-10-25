@@ -26,8 +26,11 @@ export type Panel = {
   owner?: string;
   /** A handle turns a plate into a persistent window. Owned windows start closed beside their owner. */
   window?: {
+    /** User-visible title, trimmed and renameable in Edit. */
     name: string;
+    /** Keeps only the handle visible; omitted means expanded. */
     collapsed?: true;
+    /** Owned windows toggle independently; omitted means closed in Live. Edit shows all windows for recovery. */
     open?: true;
     /** Set after dragging the handle: `at` then stays independent of the owner. */
     placed?: true;

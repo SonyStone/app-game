@@ -17,6 +17,8 @@ import {
  * empty one to drop parts into. The panels in `pinned` keep their cell (0, 0) at its origin there. The workbench lies
  * in the box instead (see `benchFrame`): given as `bench`, the panels are it and the open chain of a swatch on it,
  * in its pixels within a `view` its size.
+ * All windows are shown in Edit, even closed or cyclic ones, so their parts can always be recovered. In Live an
+ * unplaced window requires a visible owner; a dragged window remains independent of hidden ancestors.
  */
 export function visiblePanels(
   board: Board,
@@ -36,15 +38,31 @@ export function visiblePanels(
         ownedPanel(board, owner) ??
         (editing ? { id: `${owner}-panel`, owner, at: { x: 0, y: 0 }, parts: [] } : undefined)
     )
-    .filter((panel): panel is Panel => panel !== undefined && folderAvailable(board, panel));
+    .filter((panel): panel is Panel => panel !== undefined);
   const roots = bench ? [bench.panel] : board.panels.filter((panel) => panel.owner === undefined && !panel.bench);
   const windows = board.panels.filter(
     (panel) =>
       panel.owner !== undefined &&
-      panel.window?.open &&
+      panel.window &&
+      (editing || panel.window.open) &&
       (onWorkbench(board, panel) && !panel.window.placed) === (bench !== undefined)
   );
-  const panels = [...roots, ...windows, ...owned.filter((panel) => !panel.window)];
+  const candidates = [...roots, ...windows, ...owned.filter((panel) => !panel.window)];
+  const candidateIds = new Set(candidates.map((panel) => panel.id));
+  const available = (panel: Panel, seen = new Set<string>()): boolean => {
+    if (!candidateIds.has(panel.id) || seen.has(panel.id)) {
+      return false;
+    }
+
+    if (panel.owner === undefined || panel.bench || (panel.window && (editing || panel.window.placed))) {
+      return true;
+    }
+
+    seen.add(panel.id);
+    const host = findPart(board, panel.owner)?.panel;
+    return !!host && !host.window?.collapsed && available(host, seen);
+  };
+  const panels = candidates.filter((panel) => available(panel));
 
   const frames = new Map<string, ReturnType<typeof panelFrame>>(bench ? [[bench.panel.id, bench.frame]] : []);
   const frameOf = (panel: Panel, depth = 0): ReturnType<typeof panelFrame> => {
@@ -83,6 +101,22 @@ export function visiblePanels(
   };
 
   return panels.map((panel) => ({ panel, frame: frameOf(panel) }));
+}
+
+/** Refuses drops into any carried part's descendants, including blocks and malformed existing owner cycles. */
+export function canDropParts(board: Board, panel: Panel, carried: ReadonlySet<string>) {
+  const seen = new Set<string>();
+  let current: Panel | undefined = panel;
+  while (current?.owner !== undefined) {
+    if (carried.has(current.owner) || seen.has(current.id)) {
+      return false;
+    }
+
+    seen.add(current.id);
+    current = findPart(board, current.owner)?.panel;
+  }
+
+  return true;
 }
 
 /** `frame` moved the least it takes to lie inside `view`, as far as it fits. */
@@ -137,18 +171,3 @@ function onWorkbench(board: Board, panel: Panel) {
   return false;
 }
 
-/** A folder inside a collapsed or closed window stays hidden until its host becomes visible again. */
-function folderAvailable(board: Board, panel: Panel) {
-  const seen = new Set<string>();
-  let host = panel.owner ? findPart(board, panel.owner)?.panel : undefined;
-  while (host && !seen.has(host.id)) {
-    if (host.window) {
-      return !host.window.collapsed && (host.owner === undefined || !!host.window.open);
-    }
-
-    seen.add(host.id);
-    host = host.owner ? findPart(board, host.owner)?.panel : undefined;
-  }
-
-  return true;
-}

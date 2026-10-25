@@ -46,7 +46,7 @@ import { BlockView, PartsTray } from './PartsTray';
 import { SelectionBar } from './SelectionBar';
 import { SpawnMenu } from './SpawnMenu';
 import { WindowHandle } from './WindowHandle';
-import { openChain, visiblePanels } from './windows';
+import { canDropParts, openChain, visiblePanels } from './windows';
 
 /**
  * The board over the drawing: its panels, and in edit mode the studs, the box of parts and kits, and the drags that
@@ -1405,6 +1405,9 @@ export function BoardView(props: {
    */
   function partDrop(drag: Extract<Drag, { type: 'part' }>, point: Point) {
     const size = view();
+    const carried = new Set(drag.block ? drag.block.parts.map((part) => part.id) : [drag.id]);
+    const ancestry = { panels: [...drag.before.panels, ...(drag.block?.panels ?? [])] };
+    const accepts = (panel: Panel) => !panel.window?.collapsed && canDropParts(ancestry, panel, carried);
     const part = { id: drag.id, kind: drag.kind, span: drag.span, looks: drag.looks, [partData]: drag[partData] };
     const withOwned = (board: Board) =>
       drag.block ? { ...board, panels: [...board.panels, ...drag.block.panels] } : board;
@@ -1447,7 +1450,7 @@ export function BoardView(props: {
     if (at) {
       // An open swatch panel on the bench takes what touches it, as on the board; the bench takes the rest.
       const corner = { x: at.x - drag.grab.x, y: at.y - drag.grab.y };
-      const owned = benchVisible(drag.base, drag.pinned).filter((entry) => !entry.panel.bench);
+      const owned = benchVisible(drag.base, drag.pinned).filter((entry) => !entry.panel.bench && accepts(entry.panel));
       const into = touched(owned, corner);
       if (into) {
         return { where: 'bench' as const, ...placeOn(into.panel, nearestCell(into.frame.origin, corner)) };
@@ -1476,7 +1479,7 @@ export function BoardView(props: {
         ? undefined
         : touched(
             visiblePanels(drag.base, props.openPanel, props.editing, size, drag.pinned).filter(
-              (entry) => !entry.panel.window?.collapsed
+              (entry) => accepts(entry.panel)
             ),
             corner
           );

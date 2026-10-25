@@ -87,3 +87,39 @@ it('hides a nested folder when its host window collapses or closes', () => {
   expect(visible({ ...host, window: { name: 'Host', open: true, collapsed: true } })).not.toContain('folder');
   expect(visible({ ...host, window: { name: 'Host' } })).not.toContain('folder');
 });
+
+it('rejects an owner, a carried block owner, and mutually nested owners as drop targets', async () => {
+  const { canDropParts } = await import('./windows');
+  const root = { ...plate('root'), parts: [tile('a'), tile('b')] };
+  const a = { ...plate('a-window', 'a'), parts: [tile('nested')] };
+  const nested = plate('nested-window', 'nested');
+  const board = { panels: [root, a, nested] };
+  expect(canDropParts(board, a, new Set(['a']))).toBe(false);
+  expect(canDropParts(board, nested, new Set(['unrelated', 'a']))).toBe(false);
+  expect(canDropParts(board, a, new Set(['b']))).toBe(true);
+  const b = { ...plate('b-window', 'b'), parts: [tile('a')] };
+  expect(canDropParts({ panels: [a, b] }, a, new Set(['b']))).toBe(false);
+  expect(canDropParts(board, root, new Set(['a']))).toBe(true);
+});
+
+it('shows closed and cyclic windows in Edit so persisted parts can be recovered', () => {
+  const a: Panel = { ...plate('a', 'b-part'), window: { name: 'A' } };
+  const b: Panel = { ...plate('b', 'a-part'), window: { name: 'B' } };
+  const board = { panels: [a, b] };
+  expect(visiblePanels(board, undefined, false, view)).toEqual([]);
+  expect(visiblePanels(board, undefined, true, view).map(({ panel }) => panel.id)).toEqual(['a', 'b']);
+});
+
+it('hides unplaced windows behind invisible owners but keeps dragged windows independent', () => {
+  const root = plate('root');
+  const folder = plate('folder', 'root-part');
+  const window: Panel = { ...plate('window', 'folder-part'), window: { name: 'Nested', open: true } };
+  const shown = (open: string | undefined, placed?: true) => visiblePanels({
+    panels: [root, folder, { ...window, window: { ...window.window!, placed } }]
+  }, open, false, view).map(({ panel }) => panel.id);
+  expect(shown(undefined)).not.toContain('window');
+  expect(shown('root-part')).toContain('window');
+  expect(shown(undefined, true)).toContain('window');
+  const host = { ...folder, window: { name: 'Host', open: true as const, collapsed: true as const } };
+  expect(visiblePanels({ panels: [root, host, window] }, undefined, false, view).map(({ panel }) => panel.id)).not.toContain('window');
+});
