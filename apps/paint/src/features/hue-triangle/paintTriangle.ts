@@ -27,12 +27,20 @@ export function paintTriangle(canvas: HTMLCanvasElement, angle: number, hue = an
   const { hue: p, white: q, black: r } = triangleCorners(angle, triangleRadius);
   const area = (q.x - p.x) * (r.y - p.y) - (r.x - p.x) * (q.y - p.y);
   const height = 1.5 * triangleRadius;
-  for (let y = 0; y < pixels; y++) {
+  // A rotated triangle covers only a fraction of the square canvas. Scan its bounding rectangle and
+  // advance the barycentric weights along the row instead of dividing twice for every canvas pixel.
+  const left = Math.max(0, Math.floor((Math.min(p.x, q.x, r.x) + size / 2) / scale - 1));
+  const right = Math.min(pixels, Math.ceil((Math.max(p.x, q.x, r.x) + size / 2) / scale + 1));
+  const top = Math.max(0, Math.floor((Math.min(p.y, q.y, r.y) + size / 2) / scale - 1));
+  const bottom = Math.min(pixels, Math.ceil((Math.max(p.y, q.y, r.y) + size / 2) / scale + 1));
+  const stepA = ((q.y - r.y) * scale) / area;
+  const stepB = ((r.y - p.y) * scale) / area;
+  const px = (left + 0.5) * scale - size / 2;
+  for (let y = top; y < bottom; y++) {
     const py = (y + 0.5) * scale - size / 2;
-    for (let x = 0; x < pixels; x++) {
-      const px = (x + 0.5) * scale - size / 2;
-      const wa = ((q.x - px) * (r.y - py) - (r.x - px) * (q.y - py)) / area;
-      const wb = ((r.x - px) * (p.y - py) - (p.x - px) * (r.y - py)) / area;
+    let wa = ((q.x - px) * (r.y - py) - (r.x - px) * (q.y - py)) / area;
+    let wb = ((r.x - px) * (p.y - py) - (p.x - px) * (r.y - py)) / area;
+    for (let x = left; x < right; x++, wa += stepA, wb += stepB) {
       const inside = Math.min(wa, wb, 1 - wa - wb) * height;
       const alpha = Math.min(1, Math.max(0, inside / scale + 0.5));
       if (!alpha) {

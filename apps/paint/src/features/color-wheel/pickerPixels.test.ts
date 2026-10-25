@@ -32,29 +32,32 @@ it.each([44, 176, 424])('keeps the OKLCH disk within one channel step of the old
   expect(allocations).toHaveBeenCalledTimes(6);
 });
 
-it.each([0, 57, 180, 293])('keeps HSV disc and rotated triangle pixels at hue %s', (hue) => {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 176;
-  const images: ImageData[] = [];
-  vi.spyOn(canvas, 'getContext').mockReturnValue({
-    createImageData: (width: number, height: number) => ({
-      width,
-      height,
-      data: new Uint8ClampedArray(width * height * 4)
-    }),
-    putImageData: (image: ImageData) => images.push({ ...image, data: image.data.slice() })
-  } as unknown as ReturnType<HTMLCanvasElement['getContext']>);
+it.each([44, 176, 648].flatMap((size) => [0, 57, 180, 293].map((hue) => ({ size, hue }))))(
+  'keeps HSV disc and rotated triangle pixels at $size px, hue $hue',
+  ({ size, hue }) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const images: ImageData[] = [];
+    vi.spyOn(canvas, 'getContext').mockReturnValue({
+      createImageData: (width: number, height: number) => ({
+        width,
+        height,
+        data: new Uint8ClampedArray(width * height * 4)
+      }),
+      putImageData: (image: ImageData) => images.push({ ...image, data: image.data.slice() })
+    } as unknown as ReturnType<HTMLCanvasElement['getContext']>);
 
-  referenceDisc(canvas, hue, 176);
-  paintDisc(canvas, hue, 176);
-  expectPixels(images[0]!, images[1]!);
+    referenceDisc(canvas, hue, size);
+    paintDisc(canvas, hue, size);
+    expectPixels(images[0]!, images[1]!);
 
-  for (const angle of [hue, hue + 31]) {
-    referenceTriangle(canvas, angle, hue);
-    paintTriangle(canvas, angle, hue);
-    expectPixels(images.at(-2)!, images.at(-1)!);
+    for (const angle of [hue, hue + 31]) {
+      referenceTriangle(canvas, angle, hue);
+      paintTriangle(canvas, angle, hue);
+      expectPixels(images.at(-2)!, images.at(-1)!);
+    }
   }
-});
+);
 
 function expectPixels(expected: ImageData, actual: ImageData) {
   let max = 0;
