@@ -236,6 +236,7 @@ it('binds symmetry modes, QuickShape and pressure through their narrow commands'
   flush();
   expect(services.symmetry.setMode).toHaveBeenCalledWith('radial');
   expect(symmetry.title).toBe('Symmetry: Radial');
+  expect(symmetry.textContent).toBe('Radial');
   document.querySelector<HTMLButtonElement>('[aria-label="QuickShape"]')!.click();
   expect(services.quickShape.toggle).toHaveBeenCalledOnce();
   document.querySelector<HTMLButtonElement>('[aria-label="Pressure calibration"]')!.click();

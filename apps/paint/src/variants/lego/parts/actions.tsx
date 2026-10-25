@@ -184,7 +184,7 @@ function ActionPart(props: {
         size={Math.min(40, 20 + (Math.min(props.span.columns, props.span.rows) - 1) * 10)}
       />
       <Show when={props.span.columns >= 2}>
-        <span class={styles.name}>{props.status ? `${props.label}: ${props.status}` : props.label}</span>
+        <span class={styles.name}>{props.status ?? props.label}</span>
       </Show>
     </button>
   );
