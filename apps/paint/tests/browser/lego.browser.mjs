@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { createServer } from 'vite';
+import { verifyLegoFeatures } from './legoFeaturesVerification.mjs';
 
 /**
  * Chrome/WebGPU regression for every LEGO kind and look, box, chooser and carried-kit interactions.
@@ -215,6 +216,7 @@ try {
   console.log(
     'PASS registry showcase: minimum sizes, 25 size pairs, three modes, missing/broken tiles, displayed backing sizes'
   );
+  await verifyLegoFeatures(browser, url, output);
   console.log(`Screenshots: ${output}`);
 } catch (error) {
   await page?.screenshot({ path: path.join(output, 'failure.png') }).catch(() => {});
