@@ -464,6 +464,7 @@ export function ProcreateStudio(props: PaintVariantProps) {
                     <BrushLibrary
                       title="Brush Library"
                       presets={library.presets()}
+                      resources={library.resources}
                       recent={[tools.preset(), ...recentPresets.recent(7)]}
                       preset={open.id === 'eraser' && tools.eraserMode() === 'clear' ? '' : tools.preset()}
                       disabled={!ready() || uploads.busy()}

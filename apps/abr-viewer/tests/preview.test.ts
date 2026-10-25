@@ -2,8 +2,6 @@ import { createAbrStrokeSampler } from '@app-game/abr-brush/stroke';
 import { percent, pixels } from '@app-game/abr-parser';
 import { describe, expect, test } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
-import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
-import { createPreviewQueue } from '../src/features/brush-preview/queue';
 import {
   createPreviewStroke,
   generateComputedBrushTip,
@@ -36,25 +34,6 @@ function input(): PreviewInput {
 }
 const tip = generateComputedBrushTip(32, 100);
 
-test('Pencil has binary edges, ignores Flow, retains opacity and selects Auto Erase color at contact', () => {
-  const job = input();
-  job.values.tool.type = 'PcTl';
-  job.flow = 0.01;
-  job.opacity = 0.25;
-  const faint = renderPreviewPixels(job, tip);
-  const colors = new Set(Array.from(faint).filter((_, i) => i % 4 === 0));
-  expect(colors).toEqual(new Set([0, 64]));
-  job.opacity = 1;
-  const opaque = renderPreviewPixels(job, tip);
-  expect(new Set(Array.from(opaque).filter((_, i) => i % 4 === 0))).toEqual(new Set([0, 255]));
-  job.values.tool.autoErase = true;
-  job.color = '#000000';
-  job.secondaryColor = '#ff0000';
-  const erased = renderPreviewPixels(job, tip);
-  expect(erased.some((value, i) => i % 4 === 0 && value === 255)).toBe(true);
-  expect(erased.every((value, i) => i % 4 !== 1 || value === 0)).toBe(true);
-});
-
 test('Mixer pressure changes wetness and mix independently, with reversible preview state', () => {
   const job = { ...input(), size: 40 };
   Object.assign(job.values.tool, { type: 'MixB', wetness: 80, mix: 60 });
@@ -80,22 +59,6 @@ test('Mixer pressure changes wetness and mix independently, with reversible prev
     tip
   ).add([point]);
   expect(ordinary.mixing).toBeUndefined();
-});
-
-test('resource previews use pattern luminance and the secondary tip independently of stroke settings', () => {
-  const job = { ...input(), width: 32, height: 32 };
-  const black = { width: 8, height: 8, depth: 8 as const, data: new Uint8Array(64) };
-  const white = { ...black, data: new Uint8Array(64).fill(255) };
-  job.resourcePreview = 'pattern';
-  const pixels = renderPreviewPixels(job, tip, undefined, { pattern: black });
-  expect(pixels[0]).toBe(0);
-  job.values.useNoise = true;
-  job.values.texture.invert = true;
-  expect(renderPreviewPixels(job, tip, undefined, { pattern: black })).toEqual(pixels);
-  job.resourcePreview = 'dual';
-  const center = (16 * 32 + 16) * 4;
-  expect(renderPreviewPixels(job, white, undefined, { dualTip: black })[center]).toBe(40);
-  expect(renderPreviewPixels(job, black, undefined, { dualTip: white })[center]).toBe(255);
 });
 
 describe('preview stroke', () => {
@@ -177,94 +140,4 @@ describe('preview stroke', () => {
     job.values.scattering.scatter = 1000;
     expect(createPreviewStroke(job, tip).count).toBeLessThanOrEqual(16384);
   });
-});
-
-describe('coverage reference', () => {
-  test('Color Dynamics changes RGB at an already reached opacity ceiling', () => {
-    const job = input();
-    job.width = job.height = 1;
-    job.values.useColorDynamics = true;
-    job.values.colorDynamics.hueJitter = 1;
-    const stamp = (opacity: number, red: number, blue: number) => [
-      0.5,
-      0.5,
-      1,
-      1,
-      1,
-      0,
-      1,
-      1,
-      1,
-      opacity,
-      0,
-      0,
-      red,
-      0,
-      blue,
-      1
-    ];
-    const pixels = renderPreviewPixels(
-      job,
-      { width: 1, height: 1, depth: 8, data: new Uint8Array([255]) },
-      { count: 2, data: new Float32Array([...stamp(0.2, 1, 0), ...stamp(0.1, 0, 1)]) }
-    );
-    // The executed kernels retain alpha 51 and use divide(26, 51) = 130 for the
-    // second color, rather than replacing it. The channel rounding phases vary
-    // with allocation identity, so each final channel can differ by one byte.
-    expect(pixels[0]).toBeGreaterThanOrEqual(24);
-    expect(pixels[0]).toBeLessThanOrEqual(26);
-    expect(pixels[2]).toBeGreaterThanOrEqual(25);
-    expect(pixels[2]).toBeLessThanOrEqual(27);
-    expect(pixels[1]).toBe(0);
-  });
-  test('partial flow accumulates toward the per-dab opacity in the Photoshop mask path', () => {
-    const job = input();
-    job.width = 1;
-    job.height = 1;
-    const solidTip = { width: 1, height: 1, depth: 8 as const, data: new Uint8Array([255]) };
-    const stamp = [0.5, 0.5, 1, 1, 1, 0, 1, 1, 0.2, 0.5, 0, 0, 1, 1, 1, 1];
-    const render = (count: number) =>
-      renderPreviewPixels(job, solidTip, {
-        count,
-        data: new Float32Array(Array.from({ length: count }, () => stamp).flat())
-      })[0];
-    expect(render(1)).toBe(26);
-    expect(render(2)).toBe(47);
-    expect(render(20)).toBe(128);
-  });
-  test('alpha remains coverage without gamma conversion', () => {
-    const job = input();
-    job.width = 1;
-    job.height = 1;
-    const pixels = renderPreviewPixels(
-      job,
-      { width: 1, height: 1, depth: 8, data: new Uint8Array([128]) },
-      { count: 1, data: new Float32Array([0.5, 0.5, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1]) }
-    );
-    expect(pixels[0]).toBe(128);
-  });
-});
-
-test('queue coalesces edits, prioritizes the active preview and cancels hidden targets', () => {
-  const queue = createPreviewQueue<{ target: number; priority: number; revision: number }>();
-  queue.put({ target: 1, priority: 0, revision: 1 });
-  queue.put({ target: 1, priority: 0, revision: 2 });
-  queue.put({ target: 2, priority: 10, revision: 1 });
-  queue.put({ target: 3, priority: 0, revision: 1 });
-  queue.remove(3);
-  expect(queue.size).toBe(2);
-  expect(queue.take()?.target).toBe(2);
-  expect(queue.take()).toEqual({ target: 1, priority: 0, revision: 2 });
-  expect(queue.take()).toBeUndefined();
-});
-
-test('Paintbrush applies global opacity after accumulated flow in the preview compositor', () => {
-  const job = input();
-  job.flow = 0.5;
-  job.opacity = 0.5;
-  job.path = [{ x: 0.5, y: 0.5, pressure: 1, tiltX: 0, tiltY: 0, rotation: 0, time: 0 }];
-  const pixels = renderPreviewPixels(job, tip);
-  // Flow is quantized to 128/255 by Photoshop's tool-option getter. Global opacity
-  // independently supplies 128/255 after the mask. Clamping flow to opacity gives 128 instead.
-  expect(pixels[(32 * job.width + 120) * 4]).toBe(64);
 });

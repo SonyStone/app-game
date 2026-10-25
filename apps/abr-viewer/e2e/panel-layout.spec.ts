@@ -49,11 +49,8 @@ async function dragSeparator(page: Page, name: string, dx: number, dy: number) {
 test('the editor fits inside the Paint dialog instead of the whole viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 700 });
   await page.goto('/paint/studio');
-  await page
-    .getByRole('button', { name: /ABR Brush/ })
-    .first()
-    .click();
-  await page.getByRole('button', { name: 'Brush settings' }).click();
+  await page.getByRole('button', { name: 'Brush settings', exact: true }).click();
+  await page.getByRole('button', { name: 'ABR brushes…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'ABR brush editor' });
   const status = dialog.getByRole('status');
   await expect(status).toBeVisible();

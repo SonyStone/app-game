@@ -1,82 +1,97 @@
+import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { Brush } from '@app-game/paint-core/brush';
-import { createEffect } from 'solid-js';
+import { attachStrokePreview } from '@app-game/paint-core/preview/client';
+import { createEffect, createSignal, onSettled, Show } from 'solid-js';
 
-/**
- * A brush preset's sample stroke for the Brush Library, as Procreate shows one beside each brush's name: an S-curve
- * across the width, in white. Its thickness grows with the preset's size (geometrically, so a 2 px liner and a
- * 300 px airbrush both read), tapers at both ends when size follows pressure, blurs for soft tips and fades with the
- * preset's opacity. Imported ABR tips are drawn as their spaced dabs, since their tip images are not loaded here.
- * Fills its parent's width at `height` CSS pixels; redraws when the settings or the color change.
- */
+/** Replays the shared tablet sample through Paint's real preset engine at its current size and saved color. */
 export function StrokePreview(props: {
   settings: Partial<Brush>;
   height: number;
-  /** The stroke's CSS color; white by default. */
+  /** Fallback stroke color when the preset does not save its own. */
   color?: string;
+  class?: string;
+  /** Loads all referenced tip, texture and dual resources, only while visible. */
+  resources?: () => Promise<readonly BrushResource[]>;
 }) {
+  const [warning, setWarning] = createSignal('');
   let canvas!: HTMLCanvasElement;
-
+  let refresh = () => {};
   createEffect(
-    () => ({ settings: props.settings, height: props.height, color: props.color ?? '#ffffff' }),
-    ({ settings, height, color }) => {
-      const frame = requestAnimationFrame(() => paint(canvas, settings, height, color));
-      return () => cancelAnimationFrame(frame);
-    }
+    () => [JSON.stringify(props.settings), props.height, props.color, props.resources],
+    () => refresh()
   );
-
-  return (
-    <canvas ref={canvas} style={{ display: 'block', width: '100%', height: `${props.height}px` }} aria-hidden="true" />
-  );
-}
-
-function paint(canvas: HTMLCanvasElement, settings: Partial<Brush>, height: number, color: string) {
-  const ratio = devicePixelRatio || 1;
-  const width = Math.max(40, canvas.clientWidth || 160);
-  canvas.width = Math.round(width * ratio);
-  canvas.height = Math.round(height * ratio);
-  const context = canvas.getContext('2d')!;
-  context.scale(ratio, ratio);
-
-  const size = settings.size ?? 32;
-  const thickness = Math.min(height * 0.6, 1.4 + Math.log2(1 + size) * height * 0.07);
-  const hardness = settings.hardness ?? 1;
-  const erase = settings.tool === 'eraser';
-  const dabs = settings.engine?.id === 'abr';
-  const margin = thickness / 2 + 6;
-  const point = (t: number) => ({
-    x: margin + (width - margin * 2) * t,
-    y: height / 2 + Math.sin(t * Math.PI * 2) * (height / 2 - margin) * 0.5
+  onSettled(() => {
+    const connection = attachStrokePreview(canvas);
+    const status = new MutationObserver(() => setWarning(canvas.dataset.previewReason ?? ''));
+    status.observe(canvas, { attributes: true, attributeFilter: ['data-preview-reason'] });
+    let visible = false;
+    let revision = 0;
+    refresh = () => {
+      const current = ++revision;
+      if (!visible) {
+        return;
+      }
+      const brush: Partial<Brush> = JSON.parse(JSON.stringify(props.settings));
+      const dpr = Math.min(2, devicePixelRatio || 1, 2048 / Math.max(1, canvas.clientWidth), 512 / props.height);
+      const width = Math.max(1, Math.round(canvas.clientWidth * dpr));
+      const height = Math.max(1, Math.round(props.height * dpr));
+      void (props.resources?.() ?? Promise.resolve([]))
+        .then((resources) => {
+          if (current !== revision || !visible) {
+            return;
+          }
+          connection.update({
+            kind: 'brush',
+            brush: { color: props.color ?? '#ffffff', ...brush },
+            resources,
+            width,
+            height,
+            dpr,
+            background: '#333333',
+            thumbnail: true
+          });
+        })
+        .catch((error: unknown) => {
+          if (current === revision) {
+            canvas.dataset.previewState = 'error';
+            canvas.dataset.previewReason = String(error);
+          }
+        });
+    };
+    const resize = new ResizeObserver(refresh);
+    resize.observe(canvas);
+    const intersection = new IntersectionObserver(([entry]) => {
+      visible = entry?.isIntersecting ?? false;
+      if (visible) {
+        refresh();
+      } else {
+        revision++;
+        connection.pause();
+      }
+    });
+    intersection.observe(canvas);
+    return () => {
+      revision++;
+      status.disconnect();
+      resize.disconnect();
+      intersection.disconnect();
+      connection.dispose();
+    };
   });
-  const taper = (t: number) => (settings.pressureSize === false ? 1 : Math.sin(Math.PI * Math.min(0.97, 0.05 + t)));
-
-  context.globalAlpha = erase ? 0.55 : Math.max(0.25, settings.opacity ?? 1);
-  context.filter = hardness < 0.9 ? `blur(${(1 - hardness) * thickness * 0.3}px)` : 'none';
-  context.strokeStyle = context.fillStyle = color;
-  context.lineCap = 'round';
-  if (dabs) {
-    // Spaced dabs suggest a stamped tip.
-    const step = Math.max(3, thickness * Math.max(0.35, settings.spacing ?? 0.25));
-    for (let x = 0; x <= width - margin * 2; x += step) {
-      const t = x / (width - margin * 2);
-      const { x: px, y } = point(t);
-      context.beginPath();
-      context.arc(px, y, Math.max(0.6, (thickness / 2) * taper(t)), 0, Math.PI * 2);
-      context.fill();
-    }
-
-    return;
-  }
-
-  const steps = 48;
-  let previous = point(0);
-  for (let step = 1; step <= steps; step++) {
-    const t = step / steps;
-    const next = point(t);
-    context.lineWidth = Math.max(0.6, thickness * taper(t));
-    context.beginPath();
-    context.moveTo(previous.x, previous.y);
-    context.lineTo(next.x, next.y);
-    context.stroke();
-    previous = next;
-  }
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <canvas
+        ref={canvas}
+        class={props.class}
+        style={{ display: 'block', width: '100%', height: `${props.height}px` }}
+        aria-hidden="true"
+        data-preview-state="waiting"
+      />
+      <Show when={warning()}>
+        <span role="status" style={{ position: 'absolute', inset: '0', 'font-size': '10px' }}>
+          {warning()}
+        </span>
+      </Show>
+    </div>
+  );
 }

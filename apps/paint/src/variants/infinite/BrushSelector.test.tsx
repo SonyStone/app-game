@@ -18,7 +18,21 @@ const presets = [...builtInPresets, ink, chalk];
 let dispose: (() => void) | undefined;
 
 beforeEach(() => {
-  // The sample strokes draw on the next frame, which jsdom's canvas cannot do.
+  // Browser observers keep engine previews inactive in jsdom.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  );
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  );
   vi.stubGlobal('requestAnimationFrame', () => 0);
   vi.stubGlobal('cancelAnimationFrame', () => {});
 });

@@ -1,3 +1,5 @@
+import type { BrushResource } from '@app-game/abr-paint/resources';
+import type { Result } from 'neverthrow';
 import { createSignal, For, Show, untrack } from 'solid-js';
 import type { BrushPreset } from '../../features/brush-library';
 import { brushSets, setOf, type BrushSet } from '../desktop/brushSets';
@@ -20,6 +22,8 @@ import theme from './theme.module.css';
  */
 export function BrushSelector(props: {
   presets: readonly BrushPreset[];
+  /** Resolves imported preset textures before their sample is rendered. */
+  resources?: (preset: BrushPreset) => Promise<Result<BrushResource[], unknown>>;
   /** Recently used preset ids, newest first, for the Recent folder. */
   recent: readonly string[];
   /** The id of the preset the tool paints with. */
@@ -103,7 +107,22 @@ export function BrushSelector(props: {
           <Show when={current()}>
             {(preset) => (
               <div class={styles.pinned} aria-label="Current brush">
-                <StrokePreview settings={preset().settings} height={strokeHeight} color={strokeColor} />
+                <StrokePreview
+                  settings={preset().settings}
+                  resources={
+                    props.resources
+                      ? async () => {
+                          const result = await props.resources!(preset());
+                          if (result.isErr()) {
+                            throw result.error;
+                          }
+                          return result.value;
+                        }
+                      : undefined
+                  }
+                  height={strokeHeight}
+                  color={strokeColor}
+                />
                 <span class={styles.name}>{preset().name}</span>
                 <Show when={props.onFavorite}>
                   {(onFavorite) => (
@@ -133,6 +152,17 @@ export function BrushSelector(props: {
                 >
                   <StrokePreview
                     settings={preset().settings}
+                    resources={
+                      props.resources
+                        ? async () => {
+                            const result = await props.resources!(preset());
+                            if (result.isErr()) {
+                              throw result.error;
+                            }
+                            return result.value;
+                          }
+                        : undefined
+                    }
                     height={strokeHeight}
                     color={preset().id === props.preset ? strokeOnLight : strokeColor}
                   />

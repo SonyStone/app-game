@@ -1,4 +1,6 @@
+import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { JSX } from '@solidjs/web';
+import type { Result } from 'neverthrow';
 import { createSignal, For, Show } from 'solid-js';
 import type { BrushPreset } from '../../features/brush-library';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
@@ -15,6 +17,8 @@ import { StrokePreview } from './StrokePreview';
 export function BrushLibrary(props: {
   title: string;
   presets: readonly BrushPreset[];
+  /** Resolves imported preset textures before their sample is rendered. */
+  resources?: (preset: BrushPreset) => Promise<Result<BrushResource[], unknown>>;
   /** Recently used presets, newest first, for the Recent set. */
   recent: readonly string[];
   /** The preset the tool paints with. */
@@ -77,7 +81,21 @@ export function BrushLibrary(props: {
                 onClick={() => props.onChoose(preset().id)}
               >
                 <span class={styles.brushName}>{preset().name}</span>
-                <StrokePreview settings={preset().settings} height={30} />
+                <StrokePreview
+                  settings={preset().settings}
+                  resources={
+                    props.resources
+                      ? async () => {
+                          const result = await props.resources!(preset());
+                          if (result.isErr()) {
+                            throw result.error;
+                          }
+                          return result.value;
+                        }
+                      : undefined
+                  }
+                  height={30}
+                />
               </button>
             )}
           </For>
