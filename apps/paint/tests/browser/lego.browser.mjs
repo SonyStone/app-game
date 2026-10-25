@@ -11,7 +11,8 @@ import { verifyLegoFeatures } from './legoFeaturesVerification.mjs';
 /**
  * Chrome/WebGPU regression for every LEGO kind and look, box, chooser and carried-kit interactions.
  * Starts Vite on free ports and uses isolated browser storage.
- * PAINT_MASTER_URL optionally compares a separately served baseline.
+ * PAINT_MASTER_URL optionally compares a separately served baseline board and variant panels.
+ * PAINT_PANELS_MASTER_URL compares only variant panels when the baseline predates registered parts.
  * PAINT_SCREENSHOTS defaults to paint-lego-browser in the system temp directory.
  */
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -24,6 +25,7 @@ let page;
 try {
   await mkdir(output, { recursive: true });
   const url = process.env.PAINT_URL ?? (await startServer(root));
+  const masterUrl = process.env.PAINT_PANELS_MASTER_URL ?? process.env.PAINT_MASTER_URL;
   browser = await chromium.launch({
     channel: 'chrome',
     headless: true,
@@ -184,6 +186,12 @@ try {
     [...document.querySelectorAll('[data-part-kind="color:wheel"] canvas')].every((canvas) => canvas.width > 0)
   );
   await checkShowcase(page);
+  const panelPreview = page
+    .getByRole('region', { name: 'preview specimens' })
+    .locator('[data-specimen]')
+    .filter({ has: page.locator('[data-part-kind="action:layers"] .paint-layers') });
+  assert.equal(await panelPreview.count(), 1, 'Panel look renders the inline panel in preview');
+  await panelPreview.screenshot({ path: path.join(output, 'layers-panel-preview.png') });
   await checkValueText(page);
   // Keep each complete section in the viewport so screenshots include offscreen canvas layers.
   await page.locator('header').evaluate((element) => {
@@ -216,7 +224,7 @@ try {
   console.log(
     'PASS registry showcase: minimum sizes, 25 size pairs, three modes, missing/broken tiles, displayed backing sizes'
   );
-  await verifyLegoFeatures(browser, url, output);
+  await verifyLegoFeatures(browser, url, output, masterUrl);
   console.log(`Screenshots: ${output}`);
 } catch (error) {
   await page?.screenshot({ path: path.join(output, 'failure.png') }).catch(() => {});

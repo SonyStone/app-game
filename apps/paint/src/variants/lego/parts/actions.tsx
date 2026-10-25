@@ -120,7 +120,7 @@ export const actionParts = [
           return f.span;
         },
         get full() {
-          return f.look === 'panel' && f.mode !== 'preview';
+          return f.look === 'panel';
         },
         onPress: (anchor: Element) => f.onPopup(anchor, { kind: 'part', partKind: f.kind })
       }),
@@ -253,7 +253,11 @@ function SymmetryPart(props: {
         icon="symmetry"
         span={props.span}
         active={props.mode !== 'off'}
-        status={symmetryModes.find((mode) => mode.id === props.mode)?.label}
+        status={
+          props.mode === 'off' || props.showModes
+            ? undefined
+            : symmetryModes.find((mode) => mode.id === props.mode)?.label
+        }
         onPress={props.onToggle}
       />
       <Show when={props.showModes}>
@@ -287,7 +291,7 @@ const symmetryModes = [
   { id: 'mandala', label: 'Mandala' }
 ] as const;
 
-/** Both layer presentations use guarded document edits and acquire images only in a mounted live view. */
+/** Both layer presentations use guarded document edits and acquire images only outside previews. */
 function layerNeeds(services: LegoServices, frame: PartBinding) {
   return {
     get state() {
@@ -296,8 +300,8 @@ function layerNeeds(services: LegoServices, frame: PartBinding) {
     get ready() {
       return services.layers.ready();
     },
-    get live() {
-      return frame.mode === 'live';
+    get acquireThumbnails() {
+      return frame.mode !== 'preview';
     },
     onAction: frame.command(services.layers.action),
     onLinearBlending: frame.command(services.layers.blending),
@@ -306,19 +310,19 @@ function layerNeeds(services: LegoServices, frame: PartBinding) {
   };
 }
 
-/** Owns thumbnails for the exact lifetime of the live panel, including compact/full resize transitions. */
+/** Owns thumbnails for the mounted panel lifetime outside previews, including compact/full resize transitions. */
 function LayerPanelPart(props: ReturnType<typeof layerNeeds> & { fillContainer?: boolean }) {
   return (
     <div class={[styles.studioCard, { [styles.inlineLayers!]: props.fillContainer }]}>
-      <Show when={props.live}>
+      <Show when={props.acquireThumbnails}>
         <WantLayerThumbnails want={props.wantThumbnails} />
       </Show>
-      <LayersPanel {...props} thumbnail={props.live ? props.thumbnail : undefined} />
+      <LayersPanel {...props} thumbnail={props.acquireThumbnails ? props.thumbnail : undefined} />
     </div>
   );
 }
 
-/** Resource acquisition writes session state, so it belongs after settlement in the live-only subtree. */
+/** Resource acquisition writes session state, so it belongs after settlement in the non-preview subtree. */
 function WantLayerThumbnails(props: { want: LegoServices['layers']['wantThumbnails'] }) {
   onSettled(() => props.want(26));
 

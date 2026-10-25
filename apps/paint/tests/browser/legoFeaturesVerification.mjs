@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 
 /** Exercises real worker-backed LEGO controls and layer gestures in isolated storage. */
-export async function verifyLegoFeatures(browser, url, output) {
+export async function verifyLegoFeatures(browser, url, output, masterUrl) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, hasTouch: true });
   await context.addInitScript(() => {
     window.paintCommands = [];
@@ -36,8 +36,12 @@ export async function verifyLegoFeatures(browser, url, output) {
 
   try {
     await verifyControls(page, context, url, output);
+    await verifySymmetrySizes(page, url, output);
     await verifyLayers(page, context, url, output);
     await verifyOtherVariants(page, url, output);
+    if (masterUrl) {
+      await compareVariantPanels(browser, url, masterUrl, output);
+    }
     assert.deepEqual(errors, [], 'feature workflows have no uncaught errors');
   } catch (error) {
     await page.screenshot({ path: `${output}/features-failure.png` }).catch(() => {});
@@ -157,7 +161,8 @@ async function verifyControls(page, context, url, output) {
   await symmetryPart.getByRole('button', { name: 'Symmetry', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('[aria-label="Paint symmetry mode"]').value === 'mandala');
   const caption = symmetryPart.locator('button span');
-  assert.equal(await caption.innerText(), 'Mandala');
+  assert.equal(await caption.innerText(), 'Symmetry');
+  assert.ok((await modes.boundingBox()).height >= 36, 'symmetry mode touch height');
   assert.ok(await caption.evaluate((element) => element.scrollWidth <= element.clientWidth), 'mode label fits at 2×2');
   await page.screenshot({ path: `${output}/symmetry-mode-chooser.png` });
   console.log('PASS placement, symmetry stroke, QuickShape disabled/enabled held strokes, pressure window');
@@ -280,6 +285,21 @@ async function verifyLayers(page, context, url, output) {
   await menu.waitFor();
   await page.mouse.click(500, 500);
   await menu.waitFor({ state: 'detached' });
+  await blend.click();
+  await menu.waitFor();
+  await page.setViewportSize({ width: 1400, height: 960 });
+  await menu.waitFor({ state: 'detached' });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await blend.click();
+  await menu.waitFor();
+  await panel.evaluate((element) => element.dispatchEvent(new Event('scroll')));
+  await menu.waitFor({ state: 'detached' });
+  await panel.getByLabel('Layer settings', { exact: true }).click();
+  const smooth = panel.getByRole('checkbox', { name: 'Smooth color for all layers' });
+  await smooth.check();
+  await page.waitForFunction(() => window.paintState.document.linearBlending === true);
+  await page.screenshot({ path: `${output}/layers-settings.png` });
+  await panel.getByLabel('Layer settings', { exact: true }).click();
   for (let i = 0; i < 17; i++) {
     await add.click();
     await page.waitForFunction((count) => window.paintState.document.layers.length === count, i + 3);
@@ -287,6 +307,15 @@ async function verifyLayers(page, context, url, output) {
   const list = panel.locator('[class*="layerList"]');
   const dimensions = await list.evaluate((e) => ({ client: e.clientHeight, scroll: e.scrollHeight }));
   assert.ok(dimensions.scroll > dimensions.client);
+  const rows = await list.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const row = element.firstElementChild.getBoundingClientRect();
+    return { listHeight: bounds.height, rowHeight: row.height, visible: Math.floor(bounds.height / row.height) };
+  });
+  assert.ok(rows.visible >= 5, `7×8 must show five complete rows: ${JSON.stringify(rows)}`);
+  await page.screenshot({ path: `${output}/layers-inline-five-rows.png` });
+  console.log('PASS compact 7×8 inline layout', rows);
+  await writeFile(`${output}/layers-visible-rows.json`, JSON.stringify(rows, null, 2));
   const area = await list.boundingBox();
   const cdp = await context.newCDPSession(page);
   // Keep this swipe in the upper viewport; lower-edge CDP scrolling also fails on plain HTML in headless Chrome.
@@ -303,8 +332,26 @@ async function verifyLayers(page, context, url, output) {
   assert.ok(scrollTop > 30, `touch scrollTop=${scrollTop}`);
   await page.screenshot({ path: `${output}/layers-touch-scroll.png` });
   assert.ok((await panel.locator('img').count()) > 0, 'live thumbnails arrive');
+  const thumbnails = await panel.locator('img').evaluateAll((images) => images.map((image) => image.src));
+  await panel.locator('img').evaluateAll((images) =>
+    images.forEach((image) => {
+      image.dataset.retained = 'true';
+    })
+  );
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  assert.deepEqual(await panel.locator('img').evaluateAll((images) => images.map((image) => image.src)), thumbnails);
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  assert.equal(await panel.locator('img:not([data-retained])').count(), 0, 'Edit/Done preserves image nodes');
+  assert.deepEqual(await panel.locator('img').evaluateAll((images) => images.map((image) => image.src)), thumbnails);
+  await verifyPlateTouch(page, context, panel);
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await panel.click({ position: { x: 8, y: 8 } });
+  await page.getByRole('button', { name: 'Look', exact: true }).click();
+  const choices = page.locator('[data-part-kind="Looks"]');
+  await choices.getByRole('heading', { name: 'Look at 7×8' }).waitFor();
+  assert.equal(await choices.locator('[data-part-kind="action:layers"] .paint-layers').count(), 1);
+  await page.screenshot({ path: `${output}/layers-look-chooser.png` });
+  await page.keyboard.press('Escape');
   const handle = page.getByLabel('Resize', { exact: true });
   const resize = async (dx, dy) => {
     const r = await handle.boundingBox();
@@ -419,4 +466,169 @@ async function verifyOtherVariants(page, url, output) {
     await page.screenshot({ path: `${output}/layers-${id}.png` });
     console.log('PASS variant layer panel', id);
   }
+}
+
+/** A jittery press on a live plate must not yield to browser pan or zoom. */
+async function verifyPlateTouch(page, context, panel) {
+  const plate = panel.locator('xpath=ancestor::*[contains(@class,"panel")][1]');
+  assert.equal(await plate.evaluate((element) => getComputedStyle(element).touchAction), 'none');
+  await page.evaluate(() => {
+    window.plateTouch = { cancelled: 0, released: 0, x: scrollX, y: scrollY, scale: visualViewport.scale };
+    document.addEventListener('pointercancel', () => window.plateTouch.cancelled++, { once: true });
+    document.addEventListener('pointerup', () => window.plateTouch.released++, { once: true });
+  });
+  const rect = await plate.boundingBox();
+  const cdp = await context.newCDPSession(page);
+  const x = rect.x + rect.width - 3;
+  const y = rect.y + rect.height / 2;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  for (const offset of [3, -4, 6, -5, 2]) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + offset }] });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  const result = await page.evaluate(() => ({
+    ...window.plateTouch,
+    afterX: scrollX,
+    afterY: scrollY,
+    afterScale: visualViewport.scale
+  }));
+  assert.equal(result.cancelled, 0);
+  assert.equal(result.released, 1);
+  assert.equal(result.afterX, result.x);
+  assert.equal(result.afterY, result.y);
+  assert.equal(result.afterScale, result.scale);
+  await cdp.detach();
+  console.log('PASS live plate jitter keeps pointer ownership and page position/scale', result);
+}
+
+/** Compares isolated, identically seeded layer panels against the read-only master checkout. */
+async function compareVariantPanels(browser, url, masterUrl, output) {
+  for (const id of ['desktop', 'zen', 'procreate', 'studio']) {
+    const shots = [];
+    for (const [label, origin] of [
+      ['round2', url],
+      ['master', masterUrl]
+    ]) {
+      const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+      try {
+        const page = await context.newPage();
+        await page.goto(`${origin}/variants.html#${id}`);
+        await page
+          .getByRole('button', {
+            name:
+              id === 'desktop'
+                ? 'New layer'
+                : id === 'zen'
+                  ? 'Tools · drag to move · hold, then drag for size and opacity'
+                  : 'Layers',
+            exact: true
+          })
+          .waitFor({ timeout: 60000 });
+        let panel;
+        if (id === 'desktop') {
+          panel = page.getByRole('listbox', { name: 'Layers', exact: true }).locator('..');
+        } else if (id === 'zen') {
+          await page
+            .getByRole('button', { name: 'Tools · drag to move · hold, then drag for size and opacity', exact: true })
+            .click();
+          await page.getByRole('button', { name: 'Layers and export', exact: true }).click();
+          panel = page.getByRole('dialog');
+        } else {
+          await page.getByRole('button', { name: 'Layers', exact: true }).click();
+          panel =
+            id === 'studio' ? page.locator('.paint-layers') : page.getByRole('dialog', { name: 'Layers', exact: true });
+        }
+        const add = page.getByRole('button', {
+          name: ['desktop', 'zen'].includes(id) ? 'New layer' : 'Add layer',
+          exact: true
+        });
+        await add.waitFor();
+        await page.waitForFunction(
+          (label) => !document.querySelector(`[aria-label="${label}"]`)?.disabled,
+          ['desktop', 'zen'].includes(id) ? 'New layer' : 'Add layer'
+        );
+        await add.click();
+        await page
+          .getByRole(id === 'studio' ? 'button' : 'checkbox', {
+            name: id === 'studio' ? 'Hide Layer 2' : 'Show Layer 2',
+            exact: true
+          })
+          .waitFor();
+        await page.evaluate(() => document.fonts.ready);
+        await page.waitForTimeout(350);
+        await page.mouse.move(1400, 900);
+        shots.push(await panel.screenshot({ path: `${output}/compare-${id}-${label}.png`, animations: 'disabled' }));
+        if (id === 'studio') {
+          await page.getByRole('button', { name: 'Layer blend mode', exact: true }).click();
+          const menu = page.getByRole('listbox', { name: 'Layer blend modes' });
+          await menu.waitFor();
+          assert.equal(await menu.evaluate((element) => getComputedStyle(element).width), '220px');
+          await menu.screenshot({ path: `${output}/compare-studio-blend-${label}.png` });
+        }
+      } finally {
+        await context.close();
+      }
+    }
+    assert.ok(shots[0].equals(shots[1]), `${id} layer panel must be pixel-identical to master`);
+    console.log('PASS pixel-identical layer panel vs master 52a28f3f', id);
+  }
+}
+
+/** Labels identify the tool while off, with a single mode readout and touch-sized chooser. */
+async function verifySymmetrySizes(page, url, output) {
+  const spans = [
+    { columns: 1, rows: 1 },
+    { columns: 2, rows: 1 },
+    { columns: 2, rows: 2 }
+  ];
+  await page.evaluate(
+    (spans) =>
+      localStorage.setItem(
+        'paint.lego',
+        JSON.stringify({
+          version: 2,
+          board: {
+            panels: [
+              {
+                id: 'symmetry-sizes',
+                at: { x: 0.1, y: 0.1 },
+                parts: spans.map((span, i) => ({
+                  id: `symmetry-${i}`,
+                  kind: 'action:symmetry',
+                  cell: { column: i * 3, row: 0 },
+                  span
+                }))
+              }
+            ]
+          }
+        })
+      ),
+    spans
+  );
+  await page.goto(`${url}/variants.html#lego`);
+  await page.reload();
+  const chooser = page.getByRole('combobox', { name: 'Paint symmetry mode' });
+  await chooser.waitFor();
+  await page.waitForFunction(() => window.paintState?.document.layers.length);
+  await chooser.selectOption('off');
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('[aria-label="Symmetry"]')].every(
+      (button) => button.getAttribute('aria-pressed') === 'false'
+    )
+  );
+  for (const [i, span] of spans.entries()) {
+    const part = page.locator(`[data-part="symmetry-${i}"]`);
+    const button = part.getByRole('button', { name: 'Symmetry', exact: true });
+    assert.equal(await button.innerText(), span.columns === 1 ? '' : 'Symmetry');
+    assert.equal(await button.getAttribute('aria-pressed'), 'false');
+    await part.screenshot({ path: `${output}/symmetry-${span.columns}x${span.rows}-off.png` });
+  }
+  await chooser.selectOption('horizontal');
+  await page.waitForFunction(
+    () => document.querySelector('[data-part="symmetry-1"] button').textContent === 'Horizontal'
+  );
+  assert.equal(await page.locator('[data-part="symmetry-1"] button').innerText(), 'Horizontal');
+  assert.equal(await page.locator('[data-part="symmetry-2"] button').innerText(), 'Symmetry');
+  await page.screenshot({ path: `${output}/symmetry-sizes-active.png` });
+  console.log('PASS symmetry labels at 1×1, 2×1, 2×2');
 }

@@ -154,7 +154,7 @@ it.each(['live', 'edit', 'preview'] satisfies PartMode[])('renders each definiti
   expect(errors).not.toHaveBeenCalled();
 });
 
-it('releases live layer thumbnails when resized and never acquires them in previews', () => {
+it('keeps thumbnails through Edit, releases on resize and renders previews without acquiring', () => {
   const { services } = owned(createTestServices);
   const release = vi.fn();
   services.layers.wantThumbnails = vi.fn(() => release);
@@ -166,7 +166,9 @@ it('releases live layer thumbnails when resized and never acquires them in previ
     </LegoServicesContext>
   ));
   expect(services.layers.wantThumbnails).not.toHaveBeenCalled();
-  expect(document.querySelector('[aria-label="Add layer"]')).toBeNull();
+  expect(document.querySelector('[aria-label="Add layer"]')).not.toBeNull();
+  document.querySelector<HTMLButtonElement>('[aria-label="Add layer"]')!.click();
+  expect(services.layers.action).not.toHaveBeenCalled();
   setMode('live');
   flush();
   expect(document.querySelector('[aria-label="Add layer"]')).not.toBeNull();
@@ -180,8 +182,16 @@ it('releases live layer thumbnails when resized and never acquires them in previ
   expect(services.layers.wantThumbnails).toHaveBeenCalledTimes(2);
   setMode('edit');
   flush();
-  expect(release).toHaveBeenCalledTimes(2);
+  expect(release).toHaveBeenCalledOnce();
+  expect(services.layers.wantThumbnails).toHaveBeenCalledTimes(2);
   expect(document.querySelector('[aria-label="Add layer"]')).not.toBeNull();
+  setMode('live');
+  flush();
+  expect(release).toHaveBeenCalledOnce();
+  expect(services.layers.wantThumbnails).toHaveBeenCalledTimes(2);
+  setMode('preview');
+  flush();
+  expect(release).toHaveBeenCalledTimes(2);
 });
 
 it('routes one layer opacity change per scrub gesture through the guarded layer command', () => {
@@ -226,7 +236,7 @@ it('binds symmetry modes, QuickShape and pressure through their narrow commands'
     </LegoServicesContext>
   ));
   const symmetry = document.querySelector<HTMLButtonElement>('[aria-label="Symmetry"]')!;
-  expect(symmetry.title).toBe('Symmetry: Vertical');
+  expect(symmetry.title).toBe('Symmetry');
   expect(symmetry.getAttribute('aria-pressed')).toBe('true');
   symmetry.click();
   expect(services.symmetry.toggle).toHaveBeenCalledOnce();
@@ -235,8 +245,8 @@ it('binds symmetry modes, QuickShape and pressure through their narrow commands'
   select.dispatchEvent(new Event('change', { bubbles: true }));
   flush();
   expect(services.symmetry.setMode).toHaveBeenCalledWith('radial');
-  expect(symmetry.title).toBe('Symmetry: Radial');
-  expect(symmetry.textContent).toBe('Radial');
+  expect(symmetry.title).toBe('Symmetry');
+  expect(symmetry.textContent).toBe('Symmetry');
   document.querySelector<HTMLButtonElement>('[aria-label="QuickShape"]')!.click();
   expect(services.quickShape.toggle).toHaveBeenCalledOnce();
   document.querySelector<HTMLButtonElement>('[aria-label="Pressure calibration"]')!.click();

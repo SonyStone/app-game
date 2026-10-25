@@ -15,7 +15,7 @@ export function LayersPanel(props: {
   state: DocumentState;
   /** Adding, moving and deleting layers wait for the engine. */
   ready: boolean;
-  /** Uses the host's height and scrolls the list instead of capping it by the viewport. Defaults to false. */
+  /** Uses a compact header, a settings menu and icon footer, filling the host's height with a scrolling list. Defaults to false. */
   fillContainer?: boolean;
   /** Read-only thumbnail URL lookup. The caller owns acquiring and releasing the image resource. */
   thumbnail?: (id: string) => string | undefined;
@@ -56,45 +56,57 @@ export function LayersPanel(props: {
 
   return (
     <section class={['paint-layers', { [styles.fillContainer!]: props.fillContainer }]}>
-      <div class={styles.sectionHeading}>
-        <span>
-          {props.state.layers.length} {props.state.layers.length === 1 ? 'layer' : 'layers'}
-        </span>
-        <button
-          aria-label="Duplicate layer"
-          title="Duplicate selected layer"
-          disabled={!props.ready}
-          onClick={() => props.onAction({ type: 'duplicate', id: props.state.activeId })}
-        >
-          <SketchIcon name="copy" size={18} />
-        </button>
-        <button aria-label="Add layer" disabled={!props.ready} onClick={() => props.onAction({ type: 'add' })}>
-          <SketchIcon name="plus" size={18} />
-        </button>
-      </div>
-      <input
-        class={styles.layerName}
-        aria-label="Layer name"
-        maxlength={64}
-        value={selected().name}
-        onChange={(e) => {
-          const name = e.currentTarget.value.trim();
-          if (!name) {
-            // An empty name would leave the layer unlabelled in the list.
-            e.currentTarget.value = selected().name;
-            return;
-          }
+      <div class={styles.panelHeader}>
+        <div class={styles.sectionHeading}>
+          <span>
+            {props.state.layers.length} {props.state.layers.length === 1 ? 'layer' : 'layers'}
+          </span>
+          <button
+            aria-label="Duplicate layer"
+            title="Duplicate selected layer"
+            disabled={!props.ready}
+            onClick={() => props.onAction({ type: 'duplicate', id: props.state.activeId })}
+          >
+            <SketchIcon name="copy" size={18} />
+          </button>
+          <button aria-label="Add layer" disabled={!props.ready} onClick={() => props.onAction({ type: 'add' })}>
+            <SketchIcon name="plus" size={18} />
+          </button>
+        </div>
+        <input
+          class={styles.layerName}
+          aria-label="Layer name"
+          maxlength={64}
+          value={selected().name}
+          onChange={(e) => {
+            const name = e.currentTarget.value.trim();
+            if (!name) {
+              // An empty name would leave the layer unlabelled in the list.
+              e.currentTarget.value = selected().name;
+              return;
+            }
 
-          if (name !== selected().name) {
-            props.onAction({ type: 'update', id: props.state.activeId, patch: { name } });
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.currentTarget.blur();
-          }
-        }}
-      />
+            if (name !== selected().name) {
+              props.onAction({ type: 'update', id: props.state.activeId, patch: { name } });
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur();
+            }
+          }}
+        />
+        <Show when={props.fillContainer}>
+          <details class={styles.moreSettings}>
+            <summary aria-label="Layer settings" title="Layer settings">
+              <SketchIcon name="more" size={18} />
+            </summary>
+            <div class={styles.settingsMenu}>
+              <SmoothColor linear={props.state.linearBlending} onChange={props.onLinearBlending} />
+            </div>
+          </details>
+        </Show>
+      </div>
       <div class={styles.layerControls}>
         <BlendModePicker
           mode={selected().blend}
@@ -134,17 +146,9 @@ export function LayersPanel(props: {
           <SketchIcon name="clip" size={18} />
         </button>
       </div>
-      <label
-        class={styles.smoothColor}
-        title="Blend every layer, in every mode, in linear light: brighter mixes without dark edges, as Photoshop's “Blend RGB colors using gamma 1.0”. Saved with the drawing."
-      >
-        <input
-          type="checkbox"
-          checked={props.state.linearBlending}
-          onChange={(event) => props.onLinearBlending(event.currentTarget.checked)}
-        />
-        Smooth color for all layers
-      </label>
+      <Show when={!props.fillContainer}>
+        <SmoothColor linear={props.state.linearBlending} onChange={props.onLinearBlending} />
+      </Show>
       <drag.Provider>
         <div class={styles.layerList}>
           <For
@@ -189,11 +193,14 @@ export function LayersPanel(props: {
           <SketchIcon name="down" size={18} />
         </button>
         <button
+          aria-label="Merge down"
           title="Merge the selected layer into the layer below"
           disabled={!props.ready || !canMergeDown()}
           onClick={() => props.onAction({ type: 'merge-down', id: props.state.activeId })}
         >
-          Merge down
+          <Show when={props.fillContainer} fallback="Merge down">
+            <SketchIcon name="layers" size={18} />
+          </Show>
         </button>
         <button
           aria-label="Delete layer"
@@ -201,10 +208,25 @@ export function LayersPanel(props: {
           disabled={!props.ready || props.state.layers.length <= 1}
           onClick={() => props.onAction({ type: 'delete', id: props.state.activeId })}
         >
-          Delete
+          <Show when={props.fillContainer} fallback="Delete">
+            <SketchIcon name="trash" size={18} />
+          </Show>
         </button>
       </div>
     </section>
+  );
+}
+
+/** Document-wide blending preference, shared by the full header and compact settings menu. */
+function SmoothColor(props: { linear: boolean; onChange: (linear: boolean) => void }) {
+  return (
+    <label
+      class={styles.smoothColor}
+      title="Blend every layer, in every mode, in linear light: brighter mixes without dark edges, as Photoshop's “Blend RGB colors using gamma 1.0”. Saved with the drawing."
+    >
+      <input type="checkbox" checked={props.linear} onChange={(event) => props.onChange(event.currentTarget.checked)} />
+      Smooth color for all layers
+    </label>
   );
 }
 

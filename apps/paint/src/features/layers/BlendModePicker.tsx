@@ -1,5 +1,6 @@
 import { TILE_SIZE } from '@app-game/paint-core/brush';
 import type { BlendMode } from '@app-game/paint-core/document';
+import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { blendPreview } from './blendPreview';
 import styles from './LayersPanel.module.css';
@@ -8,7 +9,7 @@ import styles from './LayersPanel.module.css';
  * The layer blend mode as a dropdown, as in Photoshop's Layers panel: the button shows the current mode and opens a
  * list of the modes, each with what it does to two overlapping circles, rendered with the same composite as the
  * canvas, so that a mode can be chosen by its look rather than its name. The list closes on a choice, Escape or a
- * press outside; arrow keys move through it.
+ * press outside, window resize or ancestor scroll; arrow keys move through it.
  */
 export function BlendModePicker(props: {
   mode: BlendMode;
@@ -27,6 +28,23 @@ export function BlendModePicker(props: {
       props.onChange(mode);
     }
   };
+
+  createEventListener(
+    () => (open() ? window : undefined),
+    'resize',
+    () => setOpen(false)
+  );
+  createEventListener(
+    () => (open() ? window : undefined),
+    'scroll',
+    (event) => {
+      // Scrolling the options does not move the trigger; only its ancestors do.
+      if (event.target === document || (event.target instanceof Element && event.target.contains(trigger))) {
+        setOpen(false);
+      }
+    },
+    { capture: true, passive: true }
+  );
 
   createEffect(open, (isOpen) => {
     if (!isOpen) {

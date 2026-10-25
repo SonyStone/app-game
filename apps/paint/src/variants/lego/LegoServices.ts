@@ -29,7 +29,8 @@ export function createLegoServices(session: PaintSession) {
   });
 
   const symmetryMode = createMemo(() => session.symmetry.symmetry().mode);
-  let lastSymmetryMode: Exclude<ReturnType<typeof symmetryMode>, 'off'> = 'vertical';
+  /** Last enabled mode remembered only for this studio session; defaults to vertical. */
+  let sessionSymmetryMode: Exclude<ReturnType<typeof symmetryMode>, 'off'> = 'vertical';
   const setSymmetryMode = (mode: ReturnType<typeof symmetryMode>) => {
     const current = session.symmetry.symmetry();
     const center = current.mode === 'off' ? session.camera.camera() : current;
@@ -42,7 +43,7 @@ export function createLegoServices(session: PaintSession) {
     });
 
     if (accepted && mode !== 'off') {
-      lastSymmetryMode = mode;
+      sessionSymmetryMode = mode;
     }
   };
 
@@ -85,10 +86,10 @@ export function createLegoServices(session: PaintSession) {
         const mode = symmetryMode();
 
         if (mode !== 'off') {
-          lastSymmetryMode = mode;
+          sessionSymmetryMode = mode;
         }
 
-        setSymmetryMode(mode === 'off' ? lastSymmetryMode : 'off');
+        setSymmetryMode(mode === 'off' ? sessionSymmetryMode : 'off');
       }
     },
     quickShape: {

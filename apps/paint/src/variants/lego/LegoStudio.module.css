@@ -52,6 +52,7 @@
   background: var(--lego-plate);
   box-shadow: var(--lego-shadow);
   pointer-events: auto;
+  touch-action: none;
 }
 
 .board[data-editing] .panel,
@@ -1433,11 +1434,12 @@
   min-width: 0;
 
   &[data-modes] {
-    grid-template-rows: minmax(0, 1fr) 30px;
+    grid-template-rows: minmax(0, 1fr) 36px;
     padding-bottom: 4px;
   }
 
   select {
+    min-height: 36px;
     width: calc(100% - 8px);
     min-width: 0;
     margin: 0 4px;
@@ -1452,6 +1454,34 @@
 
 /* Seven columns give the controls their usable width; eight rows leave room to scroll the list. */
 .inlineLayers {
+  --ink: var(--lego-ink);
+  --muted: var(--lego-quiet);
+  --line: rgb(36 38 44 / 0.14);
+  --scrub-height: 36px;
+  --scrub-track: var(--lego-tile);
+  --scrub-fill: var(--lego-preset-active);
+  --scrub-focus: var(--lego-accent);
+  --layers-surface: var(--lego-tile);
+  --layers-ink: var(--lego-ink);
+  --layers-muted: var(--lego-quiet);
+  --layers-line: rgb(36 38 44 / 0.14);
+  --layers-row-line: rgb(36 38 44 / 0.08);
+  --layers-selected: var(--lego-preset-active);
+  --layers-toggle-active: var(--lego-preset-active);
+  --layers-toggle-ink: var(--lego-accent);
+  --layers-focus: var(--lego-accent);
+  --layers-menu-selected: var(--lego-preset-active);
+  --layers-accent: var(--lego-accent);
+  --layers-danger: #b44438;
+  --layers-drag-shadow: var(--lego-shadow);
+  --layers-menu-shadow: var(--lego-shadow);
+  --layers-checker: #d5d3cf;
+  --layers-checkbox-accent: var(--lego-accent);
+  --layers-checkbox-surface: var(--lego-tile);
+  --layers-checkbox-check: var(--lego-tile);
+  background: var(--lego-tile);
+  color: var(--lego-ink);
+  font: inherit;
   box-sizing: border-box;
   width: 100%;
   height: 100%;
@@ -1459,4 +1489,21 @@
   min-height: 0;
   overflow: hidden;
   padding: 8px;
+}
+
+/* Inline layer controls use the same flat surfaces as the surrounding LEGO tiles. */
+.inlineLayers button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+}
+
+.inlineLayers [aria-haspopup='listbox'] {
+  border: 1px solid var(--layers-line);
+  background: var(--lego-tile);
 }
