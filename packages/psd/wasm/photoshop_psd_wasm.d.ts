@@ -1,6 +1,14 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
+ * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
+ * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
+ * document identities. Supply actual face versions, never guesses based only on PostScript names.
+ * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
+ */
+export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
  * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
  * arrays, including a supplied uniform shadow scale for strike descent. This imports source
  * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
@@ -15,29 +23,29 @@ export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngin
  */
 export function projectTypeEngineLayoutCache26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
 /**
- * Converts modern horizontal cache origins through the native visual-origin addition before
- * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
- * import/layout dependencies still require comparison; no editor admission changes.
- */
-export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
  * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
  * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
  * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
  */
 export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
 /**
- * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
- * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
- * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
- * document identities. Supply actual face versions, never guesses based only on PostScript names.
- * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
+ * Converts modern horizontal cache origins through the native visual-origin addition before
+ * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
+ * import/layout dependencies still require comparison; no editor admission changes.
  */
-export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
 /**
  * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
  */
 export function formatTypeEngineReal26(value: number): Uint8Array;
+/**
+ * Accumulates nominal hmtx advances with explicit shaped design adjustments and point spacing.
+ * Supply glyph IDs, signed design-unit adjustments and point spacing with equal lengths, plus a
+ * size in 0.5..=32767 points. Returns one binary32 point pen per glyph and a terminal pen, starting
+ * at zero. Base and spacing sums accumulate separately. Invalid operands or font programs throw.
+ * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
+ */
+export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: number, glyphs: Uint16Array, size: number, adjustments: Int32Array, spacing: Float32Array): Float32Array;
 /**
  * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
  * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
@@ -59,14 +67,6 @@ export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePosi
  */
 export function computeTypeManualBaselines26(bytes: Uint8Array, face_index: number, size: number, leading: number, count: number, boxed: boolean): Float32Array;
 /**
- * Accumulates nominal hmtx advances with explicit shaped design adjustments and point spacing.
- * Supply glyph IDs, signed design-unit adjustments and point spacing with equal lengths, plus a
- * size in 0.5..=32767 points. Returns one binary32 point pen per glyph and a terminal pen, starting
- * at zero. Base and spacing sums accumulate separately. Invalid operands or font programs throw.
- * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
- */
-export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: number, glyphs: Uint16Array, size: number, adjustments: Int32Array, spacing: Float32Array): Float32Array;
-/**
  * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
  * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
  * source-dependent; a returned packet is not an editor admission certificate.
@@ -77,11 +77,6 @@ export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26
  */
 export function readPsd(bytes: Uint8Array): any;
 /**
- * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
- * pixels on a side.
- */
-export function writePsd(document: any, composite: Uint8Array): Uint8Array;
-/**
  * Rasterizes one upright stem-free CFF2 glyph with Strong AA at 13.375..47.5625 px.
  * The caller supplies actual single-face OTTO font bytes, a complete signed 16.16 design tuple
  * in fvar order and a finite baseline origin within +/-100000 pixels. Font input is at most 64 MiB.
@@ -90,6 +85,12 @@ export function writePsd(document: any, composite: Uint8Array): Uint8Array;
  * Returns coverage and document-space bounds only. This does not admit CFF2 to addTextFont or SetText.
  */
 export function rasterizeCff2Strong(font_bytes: Uint8Array, design_coordinates: readonly number[], character: string, size: number, origin_x: number, origin_y: number): PsdCff2Coverage;
+/**
+ * Generate an independent baseline JPEG in Photoshop 26's resource-1036 envelope.
+ * Complete sRGB8 RGBA canvas pixels and explicit resolution are required. Resizing
+ * refuses. This proves thumbnail generation only, never editor-save equivalence.
+ */
+export function generatePhotoshop26Thumbnail(width: number, height: number, resolution: number, rgba: Uint8Array): Uint8Array;
 /**
  * Check prepared native-layout bytes under the closed Photoshop 26 v1 contract.
  * Throws on unsupported metadata layouts. A false result grants no save certificate.
@@ -107,12 +108,6 @@ export function checkPhotoshop26Save(left: Uint8Array, right: Uint8Array): any;
  * generated. Invalid native element-form XMP or context throws TypeError.
  */
 export function writeSavedHistory(xmp: Uint8Array, context: PsdPhotoshop26SaveContext, retained_instance_id?: string | null): Uint8Array;
-/**
- * Generate an independent baseline JPEG in Photoshop 26's resource-1036 envelope.
- * Complete sRGB8 RGBA canvas pixels and explicit resolution are required. Resizing
- * refuses. This proves thumbnail generation only, never editor-save equivalence.
- */
-export function generatePhotoshop26Thumbnail(width: number, height: number, resolution: number, rgba: Uint8Array): Uint8Array;
 /**
  * Reads persisted styles, vectors, locks, labels, metadata and XMP without renderer admission.
  * Vector frame queries are separate from stored values and report malformed-name/rectangle refusals.
@@ -303,6 +298,108 @@ export interface PsdCff2Coverage {
 
 
 
+/**
+ * Caller-owned facts for the first save of a new flat RGB8 raster document.
+ * Every operand is required. Supply truthful application, profile and compositor facts.
+ * Creation is separate from imported-file preservation and later editor saves.
+ */
+export interface PsdNewDocumentContext {
+  /** Creation facts retained independently of later save events. */
+  readonly creation: {
+    /** Cryptographic UUID with the xmp.did: prefix. */
+    readonly originalDocumentId: string;
+    /** Created-event UUID with the xmp.iid: prefix, sharing the original creation UUID. */
+    readonly instanceId: string;
+    /** Actual ISO8601 creation clock, including seconds and timezone. */
+    readonly when: string;
+    /** Actual originating application, such as Paint. */
+    readonly creatorTool: string;
+  };
+  /** First-save facts. Generate independent save identities and capture the actual save clock. */
+  readonly save: {
+    /** Final filename without its PSD/PSB extension. */
+    readonly basename: string;
+    /** Actual ISO8601 save clock, including seconds and timezone. */
+    readonly saveTime: string;
+    /** Consistent local save wall time as YYYY:MM:DD HH:MM:SS. */
+    readonly exifTime: string;
+    /** Save-event UUID with the xmp.iid: prefix. */
+    readonly instanceId: string;
+    /** Save document UUID with the adobe:docid:photoshop: prefix. */
+    readonly documentId: string;
+    /** Actual saving application. Do not attribute Paint exports to Adobe. */
+    readonly softwareAgent: string;
+    /** Caller composite policy. PSD cannot persist Photoshop's RGBBlendGamma preference. */
+    readonly linearBlending: boolean;
+  };
+  /** Explicit resource defaults for this document and host. */
+  readonly resources: {
+    /** Actual writer application name. */
+    readonly writerName: string;
+    /** Actual reader application name. */
+    readonly readerName: string;
+    /** Complete creation requires a supplied merged composite. */
+    readonly mergedComposite: true;
+    /** Native display-unit code, 1 or 2. */
+    readonly displayUnit: 1 | 2;
+    /** Unsigned 16.16 resolution and native resolution unit. */
+    readonly missingResolution: readonly [number, number];
+    /** Horizontal and vertical grid spacing in 1/32-pixel units. */
+    readonly missingGrid: readonly [number, number];
+    /** Four ARGB guide-color bytes. */
+    readonly legacyGuideColor: readonly [number, number, number, number];
+    /** Actual localized merged-transparency channel name. */
+    readonly transparencyName: string;
+    /** Whether the supplied RGB profile is tagged as sRGB. */
+    readonly taggedSrgb: boolean;
+  };
+  /** Supported compositor and ICC state. Credential signing is outside this writer. */
+  readonly document: {
+    /** Truthful supported compositor settings for the document. */
+    readonly compositor: {
+      /** Supported compositor engine identifier. */
+      readonly engine: 'compCore' | 'compCoreGPU';
+      /** Host GPU policy. */
+      readonly gpu: 'on' | 'off' | 'feature';
+      /** Host threading policy. */
+      readonly threads: 'on' | 'off' | 'feature';
+      /** This bounded writer accepts the supported GPU-state marker. */
+      readonly gpuSupport: 'supported';
+    };
+    /** Actual ICC display state. */
+    readonly iccDisplay: string;
+    /** Actual ICC view state. */
+    readonly iccView: string;
+    /** Signing credentials must remain disabled. */
+    readonly newCredentialsEnabled: false;
+  };
+  /** Actual document RGB ICC bytes, including the caller's rendering-intent header. */
+  readonly profile: Uint8Array;
+  /** Stable positive unique signed-32-bit IDs in document.layers bottom-to-top order. */
+  readonly layerIds: readonly number[];
+  /** Finite positive layer clocks, one per layer in the same order as layerIds. */
+  readonly layerTimes: readonly number[];
+  /** Global lighting angle in degrees, 0 through 360. */
+  readonly globalAngle: number;
+  /** Global lighting altitude in degrees, 0 through 90. */
+  readonly globalAltitude: number;
+  /** Actual localized built-in CMYK proof-setup name. */
+  readonly proofSetupName: string;
+}
+/**
+ * Write flat RGB8 ordinary rasters and the supplied straight-RGBA composite.
+ * Context initializes complete first-save XMP/history, resources and document state.
+ * Omitting context keeps the identity-only legacy mode with IDs beginning at 2,
+ * no XMP initialization and the largest allocated ID in resource 1044.
+ * Partial alpha, clipping and transparency protection are retained. PSB is selected
+ * above 30000 pixels on either side. The codec preserves caller pixels and does not render.
+ * Invalid facts, unknown context keys, duplicate IDs and invalid clocks throw without
+ * mutating document, context or composite. Imported files use preservation/editor saves.
+ */
+export function writePsd(document: unknown, composite: Uint8Array, context?: PsdNewDocumentContext): Uint8Array;
+
+
+
 /** Host policy for a call or explicit allocation context. Defaults are 64 MiB per allocation, 512 MiB live and depth 64.
  * Limits concern accounted buffers, not OS RSS. Safe-integer byte values may raise or lower defaults.
  * retainedBytes includes caller input copies, fonts and caches not owned by this operation. */
@@ -325,6 +422,21 @@ export interface PsdAllocationError extends Error {
   name: 'PsdAllocationError';
   requested: bigint;
 }
+
+
+
+/** Explicit final-save context plus optional runtime leaves for a first saved event. */
+export type PsdXmpSaveContext = PsdPhotoshop26SaveContext & {
+  /** Required exactly when initialized source history has no saved event. */
+  initialEvent?: {
+    /** Actual generated xmp.iid UUID for first preparation, independent of the final instanceId. */
+    instanceId: string;
+    /** Actual ISO8601 preparation time with seconds and timezone. */
+    when: string;
+    /** Actual software agent for the first preparation event. */
+    softwareAgent: string;
+  } | null;
+};
 
 
 
@@ -387,6 +499,10 @@ export interface PsdProcessSource {
  * Background alpha is a byte buffer filled with 255, at the same byte length as each color
  * plane; it is validated and never stored. RGB16 color words are canonical Q15 in 0..32768.
  * CMYK8 accepts native inverted process samples only; RGB Fill conversion remains unqualified.
+ * Under editRasterTreeExact v3, visible ordinary RGB16 rasters may retain admitted names,
+ * styles, masks, nonprocess streams, siblings and groups while replacing only complete RGB
+ * streams and existing alpha at unchanged nonempty bounds. Supplied alpha must be opaque.
+ * Source/cache/render/writer admission still runs; hidden RGB16 Fill refuses atomically.
  * Gray8 Background saves retain the named resource-1012 refusal. */
 export type PsdProcessEdit =
   | { readonly kind: 'replaceProcessPlanes'; readonly layerId: number;
@@ -606,6 +722,38 @@ export interface PsdPhotoshop26SaveContext {
 export interface PsdEditorSession {
   /**
    * Apply a bounded Photoshop 26 reopen-equivalent transaction with explicit host operands.
+   * Contract v3-carried-untouched carries independent layer records, every tagged block and
+   * compressed channel stream byte-identically. It computes dependencies from source identities
+   * and one command on a pristine revision; callers cannot supply a carry list. Edited group
+   * subtrees, ancestor groups and their paired ends, complete sibling clipping chains and a
+   * previously active empty group reopened by a scalar edit remain dependent. Independent
+   * siblings use Photoshop reopening the source as their reference; edited/dependent state
+   * uses Photoshop saving the same edit. Merged pixels and thumbnails always regenerate.
+   * v3 requires writers, typeRendering and the actual localized backgroundLayerName. It keeps
+   * v2's complete active-font inventory checks and refuses type targets and type ancestors.
+   * Changed smart subtrees, external placements, unknown local/global fields, custom metadata,
+   * duplicate identities/fields/resources and hidden group-end targets retain named refusals.
+   * Structural edits touching clipping topology refuse with save.carriedUntouched.clippingStructure.
+   * A flat ordinary RGB8 stack's single unclipped top layer may move to root bottom, delete,
+   * or group alone while preserving existing clipping runs. Grouped topology and clipping
+   * bases/targets retain their guards. Opaque Fill that needs native
+   * merged-alpha collapse and removal of dependent alpha resources refuses with
+   * save.carriedUntouched.mergedAlphaCollapse. These guards close the three false admissions
+   * found in the initial 100-request audit; the final retained audit has zero false admissions.
+   * v3 serializes dependent legacy lrFX only from one complete version-zero lfx2/lrFX pair
+   * on an ordinary layer, with unit scale, seven single legacy families, canonical units,
+   * finite nonnegative geometry and RGB colors. Repeated families, gradient glows, textured
+   * Bevel, foreign colors and incomplete or unknown envelopes retain named refusals.
+   * Modern descriptors remain intact. Dependent lrFX and enclosing Lr16 use canonical padding.
+   * Disposable validation accepts unchanged name-source layr on ordinary records, lset on
+   * section markers, and cont beside a typed adjustment or fill. Published names and tags
+   * remain unchanged. Unknown codes refuse. This adds no generated-name setter, localized
+   * name generation or selected-path support. v1/v2 style admission stays unchanged.
+   * Resource 1015 carries its full source envelope after thirteen-point transfer grammar checks.
+   * Canvas, mode, depth, version and imported resolution remain stable. All work, serialization,
+   * reparse and complete carried-record checks happen privately before publication. A failure
+   * preserves bytes, selection, allocation and revision. v3 never falls back to v1/v2;
+   * those endpoints and ordinary byte-identical preservation saves keep their contracts.
    * Contract v2-carried-type carries complete untouched type records, compressed channel
    * caches and global Txt2 byte-identically. Compare those layers with Photoshop's reopen
    * of the source; all remaining observations keep v1's native edit/save reference.
@@ -700,6 +848,27 @@ export interface PsdEditorSession {
    * Imported grouping follows make-layerSection semantics. Explicit operands stage selection
    * after validating the original saved selection. Contiguous sibling/depth guards, both
    * allocated IDs and their actual layerTimes remain required. Failures publish no selection.
+   * V3 accepts bounded off-canvas raster records for existing same-rectangle operations.
+   * Geometry relocation/resizing and dependent vector/style producers retain their guards.
+   * Explicit rename projects only its target's known rend/layr/user/lset name source to user
+   * state on a private snapshot. Unknown sources and non-rename name dependencies refuse.
+   * Untagged Gray Fill/grouping refuse at save.carriedUntouched.grayChannelActivation after
+   * existing lock/Background checks. Any refusal leaves bytes and revision unchanged.
+   * V3 hidden RGB16 opacity setters refuse at save.carriedUntouched.hiddenProcessOpacity.
+   * Explicit moves of an already-bottom root with source type refuse at
+   * save.carriedUntouched.selfMoveTypeComposite because native save-time type import changes
+   * the stored composite. Both checks follow lock/Background refusals and precede staging.
+   * Hidden RGB8 pixel replacement refuses at save.carriedUntouched.hiddenRasterPixels.
+   * Hidden RGB8 opacity refuses at save.carriedUntouched.hiddenActiveOpacity only when
+   * resource 1069 selects that target alone. Hidden rename and unselected-hidden opacity
+   * keep their existing contracts. Lock/Background checks take priority over these guards.
+   * writePsd's optional PsdNewDocumentContext initializes complete new RGB8 first saves;
+   * omission keeps the identity-only legacy mode. Imported files use preservation/editor saves.
+   * Native observations explicitly select process channels before comparing targetChannels;
+   * this runtime leaf stays significant and is never masked as volatile.
+   * Preview freshness follows process composite to explicit source/destination ICC operands.
+   * Generic ICC conversions retain their approximate display provenance. The preview tier
+   * compares freshness, envelope and geometry; converted/JPEG samples are excluded.
    * preview.sourceWorkingProfile supplies actual working ICC bytes for untagged sources;
    * embedded ICC takes precedence and no working profile is written to the file. The explicit
    * relative-colorimetric sRGB identity route allows only a validated default-intent header
@@ -716,7 +885,9 @@ export interface PsdEditorSession {
    * Selected full-strength Pass Through groups admit opacity, hide and blend changes.
    * groupSelectedLayers wraps contiguous selected sibling subtrees and requires expanded.
    * Its header and hidden end consume two IDs and two explicit layerTimes, returning the header ID.
-   * ungroupLayer selects a sole child or multiple direct rasters, with the top child active.
+   * ungroupLayer retains the one-child or multiple-direct-raster admission boundary. It selects
+   * every surviving nested header and leaf in the child span in physical order, excluding group
+   * ends, with the top surviving sheet active. Empty/mixed-subgroup guards remain.
    * Group deletion removes its paired subtree; a nested group must be its parent's sole child.
    * Deleting a sole nested raster selects its parent. Source and result depth must stay below six.
    * Positions are bottom to top, after removal. Insert allocates above resource 1044 and
@@ -731,15 +902,45 @@ export interface PsdEditorSession {
    * final order is unchanged. A preservation save still emits the source bytes exactly.
    * Full-strength Normal RGB16/CMYK8 adjustments retain partial alpha. Gray8/CMYK8 process-only
    * transitions add the native merged-alpha declaration. Full-opacity unmasked RGB16 Multiply
-   * groups use the existing isolated return. Multiply on closed nonempty or CMYK groups refuses
-   * with save.reopen.group.blend.expansion. Adjustment descendants at any depth and non-Normal
+   * groups use the existing isolated return. With writers, Multiply expands plain nonempty closed
+   * groups; empty groups retain their state. CMYK and writer-free closed-group Multiply refuse
+   * with save.reopen.group.blend.expansion. Smart-descendant group opacity/blend refuses with
+   * save.reopen.group.smartChildren. Adjustment descendants at any depth and non-Normal
    * leaf blends refuse with save.reopen.group.blend.complexChildren, including hidden descendants.
-   * Deleting the sole non-Background root subtree or ungrouping an empty group above the sole
-   * Background refuses with save.reopen.structure.backgroundOnly. Unselected hidden raster
+   * v3 additionally admits a typed default adjustment graph in RGB8/16: one opaque full-canvas
+   * Normal base below one full-strength Pass Through group, with direct opaque Normal rasters
+   * and full-strength Normal adjustments with absent or white masks. Nested groups, non-Normal
+   * children, fractional raster alpha and partial source group strength retain the cache guard.
+   * v3 replaceProcessPlanes preserves admitted RGB16 record metadata, bounds, names, styles,
+   * masks, nonprocess streams, siblings and groups. It requires a visible ordinary nonempty
+   * raster, unique complete RGB streams, sized opaque operands and the native encoding policy.
+   * Hidden RGB16 Fill refuses with save.carriedUntouched.hiddenRasterPixels before publication.
+   * Complete-source, strict merged-cache, renderer, dependency-plan and writer admission still
+   * run before merged/thumbnail regeneration, reparse and preservation checks. The three earlier
+   * complex group cache failures remain atomic refusals. No source-name/hash exception or
+   * source-cache bypass is used; v1/v2 keep their earlier group-blend boundary.
+   * RGB16 Exposure has no layer-count restriction within the supported profile/render graph.
+   * Partial RGB16 layer opacity admits one supported Normal Drop Shadow, Inner Glow, Color
+   * Overlay or Satin through the existing return/work rectangle. Fill, binary-mask, source-mode,
+   * effect geometry and opaque-backdrop checks remain mandatory. RGB16 type and stale Photo
+   * Filter source caches retain their refusals; this adds no context operand or cache bypass.
+   * A single RGB8 root deletion or empty ungroup leaving only an opaque, unmasked full-canvas
+   * Background emits the native flat layout and omits unused patterns and sheet resources.
+   * Invalid identity/resource inventories, unknown or duplicate surviving Background fields,
+   * saved paths and unknown global carriers refuse. Other Background-only scopes retain
+   * save.reopen.structure.backgroundOnly. Unselected hidden raster
    * name/opacity edits refuse with save.layers.scalar.hiddenTarget; active hidden targets retain
    * their measured behavior. These guards preserve source bytes, selection, IDs and revision.
    * Source partial alpha remains intact. Deleting the sole physical raster refuses before
    * resource preparation, selection changes, identity allocation or rendering.
+   * Embedded-only linked ingredients are prepared from validated unique, resolvable source records;
+   * external, alias, legacy-only and malformed inventories retain named XMP refusals.
+   * Stored reference-point coordinates must be finite and within ±300000. Validation projects
+   * only a disposable copy; source/output fxrp bytes and no-op saves remain unchanged.
+   * Restoring a different active vector sheet without resource 1088 refuses with
+   * save.layers.scalar.activeVectorPath. Deleting a raster beside nested-group siblings refuses
+   * with save.reopen.delete.mixedSiblings until native selection fallback is implemented.
+   * When empty Ungroup clears resource 1069, resource 1024 records the top physical index.
    * Standard Gray halftones use the typed resource-1012 writer. Custom spot functions,
    * unsupported angles and other unsupported resource writers retain atomic refusals.
    * Success freezes complete prepared bytes at either later gamma. Failure preserves
@@ -769,6 +970,26 @@ export type PsdReopenSaveContext = PsdReopenSaveOperands & (
        * Promotion can allocate a new identity; supply its actual layerTimes entry.
        * Missing operands and refusals preserve bytes, selection, allocation and revision. */
       readonly backgroundLayerName?: string;
+    }
+  | {
+      /** Complete independent layer records, tagged blocks and compressed channels carry byte-identically.
+       * Edited group subtrees, ancestor composites and complete clipping chains are dependent.
+       * Structural clipping and opaque Fill requiring alpha/resource collapse refuse atomically.
+       * Dependent styles require the bounded complete RGB legacy companion writer described by
+       * editRasterTreeExact. Known generated-name sources validate by record kind while published
+       * names and tags remain intact; unsupported styles and unknown name sources still refuse.
+       * The typed default adjustment group and visible same-bounds RGB16 process replacement
+       * described by editRasterTreeExact also admit. Strict source-cache and writer checks remain;
+       * nested/partial group caches and hidden RGB16 Fill retain atomic refusals.
+       * Merged pixels and thumbnails regenerate. A pristine source and one command are required;
+       * callers cannot supply a carry list. Failures preserve bytes, selection, IDs and revision. */
+      readonly contract: "photoshop26.reopen-equivalent/v3-carried-untouched";
+      /** Required resource, XMP, document and dependent layer-cache writers. */
+      readonly writers: PsdReopenSaveWriters;
+      /** Actual host text gamma and complete active PostScript font inventory. */
+      readonly typeRendering: PsdCarriedTypeRendering;
+      /** Actual localized promoted-Background name, required for v3. */
+      readonly backgroundLayerName: string;
     }
 );
 /** Actual host text rendering settings, without loading or activating font programs. */
@@ -1012,21 +1233,6 @@ export type PsdSourceEdit = PsdSourceEditTarget & (
       /** Raw copy-on-sheet byte, 0 through 255. */ copyOnSheet: number;
     }
 );
-
-
-
-/** Explicit final-save context plus optional runtime leaves for a first saved event. */
-export type PsdXmpSaveContext = PsdPhotoshop26SaveContext & {
-  /** Required exactly when initialized source history has no saved event. */
-  initialEvent?: {
-    /** Actual generated xmp.iid UUID for first preparation, independent of the final instanceId. */
-    instanceId: string;
-    /** Actual ISO8601 preparation time with seconds and timezone. */
-    when: string;
-    /** Actual software agent for the first preparation event. */
-    softwareAgent: string;
-  } | null;
-};
 
 
 
@@ -1614,6 +1820,7 @@ export class PsdEditorSession {
    * Prepare resource 1060 from the current source snapshot. No-op preservation is unchanged.
    * Missing identity/import rules or runtime leaves throw without changing revision.
    * The optional initialEvent contains only explicit first-preparation runtime leaves.
+   * Embedded-only linked inventory removes Ingredients; external or unresolved content throws.
    */
   preparePhotoshop26XmpCandidate(context: PsdXmpSaveContext): PsdPreparedSave;
   /**
@@ -1835,7 +2042,7 @@ export interface InitOutput {
   readonly readPsdMetadataQueries: (a: number, b: number) => [number, number, number];
   readonly readPsdSource: (a: number, b: number) => [number, number, number];
   readonly readTypeFontMetrics26: (a: number, b: number, c: number) => [number, number, number];
-  readonly writePsd: (a: any, b: number, c: number) => [number, number, number, number];
+  readonly writePsd: (a: any, b: number, c: number, d: any) => [number, number, number, number];
   readonly writeSavedHistory: (a: number, b: number, c: any, d: number, e: number) => [number, number, number, number];
   readonly writeTypeEngineValues26: (a: number, b: number) => [number, number, number, number];
   readonly writeTypeLayerGlyphs26: (a: number, b: number, c: any, d: any, e: number) => [number, number, number, number];
