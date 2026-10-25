@@ -1,7 +1,7 @@
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { Brush } from '@app-game/paint-core/brush';
 import { attachStrokePreview } from '@app-game/paint-core/preview/client';
-import { createEffect, createSignal, onSettled, Show } from 'solid-js';
+import { createEffect, createSignal, onSettled, Show, untrack } from 'solid-js';
 
 /** Replays the shared tablet sample through Paint's real preset engine at its current size and saved color. */
 export function StrokePreview(props: {
@@ -26,38 +26,42 @@ export function StrokePreview(props: {
     status.observe(canvas, { attributes: true, attributeFilter: ['data-preview-reason'] });
     let visible = false;
     let revision = 0;
-    refresh = () => {
-      const current = ++revision;
-      if (!visible) {
-        return;
-      }
-      const brush: Partial<Brush> = JSON.parse(JSON.stringify(props.settings));
-      const dpr = Math.min(2, devicePixelRatio || 1, 2048 / Math.max(1, canvas.clientWidth), 512 / props.height);
-      const width = Math.max(1, Math.round(canvas.clientWidth * dpr));
-      const height = Math.max(1, Math.round(props.height * dpr));
-      void (props.resources?.() ?? Promise.resolve([]))
-        .then((resources) => {
-          if (current !== revision || !visible) {
-            return;
-          }
-          connection.update({
-            kind: 'brush',
-            brush: { color: props.color ?? '#ffffff', ...brush },
-            resources,
-            width,
-            height,
-            dpr,
-            background: '#333333',
-            thumbnail: true
+    // Refresh is an imperative snapshot, also called by the effect's untracked callback and browser observers.
+    refresh = () =>
+      untrack(() => {
+        const current = ++revision;
+        if (!visible) {
+          return;
+        }
+
+        const brush: Partial<Brush> = JSON.parse(JSON.stringify(props.settings));
+        const dpr = Math.min(2, devicePixelRatio || 1, 2048 / Math.max(1, canvas.clientWidth), 512 / props.height);
+        const width = Math.max(1, Math.round(canvas.clientWidth * dpr));
+        const height = Math.max(1, Math.round(props.height * dpr));
+        void (props.resources?.() ?? Promise.resolve([]))
+          .then((resources) => {
+            if (current !== revision || !visible) {
+              return;
+            }
+            connection.update({
+              kind: 'brush',
+              brush: { color: props.color ?? '#ffffff', ...brush },
+              resources,
+              width,
+              height,
+              dpr,
+              background: '#333333',
+              thumbnail: true
+            });
+          })
+          .catch((error: unknown) => {
+            if (current === revision) {
+              canvas.dataset.previewState = 'error';
+              canvas.dataset.previewReason = String(error);
+            }
           });
-        })
-        .catch((error: unknown) => {
-          if (current === revision) {
-            canvas.dataset.previewState = 'error';
-            canvas.dataset.previewReason = String(error);
-          }
-        });
-    };
+      });
+
     const resize = new ResizeObserver(refresh);
     resize.observe(canvas);
     const intersection = new IntersectionObserver(([entry]) => {
