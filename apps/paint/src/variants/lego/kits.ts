@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { newId, partsBounds, type Board, type Panel, type Part } from './board';
+import { createPartStorage, migratePart, storedPart } from './partStorage';
+import { swatchPanelParts } from './swatchPanelParts';
 
 /**
  * Kits: panels kept to be used again. A kit is a set of parts as they lay on a panel, with the panels of the swatches
@@ -22,14 +24,11 @@ export type Kit = {
 
 /** The kits on this device: the ready ones first, then the user's, kept in `localStorage`. */
 export function createKits() {
-  const [saved, setSaved, latest] = createImmediateSignal<Kit[]>(read());
+  const storage = createPartStorage('paint.lego.kits', 'kits', [], read);
+  const [saved, setSaved, latest] = createImmediateSignal<Kit[]>(storage.initial);
   const store = (next: Kit[]) => {
     setSaved(next);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
-    } catch {
-      // The kits still apply until the page closes.
-    }
+    storage.write(next);
   };
 
   return {
@@ -136,15 +135,6 @@ const part = (id: string, kind: string, column: number, row: number, columns: nu
   looks: look ? { [`${columns}x${rows}`]: look } : undefined
 });
 
-/** What a new swatch opens: the disc over hue, saturation and brightness, and the history below. */
-export const swatchPanelParts: Part[] = [
-  part('disc', 'color:wheel', 0, 0, 5, 5),
-  part('hue', 'value:hue', 0, 5, 5, 1),
-  part('saturation', 'value:saturation', 0, 6, 5, 1),
-  part('brightness', 'value:brightness', 0, 7, 5, 1),
-  part('history', 'color:history', 0, 8, 5, 1)
-];
-
 /**
  * The ready kits, each one of the library's color panels taken apart: Procreate's Colors (the pair, the Classic
  * square and sliders, history and palette), the OKLCH wheel (disk, lightness, harmony, gamut mask), the Desktop
@@ -195,39 +185,33 @@ const readyKits: Kit[] = [
   }
 ];
 
-const storageKey = 'paint.lego.kits';
-
-const partSchema = z.object({
-  id: z.string(),
-  kind: z.string(),
-  cell: z.object({ column: z.number().int(), row: z.number().int() }),
-  span: z.object({ columns: z.number().int().min(1), rows: z.number().int().min(1) }),
-  looks: z.record(z.string(), z.string()).optional()
-});
-
-/** The stored shape of a part, for the board's schema too. */
-export const storedPart = partSchema;
-
 const kitsSchema = z.array(
   z.object({
     id: z.string(),
     name: z.string(),
-    parts: z.array(partSchema),
+    parts: z.array(storedPart),
     owned: z.array(
       z.object({
         owner: z.string(),
-        parts: z.array(partSchema),
+        parts: z.array(storedPart),
         offset: z.object({ column: z.number().int(), row: z.number().int() }).optional()
       })
     )
   })
 );
 
-function read(): Kit[] {
-  try {
-    const parsed = kitsSchema.safeParse(JSON.parse(localStorage.getItem(storageKey) ?? '[]'));
-    return parsed.success ? parsed.data : [];
-  } catch {
-    return [];
-  }
+/** Migrates every kit and its owned panels with the same part migrations as the board. */
+function read(data: unknown, version: number): Kit[] {
+  return kitsSchema.parse(data).map((kit) => {
+    const added: Kit['owned'] = [];
+    const migrate = (parts: Part[]) =>
+      parts.map((part) => {
+        const result = migratePart(part, version);
+        added.push(...result.owned);
+        return result.part;
+      });
+    const parts = migrate(kit.parts);
+    const owned = kit.owned.map((entry) => ({ ...entry, parts: migrate(entry.parts) }));
+    return { ...kit, parts, owned: [...owned, ...added] };
+  });
 }

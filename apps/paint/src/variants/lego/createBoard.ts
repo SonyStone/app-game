@@ -1,22 +1,21 @@
 import { z } from 'zod';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
-import type { Board, Part } from './board';
-import { storedPart, swatchPanelParts } from './kits';
+import type { Board } from './board';
+import { createPartStorage, migratePart, storedPart } from './partStorage';
+import { swatchPanelParts } from './swatchPanelParts';
 
 /**
- * The LEGO variant's board on this device, kept in `localStorage`; a missing or malformed one starts from
- * `defaultBoard`. Storage failures keep the board until the page closes.
+ * The LEGO variant's board on this device, kept in `localStorage`; missing or hard-corrupt storage starts from
+ * `defaultBoard` after backing up corrupt data. Malformed parts remain on the board. Storage failures keep the
+ * board until the page closes.
  */
 export function createBoard() {
   // Drags build on the last write, so several in one event compose.
-  const [board, setBoard, latest] = createImmediateSignal<Board>(read());
+  const storage = createPartStorage('paint.lego', 'board', defaultBoard, read);
+  const [board, setBoard, latest] = createImmediateSignal<Board>(storage.initial);
   const set = (next: Board) => {
     setBoard(next);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
-    } catch {
-      // The board still applies until the page closes.
-    }
+    storage.write(next);
   };
 
   return {
@@ -29,8 +28,6 @@ export function createBoard() {
     reset: () => set(defaultBoard)
   };
 }
-
-const storageKey = 'paint.lego';
 
 const point = z.object({ x: z.number(), y: z.number() });
 const boardSchema = z.object({
@@ -46,45 +43,20 @@ const boardSchema = z.object({
   )
 });
 
-function read(): Board {
-  try {
-    const stored = localStorage.getItem(storageKey);
-    const parsed = stored ? boardSchema.safeParse(JSON.parse(stored)) : undefined;
-    return parsed?.success ? withSplitColor(parsed.data) : defaultBoard;
-  } catch {
-    return defaultBoard;
-  }
-}
-
-/**
- * A board from before the color was split into parts: its `color` parts become pickers where they showed one, and
- * swatches opening the default panel otherwise.
- */
-function withSplitColor(board: Board): Board {
+/** Loads every part independently and appends panels introduced by shared migrations. */
+function read(data: unknown, version: number): Board {
+  const board = boardSchema.parse(data);
   const added: Board['panels'] = [];
   const panels = board.panels.map((panel) => ({
     ...panel,
-    parts: panel.parts.map((part): Part => {
-      if (part.kind !== 'color') {
-        return part;
-      }
-
-      const wheel = Object.values(part.looks ?? {}).some((look) => wheelIds.has(look)) || part.span.columns >= 5;
-      if (wheel) {
-        const looks = Object.fromEntries(Object.entries(part.looks ?? {}).filter(([, look]) => wheelIds.has(look)));
-        return { ...part, kind: 'color:wheel', looks: Object.keys(looks).length > 0 ? looks : undefined };
-      }
-
-      added.push(swatchPanel(part.id));
-      return { id: part.id, kind: 'color:swatch', cell: part.cell, span: part.span };
+    parts: panel.parts.map((part) => {
+      const result = migratePart(part, version);
+      added.push(...result.owned.map((entry) => ({ ...entry, id: `${entry.owner}-panel`, at: { x: 0, y: 0 } })));
+      return result.part;
     })
   }));
-
-  return { panels: [...panels, ...added] };
+  return { ...board, panels: [...panels, ...added] };
 }
-
-/** The picker looks an old color part may have shown. */
-const wheelIds = new Set(['disc', 'triangle', 'wheel', 'coolorus']);
 
 /** The default panel swatch `owner` opens, its part ids prefixed with the owner's to keep them unique. */
 function swatchPanel(owner: string): Board['panels'][number] {

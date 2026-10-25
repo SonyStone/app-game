@@ -36,12 +36,13 @@ import type { createBoard } from './createBoard';
 import type { createSheet } from './createSheet';
 import { createTwoFingerSheet } from './createTwoFingerSheet';
 import { nameKit } from './kitNames';
-import { kitOf, swatchPanelParts, unpackKit, type createKits, type Kit } from './kits';
+import { kitOf, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { kindLabel, lookOf, partLooks, PartView, type Popup, type Session } from './parts';
 import { BlockView, PartsTray } from './PartsTray';
 import { SelectionBar } from './SelectionBar';
 import { SpawnMenu } from './SpawnMenu';
+import { swatchPanelParts } from './swatchPanelParts';
 
 /**
  * The board over the drawing: its panels, and in edit mode the studs, the box of parts and kits, and the drags that

@@ -47,7 +47,12 @@ export type Part = {
   span: Span;
   /** Look ids by `spanKey` of the size they were chosen at. */
   looks?: Record<string, string>;
+  /** Original persisted data, retained across moves and copies, including fields this version cannot read. */
+  [partData]?: { record: unknown; invalid: boolean };
 };
+
+/** Internal storage metadata uses a symbol so future JSON fields cannot be mistaken for it. */
+export const partData = Symbol('stored part data');
 
 export type Point = { x: number; y: number };
 export type Cell = { column: number; row: number };
