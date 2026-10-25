@@ -87,6 +87,8 @@ async function verifyControls(page, context, url, output) {
         .at(-1)
     ])
   );
+  assert.equal(board.panels.find((panel) => panel.owner === added.layers.id)?.window?.name, 'Layers');
+  assert.equal(board.panels.find((panel) => panel.owner === added.layers.id)?.window?.open, undefined);
   for (const part of Object.values(added)) {
     assert.ok(part);
   }
@@ -189,19 +191,21 @@ async function verifyControls(page, context, url, output) {
 /** Checks guarded edits, top-layer dismissal, native touch scrolling, resizing and idle-only thumbnails. */
 async function verifyLayers(page, context, url, output) {
   await page.goto(`${url}/variants.html#lego`);
-  await page.getByRole('button', { name: 'Edit', exact: true }).waitFor({ timeout: 60000 });
+  await page.getByRole('button', { name: 'Edit', exact: true }).waitFor();
   await page.evaluate(() =>
     localStorage.setItem(
       'paint.lego',
       JSON.stringify({
-        version: 2,
+        version: 1,
         board: {
           panels: [
             {
-              id: 'layers-panel',
-              at: { x: 0.1, y: 0.1 },
+              id: 'buttons',
+              at: { x: 0.1, y: 0.15 },
               parts: [
-                { id: 'layers', kind: 'action:layers', cell: { column: 0, row: 0 }, span: { columns: 7, rows: 8 } }
+                { id: 'layers', kind: 'action:layers', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 1 } },
+                { id: 'layers-two', kind: 'action:layers', cell: { column: 0, row: 1 }, span: { columns: 2, rows: 1 } },
+                { id: 'swatch', kind: 'color', cell: { column: 0, row: 2 }, span: { columns: 2, rows: 1 } }
               ]
             }
           ]
@@ -210,7 +214,45 @@ async function verifyLayers(page, context, url, output) {
     )
   );
   await page.reload();
-  const panel = page.locator('[data-part="layers"]');
+  const button = page.locator('[data-part="layers"]').getByRole('button', { name: 'Layers', exact: true });
+  const second = page.locator('[data-part="layers-two"]').getByRole('button', { name: 'Layers', exact: true });
+  const panel = page.locator('[data-panel="layers-panel"]');
+  const panelTwo = page.locator('[data-panel="layers-two-panel"]');
+  await button.waitFor();
+  await expect(panel).toHaveCount(0);
+  await button.click();
+  await expect(panel).toBeVisible();
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await second.click();
+  await expect(panelTwo).toBeVisible();
+  await expect(panel).toBeVisible();
+  await second.click();
+  await expect(panelTwo).toHaveCount(0);
+  // A color folder still closes outside; windows remain open while painting.
+  await page.locator('[data-part="swatch"] button').click();
+  const folder = page.locator('[data-panel="swatch-panel"]');
+  await expect(folder).toBeVisible();
+  await page.mouse.click(1000, 800);
+  await expect(folder).toHaveCount(0);
+  await expect(panel).toBeVisible();
+  const handle = panel.locator('[data-window-handle]');
+  const initial = await handle.boundingBox();
+  await page.mouse.move(initial.x + 8, initial.y + initial.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(initial.x + 188, initial.y + initial.height / 2 + 30, { steps: 12 });
+  await page.mouse.up();
+  await expect.poll(() => handle.boundingBox().then((rect) => Math.round(rect.x))).toBe(Math.round(initial.x + 180));
+  await page.screenshot({ path: `${output}/layers-window-live.png` });
+  await panel.getByRole('button', { name: 'Collapse Layers', exact: true }).click();
+  await expect(panel).toHaveAttribute('data-collapsed', '');
+  await expect(panel.locator('[data-part]')).toHaveCount(0);
+  await page.screenshot({ path: `${output}/layers-window-collapsed.png` });
+  await panel.getByRole('button', { name: 'Expand Layers', exact: true }).click();
+  await button.click();
+  await expect(panel).toHaveCount(0);
+  await button.click();
+  await expect(panel).toBeVisible();
+  await expect.poll(() => handle.boundingBox().then((rect) => Math.round(rect.x))).toBe(Math.round(initial.x + 180));
   const add = panel.getByRole('button', { name: 'Add layer', exact: true });
   await add.waitFor({ timeout: 60000 });
   await page.waitForFunction(() => window.paintState?.document.layers.length);
@@ -260,7 +302,7 @@ async function verifyLayers(page, context, url, output) {
   assert.equal(await menu.evaluate((e) => e.matches(':popover-open')), true);
   const geometry = await menu.evaluate((e) => {
     const r = e.getBoundingClientRect();
-    const tile = document.querySelector('[data-part="layers"]').getBoundingClientRect();
+    const tile = document.querySelector('[data-panel="layers-panel"]').getBoundingClientRect();
     return {
       x: r.x,
       y: r.y,
@@ -300,12 +342,8 @@ async function verifyLayers(page, context, url, output) {
   await menu.waitFor();
   await panel.evaluate((element) => element.dispatchEvent(new Event('scroll')));
   await menu.waitFor({ state: 'detached' });
-  await panel.getByLabel('Layer settings', { exact: true }).click();
-  const smooth = panel.getByRole('checkbox', { name: 'Smooth color for all layers' });
-  await smooth.check();
+  await panel.getByRole('button', { name: 'Smooth color', exact: true }).click();
   await page.waitForFunction(() => window.paintState.document.linearBlending === true);
-  await page.screenshot({ path: `${output}/layers-settings.png` });
-  await panel.getByLabel('Layer settings', { exact: true }).click();
   for (let i = 0; i < 17; i++) {
     await add.click();
     await page.waitForFunction((count) => window.paintState.document.layers.length === count, i + 3);
@@ -318,9 +356,9 @@ async function verifyLayers(page, context, url, output) {
     const row = element.firstElementChild.getBoundingClientRect();
     return { listHeight: bounds.height, rowHeight: row.height, visible: Math.floor(bounds.height / row.height) };
   });
-  assert.ok(rows.visible >= 5, `7×8 must show five complete rows: ${JSON.stringify(rows)}`);
-  await page.screenshot({ path: `${output}/layers-inline-five-rows.png` });
-  console.log('PASS compact 7×8 inline layout', rows);
+  assert.ok(rows.visible >= 5, `5×5 must show five complete rows: ${JSON.stringify(rows)}`);
+  await page.screenshot({ path: `${output}/layers-window-five-rows.png` });
+  console.log('PASS 5×5 list layout', rows);
   await writeFile(`${output}/layers-visible-rows.json`, JSON.stringify(rows, null, 2));
   const area = await list.boundingBox();
   const cdp = await context.newCDPSession(page);
@@ -349,50 +387,80 @@ async function verifyLayers(page, context, url, output) {
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   assert.equal(await panel.locator('img:not([data-retained])').count(), 0, 'Edit/Done preserves image nodes');
   assert.deepEqual(await panel.locator('img').evaluateAll((images) => images.map((image) => image.src)), thumbnails);
-  await verifyPlateTouch(page, context, panel);
+  await verifyPlateTouch(page, context, panel.locator('[data-part-kind="layers:list"]'));
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await panel.click({ position: { x: 8, y: 8 } });
-  await page.getByRole('button', { name: 'Look', exact: true }).click();
-  const choices = page.locator('[data-part-kind="Looks"]');
-  await choices.getByRole('heading', { name: 'Look at 7×8' }).waitFor();
-  // Previews mount once the visibility observer sees them, so wait instead of counting at once.
-  const panelPreview = choices.locator('[data-part-kind="action:layers"] .paint-layers');
-  await panelPreview.waitFor();
-  assert.equal(await panelPreview.count(), 1);
-  await page.screenshot({ path: `${output}/layers-look-chooser.png` });
-  await page.keyboard.press('Escape');
-  const handle = page.getByLabel('Resize', { exact: true });
-  const resize = async (dx, dy) => {
-    const previous = await page.evaluate(
-      () => JSON.parse(localStorage.getItem('paint.lego')).board.panels[0].parts[0].span
-    );
-    const r = await handle.boundingBox();
-    await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(r.x + r.width / 2 + dx, r.y + r.height / 2 + dy, { steps: 20 });
-    await page.mouse.up();
-    await page.waitForFunction(
-      ({ columns, rows }) => {
-        const span = JSON.parse(localStorage.getItem('paint.lego')).board.panels[0].parts[0].span;
-        return span.columns === columns && span.rows === rows;
-      },
-      { columns: previous.columns + dx / 48, rows: previous.rows + dy / 48 }
-    );
-  };
-  await resize(-288, -336);
+  await panel.getByRole('button', { name: 'Rename Layers', exact: true }).click();
+  await panel.getByRole('textbox', { name: 'Window name', exact: true }).fill('My Layers');
+  await page.keyboard.press('Enter');
+  await expect(panel.getByRole('button', { name: 'Rename My Layers', exact: true })).toBeVisible();
+  await page.screenshot({ path: `${output}/layers-window-edit.png` });
+  // Select the owner to discover the folder/window conversion action.
+  await page.locator('[data-part="layers"]').click();
+  await page.getByRole('button', { name: 'Make folder', exact: true }).click();
+  await expect(panel.locator('[data-window-handle]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Make window', exact: true }).click();
+  await expect(panel.locator('[data-window-handle]')).toBeVisible();
+  // Rename again after conversion; the custom name survives reload.
+  await panel.getByRole('button', { name: 'Rename Layers', exact: true }).click();
+  await panel.getByRole('textbox', { name: 'Window name', exact: true }).fill('My Layers');
+  await page.keyboard.press('Enter');
+  const box = page.getByRole('complementary', { name: 'Box of parts' });
+  await box.locator('[class*="trayBar"]').click();
+  const windowTile = box.locator('div[title="Window"]');
+  await windowTile.scrollIntoViewIfNeeded();
+  const windowRect = await windowTile.boundingBox();
+  await page.mouse.move(windowRect.x + windowRect.width / 2, windowRect.y + windowRect.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(1000, 350, { steps: 16 });
+  await page.mouse.up();
+  const freeWindow = page
+    .locator('[data-window]')
+    .filter({ has: page.getByRole('toolbar', { name: 'Window window', exact: true }) });
+  await expect(freeWindow).toBeVisible();
+  await expect(freeWindow).toContainText('Drop parts here');
+  // A window accepts ordinary parts, and its cells keep the existing resize and transfer behavior.
+  const addPart = panel.locator('[data-part]').filter({ has: page.locator('[data-part-kind="layer:add"]') });
+  const addId = await addPart.getAttribute('data-part');
+  const addRect = await addPart.boundingBox();
+  const emptyRect = await freeWindow.boundingBox();
+  await page.mouse.move(addRect.x + 22, addRect.y + 22);
+  await page.mouse.down();
+  await page.mouse.move(emptyRect.x + 24, emptyRect.y + 60, { steps: 12 });
+  await page.mouse.up();
+  await expect(freeWindow.locator(`[data-part="${addId}"]`)).toHaveCount(1);
+  await expect(panel.locator('[data-part-kind="layer:add"]')).toHaveCount(0);
+  await freeWindow.locator(`[data-part="${addId}"]`).click();
+  const corner = freeWindow.getByLabel('Resize', { exact: true });
+  const cornerRect = await corner.boundingBox();
+  await page.mouse.move(cornerRect.x + cornerRect.width / 2, cornerRect.y + cornerRect.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cornerRect.x + cornerRect.width / 2 + 48, cornerRect.y + cornerRect.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (id) =>
+          JSON.parse(localStorage.getItem('paint.lego'))
+            .board.panels.flatMap((panel) => panel.parts)
+            .find((part) => part.id === id)?.span.columns,
+        addId
+      )
+    )
+    .toBe(2);
+  // Moving the part out leaves the empty window available for the next composition.
+  const movedRect = await freeWindow.locator(`[data-part="${addId}"]`).boundingBox();
+  await page.mouse.move(movedRect.x + 20, movedRect.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(1150, 580, { steps: 12 });
+  await page.mouse.up();
+  await expect(freeWindow.locator('[data-part]')).toHaveCount(0);
+  await expect(freeWindow).toContainText('Drop parts here');
   await page.getByRole('button', { name: 'Done', exact: true }).click();
-  await expect(add).toHaveCount(0);
-  await panel.getByRole('button', { name: 'Layers', exact: true }).click();
-  await page.getByRole('button', { name: 'Add layer', exact: true }).waitFor();
-  await page.screenshot({ path: `${output}/layers-compact-popup.png` });
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await panel.click({ position: { x: 8, y: 8 } });
-  await resize(288, 336);
-  await page.getByRole('button', { name: 'Done', exact: true }).click();
-  await add.waitFor();
-  await page.screenshot({ path: `${output}/layers-inline-restored.png` });
-  await expect(panel.locator('img')).toHaveCount(await page.evaluate(() => window.paintState.document.layers.length));
+  await expect(freeWindow).not.toContainText('Drop parts here');
+  await page.reload();
+  await expect(page.getByRole('toolbar', { name: 'My Layers window', exact: true })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Window window', exact: true })).toBeVisible();
+  await page.waitForFunction(() => window.paintState?.document.layers.length);
   await page.evaluate(() => {
     window.paintEvents = [];
   });
@@ -422,22 +490,12 @@ async function verifyLayers(page, context, url, output) {
   await page.waitForFunction(() => window.paintEvents.length > 0);
   console.log('PASS live layer thumbnails arrive after, never during, a stroke');
   console.log(
-    'PASS layers add/select/reorder/hide, opacity single edit + one Undo restores, blend top layer + keys/Escape/outside, CDP touch scroll',
-    { dimensions, scrollTop, geometry }
+    'PASS Layers windows: independent open state, live handle drag, collapse, rename, folder conversion, Window box entry and persistence'
   );
-  console.log('PASS compact/full resize and popup compatibility');
-  await writeFile(
-    `${output}/layers-browser-state.json`,
-    JSON.stringify(
-      await page.evaluate(() => ({
-        commands: window.paintCommands,
-        state: window.paintState,
-        board: JSON.parse(localStorage.getItem('paint.lego'))
-      })),
-      null,
-      2
-    )
+  console.log(
+    'PASS ordinary Layers parts: list/reorder/visibility, opacity one undo, blend menu, smooth color and touch scroll'
   );
+  await cdp.detach();
 }
 
 /** Existing variants retain their layer selection, visibility and blend controls. */

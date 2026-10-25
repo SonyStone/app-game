@@ -20,8 +20,8 @@ export type Panel = {
   at: Point;
   parts: Part[];
   /**
-   * The part this panel belongs to, such as a swatch's panel of pickers: it lies beside that part instead of at `at`,
-   * and shows only while open, like an Android folder.
+   * The part this panel belongs to. Folders follow their owner and the single open chain. Windows persist their
+   * own open state and, after their handle is dragged, lie independently at `at`.
    */
   owner?: string;
   /** A handle turns a plate into a persistent window. Owned windows start closed beside their owner. */
@@ -268,7 +268,7 @@ export function spanAfter(from: Span, delta: Point): Span {
   };
 }
 
-/** `board` with `panel` replaced by `next`, or removed when `next` has no parts left. */
+/** `board` with `panel` replaced by `next`, or removed when `next` has no parts left and no window handle. */
 export function replacePanel(board: Board, id: string, next: Panel): Board {
   return {
     ...board,
@@ -278,7 +278,7 @@ export function replacePanel(board: Board, id: string, next: Panel): Board {
   };
 }
 
-/** `board` with `next` in place of the panel of its id, or added after the others; a panel without parts goes. */
+/** `board` with `next` in place of the panel of its id, or added after the others; an empty panel without a handle goes. */
 export function putPanel(board: Board, next: Panel): Board {
   if (board.panels.some((panel) => panel.id === next.id)) {
     return replacePanel(board, next.id, next);
@@ -327,7 +327,7 @@ export function pruneOwned(board: Board): Board {
   }
 }
 
-/** `board` without part `id`; a panel left without parts goes too. */
+/** `board` without part `id`; an empty panel without a window handle goes too. */
 export function removePart(board: Board, id: string): Board {
   return {
     ...board,

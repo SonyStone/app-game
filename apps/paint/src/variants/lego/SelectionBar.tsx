@@ -18,6 +18,9 @@ export function SelectionBar(props: {
   looks: boolean;
   /** Whether the selection was just kept as a kit, which the bar tells for a moment. */
   kept: boolean;
+  /** Present when the selection owns or lies on an owned plate. */
+  onHandle?: () => void;
+  handle?: boolean;
   onPutAway: () => void;
   onDuplicate: () => void;
   onKeep: () => void;
@@ -63,6 +66,12 @@ export function SelectionBar(props: {
         <SketchIcon name={props.kept ? 'check' : 'tools'} size={18} />
         {props.kept ? 'Kept' : 'Keep as kit'}
       </button>
+      <Show when={props.onHandle}>
+        <button type="button" onClick={() => props.onHandle?.()} aria-pressed={props.handle ? 'true' : 'false'}>
+          <SketchIcon name="layers" size={18} />
+          {props.handle ? 'Make folder' : 'Make window'}
+        </button>
+      </Show>
       <Show when={props.looks}>
         <button type="button" onClick={() => props.onLooks()}>
           <span class={styles.looksGlyph} aria-hidden="true">

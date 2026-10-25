@@ -1,0 +1,78 @@
+.handle {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 10px 10px 0 0;
+  background: var(--lego-tile);
+  color: var(--lego-ink);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+
+  &[data-collapsed] {
+    border-radius: 10px;
+  }
+}
+
+.grip {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--lego-quiet);
+}
+
+.name,
+.field {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  padding: 4px;
+}
+
+.field {
+  user-select: text;
+  width: 0;
+}
+
+.collapse {
+  flex: 0 0 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.handle[data-compact] {
+  padding-inline: 2px;
+  gap: 2px;
+
+  .grip {
+    width: 8px;
+    overflow: hidden;
+  }
+
+  .collapse {
+    flex-basis: 24px;
+  }
+
+  .name,
+  .field {
+    padding-inline: 0;
+  }
+}

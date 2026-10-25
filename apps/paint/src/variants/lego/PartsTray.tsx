@@ -1,6 +1,7 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createSignal, For, onCleanup, onSettled, Show } from 'solid-js';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { cellGap, cellSize, partData, partsBounds, pitch, type Part } from './board';
 import { closedHeight, type createSheet } from './createSheet';
 import type { createKits, Kit } from './kits';
@@ -299,7 +300,11 @@ const wheelSettle = 160;
 /** The families of parts the box and the spawn menu offer: the box's sections, then the user's brushes. */
 export function partFamilies(presets: LegoServices['presets']['all']) {
   const brushes = presets().map((preset) => `preset:${preset.id}`);
-  return [...boxSections, { id: 'Brushes', title: 'Brushes', kinds: brushes }];
+  return [
+    { id: 'Plates', title: 'Plates', kinds: ['window'] },
+    ...boxSections,
+    { id: 'Brushes', title: 'Brushes', kinds: brushes }
+  ];
 }
 
 /** A part of `kind` as the box shows it: a one-cell sample with its name below; a press lifts a new one. */
@@ -312,14 +317,25 @@ export function PartTile(props: {
     <div class={styles.trayItem}>
       <div
         class={styles.trayTile}
-        title={kindLabel(props.kind, props.presets())}
+        title={props.kind === 'window' ? 'Window' : kindLabel(props.kind, props.presets())}
         onPointerDown={(event) => props.onLift(event)}
       >
         <div class={styles.content} inert>
-          <PartFrame mode="preview" kind={props.kind} span={{ columns: 1, rows: 1 }} onPopup={() => {}} />
+          <Show
+            when={props.kind !== 'window'}
+            fallback={
+              <span class={styles.windowSample}>
+                <SketchIcon name="layers" />
+              </span>
+            }
+          >
+            <PartFrame mode="preview" kind={props.kind} span={{ columns: 1, rows: 1 }} onPopup={() => {}} />
+          </Show>
         </div>
       </div>
-      <span class={styles.trayCaption}>{kindLabel(props.kind, props.presets())}</span>
+      <span class={styles.trayCaption}>
+        {props.kind === 'window' ? 'Window' : kindLabel(props.kind, props.presets())}
+      </span>
     </div>
   );
 }

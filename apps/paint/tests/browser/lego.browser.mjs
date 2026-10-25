@@ -188,11 +188,10 @@ try {
   await checkShowcase(page);
   const panelPreview = page
     .getByRole('region', { name: 'preview specimens' })
-    .locator('[data-specimen]')
-    .filter({ has: page.locator('[data-part-kind="action:layers"] .paint-layers') });
-  await expect(panelPreview).toHaveCount(1);
+    .locator('[data-part-kind="layers:list"]')
+    .first();
   await panelPreview.waitFor();
-  await panelPreview.screenshot({ path: path.join(output, 'layers-panel-preview.png') });
+  await panelPreview.screenshot({ path: path.join(output, 'layers-list-preview.png') });
   await checkValueText(page);
   // Keep each complete section in the viewport so screenshots include offscreen canvas layers.
   await page.locator('header').evaluate((element) => {
