@@ -1,4 +1,5 @@
 import { render } from '@solidjs/web';
+import { lazy } from 'solid-js';
 import 'uno.css';
 import { PaintApp } from './features/pwa/PaintApp';
 
@@ -8,5 +9,8 @@ if (!element) {
   throw new Error('Missing application mount element.');
 }
 
-render(() => <PaintApp />, element);
+const PartsShowcase = lazy(() =>
+  import('./variants/lego/PartsShowcase').then(({ PartsShowcase }) => ({ default: PartsShowcase }))
+);
+render(() => (location.pathname === '/paint/lego/parts' ? <PartsShowcase /> : <PaintApp />), element);
 document.body.classList.add('app-utilities');

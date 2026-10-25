@@ -18,6 +18,14 @@ export const demoRoutes: Routes[] = featureDemos.map((demo) => variantRoute(demo
 /** Paint's UI parts side by side in their variants and states, to compare and star; see `ComponentCanvas`. */
 export const componentCanvasRoutes: Routes[] = [
   {
+    path: '/lego/parts',
+    name: 'Paint · LEGO parts',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() =>
+      import('@app-game/paint/lego-parts').then(({ PartsShowcase }) => ({ default: PartsShowcase }))
+    )
+  },
+  {
     path: '/components',
     name: 'Paint · Component canvas',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,

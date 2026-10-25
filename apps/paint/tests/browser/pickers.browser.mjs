@@ -24,6 +24,9 @@ try {
     function measure(kind, version, size, paint) {
       const canvas = document.createElement('canvas');
       canvas.width = canvas.height = size;
+      const coldStart = performance.now();
+      paint(canvas, 0);
+      const cold = performance.now() - coldStart;
       for (let i = 0; i < 12; i++) {
         paint(canvas, i);
       }
@@ -38,6 +41,7 @@ try {
         kind,
         version,
         size,
+        cold,
         median: times[50],
         p95: times[95],
         mean: times.reduce((a, b) => a + b, 0) / times.length

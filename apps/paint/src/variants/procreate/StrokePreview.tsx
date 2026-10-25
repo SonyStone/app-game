@@ -1,7 +1,7 @@
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { Brush } from '@app-game/paint-core/brush';
-import { attachStrokePreview } from '@app-game/paint-core/preview/client';
-import { createEffect, createSignal, onSettled, Show, untrack } from 'solid-js';
+import { createEffect, createSignal, onSettled, Show, untrack, useContext } from 'solid-js';
+import { PreviewAttachment } from '../../features/brush-library/previewAttachment';
 
 /** Replays the shared tablet sample through Paint's real preset engine at its current size and saved color. */
 export function StrokePreview(props: {
@@ -17,6 +17,7 @@ export function StrokePreview(props: {
   /** Loads all referenced tip, texture and dual resources, only while visible. */
   resources?: () => Promise<readonly BrushResource[]>;
 }) {
+  const attach = useContext(PreviewAttachment);
   const [warning, setWarning] = createSignal('');
   let canvas!: HTMLCanvasElement;
   let refresh = () => {};
@@ -32,7 +33,7 @@ export function StrokePreview(props: {
     () => refresh()
   );
   onSettled(() => {
-    const connection = attachStrokePreview(canvas);
+    const connection = attach(canvas);
     const status = new MutationObserver(() => setWarning(canvas.dataset.previewReason ?? ''));
     status.observe(canvas, { attributes: true, attributeFilter: ['data-preview-reason'] });
     let visible = false;

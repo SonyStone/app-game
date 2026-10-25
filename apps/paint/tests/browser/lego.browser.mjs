@@ -29,7 +29,7 @@ try {
     args: ['--enable-unsafe-webgpu', '--use-angle=metal']
   });
 
-  const context = await browser.newContext({ viewport: { width: 1920, height: 1200 } });
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1200 }, deviceScaleFactor: 2 });
   page = await context.newPage();
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -170,6 +170,35 @@ try {
   await box.waitFor({ state: 'detached' });
   assert.deepEqual(errors, [], 'uncaught page errors');
   console.log('PASS box open/close and kit drag-out ghost');
+  const stored = await page.evaluate(() => ({ ...localStorage }));
+  page = await context.newPage();
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto(`${url}/paint/lego/parts`);
+  await page.locator('[data-parts-showcase]').waitFor();
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('[data-part-kind="color:wheel"] canvas')].every((canvas) => canvas.width > 0)
+  );
+  await checkShowcase(page);
+  for (const mode of ['live', 'edit', 'preview']) {
+    await page
+      .getByRole('region', { name: `${mode} specimens` })
+      .screenshot({ path: path.join(output, `parts-${mode}.png`) });
+  }
+  // This gallery has one shared fixture and must not mutate any existing editor preferences.
+  for (const columns of [1, 2, 3, 4, 10]) {
+    for (const rows of [1, 2, 3, 4, 10]) {
+      await page.getByLabel('Columns', { exact: true }).selectOption(String(columns));
+      await page.getByLabel('Rows', { exact: true }).selectOption(String(rows));
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await checkShowcase(page);
+    }
+  }
+  assert.deepEqual(await page.evaluate(() => ({ ...localStorage })), stored, 'showcase must not write storage');
+  assert.deepEqual(errors, [], 'uncaught showcase errors');
+  console.log(
+    'PASS registry showcase: minimum sizes, 25 size pairs, three modes, missing/broken tiles, displayed backing sizes'
+  );
   console.log(`Screenshots: ${output}`);
 } catch (error) {
   await page?.screenshot({ path: path.join(output, 'failure.png') }).catch(() => {});
@@ -309,4 +338,41 @@ async function startServer(appRoot) {
   await server.listen();
   await server.environments.client.depsOptimizer?.scanProcessing;
   return server.resolvedUrls.local[0].replace(/\/$/, '');
+}
+
+/** Checks real specimen content, including transformed backing sizes; error and missing tiles stay measurable. */
+async function checkShowcase(tab) {
+  const specimens = await tab.locator('[data-specimen]').evaluateAll((figures) =>
+    figures.map((figure) => {
+      const frame = figure.querySelector('[data-part-kind]');
+      const content = frame?.firstElementChild;
+      const box = content?.getBoundingClientRect();
+      const host = frame?.getBoundingClientRect();
+      return {
+        id: figure.dataset.specimen,
+        width: box?.width ?? 0,
+        height: box?.height ?? 0,
+        hostWidth: host?.width ?? 0,
+        hostHeight: host?.height ?? 0,
+        canvases: [...figure.querySelectorAll('[data-part-kind="color:wheel"] canvas')].map((canvas) => ({
+          backing: canvas.width,
+          displayed: Math.round(canvas.getBoundingClientRect().width * devicePixelRatio)
+        }))
+      };
+    })
+  );
+  assert.ok(specimens.length > 60, 'showcase must contain the registry catalogue in all three modes');
+  for (const specimen of specimens) {
+    assert.ok(specimen.width > 0 && specimen.height > 0, `zero-sized specimen: ${JSON.stringify(specimen)}`);
+    assert.ok(
+      specimen.width <= specimen.hostWidth + 1 && specimen.height <= specimen.hostHeight + 1,
+      `specimen must fit its frame: ${JSON.stringify(specimen)}`
+    );
+    for (const canvas of specimen.canvases) {
+      assert.ok(
+        Math.abs(canvas.backing - canvas.displayed) <= 1,
+        `picker backing must follow displayed CSS size × DPR: ${JSON.stringify({ specimen: specimen.id, ...canvas })}`
+      );
+    }
+  }
 }

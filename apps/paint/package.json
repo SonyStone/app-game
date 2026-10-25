@@ -62,6 +62,7 @@
     "./puck-gallery": "./src/mockups/puck-gallery/PuckGallery.tsx",
     "./variants": "./src/variants/index.ts",
     "./native-shell": "./src/features/native-shell/index.ts",
+    "./lego-parts": "./src/variants/lego/PartsShowcase.tsx",
     "./component-canvas": "./src/component-canvas/ComponentCanvas.tsx"
   }
 }
