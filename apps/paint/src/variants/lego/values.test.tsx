@@ -27,7 +27,9 @@ it('commits typed and arrow-key opacity immediately, including after a pointer t
   input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   flush();
   expect(services.layers.action).toHaveBeenLastCalledWith({
-    type: 'update', id: services.layers.state().activeId, patch: { opacity: 0.4 }
+    type: 'update',
+    id: services.layers.state().activeId,
+    patch: { opacity: 0.4 }
   });
   expect(input.value).toBe('40');
   input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
@@ -35,7 +37,9 @@ it('commits typed and arrow-key opacity immediately, including after a pointer t
   expect(input.value).toBe('39');
   expect(services.layers.action).toHaveBeenCalledTimes(2);
   expect(services.layers.action).toHaveBeenLastCalledWith({
-    type: 'update', id: services.layers.state().activeId, patch: { opacity: 0.39 }
+    type: 'update',
+    id: services.layers.state().activeId,
+    patch: { opacity: 0.39 }
   });
 });
 
@@ -76,11 +80,16 @@ function mountOpacity() {
   });
   const host = document.createElement('div');
   document.body.append(host);
-  disposers.push(render(() => (
-    <LegoServicesContext value={services}>
-      <PartFrame kind="value:layer-opacity" span={{ columns: 2, rows: 1 }} look="number" />
-    </LegoServicesContext>
-  ), host));
+  disposers.push(
+    render(
+      () => (
+        <LegoServicesContext value={services}>
+          <PartFrame kind="value:layer-opacity" span={{ columns: 2, rows: 1 }} look="number" />
+        </LegoServicesContext>
+      ),
+      host
+    )
+  );
   flush();
   const input = host.querySelector('input')!;
   input.setPointerCapture = vi.fn();

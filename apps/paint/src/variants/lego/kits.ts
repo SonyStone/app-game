@@ -19,8 +19,8 @@ export type Kit = {
   /** The parts, their cells counted from the kit's top-left at (0, 0). */
   parts: Part[];
   /**
-   * The panels of swatches among the parts, by the owner's id in the kit, with where each lies from its swatch if
-   * the user placed it; owners may lie in other owned panels.
+   * The panels of swatches among the parts, by the owner's id in the kit; owners may lie in other owned panels.
+   * Folders retain their offsets. Windows retain names and unknown fields, without live placement or toggle state.
    */
   owned: (Pick<Panel, 'parts' | 'offset' | 'window'> & { at?: Panel['at'] } & { owner: string })[];
   /** A kit saved from a window creates a named window again when placed on bare drawing. */
@@ -74,7 +74,8 @@ export function createKits(onSavingError?: (message: string) => void) {
 
 /**
  * A fresh copy of `kit` to place: every part gets a new id, so a kit can be placed again and again, with the owned
- * panels, ready to join a board, re-pointed at the new owners. Cells stay as in the kit.
+ * panels, ready to join a board, re-pointed at the new owners. Cells stay as in the kit. Window state is reset even
+ * for older saved kits: owned windows start closed and expanded beside their owners; free ones use the drop point.
  */
 export function unpackKit(kit: Pick<Kit, 'parts' | 'owned' | 'window'>) {
   const ids = new Map<string, string>();

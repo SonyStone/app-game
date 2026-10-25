@@ -4,7 +4,11 @@ import { writeFile } from 'node:fs/promises';
 
 /** Exercises real worker-backed LEGO controls and layer gestures in isolated storage. */
 export async function verifyLegoFeatures(browser, url, output, masterUrl) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, hasTouch: true });
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 1000 },
+    deviceScaleFactor: 2,
+    hasTouch: true
+  });
   await context.addInitScript(() => {
     window.paintCommands = [];
     window.paintEvents = [];
@@ -39,12 +43,25 @@ export async function verifyLegoFeatures(browser, url, output, masterUrl) {
     await verifyControls(page, context, url, output);
     await verifySymmetrySizes(page, url, output);
     await verifyLayers(page, context, url, output);
+    await verifyNumberTiles(page, url, output);
     await verifyOtherVariants(page, url, output);
     if (masterUrl) {
       await compareVariantPanels(browser, url, masterUrl, output);
     }
     assert.deepEqual(errors, [], 'feature workflows have no uncaught errors');
   } catch (error) {
+    await writeFile(
+      `${output}/features-failure.json`,
+      JSON.stringify(
+        await page.evaluate(() => ({
+          commands: window.paintCommands,
+          state: window.paintState,
+          board: JSON.parse(localStorage.getItem('paint.lego'))
+        })),
+        null,
+        2
+      )
+    ).catch(() => {});
     await page.screenshot({ path: `${output}/features-failure.png` }).catch(() => {});
     throw error;
   } finally {
@@ -188,6 +205,57 @@ async function verifyControls(page, context, url, output) {
   );
 }
 
+/** Verifies the flat number tile theme against the actual Desktop kit and a 2×1 layer-opacity part. */
+async function verifyNumberTiles(page, url, output) {
+  await page.goto(`${url}/variants.html#lego`);
+  await page.getByRole('button', { name: 'Edit', exact: true }).waitFor();
+  await page.evaluate(async () => {
+    const { createKits } = await import('/src/variants/lego/kits.ts');
+    const kit = createKits()
+      .kits()
+      .find((kit) => kit.id === 'ready:desktop-color');
+    localStorage.setItem(
+      'paint.lego',
+      JSON.stringify({
+        version: 3,
+        board: {
+          panels: [
+            { id: 'desktop-number-kit', at: { x: 0.15, y: 0.15 }, parts: kit.parts },
+            {
+              id: 'layer-number',
+              at: { x: 0.55, y: 0.15 },
+              parts: [
+                {
+                  id: 'layer-number-part',
+                  kind: 'value:layer-opacity',
+                  cell: { column: 0, row: 0 },
+                  span: { columns: 2, rows: 1 },
+                  looks: { '2x1': 'number' }
+                }
+              ]
+            }
+          ]
+        }
+      })
+    );
+  });
+  await page.reload();
+  await page.getByRole('spinbutton', { name: 'Layer opacity', exact: true }).waitFor();
+  for (const label of ['Hue', 'Saturation', 'Brightness', 'Layer opacity']) {
+    const input = page.getByRole('spinbutton', { name: label, exact: true });
+    assert.equal(
+      await input.evaluate((input) => getComputedStyle(input.parentElement).getPropertyValue('--scrub-fill').trim()),
+      'transparent'
+    );
+    assert.ok(await input.evaluate((input) => input.scrollWidth <= input.clientWidth), `${label} number fits`);
+  }
+  await page
+    .locator('[data-panel="desktop-number-kit"]')
+    .screenshot({ path: `${output}/desktop-color-hsv-number.png` });
+  await page.locator('[data-panel="layer-number"]').screenshot({ path: `${output}/layer-opacity-number.png` });
+  console.log('PASS flat layer opacity and Desktop color H/S/V number tiles at 2× device scale');
+}
+
 /** Checks guarded edits, top-layer dismissal, native touch scrolling, resizing and idle-only thumbnails. */
 async function verifyLayers(page, context, url, output) {
   await page.goto(`${url}/variants.html#lego`);
@@ -274,6 +342,26 @@ async function verifyLayers(page, context, url, output) {
   await panel.getByRole('button', { name: 'Hide Layer 1', exact: true }).click();
   await panel.getByRole('button', { name: 'Show Layer 1', exact: true }).waitFor();
   const opacity = panel.getByRole('spinbutton', { name: 'Layer opacity' });
+  // A real tap and Enter exercise Solid 2's deferred writes in the keyboard path too.
+  await opacity.click();
+  await opacity.fill('40');
+  await opacity.press('Enter');
+  await page.waitForFunction(
+    () =>
+      window.paintState.document.layers.find((layer) => layer.id === window.paintState.document.activeId).opacity ===
+      0.4
+  );
+  await opacity.press('ArrowDown');
+  await page.waitForFunction(
+    () =>
+      window.paintState.document.layers.find((layer) => layer.id === window.paintState.document.activeId).opacity ===
+      0.39
+  );
+  await opacity.blur();
+  await page.keyboard.press('ControlOrMeta+z');
+  await page.waitForFunction(() => document.querySelector('[aria-label="Layer opacity"]').value === '40');
+  await page.keyboard.press('ControlOrMeta+z');
+  await page.waitForFunction(() => document.querySelector('[aria-label="Layer opacity"]').value === '100');
   const rect = await opacity.boundingBox();
   await page.evaluate(() => {
     window.paintCommands = [];
@@ -331,19 +419,24 @@ async function verifyLayers(page, context, url, output) {
   await expect(blend).toBeFocused();
   await blend.click();
   await menu.waitFor();
-  await page.mouse.click(500, 500);
+  await page.mouse.click(1200, 800);
   await menu.waitFor({ state: 'detached' });
   await blend.click();
   await menu.waitFor();
   await page.setViewportSize({ width: 1400, height: 960 });
   await menu.waitFor({ state: 'detached' });
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect.poll(() => handle.boundingBox().then((rect) => Math.round(rect.x))).toBe(Math.round(initial.x + 180));
   await blend.click();
   await menu.waitFor();
   await panel.evaluate((element) => element.dispatchEvent(new Event('scroll')));
   await menu.waitFor({ state: 'detached' });
-  await panel.getByRole('button', { name: 'Smooth color', exact: true }).click();
-  await page.waitForFunction(() => window.paintState.document.linearBlending === true);
+  await expect(blend).toHaveAttribute('aria-expanded', 'false');
+  const smooth = panel.getByRole('button', { name: 'Smooth color', exact: true });
+  const nextSmooth = (await smooth.getAttribute('aria-pressed')) !== 'true';
+  await smooth.click();
+  await expect(smooth).toHaveAttribute('aria-pressed', String(nextSmooth));
+  await page.waitForFunction((next) => window.paintState.document.linearBlending === next, nextSmooth);
   for (let i = 0; i < 17; i++) {
     await add.click();
     await page.waitForFunction((count) => window.paintState.document.layers.length === count, i + 3);
@@ -375,6 +468,19 @@ async function verifyLayers(page, context, url, output) {
   const scrollTop = await list.evaluate((e) => e.scrollTop);
   assert.ok(scrollTop > 30, `touch scrollTop=${scrollTop}`);
   await page.screenshot({ path: `${output}/layers-touch-scroll.png` });
+  // Adding while the active row is offscreen must bring the new active row into this list's viewport.
+  const previousCount = await page.evaluate(() => window.paintState.document.layers.length);
+  await add.click();
+  await page.waitForFunction((count) => window.paintState.document.layers.length === count + 1, previousCount);
+  await expect
+    .poll(() =>
+      list.evaluate((element) => {
+        const row = element.querySelector('[aria-current="true"]').parentElement.getBoundingClientRect();
+        const bounds = element.getBoundingClientRect();
+        return row.top >= bounds.top - 1 && row.bottom <= bounds.bottom + 1;
+      })
+    )
+    .toBe(true);
   await expect(panel.locator('img')).toHaveCount(await page.evaluate(() => window.paintState.document.layers.length));
   const thumbnails = await panel.locator('img').evaluateAll((images) => images.map((image) => image.src));
   await panel.locator('img').evaluateAll((images) =>
@@ -389,6 +495,27 @@ async function verifyLayers(page, context, url, output) {
   assert.deepEqual(await panel.locator('img').evaluateAll((images) => images.map((image) => image.src)), thumbnails);
   await verifyPlateTouch(page, context, panel.locator('[data-part-kind="layers:list"]'));
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page
+    .locator('div[data-editing]')
+    .evaluate((element) => Promise.allSettled(element.getAnimations().map((animation) => animation.finished)));
+  // Closed windows remain recoverable in Edit. Move the second one aside before exercising conversion.
+  await expect(panelTwo).toBeVisible();
+  const secondHandle = await panelTwo.locator('[data-window-handle]').boundingBox();
+  await page.mouse.move(secondHandle.x + 8, secondHandle.y + 18);
+  await page.mouse.down();
+  await page.mouse.move(1100, 100, { steps: 12 });
+  await page.mouse.up();
+  const name = panel.getByRole('button', { name: 'Rename Layers', exact: true });
+  const beforeNameDrag = await handle.boundingBox();
+  const nameRect = await name.boundingBox();
+  await page.mouse.move(nameRect.x + nameRect.width / 2, nameRect.y + nameRect.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(nameRect.x + nameRect.width / 2 + 60, nameRect.y + nameRect.height / 2 + 20, { steps: 12 });
+  await page.mouse.up();
+  await expect
+    .poll(() => handle.boundingBox().then((rect) => Math.round(rect.x)))
+    .toBe(Math.round(beforeNameDrag.x + 60));
+  await expect(panel.getByRole('textbox', { name: 'Window name', exact: true })).toHaveCount(0);
   await panel.getByRole('button', { name: 'Rename Layers', exact: true }).click();
   await panel.getByRole('textbox', { name: 'Window name', exact: true }).fill('My Layers');
   await page.keyboard.press('Enter');
@@ -404,6 +531,26 @@ async function verifyLayers(page, context, url, output) {
   await panel.getByRole('button', { name: 'Rename Layers', exact: true }).click();
   await panel.getByRole('textbox', { name: 'Window name', exact: true }).fill('My Layers');
   await page.keyboard.press('Enter');
+  const ownerRect = await page.locator('[data-part="layers"]').boundingBox();
+  const ownWindowRect = await panel.boundingBox();
+  await page.mouse.move(ownerRect.x + 22, ownerRect.y + 22);
+  await page.mouse.down();
+  await page.mouse.move(ownWindowRect.x + 26, ownWindowRect.y + 65, { steps: 16 });
+  await page.mouse.up();
+  const ownerHost = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('paint.lego')).board.panels.find((panel) =>
+      panel.parts.some((part) => part.id === 'layers')
+    )
+  );
+  assert.notEqual(ownerHost.id, 'layers-panel', 'a window cannot receive its own owner');
+  assert.equal(ownerHost.owner, undefined, 'rejected target falls back to a free plate');
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  // Use the owner locator, which follows the moved button, to check that neither toggle loses the composition.
+  await button.click();
+  await expect(panel).toHaveCount(0);
+  await button.click();
+  await expect(panel).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const box = page.getByRole('complementary', { name: 'Box of parts' });
   await box.locator('[class*="trayBar"]').click();
   const windowTile = box.locator('div[title="Window"]');
@@ -457,6 +604,11 @@ async function verifyLayers(page, context, url, output) {
   await expect(freeWindow).toContainText('Drop parts here');
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(freeWindow).not.toContainText('Drop parts here');
+  await freeWindow
+    .locator('..')
+    .evaluate((element) => Promise.allSettled(element.getAnimations().map((animation) => animation.finished)));
+  assert.equal(Math.round((await freeWindow.boundingBox()).height), 36, 'an empty Live window shows only its handle');
+  await freeWindow.screenshot({ path: `${output}/empty-free-window-live.png` });
   await page.reload();
   await expect(page.getByRole('toolbar', { name: 'My Layers window', exact: true })).toBeVisible();
   await expect(page.getByRole('toolbar', { name: 'Window window', exact: true })).toBeVisible();

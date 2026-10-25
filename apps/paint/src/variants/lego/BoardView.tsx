@@ -1482,8 +1482,8 @@ export function BoardView(props: {
       drag.block?.parts.length === 0
         ? undefined
         : touched(
-            visiblePanels(drag.base, props.openPanel, props.editing, size, drag.pinned).filter(
-              (entry) => accepts(entry.panel)
+            visiblePanels(drag.base, props.openPanel, props.editing, size, drag.pinned).filter((entry) =>
+              accepts(entry.panel)
             ),
             corner
           );

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { frameAt, panelFrame, pitch, putPanel, removePart, windowHandleHeight, type Board, type Panel } from './board';
-import { openChain, visiblePanels } from './windows';
+import { canDropParts, openChain, visiblePanels } from './windows';
 
 const view = { width: 1400, height: 1000 };
 const tile = (id: string) => ({
@@ -88,8 +88,7 @@ it('hides a nested folder when its host window collapses or closes', () => {
   expect(visible({ ...host, window: { name: 'Host' } })).not.toContain('folder');
 });
 
-it('rejects an owner, a carried block owner, and mutually nested owners as drop targets', async () => {
-  const { canDropParts } = await import('./windows');
+it('rejects an owner, a carried block owner, and mutually nested owners as drop targets', () => {
   const root = { ...plate('root'), parts: [tile('a'), tile('b')] };
   const a = { ...plate('a-window', 'a'), parts: [tile('nested')] };
   const nested = plate('nested-window', 'nested');
@@ -114,12 +113,20 @@ it('hides unplaced windows behind invisible owners but keeps dragged windows ind
   const root = plate('root');
   const folder = plate('folder', 'root-part');
   const window: Panel = { ...plate('window', 'folder-part'), window: { name: 'Nested', open: true } };
-  const shown = (open: string | undefined, placed?: true) => visiblePanels({
-    panels: [root, folder, { ...window, window: { ...window.window!, placed } }]
-  }, open, false, view).map(({ panel }) => panel.id);
+  const shown = (open: string | undefined, placed?: true) =>
+    visiblePanels(
+      {
+        panels: [root, folder, { ...window, window: { ...window.window!, placed } }]
+      },
+      open,
+      false,
+      view
+    ).map(({ panel }) => panel.id);
   expect(shown(undefined)).not.toContain('window');
   expect(shown('root-part')).toContain('window');
   expect(shown(undefined, true)).toContain('window');
   const host = { ...folder, window: { name: 'Host', open: true as const, collapsed: true as const } };
-  expect(visiblePanels({ panels: [root, host, window] }, undefined, false, view).map(({ panel }) => panel.id)).not.toContain('window');
+  expect(
+    visiblePanels({ panels: [root, host, window] }, undefined, false, view).map(({ panel }) => panel.id)
+  ).not.toContain('window');
 });
