@@ -170,3 +170,36 @@ test('revisits retained window coverage without worker calls or GPU uploads', as
 
   expect(await page.evaluate(() => Reflect.get(window, '__tileRevisit'))).toEqual(before);
 });
+
+test('keeps WebGPU active while the camera moves during a pending comparison', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    const NativeWorker = Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(...args: ConstructorParameters<typeof Worker>) {
+        super(...args);
+        this.addEventListener('message', (event) => {
+          const reply = event.data;
+          if (reply.type === 'difference' && !reply.testDelayed) {
+            reply.testDelayed = true;
+            event.stopImmediatePropagation();
+            setTimeout(() => this.dispatchEvent(new MessageEvent('message', { data: reply })), 750);
+          }
+        });
+      }
+    };
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Examples…' }).click();
+  await page.getByRole('button', { name: /Adjustment stack/ }).click();
+  await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false');
+  await page.getByRole('button', { name: 'Difference', exact: true }).click();
+  await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'true');
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(page.locator('canvas[data-backend=webgpu]')).toBeVisible();
+  await expect(page.locator('canvas[data-backend=canvas2d]')).toHaveCount(0);
+  await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false');
+  expect(errors).toEqual([]);
+});

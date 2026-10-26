@@ -114,10 +114,13 @@ function GpuFrames(props: Parameters<typeof WebGpuViewport>[0]) {
     props.onError
   );
   createEffect(
-    () => displayTiles(props.image),
-    (tiles) => {
+    () => {
+      const image = props.image;
+      return { image, tiles: displayTiles(image) };
+    },
+    ({ image, tiles }) => {
       display.setTiles(tiles);
-      frames.invalidate();
+      frames.presentImage(image);
     }
   );
   onGpuRelease(gpu.signal, () => {
@@ -136,10 +139,13 @@ function CanvasViewport(props: Parameters<typeof GpuViewport>[0]) {
     (view, width, height, dpr) => display.draw(canvas, view, width, height, dpr)
   );
   createEffect(
-    () => displayTiles(props.image),
-    (tiles) => {
+    () => {
+      const image = props.image;
+      return { image, tiles: displayTiles(image) };
+    },
+    ({ image, tiles }) => {
       display.setTiles(tiles);
-      frames.invalidate();
+      frames.presentImage(image);
     }
   );
   onCleanup(display.destroy);
@@ -167,6 +173,7 @@ function createDisplayFrames(
   createEventListener(window, 'resize', () => setDpr(devicePixelRatio));
   let state: { view: View; size: { width: number; height: number }; dpr: number };
   let inputAt: number | undefined;
+  let image: DisplayImage | undefined;
   const [, start, stop] = createRAF(() => {
     stop();
     const canvas = typeof element === 'function' ? element() : element;
@@ -186,8 +193,8 @@ function createDisplayFrames(
       props.onBusyChange?.(pending);
       if (pending) {
         start();
-      } else {
-        props.onPresented?.(props.image);
+      } else if (image) {
+        props.onPresented?.(image);
       }
 
       if (inputAt !== undefined) {
@@ -221,5 +228,12 @@ function createDisplayFrames(
     },
     { capture: true }
   );
-  return { invalidate: start, stop };
+  return {
+    /** Keeps RAF callbacks on the same resolved image as the textures, even while a comparison is pending. */
+    presentImage(next: DisplayImage) {
+      image = next;
+      start();
+    },
+    stop
+  };
 }
