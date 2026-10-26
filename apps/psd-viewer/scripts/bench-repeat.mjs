@@ -198,7 +198,7 @@ function rss(rootPid) {
       totalBytes: rows.filter((x) => ids.has(x.pid)).reduce((s, x) => s + x.rss, 0),
       processes: rows
         .filter((x) => ids.has(x.pid))
-        .map((x) => ({ pid: x.pid, rss: x.rss, type: x.command.match(/--type=([^ ]+)/)?.[1] ?? 'browser' }))
+        .map((x) => ({ pid: x.pid, rss: x.rss, browserRoot: x.command.includes('--remote-debugging-pipe'), type: x.command.match(/--type=([^ ]+)/)?.[1] ?? 'browser' }))
     };
   } catch (e) {
     return { error: String(e) };
@@ -210,10 +210,25 @@ for (const [name, dir, ext] of fixtures) {
     console.log('missing', file);
     continue;
   }
-  let browser, server, pid;
+  let browser, pid;
   const result = { loadBefore: loadavg(), name, file, fileBytes: fs.statSync(file).size, started: new Date().toISOString(), rssSamples: [] };
+  // A browser blocked in macOS startup must become a failed result, not stall the fixture matrix indefinitely.
+  const watchdog = setTimeout(() => {
+    result.caseTimeout = true;
+    for (const child of rss(process.pid).processes ?? []) {
+      if (child.browserRoot) {
+        try {
+          process.kill(child.pid, 'SIGKILL');
+        } catch {
+          // The isolated browser may already have exited.
+        }
+      }
+    }
+  }, 120000);
   try {
-    server = await chromium.launchServer({
+    // Local launch also avoids uploading large fixture files over a remote Playwright WebSocket connection.
+    browser = await chromium.launch({
+      timeout: 30000,
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
       channel: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? undefined : 'chrome',
       headless: true,
@@ -224,8 +239,10 @@ for (const [name, dir, ext] of fixtures) {
         '--disable-renderer-backgrounding'
       ]
     });
-    pid = server.process().pid;
-    browser = await chromium.connect(server.wsEndpoint());
+    pid = rss(process.pid).processes?.find((child) => child.browserRoot)?.pid;
+    if (!pid) {
+      throw new Error('Could not identify the isolated Chrome process for RSS measurement.');
+    }
     const context = await browser.newContext({
       viewport: { width: 1440, height: 1000 },
       deviceScaleFactor: Number(process.env.PSD_BENCH_DPR ?? 1)
@@ -479,8 +496,11 @@ for (const [name, dir, ext] of fixtures) {
   } catch (e) {
     result.error = String(e);
   } finally {
-    await browser?.close();
-    await server?.close();
+    try {
+      await browser?.close();
+    } finally {
+      clearTimeout(watchdog);
+    }
   }
   result.loadAfter = loadavg();
   fs.writeFileSync(
