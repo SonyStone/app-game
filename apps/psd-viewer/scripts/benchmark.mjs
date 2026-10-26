@@ -8,12 +8,12 @@ import { fileURLToPath } from 'node:url';
 // Usage: pnpm benchmark [output-directory]. PSD_BENCH_CASES selects comma-separated fixture names;
 // PSD_BENCH_RUNS defaults to 3, PSD_BENCH_DPR to 1, PSD_BENCH_OPEN_ONLY=1 skips gestures/probes.
 // PSD_BENCH_BEHAVIORS=1 measures cancellation, restart and strict fallback.
-// PSD_BENCH_FEATURES=1 also runs the audit's feature/cache probes. Display backend is currently canvas2d.
+// PSD_BENCH_FEATURES=1 also runs the audit's feature/cache probes. PSD_BENCH_BACKEND selects webgpu/canvas2d.
 const app = fileURLToPath(new URL('../', import.meta.url));
 const out = resolve(process.argv[2] ?? `${tmpdir()}/psd-viewer-benchmark-${Date.now()}`);
-const backend = process.env.PSD_BENCH_BACKEND ?? 'canvas2d';
-if (backend !== 'canvas2d') {
-  throw new Error(`Unavailable display backend: ${backend}. Available: canvas2d`);
+const backend = process.env.PSD_BENCH_BACKEND ?? 'webgpu';
+if (!['webgpu', 'canvas2d'].includes(backend)) {
+  throw new Error(`Unavailable display backend: ${backend}. Available: webgpu, canvas2d`);
 }
 if (!process.env.PSD_TEXT_MIXER_RESEARCH_ROOT) {
   throw new Error('Set PSD_TEXT_MIXER_RESEARCH_ROOT to the fixture research checkout.');

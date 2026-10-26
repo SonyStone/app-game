@@ -11,29 +11,13 @@ const recoveryRefusal = `${corpus}/Nintendo_Super_Famicom__Nintendo_Super_Famico
 /** Observes real uploads and worker requests without changing their scheduling. */
 async function observe(page: import('@playwright/test').Page) {
   await page.addInitScript(() => {
-    const put = CanvasRenderingContext2D.prototype.putImageData;
-    CanvasRenderingContext2D.prototype.putImageData = function (
-      image: ImageData,
-      dx: number,
-      dy: number,
-      dirtyX?: number,
-      dirtyY?: number,
-      dirtyWidth?: number,
-      dirtyHeight?: number
-    ) {
-      const result = put.call(
-        this,
-        image,
-        dx,
-        dy,
-        dirtyX ?? 0,
-        dirtyY ?? 0,
-        dirtyWidth ?? image.width,
-        dirtyHeight ?? image.height
-      );
-      performance.mark('test:upload');
-      return result;
-    };
+    new PerformanceObserver(list => {
+      for (const entry of list.getEntries()) {
+        if (entry.name === 'psd:upload') {
+          performance.mark('test:upload', { startTime: entry.startTime });
+        }
+      }
+    }).observe({ type: 'measure' });
     const NativeWorker = Worker;
     window.Worker = class extends NativeWorker {
       constructor(...args: ConstructorParameters<typeof Worker>) {
