@@ -4,6 +4,7 @@ import { mathRoutes } from '@app-game/math-examples/routes';
 import { oglRoutes } from '@app-game/ogl-examples/routes';
 import { paintFolderGroups, paintRoutes } from '@app-game/paint-examples/routes';
 import { phaserRoutes } from '@app-game/phaser-examples/routes';
+import { tankiRoutes } from '@app-game/tanki/routes';
 import { threeRoutes } from '@app-game/three-examples';
 import { twglRoutes } from '@app-game/twgl-examples/routes';
 import { typegpuRoutes } from '@app-game/typegpu-examples/routes';
@@ -208,7 +209,13 @@ export const catalog: ProjectGroup[] = [
         icon: buildingCastleIcon,
         art: nightDefensePreview
       },
-      { href: '/tanki', name: 'Tanki', sources: ['apps/tanki'], icon: tankIcon },
+      {
+        href: String(tankiRoutes.path),
+        name: 'Tanki',
+        sources: ['apps/tanki'],
+        icon: tankIcon,
+        folder: tankiRoutes
+      },
       {
         href: '/spector',
         name: 'Spector',
