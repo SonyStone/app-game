@@ -9,8 +9,8 @@ import { makeUploadStaging } from './makeUploadStaging';
  * Displays authoritative straight RGBA8 bytes. No sRGB texture conversion is applied: filtering is explicitly
  * bilinear in premultiplied display-sRGB, with a one-source-texel halo. At >=1 physical pixel/source texel,
  * textureLoad preserves the original bytes. Coarse worker overviews remain point-sampled previews, not area mips.
- * Uploads stop after 2 ms or exhausting the 4 MiB staging pool per frame. Reusable mapped 64 KiB staging buffers pack only source rows, then
- * one encoder copies strips and draws. GPU residency, including the 4 MiB staging pool, has a
+ * Uploads stop after 2.5 ms or exhausting the 8 MiB staging pool per frame. Reusable mapped 64 KiB staging buffers pack only source rows, then
+ * one encoder copies strips and draws. GPU residency, including the 8 MiB staging pool, has a
  * separate 128 MiB LRU. Geometry and texture bindings are retained; camera gestures never process resident pixels.
  */
 export function makeGpuDisplay(
@@ -132,12 +132,12 @@ export function makeGpuDisplay(
           }
 
           uploaded += copied;
-          if (performance.now() - start >= 2) {
+          if (performance.now() - start >= 2.5) {
             break;
           }
         }
 
-        if (blocked || performance.now() - start >= 2) {
+        if (blocked || performance.now() - start >= 2.5) {
           break;
         }
       }

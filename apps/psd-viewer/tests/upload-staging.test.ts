@@ -5,13 +5,13 @@ afterEach(() => vi.unstubAllGlobals());
 
 it('bounds in-flight staging and reuses a buffer only after its asynchronous map completes', async () => {
   const { staging, buffers, finish } = fixture();
-  const acquired = Array.from({ length: 64 }, () => {
+  const acquired = Array.from({ length: 128 }, () => {
     const slot = staging.acquire()!;
     slot.view[0] = 42;
     slot.unmap();
     return slot.buffer;
   });
-  expect(new Set(acquired).size).toBe(64);
+  expect(new Set(acquired).size).toBe(128);
   expect(staging.acquire()).toBeUndefined();
   staging.submit();
   expect(buffers.every((buffer) => buffer.mapAsync.mock.calls.length === 1)).toBe(true);
