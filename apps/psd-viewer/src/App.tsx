@@ -4,11 +4,13 @@ import styles from './App.module.css';
 import { createBlendingDetection } from './features/blending-detection';
 import { createComparison, DifferenceSummary, ViewSwitch, type ViewMode } from './features/comparison';
 import { createPsdDocument, createPsdRender, type PsdSource } from './features/document';
+import { createOpeningPreview } from './features/document/createOpeningPreview';
 import { ExamplesMenu } from './features/examples';
 import { createFonts, FontsPanel, TextSupportSection } from './features/fonts';
 import { DocumentInspector, LayerInspector } from './features/inspector';
 import { collectNotes, createLayerVisibility, LayersPanel, layerVisibility } from './features/layers';
 import { createFileDrop, fileSource, firstPsd, urlSource } from './features/open-file';
+import { OpenFailure } from './features/open-file/OpenFailure';
 import { createOpenPrompt, OpeningReport, OpenPromptDialog } from './features/open-like-photoshop';
 import {
   createPsdWorker,
@@ -33,30 +35,33 @@ import { createWindowedRender } from './features/viewport/createWindowedRender';
  * the inspector and the renderer status.
  */
 export function App() {
-  const client = makePsdClient(createPsdWorker());
+  const client = makePsdClient(createPsdWorker(), createPsdWorker);
   onCleanup(client.dispose);
 
-  const { source, opened, open } = createPsdDocument(client);
+  const { source, opened, opening, canceled, open, cancel, retry } = createPsdDocument(client);
   const { prompt, answer } = createOpenPrompt(source, opened, open);
   const { settings: stored, update, replace, reset } = createRenderSettings();
   const { overrides, pairs, setVisible } = createLayerVisibility(source);
-  const blending = createBlendingDetection(client, opened, stored, pairs);
+  const initial = createOpeningPreview(client, opened, stored);
+  const blending = createBlendingDetection(client, opened, stored, pairs, initial.ready);
   const settings = blending.settings;
   const [selected, setSelected] = createSignal<number | undefined>(() => {
     source();
     return undefined;
   });
-  const fonts = createFonts(client, opened, selected);
+  const fonts = createFonts(client, () => initial.ready() ? opened() : undefined, selected);
   const { choice: stateChoice, choose: chooseState, withState } = createStateChoice(source);
   const document = () => valueOf(opened());
   const viewport = createViewport(() => document()?.info, source);
   const windowed = () => Boolean(document() && requiresWindowedRendering(document()!.info));
   const renderSettings = fonts.withFonts(withState(settings));
-  const wholeRender = createPsdRender(client, opened, renderSettings, pairs);
+  const wholeRender = createPsdRender(client, () => (blending.settled() ? opened() : undefined), renderSettings, pairs);
   const windows = createWindowedRender(client, opened, renderSettings, pairs, viewport);
   const render = () => (windowed() ? windows.render() : wholeRender());
   const renderWindow = () => valueOf(render())?.window;
-  const { view, setView, merged, difference } = createComparison(client, opened, render);
+  const { view, setView, merged, difference } = createComparison(client, opened, render, () =>
+    initial.preview()?.source === 'saved' ? initial.preview()?.image : undefined
+  );
 
   const [tab, setTab] = createSignal<'layer' | 'document'>('document');
   const layer = createMemo(() => {
@@ -80,8 +85,8 @@ export function App() {
   const layerFailure = () => failureOf(layer());
   const differenceValue = () => valueOf(difference());
   const shown = createMemo<(PsdImage & { window?: RenderedPixels['window'] }) | undefined>(() => {
-    const result = view() === 'ours' ? render() : view() === 'photoshop' ? merged() : difference();
-    return result?.ok ? result.value : undefined;
+    const result = view() === 'ours' ? latest(render) : view() === 'photoshop' ? merged() : difference();
+    return result?.ok ? result.value : view() === 'ours' && !result ? initial.preview()?.image : undefined;
   });
   const shownFailure = () => {
     const result = view() === 'ours' ? render() : view() === 'photoshop' ? merged() : (difference() ?? render());
@@ -96,8 +101,12 @@ export function App() {
   };
 
   const activity = () => {
-    if (isPending(opened)) {
+    if (opening()) {
       return `Opening ${latest(source)?.name ?? ''}…`;
+    }
+
+    if (document() && !blending.settled()) {
+      return initial.ready() ? 'Detecting blending…' : 'Loading preview…';
     }
 
     if (windows.busy() || isPending(wholeRender)) {
@@ -150,6 +159,16 @@ export function App() {
             event.currentTarget.value = '';
           }}
         />
+        <Show when={source()}>
+          <button type="button" onClick={cancel}>
+            Cancel
+          </button>
+        </Show>
+        <Show when={canceled()}>
+          <button type="button" onClick={() => retry()}>
+            Restart
+          </button>
+        </Show>
         <span class={styles.spacer} />
         <ViewSwitch
           view={latest(view)}
@@ -232,7 +251,9 @@ export function App() {
                       image={image()}
                       label={
                         view() === 'ours'
-                          ? 'Our render'
+                          ? !latest(render) && initial.preview()
+                            ? 'Opening preview'
+                            : 'Our render'
                           : view() === 'photoshop'
                             ? "Photoshop's merged image"
                             : 'Difference heat map'
@@ -240,6 +261,14 @@ export function App() {
                     />
                   </div>
                 )}
+              </Show>
+              <Show when={initial.preview() && !latest(render)}>
+                <p class={styles.previewLabel} role="note" data-preview={initial.preview()?.source}>
+                  {initial.preview()?.source === 'saved'
+                    ? 'Saved preview. May be stale; does not reflect changed settings or visibility.'
+                    : 'Chosen-settings preview. Blending detection has not settled.'}{' '}
+                  Blending fidelity is unverified until detection finishes.
+                </p>
               </Show>
               <Show when={!latest(source)}>
                 <div class={styles.welcome}>
@@ -249,11 +278,12 @@ export function App() {
               </Show>
               <Show when={openFailure()}>
                 {(failure) => (
-                  <div class={styles.message} role="alert" data-failure={failure().kind}>
-                    {source()?.name}
-                    {failure().kind === 'refused' ? ': ' : ' could not be opened: '}
-                    {failure().message}
-                  </div>
+                  <OpenFailure
+                    name={source()?.name ?? ''}
+                    failure={failure()}
+                    class={styles.message}
+                    onStrict={() => retry('strict')}
+                  />
                 )}
               </Show>
               <Show when={document() && shownFailure()}>
@@ -278,6 +308,12 @@ export function App() {
               {(current) => (
                 <>
                   <OpeningReport opening={current().opening} />
+                  <Show when={source()?.mode === 'strict'}>
+                    <p role="note">
+                      Strict reading. Photoshop recovery and repairs were skipped. Layers may differ from a recovered
+                      opening; Photoshop view shows the saved composite when available.
+                    </p>
+                  </Show>
                   <Show when={windowed()}>
                     <p role="note">
                       Windowed layer view. Large canvases use the strict reader and your blending preferences. Photoshop
@@ -408,6 +444,14 @@ export function App() {
   /** The settled state in words: the last render's time or why there is none. */
   function statusText() {
     const current = render();
+    if (openFailure()) {
+      return 'Failed to open';
+    }
+
+    if (canceled()) {
+      return 'Canceled';
+    }
+
     if (!document()) {
       return 'Ready';
     }

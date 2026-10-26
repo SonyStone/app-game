@@ -1,3 +1,4 @@
+import type { PsdImage } from '@app-game/psd/viewer';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 import type { OpenedPsd, PsdClient, PsdResultOf, RenderedPixels } from '../psd-worker';
 import { requiresWindowedRendering } from '../psd-worker/protocol';
@@ -13,7 +14,8 @@ export type ViewMode = 'ours' | 'photoshop' | 'difference';
 export function createComparison(
   client: PsdClient,
   opened: Accessor<PsdResultOf<OpenedPsd> | undefined>,
-  render: Accessor<PsdResultOf<RenderedPixels> | undefined>
+  render: Accessor<PsdResultOf<RenderedPixels> | undefined>,
+  initialMerged: Accessor<PsdImage | undefined>
 ) {
   const [chosen, setView] = createSignal<ViewMode>('ours');
   const view = createMemo(() => {
@@ -23,7 +25,11 @@ export function createComparison(
   const merged = createMemo(() => {
     const document = opened();
     return document?.ok && !requiresWindowedRendering(document.value.info)
-      ? client.merged(document.value.document)
+      ? initialMerged()
+        ? { ok: true as const, value: initialMerged()! }
+        : view() === 'photoshop'
+          ? client.merged(document.value.document)
+          : undefined
       : undefined;
   });
   const difference = createMemo(() => {

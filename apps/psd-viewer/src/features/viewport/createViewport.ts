@@ -63,7 +63,10 @@ export function createViewport(
   let drag: { x: number; y: number } | undefined;
   const surface = {
     onPointerDown(event: PointerEvent & { currentTarget: HTMLElement }) {
-      if (event.button !== 0) {
+      if (
+        event.button !== 0 ||
+        (event.target instanceof Element && event.target.closest('button, input, select, a, [role=button]'))
+      ) {
         return;
       }
 

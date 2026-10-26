@@ -558,3 +558,41 @@ it('abstains from imported font decisions without face bytes, including names-on
 
   client.dispose();
 });
+
+it('restarts independently of an old render and keeps the replacement render queue single-flight', async () => {
+  const ports: { port: PsdWorkerPort; sent: PsdRequest[] }[] = [];
+  function replacement() {
+    const sent: PsdRequest[] = [];
+    const port: PsdWorkerPort = {
+      onmessage: null,
+      onerror: null,
+      onmessageerror: null,
+      postMessage: message => { sent.push(message); },
+      terminate: vi.fn()
+    };
+    ports.push({ port, sent });
+    return port;
+  }
+  const client = makePsdClient(replacement(), replacement);
+  const old = client.render(1, settings, []);
+  const waiting = client.render(1, settings, [[1, false]]);
+  const oldPort = ports[0].port;
+  client.restart();
+  expect(oldPort.terminate).toHaveBeenCalledOnce();
+  expect(oldPort.onmessage).toBeNull();
+  expect(await old).toMatchObject({ ok: false, error: { kind: 'superseded' } });
+  expect(await waiting).toMatchObject({ ok: false, error: { kind: 'superseded' } });
+  const first = client.render(1, settings, []);
+  await Promise.resolve();
+  await Promise.resolve();
+  const second = client.render(1, settings, [[2, false]]);
+  const current = ports[1];
+  expect(current.sent).toHaveLength(1);
+  const reply = () => current.port.onmessage?.({ data: { id: current.sent.at(-1)!.id, type: 'failed', error: { kind: 'unsupported', message: 'test reply' } } });
+  reply();
+  await first;
+  await vi.waitFor(() => expect(current.sent).toHaveLength(2));
+  reply();
+  await second;
+  client.dispose();
+});

@@ -59,6 +59,9 @@ test('shows a budget refusal as an open failure and can open another file', asyn
   const failure = page.locator('[data-failure="budget"]');
   await expect(failure).toContainText("exceeds the viewer's resource budget");
   await expect(failure).toContainText('allocation bytes');
+  await expect(page.locator('footer')).toContainText('Failed to open');
+  await expect(failure.getByRole('button', { name: 'Retry strict reading' })).toBeVisible();
+  await expect(failure).toContainText('Strict reading skips Photoshop recovery');
   await picker.setInputFiles({
     name: 'small-source.psb',
     mimeType: 'application/octet-stream',

@@ -31,7 +31,7 @@ export type PsdRequest = PsdRequestBody & { telemetry?: boolean };
 
 /** Request payload, independent of optional diagnostics. */
 type PsdRequestBody =
-  | { id: number; type: 'open'; bytes: ArrayBuffer; answers?: PsdOpenAnswers }
+  | { id: number; type: 'open'; bytes: ArrayBuffer; answers?: PsdOpenAnswers; mode?: 'strict' }
   | {
       id: number;
       type: 'render';
