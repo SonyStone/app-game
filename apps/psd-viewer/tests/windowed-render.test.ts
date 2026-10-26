@@ -356,6 +356,17 @@ it('plans bounded overviews and viewport-only regions, including empty/off-canva
   }
 });
 
+it('uses bounded coarse coverage when zoom-out source tiles cannot coexist in the LRU', () => {
+  const size = { width: 30806, height: 45624 };
+  const viewport = { width: 840, height: 900 };
+  expect(planWindow(size, { scale: 0.7, x: -5000, y: -7000 }, viewport)?.kind).toBe('regions');
+  const plan = planWindow(size, { scale: 0.1, x: -500, y: -700 }, viewport);
+  expect(plan?.kind).toBe('overview');
+  if (plan?.kind === 'overview') {
+    expect(Math.ceil(size.width / plan.step) * Math.ceil(size.height / plan.step)).toBeLessThanOrEqual(2_097_152);
+  }
+});
+
 it('clips coarse preview coverage to odd document bounds', async () => {
   const client: Pick<PsdClient, 'renderWindow'> = {
     async renderWindow(_document, _settings, _visibility, window) {
