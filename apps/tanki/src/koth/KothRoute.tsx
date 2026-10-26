@@ -3,19 +3,28 @@ import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
 import { createSignal, onCleanup, onSettled, Show, untrack } from 'solid-js';
 import { aimAngle } from '../arena/aim';
-import { createCamera, DRAG_MARGIN, followTarget, screenToWorld, screenToWorldDirection, worldToScreen, zoomCamera } from '../arena/camera';
+import {
+  createCamera,
+  DRAG_MARGIN,
+  followTarget,
+  screenToWorld,
+  screenToWorldDirection,
+  worldToScreen,
+  zoomCamera
+} from '../arena/camera';
 import { makeArenaInput, type Aim } from '../arena/input';
 import { createLookAhead } from '../arena/lookahead';
 import { createRangeRenderer } from '../damage/renderer';
 import { Rapier2D, useRapier2D } from '../physics/Rapier2D';
 import { createWorld } from '../physics/World';
-import { AimOverlay, aimOnScreen, type AimView } from './AimOverlay';
+import { AIM_LOOK_IDS, aimLookFromAddress, aimOnScreen, AimOverlay, type AimView } from './AimOverlay';
+import { TANK_CLASSES } from './classes/classes';
 import { ClassMenu } from './classes/ClassMenu';
 import { createScope } from './classes/scope';
 import { BotThoughts, KothHud, MatchResult, type HudState, type ThoughtView } from './Hud';
 import { createKothMatch, type KothMatch } from './match';
 import { loadPace, savePace, type Pace } from './pace';
-import { PacePanel } from './PacePanel';
+import { PauseMenu } from './PauseMenu';
 import { CAPTURE_RULES } from './rules';
 import { TANK_CLASS_IDS, type TankClassId } from './tanks';
 
@@ -37,19 +46,20 @@ import { TANK_CLASS_IDS, type TankClassId } from './tanks';
  * keeps the gun's aim however the view settles (see `createLookAhead`). Every gun fires at a
  * steady cadence for as long as the button is held, with no clip and no reload to keep track of.
  *
- * Keys: 1-5 pick a class and C opens the class menu, R restarts, B shows what the bots think, V
- * hands the player's tank to a bot and shows the whole map (1-8 follow a tank, 0 shows the whole
- * map again), X switches the look of the aim, T opens the pace panel (see `PacePanel`), whose
- * knobs, the game's speed, the tanks' and shells' speeds, the damage, the bots' reaction and how
- * far they see, the zoom and the view's lead, take effect at once and are kept for the next
- * visit. The right mouse button or Shift turns a Sniper's hull on the spot toward the cursor,
+ * Esc pauses the match and opens the menu (see `PauseMenu`), which holds the actions of the
+ * keys below, the pace knobs, the game's speed, the tanks' and shells' speeds, the damage, the
+ * bots' reaction and how far they see, the zoom and the view's lead, which take effect at once and
+ * are kept for the next visit, and what every key does. Keys: 1-5 pick a class and C opens the
+ * class menu, R restarts, B shows what the bots think, V hands the player's tank to a bot and
+ * shows the whole map (1-8 follow a tank, 0 shows the whole map again), X switches the look of
+ * the aim. The right mouse button or Shift turns a Sniper's hull on the spot toward the cursor,
  * which it also does by itself when the player stops driving and aims outside its gun's arc.
  * While a Sniper charges its shot, the view widens about the tank, which keeps the gun's aim, the
  * cores of the enemies in sight are marked and the crosshair tells when the rail would blow one
  * up; letting go fires the rail, which hits at once along the gun. In the address, `?watch`
  * starts watching right away, `?hold=30` shortens the hold time that wins to 30 seconds,
  * `?class=scout` starts as that class with the menu closed, `?aim=line` picks the aim's look,
- * `?tune` opens the pace panel and `?slow=4` runs the game four times slower, to look at effects
+ * `?tune` starts paused in the menu and `?slow=4` runs the game four times slower, to look at effects
  * frame by frame.
  */
 export default function KothRoute() {
@@ -64,31 +74,41 @@ export default function KothRoute() {
   const [menu, setMenu] = createSignal(!address.has('watch') && !address.has('class'));
   const [choice, setChoice] = createSignal<{ id: TankClassId; count: number }>();
   const [pace, setPace] = createSignal(loadPace());
-  const [tuning, setTuning] = createSignal(address.has('tune'));
+  const [paused, setPaused] = createSignal(address.has('tune'));
+  const [look, setLook] = createSignal(aimLookFromAddress());
 
   makeEventListener(window, 'keydown', (event) => {
     const digit = /^Digit([1-5])$/.exec(event.code);
 
-    if (event.code === 'KeyR') {
-      setRestarts((count) => count + 1);
+    if (event.repeat) {
+      return;
+    }
+
+    if (event.code === 'Escape') {
+      // Esc closes the class menu first, as it always has; otherwise it pauses or resumes.
+      if (menu() && !paused()) {
+        setMenu(false);
+      } else {
+        setPaused((on) => !on);
+      }
+    } else if (event.code === 'KeyR') {
+      restart();
     } else if (event.code === 'KeyB') {
       setShowThoughts((shown) => !shown);
+    } else if (event.code === 'KeyX') {
+      setLook((current) => AIM_LOOK_IDS[(AIM_LOOK_IDS.indexOf(current) + 1) % AIM_LOOK_IDS.length]);
     } else if (event.code === 'KeyV') {
-      setWatching((on) => !on);
-      setMenu(false);
-    } else if (event.code === 'KeyT') {
-      setTuning((shown) => !shown);
+      toggleWatching();
     } else if (event.code === 'KeyC' && !watching()) {
+      setPaused(false);
       setMenu((open) => !open);
-    } else if (event.code === 'Escape') {
-      setMenu(false);
-    } else if (digit && !watching()) {
+    } else if (digit && !watching() && !paused()) {
       choose(TANK_CLASS_IDS[Number(digit[1]) - 1]);
     }
   });
 
   return (
-    <div class="fixed inset-0 overflow-hidden select-none font-sans">
+    <div class="fixed inset-0 overflow-hidden font-sans select-none">
       <canvas ref={setCanvas} class="block h-full w-full touch-none" />
       <GpuCanvas
         canvas={canvas()}
@@ -104,6 +124,7 @@ export default function KothRoute() {
             choice={choice()}
             playerClass={address.get('class')}
             pace={pace()}
+            paused={paused()}
             onFrame={(frame) => {
               setState(frame.state);
               setThoughts(frame.thoughts);
@@ -114,18 +135,15 @@ export default function KothRoute() {
       </GpuCanvas>
       <BotThoughts thoughts={thoughts()} />
       <KothHud state={state()} watching={watching()} />
-      <AimOverlay canvas={canvas()} view={aim()} player={state()?.player} active={!menu() && !watching() && !state()?.capture.winner} />
-      <MatchResult state={state()} onRestart={() => setRestarts((count) => count + 1)} />
-      <Show when={tuning()}>
-        <PacePanel
-          pace={pace()}
-          onChange={(next) => {
-            setPace(next);
-            savePace(next);
-          }}
-        />
-      </Show>
-      <Show when={menu() && !watching() && state()}>
+      <AimOverlay
+        canvas={canvas()}
+        view={aim()}
+        player={state()?.player}
+        look={look()}
+        active={!menu() && !paused() && !watching() && !state()?.capture.winner}
+      />
+      <MatchResult state={state()} onRestart={restart} />
+      <Show when={menu() && !paused() && !watching() && state()}>
         {(shown) => (
           <ClassMenu
             current={shown().player.tankClass}
@@ -136,14 +154,51 @@ export default function KothRoute() {
           />
         )}
       </Show>
-      <p class="pointer-events-none absolute bottom-3 left-4 m-0 text-xs text-white/60">
-        WASD drive · mouse aims, the view looks ahead toward it: the line shows what the shot hits · hold to fire, no reloads (Sniper: hold to
-        charge, the scope marks enemy cores, let go for an instant rail) · right button or Shift: turn on the spot (Sniper) · C or 1-5 class ·
-        walls break, ram fences · wrecks are cover · green kits mend where they touch · X aim look · T pace · B bot thoughts · V watch (1-8
-        follow, 0 map) · R restart
-      </p>
+      <Show when={!paused()}>
+        <button
+          class="absolute bottom-3 left-3 cursor-pointer border-2 border-solid border-black bg-[#efe7d4] px-2 py-0.5 text-xs font-bold tracking-wider text-black uppercase shadow-[3px_3px_0_#000]"
+          onClick={() => setPaused(true)}
+        >
+          Esc · menu
+        </button>
+      </Show>
+      <Show when={paused()}>
+        <PauseMenu
+          pace={pace()}
+          onPace={(next) => {
+            setPace(next);
+            savePace(next);
+          }}
+          look={look()}
+          onLook={setLook}
+          thoughts={showThoughts()}
+          onThoughts={setShowThoughts}
+          className={state() && TANK_CLASSES[state()!.player.tankClass].name}
+          watching={watching()}
+          onResume={() => setPaused(false)}
+          onRestart={restart}
+          onClass={() => {
+            setPaused(false);
+            setMenu(true);
+          }}
+          onWatch={toggleWatching}
+        />
+      </Show>
     </div>
   );
+
+  /** Starts a new match and plays it. */
+  function restart() {
+    setRestarts((count) => count + 1);
+    setPaused(false);
+  }
+
+  /** Hands the player's tank to a bot to watch the match, or takes it back, and plays on. */
+  function toggleWatching() {
+    setWatching((on) => !on);
+    setMenu(false);
+    setPaused(false);
+  }
 
   /** Asks the scene for class `id` for the player and closes the menu. */
   function choose(id: TankClassId) {
@@ -167,6 +222,7 @@ const PIXELS_PER_METER = 100;
  * @param playerClass - The player's first class, read once; anything but a class id means the Soldier.
  * @param pace - The match's pace, read every frame: the game's speed, the zoom it sets when it
  *   changes, the view's lead, and what the match itself works by.
+ * @param paused - Holds the match, its effects and the view still; the frame is drawn again as it stands.
  * @param onFrame - Receives the display state after each frame, with the player's aim on screen.
  */
 function KothScene(props: {
@@ -177,6 +233,7 @@ function KothScene(props: {
   choice: { id: TankClassId; count: number } | undefined;
   playerClass: string | null;
   pace: Pace;
+  paused: boolean;
   onFrame: (frame: { state: HudState; thoughts: ThoughtView[]; aim: AimView | undefined }) => void;
 }) {
   const canvas = untrack(() => props.canvas);
@@ -185,7 +242,11 @@ function KothScene(props: {
   const renderer = createRangeRenderer(useGpuCanvas());
   const first = untrack(() => props.playerClass);
   const playerClass = TANK_CLASS_IDS.find((id) => id === first);
-  const match = createKothMatch(rapier, world, renderer, { rules: rulesFromAddress(), playerClass, pace: () => props.pace });
+  const match = createKothMatch(rapier, world, renderer, {
+    rules: rulesFromAddress(),
+    playerClass,
+    pace: () => props.pace
+  });
   const input = makeArenaInput(canvas);
   const camera = createCamera(match.seat.tank?.hull.translation() ?? { x: 0, y: 0 });
   const lookAhead = createLookAhead();
@@ -203,7 +264,7 @@ function KothScene(props: {
   makeEventListener(window, 'keydown', (event) => {
     const digit = /^Digit([0-8])$/.exec(event.code);
 
-    if (digit && props.watching) {
+    if (digit && props.watching && !props.paused) {
       watched = digit[1] === '0' ? undefined : Number(digit[1]) - 1;
       camera.zoom = watched === undefined ? camera.zoom : FOLLOW_ZOOM;
     }
@@ -227,7 +288,8 @@ function KothScene(props: {
   /** Reads input, steps the match, places the camera, draws and reports one frame. */
   function frame(time: number) {
     const pace = props.pace;
-    const dt = lastTime === undefined ? 0 : (Math.min((time - lastTime) / 1000, MAX_FRAME_TIME) * pace.speed) / SLOW_MOTION;
+    const dt =
+      lastTime === undefined ? 0 : (Math.min((time - lastTime) / 1000, MAX_FRAME_TIME) * pace.speed) / SLOW_MOTION;
     lastTime = time;
 
     if (props.restarts !== seenRestarts) {
@@ -249,6 +311,18 @@ function KothScene(props: {
     const controls = input.read();
     const player = match.player;
 
+    // Paused, the wheel and keys read meanwhile are dropped, and the frame is drawn and reported as it stands, without shake.
+    if (props.paused) {
+      match.draw(camera);
+      renderer.render(camera, screen, BACKGROUND, 0);
+      props.onFrame({
+        state: match.hud(),
+        thoughts: props.thoughts && !match.capture.winner ? thoughtsOnScreen(match, camera, screen) : [],
+        aim: undefined
+      });
+      return;
+    }
+
     // A new zoom on the pace panel takes over the view; the wheel and +/- zoom on from it.
     if (pace.zoom !== zoom) {
       zoom = pace.zoom;
@@ -266,7 +340,10 @@ function KothScene(props: {
 
     const aim = player && pivot ? aimAngle(player, controls.aim, camera, screen, pivot) : undefined;
     const drive = screenToWorldDirection(camera, controls.move);
-    const reach = player && controls.aim?.kind === 'point' ? distanceTo(player.hull.translation(), screenToWorld(camera, controls.aim, screen)) : undefined;
+    const reach =
+      player && controls.aim?.kind === 'point'
+        ? distanceTo(player.hull.translation(), screenToWorld(camera, controls.aim, screen))
+        : undefined;
     const alt = controls.alt && !props.watching;
     pendingStep += dt;
 
@@ -279,7 +356,11 @@ function KothScene(props: {
     placeCamera(screen, dt, controls.aim);
     match.draw(camera);
     const shake = match.shake;
-    const view = { ...camera, x: camera.x + (Math.random() * 2 - 1) * shake, y: camera.y + (Math.random() * 2 - 1) * shake };
+    const view = {
+      ...camera,
+      x: camera.x + (Math.random() * 2 - 1) * shake,
+      y: camera.y + (Math.random() * 2 - 1) * shake
+    };
     renderer.render(view, screen, BACKGROUND, dt);
     props.onFrame({
       state: match.hud(),
@@ -301,7 +382,10 @@ function KothScene(props: {
 
     if (props.watching && watched === undefined) {
       scope.reset();
-      const fit = Math.min(screen.width / (match.map.halfWidth * 2 + 60), screen.height / (match.map.halfHeight * 2 + 140));
+      const fit = Math.min(
+        screen.width / (match.map.halfWidth * 2 + 60),
+        screen.height / (match.map.halfHeight * 2 + 140)
+      );
 
       if (overview.zoom !== fit) {
         overview = { zoom: fit };
@@ -321,7 +405,13 @@ function KothScene(props: {
     // Watching one tank, or waiting to respawn: the view follows as it always has, and the lead starts afresh with the next tank.
     if (!pivot) {
       lookAhead.reset();
-      scope.step(camera, screen, target ? worldToScreen(camera, target, screen) : { x: screen.width / 2, y: screen.height / 2 }, scoped, dt);
+      scope.step(
+        camera,
+        screen,
+        target ? worldToScreen(camera, target, screen) : { x: screen.width / 2, y: screen.height / 2 },
+        scoped,
+        dt
+      );
 
       if (target) {
         followTarget(camera, target, screen, scope.followMargin(DRAG_MARGIN));
@@ -357,12 +447,17 @@ function rulesFromAddress() {
 }
 
 /** What each bot thinks, with its label, path and target placed on screen. */
-function thoughtsOnScreen(match: KothMatch, camera: ReturnType<typeof createCamera>, screen: { width: number; height: number }): ThoughtView[] {
+function thoughtsOnScreen(
+  match: KothMatch,
+  camera: ReturnType<typeof createCamera>,
+  screen: { width: number; height: number }
+): ThoughtView[] {
   const toScreen = (point: { x: number; y: number }) => worldToScreen(camera, point, screen);
 
   return match.thoughts().map((thought) => {
     const label = toScreen(thought.position);
-    const target = thought.target && match.combat.armorOf(thought.target) ? toScreen(thought.target.hull.translation()) : undefined;
+    const target =
+      thought.target && match.combat.armorOf(thought.target) ? toScreen(thought.target.hull.translation()) : undefined;
 
     return {
       id: thought.member.id,
@@ -370,7 +465,9 @@ function thoughtsOnScreen(match: KothMatch, camera: ReturnType<typeof createCame
       name: thought.member.name,
       role: thought.member.role,
       goal: thought.goal ?? '',
-      action: thought.breach ? `${thought.action ?? ''} · breach: ${thought.breach.method} ${thought.breach.phase}` : (thought.action ?? ''),
+      action: thought.breach
+        ? `${thought.action ?? ''} · breach: ${thought.breach.method} ${thought.breach.phase}`
+        : (thought.action ?? ''),
       steps: thought.steps.join(' → '),
       covering: thought.covering?.name,
       x: label.x,

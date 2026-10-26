@@ -10,7 +10,8 @@ export type Aim = { kind: 'point'; x: number; y: number } | { kind: 'direction';
  * prototype's input map. Listeners stay attached until the calling owner is disposed.
  *
  * - Keyboard: WASD or arrows drive, Space fires, Q/E turn the view, +/- zoom. Keys are read by
- *   physical position, so WASD works in any layout.
+ *   physical position, so WASD works in any layout. The page doesn't scroll on arrows or Space,
+ *   unless an input element has the focus.
  * - Mouse: the turret follows the cursor, the left button fires, the right button is the second
  *   action, the wheel zooms.
  * - Touch and pen: a touch starting in the left 40% of the screen is a floating drive stick; any
@@ -29,7 +30,8 @@ export function makeArenaInput(target: HTMLElement) {
   const firePointers = new Set<number>();
 
   makeEventListener(window, 'keydown', (event) => {
-    if (GAME_KEYS.has(event.code)) {
+    // A focused form control, such as a menu's slider, keeps its own arrows and Space.
+    if (GAME_KEYS.has(event.code) && !(event.target instanceof HTMLInputElement)) {
       event.preventDefault();
     }
 

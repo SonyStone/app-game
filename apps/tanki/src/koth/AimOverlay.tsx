@@ -1,5 +1,5 @@
-import { createEventListener, makeEventListener } from '@solid-primitives/event-listener';
-import { createEffect, createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import { createEventListener } from '@solid-primitives/event-listener';
+import { createEffect, createMemo, createSignal, onCleanup, Show, untrack } from 'solid-js';
 import type { Tank } from '../arena/bodies';
 import { worldToScreen, type Camera } from '../arena/camera';
 import { forecastShot, type Lane, type ShotForecast, type Verdict } from './aim';
@@ -32,17 +32,24 @@ type Point = { x: number; y: number };
  *   cores of the enemies in the gun's line of sight, hidden under their armor, marked in yellow,
  *   as a sniper's scope shows where to aim.
  *
- * Three looks differ in the line and the crosshair's center; X cycles through them and `?aim=`
- * in the address picks one (see `AIM_LOOKS`).
+ * Three looks differ in the line and the crosshair's center (see `AIM_LOOKS`); a notice names a
+ * new look picked while playing.
  *
  * @param canvas - The game canvas: the pointer is followed over it, and the cursor is hidden over it while `active`.
  * @param view - Where the aim is on screen this frame, from `aimOnScreen`.
  * @param player - The player's weapon as the heads-up display shows it.
+ * @param look - The aim's look.
  * @param active - Whether the player is playing: without a menu, the match's result or watching
  *   the bots. Otherwise nothing is drawn and the cursor shows as usual.
  */
-export function AimOverlay(props: { canvas: HTMLCanvasElement | undefined; view: AimView | undefined; player: HudState['player'] | undefined; active: boolean }) {
-  const [look, setLook] = createSignal(lookFromAddress());
+export function AimOverlay(props: {
+  canvas: HTMLCanvasElement | undefined;
+  view: AimView | undefined;
+  player: HudState['player'] | undefined;
+  look: AimLookId;
+  active: boolean;
+}) {
+  const look = () => props.look;
   const [hovering, setHovering] = createSignal(false);
   const [notice, setNotice] = createSignal(false);
   let noticeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -56,20 +63,37 @@ export function AimOverlay(props: { canvas: HTMLCanvasElement | undefined; view:
         return;
       }
 
-      crosshair?.style.setProperty('transform', `translate(${event.offsetX - CROSSHAIR_SIZE / 2}px, ${event.offsetY - CROSSHAIR_SIZE / 2}px)`);
+      crosshair?.style.setProperty(
+        'transform',
+        `translate(${event.offsetX - CROSSHAIR_SIZE / 2}px, ${event.offsetY - CROSSHAIR_SIZE / 2}px)`
+      );
       setHovering(true);
     }
   );
-  createEventListener(() => props.canvas, 'pointerleave', () => setHovering(false));
+  createEventListener(
+    () => props.canvas,
+    'pointerleave',
+    () => setHovering(false)
+  );
 
-  makeEventListener(window, 'keydown', (event) => {
-    if (event.code === 'KeyX' && !event.repeat) {
-      setLook((current) => AIM_LOOK_IDS[(AIM_LOOK_IDS.indexOf(current) + 1) % AIM_LOOK_IDS.length]);
-      clearTimeout(noticeTimer);
-      setNotice(true);
-      noticeTimer = setTimeout(() => setNotice(false), NOTICE_TIME);
+  let noticed = untrack(() => props.look);
+  createEffect(
+    () => props.look,
+    (picked) => {
+      if (picked === noticed) {
+        return;
+      }
+
+      noticed = picked;
+
+      // A look picked in the menu shows as the menu closes; the notice is for a look switched in play.
+      if (untrack(() => props.active)) {
+        clearTimeout(noticeTimer);
+        setNotice(true);
+        noticeTimer = setTimeout(() => setNotice(false), NOTICE_TIME);
+      }
     }
-  });
+  );
   onCleanup(() => clearTimeout(noticeTimer));
 
   createEffect(
@@ -86,18 +110,29 @@ export function AimOverlay(props: { canvas: HTMLCanvasElement | undefined; view:
   return (
     <>
       <svg class="pointer-events-none absolute inset-0 h-full w-full">
-        <Show when={props.active && props.view !== undefined && props.view.cores.length > 0 && props.view.cores}>{(cores) => <CoreMarks cores={cores()} />}</Show>
+        <Show when={props.active && props.view !== undefined && props.view.cores.length > 0 && props.view.cores}>
+          {(cores) => <CoreMarks cores={cores()} />}
+        </Show>
         <Show when={shot()}>{(shown) => <ShotMarks shot={shown()} look={AIM_LOOKS[look()]} />}</Show>
       </svg>
       <div
         ref={(element) => (crosshair = element)}
-        class="pointer-events-none absolute left-0 top-0"
-        style={{ display: props.active && hovering() ? 'block' : 'none', width: `${CROSSHAIR_SIZE}px`, height: `${CROSSHAIR_SIZE}px` }}
+        class="pointer-events-none absolute top-0 left-0"
+        style={{
+          display: props.active && hovering() ? 'block' : 'none',
+          width: `${CROSSHAIR_SIZE}px`,
+          height: `${CROSSHAIR_SIZE}px`
+        }}
       >
-        <Crosshair player={props.player} verdict={shot()?.verdict} out={shot()?.out ?? false} look={AIM_LOOKS[look()]} />
+        <Crosshair
+          player={props.player}
+          verdict={shot()?.verdict}
+          out={shot()?.out ?? false}
+          look={AIM_LOOKS[look()]}
+        />
       </div>
       <Show when={notice()}>
-        <div class="pointer-events-none absolute left-1/2 top-32 -translate-x-1/2 rounded bg-black/60 px-3 py-1 text-sm font-bold text-white">
+        <div class="pointer-events-none absolute top-32 left-1/2 -translate-x-1/2 rounded bg-black/60 px-3 py-1 text-sm font-bold text-white">
           Aim look: {AIM_LOOKS[look()].name} (X)
         </div>
       </Show>
@@ -113,7 +148,12 @@ export function AimOverlay(props: { canvas: HTMLCanvasElement | undefined; view:
  * @param input.reach - How far from the hull's center the player aims, in world pixels.
  * @param view - The camera the frame is drawn with, shake included, so the marks stay on what they mark.
  */
-export function aimOnScreen(match: KothMatch, input: { angle?: number; reach?: number }, view: Camera, screen: { width: number; height: number }): AimView | undefined {
+export function aimOnScreen(
+  match: KothMatch,
+  input: { angle?: number; reach?: number },
+  view: Camera,
+  screen: { width: number; height: number }
+): AimView | undefined {
   const tank = match.player;
 
   if (!tank) {
@@ -122,9 +162,19 @@ export function aimOnScreen(match: KothMatch, input: { angle?: number; reach?: n
 
   const toScreen = (point: Point) => worldToScreen(view, point, screen);
   const charge = match.seat.weapon?.charge;
-  const forecast = forecastShot(match.combat, tank, match.seat.tankClass, input.angle ?? tank.turretAngle, input.reach, charge);
+  const forecast = forecastShot(
+    match.combat,
+    tank,
+    match.seat.tankClass,
+    input.angle ?? tank.turretAngle,
+    input.reach,
+    charge
+  );
 
-  return { shot: forecast && shotOnScreen(forecast, input.reach, toScreen, view), cores: charge === undefined ? [] : coresInSight(match, tank, toScreen, view) };
+  return {
+    shot: forecast && shotOnScreen(forecast, input.reach, toScreen, view),
+    cores: charge === undefined ? [] : coresInSight(match, tank, toScreen, view)
+  };
 }
 
 /** What `AimOverlay` draws for a frame, from `aimOnScreen`, in CSS pixels. */
@@ -176,16 +226,34 @@ type ShotView = {
 };
 
 /** Where a lane ends on screen, which way the shell flies there and what it meets, as `LaneEnd` says. */
-type ScreenEnd = Point & Pick<Lane['end'], 'meets' | 'core' | 'breakable' | 'glancing'> & { angle: number; enemy: boolean };
+type ScreenEnd = Point &
+  Pick<Lane['end'], 'meets' | 'core' | 'breakable' | 'glancing'> & { angle: number; enemy: boolean };
 
 /** Places a forecast on screen with `toScreen`. */
-function shotOnScreen(forecast: ShotForecast, reach: number | undefined, toScreen: (point: Point) => Point, view: Camera): ShotView {
+function shotOnScreen(
+  forecast: ShotForecast,
+  reach: number | undefined,
+  toScreen: (point: Point) => Point,
+  view: Camera
+): ShotView {
   const lanes = forecast.lanes.map((lane) => {
     const points = lane.path.map((point) => toScreen(point));
     const end = toScreen(lane.end.at);
     const ahead = toScreen({ x: lane.end.at.x + lane.end.heading.x, y: lane.end.at.y + lane.end.heading.y });
     const { meets, core, breakable, glancing } = lane.end;
-    return { points, end: { ...end, angle: Math.atan2(ahead.y - end.y, ahead.x - end.x), meets, core, breakable, glancing, enemy: lane.end.tank !== undefined }, weight: lane.weight };
+    return {
+      points,
+      end: {
+        ...end,
+        angle: Math.atan2(ahead.y - end.y, ahead.x - end.x),
+        meets,
+        core,
+        breakable,
+        glancing,
+        enemy: lane.end.tank !== undefined
+      },
+      weight: lane.weight
+    };
   });
   const lob = forecast.kind === 'lob' ? forecast.lanes[0] : undefined;
   const blast = forecast.blast;
@@ -222,7 +290,11 @@ function hopDots(path: readonly { x: number; y: number; height: number }[]) {
     for (let along = HOP_SPACING - carried; along <= length; along += HOP_SPACING) {
       const share = along / length;
       const height = from.height + (to.height - from.height) * share;
-      dots.push({ x: from.x + (to.x - from.x) * share, y: from.y + (to.y - from.y) * share, radius: HOP_DOT + height * HOP_GROWTH });
+      dots.push({
+        x: from.x + (to.x - from.x) * share,
+        y: from.y + (to.y - from.y) * share,
+        radius: HOP_DOT + height * HOP_GROWTH
+      });
     }
 
     carried = (carried + length) % HOP_SPACING;
@@ -239,7 +311,11 @@ const HOP_GROWTH = 0.07;
 /** The outline of a fan of lanes: from the muzzle of its leftmost lane, along their ends in turn, back to its rightmost lane's muzzle. */
 function fanOutline(lanes: readonly { points: Point[] }[]) {
   const muzzle = lanes[0].points[0];
-  const sorted = [...lanes].sort((a, b) => sideOf(muzzle, a.points.at(-1)!, lanes[0].points.at(-1)!) - sideOf(muzzle, b.points.at(-1)!, lanes[0].points.at(-1)!));
+  const sorted = [...lanes].sort(
+    (a, b) =>
+      sideOf(muzzle, a.points.at(-1)!, lanes[0].points.at(-1)!) -
+      sideOf(muzzle, b.points.at(-1)!, lanes[0].points.at(-1)!)
+  );
   return [sorted[0].points[0], ...sorted.map((lane) => lane.points.at(-1)!), sorted.at(-1)!.points[0]];
 }
 
@@ -277,10 +353,14 @@ type AimLook = {
   center: 'cross' | 'dot' | 'saltire';
 };
 
-const AIM_LOOK_IDS = Object.keys(AIM_LOOKS) as (keyof typeof AIM_LOOKS)[];
+/** The id of one of `AIM_LOOKS`. */
+export type AimLookId = keyof typeof AIM_LOOKS;
+
+/** The ids of `AIM_LOOKS`, in the order X steps through them. */
+export const AIM_LOOK_IDS = Object.keys(AIM_LOOKS) as AimLookId[];
 
 /** The look picked by `?aim=` in the address, else `dots`. */
-function lookFromAddress() {
+export function aimLookFromAddress() {
   const asked = new URLSearchParams(window.location.search).get('aim');
   return AIM_LOOK_IDS.find((id) => id === asked) ?? 'dots';
 }
@@ -297,11 +377,31 @@ const BREAKS = '#ffd27a';
  * A stroke in the game's look: `d` drawn in `color` over a dark outline `outline` pixels wider,
  * both with the same dashes, so it reads over light ground, dark ground and smoke alike.
  */
-function Stroke(props: { d: string; color: string; width: number; dash?: string; opacity?: number; outline?: number; fill?: string }) {
+function Stroke(props: {
+  d: string;
+  color: string;
+  width: number;
+  dash?: string;
+  opacity?: number;
+  outline?: number;
+  fill?: string;
+}) {
   return (
     <g opacity={props.opacity ?? 1} fill="none" stroke-linecap="round" stroke-linejoin="round">
-      <path d={props.d} stroke={INK} stroke-width={props.width + (props.outline ?? 2)} stroke-dasharray={props.dash} stroke-opacity="0.75" />
-      <path d={props.d} stroke={props.color} stroke-width={props.width} stroke-dasharray={props.dash} fill={props.fill ?? 'none'} />
+      <path
+        d={props.d}
+        stroke={INK}
+        stroke-width={props.width + (props.outline ?? 2)}
+        stroke-dasharray={props.dash}
+        stroke-opacity="0.75"
+      />
+      <path
+        d={props.d}
+        stroke={props.color}
+        stroke-width={props.width}
+        stroke-dasharray={props.dash}
+        fill={props.fill ?? 'none'}
+      />
     </g>
   );
 }
@@ -318,7 +418,12 @@ function ShotMarks(props: { shot: ShotView; look: AimLook }) {
       <Show when={props.shot.fan}>
         {(fan) => (
           <>
-            <path d={`${polyline(fan())} Z`} fill={props.shot.verdict === 'hit' || props.shot.verdict === 'kill' ? HIT : LIGHT} fill-opacity="0.16" stroke="none" />
+            <path
+              d={`${polyline(fan())} Z`}
+              fill={props.shot.verdict === 'hit' || props.shot.verdict === 'kill' ? HIT : LIGHT}
+              fill-opacity="0.16"
+              stroke="none"
+            />
             <Stroke d={paths().fanEdges} color={LIGHT} width={1.2} opacity={0.75} />
           </>
         )}
@@ -326,7 +431,9 @@ function ShotMarks(props: { shot: ShotView; look: AimLook }) {
       <Show when={props.shot.hops}>
         {(hops) => (
           <path
-            d={hops().map((dot) => circlePath(dot.x, dot.y, dot.radius)).join(' ')}
+            d={hops()
+              .map((dot) => circlePath(dot.x, dot.y, dot.radius))
+              .join(' ')}
             fill={props.shot.verdict === 'hit' || props.shot.verdict === 'kill' ? HIT : LIGHT}
             fill-opacity="0.9"
             stroke={INK}
@@ -351,11 +458,20 @@ function ShotMarks(props: { shot: ShotView; look: AimLook }) {
               dash="4 5"
               opacity={blast().reaches.length > 0 ? 0.9 : 0.5}
             />
-            <Stroke d={blast().reaches.map((tank) => circlePath(tank.x, tank.y, tank.radius)).join(' ')} color={HIT} width={2} dash="3 3" />
+            <Stroke
+              d={blast()
+                .reaches.map((tank) => circlePath(tank.x, tank.y, tank.radius))
+                .join(' ')}
+              color={HIT}
+              width={2}
+              dash="3 3"
+            />
           </>
         )}
       </Show>
-      <Show when={props.shot.landing}>{(landing) => <Stroke d={circlePath(landing().x, landing().y, 4)} color={LIGHT} width={1.5} opacity={0.85} />}</Show>
+      <Show when={props.shot.landing}>
+        {(landing) => <Stroke d={circlePath(landing().x, landing().y, 4)} color={LIGHT} width={1.5} opacity={0.85} />}
+      </Show>
       <Stroke d={paths().clear} color={LIGHT} width={1.5} opacity={0.8} />
       <Stroke d={paths().breaks} color={BREAKS} width={3} outline={2.6} />
       <Stroke d={paths().solid} color={LIGHT} width={3} outline={2.6} />
@@ -398,11 +514,22 @@ function shotPaths(shot: ShotView) {
   const edges = fanned ? [shot.fan![0], shot.fan![1], shot.fan!.at(-2)!, shot.fan!.at(-1)!] : [];
 
   return {
-    lanes: shot.lanes.filter((lane) => !enemyHit(lane.end)).map((lane) => polyline(lane.points)).join(' '),
-    hitLanes: shot.lanes.filter((lane) => enemyHit(lane.end)).map((lane) => polyline(lane.points)).join(' '),
+    lanes: shot.lanes
+      .filter((lane) => !enemyHit(lane.end))
+      .map((lane) => polyline(lane.points))
+      .join(' '),
+    hitLanes: shot.lanes
+      .filter((lane) => enemyHit(lane.end))
+      .map((lane) => polyline(lane.points))
+      .join(' '),
     fanEdges: fanned ? `${polyline(edges.slice(0, 2))} ${polyline(edges.slice(2))}` : '',
     // A fan's lanes end in dots, red where they hit; a single lane in a mark of what it meets.
-    pellets: fanned ? ends.filter((end) => !end.enemy).map((end) => circlePath(end.x, end.y, 1.6)).join(' ') : '',
+    pellets: fanned
+      ? ends
+          .filter((end) => !end.enemy)
+          .map((end) => circlePath(end.x, end.y, 1.6))
+          .join(' ')
+      : '',
     hits: ends
       .filter((end) => enemyHit(end))
       .map((end) => (fanned ? circlePath(end.x, end.y, 2.4) : crossMark(end, 4, 12)))
@@ -415,9 +542,25 @@ function shotPaths(shot: ShotView) {
       .filter((end) => end.enemy && end.glancing)
       .map((end) => crossMark(end, 3.5, 9))
       .join(' '),
-    breaks: fanned ? '' : ends.filter((end) => blocked(end) && end.breakable).map((end) => wallMark(end, true)).join(' '),
-    solid: fanned ? '' : ends.filter((end) => blocked(end) && !end.breakable).map((end) => wallMark(end, false)).join(' '),
-    clear: fanned || shot.kind === 'lob' ? '' : ends.filter((end) => end.meets === 'nothing').map((end) => circlePath(end.x, end.y, 3.5)).join(' ')
+    breaks: fanned
+      ? ''
+      : ends
+          .filter((end) => blocked(end) && end.breakable)
+          .map((end) => wallMark(end, true))
+          .join(' '),
+    solid: fanned
+      ? ''
+      : ends
+          .filter((end) => blocked(end) && !end.breakable)
+          .map((end) => wallMark(end, false))
+          .join(' '),
+    clear:
+      fanned || shot.kind === 'lob'
+        ? ''
+        : ends
+            .filter((end) => end.meets === 'nothing')
+            .map((end) => circlePath(end.x, end.y, 3.5))
+            .join(' ')
   };
 }
 
@@ -446,7 +589,8 @@ function wallMark(end: ScreenEnd, breaks: boolean) {
   const across = { x: -Math.sin(end.angle), y: Math.cos(end.angle) };
   const half = 10;
   const gap = breaks ? 2.5 : 0;
-  const segment = (from: number, to: number) => `M ${end.x + across.x * from} ${end.y + across.y * from} L ${end.x + across.x * to} ${end.y + across.y * to}`;
+  const segment = (from: number, to: number) =>
+    `M ${end.x + across.x * from} ${end.y + across.y * from} L ${end.x + across.x * to} ${end.y + across.y * to}`;
   return breaks ? `${segment(-half, -gap)} ${segment(gap, half)}` : segment(-half, half);
 }
 
@@ -455,13 +599,29 @@ function wallMark(end: ScreenEnd, breaks: boolean) {
  * around it the charge of a casemate gun's shot, filling the ring and turning red when full. It
  * fades when the pointer is beyond the shot's reach.
  */
-function Crosshair(props: { player: HudState['player'] | undefined; verdict: Verdict | undefined; out: boolean; look: AimLook }) {
+function Crosshair(props: {
+  player: HudState['player'] | undefined;
+  verdict: Verdict | undefined;
+  out: boolean;
+  look: AimLook;
+}) {
   const middle = CROSSHAIR_SIZE / 2;
-  const tint = () => (props.verdict === 'hit' || props.verdict === 'kill' || props.verdict === 'splash' ? HIT : props.verdict === 'glance' ? GLANCE : LIGHT);
+  const tint = () =>
+    props.verdict === 'hit' || props.verdict === 'kill' || props.verdict === 'splash'
+      ? HIT
+      : props.verdict === 'glance'
+        ? GLANCE
+        : LIGHT;
   const center = () => crosshairCenter(props.look.center, middle);
 
   return (
-    <svg width={CROSSHAIR_SIZE} height={CROSSHAIR_SIZE} viewBox={`0 0 ${CROSSHAIR_SIZE} ${CROSSHAIR_SIZE}`} class="block overflow-visible" opacity={props.out ? 0.5 : 1}>
+    <svg
+      width={CROSSHAIR_SIZE}
+      height={CROSSHAIR_SIZE}
+      viewBox={`0 0 ${CROSSHAIR_SIZE} ${CROSSHAIR_SIZE}`}
+      class="block overflow-visible"
+      opacity={props.out ? 0.5 : 1}
+    >
       <Show when={props.player?.alive && props.player.charge !== undefined && props.player.charge}>
         {(charge) => <ChargeRing charge={charge()} middle={middle} />}
       </Show>
@@ -487,7 +647,8 @@ function crosshairCenter(kind: AimLook['center'], middle: number) {
       .join(' ');
 
   if (kind === 'dot') {
-    const corner = (sx: number, sy: number) => `M ${middle + sx * 11} ${middle + sy * 5} L ${middle + sx * 11} ${middle + sy * 11} L ${middle + sx * 5} ${middle + sy * 11}`;
+    const corner = (sx: number, sy: number) =>
+      `M ${middle + sx * 11} ${middle + sy * 5} L ${middle + sx * 11} ${middle + sy * 11} L ${middle + sx * 5} ${middle + sy * 11}`;
     return [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)].join(' ');
   }
 
@@ -524,7 +685,9 @@ const NOTICE_TIME = 1400;
 
 /** An SVG path through `points`. */
 function polyline(points: readonly Point[]) {
-  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ');
+  return points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
+    .join(' ');
 }
 
 /** An SVG path of a circle, starting at its left. */
