@@ -50,7 +50,7 @@ export function GpuViewport(props: {
       <div class={styles.backend} aria-label="Display backend">
         <Show
           when={forced || failure()}
-          fallback="WebGPU · nearest at pixel scale; bordered premultiplied bilinear below"
+          fallback="WebGPU · nearest at pixel scale; filtered LODs and premultiplied bilinear below"
         >
           2D fallback · {failure() ?? 'requested'}
           <Show when={!forced}>
@@ -119,7 +119,7 @@ function GpuFrames(props: Parameters<typeof WebGpuViewport>[0]) {
       return { image, tiles: displayTiles(image) };
     },
     ({ image, tiles }) => {
-      display.setTiles(tiles);
+      display.setTiles(tiles, image.window?.step);
       frames.presentImage(image);
     }
   );
@@ -144,7 +144,7 @@ function CanvasViewport(props: Parameters<typeof GpuViewport>[0]) {
       return { image, tiles: displayTiles(image) };
     },
     ({ image, tiles }) => {
-      display.setTiles(tiles);
+      display.setTiles(tiles, image.window?.step);
       frames.presentImage(image);
     }
   );

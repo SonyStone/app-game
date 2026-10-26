@@ -2,18 +2,25 @@ import type { GpuContext } from '@app-game/solid-gpu/gpu';
 import tgpu, { d, std } from 'typegpu';
 import { viewerPerformance } from '../telemetry/performance';
 import type { View } from '../viewport/view';
-import { tileTextureUpload, type DisplayTile } from './displayTiles';
+import { displayTileLevels, tileTextureUpload, type DisplayTile } from './displayTiles';
 import { makeUploadStaging } from './makeUploadStaging';
 
 /**
  * Displays authoritative straight RGBA8 bytes. No sRGB texture conversion is applied: filtering is explicitly
  * bilinear in premultiplied display-sRGB, with a one-source-texel halo. At >=1 physical pixel/source texel,
  * textureLoad preserves the original bytes. Coarse worker overviews remain point-sampled previews, not area mips.
- * Uploads stop after 1 ms or exhausting the 1 MiB staging pool per frame. Reusable mapped 128 KiB staging buffers pack only source rows, then
- * one encoder copies strips and draws. GPU residency, including the 1 MiB staging pool, has a
+ * Uploads stop after 2 ms or exhausting the 4 MiB staging pool per frame. Reusable mapped 64 KiB staging buffers pack only source rows, then
+ * one encoder copies strips and draws. GPU residency, including the 4 MiB staging pool, has a
  * separate 128 MiB LRU. Geometry and texture bindings are retained; camera gestures never process resident pixels.
  */
-export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format'>) {
+export function makeGpuDisplay(
+  gpu: Pick<GpuContext, 'root' | 'device' | 'format'>,
+  gpuBudgetBytes = 128 * 1024 * 1024
+) {
+  if (!Number.isFinite(gpuBudgetBytes) || gpuBudgetBytes < 16 * 1024 * 1024) {
+    throw new RangeError('GPU tile residency requires at least 16 MiB, including staging buffers.');
+  }
+
   const initializing = performance.now();
   const { root, device, format } = gpu;
   const camera = root.createBuffer(Camera).$usage('uniform');
@@ -32,8 +39,11 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
   const resident = new Map<symbol, ReturnType<typeof allocate>>();
   const identities = new WeakMap<DisplayTile, symbol>();
   let tiles: readonly DisplayTile[] = [];
+  let levels: ReturnType<typeof displayTileLevels> = [];
   let bytes = 0;
   let destroyed = false;
+  let frameNumber = 0;
+  const firstVisible = new Map<symbol, number>();
   const timer = makeTimer(device);
   const staging = makeUploadStaging(device);
   // TypeGPU resolves shaders and creates native pipelines lazily. Compile once in backend initialization so tile
@@ -45,7 +55,7 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
 
   return {
     /** Reconciles immutable identities without copying bytes; unchanged tiles keep their GPU residency. */
-    setTiles(next: readonly DisplayTile[]) {
+    setTiles(next: readonly DisplayTile[], step = 1) {
       const active = new Set(next.map(identity));
       for (const [key, entry] of resident) {
         if (!entry.ready && !active.has(key)) {
@@ -55,15 +65,34 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
         }
       }
 
+      for (const key of firstVisible.keys()) {
+        if (!active.has(key)) {
+          firstVisible.delete(key);
+        }
+      }
+
       tiles = next;
+      levels = displayTileLevels(next, step);
     },
     /** Uploads a bounded batch, then renders once into an opaque viewport or an explicit readback target. */
     draw(view: View, width: number, height: number, dpr: number, target: GPUTextureView, raw = false) {
       const start = performance.now();
+      frameNumber++;
+      for (const { coarse, requested } of levels) {
+        for (const tile of [coarse, requested]) {
+          const key = identity(tile);
+          if (!visible(tile, view, width / dpr, height / dpr)) {
+            firstVisible.delete(key);
+          } else if (!firstVisible.has(key) || resident.get(key)?.ready) {
+            firstVisible.set(key, frameNumber);
+          }
+        }
+      }
+
       let uploaded = 0;
       let blocked = false;
       const encoder = device.createCommandEncoder();
-      for (const tile of tiles) {
+      for (const tile of [...levels.map((group) => group.coarse), ...levels.map((group) => group.requested)]) {
         if (!visible(tile, view, width / dpr, height / dpr)) {
           continue;
         }
@@ -71,6 +100,25 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
         const key = identity(tile);
         let entry = resident.get(key);
         if (!entry) {
+          const upload = tileTextureUpload(tile);
+          const required = upload.width * upload.height * 4 + 32;
+          const active = new Set(tiles.map(identity));
+          for (const [old, resource] of resident) {
+            if (bytes + required + staging.bytes + 32 + timer.bytes <= gpuBudgetBytes) {
+              break;
+            }
+
+            if (!active.has(old)) {
+              resource.destroy();
+              resident.delete(old);
+              bytes -= resource.bytes;
+            }
+          }
+
+          if (bytes + required + staging.bytes + 32 + timer.bytes > gpuBudgetBytes) {
+            break;
+          }
+
           entry = allocate(tile);
           resident.set(key, entry);
           bytes += entry.bytes;
@@ -84,12 +132,12 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
           }
 
           uploaded += copied;
-          if (performance.now() - start >= 1) {
+          if (performance.now() - start >= 2) {
             break;
           }
         }
 
-        if (blocked || performance.now() - start >= 1) {
+        if (blocked || performance.now() - start >= 2) {
           break;
         }
       }
@@ -127,13 +175,21 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
       }
 
       let drawn = 0;
-      for (const tile of tiles) {
+      for (const group of levels) {
+        const tile =
+          group.levels.find((tile) => tile.step <= group.requested.step && resident.get(identity(tile))?.ready) ??
+          [...group.levels].reverse().find((tile) => resident.get(identity(tile))?.ready);
+        if (!tile) {
+          continue;
+        }
+
         const entry = resident.get(identity(tile));
         if (entry?.ready && visible(tile, view, width / dpr, height / dpr)) {
           // Touch in draw order for LRU eviction; coarse ancestors draw before fine coverage.
           resident.delete(identity(tile));
           resident.set(identity(tile), entry);
           pipeline.with(pass).with(cameraGroup).with(entry.group).draw(4);
+          entry.present(frameNumber, firstVisible.get(identity(tile)));
           drawn++;
         }
       }
@@ -146,14 +202,24 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
       if (drawn) {
         viewerPerformance.record('frame.pixels', start, drawn);
       }
+      viewerPerformance.record(
+        'gpu.pending.bytes',
+        performance.now(),
+        [...resident.values()].filter((entry) => !entry.ready).reduce((sum, entry) => sum + entry.bytes, 0)
+      );
+      viewerPerformance.record(
+        'upload.pending.cpu.bytes',
+        performance.now(),
+        [...resident.values()].reduce((sum, entry) => sum + entry.pendingSourceBytes, 0)
+      );
       viewerPerformance.record('gpu.explicit.bytes', performance.now(), bytes + staging.bytes + 32 + timer.bytes);
       if (uploaded) {
         viewerPerformance.record('upload', start, uploaded);
       }
 
       timer.finish(start, () => destroyed);
-      return tiles.some(
-        (tile) => !resident.get(identity(tile))?.ready && visible(tile, view, width / dpr, height / dpr)
+      return levels.some(
+        ({ requested: tile }) => !resident.get(identity(tile))?.ready && visible(tile, view, width / dpr, height / dpr)
       );
     },
     /** Releases textures, tile uniforms and timing buffers before the device scope closes. */
@@ -165,6 +231,8 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
 
       resident.clear();
       tiles = [];
+      levels = [];
+      firstVisible.clear();
       camera.destroy();
       timer.destroy();
       staging.destroy();
@@ -200,9 +268,19 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
       const bytesPerRow = upload.bytesPerRow;
       let source: Uint8Array<ArrayBuffer> | undefined = upload.source;
       let row = 0;
+      let presented = false;
       return {
         group,
+        present(frame: number, firstFrame?: number) {
+          if (!presented) {
+            viewerPerformance.record('tile.visible.frames', performance.now(), frame - (firstFrame ?? frame) + 1);
+            presented = true;
+          }
+        },
         bytes: width * height * 4 + 32,
+        get pendingSourceBytes() {
+          return source?.buffer.byteLength ?? 0;
+        },
         get ready() {
           return row === height;
         },
@@ -398,5 +476,3 @@ function makeTimer(device: GPUDevice) {
     }
   };
 }
-
-const gpuBudgetBytes = 128 * 1024 * 1024;

@@ -19,6 +19,7 @@ export function StatusArea(props: {
   const failure = () => (props.render && !props.render.ok ? props.render.error : undefined);
   const approximations = () => (props.render?.ok ? props.render.value.approximations : []);
   const windowed = () => props.windowed || (props.render?.ok && props.render.value.window !== undefined);
+  const quality = () => (props.render?.ok ? props.render.value.quality : undefined);
   const saved = () => props.render?.ok && props.render.value.window?.source === 'savedComposite';
   const clean = () => !failure() && !approximations().length && !props.layerNotes.length && !props.documentNotes.length;
   return (
@@ -38,6 +39,16 @@ export function StatusArea(props: {
                 : 'exact'
       }
     >
+      <Show when={quality()}>
+        {(progress) => (
+          <p role="status" aria-label="Tile refinement">
+            {progress().coarse ? 'Coarse coverage · refining' : 'Fresh coverage'} · {progress().completed}/
+            {progress().required} tiles
+            {' · '}
+            {progress().step === 1 ? 'source pixels' : `LOD ${Math.log2(progress().step)} display pixels`}
+          </p>
+        )}
+      </Show>
       <Show when={failure()}>
         {(error) => (
           <p class={styles.error}>

@@ -226,6 +226,9 @@ export function App() {
               class={styles.viewport}
               {...viewport.surface}
               data-view={view()}
+              data-camera-scale={viewport.view().scale}
+              data-camera-x={viewport.view().x}
+              data-camera-y={viewport.view().y}
               data-busy={activity() ? 'true' : 'false'}
               data-render-source={renderWindow()?.source}
               data-render-step={renderWindow()?.step}
