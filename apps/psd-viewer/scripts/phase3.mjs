@@ -194,9 +194,16 @@ for (let run = 1; run <= runs; run++) {
           let lastX = center.x,
             lastY = center.y;
           let previousBand = -1;
+          let checkedScheduling = false;
           while (performance.now() - start < duration) {
             await new Promise(requestAnimationFrame);
             const elapsed = performance.now() - start;
+            if (!checkedScheduling && elapsed >= 30000) {
+              checkedScheduling = true;
+              if (!__phase3.requests.some((request) => request.phase === 'traversal')) {
+                throw new Error('Continuous input starved viewport tile requests.');
+              }
+            }
             const band = Math.floor(elapsed / 15000) % 2;
             if (band !== previousBand) {
               const scale = Number(stage.dataset.cameraScale);
@@ -223,13 +230,19 @@ for (let run = 1; run <= runs; run++) {
               new PointerEvent('pointermove', { pointerId: 1, clientX: lastX, clientY: lastY, bubbles: true })
             );
           }
-          __phase3.traversalMs = performance.now() - start;
+          __phase3.traversalEnd = performance.now();
+          __phase3.traversalMs = __phase3.traversalEnd - start;
         },
         { center, duration }
       );
       await page.mouse.up();
       await settle();
       result.traversalMs = await page.evaluate(() => __phase3.traversalMs);
+      result.duringTraversal = await page.evaluate(() => ({
+        requests: __phase3.requests.filter((request) => request.phase === 'traversal' && request.time <= __phase3.traversalEnd).length,
+        visibleArrivals: __phase3.samples.filter((sample) => sample.phase === 'traversal' &&
+          sample.name === 'tile.visible.frames' && sample.start <= __phase3.traversalEnd).length
+      }));
     }
     result.diagnostics = await page.evaluate(() => {
       const samples = __phase3.samples;
