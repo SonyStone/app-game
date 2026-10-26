@@ -163,7 +163,7 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
       let entry = totals.get(id);
 
       if (!entry) {
-        entry = { alive: 0, kills: 0, deaths: 0, life: 0, lives: 0, damage: 0, fatal: 0, point: 0, kits: 0 };
+        entry = { alive: 0, kills: 0, deaths: 0, life: 0, lives: 0, damage: 0, fatal: 0, point: 0, kits: 0, shots: 0, hits: 0, opened: 0, finished: 0, assisted: 0 };
         totals.set(id, entry);
       }
 
@@ -182,9 +182,19 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
     for (const seed of seeds) {
       const born = new Map<number, number>();
       const armor = new Map<object, number>();
+      const shotsSeen = new Map<Member, number>();
+      /** Who opened each tank's core and when, while it stays open. */
+      const opener = new Map<object, { member: Member; tankClass: TankClassId; at: number }>();
       let kills = 0;
       const match = createMatch(rapier, seed, {
         roster: ROSTER,
+        onHit: (_target, shooter, part) => {
+          const member = shooter && match.members.find((candidate) => candidate.tank === shooter);
+
+          if (member && part !== 'ricochet') {
+            tally(member.tankClass.id).hits++;
+          }
+        },
         onKill: (kill) => {
           kills++;
           tally(kill.victimClass).deaths++;
@@ -194,7 +204,17 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
             killer.kills++;
             // The armor the tank still had goes to its killer too: the step's armor tally never sees a destroyed tank.
             killer.fatal += armor.get(kill.victimTank) ?? 1;
+            const opened = opener.get(kill.victimTank);
+
+            // A core opened and then destroyed: by the one that opened it, or by a teammate soon after, an assist.
+            if (opened && opened.member === kill.killer) {
+              killer.finished++;
+            } else if (opened && opened.member.team === kill.killer?.team && match.time - opened.at < ASSIST_TIME) {
+              tally(opened.tankClass).assisted++;
+            }
           }
+
+          opener.delete(kill.victimTank);
         }
       });
       const step = match.kits.step;
@@ -229,13 +249,30 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
             born.delete(member.id);
           }
 
+          if (member.weapon) {
+            const fired = member.weapon.shots - (shotsSeen.get(member) ?? 0);
+            tally(member.tankClass.id).shots += Math.max(fired, 0);
+            shotsSeen.set(member, member.weapon.shots);
+          } else {
+            shotsSeen.delete(member);
+          }
+
           if (member.tank) {
             const stats = tally(member.tankClass.id);
             stats.alive += 1 / 60;
+            const shooter = member.attacker && match.members.find((other) => other.team !== member.team && other.tank === member.attacker);
+
+            // A core newly open is credited to the enemy that hit the tank last.
+            if (match.combat.isCoreOpen(member.tank) && !opener.has(member.tank) && shooter) {
+              opener.set(member.tank, { member: shooter, tankClass: shooter.tankClass.id, at: match.time });
+              tally(shooter.tankClass.id).opened++;
+            } else if (!match.combat.isCoreOpen(member.tank)) {
+              opener.delete(member.tank);
+            }
+
             const left = match.combat.armorLeft(member.tank);
             const before = armor.get(member.tank) ?? 1;
             // Armor lost goes to the enemy that hit the tank last.
-            const shooter = member.attacker && match.members.find((other) => other.team !== member.team && other.tank === member.attacker);
 
             if (left < before && shooter) {
               tally(shooter.tankClass.id).damage += before - left;
@@ -312,7 +349,26 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
       );
     }
 
-    lines.push(`driver stalls ${stalls}, longest ${longest.toFixed(2)} s`);
+    lines.push(
+      '',
+      `Shooting by class: shots and hits on enemy tanks per minute alive (a blast or a fragment counts as a hit for each tank it chips), cores opened per minute, and what became of them: destroyed by the class itself, or by a teammate within ${ASSIST_TIME} s`,
+      'class      shots/min  hits/shot  cores opened/min  finished own  assists'
+    );
+
+    for (const id of TANK_CLASS_IDS) {
+      const stats = totals.get(id);
+
+      if (!stats || stats.alive === 0) {
+        continue;
+      }
+
+      const minutes = stats.alive / 60;
+      lines.push(
+        `${id.padEnd(10)} ${(stats.shots / minutes).toFixed(1).padStart(9)}  ${(stats.hits / Math.max(stats.shots, 1)).toFixed(2).padStart(9)}  ${(stats.opened / minutes).toFixed(2).padStart(16)}  ${String(stats.finished).padStart(12)}  ${String(stats.assisted).padStart(7)}`
+      );
+    }
+
+    lines.push('', `driver stalls ${stalls}, longest ${longest.toFixed(2)} s`);
     lines.push(
       `wrecks left ${debris.wrecks}, scrap lying at the end ${debris.pieces} pieces (${debris.metal} metal) of ${debris.area.toFixed(0)} px² in ${debris.chunks} chunks, per match ${(debris.pieces / seeds.length).toFixed(1)} pieces`
     );
@@ -336,7 +392,26 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
 });
 
 /** What the full matches add up for a class: seconds alive, completed lives and their seconds, and armor taken away by its shots, apart and in kills. */
-type ClassTally = { alive: number; kills: number; deaths: number; life: number; lives: number; damage: number; fatal: number; point: number; kits: number };
+type ClassTally = {
+  alive: number;
+  kills: number;
+  deaths: number;
+  life: number;
+  lives: number;
+  damage: number;
+  fatal: number;
+  point: number;
+  kits: number;
+  /** Shots fired, hits on enemy tanks, cores opened, kills of tanks whose core the class opened itself, and kills by a teammate it opened the core for. */
+  shots: number;
+  hits: number;
+  opened: number;
+  finished: number;
+  assisted: number;
+};
+
+/** Seconds after a core opens within which a teammate's kill counts as an assist of the class that opened it. */
+const ASSIST_TIME = 5;
 
 /**
  * Classes of both teams for the full matches from `TANKI_ROSTER`, as `sniper,soldier,heavy,demoman`
