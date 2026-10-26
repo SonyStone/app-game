@@ -7,6 +7,7 @@ import type { DisplayTile } from '../src/features/gpu-viewport/displayTiles';
 import { makePsdClient, type PsdClient, type PsdResultOf, type PsdWorkerPort } from '../src/features/psd-worker';
 import type { PsdRequest, WindowRequest } from '../src/features/psd-worker/protocol';
 import { makePsdWorkerHost } from '../src/features/psd-worker/workerHost';
+import { viewerPerformance } from '../src/features/telemetry/performance';
 import { createWindowedRender } from '../src/features/viewport/createWindowedRender';
 import {
   chooseLod,
@@ -699,4 +700,36 @@ it('shares an unaffected in-flight tile across a visibility edit instead of rend
   expect(value(await edited).tiles!.at(-1)!.step).toBe(1);
   expect(wrapped.renderWindow).toHaveBeenCalledOnce();
   renderer.clear();
+});
+
+it('counts one obsolete native batch when several canceled camera consumers share its result', async () => {
+  const { client } = synthetic();
+  let finish!: () => void;
+  const wrapped = {
+    renderWindow: vi.fn<PsdClient['renderWindow']>().mockImplementation(
+      (...args) =>
+        new Promise((resolve) => {
+          finish = async () => resolve(await client.renderWindow(...args));
+        })
+    )
+  };
+  const record = vi.spyOn(viewerPerformance, 'record');
+  try {
+    const renderer = makeWindowRenderer(wrapped);
+    const snapshot = fakeSnapshot(300000, 300000);
+    const controllers = Array.from({ length: 3 }, () => new AbortController());
+    const results = controllers.map((controller) =>
+      renderer.render(snapshot, { scale: 1, x: 0, y: 0 }, { width: 100, height: 100 }, controller.signal, vi.fn())
+    );
+    controllers[0].abort();
+    controllers[1].abort();
+    finish();
+    await Promise.all(results);
+    expect(wrapped.renderWindow).toHaveBeenCalledOnce();
+    expect(record.mock.calls.filter(([name]) => name === 'cancellation.obsoleteBatchTiles')).toHaveLength(1);
+    expect(record.mock.calls.filter(([name]) => name === 'cancellation.salvagedTiles')).toHaveLength(1);
+    renderer.clear();
+  } finally {
+    record.mockRestore();
+  }
 });
