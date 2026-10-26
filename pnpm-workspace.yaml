@@ -24,6 +24,7 @@ catalog:
   '@solid-primitives/jsx-tokenizer': 3.0.0-next.2
   '@solid-primitives/keyboard': 2.0.0-next.5
   '@solid-primitives/keyed': 3.0.0-next.2
+  '@solid-primitives/map': 1.0.0-next.2
   '@solid-primitives/match': 1.0.0-next.2
   '@solid-primitives/media': 4.0.0-next.2
   '@solid-primitives/memo': 2.0.0-next.2

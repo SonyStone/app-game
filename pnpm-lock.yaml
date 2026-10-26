@@ -69,6 +69,9 @@ catalogs:
     '@solid-primitives/keyed':
       specifier: 3.0.0-next.2
       version: 3.0.0-next.2
+    '@solid-primitives/map':
+      specifier: 1.0.0-next.2
+      version: 1.0.0-next.2
     '@solid-primitives/match':
       specifier: 1.0.0-next.2
       version: 1.0.0-next.2
@@ -750,6 +753,9 @@ importers:
       '@solid-primitives/event-listener':
         specifier: 'catalog:'
         version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
+      '@solid-primitives/map':
+        specifier: 'catalog:'
+        version: 1.0.0-next.2(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
       '@solidjs/web':
         specifier: 'catalog:'
         version: 2.0.0-rc.13(solid-js@2.0.0-rc.13)
