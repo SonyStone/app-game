@@ -215,7 +215,8 @@ export type WindowSnapshot = { opened: OpenedPsd; settings: PsdRenderSettings; v
 /**
  * Uses an integer overview stride near one sample per CSS pixel when its total output fits two million pixels.
  * Otherwise requests 512-pixel source tiles covering the viewport plus 96 CSS pixels. Regions retain full-resolution
- * bytes with a one-texel filtering border; the display handles scaling without an assembled surface.
+ * bytes with a one-texel filtering border; the display handles scaling without an assembled surface. Zoom-out
+ * demands larger than the CPU tile budget use a labeled, bounded coarse overview until region LODs are available.
  */
 export function planWindow(
   document: { width: number; height: number },
@@ -257,6 +258,18 @@ export function planWindow(
         height: Math.min(tileEdge, document.height - y)
       });
     }
+  }
+
+  // Retained regions must fit together: evicting an earlier visible tile would leave a permanent hole.
+  // A labeled full-document coarse preview is the bounded display policy until region LODs are available.
+  const sourceBytes = tiles.reduce((bytes, tile) => bytes + (tile.width + 2) * (tile.height + 2) * 4, 0);
+  if (view.scale < 1 && sourceBytes > cacheLimitBytes) {
+    let coarse = Math.max(step, Math.ceil(Math.sqrt((document.width * document.height) / 2_097_152)));
+    while (Math.ceil(document.width / coarse) * Math.ceil(document.height / coarse) > 2_097_152) {
+      coarse++;
+    }
+
+    return { kind: 'overview', step: coarse };
   }
 
   return {
