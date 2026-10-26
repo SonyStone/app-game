@@ -207,6 +207,7 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         telemetry.record('tile.render', start);
         const images = (Array.isArray(result.value) ? result.value : [result.value]).map((image) => ({
           ...image,
+          populated: hasVisiblePixels(image.pixels),
           ...(window.kind === 'regions' && window.mipStep ? { mips: regionMips(image, window.mipStep) } : {})
         }));
         post(
@@ -514,3 +515,14 @@ function hasTypeLayers(layers: readonly PsdLayerNode[]): boolean {
 
 /** Renders whose full-depth composites stay available for comparisons. */
 const keptRenders = 2;
+
+/** Empty windows must not calibrate the populated-tile throughput admission gate. */
+function hasVisiblePixels(pixels: Uint8Array) {
+  for (let index = 3; index < pixels.length; index += 4) {
+    if (pixels[index] !== 0) {
+      return true;
+    }
+  }
+
+  return false;
+}

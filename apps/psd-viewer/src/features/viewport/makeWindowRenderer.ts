@@ -194,7 +194,8 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
 
     let batchStart: number | undefined;
     let batchTiles = 0;
-    let workerMilliseconds = 0;
+    let requestMilliseconds = 0;
+    let populatedTiles = 0;
 
     if (plan.kind === 'overview' && previewedDocument !== document && snapshot.visibility.length === 0) {
       previewedDocument = document;
@@ -283,7 +284,8 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
         workers: concurrency,
         tiles: batchTiles,
         milliseconds: performance.now() - batchStart,
-        workerMilliseconds
+        requestMilliseconds,
+        populated: populatedTiles
       });
     }
     viewerPerformance.record('coverage.tiles', start, keys.length);
@@ -306,6 +308,7 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
       if (window.kind === 'regions') {
         batchStart ??= performance.now();
       }
+      const requestedAt = performance.now();
       const job = client
         .renderWindow(document, snapshot.settings, snapshot.visibility, window, controller.signal)
         .then((result) => {
@@ -315,7 +318,8 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
 
           if (window.kind === 'regions') {
             batchTiles++;
-            workerMilliseconds += result.value.milliseconds;
+            requestMilliseconds += performance.now() - requestedAt;
+            populatedTiles += result.value.images[0].populated ? 1 : 0;
           }
           const { mips = [], ...image } = result.value.images[0];
           const clip = core ?? {
