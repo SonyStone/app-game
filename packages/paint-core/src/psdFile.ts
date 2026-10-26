@@ -1,10 +1,9 @@
 import { readPsd, writePsd, type PsdBlend, type PsdLayer, type PsdNewDocumentContext } from '@app-game/psd';
-import { openPsd } from '@app-game/psd/viewer';
+import { openPsd, type PsdBudgetOptions, type PsdViewerDocument } from '@app-game/psd/viewer';
 import { TILE_SIZE } from './brush';
 import type { Camera, ViewSize } from './camera';
 import type { BlendMode, Layer } from './document';
 import { imageTiles } from './imageTiles';
-import { mergeTilePixels } from './layerMerge';
 import type { DocumentRect } from './layersInView';
 import { packTile, unpackTile, type TileData } from './tilePixels';
 
@@ -17,7 +16,8 @@ import { packTile, unpackTile, type TileData } from './tilePixels';
  * PSB allows. `context` selects complete first-save creation; its caller-owned IDs and layer clocks must follow
  * `layers` order, including hidden and empty layers. Omission retains the codec's identity-only compatibility mode.
  * Invalid complete-mode operands throw PsdWriteError; supplied context is never replaced with legacy defaults.
- * Throws PsdExportCompositeError when the serialized document cannot be rendered exactly at the canvas dimensions.
+ * Composites in 1024² regions with bounded render scratch. The host still needs one full straight-RGBA buffer.
+ * Throws PsdExportCompositeError when that buffer cannot fit the WASM32 writer or the layers cannot render exactly.
  */
 export async function writePsdFile(
   layers: Layer[],
@@ -41,6 +41,7 @@ export async function writePsdFile(
     throw new Error('There is nothing to export yet.');
   }
 
+  const composite = allocateComposite(canvas);
   const psdLayers = loaded.map(({ layer, tiles }): PsdLayer => {
     const bounds = intersect(alphaBounds(tiles), canvas) ?? { left: canvas.left, top: canvas.top, width: 0, height: 0 };
     return {
@@ -58,56 +59,51 @@ export async function writePsdFile(
     };
   });
   const document = { width: canvas.width, height: canvas.height, layers: psdLayers };
-  const file = await writePsd(
-    document,
-    straightPixels(flatten(loaded, linearBlending), canvas),
-    context
-  );
-  const opened = await openPsd(file);
+  // Only the serialized layers are rendered. Reuse the empty provisional composite for the final straight pixels.
+  const file = await writePsd(document, composite, context);
+  const retainedBytes =
+    composite.byteLength +
+    psdLayers.reduce((bytes, layer) => bytes + layer.pixels.byteLength, 0) +
+    loaded.reduce((bytes, { tiles }) => bytes + [...tiles.values()].reduce((sum, tile) => sum + tile.byteLength, 0), 0);
+  const budget = compositeBudget(file.byteLength, retainedBytes, canvas.width, psdLayers.length);
+  const opened = await openPsd(file, budget);
   if (!opened.ok) {
     throw new PsdExportCompositeError('OpenFailed', opened.error.message, { cause: opened.error });
   }
 
   try {
-    const rendered = opened.value.render({
-      linearBlending,
-      approximate: false,
-      textGamma: 1.45,
-      vectorPaths: false,
-      typeLayers: false,
-      smartObjects: null
-    });
-    if (!rendered.ok) {
-      throw new PsdExportCompositeError('RenderFailed', rendered.error.message, { cause: rendered.error });
-    }
-
-    const render = rendered.value;
-    try {
-      if (render.approximations.length) {
-        throw new PsdExportCompositeError('Approximation', render.approximations.join('; '));
+    for (let top = 0; top < canvas.height; top += compositeTileSize) {
+      for (let left = 0; left < canvas.width; left += compositeTileSize) {
+        copyCompositeTile(
+          opened.value,
+          composite,
+          canvas.width,
+          {
+            left,
+            top,
+            width: Math.min(compositeTileSize, canvas.width - left),
+            height: Math.min(compositeTileSize, canvas.height - top)
+          },
+          linearBlending,
+          budget
+        );
       }
-
-      if (render.width !== canvas.width || render.height !== canvas.height) {
-        throw new PsdExportCompositeError('Dimensions', 'The PSD composite dimensions do not match the export canvas.');
-      }
-
-      const final = await writePsd(document, render.pixels, context);
-      return new Blob([final as Uint8Array<ArrayBuffer>], { type: 'image/vnd.adobe.photoshop' });
-    } finally {
-      render.dispose();
     }
   } finally {
     opened.value.close();
   }
+
+  const final = await writePsd(document, composite, context);
+  return new Blob([final as Uint8Array<ArrayBuffer>], { type: 'image/vnd.adobe.photoshop' });
 }
 
 /** Refuses an export whose serialized layers cannot produce an exact, full-canvas Photoshop composite. */
 export class PsdExportCompositeError extends Error {
   readonly name = 'PsdExportCompositeError';
 
-  /** Preserves renderer diagnostics as the cause for opening and rendering failures. */
+  /** Preserves allocation and renderer diagnostics as the cause of failures. */
   constructor(
-    readonly code: 'OpenFailed' | 'RenderFailed' | 'Approximation' | 'Dimensions',
+    readonly code: 'OpenFailed' | 'RenderFailed' | 'Approximation' | 'Dimensions' | 'AllocationFailed',
     message: string,
     options?: ErrorOptions
   ) {
@@ -169,6 +165,82 @@ export async function readPsdFile(
     linearBlending: false
   };
 }
+
+/** Allocates the required host composite, refusing sizes the WASM32 writer cannot address. */
+function allocateComposite(canvas: DocumentRect): Uint8Array {
+  const bytes = canvas.width * canvas.height * 4;
+  try {
+    if (!Number.isSafeInteger(bytes) || bytes > 0x7fffffff) {
+      throw new RangeError('The straight RGBA composite exceeds the WASM32 writer limit of 2 GiB.');
+    }
+
+    return new Uint8Array(bytes);
+  } catch (cause) {
+    throw new PsdExportCompositeError('AllocationFailed', 'Cannot allocate the PSD export composite.', { cause });
+  }
+}
+
+/**
+ * Admits compressed source storage plus caller-owned canvas/layers and bounded tile scratch. Opening counts both
+ * input copies; four file lengths also cover the parsed channels and render-time host input. Scratch follows the
+ * viewer's conservative per-layer float-buffer and full-width channel-row accounting for a 1024² tile.
+ * Admission stays within WASM32's 4 GiB address space. Larger source documents still fail with the viewer's typed
+ * budget/allocation cause rather than disabling limits.
+ */
+function compositeBudget(sourceBytes: number, retainedBytes: number, width: number, layers: number): PsdBudgetOptions {
+  const scratchBytes = compositeTileSize ** 2 * (32 * (layers + 8) + 8) + width * 64 * layers + 196_608;
+  return {
+    allocationBytes: Math.max(128 * 1024 * 1024, sourceBytes),
+    liveBytes: Math.min(0xffffffff, retainedBytes + sourceBytes * 4 + scratchBytes),
+    retainedBytes
+  };
+}
+
+/** Copies one exact straight-RGBA region; the region API frees its WASM scratch before returning owned pixels. */
+function copyCompositeTile(
+  document: PsdViewerDocument,
+  composite: Uint8Array,
+  canvasWidth: number,
+  rectangle: DocumentRect,
+  linearBlending: boolean,
+  budget: PsdBudgetOptions
+): void {
+  const rendered = document.renderRegion(rectangle, {
+    linearBlending,
+    approximate: false,
+    textGamma: 1.45,
+    vectorPaths: false,
+    typeLayers: false,
+    smartObjects: null,
+    maxWorkPixels: compositeTileSize * compositeTileSize,
+    budget
+  });
+  if (!rendered.ok) {
+    throw new PsdExportCompositeError('RenderFailed', rendered.error.message, { cause: rendered.error });
+  }
+
+  const tile = rendered.value;
+  if (tile.approximations.length || !tile.exactToLayerRender || tile.source !== 'layers') {
+    throw new PsdExportCompositeError('Approximation', tile.approximations.join('; ') || 'The PSD tile is not exact.');
+  }
+
+  if (
+    tile.left !== rectangle.left || tile.top !== rectangle.top || tile.width !== rectangle.width ||
+    tile.height !== rectangle.height || tile.step !== 1 || tile.pixels.length !== tile.width * tile.height * 4
+  ) {
+    throw new PsdExportCompositeError('Dimensions', 'The PSD composite tile does not match the requested rectangle.');
+  }
+
+  for (let y = 0; y < tile.height; y++) {
+    composite.set(
+      tile.pixels.subarray(y * tile.width * 4, (y + 1) * tile.width * 4),
+      ((tile.top + y) * canvasWidth + tile.left) * 4
+    );
+  }
+}
+
+/** Bounds float/channel scratch independently of the canvas area. */
+const compositeTileSize = 1024;
 
 /** Photoshop blend modes Paint has; the others open as Normal. */
 const importedBlends: Partial<Record<PsdBlend, BlendMode>> = {
@@ -261,45 +333,4 @@ function straightPixels(tiles: Map<string, Uint8Array>, rect: DocumentRect): Uin
   }
 
   return out;
-}
-
-/**
- * Merges the visible layers bottom up, tile by tile, clipping each clipped layer to its base. A hidden base hides
- * the layers clipped to it, as on screen.
- */
-function flatten(
-  loaded: { layer: Layer; tiles: Map<string, Uint8Array> }[],
-  linear: boolean
-): Map<string, Uint8Array> {
-  const result = new Map<string, Uint8Array>();
-  let base: (typeof loaded)[number] | undefined;
-  for (const entry of loaded) {
-    const { layer, tiles } = entry;
-    const clipped = !!layer.clipping && !!base;
-    if (!clipped) {
-      base = entry;
-    }
-
-    if (!layer.visible || (clipped && !base!.layer.visible)) {
-      continue;
-    }
-
-    for (const [key, pixels] of tiles) {
-      const merged = mergeTilePixels(
-        result.get(key),
-        pixels,
-        layer.blend,
-        layer.opacity,
-        clipped ? { base: base!.tiles.get(key) } : undefined,
-        linear
-      );
-      if (merged) {
-        result.set(key, merged);
-      } else {
-        result.delete(key);
-      }
-    }
-  }
-
-  return result;
 }
