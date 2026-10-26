@@ -22,7 +22,10 @@ export function createOpeningPreview(
         return;
       }
 
-      if (requiresWindowedRendering(document.value.info)) {
+      if (
+        document.value.sourceBacked ||
+        requiresWindowedRendering({ width: document.value.info.width, height: document.value.info.height })
+      ) {
         setReady(true);
         return;
       }

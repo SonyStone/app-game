@@ -2,25 +2,26 @@ import {
   createFontLibrary,
   loadPsdViewer,
   openPsd,
-  openPsdSource,
-  type PsdViewerSource,
-  type PsdInfo,
-  type PsdNativeRenderOptions,
-  type PsdRegionRect,
-  type PsdLayerDetail,
-  type PsdLayerPixels,
-  type PsdSavedProcessChannels,
   openPsdLikePhotoshop,
+  openPsdSource,
   photoshopDefaultSettings,
   type PsdFailure,
   type PsdFontLibrary,
+  type PsdInfo,
+  type PsdLayerDetail,
   type PsdLayerNode,
+  type PsdLayerPixels,
+  type PsdNativeRenderOptions,
+  type PsdRegionRect,
   type PsdRender,
   type PsdRenderSettings,
-  type PsdViewerDocument
+  type PsdSavedProcessChannels,
+  type PsdViewerDocument,
+  type PsdViewerSource
 } from '@app-game/psd/viewer';
 import { addFontFile, type SessionFont } from '../fonts/addFontFile';
 import { makePerformanceRecorder } from '../telemetry/performance';
+import { inspectionRect, wireDisplay, wireSample } from './nativePixels';
 import {
   requiresWindowedRendering,
   windowWorkPixels,
@@ -28,8 +29,8 @@ import {
   type PsdReply,
   type PsdRequest
 } from './protocol';
-import { inspectionRect, wireDisplay, wireSample } from './nativePixels';
 import { regionMips } from './regionMips';
+import { preferWholeRender } from './windowCost';
 
 /**
  * The worker side of the protocol, independent of the worker global so tests can drive it directly. It holds one open
@@ -37,8 +38,9 @@ import { regionMips } from './regionMips';
  * while the next one is already running; opening another document closes the previous one, even when the new one
  * fails or waits for an answer to a Photoshop prompt. Small documents open as Photoshop opens them; large canvases
  * use the strict, lazy reader because recovery still decodes whole channels. Large-canvas requests never run
- * whole-document compositing, comparison or blending detection. Window calls admit up to 2 GiB live and count
- * the retained host input; typed budget refusals travel to the UI as ordinary failed replies.
+ * whole-document compositing, comparison or blending detection. Small documents compare repeated source work
+ * against one whole composite; tile cuts retain one display buffer for the current settings/visibility key.
+ * Window calls admit up to 2 GiB live and count the retained host input; typed budget refusals travel to the UI as ordinary failed replies.
  * The renders a blending
  * detection made wait for the next render request, which takes the one with its settings and visibility instead of
  * compositing again; the others are freed then. It also holds the font library, created on first use and kept across
@@ -87,6 +89,10 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
   const renders = new Map<number, PsdRender>();
   // Detection renders by `renderKey`, until the next render request.
   const prepared = new Map<string, PsdRender>();
+  // Keep one display composite for whole-render tile cuts. It owns host bytes, never transferred directly.
+  let wholeCache: { key: string; image: Omit<PsdRender, 'dispose'> } | undefined;
+  const wholeCosts = new Map<string, number>();
+  const windowCosts = new Map<string, number>();
   let nextDocument = 0;
   let nextRender = 0;
   let queue = Promise.resolve();
@@ -200,11 +206,7 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         windowed: large
       };
       const capability = planFor(opened.value, photoshopDefaultSettings, []);
-      document.windowed =
-        large ||
-        (capability.ok &&
-          capability.value.strategy === 'window' &&
-          opened.value.info.width * opened.value.info.height >= 1_048_576);
+      document.windowed = chooseWindowed(opened.value, photoshopDefaultSettings, [], capability);
       post(
         {
           id: request.id,
@@ -225,6 +227,9 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
     if (request.type === 'addFonts') {
       const library = (fonts ??= await createFontLibrary());
       releasePrepared();
+      wholeCache = undefined;
+      wholeCosts.clear();
+      windowCosts.clear();
       const results = request.fonts.map((bytes, index) =>
         addFontFile(library, bytes, request.sources?.[index] ?? `font file ${request.id}:${index}`)
       );
@@ -269,7 +274,10 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
     const viewer = document.viewer!;
     const readBudget = { liveBytes: 2 * 1024 ** 3, retainedBytes: document.inputBytes };
     const windowed = document.windowed;
-    if (windowed && ['render', 'merged', 'difference', 'textSupport'].includes(request.type)) {
+    if (
+      (windowed && ['render', 'difference', 'textSupport'].includes(request.type)) ||
+      (requiresWindowedRendering({ width: viewer.info.width, height: viewer.info.height }) && request.type === 'merged')
+    ) {
       post(
         failed(request, {
           kind: 'unsupported',
@@ -288,9 +296,7 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
           return;
         }
 
-        document.windowed =
-          requiresWindowedRendering(viewer.info) ||
-          (result.value.strategy === 'window' && viewer.info.width * viewer.info.height >= 1_048_576);
+        document.windowed = chooseWindowed(viewer, request.settings, request.visibility, result);
         post({ id: request.id, type: 'capability', capability: result.value, windowed: document.windowed }, []);
         return;
       }
@@ -310,6 +316,109 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       case 'renderWindow': {
         const start = performance.now();
         const window = request.window;
+        if (window.kind === 'overview' && (!Number.isSafeInteger(window.step) || window.step < 1)) {
+          post(failed(request, { kind: 'invalid', message: 'Overview step must be a positive integer.' }), []);
+          return;
+        }
+
+        if (window.kind !== 'saved' && !document.windowed && request.liveBytes === undefined) {
+          const key = renderKey(request.settings, request.visibility);
+          if (wholeCache?.key !== key) {
+            const rendered = composite(viewer, request.settings, request.visibility);
+            if (!rendered.ok) {
+              post(failed(request, rendered.error), []);
+              return;
+            }
+
+            const { dispose, ...image } = rendered.value;
+            wholeCache = { key, image };
+            dispose();
+          }
+
+          const image = wholeCache.image;
+          const rectangles =
+            window.kind === 'regions'
+              ? window.rectangles
+              : [{ left: 0, top: 0, width: image.width, height: image.height }];
+          if (
+            rectangles.some(
+              (rect) =>
+                ![rect.left, rect.top, rect.width, rect.height].every(Number.isSafeInteger) ||
+                rect.left < 0 ||
+                rect.top < 0 ||
+                rect.width <= 0 ||
+                rect.height <= 0 ||
+                rect.left + rect.width > image.width ||
+                rect.top + rect.height > image.height
+            )
+          ) {
+            post(failed(request, { kind: 'invalid', message: 'Region must lie within the document canvas.' }), []);
+            return;
+          }
+
+          const outputPixels = rectangles.reduce(
+            (sum, rect) =>
+              sum +
+              Math.ceil(rect.width / (window.kind === 'overview' ? window.step : 1)) *
+                Math.ceil(rect.height / (window.kind === 'overview' ? window.step : 1)),
+            0
+          );
+          if (outputPixels > windowWorkPixels) {
+            post(
+              failed(request, {
+                kind: 'budget',
+                resource: 'output pixels',
+                requested: BigInt(outputPixels),
+                limit: BigInt(windowWorkPixels),
+                message: 'Window output exceeds the pixel budget.'
+              }),
+              []
+            );
+            return;
+          }
+
+          const images = rectangles.map((rect) => {
+            const step = window.kind === 'overview' ? window.step : 1;
+            const width = Math.ceil(rect.width / step);
+            const height = Math.ceil(rect.height / step);
+            const pixels = new Uint8Array(width * height * 4);
+            for (let y = 0; y < height; y++) {
+              if (step === 1) {
+                const offset = ((rect.top + y) * image.width + rect.left) * 4;
+                pixels.set(image.pixels.subarray(offset, offset + width * 4), y * width * 4);
+              } else {
+                for (let x = 0; x < width; x++) {
+                  const offset = ((rect.top + y * step) * image.width + rect.left + x * step) * 4;
+                  pixels.set(image.pixels.subarray(offset, offset + 4), (y * width + x) * 4);
+                }
+              }
+            }
+
+            const cut = {
+              ...rect,
+              width,
+              height,
+              step,
+              pixels,
+              source: 'layers' as const,
+              strategy: 'fullCanvas' as const,
+              exactToLayerRender: step === 1,
+              approximations: image.approximations
+            };
+            return {
+              ...cut,
+              populated: hasVisiblePixels(pixels),
+              ...(window.kind === 'regions' && window.mipStep ? { mips: regionMips(cut, window.mipStep) } : {})
+            };
+          });
+          telemetry.record('tile.wholeCut', start);
+          post(
+            { id: request.id, type: 'windowRendered', images, milliseconds: performance.now() - start },
+            images.flatMap((image) => [image.pixels.buffer, ...(image.mips ?? []).map((mip) => mip.pixels.buffer)])
+          );
+          return;
+        }
+
         // A storage plan chooses the caller's live budget. Fonts and the retained host source stay accounted.
         let liveBytes = request.liveBytes ?? 512 * 1024 ** 2;
         if (window.kind === 'regions') {
@@ -342,6 +451,15 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
           return;
         }
 
+        if (window.kind === 'regions' && window.rectangles.length) {
+          if (windowCosts.size >= 16) {
+            windowCosts.delete(windowCosts.keys().next().value!);
+          }
+          windowCosts.set(
+            renderKey(request.settings, request.visibility),
+            (performance.now() - start) / window.rectangles.length
+          );
+        }
         telemetry.record('tile.render', start);
         const images = (Array.isArray(result.value) ? result.value : [result.value]).map((image) => ({
           ...image,
@@ -368,6 +486,8 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
           return;
         }
 
+        // A transferred render detaches its display buffer. Retain an independent cut source only on demand.
+        wholeCache = undefined;
         const id = ++nextRender;
         renders.set(id, rendered.value);
         for (const [old, render] of renders) {
@@ -535,6 +655,44 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       { left: 0, top: 0, width: Math.min(544, viewer.info.width), height: Math.min(544, viewer.info.height) },
       nativeOptions(settings, visibility),
       fonts
+    );
+  }
+
+  /** Large canvases always stay bounded. Small canvases pay shared dependency work only once. */
+  function chooseWindowed(
+    viewer: PsdViewerDocument,
+    settings: PsdRenderSettings,
+    visibility: [number, boolean][],
+    region: ReturnType<typeof planFor>
+  ) {
+    const { width, height } = viewer.info;
+    if (requiresWindowedRendering({ width, height })) {
+      return true;
+    }
+
+    if (!region.ok || region.value.strategy !== 'window' || width * height < 1_048_576) {
+      return false;
+    }
+
+    const whole = viewer.regionCapability(
+      { left: 0, top: 0, width, height },
+      nativeOptions(settings, visibility),
+      fonts
+    );
+    if (!whole.ok) {
+      return false;
+    }
+
+    const key = renderKey(settings, visibility);
+    const wholeMilliseconds = wholeCosts.get(key);
+    const windowMilliseconds = windowCosts.get(key);
+    return !preferWholeRender(
+      viewer.info,
+      region.value,
+      whole.value,
+      wholeMilliseconds !== undefined && windowMilliseconds !== undefined
+        ? { wholeMilliseconds, windowMilliseconds }
+        : undefined
     );
   }
 
@@ -711,6 +869,10 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
   function composite(viewer: PsdViewerDocument, settings: PsdRenderSettings, visibility: [number, boolean][]) {
     const start = performance.now();
     const result = viewer.render(settings, visibility, fonts);
+    if (wholeCosts.size >= 16) {
+      wholeCosts.delete(wholeCosts.keys().next().value!);
+    }
+    wholeCosts.set(renderKey(settings, visibility), performance.now() - start);
     telemetry.record('composite', start, 1);
     if (result.ok) {
       telemetry.record('render.rgba.bytes', performance.now(), result.value.pixels.byteLength);
@@ -728,6 +890,9 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
   }
 
   function close() {
+    wholeCache = undefined;
+    wholeCosts.clear();
+    windowCosts.clear();
     releasePrepared();
     renders.clear();
     document?.viewer?.close();
