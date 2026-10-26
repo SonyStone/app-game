@@ -343,7 +343,7 @@ export function createTeamBoard(
 
     /**
      * Where a sniper watches from, and where it looks while nothing is in sight: its perch,
-     * kept until an enemy comes close or an enemy Sniper sees it, then the best safe one.
+     * kept until an enemy comes close or an enemy Sniper takes aim at it, then the best safe one.
      */
     perchSpot(member: Member): Perch {
       return perchSpot(member);
@@ -487,7 +487,7 @@ export function createTeamBoard(
   /**
    * The perch `member` watches from: the one it has for as long as it is safe there, else the
    * best safe perch no teammate has, the nearer the better. A perch is not safe once a known enemy
-   * comes within `PERCH_THREAT` px of it or a known enemy Sniper sees it; a Sniper that has to
+   * comes within `PERCH_THREAT` px of it or a known enemy Sniper aims at it; a Sniper that has to
    * move says so on the radio.
    */
   function perchSpot(member: Member): Perch {
@@ -510,12 +510,14 @@ export function createTeamBoard(
     return best;
   }
 
-  /** Whether a known enemy is close to `perch` or a known enemy Sniper sees it. */
+  /** Whether a known enemy is close to `perch`, or a known enemy Sniper sees it and has its gun on it. */
   function threatened(perch: Point) {
     return [...sightings.values()].some((sighting) => {
       const range = distanceTo(sighting.position, perch);
       const sniper = context.rivals.find((rival) => rival.tank === sighting.tank)?.tankClass.id === 'sniper';
-      return range < PERCH_THREAT || (sniper && range < SNIPER_SIGHT && traceClear(grid, sight, sighting.position, perch, rubbleSight));
+      const bearing = Math.atan2(perch.y - sighting.position.y, perch.x - sighting.position.x);
+      const aimed = Math.abs(Math.atan2(Math.sin(sighting.turret - bearing), Math.cos(sighting.turret - bearing))) < SNIPER_AIMED;
+      return range < PERCH_THREAT || (sniper && aimed && range < SNIPER_SIGHT && traceClear(grid, sight, sighting.position, perch, rubbleSight));
     });
   }
 
@@ -1095,11 +1097,13 @@ const DEADLY_TIME = 20;
 const DEADLY_RADIUS = 110;
 /**
  * A Sniper leaves its perch when a known enemy comes within `PERCH_THREAT` px or an enemy Sniper
- * within `SNIPER_SIGHT` px sees it. Choosing another, a perch scores `PERCH_EXPOSURE` less per
+ * within `SNIPER_SIGHT` px sees it with its gun within `SNIPER_AIMED` of it. Choosing another, a perch scores `PERCH_EXPOSURE` less per
  * enemy that sees it, one less per `PERCH_TRAVEL` px away, and `PERCH_UNSAFE` less if not safe.
  */
 const PERCH_THREAT = 320;
 const SNIPER_SIGHT = 900;
+/** Radians an enemy Sniper's gun may be off a perch and still count as aimed at it. */
+const SNIPER_AIMED = 0.3;
 const PERCH_EXPOSURE = 10;
 const PERCH_TRAVEL = 40;
 const PERCH_UNSAFE = 1000;
