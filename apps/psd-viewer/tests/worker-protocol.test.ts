@@ -660,3 +660,86 @@ it('reads a bounded layer window without whole-layer decoding even for oversized
     client.dispose();
   }
 });
+
+it('renders shared support once for tile cuts, retains its bytes after transfer, and invalidates after edits', async () => {
+  const { client } = connect();
+  const opened = value(await client.open(await example('adjustment-stack.psd')));
+  const codec = await loadPsdViewer();
+  const render = vi.spyOn(codec.PsdDocumentHandle.prototype, 'render');
+  const rectangles = [
+    { left: 2, top: 3, width: 7, height: 9 },
+    { left: 10, top: 12, width: 5, height: 4 }
+  ];
+  try {
+    const first = value(
+      await client.renderWindow(
+        opened.document,
+        settings,
+        [],
+        {
+          kind: 'regions',
+          rectangles: [rectangles[0]!],
+          mipStep: 4
+        },
+        new AbortController().signal
+      )
+    );
+    const detached = structuredClone(first, { transfer: [first.images[0]!.pixels.buffer] });
+    const second = value(
+      await client.renderWindow(
+        opened.document,
+        settings,
+        [],
+        {
+          kind: 'regions',
+          rectangles: [rectangles[1]!]
+        },
+        new AbortController().signal
+      )
+    );
+    expect(render).toHaveBeenCalledTimes(1);
+    const whole = value(await client.render(opened.document, settings, []));
+    for (const [image, rect] of [
+      [detached.images[0]!, rectangles[0]!],
+      [second.images[0]!, rectangles[1]!]
+    ] as const) {
+      expect(image.strategy).toBe('fullCanvas');
+      expect(image.exactToLayerRender).toBe(true);
+      for (let y = 0; y < rect.height; y++) {
+        const offset = ((rect.top + y) * whole.width + rect.left) * 4;
+        expect(image.pixels.subarray(y * rect.width * 4, (y + 1) * rect.width * 4)).toEqual(
+          whole.pixels.subarray(offset, offset + rect.width * 4)
+        );
+      }
+    }
+    const count = render.mock.calls.length;
+    value(
+      await client.renderWindow(
+        opened.document,
+        settings,
+        [[0, false]],
+        {
+          kind: 'regions',
+          rectangles
+        },
+        new AbortController().signal
+      )
+    );
+    expect(render).toHaveBeenCalledTimes(count + 1);
+    expect(
+      await client.renderWindow(
+        opened.document,
+        settings,
+        [],
+        {
+          kind: 'regions',
+          rectangles: [{ left: -1, top: 0, width: 5, height: 4 }]
+        },
+        new AbortController().signal
+      )
+    ).toMatchObject({ ok: false, error: { kind: 'invalid' } });
+  } finally {
+    render.mockRestore();
+    client.dispose();
+  }
+});
