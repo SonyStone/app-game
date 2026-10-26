@@ -185,6 +185,7 @@ export const ja: Dictionary = {
     go: '全員、突撃！',
     followMe: 'ついて来い！突撃！',
     waitForTeam: '仲間を待つ',
+    switchClass: (say: RadioWords) => `${say.tankClass}に変更`,
     captured: '拠点を確保！',
     regroup: '後退、再集結！',
     sniper: 'スナイパーだ！',

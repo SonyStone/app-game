@@ -45,6 +45,64 @@ export function rebalance(team: readonly TankClassId[], current: TankClassId, si
   return neededClass(team, size, random);
 }
 
+/**
+ * The class a bot switches to at its next respawn when its class is not working out, as a Team
+ * Fortress 2 player does, or `undefined` to keep it. In order:
+ *
+ * - An enemy Sniper keeps picking the team off (`COUNTER_DEATHS` of the team's recent deaths, the
+ *   bot's own last one among them) and the team has no Scout: a Scout, which hunts Snipers.
+ * - An enemy Heavy keeps grinding the team down the same way and the team has no Sniper: a
+ *   Sniper, whose rail goes through the Heavy's plates from afar.
+ * - The bot destroyed nothing in its last `STRUGGLE_LIVES` lives: the class the team lacks most,
+ *   a Heavy to lead its pushes, then a Demoman, then a Soldier.
+ *
+ * The switch keeps within `rosterLimits`, and a bot switches at most once in `SWITCH_COOLDOWN` s,
+ * so it gives a new class a fair try.
+ *
+ * @param team - Classes of the bot's teammates, its own seat left out.
+ * @param lives - The bot's lives, oldest first: what it destroyed and what destroyed it.
+ * @param teamDeaths - What destroyed each member of the team lately.
+ * @param switchedAgo - Seconds since the bot last switched class this way.
+ */
+export function adaptClass(
+  current: TankClassId,
+  situation: {
+    team: readonly TankClassId[];
+    size: number;
+    lives: readonly { kills: number; killer: TankClassId | undefined }[];
+    teamDeaths: readonly (TankClassId | undefined)[];
+    switchedAgo: number;
+  }
+): TankClassId | undefined {
+  const { team, lives, teamDeaths } = situation;
+  const limit = rosterLimits(situation.size);
+  const fits = (id: TankClassId) => id !== current && team.filter((other) => other === id).length < limit[id];
+  const lastKiller = lives[lives.length - 1]?.killer;
+  const pickedOff = (by: TankClassId) => lastKiller === by && teamDeaths.filter((killer) => killer === by).length >= COUNTER_DEATHS;
+
+  if (situation.switchedAgo < SWITCH_COOLDOWN) {
+    return undefined;
+  }
+
+  if (pickedOff('sniper') && !team.includes('scout') && fits('scout')) {
+    return 'scout';
+  }
+
+  if (pickedOff('heavy') && !team.includes('sniper') && fits('sniper')) {
+    return 'sniper';
+  }
+
+  const struggling = lives.length >= STRUGGLE_LIVES && lives.slice(-STRUGGLE_LIVES).every((life) => life.kills === 0);
+  return struggling ? (['heavy', 'demoman', 'soldier'] as const).find((id) => !team.includes(id) && fits(id)) : undefined;
+}
+
+/** Recent deaths of a team to one enemy class that make a bot it destroyed switch to counter it. */
+const COUNTER_DEATHS = 3;
+/** Lives in a row without destroying anything after which a bot tries a class its team lacks. */
+const STRUGGLE_LIVES = 2;
+/** Seconds a bot keeps a class it switched to before it may switch again. */
+export const SWITCH_COOLDOWN = 60;
+
 /** The next class a team of `team` needs: a missing must-have first, then a weighted draw within the limits. */
 function neededClass(team: readonly TankClassId[], size: number, random: () => number): TankClassId {
   const limit = rosterLimits(size);

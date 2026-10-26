@@ -185,6 +185,7 @@ export const sr: Dictionary = {
     go: 'Напред, сви заједно!',
     followMe: 'За мном! Напред!',
     waitForTeam: 'Чекам своје',
+    switchClass: (say: RadioWords) => `Мењам класу: ${say.tankClass}`,
     captured: 'Тачка је наша!',
     regroup: 'Повлачење, прегруписавање!',
     sniper: 'Снајпер!',

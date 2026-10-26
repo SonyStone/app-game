@@ -187,6 +187,7 @@ export const en = {
     go: 'Go, all together!',
     followMe: 'On me! Push!',
     waitForTeam: 'Waiting for backup',
+    switchClass: (say: RadioWords) => `Switching to ${say.tankClass}`,
     captured: 'The point is ours!',
     regroup: 'Fall back and regroup!',
     sniper: 'Sniper!',

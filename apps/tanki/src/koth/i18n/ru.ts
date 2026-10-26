@@ -185,6 +185,7 @@ export const ru: Dictionary = {
     go: 'Вперёд, все разом!',
     followMe: 'За мной! Вперёд!',
     waitForTeam: 'Жду своих',
+    switchClass: (say: RadioWords) => `Беру класс: ${say.tankClass}`,
     captured: 'Точка наша!',
     regroup: 'Отходим, перегруппировка!',
     sniper: 'Снайпер!',

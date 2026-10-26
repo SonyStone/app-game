@@ -6,7 +6,7 @@ import type { World } from '../physics/World';
 import { createBot, type Bot } from './bot';
 import { angleBetween, clampGun, turnInPlace } from './classes/casemate';
 import { TANK_CLASSES } from './classes/classes';
-import { pickRoster, rebalance } from './classes/roster';
+import { adaptClass, pickRoster, rebalance } from './classes/roster';
 import { drawSight } from './classes/sight';
 import { chargedShell, createWeapon, type Trigger } from './classes/weapon';
 import { createKits } from './kits';
@@ -105,6 +105,12 @@ export function createKothMatch(
   let nextRepair = 0;
   let feedId = 0;
   const feed: { id: number; at: number; killer?: Member; victim: Member }[] = [];
+  /**
+   * What each bot's lives went like, for switching a class that does not work out (see
+   * `adaptClass`): its kill count when its tank came out, its last lives, when it last switched
+   * and whether its next tank is a switch to call out.
+   */
+  const careers = new Map<Member, { killsAtSpawn: number; lives: { kills: number; killer: TankClassId | undefined }[]; switchedAt: number; switching: boolean }>();
   const boards: Record<TeamId, TeamBoard> = {
     red: createBoard('red'),
     blue: createBoard('blue')
@@ -373,6 +379,7 @@ export function createKothMatch(
       playerKitAt = -Infinity;
       capture = createCaptureState(rules);
       feed.length = 0;
+      careers.clear();
       boards.red.reset();
       boards.blue.reset();
 
@@ -525,6 +532,19 @@ export function createKothMatch(
       look: tankClass.look
     });
 
+    const career = careers.get(member);
+
+    if (career) {
+      career.killsAtSpawn = member.kills;
+
+      // A bot back in a class it switched to says so, so its team knows what it brings now.
+      if (career.switching && member.tankClass.id !== tankClass.id) {
+        boards[member.team].say(member, 'switchClass', { priority: 2, tankClass: tankClass.id });
+      }
+
+      career.switching = false;
+    }
+
     member.tank = tank;
     member.tankClass = tankClass;
     member.role = ROLE_OF_CLASS[tankClass.id];
@@ -581,6 +601,37 @@ export function createKothMatch(
     }
 
     feed.push({ id: feedId++, at: time, killer: credited, victim: member });
+    reconsiderClass(member, credited && credited.team !== member.team ? credited.tankClass.id : undefined);
+  }
+
+  /**
+   * After a bot's tank is destroyed, picks another class for its next one if its own is not
+   * working out (see `adaptClass`); a team with a set roster keeps it.
+   */
+  function reconsiderClass(member: Member, killer: TankClassId | undefined) {
+    if (member.human || options.roster?.[member.team]) {
+      return;
+    }
+
+    const career = careers.get(member) ?? { killsAtSpawn: 0, lives: [], switchedAt: -Infinity, switching: false };
+    career.lives = [...career.lives, { kills: member.kills - career.killsAtSpawn, killer }].slice(-CAREER_LIVES);
+    careers.set(member, career);
+    const teamDeaths = feed
+      .filter((entry) => entry.victim.team === member.team && time - entry.at < DEATH_MEMORY)
+      .map((entry) => (entry.killer && entry.killer.team !== member.team ? entry.killer.tankClass.id : undefined));
+    const next = adaptClass(member.nextClass ?? member.tankClass.id, {
+      team: teams[member.team].filter((other) => other !== member).map((other) => other.nextClass ?? other.tankClass.id),
+      size: teams[member.team].length,
+      lives: career.lives,
+      teamDeaths,
+      switchedAgo: time - career.switchedAt
+    });
+
+    if (next) {
+      member.nextClass = next;
+      career.switchedAt = time;
+      career.switching = true;
+    }
   }
 
   /** Brings the oldest changed area of the grid up to date with the walls and wrecks. */
@@ -662,6 +713,9 @@ const BARREL_TURN = 40;
  */
 const RESPAWN_WAVE = 6;
 const MIN_RESPAWN = 5;
+/** Lives of a bot kept for judging its class, and seconds the team's deaths count for it. */
+const CAREER_LIVES = 3;
+const DEATH_MEMORY = 60;
 const WRECK_FIRE = 5;
 /** Share of armor damage mended per second in the base is `1 - exp(-REPAIR_RATE)`. */
 const REPAIR_RATE = 0.9;
