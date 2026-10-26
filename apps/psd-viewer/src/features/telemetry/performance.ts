@@ -34,6 +34,8 @@ export function makePerformanceRecorder(enabled = false) {
     enable: (value: boolean) => {
       enabled = value;
     },
+    /** Copies the current bounded diagnostics without consuming benchmark samples. */
+    snapshot: () => samples.slice(),
     take: () => samples.splice(0)
   };
 }

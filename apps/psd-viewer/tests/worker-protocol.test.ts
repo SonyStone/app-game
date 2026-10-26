@@ -625,3 +625,15 @@ it('exposes bounded saved channels and typed saved paths without changing render
   expect(after.pixels).toEqual(before.pixels);
   client.dispose();
 });
+
+it('downloads the byte-identical original after transient visibility and state renders', async () => {
+  const { client } = connect();
+  const input = await example('layer-comps.psd');
+  const original = new Uint8Array(input.slice(0));
+  const opened = value(await client.open(input));
+  const state = opened.states.comps[0];
+  value(await client.render(opened.document, { ...settings, state: state ? { comp: state.id } : null }, [[0, false]]));
+  const downloaded = value(await client.original(opened.document));
+  expect(new Uint8Array(await downloaded.arrayBuffer())).toEqual(original);
+  client.dispose();
+});

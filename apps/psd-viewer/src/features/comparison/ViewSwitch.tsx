@@ -32,5 +32,8 @@ export function ViewSwitch(props: {
 const modes: { value: ViewMode; label: string; title: string }[] = [
   { value: 'ours', label: 'Our render', title: 'The document composited by the Rust renderer' },
   { value: 'photoshop', label: 'Photoshop', title: 'The merged image Photoshop saved with the document' },
+  { value: 'split', label: 'Split', title: 'Current state on the left; saved Photoshop composite on the right' },
+  { value: 'wipe', label: 'Wipe', title: 'Move the divider between current state and saved composite' },
+  { value: 'blink', label: 'Blink', title: 'Alternate current state and saved composite every 600 ms' },
   { value: 'difference', label: 'Difference', title: 'Where our render differs from Photoshop’s merged image' }
 ];

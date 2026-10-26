@@ -221,6 +221,12 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
     return reply.type === 'blending' ? { ok: true, value: reply.detection } : failure(reply);
   }
 
+  /** Returns unchanged bytes retained at open, independent of recovery, rendering or view overrides. */
+  async function original(document: number): Promise<PsdResultOf<Blob>> {
+    const reply = await send({ type: 'original', document });
+    return reply.type === 'original' ? { ok: true, value: reply.bytes } : failure(reply);
+  }
+
   /** Reads saved native channel planes on demand, subject to worker admission. */
   async function channels(document: number): Promise<PsdResultOf<PsdSavedProcessChannels>> {
     const reply = await send({ type: 'channels', document });
@@ -358,6 +364,7 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
     detectBlending,
     layer,
     channels,
+    original,
     paths,
     addFonts,
     fonts,

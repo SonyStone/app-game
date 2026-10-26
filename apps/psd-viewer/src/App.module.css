@@ -386,3 +386,38 @@
   pointer-events: none;
   z-index: 2;
 }
+
+.provenance {
+  margin: 0;
+  padding: 4px 10px;
+  background: #242424;
+  color: #aaa;
+  font-size: 10px;
+}
+
+.workspace {
+  input[type='number'],
+  input[type='search'],
+  select {
+    background: #242424;
+    color: #ddd;
+    border: 1px solid #555;
+    border-radius: 2px;
+    padding: 3px;
+    font: inherit;
+  }
+
+  details button,
+  [aria-label='Comparison controls'] button {
+    border: 1px solid #555;
+    background: #363636;
+    color: #ddd;
+    border-radius: 2px;
+    padding: 3px 6px;
+    font-size: 11px;
+  }
+
+  summary {
+    cursor: pointer;
+  }
+}

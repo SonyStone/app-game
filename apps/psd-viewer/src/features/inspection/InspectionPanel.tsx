@@ -21,7 +21,10 @@ export function InspectionPanel(props: {
   masks: readonly { id: number; disabled: boolean }[];
   onMaskIndex: (index: number) => void;
 }) {
-  const [plane, setPlane] = createSignal(0);
+  const [plane, setPlane] = createSignal(() => {
+    props.channels;
+    return 0;
+  });
   const channels = () => (props.channels?.ok ? props.channels.value : undefined);
   const preview = createMemo(() => (channels() ? channelImage(channels()!, plane()) : undefined));
   const rgba = () => (props.image && props.point ? displayPixel(props.image, props.point.x, props.point.y) : undefined);

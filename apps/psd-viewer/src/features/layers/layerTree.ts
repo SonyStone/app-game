@@ -124,4 +124,3 @@ const pixelSourceNotes = {
   '3d': 'a 3D layer: shown as the pixels Photoshop saved; the 3D scene is not rendered',
   video: 'a video layer: shown as the frame Photoshop saved; the footage is not played'
 } as const;
-

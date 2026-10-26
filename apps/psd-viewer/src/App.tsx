@@ -2,9 +2,11 @@ import { createMemo, createSignal, Errored, isPending, latest, onCleanup, Show }
 import styles from './App.module.css';
 import { createBlendingDetection } from './features/blending-detection';
 import { createComparison, DifferenceSummary, ViewSwitch, type ViewMode } from './features/comparison';
+import { ComparisonTools } from './features/comparison/ComparisonTools';
 import { createPsdDocument, createPsdRender, type PsdSource } from './features/document';
 import { createOpeningPreview } from './features/document/createOpeningPreview';
 import { ExamplesMenu } from './features/examples';
+import { ExportPanel } from './features/export/ExportPanel';
 import { createFonts, FontsPanel, TextSupportSection } from './features/fonts';
 import { GpuViewport } from './features/gpu-viewport/GpuViewport';
 import type { DisplayImage } from './features/gpu-viewport/displayTiles';
@@ -24,6 +26,7 @@ import { createRenderSettings, RenderSettingsPanel } from './features/render-set
 import { ariaState } from './features/shared/format';
 import { createStateChoice, StatesPanel } from './features/states';
 import { StatusArea } from './features/status';
+import { viewerPerformance } from './features/telemetry/performance';
 import { createViewport } from './features/viewport';
 import { RgbaCanvas } from './features/viewport/RgbaCanvas';
 import { createWindowedRender } from './features/viewport/createWindowedRender';
@@ -61,8 +64,11 @@ export function App() {
   const windows = createWindowedRender(client, opened, renderSettings, pairs, viewport);
   const render = () => (windowed() ? windows.render() : wholeRender());
   const renderWindow = () => valueOf(render())?.window;
-  const { view, setView, merged, difference } = createComparison(client, opened, render, () =>
-    initial.preview()?.source === 'saved' ? initial.preview()?.image : undefined
+  const { view, setView, merged, difference, blinkSaved, wipe, setWipe } = createComparison(
+    client,
+    opened,
+    render,
+    () => (initial.preview()?.source === 'saved' ? initial.preview()?.image : undefined)
   );
 
   const [revealed, setRevealed] = createSignal(() => {
@@ -115,6 +121,10 @@ export function App() {
     return 0;
   });
   const layerPixels = () => layerContents()?.pixels;
+  const selectedPixels = () => {
+    const pixels = layerPixels();
+    return pixels?.ok ? pixels.value : undefined;
+  };
   const masks = () => {
     const pixels = layerPixels();
     return pixels?.ok ? pixels.value.masks : [];
@@ -132,11 +142,16 @@ export function App() {
       return maskPixels();
     }
 
-    const result = view() === 'ours' ? latest(render) : view() === 'photoshop' ? merged() : difference();
+    const result =
+      view() === 'photoshop' || (view() === 'blink' && blinkSaved())
+        ? merged()
+        : view() === 'difference'
+          ? difference()
+          : latest(render);
     return result?.ok ? result.value : view() === 'ours' && !result ? initial.preview()?.image : undefined;
   });
   const shownFailure = () => {
-    const result = view() === 'ours' ? render() : view() === 'photoshop' ? merged() : (difference() ?? render());
+    const result = view() === 'photoshop' ? merged() : view() === 'difference' ? difference() : render();
     return result && !result.ok && result.error.kind !== 'superseded' && result.error.kind !== 'stale'
       ? result.error
       : undefined;
@@ -303,6 +318,28 @@ export function App() {
             </Show>
           </aside>
           <section class={styles.stage}>
+            <Show when={view() !== 'ours' && view() !== 'photoshop'}>
+              <ComparisonTools
+                view={view()}
+                state={stateChoice() === null ? 'document as saved' : JSON.stringify(stateChoice())}
+                overrides={pairs().length}
+                difference={differenceValue()}
+                wipe={wipe()}
+                onWipe={setWipe}
+                onMismatch={(point) => {
+                  viewport.centerOn(point);
+                }}
+              />
+            </Show>
+            <p class={styles.provenance}>
+              Viewing{' '}
+              {maskMode() === 'only'
+                ? 'saved mask'
+                : view() === 'photoshop'
+                  ? "Photoshop's saved merged composite"
+                  : `current ${stateChoice() === null ? 'document-as-saved state' : JSON.stringify(stateChoice())} with ${pairs().length} transient visibility overrides`}
+              . Display RGB8. Source PSD is unchanged.
+            </p>
             <div
               ref={viewport.setElement}
               class={styles.viewport}
@@ -339,16 +376,52 @@ export function App() {
                     view={viewport.view()}
                     size={viewport.size()}
                     label={
-                      view() === 'ours'
-                        ? !latest(render) && initial.preview()
-                          ? 'Opening preview'
-                          : 'Our render'
-                        : view() === 'photoshop'
+                      maskMode() === 'only'
+                        ? 'Saved mask only'
+                        : view() === 'blink' && blinkSaved()
                           ? "Photoshop's merged image"
-                          : 'Difference heat map'
+                          : view() === 'ours' || view() === 'split' || view() === 'wipe' || view() === 'blink'
+                            ? !latest(render) && initial.preview()
+                              ? 'Opening preview'
+                              : 'Our render'
+                            : view() === 'photoshop'
+                              ? "Photoshop's merged image"
+                              : 'Difference heat map'
                     }
                   />
                 )}
+              </Show>
+              <Show when={(view() === 'split' || view() === 'wipe') && maskMode() !== 'only' && valueOf(merged())}>
+                {(saved) => (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      'pointer-events': 'none',
+                      'clip-path': `inset(0 0 0 ${view() === 'split' ? 50 : wipe()}%)`
+                    }}
+                  >
+                    <GpuViewport
+                      image={saved()}
+                      view={viewport.view()}
+                      size={viewport.size()}
+                      label="Comparison saved composite"
+                    />
+                  </div>
+                )}
+              </Show>
+              <Show when={(view() === 'split' || view() === 'wipe') && maskMode() !== 'only'}>
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    left: `${view() === 'split' ? 50 : wipe()}%`,
+                    border: '1px solid #55b5ea',
+                    'pointer-events': 'none'
+                  }}
+                />
               </Show>
               <Show when={maskMode() === 'overlay' && maskPixels()}>
                 {(image) => (
@@ -505,6 +578,66 @@ export function App() {
               )}
             </Show>
             <Show when={document()}>
+              <ExportPanel
+                name={source()?.name ?? 'document.psd'}
+                state={
+                  stateChoice() === null
+                    ? 'document-as-saved'
+                    : JSON.stringify(stateChoice()).replace(/[^a-z0-9]/gi, '-')
+                }
+                fidelity={
+                  valueOf(render())?.approximations.join('; ') || 'Current render has no reported approximations.'
+                }
+                busy={Boolean(activity())}
+                shown={shown()}
+                full={windowed() ? undefined : valueOf(render())}
+                view={viewport.view()}
+                size={viewport.size()}
+                comparison={
+                  (view() === 'split' || view() === 'wipe') && valueOf(merged()) && maskMode() !== 'only'
+                    ? { image: valueOf(merged())!, divider: view() === 'split' ? 50 : wipe() }
+                    : undefined
+                }
+                overlay={maskMode() === 'overlay' ? maskPixels() : undefined}
+                layer={selectedPixels()}
+                layerName={layerContents()?.detail.name ?? 'layer'}
+                mask={mask()}
+                onOriginal={async () => {
+                  const result = await client.original(document()!.document);
+                  if (!result.ok) {
+                    throw new Error(result.error.message);
+                  }
+                  return result.value;
+                }}
+                report={() => ({
+                  source: source()?.name,
+                  originalUnchanged: true,
+                  info: document()?.info,
+                  opening: document()?.opening,
+                  state: stateChoice(),
+                  renderSettings: renderSettings(),
+                  transientVisibility: pairs(),
+                  fidelity: 'display RGB8',
+                  performance: viewerPerformance.snapshot(),
+                  render: (() => {
+                    const value = valueOf(render());
+                    return (
+                      value && {
+                        render: value.render,
+                        depth: value.depth,
+                        approximations: value.approximations,
+                        quality: value.quality,
+                        window: value.window
+                      }
+                    );
+                  })(),
+                  comparison: differenceValue() && {
+                    unit: differenceValue()!.unit,
+                    max: differenceValue()!.max,
+                    differingSamples: differenceValue()!.differingSamples
+                  }
+                })}
+              />
               <InspectionPanel
                 image={shown()}
                 point={point()}

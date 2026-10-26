@@ -1,17 +1,21 @@
 import type { PsdImage, PsdLayerPixels, PsdSavedProcessChannels } from '@app-game/psd/viewer';
-import { displayTiles, type DisplayImage } from '../gpu-viewport/displayTiles';
+import { displayTiles, type DisplayImage, type DisplayTile } from '../gpu-viewport/displayTiles';
 
 /** Samples the finest resident tile covering a document coordinate; absent coverage stays unknown. */
 export function displayPixel(image: DisplayImage, x: number, y: number) {
-  const tile = [...displayTiles(image)]
-    .sort((a, b) => a.step - b.step)
-    .find(
-      (tile) =>
-        x >= tile.clip.left &&
-        y >= tile.clip.top &&
-        x < tile.clip.left + tile.clip.width &&
-        y < tile.clip.top + tile.clip.height
-    );
+  let tile: DisplayTile | undefined;
+  for (const candidate of displayTiles(image)) {
+    if (
+      x >= candidate.clip.left &&
+      y >= candidate.clip.top &&
+      x < candidate.clip.left + candidate.clip.width &&
+      y < candidate.clip.top + candidate.clip.height &&
+      (!tile || candidate.step < tile.step)
+    ) {
+      tile = candidate;
+    }
+  }
+
   if (!tile) {
     return undefined;
   }
@@ -60,12 +64,27 @@ export function nativeSample(
 export function channelImage(channels: PsdSavedProcessChannels, planeIndex: number): PsdImage {
   const pixels = new Uint8Array(channels.width * channels.height * 4);
   const maximum = channels.depth === 16 ? 65535 : channels.depth === 8 ? 255 : 1;
+  const source = channels.planes[planeIndex]?.bytes ?? new Uint8Array();
+  const view = new DataView(source.buffer, source.byteOffset, source.byteLength);
   for (let y = 0; y < channels.height; y++) {
     for (let x = 0; x < channels.width; x++) {
-      const value = Math.round(
-        Math.max(0, Math.min(1, (nativeSample(channels, planeIndex, x, y) ?? 0) / maximum)) * 255
-      );
-      pixels.set([value, value, value, 255], (y * channels.width + x) * 4);
+      const index = y * channels.width + x;
+      const offset = (index * channels.depth) / 8;
+      const sample =
+        channels.depth === 1
+          ? ((source[y * Math.ceil(channels.width / 8) + Math.floor(x / 8)] ?? 0) >> (7 - (x % 8))) & 1
+          : offset + channels.depth / 8 > source.length
+            ? 0
+            : channels.depth === 32
+              ? view.getFloat32(offset, false)
+              : channels.depth === 16
+                ? view.getUint16(offset, false)
+                : (source[offset] ?? 0);
+      const value = Math.round(Math.max(0, Math.min(1, sample / maximum)) * 255);
+      pixels[index * 4] = value;
+      pixels[index * 4 + 1] = value;
+      pixels[index * 4 + 2] = value;
+      pixels[index * 4 + 3] = 255;
     }
   }
 

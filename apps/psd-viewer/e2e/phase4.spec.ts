@@ -13,6 +13,8 @@ test('search, keyboard tree selection, reveal, solo/reset and canvas navigation'
   await tree.focus();
   await tree.press('Home');
   await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-selected', 'true');
+  await tree.press('ArrowLeft');
+  await tree.press('ArrowRight');
   await tree.press('ArrowDown');
   await tree.press('Enter');
   await expect(page.getByRole('img', { name: 'Selected layer saved bounds' })).toBeVisible();
@@ -43,8 +45,10 @@ test('state stepping and bounded playback expose saved-record inspection', async
   await expect(page.getByLabel('Show', { exact: true })).toHaveValue(/frame:/);
   await page.getByRole('button', { name: 'Previous state' }).click();
   await page.getByRole('checkbox', { name: 'Loop', exact: true }).check();
+  const previousState = await page.getByLabel('Show', { exact: true }).inputValue();
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Show', { exact: true })).not.toHaveValue(previousState);
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   await expect(page.getByText(/Layer properties and bounds show saved records/)).toBeVisible();
 });
@@ -68,4 +72,188 @@ test('saved masks, native channels and typed paths are explicitly labeled', asyn
   await expect(page.getByRole('img', { name: 'Saved mask red overlay' })).toBeVisible();
   await page.getByRole('combobox', { name: 'Mask view', exact: true }).selectOption('only');
   await expect(page.getByText(/Saved-record properties and pixels/)).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath('mask-inspection.png') });
 });
+
+test('comparison wipe/blink and mismatch navigation describe current versus saved state', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(asset('adjustment-stack.psd'));
+  await expect(page.locator('[data-busy]')).toHaveAttribute('data-render-id', /\d+/);
+  await page.getByRole('checkbox', { name: 'Visible: posterize' }).uncheck();
+  await page.getByRole('button', { name: 'Split', exact: true }).click();
+  await expect(page.getByRole('img', { name: 'Comparison saved composite' })).toBeVisible();
+  await expect(page.getByLabel('Comparison controls')).toContainText('1 transient visibility overrides');
+  await expect(page.getByRole('button', { name: 'Next mismatch' })).toBeEnabled();
+  const canvas = page.locator('[data-busy]');
+  const x = await canvas.getAttribute('data-camera-x');
+  await page.getByRole('button', { name: 'Next mismatch' }).click();
+  await expect(canvas).not.toHaveAttribute('data-camera-x', x!);
+  await page.getByRole('button', { name: 'Wipe', exact: true }).click();
+  await page.getByRole('slider', { name: 'Wipe position' }).fill('30');
+  await expect(page.locator('[style*="clip-path"]')).toHaveCSS('clip-path', 'inset(0px 0px 0px 30%)');
+  await page.getByRole('button', { name: 'Fit', exact: true }).click();
+  await page.screenshot({ path: test.info().outputPath('comparison-wipe.png') });
+  await page.getByRole('button', { name: 'Blink', exact: true }).click();
+  await expect(page.getByLabel('Comparison controls')).toContainText('600 ms');
+  await page.getByRole('button', { name: 'Our render', exact: true }).click();
+  await expect(page.getByLabel('Comparison controls')).toHaveCount(0);
+});
+
+test('exports display RGB8 current render, saved layer/mask, viewport, diagnostics and unchanged original', async ({
+  page
+}) => {
+  const { readFile } = await import('node:fs/promises');
+  await page.addInitScript(() => {
+    const Native = Worker;
+    window.Worker = class extends Native {
+      constructor(...args: ConstructorParameters<typeof Worker>) {
+        super(...args);
+        this.addEventListener('message', (event) => {
+          if (event.data.type === 'rendered') {
+            const image = event.data.render;
+            Reflect.set(window, '__exportPixels', {
+              width: image.width,
+              height: image.height,
+              pixels: Array.from(image.pixels)
+            });
+          }
+        });
+      }
+    };
+  });
+  await page.goto('/');
+  const file = asset('adjustment-stack.psd');
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(file);
+  await expect(page.locator('[data-busy]')).toHaveAttribute('data-render-id', /\d+/);
+  const first = await page.locator('[data-busy]').getAttribute('data-render-id');
+  await page.getByRole('checkbox', { name: 'Visible: posterize' }).uncheck();
+  await expect(page.locator('[data-busy]')).not.toHaveAttribute('data-render-id', first!);
+  await page.locator('[data-layer-index="1"]').click();
+  await page.getByText('Export and original download', { exact: true }).click();
+  for (const name of [
+    'Export full render PNG',
+    'Export viewport PNG',
+    'Export selected layer PNG',
+    'Export selected mask PNG',
+    'Download diagnostics',
+    'Download unchanged original'
+  ]) {
+    if (name === 'Export selected layer PNG') {
+      await page.locator('[data-layer-index="0"]').click();
+    }
+    if (name === 'Export selected mask PNG') {
+      await page.locator('[data-layer-index="1"]').click();
+    }
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name, exact: true }).click();
+    const result = await download;
+    const bytes = await readFile((await result.path())!);
+    if (name === 'Download unchanged original') {
+      expect(bytes).toEqual(await readFile(file));
+    } else if (name === 'Download diagnostics') {
+      expect(JSON.parse(bytes.toString()).originalUnchanged).toBe(true);
+    } else {
+      if (name === 'Export full render PNG') {
+        const expected = await page.evaluate(
+          () => Reflect.get(window, '__exportPixels') as { width: number; height: number; pixels: number[] }
+        );
+        const { inflateSync } = await import('node:zlib');
+        const chunks: Buffer[] = [];
+        for (let offset = 8; offset < bytes.length;) {
+          const length = bytes.readUInt32BE(offset);
+          if (bytes.toString('ascii', offset + 4, offset + 8) === 'IDAT') {
+            chunks.push(bytes.subarray(offset + 8, offset + 8 + length));
+          }
+          offset += 12 + length;
+        }
+        const raw = inflateSync(Buffer.concat(chunks));
+        const pixels: number[] = [];
+        for (let row = 0; row < expected.height; row++) {
+          const start = row * (1 + expected.width * 4);
+          expect(raw[start]).toBe(0);
+          pixels.push(...raw.subarray(start + 1, start + 1 + expected.width * 4));
+        }
+        expect(pixels).toEqual(expected.pixels);
+      }
+      expect(result.suggestedFilename()).toContain('display-rgb8');
+      expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+    }
+  }
+});
+
+test('finds and reveals a named layer among 350 records with a bounded DOM and unchanged source', async ({ page }) => {
+  const { writePsd } = await import('@app-game/psd');
+  const pixels = Uint8Array.of(70, 90, 110, 255);
+  const bytes = await writePsd(
+    {
+      width: 1,
+      height: 1,
+      layers: Array.from({ length: 350 }, (_, i) => ({
+        name: `Named record ${i}`,
+        left: 0,
+        top: 0,
+        width: 1,
+        height: 1,
+        pixels,
+        opacity: 1,
+        visible: true,
+        blend: 'normal',
+        clipping: false,
+        transparencyLocked: false
+      }))
+    },
+    pixels
+  );
+  await page.goto('/');
+  await page
+    .locator('input[accept=".psd,.psb"]')
+    .setInputFiles({ name: '350-records.psd', mimeType: 'application/octet-stream', buffer: Buffer.from(bytes) });
+  await expect(page.locator('[data-busy]')).toHaveAttribute('data-render-id', /\d+/);
+  const tree = page.getByRole('tree', { name: 'Layers', exact: true });
+  expect(await tree.getByRole('treeitem').count()).toBeLessThan(80);
+  await page.getByRole('searchbox', { name: 'Search layers' }).fill('Named record 125');
+  await expect(tree.getByRole('treeitem')).toHaveCount(1);
+  await tree.focus();
+  await tree.press('Home');
+  await tree.press('Enter');
+  await expect(page.locator('[data-layer-detail="125"]')).toContainText('Named record 125');
+  await expect(page.getByRole('img', { name: 'Selected layer saved bounds' })).toBeVisible();
+  await page.getByRole('button', { name: 'Solo', exact: true }).click();
+  await page.getByRole('button', { name: 'Reset visibility', exact: true }).click();
+  await page.screenshot({ path: test.info().outputPath('350-layer-search.png') });
+  await page.getByText('Export and original download', { exact: true }).click();
+  const pending = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download unchanged original', exact: true }).click();
+  const { readFile } = await import('node:fs/promises');
+  expect(await readFile((await (await pending).path())!)).toEqual(Buffer.from(bytes));
+});
+
+for (const { mode, depth, values, unit } of [
+  { mode: 3, depth: 32, values: [0.125, 0.5, 0.75], unit: 'float32 ULP' },
+  { mode: 9, depth: 16, values: [30000, 32768, 32768], unit: '16-bit Lab level' },
+  { mode: 4, depth: 16, values: [65535, 32000, 1000, 65535], unit: '16-bit CMYK level' }
+]) {
+  test(`small mode ${mode} depth ${depth} remains zero in native units`, async ({ page }) => {
+    const bytes = new Uint8Array(40 + (values.length * depth) / 8);
+    bytes.set([56, 66, 80, 83]);
+    const view = new DataView(bytes.buffer);
+    view.setUint16(4, 1);
+    view.setUint16(12, values.length);
+    view.setUint32(14, 1);
+    view.setUint32(18, 1);
+    view.setUint16(22, depth);
+    view.setUint16(24, mode);
+    values.forEach((value, i) =>
+      depth === 32 ? view.setFloat32(40 + i * 4, value) : view.setUint16(40 + i * 2, value)
+    );
+    await page.goto('/');
+    await page
+      .locator('input[accept=".psd,.psb"]')
+      .setInputFiles({ name: 'native.psd', mimeType: 'application/octet-stream', buffer: Buffer.from(bytes) });
+    await expect(page.locator('[data-busy]')).toHaveAttribute('data-render-id', /\d+/);
+    await page.getByRole('button', { name: 'Difference', exact: true }).click();
+    const stats = page.getByRole('region', { name: 'Difference statistics' });
+    await expect(stats).toHaveAttribute('data-mismatches', '0');
+    await expect(stats).toContainText(unit);
+  });
+}

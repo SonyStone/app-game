@@ -53,7 +53,7 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
     send({ ...reply, performance: telemetry.take() }, transfer);
   }
 
-  let document: { id: number; viewer: PsdViewerDocument; inputBytes: number } | undefined;
+  let document: { id: number; viewer: PsdViewerDocument; inputBytes: number; original: ArrayBuffer } | undefined;
   let fonts: PsdFontLibrary | undefined;
   const sessionFonts = new Map<string, SessionFont>();
   const suppliedFonts = () => [...sessionFonts.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -112,7 +112,12 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         return;
       }
 
-      document = { id: ++nextDocument, viewer: opened.value, inputBytes: request.bytes.byteLength };
+      document = {
+        id: ++nextDocument,
+        viewer: opened.value,
+        inputBytes: request.bytes.byteLength,
+        original: request.bytes
+      };
       post(
         {
           id: request.id,
@@ -313,9 +318,24 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         return;
       }
 
+      case 'original': {
+        post(
+          {
+            id: request.id,
+            type: 'original',
+            bytes: new Blob([document.original], { type: 'application/octet-stream' })
+          },
+          []
+        );
+        return;
+      }
+
       case 'channels': {
         const info = viewer.info;
-        const bytes = Math.ceil((info.width * info.depth) / 8) * info.height * info.channels;
+        const bytes =
+          Math.ceil((info.width * info.depth) / 8) * info.height * info.channels +
+          info.colorModeDataSize +
+          info.resources.reduce((sum, resource) => sum + resource.size, 0);
         if (info.width * info.height > windowWorkPixels || bytes > 64 * 1024 * 1024) {
           post(
             failed(request, {
