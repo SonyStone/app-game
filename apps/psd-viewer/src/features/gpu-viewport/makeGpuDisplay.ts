@@ -116,9 +116,9 @@ export function makeGpuDisplay(
       let uploaded = 0;
       let blocked = false;
       const encoder = device.createCommandEncoder();
-      // Serve the requested level before its optional ancestor. Old visible arrivals own the next frame's
-      // upload slot, so a cold allocation or a short first-frame budget cannot defer them a third time.
-      const uploads = [...new Set([...levels.map((group) => group.requested), ...levels.map((group) => group.coarse)])];
+      // Fill holes before refinement. Old visible arrivals own the next frame's upload slot, so a cold
+      // allocation or a short first-frame budget cannot defer them a third time.
+      const uploads = [...new Set([...levels.map((group) => group.coarse), ...levels.map((group) => group.requested)])];
       uploads.sort(
         (a, b) => (firstVisible.get(identity(a)) ?? frameNumber) - (firstVisible.get(identity(b)) ?? frameNumber)
       );
