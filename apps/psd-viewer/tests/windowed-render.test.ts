@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createRoot, createSignal, flush } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import { largePsb } from '../../../packages/psd/test/largePsb';
+import type { DisplayTile } from '../src/features/gpu-viewport/displayTiles';
 import { makePsdClient, type PsdClient, type PsdResultOf, type PsdWorkerPort } from '../src/features/psd-worker';
 import type { PsdRequest, WindowRequest } from '../src/features/psd-worker/protocol';
 import { makePsdWorkerHost } from '../src/features/psd-worker/workerHost';
@@ -25,8 +26,8 @@ it('renders a generated large PSB through the worker and refuses whole-canvas op
     )
   );
   expect(rendered.window).toMatchObject({ source: 'layers', step: 1, strategy: 'window', exactToLayerRender: true });
-  const pixel = ((299008 - rendered.window!.top) * rendered.width + 299008 - rendered.window!.left) * 4;
-  expect([...rendered.pixels.subarray(pixel, pixel + 4)]).toEqual([255, 0, 0, 255]);
+  expect(sample(rendered.tiles!, 299008, 299008)).toEqual([255, 0, 0, 255]);
+  expect(rendered.pixels.byteLength).toBe(0);
   expect(sent.some((request) => request.type === 'renderWindow' && request.window.kind === 'regions')).toBe(true);
   expect(await client.render(opened.document, photoshopDefaultSettings, [])).toMatchObject({
     ok: false,
@@ -40,9 +41,9 @@ it('renders a generated large PSB through the worker and refuses whole-canvas op
 it('transfers typed budget refusals without breaking subsequent worker requests', async () => {
   const codec = await loadPsdViewer();
   const open = codec.PsdDocumentHandle.openWithBudget;
-  const refused = vi.spyOn(codec.PsdDocumentHandle, 'openWithBudget').mockImplementationOnce((bytes, options) =>
-    open(bytes, { ...options, allocationBytes: 1 })
-  );
+  const refused = vi
+    .spyOn(codec.PsdDocumentHandle, 'openWithBudget')
+    .mockImplementationOnce((bytes, options) => open(bytes, { ...options, allocationBytes: 1 }));
   const { client } = connect();
   try {
     expect(await client.open(largePsb().buffer as ArrayBuffer)).toMatchObject({
@@ -80,7 +81,7 @@ it('preserves audited allocation failures through the facade and worker and perm
   }
 });
 
-it('assembles cached fixture tiles and invalidates them after edits', async () => {
+it('retains strict fixture tiles without assembly and invalidates them after edits', async () => {
   const { client, sent } = connect();
   const bytes = await readFile(new URL('../src/features/examples/assets/adjustment-stack.psd', import.meta.url));
   const opened = value(
@@ -98,7 +99,8 @@ it('assembles cached fixture tiles and invalidates them after edits', async () =
       vi.fn()
     )
   );
-  expect(image.pixels).toEqual(whole.pixels);
+  expect(image.pixels.byteLength).toBe(0);
+  expect(image.tiles![0].image.pixels).toEqual(whole.pixels);
   const count = sent.length;
   await renderer.render(
     snapshot,
@@ -117,7 +119,7 @@ it('assembles cached fixture tiles and invalidates them after edits', async () =
       vi.fn()
     )
   );
-  expect(edited.pixels).not.toEqual(whole.pixels);
+  expect(edited.tiles![0].image.pixels).not.toEqual(whole.pixels);
   expect(sent).toHaveLength(count + 1);
   renderer.clear();
   expect(renderer.cacheBytes()).toBe(0);
@@ -139,18 +141,14 @@ it('bounds the LRU while panning and samples correctly across 512-pixel tile edg
         vi.fn()
       )
     );
-    for (const [x, y] of [
-      [0, 0],
-      [171, 173],
-      [image.width - 1, image.height - 1]
-    ]) {
-      const offset = (y * image.width + x) * 4;
-      expect([...image.pixels.subarray(offset, offset + 4)]).toEqual([
-        (image.window!.left + x * 3) % 256,
-        (image.window!.top + y * 3) % 256,
-        0,
-        255
-      ]);
+    expect(image.pixels.byteLength).toBe(0);
+    for (const tile of image.tiles!) {
+      for (const [x, y] of [
+        [tile.clip.left, tile.clip.top],
+        [tile.clip.left + tile.clip.width - 1, tile.clip.top + tile.clip.height - 1]
+      ]) {
+        expect(sample([tile], x, y)).toEqual([x % 256, y % 256, 0, 255]);
+      }
     }
 
     expect(renderer.cacheBytes()).toBeLessThanOrEqual(32 * 1024 * 1024);
@@ -209,7 +207,7 @@ it('never introduces a saved preview after displaying regions or changing render
     preview
   );
   expect(calls.map((call) => call.kind)).toEqual(['regions', 'overview']);
-  expect(preview).not.toHaveBeenCalled();
+  expect(preview.mock.calls.every(([frame]) => frame.window.source === 'layers')).toBe(true);
 });
 
 it('returns a fresh-layer refusal after a saved first frame instead of leaving it as a successful final image', async () => {
@@ -235,7 +233,7 @@ it('returns a fresh-layer refusal after a saved first frame instead of leaving i
   expect(result).toMatchObject({ ok: false, error: { kind: 'unsupported' } });
 });
 
-it('cancels in-flight tile assembly before any later batch, and ignores its late reply', async () => {
+it('salvages a camera-obsolete tile, stops before the next tile, and reuses it on revisit', async () => {
   const { client } = synthetic();
   let finish!: () => void;
   const wrapped = {
@@ -260,7 +258,7 @@ it('cancels in-flight tile assembly before any later batch, and ignores its late
   finish();
   expect(await rendering).toBeUndefined();
   expect(wrapped.renderWindow).toHaveBeenCalledOnce();
-  expect(renderer.cacheBytes()).toBe(0);
+  expect(renderer.cacheBytes()).toBeGreaterThan(0);
   expect(preview).not.toHaveBeenCalled();
 });
 
@@ -312,7 +310,7 @@ it('clears temporary saved frames on pan cancellation and rejects late overview 
   expect(value(state.render()).window?.source).toBe('savedComposite');
   state.pan({ scale: 1, x: -1000, y: -1000 });
   flush();
-  expect(state.jobs[1].signal.aborted).toBe(true);
+  expect(state.jobs[1].signal.aborted).toBe(false);
   expect(state.render()).toBeUndefined();
   expect(state.jobs[2].window.kind).toBe('regions');
   state.jobs[1].resolve({ ok: true, value: { images: [singlePixel('layers')], milliseconds: 1 } });
@@ -465,3 +463,85 @@ function singlePixel(source: PsdRegionPixels['source']): PsdRegionPixels {
     approximations: []
   };
 }
+
+/** Reads the retained strict bytes in tests only, independently of GPU display transforms. */
+function sample(tiles: readonly DisplayTile[], x: number, y: number) {
+  const tile = tiles.find(
+    (tile) =>
+      x >= tile.clip.left &&
+      x < tile.clip.left + tile.clip.width &&
+      y >= tile.clip.top &&
+      y < tile.clip.top + tile.clip.height
+  )!;
+  const index =
+    (Math.floor((y - tile.top) / tile.step) * tile.image.width + Math.floor((x - tile.left) / tile.step)) * 4;
+  return [...tile.image.pixels.subarray(index, index + 4)];
+}
+
+it('deduplicates overlapping camera demand and retains the original tile identity on a warm revisit', async () => {
+  const { client } = synthetic();
+  let finish!: () => void;
+  const wrapped = {
+    renderWindow: vi.fn<PsdClient['renderWindow']>().mockImplementation(
+      (...args) =>
+        new Promise((resolve) => {
+          finish = async () => resolve(await client.renderWindow(...args));
+        })
+    )
+  };
+  const renderer = makeWindowRenderer(wrapped);
+  const snapshot = fakeSnapshot(300000, 300000);
+  const firstController = new AbortController();
+  const size = { width: 100, height: 100 };
+  const first = renderer.render(snapshot, { scale: 1, x: 0, y: 0 }, size, firstController.signal, vi.fn());
+  firstController.abort();
+  const second = renderer.render(snapshot, { scale: 1, x: -10, y: 0 }, size, new AbortController().signal, vi.fn());
+  expect(wrapped.renderWindow).toHaveBeenCalledOnce();
+  finish();
+  expect(await first).toBeUndefined();
+  const tile = value(await second).tiles![0];
+  const warm = value(
+    await renderer.render(snapshot, { scale: 1, x: 0, y: 0 }, size, new AbortController().signal, vi.fn())
+  );
+  expect(warm.tiles![0]).toBe(tile);
+  expect(wrapped.renderWindow).toHaveBeenCalledOnce();
+  renderer.clear();
+});
+
+it('discards a late tile after semantic invalidation rather than admitting it into the next snapshot', async () => {
+  const { client } = synthetic();
+  const jobs: (() => void)[] = [];
+  const signals: AbortSignal[] = [];
+  const wrapped = {
+    renderWindow: vi.fn<PsdClient['renderWindow']>().mockImplementation(
+      (...args) =>
+        new Promise((resolve) => {
+          signals.push(args[4]);
+          jobs.push(async () => resolve(await client.renderWindow(...args)));
+        })
+    )
+  };
+  const renderer = makeWindowRenderer(wrapped);
+  const snapshot = fakeSnapshot(300000, 300000);
+  const first = renderer.render(
+    snapshot,
+    { scale: 1, x: 0, y: 0 },
+    { width: 100, height: 100 },
+    new AbortController().signal,
+    vi.fn()
+  );
+  const next = renderer.render(
+    { ...snapshot, visibility: [[1, false]] },
+    { scale: 1, x: 0, y: 0 },
+    { width: 100, height: 100 },
+    new AbortController().signal,
+    vi.fn()
+  );
+  expect(signals[0].aborted).toBe(true);
+  jobs[0]();
+  expect(await first).toBeUndefined();
+  expect(renderer.cacheBytes()).toBe(0);
+  jobs[1]();
+  expect(value(await next).tiles).toHaveLength(1);
+  renderer.clear();
+});
