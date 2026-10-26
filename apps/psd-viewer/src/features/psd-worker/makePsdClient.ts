@@ -33,10 +33,11 @@ import type {
  * (and resolving as `superseded`) any render queued before it, so quick visibility toggles never pile up work. Other
  * requests go straight to the worker, which answers in arrival order. A crashed worker rejects every pending and later
  * call. With a replacement factory, `restart` settles old calls as superseded and starts a clean worker, replaying
- * caller-supplied font bytes. `dispose` terminates the worker and releases retained inputs; pending calls never settle.
+ * caller-supplied font bytes. `dispose` terminates the worker and releases retained inputs; pending calls settle as superseded.
  */
 export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWorkerPort) {
   const pending = new Map<number, { resolve: (reply: PsdReply) => void; reject: (error: Error) => void }>();
+  let memory = { wasmBytes: 0, sourceBytes: 0 };
   let nextId = 0;
   let epoch = 0;
   const fontInputs: { fonts: ArrayBuffer[]; sources?: string[] }[] = [];
@@ -48,6 +49,10 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
 
   function attach() {
     worker.onmessage = (event) => {
+      if (event.data.memory) {
+        memory = event.data.memory;
+      }
+
       const entry = pending.get(event.data.id);
       if (entry) {
         pending.delete(event.data.id);
@@ -146,10 +151,11 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
     settings: PsdRenderSettings,
     visibility: [number, boolean][],
     window: WindowRequest,
-    signal: AbortSignal
+    signal: AbortSignal,
+    liveBytes?: number
   ): Promise<PsdResultOf<{ images: WindowPixels[]; milliseconds: number }>> {
     const reply = await scheduleRender(
-      { type: 'renderWindow', document, settings: { ...settings }, visibility, window },
+      { type: 'renderWindow', document, settings: { ...settings }, visibility, window, liveBytes },
       signal
     );
     return reply.type === 'windowRendered'
@@ -299,6 +305,10 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
     worker.onerror = null;
     worker.onmessageerror = null;
     worker.terminate();
+    for (const entry of pending.values()) {
+      entry.resolve({ id: 0, type: 'failed', error: { kind: 'superseded', message: 'Worker disposed' } });
+    }
+    queued?.settle({ id: 0, type: 'failed', error: { kind: 'superseded', message: 'Worker disposed' } });
     pending.clear();
     fontInputs.length = 0;
     queued = undefined;
@@ -371,7 +381,9 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
     documentFonts,
     textSupport,
     dispose,
-    restart
+    restart,
+    /** Latest actual WASM capacity plus host source bytes, available without telemetry. */
+    memory: () => memory
   };
 }
 

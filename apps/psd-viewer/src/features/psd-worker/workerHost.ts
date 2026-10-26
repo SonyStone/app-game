@@ -50,7 +50,14 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
     );
     telemetry.record('wasm.linear.bytes', performance.now(), wasmMemory?.buffer.byteLength ?? 0);
     telemetry.record('transfer.postedAt', performance.now(), performance.timeOrigin + performance.now());
-    send({ ...reply, performance: telemetry.take() }, transfer);
+    send(
+      {
+        ...reply,
+        memory: { wasmBytes: wasmMemory?.buffer.byteLength ?? 0, sourceBytes: document?.inputBytes ?? 0 },
+        performance: telemetry.take()
+      },
+      transfer
+    );
   }
 
   let document: { id: number; viewer: PsdViewerDocument; inputBytes: number; original: ArrayBuffer } | undefined;
@@ -92,13 +99,7 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         requiresWindowedRendering({ width: header.getUint32(18), height: header.getUint32(14) });
       const loading = performance.now();
       const codec = await loadPsdViewer();
-      if (request.telemetry) {
-        try {
-          wasmMemory = (await codec.default()).memory;
-        } catch {
-          // Memory diagnostics must not change whether the file can open.
-        }
-      }
+      wasmMemory = (await codec.default()).memory;
       telemetry.record('wasm.load', loading);
       telemetry.record('source.retained.bytes', performance.now(), request.bytes.byteLength);
       const opening = performance.now();
@@ -189,7 +190,7 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       case 'renderWindow': {
         const start = performance.now();
         // Admission includes the host input in addition to WASM-owned document storage.
-        const budget = { liveBytes: 2 * 1024 * 1024 * 1024, retainedBytes: document.inputBytes };
+        const budget = { liveBytes: request.liveBytes ?? 2 * 1024 * 1024 * 1024, retainedBytes: document.inputBytes };
         const settings = { ...request.settings, maxWorkPixels: windowWorkPixels, budget };
         const window = request.window;
         const result =

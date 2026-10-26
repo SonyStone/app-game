@@ -1,16 +1,17 @@
 import type { PsdLayerNode, PsdRegionPixels, PsdRegionRect, PsdRenderSettings } from '@app-game/psd/viewer';
 import { displayTileLevels, type DisplayTile } from '../gpu-viewport/displayTiles';
 import type { OpenedPsd, PsdClient, PsdResultOf, RenderedPixels } from '../psd-worker';
+import type { WindowClient } from '../psd-worker/makePsdWorkerPool';
 import { viewerPerformance } from '../telemetry/performance';
 import type { View } from './view';
 
 /**
- * Owns a byte-accounted source/mip LRU independently of camera interest. One native tile runs at a time;
- * an obsolete camera can waste at most that tile, whose valid pixels are salvaged for later demand.
+ * Owns a byte-accounted source/mip LRU independently of camera interest. One native tile runs per admitted worker;
+ * an obsolete camera can waste at most one tile per worker, whose valid pixels are salvaged for later demand.
  * Visibility edits retain provably unaffected coverage. Settings, fonts and document changes invalidate all pixels.
  * The CPU budget defaults to 64 MiB and must be at least 16 MiB; pending transfers and every mip level count.
  */
-export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budgetBytes = 64 * 1024 * 1024) {
+export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024 * 1024) {
   if (!Number.isFinite(budgetBytes) || budgetBytes < 16 * 1024 * 1024) {
     throw new RangeError('CPU tile residency requires at least 16 MiB, including pending transfers.');
   }
@@ -32,7 +33,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
   const canceledResults = new WeakSet<PsdResultOf<DisplayTile>>();
   const admitted = new WeakSet<DisplayTile>();
   const arrivals = new Map<NonNullable<DisplayTile['arrival']>, PsdRegionRect>();
-  let flight: Promise<unknown> | undefined;
+  const flights = new Set<Promise<unknown>>();
   let cacheBytes = 0;
   let reservedBytes = 0;
   let previous: WindowSnapshot | undefined;
@@ -191,6 +192,10 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
     };
     present();
 
+    let batchStart: number | undefined;
+    let batchTiles = 0;
+    let workerMilliseconds = 0;
+
     if (plan.kind === 'overview' && previewedDocument !== document && snapshot.visibility.length === 0) {
       previewedDocument = document;
       const saved = await request(`saved:${plan.step}`, { kind: 'saved', step: plan.step });
@@ -204,57 +209,83 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
     }
 
     previewedDocument = document;
-    for (let index = 0; index < keys.length; index++) {
-      if (signal.aborted || previous !== snapshot) {
-        return undefined;
-      }
-
-      const key = keys[index];
-      if (current(key, step)) {
-        continue;
-      }
-
-      // Deduplicate shared demand first. Different camera requests wait outside the worker queue and recheck
-      // interest before posting. Ordinary cancellation cannot interrupt a synchronous WASM region call.
-      while (flight && !pending.has(key)) {
-        await flight;
+    const concurrency = plan.kind === 'regions' && client.prepareWindows
+      ? await client.prepareWindows(
+          document, snapshot.settings, snapshot.visibility, keys.filter((key) => !current(key, step)).length
+        )
+      : 1;
+    let nextIndex = 0;
+    let failed: Extract<PsdResultOf<DisplayTile>, { ok: false }> | undefined;
+    const run = async () => {
+      while (nextIndex < keys.length && !failed) {
+        const index = nextIndex++;
         if (signal.aborted || previous !== snapshot) {
           return undefined;
         }
-      }
 
-      if (current(key, step)) {
-        continue;
-      }
-
-      const core = plan.kind === 'regions' ? plan.tiles[index] : undefined;
-      const result = await request(
-        key,
-        core
-          ? { kind: 'regions', rectangles: [withBorder(core, info)], mipStep: maxMipStep }
-          : { kind: 'overview', step: plan.step },
-        core
-      );
-      if (signal.aborted || previous !== snapshot) {
-        if (!canceledResults.has(result)) {
-          canceledResults.add(result);
-          viewerPerformance.record(
-            'cancellation.salvagedTiles',
-            performance.now(),
-            result.ok && admitted.has(result.value) ? 1 : 0
-          );
-          viewerPerformance.record('cancellation.obsoleteBatchTiles', performance.now(), 1);
+        const key = keys[index];
+        if (current(key, step)) {
+          continue;
         }
-        return undefined;
-      }
 
-      if (!result.ok) {
-        return result;
-      }
+        // Deduplicate shared demand first. Different camera requests wait outside the worker queue and recheck
+        // interest before posting. Ordinary cancellation cannot interrupt a synchronous WASM region call.
+        while (flights.size >= concurrency && !pending.has(key)) {
+          await Promise.race(flights);
+          if (signal.aborted || previous !== snapshot) {
+            return undefined;
+          }
+        }
 
-      present();
+        if (current(key, step)) {
+          continue;
+        }
+
+        const core = plan.kind === 'regions' ? plan.tiles[index] : undefined;
+        const result = await request(
+          key,
+          core
+            ? { kind: 'regions', rectangles: [withBorder(core, info)], mipStep: maxMipStep }
+            : { kind: 'overview', step: plan.step },
+          core
+        );
+        if (signal.aborted || previous !== snapshot) {
+          if (!canceledResults.has(result)) {
+            canceledResults.add(result);
+            viewerPerformance.record(
+              'cancellation.salvagedTiles',
+              performance.now(),
+              result.ok && admitted.has(result.value) ? 1 : 0
+            );
+            viewerPerformance.record('cancellation.obsoleteBatchTiles', performance.now(), 1);
+          }
+          return undefined;
+        }
+
+        if (!result.ok) {
+          failed = result;
+          return;
+        }
+
+        present();
+      }
+    };
+    await Promise.all(Array.from({ length: concurrency }, run));
+    if (signal.aborted || previous !== snapshot) {
+      return undefined;
+    }
+    if (failed) {
+      return failed;
     }
 
+    if (batchStart !== undefined) {
+      client.reportWindowBatch?.({
+        workers: concurrency,
+        tiles: batchTiles,
+        milliseconds: performance.now() - batchStart,
+        workerMilliseconds
+      });
+    }
     viewerPerformance.record('coverage.tiles', start, keys.length);
     return { ok: true, value: frame(available()) };
 
@@ -272,6 +303,9 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
           : Math.ceil(info.width / window.step) * Math.ceil(info.height / window.step) * 4;
       reservedBytes += reservation;
       trim();
+      if (window.kind === 'regions') {
+        batchStart ??= performance.now();
+      }
       const job = client
         .renderWindow(document, snapshot.settings, snapshot.visibility, window, controller.signal)
         .then((result) => {
@@ -279,6 +313,10 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
             return result;
           }
 
+          if (window.kind === 'regions') {
+            batchTiles++;
+            workerMilliseconds += result.value.milliseconds;
+          }
           const { mips = [], ...image } = result.value.images[0];
           const clip = core ?? {
             left: image.left,
@@ -322,9 +360,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
             pending.delete(key);
           }
 
-          if (flight === job) {
-            flight = undefined;
-          }
+          flights.delete(job);
 
           trim();
         });
@@ -335,7 +371,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
         support:
           window.kind === 'regions' ? window.rectangles[0] : { left: 0, top: 0, width: info.width, height: info.height }
       });
-      flight = job;
+      flights.add(job);
       return job;
     }
   }

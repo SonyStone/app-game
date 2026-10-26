@@ -22,6 +22,7 @@ import { createFileDrop, fileSource, firstPsd, urlSource } from './features/open
 import { OpenFailure } from './features/open-file/OpenFailure';
 import { createOpenPrompt, OpeningReport, OpenPromptDialog } from './features/open-like-photoshop';
 import { createPsdWorker, makePsdClient, type PsdResultOf, type WorkerFailure } from './features/psd-worker';
+import { makePsdWorkerPool } from './features/psd-worker/makePsdWorkerPool';
 import { requiresWindowedRendering } from './features/psd-worker/protocol';
 import { createRenderSettings, RenderSettingsPanel } from './features/render-settings';
 import { ariaState } from './features/shared/format';
@@ -40,7 +41,11 @@ import { createWindowedRender } from './features/viewport/createWindowedRender';
  * the inspector and the renderer status.
  */
 export function App() {
-  const client = makePsdClient(createPsdWorker(), createPsdWorker);
+  const initialWorkers = new URLSearchParams(location.search).get('workers') === '2' ? 2 : 1;
+  const [workerCount, setWorkerCount] = createSignal<1 | 2>(initialWorkers);
+  const client = makePsdWorkerPool(makePsdClient(createPsdWorker(), createPsdWorker), createPsdWorker, {
+    workers: initialWorkers
+  });
   const [displayBusy, setDisplayBusy] = createSignal(false);
   onCleanup(client.dispose);
 
@@ -262,6 +267,19 @@ export function App() {
           disabled={!document()}
           windowed={windowed()}
         />
+        <select
+          aria-label="Tile workers"
+          value={workerCount()}
+          title="Two workers require independent RGB8/Gray8 windows and a 3 GiB accounted budget. Supplied fonts use one worker."
+          onChange={(event) => {
+            const count = event.currentTarget.value === '2' ? 2 : 1;
+            client.setWorkers(count);
+            setWorkerCount(count);
+          }}
+        >
+          <option value="1">1 worker</option>
+          <option value="2">2 workers when admitted</option>
+        </select>
         <div class={styles.zoom} role="group" aria-label="Zoom">
           <button type="button" aria-label="Zoom out" onClick={viewport.zoomOut}>
             −
@@ -386,6 +404,7 @@ export function App() {
                     image={image()}
                     onPresented={initial.presented}
                     onBusyChange={setDisplayBusy}
+                    onInteractionLatency={client.reportInteraction}
                     view={viewport.view()}
                     size={viewport.size()}
                     label={
