@@ -94,7 +94,7 @@ export function createSortable<K>(options: {
    * Accepts either a static `GridConfig` object or reactive `MaybeAccessor<GridConfig>`
    * input for updates such as changing the column count.
    */
-  gridConfig?: MaybeAccessor<GridConfig>;
+  gridConfig?: MaybeAccessor<GridConfig> | undefined;
   /**
    * Spacing between items in pixels. Used as a hint for indicator placement
    * in list mode. Does not affect grid mode (use gridConfig.gap instead).
@@ -142,7 +142,7 @@ export function createSortable<K>(options: {
     const containerRect = options.getContainerRect();
     const keys = getItems();
     // Measure first item height for 'auto' rowHeight
-    const firstRect = keys.length > 0 ? options.getRect(keys[0]) : undefined;
+    const firstRect = keys.length > 0 ? options.getRect(keys[0]!) : undefined;
     return resolveGrid(gc, keys.length, containerRect?.width, firstRect?.height);
   });
 
@@ -189,8 +189,8 @@ export function createSortable<K>(options: {
     // Detect spacing between adjacent items (CSS flex gap / margin)
     let spacing = 0;
     for (let i = 1; i < measured.length; i++) {
-      const previousRect = measured[i - 1].rect;
-      const currentRect = measured[i].rect;
+      const previousRect = measured[i - 1]!.rect;
+      const currentRect = measured[i]!.rect;
       const gap =
         primaryAxis() === 'horizontal'
           ? currentRect.x - (previousRect.x + previousRect.width)
@@ -312,7 +312,7 @@ export function createSortable<K>(options: {
       if (cellIndex >= visibleKeys.length) {
         return { parent: containerKey, before: null };
       }
-      return { parent: containerKey, before: visibleKeys[cellIndex] };
+      return { parent: containerKey, before: visibleKeys[cellIndex]! };
     }
 
     // ── List layout ──────────────────────────────────────────────────────
@@ -357,7 +357,7 @@ export function createSortable<K>(options: {
     const keys = activeItems();
     if (keys.length === 0) return 0;
 
-    const lastRect = options.getRect(keys[keys.length - 1]);
+    const lastRect = options.getRect(keys[keys.length - 1]!);
     if (!lastRect) return undefined;
     return primaryAxis() === 'horizontal'
       ? lastRect.x + lastRect.width - containerRect.x

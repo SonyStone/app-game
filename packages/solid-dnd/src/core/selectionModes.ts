@@ -118,7 +118,7 @@ export function applyGridRange<K>(items: ReadonlyArray<K>, anchor: K, key: K, co
     for (let c = minCol; c <= maxCol; c++) {
       const idx = r * columns + c;
       if (idx < items.length) {
-        result.push(items[idx]);
+        result.push(items[idx]!);
       }
     }
   }

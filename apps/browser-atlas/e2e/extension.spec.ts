@@ -21,13 +21,13 @@ const CLIPBOARD_MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control';
 /** Grabs a row by its title: a drag from the empty space after the title selects rows instead. */
 const ROW_TITLE_POSITION = { x: 48, y: 10 };
 
-test('opens current Help, About, and Cloud dialogs in Chromium', async ({}, testInfo) => {
+test('opens current Help and About dialogs and the Cloud panel in Chromium', async ({}, testInfo) => {
   const session = await launchBrowserAtlas(testInfo);
 
   try {
     await session.page.getByRole('button', { name: 'Help', exact: true }).click();
     const help = session.page.getByRole('dialog', { name: 'Browser Atlas help' });
-    await expect(help).toContainText('Each pane can independently show');
+    await expect(help).toContainText('Each explorer can independently show');
     await session.page.keyboard.press('Escape');
     await expect(help).toHaveCount(0);
 
@@ -39,10 +39,11 @@ test('opens current Help, About, and Cloud dialogs in Chromium', async ({}, test
     await expect(about).toHaveCount(0);
 
     await session.page.getByRole('button', { name: 'Cloud', exact: true }).click();
-    const cloud = session.page.getByRole('dialog', { name: 'Google Drive backups' });
+    const cloud = session.page.getByRole('region', { name: 'Google Drive backups' });
     await expect(cloud.locator('[data-cloud-backup-attempt="none"]')).toBeVisible();
     await expect(cloud).toContainText('This Browser Atlas build has no Google OAuth client ID.');
-    await cloud.getByRole('button', { name: 'Close cloud backups' }).click();
+    await expect(cloud.getByRole('combobox', { name: 'Browser' })).toHaveCount(0);
+    await closeDockPanel(session.page, 'cloud');
     await expect(cloud).toHaveCount(0);
 
     await expect.poll(() => readBrowserActionStatistics(session.serviceWorker)).toEqual({
@@ -86,7 +87,7 @@ test('shows success and failure backup-attempt strips from Chromium session stor
     await expect(
       session.page.locator('[data-cloud-backup-attempt="success"]')
     ).toContainText('Last manual cloud backup succeeded');
-    await session.page.getByRole('button', { name: 'Close cloud backups' }).click();
+    await closeDockPanel(session.page, 'cloud');
 
     await session.serviceWorker.evaluate(async ({ key }) => {
       await chrome.storage.session.set({
@@ -117,7 +118,7 @@ test('highlights Chromium windows saved by Save All for the browser session', as
   try {
     browserState = await createTestBrowserState(session.serviceWorker);
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     await acceptNextConfirmation(session.page, () =>
       leftPane.getByTitle('Save and close all other browser windows').click()
     );
@@ -145,7 +146,7 @@ test('reveals the source Chromium window requested by the extension action', asy
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const root = leftPane.locator('[data-node-id="explore-root"]');
     await root.getByRole('button', { name: 'Collapse node' }).click();
     await session.page.bringToFront();
@@ -174,7 +175,7 @@ test('shows recursive live-window and live-tab statistics for a collapsed Chromi
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     await expect(leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`)).toBeVisible();
     const totalNodes = (await leftPane.getByRole('treeitem').count()) - 1;
     const liveWindows = await leftPane.locator('[data-node-id^="explore-window-"]').count();
@@ -221,7 +222,7 @@ test('keeps the complete live hierarchy current and retains it when Chromium clo
     }
 
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const sourceRow = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
     await sourceRow.evaluate((element) => element.setAttribute('data-render-instance', 'preserved'));
     const childTabId = await session.serviceWorker.evaluate(
@@ -275,7 +276,7 @@ test('manages tabs, windows, groups, notes, and separators', async ({}, testInfo
     browserState = state;
     await session.page.reload();
 
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const sourceLink = leftPane.getByRole('link', { name: 'Browser Atlas E2E Source' });
     await expect(sourceLink).toBeVisible();
 
@@ -290,7 +291,7 @@ test('manages tabs, windows, groups, notes, and separators', async ({}, testInfo
       });
 
     await session.page.bringToFront();
-    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    const rightPane = session.page.getByRole('region', { name: 'Explorer 2' });
     await rightPane.getByRole('tab', { name: 'Explore' }).click();
 
     const sourceRow = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
@@ -545,7 +546,7 @@ test('preserves notes attached to tabs closed by Chrome', async ({}, testInfo) =
     const state = await createAttachedTabBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const sourceRow = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
     await expect(sourceRow).toBeVisible();
     await sourceRow.click();
@@ -612,7 +613,7 @@ test('keeps custom live and saved window titles in Chromium', async ({}, testInf
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const liveWindow = leftPane.locator(`[data-node-id="explore-window-${state.sourceWindowId}"]`);
 
     await selectTreeRow(liveWindow);
@@ -688,7 +689,7 @@ test('restores a saved Chromium window at its retained position and size', async
       };
     }, state.sourceWindowId);
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     await leftPane
       .locator(`[data-node-id="explore-window-${state.sourceWindowId}"]`)
       .getByTitle('Close this window and keep its tabs in Browser Atlas')
@@ -735,7 +736,7 @@ test('supports inline tab notes and note shorthands in Chromium', async ({}, tes
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const liveTab = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
 
     await selectTreeRow(liveTab);
@@ -773,7 +774,7 @@ test('uses expanded versus collapsed deletion semantics and exact Undo/Redo in C
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const root = leftPane.locator('[data-node-id="explore-root"]');
     await selectTreeRow(root);
     await acceptNextPrompt(session.page, 'Delete wrapper', () => leftPane.getByTitle('Create a saved group').click());
@@ -834,8 +835,8 @@ test('moves and deletes a multi-row selection as one undoable Chromium change', 
     const firstSiblingTabId = await createSiblingTab(session.serviceWorker, state.sourceWindowId);
     await createSiblingTab(session.serviceWorker, state.sourceWindowId);
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
-    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
+    const rightPane = session.page.getByRole('region', { name: 'Explorer 2' });
     await rightPane.getByRole('tab', { name: 'Explore' }).click();
     const undo = leftPane.getByTitle('Undo the latest persistent tree change');
     const sourceTab = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
@@ -892,7 +893,7 @@ test('promotes or removes inline context when deleting live Chromium tabs', asyn
     browserState = state;
     const collapsedTabId = await createSiblingTab(session.serviceWorker, state.sourceWindowId);
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const sourceTab = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
     await selectTreeRow(sourceTab);
     await acceptNextPrompt(session.page, 'Promoted Chromium context', () => sourceTab.press('F2'));
@@ -940,8 +941,8 @@ test('keeps a live tab inside a saved note across Chrome moves and reloads', asy
     const state = await createAttachedTabBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
-    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
+    const rightPane = session.page.getByRole('region', { name: 'Explorer 2' });
 
     await leftPane.locator(`[data-node-id="explore-window-${state.targetWindowId}"]`).click();
     await acceptNextPrompt(session.page, 'Organized live work', () =>
@@ -997,7 +998,7 @@ test('save-closes only the selected Chromium tab while its nested window is expa
     const state = await createAttachedTabBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const sourceTab = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
     const nestedWindow = leftPane.locator(`[data-node-id="explore-window-${state.targetWindowId}"]`);
     await nestLiveWindowUnderTab(nestedWindow);
@@ -1031,7 +1032,7 @@ test('save-closes every Chromium descendant hidden beneath a collapsed tab', asy
     const state = await createAttachedTabBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const sourceTab = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
     const nestedWindow = leftPane.locator(`[data-node-id="explore-window-${state.targetWindowId}"]`);
     await nestLiveWindowUnderTab(nestedWindow);
@@ -1083,7 +1084,7 @@ test('opens a saved group as a real Chromium window', async ({}, testInfo) => {
   try {
     browserState = await createTestBrowserState(session.serviceWorker);
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     await leftPane.locator('[data-node-id="explore-root"]').click();
     await acceptNextPrompt(session.page, 'Chromium window group', () =>
       leftPane.getByTitle('Create a saved group').click()
@@ -1134,8 +1135,8 @@ test('turns a saved group into a real Chromium window when a live tab is dropped
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
-    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
+    const rightPane = session.page.getByRole('region', { name: 'Explorer 2' });
     await leftPane.locator('[data-node-id="explore-root"]').click();
     await acceptNextPrompt(session.page, 'Dropped Chromium tab', () =>
       leftPane.getByTitle('Create a saved group').click()
@@ -1184,8 +1185,8 @@ test('creates precisely placed organizers by dragging the toolbar tools in Chrom
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
-    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
+    const rightPane = session.page.getByRole('region', { name: 'Explorer 2' });
     await rightPane.getByRole('tab', { name: 'Explore' }).click();
     const liveTab = rightPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
 
@@ -1234,8 +1235,8 @@ test('creates a live Chromium window where the Window toolbar tool is dropped', 
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
-    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
+    const rightPane = session.page.getByRole('region', { name: 'Explorer 2' });
     const root = leftPane.locator('[data-node-id="explore-root"]');
     await selectTreeRow(root);
     await acceptNextPrompt(session.page, 'Window fabric destination', () =>
@@ -1295,8 +1296,8 @@ test('creates and naturally retains a protected Google Doc from the Doc toolbar 
     await session.context.route('https://docs.google.com/document/create', (route) =>
       route.fulfill({ contentType: 'text/html', body: '<title>Untitled document</title>' })
     );
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
-    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
+    const rightPane = session.page.getByRole('region', { name: 'Explorer 2' });
     const root = leftPane.locator('[data-node-id="explore-root"]');
     await selectTreeRow(root);
     await acceptNextPrompt(session.page, 'Document fabric destination', () =>
@@ -1358,7 +1359,7 @@ test('persists Chromium settings and applies one-click activation to a real save
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     await session.page.getByRole('button', { name: 'Settings' }).click();
     await session.page.getByLabel('Follow the focused browser window').uncheck();
     await session.page.getByLabel('Activate with one click').check();
@@ -1422,8 +1423,8 @@ test('liberates a live Chromium tab into a new window by dropping it on the Expl
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
-    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
+    const rightPane = session.page.getByRole('region', { name: 'Explorer 2' });
     await rightPane.getByRole('tab', { name: 'Explore' }).click();
     const liveTab = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
 
@@ -1488,8 +1489,8 @@ test('restores a saved tab into the window where it is dropped', async ({}, test
     const state = await createAttachedTabBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
-    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
+    const rightPane = session.page.getByRole('region', { name: 'Explorer 2' });
 
     await leftPane
       .locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`)
@@ -1529,7 +1530,7 @@ test('opens a new Chromium window from the explorer toolbar', async ({}, testInf
         browserWindow.id === undefined ? [] : [browserWindow.id]
       )
     );
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     await leftPane.getByTitle('Open a new browser window').click();
 
     createdWindowId = await expect
@@ -1556,8 +1557,8 @@ test('browses and selectively restores local Chromium tree snapshots', async ({}
   try {
     await session.serviceWorker.evaluate(() => chrome.storage.local.clear());
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
-    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
+    const rightPane = session.page.getByRole('region', { name: 'Explorer 2' });
     const root = leftPane.locator('[data-node-id="explore-root"]');
     await session.page.bringToFront();
     await root.click();
@@ -1584,28 +1585,27 @@ test('browses and selectively restores local Chromium tree snapshots', async ({}
     await expect(secondTemporaryGroup).toBeVisible();
 
     await leftPane.getByTitle('Browse and restore local tree snapshots').click();
-    const history = leftPane.getByRole('dialog', { name: 'Local backup history' });
+    const history = session.page.getByRole('region', { name: 'Local backup history' });
     const entries = history.locator('li[data-created-at]');
     await expect(entries).toHaveCount(2);
     await expect(entries.first()).toContainText(/\d+ nodes?/u);
 
     await entries.first().getByRole('button', { name: /Open backup from/u }).click();
+    const backupPane = session.page.getByRole('region', { name: 'Explorer 3' });
     await expect(
-      leftPane.getByRole('combobox', { name: 'Explorer data source' }).locator('option:checked')
+      backupPane.getByRole('combobox', { name: 'Explorer data source' }).locator('option:checked')
     ).toContainText('Local backup');
-    await expect(leftPane.getByText('Temporary Chromium backup test', { exact: true })).toBeVisible();
-    await expect(leftPane.getByText('Second Chromium backup test', { exact: true })).toHaveCount(0);
+    await expect(backupPane.getByText('Temporary Chromium backup test', { exact: true })).toBeVisible();
+    await expect(backupPane.getByText('Second Chromium backup test', { exact: true })).toHaveCount(0);
 
     await rightPane.getByRole('tab', { name: 'Explore' }).click();
     await expect(rightPane.getByText('Second Chromium backup test', { exact: true })).toBeVisible();
-    await rightPane.getByTitle('Browse and restore local tree snapshots').click();
-    const rightHistory = rightPane.getByRole('dialog', { name: 'Local backup history' });
     await acceptNextConfirmation(session.page, () =>
-      rightHistory.getByRole('button', { name: /Restore backup from/u }).nth(1).click()
+      history.getByRole('button', { name: /Restore backup from/u }).nth(1).click()
     );
     await expect(rightPane.getByText('Temporary Chromium backup test', { exact: true })).toHaveCount(0);
     await expect(rightPane.getByText('Second Chromium backup test', { exact: true })).toHaveCount(0);
-    await expect(rightHistory.locator('li[data-created-at]')).toHaveCount(1);
+    await expect(entries).toHaveCount(1);
     await expect.poll(() => countLocalTreeSnapshots(session.serviceWorker)).toBe(1);
     await session.page.reload();
     await rightPane.getByRole('tab', { name: 'Explore' }).click();
@@ -1624,7 +1624,7 @@ test('imports external text and links into Chrome persistent storage', async ({}
     const state = await createAttachedTabBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const sourceTab = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
     const transfer = await dispatchDragWrite(sourceTab);
     expect(transfer['text/uri-list']).toBe(sourceUrl);
@@ -1671,7 +1671,7 @@ test('opens an original Tabs Outliner tree export in the Chromium document pane'
   const session = await launchBrowserAtlas(testInfo);
 
   try {
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     await leftPane.locator('input[type="file"]').setInputFiles({
       name: 'legacy-tabs-outliner.tree',
       mimeType: 'application/json',
@@ -1701,7 +1701,7 @@ test('browses and selectively restores deleted Chromium hierarchies', async ({},
   try {
     await session.serviceWorker.evaluate(() => chrome.storage.local.clear());
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const root = leftPane.locator('[data-node-id="explore-root"]');
 
     await root.click();
@@ -1727,7 +1727,7 @@ test('browses and selectively restores deleted Chromium hierarchies', async ({},
     );
     await leftPane.getByTitle('Browse and restore deleted hierarchies').click();
 
-    const history = leftPane.getByRole('dialog', { name: 'Deleted items history' });
+    const history = session.page.getByRole('region', { name: 'Deleted items history' });
     const entries = history.locator('li[data-deletion-id]');
     await expect(entries).toHaveCount(2);
     await expect(entries.first()).toContainText('Second deleted Chromium group');
@@ -1755,7 +1755,7 @@ test('copies, cuts, and pastes saved hierarchies through the context menu in Chr
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const root = leftPane.locator('[data-node-id="explore-root"]');
 
     await selectTreeRow(root);
@@ -1814,8 +1814,8 @@ test('copies a complete persistent hierarchy with Alt-drag in Chromium', async (
   try {
     browserState = await createTestBrowserState(session.serviceWorker);
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
-    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
+    const rightPane = session.page.getByRole('region', { name: 'Explorer 2' });
     const root = leftPane.locator('[data-node-id="explore-root"]');
 
     await selectTreeRow(root);
@@ -1863,7 +1863,7 @@ test('restores only the latest saved Chromium window session with Alt activation
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const liveWindow = leftPane.locator(`[data-node-id="explore-window-${state.sourceWindowId}"]`);
     const liveTab = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
     const menu = session.page.getByRole('menu', { name: 'Tree commands' });
@@ -1949,7 +1949,7 @@ test('opens a saved Chromium link in a new or last window without restoring it',
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const liveTab = leftPane.locator(`[data-node-id="explore-tab-${state.sourceTabId}"]`);
     await liveTab.getByRole('button', { name: 'Close and save Browser Atlas E2E Source' }).click();
     const savedTab = leftPane
@@ -2021,14 +2021,16 @@ test('searches, prints, and exports visible rows in the Chromium extension', asy
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
-    const rightPane = session.page.getByRole('region', { name: 'Right explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
+    const rightPane = session.page.getByRole('region', { name: 'Explorer 2' });
     const root = leftPane.locator('[data-node-id="explore-root"]');
 
     await root.focus();
     await root.press('c');
-    await expect(rightPane.getByRole('tab', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
-    await expect(rightPane.getByRole('link', { name: 'Browser Atlas E2E Source' })).toBeVisible();
+    const clonePane = session.page.getByRole('region', { name: 'Explorer 3' });
+    await expect(clonePane.getByRole('tab', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
+    await expect(clonePane.getByRole('link', { name: 'Browser Atlas E2E Source' })).toBeVisible();
+    await expect(rightPane.getByRole('tab', { name: 'Bookmarks' })).toHaveAttribute('aria-selected', 'true');
 
     await root.focus();
     await root.press(`${CLIPBOARD_MODIFIER}+f`);
@@ -2103,7 +2105,7 @@ test('supports original organizer placement shortcuts in Chromium', async ({}, t
     const state = await createTestBrowserState(session.serviceWorker);
     browserState = state;
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const root = leftPane.locator('[data-node-id="explore-root"]');
 
     await selectTreeRow(root);
@@ -2163,7 +2165,7 @@ test('moves persistent and live hierarchies with structural shortcuts in Chromiu
     browserState = state;
     const siblingTabId = await createSiblingTab(session.serviceWorker, state.sourceWindowId);
     await session.page.reload();
-    const leftPane = session.page.getByRole('region', { name: 'Left explorer pane' });
+    const leftPane = session.page.getByRole('region', { name: 'Explorer 1' });
     const root = leftPane.locator('[data-node-id="explore-root"]');
 
     await selectTreeRow(root);
@@ -2831,6 +2833,11 @@ async function acceptNextPrompt(page: Page, value: string, action: () => Promise
   const dialog = page.locator('[data-browser-atlas-operation-dialog]');
   await dialog.locator('input[aria-label="Name"]').fill(value);
   await dialog.getByRole('button', { name: /Create|Rename/u }).click();
+}
+
+/** Closes a dock panel with the close button of its tab. */
+async function closeDockPanel(page: Page, panelId: string): Promise<void> {
+  await page.locator(`[data-dock-tab="${panelId}"]`).getByRole('button', { name: 'Close panel' }).click();
 }
 
 async function acceptNextConfirmation(page: Page, action: () => Promise<void>): Promise<void> {

@@ -200,7 +200,7 @@ function childStyle(dock: DockController, splitId: DockNodeId, index: number): J
   const total = node.children.reduce((sum, _, childIndex) => sum + size(childIndex), 0) || count;
   const grow = (size(index) / total) * count;
   const row = node.direction === 'row';
-  const limits = dock.limits(node.children[index], row ? 'width' : 'height');
+  const limits = dock.limits(node.children[index]!, row ? 'width' : 'height');
   const min = limits.min > 0 ? `${limits.min}px` : '0';
   const max = Number.isFinite(limits.max) ? `${limits.max}px` : undefined;
   return {
@@ -454,7 +454,8 @@ export function createDockSash(splitId: DockNodeId, before: DockNodeId) {
   function resizeBy(deltaPx: number): void {
     const children = split()?.children ?? [];
     const axis = direction() === 'row' ? 'width' : 'height';
-    const limits = [dock.limits(children[index()], axis), dock.limits(children[index() + 1], axis)] as const;
+    // A missing child (a stale sash) has no node, which gives unlimited sizes.
+    const limits = [dock.limits(children[index()]!, axis), dock.limits(children[index() + 1]!, axis)] as const;
     dock.resize(splitId, resizeWeights(startSizes, index(), deltaPx, freeSpace, dock.minPaneSize(), limits));
   }
 

@@ -47,7 +47,7 @@ export type NestableContainer<K> = {
   /** Ordered list of child item keys in this container. */
   items: Accessor<K[]>;
   /** Tags this container accepts. `undefined` = accept everything. */
-  acceptTags?: string[];
+  acceptTags?: string[] | undefined;
   /** Returns the bounding rect for an item by its key. */
   getRect: (key: K) => Rect | undefined;
   /** Returns the bounding rect for the container element. */

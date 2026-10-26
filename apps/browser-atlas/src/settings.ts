@@ -184,7 +184,8 @@ function parseColorOverride(value: unknown, fallback: BrowserAtlasColorOverride)
   };
 }
 
-function getExtensionStorage(): ExtensionStorage | undefined {
+/** Returns `chrome.storage` on extension pages, or `undefined` in the localhost mock. */
+export function getExtensionStorage(): ExtensionStorage | undefined {
   const candidate: unknown = Reflect.get(globalThis, 'chrome');
   if (!isRecord(candidate) || !isRecord(candidate.storage)) {
     return undefined;

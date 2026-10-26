@@ -13,6 +13,7 @@ import {
   snapshot,
   type Store,
   type StoreSetter,
+  untrack,
   useContext
 } from 'solid-js';
 import {
@@ -307,7 +308,11 @@ function createDockSlots(root: Accessor<HTMLElement | undefined>, state: Accesso
     observer.observe(element);
     return () => observer.unobserve(element);
   });
-  createEffect(() => deep(state()), measure);
+  // The compute tracks the whole layout; measuring reads it again only as a snapshot.
+  createEffect(
+    () => deep(state()),
+    () => untrack(measure)
+  );
 
   function measure(): void {
     const rootElement = root();
@@ -547,7 +552,7 @@ function createDockDrag(options: {
     const previous = style.userSelect;
     style.userSelect = 'none';
     document.getSelection()?.removeAllRanges();
-    const frames = [...(options.root()?.querySelectorAll('iframe') ?? [])].map((frame) => ({
+    const frames = [...(untrack(options.root)?.querySelectorAll('iframe') ?? [])].map((frame) => ({
       frame,
       pointerEvents: frame.style.pointerEvents
     }));

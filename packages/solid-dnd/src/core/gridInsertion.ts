@@ -66,7 +66,7 @@ export function getGridInsertionPoint<K>(
   if (getRectForItem) {
     // 1. Direct hit: pointer is inside an item's rect
     for (let i = 0; i < items.length; i++) {
-      const rect = getRectForItem(items[i]);
+      const rect = getRectForItem(items[i]!);
       if (!rect) continue;
       if (
         position.x >= rect.x &&
@@ -91,7 +91,7 @@ export function getGridInsertionPoint<K>(
     let bestIdx = 0;
     let bestDist = Infinity;
     for (let i = 0; i < items.length; i++) {
-      const rect = getRectForItem(items[i]);
+      const rect = getRectForItem(items[i]!);
       if (!rect) continue;
       const dx = Math.max(rect.x - position.x, 0, position.x - (rect.x + rect.width));
       const dy = Math.max(rect.y - position.y, 0, position.y - (rect.y + rect.height));
@@ -102,7 +102,7 @@ export function getGridInsertionPoint<K>(
       }
     }
 
-    const bestRect = getRectForItem(items[bestIdx]);
+    const bestRect = getRectForItem(items[bestIdx]!);
     if (bestRect) {
       return insertionFromHalf(position.x, bestRect, bestIdx, items, containerKey);
     }
@@ -122,13 +122,13 @@ export function getGridInsertionPoint<K>(
   const cellCenterX = origin.x + cell.col * cellStep + grid.columnWidth / 2;
 
   if (position.x < cellCenterX) {
-    return { parent: containerKey, before: items[flatIndex] };
+    return { parent: containerKey, before: items[flatIndex]! };
   } else {
     const nextIndex = flatIndex + 1;
     if (nextIndex >= items.length) {
       return { parent: containerKey, before: null };
     }
-    return { parent: containerKey, before: items[nextIndex] };
+    return { parent: containerKey, before: items[nextIndex]! };
   }
 }
 
@@ -137,13 +137,13 @@ export function getGridInsertionPoint<K>(
 function insertionFromHalf<K>(pointerX: number, rect: Rect, index: number, items: K[], containerKey: K): Place<K> {
   const centerX = rect.x + rect.width / 2;
   if (pointerX < centerX) {
-    return { parent: containerKey, before: items[index] };
+    return { parent: containerKey, before: items[index]! };
   }
   const next = index + 1;
   if (next >= items.length) {
     return { parent: containerKey, before: null };
   }
-  return { parent: containerKey, before: items[next] };
+  return { parent: containerKey, before: items[next]! };
 }
 
 // ============================================================================
@@ -205,7 +205,7 @@ export function getGridIndicatorPosition<K>(
   const lastIdx = items.length - 1;
 
   if (getRectForItem) {
-    const rect = getRectForItem(items[lastIdx]);
+    const rect = getRectForItem(items[lastIdx]!);
     if (rect) {
       return {
         x: rect.x + rect.width - origin.x,

@@ -67,7 +67,7 @@ export function getLinearInsertionPoint<K>(
   }
 
   for (let i = 0; i < keys.length; i++) {
-    const rect = getRect(keys[i]);
+    const rect = getRect(keys[i]!);
     if (!rect) continue;
 
     const rectStart = axis === 'horizontal' ? rect.x : rect.y;
@@ -78,7 +78,7 @@ export function getLinearInsertionPoint<K>(
     if (i < keys.length - 1) {
       // For non-last items: boundary is the midpoint between this item's
       // trailing edge and the next item's leading edge.
-      const nextRect = getRect(keys[i + 1]);
+      const nextRect = getRect(keys[i + 1]!);
       if (nextRect) {
         const nextStart = axis === 'horizontal' ? nextRect.x : nextRect.y;
         boundary = (rectStart + rectSize + nextStart) / 2;
@@ -95,7 +95,7 @@ export function getLinearInsertionPoint<K>(
 
     const probe = axis === 'horizontal' ? position.x : position.y;
     if (probe < boundary) {
-      return { parent: parentKey, before: keys[i] };
+      return { parent: parentKey, before: keys[i]! };
     }
   }
 

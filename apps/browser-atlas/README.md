@@ -18,6 +18,16 @@ groups, notes, separators, and arbitrary nested descendants. Mutations survive
 reload through `localStorage`, so extension features can be exercised without
 touching a personal browser profile.
 
+The workspace is a dock built on `solid-dock`. Explorers and the **Deleted**,
+**Backups**, **Cloud**, and **Settings** panels are tabs that can be dragged into
+another panel's tab group or beside it, and the gaps between panels resize them.
+**New explorer** opens any number of explorers. The arrangement, what every
+explorer shows, the primary explorer, and the browser of each service panel are
+stored in `chrome.storage.local` in the extension and in `localStorage` on
+localhost, so every window, including **Pop out**, opens the latest layout.
+While a tree row is dragged over a background tab, that tab opens, so rows can
+be dropped into explorers hidden behind another tab.
+
 The header's **Help** dialog documents current tree workflows, recovery rules,
 cross-browser mock behavior, and keyboard shortcuts without leaving the active
 tree. **About** records the Tabs Outliner lineage, build version, runtime, and
@@ -28,7 +38,7 @@ app, close with Escape or their Close action, and never mutate browser data.
 `.tree` operation-log exports. Legacy windows, groups, nested tabs, notes,
 separator styles, collapsed state, custom titles, favicons, and protected
 Google Doc colors are converted into an editable portable document. The same
-parser and document pane run in the extension and at the localhost route.
+parser and document view run in the extension and at the localhost route.
 
 The extension watch build is written to `dist-extension`. Load that directory
 as an unpacked extension from `chrome://extensions`.
@@ -155,7 +165,7 @@ Backspace or **Save & Close hierarchy** saves and closes every hidden live tab
 and window beneath it. Chromium and both localhost browser mocks share this
 behavior.
 
-**Expand all** opens every collapsed branch in the current pane; **Undo expand**
+**Expand all** opens every collapsed branch in the current explorer; **Undo expand**
 restores exactly the branches that were collapsed before that operation.
 Collapsed branches retain the original recursive statistics block. The first
 value counts every hidden node, `▣` counts hidden live browser windows, and `●`
@@ -168,10 +178,14 @@ Browser Atlas retains up to 30 local Persistent Tree snapshots. A recovery point
 is created automatically before a changed tree is written when at least five
 minutes have elapsed since the previous snapshot. **Backup** captures the current
 tree immediately, and **Restore backup** consumes and restores the newest local
-snapshot. **Backups** opens the complete newest-first history with each timestamp
-and recursive node count. **Open** loads a recovery point as a detached tree for
-selective drag-and-drop recovery, while **Restore** replaces the live tree and
-consumes only that selected entry. Chromium stores these snapshots in extension-local storage; the
+snapshot. **Backups** opens the Local backups panel with the complete
+newest-first history, each timestamp, and recursive node count. **Open** loads a
+recovery point as a detached tree in a new explorer for selective drag-and-drop
+recovery, while **Restore** replaces the live tree and consumes only that
+selected entry. The Deleted, Backups, and Cloud panels each choose their browser:
+an explorer's toolbar button shows the panel for that explorer's browser, hides
+it when it already shows that browser, and the panel's own picker switches it.
+Chromium stores these snapshots in extension-local storage; the
 localhost mock uses `localStorage`, so the same recovery flow can be tested at
 `http://localhost:3120/browser-atlas`.
 
@@ -179,8 +193,9 @@ The **Cloud** panel provides the original remote-backup workflow through a
 backend-neutral provider: connect or disconnect, add a machine label, enable
 24-hour automatic copies, create a manual copy, list the newest 30 backups,
 open any copy as a detached editable tree, restore without consuming a remote
-copy, and permanently delete individual copies. Opening a copy leaves the live
-tree untouched, so selected branches can be dragged from it into another pane;
+copy, and permanently delete individual copies. Opening a copy shows it in a new
+explorer and leaves the live tree untouched, so selected branches can be dragged
+from it into another explorer;
 full restore first creates a local safety snapshot of the current tree.
 At localhost, Chrome (mock) and Firefox (mock) have completely independent
 connections, preferences, and durable cloud objects stored under separate
@@ -229,16 +244,19 @@ global shortcut, alongside Save & Close Current Tab, Current Window, and All
 Windows. These browser-level shortcuts can be assigned under
 `chrome://extensions/shortcuts`.
 
-The primary Explore pane follows browser-window focus changes automatically,
-including focus changes initiated from the opposite pane. Activating an item in
-the primary pane suppresses the redundant auto-scroll, matching the original
-Tabs Outliner behavior. **Settings** can disable following, opt into one-click
+The primary explorer, starred on its tab, follows browser-window focus changes
+while it shows Explore, including focus changes initiated from other explorers,
+and shows the window revealed by the extension action. The first explorer is
+primary by default; the star on another explorer's tab makes that one primary,
+and closing the primary explorer passes the role to the first remaining one.
+Activating an item in the primary explorer suppresses the redundant auto-scroll,
+matching the original Tabs Outliner behavior. **Settings** can disable following, opt into one-click
 tab/window activation (double click is the default), and request that the
 extension open Browser Atlas on Chromium startup. Its Appearance section also
 recreates the original experimental light background and independent color
 overrides for saved, open, active tabs, and notes. The original default colors
 remain visible when an override is disabled, protected Google Docs keep their
-custom blue title, and changes apply immediately to both panes. Settings use
+custom blue title, and changes apply immediately to every explorer. Settings use
 `chrome.storage.local` in the extension and `localStorage` in the localhost
 mock, and persist across reloads in both runtimes.
 
@@ -251,13 +269,14 @@ can disable this behavior. On localhost, Ctrl/Cmd-clicking or middle-clicking a
 saved link creates the same nested mock-tab chain, so both the enabled and
 disabled behaviors can be exercised without touching a real profile.
 
-`C` clones the current view into the opposite explorer pane. The destination
-switches to the same browser/file backend and Explore/Bookmarks/History source,
-then receives the exact collapsed-branch set and scroll position. This adapts
-Tabs Outliner's separate cloned windows to Browser Atlas's side-by-side model,
-where both views remain independently scrollable and can exchange complete
-hierarchies by drag-and-drop. The directional **Clone** toolbar buttons and the
-Global context-menu action provide the same behavior in Chromium and localhost.
+`C` clones the current view into a new explorer to the right of the current
+one. The clone shows the same browser/file backend and
+Explore/Bookmarks/History source with the exact collapsed-branch set and scroll
+position. This adapts Tabs Outliner's separate cloned windows to Browser
+Atlas's docked panels, where every view stays independently scrollable and can
+exchange complete hierarchies by drag-and-drop. The **Clone** toolbar button and
+the Global context-menu action provide the same behavior in Chromium and
+localhost.
 
 Dragging a live tab onto the Explore root detaches it into a new browser window.
 Its persistent identity and nested organizer context move with it, including
@@ -347,8 +366,8 @@ Right-clicking a tree row opens the equivalent contextual command menu. It
 groups hierarchy copy/cut/paste, node actions, relative note/group/separator
 creation, and every structural move that is valid at that position. The row is
 selected before the menu opens, Escape dismisses it, and Shift+right-click
-leaves the browser's native context menu available. The two explorer panes
-share an in-app portable clipboard so complete hierarchies can be exercised on
+leaves the browser's native context menu available. All explorers share an
+in-app portable clipboard so complete hierarchies can be exercised on
 localhost even when the browser denies direct clipboard access.
 
 Saved tabs, windows, groups, notes, and separators all use Persistent Tree v2.
@@ -370,10 +389,12 @@ while preserving groups, notes, separators, and already-live descendants.
 Regular Restore actions also rebind nodes in place, so restoring a saved window
 does not discard its organizational context.
 
-Each pane can independently display the live browser/local backend, the left
-editable file, or the right editable file. Drop a versioned Browser Atlas
-JSON document or newline-oriented URL text file directly onto a pane to open it.
-The pane toolbar can also open a file, export every collection as Browser Atlas
+Each explorer can independently display any browser backend or the editable
+file of any open explorer. Every explorer owns one file, which lives as long as
+the explorer and is not stored between sessions: after a restart that explorer
+shows the primary browser's Explore. Drop a versioned Browser Atlas JSON
+document or newline-oriented URL text file directly onto an explorer to open it
+in its file. The explorer toolbar can also open a file, export every collection as Browser Atlas
 JSON, or export the selected collection as a newline-oriented URL list.
 Drag a tree item onto another tree to move or copy it, or out to the desktop in
 Chromium to save that item as portable JSON.
