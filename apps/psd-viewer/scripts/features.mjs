@@ -4,7 +4,9 @@ import { createRequire } from 'node:module';
 const require = createRequire(new URL('../package.json', import.meta.url));
 const { chromium } = require('@playwright/test');
 const out = process.env.PSD_BENCH_OUT;
-if (!out) throw new Error('Run through benchmark.mjs');
+if (!out) {
+  throw new Error('Run through benchmark.mjs');
+}
 const root = new URL('../../../', import.meta.url).pathname.replace(/\/$/, '');
 const fixtures = `${process.env.PSD_TEXT_MIXER_RESEARCH_ROOT}/fixtures/psd`;
 const b = await chromium.launch({
@@ -40,7 +42,9 @@ try {
         });
       }
       postMessage(d, ...a) {
-        if (d.type !== 'open') __requests.push(d);
+        if (d.type !== 'open') {
+          __requests.push(d);
+        }
         super.postMessage(d, ...a);
       }
     };
@@ -125,7 +129,7 @@ try {
   await settle();
   result.cacheProbe = await p.evaluate(async () => {
     const base = __requests.filter((x) => x.type === 'render').at(-1),
-      w = __workers[0];
+      w = __workers.at(-1);
     async function send(d) {
       return await new Promise((resolve) => {
         const t = performance.now();
@@ -159,7 +163,7 @@ try {
     .setInputFiles(`${fixtures}/oracle-1/DVE__Enzymes__test__--1-e9610aa019d6-g0/source-input/document.psb`);
   await settle();
   result.contentTiles = await p.evaluate(async () => {
-    const w = __workers[0],
+    const w = __workers.at(-1),
       base = __requests.filter((x) => x.type === 'renderWindow').at(-1),
       results = [];
     for (let n = 0; n < 8; n++) {
@@ -176,8 +180,9 @@ try {
               w.removeEventListener('message', listen);
               const d = e.data;
               let nontransparent = 0;
-              for (let i = 3; i < (d.images?.[0].pixels.length ?? 0); i += 4)
+              for (let i = 3; i < (d.images?.[0].pixels.length ?? 0); i += 4) {
                 nontransparent += d.images[0].pixels[i] > 0;
+              }
               resolve({
                 content,
                 rectangle,

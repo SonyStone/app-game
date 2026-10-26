@@ -5,7 +5,9 @@ import { createRequire } from 'node:module';
 const require = createRequire(new URL('../package.json', import.meta.url));
 const { chromium } = require('@playwright/test');
 const out = process.env.PSD_BENCH_OUT;
-if (!out) throw new Error('Run through benchmark.mjs');
+if (!out) {
+  throw new Error('Run through benchmark.mjs');
+}
 const base = `${process.env.PSD_TEXT_MIXER_RESEARCH_ROOT}/fixtures/psd/oracle-1`;
 const cases = [
   ['large-psb', 'DVE__Enzymes__test__--1-e9610aa019d6-g0', 'psb'],
@@ -50,7 +52,9 @@ const init = () => {
   ).observe({ type: 'longtask', buffered: true });
   let last;
   const frame = (t) => {
-    if (last) a.frames.push({ t, dt: t - last, phase: a.phase });
+    if (last) {
+      a.frames.push({ t, dt: t - last, phase: a.phase });
+    }
     last = t;
     requestAnimationFrame(frame);
   };
@@ -74,7 +78,9 @@ const init = () => {
   document.addEventListener(
     'change',
     (e) => {
-      if (e.target.matches('[role=tree] input')) a.toggleInput = performance.now();
+      if (e.target.matches('[role=tree] input')) {
+        a.toggleInput = performance.now();
+      }
     },
     true
   );
@@ -90,16 +96,21 @@ const init = () => {
           a.opened = { info: d.info, layers: d.layers, states: d.states, opening: d.opening, document: d.document };
           summary.info = d.info;
         }
-        if (d.performance) summary.performance = d.performance;
-        if (d.error) summary.error = d.error;
-        if (d.render)
+        if (d.performance) {
+          summary.performance = d.performance;
+        }
+        if (d.error) {
+          summary.error = d.error;
+        }
+        if (d.render) {
           summary.render = {
             milliseconds: d.render.milliseconds,
             w: d.render.width,
             h: d.render.height,
             approximations: d.render.approximations
           };
-        if (d.images)
+        }
+        if (d.images) {
           summary.images = d.images.map((i) => ({
             left: i.left,
             top: i.top,
@@ -112,8 +123,13 @@ const init = () => {
             bytes: i.pixels.byteLength,
             approximations: i.approximations
           }));
-        if (d.milliseconds !== undefined) summary.milliseconds = d.milliseconds;
-        if (d.__auditWasmBytes) summary.wasmBytes = d.__auditWasmBytes;
+        }
+        if (d.milliseconds !== undefined) {
+          summary.milliseconds = d.milliseconds;
+        }
+        if (d.__auditWasmBytes) {
+          summary.wasmBytes = d.__auditWasmBytes;
+        }
         a.events.push(summary);
       });
     }
@@ -148,7 +164,13 @@ function rss(rootPid) {
       .filter(Boolean);
     const roots = rows.filter((x) => x.pid === rootPid);
     const ids = new Set(roots.map((x) => x.pid));
-    for (let n = 0; n < 5; n++) for (const r of rows) if (ids.has(r.ppid)) ids.add(r.pid);
+    for (let n = 0; n < 5; n++) {
+      for (const r of rows) {
+        if (ids.has(r.ppid)) {
+          ids.add(r.pid);
+        }
+      }
+    }
     return {
       totalBytes: rows.filter((x) => ids.has(x.pid)).reduce((s, x) => s + x.rss, 0),
       processes: rows
@@ -190,7 +212,9 @@ for (const [name, dir, ext] of fixtures) {
     result.errors = [];
     page.on('pageerror', (e) => result.errors.push(e.message));
     await page.goto(`${process.env.PSD_BENCH_URL}/?telemetry=1`, { waitUntil: 'networkidle' });
-    if (name.startsWith('large-psb')) await page.screenshot({ path: `${out}/assets/01-empty.png` });
+    if (name.startsWith('large-psb')) {
+      await page.screenshot({ path: `${out}/assets/01-empty.png` });
+    }
     result.environment = await page.evaluate(async () => {
       const adapter = await navigator.gpu?.requestAdapter();
       return {
@@ -362,7 +386,9 @@ for (const [name, dir, ext] of fixtures) {
         result.probes = await page.evaluate(async () => {
           const a = __audit;
           const req = [...a.requests].reverse().find((x) => x.type === 'renderWindow' || x.type === 'render');
-          if (!req || !a.opened) return [];
+          if (!req || !a.opened) {
+            return [];
+          }
           const info = a.opened.info;
           const results = [];
           for (let n = 0; n < 4; n++) {
