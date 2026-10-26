@@ -744,3 +744,45 @@ it('bounds zoom-out coverage when even the coarsest region pyramid cannot coexis
     );
   }
 });
+
+it('deduplicates both admitted lanes across camera changes and bounds obsolete work to one tile per worker', async () => {
+  const { client } = synthetic();
+  const jobs: (() => void)[] = [];
+  const calls: WindowRequest[] = [];
+  let active = 0;
+  let peak = 0;
+  const wrapped = {
+    prepareWindows: async () => 2 as const,
+    renderWindow: vi.fn<PsdClient['renderWindow']>().mockImplementation((...args) => {
+      active++;
+      peak = Math.max(peak, active);
+      calls.push(args[3]);
+      return new Promise((resolve) => jobs.push(async () => {
+        active--;
+        resolve(await client.renderWindow(...args));
+      }));
+    })
+  };
+  const renderer = makeWindowRenderer(wrapped);
+  const snapshot = fakeSnapshot(300000, 300000);
+  const old = new AbortController();
+  const args = [{ scale: 1, x: 0, y: 0 }, { width: 1100, height: 100 }] as const;
+  const first = renderer.render(snapshot, ...args, old.signal, vi.fn());
+  await vi.waitFor(() => expect(jobs).toHaveLength(2));
+  old.abort();
+  const second = renderer.render(snapshot, ...args, new AbortController().signal, vi.fn());
+  await Promise.resolve();
+  expect(jobs).toHaveLength(2);
+  jobs[0]();
+  jobs[1]();
+  await vi.waitFor(() => expect(jobs).toHaveLength(3));
+  jobs[2]();
+  expect(await first).toBeUndefined();
+  expect(value(await second).quality).toMatchObject({ completed: 3, required: 3 });
+  expect(peak).toBe(2);
+  expect(new Set(calls.map((call) => JSON.stringify(call))).size).toBe(calls.length);
+  const count = calls.length;
+  await renderer.render(snapshot, ...args, new AbortController().signal, vi.fn());
+  expect(calls).toHaveLength(count);
+  renderer.clear();
+});

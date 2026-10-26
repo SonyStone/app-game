@@ -7,61 +7,64 @@ import { largePsb } from '../../../packages/psd/test/largePsb';
 const stage = (page: Page) => page.locator('[data-busy]');
 
 /** A tiny generated file exercises the real worker/WASM path on a canvas that cannot fit in memory whole. */
-test('opens a generated 300000-square PSB and pans/zooms through bounded regions', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.addInitScript(() => {
-    const NativeWorker = Worker;
-    window.Worker = class extends NativeWorker {
-      postMessage(message: { type: string }, options: Transferable[] | StructuredSerializeOptions = []) {
-        if (message.type === 'detectBlending') {
-          performance.mark('test:windowedDetection');
-        }
+for (const workers of [1, 2]) {
+  test(`opens a generated 300000-square PSB through bounded regions with ${workers} workers`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.addInitScript(() => {
+      const NativeWorker = Worker;
+      window.Worker = class extends NativeWorker {
+        postMessage(message: { type: string }, options: Transferable[] | StructuredSerializeOptions = []) {
+          if (message.type === 'detectBlending') {
+            performance.mark('test:windowedDetection');
+          }
 
-        if (Array.isArray(options)) {
-          super.postMessage(message, options);
-        } else {
-          super.postMessage(message, options);
+          if (Array.isArray(options)) {
+            super.postMessage(message, options);
+          } else {
+            super.postMessage(message, options);
+          }
         }
-      }
-    };
+      };
+    });
+    await page.goto(`/?workers=${workers}`);
+    await page.locator('input[accept=".psd,.psb"]').setInputFiles({
+      name: 'large-generated.psb',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from(largePsb())
+    });
+    await expect(stage(page)).toHaveAttribute('data-render-source', 'layers');
+    await expect(stage(page)).toHaveAttribute('data-busy', 'false');
+    await expect(page.getByRole('note')).toContainText('Windowed layer view');
+    await expect(page.getByRole('button', { name: 'Photoshop', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Difference', exact: true })).toBeDisabled();
+    const canvas = page.getByRole('img', { name: 'Our render', exact: true });
+    const overviewSize = await canvas.evaluate((element: HTMLCanvasElement) => [element.width, element.height]);
+    expect(overviewSize[0] * overviewSize[1]).toBeLessThan(2_097_152);
+    await page.getByRole('button', { name: '100%', exact: true }).click();
+    await expect(stage(page)).toHaveAttribute('data-render-step', '1');
+    await expect(stage(page)).toHaveAttribute('data-busy', 'false');
+    await panFromCanvasCenter(page, { width: 300000, height: 300000 }, { x: 299072, y: 299072 });
+    await expect(stage(page)).toHaveAttribute('data-busy', 'false');
+    await expect.poll(() => hasVisiblePixels(page)).toBe(true);
+    const bounds = (await stage(page).boundingBox())!;
+    const first = await stage(page).getAttribute('data-render-id');
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + bounds.width / 2 + 180, bounds.y + bounds.height / 2 + 70, { steps: 12 });
+    await page.mouse.up();
+    await expect(stage(page)).not.toHaveAttribute('data-render-id', first!);
+    await expect(stage(page)).toHaveAttribute('data-busy', 'false');
+    await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+    await expect(page.getByRole('spinbutton', { name: 'Zoom percentage' })).toHaveValue('125');
+    await expect(stage(page)).toHaveAttribute('data-busy', 'false');
+    const regionSize = await canvas.evaluate((element: HTMLCanvasElement) => [element.width, element.height]);
+    expect(regionSize[0] * regionSize[1]).toBeLessThanOrEqual(4_194_304);
+    expect(await page.evaluate(() => performance.getEntriesByName('test:windowedDetection').length)).toBe(0);
+    expect(errors).toEqual([]);
+    expect(page.workers()).toHaveLength(workers);
   });
-  await page.goto('/');
-  await page.locator('input[accept=".psd,.psb"]').setInputFiles({
-    name: 'large-generated.psb',
-    mimeType: 'application/octet-stream',
-    buffer: Buffer.from(largePsb())
-  });
-  await expect(stage(page)).toHaveAttribute('data-render-source', 'layers');
-  await expect(stage(page)).toHaveAttribute('data-busy', 'false');
-  await expect(page.getByRole('note')).toContainText('Windowed layer view');
-  await expect(page.getByRole('button', { name: 'Photoshop', exact: true })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Difference', exact: true })).toBeDisabled();
-  const canvas = page.getByRole('img', { name: 'Our render', exact: true });
-  const overviewSize = await canvas.evaluate((element: HTMLCanvasElement) => [element.width, element.height]);
-  expect(overviewSize[0] * overviewSize[1]).toBeLessThan(2_097_152);
-  await page.getByRole('button', { name: '100%', exact: true }).click();
-  await expect(stage(page)).toHaveAttribute('data-render-step', '1');
-  await expect(stage(page)).toHaveAttribute('data-busy', 'false');
-  await panFromCanvasCenter(page, { width: 300000, height: 300000 }, { x: 299072, y: 299072 });
-  await expect(stage(page)).toHaveAttribute('data-busy', 'false');
-  await expect.poll(() => hasVisiblePixels(page)).toBe(true);
-  const bounds = (await stage(page).boundingBox())!;
-  const first = await stage(page).getAttribute('data-render-id');
-  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(bounds.x + bounds.width / 2 + 180, bounds.y + bounds.height / 2 + 70, { steps: 12 });
-  await page.mouse.up();
-  await expect(stage(page)).not.toHaveAttribute('data-render-id', first!);
-  await expect(stage(page)).toHaveAttribute('data-busy', 'false');
-  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-  await expect(page.getByRole('spinbutton', { name: 'Zoom percentage' })).toHaveValue('125');
-  await expect(stage(page)).toHaveAttribute('data-busy', 'false');
-  const regionSize = await canvas.evaluate((element: HTMLCanvasElement) => [element.width, element.height]);
-  expect(regionSize[0] * regionSize[1]).toBeLessThanOrEqual(4_194_304);
-  expect(await page.evaluate(() => performance.getEntriesByName('test:windowedDetection').length)).toBe(0);
-  expect(errors).toEqual([]);
-});
+}
 
 /** A sparse oversized source is rejected before WASM copies it; the worker remains usable. */
 test('shows a budget refusal as an open failure and can open another file', async ({ page }) => {

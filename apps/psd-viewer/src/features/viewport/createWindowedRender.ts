@@ -1,7 +1,8 @@
 import type { PsdRenderSettings } from '@app-game/psd/viewer';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
-import type { OpenedPsd, PsdClient, PsdResultOf, RenderedPixels } from '../psd-worker';
+import type { OpenedPsd, PsdResultOf, RenderedPixels } from '../psd-worker';
+import type { WindowClient } from '../psd-worker/makePsdWorkerPool';
 import { requiresWindowedRendering } from '../psd-worker/protocol';
 import type { createViewport } from './createViewport';
 import { makeWindowRenderer } from './makeWindowRenderer';
@@ -13,7 +14,7 @@ import { makeWindowRenderer } from './makeWindowRenderer';
  * The temporary saved first frame is cleared on failure, edits or cancellation. Disposal releases cached pixels.
  */
 export function createWindowedRender(
-  client: Pick<PsdClient, 'renderWindow'>,
+  client: WindowClient,
   opened: Accessor<PsdResultOf<OpenedPsd> | undefined>,
   settings: Accessor<PsdRenderSettings>,
   visibility: Accessor<[number, boolean][]>,

@@ -50,6 +50,8 @@ type PsdRequestBody =
       settings: PsdRenderSettings;
       visibility: [number, boolean][];
       window: WindowRequest;
+      /** Per-worker native admission, including the retained host source. */
+      liveBytes?: number;
     }
   | { id: number; type: 'original'; document: number }
   | { id: number; type: 'channels'; document: number }
@@ -75,7 +77,11 @@ type PsdRequestBody =
  * The worker's answer to the request with the same `id`. Pixel buffers are transferred, never copied.
  * `documentFonts` and `textSupport` preserve the facade's release mismatches, separately from font availability.
  */
-export type PsdReply = PsdReplyBody & { performance?: PsdPerformanceSample[] };
+export type PsdReply = PsdReplyBody & {
+  performance?: PsdPerformanceSample[];
+  /** Actual WASM capacity and retained source, independent of optional telemetry. */
+  memory?: { wasmBytes: number; sourceBytes: number };
+};
 
 /** Reply payload, independent of optional diagnostics. */
 type PsdReplyBody =

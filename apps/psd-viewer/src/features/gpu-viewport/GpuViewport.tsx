@@ -27,6 +27,8 @@ export function GpuViewport(props: {
   onPresented?: (image: DisplayImage) => void;
   /** Reports pending display uploads separately from worker rendering; disposal clears the pending state. */
   onBusyChange?: (busy: boolean) => void;
+  /** Input-to-submission latency for worker admission, independent of optional diagnostics. */
+  onInteractionLatency?: (milliseconds: number) => void;
 }) {
   const forced = new URLSearchParams(location.search).get('backend') === 'canvas2d';
   const [failure, setFailure] = createSignal<string>();
@@ -198,6 +200,7 @@ function createDisplayFrames(
       }
 
       if (inputAt !== undefined) {
+        props.onInteractionLatency?.(performance.now() - inputAt);
         viewerPerformance.record('frame.inputToNextFrame', inputAt);
         inputAt = undefined;
       }
