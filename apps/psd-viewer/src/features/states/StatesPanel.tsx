@@ -14,10 +14,14 @@ export function StatesPanel(props: {
   busy: boolean;
   onChoose: (choice: PsdStateChoice | null) => void;
 }) {
-  const [playing, setPlaying] = createSignal(false);
+  const [playing, setPlaying] = createSignal(() => {
+    props.states;
+    return false;
+  });
   const [loop, setLoop] = createSignal(false);
   let deadline = 0;
   let steps = 0;
+  createEffect(playing, (active) => (active ? makeTimer(() => setPlaying(false), 30_000, setTimeout) : undefined));
   createEffect(
     () => ({ playing: playing(), busy: props.busy, choice: props.choice, states: props.states, loop: loop() }),
     (current) => {
@@ -55,6 +59,7 @@ export function StatesPanel(props: {
           aria-label="Show"
           value={value()}
           onChange={(event) => {
+            setPlaying(false);
             const [kind, id] = event.currentTarget.value.split(':');
             props.onChoose(kind === 'comp' ? { comp: Number(id) } : kind === 'frame' ? { frame: Number(id) } : null);
           }}

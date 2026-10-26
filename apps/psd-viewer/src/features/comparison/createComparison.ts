@@ -1,14 +1,15 @@
 import type { PsdImage } from '@app-game/psd/viewer';
+import { createTimer } from '@solid-primitives/timer';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 import type { OpenedPsd, PsdClient, PsdResultOf, RenderedPixels } from '../psd-worker';
 import { requiresWindowedRendering } from '../psd-worker/protocol';
 
 /** What the canvas shows: our render, Photoshop's saved merged image, or the heat map of their difference. */
-export type ViewMode = 'ours' | 'photoshop' | 'difference';
+export type ViewMode = 'ours' | 'photoshop' | 'difference' | 'split' | 'wipe' | 'blink';
 
 /**
  * Owns the view switch and what it needs from the worker: Photoshop's merged image, read once per document, and the
- * difference of the current render with it, computed only while the difference view is selected and again for every
+ * difference of the current render with it, computed only while a comparison mode is selected and again for every
  * new render.
  */
 export function createComparison(
@@ -27,13 +28,13 @@ export function createComparison(
     return document?.ok && !requiresWindowedRendering(document.value.info)
       ? initialMerged()
         ? { ok: true as const, value: initialMerged()! }
-        : view() === 'photoshop'
+        : view() !== 'ours'
           ? client.merged(document.value.document)
           : undefined
       : undefined;
   });
   const difference = createMemo(() => {
-    if (view() !== 'difference') {
+    if (view() === 'ours' || view() === 'photoshop') {
       return undefined;
     }
 
@@ -44,5 +45,13 @@ export function createComparison(
       : undefined;
   });
 
-  return { view, setView, merged, difference };
+  const [blinkSaved, setBlinkSaved] = createSignal(false);
+  createTimer(
+    () => setBlinkSaved((saved) => !saved),
+    () => (view() === 'blink' ? 600 : false),
+    setInterval
+  );
+  const [wipe, setWipe] = createSignal(50);
+
+  return { view, setView, merged, difference, blinkSaved, wipe, setWipe };
 }

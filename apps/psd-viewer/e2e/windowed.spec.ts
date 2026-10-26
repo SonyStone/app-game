@@ -55,7 +55,7 @@ test('opens a generated 300000-square PSB and pans/zooms through bounded regions
   await expect(stage(page)).not.toHaveAttribute('data-render-id', first!);
   await expect(stage(page)).toHaveAttribute('data-busy', 'false');
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-  await expect(page.getByRole('status', { name: 'Zoom level' })).toHaveText('125%');
+  await expect(page.getByRole('spinbutton', { name: 'Zoom percentage' })).toHaveValue('125');
   await expect(stage(page)).toHaveAttribute('data-busy', 'false');
   const regionSize = await canvas.evaluate((element: HTMLCanvasElement) => [element.width, element.height]);
   expect(regionSize[0] * regionSize[1]).toBeLessThanOrEqual(4_194_304);

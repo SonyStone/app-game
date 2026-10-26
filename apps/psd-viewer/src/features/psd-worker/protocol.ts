@@ -51,6 +51,7 @@ type PsdRequestBody =
       visibility: [number, boolean][];
       window: WindowRequest;
     }
+  | { id: number; type: 'original'; document: number }
   | { id: number; type: 'channels'; document: number }
   | { id: number; type: 'paths'; document: number }
   | { id: number; type: 'merged'; document: number }
@@ -89,6 +90,7 @@ type PsdReplyBody =
     }
   | { id: number; type: 'rendered'; render: RenderedPixels }
   | { id: number; type: 'windowRendered'; images: WindowPixels[]; milliseconds: number }
+  | { id: number; type: 'original'; bytes: Blob }
   | { id: number; type: 'channels'; channels: PsdSavedProcessChannels }
   | { id: number; type: 'paths'; paths: PsdPathSummary[] }
   | { id: number; type: 'merged'; image: PsdImage }
