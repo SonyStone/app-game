@@ -205,8 +205,8 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         info: opened.value.info,
         windowed: large
       };
-      const capability = planFor(opened.value, photoshopDefaultSettings, []);
-      document.windowed = chooseWindowed(opened.value, photoshopDefaultSettings, [], capability);
+      // Optional small-canvas planning follows saved first pixels through the capability request.
+      const capability = large ? planFor(opened.value, photoshopDefaultSettings, []) : undefined;
       post(
         {
           id: request.id,
