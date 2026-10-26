@@ -27,6 +27,7 @@ export function makePsdWorkerPool(
   let disabled = false;
   let verified: string | undefined;
   let primaryBusy = 0;
+  let primaryFlight: ReturnType<PsdClient['renderWindow']> | undefined;
   let secondaryBusy = false;
   let serialMillisecondsPerTile: number | undefined;
   const serialInputs: number[] = [];
@@ -131,6 +132,23 @@ export function makePsdWorkerPool(
     return secondary?.document && account() ? 2 : 1;
   }
 
+  // A spare can disappear while two scheduler lanes are active. Serialize their serial retries outside the
+  // primary client's coalescing queue so neither lane supersedes the other's still-needed tile.
+  const renderPrimary: PsdClient['renderWindow'] = async (...args) => {
+    while (primaryFlight) {
+      await primaryFlight.catch(() => undefined);
+    }
+    const job = primary.renderWindow(...args);
+    primaryFlight = job;
+    try {
+      return await job;
+    } finally {
+      if (primaryFlight === job) {
+        primaryFlight = undefined;
+      }
+    }
+  };
+
   const renderWindow: PsdClient['renderWindow'] = async (document, settings, visibility, window, signal) => {
     const identity = key(settings, visibility);
     const parallel = window.kind === 'regions' && verified === identity && eligible(settings) && !!secondary?.document;
@@ -145,7 +163,7 @@ export function makePsdWorkerPool(
     }
     const session = documentEpoch;
     try {
-      let result = await (spare?.client ?? primary).renderWindow(
+      let result = await (spare ? spare.client.renderWindow : renderPrimary)(
         spare?.document ?? document, settings, visibility, window, signal, parallel ? workerBytes : undefined
       );
       if (session !== documentEpoch) {
@@ -156,7 +174,7 @@ export function makePsdWorkerPool(
         stop();
         // A bounded-operation refusal is retried serially under the original one-worker policy.
         if (!result.ok && !signal.aborted) {
-          result = await primary.renderWindow(document, settings, visibility, window, signal);
+          result = await renderPrimary(document, settings, visibility, window, signal);
         }
       }
       if (result.ok && window.kind !== 'saved' && result.value.images.every((image) => image.strategy === 'window')) {
@@ -175,7 +193,7 @@ export function makePsdWorkerPool(
       }
       disabled = true;
       stop();
-      return primary.renderWindow(document, settings, visibility, window, signal);
+      return renderPrimary(document, settings, visibility, window, signal);
     } finally {
       if (spare) {
         if (secondary === spare) {

@@ -204,3 +204,19 @@ it('rejects old session replies even when a replacement worker reuses document i
   expect(await old).toMatchObject({ ok: false, error: { kind: 'superseded' } });
   pool.dispose();
 });
+
+it('serializes both surviving scheduler lanes after a mode change without coalescing required tiles', async () => {
+  const { pool, main } = setup();
+  await pool.open(new ArrayBuffer(100));
+  await tile(pool);
+  await prepare(pool);
+  pool.setWorkers(1);
+  main.hold = true;
+  const jobs = [tile(pool), tile(pool), tile(pool)];
+  for (let index = 0; index < jobs.length; index++) {
+    await vi.waitFor(() => expect(main.requests.filter((request) => request.type === 'renderWindow')).toHaveLength(index + 2));
+    main.finish();
+    expect((await jobs[index]).ok).toBe(true);
+  }
+  pool.dispose();
+});
