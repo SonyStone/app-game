@@ -45,14 +45,15 @@ import { createTuning } from './tuning';
  * The player aims with a crosshair of the game's own instead of the cursor; a line from the gun
  * shows where the next shot goes and what it will hit (see `AimOverlay`). The view looks ahead
  * toward the aim: it leads the tank by a share of the cursor's offset from the screen's center, so
- * the screen shows what lies ahead of the gun rather than behind the tank, and a still cursor
- * keeps the gun's aim however the view settles (see `createLookAhead`). Every gun fires at a
+ * the screen shows what lies ahead of the gun rather than behind the tank, and holds still while
+ * the tank and its lead keep within a box about the screen's center, so the picture does not
+ * slide under the aim while the tank drives about (see `createLookAhead`). Every gun fires at a
  * steady cadence for as long as the button is held, with no clip and no reload to keep track of.
  *
  * Esc pauses the match and opens the menu (see `PauseMenu`), which holds the actions of the
  * keys below, the pace knobs, the game's speed, the tanks' and shells' speeds, the damage, the
- * bots' reaction and how far they see, the zoom and the view's lead, which take effect at once and
- * are kept for the next visit, and what every key does. Its second page is the class editor,
+ * bots' reaction and how far they see, the zoom and the view's lead and slack, which take effect
+ * at once and are kept for the next visit, and what every key does. Its second page is the class editor,
  * which changes each class's numbers, kept for the next visit too, and shares the whole tuning as
  * JSON or a link (see `createTuning`). Keys: 1-5 pick a class and C opens the
  * class menu, R restarts, B shows what the bots think, V hands the player's tank to a bot and
@@ -256,7 +257,7 @@ const PIXELS_PER_METER = 100;
  * @param choice - The class the player asked for last, handed to the match whenever it changes after mount.
  * @param playerClass - The player's first class, read once; anything but a class id means the Soldier.
  * @param pace - The match's pace, read every frame: the game's speed, the zoom it sets when it
- *   changes, the view's lead, and what the match itself works by.
+ *   changes, the view's lead and slack, and what the match itself works by.
  * @param paused - Holds the match, its effects and the view still; the frame is drawn again as it stands.
  * @param onFrame - Receives the display state after each frame, with the player's aim on screen.
  */
@@ -371,7 +372,7 @@ function KothScene(props: {
 
     // The view goes onto the tank as it stands for the cursor as it is, so the gun aims at the ground the frame shows under the cursor.
     if (pivot) {
-      lookAhead.place(camera, screen, pivot, controls.aim, { share: pace.lead, dt: 0 });
+      lookAhead.place(camera, screen, pivot, controls.aim, { share: pace.lead, dt: 0, slack: slackOf(pace) });
     }
 
     const aim = player && pivot ? aimAngle(player, controls.aim, camera, screen, pivot) : undefined;
@@ -409,9 +410,10 @@ function KothScene(props: {
   /**
    * Leads the player's tank toward the aim (see `createLookAhead`), follows a watched tank, or
    * frames the whole map while watching. While the player's casemate gun charges a shot, the view
-   * zooms out, as a sniper's scope shows more (see `createScope`), about the tank, which the lead
-   * keeps where it is on the screen: the ground under a still cursor slides out along the gun's
-   * line, and the gun keeps its aim.
+   * zooms out, as a sniper's scope shows more (see `createScope`). A view with slack zooms about
+   * the cursor and gives the tank the scope's wider box, so the ground under a still cursor stays
+   * put; a rigid view zooms about the tank, which the lead keeps where it is on the screen, and the
+   * ground under a still cursor slides out along the gun's line. Either way the gun keeps its aim.
    */
   function placeCamera(screen: { width: number; height: number }, dt: number, aim: Aim | undefined) {
     const followed = props.watching ? (watched === undefined ? undefined : match.members[watched]) : match.seat;
@@ -457,8 +459,14 @@ function KothScene(props: {
       return;
     }
 
-    scope.step(camera, screen, worldToScreen(camera, pivot, screen), scoped, dt);
-    lookAhead.place(camera, screen, pivot, aim, { share: props.pace.lead, dt });
+    const anchor = props.pace.slack > 0 && aim?.kind === 'point' ? aim : worldToScreen(camera, pivot, screen);
+    scope.step(camera, screen, anchor, scoped, dt);
+    lookAhead.place(camera, screen, pivot, aim, { share: props.pace.lead, dt, slack: slackOf(props.pace) });
+  }
+
+  /** The view's slack for `pace`, widened while the scope is open; none for a rigid view. */
+  function slackOf(pace: Pace) {
+    return pace.slack > 0 ? scope.followMargin(pace.slack) : 0;
   }
 }
 

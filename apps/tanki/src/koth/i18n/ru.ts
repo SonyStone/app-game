@@ -37,7 +37,8 @@ export const ru: Dictionary = {
     botReaction: 'Реакция ботов',
     botSight: 'Обзор ботов',
     zoom: 'Масштаб',
-    lead: 'Упреждение камеры'
+    lead: 'Упреждение камеры',
+    slack: 'Свобода камеры'
   },
   knobGroup: { move: 'Движение', weapon: 'Оружие', armor: 'Броня', point: 'Точка', bot: 'Боты' },
   classKnob: {

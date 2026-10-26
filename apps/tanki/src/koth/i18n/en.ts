@@ -39,7 +39,8 @@ export const en = {
     botReaction: 'Bot reaction',
     botSight: 'Bot sight',
     zoom: 'Zoom',
-    lead: 'Camera lead'
+    lead: 'Camera lead',
+    slack: 'Camera slack'
   },
   knobGroup: { move: 'Movement', weapon: 'Weapon', armor: 'Armor', point: 'Point', bot: 'Bots' },
   classKnob: {

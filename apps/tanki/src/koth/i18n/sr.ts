@@ -37,7 +37,8 @@ export const sr: Dictionary = {
     botReaction: 'Реакција ботова',
     botSight: 'Видик ботова',
     zoom: 'Зум',
-    lead: 'Камера унапред'
+    lead: 'Камера унапред',
+    slack: 'Слобода камере'
   },
   knobGroup: { move: 'Кретање', weapon: 'Оружје', armor: 'Оклоп', point: 'Тачка', bot: 'Ботови' },
   classKnob: {

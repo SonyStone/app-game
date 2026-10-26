@@ -31,9 +31,16 @@ type Size = { width: number; height: number };
  * back to the tank. However far the cursor goes, even off the canvas, the lead stops short of
  * putting the tank closer than `EDGE_MARGIN` to the screen's edge.
  *
- * Call `place` once a frame before aiming, with `dt` 0, to center the view on where the tank is
- * now for the cursor as it is now, and again after physics with the frame's `dt` to ease the lead
- * and follow the tank.
+ * With `slack` the view holds still instead, as the old arena's camera did: the tank plus its lead
+ * may stray that share of the half screen from the screen's center before the view follows, and
+ * then the view moves only as far as it must. A still view keeps the ground under a still cursor
+ * still, so the gun stays on the spot it aims at while the tank drives, turns and swings under it;
+ * the view moves when the tank leaves the box or the cursor swings the lead out of it. Whatever
+ * the slack, the tank stays `EDGE_MARGIN` clear of the screen's edge.
+ *
+ * Call `place` once a frame before aiming, with `dt` 0, to put the view on where the tank is now
+ * for the cursor as it is now, and again after physics with the frame's `dt` to ease the lead and
+ * follow the tank.
  */
 export function createLookAhead() {
   let lead: Point = { x: 0, y: 0 };
@@ -45,14 +52,28 @@ export function createLookAhead() {
     },
 
     /**
-     * Eases the lead over a frame of `dt` seconds for `aim` and centers `camera` on `pivot` plus the lead.
+     * Eases the lead over a frame of `dt` seconds for `aim` and centers `camera` on `pivot` plus the
+     * lead, or with `slack` moves it only as far as it takes to bring them back into the box.
      *
      * @param pivot - Where the player's gun turns, in the world.
      * @param options.share - Share of the cursor's offset from the screen's center to lead by, 0 for none.
+     * @param options.slack - Share of the half screen the tank plus its lead may stray from the
+     *   screen's center before the view follows; 0, the default, follows rigidly.
      */
-    place(camera: Camera, screen: Size, pivot: Point, aim: Aim | undefined, options: { share: number; dt: number }) {
+    place(camera: Camera, screen: Size, pivot: Point, aim: Aim | undefined, options: { share: number; dt: number; slack?: number }) {
       lead = stepLead(lead, aim, screen, options.share, options.dt);
-      centerOn(camera, pivot, lead);
+      const slack = options.slack ?? 0;
+
+      if (slack <= 0) {
+        centerOn(camera, pivot, lead);
+        return;
+      }
+
+      const goal = { ...camera };
+      centerOn(goal, pivot, lead);
+      pushView(camera, goal, { x: (screen.width / 2) * slack, y: (screen.height / 2) * slack });
+      const margin = edgeMargin(screen);
+      pushView(camera, pivot, { x: screen.width / 2 - margin, y: screen.height / 2 - margin });
     },
 
     /** Drops the lead at once, as when the view is handed to watching. */
@@ -105,6 +126,21 @@ export function centerOn(camera: Camera, pivot: Point, lead: Point) {
   const sin = Math.sin(-camera.rotation);
   camera.x = pivot.x + (lead.x * cos - lead.y * sin) / camera.zoom;
   camera.y = pivot.y + (lead.x * sin + lead.y * cos) / camera.zoom;
+}
+
+/** Moves `camera` just enough that `point`, in the world, lies within `box` screen pixels of the screen's center along each screen axis. */
+function pushView(camera: Camera, point: Point, box: Point) {
+  const cos = Math.cos(camera.rotation);
+  const sin = Math.sin(camera.rotation);
+  const dx = (point.x - camera.x) * camera.zoom;
+  const dy = (point.y - camera.y) * camera.zoom;
+  // Offset on the screen, in screen axes.
+  const across = dx * cos - dy * sin;
+  const down = dx * sin + dy * cos;
+  const shift = { x: across - clamp(across, -box.x, box.x), y: down - clamp(down, -box.y, box.y) };
+  // Back to world axes and pixels.
+  camera.x += (shift.x * cos + shift.y * sin) / camera.zoom;
+  camera.y += (-shift.x * sin + shift.y * cos) / camera.zoom;
 }
 
 /**

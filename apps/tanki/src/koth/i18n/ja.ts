@@ -37,7 +37,8 @@ export const ja: Dictionary = {
     botReaction: 'ボットの反応',
     botSight: 'ボットの視界',
     zoom: 'ズーム',
-    lead: 'カメラの先読み'
+    lead: 'カメラの先読み',
+    slack: 'カメラの遊び'
   },
   knobGroup: { move: '移動', weapon: '武器', armor: '装甲', point: '拠点', bot: 'ボット' },
   classKnob: {
