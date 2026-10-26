@@ -106,6 +106,7 @@ test('bounds 82 text statuses so document inspection stays available', async ({ 
   test.skip(!existsSync(text), 'Requires the public text-heavy fixture.');
   await page.goto('/');
   await page.locator('input[accept=".psd,.psb"]').setInputFiles(text);
+  await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false', { timeout: 30000 });
   const panel = page.getByRole('region', { name: 'Fonts', exact: true });
   await expect(panel.locator('[data-text-layer]')).toHaveCount(82);
   const size = await panel.evaluate((element) => ({ height: element.clientHeight, content: element.scrollHeight }));
