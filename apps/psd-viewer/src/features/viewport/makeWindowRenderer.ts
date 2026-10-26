@@ -273,11 +273,13 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
             width: Math.min(image.width * image.step, info.width - image.left),
             height: Math.min(image.height * image.step, info.height - image.top)
           };
+          const arrival = {};
           const levels = [image, ...mips]
             .map(
               (image): DisplayTile => ({
                 image,
                 contentTile: window.kind === 'regions',
+                arrival,
                 left: image.left,
                 top: image.top,
                 step: image.step,
