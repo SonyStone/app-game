@@ -388,7 +388,10 @@ export function createBot(member: Member, context: BotContext) {
       combatReady: !coreOpen && armor >= TACTICS[member.tankClass.id].retreat,
       allyNeedsHelp: help !== undefined,
       attackerInRange: help !== undefined && visible.has(help.attacker) && distance(position, help.attacker.hull.translation()) < reach,
-      regroupCalled: board.intent === 'regroup' || (board.intent === 'fallBack' && !board.coversRetreat(member)),
+      // A Sniper keeps watching from its perch when the team regroups; when it falls back, the fit gather while the hurt mend.
+      regroupCalled:
+        member.role !== 'sniper' &&
+        (board.intent === 'regroup' || (board.intent === 'fallBack' && !board.coversRetreat(member) && !coreOpen && armor >= TACTICS[member.tankClass.id].retreat)),
       fallBackCalled: board.intent === 'fallBack',
       coveringRetreat: board.coversRetreat(member)
     };

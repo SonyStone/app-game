@@ -8,7 +8,7 @@ import { findPosts, findShortcuts, isOpened, type Post, type Shortcut } from './
 import type { Kit } from './kits';
 import { createRadio, type CalloutOptions, type RadioLine } from './radio';
 import { TACTICS } from './classes/tactics';
-import { cellAt, cellCenter, isOpenCell, sightReach, traceClear, type NavGrid } from './navigation';
+import { cellAt, cellCenter, isOpenCell, searchNearest, sightReach, traceClear, type NavGrid } from './navigation';
 import { rivalOf, type CaptureState, type TeamId } from './rules';
 import type { TankClass, TankClassId } from './tanks';
 
@@ -151,6 +151,8 @@ export function createTeamBoard(
   /** Shortcuts a bot broke through, open at least as wide as a hull though the grid may not count them open yet. */
   const opened = new Set<Shortcut>();
   const perchOf = new Map<Member, Perch>();
+  /** Each member's staging spot out of the known enemies' sight, found anew every update. */
+  const safeStaging = new Map<Member, Point>();
   /** Snipers fallen back to their base from an unsafe perch, and when their perch was last unsafe. */
   const fallenBack = new Map<Member, number>();
   // Teams update half an interval apart, so their work falls on different steps.
@@ -243,15 +245,7 @@ export function createTeamBoard(
 
     /** Whether a tank in `cell` would be out of every known enemy's sight, its whole hull included. */
     isHidden(cell: number) {
-      const col = cell % grid.cols;
-
-      return (
-        danger[cell] === 0 &&
-        (col === 0 || danger[cell - 1] === 0) &&
-        (col === grid.cols - 1 || danger[cell + 1] === 0) &&
-        (cell < grid.cols || danger[cell - grid.cols] === 0) &&
-        (cell >= cellCount - grid.cols || danger[cell + grid.cols] === 0)
-      );
+      return isHidden(cell);
     },
 
     /** Extra path cost of a cell taken by a crate. */
@@ -328,22 +322,21 @@ export function createTeamBoard(
      * the flanker in a side lane, a sniper on its perch.
      */
     stagingSpot(member: Member): Point {
-      const lanes = map.lanes[team];
-      const back = team === 'red' ? -1 : 1;
-
       if (member.role === 'sniper') {
         return perchSpot(member);
       }
 
-      if (member.role === 'flank') {
-        return lanes[push.lane];
+      // A spot the enemy sees is no place to gather: the nearest hidden one instead, found once an update.
+      let spot = safeStaging.get(member);
+
+      if (!spot) {
+        const planned = plannedStaging(member);
+        const cell = isHidden(cellAt(grid, planned)) ? undefined : searchNearest(grid, planned, STAGE_SEARCH, (candidate) => isHidden(candidate), { cost: (candidate) => danger[candidate] * 4 });
+        spot = cell === undefined ? planned : cellCenter(grid, cell);
+        safeStaging.set(member, spot);
       }
 
-      if (member.role === 'support') {
-        return { x: lanes.center.x + back * 70, y: lanes.center.y + (member.index % 2 === 0 ? 60 : -60) };
-      }
-
-      return { x: lanes.center.x, y: lanes.center.y + (member.index % 2 === 0 ? 75 : -75) };
+      return spot;
     },
 
     /**
@@ -440,6 +433,7 @@ export function createTeamBoard(
 
       nextUpdate = now + UPDATE_INTERVAL;
       forget(now);
+      safeStaging.clear();
       // Old losses no longer warn of anything.
       losses.splice(0, losses.length, ...losses.filter((loss) => loss.until > now));
       revealPoint();
@@ -498,10 +492,9 @@ export function createTeamBoard(
 
   /**
    * Where `member` watches from: the best perch no teammate has, kept for good, as the best ones
-   * lie in the middle, by the hall, from where the Sniper sees the most. While a known enemy comes
-   * within `PERCH_THREAT` px of it or a known enemy Sniper aims at it, the Sniper does not fight
-   * for it or look for another but falls back to its base, saying so, and comes back once the
-   * perch has been safe for `PERCH_CLEAR` s.
+   * lie in the middle, by the hall, from where the Sniper sees the most. While the perch is too
+   * dangerous (see `threatened`), the Sniper does not fight for it or look for another but falls
+   * back to its base, saying so, and comes back once the perch has been safe for `PERCH_CLEAR` s.
    */
   function perchSpot(member: Member): Perch {
     let perch = perchOf.get(member);
@@ -527,13 +520,45 @@ export function createTeamBoard(
     return fallenBack.has(member) ? { ...baseSpotOf(member), watch: perch, score: 0 } : perch;
   }
 
+  /**
+   * Where `member` waits before a coordinated push as the lanes have it: assaults and supports in
+   * the middle lane, the flanker in a side lane.
+   */
+  function plannedStaging(member: Member): Point {
+    const lanes = map.lanes[team];
+    const back = team === 'red' ? -1 : 1;
+
+    if (member.role === 'flank') {
+      return lanes[push.lane];
+    }
+
+    if (member.role === 'support') {
+      return { x: lanes.center.x + back * 70, y: lanes.center.y + (member.index % 2 === 0 ? 60 : -60) };
+    }
+
+    return { x: lanes.center.x, y: lanes.center.y + (member.index % 2 === 0 ? 75 : -75) };
+  }
+
+  /** Whether a tank in `cell` would be out of every known enemy's sight, its whole hull included. */
+  function isHidden(cell: number) {
+    const col = cell % grid.cols;
+
+    return (
+      danger[cell] === 0 &&
+      (col === 0 || danger[cell - 1] === 0) &&
+      (col === grid.cols - 1 || danger[cell + 1] === 0) &&
+      (cell < grid.cols || danger[cell - grid.cols] === 0) &&
+      (cell >= cellCount - grid.cols || danger[cell + grid.cols] === 0)
+    );
+  }
+
   /** The member's own spot in the base. */
   function baseSpotOf(member: Member) {
     const spawn = map.bases[team].spawns[member.index % map.bases[team].spawns.length];
     return { x: spawn.x, y: spawn.y };
   }
 
-  /** Whether a known enemy is close to `perch`, or a known enemy Sniper sees it and has its gun on it. */
+  /** Whether `perch` is too dangerous to hold: a known enemy close to it, or a known enemy Sniper that sees it and has its gun on it. */
   function threatened(perch: Point) {
     return [...sightings.values()].some((sighting) => {
       const range = distanceTo(sighting.position, perch);
@@ -766,7 +791,10 @@ export function createTeamBoard(
     if (push.phase === 'gather') {
       const waiting = [...staging.entries()].filter(([member, entry]) => member.tank && now - entry.at < 0.5);
       const arrived = waiting.filter(([, entry]) => entry.arrived).length;
-      const everyone = waiting.length > 0 && arrived === waiting.length && (waiting.length >= 2 || now - push.since > 3);
+      // A push needs two tanks; a lone one waits for teammates back from respawn soon rather than going in alone.
+      const reinforced = members.some((member) => !member.tank && member.respawnAt !== undefined && member.respawnAt - now < REINFORCEMENTS);
+      const tooFew = alive < 2 && reinforced;
+      const everyone = !tooFew && waiting.length > 0 && arrived === waiting.length && (waiting.length >= 2 || now - push.since > 3);
 
       // No waiting while the enemy is about to take a point nobody holds.
       const hurry = capture.capturer === rivalOf(team) && capture.owner !== rivalOf(team) && capture.progress > HURRY_PROGRESS;
@@ -779,7 +807,7 @@ export function createTeamBoard(
         say(leader(), 'countdown', { priority: 2, seconds: Math.ceil(launchAt - now) });
       }
 
-      if ((launchAt !== undefined && now >= launchAt) || hurry || now - push.since > GATHER_TIMEOUT) {
+      if ((launchAt !== undefined && now >= launchAt) || hurry || (now - push.since > GATHER_TIMEOUT && !tooFew)) {
         push = { ...push, phase: 'go', since: now };
         launchAt = undefined;
         pushers.clear();
@@ -1093,6 +1121,10 @@ const SIGHT_RAYS = 360;
 export const DANGER_RANGE = 520;
 /** The point counts as defended when an enemy was seen this close to it. */
 const DEFENDED_RADIUS = 350;
+/** How far from its planned staging spot, in path pixels, a member looks for one the enemy does not see. */
+const STAGE_SEARCH = 600;
+/** A lone tank waits to push while a teammate comes back from respawn within this many seconds. */
+const REINFORCEMENTS = 10;
 /** Seconds the team waits for stragglers before it pushes anyway, and how long a push lasts. */
 const GATHER_TIMEOUT = 6;
 /** Capture progress of the enemy on a free point at which the team stops gathering and goes. */

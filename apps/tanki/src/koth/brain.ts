@@ -220,7 +220,8 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
   }
 
   if (facts.regroupCalled && !desperate) {
-    goals.push({ name: 'regroup', wants: { regrouped: true }, priority: 66 });
+    // A team call to regroup outranks the point and a bot's own commitment to it: going in alone only feeds the enemy.
+    goals.push({ name: 'regroup', wants: { regrouped: true }, priority: REGROUP });
   }
 
   return goals.map((goal) => (goal.name === situation.current ? { ...goal, priority: goal.priority + COMMITMENT } : goal));
@@ -311,6 +312,8 @@ const OVERWATCH = 56;
 const FLANK_COST: Record<Role, number> = { assault: 1.4, flank: 0.55, support: 1.4, lead: 2.5, sniper: Infinity };
 /** Priority bonus of the goal being pursued. */
 const COMMITMENT = 6;
+/** Priority of answering the team's call to regroup. */
+const REGROUP = 85;
 /** Priority of mending for a badly hit bot while its team falls back, and of covering the retreat from a perch. */
 const FALL_BACK = 82;
 const COVER_RETREAT = 70;

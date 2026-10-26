@@ -136,6 +136,13 @@ const SCENARIOS: Scenario[] = [
       let contact: number | undefined;
       stage.run(12, () => {
         contact ??= stage.sees(lone, 450) ? stage.match.time : undefined;
+
+        if (import.meta.env.TANKI_TRACE && Math.round(stage.match.time * 60) % 30 === 0) {
+          const thought = stage.match.bots.get(lone)?.thought();
+          const at = lone.tank?.hull.translation();
+          const enemies = stage.team('blue').map((member) => member.tank && `${member.tankClass.id}@${Math.round(member.tank.hull.translation().x)},${Math.round(member.tank.hull.translation().y)}`);
+          console.log(`t=${stage.match.time.toFixed(1)} plan=${JSON.stringify(stage.match.hud().teams.red.plan)} steps=${thought?.steps.join(">")} ${thought?.goal}/${thought?.action} at=${at && [Math.round(at.x), Math.round(at.y)]} dest=${thought?.destination && [Math.round(thought.destination.x), Math.round(thought.destination.y)]} enemies=${enemies}`);
+        }
       });
       const alone = contact !== undefined && contact < 6.5;
       return { pass: !alone && lone.deaths === 0, note: contact === undefined ? 'never met the enemy' : alone ? `went in alone at ${roundTo(contact)} s` : `met the enemy with the others at ${roundTo(contact)} s` };
