@@ -1,4 +1,5 @@
 import type { PsdRenderSettings } from '@app-game/psd/viewer';
+import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
 import type { OpenedPsd, PsdClient, PsdResultOf, RenderedPixels } from '../psd-worker';
 import { requiresWindowedRendering } from '../psd-worker/protocol';
@@ -19,6 +20,12 @@ export function createWindowedRender(
   viewport: Pick<ReturnType<typeof createViewport>, 'view' | 'size'>
 ) {
   const renderer = makeWindowRenderer(client);
+  const [dpr, setDpr] = createSignal(typeof devicePixelRatio === 'number' ? devicePixelRatio : 1);
+  createEventListener(
+    () => (typeof window === 'undefined' ? undefined : window),
+    'resize',
+    () => setDpr(devicePixelRatio)
+  );
   onCleanup(renderer.clear);
   const [render, setRender] = createSignal<PsdResultOf<RenderedPixels>>();
   const [busy, setBusy] = createSignal(false);
@@ -30,8 +37,8 @@ export function createWindowedRender(
   });
   let previous: ReturnType<typeof snapshot>;
   createEffect(
-    () => ({ snapshot: snapshot(), view: viewport.view(), size: viewport.size() }),
-    ({ snapshot, view, size }) => {
+    () => ({ snapshot: snapshot(), view: viewport.view(), size: viewport.size(), dpr: dpr() }),
+    ({ snapshot, view, size, dpr }) => {
       if (previous !== snapshot) {
         setRender(undefined);
         previous = snapshot;
@@ -46,7 +53,7 @@ export function createWindowedRender(
       const controller = new AbortController();
       setBusy(true);
       void renderer
-        .render(snapshot, view, size, controller.signal, (image) => setRender({ ok: true, value: image }))
+        .render(snapshot, view, { ...size, dpr }, controller.signal, (image) => setRender({ ok: true, value: image }))
         .then(
           (result) => {
             if (!controller.signal.aborted) {

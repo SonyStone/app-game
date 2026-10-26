@@ -8,7 +8,6 @@ import type {
   PsdLayerPixels,
   PsdOpenAnswers,
   PsdOpening,
-  PsdRegionPixels,
   PsdRenderSettings,
   PsdStates,
   PsdTextSupport
@@ -21,6 +20,7 @@ import type {
   PsdRequest,
   PsdResultOf,
   RenderedPixels,
+  WindowPixels,
   WindowRequest,
   WorkerFailure
 } from './protocol';
@@ -145,7 +145,7 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
     visibility: [number, boolean][],
     window: WindowRequest,
     signal: AbortSignal
-  ): Promise<PsdResultOf<{ images: PsdRegionPixels[]; milliseconds: number }>> {
+  ): Promise<PsdResultOf<{ images: WindowPixels[]; milliseconds: number }>> {
     const reply = await scheduleRender(
       { type: 'renderWindow', document, settings: { ...settings }, visibility, window },
       signal

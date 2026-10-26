@@ -1,22 +1,24 @@
 import { viewerPerformance } from '../telemetry/performance';
 import type { View } from '../viewport/view';
-import type { DisplayTile } from './displayTiles';
+import { displayTileLevels, type DisplayTile } from './displayTiles';
 
 /** Last-resort display using bounded cached tile surfaces; the strict worker and document survive backend changes. */
 export function makeCanvasDisplay() {
   const resident = new Map<symbol, { canvas: HTMLCanvasElement; left: number; top: number; bytes: number }>();
   const identities = new WeakMap<DisplayTile, symbol>();
   let tiles: readonly DisplayTile[] = [];
+  let levels: ReturnType<typeof displayTileLevels> = [];
   let bytes = 0;
   let pattern: CanvasPattern | null = null;
   return {
-    setTiles(next: readonly DisplayTile[]) {
+    setTiles(next: readonly DisplayTile[], step = 1) {
       tiles = next;
+      levels = displayTileLevels(next, step);
     },
     draw(canvas: HTMLCanvasElement, view: View, width: number, height: number, dpr: number) {
       const start = performance.now();
       let pending = false;
-      for (const tile of tiles) {
+      for (const tile of levels.map((group) => group.requested)) {
         if (resident.has(identity(tile))) {
           continue;
         }
@@ -54,7 +56,14 @@ export function makeCanvasDisplay() {
 
       context.setTransform(view.scale * dpr, 0, 0, view.scale * dpr, view.x * dpr, view.y * dpr);
       let drawn = 0;
-      for (const tile of tiles) {
+      for (const group of levels) {
+        const tile =
+          group.levels.find((tile) => tile.step <= group.requested.step && resident.has(identity(tile))) ??
+          [...group.levels].reverse().find((tile) => resident.has(identity(tile)));
+        if (!tile) {
+          continue;
+        }
+
         const entry = resident.get(identity(tile));
         if (!entry) {
           continue;
@@ -97,6 +106,7 @@ export function makeCanvasDisplay() {
 
       resident.clear();
       tiles = [];
+      levels = [];
       bytes = 0;
     }
   };

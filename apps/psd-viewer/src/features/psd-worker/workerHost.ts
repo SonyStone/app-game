@@ -20,6 +20,7 @@ import {
   type PsdReply,
   type PsdRequest
 } from './protocol';
+import { regionMips } from './regionMips';
 
 /**
  * The worker side of the protocol, independent of the worker global so tests can drive it directly. It holds one open
@@ -198,10 +199,13 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         }
 
         telemetry.record('tile.render', start);
-        const images = Array.isArray(result.value) ? result.value : [result.value];
+        const images = (Array.isArray(result.value) ? result.value : [result.value]).map((image) => ({
+          ...image,
+          ...(window.kind === 'regions' && window.mipStep ? { mips: regionMips(image, window.mipStep) } : {})
+        }));
         post(
           { id: request.id, type: 'windowRendered', images, milliseconds: performance.now() - start },
-          images.map((image) => image.pixels.buffer)
+          images.flatMap((image) => [image.pixels.buffer, ...(image.mips ?? []).map((mip) => mip.pixels.buffer)])
         );
         return;
       }

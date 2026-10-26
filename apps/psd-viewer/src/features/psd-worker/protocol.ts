@@ -15,8 +15,8 @@ import type {
   PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
-import type { DisplayTile } from '../gpu-viewport/displayTiles';
 import type { SessionFont } from '../fonts/addFontFile';
+import type { DisplayTile } from '../gpu-viewport/displayTiles';
 import type { PsdPerformanceSample } from '../telemetry/performance';
 
 /**
@@ -84,7 +84,7 @@ type PsdReplyBody =
       opening: PsdOpening;
     }
   | { id: number; type: 'rendered'; render: RenderedPixels }
-  | { id: number; type: 'windowRendered'; images: PsdRegionPixels[]; milliseconds: number }
+  | { id: number; type: 'windowRendered'; images: WindowPixels[]; milliseconds: number }
   | { id: number; type: 'merged'; image: PsdImage }
   | { id: number; type: 'difference'; difference: PsdDifference }
   | { id: number; type: 'blending'; detection: BlendingDetection }
@@ -120,6 +120,8 @@ export type BlendingDetection = {
 export type RenderedPixels = PsdImage & {
   /** Retained display tiles. When present, pixels is empty and must not be treated as an assembled surface. */
   tiles?: readonly DisplayTile[];
+  /** Current camera demand, separate from fidelity approximations and GPU upload completion. */
+  quality?: { completed: number; required: number; step: number; coarse: boolean };
   render: number;
   depth: 8 | 16 | 32;
   milliseconds: number;
@@ -139,7 +141,7 @@ export type PsdResultOf<T> = { ok: true; value: T } | { ok: false; error: Worker
 
 /** Bounded rendering operations. Saved pixels are only a temporary first frame. */
 export type WindowRequest =
-  | { kind: 'regions'; rectangles: PsdRegionRect[] }
+  | { kind: 'regions'; rectangles: PsdRegionRect[]; mipStep?: number }
   | { kind: 'overview'; step: number }
   | { kind: 'saved'; step: number };
 
@@ -150,3 +152,6 @@ export function requiresWindowedRendering(size: { width: number; height: number 
 
 /** At most four million work pixels per window call, including conservative spatial fallbacks. */
 export const windowWorkPixels = 4_194_304;
+
+/** Filtered display products accompany canonical source bytes; saved overviews never acquire a mip claim. */
+export type WindowPixels = PsdRegionPixels & { mips?: PsdRegionPixels[] };

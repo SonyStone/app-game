@@ -2,7 +2,7 @@ import type { PsdImage, PsdRegionRect } from '@app-game/psd/viewer';
 
 /** Immutable straight display-sRGB bytes and a nonoverlapping document-space drawing rectangle. */
 export type DisplayTile = {
-  /** May include a one-texel neighbor halo around the drawing rectangle. */
+  /** May include a neighbor halo supporting all retained mip levels around the drawing rectangle. */
   image: PsdImage;
   left: number;
   top: number;
@@ -72,6 +72,24 @@ export function tileTextureUpload(tile: DisplayTile) {
     left: tile.left + x * step,
     top: tile.top + y * step
   };
+}
+
+/** Groups alternate resolutions of the same source coverage, coarsest first and selects the closest available requested resolution. */
+export function displayTileLevels(tiles: readonly DisplayTile[], step = 1) {
+  const groups = new Map<string, DisplayTile[]>();
+  for (const tile of tiles) {
+    const { left, top, width, height } = tile.clip;
+    const key = `${left}:${top}:${width}:${height}`;
+    const levels = groups.get(key) ?? [];
+    levels.push(tile);
+    groups.set(key, levels);
+  }
+
+  return [...groups.values()].map((levels) => {
+    levels.sort((a, b) => b.step - a.step);
+    const requested = levels.find((tile) => tile.step <= step) ?? levels.at(-1)!;
+    return { levels, requested, coarse: levels[0] };
+  });
 }
 
 const chunks = new WeakMap<PsdImage, readonly DisplayTile[]>();

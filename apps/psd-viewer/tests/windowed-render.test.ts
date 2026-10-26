@@ -8,7 +8,12 @@ import { makePsdClient, type PsdClient, type PsdResultOf, type PsdWorkerPort } f
 import type { PsdRequest, WindowRequest } from '../src/features/psd-worker/protocol';
 import { makePsdWorkerHost } from '../src/features/psd-worker/workerHost';
 import { createWindowedRender } from '../src/features/viewport/createWindowedRender';
-import { makeWindowRenderer, planWindow, type WindowSnapshot } from '../src/features/viewport/makeWindowRenderer';
+import {
+  chooseLod,
+  makeWindowRenderer,
+  planWindow,
+  type WindowSnapshot
+} from '../src/features/viewport/makeWindowRenderer';
 
 it('renders a generated large PSB through the worker and refuses whole-canvas operations', async () => {
   const { client, sent } = connect();
@@ -100,7 +105,7 @@ it('retains strict fixture tiles without assembly and invalidates them after edi
     )
   );
   expect(image.pixels.byteLength).toBe(0);
-  expect(image.tiles![0].image.pixels).toEqual(whole.pixels);
+  expect(image.tiles!.at(-1)!.image.pixels).toEqual(whole.pixels);
   const count = sent.length;
   await renderer.render(
     snapshot,
@@ -119,7 +124,7 @@ it('retains strict fixture tiles without assembly and invalidates them after edi
       vi.fn()
     )
   );
-  expect(edited.tiles![0].image.pixels).not.toEqual(whole.pixels);
+  expect(edited.tiles!.at(-1)!.image.pixels).not.toEqual(whole.pixels);
   expect(sent).toHaveLength(count + 1);
   renderer.clear();
   expect(renderer.cacheBytes()).toBe(0);
@@ -151,7 +156,7 @@ it('bounds the LRU while panning and samples correctly across 512-pixel tile edg
       }
     }
 
-    expect(renderer.cacheBytes()).toBeLessThanOrEqual(32 * 1024 * 1024);
+    expect(renderer.cacheBytes()).toBeLessThanOrEqual(64 * 1024 * 1024);
   }
 
   expect(calls.length).toBeGreaterThan(32);
@@ -189,7 +194,7 @@ it('replaces saved pixels with fresh overviews and never caches the potentially 
     new AbortController().signal,
     preview
   );
-  expect(calls.map((call) => call.kind)).toEqual(['saved', 'overview', 'overview']);
+  expect(calls.map((call) => call.kind)).toEqual(['saved', 'overview']);
 });
 
 it('never introduces a saved preview after displaying regions or changing render inputs', async () => {
@@ -312,11 +317,11 @@ it('clears temporary saved frames on pan cancellation and rejects late overview 
   flush();
   expect(state.jobs[1].signal.aborted).toBe(false);
   expect(state.render()).toBeUndefined();
-  expect(state.jobs[2].window.kind).toBe('regions');
+  expect(state.jobs).toHaveLength(2);
   state.jobs[1].resolve({ ok: true, value: { images: [singlePixel('layers')], milliseconds: 1 } });
-  await Promise.resolve();
+  await vi.waitFor(() => expect(state.jobs).toHaveLength(3));
   flush();
-  expect(state.render()).toBeUndefined();
+  expect(state.jobs[2].window.kind).toBe('regions');
   state.dispose();
   expect(state.jobs[2].signal.aborted).toBe(true);
   state.jobs[2].resolve({ ok: false, error: { kind: 'superseded', message: 'disposed' } });
@@ -380,15 +385,12 @@ it('plans bounded overviews and viewport-only regions, including empty/off-canva
   }
 });
 
-it('uses bounded coarse coverage when zoom-out source tiles cannot coexist in the LRU', () => {
+it('plans filtered region coverage when zoom-out source bytes cannot coexist in the LRU', () => {
   const size = { width: 30806, height: 45624 };
   const viewport = { width: 840, height: 900 };
   expect(planWindow(size, { scale: 0.7, x: -5000, y: -7000 }, viewport)?.kind).toBe('regions');
   const plan = planWindow(size, { scale: 0.1, x: -500, y: -700 }, viewport);
-  expect(plan?.kind).toBe('overview');
-  if (plan?.kind === 'overview') {
-    expect(Math.ceil(size.width / plan.step) * Math.ceil(size.height / plan.step)).toBeLessThanOrEqual(2_097_152);
-  }
+  expect(plan?.kind).toBe('regions');
 });
 
 it('clips coarse preview coverage to odd document bounds', async () => {
@@ -602,8 +604,71 @@ it('discards a late tile after semantic invalidation rather than admitting it in
   expect(signals[0].aborted).toBe(true);
   jobs[0]();
   expect(await first).toBeUndefined();
-  expect(renderer.cacheBytes()).toBe(0);
+  expect(renderer.cacheBytes()).toBeGreaterThan(0); // The next tile has an accounted reservation.
   jobs[1]();
-  expect(value(await next).tiles).toHaveLength(1);
+  expect(value(await next).tiles!.at(-1)!.step).toBe(1);
+  renderer.clear();
+});
+
+it('holds LOD through boundary jitter and accounts for physical DPR', () => {
+  expect(chooseLod(0.39, 1)).toBe(2);
+  expect(chooseLod(0.41, 2)).toBe(2);
+  expect(chooseLod(0.59, 2)).toBe(2);
+  expect(chooseLod(0.61, 2)).toBe(1);
+  expect(chooseLod(0.3, 1)).toBe(2);
+  expect(chooseLod(0.3 * 2, 1)).toBe(1);
+});
+
+it('retains unaffected tile identities after a local visibility edit, including neighbor filter support', async () => {
+  const { client, calls } = synthetic();
+  const renderer = makeWindowRenderer(client);
+  const snapshot = fakeSnapshot(300000, 300000);
+  snapshot.opened.layers = [
+    { index: 1, kind: 'pixel', bounds: { left: 510, top: 0, right: 511, bottom: 50 } }
+  ] as WindowSnapshot['opened']['layers'];
+  const args = [{ scale: 1, x: 0, y: 0 }, { width: 1300, height: 100 }, new AbortController().signal, vi.fn()] as const;
+  const before = value(await renderer.render(snapshot, ...args));
+  const count = calls.length;
+  const after = value(await renderer.render({ ...snapshot, visibility: [[1, false]] }, ...args));
+  // The first two source rectangles include the edited texel. The third rectangle is still valid.
+  expect(calls.length - count).toBe(2);
+  const untouched = before.tiles!.find((tile) => tile.clip.left === 1024)!;
+  expect(after.tiles).toContain(untouched);
+  renderer.clear();
+});
+
+it('serializes unrelated camera demands outside the worker and skips obsolete waiters', async () => {
+  const { client } = synthetic();
+  const jobs: (() => void)[] = [];
+  const wrapped = {
+    renderWindow: vi
+      .fn<PsdClient['renderWindow']>()
+      .mockImplementation(
+        (...args) => new Promise((resolve) => jobs.push(async () => resolve(await client.renderWindow(...args))))
+      )
+  };
+  const renderer = makeWindowRenderer(wrapped);
+  const snapshot = fakeSnapshot(300000, 300000);
+  const controllers = Array.from({ length: 3 }, () => new AbortController());
+  const views = controllers.map((controller, index) =>
+    renderer.render(
+      snapshot,
+      { scale: 1, x: -index * 2000, y: 0 },
+      { width: 100, height: 100 },
+      controller.signal,
+      vi.fn()
+    )
+  );
+  controllers[0].abort();
+  controllers[1].abort();
+  expect(wrapped.renderWindow).toHaveBeenCalledOnce();
+  jobs[0]();
+  await vi.waitFor(() => expect(jobs).toHaveLength(2));
+  expect(wrapped.renderWindow.mock.calls[1][3]).toMatchObject({ rectangles: [{ left: 3568 }] });
+  jobs[1]();
+  await vi.waitFor(() => expect(jobs).toHaveLength(3));
+  jobs[2]();
+  await Promise.all(views);
+  expect(wrapped.renderWindow).toHaveBeenCalledTimes(3);
   renderer.clear();
 });
