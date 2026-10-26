@@ -44,7 +44,9 @@ export function App() {
   const initialWorkers = new URLSearchParams(location.search).get('workers') === '2' ? 2 : 1;
   const [workerCount, setWorkerCount] = createSignal<1 | 2>(initialWorkers);
   const client = makePsdWorkerPool(makePsdClient(createPsdWorker(), createPsdWorker), createPsdWorker, {
-    workers: initialWorkers
+    workers: initialWorkers,
+    // Repeated DPR 2 measurements regressed interaction p95. Keep that display on the serial baseline.
+    parallelAllowed: () => devicePixelRatio <= 1
   });
   const [displayBusy, setDisplayBusy] = createSignal(false);
   onCleanup(client.dispose);
@@ -270,7 +272,7 @@ export function App() {
         <select
           aria-label="Tile workers"
           value={workerCount()}
-          title="Two workers require independent RGB8/Gray8 windows and a 3 GiB accounted budget. Supplied fonts use one worker."
+          title="Two workers require DPR 1, independent RGB8/Gray8 windows and a 3 GiB accounted budget. Supplied fonts use one worker."
           onChange={(event) => {
             const count = event.currentTarget.value === '2' ? 2 : 1;
             client.setWorkers(count);

@@ -13,7 +13,14 @@ import { requiresWindowedRendering } from './protocol';
 export function makePsdWorkerPool(
   primary: PsdClient,
   spawn: () => PsdWorkerPort,
-  options: { workers?: 1 | 2; budgetBytes?: number } = {}
+  options: {
+    /** Maximum count; defaults to the one-worker baseline. */
+    workers?: 1 | 2;
+    /** Total worker/display reservation for spare admission; defaults to 3 GiB. */
+    budgetBytes?: number;
+    /** Display admission, rechecked on demand, defaults to true. False keeps expensive output configurations serial. */
+    parallelAllowed?: () => boolean;
+  } = {}
 ) {
   const budgetBytes = options.budgetBytes ?? 3072 * mib;
   let workers = options.workers ?? 1;
@@ -64,7 +71,8 @@ export function makePsdWorkerPool(
 
   function eligible(settings: PsdRenderSettings) {
     return (
-      workers === 2 && !disabled && !hasFonts && !!opened && requiresWindowedRendering(opened.info) &&
+      workers === 2 && (options.parallelAllowed?.() ?? true) && !disabled && !hasFonts &&
+      !!opened && requiresWindowedRendering(opened.info) &&
       opened.info.depth === 8 && [1, 3].includes(opened.info.mode) &&
       opened.info.layerRecords <= 4096 && metadataBytes <= 8 * mib &&
       !settings.typeLayers && !settings.vectorPaths && !settings.smartObjects &&
@@ -205,11 +213,16 @@ export function makePsdWorkerPool(
       if (session !== documentEpoch) {
         return { ok: false, error: { kind: 'superseded', message: 'Worker session replaced' } };
       }
-      if (!spare || signal.aborted) {
+      if (!spare) {
+        if (signal.aborted) {
+          return canceledWindow();
+        }
         throw error;
       }
-      disabled = true;
-      stop();
+      disable('worker');
+      if (signal.aborted) {
+        return canceledWindow();
+      }
       return renderPrimary(document, settings, visibility, window, signal);
     } finally {
       if (spare) {
@@ -234,9 +247,9 @@ export function makePsdWorkerPool(
       serialInputs.length = 0;
       parallelInputs.length = 0;
       sourceBytes = args[0].byteLength;
-      const current = generation;
+      const current = documentEpoch;
       const result = await primary.open(...args);
-      if (current === generation && result.ok) {
+      if (current === documentEpoch && result.ok) {
         opened = result.value;
         // Reserve eight times the UTF-16 JSON payload for both object trees and transient open replies.
         // A metadata-heavy document stays serial rather than multiplying an unbounded JS snapshot.
