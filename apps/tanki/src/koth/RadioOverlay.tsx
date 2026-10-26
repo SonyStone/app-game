@@ -12,8 +12,6 @@ export type CalloutView = {
   id: number;
   team: TeamId;
   line: RadioLine;
-  /** Who says it. */
-  seat: SeatHud;
   /** What the line names. */
   tankClass: TankClassId | undefined;
   ally: SeatHud | undefined;
@@ -22,6 +20,11 @@ export type CalloutView = {
   /** The bubble over the speaker's tank, in CSS pixels, while the line is said and the speaker lives. */
   bubble: { x: number; y: number; opacity: number } | undefined;
   /**
+   * The arrow from the speaker's tank to the line's marker, in CSS pixels, with the bubble's
+   * opacity; `undefined` without a bubble or a marker, or when the marker is on the speaker.
+   */
+  arrow: { from: { x: number; y: number }; to: { x: number; y: number }; opacity: number } | undefined;
+  /**
    * The line's marker, in CSS pixels. A marker off the screen is held at its edge, with `edge`
    * the direction it lies in, in radians on screen; `undefined` while it is on the screen.
    */
@@ -29,9 +32,11 @@ export type CalloutView = {
 };
 
 /**
- * What the bots say on the radio, over the canvas: a speech bubble in the poster look over each
- * speaker's tank, edged in its team's color, and the line's marker on the map, held at the edge of
- * the screen with an arrow when what it marks lies off it.
+ * What the bots say on the radio, over the canvas: a word or two in a bubble in the poster look
+ * over each speaker's tank, edged in its team's color, an arrow in the team's color that shoots
+ * from the speaker at what the line is about and keeps flowing toward it while the line is said,
+ * and the line's marker on the map, held at the edge of the screen with a pointer when what it
+ * marks lies off it.
  */
 export function RadioOverlay(props: { callouts: readonly CalloutView[] }) {
   const { t } = useKothI18n();
@@ -50,6 +55,15 @@ export function RadioOverlay(props: { callouts: readonly CalloutView[] }) {
 
   return (
     <div class="pointer-events-none absolute inset-0 overflow-hidden">
+      <svg class="absolute inset-0 h-full w-full overflow-visible">
+        <For each={props.callouts} keyed={(callout) => callout.id}>
+          {(callout) => (
+            <Show when={callout().arrow}>
+              {(arrow) => <RadioArrow {...arrow()} team={callout().team} />}
+            </Show>
+          )}
+        </For>
+      </svg>
       <For each={props.callouts} keyed={(callout) => callout.id}>
         {(callout) => (
           <>
@@ -77,7 +91,6 @@ export function RadioOverlay(props: { callouts: readonly CalloutView[] }) {
                   class="tk-bubble"
                   style={{ left: `${bubble().x}px`, top: `${bubble().y}px`, opacity: bubble().opacity, '--tk-bubble-team': TEAM_CSS[callout().team] }}
                 >
-                  <span class="tk-bubble-name">{seatName(t, callout().seat)}</span>
                   {text(callout())}
                 </div>
               )}
@@ -86,6 +99,26 @@ export function RadioOverlay(props: { callouts: readonly CalloutView[] }) {
         )}
       </For>
     </div>
+  );
+}
+
+/**
+ * An arrow from `from` to `to`, on screen: it shoots out in the team's color, flashes a ring where
+ * it lands, and dashes keep running along it toward the target until it fades.
+ */
+function RadioArrow(props: { from: { x: number; y: number }; to: { x: number; y: number }; opacity: number; team: TeamId }) {
+  const angle = () => (Math.atan2(props.to.y - props.from.y, props.to.x - props.from.x) * 180) / Math.PI;
+
+  return (
+    <g class="tk-arrow" style={{ opacity: props.opacity, '--tk-arrow-team': TEAM_CSS[props.team] }}>
+      <line class="tk-arrow-casing" x1={props.from.x} y1={props.from.y} x2={props.to.x} y2={props.to.y} pathLength={1} />
+      <line class="tk-arrow-shot" x1={props.from.x} y1={props.from.y} x2={props.to.x} y2={props.to.y} pathLength={1} />
+      <line class="tk-arrow-flow" x1={props.from.x} y1={props.from.y} x2={props.to.x} y2={props.to.y} />
+      <g transform={`translate(${props.to.x} ${props.to.y}) rotate(${angle()})`}>
+        <circle class="tk-arrow-hit" r="16" />
+        <path class="tk-arrow-head" d="M 2 0 L -11 -7 L -7 0 L -11 7 Z" />
+      </g>
+    </g>
   );
 }
 
@@ -120,6 +153,8 @@ function MarkerIcon(props: { kind: MarkerKind }) {
                 <path d="M 0 -6 L -1.5 -1 L 1.5 1 L 0 6" fill="none" stroke={INK} stroke-width="1.4" />
               </>
             );
+          case 'base':
+            return <path d="M -5.5 0.5 L 0 -5 L 5.5 0.5 V 5 H -5.5 Z" fill="var(--tk-marker-team)" stroke={INK} stroke-width="1.2" />;
           case 'danger':
             return (
               <>

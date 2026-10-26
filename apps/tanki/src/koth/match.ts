@@ -331,13 +331,27 @@ export function createKothMatch(
 
     /**
      * What the bots of both teams say on their radios, with who says it, where the speaker's tank
-     * is now, `undefined` once destroyed, and the ally the line names; each line's marker stays
-     * where it was put.
+     * is now, `undefined` once destroyed, and the ally the line names; a marker on a tank is
+     * where the tank is while it lives, and stays where it was put once the tank is gone.
      */
     callouts() {
-      return [...boards.red.callouts, ...boards.blue.callouts].map(({ member, ally, ...callout }) => {
+      return [...boards.red.callouts, ...boards.blue.callouts].map(({ member, ally, marker, ...callout }) => {
         const at = member.tank?.hull.translation();
-        return { ...callout, team: member.team, seat: seatOf(member), ally: ally && seatOf(ally), speaker: at && { x: at.x, y: at.y } };
+
+        if (marker?.on && combat.armorOf(marker.on)) {
+          const on = marker.on.hull.translation();
+          marker.x = on.x;
+          marker.y = on.y;
+        }
+
+        return {
+          ...callout,
+          team: member.team,
+          seat: seatOf(member),
+          ally: ally && seatOf(ally),
+          speaker: at && { x: at.x, y: at.y },
+          marker: marker && { kind: marker.kind, x: marker.x, y: marker.y }
+        };
       });
     },
 

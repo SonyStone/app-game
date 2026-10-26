@@ -678,18 +678,21 @@
 /* What bots say on the radio (see `Radio.tsx`): a paper bubble over the speaker, edged in its team's color, with a tail. */
 .tk-bubble {
   position: absolute;
-  transform: translate(-50%, calc(-100% - 30px));
-  max-width: 220px;
-  padding: 3px 8px 4px;
+  transform: translate(-50%, calc(-100% - 28px));
+  padding: 1px 8px 2px;
   background: var(--paper-light);
   border: 2px solid var(--ink);
   border-left: 6px solid var(--tk-bubble-team);
+  box-shadow: 2px 2px 0 var(--ink);
   color: var(--ink);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 700;
   line-height: 1.15;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   white-space: nowrap;
   transition: opacity 0.2s;
+  animation: tk-bubble-pop 0.18s ease-out;
 }
 
 .tk-bubble::after {
@@ -703,13 +706,108 @@
   transform: translateX(-50%);
 }
 
-.tk-bubble-name {
-  display: block;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--tk-bubble-team);
+@keyframes tk-bubble-pop {
+  from {
+    scale: 0.6;
+  }
+}
+
+/*
+ * The arrow a radio line shoots from the speaker at what it is about: the line draws out in a
+ * fifth of a second, a ring flashes where it lands, then paper dashes keep running down it.
+ */
+.tk-arrow line {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.tk-arrow-casing {
+  stroke: var(--ink);
+  stroke-width: 6px;
+  stroke-dasharray: 1;
+  animation: tk-arrow-shoot 0.2s ease-out backwards;
+}
+
+.tk-arrow-shot {
+  stroke: var(--tk-arrow-team);
+  stroke-width: 3px;
+  stroke-dasharray: 1;
+  animation: tk-arrow-shoot 0.2s ease-out backwards;
+}
+
+.tk-arrow-flow {
+  stroke: var(--paper-light);
+  stroke-width: 1.6px;
+  stroke-dasharray: 6 18;
+  animation:
+    tk-arrow-appear 0.2s 0.2s backwards,
+    tk-arrow-flow 0.5s linear infinite;
+}
+
+.tk-arrow-head,
+.tk-arrow-hit {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.tk-arrow-head {
+  fill: var(--tk-arrow-team);
+  stroke: var(--ink);
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
+  animation: tk-arrow-head 0.2s 0.15s ease-out backwards;
+}
+
+.tk-arrow-hit {
+  fill: none;
+  stroke: var(--tk-arrow-team);
+  stroke-width: 3px;
+  opacity: 0;
+  animation: tk-arrow-hit 0.45s 0.18s ease-out;
+}
+
+@keyframes tk-arrow-shoot {
+  from {
+    stroke-dashoffset: 1;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes tk-arrow-appear {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes tk-arrow-flow {
+  from {
+    stroke-dashoffset: 24;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes tk-arrow-head {
+  from {
+    scale: 0;
+  }
+}
+
+@keyframes tk-arrow-hit {
+  from {
+    opacity: 1;
+    scale: 0.3;
+  }
+
+  to {
+    opacity: 0;
+    scale: 1.6;
+  }
 }
 
 /* A marker a radio line puts on the map; it pulses so the eye finds it, and points the way when held at the screen's edge. */

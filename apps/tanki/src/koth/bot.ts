@@ -515,21 +515,21 @@ export function createBot(member: Member, context: BotContext) {
 
       case 'retreat':
         if (goal === 'repair' || goal === 'patch') {
-          board.say(member, 'repairing');
+          board.say(member, 'repairing', { marker: { kind: 'base', ...board.baseSpot(member) } });
         }
 
         break;
 
       case 'flank':
         if (task.target) {
-          board.say(member, 'flanking', { tankClass: classOf(task.target), marker: { kind: 'enemy', ...at(whereIs(task.target)) } });
+          board.say(member, 'flanking', { tankClass: classOf(task.target), marker: { kind: 'enemy', ...at(whereIs(task.target)), on: task.target } });
         }
 
         break;
 
       case 'moveToSupport':
         if (task.ally?.tank) {
-          board.say(member, 'helping', { ally: task.ally, marker: { kind: 'help', ...at(task.ally.tank.hull.translation()) } });
+          board.say(member, 'helping', { ally: task.ally, marker: { kind: 'help', ...at(task.ally.tank.hull.translation()), on: task.ally.tank } });
         }
 
         break;
@@ -557,7 +557,7 @@ export function createBot(member: Member, context: BotContext) {
 
       case 'guardPoint':
         if (goal === 'defend') {
-          board.say(member, 'holdPoint');
+          board.say(member, 'holdPoint', { marker: { kind: 'hold', ...at(map.point) } });
         }
 
         break;
@@ -574,7 +574,7 @@ export function createBot(member: Member, context: BotContext) {
 
       case 'goToPoint':
         if (goal === 'capture' && !facts.enemyOnPoint && board.phase === 'none') {
-          board.say(member, 'capturing');
+          board.say(member, 'capturing', { marker: { kind: 'attack', ...at(map.point) } });
         }
 
         break;

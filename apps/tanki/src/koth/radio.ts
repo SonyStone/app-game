@@ -1,3 +1,4 @@
+import type { Tank } from '../arena/bodies';
 import type { Dictionary } from './i18n/en';
 import type { TankClassId } from './tanks';
 import type { Member } from './team';
@@ -5,8 +6,8 @@ import type { Member } from './team';
 type Point = { x: number; y: number };
 
 /**
- * A team's radio: what its bots say, shown as a speech bubble over the speaker's tank, often with
- * a marker on the map at what the line is about. Bots say a line when they commit to something,
+ * A team's radio: what its bots say, shown as a word or two over the speaker's tank, often with
+ * a marker on the map at what the line is about and an arrow from the speaker to it. Bots say a line when they commit to something,
  * a new goal or the next step of the team's plan, never to fill silence, so every line tells the
  * player what the bot is about to do.
  *
@@ -74,7 +75,7 @@ export function createRadio(clock: () => number) {
         ally: options.ally,
         lane: options.lane,
         seconds: options.seconds,
-        marker: options.marker && { kind: options.marker.kind, x: options.marker.x, y: options.marker.y }
+        marker: options.marker && { ...options.marker }
       });
 
       // Lines long done are kept a while for the repeat and echo rules, then dropped.
@@ -101,12 +102,15 @@ export type Lane = 'north' | 'center' | 'south';
 /**
  * What a marker on the map points out: where the team attacks or gathers, an ally that needs
  * help, an enemy worth knowing about, ground a bot holds, a repair kit it takes, one to keep
- * away from, or a wall a bot breaks open.
+ * away from, a wall a bot breaks open, or the base a bot falls back to.
  */
-export type MarkerKind = 'attack' | 'gather' | 'help' | 'enemy' | 'hold' | 'kit' | 'danger' | 'breach';
+export type MarkerKind = 'attack' | 'gather' | 'help' | 'enemy' | 'hold' | 'kit' | 'danger' | 'breach' | 'base';
 
-/** A marker on the map, in world pixels. */
-export type Marker = Point & { kind: MarkerKind };
+/**
+ * A marker on the map, in world pixels. A marker `on` a tank follows it while it lives and stays
+ * where the tank was last; any other stays where it was put.
+ */
+export type Marker = Point & { kind: MarkerKind; on?: Tank };
 
 /** How a line is said and what it names. */
 export type CalloutOptions = {
@@ -123,7 +127,7 @@ export type CalloutOptions = {
   lane?: Lane;
   /** A number of seconds the line counts down. */
   seconds?: number;
-  /** A marker the line puts on the map, at a spot that does not move with anything. */
+  /** A marker the line puts on the map, at a spot or on a tank (see `Marker`). */
   marker?: Marker;
 };
 

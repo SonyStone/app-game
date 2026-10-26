@@ -234,7 +234,7 @@ export function createTeamBoard(
 
       if (!known && rival?.tankClass.id === 'sniper') {
         const at = tank.hull.translation();
-        radio.say(member, 'sniper', { priority: 2, tankClass: 'sniper', marker: { kind: 'enemy', x: at.x, y: at.y } });
+        radio.say(member, 'sniper', { priority: 2, tankClass: 'sniper', marker: { kind: 'enemy', x: at.x, y: at.y, on: tank } });
       }
     },
 
@@ -509,7 +509,7 @@ export function createTeamBoard(
 
     if (threatened(perch)) {
       if (!fallenBack.has(member) && member.tank) {
-        radio.say(member, 'fallBack', { priority: 2, marker: { kind: 'danger', x: perch.x, y: perch.y } });
+        radio.say(member, 'fallBack', { priority: 2, marker: { kind: 'base', ...baseSpotOf(member) } });
       }
 
       fallenBack.set(member, now);
@@ -1038,7 +1038,7 @@ export function createTeamBoard(
       const speaker = nearestBot(at);
       const rival = context.rivals.find((other) => other.tank === focus);
 
-      if (speaker && rival && radio.say(speaker, 'focus', { priority: 2, tankClass: rival.tankClass.id, marker: { kind: 'enemy', x: at.x, y: at.y } })) {
+      if (speaker && rival && radio.say(speaker, 'focus', { priority: 2, tankClass: rival.tankClass.id, marker: { kind: 'enemy', x: at.x, y: at.y, on: focus } })) {
         focusCalledAt = now;
       }
     }
@@ -1097,7 +1097,7 @@ export function createTeamBoard(
       // A bot whose core lies open calls for help once while it is under fire and a helper is free to come.
       if (helper && !calling.has(victim) && combat.isCoreOpen(victim.tank!)) {
         calling.add(victim);
-        radio.say(victim, 'needHelp', { priority: 2, marker: { kind: 'help', x: at.x, y: at.y } });
+        radio.say(victim, 'needHelp', { priority: 2, marker: { kind: 'help', x: at.x, y: at.y, on: victim.tank } });
       }
     }
   }
