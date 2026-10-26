@@ -733,3 +733,14 @@ it('counts one obsolete native batch when several canceled camera consumers shar
     record.mockRestore();
   }
 });
+
+it('bounds zoom-out coverage when even the coarsest region pyramid cannot coexist in the cache', () => {
+  const document = { width: 300000, height: 300000 };
+  const plan = planWindow(document, { scale: 0.01, x: 0, y: 0 }, { width: 840, height: 900 });
+  expect(plan?.kind).toBe('overview');
+  if (plan?.kind === 'overview') {
+    expect(Math.ceil(document.width / plan.step) * Math.ceil(document.height / plan.step)).toBeLessThanOrEqual(
+      2_097_152
+    );
+  }
+});
