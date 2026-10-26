@@ -10,6 +10,22 @@ const stage = (page: Page) => page.locator('[data-busy]');
 test('opens a generated 300000-square PSB and pans/zooms through bounded regions', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    const NativeWorker = Worker;
+    window.Worker = class extends NativeWorker {
+      postMessage(message: { type: string }, options: Transferable[] | StructuredSerializeOptions = []) {
+        if (message.type === 'detectBlending') {
+          performance.mark('test:windowedDetection');
+        }
+
+        if (Array.isArray(options)) {
+          super.postMessage(message, options);
+        } else {
+          super.postMessage(message, options);
+        }
+      }
+    };
+  });
   await page.goto('/');
   await page.locator('input[accept=".psd,.psb"]').setInputFiles({
     name: 'large-generated.psb',
@@ -43,6 +59,7 @@ test('opens a generated 300000-square PSB and pans/zooms through bounded regions
   await expect(stage(page)).toHaveAttribute('data-busy', 'false');
   const regionSize = await canvas.evaluate((element: HTMLCanvasElement) => [element.width, element.height]);
   expect(regionSize[0] * regionSize[1]).toBeLessThanOrEqual(4_194_304);
+  expect(await page.evaluate(() => performance.getEntriesByName('test:windowedDetection').length)).toBe(0);
   expect(errors).toEqual([]);
 });
 

@@ -16,7 +16,7 @@ export function makePerformanceRecorder(enabled = false) {
     }
 
     try {
-      const duration = performance.now() - start;
+      const duration = Math.max(0, performance.now() - start);
       samples.push({ name, start, duration, value });
       if (samples.length > 10_000) {
         samples.shift();
