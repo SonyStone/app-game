@@ -322,6 +322,30 @@ it('clears temporary saved frames on pan cancellation and rejects late overview 
   state.jobs[2].resolve({ ok: false, error: { kind: 'superseded', message: 'disposed' } });
 });
 
+it('keeps fresh coverage through an off-document camera without another worker request', async () => {
+  const state = reactiveRenderer();
+  flush();
+  state.jobs[0].resolve({ ok: true, value: { images: [singlePixel('savedComposite')], milliseconds: 1 } });
+  await vi.waitFor(() => {
+    flush();
+    expect(state.jobs).toHaveLength(2);
+  });
+  state.jobs[1].resolve({ ok: true, value: { images: [singlePixel('layers')], milliseconds: 1 } });
+  await vi.waitFor(() => {
+    flush();
+    expect(state.busy()).toBe(false);
+  });
+  const before = state.render();
+  state.pan({ scale: 1, x: 5000, y: 5000 });
+  await vi.waitFor(() => {
+    flush();
+    expect(state.busy()).toBe(false);
+  });
+  expect(state.render()).toBe(before);
+  expect(state.jobs).toHaveLength(2);
+  state.dispose();
+});
+
 it('clears the saved first frame when fresh layer rendering fails', async () => {
   const state = reactiveRenderer();
   flush();

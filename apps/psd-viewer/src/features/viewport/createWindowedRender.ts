@@ -50,7 +50,11 @@ export function createWindowedRender(
         .then(
           (result) => {
             if (!controller.signal.aborted) {
-              setRender(result);
+              // An off-document camera has no demand. Keep valid tiles and the GPU scope for a warm return.
+              if (result) {
+                setRender(result);
+              }
+
               setBusy(false);
             }
           },

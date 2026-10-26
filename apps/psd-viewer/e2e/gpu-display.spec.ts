@@ -154,5 +154,19 @@ test('revisits retained window coverage without worker calls or GPU uploads', as
   await settle();
   await page.getByRole('button', { name: '100%', exact: true }).click();
   await settle();
+  // Moving fully off-document must keep the canvas/device and its resident textures alive.
+  const stage = page.locator('[data-busy]');
+  const bounds = (await stage.boundingBox())!;
+  for (const delta of [600000, -600000]) {
+    const x = bounds.x + bounds.width / 2;
+    const y = bounds.y + bounds.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await stage.dispatchEvent('pointermove', { pointerId: 1, clientX: x + delta, clientY: y });
+    await page.mouse.up();
+    await settle();
+    await expect(page.locator('canvas[data-backend=webgpu]')).toBeVisible();
+  }
+
   expect(await page.evaluate(() => Reflect.get(window, '__tileRevisit'))).toEqual(before);
 });
