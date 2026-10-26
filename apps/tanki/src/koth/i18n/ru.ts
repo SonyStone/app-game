@@ -186,6 +186,8 @@ export const ru: Dictionary = {
     followMe: 'За мной! Вперёд!',
     waitForTeam: 'Жду своих',
     switchClass: (say: RadioWords) => `Беру класс: ${say.tankClass}`,
+    breaching: (say: RadioWords) => `Пробиваю проход: ${say.lane}`,
+    wayOpen: (say: RadioWords) => `Проход открыт: ${say.lane}!`,
     captured: 'Точка наша!',
     regroup: 'Отходим, перегруппировка!',
     sniper: 'Снайпер!',

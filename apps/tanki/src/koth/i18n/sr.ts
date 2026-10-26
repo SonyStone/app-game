@@ -186,6 +186,8 @@ export const sr: Dictionary = {
     followMe: 'За мном! Напред!',
     waitForTeam: 'Чекам своје',
     switchClass: (say: RadioWords) => `Мењам класу: ${say.tankClass}`,
+    breaching: (say: RadioWords) => `Пробијам пролаз: ${say.lane}`,
+    wayOpen: (say: RadioWords) => `Пролаз отворен: ${say.lane}!`,
     captured: 'Тачка је наша!',
     regroup: 'Повлачење, прегруписавање!',
     sniper: 'Снајпер!',

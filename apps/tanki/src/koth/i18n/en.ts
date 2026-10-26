@@ -188,6 +188,8 @@ export const en = {
     followMe: 'On me! Push!',
     waitForTeam: 'Waiting for backup',
     switchClass: (say: RadioWords) => `Switching to ${say.tankClass}`,
+    breaching: (say: RadioWords) => `Opening a way to the ${say.lane}`,
+    wayOpen: (say: RadioWords) => `The way to the ${say.lane} is open!`,
     captured: 'The point is ours!',
     regroup: 'Fall back and regroup!',
     sniper: 'Sniper!',

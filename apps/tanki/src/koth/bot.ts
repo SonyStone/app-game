@@ -9,6 +9,7 @@ import { TACTICS, TOUGHNESS } from './classes/tactics';
 import { chargedShell, type Trigger } from './classes/weapon';
 import { createDriver, type Obstacle } from './driver';
 import { KIT_REPAIR, type Kit } from './kits';
+import { isOpened, type Shortcut } from './front';
 import { inBase, onPoint, type KothMap } from './map';
 import { cellAt, floodCosts, isOpenAt, searchNearest, cellCenter, sightClear, type NavGrid } from './navigation';
 import { captureRate, rivalOf, type CaptureRules, type CaptureState } from './rules';
@@ -191,7 +192,13 @@ export function createBot(member: Member, context: BotContext) {
       const position = tank.hull.translation();
       const travel = task?.hold ? undefined : task?.destination;
       const cost = costFor(task?.route ?? 'normal');
-      const breach = breacher.step(now, tank, { destination: travel, allowed: task !== undefined && BREACH_ACTIONS.has(task.action), cost, route: driver.path });
+      const breach = breacher.step(now, tank, {
+      destination: travel,
+      allowed: task !== undefined && BREACH_ACTIONS.has(task.action),
+      prefer: task?.action === 'openWay',
+      cost,
+      route: driver.path
+    });
       // The gun may want the hull still or turning on the spot; the driver then waits, so it does not take the stop for being stuck.
       // A breach that shoots works the gun itself, and one under way drives the tank.
       const stance = breach?.aim !== undefined ? {} : aim(tank, dt, now, lastMove);
@@ -522,6 +529,16 @@ export function createBot(member: Member, context: BotContext) {
 
         break;
 
+      case 'openWay': {
+        const shortcut = board.breachOf(member);
+
+        if (shortcut) {
+          board.say(member, 'breaching', { priority: 2, lane: shortcut.lane, marker: { kind: 'breach', ...at(shortcut.wall) } });
+        }
+
+        break;
+      }
+
       case 'stage':
         if (board.phase === 'go') {
           board.say(member, 'waitForTeam');
@@ -621,7 +638,9 @@ export function createBot(member: Member, context: BotContext) {
         rally: travel(board.rally()),
         kit: choice?.travel ?? Infinity,
         perch: member.role === 'sniper' ? travel(board.perchSpot(member)) : Infinity,
-        post: travel(board.postOf(member)?.at)
+        post: travel(board.postOf(member)?.at),
+        // The wall itself cannot be driven to; the way to it is the way to the nearer of the places it joins.
+        breach: Math.min(travel(board.breachOf(member)?.from), travel(board.breachOf(member)?.to))
       },
       kill: { front: killTime(position, target, false), rear: killTime(position, target, true) },
       capture: ((1 - progress) * context.rules.captureTime) / captureRate(alliesOn + member.tankClass.capture),
@@ -793,6 +812,39 @@ export function createBot(member: Member, context: BotContext) {
         task.destination = keeping ? board.pointSpot(member) : wander(task, board.pointSpot(member), now);
         task.arrive = keeping ? 10 : 20;
         return context.capture().owner === member.team ? 'running' : 'failed';
+      }
+
+      case 'openWay': {
+        // The bot drives to the nearer side of the wall, then for the other side through the wall:
+        // its breacher breaks the wall open on the way.
+        const shortcut = board.breachOf(member);
+
+        if (!shortcut) {
+          return 'failed';
+        }
+
+        if (task.wall !== shortcut) {
+          // The near side is the one the bot can drive to the quicker, the wall still standing.
+          const costs = floodCosts(grid, position);
+          const [one, other] = shortcut.sides;
+          const near = costs[cellAt(grid, one)] <= costs[cellAt(grid, other)] ? one : other;
+          task.wall = shortcut;
+          task.crossFrom = near;
+          task.crossTo = near === one ? other : one;
+          task.crossing = false;
+        }
+
+        task.crossing ||= distance(position, task.crossFrom!) < CROSS_START;
+
+        // Through to the other side, the bot has opened the way, if only as wide as its hull.
+        if (isOpened(grid, shortcut) || (task.crossing && distance(position, task.crossTo!) < CROSS_START)) {
+          board.finishBreach(member);
+          return 'done';
+        }
+
+        task.destination = task.crossing ? task.crossTo : task.crossFrom;
+        task.arrive = task.crossing ? 10 : 30;
+        return 'running';
       }
 
       case 'holdPost': {
@@ -1406,7 +1458,7 @@ type Route = 'normal' | 'sneaky' | 'safe';
 const PASSING = new Set<BotAction>(['goToPerch', 'retreat', 'repair', 'pickUpKit', 'takeCover', 'regroup', 'stage']);
 
 /** Actions on the way somewhere, during which a bot may break through a wall that is in the way. */
-const BREACH_ACTIONS = new Set<BotAction>(['goToPoint', 'stage', 'flank', 'retreat', 'repair', 'pickUpKit', 'regroup', 'moveToSupport']);
+const BREACH_ACTIONS = new Set<BotAction>(['goToPoint', 'stage', 'flank', 'retreat', 'repair', 'pickUpKit', 'regroup', 'moveToSupport', 'openWay']);
 
 const STOP = { x: 0, y: 0 };
 /** Pixels past the hull's front at which the driver checks for a wall ahead. */
@@ -1452,6 +1504,11 @@ type Task = {
   arrivedAt?: number;
   orbit?: { spot: Point; until: number };
   wander?: { spot: Point; until: number };
+  /** The shortcut the team asked the bot to break open, the place beyond it to cross to, and whether it set out across. */
+  wall?: Shortcut;
+  crossFrom?: Point;
+  crossTo?: Point;
+  crossing?: boolean;
   /** The repair kit driven to, when it was due back as the bot set out, and the bot's armor then. */
   kit?: { kit: Readonly<Kit>; readyAt: number; armor: number };
 };
@@ -1469,6 +1526,8 @@ const REPLAN_JITTER = 1;
 const SCOPE_RANGE = 900;
 const SCOPE_ARC = 0.45;
 const PERCHED = 30;
+/** How close to its side of a shortcut's wall a bot must come before it drives across, through the wall. */
+const CROSS_START = 60;
 /** How close to its post a bot must be to stand still there. */
 const POSTED = 25;
 /** Enemies this close to the point are a threat to it. */

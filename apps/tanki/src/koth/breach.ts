@@ -27,8 +27,10 @@ export type BreachContext = {
  * @param cost - Extra cell costs of the bot's route, as for `findPath`.
  * @param route - The way the bot's driver plans to `destination`, if it has one: the way around
  *   that a breach is weighed against, which spares planning it again.
+ * @param prefer - The team asked the bot to break through on this way: it does so even when that
+ *   saves no time, as long as it costs no more than `PREFER_SLACK` s, and however short the way.
  */
-export type BreachTravel = { destination: Point | undefined; allowed: boolean; cost: (cell: number) => number; route?: readonly Point[] };
+export type BreachTravel = { destination: Point | undefined; allowed: boolean; prefer?: boolean; cost: (cell: number) => number; route?: readonly Point[] };
 
 /**
  * What the breacher wants the bot to do this step: drive to `destination` with its driver, or
@@ -113,7 +115,7 @@ export function createBreacher(member: Member, context: BreachContext) {
 
       if (!plan && travel.allowed && travel.destination && now >= nextThought) {
         nextThought = now + CONSIDER_INTERVAL;
-        plan = consider(position, travel.destination, travel.cost, now, travel.route);
+        plan = consider(position, travel.destination, travel.cost, now, travel.route, travel.prefer ?? false);
       }
 
       return plan && act(plan, tank, position, now);
@@ -131,10 +133,10 @@ export function createBreacher(member: Member, context: BreachContext) {
    * Weighs the way through a wall against the way around and plans a breach where it pays. A way
    * around hardly longer than a straight line leaves nothing to save, which spares the planning.
    */
-  function consider(position: Point, destination: Point, cost: (cell: number) => number, now: number, route?: readonly Point[]): Plan | undefined {
+  function consider(position: Point, destination: Point, cost: (cell: number) => number, now: number, route: readonly Point[] | undefined, prefer: boolean): Plan | undefined {
     const straight = distance(position, destination);
 
-    if (straight < MIN_TRIP || underFire(now)) {
+    if ((straight < MIN_TRIP && !prefer) || underFire(now)) {
       return undefined;
     }
 
@@ -149,7 +151,7 @@ export function createBreacher(member: Member, context: BreachContext) {
       return undefined;
     }
 
-    if (detour - straight / pace() < Math.max(MIN_SAVING, detour * MIN_SHARE)) {
+    if (!prefer && detour - straight / pace() < Math.max(MIN_SAVING, detour * MIN_SHARE)) {
       return undefined;
     }
 
@@ -183,7 +185,7 @@ export function createBreacher(member: Member, context: BreachContext) {
     const fromGap = (distance(crossing.face, way.crossing.exit) + pathLength(way.path.slice(split))) / pace();
     const saving = detour - toGap - fromGap;
 
-    if (saving < Math.max(MIN_SAVING, detour * MIN_SHARE)) {
+    if (saving < (prefer ? -PREFER_SLACK : Math.max(MIN_SAVING, detour * MIN_SHARE))) {
       tally.short++;
       return undefined;
     }
@@ -634,6 +636,8 @@ const MIN_TRIP = 250;
 const ROUTE_MATCH = 40;
 /** A breach must save at least this many seconds, and this share of the drive around. */
 const MIN_SAVING = 2;
+/** Seconds a breach the team asked for may cost over driving around. */
+const PREFER_SLACK = 4;
 const MIN_SHARE = 0.25;
 /** Share of a tank's top speed it keeps along a way, as the bots' travel estimates take it. */
 const PACE_SHARE = 0.85;

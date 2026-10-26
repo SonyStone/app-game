@@ -100,10 +100,10 @@ export type Lane = 'north' | 'center' | 'south';
 
 /**
  * What a marker on the map points out: where the team attacks or gathers, an ally that needs
- * help, an enemy worth knowing about, ground a bot holds, a repair kit it takes, or one to keep
- * away from.
+ * help, an enemy worth knowing about, ground a bot holds, a repair kit it takes, one to keep
+ * away from, or a wall a bot breaks open.
  */
-export type MarkerKind = 'attack' | 'gather' | 'help' | 'enemy' | 'hold' | 'kit' | 'danger';
+export type MarkerKind = 'attack' | 'gather' | 'help' | 'enemy' | 'hold' | 'kit' | 'danger' | 'breach';
 
 /** A marker on the map, in world pixels. */
 export type Marker = Point & { kind: MarkerKind };

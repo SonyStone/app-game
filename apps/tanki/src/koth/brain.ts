@@ -69,10 +69,11 @@ export type BotFact =
   | 'regroupCalled'
   | 'regrouped'
   | 'atPerch'
+  | 'wayOpened'
   | 'guarding';
 
 /** Names of the bot's goals. */
-export type BotGoal = 'survive' | 'patch' | 'repair' | 'capture' | 'defend' | 'kill' | 'support' | 'regroup';
+export type BotGoal = 'survive' | 'patch' | 'repair' | 'capture' | 'defend' | 'kill' | 'support' | 'regroup' | 'breach';
 
 /** Names of the bot's actions; the bot has a behavior for each. */
 export type BotAction =
@@ -93,7 +94,8 @@ export type BotAction =
   | 'pickUpKit'
   | 'regroup'
   | 'goToPerch'
-  | 'overwatch';
+  | 'overwatch'
+  | 'openWay';
 
 /** Everything a bot plans from. */
 export type Situation = {
@@ -105,9 +107,14 @@ export type Situation = {
    * firing position on its target, a spot behind the target, a spot beside the ally it helps,
    * the nearest cover, its base, the team's rally point, the repair kit most worth taking, a
    * small kit counting a little longer than it is for mending less, a sniper's perch, and the
-   * post in front of the point the bot holds while its team holds the point (see `findPosts`).
+   * post in front of the point the bot holds while its team holds the point (see `findPosts`),
+   * and the wall its team asked it to break open (see `findShortcuts`).
    */
-  travel: Record<'point' | 'stage' | 'approach' | 'flank' | 'support' | 'cover' | 'base' | 'rally' | 'kit', number> & { perch?: number; post?: number };
+  travel: Record<'point' | 'stage' | 'approach' | 'flank' | 'support' | 'cover' | 'base' | 'rally' | 'kit', number> & {
+    perch?: number;
+    post?: number;
+    breach?: number;
+  };
   /** Seconds the bot expects to need to destroy its target from where it is and from behind. */
   kill: { front: number; rear: number };
   /** Seconds a capture would take with the bot's team on the point. */
@@ -194,6 +201,11 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
     goals.push({ name: 'support', wants: { allyCovered: true }, priority: role === 'support' ? 72 : 52 });
   }
 
+  // A wall the team asked the bot to open comes before the point, but not before its life or a target in its sights.
+  if (Number.isFinite(situation.travel.breach ?? Infinity) && !desperate) {
+    goals.push({ name: 'breach', wants: { wayOpened: true }, priority: BREACH });
+  }
+
   if (facts.regroupCalled && !desperate) {
     goals.push({ name: 'regroup', wants: { regrouped: true }, priority: 66 });
   }
@@ -257,7 +269,8 @@ export function botActions(situation: Situation): GoapAction<BotAction>[] {
     },
     // A sniper guards the point from its perch instead of on it.
     { name: 'goToPerch', requires: {}, effects: { atPerch: true, inCover: false }, cost: role === 'sniper' ? (travel.perch ?? Infinity) + 0.5 : Infinity },
-    { name: 'overwatch', requires: { atPerch: true }, effects: { guarding: true }, cost: role === 'sniper' ? 1 : Infinity }
+    { name: 'overwatch', requires: { atPerch: true }, effects: { guarding: true }, cost: role === 'sniper' ? 1 : Infinity },
+    { name: 'openWay', requires: {}, effects: { wayOpened: true }, cost: (travel.breach ?? Infinity) + BREAK_TIME }
   ];
 
   if (role === 'sniper') {
@@ -283,6 +296,9 @@ const OVERWATCH = 56;
 const FLANK_COST: Record<Role, number> = { assault: 1.4, flank: 0.55, support: 1.4, lead: 2.5, sniper: Infinity };
 /** Priority bonus of the goal being pursued. */
 const COMMITMENT = 6;
+/** Priority of breaking open a wall the team asked for, and the seconds breaking it is reckoned to take. */
+const BREACH = 58;
+const BREAK_TIME = 4;
 /** Priority a target out of the bot's fire zone loses while the team gathers for a push. */
 const STAGE_RESTRAINT = 15;
 /** Seconds a bot expects to wait at its staging spot for the rest of the team. */

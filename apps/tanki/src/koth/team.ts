@@ -4,7 +4,7 @@ import type { Role } from './brain';
 import type { Trigger, Weapon } from './classes/weapon';
 import type { KothMap } from './map';
 import { findPerches, type Perch } from './classes/perch';
-import { findPosts, type Post } from './front';
+import { findPosts, findShortcuts, isOpened, type Post, type Shortcut } from './front';
 import type { Kit } from './kits';
 import { createRadio, type CalloutOptions, type RadioLine } from './radio';
 import { TACTICS } from './classes/tactics';
@@ -70,6 +70,9 @@ export type Sighting = {
  * - Roles: an assault, a flanker, a support and another assault, filled from the living members
  *   and kept stable; a human always plays assault.
  * - Intent: push for the point, hold it, or regroup when too many members are down.
+ * - Breaching: while the team pushes, a Demoman, Heavy or Soldier breaks open a wall on the
+ *   team's side that shuts a short way between the hall and a side street (see `findShortcuts`),
+ *   so the team can switch lanes quickly, and says so.
  * - Jobs while the team holds the point: one bot keeps to the point and the others take posts in
  *   front of it, one on each way the enemy comes back by (see `findPosts`), so the enemy is met
  *   before it reaches the point and the team is not all standing in the open on it. The Heavy
@@ -138,6 +141,12 @@ export function createTeamBoard(
     (cell) => isOpenCell(grid, cell) && distanceTo(cellCenter(grid, cell), map.point) < map.point.radius - KEEPER_MARGIN
   );
   let keeperCell: number | undefined;
+  let shortcuts = findShortcuts(grid, map, team, thinWall);
+  /** The bot opening a shortcut, and since when; when each shortcut was last tried and given up. */
+  let breach: { member: Member; shortcut: Shortcut; since: number } | undefined;
+  const triedAt = new Map<Shortcut, number>();
+  /** Shortcuts a bot broke through, open at least as wide as a hull though the grid may not count them open yet. */
+  const opened = new Set<Shortcut>();
   const perchOf = new Map<Member, Perch>();
   // Teams update half an interval apart, so their work falls on different steps.
   let nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
@@ -373,6 +382,20 @@ export function createTeamBoard(
       return context.clock() - since < LATE_WAIT;
     },
 
+    /** Records that `member` broke through the shortcut it was asked to open; it says so. */
+    finishBreach(member: Member) {
+      if (breach?.member === member) {
+        opened.add(breach.shortcut);
+        radio.say(member, 'wayOpen', { priority: 2, lane: breach.shortcut.lane, marker: { kind: 'gather', ...breach.shortcut.wall } });
+        breach = undefined;
+      }
+    },
+
+    /** The shortcut `member` was asked to break open, if any. */
+    breachOf(member: Member) {
+      return breach?.member === member ? breach.shortcut : undefined;
+    },
+
     /** Whether `member` keeps the point while the team holds it. */
     keepsPoint(member: Member) {
       return jobs.get(member) === 'point';
@@ -416,6 +439,7 @@ export function createTeamBoard(
       assignRoles();
       decideIntent(now);
       refreshPosts(now);
+      assignBreach(now);
       assignJobs();
       chooseKeeperCell();
       chooseFocus();
@@ -448,6 +472,10 @@ export function createTeamBoard(
       postsAt = 0;
       jobs.clear();
       keeperCell = undefined;
+      shortcuts = findShortcuts(grid, map, team, thinWall);
+      breach = undefined;
+      triedAt.clear();
+      opened.clear();
       nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
     }
   };
@@ -767,6 +795,54 @@ export function createTeamBoard(
   }
 
   /**
+   * Whether the wall closing `cell` is one a bot should break through for a shortcut: a thin
+   * wall of wood or brick, a fence or an alley wall, not a building.
+   */
+  function thinWall(cell: number) {
+    const blocker = combat.breakableNear(cellCenter(grid, cell), grid.clearance + 2);
+    return blocker !== undefined && (blocker.material === 'wood' || blocker.material === 'brick') && blocker.thickness <= SHORTCUT_THICKNESS;
+  }
+
+  /**
+   * While the team pushes for the point, has one bot break open a shortcut still shut: the first
+   * of a Demoman, a Heavy and a Soldier within `OPENER_RANGE` px of it with most of its armor. The
+   * bot says when it is through (see `finishBreach`). A breach that takes longer than `BREACH_TIME` s, or whose bot
+   * is destroyed, is given up, and that shortcut waits `BREACH_RETRY` s before it is tried again.
+   */
+  function assignBreach(now: number) {
+    if (breach) {
+      if (!breach.member.tank || now - breach.since > BREACH_TIME || intent !== 'push') {
+        triedAt.set(breach.shortcut, now);
+        breach = undefined;
+      }
+
+      return;
+    }
+
+    const shut = (candidate: Shortcut) => !opened.has(candidate) && !isOpened(grid, candidate);
+    const shortcut = intent === 'push' ? shortcuts.find((candidate) => shut(candidate) && now - (triedAt.get(candidate) ?? -Infinity) > BREACH_RETRY) : undefined;
+
+    if (!shortcut) {
+      return;
+    }
+
+    const opener = members
+      .filter(
+        (member) =>
+          member.tank &&
+          !member.human &&
+          OPENERS.includes(member.tankClass.id) &&
+          combat.armorLeft(member.tank) > OPENER_ARMOR &&
+          distanceTo(member.tank.hull.translation(), shortcut.wall) < OPENER_RANGE
+      )
+      .sort((a, b) => OPENERS.indexOf(a.tankClass.id) - OPENERS.indexOf(b.tankClass.id) || distanceTo(a.tank!.hull.translation(), shortcut.wall) - distanceTo(b.tank!.hull.translation(), shortcut.wall))[0];
+
+    if (opener) {
+      breach = { member: opener, shortcut, since: now };
+    }
+  }
+
+  /**
    * The spot on the point its keeper stands on: in the least danger from known enemies and as
    * close to cover as can be, kept until another is clearly better, so the keeper does not dither.
    */
@@ -989,6 +1065,14 @@ const POST_ORDER: Record<Post['lane'], readonly TankClassId[]> = {
   north: ['soldier', 'demoman', 'scout', 'heavy'],
   south: ['soldier', 'demoman', 'scout', 'heavy']
 };
+/** Classes in the order they are asked to open a shortcut, the armor share they need and how near they must be. */
+const OPENERS: readonly TankClassId[] = ['demoman', 'heavy', 'soldier'];
+const OPENER_ARMOR = 0.6;
+const OPENER_RANGE = 700;
+/** Thickest wall a shortcut goes through, in pixels; seconds a breach may take, and before a given-up one is tried again. */
+const SHORTCUT_THICKNESS = 40;
+const BREACH_TIME = 20;
+const BREACH_RETRY = 30;
 /**
  * The point's keeper stands at least `KEEPER_MARGIN` px inside its edge; a spot scores
  * `KEEPER_DANGER` per known enemy that sees it and one per `KEEPER_HUG` px from cover, and the

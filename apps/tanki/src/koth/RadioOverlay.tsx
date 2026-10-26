@@ -113,6 +113,13 @@ function MarkerIcon(props: { kind: MarkerKind }) {
             return <path d="M -4.5 -5 H 4.5 V 0.5 L 0 5.5 L -4.5 0.5 Z" fill="var(--tk-marker-team)" stroke={INK} stroke-width="1.2" />;
           case 'kit':
             return <path d="M -1.6 -5.5 H 1.6 V -1.6 H 5.5 V 1.6 H 1.6 V 5.5 H -1.6 V 1.6 H -5.5 V -1.6 H -1.6 Z" fill="#4d9e52" />;
+          case 'breach':
+            return (
+              <>
+                <path d="M -6 -4 H -1 V 4 H -6 Z M 1 -4 H 6 V 4 H 1 Z" fill="#c9473b" stroke={INK} stroke-width="1" />
+                <path d="M 0 -6 L -1.5 -1 L 1.5 1 L 0 6" fill="none" stroke={INK} stroke-width="1.4" />
+              </>
+            );
           case 'danger':
             return (
               <>

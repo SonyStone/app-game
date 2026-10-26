@@ -1,5 +1,5 @@
 import type { KothMap } from './map';
-import { cellCenter, findPath, isOpenCell, searchNearest, sightClear, type NavGrid } from './navigation';
+import { cellCenter, findBreachPath, findPath, isOpenCell, pathLength, searchNearest, sightClear, type NavGrid } from './navigation';
 import type { Lane } from './radio';
 import { rivalOf, type TeamId } from './rules';
 
@@ -39,6 +39,53 @@ export function findPosts(grid: NavGrid, map: KothMap, team: TeamId): Post[] {
   return posts;
 }
 
+/**
+ * A wall on the team's own side worth breaking open: it shuts a short way between the team's
+ * staging spot in the hall and one in a side street, so opening it lets the team switch lanes
+ * quickly. `cells` are the grid cells it closes, `wall` the middle of them, and `sides` the open
+ * spots just before and just beyond it, from where a tank breaks through.
+ */
+export type Shortcut = { lane: Exclude<Lane, 'center'>; from: Point; to: Point; wall: Point; cells: number[]; sides: [Point, Point] };
+
+/**
+ * The shortcuts of `team` (see `Shortcut`): for each side street, the way from the hall's staging
+ * spot to the street's through walls `breakable` allows, if it is shorter than `SHORTCUT_SHARE`
+ * of the way around, or there is no way around. On the king of the hill map these are the wooden
+ * fence and the brick wall across the alleys between the buildings beside the hall. A shortcut
+ * already open is left out.
+ *
+ * @param breakable - Whether a bot should break through the wall closing `cell`.
+ */
+export function findShortcuts(grid: NavGrid, map: KothMap, team: TeamId, breakable: (cell: number) => boolean): Shortcut[] {
+  const lanes = map.lanes[team];
+  const shortcuts: Shortcut[] = [];
+
+  for (const lane of ['north', 'south'] as const) {
+    const around = findPath(grid, lanes.center, lanes[lane]);
+    const way = findBreachPath(grid, lanes.center, lanes[lane], { through: (cell) => (breakable(cell) ? THROUGH_PRICE : Infinity) });
+
+    if (!way?.crossing || (around && pathLength(way.path) > pathLength(around) * SHORTCUT_SHARE)) {
+      continue;
+    }
+
+    const cells = way.crossing.cells;
+    const wall = { x: (way.crossing.entry.x + way.crossing.exit.x) / 2, y: (way.crossing.entry.y + way.crossing.exit.y) / 2 };
+    shortcuts.push({ lane, from: lanes.center, to: lanes[lane], wall, cells, sides: [way.crossing.entry, way.crossing.exit] });
+  }
+
+  return shortcuts;
+}
+
+/**
+ * Whether a shortcut's wall has been broken through: a tank can drive from one side of it to the
+ * other along a way at most `OPENED_DETOUR` times as long as the straight line, plus a little.
+ */
+export function isOpened(grid: NavGrid, shortcut: Shortcut) {
+  const [one, other] = shortcut.sides;
+  const way = findPath(grid, one, other);
+  return way !== undefined && pathLength(way) < Math.hypot(other.x - one.x, other.y - one.y) * OPENED_DETOUR + OPENED_SLACK;
+}
+
 /** The ways to the point, the hall first: the most used, so the first post filled. */
 export const LANES: readonly Lane[] = ['center', 'north', 'south'];
 
@@ -62,6 +109,13 @@ function pointAlong(path: readonly Point[], distance: number): Point {
   return path[path.length - 1];
 }
 
+/** A shortcut's wall counts as broken through when the way across is at most this much longer than straight. */
+const OPENED_DETOUR = 1.5;
+const OPENED_SLACK = 40;
+/** A way through a wall is a shortcut when it is shorter than this share of the way around. */
+const SHORTCUT_SHARE = 0.8;
+/** Extra cost of a step through a breakable wall, as a multiple of the step, for finding shortcuts. */
+const THROUGH_PRICE = 0.5;
 /** Driving distance from the point's center to a post, and how far beyond it a post watches its way. */
 const FORWARD = 330;
 const WATCH = 260;
