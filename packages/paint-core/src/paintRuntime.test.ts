@@ -84,8 +84,11 @@ it.each([false, true])(
       runtime.send({ type: 'psd', name: 'my painting.psb', region, requestId: 'second' });
       await waitFor(() => downloads().length === 2);
       expect(downloads().map((event) => event.name)).toEqual(['folder/my painting.PSD', 'my painting.psb']);
+      expect(captured).toHaveLength(4);
+      expect(captured[1]).toEqual(captured[0]);
+      expect(captured[3]).toEqual(captured[2]);
       const first = captured[0]!,
-        second = captured[1]!;
+        second = captured[2]!;
       expect(first.creation).toEqual(identity.creation);
       expect(second.creation).toEqual(first.creation);
       expect(second.layerIds).toEqual(first.layerIds);

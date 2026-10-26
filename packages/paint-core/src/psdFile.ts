@@ -1,4 +1,5 @@
 import { readPsd, writePsd, type PsdBlend, type PsdLayer, type PsdNewDocumentContext } from '@app-game/psd';
+import { openPsd } from '@app-game/psd/viewer';
 import { TILE_SIZE } from './brush';
 import type { Camera, ViewSize } from './camera';
 import type { BlendMode, Layer } from './document';
@@ -9,13 +10,14 @@ import { packTile, unpackTile, type TileData } from './tilePixels';
 
 /**
  * Exports `layers` as a layered Photoshop document of `region`, or of the bounds of everything drawn when it is
- * omitted. Every layer, hidden ones too, is cropped to its pixels within the canvas; the flattened image is merged as
- * `mergeTilePixels` merges layers down, in linear light with `linearBlending` as the document does; Photoshop keeps no
- * such flag in the file, so it shows the layers blended in encoded sRGB unless set to blend RGB with gamma 1.0. A canvas
+ * omitted. Every layer, hidden ones too, is cropped to its pixels within the canvas. The composite strictly renders
+ * the serialized layers with Photoshop's byte opacity and the document's `linearBlending` setting. Photoshop's
+ * application preference must match that setting when recompositing the file. A canvas
  * over 30,000 pixels on a side is written as PSB. Throws when there is nothing to export or the canvas is larger than a
  * PSB allows. `context` selects complete first-save creation; its caller-owned IDs and layer clocks must follow
  * `layers` order, including hidden and empty layers. Omission retains the codec's identity-only compatibility mode.
  * Invalid complete-mode operands throw PsdWriteError; supplied context is never replaced with legacy defaults.
+ * Throws PsdExportCompositeError when the serialized document cannot be rendered exactly at the canvas dimensions.
  */
 export async function writePsdFile(
   layers: Layer[],
@@ -55,12 +57,62 @@ export async function writePsdFile(
       transparencyLocked: !!layer.alphaLock
     };
   });
+  const document = { width: canvas.width, height: canvas.height, layers: psdLayers };
   const file = await writePsd(
-    { width: canvas.width, height: canvas.height, layers: psdLayers },
+    document,
     straightPixels(flatten(loaded, linearBlending), canvas),
     context
   );
-  return new Blob([file as Uint8Array<ArrayBuffer>], { type: 'image/vnd.adobe.photoshop' });
+  const opened = await openPsd(file);
+  if (!opened.ok) {
+    throw new PsdExportCompositeError('OpenFailed', opened.error.message, { cause: opened.error });
+  }
+
+  try {
+    const rendered = opened.value.render({
+      linearBlending,
+      approximate: false,
+      textGamma: 1.45,
+      vectorPaths: false,
+      typeLayers: false,
+      smartObjects: null
+    });
+    if (!rendered.ok) {
+      throw new PsdExportCompositeError('RenderFailed', rendered.error.message, { cause: rendered.error });
+    }
+
+    const render = rendered.value;
+    try {
+      if (render.approximations.length) {
+        throw new PsdExportCompositeError('Approximation', render.approximations.join('; '));
+      }
+
+      if (render.width !== canvas.width || render.height !== canvas.height) {
+        throw new PsdExportCompositeError('Dimensions', 'The PSD composite dimensions do not match the export canvas.');
+      }
+
+      const final = await writePsd(document, render.pixels, context);
+      return new Blob([final as Uint8Array<ArrayBuffer>], { type: 'image/vnd.adobe.photoshop' });
+    } finally {
+      render.dispose();
+    }
+  } finally {
+    opened.value.close();
+  }
+}
+
+/** Refuses an export whose serialized layers cannot produce an exact, full-canvas Photoshop composite. */
+export class PsdExportCompositeError extends Error {
+  readonly name = 'PsdExportCompositeError';
+
+  /** Preserves renderer diagnostics as the cause for opening and rendering failures. */
+  constructor(
+    readonly code: 'OpenFailed' | 'RenderFailed' | 'Approximation' | 'Dimensions',
+    message: string,
+    options?: ErrorOptions
+  ) {
+    super(message, options);
+  }
 }
 
 /** Whether `file` starts with the Photoshop signature. */
