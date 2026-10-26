@@ -37,7 +37,8 @@ import { createWeapon } from './weapon';
  * it. `TANKI_SEEDS` replaces the matches' twelve
  * seeds with a comma-separated list: a class's kills against deaths moves by 0.2-0.5 from one set
  * of twelve to another, so a change is worth checking on a second set. `TANKI_VICTIMS` lists the
- * classes the kill times are taken against; defaults to `soldier,heavy,scout`.
+ * classes the kill times are taken against; defaults to `soldier,heavy,scout`. `TANKI_ROSTER`
+ * sets the classes of both teams in the full matches (see `ROSTER`).
  */
 describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
   let rapier: Rapier;
@@ -156,35 +157,60 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
   }, 900_000);
 
   it('plays eight-bot matches and sums up every class', () => {
-    const totals = new Map<TankClassId, { seats: number; kills: number; deaths: number; life: number; lives: number; damage: number; point: number; kits: number }>();
+    // Every number is counted for the class a tank had at the moment, as bots switch classes between lives.
+    const totals = new Map<TankClassId, ClassTally>();
+    const tally = (id: TankClassId) => {
+      let entry = totals.get(id);
+
+      if (!entry) {
+        entry = { alive: 0, kills: 0, deaths: 0, life: 0, lives: 0, damage: 0, fatal: 0, point: 0, kits: 0 };
+        totals.set(id, entry);
+      }
+
+      return entry;
+    };
     const matches: string[] = [];
     const breaches = new Map<string, { passed: number; opened: number; abandoned: number; spent: number; reasons: Record<string, number> }>();
     const weighed = new Map<string, { considered: number; exposed: number; short: number; chosen: number }>();
     const debris = { wrecks: 0, pieces: 0, area: 0, chunks: 0, metal: 0 };
     let stalls = 0;
     let longest = 0;
+    let wins = { red: 0, blue: 0, none: 0 };
 
     const seeds = import.meta.env.TANKI_SEEDS?.split(',').map(Number) ?? [11, 23, 37, 41, 53, 67, 71, 89, 97, 101, 113, 127];
 
     for (const seed of seeds) {
-      const match = createMatch(rapier, seed);
+      const born = new Map<number, number>();
+      const armor = new Map<object, number>();
+      let kills = 0;
+      const match = createMatch(rapier, seed, {
+        roster: ROSTER,
+        onKill: (kill) => {
+          kills++;
+          tally(kill.victimClass).deaths++;
+
+          if (kill.killerClass) {
+            const killer = tally(kill.killerClass);
+            killer.kills++;
+            // The armor the tank still had goes to its killer too: the step's armor tally never sees a destroyed tank.
+            killer.fatal += armor.get(kill.victimTank) ?? 1;
+          }
+        }
+      });
       const step = match.kits.step;
       match.kits.step = (time, tanks) => {
         const takers = step(time, tanks);
 
         for (const taker of takers) {
           const member = match.members.find((candidate) => candidate.tank === taker);
-          const stats = member && totals.get(member.tankClass.id);
 
-          if (stats) {
-            stats.kits++;
+          if (member) {
+            tally(member.tankClass.id).kits++;
           }
         }
 
         return takers;
       };
-      const born = new Map<number, number>();
-      const armor = new Map<object, number>();
       let firstCapture: number | undefined;
 
       while (match.time < 300 && !match.capture.winner) {
@@ -193,25 +219,26 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
         firstCapture ??= match.capture.owner ? match.time : undefined;
 
         for (const member of match.members) {
-          const stats = totals.get(member.tankClass.id) ?? { seats: 0, kills: 0, deaths: 0, life: 0, lives: 0, damage: 0, point: 0, kits: 0 };
-          totals.set(member.tankClass.id, stats);
-
           if (member.tank && !born.has(member.id)) {
             born.set(member.id, match.time);
           } else if (!member.tank && born.has(member.id)) {
+            // The member's class is still the one it died in until it comes back.
+            const stats = tally(member.tankClass.id);
             stats.life += match.time - born.get(member.id)!;
             stats.lives++;
             born.delete(member.id);
           }
 
           if (member.tank) {
+            const stats = tally(member.tankClass.id);
+            stats.alive += 1 / 60;
             const left = match.combat.armorLeft(member.tank);
             const before = armor.get(member.tank) ?? 1;
             // Armor lost goes to the enemy that hit the tank last.
             const shooter = member.attacker && match.members.find((other) => other.team !== member.team && other.tank === member.attacker);
 
             if (left < before && shooter) {
-              totals.get(shooter.tankClass.id)!.damage += before - left;
+              tally(shooter.tankClass.id).damage += before - left;
             }
 
             armor.set(member.tank, left);
@@ -223,13 +250,7 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
         }
       }
 
-      for (const member of match.members) {
-        const stats = totals.get(member.tankClass.id)!;
-        stats.seats++;
-        stats.kills += member.kills;
-        stats.deaths += member.deaths;
-      }
-
+      wins = { ...wins, [match.capture.winner ?? 'none']: wins[match.capture.winner ?? 'none'] + 1 };
       for (const bot of match.bots.values()) {
         stalls += bot.driver.stalls;
         longest = Math.max(longest, bot.driver.longestStall);
@@ -265,15 +286,29 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
 
       const roster = (team: 'red' | 'blue') => match.members.filter((member) => member.team === team).map((member) => member.tankClass.id[0].toUpperCase() + member.tankClass.id.slice(1, 3));
       matches.push(
-        `seed ${seed}: ${roster('red').join(' ')} vs ${roster('blue').join(' ')} -> ${match.capture.winner ?? 'none'} at ${match.time.toFixed(0)} s, first capture ${firstCapture?.toFixed(0) ?? '-'} s, kills ${match.members.reduce((sum, member) => sum + member.kills, 0)}, wall hits ${match.combat.walls.damage.hits}, rams ${match.combat.walls.damage.rams}, tiles fallen ${match.combat.walls.damage.collapsed}, wrecks ${match.combat.wrecks.made}`
+        `seed ${seed}: ${roster('red').join(' ')} vs ${roster('blue').join(' ')} -> ${match.capture.winner ?? 'none'} at ${match.time.toFixed(0)} s, first capture ${firstCapture?.toFixed(0) ?? '-'} s, kills ${kills}, wall hits ${match.combat.walls.damage.hits}, rams ${match.combat.walls.damage.rams}, tiles fallen ${match.combat.walls.damage.collapsed}, wrecks ${match.combat.wrecks.made}`
       );
     }
 
-    const lines = ['Eight-bot matches, hold time 120 s:', ...matches, '', 'class      seats  K/D    kills/seat  life s  damage/seat  on point s/seat  kits/seat'];
+    const lines = [
+      `Eight-bot matches, hold time 120 s${ROSTER ? `, rosters ${import.meta.env.TANKI_ROSTER}` : ''}:`,
+      ...matches,
+      `wins: red ${wins.red}, blue ${wins.blue}, undecided at 300 s ${wins.none}`,
+      '',
+      'Per class, counted for the class a tank had at the time; rates per minute alive. Damage is armor taken away, the fatal part (what a destroyed tank had left) shown apart.',
+      'class      alive min   K/D  kills/min  deaths/min  life s  damage/min  fatal/min  point %  kits/min'
+    ];
 
-    for (const [id, stats] of totals) {
+    for (const id of TANK_CLASS_IDS) {
+      const stats = totals.get(id);
+
+      if (!stats || stats.alive === 0) {
+        continue;
+      }
+
+      const minutes = stats.alive / 60;
       lines.push(
-        `${id.padEnd(10)} ${String(stats.seats).padStart(5)}  ${(stats.kills / Math.max(stats.deaths, 1)).toFixed(2).padStart(4)}   ${(stats.kills / stats.seats).toFixed(2).padStart(9)}  ${(stats.life / Math.max(stats.lives, 1)).toFixed(0).padStart(6)}  ${(stats.damage / stats.seats).toFixed(2).padStart(11)}  ${(stats.point / stats.seats).toFixed(0).padStart(14)}  ${(stats.kits / stats.seats).toFixed(1).padStart(9)}`
+        `${id.padEnd(10)} ${minutes.toFixed(1).padStart(9)}  ${(stats.kills / Math.max(stats.deaths, 1)).toFixed(2).padStart(4)}  ${(stats.kills / minutes).toFixed(2).padStart(9)}  ${(stats.deaths / minutes).toFixed(2).padStart(10)}  ${(stats.life / Math.max(stats.lives, 1)).toFixed(0).padStart(6)}  ${(stats.damage / minutes).toFixed(2).padStart(10)}  ${(stats.fatal / minutes).toFixed(2).padStart(9)}  ${((stats.point / stats.alive) * 100).toFixed(0).padStart(7)}  ${(stats.kits / minutes).toFixed(2).padStart(8)}`
       );
     }
 
@@ -299,6 +334,24 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
     console.log(lines.join('\n'));
   }, 900_000);
 });
+
+/** What the full matches add up for a class: seconds alive, completed lives and their seconds, and armor taken away by its shots, apart and in kills. */
+type ClassTally = { alive: number; kills: number; deaths: number; life: number; lives: number; damage: number; fatal: number; point: number; kits: number };
+
+/**
+ * Classes of both teams for the full matches from `TANKI_ROSTER`, as `sniper,soldier,heavy,demoman`
+ * for the same four a side or `a,b,c,d/e,f,g,h` for red, then blue; bots then keep their classes.
+ */
+const ROSTER = (() => {
+  const text = import.meta.env.TANKI_ROSTER;
+
+  if (!text) {
+    return undefined;
+  }
+
+  const [red, blue = red] = text.split('/').map((team: string) => team.split(',') as TankClassId[]);
+  return { red, blue };
+})();
 
 /** The tuning every part runs with, from `TANKI_TUNING`; none by default. */
 const TUNED = harnessTuning(import.meta.env.TANKI_TUNING);

@@ -49,7 +49,14 @@ describe.skipIf(!import.meta.env.TANKI_TACTICS)('bot tactics', () => {
     const lines: string[] = [];
 
     for (const seed of seeds) {
-      const match = createMatch(rapier, seed);
+      // Kills and deaths count for the classes the tanks had at the time, as bots switch classes between lives.
+      const match = createMatch(rapier, seed, (kill) => {
+        tallyOf(totals, kill.victimClass).deaths++;
+
+        if (kill.killerClass) {
+          tallyOf(totals, kill.killerClass).kills++;
+        }
+      });
       const summary = playMatch(match, totals, said);
       lines.push(`seed ${seed}: ${summary}`);
     }
@@ -234,10 +241,7 @@ function playMatch(match: KothMatch, totals: Map<TankClassId, ClassTally>, said:
   }
 
   for (const member of match.members) {
-    const tally = tallyOf(totals, member.tankClass.id);
-    tally.seats++;
-    tally.kills += member.kills;
-    tally.deaths += member.deaths;
+    tallyOf(totals, member.tankClass.id).seats++;
   }
 
   const roster = (team: 'red' | 'blue') =>
@@ -284,7 +288,7 @@ function rosterFrom(text: string | undefined) {
 const TUNED = harnessTuning(import.meta.env.TANKI_TUNING);
 const PACE: Pace = { ...PACE_DEFAULTS, ...TUNED.tuning.pace };
 
-function createMatch(rapier: Rapier, seed: number) {
+function createMatch(rapier: Rapier, seed: number, onKill: NonNullable<Parameters<typeof createKothMatch>[3]>['onKill']) {
   const world = new rapier.World({ x: 0, y: 0 });
   world.lengthUnit = 100;
 
@@ -293,7 +297,8 @@ function createMatch(rapier: Rapier, seed: number) {
     random: seeded(seed),
     pace: () => PACE,
     rules: { ...CAPTURE_RULES, holdTime: 120 },
-    roster: ROSTER
+    roster: ROSTER,
+    onKill
   });
 }
 

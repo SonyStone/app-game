@@ -43,6 +43,9 @@ type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
  *   `pickRoster`.
  * @param options.playerClass - The player's first class; defaults to the Soldier.
  * @param options.onHit - Called for every hit, as the battle core's `onHit`, for tools that measure the fighting.
+ * @param options.onKill - Called for every tank destroyed, with the classes the victim and the
+ *   enemy credited with it had at that moment, before either can change class, for tools that
+ *   measure the fighting.
  * @param options.pace - The fight's pace, read anew every step and every shot: shares of every
  *   class's driving and shell speed, of the armor hits take away and of the bots' reaction times,
  *   and how far bots see (see `Pace`). Defaults to `PACE_DEFAULTS`.
@@ -59,6 +62,7 @@ export function createKothMatch(
     roster?: Partial<Record<TeamId, readonly TankClassId[]>>;
     playerClass?: TankClassId;
     onHit?: NonNullable<Parameters<typeof createCombat>[4]>['onHit'];
+    onKill?: (kill: { victim: Member; victimTank: Tank; victimClass: TankClassId; killer: Member | undefined; killerClass: TankClassId | undefined }) => void;
     pace?: () => MatchPace;
   } = {}
 ) {
@@ -601,6 +605,8 @@ export function createKothMatch(
     }
 
     feed.push({ id: feedId++, at: time, killer: credited, victim: member });
+    const enemy = credited && credited.team !== member.team ? credited : undefined;
+    options.onKill?.({ victim: member, victimTank: victim, victimClass: member.tankClass.id, killer: enemy, killerClass: enemy?.tankClass.id });
     reconsiderClass(member, credited && credited.team !== member.team ? credited.tankClass.id : undefined);
   }
 
