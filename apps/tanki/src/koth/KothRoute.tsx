@@ -536,7 +536,7 @@ function thoughtsOnScreen(
  * while watching. A bubble fades over its last `BUBBLE_FADE` s and a marker over its last
  * `MARKER_FADE` s; a marker off the screen is held `EDGE_INSET` px inside its edge. The shot flies
  * from `SHOT_START` px off the speaker's tank to `SHOT_END` px short of the marker at `SHOT_SPEED`
- * px/s, and is left out when that leaves less than `SHOT_SHORTEST` px.
+ * px/s, by the match's clock, and is left out when that leaves less than `SHOT_SHORTEST` px.
  */
 function calloutsOnScreen(
   match: KothMatch,
@@ -570,7 +570,7 @@ function calloutsOnScreen(
         lane: callout.lane,
         seconds: callout.seconds,
         bubble: speaker && { x: speaker.x, y: speaker.y, opacity: bubbleOpacity },
-        shot: speaker && held ? shotBetween(speaker, held, bubbleOpacity) : undefined,
+        shot: speaker && held ? shotBetween(speaker, held, said, bubbleOpacity) : undefined,
         marker:
           callout.marker && held
             ? {
@@ -588,8 +588,13 @@ const BUBBLE_FADE = 0.4;
 const MARKER_FADE = 0.8;
 const EDGE_INSET = 34;
 
-/** The radio shot from the speaker at `from` to the marker at `to`, on screen, cut short at both ends; none if too short. */
-function shotBetween(from: { x: number; y: number }, to: { x: number; y: number }, opacity: number) {
+/**
+ * The radio shot from the speaker at `from` to the marker at `to`, on screen, cut short at both
+ * ends, `said` s after it was fired; none if too short. The bolt, `BOLT_LENGTH` px or less on a
+ * short way, comes out of the speaker and flies with its head reaching the target in `flight` s,
+ * then is gone.
+ */
+function shotBetween(from: { x: number; y: number }, to: { x: number; y: number }, said: number, opacity: number) {
   const length = Math.hypot(to.x - from.x, to.y - from.y);
   const shown = length - SHOT_START - SHOT_END;
 
@@ -598,10 +603,15 @@ function shotBetween(from: { x: number; y: number }, to: { x: number; y: number 
   }
 
   const along = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
+  const at = (distance: number) => ({ x: from.x + along.x * (SHOT_START + distance), y: from.y + along.y * (SHOT_START + distance) });
+  const flight = Math.min(Math.max(shown / SHOT_SPEED, SHOT_QUICKEST), SHOT_SLOWEST);
+  const head = (said / flight) * shown;
+  const tail = Math.max(head - Math.min(BOLT_LENGTH, shown * 0.6), 0);
+
   return {
-    from: { x: from.x + along.x * SHOT_START, y: from.y + along.y * SHOT_START },
-    to: { x: to.x - along.x * SHOT_END, y: to.y - along.y * SHOT_END },
-    flight: Math.min(Math.max(shown / SHOT_SPEED, SHOT_QUICKEST), SHOT_SLOWEST),
+    bolt: head < shown ? { tail: at(tail), head: at(head) } : undefined,
+    to: at(shown),
+    flight,
     opacity
   };
 }
@@ -613,6 +623,7 @@ const SHOT_SPEED = 1200;
 /** Seconds a shot flies at least and at most, so a near one is still seen and a far one does not keep the marker waiting. */
 const SHOT_QUICKEST = 0.15;
 const SHOT_SLOWEST = 0.4;
+const BOLT_LENGTH = 110;
 
 /** Sizes the canvas's drawing buffer to its CSS size times the device pixel ratio; returns the CSS size. */
 function fitCanvas(canvas: HTMLCanvasElement) {

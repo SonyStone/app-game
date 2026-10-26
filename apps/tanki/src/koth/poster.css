@@ -713,31 +713,13 @@
 }
 
 /*
- * The shot a radio line fires from the speaker at what it is about: a wide ribbon of a tracer, a
- * third of the way long, flies to the target in --tk-shot-flight over a faint trail, which fades once it lands,
- * and a ring flashes where it hits. Lengths are shares of the line (pathLength 1).
+ * The shot a radio line fires from the speaker at what it is about: a bolt, drawn by the overlay
+ * frame by frame, and a ring that flashes where it hits after --tk-shot-flight.
  */
-.tk-shot line {
+.tk-shot-bolt {
   fill: none;
-  stroke: var(--tk-shot-team);
-  stroke-linecap: round;
-}
-
-.tk-shot-tracer {
-  stroke-width: 9px;
-  stroke-dasharray: 0.32 2;
-  animation:
-    tk-shot-fly var(--tk-shot-flight) linear both,
-    tk-shot-gone 0.08s var(--tk-shot-flight) forwards;
-}
-
-.tk-shot-trail {
-  stroke-width: 3px;
-  stroke-dasharray: 1;
-  opacity: 0.45;
-  animation:
-    tk-shot-draw var(--tk-shot-flight) linear both,
-    tk-shot-gone 0.35s var(--tk-shot-flight) forwards;
+  stroke-width: 10px;
+  stroke-linecap: butt;
 }
 
 .tk-shot-hit {
@@ -748,33 +730,6 @@
   transform-box: fill-box;
   transform-origin: center;
   animation: tk-shot-hit 0.4s var(--tk-shot-flight) ease-out;
-}
-
-/* The dash starts just behind the speaker and ends with its head on the target. */
-@keyframes tk-shot-fly {
-  from {
-    stroke-dashoffset: 0.32;
-  }
-
-  to {
-    stroke-dashoffset: -0.68;
-  }
-}
-
-@keyframes tk-shot-draw {
-  from {
-    stroke-dashoffset: 1;
-  }
-
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes tk-shot-gone {
-  to {
-    opacity: 0;
-  }
 }
 
 @keyframes tk-shot-hit {

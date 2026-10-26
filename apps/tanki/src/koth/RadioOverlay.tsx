@@ -24,7 +24,15 @@ export type CalloutView = {
    * flies and the bubble's opacity; `undefined` without a bubble or a marker, or when the marker
    * is on the speaker.
    */
-  shot: { from: { x: number; y: number }; to: { x: number; y: number }; flight: number; opacity: number } | undefined;
+  shot:
+    | {
+        /** The bolt's ends while it flies, `undefined` once it hit. */
+        bolt: { tail: { x: number; y: number }; head: { x: number; y: number } } | undefined;
+        to: { x: number; y: number };
+        flight: number;
+        opacity: number;
+      }
+    | undefined;
   /**
    * The line's marker, in CSS pixels. A marker off the screen is held at its edge, with `edge`
    * the direction it lies in, in radians on screen; `undefined` while it is on the screen.
@@ -59,7 +67,7 @@ export function RadioOverlay(props: { callouts: readonly CalloutView[] }) {
         <For each={props.callouts} keyed={(callout) => callout.id}>
           {(callout) => (
             <Show when={callout().shot}>
-              {(shot) => <RadioShot {...shot()} team={callout().team} />}
+              {(shot) => <RadioShot {...shot()} id={callout().id} team={callout().team} />}
             </Show>
           )}
         </For>
@@ -105,23 +113,50 @@ export function RadioOverlay(props: { callouts: readonly CalloutView[] }) {
 }
 
 /**
- * A shot from `from` to `to`, on screen, in the team's color: a short tracer flies to the target
- * in `flight` s, as read when it is fired, over a faint trail that fades once it lands, and a
- * ring flashes where it hits. Nothing of it stays.
+ * A shot at `to`, on screen, like a blaster's bolt: a band in the team's color, see-through and
+ * dissolving toward both ends, flies from the speaker while `bolt` is given, and a ring flashes
+ * where it hits after `flight` s, as read when it is fired. Nothing of it stays.
  */
 function RadioShot(props: {
-  from: { x: number; y: number };
+  id: number;
+  bolt: { tail: { x: number; y: number }; head: { x: number; y: number } } | undefined;
   to: { x: number; y: number };
   flight: number;
   opacity: number;
   team: TeamId;
 }) {
   const flight = untrack(() => props.flight);
+  const gradient = `tk-shot-${untrack(() => props.id)}`;
 
   return (
     <g class="tk-shot" style={{ opacity: props.opacity, '--tk-shot-team': TEAM_CSS[props.team], '--tk-shot-flight': `${flight}s` }}>
-      <line class="tk-shot-trail" x1={props.from.x} y1={props.from.y} x2={props.to.x} y2={props.to.y} pathLength={1} />
-      <line class="tk-shot-tracer" x1={props.from.x} y1={props.from.y} x2={props.to.x} y2={props.to.y} pathLength={1} />
+      <Show when={props.bolt}>
+        {(bolt) => (
+          <>
+            <linearGradient
+              id={gradient}
+              gradientUnits="userSpaceOnUse"
+              x1={bolt().tail.x}
+              y1={bolt().tail.y}
+              x2={bolt().head.x}
+              y2={bolt().head.y}
+            >
+              <stop offset="0" stop-color={TEAM_CSS[props.team]} stop-opacity="0" />
+              <stop offset="0.45" stop-color={TEAM_CSS[props.team]} stop-opacity="0.75" />
+              <stop offset="0.8" stop-color={TEAM_CSS[props.team]} stop-opacity="0.75" />
+              <stop offset="1" stop-color={TEAM_CSS[props.team]} stop-opacity="0" />
+            </linearGradient>
+            <line
+              class="tk-shot-bolt"
+              x1={bolt().tail.x}
+              y1={bolt().tail.y}
+              x2={bolt().head.x}
+              y2={bolt().head.y}
+              stroke={`url(#${gradient})`}
+            />
+          </>
+        )}
+      </Show>
       <circle class="tk-shot-hit" cx={props.to.x} cy={props.to.y} r="20" />
     </g>
   );
