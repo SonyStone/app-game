@@ -42,10 +42,18 @@ export function StatusArea(props: {
       <Show when={quality()}>
         {(progress) => (
           <p role="status" aria-label="Tile refinement">
-            {progress().coarse ? 'Coarse coverage · refining' : 'Fresh coverage'} · {progress().completed}/
-            {progress().required} tiles
+            {progress().kind === 'pointPreview'
+              ? 'Coarse preview'
+              : progress().coarse
+                ? 'Coarse coverage · refining'
+                : 'Fresh coverage'}{' '}
+            · {progress().completed}/{progress().required} tiles
             {' · '}
-            {progress().step === 1 ? 'source pixels' : `LOD ${Math.log2(progress().step)} display pixels`}
+            {progress().kind === 'pointPreview'
+              ? `point samples every ${progress().step} source pixels`
+              : progress().step === 1
+                ? 'source pixels'
+                : `filtered LOD ${Math.log2(progress().step)}`}
           </p>
         )}
       </Show>
