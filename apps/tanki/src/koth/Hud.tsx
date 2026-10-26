@@ -2,9 +2,10 @@ import { For, Show } from 'solid-js';
 import { ClassSilhouette } from './classes/ClassMenu';
 import { TANK_CLASSES } from './classes/classes';
 import { FULL_CHARGE } from './classes/weapon';
-import type { KothMatch, MemberHud } from './match';
+import { useKothI18n } from './i18n/i18n';
+import type { KothMatch, MemberHud, SeatHud } from './match';
+import './poster.css';
 import type { TeamId } from './rules';
-import type { TankClassId } from './tanks';
 
 /** What the heads-up display shows, from `KothMatch['hud']`. */
 export type HudState = ReturnType<KothMatch['hud']>;
@@ -31,8 +32,9 @@ export type ThoughtView = {
 };
 
 /**
- * The match display over the canvas: the teams' clocks either side of the point's state, who of
- * each team is alive or respawning, the kill feed, and the player's armor or respawn countdown.
+ * The match display over the canvas, in the poster look of `poster.css`: the teams' clocks either
+ * side of the point's state, who of each team is alive or respawning, the kill feed, and the
+ * player's armor or respawn countdown.
  *
  * @param watching - The player watches the bots, so the player's own panel is hidden.
  */
@@ -41,7 +43,7 @@ export function KothHud(props: { state: HudState | undefined; watching: boolean 
     <Show when={props.state}>
       {(state) => (
         <>
-          <div class="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 items-start gap-3 text-white">
+          <div class="pointer-events-none absolute top-3 left-1/2 flex -translate-x-1/2 items-start gap-3">
             <TeamPanel team="red" state={state()} />
             <PointDial state={state()} />
             <TeamPanel team="blue" state={state()} />
@@ -56,74 +58,86 @@ export function KothHud(props: { state: HudState | undefined; watching: boolean 
   );
 }
 
-/** A team's clock, kills and members: filled pips for tanks in play, outlined ones with a countdown for tanks respawning. */
+/** A team's clock, kills and plan, and its members: filled pips for tanks in play, paper ones with a countdown for tanks respawning. */
 function TeamPanel(props: { team: TeamId; state: HudState }) {
+  const { t } = useKothI18n();
   const team = () => props.state.teams[props.team];
   const owns = () => props.state.capture.owner === props.team;
+  const plan = () =>
+    team().plan.intent === 'push' && team().plan.phase !== 'none'
+      ? `${t('plan.push')} · ${t(`plan.${team().plan.phase as 'gather' | 'go'}`)}`
+      : t(`plan.${team().plan.intent}`);
 
   return (
-    <div class={`flex flex-col gap-1 ${props.team === 'red' ? 'items-end' : 'items-start'}`}>
+    <div class={['flex flex-col gap-1.5', props.team === 'red' ? 'items-end' : 'items-start']}>
       <div
-        class="min-w-24 rounded px-3 py-1 text-center text-2xl font-bold tabular-nums"
+        class="tk-clock"
         style={{
-          background: owns() ? TEAM_CSS[props.team] : 'rgba(0, 0, 0, 0.45)',
-          opacity: owns() || props.state.capture.owner === undefined ? 1 : 0.7
+          background: owns() ? TEAM_CSS[props.team] : undefined,
+          color: owns() ? PAPER : undefined,
+          opacity: owns() || props.state.capture.owner === undefined ? 1 : 0.75
         }}
       >
         {clock(team().left)}
       </div>
-      <div class={`flex gap-1 ${props.team === 'red' ? 'flex-row-reverse' : ''}`}>
+      <div class={['flex gap-1', { 'flex-row-reverse': props.team === 'red' }]}>
         <For each={team().members} keyed={(member) => member.id}>
           {(member) => <MemberPip team={props.team} member={member()} />}
         </For>
       </div>
-      <div class="text-xs text-white/70">
-        {team().kills} kills · {team().plan}
+      <div class="tk-tag">
+        {t('hud.kills', team().kills)} · {plan()}
       </div>
     </div>
   );
 }
 
-/** A member of a team: its class, a ring for the player, a countdown while respawning. */
+/** A member of a team: its class, a yellow inner ring for the player's seat, a countdown while respawning. */
 function MemberPip(props: { team: TeamId; member: MemberHud }) {
+  const { t } = useKothI18n();
+
   return (
     <div
-      class="grid h-6 w-7 place-items-center rounded text-[11px] font-bold tabular-nums"
-      title={`${props.member.name} · ${TANK_CLASSES[props.member.tankClass].name} · ${props.member.role} · ${props.member.kills}/${props.member.deaths}`}
+      class={['tk-pip', { 'tk-player': props.member.player }]}
+      title={`${seatName(t, props.member)} · ${t(`tankClass.${props.member.tankClass}`)} · ${t(`botRole.${props.member.role}`)} · ${props.member.kills}/${props.member.deaths}`}
       style={{
-        background: props.member.alive ? TEAM_CSS[props.team] : 'rgba(0, 0, 0, 0.45)',
-        border: `2px solid ${props.member.human ? '#ffffff' : props.member.alive ? 'rgba(0, 0, 0, 0.35)' : TEAM_CSS[props.team]}`
+        background: props.member.alive ? TEAM_CSS[props.team] : PAPER,
+        color: props.member.alive ? PAPER : TEAM_CSS[props.team]
       }}
     >
-      {props.member.alive ? CLASS_ABBREVIATIONS[props.member.tankClass] : Math.ceil(props.member.respawnIn)}
+      {props.member.alive ? t(`short.${props.member.tankClass}`) : Math.ceil(props.member.respawnIn)}
     </div>
   );
 }
 
 /**
- * The control point: a disc in the owner's color with a ring that fills in the capturing team's
- * color, how many tanks of each team stand on it, and whether it is contested or in overtime.
- * While the point is locked the disc counts down the seconds until it opens.
+ * The control point as a poster disc with a hard shadow: filled in the owner's color, with a ring
+ * that fills in the capturing team's color, how many tanks of the capturing team stand on it, and
+ * a tag while it is locked, contested or in overtime. While the point is locked the disc counts
+ * down the seconds until it opens.
  */
 function PointDial(props: { state: HudState }) {
+  const { t } = useKothI18n();
   const capture = () => props.state.capture;
-  const circumference = 2 * Math.PI * 22;
+  const circumference = 2 * Math.PI * 21;
 
   return (
     <div class="flex flex-col items-center gap-1">
-      <svg width="56" height="56" viewBox="0 0 56 56" class="drop-shadow">
-        <circle cx="28" cy="28" r="22" fill={capture().owner ? TEAM_CSS[capture().owner!] : '#d8d8d4'} stroke="rgba(0, 0, 0, 0.6)" stroke-width="6" />
+      <svg width="60" height="60" viewBox="0 0 60 60">
+        <circle cx="31" cy="31" r="27" fill={INK} />
+        <circle cx="28" cy="28" r="26" fill={INK} />
+        <circle cx="28" cy="28" r="18" fill={capture().owner ? TEAM_CSS[capture().owner!] : PAPER} />
         <circle
           cx="28"
           cy="28"
-          r="22"
+          r="21"
           fill="none"
           stroke={capture().capturer ? TEAM_CSS[capture().capturer!] : 'transparent'}
-          stroke-width="6"
+          stroke-width="5"
           stroke-dasharray={`${capture().progress * circumference} ${circumference}`}
           transform="rotate(-90 28 28)"
         />
-        <text x="28" y="33" text-anchor="middle" font-size="15" font-weight="bold" fill="#ffffff" stroke="rgba(0,0,0,0.5)" stroke-width="0.6">
+        <text x="28" y="34" text-anchor="middle" font-size="17" font-weight="700" fill={capture().owner ? PAPER : INK}>
           {capture().locked > 0
             ? Math.ceil(capture().locked)
             : capture().contested
@@ -134,8 +148,8 @@ function PointDial(props: { state: HudState }) {
         </text>
       </svg>
       <Show when={capture().locked > 0 || capture().contested || capture().overtime}>
-        <div class="rounded bg-black/55 px-2 py-0.5 text-xs font-bold tracking-wide">
-          {capture().locked > 0 ? 'LOCKED' : capture().overtime ? 'OVERTIME' : 'CONTESTED'}
+        <div class={['tk-tag', { 'tk-tag-red': capture().contested || capture().overtime }]}>
+          {capture().locked > 0 ? t('hud.locked') : capture().overtime ? t('hud.overtime') : t('hud.contested')}
         </div>
       </Show>
     </div>
@@ -144,16 +158,18 @@ function PointDial(props: { state: HudState }) {
 
 /** The last few kills, newest at the bottom. */
 function KillFeed(props: { feed: HudState['feed'] }) {
+  const { t } = useKothI18n();
+
   return (
-    <div class="pointer-events-none absolute right-3 top-3 flex flex-col items-end gap-1 text-sm">
+    <div class="pointer-events-none absolute top-3 right-3 flex flex-col items-end gap-1.5">
       <For each={props.feed} keyed={(entry) => entry.id}>
         {(entry) => (
-          <div class="rounded bg-black/45 px-2 py-0.5 text-white">
+          <div class="tk-feed">
             <Show when={entry().killer}>
-              {(killer) => <span style={{ color: TEAM_TEXT[killer().team] }}>{killer().name}</span>}
+              {(killer) => <span style={{ color: TEAM_CSS[killer().team] }}>{seatName(t, killer())}</span>}
             </Show>
-            <span class="px-1.5 text-white/70">✕</span>
-            <span style={{ color: TEAM_TEXT[entry().victim.team] }}>{entry().victim.name}</span>
+            <span class="px-1.5">✕</span>
+            <span style={{ color: TEAM_CSS[entry().victim.team] }}>{seatName(t, entry().victim)}</span>
           </div>
         )}
       </For>
@@ -166,42 +182,43 @@ function KillFeed(props: { feed: HudState['feed'] }) {
  * that comes next.
  */
 function PlayerPanel(props: { player: HudState['player'] }) {
+  const { t } = useKothI18n();
   const tankClass = () => TANK_CLASSES[props.player.tankClass];
-  const next = () => props.player.nextClass && TANK_CLASSES[props.player.nextClass];
+  const next = () => props.player.nextClass;
 
   return (
-    <div class="pointer-events-none absolute bottom-10 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1 text-white">
+    <div class="pointer-events-none absolute bottom-10 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
       <Show
         when={props.player.alive}
         fallback={
-          <div class="flex flex-col items-center gap-1 rounded bg-black/55 px-4 py-2">
-            <div class="text-xl font-bold">
-              Respawning in {Math.ceil(props.player.respawnIn)} as {(next() ?? tankClass()).name}
+          <div class="tk-card flex flex-col items-center px-4 py-1.5">
+            <div class="text-xl font-bold tracking-wide uppercase">
+              {t('hud.respawn', Math.ceil(props.player.respawnIn), t(`tankClass.${next() ?? props.player.tankClass}`))}
             </div>
-            <div class="text-xs text-white/70">C or 1-5: change class</div>
+            <div class="tk-note">{t('hud.changeClass')}</div>
           </div>
         }
       >
         <Show when={props.player.coreOpen}>
-          <div class="rounded bg-[#e0662a] px-2 py-0.5 text-sm font-bold">Core exposed — get to cover or your base</div>
+          <div class="tk-tag tk-tag-red text-[13px]">{t('hud.coreOpen')}</div>
         </Show>
         <Show when={props.player.mending}>
-          <div class="rounded bg-black/45 px-2 py-0.5 text-xs">Mending armor</div>
+          <div class="tk-tag tk-tag-blue">{t('hud.mending')}</div>
         </Show>
-        <div class="flex items-end gap-3 rounded bg-black/35 px-3 py-1.5">
+        <div class="tk-card flex items-center gap-3 px-3 py-1.5">
           <div class="flex flex-col items-center">
             <ClassSilhouette tankClass={tankClass()} color={PLAYER_CSS} width={64} height={32} />
-            <div class="text-xs font-bold">{tankClass().name}</div>
+            <div class="text-xs font-bold tracking-wider uppercase">{t(`tankClass.${props.player.tankClass}`)}</div>
           </div>
-          <div class="flex flex-col items-center gap-1">
-            <div class="h-2 w-48 overflow-hidden rounded bg-black/45">
-              <div class="h-full bg-white/85" style={{ width: `${Math.round(props.player.armor * 100)}%` }} />
+          <div class="flex flex-col gap-1.5">
+            <div class="tk-bar w-52">
+              <div style={{ width: `${Math.round(props.player.armor * 100)}%` }} />
             </div>
             <WeaponState player={props.player} />
           </div>
         </div>
         <Show when={next()}>
-          {(after) => <div class="rounded bg-black/45 px-2 py-0.5 text-xs">Next respawn: {after().name}</div>}
+          {(after) => <div class="tk-tag tk-tag-yellow">{t('hud.nextRespawn', t(`tankClass.${after()}`))}</div>}
         </Show>
       </Show>
     </div>
@@ -214,14 +231,21 @@ function PlayerPanel(props: { player: HudState['player'] }) {
  * nothing here.
  */
 function WeaponState(props: { player: HudState['player'] }) {
+  const { t } = useKothI18n();
   const charge = () => props.player.charge;
 
   return (
     <Show when={props.player.weapon === 'charge'}>
       <Gauge
-        label={charge() === undefined ? 'Hold' : charge()! >= FULL_CHARGE ? 'FULL' : 'Charge'}
+        label={
+          charge() === undefined
+            ? t('hud.gauge.idle')
+            : charge()! >= FULL_CHARGE
+              ? t('hud.gauge.full')
+              : t('hud.gauge.charging')
+        }
         value={charge() ?? 0}
-        color={charge() === undefined ? '#8a8a8a' : charge()! >= FULL_CHARGE ? '#ff5a3c' : '#ffd27a'}
+        color={charge() === undefined ? '#8a8a8a' : charge()! >= FULL_CHARGE ? 'var(--red)' : 'var(--yellow)'}
       />
     </Show>
   );
@@ -230,49 +254,55 @@ function WeaponState(props: { player: HudState['player'] }) {
 /** A bar 0-1 with a label before it. */
 function Gauge(props: { label: string; value: number; color: string }) {
   return (
-    <div class="flex items-center gap-1.5 text-[10px] font-bold">
-      <div class="w-10 text-right">{props.label}</div>
-      <div class="h-3 w-36 overflow-hidden rounded-sm bg-black/45">
-        <div class="h-full" style={{ width: `${Math.round(Math.min(Math.max(props.value, 0), 1) * 100)}%`, background: props.color }} />
+    <div class="flex items-center gap-1.5 text-[11px] font-bold tracking-wide uppercase">
+      <div class="w-14 truncate text-right">{props.label}</div>
+      <div class="tk-bar h-2.5 flex-1" style={{ '--fill-color': props.color }}>
+        <div style={{ width: `${Math.round(Math.min(Math.max(props.value, 0), 1) * 100)}%` }} />
       </div>
     </div>
   );
 }
 
 /**
- * The end of a match: the winner, every member's kills and deaths, and a button to play again.
+ * The end of a match on a poster sheet with a wedge in the winner's color: the winner, every member's kills and
+ * deaths with the player's line in yellow, and a button to play again.
  *
  * @param onRestart - Called when the player asks for another match.
  */
 export function MatchResult(props: { state: HudState | undefined; onRestart: () => void }) {
+  const { t } = useKothI18n();
+
   return (
     <Show when={props.state?.capture.winner}>
       {(winner) => (
-        <div class="absolute inset-0 grid place-items-center bg-black/45 text-white">
-          <div class="flex flex-col items-center gap-4 rounded-lg bg-black/60 px-8 py-6">
-            <div class="text-4xl font-bold tracking-wide" style={{ color: TEAM_TEXT[winner()] }}>
-              {winner() === 'red' ? 'RED' : 'BLUE'} TEAM WINS
-            </div>
-            <div class="flex gap-8 text-sm">
+        <div class="tk-backdrop absolute inset-0 grid place-items-center">
+          <div class="tk-sheet min-w-[640px]">
+            <header class="tk-head" style={{ '--wedge': TEAM_CSS[winner()] }}>
+              <div class="tk-wedge" />
+              <div class="tk-disc" />
+              <div class="tk-title">{t(`result.wins.${winner()}`)}</div>
+            </header>
+            <div class="flex justify-center gap-8 px-[18px] pt-4 pb-2">
               <For each={['red', 'blue'] as const}>
                 {(team) => (
-                  <table class="border-collapse">
+                  <table class="tk-table">
                     <thead>
-                      <tr class="text-white/60">
-                        <th class="pr-4 text-left font-normal" style={{ color: TEAM_TEXT[team] }}>
-                          {team === 'red' ? 'Red' : 'Blue'} · held {Math.round(props.state!.holdTime - props.state!.teams[team].left)} s
+                      <tr>
+                        <th class="text-left" style={{ color: TEAM_CSS[team] }}>
+                          {t(`result.team.${team}`)} ·{' '}
+                          {t('result.held', Math.round(props.state!.holdTime - props.state!.teams[team].left))}
                         </th>
-                        <th class="px-2 font-normal">K</th>
-                        <th class="px-2 font-normal">D</th>
+                        <th>{t('result.kills')}</th>
+                        <th>{t('result.deaths')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       <For each={props.state!.teams[team].members} keyed={(member) => member.id}>
                         {(member) => (
-                          <tr class={member().human ? 'font-bold' : ''}>
-                            <td class="pr-4">{member().name}</td>
-                            <td class="px-2 text-center tabular-nums">{member().kills}</td>
-                            <td class="px-2 text-center tabular-nums">{member().deaths}</td>
+                          <tr class={{ 'tk-player': member().player }}>
+                            <td>{seatName(t, member())}</td>
+                            <td class="text-center">{member().kills}</td>
+                            <td class="text-center">{member().deaths}</td>
                           </tr>
                         )}
                       </For>
@@ -281,14 +311,26 @@ export function MatchResult(props: { state: HudState | undefined; onRestart: () 
                 )}
               </For>
             </div>
-            <button class="rounded border-0 bg-white px-4 py-2 text-base font-bold text-black" onClick={() => props.onRestart()}>
-              Play again (R)
-            </button>
+            <div class="flex justify-center px-[18px] pt-2 pb-4">
+              <button class="tk-action tk-primary w-72" onClick={() => props.onRestart()}>
+                <span class="tk-action-label">{t('result.again')}</span>
+                <kbd class="tk-key">R</kbd>
+              </button>
+            </div>
           </div>
         </div>
       )}
     </Show>
   );
+}
+
+/** The name of whoever sits in `seat`, in the display's language: the player, or a team's seat counted from 1. */
+function seatName(t: ReturnType<typeof useKothI18n>['t'], seat: SeatHud) {
+  if (seat.player) {
+    return seat.human ? t('seat.you') : t('seat.youBot');
+  }
+
+  return t(`seat.${seat.team}`, seat.seat + 1);
 }
 
 /**
@@ -340,8 +382,9 @@ export function BotThoughts(props: { thoughts: readonly ThoughtView[] }) {
 /** Team colors for panels, as CSS, matching the hulls, and the player's own hull color. */
 const TEAM_CSS: Record<TeamId, string> = { red: '#c9473b', blue: '#3b73c9' };
 const PLAYER_CSS = '#f0773a';
-/** Short names of the classes for the team panels. */
-const CLASS_ABBREVIATIONS: Record<TankClassId, string> = { scout: 'Sc', soldier: 'So', heavy: 'Hv', demoman: 'De', sniper: 'Sn' };
+/** The poster's paper and ink, as `poster.css` has them, for SVG fills and inline colors. */
+const PAPER = '#fbf6ea';
+const INK = '#141414';
 /** Lighter team colors for text on dark backgrounds. */
 const TEAM_TEXT: Record<TeamId, string> = { red: '#ff8a7a', blue: '#8ab4ff' };
 

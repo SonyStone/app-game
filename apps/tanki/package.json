@@ -18,6 +18,7 @@
     "@app-game/solid-utils": "workspace:*",
     "@dimforge/rapier2d-simd": "^0.19.3",
     "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/i18n": "catalog:",
     "@solid-primitives/raf": "catalog:",
     "@solid-primitives/resize-observer": "catalog:",
     "@solidjs/router": "catalog:",

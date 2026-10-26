@@ -5,6 +5,7 @@ import { worldToScreen, type Camera } from '../arena/camera';
 import { forecastShot, type Lane, type ShotForecast, type Verdict } from './aim';
 import { FULL_CHARGE } from './classes/weapon';
 import type { HudState } from './Hud';
+import { useKothI18n } from './i18n/i18n';
 import type { KothMatch } from './match';
 
 type Point = { x: number; y: number };
@@ -49,6 +50,7 @@ export function AimOverlay(props: {
   look: AimLookId;
   active: boolean;
 }) {
+  const { t } = useKothI18n();
   const look = () => props.look;
   const [hovering, setHovering] = createSignal(false);
   const [notice, setNotice] = createSignal(false);
@@ -132,8 +134,8 @@ export function AimOverlay(props: {
         />
       </div>
       <Show when={notice()}>
-        <div class="pointer-events-none absolute top-32 left-1/2 -translate-x-1/2 rounded bg-black/60 px-3 py-1 text-sm font-bold text-white">
-          Aim look: {AIM_LOOKS[look()].name} (X)
+        <div class="tk-plaque pointer-events-none absolute top-32 left-1/2 -translate-x-1/2 text-sm">
+          {t('lookNotice', t(`look.${look()}`))}
         </div>
       </Show>
     </>
@@ -337,14 +339,13 @@ const REACHED_RADIUS = 26;
  * - `dash`: a dashed line, and a cross turned on its side.
  */
 export const AIM_LOOKS = {
-  dots: { name: 'Dots', dash: '0 7', width: 3, center: 'cross' },
-  line: { name: 'Line', dash: undefined, width: 1.6, center: 'dot' },
-  dash: { name: 'Dashes', dash: '7 5', width: 2, center: 'saltire' }
+  dots: { dash: '0 7', width: 3, center: 'cross' },
+  line: { dash: undefined, width: 1.6, center: 'dot' },
+  dash: { dash: '7 5', width: 2, center: 'saltire' }
 } as const satisfies Record<string, AimLook>;
 
 /** One of `AIM_LOOKS`. */
 type AimLook = {
-  name: string;
   /** SVG dash pattern of the line; dots are dashes of zero length with round caps. */
   dash: string | undefined;
   /** Stroke width of the line's light middle. */

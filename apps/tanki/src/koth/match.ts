@@ -69,6 +69,14 @@ export function createKothMatch(
   const hasPlayer = options.human ?? true;
   const members = createMembers(hasPlayer, options.roster ?? {}, options.playerClass ?? 'soldier', random);
   const teams = { red: members.filter((member) => member.team === 'red'), blue: members.filter((member) => member.team === 'blue') };
+  /** Who sits in `member`'s seat, as the display names it. */
+  const seatOf = (member: Member): SeatHud => ({
+    name: member.name,
+    team: member.team,
+    seat: member.index,
+    player: hasPlayer && member === members[0],
+    human: member.human
+  });
   // Destroyed tanks stay here, so a shell still flying from one is credited to its member.
   const byTank = new Map<Tank, Member>();
   const combat = createCombat(rapier, world, renderer, map, {
@@ -272,12 +280,11 @@ export function createKothMatch(
             {
               left: Math.max(rules.holdTime - capture.held[team], 0),
               kills: teams[team].reduce((total, member) => total + member.kills, 0),
-              plan: describePlan(boards[team]),
+              plan: { intent: boards[team].intent, phase: boards[team].phase },
               onPoint: teams[team].filter((member) => member.tank && onPoint(map, member.tank.hull.translation())).length,
               members: teams[team].map((member) => ({
                 id: member.id,
-                name: member.name,
-                human: member.human,
+                ...seatOf(member),
                 role: member.role,
                 tankClass: member.tankClass.id,
                 alive: member.tank !== undefined,
@@ -287,7 +294,7 @@ export function createKothMatch(
               }))
             }
           ])
-        ) as Record<TeamId, { left: number; kills: number; plan: string; onPoint: number; members: MemberHud[] }>,
+        ) as Record<TeamId, { left: number; kills: number; plan: TeamPlan; onPoint: number; members: MemberHud[] }>,
         player: {
           alive: human.tank !== undefined,
           respawnIn: human.respawnAt === undefined ? 0 : Math.max(human.respawnAt - time, 0),
@@ -306,8 +313,8 @@ export function createKothMatch(
           .filter((entry) => time - entry.at < FEED_TIME)
           .map((entry) => ({
             id: entry.id,
-            killer: entry.killer && { name: entry.killer.name, team: entry.killer.team },
-            victim: { name: entry.victim.name, team: entry.victim.team }
+            killer: entry.killer && seatOf(entry.killer),
+            victim: seatOf(entry.victim)
           }))
       };
     },
@@ -600,11 +607,19 @@ export type MatchPace = Pick<Pace, 'tankSpeed' | 'shellSpeed' | 'damage' | 'botR
 /** The player's input for a step, as `KothMatch['step']` describes it. */
 export type PlayerInput = { drive: Point; aim?: number; fire: boolean; reach?: number; turn?: boolean };
 
+/**
+ * Who sits in a seat, for the display to name in its own language: a team's seat counted from 0,
+ * whether it is the player's seat, held by the player or by a bot while the player watches, and
+ * whether a person drives it now. `name` is the English name the bots' debug overlay shows.
+ */
+export type SeatHud = { name: string; team: TeamId; seat: number; player: boolean; human: boolean };
+
+/** What a team's bots are up to: their intent and, in a push, whether they gather or go in. */
+export type TeamPlan = { intent: TeamBoard['intent']; phase: TeamBoard['phase'] };
+
 /** One member's line on the heads-up display. */
-export type MemberHud = {
+export type MemberHud = SeatHud & {
   id: number;
-  name: string;
-  human: boolean;
   role: Member['role'];
   tankClass: TankClassId;
   alive: boolean;
@@ -651,14 +666,6 @@ const KIT_NOTICE = 1.2;
 const NAV_REACH = 96;
 const NAV_CAP = 128;
 
-/** The team's intent in a few words, with the stage of a coordinated push. */
-function describePlan(board: TeamBoard) {
-  if (board.intent !== 'push') {
-    return board.intent;
-  }
-
-  return board.phase === 'gather' ? 'push · gathering' : board.phase === 'go' ? 'push · going in' : 'push';
-}
 
 /**
  * The seats of both teams, red's first: the classes of `roster`, or four seats each with the

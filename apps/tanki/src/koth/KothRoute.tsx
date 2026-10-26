@@ -18,10 +18,10 @@ import { createRangeRenderer } from '../damage/renderer';
 import { Rapier2D, useRapier2D } from '../physics/Rapier2D';
 import { createWorld } from '../physics/World';
 import { AIM_LOOK_IDS, aimLookFromAddress, aimOnScreen, AimOverlay, type AimView } from './AimOverlay';
-import { TANK_CLASSES } from './classes/classes';
 import { ClassMenu } from './classes/ClassMenu';
 import { createScope } from './classes/scope';
 import { BotThoughts, KothHud, MatchResult, type HudState, type ThoughtView } from './Hud';
+import { createKothI18n, KothI18nProvider } from './i18n/i18n';
 import { createKothMatch, type KothMatch } from './match';
 import { loadPace, savePace, type Pace } from './pace';
 import { PauseMenu } from './PauseMenu';
@@ -61,6 +61,10 @@ import { TANK_CLASS_IDS, type TankClassId } from './tanks';
  * `?class=scout` starts as that class with the menu closed, `?aim=line` picks the aim's look,
  * `?tune` starts paused in the menu and `?slow=4` runs the game four times slower, to look at effects
  * frame by frame.
+ *
+ * The interface is drawn as constructivist posters (see `poster.css`) and speaks English, Russian,
+ * Japanese or Serbian, picked in the menu and kept for the next visit; `?lang=ja` picks one for a
+ * visit (see `createKothI18n`).
  */
 export default function KothRoute() {
   const address = new URLSearchParams(window.location.search);
@@ -76,6 +80,10 @@ export default function KothRoute() {
   const [pace, setPace] = createSignal(loadPace());
   const [paused, setPaused] = createSignal(address.has('tune'));
   const [look, setLook] = createSignal(aimLookFromAddress());
+  const i18n = createKothI18n();
+  const { t } = i18n;
+
+  loadPosterFont();
 
   makeEventListener(window, 'keydown', (event) => {
     const digit = /^Digit([1-5])$/.exec(event.code);
@@ -108,83 +116,82 @@ export default function KothRoute() {
   });
 
   return (
-    <div class="fixed inset-0 overflow-hidden font-sans select-none">
-      <canvas ref={setCanvas} class="block h-full w-full touch-none" />
-      <GpuCanvas
-        canvas={canvas()}
-        requiredBufferBytes={64 * 1024 * 1024}
-        error={(error) => <p class="absolute inset-0 m-0 grid place-items-center text-white">{error.message}</p>}
-      >
-        <Rapier2D>
-          <KothScene
-            canvas={canvas()!}
-            restarts={restarts()}
-            watching={watching()}
-            thoughts={showThoughts() || watching()}
-            choice={choice()}
-            playerClass={address.get('class')}
-            pace={pace()}
-            paused={paused()}
-            onFrame={(frame) => {
-              setState(frame.state);
-              setThoughts(frame.thoughts);
-              setAim(frame.aim);
-            }}
-          />
-        </Rapier2D>
-      </GpuCanvas>
-      <BotThoughts thoughts={thoughts()} />
-      <KothHud state={state()} watching={watching()} />
-      <AimOverlay
-        canvas={canvas()}
-        view={aim()}
-        player={state()?.player}
-        look={look()}
-        active={!menu() && !paused() && !watching() && !state()?.capture.winner}
-      />
-      <MatchResult state={state()} onRestart={restart} />
-      <Show when={menu() && !paused() && !watching() && state()}>
-        {(shown) => (
-          <ClassMenu
-            current={shown().player.tankClass}
-            next={shown().player.nextClass}
-            color="#f0773a"
-            onChoose={(id) => choose(id)}
-            onClose={() => setMenu(false)}
-          />
-        )}
-      </Show>
-      <Show when={!paused()}>
-        <button
-          class="absolute bottom-3 left-3 cursor-pointer border-2 border-solid border-black bg-[#efe7d4] px-2 py-0.5 text-xs font-bold tracking-wider text-black uppercase shadow-[3px_3px_0_#000]"
-          onClick={() => setPaused(true)}
+    <KothI18nProvider value={i18n}>
+      <div class="tk-ui fixed inset-0 overflow-hidden select-none" lang={i18n.language()}>
+        <canvas ref={setCanvas} class="block h-full w-full touch-none" />
+        <GpuCanvas
+          canvas={canvas()}
+          requiredBufferBytes={64 * 1024 * 1024}
+          error={(error) => <p class="absolute inset-0 m-0 grid place-items-center text-white">{error.message}</p>}
         >
-          Esc · menu
-        </button>
-      </Show>
-      <Show when={paused()}>
-        <PauseMenu
-          pace={pace()}
-          onPace={(next) => {
-            setPace(next);
-            savePace(next);
-          }}
+          <Rapier2D>
+            <KothScene
+              canvas={canvas()!}
+              restarts={restarts()}
+              watching={watching()}
+              thoughts={showThoughts() || watching()}
+              choice={choice()}
+              playerClass={address.get('class')}
+              pace={pace()}
+              paused={paused()}
+              onFrame={(frame) => {
+                setState(frame.state);
+                setThoughts(frame.thoughts);
+                setAim(frame.aim);
+              }}
+            />
+          </Rapier2D>
+        </GpuCanvas>
+        <BotThoughts thoughts={thoughts()} />
+        <KothHud state={state()} watching={watching()} />
+        <AimOverlay
+          canvas={canvas()}
+          view={aim()}
+          player={state()?.player}
           look={look()}
-          onLook={setLook}
-          thoughts={showThoughts()}
-          onThoughts={setShowThoughts}
-          className={state() && TANK_CLASSES[state()!.player.tankClass].name}
-          watching={watching()}
-          onResume={() => setPaused(false)}
-          onRestart={restart}
-          onClass={() => {
-            setPaused(false);
-            setMenu(true);
-          }}
-          onWatch={toggleWatching}
+          active={!menu() && !paused() && !watching() && !state()?.capture.winner}
         />
-      </Show>
-    </div>
+        <MatchResult state={state()} onRestart={restart} />
+        <Show when={menu() && !paused() && !watching() && state()}>
+          {(shown) => (
+            <ClassMenu
+              current={shown().player.tankClass}
+              next={shown().player.nextClass}
+              color="#f0773a"
+              onChoose={(id) => choose(id)}
+              onClose={() => setMenu(false)}
+            />
+          )}
+        </Show>
+        <Show when={!paused()}>
+          <button class="tk-plaque absolute bottom-3 left-3" onClick={() => setPaused(true)}>
+            {t('menu.open')}
+          </button>
+        </Show>
+        <Show when={paused()}>
+          <PauseMenu
+            pace={pace()}
+            onPace={(next) => {
+              setPace(next);
+              savePace(next);
+            }}
+            look={look()}
+            onLook={setLook}
+            thoughts={showThoughts()}
+            onThoughts={setShowThoughts}
+            className={state() && t(`tankClass.${state()!.player.tankClass}`)}
+            watching={watching()}
+            onResume={() => setPaused(false)}
+            onRestart={restart}
+            onClass={() => {
+              setPaused(false);
+              setMenu(true);
+            }}
+            onWatch={toggleWatching}
+          />
+        </Show>
+      </div>
+    </KothI18nProvider>
   );
 
   /** Starts a new match and plays it. */
@@ -206,6 +213,25 @@ export default function KothRoute() {
     setMenu(false);
   }
 }
+
+/**
+ * Adds the interface's condensed typeface, Oswald, with its Latin and Cyrillic letters, to the
+ * page once. Without the network the interface falls back to the system's narrow faces, and
+ * Japanese is always set in the system's gothic (see `poster.css`).
+ */
+function loadPosterFont() {
+  if (document.getElementById(FONT_LINK_ID)) {
+    return;
+  }
+
+  const link = document.createElement('link');
+  link.id = FONT_LINK_ID;
+  link.rel = 'stylesheet';
+  link.href = 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&display=swap';
+  document.head.append(link);
+}
+
+const FONT_LINK_ID = 'tanki-poster-font';
 
 /** Rapier tolerances assume meters; Godot's Rapier plugin likewise treats 100 px as a meter. */
 const PIXELS_PER_METER = 100;

@@ -1,13 +1,16 @@
 import { For, Show } from 'solid-js';
 import { TURRET_CASEMATE, TURRET_GATLING, TURRET_LONG_GUN, TURRET_MORTAR, TURRET_TWIN } from '../../damage/renderer';
 import type { HullSpec } from '../../damage/shapes';
+import { useKothI18n } from '../i18n/i18n';
+import '../poster.css';
 import { TANK_CLASS_IDS, type TankClass, type TankClassId } from '../tanks';
 import { TANK_CLASSES } from './classes';
 
 /**
- * The class menu, as Team Fortress 2's: the five classes side by side, each with its silhouette,
- * its key, what it is for and bars for its speed, armor and reach. Picking one asks for it; in the
- * player's base the tank changes at once, elsewhere at the next respawn.
+ * The class menu, as Team Fortress 2's, on a constructivist poster (see `poster.css`): the five
+ * classes side by side, each with its silhouette, its key, what it is for and bars for its speed,
+ * armor and reach. Picking one asks for it; in the player's base the tank changes at once,
+ * elsewhere at the next respawn.
  *
  * @param current - The player's class now.
  * @param next - The class the player asked for that comes with the next respawn, if any.
@@ -22,40 +25,44 @@ export function ClassMenu(props: {
   onChoose: (id: TankClassId) => void;
   onClose: () => void;
 }) {
+  const { t } = useKothI18n();
+
   return (
-    <div class="absolute inset-0 grid place-items-center bg-black/40 text-white" onClick={() => props.onClose()}>
-      <div class="flex flex-col items-center gap-4 rounded-lg bg-[#1d1d1f]/95 px-6 py-5" onClick={(event) => event.stopPropagation()}>
-        <div class="text-2xl font-bold tracking-wide">CHOOSE A CLASS</div>
-        <div class="flex gap-3">
+    <div class="tk-backdrop absolute inset-0 grid place-items-center" onClick={() => props.onClose()}>
+      <div class="tk-sheet" onClick={(event) => event.stopPropagation()}>
+        <header class="tk-head">
+          <div class="tk-wedge" />
+          <div class="tk-disc" />
+          <div class="tk-title">{t('classMenu.title')}</div>
+        </header>
+        <div class="flex gap-3.5 px-[18px] pt-4 pb-2">
           <For each={[...TANK_CLASS_IDS]}>
             {(id, index) => {
               const tankClass = TANK_CLASSES[id];
 
               return (
-                <button
-                  class="flex w-40 flex-col items-center gap-1.5 rounded-md border-2 border-solid px-2 pb-3 pt-2 text-white"
-                  style={{
-                    background: id === props.current ? '#3a3a3d' : '#2a2a2c',
-                    'border-color': id === props.next ? '#ffd27a' : id === props.current ? 'rgba(255, 255, 255, 0.8)' : 'transparent'
-                  }}
-                  onClick={() => props.onChoose(id)}
-                >
-                  <div class="self-start rounded bg-white/15 px-1.5 text-xs font-bold tabular-nums">{index() + 1}</div>
-                  <ClassSilhouette tankClass={tankClass} color={props.color} width={136} height={84} />
-                  <div class="text-lg font-bold">{tankClass.name}</div>
-                  <div class="h-10 text-center text-[11px] leading-tight text-white/70">{tankClass.role}</div>
-                  <StatBar label="Speed" value={tankClass.speed / FASTEST} />
-                  <StatBar label="Armor" value={armorOf(tankClass)} />
-                  <StatBar label="Reach" value={reachOf(tankClass)} />
-                  <Show when={id === props.next}>
-                    <div class="text-[11px] font-bold text-[#ffd27a]">next respawn</div>
-                  </Show>
+                <button class={['tk-class', { 'tk-on': id === props.current }]} onClick={() => props.onChoose(id)}>
+                  <div class="flex w-full items-center justify-between">
+                    <span class="tk-number">{index() + 1}</span>
+                    <Show when={id === props.next}>
+                      <span class="tk-tag tk-tag-yellow">{t('classMenu.next')}</span>
+                    </Show>
+                    <Show when={id === props.current && id !== props.next}>
+                      <span class="tk-tag">{t('classMenu.current')}</span>
+                    </Show>
+                  </div>
+                  <ClassSilhouette tankClass={tankClass} color={props.color} width={136} height={76} />
+                  <div class="tk-class-name">{t(`tankClass.${id}`)}</div>
+                  <div class="tk-class-role">{t(`classRole.${id}`)}</div>
+                  <StatBar label={t('classMenu.speed')} value={tankClass.speed / FASTEST} />
+                  <StatBar label={t('classMenu.armor')} value={armorOf(tankClass)} />
+                  <StatBar label={t('classMenu.reach')} value={reachOf(tankClass)} />
                 </button>
               );
             }}
           </For>
         </div>
-        <div class="text-xs text-white/60">1-5 or click to pick · in your base the change is instant, elsewhere at your next respawn · C or Esc closes</div>
+        <div class="tk-note px-[18px] pb-3.5">{t('classMenu.hint')}</div>
       </div>
     </div>
   );
@@ -64,10 +71,10 @@ export function ClassMenu(props: {
 /** A labelled bar, filled to `value` 0-1. */
 function StatBar(props: { label: string; value: number }) {
   return (
-    <div class="flex w-full items-center gap-2 text-[10px] text-white/70">
-      <div class="w-9 text-right">{props.label}</div>
-      <div class="h-1.5 flex-1 overflow-hidden rounded bg-white/15">
-        <div class="h-full bg-white/85" style={{ width: `${Math.round(Math.min(Math.max(props.value, 0.05), 1) * 100)}%` }} />
+    <div class="tk-stat">
+      <span>{props.label}</span>
+      <div class="tk-bar">
+        <div style={{ width: `${Math.round(Math.min(Math.max(props.value, 0.05), 1) * 100)}%` }} />
       </div>
     </div>
   );
