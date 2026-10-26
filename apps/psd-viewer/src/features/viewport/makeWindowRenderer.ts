@@ -1,6 +1,7 @@
 import type { PsdRegionPixels, PsdRegionRect, PsdRenderSettings } from '@app-game/psd/viewer';
 import type { OpenedPsd, PsdClient, PsdResultOf, RenderedPixels } from '../psd-worker';
 import { windowWorkPixels } from '../psd-worker/protocol';
+import { viewerPerformance } from '../telemetry/performance';
 import type { View } from './view';
 
 /**
@@ -146,6 +147,8 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>) {
       }
     }
 
+    viewerPerformance.record('coverage.tiles', start, plan.tiles.length);
+    viewerPerformance.record('coverage.cachedTiles', performance.now(), plan.tiles.length - missing.length);
     image.approximations = [...approximations];
     return { ok: true, value: frame(image) };
   }
@@ -165,6 +168,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>) {
     cache.delete(key);
     cache.set(key, image);
     cacheBytes += image.pixels.byteLength;
+    viewerPerformance.record('tiles.cpu.bytes', performance.now(), cacheBytes);
     while (cacheBytes > cacheLimitBytes) {
       const oldest = cache.keys().next().value!;
       cacheBytes -= cache.get(oldest)!.pixels.byteLength;
