@@ -17,9 +17,10 @@ export function planBot(situation: Situation) {
 
 /**
  * A bot's job in its team, from its class: assaults go for the point, flankers for the enemy's
- * rear, supports cover allies, anchors hold the point and snipers watch it from a perch.
+ * rear, supports cover allies, the lead goes first into a push and takes the brunt of the fire,
+ * and snipers shoot from a perch, from afar, and never chase.
  */
-export type Role = 'assault' | 'flank' | 'support' | 'anchor' | 'sniper';
+export type Role = 'assault' | 'flank' | 'support' | 'lead' | 'sniper';
 
 /**
  * Facts a bot plans with; missing ones are false.
@@ -130,8 +131,9 @@ export type Situation = {
 /**
  * The goals a bot could pursue now, with priorities from its situation. Goals that do not apply
  * are left out: a healthy bot has no reason to repair. Roles weigh them differently: a flanker
- * rushes a point nobody holds, as a Scout takes it twice as fast; an anchor holds the point;
- * a sniper watches it from its perch rather than standing on it, unless all is at stake.
+ * rushes a point nobody holds, as a Scout takes it twice as fast; the lead keeps to the ground it
+ * holds; a sniper watches the point and the ways to it from its perch and takes the point only
+ * when all is at stake.
  */
 export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
   const { facts, role } = situation;
@@ -158,7 +160,7 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
     goals.push({ name: 'repair', wants: { combatReady: true }, priority: desperate ? 30 : kitNear && situation.kitRestores ? 58 : 46 });
   }
 
-  if (!facts.pointOurs) {
+  if (!facts.pointOurs && (role !== 'sniper' || desperate)) {
     // A locked point cannot be taken yet, so enemies in the way are worth more until it opens.
     const rush = role === 'flank' && !facts.enemyOnPoint && !facts.pointLocked ? RUSH : 0;
     const wait = facts.pointLocked ? LOCKED_WAIT : 0;
@@ -168,8 +170,8 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
       wants: { pointOurs: true },
       priority: 50 + 35 * situation.enemyClock + eager + rush - wait
     });
-  } else {
-    goals.push({ name: 'defend', wants: { guarding: true }, priority: (facts.enemyOnPoint ? 68 : 45) + (role === 'anchor' ? ANCHOR_HOLD : 0) });
+  } else if (facts.pointOurs) {
+    goals.push({ name: 'defend', wants: { guarding: true }, priority: (facts.enemyOnPoint ? 68 : 45) + (role === 'lead' ? LEAD_HOLD : 0) });
   }
 
   if (role === 'sniper' && !facts.pointOurs) {
@@ -223,7 +225,13 @@ export function botActions(situation: Situation): GoapAction<BotAction>[] {
       cost: hasPost && !facts.enemyOnPoint ? Infinity : travel.point + 1
     },
     { name: 'holdPost', requires: { pointOurs: true }, effects: { guarding: true }, cost: hasPost && !facts.enemyOnPoint ? travel.post! + 1 : Infinity },
-    { name: 'approach', requires: { hasTarget: true }, effects: { targetVisible: true, inFireZone: true }, cost: travel.approach + 0.5 },
+    // A sniper shoots what comes into its sights and never drives after a target.
+    {
+      name: 'approach',
+      requires: { hasTarget: true },
+      effects: { targetVisible: true, inFireZone: true },
+      cost: role === 'sniper' ? Infinity : travel.approach + 0.5
+    },
     { name: 'attackFront', requires: { inFireZone: true }, effects: killed, cost: situation.kill.front },
     {
       name: 'flank',
@@ -262,15 +270,15 @@ export function botActions(situation: Situation): GoapAction<BotAction>[] {
 /** Seconds added to every action. */
 const ACTION_EFFORT = 0.25;
 /** Priority each role adds to taking the point, and a flanker adds to rushing a point no enemy stands on. */
-const CAPTURE_BONUS: Record<Role, number> = { assault: 5, flank: 0, support: 0, anchor: 6, sniper: -20 };
+const CAPTURE_BONUS: Record<Role, number> = { assault: 5, flank: 0, support: 0, lead: 6, sniper: -20 };
 const RUSH = 8;
 /** Priority taking the point loses while it is locked. */
 const LOCKED_WAIT = 15;
-/** Priority an anchor adds to holding the point, and a sniper gives to watching it while others take it. */
-const ANCHOR_HOLD = 12;
+/** Priority the lead adds to holding its ground, and a sniper gives to watching the point while others take it. */
+const LEAD_HOLD = 12;
 const OVERWATCH = 56;
 /** How a role prices working round to an enemy's rear: cheap for flankers, dear for the slow and the far. */
-const FLANK_COST: Record<Role, number> = { assault: 1.4, flank: 0.55, support: 1.4, anchor: 2.5, sniper: 3 };
+const FLANK_COST: Record<Role, number> = { assault: 1.4, flank: 0.55, support: 1.4, lead: 2.5, sniper: Infinity };
 /** Priority bonus of the goal being pursued. */
 const COMMITMENT = 6;
 /** Seconds a bot expects to wait at its staging spot for the rest of the team. */

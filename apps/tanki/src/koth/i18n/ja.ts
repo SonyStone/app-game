@@ -149,7 +149,7 @@ export const ja: Dictionary = {
     next: '次のリスポーン',
     hint: '1–5 またはクリックで選択 · 自陣ならすぐ、他では次のリスポーンで変更 · C か Esc で閉じる'
   },
-  botRole: { assault: '突撃', flank: '側面', support: '援護', anchor: '守備', sniper: '狙撃' },
+  botRole: { assault: '突撃', flank: '側面', support: '援護', lead: '先鋒', sniper: '狙撃' },
   seat: {
     you: 'あなた',
     youBot: 'あなた (ボット)',
@@ -176,12 +176,14 @@ export const ja: Dictionary = {
     flanking: (say: RadioWords) => `${say.tankClass}の背後に回る`,
     focus: (say: RadioWords) => `${say.tankClass}を狙え！`,
     perch: '射撃位置につく',
+    relocate: '射撃位置を変える',
     holdPoint: '拠点を守る',
     holdLane: (say: RadioWords) => `${say.lane}を押さえる`,
     capturing: '拠点を占領する',
     gather: (say: RadioWords) => `集合！${say.lane}から行くぞ`,
     countdown: (say: RadioWords) => `攻撃まで${say.seconds}…`,
     go: '全員、突撃！',
+    followMe: 'ついて来い！突撃！',
     captured: '拠点を確保！',
     regroup: '後退、再集結！',
     sniper: 'スナイパーだ！',

@@ -151,7 +151,7 @@ export const en = {
     next: 'next respawn',
     hint: '1–5 or click to pick · in your base the change is instant, elsewhere at your next respawn · C or Esc closes'
   },
-  botRole: { assault: 'assault', flank: 'flank', support: 'support', anchor: 'anchor', sniper: 'sniper' },
+  botRole: { assault: 'assault', flank: 'flank', support: 'support', lead: 'lead', sniper: 'sniper' },
   seat: {
     you: 'You',
     youBot: 'You (bot)',
@@ -178,12 +178,14 @@ export const en = {
     flanking: (say: RadioWords) => `Going round the ${say.tankClass}`,
     focus: (say: RadioWords) => `Target: ${say.tankClass}!`,
     perch: 'Taking my firing spot',
+    relocate: 'Moving to another spot',
     holdPoint: 'Holding the point',
     holdLane: (say: RadioWords) => `Holding the ${say.lane}`,
     capturing: 'Taking the point',
     gather: (say: RadioWords) => `Gather up! We go by the ${say.lane}`,
     countdown: (say: RadioWords) => `Attack in ${say.seconds}…`,
     go: 'Go, all together!',
+    followMe: 'On me! Push!',
     captured: 'The point is ours!',
     regroup: 'Fall back and regroup!',
     sniper: 'Sniper!',

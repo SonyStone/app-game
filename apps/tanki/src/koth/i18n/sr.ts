@@ -149,7 +149,7 @@ export const sr: Dictionary = {
     next: 'следећи респаун',
     hint: '1–5 или клик · у бази се мења одмах, другде при следећем респауну · C или Esc затвара'
   },
-  botRole: { assault: 'јуриш', flank: 'бок', support: 'подршка', anchor: 'сидро', sniper: 'снајпер' },
+  botRole: { assault: 'јуриш', flank: 'бок', support: 'подршка', lead: 'предводник', sniper: 'снајпер' },
   seat: {
     you: 'Ти',
     youBot: 'Ти (бот)',
@@ -176,12 +176,14 @@ export const sr: Dictionary = {
     flanking: (say: RadioWords) => `Заобилазим — ${say.tankClass}`,
     focus: (say: RadioWords) => `Мета — ${say.tankClass}!`,
     perch: 'Заузимам положај',
+    relocate: 'Мењам положај',
     holdPoint: 'Држим тачку',
     holdLane: (say: RadioWords) => `Држим ${say.lane}`,
     capturing: 'Заузимам тачку',
     gather: (say: RadioWords) => `Окупљање! Правац — ${say.lane}`,
     countdown: (say: RadioWords) => `Напад за ${say.seconds}…`,
     go: 'Напред, сви заједно!',
+    followMe: 'За мном! Напред!',
     captured: 'Тачка је наша!',
     regroup: 'Повлачење, прегруписавање!',
     sniper: 'Снајпер!',

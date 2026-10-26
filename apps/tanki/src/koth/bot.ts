@@ -387,11 +387,16 @@ export function createBot(member: Member, context: BotContext) {
 
   /**
    * The enemy to fight: the team's focus if the team knows where it is, else the nearest enemy
-   * the bot sees, else the nearest one the team knows of.
+   * the bot sees, else the nearest one the team knows of. A flanker hunts its own prey instead
+   * (see `choosePrey`).
    */
   function chooseTarget(tank: Tank) {
     const position = tank.hull.translation();
     const focus = board.focus;
+
+    if (member.role === 'flank') {
+      return choosePrey(position);
+    }
 
     const sight = Math.max(context.pace().botSight, TACTICS[member.tankClass.id].reach);
 
@@ -402,6 +407,35 @@ export function createBot(member: Member, context: BotContext) {
     const nearest = (tanks: Tank[]) => tanks.sort((a, b) => distance(position, whereIs(a)) - distance(position, whereIs(b)))[0];
 
     return nearest([...visible]) ?? nearest(board.known().map((sighting) => sighting.tank).filter((enemy) => distance(position, whereIs(enemy)) < sight));
+  }
+
+  /**
+   * The enemy a flanker goes after, of those the team knows within `PREY_RANGE` px: the nearest,
+   * counting an enemy Sniper, an enemy with its core open or badly hit, and one with no ally of its
+   * own near, as nearer than it is, so a Scout hunts the Sniper and picks off stragglers rather
+   * than taking on a group head on.
+   */
+  function choosePrey(position: Point) {
+    let best: { tank: Tank; score: number } | undefined;
+
+    for (const sighting of board.known()) {
+      const at = whereIs(sighting.tank);
+      const range = distance(position, at);
+
+      if (range > PREY_RANGE) {
+        continue;
+      }
+
+      const sniper = classOf(sighting.tank) === 'sniper';
+      const alone = !board.known().some((other) => other !== sighting && distance(other.position, at) < PREY_ESCORT);
+      const score = range - (sniper ? PREY_SNIPER : 0) - (combat.isCoreOpen(sighting.tank) ? PREY_OPEN : 0) - (1 - combat.armorLeft(sighting.tank)) * PREY_HURT - (alone ? PREY_ALONE : 0);
+
+      if (!best || score < best.score) {
+        best = { tank: sighting.tank, score };
+      }
+    }
+
+    return best?.tank;
   }
 
   /**
@@ -534,8 +568,15 @@ export function createBot(member: Member, context: BotContext) {
     return (stats.actions[action] ??= { started: 0, done: 0, failed: 0 });
   }
 
-  /** What the bot does without a plan: hold its post or the point if the point is ours, else head for it. */
+  /**
+   * What the bot does without a plan: a Sniper goes to its perch; others hold their post or the
+   * point if the point is ours, else head for it.
+   */
   function idleAction(): BotAction {
+    if (member.role === 'sniper') {
+      return 'goToPerch';
+    }
+
     return facts.pointOurs ? (board.postOf(member) && !facts.enemyOnPoint ? 'holdPost' : 'guardPoint') : 'goToPoint';
   }
 
@@ -710,7 +751,7 @@ export function createBot(member: Member, context: BotContext) {
 
     switch (task.action) {
       case 'goToPoint': {
-        task.destination = escortSpot(position) ?? board.pointSpot(member);
+        task.destination = convoySpot(position) ?? escortSpot(position) ?? board.pointSpot(member);
         task.route = 'normal';
         return distance(position, map.point) < map.point.radius - 20 ? 'done' : 'running';
       }
@@ -777,6 +818,13 @@ export function createBot(member: Member, context: BotContext) {
 
         if (lost(task, task.target, now, LOSE_SIGHT)) {
           return 'failed';
+        }
+
+        // A sniper fights from where it stands, its perch if it is on it; the others circle toward the target's rear.
+        if (member.role === 'sniper') {
+          task.destination = position;
+          task.hold = true;
+          return 'running';
         }
 
         task.destination = circleAround(task, position, task.target, now);
@@ -963,7 +1011,9 @@ export function createBot(member: Member, context: BotContext) {
     const offset = { x: position.x - at.x, y: position.y - at.y };
     const duel = TACTICS[member.tankClass.id].duel;
     const range = Math.min(Math.max(Math.hypot(offset.x, offset.y), duel.min), duel.max);
-    const angle = Math.atan2(offset.y, offset.x) + (task.side ?? 1) * ORBIT_STEP;
+    // The lead presses in, nose and front plates to the target, rather than circling.
+    const step = member.role === 'lead' ? LEAD_ORBIT_STEP : ORBIT_STEP;
+    const angle = Math.atan2(offset.y, offset.x) + (task.side ?? 1) * step;
     let spot = { x: at.x + Math.cos(angle) * range, y: at.y + Math.sin(angle) * range };
 
     if (!isOpenAt(grid, spot) || !board.canSee(spot, at)) {
@@ -1014,6 +1064,26 @@ export function createBot(member: Member, context: BotContext) {
     }
 
     return supportSpot(ally);
+  }
+
+  /**
+   * In a coordinated push, a bot behind the lead stays behind it rather than overtaking it, so the
+   * lead's armor meets the fire first and the team arrives together: a spot `CONVOY_GAP` px behind
+   * the lead toward the base, to one side of its track. `undefined` when the bot leads, flanks or
+   * snipes, there is no push under way or no lead, or the lead is near the point or far away.
+   */
+  function convoySpot(position: Point) {
+    const lead = board.phase === 'go' && (member.role === 'assault' || member.role === 'support') ? board.spearhead() : undefined;
+    const at = lead?.tank?.hull.translation();
+
+    if (!at || distance(at, map.point) < map.point.radius + CONVOY_RELEASE || distance(position, at) > CONVOY_REACH) {
+      return undefined;
+    }
+
+    const ahead = normalize({ x: map.point.x - at.x, y: map.point.y - at.y });
+    const side = member.index % 2 === 0 ? 1 : -1;
+    const spot = { x: at.x - ahead.x * CONVOY_GAP - ahead.y * side * CONVOY_SIDE, y: at.y - ahead.y * CONVOY_GAP + ahead.x * side * CONVOY_SIDE };
+    return isOpenAt(grid, spot) ? spot : undefined;
   }
 
   function supportSpot(ally: Member) {
@@ -1177,11 +1247,15 @@ export function createBot(member: Member, context: BotContext) {
     let goal: number;
 
     const post = task?.action === 'holdPost' ? board.postOf(member) : undefined;
+    const perch = member.role === 'sniper' ? board.perchSpot(member) : undefined;
 
+    // At its post or perch, the gun watches the way the enemy comes by, so a Sniper's scope sees them come out.
     if (threat) {
       goal = Math.atan2(threat.position.y - position.y, threat.position.x - position.x);
     } else if (post && distance(position, post.at) < POSTED * 2) {
       goal = Math.atan2(post.watch.y - position.y, post.watch.x - position.x);
+    } else if (perch && distance(position, perch) < PERCHED * 2) {
+      goal = Math.atan2(perch.watch.y - position.y, perch.watch.x - position.x);
     } else if (Math.hypot(move.x, move.y) > 0.2) {
       goal = Math.atan2(move.y, move.x);
     } else {
@@ -1399,7 +1473,27 @@ const FLANK_TIMEOUT = 12;
 const REGROUP_TIME = 8;
 /** How far around the target the bot shifts every `ORBIT_INTERVAL` s in a head-on duel, at its class's range. */
 const ORBIT_STEP = 0.35;
+const LEAD_ORBIT_STEP = 0.1;
 const ORBIT_INTERVAL = 0.8;
+/**
+ * A flanker hunts enemies the team knows within `PREY_RANGE` px, counting a Sniper `PREY_SNIPER`
+ * px nearer than it is, one with its core open `PREY_OPEN` px, one wholly broken `PREY_HURT` px
+ * and one with no other enemy within `PREY_ESCORT` px `PREY_ALONE` px.
+ */
+const PREY_RANGE = 1000;
+const PREY_SNIPER = 450;
+const PREY_OPEN = 300;
+const PREY_HURT = 250;
+const PREY_ESCORT = 300;
+const PREY_ALONE = 200;
+/**
+ * In a push a bot trails the lead `CONVOY_GAP` px behind and `CONVOY_SIDE` px aside, while it is
+ * within `CONVOY_REACH` px of it, until the lead is within `CONVOY_RELEASE` px of the point's edge.
+ */
+const CONVOY_GAP = 90;
+const CONVOY_SIDE = 45;
+const CONVOY_REACH = 450;
+const CONVOY_RELEASE = 120;
 /** Angles off the target's tail and distances tried for a flanking spot. */
 const FLANK_OFFSETS: [angle: number, radius: number][] = [
   [0.55, 190],

@@ -149,7 +149,7 @@ export const ru: Dictionary = {
     next: 'при возрождении',
     hint: '1–5 или клик · на базе класс сменится сразу, иначе при следующем возрождении · C или Esc закрывает'
   },
-  botRole: { assault: 'штурм', flank: 'фланг', support: 'поддержка', anchor: 'якорь', sniper: 'снайпер' },
+  botRole: { assault: 'штурм', flank: 'фланг', support: 'поддержка', lead: 'танк', sniper: 'снайпер' },
   seat: {
     you: 'Вы',
     youBot: 'Вы (бот)',
@@ -176,12 +176,14 @@ export const ru: Dictionary = {
     flanking: (say: RadioWords) => `Захожу в тыл — ${say.tankClass}`,
     focus: (say: RadioWords) => `Цель — ${say.tankClass}!`,
     perch: 'Занимаю позицию',
+    relocate: 'Меняю позицию',
     holdPoint: 'Держу точку',
     holdLane: (say: RadioWords) => `Держу ${say.lane}`,
     capturing: 'Захватываю точку',
     gather: (say: RadioWords) => `Собираемся! Направление — ${say.lane}`,
     countdown: (say: RadioWords) => `Атака через ${say.seconds}…`,
     go: 'Вперёд, все разом!',
+    followMe: 'За мной! Вперёд!',
     captured: 'Точка наша!',
     regroup: 'Отходим, перегруппировка!',
     sniper: 'Снайпер!',

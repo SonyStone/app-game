@@ -3,7 +3,7 @@ import { SIGHT_OVER_RUBBLE, type Combat } from '../damage/combat';
 import type { Role } from './brain';
 import type { Trigger, Weapon } from './classes/weapon';
 import type { KothMap } from './map';
-import { findPerches } from './classes/perch';
+import { findPerches, type Perch } from './classes/perch';
 import { findPosts, type Post } from './front';
 import type { Kit } from './kits';
 import { createRadio, type CalloutOptions, type RadioLine } from './radio';
@@ -130,7 +130,7 @@ export function createTeamBoard(
   let postsAt = 0;
   /** Each member's job while the team holds the point: the point itself or a post in front of it. */
   const jobs = new Map<Member, Post | 'point'>();
-  const perchOf = new Map<Member, Point>();
+  const perchOf = new Map<Member, Perch>();
   // Teams update half an interval apart, so their work falls on different steps.
   let nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
 
@@ -269,7 +269,7 @@ export function createTeamBoard(
     },
 
     /**
-     * The member's spot on the point, on its own side and spread out from the others: an anchor
+     * The member's spot on the point, on its own side and spread out from the others: the lead
      * near its middle, and a sniper on its perch, from where it watches the point.
      */
     pointSpot(member: Member) {
@@ -281,7 +281,7 @@ export function createTeamBoard(
         return perchSpot(member);
       }
 
-      if (member.role === 'anchor') {
+      if (member.role === 'lead') {
         return { x: map.point.x + Math.cos(side + spread * 0.3) * POINT_SPOT * 0.4, y: map.point.y + Math.sin(side + spread * 0.3) * POINT_SPOT * 0.4 };
       }
 
@@ -318,11 +318,19 @@ export function createTeamBoard(
     },
 
     /**
-     * Where a sniper watches the point from: the team's best perch in least danger from the
-     * enemies it knows of, kept while it stays out of their sight.
+     * Where a sniper watches from, and where it looks while nothing is in sight: its perch,
+     * kept until an enemy comes close or an enemy Sniper sees it, then the best safe one.
      */
-    perchSpot(member: Member): Point {
+    perchSpot(member: Member): Perch {
       return perchSpot(member);
+    },
+
+    /**
+     * The tank that leads the team's push, its armor first into the fire: a living Heavy bot with
+     * at least `LEAD_ARMOR` of its armor; `undefined` without one.
+     */
+    spearhead() {
+      return members.find((member) => member.tank && !member.human && member.role === 'lead' && combat.armorLeft(member.tank) >= LEAD_ARMOR);
     },
 
     /**
@@ -399,18 +407,39 @@ export function createTeamBoard(
     return combat.armorOf(tank) !== undefined;
   }
 
-  function perchSpot(member: Member): Point {
-    const exposure = (spot: Point) => danger[cellAt(grid, spot)];
+  /**
+   * The perch `member` watches from: the one it has for as long as it is safe there, else the
+   * best safe perch no teammate has, the nearer the better. A perch is not safe once a known enemy
+   * comes within `PERCH_THREAT` px of it or a known enemy Sniper sees it; a Sniper that has to
+   * move says so on the radio.
+   */
+  function perchSpot(member: Member): Perch {
     const current = perchOf.get(member);
 
-    if (current && exposure(current) < PERCH_DANGER) {
+    if (current && !threatened(current)) {
       return current;
     }
 
+    const at = member.tank?.hull.translation() ?? current ?? map.lanes[team].center;
     const taken = new Set([...perchOf.entries()].filter(([other]) => other !== member && other.tank).map(([, spot]) => spot));
-    const best = perches.filter((spot) => !taken.has(spot)).sort((a, b) => exposure(a) - exposure(b))[0] ?? map.lanes[team].center;
+    const value = (perch: Perch) => perch.score - distanceTo(perch, at) / PERCH_TRAVEL - danger[cellAt(grid, perch)] * PERCH_EXPOSURE - (threatened(perch) ? PERCH_UNSAFE : 0);
+    const best = perches.filter((perch) => !taken.has(perch)).sort((a, b) => value(b) - value(a))[0] ?? { ...map.lanes[team].center, watch: map.point, score: 0 };
     perchOf.set(member, best);
+
+    if (current && best !== current && member.tank) {
+      radio.say(member, 'relocate', { priority: 2, marker: { kind: 'hold', x: best.x, y: best.y } });
+    }
+
     return best;
+  }
+
+  /** Whether a known enemy is close to `perch` or a known enemy Sniper sees it. */
+  function threatened(perch: Point) {
+    return [...sightings.values()].some((sighting) => {
+      const range = distanceTo(sighting.position, perch);
+      const sniper = context.rivals.find((rival) => rival.tank === sighting.tank)?.tankClass.id === 'sniper';
+      return range < PERCH_THREAT || (sniper && range < SNIPER_SIGHT && traceClear(grid, sight, sighting.position, perch, rubbleSight));
+    });
   }
 
   function record(tank: Tank) {
@@ -630,7 +659,8 @@ export function createTeamBoard(
       if ((launchAt !== undefined && now >= launchAt) || hurry || now - push.since > GATHER_TIMEOUT) {
         push = { ...push, phase: 'go', since: now };
         launchAt = undefined;
-        say(leader(), 'go', { priority: 2, marker: { kind: 'attack', x: map.point.x, y: map.point.y } });
+        const caller = leader();
+        say(caller, caller?.role === 'lead' ? 'followMe' : 'go', { priority: 2, marker: { kind: 'attack', x: map.point.x, y: map.point.y } });
       }
     } else if (push.phase === 'go' && now - push.since > PUSH_WINDOW) {
       push = { ...push, phase: 'none' };
@@ -846,10 +876,10 @@ export type TeamBoard = ReturnType<typeof createTeamBoard>;
 
 /**
  * The job of each class, after its part in a Team Fortress 2 team: the Scout flanks, the Soldier
- * assaults the point, the Heavy anchors on it, the Demoman supports the others with grenades
- * and the Sniper watches the point from afar.
+ * assaults the point, the Heavy leads the push and soaks up fire, the Demoman supports the
+ * others with grenades and the Sniper shoots from afar.
  */
-export const ROLE_OF_CLASS: Record<TankClassId, Role> = { scout: 'flank', soldier: 'assault', heavy: 'anchor', demoman: 'support', sniper: 'sniper' };
+export const ROLE_OF_CLASS: Record<TankClassId, Role> = { scout: 'flank', soldier: 'assault', heavy: 'lead', demoman: 'support', sniper: 'sniper' };
 const UPDATE_INTERVAL = 0.25;
 /** Seconds the team remembers an enemy it no longer sees. */
 const MEMORY = 4;
@@ -869,13 +899,18 @@ const HELP_WINDOW = 1.5;
 const HELP_RANGE = 700;
 /** Distance of the members' spots from the point's center. */
 const POINT_SPOT = 45;
+/** Share of its armor a Heavy needs to lead a push. */
+const LEAD_ARMOR = 0.5;
 /** Classes in the order they keep to the point while the team holds it. */
 const POINT_KEEPERS: readonly TankClassId[] = ['demoman', 'soldier', 'heavy', 'scout'];
-/** Classes in the order they take each post: the Heavy holds the hall, the busiest way in. */
+/**
+ * Classes in the order they take each post: the Heavy holds the hall, the busiest way in; a Scout
+ * takes a post last, as it would rather hunt.
+ */
 const POST_ORDER: Record<Post['lane'], readonly TankClassId[]> = {
   center: ['heavy', 'soldier', 'demoman', 'scout'],
-  north: ['scout', 'soldier', 'demoman', 'heavy'],
-  south: ['scout', 'soldier', 'demoman', 'heavy']
+  north: ['soldier', 'demoman', 'scout', 'heavy'],
+  south: ['soldier', 'demoman', 'scout', 'heavy']
 };
 /** Seconds after walls changed before the team looks for its posts again. */
 const POST_REFRESH = 3;
@@ -888,8 +923,16 @@ const FOCUS_CALL = 8;
 /** Seconds a spot where a member was destroyed counts as deadly, and how far around it. */
 const DEADLY_TIME = 20;
 const DEADLY_RADIUS = 110;
-/** Danger at its perch from which a sniper moves to another. */
-const PERCH_DANGER = 1.5;
+/**
+ * A Sniper leaves its perch when a known enemy comes within `PERCH_THREAT` px or an enemy Sniper
+ * within `SNIPER_SIGHT` px sees it. Choosing another, a perch scores `PERCH_EXPOSURE` less per
+ * enemy that sees it, one less per `PERCH_TRAVEL` px away, and `PERCH_UNSAFE` less if not safe.
+ */
+const PERCH_THREAT = 320;
+const SNIPER_SIGHT = 900;
+const PERCH_EXPOSURE = 10;
+const PERCH_TRAVEL = 40;
+const PERCH_UNSAFE = 1000;
 /** Half size of a crate's armor. */
 const CRATE_HALF = { x: 21.25, y: 46.25 };
 const CRATE_COST = 3;
