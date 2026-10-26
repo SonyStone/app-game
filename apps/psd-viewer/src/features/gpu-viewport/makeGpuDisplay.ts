@@ -111,17 +111,28 @@ export function makeGpuDisplay(
       let uploaded = 0;
       let blocked = false;
       const encoder = device.createCommandEncoder();
-      for (const tile of [...levels.map((group) => group.coarse), ...levels.map((group) => group.requested)]) {
+      // Serve the requested level before its optional ancestor. Old visible arrivals own the next frame's
+      // upload slot, so a cold allocation or a short first-frame budget cannot defer them a third time.
+      const uploads = [...new Set([...levels.map((group) => group.requested), ...levels.map((group) => group.coarse)])];
+      uploads.sort(
+        (a, b) => (firstVisible.get(identity(a)) ?? frameNumber) - (firstVisible.get(identity(b)) ?? frameNumber)
+      );
+      for (const tile of uploads) {
         if (!visible(tile, view, width / dpr, height / dpr)) {
           continue;
         }
 
         const key = identity(tile);
+        const due =
+          !!tile.contentTile &&
+          !!tile.arrival?.visible &&
+          !tile.arrival.presented &&
+          frameNumber - (firstVisible.get(key) ?? frameNumber) >= 1;
         let entry = resident.get(key);
         if (!entry) {
           // Leave headroom for one native allocation; an individual GPU call cannot be time-sliced.
-          if (performance.now() - start >= uploadBudget - 0.4) {
-            break;
+          if (!due && performance.now() - start >= uploadBudget - 0.4) {
+            continue;
           }
 
           const upload = tileTextureUpload(tile);
@@ -158,12 +169,12 @@ export function makeGpuDisplay(
           }
 
           uploaded += copied;
-          if (performance.now() - start >= uploadBudget) {
+          if (!due && performance.now() - start >= uploadBudget) {
             break;
           }
         }
 
-        if (blocked || performance.now() - start >= uploadBudget) {
+        if (blocked) {
           break;
         }
       }

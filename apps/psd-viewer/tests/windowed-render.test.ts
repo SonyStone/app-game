@@ -307,6 +307,7 @@ it('drops intermediate pan/zoom requests in the worker queue, including an abort
 it('clears temporary saved frames on pan cancellation and rejects late overview completion', async () => {
   const state = reactiveRenderer();
   flush();
+  state.frame();
   expect(state.jobs[0].window.kind).toBe('saved');
   state.jobs[0].resolve({ ok: true, value: { images: [singlePixel('savedComposite')], milliseconds: 1 } });
   await vi.waitFor(() => {
@@ -316,6 +317,7 @@ it('clears temporary saved frames on pan cancellation and rejects late overview 
   expect(value(state.render()).window?.source).toBe('savedComposite');
   state.pan({ scale: 1, x: -1000, y: -1000 });
   flush();
+  state.frame();
   expect(state.jobs[1].signal.aborted).toBe(false);
   expect(state.render()).toBeUndefined();
   expect(state.jobs).toHaveLength(2);
@@ -331,6 +333,7 @@ it('clears temporary saved frames on pan cancellation and rejects late overview 
 it('keeps fresh coverage through an off-document camera without another worker request', async () => {
   const state = reactiveRenderer();
   flush();
+  state.frame();
   state.jobs[0].resolve({ ok: true, value: { images: [singlePixel('savedComposite')], milliseconds: 1 } });
   await vi.waitFor(() => {
     flush();
@@ -343,6 +346,8 @@ it('keeps fresh coverage through an off-document camera without another worker r
   });
   const before = state.render();
   state.pan({ scale: 1, x: 5000, y: 5000 });
+  flush();
+  state.frame();
   await vi.waitFor(() => {
     flush();
     expect(state.busy()).toBe(false);
@@ -355,6 +360,7 @@ it('keeps fresh coverage through an off-document camera without another worker r
 it('clears the saved first frame when fresh layer rendering fails', async () => {
   const state = reactiveRenderer();
   flush();
+  state.frame();
   state.jobs[0].resolve({ ok: true, value: { images: [singlePixel('savedComposite')], milliseconds: 1 } });
   await vi.waitFor(() => {
     flush();
@@ -489,6 +495,19 @@ function value<T>(result: PsdResultOf<T> | undefined): T {
 
 /** Drives the owned reactive binding with controllable worker replies, including replies arriving after disposal. */
 function reactiveRenderer() {
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frames.set(++nextFrame, callback);
+    return nextFrame;
+  });
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
+  const frame = () => {
+    for (const [id, callback] of [...frames]) {
+      frames.delete(id);
+      callback(0);
+    }
+  };
   const jobs: {
     window: WindowRequest;
     signal: AbortSignal;
@@ -510,7 +529,16 @@ function reactiveRenderer() {
       () => [],
       { view, size: () => ({ width: 100, height: 100 }) }
     );
-    return { ...state, jobs, pan, dispose };
+    return {
+      ...state,
+      jobs,
+      pan,
+      frame,
+      dispose: () => {
+        dispose();
+        vi.unstubAllGlobals();
+      }
+    };
   });
 }
 
@@ -757,16 +785,21 @@ it('deduplicates both admitted lanes across camera changes and bounds obsolete w
       active++;
       peak = Math.max(peak, active);
       calls.push(args[3]);
-      return new Promise((resolve) => jobs.push(async () => {
-        active--;
-        resolve(await client.renderWindow(...args));
-      }));
+      return new Promise((resolve) =>
+        jobs.push(async () => {
+          active--;
+          resolve(await client.renderWindow(...args));
+        })
+      );
     })
   };
   const renderer = makeWindowRenderer(wrapped);
   const snapshot = fakeSnapshot(300000, 300000);
   const old = new AbortController();
-  const args = [{ scale: 1, x: 0, y: 0 }, { width: 1100, height: 100 }] as const;
+  const args = [
+    { scale: 1, x: 0, y: 0 },
+    { width: 1100, height: 100 }
+  ] as const;
   const first = renderer.render(snapshot, ...args, old.signal, vi.fn());
   await vi.waitFor(() => expect(jobs).toHaveLength(2));
   old.abort();

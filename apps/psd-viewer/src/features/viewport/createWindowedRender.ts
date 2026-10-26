@@ -1,5 +1,6 @@
 import type { PsdRenderSettings } from '@app-game/psd/viewer';
 import { createEventListener } from '@solid-primitives/event-listener';
+import { createRAF } from '@solid-primitives/raf';
 import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
 import type { OpenedPsd, PsdResultOf, RenderedPixels } from '../psd-worker';
 import type { WindowClient } from '../psd-worker/makePsdWorkerPool';
@@ -37,6 +38,12 @@ export function createWindowedRender(
       : undefined;
   });
   let previous: ReturnType<typeof snapshot>;
+  let renderFrame: (() => void) | undefined;
+  // Camera drawing registers its RAF in input capture. Plan new worker demand after that submission.
+  const [, startPlanning, stopPlanning] = createRAF(() => {
+    stopPlanning();
+    renderFrame?.();
+  });
   createEffect(
     () => ({ snapshot: snapshot(), view: viewport.view(), size: viewport.size(), dpr: dpr() }),
     ({ snapshot, view, size, dpr }) => {
@@ -53,27 +60,31 @@ export function createWindowedRender(
 
       const controller = new AbortController();
       setBusy(true);
-      void renderer
-        .render(snapshot, view, { ...size, dpr }, controller.signal, (image) => setRender({ ok: true, value: image }))
-        .then(
-          (result) => {
-            if (!controller.signal.aborted) {
-              // An off-document camera has no demand. Keep valid tiles and the GPU scope for a warm return.
-              if (result) {
-                setRender(result);
-              }
+      renderFrame = () => {
+        void renderer
+          .render(snapshot, view, { ...size, dpr }, controller.signal, (image) => setRender({ ok: true, value: image }))
+          .then(
+            (result) => {
+              if (!controller.signal.aborted) {
+                // An off-document camera has no demand. Keep valid tiles and the GPU scope for a warm return.
+                if (result) {
+                  setRender(result);
+                }
 
-              setBusy(false);
+                setBusy(false);
+              }
+            },
+            (error) => {
+              if (!controller.signal.aborted) {
+                setRender({ ok: false, error: { kind: 'invalid', message: String(error) } });
+                setBusy(false);
+              }
             }
-          },
-          (error) => {
-            if (!controller.signal.aborted) {
-              setRender({ ok: false, error: { kind: 'invalid', message: String(error) } });
-              setBusy(false);
-            }
-          }
-        );
+          );
+      };
+      startPlanning();
       return () => {
+        stopPlanning();
         controller.abort();
         // Saved pixels must never survive an interrupted replacement.
         setRender((current) =>

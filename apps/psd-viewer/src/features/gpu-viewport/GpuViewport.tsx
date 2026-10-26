@@ -228,6 +228,7 @@ function createDisplayFrames(
     ['wheel', 'pointermove', 'pointerdown'],
     () => {
       inputAt ??= performance.now();
+      start();
     },
     { capture: true }
   );

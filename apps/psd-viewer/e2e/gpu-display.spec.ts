@@ -203,3 +203,19 @@ test('keeps WebGPU active while the camera moves during a pending comparison', a
   await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false');
   expect(errors).toEqual([]);
 });
+
+test('presents a visible tile by its second frame after an exhausted upload slice', async ({ page }) => {
+  await page.goto('/?telemetry=1');
+  const result = await page.evaluate(async () => {
+    const module = '/e2e/gpuHarness.ts';
+    const { runArrivalDeadline } = await import(/* @vite-ignore */ module);
+    return runArrivalDeadline();
+  });
+  expect(result).toEqual({
+    firstPending: true,
+    firstPresented: false,
+    secondPending: false,
+    secondPresented: true,
+    exact: true
+  });
+});
