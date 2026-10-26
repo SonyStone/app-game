@@ -8,7 +8,7 @@ import { angleBetween, inArc, turnInPlace } from './classes/casemate';
 import { TACTICS, TOUGHNESS } from './classes/tactics';
 import { chargedShell, type Trigger } from './classes/weapon';
 import { createDriver, type Obstacle } from './driver';
-import type { Kit } from './kits';
+import { KIT_REPAIR, type Kit } from './kits';
 import { inBase, onPoint, type KothMap } from './map';
 import { cellAt, floodCosts, isOpenAt, searchNearest, cellCenter, sightClear, type NavGrid } from './navigation';
 import { captureRate, rivalOf, type CaptureRules, type CaptureState } from './rules';
@@ -378,6 +378,7 @@ export function createBot(member: Member, context: BotContext) {
       safe: inCover && !underFire,
       atBase: inBase(map.bases[member.team], position),
       repaired: !coreOpen && armor > REPAIRED,
+      combatReady: !coreOpen && armor >= TACTICS[member.tankClass.id].retreat,
       allyNeedsHelp: help !== undefined,
       attackerInRange: help !== undefined && visible.has(help.attacker) && distance(position, help.attacker.hull.translation()) < reach,
       regroupCalled: board.intent === 'regroup'
@@ -436,7 +437,10 @@ export function createBot(member: Member, context: BotContext) {
       stats.goalChanges++;
     }
 
-    if (task && plan && steps[0] === task.action && choice.goal.name === plan.goal) {
+    // The same action for a different kit is a new task.
+    const sameKit = task?.action !== 'pickUpKit' || task.kit?.kit === kit;
+
+    if (task && plan && steps[0] === task.action && choice.goal.name === plan.goal && sameKit) {
       plan = { goal: choice.goal.name, steps, index: 0 };
       return;
     }
@@ -484,6 +488,7 @@ export function createBot(member: Member, context: BotContext) {
     cover = findCover(position);
     const choice = chooseKit(costs);
     kit = choice?.kit;
+    const armor = combat.armorLeft(tank);
 
     return {
       role: member.role,
@@ -504,6 +509,7 @@ export function createBot(member: Member, context: BotContext) {
       capture: ((1 - progress) * context.rules.captureTime) / captureRate(alliesOn + member.tankClass.capture),
       enemyClock: (capture.held[rival] / context.rules.holdTime) * (capture.owner === rival ? 1 : 0.6),
       targetClearsPoint: target !== undefined && onPoint(map, whereIs(target)) && rivalsOnPoint() <= 1,
+      kitRestores: choice !== undefined && armor + (1 - armor) * KIT_REPAIR[choice.kit.size] >= TACTICS[member.tankClass.id].retreat,
       eagerness: TACTICS[member.tankClass.id].point,
       current: plan?.goal
     };
@@ -550,20 +556,30 @@ export function createBot(member: Member, context: BotContext) {
   /**
    * The repair kit most worth driving to, with the seconds that take: of the kits that lie there
    * or will be back by the time the bot arrives, the nearest, a small kit counting
-   * `SMALL_KIT_PENALTY` seconds longer for mending less.
+   * `SMALL_KIT_PENALTY` seconds longer for mending less, and a kit known enemies see counting
+   * `KIT_EXPOSURE` seconds longer per enemy. The bot waits a moment for a kit to come back only
+   * where no enemy sees it, never drives to one more than `KIT_DANGER` enemies see, and leaves
+   * alone a kit an ally was just destroyed at (see `TeamBoard.isDeadly`).
    *
    * @param costs - Driving costs from the bot to every cell, from `floodCosts`.
    */
   function chooseKit(costs: Float32Array) {
     const now = context.clock();
-    let best: { kit: Readonly<Kit>; travel: number; score: number } | undefined;
+    let best: { kit: Readonly<Kit>; travel: number } | undefined;
 
     for (const candidate of context.kits) {
       const travel = costs[cellAt(grid, candidate)] / (member.tankClass.speed * TRAVEL_SHARE);
-      const score = Math.max(travel, candidate.readyAt - now) + (candidate.size === 'small' ? SMALL_KIT_PENALTY : 0);
+      const exposure = board.danger(cellAt(grid, candidate));
 
-      if (Number.isFinite(travel) && candidate.readyAt - now < travel + KIT_WAIT && (!best || score < best.score)) {
-        best = { kit: candidate, travel: score, score };
+      if (!Number.isFinite(travel) || exposure > KIT_DANGER || board.isDeadly(candidate)) {
+        continue;
+      }
+
+      const wait = exposure > 0 ? 0 : KIT_WAIT;
+      const score = Math.max(travel, candidate.readyAt - now) + (candidate.size === 'small' ? SMALL_KIT_PENALTY : 0) + exposure * KIT_EXPOSURE;
+
+      if (candidate.readyAt - now < travel + wait && (!best || score < best.travel)) {
+        best = { kit: candidate, travel: score };
       }
     }
 
@@ -792,6 +808,13 @@ export function createBot(member: Member, context: BotContext) {
         // Taken since the bot set out: by the bot, if its armor is better, or else by someone else.
         if (task.kit.kit.readyAt !== task.kit.readyAt && task.kit.kit.readyAt > now) {
           return combat.armorLeft(tank) > task.kit.armor + 0.005 ? 'done' : 'failed';
+        }
+
+        // A kit not back yet is waited for only while no enemy sees it, and never where an ally just died.
+        const waiting = task.kit.kit.readyAt > now;
+
+        if (board.isDeadly(task.kit.kit) || (waiting && board.danger(cellAt(grid, task.kit.kit)) > 0)) {
+          return 'failed';
         }
 
         task.destination = task.kit.kit;
@@ -1265,6 +1288,9 @@ const REPAIRED = 0.96;
  */
 const SMALL_KIT_PENALTY = 1.5;
 const KIT_WAIT = 2;
+/** Seconds a kit counts as farther per known enemy that sees it, and how many enemies may see a kit a bot still drives to. */
+const KIT_EXPOSURE = 3;
+const KIT_DANGER = 1.2;
 const KIT_TIMEOUT = 12;
 /** Share of its top speed a tank keeps on average along a path, slowing for turns, for travel estimates. */
 const TRAVEL_SHARE = 0.85;

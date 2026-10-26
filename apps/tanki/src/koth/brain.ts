@@ -31,8 +31,9 @@ export type Role = 'assault' | 'flank' | 'support' | 'anchor' | 'sniper';
  * - `hasTarget`: an enemy to fight is known; `targetNearPoint`, `targetVisible`, `inFireZone`
  *   (visible and in range), `behindTarget` (in its rear arc, where the core is) and
  *   `targetCoreOpen` describe it.
- * - `coreOpen`, `armorLow`, `underFire`, `inCover`, `safe`, `atBase`, `repaired`: the bot's health
- *   and exposure.
+ * - `coreOpen`, `armorLow`, `underFire`, `inCover`, `safe`, `atBase`: the bot's health and
+ *   exposure; `combatReady`: neither its core open nor its armor low, fit to fight on, and
+ *   `repaired`: whole again, as only the base makes it.
  * - `allyNeedsHelp`: the team asked this bot to help an ally under fire; `attackerInRange` and
  *   `allyCovered` follow from helping.
  * - `regroupCalled`, `regrouped`: the team is too weak to fight and gathers to wait for respawns.
@@ -60,6 +61,7 @@ export type BotFact =
   | 'safe'
   | 'atBase'
   | 'repaired'
+  | 'combatReady'
   | 'allyNeedsHelp'
   | 'attackerInRange'
   | 'allyCovered'
@@ -69,7 +71,7 @@ export type BotFact =
   | 'guarding';
 
 /** Names of the bot's goals. */
-export type BotGoal = 'survive' | 'repair' | 'capture' | 'defend' | 'kill' | 'support' | 'regroup';
+export type BotGoal = 'survive' | 'patch' | 'repair' | 'capture' | 'defend' | 'kill' | 'support' | 'regroup';
 
 /** Names of the bot's actions; the bot has a behavior for each. */
 export type BotAction =
@@ -111,6 +113,12 @@ export type Situation = {
   enemyClock: number;
   /** Destroying the target leaves no enemy on the point. */
   targetClearsPoint: boolean;
+  /**
+   * The repair kit of `travel.kit` mends enough to fight on: its core closed and its armor above
+   * its class's retreat share. Every kit closes an open core, but a small one leaves a badly hit
+   * tank still badly hit. Defaults to false.
+   */
+  kitRestores?: boolean;
   /** Priority the bot's class adds to taking the point, on top of its role's (see `ClassTactics.point`); defaults to 0. */
   eagerness?: number;
   /** The goal the bot pursues now; it gets a bonus so that close calls do not flip plans. */
@@ -128,19 +136,24 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
   const desperate = situation.enemyClock > 0.85 && !facts.pointOurs;
   const goals: GoapGoal<BotGoal>[] = [];
 
-  // An open core means the next hit is fatal, so the bot gets out of fire and off to mend it.
-  // Armor merely chipped away is worth mending only when nothing more pressing goes on, since the
-  // base is a long drive away, or when a repair kit lies nearer than the base and close by.
+  // An open core means the next hit is fatal, so the bot gets out of fire and off to mend it: a
+  // repair kit close by closes it at once, else the base. Armor merely chipped away is worth
+  // mending only when nothing more pressing goes on, since the base is a long drive away, or when
+  // a kit close by mends enough to fight on. A kit that mends too little is no reason to stop.
   const kitNear = situation.travel.kit < Math.min(situation.travel.base, KIT_DETOUR);
 
   if (facts.coreOpen && facts.underFire && !facts.inCover) {
     goals.push({ name: 'survive', wants: { safe: true }, priority: desperate ? 50 : 90 });
   }
 
+  if (facts.coreOpen && kitNear) {
+    goals.push({ name: 'patch', wants: { coreOpen: false }, priority: desperate ? 45 : 78 });
+  }
+
   if (facts.coreOpen) {
-    goals.push({ name: 'repair', wants: { repaired: true }, priority: desperate ? 40 : 75 });
+    goals.push({ name: 'repair', wants: { combatReady: true }, priority: desperate ? 40 : 75 });
   } else if (facts.armorLow) {
-    goals.push({ name: 'repair', wants: { repaired: true }, priority: desperate ? 30 : kitNear ? 58 : 46 });
+    goals.push({ name: 'repair', wants: { combatReady: true }, priority: desperate ? 30 : kitNear && situation.kitRestores ? 58 : 46 });
   }
 
   if (!facts.pointOurs) {
@@ -213,10 +226,15 @@ export function botActions(situation: Situation): GoapAction<BotAction>[] {
     { name: 'suppress', requires: { attackerInRange: true }, effects: { allyCovered: true }, cost: role === 'support' ? 0.5 : 1.5 },
     { name: 'takeCover', requires: {}, effects: { inCover: true, safe: true, underFire: false }, cost: travel.cover + 0.5 },
     { name: 'retreat', requires: { atBase: false }, effects: { atBase: true, safe: true }, cost: travel.base },
-    { name: 'repair', requires: { atBase: true }, effects: { repaired: true }, cost: REPAIR_TIME },
+    { name: 'repair', requires: { atBase: true }, effects: { repaired: true, combatReady: true, coreOpen: false, armorLow: false }, cost: REPAIR_TIME },
     { name: 'regroup', requires: {}, effects: { regrouped: true }, cost: travel.rally + 1 },
-    // A kit mends on the spot, with no wait as at the base, for every class alike.
-    { name: 'pickUpKit', requires: {}, effects: { repaired: true, coreOpen: false, armorLow: false }, cost: travel.kit },
+    // A kit mends on the spot, with no wait as at the base, for every class alike, but only part of the damage.
+    {
+      name: 'pickUpKit',
+      requires: {},
+      effects: situation.kitRestores ? { combatReady: true, coreOpen: false, armorLow: false } : { coreOpen: false },
+      cost: travel.kit
+    },
     // A sniper guards the point from its perch instead of on it.
     { name: 'goToPerch', requires: {}, effects: { atPerch: true, inCover: false }, cost: role === 'sniper' ? (travel.perch ?? Infinity) + 0.5 : Infinity },
     { name: 'overwatch', requires: { atPerch: true }, effects: { guarding: true }, cost: role === 'sniper' ? 1 : Infinity }

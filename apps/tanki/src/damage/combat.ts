@@ -205,7 +205,8 @@ export type CombatLayout = {
  *   seed it; defaults to `Math.random`.
  * @param options.onHit - Called when a shot chips, ricochets off or detonates a tank.
  * @param options.onDestroyed - Called when a tank blows up or loses all its armor, with the tank
- *   whose shot did it, if any. The tank is already out of `tanks`.
+ *   whose shot did it, if any, and where it was. The tank is already out of `tanks` and its body
+ *   gone from the world.
  * @param options.onShot - Called for every shot with its path: the muzzle, each ricochet and the end.
  *   A shell reports its path when it stops.
  * @param options.onWallsChanged - Called with the world bounds of a piece of wall or a wreck
@@ -226,7 +227,7 @@ export function createCombat(
     wrecks?: number;
     random?: () => number;
     onHit?: (target: Tank, shooter: Tank | undefined, part: 'armor' | 'core' | 'ricochet') => void;
-    onDestroyed?: (victim: Tank, killer: Tank | undefined) => void;
+    onDestroyed?: (victim: Tank, killer: Tank | undefined, at: Point) => void;
     onShot?: (shooter: Tank, path: readonly Point[]) => void;
     onWallsChanged?: (bounds: Bounds) => void;
     pace?: () => { readonly shellSpeed: number; readonly damage: number };
@@ -956,9 +957,10 @@ export function createCombat(
     const { boxes, area } = solidBoxes(body.field, blockCells(body.field));
 
     if (boxes.length === 0) {
+      const last = body.body.translation();
       remove(body);
       scheduleRespawn(body);
-      reportDestroyed(body);
+      reportDestroyed(body, { x: last.x, y: last.y });
       return;
     }
 
@@ -1752,9 +1754,9 @@ export function createCombat(
     }
   }
 
-  function reportDestroyed(body: Armored) {
+  function reportDestroyed(body: Armored, at: Point) {
     if (body.tank) {
-      options.onDestroyed?.(body.tank, body.lastShooter);
+      options.onDestroyed?.(body.tank, body.lastShooter, at);
     }
   }
 
@@ -2036,7 +2038,7 @@ export function createCombat(
       freshWrecks.add(wreck);
     }
     scheduleRespawn(body);
-    reportDestroyed(body);
+    reportDestroyed(body, { x: at.x, y: at.y });
   }
 
   /** Sends a piece knocked out of a wall flying; it lands and stays as scrap. */

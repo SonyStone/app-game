@@ -549,7 +549,7 @@ export function createKothMatch(
     }
   }
 
-  function destroyed(victim: Tank, killer: Tank | undefined) {
+  function destroyed(victim: Tank, killer: Tank | undefined, at: Point) {
     const member = byTank.get(victim);
     const credited = killer && byTank.get(killer);
 
@@ -557,6 +557,7 @@ export function createKothMatch(
       return;
     }
 
+    boards[member.team].noteLoss(at);
     member.tank = undefined;
     member.weapon = undefined;
     member.respawnAt = nextWave(time + MIN_RESPAWN);

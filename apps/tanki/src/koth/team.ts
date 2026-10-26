@@ -103,6 +103,8 @@ export function createTeamBoard(
   let intent: 'push' | 'hold' | 'regroup' = 'push';
   let push: { phase: 'none' | 'gather' | 'go'; since: number; lane: 'north' | 'south' } = { phase: 'none', since: 0, lane: 'north' };
   let focus: Tank | undefined;
+  /** Where members were destroyed lately, and until when such a spot counts as deadly. */
+  const losses: { x: number; y: number; until: number }[] = [];
   let perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
   const perchOf = new Map<Member, Point>();
   // Teams update half an interval apart, so their work falls on different steps.
@@ -138,6 +140,20 @@ export function createTeamBoard(
     /** The team's latest sighting of `tank`, if it is fresh and the tank lives. */
     sightingOf(tank: Tank) {
       return alive(tank) ? sightings.get(tank) : undefined;
+    },
+
+    /** Records that a member was destroyed at `position` now. */
+    noteLoss(position: Point) {
+      losses.push({ x: position.x, y: position.y, until: context.clock() + DEADLY_TIME });
+    },
+
+    /**
+     * Whether a member was destroyed within `DEADLY_RADIUS` px of `point` in the last
+     * `DEADLY_TIME` s: a repair kit there is a trap the enemy watches, so the team keeps away.
+     */
+    isDeadly(point: Point) {
+      const now = context.clock();
+      return losses.some((loss) => loss.until > now && distanceTo(loss, point) < DEADLY_RADIUS);
     },
 
     /** Records that a member sees `tank` now. */
@@ -277,6 +293,8 @@ export function createTeamBoard(
 
       nextUpdate = now + UPDATE_INTERVAL;
       forget(now);
+      // Old losses no longer warn of anything.
+      losses.splice(0, losses.length, ...losses.filter((loss) => loss.until > now));
       revealPoint();
       buildSightField();
       buildDanger();
@@ -297,6 +315,7 @@ export function createTeamBoard(
       intent = 'push';
       push = { phase: 'none', since: 0, lane: 'north' };
       focus = undefined;
+      losses.length = 0;
       perchOf.clear();
       // The walls stand as built again, and the Sniper's perch distance may have changed since.
       perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
@@ -634,6 +653,9 @@ const HELP_WINDOW = 1.5;
 const HELP_RANGE = 700;
 /** Distance of the members' spots from the point's center. */
 const POINT_SPOT = 45;
+/** Seconds a spot where a member was destroyed counts as deadly, and how far around it. */
+const DEADLY_TIME = 20;
+const DEADLY_RADIUS = 110;
 /** Danger at its perch from which a sniper moves to another. */
 const PERCH_DANGER = 1.5;
 /** Half size of a crate's armor. */

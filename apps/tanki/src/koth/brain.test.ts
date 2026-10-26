@@ -32,8 +32,18 @@ describe('bot plans', () => {
   });
 
   it('mends its armor at a repair kit nearer than the base, even with the point to take', () => {
-    expect(names(situation({ facts: { armorLow: true }, travel: { kit: 2 } }))).toEqual(['repair', 'pickUpKit']);
-    expect(names(situation({ facts: { coreOpen: true, inCover: true }, travel: { kit: 3 } }))).toEqual(['repair', 'pickUpKit']);
+    expect(names(situation({ facts: { armorLow: true }, travel: { kit: 2 }, kitRestores: true }))).toEqual(['repair', 'pickUpKit']);
+    expect(names(situation({ facts: { coreOpen: true, inCover: true }, travel: { kit: 3 } }))).toEqual(['patch', 'pickUpKit']);
+  });
+
+  it('makes no stop for a repair kit that mends too little to fight on', () => {
+    expect(names(situation({ facts: { armorLow: true }, travel: { kit: 2 }, kitRestores: false }))[0]).toBe('capture');
+  });
+
+  it('drives home after a small kit closed its core but left its armor badly hit', () => {
+    const patched = situation({ facts: { armorLow: true, inCover: true, pointOurs: true }, travel: { kit: 2 }, kitRestores: false });
+
+    expect(names(patched)).toEqual(['repair', 'retreat', 'repair']);
   });
 
   it('drives home to mend its armor when every repair kit is farther than the base', () => {
