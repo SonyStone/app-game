@@ -23,10 +23,11 @@ import { createScope } from './classes/scope';
 import { BotThoughts, KothHud, MatchResult, type HudState, type ThoughtView } from './Hud';
 import { createKothI18n, KothI18nProvider } from './i18n/i18n';
 import { createKothMatch, type KothMatch } from './match';
-import { loadPace, savePace, type Pace } from './pace';
-import { PauseMenu } from './PauseMenu';
+import type { Pace } from './pace';
+import { PauseMenu, type MenuPage } from './PauseMenu';
 import { CAPTURE_RULES } from './rules';
 import { TANK_CLASS_IDS, type TankClassId } from './tanks';
+import { createTuning } from './tuning';
 
 /**
  * King of the hill on WebGPU: red against blue, four tanks a side, the player with three bots
@@ -49,7 +50,9 @@ import { TANK_CLASS_IDS, type TankClassId } from './tanks';
  * Esc pauses the match and opens the menu (see `PauseMenu`), which holds the actions of the
  * keys below, the pace knobs, the game's speed, the tanks' and shells' speeds, the damage, the
  * bots' reaction and how far they see, the zoom and the view's lead, which take effect at once and
- * are kept for the next visit, and what every key does. Keys: 1-5 pick a class and C opens the
+ * are kept for the next visit, and what every key does. Its second page is the class editor,
+ * which changes each class's numbers, kept for the next visit too, and shares the whole tuning as
+ * JSON or a link (see `createTuning`). Keys: 1-5 pick a class and C opens the
  * class menu, R restarts, B shows what the bots think, V hands the player's tank to a bot and
  * shows the whole map (1-8 follow a tank, 0 shows the whole map again), X switches the look of
  * the aim. The right mouse button or Shift turns a Sniper's hull on the spot toward the cursor,
@@ -59,8 +62,8 @@ import { TANK_CLASS_IDS, type TankClassId } from './tanks';
  * up; letting go fires the rail, which hits at once along the gun. In the address, `?watch`
  * starts watching right away, `?hold=30` shortens the hold time that wins to 30 seconds,
  * `?class=scout` starts as that class with the menu closed, `?aim=line` picks the aim's look,
- * `?tune` starts paused in the menu and `?slow=4` runs the game four times slower, to look at effects
- * frame by frame.
+ * `?tune` starts paused in the menu, `?tune=classes` on its class editor, `?tuning=` sets a shared
+ * tuning, and `?slow=4` runs the game four times slower, to look at effects frame by frame.
  *
  * The interface is drawn as constructivist posters (see `poster.css`) and speaks English, Russian,
  * Japanese or Serbian, picked in the menu and kept for the next visit; `?lang=ja` picks one for a
@@ -78,8 +81,9 @@ export default function KothRoute() {
   const [aim, setAim] = createSignal<AimView>();
   const [menu, setMenu] = createSignal(!address.has('watch') && !address.has('class'));
   const [choice, setChoice] = createSignal<{ id: TankClassId; count: number }>();
-  const [pace, setPace] = createSignal(loadPace());
+  const tuning = createTuning();
   const [paused, setPaused] = createSignal(address.has('tune'));
+  const [menuPage, setMenuPage] = createSignal<MenuPage>(address.get('tune') === 'classes' ? 'classes' : 'menu');
   const [look, setLook] = createSignal(aimLookFromAddress());
   const i18n = createKothI18n();
   const { t } = i18n;
@@ -89,7 +93,8 @@ export default function KothRoute() {
   makeEventListener(window, 'keydown', (event) => {
     const digit = /^Digit([1-5])$/.exec(event.code);
 
-    if (event.repeat) {
+    // Keys typed into a text box, as a tuning pasted into the class editor, are text; Esc still closes the menu.
+    if (event.repeat || (event.target instanceof HTMLTextAreaElement && event.code !== 'Escape')) {
       return;
     }
 
@@ -133,7 +138,7 @@ export default function KothRoute() {
               thoughts={showThoughts() || watching()}
               choice={choice()}
               playerClass={address.get('class')}
-              pace={pace()}
+              pace={tuning.pace()}
               paused={paused()}
               onFrame={(frame) => {
                 setState(frame.state);
@@ -171,16 +176,14 @@ export default function KothRoute() {
         </Show>
         <Show when={paused()}>
           <PauseMenu
-            pace={pace()}
-            onPace={(next) => {
-              setPace(next);
-              savePace(next);
-            }}
+            tuning={tuning}
+            page={menuPage()}
+            onPage={setMenuPage}
+            playerClass={state()?.player.tankClass}
             look={look()}
             onLook={setLook}
             thoughts={showThoughts()}
             onThoughts={setShowThoughts}
-            className={state() && t(`tankClass.${state()!.player.tankClass}`)}
             watching={watching()}
             onResume={() => setPaused(false)}
             onRestart={restart}

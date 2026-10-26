@@ -30,8 +30,11 @@ export function makeArenaInput(target: HTMLElement) {
   const firePointers = new Set<number>();
 
   makeEventListener(window, 'keydown', (event) => {
-    // A focused form control, such as a menu's slider, keeps its own arrows and Space.
-    if (GAME_KEYS.has(event.code) && !(event.target instanceof HTMLInputElement)) {
+    // A focused form control, such as a menu's slider or text box, keeps its own arrows and Space.
+    if (
+      GAME_KEYS.has(event.code) &&
+      !(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
+    ) {
       event.preventDefault();
     }
 

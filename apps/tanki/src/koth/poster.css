@@ -210,9 +210,13 @@
   border: 2px solid var(--ink);
   box-shadow: 2px 2px 0 var(--ink);
 }
-.tk-small-button:active {
+.tk-small-button:active:not(:disabled) {
   transform: translate(2px, 2px);
   box-shadow: none;
+}
+.tk-small-button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* Choices */
@@ -284,6 +288,45 @@
   font-weight: 700;
   line-height: 20px;
   letter-spacing: 0.06em;
+}
+/* The pause menu's pages, in its header: paper lines on the black, the page shown in red. */
+.tk-tabs {
+  flex: 0 0 auto;
+  color: var(--paper-light);
+  background: transparent;
+  border-color: var(--paper-light);
+  box-shadow: none;
+}
+.tk-tabs > .tk-segment {
+  padding: 0 10px;
+  font-weight: 700;
+  line-height: 22px;
+  letter-spacing: 0.08em;
+  border-left-color: var(--paper-light);
+}
+.tk-ui .tk-tabs > .tk-segment.tk-on {
+  background: var(--red);
+}
+/* The class editor's classes, a class with changes marked by a yellow square. */
+.tk-class-tabs > .tk-segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 1px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.tk-class-tab-key {
+  font-size: 10px;
+  opacity: 0.55;
+}
+.tk-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--yellow);
+  border: 2px solid var(--ink);
 }
 
 /* Sliders */
@@ -377,6 +420,50 @@
   font-size: 11.5px;
   line-height: 1.35;
   opacity: 0.75;
+}
+/* The class editor's columns of knobs: narrower sliders and smaller type, three columns side by side. */
+.tk-knobs-compact {
+  grid-template-columns: max-content minmax(64px, 1fr) max-content;
+  gap: 2px 8px;
+}
+.tk-knobs-compact .tk-label {
+  font-size: 12px;
+}
+.tk-knobs-compact .tk-value {
+  min-width: 62px;
+  font-size: 12.5px;
+}
+/* A knob that takes effect later than at once: at the next respawn, or after a restart. */
+.tk-later {
+  display: inline-grid;
+  place-items: center;
+  min-width: 13px;
+  height: 13px;
+  margin-left: 5px;
+  padding: 0 2px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 13px;
+  vertical-align: 1px;
+  color: var(--paper-light);
+  background: var(--blue);
+}
+/* The box a tuning is exported to and pasted into. */
+.tk-share-text {
+  width: 100%;
+  padding: 6px 8px;
+  font:
+    12px/1.35 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 3px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+  outline: none;
+  resize: vertical;
+  user-select: text;
 }
 
 /* Key list */
