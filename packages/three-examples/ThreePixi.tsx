@@ -1,7 +1,7 @@
 import { Application, Container, Sprite, Texture } from 'pixi.js';
 import { createEffect, createMemo, onCleanup } from 'solid-js';
 import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
-import bunnyUrl from '../tanki/bunny.png?url';
+import bunnyUrl from '../../apps/tanki/src/tilt/bunny.png?url';
 
 export default function ThreePixi() {
   // Pixi.js
