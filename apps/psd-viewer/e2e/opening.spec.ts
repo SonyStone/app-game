@@ -50,6 +50,7 @@ test('presents a labeled preview before detection and reuses its prepared render
   await expect(page.locator('[data-render-id]')).toHaveAttribute('data-busy', 'false');
   const result = await page.evaluate(() => {
     const detection = performance.getEntriesByName('test:request:detectBlending')[0] as PerformanceMark;
+    const capability = performance.getEntriesByName('test:request:capability')[0];
     const upload = performance.getEntriesByName('test:upload')[0];
     const samples = performance
       .getEntriesByName('test:reply')
@@ -57,12 +58,14 @@ test('presents a labeled preview before detection and reuses its prepared render
     return {
       firstUpload: upload?.startTime,
       detection: detection?.startTime,
+      capability: capability?.startTime,
       detail: detection?.detail,
       composites: samples.filter((sample) => sample.name === 'composite').length,
       reused: samples.filter((sample) => sample.name === 'render.reused').length
     };
   });
   expect(result.firstUpload).toBeLessThan(result.detection);
+  expect(result.firstUpload).toBeLessThan(result.capability);
   expect(result.detail).toEqual({ preview: true, exact: false });
   expect(result.composites).toBe(2);
   expect(result.reused).toBe(1);
