@@ -1,6 +1,7 @@
 import type { PsdRenderSettings } from '@app-game/psd/viewer';
 import { createMemo, createSignal, isPending, untrack, type Accessor } from 'solid-js';
 import type { OpenedPsd, PsdClient, PsdResultOf } from '../psd-worker';
+import { requiresWindowedRendering } from '../psd-worker/protocol';
 
 /**
  * Chooses Photoshop's blending preferences per document, which files do not record: when a document opens, the
@@ -24,9 +25,23 @@ export function createBlendingDetection(
 ) {
   const detection = createMemo(() => {
     const document = opened();
-    return document?.ok && ready()
-      ? client.detectBlending(document.value.document, untrack(settings), untrack(visibility))
-      : undefined;
+    if (!document?.ok || !ready()) {
+      return undefined;
+    }
+
+    if (requiresWindowedRendering(document.value.info)) {
+      // Windowed documents cannot run detection. Even a no-op worker round trip would hold viewport updates.
+      return {
+        ok: true as const,
+        value: {
+          linearBlending: null,
+          textGamma: null,
+          differing: { encoded: null, linear: null, otherTextGamma: null }
+        }
+      };
+    }
+
+    return client.detectBlending(document.value.document, untrack(settings), untrack(visibility));
   });
   const [chosen, setChosen] = createSignal<BlendingChoice>(() => {
     opened();

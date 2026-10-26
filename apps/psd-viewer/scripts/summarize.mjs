@@ -20,6 +20,7 @@ const summarize = async (directory) => {
       firstUploadMs: first ? first.end - run.afterOpen.start : null,
       firstPresentedMs: first ? first.presented - run.afterOpen.start : null,
       freshUploadMs: last ? last.end - run.afterOpen.start : null,
+      sourceReadMs: run.data?.performance.find((sample) => sample.name === 'psd:source.read')?.duration,
       wasmLoadMs: samples.find((sample) => sample.name === 'wasm.load')?.duration,
       openMs: samples.find((sample) => sample.name === 'open')?.duration,
       detectionMs: samples.find((sample) => sample.name === 'detection')?.duration,
@@ -31,10 +32,9 @@ const summarize = async (directory) => {
           const request = openingEvents.find((event) => event.direction === 'request' && event.id === reply.id);
           return reply.t - request.t;
         }),
-      wasmLinearHighWaterBytes: Math.max(
-        0,
-        ...samples.filter((sample) => sample.name === 'wasm.linear.bytes').map((sample) => sample.value)
-      ),
+      wasmLinearHighWaterBytes: samples.some((sample) => sample.name === 'wasm.linear.bytes')
+        ? Math.max(...samples.filter((sample) => sample.name === 'wasm.linear.bytes').map((sample) => sample.value))
+        : null,
       browserProcessTreePeakRssBytes: Math.max(0, ...(run.rssSamples ?? []).map((sample) => sample.totalBytes ?? 0)),
       status: run.afterOpen?.status
     };
