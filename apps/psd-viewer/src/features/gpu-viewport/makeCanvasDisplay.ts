@@ -53,6 +53,7 @@ export function makeCanvasDisplay() {
       context.fillRect(0, 0, width / dpr, height / dpr);
 
       context.setTransform(view.scale * dpr, 0, 0, view.scale * dpr, view.x * dpr, view.y * dpr);
+      let drawn = 0;
       for (const tile of tiles) {
         const entry = resident.get(identity(tile));
         if (!entry) {
@@ -79,9 +80,13 @@ export function makeCanvasDisplay() {
           entry.canvas.height * tile.step
         );
         context.restore();
+        drawn++;
       }
 
       viewerPerformance.record('frame.prepare', start);
+      if (drawn) {
+        viewerPerformance.record('frame.pixels', start, drawn);
+      }
       viewerPerformance.record('canvas.backing.bytes.estimate', performance.now(), bytes + width * height * 4);
       return pending;
     },

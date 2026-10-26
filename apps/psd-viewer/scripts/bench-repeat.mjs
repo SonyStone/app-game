@@ -31,6 +31,7 @@ const init = () => {
   const a = (window.__audit = {
     events: [],
     uploads: [],
+    presentations: [],
     longTasks: [],
     frames: [],
     performance: [],
@@ -64,6 +65,15 @@ const init = () => {
         requestAnimationFrame(() =>
           requestAnimationFrame(() => {
             upload.presented = performance.now();
+          })
+        );
+      }
+      if (entry.name === 'psd:frame.pixels') {
+        const frame = { t: entry.startTime, end: entry.startTime + entry.duration, phase: a.phase };
+        a.presentations.push(frame);
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            frame.presented = performance.now();
           })
         );
       }
