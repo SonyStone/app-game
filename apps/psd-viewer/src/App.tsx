@@ -480,7 +480,7 @@ export function App() {
                 return current?.ok ? current.value.render : undefined;
               })()}
             >
-              <Show when={opening() || shown()}>
+              <Show when={opening() || document() || shown()}>
                 <GpuViewport
                   image={shown() ?? openingDisplay}
                   onPresented={initial.presented}
