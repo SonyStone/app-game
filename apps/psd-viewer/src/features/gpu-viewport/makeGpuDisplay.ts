@@ -45,6 +45,8 @@ export function makeGpuDisplay(
   let destroyed = false;
   let frameNumber = 0;
   const firstVisible = new Map<symbol, number>();
+  const arrivals = new WeakSet<object>();
+  const arrivalTargets = new WeakMap<object, DisplayTile>();
   const timer = makeTimer(device);
   const staging = makeUploadStaging(device);
   // TypeGPU resolves shaders and creates native pipelines lazily. Compile once in backend initialization so tile
@@ -81,6 +83,17 @@ export function makeGpuDisplay(
       frameNumber++;
       const uploadBudget = levels.some((group) => group.levels.length > 1) ? 2.5 : 1;
       for (const { coarse, requested } of levels) {
+        if (requested.contentTile && requested.arrival && visible(requested, view, width / dpr, height / dpr)) {
+          if (!arrivals.has(requested.arrival)) {
+            arrivals.add(requested.arrival);
+            arrivalTargets.set(requested.arrival, requested);
+          } else if (arrivalTargets.get(requested.arrival) !== requested) {
+            // Changing demand before the first presentation ends that arrival's interest, rather than
+            // charging a later cached refinement with all intervening camera frames.
+            arrivalTargets.delete(requested.arrival);
+          }
+        }
+
         for (const tile of [coarse, requested]) {
           const key = identity(tile);
           if (!visible(tile, view, width / dpr, height / dpr)) {
@@ -200,7 +213,10 @@ export function makeGpuDisplay(
           resident.delete(identity(tile));
           resident.set(identity(tile), entry);
           pipeline.with(pass).with(cameraGroup).with(entry.group).draw(4);
-          entry.present(frameNumber, firstVisible.get(identity(tile)));
+          const arrival = tile.arrival && arrivalTargets.get(tile.arrival) === tile;
+          if (entry.present(frameNumber, firstVisible.get(identity(tile)), !!arrival) && arrival) {
+            arrivalTargets.delete(tile.arrival!);
+          }
           drawn++;
         }
       }
@@ -294,15 +310,18 @@ export function makeGpuDisplay(
       let presented = false;
       return {
         group,
-        present(frame: number, firstFrame?: number) {
+        present(frame: number, firstFrame: number | undefined, arrival: boolean) {
           if (!presented) {
             viewerPerformance.record(
-              contentTile ? 'tile.visible.frames' : 'imageChunk.visible.frames',
+              contentTile ? (arrival ? 'tile.visible.frames' : 'tile.refinement.frames') : 'imageChunk.visible.frames',
               performance.now(),
               frame - (firstFrame ?? frame) + 1
             );
             presented = true;
+            return true;
           }
+
+          return false;
         },
         bytes: width * height * 4 + 32,
         get pendingSourceBytes() {

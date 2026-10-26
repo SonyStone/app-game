@@ -243,6 +243,7 @@ for (let run = 1; run <= runs; run++) {
         peakPendingGpuBytes: max('gpu.pending.bytes'),
         visibleTileMaxFrames: max('tile.visible.frames'),
         imageChunkMaxFrames: max('imageChunk.visible.frames'),
+        cachedRefinementMaxFrames: max('tile.refinement.frames'),
         visibleTileOverTwoFrames: visible.filter((sample) => sample.value > 2).length,
         visibleTileCount: visible.length,
         obsoleteBatchMaxTiles: max('cancellation.obsoleteBatchTiles'),
