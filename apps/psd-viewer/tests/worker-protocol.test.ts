@@ -82,6 +82,38 @@ it('reuses detection renders for equal Gray profiles and invalidates them when p
   }
 });
 
+it('reuses a prepared render when absent state becomes null and defaults are explicit', async () => {
+  const { client } = connect();
+  const opened = value(await client.open(await example('adjustment-stack.psd')));
+  const codec = await loadPsdViewer();
+  const render = vi.spyOn(codec.PsdDocumentHandle.prototype, 'render');
+  try {
+    value(await client.detectBlending(opened.document, settings, []));
+    const composites = render.mock.calls.length;
+    value(
+      await client.render(
+        opened.document,
+        {
+          ...settings,
+          state: null,
+          grayProfile: null,
+          availableFonts: null
+        },
+        []
+      )
+    );
+    expect(render).toHaveBeenCalledTimes(composites);
+
+    value(await client.detectBlending(opened.document, { ...settings, state: null }, []));
+    const next = render.mock.calls.length;
+    value(await client.render(opened.document, settings, []));
+    expect(render).toHaveBeenCalledTimes(next);
+  } finally {
+    render.mockRestore();
+    client.dispose();
+  }
+});
+
 it('opens, renders and compares an example our renderer reproduces exactly', async () => {
   const { client } = connect();
   const opened = value(await client.open(await example('adjustment-stack.psd')));

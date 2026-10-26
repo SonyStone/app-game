@@ -3,6 +3,7 @@ import {
   loadPsdViewer,
   openPsd,
   openPsdLikePhotoshop,
+  photoshopDefaultSettings,
   type PsdFailure,
   type PsdFontLibrary,
   type PsdLayerNode,
@@ -409,13 +410,20 @@ function failed(request: PsdRequest, error: PsdFailure): PsdReply {
 
 /** Identifies a render request by its settings and visibility overrides, whatever the order of the settings' fields. */
 function renderKey(settings: PsdRenderSettings, visibility: [number, boolean][]): string {
-  const { grayProfile, ...scalarSettings } = settings;
-  // The key list also filters nested objects, so it names the keys of a saved state too.
-  // Keep profile bytes in an array: the scalar-key whitelist would erase a Uint8Array's numeric keys.
-  return JSON.stringify(
-    [scalarSettings, visibility, grayProfile ? Array.from(grayProfile) : null],
-    [...Object.keys(scalarSettings), 'frame', 'comp'].sort()
-  );
+  const normalized = {
+    linearBlending: settings.linearBlending ?? photoshopDefaultSettings.linearBlending,
+    textGamma: settings.textGamma === undefined ? photoshopDefaultSettings.textGamma : settings.textGamma,
+    vectorPaths: settings.vectorPaths ?? photoshopDefaultSettings.vectorPaths,
+    smartObjects: settings.smartObjects ?? null,
+    approximate: settings.approximate ?? photoshopDefaultSettings.approximate,
+    typeLayers: settings.typeLayers ?? photoshopDefaultSettings.typeLayers,
+    state: settings.state ?? null,
+    availableFonts: settings.availableFonts ? [...new Set(settings.availableFonts)].sort() : null,
+    grayProfile: settings.grayProfile ? Array.from(settings.grayProfile) : null
+  };
+  // The compositor applies the last override for a layer; order across different layers is immaterial.
+  const overrides = [...new Map(visibility)].sort(([left], [right]) => left - right);
+  return JSON.stringify([normalized, overrides]);
 }
 
 /** Whether the second of two differing-sample counts is smaller: `null` when either is missing or they are equal. */
