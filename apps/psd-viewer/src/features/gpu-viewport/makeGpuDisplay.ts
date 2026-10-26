@@ -9,7 +9,8 @@ import { makeUploadStaging } from './makeUploadStaging';
  * Displays authoritative straight RGBA8 bytes. No sRGB texture conversion is applied: filtering is explicitly
  * bilinear in premultiplied display-sRGB, with a one-source-texel halo. At >=1 physical pixel/source texel,
  * textureLoad preserves the original bytes. Coarse worker overviews remain point-sampled previews, not area mips.
- * Whole-image uploads stop after 1 ms; progressive worker regions have 2.5 ms to meet their two-frame deadline.
+ * First pixels and progressive worker regions have 2.5 ms; subsequent whole-image uploads stop after 1 ms.
+ * Second-frame visible arrivals finish their bounded tile before optional coverage.
  * The 8 MiB staging pool bounds each frame independently. Reusable mapped 64 KiB staging buffers pack only source rows, then
  * one encoder copies strips and draws. GPU residency, including the 8 MiB staging pool, has a
  * separate 128 MiB LRU. Geometry and texture bindings are retained; camera gestures never process resident pixels.
@@ -44,6 +45,7 @@ export function makeGpuDisplay(
   let bytes = 0;
   let destroyed = false;
   let frameNumber = 0;
+  let submittedPixels = false;
   const firstVisible = new Map<symbol, number>();
   const arrivals = new WeakSet<object>();
   const arrivalTargets = new WeakMap<object, DisplayTile>();
@@ -76,12 +78,15 @@ export function makeGpuDisplay(
 
       tiles = next;
       levels = displayTileLevels(next, step);
+      if (!next.length) {
+        submittedPixels = false;
+      }
     },
     /** Uploads a bounded batch, then renders once into an opaque viewport or an explicit readback target. */
     draw(view: View, width: number, height: number, dpr: number, target: GPUTextureView, raw = false) {
       const start = performance.now();
       frameNumber++;
-      const uploadBudget = levels.some((group) => group.levels.length > 1) ? 2.5 : 1;
+      const uploadBudget = !submittedPixels || levels.some((group) => group.levels.length > 1) ? 2.5 : 1;
       for (const { coarse, requested } of levels) {
         if (
           requested.contentTile &&
@@ -248,6 +253,7 @@ export function makeGpuDisplay(
       viewerPerformance.record('upload.remapRequest', mapping);
       viewerPerformance.record('frame.prepare', start);
       if (drawn) {
+        submittedPixels = true;
         viewerPerformance.record('frame.pixels', start, drawn);
       }
       viewerPerformance.record(

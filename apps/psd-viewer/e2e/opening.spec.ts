@@ -13,6 +13,9 @@ async function observe(page: import('@playwright/test').Page) {
   await page.addInitScript(() => {
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
+        if (entry.name === 'psd:gpu.initialize') {
+          performance.mark('test:gpuInitialized');
+        }
         if (entry.name === 'psd:upload') {
           performance.mark('test:upload', { startTime: entry.startTime });
         }
@@ -133,4 +136,40 @@ test('offers strict reading after recovery exceeds resources and opens the next 
   await expect(page.locator('[data-render-id]')).toHaveAttribute('data-busy', 'false', { timeout: 30_000 });
   await picker.setInputFiles(fileURLToPath(new URL('adjustment-stack.psd', assets)));
   await expect(page.locator('footer')).toContainText('Rendered 96 × 96');
+});
+
+test('prepares the display while saved pixels are pending without claiming an empty first frame', async ({ page }) => {
+  await observe(page);
+  await page.addInitScript(() => {
+    const Native = Worker;
+    window.Worker = class extends Native {
+      postMessage(message: { type: string }, transfer: Transferable[] | StructuredSerializeOptions = []) {
+        const post = () => {
+          if (Array.isArray(transfer)) {
+            super.postMessage(message, transfer);
+          } else {
+            super.postMessage(message, transfer);
+          }
+        };
+        if (message.type === 'merged') {
+          (window as unknown as { releaseSaved: () => void }).releaseSaved = post;
+          performance.mark('test:mergedHeld');
+        } else {
+          post();
+        }
+      }
+    };
+  });
+  await page.goto('/?telemetry=1');
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(fileURLToPath(new URL('adjustment-stack.psd', assets)));
+  await page.waitForFunction(
+    () =>
+      performance.getEntriesByName('test:mergedHeld').length > 0 &&
+      performance.getEntriesByName('test:gpuInitialized').length > 0
+  );
+  expect(await page.evaluate(() => performance.getEntriesByName('test:upload').length)).toBe(0);
+  await expect(page.getByRole('img', { name: 'Preparing display', exact: true })).toBeVisible();
+  await page.evaluate(() => (window as unknown as { releaseSaved: () => void }).releaseSaved());
+  await expect(page.locator('[data-render-id]')).toHaveAttribute('data-busy', 'false');
+  expect(await page.evaluate(() => performance.getEntriesByName('test:upload').length)).toBeGreaterThan(0);
 });

@@ -52,6 +52,8 @@ export function App() {
     parallelAllowed: () => devicePixelRatio <= 1
   });
   const [displayBusy, setDisplayBusy] = createSignal(false);
+  // An empty tile set initializes the same display scope while the document worker opens the file.
+  const openingDisplay: DisplayImage = { width: 0, height: 0, pixels: new Uint8Array(0) };
   onCleanup(client.dispose);
 
   const { source, opened, opening, canceled, open, cancel, retry } = createPsdDocument(client);
@@ -478,17 +480,18 @@ export function App() {
                 return current?.ok ? current.value.render : undefined;
               })()}
             >
-              <Show when={shown()}>
-                {(image) => (
-                  <GpuViewport
-                    image={image()}
-                    onPresented={initial.presented}
-                    onBusyChange={setDisplayBusy}
-                    onInteractionLatency={client.reportInteraction}
-                    view={viewport.view()}
-                    size={viewport.size()}
-                    label={
-                      maskMode() === 'only'
+              <Show when={opening() || shown()}>
+                <GpuViewport
+                  image={shown() ?? openingDisplay}
+                  onPresented={initial.presented}
+                  onBusyChange={setDisplayBusy}
+                  onInteractionLatency={client.reportInteraction}
+                  view={viewport.view()}
+                  size={viewport.size()}
+                  label={
+                    !shown()
+                      ? 'Preparing display'
+                      : maskMode() === 'only'
                         ? 'Saved mask only'
                         : view() === 'blink' && blinkSaved()
                           ? "Photoshop's merged image"
@@ -499,9 +502,8 @@ export function App() {
                             : view() === 'photoshop'
                               ? "Photoshop's merged image"
                               : 'Difference heat map'
-                    }
-                  />
-                )}
+                  }
+                />
               </Show>
               <Show when={(view() === 'split' || view() === 'wipe') && maskMode() !== 'only' && valueOf(merged())}>
                 {(saved) => (
