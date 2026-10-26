@@ -20,12 +20,19 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
   const uploadReserveBytes = 2 * 1024 * 1024;
   const cacheLimitBytes = budgetBytes - uploadReserveBytes;
   const cache = new Map<string, DisplayTile[]>();
-  const pending = new Map<string, Promise<PsdResultOf<DisplayTile>>>();
+  const pending = new Map<
+    string,
+    {
+      result: Promise<PsdResultOf<DisplayTile>>;
+      controller: AbortController;
+      support: PsdRegionRect;
+      saved: boolean;
+    }
+  >();
   let flight: Promise<unknown> | undefined;
   let cacheBytes = 0;
   let reservedBytes = 0;
   let previous: WindowSnapshot | undefined;
-  let lifetime = new AbortController();
   let previewedDocument: number | undefined;
   let nextRender = 0;
   let lod = 1;
@@ -41,9 +48,12 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
   ): Promise<PsdResultOf<RenderedPixels> | undefined> {
     if (previous !== snapshot) {
       const affected = previous && visibilityDamage(previous, snapshot);
-      lifetime.abort();
-      lifetime = new AbortController();
-      pending.clear();
+      for (const [key, job] of pending) {
+        if (!affected || job.saved || affected.some((rect) => intersects(job.support, rect))) {
+          job.controller.abort();
+          pending.delete(key);
+        }
+      }
       for (const [key, levels] of cache) {
         if (
           !affected ||
@@ -228,10 +238,10 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
     function request(key: string, window: Parameters<PsdClient['renderWindow']>[3], core?: PsdRegionRect) {
       const existing = pending.get(key);
       if (existing) {
-        return existing;
+        return existing.result;
       }
 
-      const controller = lifetime;
+      const controller = new AbortController();
       // Reserve transferred raw bytes plus their entire mip chain before admitting the request.
       const reservation =
         window.kind === 'regions'
@@ -264,7 +274,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
               })
             )
             .sort((a, b) => b.step - a.step);
-          if (!controller.signal.aborted && previous === snapshot && window.kind !== 'saved') {
+          if (!controller.signal.aborted && pending.get(key)?.result === job && window.kind !== 'saved') {
             remove(key);
             cache.set(key, levels);
             if (window.kind === 'overview') {
@@ -277,7 +287,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
         })
         .finally(() => {
           reservedBytes -= reservation;
-          if (pending.get(key) === job) {
+          if (pending.get(key)?.result === job) {
             pending.delete(key);
           }
 
@@ -287,7 +297,13 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
 
           trim();
         });
-      pending.set(key, job);
+      pending.set(key, {
+        result: job,
+        controller,
+        saved: window.kind === 'saved',
+        support:
+          window.kind === 'regions' ? window.rectangles[0] : { left: 0, top: 0, width: info.width, height: info.height }
+      });
       flight = job;
       return job;
     }
@@ -330,8 +346,9 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
   }
 
   function clear() {
-    lifetime.abort();
-    lifetime = new AbortController();
+    for (const job of pending.values()) {
+      job.controller.abort();
+    }
     cache.clear();
     pending.clear();
     cacheBytes = 0;
