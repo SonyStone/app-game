@@ -153,8 +153,8 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>) {
             clip: core ?? {
               left: image.left,
               top: image.top,
-              width: image.width * image.step,
-              height: image.height * image.step
+              width: Math.min(image.width * image.step, info.width - image.left),
+              height: Math.min(image.height * image.step, info.height - image.top)
             }
           };
           if (!controller.signal.aborted && previous === snapshot && window.kind !== 'saved') {

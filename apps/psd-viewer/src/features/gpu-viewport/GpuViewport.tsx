@@ -25,10 +25,21 @@ export function GpuViewport(props: {
   label: string;
   /** Called after visible uploads finish and a frame is submitted; may repeat on later camera frames. */
   onPresented?: (image: DisplayImage) => void;
+  /** Reports pending display uploads separately from worker rendering; disposal clears the pending state. */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const forced = new URLSearchParams(location.search).get('backend') === 'canvas2d';
   const [failure, setFailure] = createSignal<string>();
   const [attempt, setAttempt] = createSignal(0);
+  createEffect(
+    () => props.image,
+    () => {
+      props.onBusyChange?.(true);
+    }
+  );
+  onCleanup(() => {
+    props.onBusyChange?.(false);
+  });
   return (
     <>
       <Show when={!forced && !failure()} fallback={<CanvasViewport {...props} />}>
@@ -79,7 +90,9 @@ function WebGpuViewport(props: Parameters<typeof GpuViewport>[0] & { onError: (m
 function BackendFailure(props: { message: string; onError: (message: string) => void }) {
   createEffect(
     () => props.message,
-    (message) => props.onError(message)
+    (message) => {
+      props.onError(message);
+    }
   );
   return null;
 }
@@ -169,7 +182,9 @@ function createDisplayFrames(
     }
 
     try {
-      if (draw(state.view, width, height, state.dpr)) {
+      const pending = draw(state.view, width, height, state.dpr);
+      props.onBusyChange?.(pending);
+      if (pending) {
         start();
       } else {
         props.onPresented?.(props.image);
