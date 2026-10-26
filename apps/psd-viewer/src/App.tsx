@@ -31,6 +31,7 @@ import { createWindowedRender } from './features/viewport/createWindowedRender';
  */
 export function App() {
   const client = makePsdClient(createPsdWorker(), createPsdWorker);
+  const [displayBusy, setDisplayBusy] = createSignal(false);
   onCleanup(client.dispose);
 
   const { source, opened, opening, canceled, open, cancel, retry } = createPsdDocument(client);
@@ -110,6 +111,10 @@ export function App() {
 
     if (isPending(difference) || isPending(merged)) {
       return 'Comparing…';
+    }
+
+    if (displayBusy()) {
+      return 'Displaying…';
     }
 
     return isPending(layer) ? 'Reading layer…' : undefined;
@@ -234,6 +239,7 @@ export function App() {
                   <GpuViewport
                     image={image()}
                     onPresented={initial.presented}
+                    onBusyChange={setDisplayBusy}
                     view={viewport.view()}
                     size={viewport.size()}
                     label={

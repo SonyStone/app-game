@@ -356,6 +356,33 @@ it('plans bounded overviews and viewport-only regions, including empty/off-canva
   }
 });
 
+it('clips coarse preview coverage to odd document bounds', async () => {
+  const client: Pick<PsdClient, 'renderWindow'> = {
+    async renderWindow(_document, _settings, _visibility, window) {
+      const step = window.kind === 'regions' ? 1 : window.step;
+      return {
+        ok: true,
+        value: {
+          images: [{ ...singlePixel('layers'), width: 3, height: 4, step, pixels: new Uint8Array(3 * 4 * 4) }],
+          milliseconds: 1
+        }
+      };
+    }
+  };
+  const renderer = makeWindowRenderer(client);
+  const result = value(
+    await renderer.render(
+      fakeSnapshot(5, 7),
+      { scale: 0.5, x: 0, y: 0 },
+      { width: 100, height: 100 },
+      new AbortController().signal,
+      vi.fn()
+    )
+  );
+  expect(result.tiles![0].clip).toEqual({ left: 0, top: 0, width: 5, height: 7 });
+  renderer.clear();
+});
+
 function connect() {
   const sent: PsdRequest[] = [];
   const port: PsdWorkerPort = {
