@@ -116,8 +116,11 @@ export async function runReadbacks(dpr: number) {
       const mip = regionMips(tile.image as Parameters<typeof regionMips>[0], 8).at(-1)!;
       return { ...tile, image: mip, step: 8 };
     });
+    const unaligned = new Uint8Array(new ArrayBuffer(image.pixels.byteLength + 1), 1);
+    unaligned.set(image.pixels);
     for (const [source, tiles, expectedImage, step] of [
       ['whole chunks', displayTiles(image), image, 1],
+      ['unaligned whole chunks', displayTiles({ ...image, pixels: unaligned }), image, 1],
       ['worker regions', regions, image, 1],
       ['filtered worker mip', filteredTiles, filtered, 8]
     ] as const) {
