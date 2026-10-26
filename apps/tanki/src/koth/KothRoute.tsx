@@ -534,9 +534,9 @@ function thoughtsOnScreen(
 /**
  * What the bots say on the radio, placed on screen: the player's team's lines, or both teams'
  * while watching. A bubble fades over its last `BUBBLE_FADE` s and a marker over its last
- * `MARKER_FADE` s; a marker off the screen is held `EDGE_INSET` px inside its edge. The arrow runs
- * from `ARROW_START` px off the speaker's tank to `ARROW_END` px short of the marker, and is left
- * out when that leaves less than `ARROW_SHORTEST` px.
+ * `MARKER_FADE` s; a marker off the screen is held `EDGE_INSET` px inside its edge. The shot flies
+ * from `SHOT_START` px off the speaker's tank to `SHOT_END` px short of the marker at `SHOT_SPEED`
+ * px/s, and is left out when that leaves less than `SHOT_SHORTEST` px.
  */
 function calloutsOnScreen(
   match: KothMatch,
@@ -570,7 +570,7 @@ function calloutsOnScreen(
         lane: callout.lane,
         seconds: callout.seconds,
         bubble: speaker && { x: speaker.x, y: speaker.y, opacity: bubbleOpacity },
-        arrow: speaker && held ? arrowBetween(speaker, held, bubbleOpacity) : undefined,
+        shot: speaker && held ? shotBetween(speaker, held, bubbleOpacity) : undefined,
         marker:
           callout.marker && held
             ? {
@@ -588,26 +588,31 @@ const BUBBLE_FADE = 0.4;
 const MARKER_FADE = 0.8;
 const EDGE_INSET = 28;
 
-/** The radio arrow from the speaker at `from` to the marker at `to`, on screen, cut short at both ends; none if too short. */
-function arrowBetween(from: { x: number; y: number }, to: { x: number; y: number }, opacity: number) {
+/** The radio shot from the speaker at `from` to the marker at `to`, on screen, cut short at both ends; none if too short. */
+function shotBetween(from: { x: number; y: number }, to: { x: number; y: number }, opacity: number) {
   const length = Math.hypot(to.x - from.x, to.y - from.y);
-  const shown = length - ARROW_START - ARROW_END;
+  const shown = length - SHOT_START - SHOT_END;
 
-  if (shown < ARROW_SHORTEST) {
+  if (shown < SHOT_SHORTEST) {
     return undefined;
   }
 
   const along = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
   return {
-    from: { x: from.x + along.x * ARROW_START, y: from.y + along.y * ARROW_START },
-    to: { x: to.x - along.x * ARROW_END, y: to.y - along.y * ARROW_END },
+    from: { x: from.x + along.x * SHOT_START, y: from.y + along.y * SHOT_START },
+    to: { x: to.x - along.x * SHOT_END, y: to.y - along.y * SHOT_END },
+    flight: Math.min(Math.max(shown / SHOT_SPEED, SHOT_QUICKEST), SHOT_SLOWEST),
     opacity
   };
 }
 
-const ARROW_START = 22;
-const ARROW_END = 15;
-const ARROW_SHORTEST = 24;
+const SHOT_START = 22;
+const SHOT_END = 8;
+const SHOT_SHORTEST = 24;
+const SHOT_SPEED = 1200;
+/** Seconds a shot flies at least and at most, so a near one is still seen and a far one does not keep the marker waiting. */
+const SHOT_QUICKEST = 0.15;
+const SHOT_SLOWEST = 0.4;
 
 /** Sizes the canvas's drawing buffer to its CSS size times the device pixel ratio; returns the CSS size. */
 function fitCanvas(canvas: HTMLCanvasElement) {

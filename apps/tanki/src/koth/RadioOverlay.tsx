@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Show, untrack } from 'solid-js';
 import { seatName } from './Hud';
 import { useKothI18n } from './i18n/i18n';
 import type { SeatHud } from './match';
@@ -20,10 +20,11 @@ export type CalloutView = {
   /** The bubble over the speaker's tank, in CSS pixels, while the line is said and the speaker lives. */
   bubble: { x: number; y: number; opacity: number } | undefined;
   /**
-   * The arrow from the speaker's tank to the line's marker, in CSS pixels, with the bubble's
-   * opacity; `undefined` without a bubble or a marker, or when the marker is on the speaker.
+   * The shot from the speaker's tank at the line's marker, in CSS pixels, with the seconds it
+   * flies and the bubble's opacity; `undefined` without a bubble or a marker, or when the marker
+   * is on the speaker.
    */
-  arrow: { from: { x: number; y: number }; to: { x: number; y: number }; opacity: number } | undefined;
+  shot: { from: { x: number; y: number }; to: { x: number; y: number }; flight: number; opacity: number } | undefined;
   /**
    * The line's marker, in CSS pixels. A marker off the screen is held at its edge, with `edge`
    * the direction it lies in, in radians on screen; `undefined` while it is on the screen.
@@ -33,10 +34,9 @@ export type CalloutView = {
 
 /**
  * What the bots say on the radio, over the canvas: a word or two in a bubble in the poster look
- * over each speaker's tank, edged in its team's color, an arrow in the team's color that shoots
- * from the speaker at what the line is about and keeps flowing toward it while the line is said,
- * and the line's marker on the map, held at the edge of the screen with a pointer when what it
- * marks lies off it.
+ * over each speaker's tank, edged in its team's color, a shot in the team's color fired from the
+ * speaker at what the line is about, and the line's marker on the map, which pops up where the
+ * shot lands, held at the edge of the screen with a pointer when what it marks lies off it.
  */
 export function RadioOverlay(props: { callouts: readonly CalloutView[] }) {
   const { t } = useKothI18n();
@@ -58,8 +58,8 @@ export function RadioOverlay(props: { callouts: readonly CalloutView[] }) {
       <svg class="absolute inset-0 h-full w-full overflow-visible">
         <For each={props.callouts} keyed={(callout) => callout.id}>
           {(callout) => (
-            <Show when={callout().arrow}>
-              {(arrow) => <RadioArrow {...arrow()} team={callout().team} />}
+            <Show when={callout().shot}>
+              {(shot) => <RadioShot {...shot()} team={callout().team} />}
             </Show>
           )}
         </For>
@@ -75,7 +75,9 @@ export function RadioOverlay(props: { callouts: readonly CalloutView[] }) {
                     left: `${marker().x}px`,
                     top: `${marker().y}px`,
                     opacity: marker().opacity,
-                    '--tk-marker-team': TEAM_CSS[callout().team]
+                    '--tk-marker-team': TEAM_CSS[callout().team],
+                    // Popped up where the line's shot lands, read once as the marker first shows.
+                    '--tk-marker-delay': `${untrack(() => callout().shot?.flight ?? 0)}s`
                   }}
                 >
                   <MarkerIcon kind={marker().kind} />
@@ -103,21 +105,24 @@ export function RadioOverlay(props: { callouts: readonly CalloutView[] }) {
 }
 
 /**
- * An arrow from `from` to `to`, on screen: it shoots out in the team's color, flashes a ring where
- * it lands, and dashes keep running along it toward the target until it fades.
+ * A shot from `from` to `to`, on screen, in the team's color: a short tracer flies to the target
+ * in `flight` s, as read when it is fired, over a faint trail that fades once it lands, and a
+ * ring flashes where it hits. Nothing of it stays.
  */
-function RadioArrow(props: { from: { x: number; y: number }; to: { x: number; y: number }; opacity: number; team: TeamId }) {
-  const angle = () => (Math.atan2(props.to.y - props.from.y, props.to.x - props.from.x) * 180) / Math.PI;
+function RadioShot(props: {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  flight: number;
+  opacity: number;
+  team: TeamId;
+}) {
+  const flight = untrack(() => props.flight);
 
   return (
-    <g class="tk-arrow" style={{ opacity: props.opacity, '--tk-arrow-team': TEAM_CSS[props.team] }}>
-      <line class="tk-arrow-casing" x1={props.from.x} y1={props.from.y} x2={props.to.x} y2={props.to.y} pathLength={1} />
-      <line class="tk-arrow-shot" x1={props.from.x} y1={props.from.y} x2={props.to.x} y2={props.to.y} pathLength={1} />
-      <line class="tk-arrow-flow" x1={props.from.x} y1={props.from.y} x2={props.to.x} y2={props.to.y} />
-      <g transform={`translate(${props.to.x} ${props.to.y}) rotate(${angle()})`}>
-        <circle class="tk-arrow-hit" r="16" />
-        <path class="tk-arrow-head" d="M 2 0 L -11 -7 L -7 0 L -11 7 Z" />
-      </g>
+    <g class="tk-shot" style={{ opacity: props.opacity, '--tk-shot-team': TEAM_CSS[props.team], '--tk-shot-flight': `${flight}s` }}>
+      <line class="tk-shot-trail" x1={props.from.x} y1={props.from.y} x2={props.to.x} y2={props.to.y} pathLength={1} />
+      <line class="tk-shot-tracer" x1={props.from.x} y1={props.from.y} x2={props.to.x} y2={props.to.y} pathLength={1} />
+      <circle class="tk-shot-hit" cx={props.to.x} cy={props.to.y} r="14" />
     </g>
   );
 }

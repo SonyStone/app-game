@@ -713,60 +713,55 @@
 }
 
 /*
- * The arrow a radio line shoots from the speaker at what it is about: the line draws out in a
- * fifth of a second, a ring flashes where it lands, then paper dashes keep running down it.
+ * The shot a radio line fires from the speaker at what it is about: a tracer a fifth of the way
+ * long flies to the target in --tk-shot-flight over a faint trail, which fades once it lands,
+ * and a ring flashes where it hits. Lengths are shares of the line (pathLength 1).
  */
-.tk-arrow line {
+.tk-shot line {
   fill: none;
+  stroke: var(--tk-shot-team);
   stroke-linecap: round;
 }
 
-.tk-arrow-casing {
-  stroke: var(--ink);
-  stroke-width: 6px;
-  stroke-dasharray: 1;
-  animation: tk-arrow-shoot 0.2s ease-out backwards;
-}
-
-.tk-arrow-shot {
-  stroke: var(--tk-arrow-team);
-  stroke-width: 3px;
-  stroke-dasharray: 1;
-  animation: tk-arrow-shoot 0.2s ease-out backwards;
-}
-
-.tk-arrow-flow {
-  stroke: var(--paper-light);
-  stroke-width: 1.6px;
-  stroke-dasharray: 6 18;
+.tk-shot-tracer {
+  stroke-width: 3.5px;
+  stroke-dasharray: 0.2 2;
   animation:
-    tk-arrow-appear 0.2s 0.2s backwards,
-    tk-arrow-flow 0.5s linear infinite;
+    tk-shot-fly var(--tk-shot-flight) linear both,
+    tk-shot-gone 0.08s var(--tk-shot-flight) forwards;
 }
 
-.tk-arrow-head,
-.tk-arrow-hit {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.tk-arrow-head {
-  fill: var(--tk-arrow-team);
-  stroke: var(--ink);
+.tk-shot-trail {
   stroke-width: 1.5px;
-  stroke-linejoin: round;
-  animation: tk-arrow-head 0.2s 0.15s ease-out backwards;
+  stroke-dasharray: 1;
+  opacity: 0.55;
+  animation:
+    tk-shot-draw var(--tk-shot-flight) linear both,
+    tk-shot-gone 0.35s var(--tk-shot-flight) forwards;
 }
 
-.tk-arrow-hit {
+.tk-shot-hit {
   fill: none;
-  stroke: var(--tk-arrow-team);
+  stroke: var(--tk-shot-team);
   stroke-width: 3px;
   opacity: 0;
-  animation: tk-arrow-hit 0.45s 0.18s ease-out;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tk-shot-hit 0.4s var(--tk-shot-flight) ease-out;
 }
 
-@keyframes tk-arrow-shoot {
+/* The dash starts just behind the speaker and ends with its head on the target. */
+@keyframes tk-shot-fly {
+  from {
+    stroke-dashoffset: 0.2;
+  }
+
+  to {
+    stroke-dashoffset: -0.8;
+  }
+}
+
+@keyframes tk-shot-draw {
   from {
     stroke-dashoffset: 1;
   }
@@ -776,29 +771,13 @@
   }
 }
 
-@keyframes tk-arrow-appear {
-  from {
+@keyframes tk-shot-gone {
+  to {
     opacity: 0;
   }
 }
 
-@keyframes tk-arrow-flow {
-  from {
-    stroke-dashoffset: 24;
-  }
-
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes tk-arrow-head {
-  from {
-    scale: 0;
-  }
-}
-
-@keyframes tk-arrow-hit {
+@keyframes tk-shot-hit {
   from {
     opacity: 1;
     scale: 0.3;
@@ -806,17 +785,29 @@
 
   to {
     opacity: 0;
-    scale: 1.6;
+    scale: 1.7;
   }
 }
 
-/* A marker a radio line puts on the map; it pulses so the eye finds it, and points the way when held at the screen's edge. */
+/*
+ * A marker a radio line puts on the map; it pops up where the line's shot lands, pulses so the eye
+ * finds it, and points the way when held at the screen's edge.
+ */
 .tk-marker {
   position: absolute;
   width: 22px;
   height: 22px;
   transform: translate(-50%, -50%);
-  animation: tk-marker-pulse 0.9s ease-in-out infinite alternate;
+  /* Pops up once the line's shot lands, then pulses. */
+  animation:
+    tk-marker-pop 0.3s var(--tk-marker-delay, 0s) cubic-bezier(0.3, 1.7, 0.5, 1) backwards,
+    tk-marker-pulse 0.9s calc(var(--tk-marker-delay, 0s) + 0.3s) ease-in-out infinite alternate;
+}
+
+@keyframes tk-marker-pop {
+  from {
+    scale: 0;
+  }
 }
 
 .tk-marker > svg {
