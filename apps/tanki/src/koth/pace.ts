@@ -73,20 +73,11 @@ export const PACE_KNOBS: readonly { key: keyof Pace; label: string; min: number;
  * not a number takes its default. Without storage, as in tests, the defaults.
  */
 export function loadPace(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): Pace {
-  let kept: Partial<Record<keyof Pace, unknown>> = {};
-
   try {
-    kept = JSON.parse(storage?.getItem(PACE_KEY) ?? '{}') ?? {};
+    return { ...PACE_DEFAULTS, ...cleanPace(JSON.parse(storage?.getItem(PACE_KEY) ?? '{}')).changes };
   } catch {
-    kept = {};
+    return { ...PACE_DEFAULTS };
   }
-
-  return Object.fromEntries(
-    PACE_KNOBS.map((knob) => {
-      const value = kept[knob.key];
-      return [knob.key, typeof value === 'number' && value >= knob.min && value <= knob.max ? value : PACE_DEFAULTS[knob.key]];
-    })
-  ) as Pace;
 }
 
 /**
@@ -94,17 +85,41 @@ export function loadPace(storage: Pick<Storage, 'getItem'> | undefined = globalT
  * others are left out, so they follow the defaults if those change.
  */
 export function savePace(pace: Pace, storage: Pick<Storage, 'setItem' | 'removeItem'> | undefined = globalThis.localStorage) {
-  const changed = PACE_KNOBS.filter((knob) => pace[knob.key] !== PACE_DEFAULTS[knob.key]).map((knob) => [knob.key, pace[knob.key]]);
+  const changes = paceChanges(pace);
 
   try {
-    if (changed.length > 0) {
-      storage?.setItem(PACE_KEY, JSON.stringify(Object.fromEntries(changed)));
+    if (Object.keys(changes).length > 0) {
+      storage?.setItem(PACE_KEY, JSON.stringify(changes));
     } else {
       storage?.removeItem(PACE_KEY);
     }
   } catch {
     // A full or blocked storage only loses the pace for the next session.
   }
+}
+
+/** The knobs of `pace` that differ from the defaults, as storage and a tuning keep them. */
+export function paceChanges(pace: Pace): Partial<Pace> {
+  return Object.fromEntries(
+    PACE_KNOBS.filter((knob) => pace[knob.key] !== PACE_DEFAULTS[knob.key]).map((knob) => [knob.key, pace[knob.key]])
+  );
+}
+
+/**
+ * The knobs of `value`, as read from storage or a tuning, that are knobs of `PACE_KNOBS` with
+ * numbers in their range; `dropped` names the other keys.
+ */
+export function cleanPace(value: unknown): { changes: Partial<Pace>; dropped: string[] } {
+  const entries = typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.entries(value) : [];
+  const fits = ([key, number]: [string, unknown]) => {
+    const knob = PACE_KNOBS.find((candidate) => candidate.key === key);
+    return knob !== undefined && typeof number === 'number' && number >= knob.min && number <= knob.max;
+  };
+
+  return {
+    changes: Object.fromEntries(entries.filter(fits)),
+    dropped: entries.filter((entry) => !fits(entry)).map(([key]) => key)
+  };
 }
 
 /** Key of the pace in local storage. */
