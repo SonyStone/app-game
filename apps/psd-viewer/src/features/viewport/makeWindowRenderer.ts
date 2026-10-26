@@ -40,6 +40,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
   let lod = 1;
   let pinned = new Set<string>();
   let overviewKey: string | undefined;
+  let camera: { view: View; size: { width: number; height: number } } | undefined;
 
   async function render(
     snapshot: WindowSnapshot,
@@ -48,6 +49,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
     signal: AbortSignal,
     publish: (image: RenderedPixels) => void
   ): Promise<PsdResultOf<RenderedPixels> | undefined> {
+    camera = { view, size };
     if (previous !== snapshot) {
       const affected = previous && visibilityDamage(previous, snapshot);
       for (const [key, job] of pending) {
@@ -273,7 +275,15 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
             width: Math.min(image.width * image.step, info.width - image.left),
             height: Math.min(image.height * image.step, info.height - image.top)
           };
-          const arrival = {};
+          const arrival = {
+            receivedAt: performance.now(),
+            visible:
+              !!camera &&
+              clip.left * camera.view.scale + camera.view.x < camera.size.width &&
+              (clip.left + clip.width) * camera.view.scale + camera.view.x > 0 &&
+              clip.top * camera.view.scale + camera.view.y < camera.size.height &&
+              (clip.top + clip.height) * camera.view.scale + camera.view.y > 0
+          };
           const levels = [image, ...mips]
             .map(
               (image): DisplayTile => ({

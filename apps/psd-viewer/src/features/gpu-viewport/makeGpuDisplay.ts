@@ -83,7 +83,11 @@ export function makeGpuDisplay(
       frameNumber++;
       const uploadBudget = levels.some((group) => group.levels.length > 1) ? 2.5 : 1;
       for (const { coarse, requested } of levels) {
-        if (requested.contentTile && requested.arrival && visible(requested, view, width / dpr, height / dpr)) {
+        if (
+          requested.contentTile &&
+          requested.arrival?.visible &&
+          visible(requested, view, width / dpr, height / dpr)
+        ) {
           if (!arrivals.has(requested.arrival)) {
             arrivals.add(requested.arrival);
             arrivalTargets.set(requested.arrival, requested);
