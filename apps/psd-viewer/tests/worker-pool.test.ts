@@ -26,7 +26,7 @@ it('admits a spare only after proven window work and transfers its source', asyn
   pool.dispose();
 });
 
-it.each(['baseline', 'cmyk', 'depth', 'budget', 'fonts', 'fallback', 'regeneration', 'capacity'])(
+it.each(['baseline', 'cmyk', 'depth', 'budget', 'fonts', 'fallback', 'regeneration', 'capacity', 'metadata'])(
   'keeps %s on one worker', async (reason) => {
     const { pool, spawn } = setup(reason);
     await pool.open(new ArrayBuffer(100));
@@ -143,7 +143,7 @@ function port(reason: string): PsdWorkerPort & {
         switch (request.type) {
           case 'open':
             body = { id: request.id, type: 'opened', document: 1,
-              info: { width: 300000, height: 300000, mode: reason === 'cmyk' ? 4 : 3, depth: reason === 'depth' ? 16 : 8 },
+              info: { width: 300000, height: 300000, layerRecords: reason === 'metadata' ? 5000 : 1, mode: reason === 'cmyk' ? 4 : 3, depth: reason === 'depth' ? 16 : 8 },
               layers: [], states: {}, opening: {} } as unknown as PsdReply;
             break;
           case 'original':
