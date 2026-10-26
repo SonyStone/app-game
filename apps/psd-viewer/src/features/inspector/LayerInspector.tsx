@@ -60,6 +60,13 @@ export function LayerInspector(props: { contents: LayerContents }) {
           ['Layer ID', properties().layerId?.toString()]
         ]}
       />
+      <Show when={!props.contents.pixels.ok ? props.contents.pixels.error.message : undefined}>
+        {(message) => (
+          <p class={styles.notes} role="note">
+            Saved layer pixel preview unavailable: {message()}
+          </p>
+        )}
+      </Show>
       <Show when={props.contents.pixels.ok ? props.contents.pixels.value : undefined}>
         {(pixels) => <PixelPreview pixels={pixels()} />}
       </Show>

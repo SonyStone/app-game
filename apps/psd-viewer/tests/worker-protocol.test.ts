@@ -637,3 +637,26 @@ it('downloads the byte-identical original after transient visibility and state r
   expect(new Uint8Array(await downloaded.arrayBuffer())).toEqual(original);
   client.dispose();
 });
+
+it('refuses oversized layer previews before decoding even on an admitted small canvas', async () => {
+  const { client } = connect();
+  const opened = value(await client.open(await example('adjustment-stack.psd')));
+  const saved = value(await client.layer(opened.document, 0)).detail;
+  const codec = await loadPsdViewer();
+  const detail = vi.spyOn(codec.PsdDocumentHandle.prototype, 'layerDetail').mockReturnValueOnce({
+    ...saved,
+    properties: { ...saved.properties, bounds: { left: 0, top: 0, right: 100000, bottom: 100000 } }
+  });
+  const pixels = vi.spyOn(codec.PsdDocumentHandle.prototype, 'layerPixels');
+  try {
+    expect(value(await client.layer(opened.document, 0)).pixels).toMatchObject({
+      ok: false,
+      error: { kind: 'unsupported', message: expect.stringContaining('too large') }
+    });
+    expect(pixels).not.toHaveBeenCalled();
+  } finally {
+    detail.mockRestore();
+    pixels.mockRestore();
+    client.dispose();
+  }
+});
