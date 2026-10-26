@@ -13,7 +13,7 @@ import { createKits } from './kits';
 import { inBase, KOTH_MAP, onPoint, type KothMap } from './map';
 import { createNavGrid, updateNavGrid } from './navigation';
 import { PACE_DEFAULTS, type Pace } from './pace';
-import { advanceCapture, CAPTURE_RULES, createCaptureState, rivalOf, TEAMS, type CaptureRules, type TeamId } from './rules';
+import { advanceCapture, CAPTURE_RULES, createCaptureState, rivalOf, TEAMS, type CaptureRules, type CaptureState, type TeamId } from './rules';
 import { createScenery } from './scenery';
 import { MEDIUM_TANK, type TankClassId } from './tanks';
 import { createTeamBoard, ROLE_OF_CLASS, type Member, type TeamBoard } from './team';
@@ -339,6 +339,29 @@ export function createKothMatch(
         const at = member.tank?.hull.translation();
         return { ...callout, team: member.team, seat: seatOf(member), ally: ally && seatOf(ally), speaker: at && { x: at.x, y: at.y } };
       });
+    },
+
+    /**
+     * Sets the control point's state, as the parts given, for tests and tools that stage a
+     * situation, such as a point one team has held for a while.
+     */
+    setCapture(state: Partial<CaptureState>) {
+      capture = { ...capture, ...state };
+    },
+
+    /**
+     * Takes `member`'s tank off the field without a wreck or a kill, and brings it back at its
+     * base `seconds` later, for tests and tools that stage a team short of tanks.
+     */
+    bench(member: Member, seconds: number) {
+      if (member.tank) {
+        combat.removeTank(member.tank);
+        member.tank = undefined;
+        member.weapon = undefined;
+      }
+
+      member.respawnAt = time + seconds;
+      bots.get(member)?.reset();
     },
 
     /** Every bot's goal, action, plan and path, for the debug overlay. */
