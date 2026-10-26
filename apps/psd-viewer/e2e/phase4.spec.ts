@@ -76,6 +76,21 @@ test('saved masks, native channels and typed paths are explicitly labeled', asyn
 });
 
 test('comparison wipe/blink and mismatch navigation describe current versus saved state', async ({ page }) => {
+  await page.addInitScript(() => {
+    const Native = Worker;
+    window.Worker = class extends Native {
+      constructor(...args: ConstructorParameters<typeof Worker>) {
+        super(...args);
+        this.addEventListener('message', (event) => {
+          if (event.data.type === 'rendered') {
+            Reflect.set(window, '__comparisonCurrent', event.data.render);
+          } else if (event.data.type === 'merged') {
+            Reflect.set(window, '__comparisonSaved', event.data.image);
+          }
+        });
+      }
+    };
+  });
   await page.goto('/');
   await page.locator('input[accept=".psd,.psb"]').setInputFiles(asset('adjustment-stack.psd'));
   await expect(page.locator('[data-busy]')).toHaveAttribute('data-render-id', /\d+/);
@@ -92,6 +107,41 @@ test('comparison wipe/blink and mismatch navigation describe current versus save
   await page.getByRole('slider', { name: 'Wipe position' }).fill('30');
   await expect(page.locator('[style*="clip-path"]')).toHaveCSS('clip-path', 'inset(0px 0px 0px 30%)');
   await page.getByRole('button', { name: 'Fit', exact: true }).click();
+  await page.getByText('Pixel, masks, channels and paths', { exact: true }).click();
+  const sample = await page.evaluate(() => {
+    const current = Reflect.get(window, '__comparisonCurrent') as { width: number; pixels: Uint8Array };
+    const saved = Reflect.get(window, '__comparisonSaved') as typeof current;
+    for (let offset = 0; offset < current.pixels.length; offset += 4) {
+      if (current.pixels[offset] !== saved.pixels[offset]) {
+        const index = offset / 4;
+        return {
+          x: index % current.width,
+          y: Math.floor(index / current.width),
+          current: Array.from(current.pixels.subarray(offset, offset + 4)),
+          saved: Array.from(saved.pixels.subarray(offset, offset + 4))
+        };
+      }
+    }
+    throw new Error('Expected a display mismatch after hiding posterize');
+  });
+  const box = (await canvas.boundingBox())!;
+  const camera = await canvas.evaluate((element) => ({
+    x: Number(element.dataset.cameraX),
+    y: Number(element.dataset.cameraY),
+    scale: Number(element.dataset.cameraScale)
+  }));
+  await page.getByRole('slider', { name: 'Wipe position' }).fill('0');
+  await page.mouse.move(
+    box.x + camera.x + (sample.x + 0.5) * camera.scale,
+    box.y + camera.y + (sample.y + 0.5) * camera.scale
+  );
+  await expect(page.getByRole('status', { name: 'Pixel inspection' })).toContainText(`RGBA ${sample.saved.join(', ')}`);
+  await page.getByRole('slider', { name: 'Wipe position' }).fill('100');
+  await expect(page.getByRole('status', { name: 'Pixel inspection' })).toContainText(
+    `RGBA ${sample.current.join(', ')}`
+  );
+  await page.getByRole('slider', { name: 'Wipe position' }).fill('30');
+  await page.getByText('Pixel, masks, channels and paths', { exact: true }).click();
   await page.screenshot({ path: test.info().outputPath('comparison-wipe.png') });
   await page.getByRole('button', { name: 'Blink', exact: true }).click();
   await expect(page.getByLabel('Comparison controls')).toContainText('600 ms');

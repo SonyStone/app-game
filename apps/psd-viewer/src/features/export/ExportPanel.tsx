@@ -11,6 +11,7 @@ export function ExportPanel(props: {
   name: string;
   state: string;
   fidelity: string;
+  viewportSource: string;
   busy: boolean;
   shown: DisplayImage | undefined;
   full: PsdImage | undefined;
@@ -58,7 +59,7 @@ export function ExportPanel(props: {
     const stem = props.name.replace(/\.(psd|psb)$/i, '').replace(/[^a-z0-9._-]/gi, '-');
     download(
       new Blob([await pngBytes(image)], { type: 'image/png' }),
-      `${stem}-${source.replace(/[^a-z0-9._-]/gi, '-')}-display-rgb8.png`
+      `${stem}-${source.replace(/[^a-z0-9._-]/gi, '-').slice(0, 140)}-display-rgb8.png`
     );
   }
 
@@ -68,6 +69,7 @@ export function ExportPanel(props: {
       <p>
         PNG is display RGB8. Current state: {props.state}. PSD bytes stay unchanged. {props.fidelity}
       </p>
+      <p>Viewport source: {props.viewportSource}. Display RGB8.</p>
       <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '4px' }}>
         <button
           disabled={working() || props.busy || !props.shown}
@@ -75,7 +77,7 @@ export function ExportPanel(props: {
             void run(() =>
               png(
                 viewportImage(props.shown!, props.view, props.size, props.comparison, props.overlay),
-                `viewport-${props.state}`
+                `viewport-${props.viewportSource}`
               )
             )
           }

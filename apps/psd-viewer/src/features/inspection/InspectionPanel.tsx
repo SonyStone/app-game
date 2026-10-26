@@ -41,8 +41,8 @@ export function InspectionPanel(props: {
       <summary>Pixel, masks, channels and paths</summary>
       <p role="status" aria-label="Pixel inspection">
         {props.point
-          ? `${props.point.x}, ${props.point.y}: RGBA ${rgba()?.rgba.join(', ') ?? 'unavailable coverage'} · display RGB8${rgba()?.step !== 1 ? ` · stride ${rgba()?.step ?? 'unknown'}` : ''}`
-          : 'Move over the canvas to inspect display RGB8.'}
+          ? `${props.point.x}, ${props.point.y}: RGBA ${rgba()?.rgba.join(', ') ?? 'unavailable coverage'} · source display RGB8 before overlays${rgba()?.step !== 1 ? ` · stride ${rgba()?.step ?? 'unknown'}` : ''}`
+          : 'Move over the canvas to inspect source display RGB8 before overlays.'}
       </p>
       <label>
         Selected saved mask{' '}
@@ -75,7 +75,10 @@ export function InspectionPanel(props: {
           <option value="only">Mask only</option>
         </select>
       </label>
-      <p>Mask source: saved layer channel, display RGB8. Comp/frame transforms are not applied.</p>
+      <p>
+        Mask source: saved layer channel, display RGB8. Saved plane bounds; empty masks show default fill. Comp/frame
+        transforms are not applied.
+      </p>
       <button onClick={props.onChannels}>Load saved channels</button>
       <Show when={props.channels && !props.channels.ok ? props.channels.error.message : undefined}>
         {(error) => <p role="alert">{error()}</p>}

@@ -41,3 +41,28 @@ it('mismatch navigation wraps and uses the native-difference heat map rather tha
   expect(nextMismatch(difference, 1, -1)).toBe(2);
   expect(nextMismatch({ ...difference, differingPixels: 0 }, 0, 1)).toBeUndefined();
 });
+
+it('labels actual saved/previous pixels independently of the requested state', async () => {
+  const { presentationSource } = await import('../src/features/comparison/presentation');
+  const options = {
+    view: 'ours' as const,
+    state: 'comp 42',
+    overrides: 3,
+    maskOnly: false,
+    maskOverlay: false,
+    blinkSaved: false,
+    initial: undefined,
+    savedWindow: false,
+    hasRender: true,
+    pending: false
+  };
+  expect(presentationSource({ ...options, initial: 'saved' })).toContain(
+    'does not reflect current settings or visibility'
+  );
+  expect(presentationSource({ ...options, savedWindow: true })).toContain('potentially stale');
+  expect(presentationSource({ ...options, pending: true })).toContain('retained previous result');
+  expect(presentationSource({ ...options, view: 'blink', blinkSaved: true })).toContain(
+    "Photoshop's saved merged composite"
+  );
+  expect(presentationSource({ ...options, view: 'wipe' })).toContain('comp 42, 3 transient visibility overrides');
+});

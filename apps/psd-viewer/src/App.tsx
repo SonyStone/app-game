@@ -3,6 +3,7 @@ import styles from './App.module.css';
 import { createBlendingDetection } from './features/blending-detection';
 import { createComparison, DifferenceSummary, ViewSwitch, type ViewMode } from './features/comparison';
 import { ComparisonTools } from './features/comparison/ComparisonTools';
+import { presentationSource } from './features/comparison/presentation';
 import { createPsdDocument, createPsdRender, type PsdSource } from './features/document';
 import { createOpeningPreview } from './features/document/createOpeningPreview';
 import { ExamplesMenu } from './features/examples';
@@ -95,7 +96,7 @@ export function App() {
     return failure?.kind === 'needsAnswer' ? undefined : failure;
   };
   const layerContents = () => valueOf(layer());
-  const [point, setPoint] = createSignal<{ x: number; y: number }>();
+  const [point, setPoint] = createSignal<{ x: number; y: number; viewportX: number }>();
   const [channelDocument, setChannelDocument] = createSignal<number | undefined>(() => {
     source();
     return undefined;
@@ -150,6 +151,25 @@ export function App() {
           : latest(render);
     return result?.ok ? result.value : view() === 'ours' && !result ? initial.preview()?.image : undefined;
   });
+  const inspectionImage = () => {
+    const split = view() === 'split' || view() === 'wipe';
+    const screenX = point()?.viewportX ?? 0;
+    const divider = (viewport.size().width * (view() === 'split' ? 50 : wipe())) / 100;
+    return split && maskMode() !== 'only' && screenX >= divider ? valueOf(merged()) : shown();
+  };
+  const presentation = () =>
+    presentationSource({
+      view: view(),
+      state: stateChoice() === null ? 'document-as-saved state' : JSON.stringify(stateChoice()),
+      overrides: pairs().length,
+      maskOnly: maskMode() === 'only',
+      maskOverlay: maskMode() === 'overlay',
+      blinkSaved: blinkSaved(),
+      initial: !latest(render) ? initial.preview()?.source : undefined,
+      savedWindow: renderWindow()?.source === 'savedComposite',
+      hasRender: Boolean(latest(render)?.ok),
+      pending: isPending(wholeRender) || (view() === 'difference' && isPending(difference))
+    });
   const shownFailure = () => {
     const result = view() === 'photoshop' ? merged() : view() === 'difference' ? difference() : render();
     return result && !result.ok && result.error.kind !== 'superseded' && result.error.kind !== 'stale'
@@ -331,15 +351,7 @@ export function App() {
                 }}
               />
             </Show>
-            <p class={styles.provenance}>
-              Viewing{' '}
-              {maskMode() === 'only'
-                ? 'saved mask'
-                : view() === 'photoshop'
-                  ? "Photoshop's saved merged composite"
-                  : `current ${stateChoice() === null ? 'document-as-saved state' : JSON.stringify(stateChoice())} with ${pairs().length} transient visibility overrides`}
-              . Display RGB8. Source PSD is unchanged.
-            </p>
+            <p class={styles.provenance}>Viewing {presentation()}. Display RGB8. Source PSD is unchanged.</p>
             <div
               ref={viewport.setElement}
               class={styles.viewport}
@@ -351,6 +363,7 @@ export function App() {
                 const rect = event.currentTarget.getBoundingClientRect();
                 const camera = viewport.view();
                 setPoint({
+                  viewportX: event.clientX - rect.left,
                   x: Math.floor((event.clientX - rect.left - camera.x) / camera.scale),
                   y: Math.floor((event.clientY - rect.top - camera.y) / camera.scale)
                 });
@@ -585,6 +598,7 @@ export function App() {
                     ? 'document-as-saved'
                     : JSON.stringify(stateChoice()).replace(/[^a-z0-9]/gi, '-')
                 }
+                viewportSource={presentation()}
                 fidelity={
                   valueOf(render())?.approximations.join('; ') || 'Current render has no reported approximations.'
                 }
@@ -619,6 +633,9 @@ export function App() {
                   transientVisibility: pairs(),
                   fidelity: 'display RGB8',
                   performance: viewerPerformance.snapshot(),
+                  presentation: presentation(),
+                  viewport: { camera: viewport.view(), size: viewport.size(), mode: view(), wipe: wipe() },
+                  savedMask: { index: maskIndex(), mode: maskMode() },
                   render: (() => {
                     const value = valueOf(render());
                     return (
@@ -639,7 +656,7 @@ export function App() {
                 })}
               />
               <InspectionPanel
-                image={shown()}
+                image={inspectionImage()}
                 point={point()}
                 channels={channels()}
                 paths={paths()}
