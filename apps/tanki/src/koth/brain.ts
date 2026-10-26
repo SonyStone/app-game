@@ -79,6 +79,7 @@ export type BotAction =
   | 'stage'
   | 'capture'
   | 'guardPoint'
+  | 'holdPost'
   | 'approach'
   | 'attackFront'
   | 'flank'
@@ -102,9 +103,10 @@ export type Situation = {
    * such place or no way there: the bot's spot on the point, its staging spot for a push, a
    * firing position on its target, a spot behind the target, a spot beside the ally it helps,
    * the nearest cover, its base, the team's rally point, the repair kit most worth taking, a
-   * small kit counting a little longer than it is for mending less, and a sniper's perch.
+   * small kit counting a little longer than it is for mending less, a sniper's perch, and the
+   * post in front of the point the bot holds while its team holds the point (see `findPosts`).
    */
-  travel: Record<'point' | 'stage' | 'approach' | 'flank' | 'support' | 'cover' | 'base' | 'rally' | 'kit', number> & { perch?: number };
+  travel: Record<'point' | 'stage' | 'approach' | 'flank' | 'support' | 'cover' | 'base' | 'rally' | 'kit', number> & { perch?: number; post?: number };
   /** Seconds the bot expects to need to destroy its target from where it is and from behind. */
   kill: { front: number; rear: number };
   /** Seconds a capture would take with the bot's team on the point. */
@@ -201,6 +203,7 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
  */
 export function botActions(situation: Situation): GoapAction<BotAction>[] {
   const { travel, role, facts } = situation;
+  const hasPost = Number.isFinite(travel.post ?? Infinity);
   const killed: Facts = situation.targetClearsPoint ? { targetDown: true, enemyOnPoint: false } : { targetDown: true };
   const actions: GoapAction<BotAction>[] = [
     {
@@ -212,7 +215,14 @@ export function botActions(situation: Situation): GoapAction<BotAction>[] {
     },
     { name: 'stage', requires: { mustStage: true }, effects: { staged: true }, cost: travel.stage + STAGING_WAIT },
     { name: 'capture', requires: { onPoint: true, enemyOnPoint: false }, effects: { pointOurs: true }, cost: situation.capture },
-    { name: 'guardPoint', requires: { pointOurs: true }, effects: { guarding: true, onPoint: true }, cost: travel.point + 1 },
+    // A bot with a post holds the point from there, and comes onto the point only to fight an enemy on it.
+    {
+      name: 'guardPoint',
+      requires: { pointOurs: true },
+      effects: { guarding: true, onPoint: true },
+      cost: hasPost && !facts.enemyOnPoint ? Infinity : travel.point + 1
+    },
+    { name: 'holdPost', requires: { pointOurs: true }, effects: { guarding: true }, cost: hasPost && !facts.enemyOnPoint ? travel.post! + 1 : Infinity },
     { name: 'approach', requires: { hasTarget: true }, effects: { targetVisible: true, inFireZone: true }, cost: travel.approach + 0.5 },
     { name: 'attackFront', requires: { inFireZone: true }, effects: killed, cost: situation.kill.front },
     {

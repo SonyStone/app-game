@@ -76,6 +76,11 @@ describe('bot plans', () => {
     expect(names(situation({ facts: { pointOurs: true } }))).toEqual(['defend', 'guardPoint']);
   });
 
+  it('holds its post in front of a point the team holds, and comes back onto the point to fight an enemy on it', () => {
+    expect(names(situation({ facts: { pointOurs: true }, travel: { post: 2 } }))).toEqual(['defend', 'holdPost']);
+    expect(names(situation({ facts: { pointOurs: true, enemyOnPoint: true }, travel: { post: 2 } }))).toEqual(['defend', 'guardPoint']);
+  });
+
   it('falls back to the rally point when the team is called to regroup', () => {
     expect(names(situation({ facts: { regroupCalled: true } }))).toEqual(['regroup', 'regroup']);
   });

@@ -499,6 +499,16 @@ export function createBot(member: Member, context: BotContext) {
 
         break;
 
+      case 'holdPost': {
+        const post = board.postOf(member);
+
+        if (post) {
+          board.say(member, 'holdLane', { lane: post.lane, marker: { kind: 'hold', ...at(post.at) } });
+        }
+
+        break;
+      }
+
       case 'goToPoint':
         if (goal === 'capture' && !facts.enemyOnPoint && board.phase === 'none') {
           board.say(member, 'capturing');
@@ -524,9 +534,9 @@ export function createBot(member: Member, context: BotContext) {
     return (stats.actions[action] ??= { started: 0, done: 0, failed: 0 });
   }
 
-  /** What the bot does without a plan: guard the point if it is ours, else head for it. */
+  /** What the bot does without a plan: hold its post or the point if the point is ours, else head for it. */
   function idleAction(): BotAction {
-    return facts.pointOurs ? 'guardPoint' : 'goToPoint';
+    return facts.pointOurs ? (board.postOf(member) && !facts.enemyOnPoint ? 'holdPost' : 'guardPoint') : 'goToPoint';
   }
 
   /** The bot's situation for the planner: its facts plus travel, kill and capture estimates. */
@@ -562,7 +572,8 @@ export function createBot(member: Member, context: BotContext) {
         base: travel(board.baseSpot(member)),
         rally: travel(board.rally()),
         kit: choice?.travel ?? Infinity,
-        perch: member.role === 'sniper' ? travel(board.perchSpot(member)) : Infinity
+        perch: member.role === 'sniper' ? travel(board.perchSpot(member)) : Infinity,
+        post: travel(board.postOf(member)?.at)
       },
       kill: { front: killTime(position, target, false), rear: killTime(position, target, true) },
       capture: ((1 - progress) * context.rules.captureTime) / captureRate(alliesOn + member.tankClass.capture),
@@ -732,6 +743,21 @@ export function createBot(member: Member, context: BotContext) {
         task.destination = wander(task, board.pointSpot(member), now);
         task.arrive = 20;
         return context.capture().owner === member.team ? 'running' : 'failed';
+      }
+
+      case 'holdPost': {
+        // At its post the bot stands in cover beside the way and watches it; the point under attack calls it back.
+        const post = board.postOf(member);
+
+        if (!post || context.capture().owner !== member.team || rivalsOnPoint() > 0) {
+          return 'failed';
+        }
+
+        task.destination = post.at;
+        task.route = 'safe';
+        task.arrive = 20;
+        task.hold = distance(position, post.at) < POSTED;
+        return 'running';
       }
 
       case 'approach': {
@@ -1150,8 +1176,12 @@ export function createBot(member: Member, context: BotContext) {
       .sort((a, b) => distance(position, a.position) - distance(position, b.position))[0];
     let goal: number;
 
+    const post = task?.action === 'holdPost' ? board.postOf(member) : undefined;
+
     if (threat) {
       goal = Math.atan2(threat.position.y - position.y, threat.position.x - position.x);
+    } else if (post && distance(position, post.at) < POSTED * 2) {
+      goal = Math.atan2(post.watch.y - position.y, post.watch.x - position.x);
     } else if (Math.hypot(move.x, move.y) > 0.2) {
       goal = Math.atan2(move.y, move.x);
     } else {
@@ -1335,6 +1365,8 @@ const REPLAN_JITTER = 1;
 const SCOPE_RANGE = 900;
 const SCOPE_ARC = 0.45;
 const PERCHED = 30;
+/** How close to its post a bot must be to stand still there. */
+const POSTED = 25;
 /** Enemies this close to the point are a threat to it. */
 const NEAR_POINT = 320;
 /** Seconds after a hit or near miss that the bot still feels under fire. */

@@ -4,8 +4,9 @@ import type { Role } from './brain';
 import type { Trigger, Weapon } from './classes/weapon';
 import type { KothMap } from './map';
 import { findPerches } from './classes/perch';
+import { findPosts, type Post } from './front';
 import type { Kit } from './kits';
-import { createRadio, URGENT, type CalloutOptions, type RadioLine } from './radio';
+import { createRadio, type CalloutOptions, type RadioLine } from './radio';
 import { TACTICS } from './classes/tactics';
 import { cellAt, cellCenter, sightReach, traceClear, type NavGrid } from './navigation';
 import { rivalOf, type CaptureState, type TeamId } from './rules';
@@ -69,6 +70,10 @@ export type Sighting = {
  * - Roles: an assault, a flanker, a support and another assault, filled from the living members
  *   and kept stable; a human always plays assault.
  * - Intent: push for the point, hold it, or regroup when too many members are down.
+ * - Jobs while the team holds the point: one bot keeps to the point and the others take posts in
+ *   front of it, one on each way the enemy comes back by (see `findPosts`), so the enemy is met
+ *   before it reaches the point and the team is not all standing in the open on it. The Heavy
+ *   takes the hall, the busiest way; a Sniper keeps its perch.
  * - A coordinated push: when the enemy defends the point, the team first gathers at staging spots
  *   in different lanes and then goes in together, so the point is hit from several sides.
  * - Focus fire on the enemy most worth killing; each support covers an ally, and each ally under
@@ -120,6 +125,11 @@ export function createTeamBoard(
   /** Where members were destroyed lately, and until when such a spot counts as deadly. */
   const losses: { x: number; y: number; until: number }[] = [];
   let perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
+  let posts = findPosts(grid, map, team);
+  let postsRevision = grid.revision;
+  let postsAt = 0;
+  /** Each member's job while the team holds the point: the point itself or a post in front of it. */
+  const jobs = new Map<Member, Post | 'point'>();
   const perchOf = new Map<Member, Point>();
   // Teams update half an interval apart, so their work falls on different steps.
   let nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
@@ -315,6 +325,15 @@ export function createTeamBoard(
       return perchSpot(member);
     },
 
+    /**
+     * The post `member` holds in front of the point while the team holds it, `undefined` when it
+     * has none: it keeps to the point, has no job yet, or the team does not hold the point.
+     */
+    postOf(member: Member) {
+      const job = jobs.get(member);
+      return job === 'point' ? undefined : job;
+    },
+
     /** Where the team regroups. */
     rally() {
       return map.lanes[team].center;
@@ -343,6 +362,8 @@ export function createTeamBoard(
       buildDanger();
       assignRoles();
       decideIntent(now);
+      refreshPosts(now);
+      assignJobs();
       chooseFocus();
       assignCovers();
       assignHelp(now);
@@ -366,6 +387,10 @@ export function createTeamBoard(
       perchOf.clear();
       // The walls stand as built again, and the Sniper's perch distance may have changed since.
       perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
+      posts = findPosts(grid, map, team);
+      postsRevision = grid.revision;
+      postsAt = 0;
+      jobs.clear();
       nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
     }
   };
@@ -649,6 +674,65 @@ export function createTeamBoard(
     }
   }
 
+  /** Finds the posts again a while after walls fell or rose, so they stand beside the walls that still stand. */
+  function refreshPosts(now: number) {
+    if (grid.revision !== postsRevision && now - postsAt > POST_REFRESH) {
+      posts = findPosts(grid, map, team);
+      postsRevision = grid.revision;
+      postsAt = now;
+      jobs.clear();
+    }
+  }
+
+  /**
+   * While the team holds the point, gives its bots their jobs: one keeps to the point, by
+   * `POINT_KEEPERS` order of class, and the rest take the posts, the hall's first, each the one
+   * it is best at (`POST_ORDER`) and nearest to; a Sniper keeps its perch and bots beyond the posts
+   * stay by the point. A bot keeps its job for as long as it lives and the team holds the point.
+   */
+  function assignJobs() {
+    if (intent !== 'hold') {
+      jobs.clear();
+      return;
+    }
+
+    const bots = members.filter((member) => member.tank && !member.human && member.role !== 'sniper');
+
+    for (const member of [...jobs.keys()]) {
+      if (!bots.includes(member)) {
+        jobs.delete(member);
+      }
+    }
+
+    const free = () => bots.filter((member) => !jobs.has(member));
+    const taken = new Set(jobs.values());
+
+    if (!taken.has('point')) {
+      const keeper = free().sort((a, b) => POINT_KEEPERS.indexOf(a.tankClass.id) - POINT_KEEPERS.indexOf(b.tankClass.id) || nearPoint(a) - nearPoint(b))[0];
+
+      if (keeper) {
+        jobs.set(keeper, 'point');
+      }
+    }
+
+    for (const post of posts.filter((candidate) => !taken.has(candidate))) {
+      const order = POST_ORDER[post.lane];
+      const guard = free().sort(
+        (a, b) =>
+          order.indexOf(a.tankClass.id) - order.indexOf(b.tankClass.id) ||
+          distanceTo(a.tank!.hull.translation(), post.at) - distanceTo(b.tank!.hull.translation(), post.at)
+      )[0];
+
+      if (guard) {
+        jobs.set(guard, post);
+      }
+    }
+  }
+
+  function nearPoint(member: Member) {
+    return distanceTo(member.tank!.hull.translation(), map.point);
+  }
+
   /** The side lane with less danger at its staging spot, for the flanker. */
   function quieterLane() {
     const lanes = map.lanes[team];
@@ -731,13 +815,6 @@ export function createTeamBoard(
 
     for (const victim of victims) {
       const at = victim.tank!.hull.translation();
-
-      // A bot whose core lies open calls for help once while it is under fire.
-      if (!calling.has(victim) && combat.isCoreOpen(victim.tank!)) {
-        calling.add(victim);
-        radio.say(victim, 'needHelp', { priority: URGENT, marker: { kind: 'help', x: at.x, y: at.y } });
-      }
-
       const candidates = members.filter(
         (member) =>
           member !== victim &&
@@ -753,6 +830,12 @@ export function createTeamBoard(
 
       if (helper) {
         help.set(helper, { ally: victim, attacker: victim.attacker! });
+      }
+
+      // A bot whose core lies open calls for help once while it is under fire and a helper is free to come.
+      if (helper && !calling.has(victim) && combat.isCoreOpen(victim.tank!)) {
+        calling.add(victim);
+        radio.say(victim, 'needHelp', { priority: 2, marker: { kind: 'help', x: at.x, y: at.y } });
       }
     }
   }
@@ -786,6 +869,16 @@ const HELP_WINDOW = 1.5;
 const HELP_RANGE = 700;
 /** Distance of the members' spots from the point's center. */
 const POINT_SPOT = 45;
+/** Classes in the order they keep to the point while the team holds it. */
+const POINT_KEEPERS: readonly TankClassId[] = ['demoman', 'soldier', 'heavy', 'scout'];
+/** Classes in the order they take each post: the Heavy holds the hall, the busiest way in. */
+const POST_ORDER: Record<Post['lane'], readonly TankClassId[]> = {
+  center: ['heavy', 'soldier', 'demoman', 'scout'],
+  north: ['scout', 'soldier', 'demoman', 'heavy'],
+  south: ['scout', 'soldier', 'demoman', 'heavy']
+};
+/** Seconds after walls changed before the team looks for its posts again. */
+const POST_REFRESH = 3;
 /** Classes in the order they lead the team's push and call its plan. */
 const LEAD_ORDER: readonly TankClassId[] = ['heavy', 'soldier', 'demoman', 'scout', 'sniper'];
 /** Seconds of countdown from everyone at their staging spot to going in. */

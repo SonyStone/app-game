@@ -179,6 +179,7 @@ export const en = {
     focus: (say: RadioWords) => `Target: ${say.tankClass}!`,
     perch: 'Taking my firing spot',
     holdPoint: 'Holding the point',
+    holdLane: (say: RadioWords) => `Holding the ${say.lane}`,
     capturing: 'Taking the point',
     gather: (say: RadioWords) => `Gather up! We go by the ${say.lane}`,
     countdown: (say: RadioWords) => `Attack in ${say.seconds}…`,

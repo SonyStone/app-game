@@ -177,6 +177,7 @@ export const ru: Dictionary = {
     focus: (say: RadioWords) => `Цель — ${say.tankClass}!`,
     perch: 'Занимаю позицию',
     holdPoint: 'Держу точку',
+    holdLane: (say: RadioWords) => `Держу ${say.lane}`,
     capturing: 'Захватываю точку',
     gather: (say: RadioWords) => `Собираемся! Направление — ${say.lane}`,
     countdown: (say: RadioWords) => `Атака через ${say.seconds}…`,

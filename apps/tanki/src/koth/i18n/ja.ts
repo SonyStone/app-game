@@ -177,6 +177,7 @@ export const ja: Dictionary = {
     focus: (say: RadioWords) => `${say.tankClass}を狙え！`,
     perch: '射撃位置につく',
     holdPoint: '拠点を守る',
+    holdLane: (say: RadioWords) => `${say.lane}を押さえる`,
     capturing: '拠点を占領する',
     gather: (say: RadioWords) => `集合！${say.lane}から行くぞ`,
     countdown: (say: RadioWords) => `攻撃まで${say.seconds}…`,
