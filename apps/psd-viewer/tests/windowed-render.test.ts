@@ -672,3 +672,31 @@ it('serializes unrelated camera demands outside the worker and skips obsolete wa
   expect(wrapped.renderWindow).toHaveBeenCalledTimes(3);
   renderer.clear();
 });
+
+it('shares an unaffected in-flight tile across a visibility edit instead of rendering it twice', async () => {
+  const { client } = synthetic();
+  let finish!: () => void;
+  const wrapped = {
+    renderWindow: vi.fn<PsdClient['renderWindow']>().mockImplementation(
+      (...args) =>
+        new Promise((resolve) => {
+          finish = async () => resolve(await client.renderWindow(...args));
+        })
+    )
+  };
+  const renderer = makeWindowRenderer(wrapped);
+  const snapshot = fakeSnapshot(300000, 300000);
+  snapshot.opened.layers = [
+    { index: 1, kind: 'pixel', bounds: { left: 10000, top: 10000, right: 10100, bottom: 10100 } }
+  ] as WindowSnapshot['opened']['layers'];
+  const args = [{ scale: 1, x: 0, y: 0 }, { width: 100, height: 100 }, new AbortController().signal, vi.fn()] as const;
+  const first = renderer.render(snapshot, ...args);
+  const edited = renderer.render({ ...snapshot, visibility: [[1, false]] }, ...args);
+  expect(wrapped.renderWindow).toHaveBeenCalledOnce();
+  expect(wrapped.renderWindow.mock.calls[0][4].aborted).toBe(false);
+  finish();
+  expect(await first).toBeUndefined();
+  expect(value(await edited).tiles!.at(-1)!.step).toBe(1);
+  expect(wrapped.renderWindow).toHaveBeenCalledOnce();
+  renderer.clear();
+});
