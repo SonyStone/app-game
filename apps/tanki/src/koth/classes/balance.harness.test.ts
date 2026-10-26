@@ -5,17 +5,20 @@ import type { createRangeRenderer } from '../../damage/renderer';
 import type { Rapier } from '../../physics/Rapier2D';
 import type { KothMap } from '../map';
 import { createKothMatch, type KothMatch } from '../match';
-import { PACE_DEFAULTS } from '../pace';
+import { PACE_DEFAULTS, type Pace } from '../pace';
 import { CAPTURE_RULES } from '../rules';
 import { MEDIUM_TANK, TANK_CLASS_IDS, type TankClassId } from '../tanks';
 import type { Member } from '../team';
+import { harnessTuning } from '../tuning';
 import { clampGun } from './casemate';
 import { TANK_CLASSES } from './classes';
+import { applyClassTuning } from './knobs';
 import { pickRoster } from './roster';
 import { createWeapon } from './weapon';
 
 /**
- * Balance metrics of the tank classes at the match's default pace (`PACE_DEFAULTS`), printed as
+ * Balance metrics of the tank classes at the match's default pace (`PACE_DEFAULTS`), or with a
+ * tuning from the game's pause menu (see below), printed as
  * tables: how long every class takes to destroy a still tank from behind, the side and the front
  * at several ranges with a perfect aim; each class played from the player's seat as a mouse aims;
  * a matrix of bot duels, class against class, from several starting ranges and seeds; and
@@ -27,8 +30,11 @@ import { createWeapon } from './weapon';
  * Slow, so it runs only with
  * `TANKI_BALANCE=1 pnpm exec vitest run src/koth/classes/balance.harness.test.ts --reporter=verbose`;
  * vitest's default reporter leaves out what passing tests print. `-t kills`, `-t player`,
- * `-t duels` or `-t matches` runs one part. `TANKI_MEDIUM_SPEED` sets the medium tank's speed
- * the classes' speeds are shares of; defaults to 250. `TANKI_SEEDS` replaces the matches' twelve
+ * `-t duels` or `-t matches` runs one part. `TANKI_TUNING` names a file of a tuning exported
+ * from the pause menu's class editor, or holds its JSON, link or code (see `harnessTuning`): every
+ * part then runs with its pace and its classes, and prints it first. `TANKI_MEDIUM_SPEED` sets
+ * the medium tank's speed and scales the other classes' speeds with it, keeping their shares of
+ * it. `TANKI_SEEDS` replaces the matches' twelve
  * seeds with a comma-separated list: a class's kills against deaths moves by 0.2-0.5 from one set
  * of twelve to another, so a change is worth checking on a second set. `TANKI_VICTIMS` lists the
  * classes the kill times are taken against; defaults to `soldier,heavy,scout`.
@@ -38,7 +44,11 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
 
   beforeAll(async () => {
     rapier = (await import('@dimforge/rapier2d-simd/rapier.js')) as Rapier;
-    const medium = Number(import.meta.env.TANKI_MEDIUM_SPEED ?? 250);
+    applyClassTuning(TUNED.tuning.classes);
+    console.log(
+      `tuning ${JSON.stringify(TUNED.tuning)}${TUNED.dropped.length > 0 ? `; left out ${TUNED.dropped.join(', ')}` : ''}`
+    );
+    const medium = Number(import.meta.env.TANKI_MEDIUM_SPEED ?? MEDIUM_TANK.speed);
     const shares = TANK_CLASS_IDS.map((id) => [id, TANK_CLASSES[id].speed / MEDIUM_TANK.speed] as const);
 
     for (const [id, share] of shares) {
@@ -290,12 +300,18 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
   }, 900_000);
 });
 
+/** The tuning every part runs with, from `TANKI_TUNING`; none by default. */
+const TUNED = harnessTuning(import.meta.env.TANKI_TUNING);
+
+/** The pace every part runs at: the defaults with the tuning's changes. */
+const PACE: Pace = { ...PACE_DEFAULTS, ...TUNED.tuning.pace };
+
 /** Seeds each kill time is the median of. */
 const KILL_SEEDS = 5;
 
 /**
  * Seconds a tank of class `id` takes to destroy a still tank of class `victim`, and the shots it
- * fires, at the match's default pace (`PACE_DEFAULTS`): the victim at the origin facing +x, the shooter standing `range` px behind it, at its side
+ * fires, at the harness's pace (`PACE`): the victim at the origin facing +x, the shooter standing `range` px behind it, at its side
  * or in front, its gun aimed at the victim's core every step, the trigger held, and a charged shot
  * let go once full. Hits shove the victim, which then stays where it was shoved. `Infinity` when the
  * victim stands after 20 s.
@@ -304,7 +320,7 @@ function timeToKill(rapier: Rapier, id: TankClassId, victim: TankClassId, side: 
   const world = new rapier.World({ x: 0, y: 0 });
   world.lengthUnit = 100;
   const random = seeded(seed * 7919);
-  const combat = createCombat(rapier, world, fakeRenderer(), { halfWidth: 1500, halfHeight: 1500 }, { shell: MEDIUM_TANK.shell, friendlyFire: false, random, pace: () => PACE_DEFAULTS });
+  const combat = createCombat(rapier, world, fakeRenderer(), { halfWidth: 1500, halfHeight: 1500 }, { shell: MEDIUM_TANK.shell, friendlyFire: false, random, pace: () => PACE });
   const spawn = (classId: TankClassId, at: { x: number; y: number }, rotation: number, team: string) => {
     const tankClass = TANK_CLASSES[classId];
     return combat.spawnTank({ ...at, rotation }, { color: 0, team, pullSpeed: pullSpeedFor(tankClass.speed), hull: tankClass.hull, mass: tankClass.mass, look: tankClass.look });
@@ -364,6 +380,7 @@ function playAsPlayer(rapier: Rapier, id: TankClassId, seed: number) {
   const match: KothMatch = createKothMatch(rapier, world, fakeRenderer(), {
     human: true,
     random,
+    pace: () => PACE,
     roster,
     playerClass: id,
     rules: { ...CAPTURE_RULES, holdTime: 120 },
@@ -510,7 +527,7 @@ function duelMap(range: number): KothMap {
   };
 }
 
-/** A seeded match of bots only on a renderer that only hands out field slots. */
+/** A seeded match of bots only at the harness's pace, on a renderer that only hands out field slots. */
 function createMatch(rapier: Rapier, seed: number, options: Partial<Parameters<typeof createKothMatch>[3]> = {}) {
   const world = new rapier.World({ x: 0, y: 0 });
   world.lengthUnit = 100;
@@ -518,6 +535,7 @@ function createMatch(rapier: Rapier, seed: number, options: Partial<Parameters<t
   return createKothMatch(rapier, world, fakeRenderer(), {
     human: false,
     random: seeded(seed),
+    pace: () => PACE,
     rules: { ...CAPTURE_RULES, holdTime: 120 },
     ...options
   });

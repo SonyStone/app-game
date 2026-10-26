@@ -4,10 +4,12 @@ import { createCamera, DRAG_MARGIN, followTarget, worldToScreen, type Camera } f
 import { createLookAhead } from '../arena/lookahead';
 import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
+import { applyClassTuning } from './classes/knobs';
 import { createKothMatch, type KothMatch } from './match';
 import { PACE_DEFAULTS, type Pace } from './pace';
-import { TANK_CLASS_IDS, type TankClassId } from './tanks';
+import { MEDIUM_TANK, TANK_CLASS_IDS, type TankClassId } from './tanks';
 import type { Member } from './team';
+import { harnessTuning } from './tuning';
 
 /**
  * How fast the fight feels to the player, measured in matches where a bot plays the player's
@@ -23,7 +25,9 @@ import type { Member } from './team';
  *   last fight it lost, hits less than three seconds apart, also by the class that destroyed it.
  *
  * Slow, so it runs only with `TANKI_PACE=1 pnpm exec vitest run src/koth/pace.harness.test.ts`.
- * `TANKI_PACE_SET` sets knobs of `Pace`, as `shellSpeed=0.8,botReaction=1.6`; `TANKI_PACE_CLASSES`
+ * `TANKI_TUNING` names a file of a tuning exported from the pause menu's class editor, or holds
+ * its JSON, link or code (see `harnessTuning`): the matches are played with its pace and classes.
+ * `TANKI_PACE_SET` sets knobs of `Pace` over it, as `shellSpeed=0.8,botReaction=1.6`; `TANKI_PACE_CLASSES`
  * the player's classes, comma-separated, all five by default; `TANKI_SEEDS` the seeds, comma-separated.
  */
 describe.skipIf(!import.meta.env.TANKI_PACE)('pace as the player sees it', () => {
@@ -34,7 +38,12 @@ describe.skipIf(!import.meta.env.TANKI_PACE)('pace as the player sees it', () =>
   });
 
   it('measures the warning before a hit and the time to kill', () => {
-    const pace = { ...PACE_DEFAULTS, ...knobsFromEnvironment() };
+    const tuned = harnessTuning(import.meta.env.TANKI_TUNING);
+    const pace = { ...PACE_DEFAULTS, ...tuned.tuning.pace, ...knobsFromEnvironment() };
+    applyClassTuning(tuned.tuning.classes);
+    console.log(
+      `tuning ${JSON.stringify(tuned.tuning)}${tuned.dropped.length > 0 ? `; left out ${tuned.dropped.join(', ')}` : ''}`
+    );
     const classes = (import.meta.env.TANKI_PACE_CLASSES?.split(',') as TankClassId[] | undefined) ?? [...TANK_CLASS_IDS];
     const seeds = import.meta.env.TANKI_SEEDS?.split(',').map(Number) ?? [11, 23, 37];
     const tally = createTally();
@@ -234,7 +243,7 @@ function onScreen(camera: Camera, point: { x: number; y: number }) {
 function report(tally: Tally, pace: Pace, classes: readonly TankClassId[], seeds: readonly number[]) {
   const lines = [
     `pace ${JSON.stringify(pace)}; player as ${classes.join(', ')}; seeds ${seeds.join(', ')}; ${(tally.time / 60).toFixed(1)} min real time`,
-    `spawn to point at the medium tank's speed: ${(1377 / (250 * pace.tankSpeed) / pace.speed).toFixed(1)} s real time; deaths per tank-minute ${(tally.deaths / (tally.time / 60) / 8).toFixed(2)}, the player's ${(tally.playerDeaths / (tally.time / 60)).toFixed(2)}`,
+    `spawn to point at the medium tank's speed: ${(1377 / (MEDIUM_TANK.speed * pace.tankSpeed) / pace.speed).toFixed(1)} s real time; deaths per tank-minute ${(tally.deaths / (tally.time / 60) / 8).toFixed(2)}, the player's ${(tally.playerDeaths / (tally.time / 60)).toFixed(2)}`,
     '',
     'camera     enemy came into view -> its first hit on the player (s)      hits on the player',
     '           first hits  p10   p25  median  <0.5s  <1.0s  appearances    all  from off screen'
