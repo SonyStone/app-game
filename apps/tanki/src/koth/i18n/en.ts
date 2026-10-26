@@ -170,6 +170,25 @@ export const en = {
     nextRespawn: (tankClass: string) => `Next respawn: ${tankClass}`,
     gauge: { idle: 'Hold', charging: 'Charge', full: 'Full' }
   },
+  radio: {
+    kit: 'Grabbing a repair kit',
+    repairing: 'Back to base for repairs',
+    needHelp: 'Need help here!',
+    helping: (say: RadioWords) => `On my way, ${say.name}!`,
+    flanking: (say: RadioWords) => `Going round the ${say.tankClass}`,
+    focus: (say: RadioWords) => `Target: ${say.tankClass}!`,
+    perch: 'Taking my firing spot',
+    holdPoint: 'Holding the point',
+    capturing: 'Taking the point',
+    gather: (say: RadioWords) => `Gather up! We go by the ${say.lane}`,
+    countdown: (say: RadioWords) => `Attack in ${say.seconds}…`,
+    go: 'Go, all together!',
+    captured: 'The point is ours!',
+    regroup: 'Fall back and regroup!',
+    sniper: 'Sniper!',
+    kitTrap: 'That kit is a trap'
+  },
+  lane: { north: 'north street', center: 'hall', south: 'south street' },
   plan: { push: 'push', hold: 'hold', regroup: 'regroup', gather: 'gathering', go: 'going in' },
   result: {
     wins: { red: 'Red team wins', blue: 'Blue team wins' },
@@ -180,6 +199,9 @@ export const en = {
     again: 'Play again'
   }
 };
+
+/** Words a radio line can name, already translated: an enemy class, an ally, a way to the point, a count of seconds. */
+export type RadioWords = { tankClass: string; name: string; lane: string; seconds: number };
 
 /** The shape every language's text has. */
 export type Dictionary = typeof en;

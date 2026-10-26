@@ -25,6 +25,8 @@ import { createKothI18n, KothI18nProvider } from './i18n/i18n';
 import { createKothMatch, type KothMatch } from './match';
 import type { Pace } from './pace';
 import { PauseMenu, type MenuPage } from './PauseMenu';
+import { BUBBLE_TIME } from './radio';
+import { RadioOverlay, type CalloutView } from './RadioOverlay';
 import { CAPTURE_RULES } from './rules';
 import { TANK_CLASS_IDS, type TankClassId } from './tanks';
 import { createTuning } from './tuning';
@@ -78,6 +80,7 @@ export default function KothRoute() {
   const [watching, setWatching] = createSignal(address.has('watch'));
   const [state, setState] = createSignal<HudState>();
   const [thoughts, setThoughts] = createSignal<ThoughtView[]>([]);
+  const [callouts, setCallouts] = createSignal<CalloutView[]>([]);
   const [aim, setAim] = createSignal<AimView>();
   const [menu, setMenu] = createSignal(!address.has('watch') && !address.has('class'));
   const [choice, setChoice] = createSignal<{ id: TankClassId; count: number }>();
@@ -143,12 +146,14 @@ export default function KothRoute() {
               onFrame={(frame) => {
                 setState(frame.state);
                 setThoughts(frame.thoughts);
+                setCallouts(frame.callouts);
                 setAim(frame.aim);
               }}
             />
           </Rapier2D>
         </GpuCanvas>
         <BotThoughts thoughts={thoughts()} />
+        <RadioOverlay callouts={callouts()} />
         <KothHud state={state()} watching={watching()} />
         <AimOverlay
           canvas={canvas()}
@@ -264,7 +269,7 @@ function KothScene(props: {
   playerClass: string | null;
   pace: Pace;
   paused: boolean;
-  onFrame: (frame: { state: HudState; thoughts: ThoughtView[]; aim: AimView | undefined }) => void;
+  onFrame: (frame: { state: HudState; thoughts: ThoughtView[]; callouts: CalloutView[]; aim: AimView | undefined }) => void;
 }) {
   const canvas = untrack(() => props.canvas);
   const rapier = useRapier2D();
@@ -348,6 +353,7 @@ function KothScene(props: {
       props.onFrame({
         state: match.hud(),
         thoughts: props.thoughts && !match.capture.winner ? thoughtsOnScreen(match, camera, screen) : [],
+        callouts: match.capture.winner ? [] : calloutsOnScreen(match, camera, screen, props.watching),
         aim: undefined
       });
       return;
@@ -395,6 +401,7 @@ function KothScene(props: {
     props.onFrame({
       state: match.hud(),
       thoughts: props.thoughts && !match.capture.winner ? thoughtsOnScreen(match, camera, screen) : [],
+      callouts: match.capture.winner ? [] : calloutsOnScreen(match, camera, screen, props.watching),
       aim: props.watching ? undefined : aimOnScreen(match, { angle: aim, reach }, view, screen)
     });
   }
@@ -510,6 +517,60 @@ function thoughtsOnScreen(
     };
   });
 }
+
+/**
+ * What the bots say on the radio, placed on screen: the player's team's lines, or both teams'
+ * while watching. A bubble fades over its last `BUBBLE_FADE` s and a marker over its last
+ * `MARKER_FADE` s; a marker off the screen is held `EDGE_INSET` px inside its edge.
+ */
+function calloutsOnScreen(
+  match: KothMatch,
+  camera: ReturnType<typeof createCamera>,
+  screen: { width: number; height: number },
+  watching: boolean
+): CalloutView[] {
+  const now = match.time;
+  const team = match.seat.team;
+
+  return match
+    .callouts()
+    .filter((callout) => watching || callout.team === team)
+    .map((callout) => {
+      const said = now - callout.at;
+      const speaker = callout.speaker && said < BUBBLE_TIME ? worldToScreen(camera, callout.speaker, screen) : undefined;
+      const marker = callout.marker && worldToScreen(camera, callout.marker, screen);
+      const held = marker && {
+        x: Math.min(Math.max(marker.x, EDGE_INSET), screen.width - EDGE_INSET),
+        y: Math.min(Math.max(marker.y, EDGE_INSET), screen.height - EDGE_INSET)
+      };
+      const off = marker && held && (held.x !== marker.x || held.y !== marker.y);
+
+      return {
+        id: callout.id,
+        team: callout.team,
+        line: callout.line,
+        seat: callout.seat,
+        tankClass: callout.tankClass,
+        ally: callout.ally,
+        lane: callout.lane,
+        seconds: callout.seconds,
+        bubble: speaker && { x: speaker.x, y: speaker.y, opacity: Math.min((BUBBLE_TIME - said) / BUBBLE_FADE, 1) },
+        marker:
+          callout.marker && held
+            ? {
+                ...held,
+                kind: callout.marker.kind,
+                opacity: Math.min((callout.until - now) / MARKER_FADE, 1),
+                edge: off ? Math.atan2(marker.y - screen.height / 2, marker.x - screen.width / 2) : undefined
+              }
+            : undefined
+      };
+    });
+}
+
+const BUBBLE_FADE = 0.4;
+const MARKER_FADE = 0.8;
+const EDGE_INSET = 28;
 
 /** Sizes the canvas's drawing buffer to its CSS size times the device pixel ratio; returns the CSS size. */
 function fitCanvas(canvas: HTMLCanvasElement) {

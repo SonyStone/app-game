@@ -336,7 +336,7 @@ export function createBot(member: Member, context: BotContext) {
 
       if ((range < context.pace().botSight || inScope) && combat.lineOfSight(position, at)) {
         visible.add(enemy);
-        board.see(enemy);
+        board.see(enemy, member);
       }
     }
   }
@@ -447,6 +447,65 @@ export function createBot(member: Member, context: BotContext) {
 
     plan = { goal: choice.goal.name, steps, index: 0 };
     task = startTask(tank, steps[0]);
+    announce(plan.goal, task);
+  }
+
+  /**
+   * Says on the team's radio what the bot sets out to do, when that is worth knowing: going for a
+   * repair kit or home to mend, working round an enemy, coming to an ally's help, taking its
+   * firing spot, or holding or taking the point. Calls for help and the team's focus are the
+   * board's to make (see `createTeamBoard`).
+   */
+  function announce(goal: BotGoal, task: Task) {
+    const at = (point: Point) => ({ x: point.x, y: point.y });
+
+    switch (task.action) {
+      case 'pickUpKit':
+        if (task.kit) {
+          board.say(member, 'kit', { marker: { kind: 'kit', ...at(task.kit.kit) } });
+        }
+
+        break;
+
+      case 'retreat':
+        if (goal === 'repair' || goal === 'patch') {
+          board.say(member, 'repairing');
+        }
+
+        break;
+
+      case 'flank':
+        if (task.target) {
+          board.say(member, 'flanking', { tankClass: classOf(task.target), marker: { kind: 'enemy', ...at(whereIs(task.target)) } });
+        }
+
+        break;
+
+      case 'moveToSupport':
+        if (task.ally?.tank) {
+          board.say(member, 'helping', { ally: task.ally, marker: { kind: 'help', ...at(task.ally.tank.hull.translation()) } });
+        }
+
+        break;
+
+      case 'goToPerch':
+        board.say(member, 'perch', { marker: { kind: 'hold', ...at(board.perchSpot(member)) } });
+        break;
+
+      case 'guardPoint':
+        if (goal === 'defend') {
+          board.say(member, 'holdPoint');
+        }
+
+        break;
+
+      case 'goToPoint':
+        if (goal === 'capture' && !facts.enemyOnPoint && board.phase === 'none') {
+          board.say(member, 'capturing');
+        }
+
+        break;
+    }
   }
 
   function advancePlan(tank: Tank, now: number, status: 'done' | 'failed') {

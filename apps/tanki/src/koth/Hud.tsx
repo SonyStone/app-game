@@ -325,7 +325,7 @@ export function MatchResult(props: { state: HudState | undefined; onRestart: () 
 }
 
 /** The name of whoever sits in `seat`, in the display's language: the player, or a team's seat counted from 1. */
-function seatName(t: ReturnType<typeof useKothI18n>['t'], seat: SeatHud) {
+export function seatName(t: ReturnType<typeof useKothI18n>['t'], seat: SeatHud) {
   if (seat.player) {
     return seat.human ? t('seat.you') : t('seat.youBot');
   }

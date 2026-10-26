@@ -1,4 +1,4 @@
-import type { Dictionary } from './en';
+import type { Dictionary, RadioWords } from './en';
 
 /** The game's Russian text; the class names follow the Russian Team Fortress 2. */
 export const ru: Dictionary = {
@@ -168,6 +168,25 @@ export const ru: Dictionary = {
     nextRespawn: (tankClass: string) => `Следующее возрождение: ${tankClass}`,
     gauge: { idle: 'Зажать', charging: 'Заряд', full: 'Полный' }
   },
+  radio: {
+    kit: 'Беру аптечку',
+    repairing: 'На базу, чиниться',
+    needHelp: 'Нужна помощь!',
+    helping: (say: RadioWords) => `Иду на помощь, ${say.name}!`,
+    flanking: (say: RadioWords) => `Захожу в тыл — ${say.tankClass}`,
+    focus: (say: RadioWords) => `Цель — ${say.tankClass}!`,
+    perch: 'Занимаю позицию',
+    holdPoint: 'Держу точку',
+    capturing: 'Захватываю точку',
+    gather: (say: RadioWords) => `Собираемся! Направление — ${say.lane}`,
+    countdown: (say: RadioWords) => `Атака через ${say.seconds}…`,
+    go: 'Вперёд, все разом!',
+    captured: 'Точка наша!',
+    regroup: 'Отходим, перегруппировка!',
+    sniper: 'Снайпер!',
+    kitTrap: 'Аптечку простреливают'
+  },
+  lane: { north: 'север', center: 'центр', south: 'юг' },
   plan: { push: 'натиск', hold: 'оборона', regroup: 'сбор', gather: 'собираются', go: 'идут' },
   result: {
     wins: { red: 'Победа красных', blue: 'Победа синих' },

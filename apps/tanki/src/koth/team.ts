@@ -4,6 +4,8 @@ import type { Role } from './brain';
 import type { Trigger, Weapon } from './classes/weapon';
 import type { KothMap } from './map';
 import { findPerches } from './classes/perch';
+import type { Kit } from './kits';
+import { createRadio, URGENT, type CalloutOptions, type RadioLine } from './radio';
 import { TACTICS } from './classes/tactics';
 import { cellAt, cellCenter, sightReach, traceClear, type NavGrid } from './navigation';
 import { rivalOf, type CaptureState, type TeamId } from './rules';
@@ -71,6 +73,10 @@ export type Sighting = {
  *   in different lanes and then goes in together, so the point is hit from several sides.
  * - Focus fire on the enemy most worth killing; each support covers an ally, and each ally under
  *   fire gets a helper.
+ * - The radio (see `./radio`): its bots say what they are about to do, and the board has them
+ *   call out the team's plan as it changes: gathering for a push, the countdown and the go, the
+ *   point taken, a regroup, a newly seen enemy sniper, a call for help, a repair kit that turned
+ *   out to be a trap.
  */
 export function createTeamBoard(
   team: TeamId,
@@ -84,6 +90,8 @@ export function createTeamBoard(
     capture: () => CaptureState;
     /** Seconds of holding the point that win the match. */
     holdTime: number;
+    /** The repair kits on the map, live. */
+    kits: readonly Readonly<Kit>[];
   }
 ) {
   const { combat, grid, map } = context;
@@ -103,6 +111,12 @@ export function createTeamBoard(
   let intent: 'push' | 'hold' | 'regroup' = 'push';
   let push: { phase: 'none' | 'gather' | 'go'; since: number; lane: 'north' | 'south' } = { phase: 'none', since: 0, lane: 'north' };
   let focus: Tank | undefined;
+  const radio = createRadio(context.clock);
+  /** When the gathered team goes in, once everyone is at their staging spot. */
+  let launchAt: number | undefined;
+  /** Members who called for help and still need it, so each call is made once. */
+  const calling = new Set<Member>();
+  let focusCalledAt = -Infinity;
   /** Where members were destroyed lately, and until when such a spot counts as deadly. */
   const losses: { x: number; y: number; until: number }[] = [];
   let perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
@@ -142,9 +156,28 @@ export function createTeamBoard(
       return alive(tank) ? sightings.get(tank) : undefined;
     },
 
-    /** Records that a member was destroyed at `position` now. */
+    /** Lines the team's bots are saying, and the markers they put on the map. */
+    get callouts() {
+      return radio.callouts;
+    },
+
+    /** Has `member` say `line` on the team's radio; see `Radio.say`. */
+    say(member: Member, line: RadioLine, options?: CalloutOptions) {
+      return radio.say(member, line, options);
+    },
+
+    /**
+     * Records that a member was destroyed at `position` now. Destroyed at a repair kit, it warns
+     * the team off that kit (see `isDeadly`), and a bot of the team says so.
+     */
     noteLoss(position: Point) {
       losses.push({ x: position.x, y: position.y, until: context.clock() + DEADLY_TIME });
+      const kit = context.kits.find((candidate) => distanceTo(candidate, position) < DEADLY_RADIUS);
+      const speaker = kit && nearestBot(kit);
+
+      if (kit && speaker) {
+        radio.say(speaker, 'kitTrap', { priority: 2, marker: { kind: 'danger', x: kit.x, y: kit.y } });
+      }
     },
 
     /**
@@ -156,9 +189,19 @@ export function createTeamBoard(
       return losses.some((loss) => loss.until > now && distanceTo(loss, point) < DEADLY_RADIUS);
     },
 
-    /** Records that a member sees `tank` now. */
-    see(tank: Tank) {
+    /**
+     * Records that `member` sees `tank` now. An enemy sniper the team did not know of is called
+     * out with a marker where it is.
+     */
+    see(tank: Tank, member: Member) {
+      const known = sightings.has(tank);
       record(tank);
+      const rival = context.rivals.find((other) => other.tank === tank);
+
+      if (!known && rival?.tankClass.id === 'sniper') {
+        const at = tank.hull.translation();
+        radio.say(member, 'sniper', { priority: 2, tankClass: 'sniper', marker: { kind: 'enemy', x: at.x, y: at.y } });
+      }
     },
 
     /** Exposure of a cell to known enemies' guns: 0 out of their sight, about 1 per enemy that sees it. */
@@ -316,6 +359,10 @@ export function createTeamBoard(
       push = { phase: 'none', since: 0, lane: 'north' };
       focus = undefined;
       losses.length = 0;
+      radio.reset();
+      launchAt = undefined;
+      calling.clear();
+      focusCalledAt = -Infinity;
       perchOf.clear();
       // The walls stand as built again, and the Sniper's perch distance may have changed since.
       perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
@@ -498,11 +545,17 @@ export function createTeamBoard(
     }
   }
 
+  /**
+   * Decides what the team wants and runs the coordinated push: gathering, a short countdown once
+   * everyone is at their staging spot, then going in together. The team's leader calls each
+   * change out on the radio.
+   */
   function decideIntent(now: number) {
     const capture = context.capture();
     const alive = members.filter((member) => member.tank).length;
     const rivalsAlive = context.rivals.filter((member) => member.tank).length;
     const enemyClock = capture.held[rivalOf(team)] / context.holdTime;
+    const before = intent;
 
     if (capture.owner === team) {
       intent = 'hold';
@@ -512,18 +565,25 @@ export function createTeamBoard(
       intent = 'push';
     }
 
+    if (intent !== before) {
+      announceIntent();
+    }
+
     const defended =
       capture.owner === rivalOf(team) || [...sightings.values()].some((sighting) => distanceTo(sighting.position, map.point) < DEFENDED_RADIUS);
 
     if (intent !== 'push' || !defended) {
       push = { ...push, phase: 'none' };
       staging.clear();
+      launchAt = undefined;
       return;
     }
 
     if (push.phase === 'none') {
       push = { phase: 'gather', since: now, lane: quieterLane() };
       staging.clear();
+      launchAt = undefined;
+      say(leader(), 'gather', { priority: 2, lane: 'center', marker: { kind: 'gather', ...map.lanes[team].center } });
     }
 
     if (push.phase === 'gather') {
@@ -534,11 +594,58 @@ export function createTeamBoard(
       // No waiting while the enemy is about to take a point nobody holds.
       const hurry = capture.capturer === rivalOf(team) && capture.owner !== rivalOf(team) && capture.progress > HURRY_PROGRESS;
 
-      if (everyone || hurry || now - push.since > GATHER_TIMEOUT) {
+      if (everyone) {
+        launchAt ??= now + COUNTDOWN;
+      }
+
+      if (launchAt !== undefined && now < launchAt && !hurry) {
+        say(leader(), 'countdown', { priority: 2, seconds: Math.ceil(launchAt - now) });
+      }
+
+      if ((launchAt !== undefined && now >= launchAt) || hurry || now - push.since > GATHER_TIMEOUT) {
         push = { ...push, phase: 'go', since: now };
+        launchAt = undefined;
+        say(leader(), 'go', { priority: 2, marker: { kind: 'attack', x: map.point.x, y: map.point.y } });
       }
     } else if (push.phase === 'go' && now - push.since > PUSH_WINDOW) {
       push = { ...push, phase: 'none' };
+    }
+  }
+
+  /** Calls out a new intent: the point taken, or a regroup. */
+  function announceIntent() {
+    if (intent === 'hold') {
+      const holder = members
+        .filter((member) => member.tank && !member.human)
+        .sort((a, b) => distanceTo(a.tank!.hull.translation(), map.point) - distanceTo(b.tank!.hull.translation(), map.point))[0];
+      say(holder, 'captured', { priority: 2 });
+    } else if (intent === 'regroup') {
+      say(leader(), 'regroup', { priority: 2, marker: { kind: 'gather', ...map.lanes[team].center } });
+    }
+  }
+
+  /**
+   * The bot that calls the team's plan: the Heavy, which leads a push, else a Soldier, a Demoman,
+   * a Scout and last a Sniper, the nearest to the rally point among equals.
+   */
+  function leader() {
+    const rally = map.lanes[team].center;
+    return members
+      .filter((member) => member.tank && !member.human)
+      .sort((a, b) => LEAD_ORDER.indexOf(a.tankClass.id) - LEAD_ORDER.indexOf(b.tankClass.id) || distanceTo(a.tank!.hull.translation(), rally) - distanceTo(b.tank!.hull.translation(), rally))[0];
+  }
+
+  /** The living bot of the team nearest to `point`. */
+  function nearestBot(point: Point) {
+    return members
+      .filter((member) => member.tank && !member.human)
+      .sort((a, b) => distanceTo(a.tank!.hull.translation(), point) - distanceTo(b.tank!.hull.translation(), point))[0];
+  }
+
+  /** Has `member`, if any, say `line`. */
+  function say(member: Member | undefined, line: RadioLine, options?: CalloutOptions) {
+    if (member) {
+      radio.say(member, line, options);
     }
   }
 
@@ -575,7 +682,20 @@ export function createTeamBoard(
       }
     }
 
+    const previous = focus;
     focus = best?.tank;
+    const now = context.clock();
+
+    // A new focus is called by the bot nearest to it, now and then, so the team hears whom to shoot.
+    if (focus && focus !== previous && now - focusCalledAt > FOCUS_CALL) {
+      const at = sightings.get(focus)!.position;
+      const speaker = nearestBot(at);
+      const rival = context.rivals.find((other) => other.tank === focus);
+
+      if (speaker && rival && radio.say(speaker, 'focus', { priority: 2, tankClass: rival.tankClass.id, marker: { kind: 'enemy', x: at.x, y: at.y } })) {
+        focusCalledAt = now;
+      }
+    }
   }
 
   /** Each support covers the human, if the team has one alive, or the assault nearest the point. */
@@ -603,8 +723,21 @@ export function createTeamBoard(
       .filter((member) => member.tank && member.attacker && alive.has(member.attacker) && now - member.shotAt < HELP_WINDOW)
       .sort((a, b) => b.shotAt - a.shotAt);
 
+    for (const member of [...calling]) {
+      if (!victims.includes(member)) {
+        calling.delete(member);
+      }
+    }
+
     for (const victim of victims) {
       const at = victim.tank!.hull.translation();
+
+      // A bot whose core lies open calls for help once while it is under fire.
+      if (!calling.has(victim) && combat.isCoreOpen(victim.tank!)) {
+        calling.add(victim);
+        radio.say(victim, 'needHelp', { priority: URGENT, marker: { kind: 'help', x: at.x, y: at.y } });
+      }
+
       const candidates = members.filter(
         (member) =>
           member !== victim &&
@@ -653,6 +786,12 @@ const HELP_WINDOW = 1.5;
 const HELP_RANGE = 700;
 /** Distance of the members' spots from the point's center. */
 const POINT_SPOT = 45;
+/** Classes in the order they lead the team's push and call its plan. */
+const LEAD_ORDER: readonly TankClassId[] = ['heavy', 'soldier', 'demoman', 'scout', 'sniper'];
+/** Seconds of countdown from everyone at their staging spot to going in. */
+const COUNTDOWN = 2;
+/** Seconds between the team's calls of a new focus. */
+const FOCUS_CALL = 8;
 /** Seconds a spot where a member was destroyed counts as deadly, and how far around it. */
 const DEADLY_TIME = 20;
 const DEADLY_RADIUS = 110;

@@ -319,6 +319,18 @@ export function createKothMatch(
       };
     },
 
+    /**
+     * What the bots of both teams say on their radios, with who says it, where the speaker's tank
+     * is now, `undefined` once destroyed, and the ally the line names; each line's marker stays
+     * where it was put.
+     */
+    callouts() {
+      return [...boards.red.callouts, ...boards.blue.callouts].map(({ member, ally, ...callout }) => {
+        const at = member.tank?.hull.translation();
+        return { ...callout, team: member.team, seat: seatOf(member), ally: ally && seatOf(ally), speaker: at && { x: at.x, y: at.y } };
+      });
+    },
+
     /** Every bot's goal, action, plan and path, for the debug overlay. */
     thoughts() {
       return [...bots.values()].flatMap((bot) => {
@@ -387,7 +399,8 @@ export function createKothMatch(
       rivals: teams[rivalOf(team)],
       clock: () => time,
       capture: () => capture,
-      holdTime: rules.holdTime
+      holdTime: rules.holdTime,
+      kits: kits.kits
     });
   }
 
@@ -557,9 +570,9 @@ export function createKothMatch(
       return;
     }
 
-    boards[member.team].noteLoss(at);
     member.tank = undefined;
     member.weapon = undefined;
+    boards[member.team].noteLoss(at);
     member.respawnAt = nextWave(time + MIN_RESPAWN);
     member.deaths++;
 

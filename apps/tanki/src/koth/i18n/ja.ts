@@ -1,4 +1,4 @@
-import type { Dictionary } from './en';
+import type { Dictionary, RadioWords } from './en';
 
 /** The game's Japanese text; the class names follow the Japanese Team Fortress 2. */
 export const ja: Dictionary = {
@@ -168,6 +168,25 @@ export const ja: Dictionary = {
     nextRespawn: (tankClass: string) => `次のリスポーン: ${tankClass}`,
     gauge: { idle: '押す', charging: 'チャージ', full: '最大' }
   },
+  radio: {
+    kit: '修理キットを取る',
+    repairing: '基地で修理する',
+    needHelp: '助けてくれ！',
+    helping: (say: RadioWords) => `${say.name}、今行く！`,
+    flanking: (say: RadioWords) => `${say.tankClass}の背後に回る`,
+    focus: (say: RadioWords) => `${say.tankClass}を狙え！`,
+    perch: '射撃位置につく',
+    holdPoint: '拠点を守る',
+    capturing: '拠点を占領する',
+    gather: (say: RadioWords) => `集合！${say.lane}から行くぞ`,
+    countdown: (say: RadioWords) => `攻撃まで${say.seconds}…`,
+    go: '全員、突撃！',
+    captured: '拠点を確保！',
+    regroup: '後退、再集結！',
+    sniper: 'スナイパーだ！',
+    kitTrap: 'あのキットは狙われてる'
+  },
+  lane: { north: '北通り', center: 'ホール', south: '南通り' },
   plan: { push: '進撃', hold: '防衛', regroup: '再集結', gather: '集合中', go: '突入' },
   result: {
     wins: { red: '赤チームの勝利', blue: '青チームの勝利' },

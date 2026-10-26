@@ -43,11 +43,12 @@ describe.skipIf(!import.meta.env.TANKI_TACTICS)('bot tactics', () => {
   it('plays eight-bot matches and sums up how every class plays', () => {
     const seeds = import.meta.env.TANKI_SEEDS?.split(',').map(Number) ?? [11, 23, 37, 41, 53, 67, 71, 89];
     const totals = new Map<TankClassId, ClassTally>();
+    const said = new Map<string, number>();
     const lines: string[] = [];
 
     for (const seed of seeds) {
       const match = createMatch(rapier, seed);
-      const summary = playMatch(match, totals);
+      const summary = playMatch(match, totals, said);
       lines.push(`seed ${seed}: ${summary}`);
     }
 
@@ -82,6 +83,8 @@ describe.skipIf(!import.meta.env.TANKI_TACTICS)('bot tactics', () => {
       lines.push(`${id.padEnd(10)} ${actions.join(', ')}`);
     }
 
+    const spoken = [...said].sort(([, a], [, b]) => b - a).map(([line, count]) => `${line} ${(count / seeds.length).toFixed(1)}`);
+    lines.push('', `radio lines per match, both teams: ${spoken.join(', ') || 'none'}`);
     console.log(lines.join('\n'));
   }, 1_800_000);
 });
@@ -107,9 +110,10 @@ type ClassTally = {
   actions: Record<string, number>;
 };
 
-/** Plays `match` to its end or 300 s, adding to `totals`; returns a line about the match. */
-function playMatch(match: KothMatch, totals: Map<TankClassId, ClassTally>) {
+/** Plays `match` to its end or 300 s, adding to `totals` and counting the radio lines in `said`; returns a line about the match. */
+function playMatch(match: KothMatch, totals: Map<TankClassId, ClassTally>, said: Map<string, number>) {
   const dt = 1 / 60;
+  const heard = new Set<string>();
   const last = new Map<Member, { x: number; y: number }>();
   let firstCapture: number | undefined;
   let owner = match.capture.owner;
@@ -119,6 +123,15 @@ function playMatch(match: KothMatch, totals: Map<TankClassId, ClassTally>) {
     match.step(dt);
     match.update(dt);
     firstCapture ??= match.capture.owner ? match.time : undefined;
+
+    for (const callout of match.callouts()) {
+      const key = `${callout.team}:${callout.id}`;
+
+      if (!heard.has(key)) {
+        heard.add(key);
+        said.set(callout.line, (said.get(callout.line) ?? 0) + 1);
+      }
+    }
 
     if (match.capture.owner !== owner) {
       owner = match.capture.owner;

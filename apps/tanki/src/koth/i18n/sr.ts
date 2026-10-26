@@ -1,4 +1,4 @@
-import type { Dictionary } from './en';
+import type { Dictionary, RadioWords } from './en';
 
 /** The game's Serbian text, in Cyrillic. */
 export const sr: Dictionary = {
@@ -168,6 +168,25 @@ export const sr: Dictionary = {
     nextRespawn: (tankClass: string) => `Следећи респаун: ${tankClass}`,
     gauge: { idle: 'Држи', charging: 'Пуњење', full: 'Пуно' }
   },
+  radio: {
+    kit: 'Узимам поправку',
+    repairing: 'Назад у базу на поправку',
+    needHelp: 'Треба ми помоћ!',
+    helping: (say: RadioWords) => `Стижем, ${say.name}!`,
+    flanking: (say: RadioWords) => `Заобилазим — ${say.tankClass}`,
+    focus: (say: RadioWords) => `Мета — ${say.tankClass}!`,
+    perch: 'Заузимам положај',
+    holdPoint: 'Држим тачку',
+    capturing: 'Заузимам тачку',
+    gather: (say: RadioWords) => `Окупљање! Правац — ${say.lane}`,
+    countdown: (say: RadioWords) => `Напад за ${say.seconds}…`,
+    go: 'Напред, сви заједно!',
+    captured: 'Тачка је наша!',
+    regroup: 'Повлачење, прегруписавање!',
+    sniper: 'Снајпер!',
+    kitTrap: 'Тај комплет је замка'
+  },
+  lane: { north: 'север', center: 'центар', south: 'југ' },
   plan: { push: 'напад', hold: 'одбрана', regroup: 'прегруписавање', gather: 'окупљају се', go: 'улазе' },
   result: {
     wins: { red: 'Црвени побеђују', blue: 'Плави побеђују' },
