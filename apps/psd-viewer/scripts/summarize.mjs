@@ -13,6 +13,23 @@ const summarize = async (directory) => {
     const samples = openingEvents.flatMap((event) => event.performance ?? []);
     const first = run.data?.uploads?.[0] ?? uploads[0];
     const last = uploads.at(-1);
+    const telemetry = run.data?.performance ?? [];
+    const percentile = (values, p) => {
+      values.sort((a, b) => a - b);
+      return values.length ? values[Math.max(0, Math.ceil(values.length * p) - 1)] : null;
+    };
+    const gestures = new Set(['pan', 'zoom']);
+    const durations = (name, moving = false) =>
+      telemetry
+        .filter((sample) => sample.name === `psd:${name}` && (!moving || gestures.has(sample.phase)))
+        .map((sample) => sample.duration);
+    const values = (name) => telemetry.filter((sample) => sample.name === `psd:${name}`).map((sample) => sample.value);
+    const intervals = (run.data?.frames ?? []).filter((frame) => gestures.has(frame.phase)).map((frame) => frame.dt);
+    const regionTiles = (run.data?.events ?? [])
+      .filter((event) => event.type === 'windowRendered' && gestures.has(event.phase))
+      .flatMap((event) => event.images ?? [])
+      .filter((image) => image.step === 1 && image.source === 'layers');
+    const uniqueTiles = new Set(regionTiles.map((image) => `${image.left}:${image.top}:${image.w}:${image.h}`));
     const metric = {
       outcome: run.error || run.openTimeout ? 'error' : first ? 'pixels' : 'refused',
       error: run.error ?? run.openTimeout ?? openingEvents.findLast((event) => event.error)?.error,
@@ -36,6 +53,21 @@ const summarize = async (directory) => {
         ? Math.max(...samples.filter((sample) => sample.name === 'wasm.linear.bytes').map((sample) => sample.value))
         : null,
       browserProcessTreePeakRssBytes: Math.max(0, ...(run.rssSamples ?? []).map((sample) => sample.totalBytes ?? 0)),
+      backend: run.afterOpen?.backend,
+      putImageDataCalls: run.data?.putImageDataCalls,
+      gestureFrameP95Ms: percentile([...intervals], 0.95),
+      gestureFrameP99Ms: percentile([...intervals], 0.99),
+      inputToNextFrameP95Ms: percentile(durations('frame.inputToNextFrame', true), 0.95),
+      preparationP95Ms: percentile(durations('frame.prepare'), 0.95),
+      preparationMaxMs: percentile(durations('frame.prepare'), 1),
+      uploadChunkP95Ms: percentile(durations('upload.texture'), 0.95),
+      uploadChunkMaxBytes: percentile(values('upload.texture'), 1),
+      gpuTimestampP95Ms: percentile(values('gpu.timestamp.ms'), 0.95),
+      queueCompletionP95Ms: percentile(durations('gpu.queueCompletion'), 0.95),
+      peakGpuExplicitBytes: percentile(values('gpu.explicit.bytes'), 1),
+      peakCpuTileBytes: percentile(values('tiles.cpu.bytes'), 1),
+      cameraReturnedTiles: regionTiles.length,
+      cameraRepeatedTiles: regionTiles.length - uniqueTiles.size,
       status: run.afterOpen?.status
     };
     groups.set(group, [...(groups.get(group) ?? []), metric]);
@@ -62,6 +94,16 @@ const summarize = async (directory) => {
           firstUploadMs: range('firstUploadMs'),
           freshUploadMs: range('freshUploadMs'),
           composites: range('composites'),
+          phase2: Object.fromEntries(
+            [
+              'gestureFrameP95Ms',
+              'gestureFrameP99Ms',
+              'inputToNextFrameP95Ms',
+              'preparationP95Ms',
+              'gpuTimestampP95Ms',
+              'queueCompletionP95Ms'
+            ].map((key) => [key, range(key)])
+          ),
           targetMs,
           allRunsWithinTarget: targetMs && firstPresentedMs ? firstPresentedMs.max <= targetMs : null
         }
@@ -75,7 +117,10 @@ const result = {
     'Presented timing uses two animation frames after the upload, not a physical display measurement.',
     'WASM linear memory is a high-water allocation; RSS is sampled across this isolated browser process tree.',
     'Neither byte estimate nor RSS is a native sample-comparison result. Native results are in features.json.',
-    'The range is observed min/max across runs, not a cross-device guarantee.'
+    'The range is observed min/max across runs on this device, not a cross-device guarantee.',
+    'Frame intervals are browser RAF intervals during pan/zoom; input latency ends at display submission, not scanout.',
+    'GPU timestamp duration measures the viewport pass; queue completion includes waiting and presentation scheduling.',
+    'Transferable worker buffers avoid structured-clone pixel copies; GPUQueue.writeTexture still copies into GPU storage.'
   ]
 };
 if (process.argv[3]) {

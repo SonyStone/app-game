@@ -214,7 +214,12 @@ async function panFromCanvasCenter(
 /** Verifies rendered content, independent of the CSS transparency checkerboard. */
 async function hasVisiblePixels(page: Page) {
   return page.getByRole('img', { name: 'Our render', exact: true }).evaluate((canvas: HTMLCanvasElement) => {
-    const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
-    return data.some((value, index) => index % 4 === 3 && value > 0);
+    const copy = document.createElement('canvas');
+    copy.width = canvas.width;
+    copy.height = canvas.height;
+    const context = copy.getContext('2d')!;
+    context.drawImage(canvas, 0, 0);
+    const data = context.getImageData(0, 0, copy.width, copy.height).data;
+    return data.some((value, index) => index % 4 !== 3 && value !== 48 && value !== 60);
   });
 }

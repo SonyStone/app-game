@@ -39,14 +39,36 @@ const init = () => {
     requests: [],
     opened: null
   });
-  new PerformanceObserver((l) =>
-    a.performance.push(
-      ...l
-        .getEntries()
-        .filter((x) => x.name.startsWith('psd:'))
-        .map((x) => ({ name: x.name, start: x.startTime, duration: x.duration, value: x.detail }))
-    )
-  ).observe({ type: 'measure', buffered: true });
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      if (!entry.name.startsWith('psd:')) {
+        continue;
+      }
+
+      a.performance.push({
+        name: entry.name,
+        start: entry.startTime,
+        duration: entry.duration,
+        value: entry.detail,
+        phase: a.phase
+      });
+      if (entry.name === 'psd:upload') {
+        const upload = {
+          t: entry.startTime,
+          end: entry.startTime + entry.duration,
+          ms: entry.duration,
+          bytes: entry.detail,
+          phase: a.phase
+        };
+        a.uploads.push(upload);
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            upload.presented = performance.now();
+          })
+        );
+      }
+    }
+  }).observe({ type: 'measure', buffered: true });
   new PerformanceObserver((l) =>
     a.longTasks.push(...l.getEntries().map((x) => ({ start: x.startTime, duration: x.duration, phase: a.phase })))
   ).observe({ type: 'longtask', buffered: true });
@@ -59,21 +81,11 @@ const init = () => {
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
+  a.putImageDataCalls = 0;
   const put = CanvasRenderingContext2D.prototype.putImageData;
   CanvasRenderingContext2D.prototype.putImageData = function (...args) {
-    const t = performance.now();
-    const r = put.apply(this, args);
-    const e = {
-      t,
-      end: performance.now(),
-      ms: performance.now() - t,
-      w: args[0].width,
-      h: args[0].height,
-      phase: a.phase
-    };
-    a.uploads.push(e);
-    requestAnimationFrame(() => requestAnimationFrame(() => (e.presented = performance.now())));
-    return r;
+    a.putImageDataCalls++;
+    return put.apply(this, args);
   };
   document.addEventListener(
     'change',
@@ -211,7 +223,9 @@ for (const [name, dir, ext] of fixtures) {
     const page = await context.newPage();
     result.errors = [];
     page.on('pageerror', (e) => result.errors.push(e.message));
-    await page.goto(`${process.env.PSD_BENCH_URL}/?telemetry=1`, { waitUntil: 'networkidle' });
+    await page.goto(`${process.env.PSD_BENCH_URL}/?telemetry=1&backend=${process.env.PSD_BENCH_BACKEND ?? 'webgpu'}`, {
+      waitUntil: 'networkidle'
+    });
     if (name.startsWith('large-psb')) {
       await page.screenshot({ path: `${out}/assets/01-empty.png` });
     }
@@ -222,6 +236,7 @@ for (const [name, dir, ext] of fixtures) {
         dpr: devicePixelRatio,
         hardwareConcurrency: navigator.hardwareConcurrency,
         webgpu: !!adapter,
+        backend: document.querySelector('[data-backend]')?.getAttribute('data-backend'),
         adapter: adapter?.info && {
           vendor: adapter.info.vendor,
           architecture: adapter.info.architecture,
@@ -265,6 +280,7 @@ for (const [name, dir, ext] of fixtures) {
         uploads: __audit.uploads,
         status: document.querySelector('footer')?.innerText,
         stage: document.querySelector('[data-busy]')?.dataset,
+        backend: document.querySelector('[data-backend]')?.getAttribute('data-backend'),
         text: document.body.innerText.slice(-7000),
         heap: performance.memory && {
           used: performance.memory.usedJSHeapSize,

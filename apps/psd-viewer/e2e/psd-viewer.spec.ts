@@ -391,6 +391,20 @@ test('matches the Photoshop 26 public 33437 reopen after adding original collect
   test.skip(!researchRoot || !existsSync(helveticaCollection), 'set PSD_TEXT_MIXER_RESEARCH_ROOT and supply system Helvetica Neue');
   const source = `${researchRoot}/private/psd-downloads/github/iamdaiyuan__dribbble_psd_files/dribbble_psd__33437.psd`;
   const native = await readFile(`${researchRoot}/fixtures/psd/text-mixer-1/public-33437-g0/native.png`);
+  // This native sample comparison reads the authoritative worker output, independent of display scaling/checkerboard.
+  await page.addInitScript(() => {
+    const NativeWorker = Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        this.addEventListener('message', event => {
+          if (event.data.type === 'rendered') {
+            Reflect.set(window, '__nativeRender', event.data.render.pixels);
+          }
+        });
+      }
+    };
+  });
   await page.goto('/');
   await page.locator('input[accept=".psd,.psb"]').setInputFiles(source);
   await expect(stage(page)).toHaveAttribute('data-render-id', /\d+/);
@@ -405,7 +419,7 @@ test('matches the Photoshop 26 public 33437 reopen after adding original collect
     reference.height = image.height;
     reference.getContext('2d')!.drawImage(image, 0, 0);
     const expected = reference.getContext('2d')!.getImageData(0, 0, image.width, image.height).data;
-    const actual = (element as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, image.width, image.height).data;
+    const actual = Reflect.get(window, '__nativeRender') as Uint8Array;
     let rgb = 0;
     let alpha = 0;
     let max = 0;
