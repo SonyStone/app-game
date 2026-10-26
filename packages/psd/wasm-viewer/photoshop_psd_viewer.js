@@ -120,28 +120,6 @@ function getArrayU8FromWasm0(ptr, len) {
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 /**
- * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
- * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
- * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
- * document identities. Supply actual face versions, never guesses based only on PostScript names.
- * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
- * @param {Uint8Array} bytes
- * @param {TypeEngineFontVersion[]} fonts
- * @returns {Uint8Array}
- */
-export function projectTypeEngineSave26(bytes, fonts) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.projectTypeEngineSave26(ptr0, len0, fonts);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
  * Converts modern horizontal cache origins through the native visual-origin addition before
  * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
  * import/layout dependencies still require comparison; no editor admission changes.
@@ -153,25 +131,6 @@ export function projectTypeEngineGeometry26(bytes, fonts) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.projectTypeEngineGeometry26(ptr0, len0, fonts);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
- * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
- * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
- * @param {Uint8Array} bytes
- * @returns {Uint8Array}
- */
-export function writeTypeEngineValues26(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.writeTypeEngineValues26(ptr0, len0);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -201,6 +160,28 @@ export function projectTypeEngineSelection26(bytes, fonts) {
 }
 
 /**
+ * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
+ * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
+ * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
+ * document identities. Supply actual face versions, never guesses based only on PostScript names.
+ * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
+ * @param {Uint8Array} bytes
+ * @param {TypeEngineFontVersion[]} fonts
+ * @returns {Uint8Array}
+ */
+export function projectTypeEngineSave26(bytes, fonts) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.projectTypeEngineSave26(ptr0, len0, fonts);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
  * @param {number} value
  * @returns {Uint8Array}
@@ -213,6 +194,25 @@ export function formatTypeEngineReal26(value) {
     var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v1;
+}
+
+/**
+ * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
+ * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
+ * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
+ * @param {Uint8Array} bytes
+ * @returns {Uint8Array}
+ */
+export function writeTypeEngineValues26(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.writeTypeEngineValues26(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 }
 
 /**
@@ -229,68 +229,6 @@ export function projectTypeEngineLayoutCache26(bytes, fonts) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.projectTypeEngineLayoutCache26(ptr0, len0, fonts);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-let cachedFloat32ArrayMemory0 = null;
-
-function getFloat32ArrayMemory0() {
-    if (cachedFloat32ArrayMemory0 === null || cachedFloat32ArrayMemory0.byteLength === 0) {
-        cachedFloat32ArrayMemory0 = new Float32Array(wasm.memory.buffer);
-    }
-    return cachedFloat32ArrayMemory0;
-}
-
-function getArrayF32FromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
-}
-/**
- * Computes ordinary TrueType box/point baselines from supplied bytes and explicit manual leading.
- * The caller establishes line breaks; `count` is at most 1,000,000 and `leading` is finite/positive.
- * Size must be in 0.5..=32767 points.
- * Box text starts at the normalized lowercase-d baseline; point text starts at zero. Returns local
- * binary32 point coordinates. Invalid operands, missing markers and unsupported contexts throw.
- * Does not choose automatic leading, shape text, query host fonts or authorize edited saves.
- * @param {Uint8Array} bytes
- * @param {number} face_index
- * @param {number} size
- * @param {number} leading
- * @param {number} count
- * @param {boolean} boxed
- * @returns {Float32Array}
- */
-export function computeTypeManualBaselines26(bytes, face_index, size, leading, count, boxed) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.computeTypeManualBaselines26(ptr0, len0, face_index, size, leading, count, boxed);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
-    return v2;
-}
-
-/**
- * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
- * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
- * source-dependent; a returned packet is not an editor admission certificate.
- * @param {Uint8Array} bytes
- * @param {TypeGlyphFont26[]} fonts
- * @param {TypePositionedGlyph26[]} glyphs
- * @param {number} units_per_pixel
- * @returns {Uint8Array}
- */
-export function writeTypeLayerGlyphs26(bytes, fonts, glyphs, units_per_pixel) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.writeTypeLayerGlyphs26(ptr0, len0, fonts, glyphs, units_per_pixel);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -316,6 +254,19 @@ export function readTypeFontMetrics26(bytes, face_index) {
     return takeFromExternrefTable0(ret[0]);
 }
 
+let cachedFloat32ArrayMemory0 = null;
+
+function getFloat32ArrayMemory0() {
+    if (cachedFloat32ArrayMemory0 === null || cachedFloat32ArrayMemory0.byteLength === 0) {
+        cachedFloat32ArrayMemory0 = new Float32Array(wasm.memory.buffer);
+    }
+    return cachedFloat32ArrayMemory0;
+}
+
+function getArrayF32FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
+}
 /**
  * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
  * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
@@ -334,6 +285,33 @@ export function computeTypeGlyphInk26(fonts, glyphs, tx, ty) {
     var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
     return v1;
+}
+
+/**
+ * Computes ordinary TrueType box/point baselines from supplied bytes and explicit manual leading.
+ * The caller establishes line breaks; `count` is at most 1,000,000 and `leading` is finite/positive.
+ * Size must be in 0.5..=32767 points.
+ * Box text starts at the normalized lowercase-d baseline; point text starts at zero. Returns local
+ * binary32 point coordinates. Invalid operands, missing markers and unsupported contexts throw.
+ * Does not choose automatic leading, shape text, query host fonts or authorize edited saves.
+ * @param {Uint8Array} bytes
+ * @param {number} face_index
+ * @param {number} size
+ * @param {number} leading
+ * @param {number} count
+ * @param {boolean} boxed
+ * @returns {Float32Array}
+ */
+export function computeTypeManualBaselines26(bytes, face_index, size, leading, count, boxed) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.computeTypeManualBaselines26(ptr0, len0, face_index, size, leading, count, boxed);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v2;
 }
 
 let cachedUint16ArrayMemory0 = null;
@@ -407,19 +385,19 @@ export function computeTypeHorizontalPens26(bytes, face_index, glyphs, size, adj
 }
 
 /**
- * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
- * pixels on a side. Without context, records carry bottom-to-top IDs beginning at 2.
- * Explicit context supplies IDs/clocks and initializes root XMP/history, host resources and document state.
- * Resource 1044 carries the largest allocated ID. Inputs and existing preservation saves remain unchanged.
- * @param {any} document
- * @param {Uint8Array} composite
- * @param {any} context
+ * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
+ * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
+ * source-dependent; a returned packet is not an editor admission certificate.
+ * @param {Uint8Array} bytes
+ * @param {TypeGlyphFont26[]} fonts
+ * @param {TypePositionedGlyph26[]} glyphs
+ * @param {number} units_per_pixel
  * @returns {Uint8Array}
  */
-export function writePsd(document, composite, context) {
-    const ptr0 = passArray8ToWasm0(composite, wasm.__wbindgen_malloc);
+export function writeTypeLayerGlyphs26(bytes, fonts, glyphs, units_per_pixel) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.writePsd(document, ptr0, len0, context);
+    const ret = wasm.writeTypeLayerGlyphs26(ptr0, len0, fonts, glyphs, units_per_pixel);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -441,6 +419,28 @@ export function readPsd(bytes) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
+ * pixels on a side. Without context, records carry bottom-to-top IDs beginning at 2.
+ * Explicit context supplies IDs/clocks and initializes root XMP/history, host resources and document state.
+ * Resource 1044 carries the largest allocated ID. Inputs and existing preservation saves remain unchanged.
+ * @param {any} document
+ * @param {Uint8Array} composite
+ * @param {any} context
+ * @returns {Uint8Array}
+ */
+export function writePsd(document, composite, context) {
+    const ptr0 = passArray8ToWasm0(composite, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.writePsd(document, ptr0, len0, context);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 }
 
 /**
@@ -560,6 +560,19 @@ export class PsdDocumentHandle {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
+     * Lists saved and work paths after companion overrides, with original Q24 knots and pixel geometry.
+     * Malformed paths remain listed with typed per-path errors; duplicate identities refuse the query.
+     * @param {PsdBudgetOptions | null | undefined} options
+     * @returns {PsdSavedPath[]}
+     */
+    savedPaths(options) {
+        const ret = wasm.psddocumenthandle_savedPaths(this.__wbg_ptr, options);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * Everything known about layer record `index`: properties, mask, vector mask, effects with their settings,
      * adjustment settings, text, smart-object placement and contents, and the raw tagged blocks. The properties'
      * opacity, Fill and `transparencyShapesLayer` are those Photoshop 26 imports, with `legacyOpacity` as in
@@ -589,6 +602,25 @@ export class PsdDocumentHandle {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
+     * Reads original layer color/transparency/mask channels, each clipped to its own bounds.
+     * IDs -2/-3 select masks. Samples keep native wire depth; density/feather are not applied.
+     * Missing channels refuse. Options use PsdBudgetOptions and account for JS output copies.
+     * @param {number} index
+     * @param {PsdNativeRect} rect
+     * @param {Int16Array} ids
+     * @param {PsdBudgetOptions | null | undefined} options
+     * @returns {PsdNativeRegion}
+     */
+    layerRegion(index, rect, ids, options) {
+        const ptr0 = passArray16ToWasm0(ids, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.psddocumenthandle_layerRegion(this.__wbg_ptr, index, rect, ptr0, len0, options);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * Composite exact process channels and convert them separately to configured sRGB.
      * `options` has render's blend/text gamma, fonts, state and visibility contract, with approximate=false.
      * `color` requires caller-owned `srgb: Uint8Array`; optional `workingRgb`, `workingGray`, `workingCmyk`
@@ -611,6 +643,24 @@ export class PsdDocumentHandle {
     renderColor(options, color, fonts) {
         _assertClass(fonts, PsdFontLibrary);
         const ret = wasm.psddocumenthandle_renderColor(this.__wbg_ptr, options, color, fonts.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Reads selected saved process/alpha/spot planes in a bounded rectangle at native depth.
+     * Saved pixels retain their matte and can be stale. Throws typed budget/corruption errors.
+     * Options use PsdBudgetOptions; caller retainedBytes covers fonts and external caches.
+     * @param {PsdNativeRect} rect
+     * @param {Uint16Array} indices
+     * @param {PsdBudgetOptions | null | undefined} options
+     * @returns {PsdNativeRegion}
+     */
+    savedRegion(rect, indices, options) {
+        const ptr0 = passArray16ToWasm0(indices, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.psddocumenthandle_savedRegion(this.__wbg_ptr, rect, ptr0, len0, options);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -754,6 +804,23 @@ export class PsdDocumentHandle {
         return PsdDocumentHandle.__wrap(ret[0]);
     }
     /**
+     * Plans rectangle storage using render's state, visibility, font and target settings.
+     * Reports typed full-canvas dependencies and byte/work-limit refusals without allocating pixels.
+     * Semantic strict-render support is checked when rendering, separately from this storage plan.
+     * @param {PsdNativeRect} rect
+     * @param {PsdNativeRenderOptions | null | undefined} options
+     * @param {PsdFontLibrary} fonts
+     * @returns {PsdRegionCapability}
+     */
+    regionCapability(rect, options, fonts) {
+        _assertClass(fonts, PsdFontLibrary);
+        const ret = wasm.psddocumenthandle_regionCapability(this.__wbg_ptr, rect, options, fonts.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * Full rendering with explicit per-call host admission. Defaults are 64 MiB per
      * allocation and 512 MiB live; retainedBytes includes caller fonts and caches.
      * This can conservatively refuse a dependency graph before legacy render() enters it.
@@ -796,6 +863,23 @@ export class PsdDocumentHandle {
         const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.psddocumenthandle_openLikePhotoshop(ptr0, len0, answers);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Renders a rectangle before display reduction, preserving RGB16 or CMYK/Lab internal units
+     * and RGB32 float bits. Uses the same settings as renderRegion, with typed storage refusals.
+     * Returned samples own their storage. Full-canvas dependencies remain explicit in strategy.
+     * @param {PsdNativeRect} rect
+     * @param {PsdNativeRenderOptions | null | undefined} options
+     * @param {PsdFontLibrary} fonts
+     * @returns {PsdNativeRender}
+     */
+    renderNativeRegion(rect, options, fonts) {
+        _assertClass(fonts, PsdFontLibrary);
+        const ret = wasm.psddocumenthandle_renderNativeRegion(this.__wbg_ptr, rect, options, fonts.__wbg_ptr);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -1096,6 +1180,58 @@ export class PsdSourceHandle {
         wasm.__wbg_psdsourcehandle_free(ptr, 0);
     }
     /**
+     * Lists physical primary layer records and bigint compressed-channel spans without reading pixels.
+     * Alternate Lr16/Lr32 carriers currently throw a typed unsupported refusal; savedRegion stays available.
+     * Options use PsdBudgetOptions; metadata and JavaScript copies are admitted before publication.
+     * @param {PsdBudgetOptions | null | undefined} options
+     * @returns {PsdSourceLayer[]}
+     */
+    layerInfo(options) {
+        const ret = wasm.psdsourcehandle_layerInfo(this.__wbg_ptr, options);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Reads native original layer or mask pixels through host-owned source windows.
+     * Metadata is indexed per call; compressed streams remain in the file. Primary layer records only.
+     * Each channel clips independently; missing channels and alternate carriers throw typed errors.
+     * @param {number} index
+     * @param {PsdNativeRect} rect
+     * @param {Int16Array} ids
+     * @param {PsdBudgetOptions | null | undefined} options
+     * @returns {PsdNativeRegion}
+     */
+    layerRegion(index, rect, ids, options) {
+        const ptr0 = passArray16ToWasm0(ids, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.psdsourcehandle_layerRegion(this.__wbg_ptr, index, rect, ptr0, len0, options);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Reads selected saved process/alpha/spot planes directly from host file windows at native depth.
+     * No whole-file UI buffer or WASM compressed-file copy is needed, including for large RGB16 files.
+     * Saved pixels may be stale and retain their matte. Does not validate rows after the window.
+     * Options use PsdBudgetOptions; throws typed budget/corruption errors before oversized reads.
+     * @param {PsdNativeRect} rect
+     * @param {Uint16Array} indices
+     * @param {PsdBudgetOptions | null | undefined} options
+     * @returns {PsdNativeRegion}
+     */
+    savedRegion(rect, indices, options) {
+        const ptr0 = passArray16ToWasm0(indices, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.psdsourcehandle_savedRegion(this.__wbg_ptr, rect, ptr0, len0, options);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * Emits original file bytes in chunks of at most 64 KiB. The callback must consume each
      * Uint8Array before returning. It must not accumulate unaccounted chunks in linear memory.
      * @param {Function} emit
@@ -1363,6 +1499,10 @@ function __wbg_get_imports() {
         const ret = new Error(getStringFromWasm0(arg0, arg1));
         return ret;
     };
+    imports.wbg.__wbg_new_e3b321dcfef89fc7 = function(arg0) {
+        const ret = new Uint32Array(arg0);
+        return ret;
+    };
     imports.wbg.__wbg_newwithbyteoffsetandlength_d4a86622320ea258 = function(arg0, arg1, arg2) {
         const ret = new Uint16Array(arg0, arg1 >>> 0, arg2 >>> 0);
         return ret;
@@ -1373,6 +1513,10 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbg_newwithbyteoffsetandlength_e6b7e69acd4c7354 = function(arg0, arg1, arg2) {
         const ret = new Float32Array(arg0, arg1 >>> 0, arg2 >>> 0);
+        return ret;
+    };
+    imports.wbg.__wbg_newwithbyteoffsetandlength_f1dead44d1fc7212 = function(arg0, arg1, arg2) {
+        const ret = new Uint32Array(arg0, arg1 >>> 0, arg2 >>> 0);
         return ret;
     };
     imports.wbg.__wbg_ownKeys_3930041068756f1f = function() { return handleError(function (arg0) {

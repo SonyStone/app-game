@@ -1,6 +1,18 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Converts modern horizontal cache origins through the native visual-origin addition before
+ * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
+ * import/layout dependencies still require comparison; no editor admission changes.
+ */
+export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
+ * arrays, including a supplied uniform shadow scale for strike descent. This imports source
+ * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
+ */
+export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
  * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
  * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
  * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
@@ -9,27 +21,15 @@
  */
 export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
 /**
- * Converts modern horizontal cache origins through the native visual-origin addition before
- * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
- * import/layout dependencies still require comparison; no editor admission changes.
+ * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
  */
-export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+export function formatTypeEngineReal26(value: number): Uint8Array;
 /**
  * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
  * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
  * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
  */
 export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
-/**
- * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
- * arrays, including a supplied uniform shadow scale for strike descent. This imports source
- * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
- */
-export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
- * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
- */
-export function formatTypeEngineReal26(value: number): Uint8Array;
 /**
  * Converts measured modern major-axis caches and segment indices into schema 7.
  * Vertical caches require zero major origins and retain source layout and glyph IDs. Metric-box
@@ -38,21 +38,6 @@ export function formatTypeEngineReal26(value: number): Uint8Array;
  * it does not shape text, compute vertical font geometry or authorize edited saves.
  */
 export function projectTypeEngineLayoutCache26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
- * Computes ordinary TrueType box/point baselines from supplied bytes and explicit manual leading.
- * The caller establishes line breaks; `count` is at most 1,000,000 and `leading` is finite/positive.
- * Size must be in 0.5..=32767 points.
- * Box text starts at the normalized lowercase-d baseline; point text starts at zero. Returns local
- * binary32 point coordinates. Invalid operands, missing markers and unsupported contexts throw.
- * Does not choose automatic leading, shape text, query host fonts or authorize edited saves.
- */
-export function computeTypeManualBaselines26(bytes: Uint8Array, face_index: number, size: number, leading: number, count: number, boxed: boolean): Float32Array;
-/**
- * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
- * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
- * source-dependent; a returned packet is not an editor admission certificate.
- */
-export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
 /**
  * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
  * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
@@ -65,6 +50,15 @@ export function readTypeFontMetrics26(bytes: Uint8Array, face_index: number): an
  */
 export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], tx: number, ty: number): Float32Array;
 /**
+ * Computes ordinary TrueType box/point baselines from supplied bytes and explicit manual leading.
+ * The caller establishes line breaks; `count` is at most 1,000,000 and `leading` is finite/positive.
+ * Size must be in 0.5..=32767 points.
+ * Box text starts at the normalized lowercase-d baseline; point text starts at zero. Returns local
+ * binary32 point coordinates. Invalid operands, missing markers and unsupported contexts throw.
+ * Does not choose automatic leading, shape text, query host fonts or authorize edited saves.
+ */
+export function computeTypeManualBaselines26(bytes: Uint8Array, face_index: number, size: number, leading: number, count: number, boxed: boolean): Float32Array;
+/**
  * Accumulates nominal hmtx advances with explicit shaped design adjustments and point spacing.
  * Supply glyph IDs, signed design-unit adjustments and point spacing with equal lengths, plus a
  * size in 0.5..=32767 points. Returns one binary32 point pen per glyph and a terminal pen, starting
@@ -72,6 +66,12 @@ export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePosi
  * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
  */
 export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: number, glyphs: Uint16Array, size: number, adjustments: Int32Array, spacing: Float32Array): Float32Array;
+/**
+ * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
+ * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
+ * source-dependent; a returned packet is not an editor admission certificate.
+ */
+export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
 /**
  * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
  */
@@ -99,6 +99,67 @@ export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
  * reconcile copyright or normalize a document for saving.
  */
 export function readPsdMetadataQueries(bytes: Uint8Array): PsdMetadataQueries;
+
+/** Document-space rectangle. Input windows must be nonempty; clipped channel results may be empty. */
+export interface PsdNativeRect { left: number; top: number; width: number; height: number }
+/** Original native samples, without unmatting, color conversion or mask application. */
+export interface PsdNativeRegion {
+  depth: 1 | 8 | 16 | 32;
+  mode: number;
+  encoding: 'big-endian-wire';
+  source: 'savedComposite' | 'layerChannels';
+  /** IDs are saved plane indices, or layer channel IDs including -2/-3 masks. */
+  planes: Array<PsdNativeRect & { id: number; bytes: Uint8Array }>;
+}
+/** Original path identity with a validated geometry projection or a per-path refusal. */
+export type PsdSavedPath = {
+  resourceId: number | null; namedIndex: number | null;
+  legacyName: Uint8Array; unicodeName: Uint16Array | null;
+  companionStream: boolean; tail: Uint8Array;
+} & ({ outcome: 'refused'; error: Error } | {
+  outcome: 'geometry'; components: Array<{
+    operation: number; fillRule: number;
+    subpaths: Array<{ recordIndex: number; closed: boolean; originationIndex: number;
+      knots: Array<{ selector: number; q24YX: number[][];
+        before: number[]; anchor: number[]; after: number[] }> }>;
+  }>;
+});
+
+
+
+/** Native region settings, sharing the existing viewer render semantics. */
+export interface PsdNativeRenderOptions {
+  /** Default false. */
+  approximate?: boolean;
+  linearBlending?: boolean;
+  textGamma?: number | null;
+  grayProfile?: Uint8Array;
+  vectorPaths?: boolean;
+  typeLayers?: boolean;
+  availableFonts?: string[];
+  smartObjects?: 'nearestNeighbor' | 'bilinear' | 'bicubic' | 'bicubicSmoother' | 'bicubicSharper' | 'bicubicAutomatic';
+  visibility?: Array<[number, boolean]>;
+  state?: { frame: number } | { comp: number } | null;
+  /** Default 16,777,216 work pixels. */
+  maxWorkPixels?: number;
+  budget?: PsdBudgetOptions;
+}
+/** Storage preflight. This does not certify semantic strict-render support. */
+export interface PsdRegionCapability {
+  strategy: 'window' | 'fullCanvas'; allocationBytes: bigint; liveBytes: bigint; sourceWorkPixels: bigint;
+  causes: Array<{ layer: number | null; kind: 'NativeDomain' | 'Layerless' | 'StoredComposite' |
+    'GeneratedGeometry' | 'RerenderedContent' | 'PassThroughFill' | 'HueSaturation' | 'NativeStyle' | 'GroupKnockout' }>;
+  refusal: Error | PsdBudgetError | null;
+}
+/** Straight native composite samples. Process arrays include alpha after the color channels. */
+export type PsdNativeRender = PsdNativeRect & {
+  strategy: 'window' | 'fullCanvas'; approximations: string[]; channels: number;
+} & ({ encoding: 'rgba8'; depth: 8; samples: Uint8Array } |
+ { encoding: 'rgba16-internal'; depth: 16; samples: Uint16Array } |
+ { encoding: 'rgba-f32-bits'; depth: 32; samples: Uint32Array } |
+ { encoding: 'process-internal'; depth: 8 | 16; samples: Uint16Array });
+
+
 
 /** An actual face-context leaf for diagnostic engine serialization. No font lookup is performed. */
 export interface TypeEngineFontVersion {
@@ -672,6 +733,14 @@ export interface LegacyMode {
 
 
 
+/** Physical source-backed primary layer metadata. Stream offsets never narrow to WASM pointers. */
+export interface PsdSourceLayer extends PsdNativeRect {
+  index: number; name: string;
+  channels: Array<{ id: number; offset: bigint; length: bigint }>;
+}
+
+
+
 /** A nonempty rectangle in document pixels, used by renderRegions. */
 export interface PsdRegionRect {
     /** Left document coordinate. */
@@ -767,6 +836,11 @@ export class PsdDocumentHandle {
    */
   difference(image: RenderedImage): any;
   /**
+   * Lists saved and work paths after companion overrides, with original Q24 knots and pixel geometry.
+   * Malformed paths remain listed with typed per-path errors; duplicate identities refuse the query.
+   */
+  savedPaths(options: PsdBudgetOptions | null | undefined): PsdSavedPath[];
+  /**
    * Everything known about layer record `index`: properties, mask, vector mask, effects with their settings,
    * adjustment settings, text, smart-object placement and contents, and the raw tagged blocks. The properties'
    * opacity, Fill and `transparencyShapesLayer` are those Photoshop 26 imports, with `legacyOpacity` as in
@@ -779,6 +853,12 @@ export class PsdDocumentHandle {
    * mask channels (`masks`: user mask `-2` and real raster mask `-3`) as 8-bit planes with their rectangles.
    */
   layerPixels(index: number): any;
+  /**
+   * Reads original layer color/transparency/mask channels, each clipped to its own bounds.
+   * IDs -2/-3 select masks. Samples keep native wire depth; density/feather are not applied.
+   * Missing channels refuse. Options use PsdBudgetOptions and account for JS output copies.
+   */
+  layerRegion(index: number, rect: PsdNativeRect, ids: Int16Array, options: PsdBudgetOptions | null | undefined): PsdNativeRegion;
   /**
    * Composite exact process channels and convert them separately to configured sRGB.
    * `options` has render's blend/text gamma, fonts, state and visibility contract, with approximate=false.
@@ -796,6 +876,12 @@ export class PsdDocumentHandle {
    * Ink modes and auxiliary plates remain available unchanged through savedProcessChannels.
    */
   renderColor(options: any, color: any, fonts: PsdFontLibrary): any;
+  /**
+   * Reads selected saved process/alpha/spot planes in a bounded rectangle at native depth.
+   * Saved pixels retain their matte and can be stale. Throws typed budget/corruption errors.
+   * Options use PsdBudgetOptions; caller retainedBytes covers fonts and external caches.
+   */
+  savedRegion(rect: PsdNativeRect, indices: Uint16Array, options: PsdBudgetOptions | null | undefined): PsdNativeRegion;
   /**
    * Reports supplied release mismatches separately from unavailable raster fonts, including uniquely
    * supplied addActiveFace collection faces. Equal versions cannot
@@ -863,6 +949,12 @@ export class PsdDocumentHandle {
    */
   static openWithBudget(bytes: Uint8Array, options: any): PsdDocumentHandle;
   /**
+   * Plans rectangle storage using render's state, visibility, font and target settings.
+   * Reports typed full-canvas dependencies and byte/work-limit refusals without allocating pixels.
+   * Semantic strict-render support is checked when rendering, separately from this storage plan.
+   */
+  regionCapability(rect: PsdNativeRect, options: PsdNativeRenderOptions | null | undefined, fonts: PsdFontLibrary): PsdRegionCapability;
+  /**
    * Full rendering with explicit per-call host admission. Defaults are 64 MiB per
    * allocation and 512 MiB live; retainedBytes includes caller fonts and caches.
    * This can conservatively refuse a dependency graph before legacy render() enters it.
@@ -888,6 +980,12 @@ export class PsdDocumentHandle {
    * Throws a `TypeError` for answers that are not one of their prompt's.
    */
   static openLikePhotoshop(bytes: Uint8Array, answers: any): any;
+  /**
+   * Renders a rectangle before display reduction, preserving RGB16 or CMYK/Lab internal units
+   * and RGB32 float bits. Uses the same settings as renderRegion, with typed storage refusals.
+   * Returned samples own their storage. Full-canvas dependencies remain explicit in strategy.
+   */
+  renderNativeRegion(rect: PsdNativeRect, options: PsdNativeRenderOptions | null | undefined, fonts: PsdFontLibrary): PsdNativeRender;
   /**
    * Exact decoded saved process planes, including auxiliary alpha/spot planes as separate byte arrays.
    * Native byte order, packed Bitmap rows, Indexed palette, ink data and float bit patterns are preserved.
@@ -1034,6 +1132,25 @@ export class PsdSourceHandle {
   private constructor();
   free(): void;
   /**
+   * Lists physical primary layer records and bigint compressed-channel spans without reading pixels.
+   * Alternate Lr16/Lr32 carriers currently throw a typed unsupported refusal; savedRegion stays available.
+   * Options use PsdBudgetOptions; metadata and JavaScript copies are admitted before publication.
+   */
+  layerInfo(options: PsdBudgetOptions | null | undefined): PsdSourceLayer[];
+  /**
+   * Reads native original layer or mask pixels through host-owned source windows.
+   * Metadata is indexed per call; compressed streams remain in the file. Primary layer records only.
+   * Each channel clips independently; missing channels and alternate carriers throw typed errors.
+   */
+  layerRegion(index: number, rect: PsdNativeRect, ids: Int16Array, options: PsdBudgetOptions | null | undefined): PsdNativeRegion;
+  /**
+   * Reads selected saved process/alpha/spot planes directly from host file windows at native depth.
+   * No whole-file UI buffer or WASM compressed-file copy is needed, including for large RGB16 files.
+   * Saved pixels may be stale and retain their matte. Does not validate rows after the window.
+   * Options use PsdBudgetOptions; throws typed budget/corruption errors before oversized reads.
+   */
+  savedRegion(rect: PsdNativeRect, indices: Uint16Array, options: PsdBudgetOptions | null | undefined): PsdNativeRegion;
+  /**
    * Emits original file bytes in chunks of at most 64 KiB. The callback must consume each
    * Uint8Array before returning. It must not accumulate unaccounted chunks in linear memory.
    */
@@ -1110,20 +1227,25 @@ export interface InitOutput {
   readonly psddocumenthandle_info: (a: number) => any;
   readonly psddocumenthandle_layerDetail: (a: number, b: number) => [number, number, number];
   readonly psddocumenthandle_layerPixels: (a: number, b: number) => [number, number, number];
+  readonly psddocumenthandle_layerRegion: (a: number, b: number, c: any, d: number, e: number, f: any) => [number, number, number];
   readonly psddocumenthandle_layers: (a: number) => [number, number, number];
   readonly psddocumenthandle_merged: (a: number) => [number, number, number];
   readonly psddocumenthandle_open: (a: number, b: number) => [number, number, number];
   readonly psddocumenthandle_openLikePhotoshop: (a: number, b: number, c: any) => [number, number, number];
   readonly psddocumenthandle_openLikePhotoshopWithBudget: (a: any, b: any, c: any) => [number, number, number];
   readonly psddocumenthandle_openWithBudget: (a: any, b: any) => [number, number, number];
+  readonly psddocumenthandle_regionCapability: (a: number, b: any, c: any, d: number) => [number, number, number];
   readonly psddocumenthandle_render: (a: number, b: any, c: number) => [number, number, number];
   readonly psddocumenthandle_renderColor: (a: number, b: any, c: any, d: number) => [number, number, number];
+  readonly psddocumenthandle_renderNativeRegion: (a: number, b: any, c: any, d: number) => [number, number, number];
   readonly psddocumenthandle_renderOverview: (a: number, b: number, c: any, d: number) => [number, number, number];
   readonly psddocumenthandle_renderRegion: (a: number, b: number, c: number, d: number, e: number, f: any, g: number) => [number, number, number];
   readonly psddocumenthandle_renderRegions: (a: number, b: any, c: any, d: number) => [number, number, number];
   readonly psddocumenthandle_renderWithBudget: (a: number, b: any, c: number, d: any) => [number, number, number];
   readonly psddocumenthandle_savedOverview: (a: number, b: number, c: number, d: number) => [number, number, number];
+  readonly psddocumenthandle_savedPaths: (a: number, b: any) => [number, number, number];
   readonly psddocumenthandle_savedProcessChannels: (a: number, b: number) => [number, number, number];
+  readonly psddocumenthandle_savedRegion: (a: number, b: any, c: number, d: number, e: any) => [number, number, number];
   readonly psddocumenthandle_states: (a: number) => any;
   readonly psddocumenthandle_textSupport: (a: number, b: number, c: number) => [number, number, number];
   readonly psdfontlibrary_add: (a: number, b: number, c: number) => [number, number, number];
@@ -1132,8 +1254,11 @@ export interface InitOutput {
   readonly psdfontlibrary_new: () => number;
   readonly psdfontlibrary_setHyphenationDictionary: (a: number, b: number, c: number) => [number, number];
   readonly psdsourcehandle_info: (a: number) => [number, number, number];
+  readonly psdsourcehandle_layerInfo: (a: number, b: any) => [number, number, number];
+  readonly psdsourcehandle_layerRegion: (a: number, b: number, c: any, d: number, e: number, f: any) => [number, number, number];
   readonly psdsourcehandle_open: (a: any, b: bigint, c: any) => [number, number, number];
   readonly psdsourcehandle_readGrid: (a: number, b: bigint, c: bigint, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: any) => [number, number, number, number];
+  readonly psdsourcehandle_savedRegion: (a: number, b: any, c: number, d: number, e: any) => [number, number, number];
   readonly psdsourcehandle_writeUnchanged: (a: number, b: any, c: any) => [number, number];
   readonly rasterizeCff2Strong: (a: number, b: number, c: any, d: any, e: number, f: number, g: number) => [number, number, number];
   readonly readPsd: (a: number, b: number) => [number, number, number];
