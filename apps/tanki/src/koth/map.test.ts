@@ -5,6 +5,7 @@ import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import { findPerches } from './classes/perch';
 import { TANK_CLASSES } from './classes/classes';
+import { TACTICS } from './classes/tactics';
 import { createDriver } from './driver';
 import { KOTH_MAP } from './map';
 import { cellCenter, createNavGrid, findPath, isOpenAt, isOpenCell, pathLength, sampleDistance, sightClear, type NavGrid } from './navigation';
@@ -106,7 +107,7 @@ describe('the king of the hill map', () => {
 
   it("gives each team's Sniper perches that watch the point along lines longer than its shell flies", () => {
     for (const team of ['red', 'blue'] as const) {
-      const perches = findPerches(grid, KOTH_MAP, team);
+      const perches = findPerches(grid, KOTH_MAP, team, TACTICS.sniper.perch!);
 
       expect(perches.length).toBeGreaterThanOrEqual(4);
 

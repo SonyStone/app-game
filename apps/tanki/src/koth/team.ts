@@ -4,6 +4,7 @@ import type { Role } from './brain';
 import type { Trigger, Weapon } from './classes/weapon';
 import type { KothMap } from './map';
 import { findPerches } from './classes/perch';
+import { TACTICS } from './classes/tactics';
 import { cellAt, cellCenter, sightReach, traceClear, type NavGrid } from './navigation';
 import { rivalOf, type CaptureState, type TeamId } from './rules';
 import type { TankClass, TankClassId } from './tanks';
@@ -102,7 +103,7 @@ export function createTeamBoard(
   let intent: 'push' | 'hold' | 'regroup' = 'push';
   let push: { phase: 'none' | 'gather' | 'go'; since: number; lane: 'north' | 'south' } = { phase: 'none', since: 0, lane: 'north' };
   let focus: Tank | undefined;
-  const perches = findPerches(grid, map, team);
+  let perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
   const perchOf = new Map<Member, Point>();
   // Teams update half an interval apart, so their work falls on different steps.
   let nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
@@ -297,6 +298,8 @@ export function createTeamBoard(
       push = { phase: 'none', since: 0, lane: 'north' };
       focus = undefined;
       perchOf.clear();
+      // The walls stand as built again, and the Sniper's perch distance may have changed since.
+      perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
       nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
     }
   };

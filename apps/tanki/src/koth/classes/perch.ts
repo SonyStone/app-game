@@ -6,14 +6,16 @@ type Point = { x: number; y: number };
 
 /**
  * Spots a casemate gun can watch the point from, best first: open ground on the team's own side,
- * `PERCH_RANGE` from the point, from where straight lines past every wall reach at least
- * `MIN_SEEN` of seven spots on the point, its middle and six round its rim, close to a wall that
- * covers a flank. A team finds its perches once, from the walls as built: walls shot apart only
- * open more lines, so the perches stay good. On the king of the hill map they lie in the hall and
+ * about `distance` px from the point (see `perchBand`), from where straight lines past every
+ * wall reach at least `MIN_SEEN` of seven spots on the point, its middle and six round its rim,
+ * close to a wall that covers a flank. A team finds its perches at the start of each match, from
+ * the walls as built: walls shot apart only open more lines, so the perches stay good. On the
+ * king of the hill map, at the Sniper's 420 px (see `ClassTactics.perch`), they lie in the hall and
  * at the doorways from the streets, 300-500 px from the point, with lines of fire across it of
  * 1100-1400 px.
  */
-export function findPerches(grid: NavGrid, map: KothMap, team: TeamId): Point[] {
+export function findPerches(grid: NavGrid, map: KothMap, team: TeamId, distance: number): Point[] {
+  const band = perchBand(distance);
   const side = team === 'red' ? -1 : 1;
   const targets = [
     map.point,
@@ -28,7 +30,7 @@ export function findPerches(grid: NavGrid, map: KothMap, team: TeamId): Point[] 
     const at = cellCenter(grid, cell);
     const range = Math.hypot(at.x - map.point.x, at.y - map.point.y);
 
-    if (!isOpenCell(grid, cell) || Math.sign(at.x - map.point.x) !== side || range < PERCH_RANGE.min || range > PERCH_RANGE.max) {
+    if (!isOpenCell(grid, cell) || Math.sign(at.x - map.point.x) !== side || range < band.min || range > band.max) {
       continue;
     }
 
@@ -39,7 +41,7 @@ export function findPerches(grid: NavGrid, map: KothMap, team: TeamId): Point[] 
     }
 
     const hug = grid.distance[cell];
-    const score = seen - Math.abs(range - PERCH_RANGE.best) / 150 - Math.max(hug - PERCH_HUG, 0) / 40;
+    const score = seen - Math.abs(range - distance) / 150 - Math.max(hug - PERCH_HUG, 0) / 40;
     spots.push({ at, score });
   }
 
@@ -55,11 +57,14 @@ export function findPerches(grid: NavGrid, map: KothMap, team: TeamId): Point[] 
 }
 
 /**
- * Distances from the point a perch may lie at, and the one it should, in pixels: within the
- * 470-480 px a Soldier and a Demoman open fire at, so the point can fight back. Perches beyond it,
- * 550 px out on the compact map, let a Sniper kill four times as often as it died.
+ * Distances from the point a perch may lie at when it should lie `distance` px away: from 120 px
+ * nearer to 80 px farther. At the Sniper's 420 px that is 300-500 px, within the 470-480 px a
+ * Soldier and a Demoman open fire at, so the point can fight back. Perches beyond it, 550 px out
+ * on the compact map, let a Sniper kill four times as often as it died.
  */
-const PERCH_RANGE = { min: 300, best: 420, max: 500 };
+function perchBand(distance: number) {
+  return { min: distance - 120, max: distance + 80 };
+}
 /** Spots on the point a perch must see. */
 const MIN_SEEN = 2;
 /** A perch this close to a wall, or closer, has it covering a flank. */

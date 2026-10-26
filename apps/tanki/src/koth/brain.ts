@@ -111,6 +111,8 @@ export type Situation = {
   enemyClock: number;
   /** Destroying the target leaves no enemy on the point. */
   targetClearsPoint: boolean;
+  /** Priority the bot's class adds to taking the point, on top of its role's (see `ClassTactics.point`); defaults to 0. */
+  eagerness?: number;
   /** The goal the bot pursues now; it gets a bonus so that close calls do not flip plans. */
   current?: BotGoal;
 };
@@ -145,7 +147,12 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
     // A locked point cannot be taken yet, so enemies in the way are worth more until it opens.
     const rush = role === 'flank' && !facts.enemyOnPoint && !facts.pointLocked ? RUSH : 0;
     const wait = facts.pointLocked ? LOCKED_WAIT : 0;
-    goals.push({ name: 'capture', wants: { pointOurs: true }, priority: 50 + 35 * situation.enemyClock + CAPTURE_BONUS[role] + rush - wait });
+    const eager = CAPTURE_BONUS[role] + (situation.eagerness ?? 0);
+    goals.push({
+      name: 'capture',
+      wants: { pointOurs: true },
+      priority: 50 + 35 * situation.enemyClock + eager + rush - wait
+    });
   } else {
     goals.push({ name: 'defend', wants: { guarding: true }, priority: (facts.enemyOnPoint ? 68 : 45) + (role === 'anchor' ? ANCHOR_HOLD : 0) });
   }

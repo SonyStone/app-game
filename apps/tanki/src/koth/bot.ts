@@ -372,7 +372,7 @@ export function createBot(member: Member, context: BotContext) {
       behindTarget: target !== undefined && isBehind(position, target),
       targetCoreOpen: target !== undefined && combat.isCoreOpen(target),
       coreOpen,
-      armorLow: armor < ARMOR_LOW,
+      armorLow: armor < TACTICS[member.tankClass.id].retreat,
       underFire,
       inCover,
       safe: inCover && !underFire,
@@ -504,6 +504,7 @@ export function createBot(member: Member, context: BotContext) {
       capture: ((1 - progress) * context.rules.captureTime) / captureRate(alliesOn + member.tankClass.capture),
       enemyClock: (capture.held[rival] / context.rules.holdTime) * (capture.owner === rival ? 1 : 0.6),
       targetClearsPoint: target !== undefined && onPoint(map, whereIs(target)) && rivalsOnPoint() <= 1,
+      eagerness: TACTICS[member.tankClass.id].point,
       current: plan?.goal
     };
   }
@@ -1256,8 +1257,7 @@ const PERCHED = 30;
 const NEAR_POINT = 320;
 /** Seconds after a hit or near miss that the bot still feels under fire. */
 const UNDER_FIRE = 1.5;
-/** Armor shares below which a bot counts as badly damaged, and above which as mended. */
-const ARMOR_LOW = 0.72;
+/** Armor share above which a bot counts as mended; below its class's `retreat` it counts as badly damaged. */
 const REPAIRED = 0.96;
 /**
  * Seconds a small repair kit counts as farther than it is, for mending less than a large one;

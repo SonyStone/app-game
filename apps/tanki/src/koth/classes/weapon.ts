@@ -34,12 +34,13 @@ export type Trigger = { fire: boolean; reach?: number; cancel?: boolean };
 /**
  * The weapon of a tank of `tankClass`: the wait between its shots and the trigger of its
  * `WeaponSpec`. Call `step` every physics step with the trigger; it returns the shots to fire this
- * step, which the caller aims along the gun and hands to the battle's `fire`.
+ * step, which the caller aims along the gun and hands to the battle's `fire`. The class's
+ * interval, shell and `WeaponSpec` are read anew at every use, so the class editor's changes
+ * (see `applyClassTuning`) reach a weapon already in a tank's hands.
  *
  * @param random - Source of randomness in [0, 1) for the spread of pellets and gatling rounds.
  */
 export function createWeapon(tankClass: TankClass, random: () => number) {
-  const spec = tankClass.weapon;
   let cooldown = 0;
   let spin = 0;
   let charged: number | undefined;
@@ -61,6 +62,7 @@ export function createWeapon(tankClass: TankClass, random: () => number) {
 
     /** Charge of a shot being charged, 0-1, or `undefined` while none is. */
     get charge() {
+      const spec = tankClass.weapon;
       return charged === undefined || spec.kind !== 'charge' ? undefined : Math.min(charged / spec.time, 1);
     },
 
@@ -71,6 +73,8 @@ export function createWeapon(tankClass: TankClass, random: () => number) {
 
     /** Share of its speed the tank keeps: less while a gatling spins or a shot charges. */
     get speedShare() {
+      const spec = tankClass.weapon;
+
       if (spec.kind === 'spin') {
         return 1 - (1 - spec.slowdown) * spin;
       }
@@ -98,6 +102,7 @@ export function createWeapon(tankClass: TankClass, random: () => number) {
   };
 
   function pull(dt: number, trigger: Trigger): Shot[] {
+    const spec = tankClass.weapon;
     const shell = tankClass.shell;
     const ready = cooldown === 0;
 

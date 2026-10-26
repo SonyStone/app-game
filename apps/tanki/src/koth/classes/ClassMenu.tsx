@@ -54,9 +54,9 @@ export function ClassMenu(props: {
                   <ClassSilhouette tankClass={tankClass} color={props.color} width={136} height={76} />
                   <div class="tk-class-name">{t(`tankClass.${id}`)}</div>
                   <div class="tk-class-role">{t(`classRole.${id}`)}</div>
-                  <StatBar label={t('classMenu.speed')} value={tankClass.speed / FASTEST} />
+                  <StatBar label={t('classMenu.speed')} value={tankClass.speed / fastest()} />
                   <StatBar label={t('classMenu.armor')} value={armorOf(tankClass)} />
-                  <StatBar label={t('classMenu.reach')} value={reachOf(tankClass)} />
+                  <StatBar label={t('classMenu.reach')} value={reachOf(tankClass) / farthest()} />
                 </button>
               );
             }}
@@ -195,8 +195,15 @@ function hullLines(hull: HullSpec) {
   }
 }
 
-/** Speed of the fastest class, which fills the speed bar. */
-const FASTEST = Math.max(...Object.values(TANK_CLASSES).map((tankClass) => tankClass.speed));
+/** Speed of the fastest class as the classes stand, tuning included, which fills the speed bar. */
+function fastest() {
+  return Math.max(...Object.values(TANK_CLASSES).map((tankClass) => tankClass.speed));
+}
+
+/** Reach of the farthest-reaching class as the classes stand, which fills the reach bar. */
+function farthest() {
+  return Math.max(...Object.values(TANK_CLASSES).map(reachOf));
+}
 
 /** How thick the armor round the core is on average, as thick again as plating makes it hold, against the thickest. */
 function armorOf(tankClass: TankClass) {
@@ -206,8 +213,7 @@ function armorOf(tankClass: TankClass) {
   return (rear + side * 2) / 3 / (plating ?? 1) / 10;
 }
 
-/** How far the class's gun reaches, against the farthest, at full charge for a charged gun. */
+/** How far the class's gun reaches, at full charge for a charged gun, in pixels. */
 function reachOf(tankClass: TankClass) {
-  const range = tankClass.weapon.kind === 'charge' ? tankClass.weapon.full.range : tankClass.shell.range;
-  return range / 1300;
+  return tankClass.weapon.kind === 'charge' ? tankClass.weapon.full.range : tankClass.shell.range;
 }

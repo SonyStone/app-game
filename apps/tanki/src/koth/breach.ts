@@ -1,6 +1,7 @@
 import type { Tank } from '../arena/bodies';
 import type { Combat } from '../damage/combat';
 import { canDrive, cellAt, cellCenter, findBreachPath, findPath, isOpenAt, pathLength, type NavGrid } from './navigation';
+import { classRevision } from './classes/knobs';
 import type { Trigger, Weapon } from './classes/weapon';
 import { openingFor, type Blocker } from './opening';
 import type { Member, TeamBoard } from './team';
@@ -584,16 +585,23 @@ function triggerFor(weapon: Weapon, aligned: boolean, range: number): Trigger {
   return { fire: aligned, reach: range };
 }
 
-/** The cost of a step into each closed cell, per grid and class, worked out as needed and anew with each revision. */
-const priceCache = new WeakMap<NavGrid, Map<string, { revision: number; prices: Float32Array }>>();
+/**
+ * The cost of a step into each closed cell, per grid and class, worked out as needed and anew with
+ * each revision of the grid and of the classes' tuning (see `classRevision`).
+ */
+const priceCache = new WeakMap<NavGrid, Map<string, { revision: number; tuning: number; prices: Float32Array }>>();
 
 function pricesFor(grid: NavGrid, tankClass: string) {
-  const byClass = priceCache.get(grid) ?? new Map<string, { revision: number; prices: Float32Array }>();
+  const byClass = priceCache.get(grid) ?? new Map<string, { revision: number; tuning: number; prices: Float32Array }>();
   let entry = byClass.get(tankClass);
   priceCache.set(grid, byClass);
 
-  if (!entry || entry.revision !== grid.revision) {
-    entry = { revision: grid.revision, prices: new Float32Array(grid.cols * grid.rows).fill(Number.NaN) };
+  if (!entry || entry.revision !== grid.revision || entry.tuning !== classRevision()) {
+    entry = {
+      revision: grid.revision,
+      tuning: classRevision(),
+      prices: new Float32Array(grid.cols * grid.rows).fill(Number.NaN)
+    };
     byClass.set(tankClass, entry);
   }
 
