@@ -12,6 +12,8 @@ import { fileURLToPath } from 'node:url';
 // PSD_BENCH_PHASE6=1 compares admitted one/two-worker cold batches with exact pixel hashes and load samples.
 // PSD_BENCH_WORKERS selects 1 or 2 for the ordinary fixture/Phase 3 suites.
 // PSD_BENCH_PHASE3_ONLY=1 skips the ordinary fixture matrix for a focused acceptance run.
+// PSD_BENCH_RESUME=1 skips successful fixture repeats already written to the output directory.
+// PSD_BENCH_DIST serves an immutable production build without rebuilding it for paired revisions.
 // PSD_BENCH_FEATURES=1 also runs the audit's feature/cache probes. PSD_BENCH_BACKEND selects webgpu/canvas2d.
 const app = fileURLToPath(new URL('../', import.meta.url));
 const out = resolve(process.argv[2] ?? `${tmpdir()}/psd-viewer-benchmark-${Date.now()}`);
@@ -23,13 +25,16 @@ if (!process.env.PSD_TEXT_MIXER_RESEARCH_ROOT) {
   throw new Error('Set PSD_TEXT_MIXER_RESEARCH_ROOT to the fixture research checkout.');
 }
 await mkdir(`${out}/assets`, { recursive: true });
-execFileSync('pnpm', ['build'], { cwd: app, stdio: 'inherit' });
+const dist = resolve(process.env.PSD_BENCH_DIST ?? resolve(app, 'dist'));
+if (!process.env.PSD_BENCH_DIST) {
+  execFileSync('pnpm', ['build'], { cwd: app, stdio: 'inherit' });
+}
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm' };
 const server = createServer(async (request, response) => {
   try {
     const path = new URL(request.url, 'http://localhost').pathname;
-    const file = resolve(app, 'dist', `.${path === '/' ? '/index.html' : path}`);
-    if (!file.startsWith(resolve(app, 'dist') + '/')) {
+    const file = resolve(dist, `.${path === '/' ? '/index.html' : path}`);
+    if (!file.startsWith(dist + '/')) {
       response.writeHead(403).end();
       return;
     }
@@ -49,6 +54,7 @@ try {
     JSON.stringify(
       {
         build: 'production',
+        dist,
         workers: Number(env.PSD_BENCH_WORKERS ?? 1),
         load: loadavg(),
         cpuCount: cpus().length,

@@ -205,6 +205,12 @@ function rss(rootPid) {
   }
 }
 for (const [name, dir, ext] of fixtures) {
+  if (process.env.PSD_BENCH_RESUME === '1' && fs.existsSync(`${out}/${name}.json`)) {
+    const previous = JSON.parse(fs.readFileSync(`${out}/${name}.json`, 'utf8'));
+    if (!previous.error && !previous.openTimeout && !previous.caseTimeout) {
+      continue;
+    }
+  }
   const file = `${base}/${dir}/source-input/document.${ext}`;
   if (!fs.existsSync(file)) {
     console.log('missing', file);
@@ -212,9 +218,14 @@ for (const [name, dir, ext] of fixtures) {
   }
   let browser, pid;
   const result = { loadBefore: loadavg(), name, file, fileBytes: fs.statSync(file).size, started: new Date().toISOString(), rssSamples: [] };
+  let expire;
+  const deadline = new Promise((_, reject) => {
+    expire = () => reject(new Error('Fixture exceeded 120 seconds'));
+  });
   // A browser blocked in macOS startup must become a failed result, not stall the fixture matrix indefinitely.
   const watchdog = setTimeout(() => {
     result.caseTimeout = true;
+    expire();
     for (const child of rss(process.pid).processes ?? []) {
       if (child.browserRoot) {
         try {
@@ -226,278 +237,292 @@ for (const [name, dir, ext] of fixtures) {
     }
   }, 120000);
   try {
-    // Local launch also avoids uploading large fixture files over a remote Playwright WebSocket connection.
-    browser = await chromium.launch({
-      timeout: 30000,
-      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
-      channel: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? undefined : 'chrome',
-      headless: true,
-      args: [
-        '--enable-unsafe-webgpu',
-        '--enable-features=Vulkan,WebGPU',
-        '--disable-background-timer-throttling',
-        '--disable-renderer-backgrounding'
-      ]
-    });
-    pid = rss(process.pid).processes?.find((child) => child.browserRoot)?.pid;
-    if (!pid) {
-      throw new Error('Could not identify the isolated Chrome process for RSS measurement.');
-    }
-    const context = await browser.newContext({
-      viewport: { width: 1440, height: 1000 },
-      deviceScaleFactor: Number(process.env.PSD_BENCH_DPR ?? 1)
-    });
-    await context.addInitScript(init);
-    const page = await context.newPage();
-    result.errors = [];
-    page.on('pageerror', (e) => result.errors.push(e.message));
-    await page.goto(`${process.env.PSD_BENCH_URL}/?workers=${process.env.PSD_BENCH_WORKERS ?? 1}&telemetry=1&backend=${process.env.PSD_BENCH_BACKEND ?? 'webgpu'}`, {
-      waitUntil: 'networkidle'
-    });
-    if (name.startsWith('large-psb')) {
-      await page.screenshot({ path: `${out}/assets/01-empty.png` });
-    }
-    result.environment = await page.evaluate(async () => {
-      const adapter = await navigator.gpu?.requestAdapter();
-      return {
-        ua: navigator.userAgent,
-        dpr: devicePixelRatio,
-        hardwareConcurrency: navigator.hardwareConcurrency,
-        webgpu: !!adapter,
-        backend: document.querySelector('[data-backend]')?.getAttribute('data-backend'),
-        adapter: adapter?.info && {
-          vendor: adapter.info.vendor,
-          architecture: adapter.info.architecture,
-          device: adapter.info.device,
-          description: adapter.info.description
-        },
-        heap: performance.memory && {
-          used: performance.memory.usedJSHeapSize,
-          total: performance.memory.totalJSHeapSize,
-          limit: performance.memory.jsHeapSizeLimit
+    await Promise.race([
+      (async () => {
+        // Local launch also avoids uploading large fixture files over a remote Playwright WebSocket connection.
+        browser = await chromium.launch({
+          timeout: 30000,
+          executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+          channel: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? undefined : 'chrome',
+          headless: true,
+          args: [
+            '--enable-unsafe-webgpu',
+            '--enable-features=Vulkan,WebGPU',
+            '--disable-background-timer-throttling',
+            '--disable-renderer-backgrounding'
+          ]
+        });
+        if (result.caseTimeout) {
+          await browser.close();
+          return;
         }
-      };
-    });
-    result.rssSamples.push({ phase: 'before-open', ...rss(pid) });
-    const sample = setInterval(() => result.rssSamples.push({ phase: 'during', ...rss(pid) }), 2000);
-    try {
-      await page.evaluate(() => {
-        __audit.phase = 'open';
-        __audit.start = performance.now();
-      });
-      await page.locator('input[accept=".psd,.psb"]').setInputFiles(file, { timeout: 30000 });
-      try {
-        await page.waitForFunction(
-          () => {
-            const a = __audit;
-            const stage = document.querySelector('[data-busy]');
-            return (
-              (a.opened && a.uploads.length && stage?.dataset.busy === 'false') ||
-              document.querySelector('[data-failure]')
-            );
-          },
-          {},
-          { timeout: 120000 }
-        );
-      } catch (e) {
-        result.openTimeout = String(e);
-      }
-      result.afterOpen = await page.evaluate(() => ({
-        now: performance.now(),
-        start: __audit.start,
-        uploads: __audit.uploads,
-        status: document.querySelector('footer')?.innerText,
-        stage: document.querySelector('[data-busy]')?.dataset,
-        backend: document.querySelector('[data-backend]')?.getAttribute('data-backend'),
-        text: document.body.innerText.slice(-7000),
-        heap: performance.memory && {
-          used: performance.memory.usedJSHeapSize,
-          total: performance.memory.totalJSHeapSize
+        pid = rss(process.pid).processes?.find((child) => child.browserRoot)?.pid;
+        if (!pid) {
+          throw new Error('Could not identify the isolated Chrome process for RSS measurement.');
         }
-      }));
-      await page.screenshot({ path: `${out}/assets/${name}-opened.png` });
-      if ((await page.locator('canvas').count()) && process.env.PSD_BENCH_OPEN_ONLY !== '1') {
-        await page.evaluate(() => (__audit.phase = 'actual-size'));
-        await page.getByRole('button', { name: '100%', exact: true }).click();
-        try {
-          await page.waitForFunction(
-            () => document.querySelector('[data-busy]')?.dataset.busy === 'false',
-            {},
-            { timeout: 60000 }
-          );
-        } catch (e) {
-          result.actualSizeTimeout = String(e);
+        const context = await browser.newContext({
+          viewport: { width: 1440, height: 1000 },
+          deviceScaleFactor: Number(process.env.PSD_BENCH_DPR ?? 1)
+        });
+        await context.addInitScript(init);
+        const page = await context.newPage();
+        result.errors = [];
+        page.on('pageerror', (e) => result.errors.push(e.message));
+        await page.goto(`${process.env.PSD_BENCH_URL}/?workers=${process.env.PSD_BENCH_WORKERS ?? 1}&telemetry=1&backend=${process.env.PSD_BENCH_BACKEND ?? 'webgpu'}`, {
+          waitUntil: 'networkidle'
+        });
+        if (name.startsWith('large-psb')) {
+          await page.screenshot({ path: `${out}/assets/01-empty.png` });
         }
-        await page.screenshot({ path: `${out}/assets/${name}-100.png` });
-        const stage = page.locator('[data-busy]');
-        const b = await stage.boundingBox();
-        const cx = b.x + b.width / 2,
-          cy = b.y + b.height / 2;
-        await page.evaluate(() => (__audit.phase = 'pan'));
-        await page.mouse.move(cx, cy);
-        await page.mouse.down();
-        await page.evaluate(
-          async ({ cx, cy }) => {
-            const a = __audit,
-              stage = document.querySelector('[data-busy]');
-            a.handlers = [];
-            for (let i = 1; i <= 120; i++) {
-              await new Promise(requestAnimationFrame);
-              const t = performance.now();
-              stage.dispatchEvent(
-                new PointerEvent('pointermove', {
-                  pointerId: 1,
-                  clientX: cx + 150 * Math.sin(i / 20),
-                  clientY: cy + 80 * Math.cos(i / 20),
-                  bubbles: true
-                })
-              );
-              a.handlers.push({ phase: 'pan', ms: performance.now() - t });
+        result.environment = await page.evaluate(async () => {
+          const adapter = await navigator.gpu?.requestAdapter();
+          return {
+            ua: navigator.userAgent,
+            dpr: devicePixelRatio,
+            hardwareConcurrency: navigator.hardwareConcurrency,
+            webgpu: !!adapter,
+            backend: document.querySelector('[data-backend]')?.getAttribute('data-backend'),
+            adapter: adapter?.info && {
+              vendor: adapter.info.vendor,
+              architecture: adapter.info.architecture,
+              device: adapter.info.device,
+              description: adapter.info.description
+            },
+            heap: performance.memory && {
+              used: performance.memory.usedJSHeapSize,
+              total: performance.memory.totalJSHeapSize,
+              limit: performance.memory.jsHeapSizeLimit
             }
-          },
-          { cx, cy }
-        );
-        await page.mouse.up();
-        await page.evaluate(() => (__audit.phase = 'pan-settle'));
+          };
+        });
+        result.rssSamples.push({ phase: 'before-open', ...rss(pid) });
+        const sample = setInterval(() => result.rssSamples.push({ phase: 'during', ...rss(pid) }), 2000);
         try {
-          await page.waitForFunction(
-            () => document.querySelector('[data-busy]')?.dataset.busy === 'false',
-            {},
-            { timeout: 60000 }
-          );
-        } catch (e) {
-          result.panTimeout = String(e);
-        }
-        await page.evaluate(() => (__audit.phase = 'zoom'));
-        await page.evaluate(
-          async ({ cx, cy }) => {
-            const stage = document.querySelector('[data-busy]');
-            for (let i = 0; i < 120; i++) {
-              await new Promise(requestAnimationFrame);
-              const t = performance.now();
-              stage.dispatchEvent(
-                new WheelEvent('wheel', {
-                  deltaY: i < 60 ? 4 : -4,
-                  clientX: cx,
-                  clientY: cy,
-                  bubbles: true,
-                  cancelable: true
-                })
-              );
-              __audit.handlers.push({ phase: 'zoom', ms: performance.now() - t });
-            }
-          },
-          { cx, cy }
-        );
-        await page.evaluate(() => (__audit.phase = 'zoom-settle'));
-        try {
-          await page.waitForFunction(
-            () => document.querySelector('[data-busy]')?.dataset.busy === 'false',
-            {},
-            { timeout: 60000 }
-          );
-        } catch (e) {
-          result.zoomTimeout = String(e);
-        }
-        const checkbox = page.locator('[role="tree"] input[type="checkbox"]').first();
-        if (await checkbox.count()) {
           await page.evaluate(() => {
-            __audit.phase = 'toggle';
-            __audit.toggleStart = performance.now();
-            __audit.toggleUploads = __audit.uploads.length;
+            __audit.phase = 'open';
+            __audit.start = performance.now();
           });
-          await checkbox.click({ timeout: 10000 });
+          await page.locator('input[accept=".psd,.psb"]').setInputFiles(file, { timeout: 30000 });
           try {
             await page.waitForFunction(
-              () =>
-                __audit.uploads.length > __audit.toggleUploads &&
-                document.querySelector('[data-busy]')?.dataset.busy === 'false',
+              () => {
+                const a = __audit;
+                const stage = document.querySelector('[data-busy]');
+                return (
+                  (a.opened && a.uploads.length && stage?.dataset.busy === 'false') ||
+                  document.querySelector('[data-failure]')
+                );
+              },
               {},
-              { timeout: 60000 }
+              { timeout: 120000 }
             );
           } catch (e) {
-            result.toggleTimeout = String(e);
+            result.openTimeout = String(e);
           }
-          result.toggle = await page.evaluate(() => ({
-            start: __audit.toggleStart,
-            input: __audit.toggleInput,
-            end: performance.now(),
-            upload: __audit.uploads[__audit.toggleUploads]
+          result.afterOpen = await page.evaluate(() => ({
+            now: performance.now(),
+            start: __audit.start,
+            uploads: __audit.uploads,
+            status: document.querySelector('footer')?.innerText,
+            stage: document.querySelector('[data-busy]')?.dataset,
+            backend: document.querySelector('[data-backend]')?.getAttribute('data-backend'),
+            text: document.body.innerText.slice(-7000),
+            heap: performance.memory && {
+              used: performance.memory.usedJSHeapSize,
+              total: performance.memory.totalJSHeapSize
+            }
           }));
-        }
-        // Issue four single-tile requests after UI tests, retaining exactly the app's settings.
-        await page.evaluate(() => (__audit.phase = 'tile-probe'));
-        result.probes = await page.evaluate(async () => {
-          const a = __audit;
-          const req = [...a.requests].reverse().find((x) => x.type === 'renderWindow' || x.type === 'render');
-          if (!req || !a.opened) {
-            return [];
-          }
-          const info = a.opened.info;
-          const results = [];
-          for (let n = 0; n < 4; n++) {
-            const id = 900000 + n;
-            const left = Math.max(0, Math.min(info.width - 512, Math.floor(info.width / 2) + (n % 2) * 512));
-            const top = Math.max(0, Math.min(info.height - 512, Math.floor(info.height / 2) + Math.floor(n / 2) * 512));
-            results.push(
-              await new Promise((resolve) => {
-                const w = a.workers[0];
-                const t = performance.now();
-                const timer = setTimeout(() => {
-                  w.removeEventListener('message', listen);
-                  resolve({ timeout: true });
-                }, 20000);
-                function listen(e) {
-                  if (e.data.id === id) {
-                    clearTimeout(timer);
-                    w.removeEventListener('message', listen);
-                    const d = e.data;
-                    resolve({
-                      latency: performance.now() - t,
-                      workerMs: d.milliseconds,
-                      error: d.error,
-                      images: d.images?.map((i) => ({
-                        w: i.width,
-                        h: i.height,
-                        strategy: i.strategy,
-                        bytes: i.pixels.byteLength,
-                        exact: i.exactToLayerRender
-                      }))
-                    });
-                  }
+          await page.screenshot({ path: `${out}/assets/${name}-opened.png` });
+          if ((await page.locator('canvas').count()) && process.env.PSD_BENCH_OPEN_ONLY !== '1') {
+            await page.evaluate(() => (__audit.phase = 'actual-size'));
+            await page.getByRole('button', { name: '100%', exact: true }).click();
+            try {
+              await page.waitForFunction(
+                () => document.querySelector('[data-busy]')?.dataset.busy === 'false',
+                {},
+                { timeout: 60000 }
+              );
+            } catch (e) {
+              result.actualSizeTimeout = String(e);
+            }
+            await page.screenshot({ path: `${out}/assets/${name}-100.png` });
+            const stage = page.locator('[data-busy]');
+            const b = await stage.boundingBox();
+            const cx = b.x + b.width / 2,
+              cy = b.y + b.height / 2;
+            await page.evaluate(() => (__audit.phase = 'pan'));
+            await page.mouse.move(cx, cy);
+            await page.mouse.down();
+            await page.evaluate(
+              async ({ cx, cy }) => {
+                const a = __audit,
+                  stage = document.querySelector('[data-busy]');
+                a.handlers = [];
+                for (let i = 1; i <= 120; i++) {
+                  await new Promise(requestAnimationFrame);
+                  const t = performance.now();
+                  stage.dispatchEvent(
+                    new PointerEvent('pointermove', {
+                      pointerId: 1,
+                      clientX: cx + 150 * Math.sin(i / 20),
+                      clientY: cy + 80 * Math.cos(i / 20),
+                      bubbles: true
+                    })
+                  );
+                  a.handlers.push({ phase: 'pan', ms: performance.now() - t });
                 }
-                w.addEventListener('message', listen);
-                w.postMessage({
-                  ...req,
-                  type: 'renderWindow',
-                  id,
-                  window: {
-                    kind: 'regions',
-                    rectangles: [{ left, top, width: Math.min(512, info.width), height: Math.min(512, info.height) }]
-                  }
-                });
-              })
+              },
+              { cx, cy }
             );
+            await page.mouse.up();
+            await page.evaluate(() => (__audit.phase = 'pan-settle'));
+            try {
+              await page.waitForFunction(
+                () => document.querySelector('[data-busy]')?.dataset.busy === 'false',
+                {},
+                { timeout: 60000 }
+              );
+            } catch (e) {
+              result.panTimeout = String(e);
+            }
+            await page.evaluate(() => (__audit.phase = 'zoom'));
+            await page.evaluate(
+              async ({ cx, cy }) => {
+                const stage = document.querySelector('[data-busy]');
+                for (let i = 0; i < 120; i++) {
+                  await new Promise(requestAnimationFrame);
+                  const t = performance.now();
+                  stage.dispatchEvent(
+                    new WheelEvent('wheel', {
+                      deltaY: i < 60 ? 4 : -4,
+                      clientX: cx,
+                      clientY: cy,
+                      bubbles: true,
+                      cancelable: true
+                    })
+                  );
+                  __audit.handlers.push({ phase: 'zoom', ms: performance.now() - t });
+                }
+              },
+              { cx, cy }
+            );
+            await page.evaluate(() => (__audit.phase = 'zoom-settle'));
+            try {
+              await page.waitForFunction(
+                () => document.querySelector('[data-busy]')?.dataset.busy === 'false',
+                {},
+                { timeout: 60000 }
+              );
+            } catch (e) {
+              result.zoomTimeout = String(e);
+            }
+            const checkbox = page.locator('[role="tree"] input[type="checkbox"]').first();
+            if (await checkbox.count()) {
+              await page.evaluate(() => {
+                __audit.phase = 'toggle';
+                __audit.toggleStart = performance.now();
+                __audit.toggleUploads = __audit.uploads.length;
+              });
+              await checkbox.click({ timeout: 10000 });
+              try {
+                await page.waitForFunction(
+                  () =>
+                    __audit.uploads.length > __audit.toggleUploads &&
+                    document.querySelector('[data-busy]')?.dataset.busy === 'false',
+                  {},
+                  { timeout: 60000 }
+                );
+              } catch (e) {
+                result.toggleTimeout = String(e);
+              }
+              result.toggle = await page.evaluate(() => ({
+                start: __audit.toggleStart,
+                input: __audit.toggleInput,
+                end: performance.now(),
+                upload: __audit.uploads[__audit.toggleUploads]
+              }));
+            }
+            // Issue four single-tile requests after UI tests, retaining exactly the app's settings.
+            await page.evaluate(() => (__audit.phase = 'tile-probe'));
+            result.probes = await page.evaluate(async () => {
+              const a = __audit;
+              const req = [...a.requests].reverse().find((x) => x.type === 'renderWindow' || x.type === 'render');
+              if (!req || !a.opened) {
+                return [];
+              }
+              const info = a.opened.info;
+              const results = [];
+              for (let n = 0; n < 4; n++) {
+                const id = 900000 + n;
+                const left = Math.max(0, Math.min(info.width - 512, Math.floor(info.width / 2) + (n % 2) * 512));
+                const top = Math.max(0, Math.min(info.height - 512, Math.floor(info.height / 2) + Math.floor(n / 2) * 512));
+                results.push(
+                  await new Promise((resolve) => {
+                    const w = a.workers[0];
+                    const t = performance.now();
+                    const timer = setTimeout(() => {
+                      w.removeEventListener('message', listen);
+                      resolve({ timeout: true });
+                    }, 20000);
+                    function listen(e) {
+                      if (e.data.id === id) {
+                        clearTimeout(timer);
+                        w.removeEventListener('message', listen);
+                        const d = e.data;
+                        resolve({
+                          latency: performance.now() - t,
+                          workerMs: d.milliseconds,
+                          error: d.error,
+                          images: d.images?.map((i) => ({
+                            w: i.width,
+                            h: i.height,
+                            strategy: i.strategy,
+                            bytes: i.pixels.byteLength,
+                            exact: i.exactToLayerRender
+                          }))
+                        });
+                      }
+                    }
+                    w.addEventListener('message', listen);
+                    w.postMessage({
+                      ...req,
+                      type: 'renderWindow',
+                      id,
+                      window: {
+                        kind: 'regions',
+                        rectangles: [{ left, top, width: Math.min(512, info.width), height: Math.min(512, info.height) }]
+                      }
+                    });
+                  })
+                );
+              }
+              return results;
+            });
           }
-          return results;
-        });
-      }
-      result.data = await page.evaluate(() => {
-        const { workers, requests, ...data } = __audit;
-        return data;
-      });
-      const cdp = await context.newCDPSession(page);
-      result.cdpHeap = await cdp.send('Runtime.getHeapUsage');
-      result.performance = await cdp.send('Performance.getMetrics');
-      result.rssSamples.push({ phase: 'after', ...rss(pid) });
-    } finally {
-      clearInterval(sample);
-    }
+          result.data = await page.evaluate(() => {
+            const { workers, requests, ...data } = __audit;
+            return data;
+          });
+          const cdp = await context.newCDPSession(page);
+          result.cdpHeap = await cdp.send('Runtime.getHeapUsage');
+          result.performance = await cdp.send('Performance.getMetrics');
+          result.rssSamples.push({ phase: 'after', ...rss(pid) });
+        } finally {
+          clearInterval(sample);
+        }
+      })(),
+      deadline
+    ]);
   } catch (e) {
     result.error = String(e);
   } finally {
     try {
-      await browser?.close();
+      let closing;
+      try {
+        await Promise.race([browser?.close(), new Promise((resolve) => { closing = setTimeout(resolve, 5000); })]);
+      } finally {
+        clearTimeout(closing);
+      }
     } finally {
       clearTimeout(watchdog);
     }
