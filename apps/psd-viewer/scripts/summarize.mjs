@@ -133,7 +133,7 @@ const result = {
       nineTiles: run.nineTile?.requests.length === 9 && run.nineTile?.replies.length === 9 && run.nineTile?.ms <= 250,
       noRepeatedTrajectoryTiles: run.trajectory?.repeated === 0,
       warmRevisit: run.warmRevisit?.wasmCalls === 0 && run.warmRevisit?.uploads === 0,
-      visibleWithinTwoFrames: run.diagnostics?.visibleTileMaxFrames <= 2,
+      visibleWithinTwoFrames: run.diagnostics?.visibleTileCount > 0 && run.diagnostics?.visibleTileMaxFrames <= 2,
       boundedCancellation: run.diagnostics?.obsoleteBatchMaxTiles <= 1,
       residency:
         run.diagnostics?.peakCpuBytes <= 64 * 1024 * 1024 && run.diagnostics?.peakGpuBytes <= 128 * 1024 * 1024,
