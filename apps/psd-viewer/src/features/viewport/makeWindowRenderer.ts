@@ -29,6 +29,8 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
       saved: boolean;
     }
   >();
+  const canceledResults = new WeakSet<PsdResultOf<DisplayTile>>();
+  const admitted = new WeakSet<DisplayTile>();
   let flight: Promise<unknown> | undefined;
   let cacheBytes = 0;
   let reservedBytes = 0;
@@ -221,8 +223,15 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
         core
       );
       if (signal.aborted || previous !== snapshot) {
-        viewerPerformance.record('cancellation.salvagedTiles', performance.now(), result.ok ? 1 : 0);
-        viewerPerformance.record('cancellation.obsoleteBatchTiles', performance.now(), 1);
+        if (!canceledResults.has(result)) {
+          canceledResults.add(result);
+          viewerPerformance.record(
+            'cancellation.salvagedTiles',
+            performance.now(),
+            result.ok && admitted.has(result.value) ? 1 : 0
+          );
+          viewerPerformance.record('cancellation.obsoleteBatchTiles', performance.now(), 1);
+        }
         return undefined;
       }
 
@@ -278,6 +287,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
           if (!controller.signal.aborted && pending.get(key)?.result === job && window.kind !== 'saved') {
             remove(key);
             cache.set(key, levels);
+            admitted.add(levels.at(-1)!);
             if (window.kind === 'overview') {
               overviewKey = key;
             }
