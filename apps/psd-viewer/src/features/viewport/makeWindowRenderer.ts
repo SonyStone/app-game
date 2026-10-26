@@ -121,7 +121,8 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
           completed,
           required: keys.length,
           step,
-          coarse: completed < keys.length || plan.kind === 'overview'
+          coarse: completed < keys.length || plan.kind === 'overview',
+          kind: plan.kind === 'overview' ? 'pointPreview' : step === 1 ? 'source' : 'filtered'
         },
         depth: info.depth as RenderedPixels['depth'],
         render: ++nextRender,

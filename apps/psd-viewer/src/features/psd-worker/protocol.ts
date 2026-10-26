@@ -121,7 +121,13 @@ export type RenderedPixels = PsdImage & {
   /** Retained display tiles. When present, pixels is empty and must not be treated as an assembled surface. */
   tiles?: readonly DisplayTile[];
   /** Current camera demand, separate from fidelity approximations and GPU upload completion. */
-  quality?: { completed: number; required: number; step: number; coarse: boolean };
+  quality?: {
+    completed: number;
+    required: number;
+    step: number;
+    coarse: boolean;
+    kind: 'pointPreview' | 'source' | 'filtered';
+  };
   render: number;
   depth: 8 | 16 | 32;
   milliseconds: number;
