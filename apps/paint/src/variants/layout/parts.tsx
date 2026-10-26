@@ -7,7 +7,8 @@ import type { BrushPreset } from '../../features/brush-library';
 import { BrushSizeGrid } from '../../features/brush-size';
 import { ColorPanel } from '../../features/color';
 import { ColorWheel, type ColorWheelSettings } from '../../features/color-wheel';
-import { CoolorusWheel, defaultCoolorusSettings, type CoolorusSettings } from '../../features/coolorus-wheel';
+import { CoolorusWheel } from '../../features/coolorus-wheel';
+import type { createCoolorusSettings } from '../../features/coolorus-wheel/createCoolorusSettings';
 import { HueTriangle } from '../../features/hue-triangle';
 import { LayersPanel, type DocumentState } from '../../features/layers';
 import studio from '../../features/studio/PaintStudio.module.css';
@@ -57,6 +58,8 @@ export type PartContext = {
   toggleMirror: () => void;
   /** The mixing palette window. */
   palette: { open: () => boolean; toggle: () => void };
+  /** Shared picker preferences; the session persists them, the constructor owns its own choices. */
+  coolorus: ReturnType<typeof createCoolorusSettings>;
   /** The color wheel's and the Color panel's picker settings, shared with Studio. */
   wheel: { settings: () => ColorWheelSettings; update: (patch: Partial<ColorWheelSettings>) => void };
 };
@@ -175,6 +178,7 @@ export const layoutParts: Record<string, LayoutPart> = {
       <PuckCard size={sizes.color}>
         {(box) => (
           <ColorCard
+            recentColors={{ colors: context.recentColors, remember: context.rememberColor }}
             box={box}
             color={context.brush().color}
             background={context.brush().backgroundColor ?? '#ffffff'}
@@ -241,6 +245,7 @@ function StudioColor(props: { context: PartContext }) {
   return (
     <div class={styles.studioPanel}>
       <ColorPanel
+        recentColors={{ colors: context.recentColors, remember: context.rememberColor }}
         brush={context.brush()}
         onChange={context.updateBrush}
         alternatives={{
@@ -277,8 +282,6 @@ function StudioColor(props: { context: PartContext }) {
 
 /** The Coolorus wheel, with settings of the page's own. */
 function Coolorus(props: { context: PartContext }) {
-  const [settings, setSettings] = createSignal<CoolorusSettings>(defaultCoolorusSettings);
-
   return (
     <div class={styles.studioPanel}>
       <section>
@@ -286,8 +289,8 @@ function Coolorus(props: { context: PartContext }) {
           color={props.context.brush().color}
           onChange={(color) => props.context.updateBrush({ color })}
           onSettle={() => {}}
-          settings={settings()}
-          onSettings={(patch) => setSettings((current) => ({ ...current, ...patch }))}
+          settings={props.context.coolorus.settings()}
+          onSettings={props.context.coolorus.update}
         />
       </section>
     </div>
@@ -324,6 +327,7 @@ function DesktopColor(props: { context: PartContext }) {
   return (
     <div class={[desktop.editor, styles.desktopPanel]}>
       <DesktopColorPanel
+        recentColors={{ colors: props.context.recentColors, remember: props.context.rememberColor }}
         foreground={props.context.brush().color}
         background={props.context.brush().backgroundColor ?? '#ffffff'}
         target={target()}

@@ -1,8 +1,8 @@
+import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { Brush } from '@app-game/paint-core/brush';
-import { ok } from 'neverthrow';
 import { Show } from 'solid-js';
 import { maxBrushSize } from '../../features/brush';
-import { PresetStroke } from '../desktop/PresetStroke';
+import { StrokePreview } from '../../features/brush-library/StrokePreview';
 import { geometricFraction, geometricValue } from '../procreate/sliderScale';
 import styles from './BrushPopups.module.css';
 import { InfiniteIcon } from './icons';
@@ -20,6 +20,8 @@ import theme from './theme.module.css';
  */
 export function BrushSizePopup(props: {
   brush: Brush;
+  /** Resolves the current preset's tip, texture and dual images for the real engine. */
+  resources?: () => Promise<readonly BrushResource[]>;
   /** Receives each change of the size, as `{ size }`. */
   onChange: (patch: Partial<Brush>) => void;
   disabled?: boolean;
@@ -31,7 +33,7 @@ export function BrushSizePopup(props: {
 
   return (
     <div class={[theme.panel, styles.popup]} aria-label="Brush size">
-      <LivePreview brush={props.brush} onEdit={props.onEdit} />
+      <LivePreview brush={props.brush} resources={props.resources} onEdit={props.onEdit} />
       <Slider
         label="Size"
         value={props.brush.size}
@@ -58,6 +60,8 @@ export function BrushSizePopup(props: {
  */
 export function BrushOpacityPopup(props: {
   brush: Brush;
+  /** Resolves the current preset's tip, texture and dual images for the real engine. */
+  resources?: () => Promise<readonly BrushResource[]>;
   /** Receives each change, as `{ opacity }`, `{ flow }` or `{ hardness }`. */
   onChange: (patch: Partial<Brush>) => void;
   disabled?: boolean;
@@ -70,7 +74,7 @@ export function BrushOpacityPopup(props: {
 }) {
   return (
     <div class={[theme.panel, styles.popup]} aria-label="Brush opacity">
-      <LivePreview brush={props.brush} onEdit={props.onEdit} />
+      <LivePreview brush={props.brush} resources={props.resources} onEdit={props.onEdit} />
       <Slider
         label="Opacity"
         value={percent(props.brush.opacity)}
@@ -114,20 +118,15 @@ export function BrushOpacityPopup(props: {
 /** The brush parameter that the main toolbar's Opacity button drags: opacity, flow or softness (`1 - hardness`). */
 export type OpacityTarget = 'opacity' | 'flow' | 'softness';
 
-/**
- * The pop-ups' live preview: the brush's sample stroke in light grey on a sunken box, stamped with its spacing, flow,
- * hardness and opacity, with the brush editor's button at the top right when `onEdit` is given. Imported tips show as
- * round dabs, since the pop-ups do not read tip images.
- */
-function LivePreview(props: { brush: Brush; onEdit?: () => void }) {
+/** The live controls use the same engine preview as the brush libraries. */
+function LivePreview(props: {
+  brush: Brush;
+  resources?: () => Promise<readonly BrushResource[]>;
+  onEdit?: () => void;
+}) {
   return (
     <div class={styles.preview}>
-      <PresetStroke
-        preset={{ id: 'live', name: '', settings: props.brush, resourceIds: [] }}
-        resources={noResources}
-        color="#d4d4d7"
-        height={previewHeight}
-      />
+      <StrokePreview settings={props.brush} resources={props.resources} color="#d4d4d7" height={previewHeight} />
       <Show when={props.onEdit}>
         {(onEdit) => (
           <button
@@ -143,9 +142,6 @@ function LivePreview(props: { brush: Brush; onEdit?: () => void }) {
     </div>
   );
 }
-
-/** The live preview reads no tip images. */
-const noResources = async () => ok([]);
 
 const previewHeight = 56;
 

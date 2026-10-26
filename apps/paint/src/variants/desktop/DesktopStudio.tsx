@@ -3,7 +3,6 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import { createSignal, Errored, Show } from 'solid-js';
 import type { PaintVariantProps } from '..';
 import { AbrViewerDialog } from '../../features/abr';
-import { createRecentColors } from '../../features/color/createRecentColors';
 import {
   createCommandRunner,
   createPaletteContext,
@@ -62,7 +61,7 @@ export function DesktopStudio(props: PaintVariantProps) {
   let drawingInput!: HTMLInputElement;
   let imageInput!: HTMLInputElement;
 
-  const recentColors = createRecentColors();
+  const { recentColors } = session;
   const context = createPaletteContext(session, props.experimentsHref !== undefined);
   // Before the variant's own key listeners, which run the shortcuts it offers commands beside.
   const typeAhead = createTypeAhead({
@@ -189,13 +188,15 @@ export function DesktopStudio(props: PaintVariantProps) {
               disabled={!session.ready() || !engine.state().canRedo}
               onClick={session.redo}
             />
-            <IconButton
-              icon={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'}
-              label="Full screen"
-              pressed={session.fullscreen.isActive()}
-              disabled={!document.fullscreenEnabled}
-              onClick={() => void session.fullscreen.props.onClick()}
-            />
+            <Show when={session.fullscreen.shown}>
+              <IconButton
+                icon={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'}
+                label="Full screen"
+                pressed={session.fullscreen.isActive()}
+                disabled={!document.fullscreenEnabled}
+                onClick={() => void session.fullscreen.props.onClick()}
+              />
+            </Show>
           </MenuBar>
         </Errored>
       </div>
@@ -264,6 +265,7 @@ export function DesktopStudio(props: PaintVariantProps) {
                     maxHeight: 330,
                     body: (
                       <ColorPanel
+                        recentColors={recentColors}
                         foreground={brush().color}
                         background={brush().backgroundColor ?? '#ffffff'}
                         target={colorTarget()}

@@ -1,6 +1,7 @@
-import { createEffect, createSignal, untrack } from 'solid-js';
+import { createEffect, createMemo, createSignal, untrack } from 'solid-js';
 import { hexToHsv, hsvToHex, type Hsv } from '../../features/color/hsv';
 import { discColor, discPoint, paintDisc } from '../../shared/ui/colorDisc';
+import { createPickerPixels } from '../../shared/ui/createPickerPixels';
 import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
 import styles from './ZenStudio.module.css';
 
@@ -19,17 +20,21 @@ export function ColorDisc(props: {
   const [hsv, setHsv] = createSignal<Hsv>((previous) =>
     previous && hsvToHex(previous) === props.color ? previous : hexToHsv(props.color, previous)
   );
+  const hue = createMemo(() => hsv().h);
+  const pixels = createPickerPixels(() => canvas);
   /** What the press in progress edits, chosen where it started. */
   let part: 'hue' | 'disc' = 'disc';
   /** The color the press last set; a signal read in the same event would still be the old one. */
   let latest = untrack(() => props.color);
 
   createEffect(
-    () => hsv().h,
-    (hue) => {
-      const frame = requestAnimationFrame(() =>
-        paintDisc(canvas, hue, Math.round(innerRadius * 2 * Math.min(2, devicePixelRatio || 1)))
-      );
+    () => ({ hue: hue(), pixels: pixels() }),
+    (next) => {
+      const frame = requestAnimationFrame(() => {
+        if (next.pixels > 0) {
+          paintDisc(canvas, next.hue, next.pixels);
+        }
+      });
       return () => cancelAnimationFrame(frame);
     }
   );

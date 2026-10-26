@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { render } from '@solidjs/web';
-import { createSignal, flush } from 'solid-js';
+import { createSignal, flush, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ScrubNumber } from './ScrubNumber';
 
@@ -59,7 +59,90 @@ it('wraps angles past their bounds and doubles a logarithmic value every 50 px',
   expect(radius.changes).toEqual([16]);
 });
 
-function mount(options: Partial<Parameters<typeof ScrubNumber>[0]> = {}) {
+it('commits once when a controlled parent echoes every input', () => {
+  const { changes, pointer } = mount({}, true);
+  pointer('pointerdown', 0, 0);
+  pointer('pointermove', 10, 0);
+  pointer('pointermove', 20, 0);
+  pointer('pointerup', 20, 0);
+  pointer('lostpointercapture', 20, 0);
+  expect(changes).toEqual([70]);
+});
+
+it.each(['pointercancel', 'lostpointercapture'])('restores the start value on %s without committing', (event) => {
+  const { input, changes, inputs, pointer } = mount({}, true);
+  pointer('pointerdown', 0, 0);
+  pointer('pointermove', 20, 0);
+  pointer(event, 20, 0);
+  pointer('pointerup', 20, 0);
+  expect(input().value).toBe('50');
+  expect(inputs).toEqual([70, 50]);
+  expect(changes).toEqual([]);
+});
+
+it('does not commit a drag that returns to its start or stays clamped', () => {
+  const { changes, pointer } = mount({ min: 50, max: 290 }, true);
+  pointer('pointerdown', 0, 0);
+  pointer('pointermove', 20, 0);
+  pointer('pointermove', 0, 0);
+  pointer('pointerup', 0, 0);
+  pointer('pointerdown', 0, 0);
+  pointer('pointermove', -20, 0);
+  pointer('pointerup', -20, 0);
+  expect(changes).toEqual([]);
+});
+
+it('restores an echoed draft when disposed during a gesture', () => {
+  const { changes, inputs, pointer } = mount({}, true);
+  pointer('pointerdown', 0, 0);
+  pointer('pointermove', 20, 0);
+  dispose?.();
+  dispose = undefined;
+  flush();
+  expect(inputs).toEqual([70, 50]);
+  expect(changes).toEqual([]);
+});
+
+it('unmounts an idle field during a reactive layout change without writing disposed state', () => {
+  const [visible, setVisible] = createSignal(true);
+  dispose = render(
+    () => (
+      <Show when={visible()}>
+        <ScrubNumber label="Amount" value={50} onChange={() => {}} />
+      </Show>
+    ),
+    document.body
+  );
+  flush();
+  setVisible(false);
+  expect(() => flush()).not.toThrow();
+  expect(document.querySelector('input')).toBeNull();
+});
+
+it('recovers an orphaned press when its pointer is no longer captured', () => {
+  const { input, changes, inputs, pointer } = mount({}, true);
+  pointer('pointerdown', 0, 0);
+  pointer('pointermove', 20, 0);
+  input().hasPointerCapture = vi.fn(() => false);
+  pointer('pointerdown', 100, 0);
+  pointer('pointermove', 110, 0);
+  pointer('pointerup', 110, 0);
+  expect(inputs).toEqual([70, 50, 60]);
+  expect(changes).toEqual([60]);
+});
+
+it('keeps a captured press and captures caller state only once', () => {
+  const onStart = vi.fn();
+  const { pointer, changes } = mount({ onStart });
+  pointer('pointerdown', 0, 0);
+  pointer('pointerdown', 100, 0);
+  pointer('pointermove', 20, 0);
+  pointer('pointerup', 20, 0);
+  expect(onStart).toHaveBeenCalledOnce();
+  expect(changes).toEqual([70]);
+});
+
+function mount(options: Partial<Parameters<typeof ScrubNumber>[0]> = {}, echo = false) {
   const host = document.createElement('div');
   document.body.append(host);
   const changes: number[] = [];
@@ -71,7 +154,12 @@ function mount(options: Partial<Parameters<typeof ScrubNumber>[0]> = {}) {
         label="Amount"
         {...options}
         value={value()}
-        onInput={(next) => inputs.push(next)}
+        onInput={(next) => {
+          inputs.push(next);
+          if (echo) {
+            setValue(next);
+          }
+        }}
         onChange={(next) => {
           changes.push(next);
           setValue(next);
@@ -82,6 +170,7 @@ function mount(options: Partial<Parameters<typeof ScrubNumber>[0]> = {}) {
   flush();
   const input = () => host.querySelector<HTMLInputElement>('input')!;
   input().setPointerCapture = vi.fn();
+  input().hasPointerCapture = vi.fn(() => true);
   const pointer = (type: string, x: number, y: number) => {
     const event = new MouseEvent(type, { clientX: x, clientY: y, bubbles: true, cancelable: true });
     Object.defineProperty(event, 'pointerId', { value: 1 });

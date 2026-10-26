@@ -201,7 +201,6 @@ async function assemblePaintRenderer(
     })
   );
   targets.attach(canvas, primaryContext);
-  let lastTarget = canvas;
 
   // Match virtual pages so touching a magnified tile does not change existing artwork's filtering.
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
@@ -424,8 +423,8 @@ async function assemblePaintRenderer(
           retouch.bytes()
       };
     },
-    /** Virtual-texture pages selected by the most recently rendered target. */
-    debugPages: () => targets.get(lastTarget)?.pages()?.debug() ?? [],
+    /** Virtual-texture pages for `target`, defaulting to the primary canvas even after secondary renders. */
+    debugPages: (target = canvas) => targets.get(target)?.pages()?.debug() ?? [],
     /** Occupied visible-layer tiles, including the active stroke, for the optional wireframe overlay. */
     debugTiles(layers: Layer[]) {
       const keys = new Set<string>();
@@ -576,7 +575,6 @@ async function assemblePaintRenderer(
       }
 
       const view = targets.attach(target);
-      lastTarget = target;
       await composer.render(view, layers, camera, size, dpr, exact);
     },
     /** Applies GPU backpressure to the worker frame scheduler, without blocking incoming messages. */

@@ -1,13 +1,25 @@
 // @vitest-environment jsdom
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { hexToHsv } from '../color/hsv';
 import { HueTriangle } from './HueTriangle';
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 
 let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
+  vi.unstubAllGlobals();
   document.body.replaceChildren();
 });
 

@@ -566,6 +566,7 @@ export function InfiniteStudio(props: PaintVariantProps) {
                   <Match when={open.id === 'brushes' || open.id === 'eraser'}>
                     <BrushSelector
                       presets={session.library.presets()}
+                      resources={session.library.resources}
                       recent={session.recentPresets.recent(12)}
                       preset={open.id === 'eraser' && tools.eraserMode() === 'clear' ? '' : tools.preset()}
                       disabled={!ready() || session.uploads.busy()}
@@ -591,11 +592,37 @@ export function InfiniteStudio(props: PaintVariantProps) {
                     />
                   </Match>
                   <Match when={open.id === 'size'}>
-                    <BrushSizePopup brush={brush()} disabled={!adjustable()} onChange={tools.updateBrush} />
+                    <BrushSizePopup
+                      brush={brush()}
+                      resources={async () => {
+                        const preset = session.library.find(tools.preset());
+                        if (!preset) {
+                          return [];
+                        }
+                        const result = await session.library.resources(preset);
+                        if (result.isErr()) {
+                          throw result.error;
+                        }
+                        return result.value;
+                      }}
+                      disabled={!adjustable()}
+                      onChange={tools.updateBrush}
+                    />
                   </Match>
                   <Match when={open.id === 'opacity'}>
                     <BrushOpacityPopup
                       brush={brush()}
+                      resources={async () => {
+                        const preset = session.library.find(tools.preset());
+                        if (!preset) {
+                          return [];
+                        }
+                        const result = await session.library.resources(preset);
+                        if (result.isErr()) {
+                          throw result.error;
+                        }
+                        return result.value;
+                      }}
                       disabled={!adjustable()}
                       onChange={tools.updateBrush}
                       target={opacityTarget()}

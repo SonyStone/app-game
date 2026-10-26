@@ -157,6 +157,7 @@ export function Cluster(props: {
           done={props.summon.done}
         />
         <ColorCard
+          recentColors={session.recentColors}
           box={props.layout.boxes.color}
           color={brush().color}
           background={brush().backgroundColor ?? '#ffffff'}
@@ -359,14 +360,16 @@ function ViewPill(props: { session: PaintSession; box: Box; center: Point; view:
       >
         <SketchIcon name="symmetry" size={18} />
       </TapButton>
-      <TapButton
-        class={[css.viewButton, { [css.on!]: fullscreen.isActive() }]}
-        title={fullscreen.props['aria-label']}
-        disabled={fullscreen.props.disabled}
-        onTap={run(() => void fullscreen.props.onClick())}
-      >
-        <SketchIcon name={fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={18} />
-      </TapButton>
+      <Show when={fullscreen.shown}>
+        <TapButton
+          class={[css.viewButton, { [css.on!]: fullscreen.isActive() }]}
+          title={fullscreen.props['aria-label']}
+          disabled={fullscreen.props.disabled}
+          onTap={run(() => void fullscreen.props.onClick())}
+        >
+          <SketchIcon name={fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={18} />
+        </TapButton>
+      </Show>
     </div>
   );
 }

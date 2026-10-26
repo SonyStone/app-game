@@ -44,6 +44,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let renderer: PaintRenderer | undefined;
     let canvas: OffscreenCanvas | HTMLCanvasElement;
     const targets = new Map<string, CanvasTargetValue>();
+    // Camera/size updates cannot revive a canvas that failed in this runtime. A replacement canvas may attach.
+    const failedTargets = new WeakSet<CanvasTargetValue['canvas']>();
     let primaryAttached = true;
     let storageName = 'paint-studio';
     let tileStore: PaintStorage;
@@ -155,7 +157,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       post({
         type: 'state',
         ...(sendDebug
-          ? { debugTiles: renderer?.debugTiles(document.layers) ?? [], debugPages: renderer?.debugPages() ?? [] }
+          ? { debugTiles: renderer?.debugTiles(document.layers) ?? [], debugPages: renderer?.debugPages(canvas) ?? [] }
           : {}),
         virtual: stats?.virtual,
         readback: stats?.readback,
@@ -484,13 +486,30 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       if (tilePreview && tilePreview.revision !== document.revision) dropPreview();
       const layers = shownLayers();
       const start = performance.now();
-      // Primary comes last so export and runtime diagnostics describe the editing view.
-      if (!exact)
-        for (const target of targets.values())
-          await renderer.render(layers, target.camera, target.size, target.dpr, false, target.canvas);
-      if (primaryAttached) await renderer.render(layers, camera, size, dpr, exact, canvas);
+      if (primaryAttached) {
+        await renderer.render(layers, camera, size, dpr, exact, canvas);
+      }
+
+      // Present and report the editing view before optional targets can wait or fail.
       renderMs = performance.now() - start;
       status();
+      if (!exact) {
+        for (const [id, target] of targets) {
+          try {
+            await renderer.render(layers, target.camera, target.size, target.dpr, false, target.canvas);
+          } catch (error) {
+            targets.delete(id);
+            failedTargets.add(target.canvas);
+            failure(error, false, undefined, true);
+            try {
+              renderer.releaseTarget(target.canvas);
+            } catch {
+              // The render failure is already reported; failed cleanup must not stop the editing view either.
+            }
+          }
+        }
+      }
+
       const waitStart = performance.now();
       const timing = { processedInputTime, receivedInputTime, renderMs };
       const frameRenderer = renderer;
@@ -1409,8 +1428,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           } else {
             const previous = targets.get(id);
             if (previous && previous.canvas !== target?.canvas) renderer?.releaseTarget(previous.canvas);
-            if (target) targets.set(id, target);
-            else targets.delete(id);
+            if (target && !failedTargets.has(target.canvas)) {
+              targets.set(id, target);
+            } else {
+              targets.delete(id);
+            }
           }
           scheduleDraw();
         });

@@ -1,6 +1,6 @@
 import { For } from 'solid-js';
 import type { BrushPreset } from '../../features/brush-library';
-import { PresetStroke } from './PresetStroke';
+import { DabPresetStroke as PresetStroke } from '../../features/brush-library/DabPresetStroke';
 import { shapeNames, type ToolShape as Shape } from './tools';
 import { ToolShape } from './ToolShape';
 import styles from './ZenStudio.module.css';

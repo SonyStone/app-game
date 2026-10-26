@@ -4,6 +4,7 @@ import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-co
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { maxBrushSize, type PaintTool } from '../../features/brush';
 import type { BrushPreset } from '../../features/brush-library';
+import { DabPresetStroke as PresetStroke } from '../../features/brush-library/DabPresetStroke';
 import { gradientKinds, gradientRepeats } from '../../features/gradient';
 import { maximumDelay, minimumDelay } from '../../features/quickshape';
 import type { PaintSession } from '../../features/session';
@@ -12,7 +13,6 @@ import styles from './BrushCards.module.css';
 import css from './cluster.module.css';
 import { PillScrubber, scrollingList, Segmented, SwitchRow, TapButton } from './controls';
 import { placed, type Box } from './layout';
-import { PresetStroke } from './PresetStroke';
 import { percentSetting, sizeSetting, type NumberSetting } from './values';
 
 /**

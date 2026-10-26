@@ -2,9 +2,10 @@ import { blockEraserSize, isBlockEraser } from '@app-game/abr-brush/blockEraser'
 import { record } from '@app-game/abr-brush/form';
 import { screenToWorld, worldToScreen, type Point } from '@app-game/paint-core/camera';
 import { supportsPaintSymmetry } from '@app-game/paint-core/symmetry';
+import { errorMessage } from '@app-game/solid-gpu/errors';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createSignal, flush } from 'solid-js';
-import type { PaintError } from '../../shared/errors';
+import { engineError, type PaintError } from '../../shared/errors';
 import { createContextMenuBlock } from '../../shared/ui/createContextMenuBlock';
 import { createPageGestureGuard } from '../../shared/ui/createPageGestureGuard';
 import { createPointerTypeAttribute } from '../../shared/ui/createPointerTypeAttribute';
@@ -21,12 +22,14 @@ import { createPaintCamera, createViewSize } from '../camera';
 import { firstCanvasAction, type CanvasInput } from '../canvas';
 import { createCanvasColorPicker } from '../color';
 import { createColorWheelSettings } from '../color-wheel';
+import { createRecentColors } from '../color/createRecentColors';
+import { createCoolorusSettings } from '../coolorus-wheel/createCoolorusSettings';
 import { createDeveloperSettings } from '../developer';
 import { createDrawingFolder } from '../drawing-folder';
 import { createPaintEngine } from '../engine';
 import { createFill } from '../fill';
 import { createFrames, frameRegion } from '../frames';
-import { arrivalStorageWaitMs, createFreshTab } from '../fresh-tab';
+import { arrivalStorageWaitMs, arrivedByMove, createFreshTab } from '../fresh-tab';
 import { createGpuWarmup } from '../gpu-warmup';
 import { createGradient } from '../gradient';
 import { createHiddenLayerGuard } from '../hidden-layer';
@@ -35,6 +38,7 @@ import { createLayerThumbnails } from '../layer-thumbnails';
 import { createImagePlacement, createLayerFilter } from '../layers';
 import { createLiveBroadcast, liveRelayUrl } from '../live';
 import { createLocalUndo } from '../local-undo';
+import { createNativeShell, saveFile } from '../native-shell';
 import { createPalmRejection, createPalmRejectionSettings } from '../palm-rejection';
 import { createPenHover } from '../pen-hover';
 import { createPerformanceMonitor } from '../performance';
@@ -59,8 +63,10 @@ import { createSessionWindows } from './createSessionWindows';
  *
  * The session also takes over page behavior every variant needs: the context menu and browser page gestures are
  * blocked, the editor element gets the pointer type attribute, a paused renderer restores itself, palms beside the pen
- * are ignored, and once Chrome stops reporting pen hover the drawing moves to a new tab (see `SessionNotices`). Must
- * be created within a Solid owner; disposing the owner stops the engine.
+ * are ignored, and once Chrome stops reporting pen hover the drawing moves to a new tab (see `SessionNotices`). In the
+ * Android shell app the shell supplies pen hover instead, so no move is offered, and its back button closes the
+ * variant's open panel (see `createNativeShell`). Must be created within a Solid owner; disposing the owner stops the
+ * engine.
  */
 export function createPaintSession(options: {
   /** The variant's open panel, recorded with input recordings; omitted when the variant has none. */
@@ -94,7 +100,11 @@ export function createPaintSession(options: {
     frames: { enabled: developer.performanceMonitor, receive: (event) => monitor.record(event) },
     layerThumbnails: { size: layerThumbnails.size, receive: layerThumbnails.receive },
     storageName: options.storageName,
-    storageWaitMs: arrivalStorageWaitMs()
+    storageWaitMs: arrivalStorageWaitMs(),
+    save: (blob, name) =>
+      void saveFile(blob, name).catch((cause: unknown) =>
+        setError(engineError('failed', `${name} could not be saved: ${errorMessage(cause)}`, cause))
+      )
   });
   const selection = createSelection({
     send: engine.send,
@@ -259,6 +269,8 @@ export function createPaintSession(options: {
   createContextMenuBlock();
   createPageGestureGuard();
   const colorWheel = createColorWheelSettings();
+  const recentColors = createRecentColors();
+  const coolorus = createCoolorusSettings();
   const windows = createSessionWindows();
   const pressureCalibration = createPressureCalibration();
   const viewOptions = createViewOptions({ ready: engine.canEdit, send: engine.send });
@@ -323,7 +335,8 @@ export function createPaintSession(options: {
   // After the recorder, so that recordings keep ignored touches, and before the other window listeners, so that
   // nothing else sees them.
   // Before palm rejection, so that the press that finds the pen without hover is guarded as such.
-  const penHover = createPenHover();
+  const penHover = createPenHover({ trustRemembered: !arrivedByMove() });
+  const nativeShell = createNativeShell();
   const palmOptions = palmSettings.settings;
   const hoverless = () => {
     const mode = palmOptions().hoverless;
@@ -344,7 +357,8 @@ export function createPaintSession(options: {
     }
   });
   const freshTab = createFreshTab({
-    lostContacts: penHover.lostContacts,
+    // The shell replays the pen hover the WebView loses, and a new tab means nothing there.
+    lostContacts: () => (nativeShell.active ? 0 : penHover.lostContacts()),
     // A transform or local undo in progress lives in this engine only.
     idle: () =>
       engine.canEdit() && !engine.isDrawing() && !transform.active() && !localUndo.open() && !selection.drawing(),
@@ -418,6 +432,10 @@ export function createPaintSession(options: {
     localUndo,
     fullscreen,
     colorWheel,
+    /** Recent colors shared by every picker and mixing palette in this session. */
+    recentColors,
+    /** Persisted Coolorus preferences shared by all picker instances. */
+    coolorus,
     viewOptions,
     drawingFolder,
     frames,
@@ -435,6 +453,8 @@ export function createPaintSession(options: {
     palm,
     /** Moving the drawing to a new tab once Chrome loses the pen hover; see `SessionNotices`. */
     freshTab,
+    /** Paint inside the Android shell app: forwarded pen hover, back handling and native calls. */
+    nativeShell,
     /**
      * The floating windows every variant can open: the mixing palette, the pen settings and the pen pressure
      * calibration; see `SessionWindows`.
@@ -456,6 +476,8 @@ export function createPaintSession(options: {
     usePreset,
     rememberTools,
     loadColor,
+    setColor,
+    toggleTool,
     setWorkerEnabled,
     restoreRenderer,
     undo: () => edit({ type: 'undo' }),
@@ -534,9 +556,11 @@ export function createPaintSession(options: {
 
   /**
    * The editor's keyboard shortcuts for this session; see `createPaintShortcuts`. `closePanel` closes the variant's
-   * open panel or popover and returns whether one was open, so Escape closes it before cancelling work.
+   * open panel or popover and returns whether one was open, so Escape closes it before cancelling work; the Android
+   * shell's back button closes it too.
    */
   function createShortcuts(variant: { closePanel: () => boolean }) {
+    nativeShell.onBack(variant.closePanel);
     createPaintShortcuts({
       closePanel: variant.closePanel,
       tool,
@@ -698,6 +722,39 @@ export function createPaintSession(options: {
     if (chosen.isErr() && chosen.error.kind !== 'aborted') {
       setError(chosen.error);
     }
+  }
+
+  /** Changes the painting color, leaving only the eraser for the brush. Does not load the Mixer Brush reservoir. */
+  function setColor(color: string) {
+    if (tool() === 'eraser') {
+      chooseTool('brush');
+    }
+
+    tools.updateBrush({ color });
+  }
+
+  /**
+   * Toggles a tool back to the previous brush slot. Fill without a selection chooses the lasso and returns false,
+   * allowing the caller to explain the required selection. Local undo also opens its settings window.
+   */
+  function toggleTool(next: 'eraser' | 'lasso' | 'fill' | 'local-undo') {
+    if (tool() === next) {
+      chooseTool(next === 'eraser' ? 'brush' : tools.slot());
+      return true;
+    }
+
+    if (next === 'fill' && !selection.selected()) {
+      chooseTool('lasso');
+      return false;
+    }
+
+    if (next === 'local-undo') {
+      chooseLocalUndo();
+    } else {
+      chooseTool(next);
+    }
+
+    return true;
   }
 
   /**

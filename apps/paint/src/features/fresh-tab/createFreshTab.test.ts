@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createRoot, createSignal, flush } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { arrivalStorageWaitMs, createFreshTab } from './createFreshTab';
+import { arrivalStorageWaitMs, arrivedByMove, createFreshTab } from './createFreshTab';
 
 let dispose: (() => void) | undefined;
 beforeEach(() => localStorage.clear());
@@ -77,11 +77,14 @@ it('stops offering the move once dismissed', () => {
   expect(freshTab.offered()).toBe(false);
 });
 
-it('waits longer for the drawing in a tab opened by a move, once', () => {
+it('waits longer for the drawing in a tab opened by a move, once, and still knows the tab moved', () => {
+  expect(arrivedByMove()).toBe(false);
   history.replaceState(null, '', '/paint/?paintMoved=&paintThread=main');
+  expect(arrivedByMove()).toBe(true);
   expect(arrivalStorageWaitMs()).toBeGreaterThan(5000);
   expect(location.search).toBe('?paintThread=main');
   expect(arrivalStorageWaitMs()).toBeUndefined();
+  expect(arrivedByMove()).toBe(true);
 });
 
 function start() {

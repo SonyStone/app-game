@@ -480,6 +480,7 @@ export function PaintStudio(props: {
                 </Match>
                 <Match when={id === 'color'}>
                   <ColorPanel
+                    recentColors={session.recentColors}
                     brush={brush()}
                     onChange={tools.updateBrush}
                     alternatives={{
@@ -631,7 +632,11 @@ export function PaintStudio(props: {
                         onChange={palmSettings.update}
                       />
                     }
-                    penHover={<FreshTabControls auto={freshTab.auto()} onChange={freshTab.setAuto} />}
+                    penHover={
+                      session.nativeShell.active ? undefined : (
+                        <FreshTabControls auto={freshTab.auto()} onChange={freshTab.setAuto} />
+                      )
+                    }
                     applicationControls={props.applicationControls}
                     experimentsHref={props.experimentsHref}
                   />

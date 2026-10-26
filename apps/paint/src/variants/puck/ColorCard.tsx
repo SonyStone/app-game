@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For } from 'solid-js';
+import { createEffect, createSignal, For, untrack } from 'solid-js';
 import { createRecentColors } from '../../features/color/createRecentColors';
 import { hexToHsv, hsvToHex, type Hsv } from '../../features/color/hsv';
 import css from './cluster.module.css';
@@ -16,6 +16,8 @@ import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
  * finishes. Mix, in the header, opens or closes the session's mixing palette window and finishes.
  */
 export function ColorCard(props: {
+  /** The session's shared history. Omit only for a standalone picker with its own history; stable until unmount. */
+  recentColors?: ReturnType<typeof createRecentColors>;
   box: Box;
   /** The foreground color, `#rrggbb`. */
   color: string;
@@ -27,7 +29,7 @@ export function ColorCard(props: {
   onMixing: () => void;
   done: () => void;
 }) {
-  const recent = createRecentColors();
+  const recent = untrack(() => props.recentColors ?? createRecentColors());
   const choose = (hex: string) => {
     props.onColor(hex);
     recent.remember(hex);

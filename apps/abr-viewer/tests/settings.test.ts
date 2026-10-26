@@ -8,7 +8,6 @@ import { AbrWriter as ReferenceWriter, createAbrFile } from '../../../packages/a
 import type { Brush as ReferenceBrush } from '../../../packages/abr-parser/tests/reference/types';
 import { brushToFormValues, formValuesToBrush } from '../src/features/brush-detail/brush-form-schema';
 import { settingGroups } from '../src/features/brush-detail/settings-fields';
-import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
 import {
   createPreviewStroke,
   generateComputedBrushTip,
@@ -189,29 +188,6 @@ function preview(): PreviewInput {
   };
 }
 const tip = generateComputedBrushTip(32, 30);
-test('texture, dual brush and per-tip color each change painted pixels', () => {
-  const input = preview(),
-    base = renderPreviewPixels(input, tip);
-  input.values.useTexture = true;
-  input.values.texture.eachTip = true;
-  input.values.texture.mode = 'Mltp';
-  const pattern = {
-    width: 4,
-    height: 4,
-    depth: 8 as const,
-    data: Uint8Array.from({ length: 16 }, (_, i) => (i % 2 ? 255 : 0))
-  };
-  expect(renderPreviewPixels(input, tip, undefined, { pattern })).not.toEqual(base);
-  input.values.useTexture = false;
-  input.values.useDualBrush = true;
-  input.values.dualBrush.diameter = 7;
-  expect(renderPreviewPixels(input, tip, undefined, { dualTip: tip })).not.toEqual(base);
-  input.values.useDualBrush = false;
-  input.values.useColorDynamics = true;
-  input.values.colorDynamics.applyPerTip = true;
-  input.values.colorDynamics.foregroundBackgroundJitter = 100;
-  expect(renderPreviewPixels(input, tip)).not.toEqual(base);
-});
 test('fade uses tip steps; pose overrides pressure', () => {
   const input = preview();
   input.values.useShapeDynamics = true;

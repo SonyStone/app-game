@@ -1533,12 +1533,12 @@ try {
       await waitForSaved(page);
       await undo(page, 1);
       await losePenHover(page);
-      await page.getByText('Chrome stopped seeing the pen above the screen.').waitFor({ timeout: 5_000 });
+      await page.getByRole('toolbar', { name: 'Pen hover lost' }).waitFor({ timeout: 5_000 });
 
       const started = performance.now();
       const [moved] = await Promise.all([
         context.waitForEvent('page'),
-        page.getByRole('button', { name: 'Continue in a new tab' }).click()
+        page.getByRole('button', { name: 'Fix pen' }).click()
       ]);
       watchErrors(moved);
       await waitForSaved(moved);

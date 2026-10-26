@@ -1,5 +1,4 @@
 import type { ColorMixing } from '@app-game/abr-brush/effects';
-import { supportsAirbrush } from '@app-game/abr-brush/stroke';
 import { createEffect, createSignal, onSettled, Show } from 'solid-js';
 import type { BrushWithPreview } from '../../../../lib/abr';
 import { attachPreview } from '../../../brush-preview/client';
@@ -19,13 +18,10 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
   let visible = false;
   let rasterWidth = 0;
   let refresh = () => {};
-  let path: PreviewPoint[] | undefined;
-  let strokeId = 0;
   let pointer: number | undefined;
-  let hold: ReturnType<typeof setInterval> | undefined;
   const stop = () => {
     pointer = undefined;
-    clearInterval(hold);
+    connection?.finish();
   };
 
   createEffect(
@@ -46,14 +42,22 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
   onSettled(() => {
     connection = attachPreview(canvas);
     const status = new MutationObserver(() => setWarning(canvas.dataset.previewReason ?? ''));
-    if (props.interactive) status.observe(canvas, { attributes: true, attributeFilter: ['data-preview-reason'] });
+    if (props.interactive) {
+      status.observe(canvas, { attributes: true, attributeFilter: ['data-preview-reason'] });
+    }
     refresh = () => {
-      if (!visible) return;
+      if (!visible) {
+        return;
+      }
       const measuredWidth = container.clientWidth;
-      if (measuredWidth < 1) return;
+      if (measuredWidth < 1) {
+        return;
+      }
       const width = props.thumbnail ? (rasterWidth = thumbnailSize(measuredWidth, rasterWidth)) : measuredWidth;
       const height = props.height ?? 100;
-      if (width < 1 || height < 1) return;
+      if (width < 1 || height < 1) {
+        return;
+      }
       const dpr = Math.min(window.devicePixelRatio || 1, 2, 2048 / width, 512 / height);
       // Solid stores are proxies, so send a plain snapshot rather than the live form object.
       const values: BrushFormValues = JSON.parse(JSON.stringify(props.values));
@@ -65,8 +69,6 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
           height: Math.max(1, Math.round(height * dpr)),
           dpr,
           background: props.backgroundColor ?? '#333333',
-          path,
-          strokeId: path ? strokeId : undefined,
           flow: values.tool.flow / 100,
           opacity: values.tool.opacity / 100
         },
@@ -80,7 +82,9 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
     resize.observe(container);
     const intersection = new IntersectionObserver((entries) => {
       const next = entries[0]?.isIntersecting ?? false;
-      if (visible && !next) connection!.pause();
+      if (visible && !next) {
+        connection!.pause();
+      }
       visible = next;
       refresh();
     });
@@ -97,23 +101,22 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
       refresh = () => {};
     };
   });
-  function append(event: PointerEvent) {
+  function samples(event: PointerEvent): PreviewPoint[] {
     const bounds = canvas.getBoundingClientRect();
-    if (!path) return;
-    if (path.length >= 2048) path.splice(1, 1);
-    path.push({
-      x: (event.clientX - bounds.left) / bounds.width,
-      y: (event.clientY - bounds.top) / bounds.height,
-      pressure: event.pointerType === 'pen' ? event.pressure : 1,
-      pointerType: event.pointerType,
-      tiltX: event.tiltX,
-      tiltY: event.tiltY,
-      tangentialPressure: event.pointerType === 'pen' ? event.tangentialPressure : undefined,
-      rotation: event.twist,
-      time: performance.now()
-    });
-    refresh();
+    const coalesced = event.getCoalescedEvents?.();
+    return (coalesced?.length ? coalesced : [event]).map((point) => ({
+      x: (point.clientX - bounds.left) / bounds.width,
+      y: (point.clientY - bounds.top) / bounds.height,
+      pressure: point.pointerType === 'pen' ? point.pressure : 1,
+      pointerType: point.pointerType,
+      tiltX: point.tiltX,
+      tiltY: point.tiltY,
+      tangentialPressure: point.pointerType === 'pen' ? point.tangentialPressure : undefined,
+      rotation: point.twist,
+      time: point.timeStamp
+    }));
   }
+
   return (
     <div
       ref={(element) => {
@@ -124,34 +127,29 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
     >
       <canvas
         onPointerDown={(event) => {
-          if (!props.interactive) return;
+          if (!props.interactive) {
+            return;
+          }
           stop();
           canvas.setPointerCapture(event.pointerId);
           pointer = event.pointerId;
-          path = [];
-          strokeId++;
-          append(event);
-          hold = setInterval(() => {
-            if (
-              pointer !== undefined &&
-              props.values.useBuildUp &&
-              supportsAirbrush(props.values.tool) &&
-              path?.length
-            ) {
-              if (path.length >= 2048) path.splice(1, 1);
-              path.push({ ...path.at(-1)!, time: performance.now() });
-              refresh();
-            }
-          }, 60);
+          connection?.begin(samples(event));
         }}
         onPointerMove={(event) => {
-          if (pointer === event.pointerId) append(event);
+          if (pointer === event.pointerId) {
+            connection?.add(samples(event));
+          }
         }}
-        onPointerUp={stop}
+        onPointerUp={(event) => {
+          if (pointer === event.pointerId) {
+            connection?.add(samples(event));
+            stop();
+          }
+        }}
         onPointerCancel={stop}
         onLostPointerCapture={stop}
         onDblClick={() => {
-          path = undefined;
+          connection?.pause();
           refresh();
         }}
         title={props.interactive ? 'Draw to test. Double-click to restore the sample stroke.' : undefined}

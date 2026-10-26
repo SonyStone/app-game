@@ -185,3 +185,78 @@ test('keeps the previous checkpoint and restores new-model edits after reload', 
   await page.reload();
   await expect(page.getByRole('textbox', { name: 'Brush name' })).toHaveValue('Persisted through Rust');
 });
+
+test('interactive packets retain coalesced pen axes without resending settings or the old path', async ({ page }) => {
+  await page.addInitScript(() => {
+    const packets: unknown[] = [];
+    Object.assign(window, { previewPackets: packets });
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      postMessage(message: { action?: string; configuration?: unknown; points?: unknown[] }) {
+        packets.push({ action: message.action, configured: !!message.configuration, points: message.points });
+        super.postMessage(message);
+      }
+    };
+  });
+  await page.goto('/abr-viewer');
+  await page.locator('input[type=file]').setInputFiles(fileURLToPath(new URL('Basic_3.abr', samples)));
+  await page.locator('[data-brush-id]').first().click();
+  const canvas = page.locator('[data-abr-brush-detail] canvas').last();
+  await expect(canvas).toHaveAttribute('data-preview-state', 'ready');
+  const bounds = (await canvas.boundingBox())!;
+  await canvas.evaluate((element) =>
+    element.addEventListener('pointerdown', (event) => {
+      Object.assign(window, { previewPointer: (event as PointerEvent).pointerId });
+    })
+  );
+  await page.mouse.move(bounds.x + 20, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await expect(canvas).toHaveAttribute('data-preview-state', 'ready');
+  await canvas.evaluate((element) => {
+    const pointerId = (window as unknown as { previewPointer: number }).previewPointer;
+    const bounds = element.getBoundingClientRect();
+    const points = [0.35, 0.65].map(
+      (pressure, index) =>
+        new PointerEvent('pointermove', {
+          pointerId,
+          pointerType: 'pen',
+          clientX: bounds.x + 40 + index * 10,
+          clientY: bounds.y + 50,
+          pressure,
+          tiltX: 25,
+          tiltY: -15,
+          twist: 127,
+          tangentialPressure: 0.2,
+          buttons: 1,
+          bubbles: true
+        })
+    );
+    const move = points[1]!;
+    Object.defineProperty(move, 'getCoalescedEvents', { value: () => points });
+    element.dispatchEvent(move);
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const packets = (
+          window as unknown as {
+            previewPackets: {
+              action?: string;
+              configured: boolean;
+              points?: { pressure: number; tiltX: number; tiltY: number; rotation: number }[];
+            }[];
+          }
+        ).previewPackets;
+        return packets.some(
+          (packet) =>
+            packet.action === 'add' &&
+            !packet.configured &&
+            packet.points?.some(
+              (point) => Math.abs(point.pressure - 0.35) < 0.001 && point.tiltX === 25 && point.tiltY === -15 && point.rotation === 127
+            )
+        );
+      })
+    )
+    .toBe(true);
+  await page.mouse.up();
+});

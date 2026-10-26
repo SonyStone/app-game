@@ -17,9 +17,11 @@ export function ViewControls(props: {
 }) {
   return (
     <div class={styles.viewControls} aria-label="Canvas view">
-      <button {...props.fullscreen.props}>
-        <SketchIcon name={props.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={16} />
-      </button>
+      <Show when={props.fullscreen.shown}>
+        <button {...props.fullscreen.props}>
+          <SketchIcon name={props.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={16} />
+        </button>
+      </Show>
       <button aria-label="Zoom out" onClick={() => props.onZoomBy(0.8)}>
         <SketchIcon name="minus" size={16} />
       </button>

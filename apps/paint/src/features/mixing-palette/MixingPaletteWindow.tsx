@@ -1,6 +1,6 @@
 import { Errored, For } from 'solid-js';
 import { FloatingWindow } from '../../shared/ui/FloatingWindow';
-import { createRecentColors } from '../color/createRecentColors';
+import type { createRecentColors } from '../color/createRecentColors';
 import { createMixingPalette } from './createMixingPalette';
 import { MixingPalette } from './MixingPalette';
 import styles from './MixingPaletteWindow.module.css';
@@ -16,11 +16,13 @@ export function MixingPaletteWindow(props: {
   onClose: () => void;
   /** The brush's color. */
   color: string;
+  /** The session's shared history; this window never creates a second persisted list. */
+  recentColors: ReturnType<typeof createRecentColors>;
   /** Loads the brush with `color`, picked from the palette or the loaded colors. */
   onLoad: (color: string) => void;
 }) {
   const palette = createMixingPalette();
-  const recentColors = createRecentColors();
+  const recentColors = props.recentColors;
   const load = (color: string) => {
     recentColors.remember(color);
     props.onLoad(color);

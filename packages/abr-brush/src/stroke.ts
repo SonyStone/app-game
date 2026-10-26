@@ -875,7 +875,8 @@ function unverifiedToolColor(
   };
   return [channel(5), channel(3), channel(1)];
 }
-function syntheticPath(): PreviewPoint[] {
+/** Shared normalized sample recording, including synthetic pressure, tilt and rotation. */
+export function syntheticPath(): PreviewPoint[] {
   return Array.from({ length: 257 }, (_, i) => {
     const t = i / 256;
     return {

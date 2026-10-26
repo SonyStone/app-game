@@ -2,27 +2,34 @@
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
-import { afterEach, beforeAll, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { BrushOpacityPopup, BrushSizePopup, type OpacityTarget } from './BrushPopups';
 
 let dispose: (() => void) | undefined;
 
-beforeAll(() => {
+beforeEach(() => {
   // The live preview draws once it scrolls into view, which jsdom never reports.
-  globalThis.IntersectionObserver ??= class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-    takeRecords() {
-      return [];
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
     }
-  } as unknown as typeof IntersectionObserver;
+  );
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  );
 });
 
 afterEach(() => {
   dispose?.();
   dispose = undefined;
   document.body.replaceChildren();
+  vi.unstubAllGlobals();
 });
 
 it('shows the size in pixels on a geometric scale up to the brush’s largest size and steps it', () => {

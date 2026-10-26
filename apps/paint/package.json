@@ -13,7 +13,8 @@
     "test:safari": "node tests/browser/safari.browser.mjs",
     "test:performance": "node --test scripts/compare-brush-performance.test.mjs",
     "bench:brushes": "node scripts/brush-performance.mjs",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test:lego": "node tests/browser/lego.browser.mjs"
   },
   "dependencies": {
     "@app-game/abr-brush": "workspace:*",
@@ -28,6 +29,7 @@
     "@solid-primitives/drag-drop": "catalog:",
     "@solid-primitives/event-listener": "catalog:",
     "@solid-primitives/fullscreen": "catalog:",
+    "@solid-primitives/intersection-observer": "catalog:",
     "@solid-primitives/media": "catalog:",
     "@solid-primitives/page-utilities": "catalog:",
     "@solid-primitives/resize-observer": "catalog:",
@@ -59,6 +61,8 @@
     "./tile-cluster-mockup": "./src/mockups/tile-cluster/TileClusterMockup.tsx",
     "./puck-gallery": "./src/mockups/puck-gallery/PuckGallery.tsx",
     "./variants": "./src/variants/index.ts",
+    "./native-shell": "./src/features/native-shell/index.ts",
+    "./lego-parts": "./src/variants/lego/PartsShowcase.tsx",
     "./component-canvas": "./src/component-canvas/ComponentCanvas.tsx"
   }
 }

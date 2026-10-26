@@ -1,6 +1,17 @@
 .theme {
+  --tree-line: #5d6977;
+  --tree-line-path: #7dd3fc;
+  --tree-anchor: #7c8794;
+  --tree-anchor-mark: #d1d9e0;
+  --tree-paper: #0a0a0a;
+
   &[data-browser-atlas-theme='light'] {
     color-scheme: light;
+    --tree-line: #a5aeb8;
+    --tree-line-path: #0284c7;
+    --tree-anchor: #8a94a0;
+    --tree-anchor-mark: #374151;
+    --tree-paper: #ffffff;
   }
 
   &[data-browser-atlas-theme='light']:global(.bg-neutral-950),

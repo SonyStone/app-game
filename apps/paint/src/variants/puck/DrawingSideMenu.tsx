@@ -80,9 +80,11 @@ export function DrawingSideMenu(props: {
             </SideMenuGroup>
             <SideMenuGroup caption="View" small>
               <SideMenuItem onSelect={() => camera.reset()}>Reset view</SideMenuItem>
-              <SideMenuItem disabled={fullscreen.props.disabled} onSelect={() => void fullscreen.props.onClick()}>
-                {fullscreen.isActive() ? 'Leave full screen' : 'Full screen'}
-              </SideMenuItem>
+              <Show when={fullscreen.shown}>
+                <SideMenuItem disabled={fullscreen.props.disabled} onSelect={() => void fullscreen.props.onClick()}>
+                  {fullscreen.isActive() ? 'Leave full screen' : 'Full screen'}
+                </SideMenuItem>
+              </Show>
               <Show when={props.experimentsHref}>
                 {(href) => <SideMenuItem href={href()}>Paint experiments</SideMenuItem>}
               </Show>

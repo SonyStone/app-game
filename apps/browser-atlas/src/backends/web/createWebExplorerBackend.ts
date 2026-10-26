@@ -37,7 +37,8 @@ export function createWebExplorerBackend(): ExplorerBackend {
         'move-bookmark': false,
         'create-bookmark': false,
         'import-items': false,
-        'move-document-node': false
+        'move-document-node': false,
+        batch: false
       }
     },
     async load(source) {

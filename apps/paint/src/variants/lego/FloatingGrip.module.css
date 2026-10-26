@@ -1,0 +1,32 @@
+.grip {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 1;
+  height: 14px;
+  border-radius: inherit;
+  background: var(--lego-plate);
+  cursor: grab;
+  touch-action: none;
+}
+
+/* Extend above the plate so the 24px touch target never covers its first row of parts. */
+.grip::before {
+  content: '';
+  position: absolute;
+  inset: -10px 0 0;
+}
+
+.grip:active {
+  cursor: grabbing;
+}
+
+.grip > span {
+  position: absolute;
+  top: 5px;
+  left: calc(50% - 15px);
+  width: 30px;
+  height: 4px;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.7) 1px, transparent 1.5px) 0 0 / 6px 4px;
+  opacity: 0.3;
+  pointer-events: none;
+}

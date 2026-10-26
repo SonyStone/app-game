@@ -248,14 +248,18 @@ export function createDesktopCommands(options: {
         },
         { label: 'Pen and palm rejection…', run: () => session.windows.open('pen') },
         { label: 'Calibrate pen pressure…', run: () => session.windows.open('pressure') },
-        'separator',
-        {
-          label: 'Full screen',
-          keys: 'Mod+Shift+F',
-          run: () => void session.fullscreen.props.onClick(),
-          enabled: () => document.fullscreenEnabled,
-          checked: session.fullscreen.isActive
-        }
+        ...(session.fullscreen.shown
+          ? [
+              'separator' as const,
+              {
+                label: 'Full screen',
+                keys: 'Mod+Shift+F',
+                run: () => void session.fullscreen.props.onClick(),
+                enabled: () => document.fullscreenEnabled,
+                checked: session.fullscreen.isActive
+              }
+            ]
+          : [])
       ]
     },
     {

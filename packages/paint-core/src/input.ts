@@ -168,8 +168,7 @@ export function attachInput(
     ...(options.puckPicker ? { pick: options.puckPicker } : {}),
     ...(options.puckSurface ? { surface: options.puckSurface } : {})
   });
-  const local = (event: { clientX: number; clientY: number }): Point => {
-    const rect = canvas.getBoundingClientRect();
+  const local = (event: { clientX: number; clientY: number }, rect = canvas.getBoundingClientRect()): Point => {
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
   /** The pressure a stroke receives from a sample of `pointerType`; every pen sample a stroke gets passes here. */
@@ -222,10 +221,9 @@ export function attachInput(
    * Sends a stroke's samples from `event`; with `samples` false, only the points predicted after it. Once a stroke
    * hold took the stroke over, its drag receives the newest point instead.
    */
-  const collect = (event: PointerEvent, samples = true) => {
+  const collect = (event: PointerEvent, samples: boolean, rect: DOMRect) => {
     if (gesture?.kind !== 'draw' || gesture.id !== event.pointerId) return;
     const draw = gesture;
-    const rect = canvas.getBoundingClientRect();
     const sample = (input: PointerEvent): Sample => ({
       ...screenToWorld({ x: input.clientX - rect.left, y: input.clientY - rect.top }, draw.camera, draw.size),
       ...tabletAxes(input),
@@ -272,16 +270,16 @@ export function attachInput(
     if (real.length) {
       options.drawn?.(event, draw.brush);
       draw.samples.push(...real);
-      watchStrokeHold(local(event));
+      watchStrokeHold(local(event, rect));
     }
   };
-  const cursorAt = (event: PointerEvent) =>
+  const cursorAt = (event: PointerEvent, point: Point) =>
     options.cursor(
       event.pointerType === 'touch' ||
         gesture?.kind === 'adjust' ||
         (event.pointerType === 'pen' && gesture?.kind === 'draw' && !options.showPenCursor?.())
         ? undefined
-        : local(event)
+        : point
     );
   if (supportsRawPointerUpdates())
     canvas.addEventListener(
@@ -291,8 +289,9 @@ export function attachInput(
         if (event.pointerType !== 'pen' || gesture?.kind !== 'draw' || gesture.id !== event.pointerId) return;
         gesture.raw = true;
         options.rawUpdate?.();
-        cursorAt(event);
-        collect(event);
+        const rect = canvas.getBoundingClientRect();
+        cursorAt(event, local(event, rect));
+        collect(event, true, rect);
       },
       { signal }
     );
@@ -428,7 +427,7 @@ export function attachInput(
         predicting: false,
         samples: [latest]
       };
-      cursorAt(event);
+      cursorAt(event, point);
       watchStrokeHold(point);
       options.send({
         type: 'begin',
@@ -460,8 +459,9 @@ export function attachInput(
   canvas.addEventListener(
     'pointermove',
     (event) => {
-      const point = local(event);
-      cursorAt(event);
+      const rect = canvas.getBoundingClientRect();
+      const point = local(event, rect);
+      cursorAt(event, point);
       if (event.pointerType === 'pen' && event.buttons === 0 && !gesture) options.hover?.(event);
       if (touches.has(event.pointerId)) {
         touches.set(event.pointerId, point);
@@ -513,12 +513,14 @@ export function attachInput(
       }
       const coalesced = event.getCoalescedEvents?.() ?? [];
       if (gesture.kind === 'select') {
-        for (const sample of coalesced.length ? coalesced : [event])
-          options.selection?.move(screenToWorld(local(sample), gesture.camera, gesture.size));
+        for (const sample of coalesced.length ? coalesced : [event]) {
+          options.selection?.move(screenToWorld(local(sample, rect), gesture.camera, gesture.size));
+        }
+
         return;
       }
       // Raw updates and pointermove contain the same physical samples. Never feed both to the filter.
-      collect(event, !gesture.raw);
+      collect(event, !gesture.raw, rect);
     },
     { signal }
   );
@@ -544,9 +546,13 @@ export function attachInput(
         return;
       }
       if (gesture?.id !== event.pointerId) return;
-      if (gesture.kind === 'select') options.selection?.move(screenToWorld(local(event), gesture.camera, gesture.size));
+      const point = local(event);
+      if (gesture.kind === 'select') {
+        options.selection?.move(screenToWorld(point, gesture.camera, gesture.size));
+      }
+
       if (gesture.kind === 'draw' && !gesture.held) {
-        const endpoint = screenToWorld(local(event), gesture.camera, gesture.size);
+        const endpoint = screenToWorld(point, gesture.camera, gesture.size);
         // Release pressure is usually zero. Keep the last contact pressure, and do not
         // advance a sample-count filter just because a stationary pen was lifted.
         if (endpoint.x !== gesture.latest.x || endpoint.y !== gesture.latest.y)
@@ -556,7 +562,7 @@ export function attachInput(
           });
       }
       finish();
-      cursorAt(event);
+      cursorAt(event, point);
     },
     { signal }
   );

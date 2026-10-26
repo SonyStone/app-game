@@ -29,6 +29,8 @@ const paths = {
   rotate: 'M20 9a8 8 0 0 0-14-3L3 9m0-6v6h6M4 15a8 8 0 0 0 14 3l3-3m0 6v-6h-6',
   tools: 'M4 4h5v5H4ZM15 4h5v5h-5ZM4 15h5v5H4ZM15 15h5v5h-5Z',
   paper: 'M4 3h16v18H4ZM8 8h8M8 12h5',
+  quickshape: 'M3 17 9 5l6 12ZM15 6h6v6h-6ZM4 21h16',
+  pressure: 'M4 3v17h17M4 20C15 20 9 4 21 4',
   symmetry:
     'M12 3v18M12 9C9 2 2 2 3 9c0 3 4 4 9 3C5 11 3 16 5 20c3 2 5-2 7-6M12 9c3-7 10-7 9 0 0 3-4 4-9 3 7-1 9 4 7 8-3 2-5-2-7-6',
   mirror: 'M12 2v20M3 5v14l6-7-6-7Zm18 0v14l-6-7 6-7Z',
@@ -39,6 +41,8 @@ const paths = {
   edit: 'M6 6h12v12H6ZM3 3h6v6H3ZM15 15h6v6h-6Z',
   pan: 'M8 12V5a2 2 0 0 1 4 0v7-9a2 2 0 0 1 4 0v9-7a2 2 0 0 1 4 0v10c0 4-3 7-7 7h-1c-2 0-4-1-5-3l-4-6a2 2 0 0 1 3-2l2 2',
   orbit: 'M21 12a9 9 0 1 1-3-7M21 3v6h-6M12 7a5 5 0 0 1 0 10 5 5 0 0 1 0-10Z',
+  folder: 'M3 5h7l2 3h9v12H3Z',
+  mergeDown: 'M5 3h14v5H5ZM12 9v7m-3-3 3 3 3-3M4 20h16',
   layers: 'm12 3 10 5-10 5L2 8Zm-10 9 10 5 10-5M2 16l10 5 10-5',
   brush: 'm14 3 7 7-9 9-7-7ZM6 13c-4 0-4 5-4 8 3 0 8 0 8-4M12 5l7 7',
   scene: 'm12 2 9 5v10l-9 5-9-5V7Zm0 10v10M3 7l9 5 9-5M12 2v10',

@@ -6,7 +6,6 @@ import { createEffect, createSignal, Errored, Match, Show, Switch } from 'solid-
 import type { PaintVariantProps } from '..';
 import { AbrViewerDialog } from '../../features/abr';
 import { maxBrushSize } from '../../features/brush';
-import { createRecentColors } from '../../features/color/createRecentColors';
 import {
   createPaintSession,
   PaintEditor,
@@ -77,7 +76,7 @@ export function ProcreateStudio(props: PaintVariantProps) {
     choosePreset,
     edit
   } = session;
-  const recentColors = createRecentColors();
+  const { recentColors } = session;
   const [colorMode, setColorMode] = createSignal<ColorMode>('disc');
   const [sidebar, setSidebar] = createInterfaceSide();
   /** The interface is hidden by a four-finger tap, leaving the canvas alone, as Procreate's full-screen mode does. */
@@ -430,7 +429,7 @@ export function ProcreateStudio(props: PaintVariantProps) {
                       mirrored={camera.camera().mirrored}
                       symmetry={symmetry.symmetry().mode}
                       sidebar={sidebar()}
-                      fullscreen={{ active: fullscreen.isActive(), supported: document.fullscreenEnabled }}
+                      fullscreen={{ active: fullscreen.isActive(), supported: document.fullscreenEnabled, shown: fullscreen.shown }}
                       onInsertPhoto={(file) => {
                         setPopover(undefined);
                         images.place(file);
@@ -464,6 +463,7 @@ export function ProcreateStudio(props: PaintVariantProps) {
                     <BrushLibrary
                       title="Brush Library"
                       presets={library.presets()}
+                      resources={library.resources}
                       recent={[tools.preset(), ...recentPresets.recent(7)]}
                       preset={open.id === 'eraser' && tools.eraserMode() === 'clear' ? '' : tools.preset()}
                       disabled={!ready() || uploads.busy()}

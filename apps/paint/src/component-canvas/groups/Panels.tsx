@@ -150,7 +150,7 @@ function ProcreateActions() {
         mirrored={mirrored()}
         symmetry={symmetry()}
         sidebar={sidebar()}
-        fullscreen={{ active: false, supported: false }}
+        fullscreen={{ active: false, supported: false, shown: true }}
         onInsertPhoto={() => {}}
         onSelectionAction={() => {}}
         onFlip={() => setMirrored((on) => !on)}

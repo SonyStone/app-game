@@ -106,13 +106,13 @@ it.each([...paintVariants, ...featureDemos].map((variant) => [variant.name, vari
     expect(reached).toEqual(['touch']);
 
     // The pen touches down after hovering, then twice more without hover: Chrome lost it in this tab.
-    expect(document.body.textContent).not.toContain('Chrome stopped seeing the pen');
+    expect(document.querySelector('[aria-label="Pen hover lost"]')).toBeNull();
     for (let contact = 0; contact < 3; contact++) {
       pointer('pointerdown', 'pen', 500);
       pointer('pointerup', 'pen', 500);
     }
 
-    expect(document.body.textContent).toContain('Chrome stopped seeing the pen above the screen.');
+    expect(document.querySelector('[aria-label="Pen hover lost"]')?.textContent).toContain('Fix pen');
 
     reply(transport, { type: 'storage-lock', state: 'lost' });
     expect(document.body.textContent).toContain('This drawing was opened in another tab');
@@ -238,6 +238,7 @@ const localUndoOpeners: Record<string, () => void | Promise<void>> = {
     flush();
   },
   desktop: () => click('nav[aria-label="Tools"] button[aria-label="Local undo"]'),
+  lego: () => click('button[aria-label="Local undo"]'),
   zen() {
     const pebble = document.querySelector<HTMLElement>('[aria-label^="Tools · drag to move"]')!;
     for (const type of ['pointerdown', 'pointerup']) {

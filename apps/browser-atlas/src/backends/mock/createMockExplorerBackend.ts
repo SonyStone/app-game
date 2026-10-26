@@ -1,5 +1,6 @@
 import type {
   ExplorerBackend,
+  ExplorerBatchableCommand,
   ExplorerCloudBackupAttempt,
   ExplorerCloudBackupConfiguration,
   ExplorerCloudBackupMode,
@@ -184,353 +185,379 @@ export function createMockExplorerBackend(options: MockExplorerBackendOptions = 
       }
     },
     async execute(command) {
-      const tracksHistory = commandTracksPersistentTreeHistory(command);
-      if (tracksHistory) {
-        undoHistory.capture(createMockHistorySnapshot());
-        captureNextTreeCommit = true;
+      if (command.kind === 'batch') {
+        await executeMockBatch(command.commands);
+        return;
       }
-      try {
-        switch (command.kind) {
-        case 'activate-tab':
-          tree = replaceTreeRoots(tree, activateMockTab(tree.roots, command.tabId, command.windowId));
-          commitTree();
-          return;
-        case 'activate-window':
-          tree = replaceTreeRoots(tree, setMockFocusedWindow(tree.roots, Number(command.windowId)));
-          commitTree();
-          return;
-        case 'create-window': {
-          const windowId = nextBrowserId++;
-          const tabId = nextBrowserId++;
-          const roots = setMockFocusedWindow(tree.roots, windowId);
-          tree = replaceTreeRoots(tree, [
-            ...roots,
-            createMockWindow(windowId, tabId)
-          ]);
-          commitTree();
-          return;
-        }
-        case 'create-window-at-placement': {
-          const windowId = nextBrowserId++;
-          const tabId = nextBrowserId++;
-          const roots = setMockFocusedWindow(tree.roots, windowId);
-          tree = replaceTreeRoots(
-            tree,
-            insertMockPersistentNode(roots, command.placement, createMockWindow(windowId, tabId))
-          );
-          commitTree();
-          return;
-        }
-        case 'create-google-doc-at-placement': {
-          const savedTab = createMockGoogleDoc();
-          const placedRoots = insertMockPersistentNode(tree.roots, command.placement, savedTab);
-          tree = replaceTreeRoots(tree, restoreMockTab(placedRoots, savedTab.id, nextBrowserId++));
-          commitTree();
-          return;
-        }
-        case 'create-tree-snapshot':
-          snapshots = appendPersistentTreeSnapshot(snapshots, createPersistentTreeSnapshot(tree));
-          saveMockSnapshots(storageKeys.snapshots, snapshots);
-          return;
-        case 'restore-latest-tree-snapshot': {
-          const snapshot = snapshots.at(-1);
-          if (!snapshot) {
-            throw new Error('There is no local mock Browser Atlas snapshot to restore.');
-          }
-          restoreMockSnapshot(snapshot.createdAt);
-          return;
-        }
-        case 'delete-tree-item': {
-          if (command.target.kind === 'document' || command.target.kind === 'bookmark') {
-            await documentBackend.execute(command);
-            return;
-          }
-          const itemId =
-            command.target.kind === 'live-tab'
-              ? findMockLiveTab(tree.roots, command.target.id)?.id
-              : command.target.kind === 'live-window'
-                ? findMockLiveWindow(tree.roots, command.target.id)?.id
-                : command.target.id;
-          if (!itemId) {
-            throw new Error('The mock item selected for Cut no longer exists.');
-          }
-          const deletion = createPersistentTreeDeletion(tree.roots, itemId, command.mode);
-          deletionHistory = appendPersistentTreeDeletion(deletionHistory, {
-            ...deletion,
-            node: detachMockLiveBindings(deletion.node, deletion.deletedAt)
-          });
-          saveMockDeletionHistory(storageKeys.deletions, deletionHistory);
-          tree = replaceTreeRoots(tree, removePersistentTreeNode(tree.roots, itemId, command.mode));
-          commitTree();
-          return;
-        }
-        case 'save-close-tab':
-          tree = replaceTreeRoots(
-            tree,
-            retainMockTab(tree.roots, command.tabId, 'saved', command.includeDescendants)
-          );
-          commitTree();
-          return;
-        case 'save-close-window':
-          tree = replaceTreeRoots(
-            tree,
-            retainMockWindow(tree.roots, command.windowId, 'saved', command.includeDescendants)
-          );
-          commitTree();
-          return;
-        case 'save-close-all-windows': {
-          for (const node of tree.roots) {
-            if (node.kind === 'window' && node.binding.state === 'live') {
-              savedWindowMarkers.set(node.id, 'recently-saved');
-            }
-          }
-          saveMockSavedWindowMarkers(storageKeys.windowMarkers, savedWindowMarkers);
-          tree = replaceTreeRoots(tree, retainAllMockWindows(tree.roots));
-          commitTree();
-          return;
-        }
-        case 'restore-saved-tab':
-          tree = replaceTreeRoots(tree, restoreMockTab(tree.roots, command.savedTabId, nextBrowserId++));
-          commitTree();
-          return;
-        case 'restore-saved-window': {
-          const savedWindow = findPersistentTreeNode(tree.roots, command.savedWindowId);
-          const tabCount = countTabs(savedWindow);
-          tree = replaceTreeRoots(
-            tree,
-            restoreMockWindow(
-              tree.roots,
-              command.savedWindowId,
-              nextBrowserId++,
-              nextBrowserId,
-              'all',
-              (await readBrowserAtlasSettings()).restoreWindowsInOriginalBounds
-            )
-          );
-          nextBrowserId += tabCount;
-          commitTree();
-          return;
-        }
-        case 'restore-saved-window-session': {
-          const savedWindow = findPersistentTreeNode(tree.roots, command.savedWindowId);
-          const tabCount = countLastWindowSessionTabs(savedWindow);
-          tree = replaceTreeRoots(
-            tree,
-            restoreMockWindow(
-              tree.roots,
-              command.savedWindowId,
-              nextBrowserId++,
-              nextBrowserId,
-              'last-session',
-              (await readBrowserAtlasSettings()).restoreWindowsInOriginalBounds
-            )
-          );
-          nextBrowserId += tabCount;
-          commitTree();
-          return;
-        }
-        case 'restore-saved-group': {
-          const savedGroup = findPersistentTreeNode(tree.roots, command.savedGroupId);
-          const tabCount = countTabs(savedGroup);
-          tree = replaceTreeRoots(
-            tree,
-            restoreMockGroup(
-              tree.roots,
-              command.savedGroupId,
-              nextBrowserId++,
-              nextBrowserId
-            )
-          );
-          nextBrowserId += Math.max(1, tabCount);
-          commitTree();
-          return;
-        }
-        case 'create-saved-organizer':
-          tree = replaceTreeRoots(
-            tree,
-            insertMockPersistentNode(
-              tree.roots,
-              command.placement,
-              createMockOrganizer(command.itemKind, command.title, command.separatorStyle)
-            )
-          );
-          commitTree();
-          return;
-        case 'rename-persistent-item':
-          tree = replaceTreeRoots(tree, renameMockPersistentItem(tree.roots, command.item, command.title));
-          commitTree();
-          return;
-        case 'cycle-saved-separator':
-          tree = replaceTreeRoots(
-            tree,
-            updatePersistentTreeNode(tree.roots, command.itemId, (node) => cycleMockSeparator(node))
-          );
-          commitTree();
-          return;
-        case 'delete-saved-organizer':
-          deletionHistory = appendPersistentTreeDeletion(
-            deletionHistory,
-            createPersistentTreeDeletion(tree.roots, command.itemId, command.mode)
-          );
-          tree = replaceTreeRoots(tree, removePersistentTreeNode(tree.roots, command.itemId, command.mode));
-          saveMockDeletionHistory(storageKeys.deletions, deletionHistory);
-          commitTree();
-          return;
-        case 'undo-persistent-tree': {
-          await undoHistory.undo();
-          return;
-        }
-        case 'redo-persistent-tree': {
-          await undoHistory.redo();
-          return;
-        }
-        case 'move-saved-item':
-          tree = replaceTreeRoots(
-            tree,
-            movePersistentTreeNode(
-              tree.roots,
-              command.itemId,
-              resolveMockTargetId(tree.roots, command.target),
-              command.targetIndex
-            )
-          );
-          commitTree();
-          return;
-        case 'reposition-persistent-item':
-          tree = replaceTreeRoots(
-            tree,
-            repositionMockPersistentItem(tree.roots, command.item, command.placement)
-          );
-          commitTree();
-          return;
-        case 'flatten-persistent-tabs':
-          tree = replaceTreeRoots(
-            tree,
-            command.items.reduce((roots, item) => {
-              const itemId = requireMockTargetId(resolveMockTargetId(roots, item));
-              return flattenPersistentTabsHierarchy(roots, itemId);
-            }, tree.roots)
-          );
-          commitTree();
-          return;
-        case 'move-tab':
-          tree = replaceTreeRoots(tree, moveMockLiveTab(tree.roots, command));
-          commitTree();
-          return;
-        case 'move-tab-to-new-window': {
-          const windowId = nextBrowserId++;
-          tree = replaceTreeRoots(
-            tree,
-            liberateMockTab(tree.roots, command.tabId, windowId, command.targetIndex)
-          );
-          commitTree();
-          return;
-        }
-        case 'move-live-tab-in-tree': {
-          const tab = findMockLiveTab(tree.roots, command.tabId);
-          if (!tab) {
-            throw new Error('The mock live tab no longer exists.');
-          }
-          const targetId = resolveMockTargetId(tree.roots, command.target);
-          const target = targetId ? findPersistentTreeNode(tree.roots, targetId) : undefined;
-          tree = replaceTreeRoots(
-            tree,
-            target?.kind === 'group'
-              ? moveMockLiveTabIntoGroup(
-                  tree.roots,
-                  tab,
-                  target,
-                  command.targetIndex,
-                  nextBrowserId++
-                )
-              : movePersistentTreeNode(
-              tree.roots,
-              tab.id,
-              targetId,
-              command.targetIndex
-            )
-          );
-          commitTree();
-          return;
-        }
-        case 'restore-saved-item-into-window':
-          tree = replaceTreeRoots(
-            tree,
-            restoreMockItemIntoWindow(
-              tree.roots,
-              command.itemId,
-              command.targetWindowId,
-              command.targetIndex,
-              () => nextBrowserId++
-            )
-          );
-          commitTree();
-          return;
-        case 'open-tab':
-          tree = replaceTreeRoots(
-            tree,
-            openMockTab(tree.roots, command.windowId, command.index, command.url, nextBrowserId++)
-          );
-          commitTree();
-          return;
-        case 'open-link':
-          tree = replaceTreeRoots(
-            tree,
-            openMockLink(
-              tree.roots,
-              command.url,
-              command.target,
-              command.nestUnderActiveTab,
-              () => nextBrowserId++
-            )
-          );
-          commitTree();
-          return;
-        case 'import-items':
-          if (command.target.kind === 'persistent') {
-            const parentId = resolveMockTargetId(tree.roots, command.target.target);
-            const importedNodes = createPersistentNodesFromPortable(command.items, {
-              savedAt: Date.now(),
-              sessionId: createMockId('session'),
-              originalWindowId: mockTargetWindowId(command.target.target),
-              createId: createMockId
-            });
-            const roots = importedNodes.reduce(
-              (currentRoots, node, offset) =>
-                insertPersistentTreeNode(currentRoots, parentId, command.index + offset, node),
-              tree.roots
-            );
-            tree = replaceTreeRoots(tree, roots);
-            commitTree();
-            return;
-          }
-          if (command.target.kind === 'window') {
-            let roots = tree.roots;
-            const links = command.items.flatMap(collectPortableLinks);
-            for (const [offset, link] of links.entries()) {
-              roots = openMockTab(roots, command.target.id, command.index + offset, link.url, nextBrowserId++);
-            }
-            tree = replaceTreeRoots(tree, roots);
-            commitTree();
-            return;
-          }
-          await documentBackend.execute(command);
-          return;
-        case 'move-bookmark':
-        case 'create-bookmark':
-        case 'move-document-node':
-          await documentBackend.execute(command);
-          return;
-        default: {
-          const exhaustiveCommand: never = command;
-          throw new Error(`Unsupported mock browser command: ${String(exhaustiveCommand)}`);
-        }
-        }
-      } finally {
-        captureNextTreeCommit = false;
-      }
+
+      await executeMockCommand(command, true);
     }
   };
+
+  async function executeMockBatch(commands: readonly ExplorerBatchableCommand[]): Promise<void> {
+    const tracksHistory = commands.some(commandTracksPersistentTreeHistory);
+    if (tracksHistory) {
+      undoHistory.capture(createMockHistorySnapshot());
+    }
+    try {
+      for (const command of commands) {
+        await executeMockCommand(command, false);
+      }
+    } finally {
+      if (tracksHistory) {
+        undoHistory.capture(createMockHistorySnapshot());
+      }
+    }
+  }
+
+  /** Executes one command; `recordHistory` is false inside a batch, which records it as one change. */
+  async function executeMockCommand(command: ExplorerBatchableCommand, recordHistory: boolean): Promise<void> {
+    const tracksHistory = recordHistory && commandTracksPersistentTreeHistory(command);
+    if (tracksHistory) {
+      undoHistory.capture(createMockHistorySnapshot());
+      captureNextTreeCommit = true;
+    }
+    try {
+      switch (command.kind) {
+      case 'activate-tab':
+        tree = replaceTreeRoots(tree, activateMockTab(tree.roots, command.tabId, command.windowId));
+        commitTree();
+        return;
+      case 'activate-window':
+        tree = replaceTreeRoots(tree, setMockFocusedWindow(tree.roots, Number(command.windowId)));
+        commitTree();
+        return;
+      case 'create-window': {
+        const windowId = nextBrowserId++;
+        const tabId = nextBrowserId++;
+        const roots = setMockFocusedWindow(tree.roots, windowId);
+        tree = replaceTreeRoots(tree, [
+          ...roots,
+          createMockWindow(windowId, tabId)
+        ]);
+        commitTree();
+        return;
+      }
+      case 'create-window-at-placement': {
+        const windowId = nextBrowserId++;
+        const tabId = nextBrowserId++;
+        const roots = setMockFocusedWindow(tree.roots, windowId);
+        tree = replaceTreeRoots(
+          tree,
+          insertMockPersistentNode(roots, command.placement, createMockWindow(windowId, tabId))
+        );
+        commitTree();
+        return;
+      }
+      case 'create-google-doc-at-placement': {
+        const savedTab = createMockGoogleDoc();
+        const placedRoots = insertMockPersistentNode(tree.roots, command.placement, savedTab);
+        tree = replaceTreeRoots(tree, restoreMockTab(placedRoots, savedTab.id, nextBrowserId++));
+        commitTree();
+        return;
+      }
+      case 'create-tree-snapshot':
+        snapshots = appendPersistentTreeSnapshot(snapshots, createPersistentTreeSnapshot(tree));
+        saveMockSnapshots(storageKeys.snapshots, snapshots);
+        return;
+      case 'restore-latest-tree-snapshot': {
+        const snapshot = snapshots.at(-1);
+        if (!snapshot) {
+          throw new Error('There is no local mock Browser Atlas snapshot to restore.');
+        }
+        restoreMockSnapshot(snapshot.createdAt);
+        return;
+      }
+      case 'delete-tree-item': {
+        if (command.target.kind === 'document' || command.target.kind === 'bookmark') {
+          await documentBackend.execute(command);
+          return;
+        }
+        const itemId =
+          command.target.kind === 'live-tab'
+            ? findMockLiveTab(tree.roots, command.target.id)?.id
+            : command.target.kind === 'live-window'
+              ? findMockLiveWindow(tree.roots, command.target.id)?.id
+              : command.target.id;
+        if (!itemId) {
+          throw new Error('The mock item selected for Cut no longer exists.');
+        }
+        const deletion = createPersistentTreeDeletion(tree.roots, itemId, command.mode);
+        deletionHistory = appendPersistentTreeDeletion(deletionHistory, {
+          ...deletion,
+          node: detachMockLiveBindings(deletion.node, deletion.deletedAt)
+        });
+        saveMockDeletionHistory(storageKeys.deletions, deletionHistory);
+        tree = replaceTreeRoots(tree, removePersistentTreeNode(tree.roots, itemId, command.mode));
+        commitTree();
+        return;
+      }
+      case 'save-close-tab':
+        tree = replaceTreeRoots(
+          tree,
+          retainMockTab(tree.roots, command.tabId, 'saved', command.includeDescendants)
+        );
+        commitTree();
+        return;
+      case 'save-close-window':
+        tree = replaceTreeRoots(
+          tree,
+          retainMockWindow(tree.roots, command.windowId, 'saved', command.includeDescendants)
+        );
+        commitTree();
+        return;
+      case 'save-close-all-windows': {
+        for (const node of tree.roots) {
+          if (node.kind === 'window' && node.binding.state === 'live') {
+            savedWindowMarkers.set(node.id, 'recently-saved');
+          }
+        }
+        saveMockSavedWindowMarkers(storageKeys.windowMarkers, savedWindowMarkers);
+        tree = replaceTreeRoots(tree, retainAllMockWindows(tree.roots));
+        commitTree();
+        return;
+      }
+      case 'restore-saved-tab':
+        tree = replaceTreeRoots(tree, restoreMockTab(tree.roots, command.savedTabId, nextBrowserId++));
+        commitTree();
+        return;
+      case 'restore-saved-window': {
+        const savedWindow = findPersistentTreeNode(tree.roots, command.savedWindowId);
+        const tabCount = countTabs(savedWindow);
+        tree = replaceTreeRoots(
+          tree,
+          restoreMockWindow(
+            tree.roots,
+            command.savedWindowId,
+            nextBrowserId++,
+            nextBrowserId,
+            'all',
+            (await readBrowserAtlasSettings()).restoreWindowsInOriginalBounds
+          )
+        );
+        nextBrowserId += tabCount;
+        commitTree();
+        return;
+      }
+      case 'restore-saved-window-session': {
+        const savedWindow = findPersistentTreeNode(tree.roots, command.savedWindowId);
+        const tabCount = countLastWindowSessionTabs(savedWindow);
+        tree = replaceTreeRoots(
+          tree,
+          restoreMockWindow(
+            tree.roots,
+            command.savedWindowId,
+            nextBrowserId++,
+            nextBrowserId,
+            'last-session',
+            (await readBrowserAtlasSettings()).restoreWindowsInOriginalBounds
+          )
+        );
+        nextBrowserId += tabCount;
+        commitTree();
+        return;
+      }
+      case 'restore-saved-group': {
+        const savedGroup = findPersistentTreeNode(tree.roots, command.savedGroupId);
+        const tabCount = countTabs(savedGroup);
+        tree = replaceTreeRoots(
+          tree,
+          restoreMockGroup(
+            tree.roots,
+            command.savedGroupId,
+            nextBrowserId++,
+            nextBrowserId
+          )
+        );
+        nextBrowserId += Math.max(1, tabCount);
+        commitTree();
+        return;
+      }
+      case 'create-saved-organizer':
+        tree = replaceTreeRoots(
+          tree,
+          insertMockPersistentNode(
+            tree.roots,
+            command.placement,
+            createMockOrganizer(command.itemKind, command.title, command.separatorStyle)
+          )
+        );
+        commitTree();
+        return;
+      case 'rename-persistent-item':
+        tree = replaceTreeRoots(tree, renameMockPersistentItem(tree.roots, command.item, command.title));
+        commitTree();
+        return;
+      case 'cycle-saved-separator':
+        tree = replaceTreeRoots(
+          tree,
+          updatePersistentTreeNode(tree.roots, command.itemId, (node) => cycleMockSeparator(node))
+        );
+        commitTree();
+        return;
+      case 'delete-saved-organizer':
+        deletionHistory = appendPersistentTreeDeletion(
+          deletionHistory,
+          createPersistentTreeDeletion(tree.roots, command.itemId, command.mode)
+        );
+        tree = replaceTreeRoots(tree, removePersistentTreeNode(tree.roots, command.itemId, command.mode));
+        saveMockDeletionHistory(storageKeys.deletions, deletionHistory);
+        commitTree();
+        return;
+      case 'undo-persistent-tree': {
+        await undoHistory.undo();
+        return;
+      }
+      case 'redo-persistent-tree': {
+        await undoHistory.redo();
+        return;
+      }
+      case 'move-saved-item':
+        tree = replaceTreeRoots(
+          tree,
+          movePersistentTreeNode(
+            tree.roots,
+            command.itemId,
+            resolveMockTargetId(tree.roots, command.target),
+            command.targetIndex
+          )
+        );
+        commitTree();
+        return;
+      case 'reposition-persistent-item':
+        tree = replaceTreeRoots(
+          tree,
+          repositionMockPersistentItem(tree.roots, command.item, command.placement)
+        );
+        commitTree();
+        return;
+      case 'flatten-persistent-tabs':
+        tree = replaceTreeRoots(
+          tree,
+          command.items.reduce((roots, item) => {
+            const itemId = requireMockTargetId(resolveMockTargetId(roots, item));
+            return flattenPersistentTabsHierarchy(roots, itemId);
+          }, tree.roots)
+        );
+        commitTree();
+        return;
+      case 'move-tab':
+        tree = replaceTreeRoots(tree, moveMockLiveTab(tree.roots, command));
+        commitTree();
+        return;
+      case 'move-tab-to-new-window': {
+        const windowId = nextBrowserId++;
+        tree = replaceTreeRoots(
+          tree,
+          liberateMockTab(tree.roots, command.tabId, windowId, command.targetIndex)
+        );
+        commitTree();
+        return;
+      }
+      case 'move-live-tab-in-tree': {
+        const tab = findMockLiveTab(tree.roots, command.tabId);
+        if (!tab) {
+          throw new Error('The mock live tab no longer exists.');
+        }
+        const targetId = resolveMockTargetId(tree.roots, command.target);
+        const target = targetId ? findPersistentTreeNode(tree.roots, targetId) : undefined;
+        tree = replaceTreeRoots(
+          tree,
+          target?.kind === 'group'
+            ? moveMockLiveTabIntoGroup(
+                tree.roots,
+                tab,
+                target,
+                command.targetIndex,
+                nextBrowserId++
+              )
+            : movePersistentTreeNode(
+            tree.roots,
+            tab.id,
+            targetId,
+            command.targetIndex
+          )
+        );
+        commitTree();
+        return;
+      }
+      case 'restore-saved-item-into-window':
+        tree = replaceTreeRoots(
+          tree,
+          restoreMockItemIntoWindow(
+            tree.roots,
+            command.itemId,
+            command.targetWindowId,
+            command.targetIndex,
+            () => nextBrowserId++
+          )
+        );
+        commitTree();
+        return;
+      case 'open-tab':
+        tree = replaceTreeRoots(
+          tree,
+          openMockTab(tree.roots, command.windowId, command.index, command.url, nextBrowserId++)
+        );
+        commitTree();
+        return;
+      case 'open-link':
+        tree = replaceTreeRoots(
+          tree,
+          openMockLink(
+            tree.roots,
+            command.url,
+            command.target,
+            command.nestUnderActiveTab,
+            () => nextBrowserId++
+          )
+        );
+        commitTree();
+        return;
+      case 'import-items':
+        if (command.target.kind === 'persistent') {
+          const parentId = resolveMockTargetId(tree.roots, command.target.target);
+          const importedNodes = createPersistentNodesFromPortable(command.items, {
+            savedAt: Date.now(),
+            sessionId: createMockId('session'),
+            originalWindowId: mockTargetWindowId(command.target.target),
+            createId: createMockId
+          });
+          const roots = importedNodes.reduce(
+            (currentRoots, node, offset) =>
+              insertPersistentTreeNode(currentRoots, parentId, command.index + offset, node),
+            tree.roots
+          );
+          tree = replaceTreeRoots(tree, roots);
+          commitTree();
+          return;
+        }
+        if (command.target.kind === 'window') {
+          let roots = tree.roots;
+          const links = command.items.flatMap(collectPortableLinks);
+          for (const [offset, link] of links.entries()) {
+            roots = openMockTab(roots, command.target.id, command.index + offset, link.url, nextBrowserId++);
+          }
+          tree = replaceTreeRoots(tree, roots);
+          commitTree();
+          return;
+        }
+        await documentBackend.execute(command);
+        return;
+      case 'move-bookmark':
+      case 'create-bookmark':
+      case 'move-document-node':
+        await documentBackend.execute(command);
+        return;
+      default: {
+        const exhaustiveCommand: never = command;
+        throw new Error(`Unsupported mock browser command: ${String(exhaustiveCommand)}`);
+      }
+      }
+    } finally {
+      captureNextTreeCommit = false;
+    }
+  }
 
   function commitTree(): void {
     const previousTree = loadPersistedMockTree(storageKeys.tree);
@@ -712,7 +739,8 @@ const MOCK_EXPLORER_CAPABILITIES = {
     'move-bookmark': false,
     'create-bookmark': false,
     'import-items': true,
-    'move-document-node': true
+    'move-document-node': true,
+    batch: true
   }
 } as const satisfies ExplorerBackend['capabilities'];
 

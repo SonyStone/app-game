@@ -11,7 +11,8 @@ import type { PaintSession } from './createPaintSession';
 /**
  * The session's floating windows that are open, over the variant's UI: `PaintEditor` shows them in every variant, so
  * a variant only opens them (see `PaintSession.windows`). The mixing palette loads the brush with paint mixed from
- * tubes; the Pen window holds palm rejection, what to do when Chrome loses the pen hover and the way to the pen
+ * tubes; the Pen window holds palm rejection, what to do when Chrome loses the pen hover (not in the Android shell,
+ * which supplies it) and the way to the pen
  * pressure calibration, whose window draws with the current brush; the Local undo window holds that tool's settings,
  * Apply and Cancel, and shows only while the tool is active.
  */
@@ -21,8 +22,10 @@ export function SessionWindows(props: { session: PaintSession }) {
     palmSettings,
     penHover,
     freshTab,
+    nativeShell,
     brush,
     loadColor,
+    recentColors,
     pressureCalibration,
     tools,
     library,
@@ -39,6 +42,7 @@ export function SessionWindows(props: { session: PaintSession }) {
           onClose={() => windows.close('palette')}
           color={brush().color}
           onLoad={loadColor}
+          recentColors={recentColors}
         />
       </Show>
       <Show when={windows.isOpen('pen')}>
@@ -54,7 +58,9 @@ export function SessionWindows(props: { session: PaintSession }) {
             penHovers={penHover.hovers()}
             onChange={palmSettings.update}
           />
-          <FreshTabControls auto={freshTab.auto()} onChange={freshTab.setAuto} />
+          <Show when={!nativeShell.active}>
+            <FreshTabControls auto={freshTab.auto()} onChange={freshTab.setAuto} />
+          </Show>
           <PressureCalibrationControls
             calibrated={!!pressureCalibration.calibration()}
             onOpen={() => windows.open('pressure')}

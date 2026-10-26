@@ -3,10 +3,12 @@ import { createFullscreen } from '@solid-primitives/fullscreen';
 import { getOwner, isDisposed, untrack, type Accessor } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import type { FullscreenError } from '../../shared/errors';
+import { nativeShell } from '../native-shell';
 
 /**
  * Provides props for a button that toggles fullscreen for `container`, the whole editor including its controls.
- * The state follows the browser, including exits through Escape. Must be created within a Solid owner.
+ * The state follows the browser, including exits through Escape. In the Android shell app there is nothing to toggle;
+ * see `shown`. Must be created within a Solid owner.
  */
 export function createFullscreenToggle(
   container: Accessor<HTMLElement | undefined>,
@@ -37,7 +39,12 @@ export function createFullscreenToggle(
       onClick: toggle
     },
     /** Whether the container is currently fullscreen. */
-    isActive
+    isActive,
+    /**
+     * Whether a full screen control belongs in the UI at all: not in the Android shell app, which always runs full
+     * screen. Variants leave the control out rather than disable it.
+     */
+    shown: nativeShell() === undefined
   };
 
   /**

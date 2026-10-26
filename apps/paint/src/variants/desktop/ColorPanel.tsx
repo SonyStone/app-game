@@ -1,4 +1,4 @@
-import { createSignal, For } from 'solid-js';
+import { createSignal, For, untrack } from 'solid-js';
 import { createRecentColors } from '../../features/color/createRecentColors';
 import { hexToHsv, hsvToHex, parseHex, type Hsv } from '../../features/color/hsv';
 import { HueTriangle } from '../../features/hue-triangle';
@@ -11,6 +11,8 @@ import styles from './panels.module.css';
  * recently used colors. Edits apply live; a color joins the recent ones when an edit ends.
  */
 export function ColorPanel(props: {
+  /** The session's shared history. Omit only for a standalone picker with its own history; stable until unmount. */
+  recentColors?: ReturnType<typeof createRecentColors>;
   foreground: string;
   background: string;
   /** The color being edited. */
@@ -19,7 +21,7 @@ export function ColorPanel(props: {
   /** Receives the edited color as a brush patch. */
   onChange: (patch: { color?: string; backgroundColor?: string }) => void;
 }) {
-  const recent = createRecentColors();
+  const recent = untrack(() => props.recentColors ?? createRecentColors());
   const hex = () => (props.target === 'color' ? props.foreground : props.background);
   // Keeps the written HSV while it still produces the color, so hue and saturation survive grays and black.
   const [hsv, setHsv] = createSignal<Hsv>((previous) =>

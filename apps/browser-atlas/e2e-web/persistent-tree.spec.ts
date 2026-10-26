@@ -7,6 +7,8 @@ import {
   serializeClipboardText
 } from '../src/explorer/clipboard';
 import { parseExplorerHtmlDocument, serializeExplorerHtml } from '../src/explorer/files';
+import { assignMetroLineNumbers } from '../src/explorer/metroLineNumbers';
+import { planSequentialInsertion, type SequentialInsertionSlot } from '../src/explorer/sequentialInsertion';
 import {
   createEmptyExplorerDocument,
   parseExplorerDocument,
@@ -49,6 +51,47 @@ test('moves complete hierarchies into every semantic node kind and rejects cycle
   expect(moved[0]?.kind).toBe('note');
   expect(moved[0]?.children[0]?.id).toBe('group');
   expect(() => movePersistentTreeNode(moved, 'note', 'tab', 0)).toThrow('cannot be moved into itself');
+});
+
+test('plans several moves so the items land side by side in their order', () => {
+  // Same list, moving forward past other siblings: a b [c] d [e] f → drop before f.
+  const forward = applySequentialMoves(
+    { tabs: ['a', 'b', 'c', 'd', 'e', 'f'] },
+    [['tabs', 'c'], ['tabs', 'e']],
+    ['tabs', 5]
+  );
+  expect(forward).toEqual({ tabs: ['a', 'b', 'd', 'c', 'e', 'f'] });
+  // Same list, moving backward: drop before b.
+  const backward = applySequentialMoves(
+    { tabs: ['a', 'b', 'c', 'd', 'e'] },
+    [['tabs', 'c'], ['tabs', 'e']],
+    ['tabs', 1]
+  );
+  expect(backward).toEqual({ tabs: ['a', 'c', 'e', 'b', 'd'] });
+  // Dropping right after the run itself keeps the order.
+  const inPlace = applySequentialMoves({ tabs: ['a', 'b', 'c', 'd'] }, [['tabs', 'b'], ['tabs', 'c']], ['tabs', 3]);
+  expect(inPlace).toEqual({ tabs: ['a', 'b', 'c', 'd'] });
+  // From two lists into the end of a third, where imports continue the run.
+  const moved = applySequentialMoves(
+    { left: ['a', 'b'], right: ['c', 'd'], target: ['t'] },
+    [['left', 'b'], ['right', 'c'], ['left', 'a']],
+    ['target', 1]
+  );
+  expect(moved).toEqual({ left: [], right: ['d'], target: ['t', 'b', 'c', 'a'] });
+  expect(planSequentialInsertion([{ key: 'left', index: 0 }], { key: 'target', index: 1 }).nextIndex).toBe(2);
+});
+
+test('keeps metro line numbers with their groups and fills the smallest free number', () => {
+  const first = assignMetroLineNumbers({}, ['a', 'b', 'c']);
+  expect([...first]).toEqual([['a', 1], ['b', 2], ['c', 3]]);
+
+  // b is gone, d is new and appears first: a and c keep their numbers, d takes the freed 2.
+  const second = assignMetroLineNumbers(Object.fromEntries(first), ['d', 'a', 'c', 'e']);
+  expect([...second]).toEqual([['a', 1], ['c', 3], ['d', 2], ['e', 4]]);
+
+  // Invalid or duplicated remembered numbers are reassigned.
+  const third = assignMetroLineNumbers({ a: 2, b: 2, c: 0 }, ['a', 'b', 'c']);
+  expect(Object.fromEntries(third)).toEqual({ a: 2, b: 1, c: 3 });
 });
 
 test('flattens nested tabs without crossing organizer boundaries', () => {
@@ -365,4 +408,29 @@ function createSavedTab(id: string, url: string): PersistentTabNode {
     },
     children: []
   };
+}
+
+/**
+ * Applies planned moves like the backends: remove at the source index, then insert at the target
+ * index, lowered by one when the item left the same list before that position.
+ */
+function applySequentialMoves(
+  lists: Record<string, string[]>,
+  moves: readonly (readonly [key: string, item: string])[],
+  target: readonly [key: string, index: number]
+): Record<string, string[]> {
+  const result = Object.fromEntries(Object.entries(lists).map(([key, items]) => [key, [...items]]));
+  const sources: SequentialInsertionSlot[] = moves.map(([key, item]) => ({
+    key,
+    index: lists[key]!.indexOf(item)
+  }));
+  const plan = planSequentialInsertion(sources, { key: target[0], index: target[1] });
+  moves.forEach(([key, item], moveNumber) => {
+    const { sourceIndex, targetIndex } = plan.positions[moveNumber]!;
+    expect(result[key]![sourceIndex]).toBe(item);
+    result[key]!.splice(sourceIndex, 1);
+    const insertionIndex = key === target[0] && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    result[target[0]]!.splice(insertionIndex, 0, item);
+  });
+  return result;
 }

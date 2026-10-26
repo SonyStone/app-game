@@ -60,7 +60,8 @@ export function createFixtureExplorerBackend(): ExplorerBackend {
         'move-bookmark': false,
         'create-bookmark': false,
         'import-items': true,
-        'move-document-node': true
+        'move-document-node': true,
+        batch: true
       }
     },
     async load(source) {

@@ -14,6 +14,8 @@ const FIREFOX_MOCK_CLOUD_CONFIGURATION_STORAGE_KEY = 'browserAtlas.mockCloudConf
 const MOCK_CLOUD_ATTEMPT_STORAGE_KEY = 'browserAtlas.mockCloudAttempt.v1';
 const SETTINGS_STORAGE_KEY = 'browserAtlas.settings.v1';
 const CLIPBOARD_MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control';
+/** Grabs a row by its title: a drag from the empty space after the title selects rows instead. */
+const ROW_TITLE_POSITION = { x: 48, y: 10 };
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(({ storageKeys, settingsStorageKey }) => {
@@ -86,7 +88,7 @@ test('supports persistent tab lifecycle and moves tabs between mock windows', as
   const sourceTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
   const targetWindow = rightPane.locator('[data-node-id="explore-window-1002"]');
   await expect(sourceTab).toContainText('SolidJS documentation');
-  await sourceTab.dragTo(targetWindow, { targetPosition: { x: 48, y: 10 } });
+  await sourceTab.dragTo(targetWindow, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
   await expect.poll(() => readMockTabWindow(page, 'mock-live-tab-solid')).toBe(1002);
   const undo = leftPane.getByTitle('Undo the latest persistent tree change');
   const redo = leftPane.getByTitle('Redo the latest undone persistent tree change');
@@ -116,7 +118,7 @@ test('moves tabs and windows between independent mock browsers', async ({ page }
 
   const firefoxWindow = rightPane.locator('[data-node-id="explore-window-3002"]');
   const movedChromeTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
-  await movedChromeTab.dragTo(firefoxWindow, { targetPosition: { x: 48, y: 10 } });
+  await movedChromeTab.dragTo(firefoxWindow, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
   await expect(movedChromeTab).toHaveCount(0);
   await expect(rightPane.locator('[data-node-id="explore-tab-20000"] a')).toHaveAttribute(
     'href',
@@ -125,6 +127,7 @@ test('moves tabs and windows between independent mock browsers', async ({ page }
 
   const movedChromeWindow = leftPane.locator('[data-node-id="explore-window-1002"]');
   await movedChromeWindow.dragTo(rightPane.locator('[data-node-id="explore-window-3001"]'), {
+    sourcePosition: ROW_TITLE_POSITION,
     targetPosition: { x: 48, y: 10 }
   });
   await expect(movedChromeWindow).toHaveCount(0);
@@ -206,7 +209,11 @@ test('persists interaction settings and defaults tab activation to double click'
   const secondSavedLink = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-firefox"] a');
   await secondSavedLink.click();
   await expect.poll(() => readMockBindingState(page, 'mock-saved-tab-firefox')).toBe('live');
-  await leftPane.locator('[data-node-id="explore-window-1002"]').click();
+  const readingWindow = leftPane.locator('[data-node-id="explore-window-1002"]');
+  await clickEmptyRowSpace(readingWindow);
+  await expect(readingWindow).toHaveAttribute('aria-selected', 'true');
+  expect(await readFocusedMockWindowId(page)).not.toBe(1002);
+  await readingWindow.click({ position: ROW_TITLE_POSITION });
   await expect.poll(() => readFocusedMockWindowId(page)).toBe(1002);
 
   await page.reload();
@@ -479,7 +486,7 @@ test('allows every persistent node kind to contain descendants', async ({ page }
 
   const savedWindow = leftPane.locator('[data-node-id="explore-saved-window-mock-saved-window-reference"]');
   const note = rightPane.locator('[data-node-id="explore-saved-note-mock-note-next"]');
-  await savedWindow.dragTo(note, { targetPosition: { x: 48, y: 10 } });
+  await savedWindow.dragTo(note, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
   await expect.poll(() => hasMockParentChild(page, 'mock-note-next', 'mock-saved-window-reference')).toBe(true);
 
   await savedWindow.getByTitle('Restore this saved window').click();
@@ -605,7 +612,7 @@ test('keeps a live tab inside a saved note without moving its browser tab', asyn
 
   const liveTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
   const savedNote = rightPane.locator('[data-node-id="explore-saved-note-mock-note-next"]');
-  await liveTab.dragTo(savedNote, { targetPosition: { x: 48, y: 10 } });
+  await liveTab.dragTo(savedNote, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
 
   await expect.poll(() => hasMockParentChild(page, 'mock-note-next', 'mock-live-tab-solid')).toBe(true);
   await expect(leftPane.locator('[data-node-id="explore-tab-2002"]')).toBeVisible();
@@ -665,7 +672,7 @@ test('turns a saved group into a new mock window when a live tab is dropped insi
     throw new Error('The created mock group has no persistent node ID.');
   }
   const persistentId = nodeId.replace(/^explore-saved-group-/u, '');
-  await liveTab.dragTo(savedGroup, { targetPosition: { x: 48, y: 10 } });
+  await liveTab.dragTo(savedGroup, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
 
   await expect.poll(() => readMockTabWindow(page, 'mock-live-tab-solid')).toBe(10_000);
   await expect.poll(() => hasMockParentChild(page, persistentId, 'mock-live-tab-solid')).toBe(true);
@@ -689,6 +696,7 @@ test('liberates a live tab into a new mock window by dropping it on the Explore 
   await selectTreeRow(liveTab);
   await acceptNextPrompt(page, 'Liberated mock context', () => liveTab.press('F2'));
   await liveTab.dragTo(rightPane.locator('[data-node-id="explore-root"]'), {
+    sourcePosition: ROW_TITLE_POSITION,
     targetPosition: { x: 48, y: 10 }
   });
 
@@ -975,7 +983,7 @@ test('restores a saved hierarchy into an existing mock window by dropping it', a
 
   const savedWindow = leftPane.locator('[data-node-id="explore-saved-window-mock-saved-window-reference"]');
   const targetWindow = rightPane.locator('[data-node-id="explore-window-1001"]');
-  await savedWindow.dragTo(targetWindow, { targetPosition: { x: 48, y: 10 } });
+  await savedWindow.dragTo(targetWindow, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
 
   await expect.poll(() => readMockTabWindow(page, 'mock-saved-tab-chrome')).toBe(1001);
   await expect.poll(() => readMockTabWindow(page, 'mock-saved-tab-firefox')).toBe(1001);
@@ -1155,7 +1163,10 @@ test('manages independent automatic and manual cloud backups in the website mock
 
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
   const projectGroup = rightPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
-  await openedRestoreMarker.dragTo(projectGroup, { targetPosition: { x: 48, y: 10 } });
+  await openedRestoreMarker.dragTo(projectGroup, {
+    sourcePosition: ROW_TITLE_POSITION,
+    targetPosition: { x: 48, y: 10 }
+  });
   await expect.poll(() => readMockChildLabelsByLabel(page, 'Browser Atlas project')).toContain('Cloud restore marker');
 
   const rightCloudButton = rightPane.getByTitle('Manage manual and automatic remote tree backups');
@@ -1490,7 +1501,7 @@ test('flattens tabs without crossing organizers and includes nested organizers w
 
   const chromeTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-chrome"]');
   const firefoxTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-firefox"]');
-  await firefoxTab.dragTo(chromeTab, { targetPosition: { x: 48, y: 10 } });
+  await firefoxTab.dragTo(chromeTab, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
   await expect.poll(() => hasMockParentChild(page, 'mock-saved-tab-chrome', 'mock-saved-tab-firefox')).toBe(true);
 
   await project.getByRole('button', { name: 'Collapse node' }).click();
@@ -1614,6 +1625,27 @@ test('uses in-app confirmation and supports persistent delete Undo and Redo', as
   await expect(savedDesignTab).toBeVisible();
   await expect(leftPane.getByTitle('Undo the latest persistent tree change')).toBeDisabled();
   await expect(nativeDialogs).toEqual([]);
+});
+
+test('undoes consecutive persistent tree changes one change at a time', async ({ page }) => {
+  await page.goto('/browser-atlas');
+  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const undo = leftPane.getByTitle('Undo the latest persistent tree change');
+  const designTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-design"]');
+  const chromeTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-chrome"]');
+
+  await designTab.getByRole('button', { name: 'Delete Tabs Outliner architecture notes' }).click();
+  await expect(designTab).toHaveCount(0);
+  await chromeTab.getByRole('button', { name: 'Delete Chrome Extensions API' }).click();
+  await expect(chromeTab).toHaveCount(0);
+
+  await undo.click();
+  await expect(chromeTab).toBeVisible();
+  await expect(designTab).toHaveCount(0);
+
+  await undo.click();
+  await expect(designTab).toBeVisible();
+  await expect(undo).toBeDisabled();
 });
 
 test('promotes children of expanded deletions, removes collapsed subtrees, and undoes both in the mock', async ({ page }) => {
@@ -1784,6 +1816,359 @@ test('searches, prints, and exports all visible mock rows with the original glob
     Number(await importedWindowRow.getAttribute('aria-level'))
   );
   await expect(leftPane.getByText('Tabs Outliner architecture notes', { exact: true })).toHaveCount(0);
+});
+
+test('selects rows by dragging from empty row space without moving them', async ({ page }) => {
+  await page.goto('/browser-atlas');
+  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const atlasTab = leftPane.locator('[data-node-id="explore-tab-2001"]');
+  const mdnTab = leftPane.locator('[data-node-id="explore-tab-2003"]');
+  const marquee = leftPane.locator('[data-tree-marquee]');
+
+  await dragAcrossEmptyRowSpace(page, atlasTab, mdnTab, async () => {
+    await expect(marquee).toBeVisible();
+  });
+  await expect(marquee).toHaveCount(0);
+  await expect.poll(() => readSelectedRowIds(leftPane)).toEqual([
+    'explore-tab-2001',
+    'explore-tab-2002',
+    'explore-window-1002',
+    'explore-tab-2003'
+  ]);
+  await expect(mdnTab).toBeFocused();
+  await expect(atlasTab).not.toHaveClass(/opacity-40/u);
+  await expect(
+    leftPane.locator('[data-node-id="explore-window-1001"] + ul [data-node-id="explore-tab-2001"]')
+  ).toHaveCount(1);
+
+  // Escape abandons a rectangle in progress and keeps the selection it started from.
+  const project = leftPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
+  const separator = leftPane.locator('[data-node-id="explore-saved-separator-mock-separator"]');
+  await dragAcrossEmptyRowSpace(page, project, separator, async () => {
+    await expect.poll(() => readSelectedRowIds(leftPane)).toContain('explore-saved-separator-mock-separator');
+    await page.keyboard.press('Escape');
+    await expect(marquee).toHaveCount(0);
+  });
+  await expect.poll(() => readSelectedRowIds(leftPane)).toEqual([
+    'explore-tab-2001',
+    'explore-tab-2002',
+    'explore-window-1002',
+    'explore-tab-2003'
+  ]);
+
+  // Shift adds the rectangle's rows to the selection; a click below the rows clears it.
+  await dragAcrossEmptyRowSpace(page, project, project, undefined, ['Shift']);
+  await expect.poll(() => readSelectedRowIds(leftPane)).toContain('explore-saved-group-mock-saved-project');
+  await expect.poll(async () => (await readSelectedRowIds(leftPane)).length).toBe(5);
+  const tree = leftPane.getByRole('tabpanel');
+  const treeBounds = await tree.boundingBox();
+  if (!treeBounds) {
+    throw new Error('The explorer tree is not visible.');
+  }
+  await tree.click({ position: { x: treeBounds.width / 2, y: treeBounds.height - 20 } });
+  await expect.poll(() => readSelectedRowIds(leftPane)).toEqual([]);
+});
+
+test('selects rows with a pen and scrolls while the rectangle reaches past the tree', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 300 });
+  await page.goto('/browser-atlas');
+  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const atlasTab = leftPane.locator('[data-node-id="explore-tab-2001"]');
+  const solidTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
+  const draftTab = leftPane
+    .locator('[data-node-id^="explore-saved-tab-"]')
+    .filter({ hasText: 'Unsaved WebExtensions draft' });
+  const tree = leftPane.getByRole('tabpanel');
+  const cdp = await page.context().newCDPSession(page);
+  const pen = async (type: 'mousePressed' | 'mouseMoved' | 'mouseReleased', point: { x: number; y: number }) =>
+    cdp.send('Input.dispatchMouseEvent', {
+      type,
+      x: point.x,
+      y: point.y,
+      button: 'left',
+      buttons: type === 'mouseReleased' ? 0 : 1,
+      clickCount: 1,
+      pointerType: 'pen'
+    });
+
+  try {
+    // Explore opens scrolled to its end; scroll back like a user to start from the first rows.
+    await tree.hover();
+    await page.mouse.wheel(0, -2000);
+    await expect.poll(() => tree.evaluate((element) => element.scrollTop)).toBe(0);
+    const start = await emptyRowSpacePoint(atlasTab);
+    const end = await emptyRowSpacePoint(solidTab);
+    await pen('mousePressed', start);
+    await pen('mouseMoved', { x: start.x + 6, y: start.y + 6 });
+    await pen('mouseMoved', end);
+    await pen('mouseReleased', end);
+    await expect.poll(() => readSelectedRowIds(leftPane)).toEqual(['explore-tab-2001', 'explore-tab-2002']);
+
+    // A selected row's empty space now drags the selection, so the next rectangle starts above it.
+    const treeBounds = await tree.boundingBox();
+    if (!treeBounds) {
+      throw new Error('The explorer tree is not visible.');
+    }
+    const windowStart = await emptyRowSpacePoint(leftPane.locator('[data-node-id="explore-window-1001"]'));
+    await pen('mousePressed', windowStart);
+    await pen('mouseMoved', { x: windowStart.x + 6, y: windowStart.y + 6 });
+    await pen('mouseMoved', { x: windowStart.x, y: treeBounds.y + treeBounds.height + 40 });
+    await expect.poll(() => tree.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await expect.poll(() => readSelectedRowIds(leftPane)).toContain(await draftTab.getAttribute('data-node-id'));
+    await pen('mouseReleased', { x: windowStart.x, y: treeBounds.y + treeBounds.height + 40 });
+    await expect.poll(async () => (await readSelectedRowIds(leftPane))[0]).toBe('explore-window-1001');
+  } finally {
+    // An attached session keeps the Playwright worker alive for minutes after the run.
+    await cdp.detach();
+  }
+});
+
+test('changes the selection with Shift, Ctrl/Cmd, and keyboard ranges', async ({ page }) => {
+  await page.goto('/browser-atlas');
+  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const researchWindow = leftPane.locator('[data-node-id="explore-window-1001"]');
+  const solidTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
+  const readingWindow = leftPane.locator('[data-node-id="explore-window-1002"]');
+  const mdnTab = leftPane.locator('[data-node-id="explore-tab-2003"]');
+  const project = leftPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
+
+  await clickEmptyRowSpace(researchWindow);
+  await expect.poll(() => readSelectedRowIds(leftPane)).toEqual(['explore-window-1001']);
+  await clickEmptyRowSpace(readingWindow, [CLIPBOARD_MODIFIER]);
+  await expect.poll(() => readSelectedRowIds(leftPane)).toEqual(['explore-window-1001', 'explore-window-1002']);
+  await clickEmptyRowSpace(researchWindow, [CLIPBOARD_MODIFIER]);
+  await expect.poll(() => readSelectedRowIds(leftPane)).toEqual(['explore-window-1002']);
+
+  await clickEmptyRowSpace(solidTab);
+  await clickEmptyRowSpace(project, ['Shift']);
+  await expect.poll(() => readSelectedRowIds(leftPane)).toEqual([
+    'explore-tab-2002',
+    'explore-window-1002',
+    'explore-tab-2003',
+    'explore-saved-group-mock-saved-project'
+  ]);
+  await expect(project).toBeFocused();
+  await clickEmptyRowSpace(readingWindow, ['Shift']);
+  await expect.poll(() => readSelectedRowIds(leftPane)).toEqual(['explore-tab-2002', 'explore-window-1002']);
+
+  await clickEmptyRowSpace(mdnTab);
+  await mdnTab.press('Shift+ArrowUp');
+  await mdnTab.page().keyboard.press('Shift+ArrowUp');
+  await expect.poll(() => readSelectedRowIds(leftPane)).toEqual([
+    'explore-tab-2002',
+    'explore-window-1002',
+    'explore-tab-2003'
+  ]);
+  await expect(solidTab).toBeFocused();
+  await solidTab.press(`${CLIPBOARD_MODIFIER}+a`);
+  await expect.poll(async () => (await readSelectedRowIds(leftPane)).length).toBe(
+    await leftPane.locator('[role="treeitem"]').count()
+  );
+
+  // A modified click on a link title keeps its link meaning and selects only that row.
+  await solidTab.locator('a').click({ modifiers: ['Shift'] });
+  await expect.poll(() => readSelectedRowIds(leftPane)).toEqual(['explore-tab-2002']);
+});
+
+test('deletes and save-closes a multi-row selection as one undoable change', async ({ page }) => {
+  await page.goto('/browser-atlas');
+  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const undo = leftPane.getByTitle('Undo the latest persistent tree change');
+  const designTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-design"]');
+  const chromeTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-chrome"]');
+
+  await clickEmptyRowSpace(designTab);
+  await clickEmptyRowSpace(chromeTab, [CLIPBOARD_MODIFIER]);
+  await chromeTab.press('Delete');
+  await expect(designTab).toHaveCount(0);
+  await expect(chromeTab).toHaveCount(0);
+  await undo.click();
+  await expect(designTab).toBeVisible();
+  await expect(chromeTab).toBeVisible();
+  await expect(undo).toBeDisabled();
+
+  const atlasTab = leftPane.locator('[data-node-id="explore-tab-2001"]');
+  const solidTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
+  await clickEmptyRowSpace(atlasTab);
+  await clickEmptyRowSpace(solidTab, ['Shift']);
+  await solidTab.press('Backspace');
+  await expect.poll(() => readMockBindingState(page, 'mock-live-tab-atlas')).toBe('saved');
+  await expect.poll(() => readMockBindingState(page, 'mock-live-tab-solid')).toBe('saved');
+  await undo.click();
+  await expect.poll(() => readMockBindingState(page, 'mock-live-tab-atlas')).toBe('live');
+  await expect.poll(() => readMockBindingState(page, 'mock-live-tab-solid')).toBe('live');
+  await expect(undo).toBeDisabled();
+});
+
+test('copies, cuts, and offers selection commands for several hierarchies', async ({ page }) => {
+  await page.goto('/browser-atlas');
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(page.url()).origin });
+  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const menu = page.getByRole('menu', { name: 'Tree commands' });
+  const savedWindow = leftPane.locator('[data-node-id="explore-saved-window-mock-saved-window-reference"]');
+  const chromeTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-chrome"]');
+  const designTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-design"]');
+  const note = leftPane.locator('[data-node-id="explore-saved-note-mock-note-next"]');
+
+  // A selected child of a selected hierarchy travels inside it rather than as a second copy.
+  await clickEmptyRowSpace(designTab);
+  await clickEmptyRowSpace(savedWindow, [CLIPBOARD_MODIFIER]);
+  await clickEmptyRowSpace(chromeTab, [CLIPBOARD_MODIFIER]);
+  const copied = await dispatchClipboardWrite(chromeTab, 'copy');
+  const payload: unknown = JSON.parse(copied['application/x-browser-atlas-items+json'] ?? 'null');
+  expect(payload).toMatchObject({
+    items: [{ url: 'https://example.com/browser-atlas/design' }, { title: 'Reference session' }]
+  });
+  expect(copied['text/plain']).toContain('Firefox WebExtensions');
+
+  await chromeTab.click({ button: 'right', position: await emptyRowSpacePosition(chromeTab) });
+  await expect(menu.getByRole('menuitem', { name: /Copy 2 hierarchies/u })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: /Cut 2 hierarchies/u })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: /Delete 3 items/u })).toBeVisible();
+  await expect.poll(() => readSelectedRowIds(leftPane)).toHaveLength(3);
+  await menu.getByRole('menuitem', { name: /Cut 2 hierarchies/u }).click();
+  await expect(designTab).toHaveCount(0);
+  await expect(savedWindow).toHaveCount(0);
+
+  await note.click({ button: 'right', position: await emptyRowSpacePosition(note) });
+  await menu.getByRole('menuitem', { name: /Paste as last child/u }).click();
+  await expect.poll(() => readMockChildLabels(page, 'mock-note-next')).toEqual([
+    'Tabs Outliner architecture notes',
+    'Reference session'
+  ]);
+});
+
+test('drags a selection from the empty space of a selected row', async ({ page }) => {
+  await page.goto('/browser-atlas');
+  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  await rightPane.getByRole('tab', { name: 'Explore' }).click();
+  const atlasTab = leftPane.locator('[data-node-id="explore-tab-2001"]');
+  const solidTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
+
+  await dragAcrossEmptyRowSpace(page, atlasTab, solidTab);
+  await expect.poll(() => readSelectedRowIds(leftPane)).toEqual(['explore-tab-2001', 'explore-tab-2002']);
+  await solidTab.dragTo(rightPane.locator('[data-node-id="explore-window-1002"]'), {
+    sourcePosition: await emptyRowSpacePosition(solidTab),
+    targetPosition: { x: 48, y: 10 }
+  });
+  await expect.poll(() => readMockChildLabels(page, 'mock-live-window-reading')).toEqual([
+    'MDN WebExtensions',
+    'Browser Atlas',
+    'SolidJS documentation'
+  ]);
+  await expect(leftPane.locator('[data-tree-marquee]')).toHaveCount(0);
+});
+
+test('drags every selected row together within and between mock browsers', async ({ page }) => {
+  await page.goto('/browser-atlas');
+  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  await rightPane.getByRole('tab', { name: 'Explore' }).click();
+  const atlasTab = leftPane.locator('[data-node-id="explore-tab-2001"]');
+  const solidTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
+
+  await clickEmptyRowSpace(atlasTab);
+  await clickEmptyRowSpace(solidTab, ['Shift']);
+  await solidTab.dragTo(rightPane.locator('[data-node-id="explore-window-1002"]'), {
+    sourcePosition: ROW_TITLE_POSITION,
+    targetPosition: { x: 48, y: 10 }
+  });
+  await expect.poll(() => readMockChildLabels(page, 'mock-live-window-reading')).toEqual([
+    'MDN WebExtensions',
+    'Browser Atlas',
+    'SolidJS documentation'
+  ]);
+  await leftPane.getByTitle('Undo the latest persistent tree change').click();
+  await expect.poll(() => readMockChildLabels(page, 'mock-live-window-research')).toEqual([
+    'Browser Atlas',
+    'SolidJS documentation'
+  ]);
+
+  await rightPane.getByRole('combobox', { name: 'Explorer data source' }).selectOption({ label: 'Firefox (mock)' });
+  await rightPane.getByRole('tab', { name: 'Explore' }).click();
+  await clickEmptyRowSpace(atlasTab);
+  await clickEmptyRowSpace(solidTab, ['Shift']);
+  await atlasTab.dragTo(rightPane.locator('[data-node-id="explore-window-3002"]'), {
+    sourcePosition: ROW_TITLE_POSITION,
+    targetPosition: { x: 48, y: 10 }
+  });
+  await expect(atlasTab).toHaveCount(0);
+  await expect(solidTab).toHaveCount(0);
+  const firefoxWindowLinks = rightPane.locator('[data-node-id="explore-window-3002"] + ul a');
+  const readFirefoxWindowUrls = () =>
+    firefoxWindowLinks.evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+  await expect
+    .poll(async () => (await readFirefoxWindowUrls()).slice(-2))
+    .toEqual(['http://localhost:3120/browser-atlas', 'https://docs.solidjs.com/']);
+});
+
+test('lights the path to the hovered row and turns it off in the settings', async ({ page }) => {
+  await page.goto('/browser-atlas');
+  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const firefoxTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-firefox"]');
+  const pathState = (id: string) => leftPane.locator(`[data-node-id="${id}"]`).getAttribute('data-tree-path');
+
+  await firefoxTab.hover({ position: ROW_TITLE_POSITION });
+  await expect.poll(() => pathState('explore-saved-tab-mock-saved-tab-firefox')).toBe('path');
+  for (const id of ['explore-saved-group-mock-nested-group', 'explore-saved-window-mock-saved-window-reference', 'explore-saved-group-mock-saved-project', 'explore-root']) {
+    expect(await pathState(id)).toBe('path');
+  }
+  expect(await pathState('explore-saved-tab-mock-saved-tab-chrome')).toBe('passed');
+  expect(await pathState('explore-saved-note-mock-note-next')).toBe('passed');
+  expect(await pathState('explore-window-1001')).toBe('passed');
+  expect(await pathState('explore-tab-2001')).toBe('off');
+  expect(await pathState('explore-saved-window-mock-crashed-window')).toBe('off');
+
+  await page.mouse.move(5, 5);
+  await expect.poll(() => pathState('explore-saved-tab-mock-saved-tab-firefox')).toBe('none');
+
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByLabel('Highlight the path to a row').uncheck();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await firefoxTab.hover({ position: ROW_TITLE_POSITION });
+  await expect.poll(() => pathState('explore-saved-group-mock-saved-project')).toBe('none');
+});
+
+test('draws the tree as a metro map whose line numbers stay with their windows', async ({ page }) => {
+  await page.goto('/browser-atlas');
+  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const badge = (id: string) => leftPane.locator(`[data-node-id="${id}"] > button [data-metro-line]`);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByLabel('Tree lines').selectOption('metro');
+  await page.getByRole('button', { name: 'Settings' }).click();
+
+  await expect(badge('explore-window-1001')).toHaveAttribute('data-metro-line', '1');
+  await expect(badge('explore-window-1002')).toHaveAttribute('data-metro-line', '2');
+  await expect(badge('explore-saved-group-mock-saved-project')).toHaveAttribute('data-metro-line', '3');
+  await expect(badge('explore-saved-window-mock-saved-window-reference')).toHaveAttribute('data-metro-line', '4');
+  await expect(badge('explore-saved-group-mock-nested-group')).toHaveAttribute('data-metro-line', '5');
+  await expect(badge('explore-saved-window-mock-crashed-window')).toHaveAttribute('data-metro-line', '6');
+
+  // A new window takes the smallest free number; a closed window's number goes to the next new one.
+  await leftPane.getByTitle('Open a new browser window').click();
+  await expect(badge('explore-window-10000')).toHaveAttribute('data-metro-line', '7');
+  await leftPane.locator('[data-node-id="explore-window-1001"]').getByRole('button', { name: /^Delete / }).click();
+  await expect(leftPane.locator('[data-node-id="explore-window-1001"]')).toHaveCount(0);
+  await leftPane.getByTitle('Open a new browser window').click();
+  await expect(badge('explore-window-10002')).toHaveAttribute('data-metro-line', '1');
+  await expect(badge('explore-window-1002')).toHaveAttribute('data-metro-line', '2');
+  await expect(badge('explore-window-10000')).toHaveAttribute('data-metro-line', '7');
+
+  await page.reload();
+  await expect(badge('explore-window-10002')).toHaveAttribute('data-metro-line', '1');
+  await expect(badge('explore-window-10000')).toHaveAttribute('data-metro-line', '7');
+  await expect(badge('explore-saved-window-mock-crashed-window')).toHaveAttribute('data-metro-line', '6');
+
+  // Hovering a row fades the markers of lines off its route.
+  await leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-firefox"]').hover({ position: ROW_TITLE_POSITION });
+  await expect(leftPane.locator('[data-node-id="explore-window-1002"] > button [data-metro-route]')).toHaveAttribute(
+    'data-metro-route',
+    'off'
+  );
+  await expect(
+    leftPane.locator('[data-node-id="explore-saved-group-mock-saved-project"] > button [data-metro-route]')
+  ).toHaveAttribute('data-metro-route', 'on');
 });
 
 async function readMockTabWindow(
@@ -2196,6 +2581,68 @@ async function dispatchDragWrite(target: ReturnType<Page['locator']>): Promise<R
   });
 }
 
+/** Viewport point in a row's empty space after its title and buttons, where drag-to-select starts. */
+async function emptyRowSpacePoint(row: ReturnType<Page['locator']>): Promise<{ x: number; y: number }> {
+  const bounds = await row.boundingBox();
+  if (!bounds) {
+    throw new Error('The tree row is not visible.');
+  }
+  const position = await emptyRowSpacePosition(row);
+  return { x: bounds.x + position.x, y: bounds.y + position.y };
+}
+
+/** Row-relative position of {@link emptyRowSpacePoint}. */
+async function emptyRowSpacePosition(row: ReturnType<Page['locator']>): Promise<{ x: number; y: number }> {
+  const bounds = await row.boundingBox();
+  if (!bounds) {
+    throw new Error('The tree row is not visible.');
+  }
+  return { x: bounds.width - 80, y: bounds.height / 2 };
+}
+
+async function clickEmptyRowSpace(
+  row: ReturnType<Page['locator']>,
+  modifiers: ('Alt' | 'Control' | 'Meta' | 'Shift')[] = []
+): Promise<void> {
+  await row.click({ position: await emptyRowSpacePosition(row), modifiers });
+}
+
+/**
+ * Drags with the mouse from one row's empty space to another's. `whileHeld` runs before the
+ * release, and `modifiers` stay pressed for the whole gesture.
+ */
+async function dragAcrossEmptyRowSpace(
+  page: Page,
+  from: ReturnType<Page['locator']>,
+  to: ReturnType<Page['locator']>,
+  whileHeld?: () => Promise<void>,
+  modifiers: ('Control' | 'Meta' | 'Shift')[] = []
+): Promise<void> {
+  const start = await emptyRowSpacePoint(from);
+  const end = await emptyRowSpacePoint(to);
+  for (const modifier of modifiers) {
+    await page.keyboard.down(modifier);
+  }
+  try {
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 8, start.y + 8, { steps: 2 });
+    await page.mouse.move(end.x, end.y, { steps: 6 });
+    await whileHeld?.();
+    await page.mouse.up();
+  } finally {
+    for (const modifier of modifiers) {
+      await page.keyboard.up(modifier);
+    }
+  }
+}
+
+async function readSelectedRowIds(pane: ReturnType<Page['locator']>): Promise<string[]> {
+  return pane
+    .locator('[role="treeitem"][aria-selected="true"]')
+    .evaluateAll((rows) => rows.map((row) => row.getAttribute('data-node-id') ?? ''));
+}
+
 async function selectTreeRow(target: ReturnType<Page['locator']>): Promise<void> {
   await target.focus();
   await target.evaluate((element) => {
@@ -2214,7 +2661,7 @@ async function copyDragTo(
 ): Promise<void> {
   await page.keyboard.down('Alt');
   try {
-    await source.dragTo(target, { targetPosition: { x: 48, y: 10 } });
+    await source.dragTo(target, { sourcePosition: ROW_TITLE_POSITION, targetPosition: { x: 48, y: 10 } });
   } finally {
     await page.keyboard.up('Alt');
   }

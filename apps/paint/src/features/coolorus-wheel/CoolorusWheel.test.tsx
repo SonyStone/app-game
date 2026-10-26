@@ -1,13 +1,25 @@
 // @vitest-environment jsdom
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { hexToWheel } from '../color-wheel/oklch';
 import { CoolorusWheel, type CoolorusSettings } from './CoolorusWheel';
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 
 let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
+  vi.unstubAllGlobals();
   dispose = undefined;
   document.body.replaceChildren();
 });

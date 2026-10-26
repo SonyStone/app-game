@@ -1,8 +1,11 @@
 import type { Point } from '@app-game/paint-core/camera';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
+import { createPickerPixels } from '../../shared/ui/createPickerPixels';
 import { hexToHsv, hsvToHex, type Hsv } from '../color/hsv';
-import { hueAt, pointFromSv, svFromPoint, triangleCorners } from '../hue-triangle';
+import { hueAt, pointFromSv, svFromPoint } from '../hue-triangle';
+import { paintTriangle } from '../hue-triangle/paintTriangle';
+import { size, triangleRadius } from '../hue-triangle/triangleGeometry';
 import styles from './CoolorusWheel.module.css';
 import { keepLightness, rgbToRybHue, rybToRgbHue } from './coolorusColor';
 
@@ -25,11 +28,13 @@ export function CoolorusWheel(props: {
   const [hsv, setHsv] = createSignal<Hsv>((previous) =>
     previous && hsvToHex(previous) === props.color ? previous : hexToHsv(props.color, previous)
   );
+  const hue = createMemo(() => hsv().h);
   const ryb = () => props.settings.hues === 'ryb';
   /** Where the hue sits on the ring and where the triangle's hue corner points, in degrees from the top. */
   const angle = createMemo(() => (ryb() ? rgbToRybHue(hsv().h) : hsv().h));
   let canvas!: HTMLCanvasElement;
   let svg!: SVGSVGElement;
+  const pixels = createPickerPixels(() => canvas);
   let frame: number | undefined;
   let pending: { angle: number; hue: number } | undefined;
   /** The part being dragged by the captured pointer, and the color the drag started from, for the lightness lock. */
@@ -37,12 +42,14 @@ export function CoolorusWheel(props: {
 
   // Repaints the triangle at most once per animation frame while the hue changes.
   createEffect(
-    () => ({ angle: angle(), hue: hsv().h }),
+    () => ({ angle: angle(), hue: hue(), pixels: pixels() }),
     (next) => {
       pending = next;
       frame ??= requestAnimationFrame(() => {
         frame = undefined;
-        paintTriangle(canvas, pending!.angle, pending!.hue);
+        if (pixels() > 0) {
+          paintTriangle(canvas, pending!.angle, pending!.hue, pixels());
+        }
       });
     }
   );
@@ -96,7 +103,7 @@ export function CoolorusWheel(props: {
     <div class={styles.coolorus}>
       <div class={styles.wheel} role="group" aria-label="Coolorus wheel">
         <div class={styles.ring} style={{ background: ryb() ? rybRing : rgbRing }} aria-hidden="true" />
-        <canvas ref={canvas} class={styles.canvas} width={pixels} height={pixels} aria-hidden="true" />
+        <canvas ref={canvas} class={styles.canvas} aria-hidden="true" />
         <svg
           ref={svg}
           class={styles.overlay}
@@ -206,14 +213,9 @@ export type CoolorusSettings = { hues: 'ryb' | 'rgb'; lockLightness: boolean };
 /** Coolorus's own start: the painter's wheel, lightness free. */
 export const defaultCoolorusSettings: CoolorusSettings = { hues: 'ryb', lockLightness: false };
 
-/** The view box side, in CSS pixels at the component's natural size; the same as `HueTriangle`. */
-const size = 220;
+/** Outer and inner hue-ring radii in view-box units, shared with the HueTriangle layout. */
 const ringOuter = 110;
 const ringInner = 88;
-/** Center to each corner of the triangle, inside the ring with a small gap. */
-const triangleRadius = 84;
-/** Backing pixels across the triangle canvas: twice the natural size, enough for dense screens. */
-const pixels = size * 2;
 
 /** The ring's colors from the top, clockwise, every 15° of its own hue, for a CSS conic gradient. */
 function ringGradient(toRgb: (angle: number) => number) {
@@ -223,48 +225,3 @@ function ringGradient(toRgb: (angle: number) => number) {
 
 const rybRing = ringGradient(rybToRgbHue);
 const rgbRing = ringGradient((angle) => angle % 360);
-
-/**
- * Paints the triangle into the canvas with its hue corner toward `angle` on the ring and the pure color of RGB hue
- * `hue` there: each pixel mixes the hue, white and black by its barycentric weights, in encoded sRGB as HSV defines
- * it; edges are antialiased over one canvas pixel.
- */
-function paintTriangle(canvas: HTMLCanvasElement, angle: number, hue: number) {
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return;
-  }
-
-  const image = context.createImageData(pixels, pixels);
-  const scale = size / pixels;
-  const [hr, hg, hb] = [5, 3, 1].map((n) => {
-    const k = (n + hue / 60) % 6;
-    return 255 * (1 - Math.max(0, Math.min(k, 4 - k, 1)));
-  }) as [number, number, number];
-  const { hue: p, white: q, black: r } = triangleCorners(angle, triangleRadius);
-  const area = (q.x - p.x) * (r.y - p.y) - (r.x - p.x) * (q.y - p.y);
-  const height = 1.5 * triangleRadius;
-  for (let y = 0; y < pixels; y++) {
-    const py = (y + 0.5) * scale - size / 2;
-    for (let x = 0; x < pixels; x++) {
-      const px = (x + 0.5) * scale - size / 2;
-      const wa = ((q.x - px) * (r.y - py) - (r.x - px) * (q.y - py)) / area;
-      const wb = ((r.x - px) * (p.y - py) - (p.x - px) * (r.y - py)) / area;
-      const inside = Math.min(wa, wb, 1 - wa - wb) * height;
-      const alpha = Math.min(1, Math.max(0, inside / scale + 0.5));
-      if (!alpha) {
-        continue;
-      }
-
-      const a = Math.max(0, wa),
-        b = Math.max(0, wb);
-      const index = (y * pixels + x) * 4;
-      image.data[index] = a * hr + b * 255;
-      image.data[index + 1] = a * hg + b * 255;
-      image.data[index + 2] = a * hb + b * 255;
-      image.data[index + 3] = alpha * 255;
-    }
-  }
-
-  context.putImageData(image, 0, 0);
-}

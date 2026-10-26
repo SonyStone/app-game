@@ -1,0 +1,1465 @@
+.editor {
+  /* The Zen color disc reads these. */
+  --zen-surface: #ffffff;
+  --zen-line: rgb(0 0 0 / 0.12);
+  --lego-plate: rgb(36 38 44 / 0.92);
+  --lego-tile: #f4f2ee;
+  --lego-preset-active: #dde7ff;
+  --lego-ink: #24262c;
+  --lego-quiet: #7c7f88;
+  --lego-accent: #3d7eff;
+  --lego-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px rgb(0 0 0 / 0.16);
+
+  background: #faf8f4;
+  color: var(--lego-ink);
+  font:
+    13px/1.3 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+
+  canvas:focus {
+    outline: none;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+/* The layer over the drawing; only its children take presses. */
+.ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.board {
+  position: absolute;
+  inset: 0;
+  pointer-events: none !important;
+}
+
+/* A panel: a dark plate the parts lie on. In edit mode its studs show between and under the parts. */
+.panel {
+  position: absolute;
+  border-radius: 10px;
+  background: var(--lego-plate);
+  box-shadow: var(--lego-shadow);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.board[data-editing] .panel,
+.benchSlot .panel {
+  touch-action: none;
+  cursor: grab;
+  background-color: var(--lego-plate);
+  background-image: radial-gradient(
+    circle,
+    rgb(255 255 255 / 0.22) 0 9px,
+    rgb(255 255 255 / 0.07) 10px,
+    transparent 11px
+  );
+  background-size: 48px 48px;
+  /* Stud centers on the cells' centers: the cell (0, 0) corner plus half a cell, less half the 48 px tile. */
+  background-position: calc(var(--stud-x) - 2px) calc(var(--stud-y) - 2px);
+  outline: 1.5px dashed rgb(255 255 255 / 0.28);
+  outline-offset: 3px;
+}
+
+/* A panel's cell (0, 0), its parts' origin: a point, so presses between parts reach the panel. */
+.cells {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/* A part: a flat tile on the studs, its print filling it edge to edge. */
+.part {
+  position: absolute;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--lego-tile);
+  transition:
+    left 120ms ease-out,
+    top 120ms ease-out,
+    width 120ms ease-out,
+    height 120ms ease-out;
+}
+
+.board[data-editing] .part,
+.benchSlot .part {
+  cursor: grab;
+  touch-action: none;
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.25);
+}
+
+/* Where the lifted part will land. */
+.part[data-lifted] {
+  background: rgb(255 255 255 / 0.12);
+  outline: 2px dashed rgb(255 255 255 / 0.7);
+  outline-offset: -2px;
+}
+
+/* The lifted part following the pointer. */
+.ghost {
+  /* Over the box and the workbench too. */
+  z-index: 960;
+  transition: none;
+  cursor: grabbing;
+  scale: 1.06;
+  box-shadow: 0 12px 30px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+
+.ghost[data-discard] {
+  opacity: 0.45;
+}
+
+.content {
+  position: absolute;
+  inset: 0;
+  display: grid;
+
+  > * {
+    min-width: 0;
+    min-height: 0;
+  }
+}
+
+/* The resize handle in a part's bottom-right corner. */
+/*
+ * The resize handle of the one selected part, centered on its bottom-right corner in the panel's cells: a knob drawn
+ * small, pressed by a finger-sized area around it that reaches past a small part.
+ */
+.corner {
+  position: absolute;
+  z-index: 3;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  cursor: nwse-resize;
+  touch-action: none;
+  pointer-events: auto;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 12px;
+    border: 3px solid #ffffff;
+    border-radius: 50%;
+    background: var(--lego-accent);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+  }
+}
+
+.unknown {
+  display: grid;
+  place-items: center;
+  color: var(--lego-quiet);
+}
+
+.name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+/* Brushes */
+
+.preset {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.preset.large {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0 0 4px;
+  gap: 0;
+
+  .name {
+    padding: 0 8px;
+  }
+}
+
+.preset[data-active] {
+  background: var(--lego-preset-active);
+
+  &::after {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 2px var(--lego-accent);
+    pointer-events: none;
+  }
+}
+
+.sample {
+  flex: none;
+  overflow: hidden;
+}
+
+/* Values */
+
+.knob {
+  display: grid;
+  place-items: center;
+  cursor: ew-resize;
+  touch-action: none;
+  font-weight: 600;
+  font-size: 12px;
+  background: conic-gradient(var(--lego-accent) var(--fraction), #dad7d0 0);
+
+  span {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--swatch, var(--lego-tile));
+    color: var(--swatch-ink, var(--lego-ink));
+    box-shadow: 0 0 0 2px var(--lego-tile);
+  }
+}
+
+.slider {
+  position: relative;
+  touch-action: none;
+  cursor: pointer;
+  background: #dad7d0;
+}
+
+.fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--fraction);
+  background: var(--lego-accent);
+}
+
+.thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: clamp(3px, calc(var(--fraction) - 3px), calc(100% - 9px));
+  width: 6px;
+  border-radius: 3px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.3);
+}
+
+.vertical {
+  .fill {
+    top: auto;
+    right: 0;
+    width: auto;
+    height: var(--fraction);
+  }
+
+  .thumb {
+    left: 3px;
+    right: 3px;
+    top: auto;
+    bottom: clamp(3px, calc(var(--fraction) - 3px), calc(100% - 9px));
+    width: auto;
+    height: 6px;
+  }
+
+  .sliderLabel {
+    writing-mode: vertical-rl;
+    rotate: 180deg;
+    flex-direction: row-reverse;
+    padding: 8px 0;
+  }
+}
+
+/* Color tracks show their gradient instead of a fill. */
+.colored .fill {
+  display: none;
+}
+
+.sliderLabel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+  font-weight: 600;
+  pointer-events: none;
+  color: var(--lego-ink);
+
+  span {
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgb(255 255 255 / 0.72);
+  }
+}
+
+/* Actions */
+
+.action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+
+  .name {
+    font-size: 11px;
+    letter-spacing: -0.25px;
+  }
+
+  &:has(.name) svg {
+    width: 20px;
+    flex-shrink: 0;
+  }
+}
+
+.action:disabled {
+  color: var(--lego-quiet);
+  opacity: 0.5;
+}
+
+.action[data-active] {
+  background: #dde7ff;
+  box-shadow: inset 0 0 0 2px var(--lego-accent);
+}
+
+/* Color */
+
+.color {
+  display: grid;
+  place-items: end start;
+  padding: 6px 8px;
+  border: 0;
+  cursor: pointer;
+  font-family: ui-monospace, monospace;
+}
+
+/* Popups: the only things that float over parts. */
+
+.popup {
+  position: absolute;
+  /* Over the session's floating windows (900) too: a popup is what was opened last. */
+  z-index: 950;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgb(36 38 44);
+  box-shadow: var(--lego-shadow);
+}
+
+/* Procreate's brush library in a popup: placed by the popup, not by its own stylesheet. */
+.brushesCard:is(section) {
+  position: relative;
+  width: min(470px, 80vw);
+  max-height: min(70vh, 560px);
+  animation: none;
+}
+
+/* The file commands the File part opens: one row each, icon, name and what it makes. */
+.fileMenu {
+  display: grid;
+  min-width: 240px;
+
+  button {
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: #ffffff;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  button:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.1);
+  }
+
+  button:disabled {
+    opacity: 0.45;
+  }
+
+  small {
+    color: rgb(255 255 255 / 0.55);
+    font-weight: 500;
+  }
+}
+
+/* A short note on how to use a part, such as the fill without a selection. */
+.note {
+  max-width: 260px;
+  margin: 4px;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.popupSlider {
+  position: relative;
+  display: grid;
+  width: calc(5 * 48px - 4px);
+  height: 44px;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+/* The box of parts and the edit button */
+
+.boxButton {
+  flex: none;
+  padding: 8px 12px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  border-radius: 8px;
+  background: none;
+  color: #ffffff !important;
+  cursor: pointer;
+}
+
+.controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.editButton {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--lego-plate);
+  color: #ffffff !important;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--lego-shadow);
+  cursor: pointer;
+}
+
+/* A round button holding an icon, such as full screen. */
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  padding: 0;
+}
+
+.editButton[data-active] {
+  background: var(--lego-accent);
+}
+
+/* Looks */
+
+/* A picker scaled into its part, centered whatever its scale. */
+.fitted {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+
+  > * {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+  }
+}
+
+/* The light card the library's light pickers stand on, in a part or a popup. */
+.pickerSurface {
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--lego-tile);
+}
+
+.chooser {
+  display: grid;
+  gap: 8px;
+  max-width: calc(4 * 112px + 3 * 8px);
+  color: #ffffff;
+
+  h3 {
+    margin: 4px 2px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgb(255 255 255 / 0.7);
+  }
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(4, 112px);
+  gap: 8px;
+}
+
+.choice {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.06);
+  color: #ffffff !important;
+  cursor: pointer;
+}
+
+.choice[data-selected] {
+  background: rgb(61 126 255 / 0.3);
+  box-shadow: inset 0 0 0 2px var(--lego-accent);
+}
+
+.choice:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.choiceLabel {
+  font-size: 12px;
+  text-align: center;
+}
+
+.choiceNote {
+  font-size: 11px;
+  color: rgb(255 255 255 / 0.6);
+}
+
+/* A choice's live miniature. */
+.preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+}
+
+.previewTile {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--lego-tile);
+}
+
+/* A swatch's own panel, lying beside it over the others. */
+.owned {
+  z-index: 5;
+  box-shadow:
+    0 0 0 1.5px var(--lego-accent),
+    var(--lego-shadow);
+}
+
+/* The swatch whose panel is open. */
+.part[data-open] {
+  outline: 2px solid var(--lego-accent);
+  outline-offset: 1px;
+}
+
+.emptyPanel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+  color: rgb(255 255 255 / 0.7);
+  font-size: 10px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* A kit being carried: its parts on a plate of their own. */
+.ghostBlock {
+  position: absolute;
+  border-radius: 10px;
+  background: var(--lego-plate);
+  outline: 6px solid var(--lego-plate);
+
+  > .part {
+    transition: none;
+  }
+}
+
+.kitRemove {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.55);
+  color: #ffffff !important;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Color parts */
+
+.pair {
+  position: relative;
+  display: block;
+
+  > * {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15);
+  }
+}
+
+/* At one cell the background color lies behind the foreground, bottom right. */
+.pairForeground {
+  z-index: 1;
+  left: 4px;
+  top: 4px;
+  width: 60%;
+  height: 60%;
+}
+
+.pairBackground {
+  right: 4px;
+  bottom: 4px;
+  width: 60%;
+  height: 60%;
+  cursor: pointer;
+}
+
+/* Wider, side by side. */
+.pairWide {
+  .pairForeground,
+  .pairBackground {
+    top: 4px;
+    bottom: 4px;
+    width: calc(50% - 6px);
+    height: auto;
+  }
+
+  .pairForeground {
+    left: 4px;
+  }
+
+  .pairBackground {
+    right: 4px;
+  }
+}
+
+.hex {
+  display: grid;
+  align-items: center;
+  container-type: inline-size;
+  padding: 3px;
+
+  input {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    padding: 0 3px;
+    border: 1px solid #d6d3cc;
+    border-radius: 6px;
+    background: #ffffff;
+    font:
+      600 clamp(7px, 14cqi, 12px) ui-monospace,
+      monospace;
+  }
+}
+
+.chips {
+  display: grid;
+  gap: 3px;
+  padding: 3px;
+}
+
+.chip {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.3);
+  cursor: pointer;
+
+  &[data-current] {
+    box-shadow:
+      0 0 0 1.5px var(--lego-tile),
+      0 0 0 3px var(--lego-ink);
+  }
+}
+
+.round .chip {
+  border-radius: 50%;
+}
+
+/* A place in the history no color has taken yet. */
+.slot {
+  border: 1px dashed rgb(0 0 0 / 0.25);
+  box-shadow: none;
+  cursor: default;
+}
+
+.square {
+  position: relative;
+  background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, var(--hue));
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.squareThumb {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 1px 4px 2px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+
+/* A value as a number to drag sideways or type. */
+.number {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  --scrub-width: 100%;
+  --scrub-height: 100%;
+  --scrub-fill: transparent;
+  --scrub-track: transparent;
+  --scrub-focus: var(--lego-accent);
+  --line: transparent;
+  --ink: var(--lego-ink);
+  --muted: var(--lego-quiet);
+
+  input {
+    padding-inline: 0;
+    text-align: right;
+  }
+
+  &[data-compact] {
+    padding: 2px;
+    font-size: 11px;
+
+    input {
+      padding: 0 1px;
+      text-align: center;
+    }
+  }
+
+  > :last-child {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.numberCaption {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lego-quiet);
+}
+
+/*
+ * The card: as the box of parts' sheet rises, the drawing and the board shrink to a card above it, as Android's home
+ * screen does while widgets are arranged. Both scale from their top-left corner, which BoardView measures to map
+ * presses to cells; LegoStudio sets the scale and the offset.
+ */
+.workspace,
+.board {
+  transform-origin: 0 0;
+  transition:
+    scale var(--sheet-time, 260ms) cubic-bezier(0.2, 0.8, 0.2, 1),
+    translate var(--sheet-time, 260ms) cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-radius 260ms;
+}
+
+.carded {
+  background: #d6d3cc;
+
+  .workspace,
+  .board {
+    scale: var(--card-scale);
+    translate: var(--card-x) var(--card-y);
+  }
+
+  .workspace {
+    border-radius: calc(18px / var(--card-scale));
+    box-shadow: 0 16px 60px rgb(0 0 0 / 0.3);
+  }
+}
+
+/* The drawing under the board while editing: it takes no strokes, and a long press there opens the spawn menu. */
+.bare {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/*
+ * The box of parts: a sheet risen from the bottom edge to the height BoardView's sheet gives, a short handle while
+ * closed and a strip that puts things away while sunk. It holds the workbench beside the parts (above them when the
+ * view is upright).
+ */
+.tray {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  /* Over the session's floating windows (900); popups and the carried part stay over it. */
+  z-index: 920;
+  display: grid;
+  grid-template-rows: 24px minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 18px 18px 0 0;
+  /* Opaque: the white card behind would show through even a slightly clear sheet. */
+  background: rgb(20 21 25);
+  color: #ffffff;
+  box-shadow: 0 -8px 30px rgb(0 0 0 / 0.25);
+  transition:
+    height var(--sheet-time, 260ms) cubic-bezier(0.2, 0.8, 0.2, 1),
+    left 200ms,
+    right 200ms;
+
+  /* A tab in the strip the drawing leaves above the bottom edge: a grip with its name, to tap or pull. */
+  &[data-closed] {
+    right: calc(50% - 80px);
+    left: calc(50% - 80px);
+    grid-template-rows: minmax(0, 1fr);
+    border-radius: 14px 14px 0 0;
+
+    .trayContent {
+      display: none;
+    }
+  }
+
+  &[data-sunk] {
+    grid-template-rows: minmax(0, 1fr) 0;
+
+    .trayContent {
+      visibility: hidden;
+    }
+  }
+
+  &[data-over] .trayBar {
+    background: rgb(230 70 60 / 0.55);
+  }
+}
+
+.trayBar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.trayGrip {
+  position: absolute;
+  top: 9px;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  translate: -50% 0;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.4);
+}
+
+.trayTitle {
+  margin-top: 8px;
+  color: rgb(255 255 255 / 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The workbench, a divider, and the parts over the kits; the dividers share the room as the user drags them. */
+.trayContent {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 12px minmax(240px, var(--shelf-width, 40%));
+  min-height: 0;
+  padding: 4px 12px 12px;
+}
+
+/* A narrow view has no room beside the workbench: the parts go under it. */
+@media (max-width: 760px) {
+  .trayContent {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(150px, 45%) minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .splitter[data-axis='x'] {
+    display: none;
+  }
+}
+
+/* A divider: a strip between two boxes, its grip lit while hovered or dragged. */
+.splitter {
+  position: relative;
+  touch-action: none;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 50% auto auto 50%;
+    translate: -50% -50%;
+    border-radius: 2px;
+    background: rgb(255 255 255 / 0.18);
+    transition: background 120ms;
+  }
+
+  &:hover::after,
+  &:active::after {
+    background: var(--lego-accent);
+  }
+
+  &[data-axis='x'] {
+    cursor: col-resize;
+
+    &::after {
+      width: 4px;
+      height: 40px;
+    }
+  }
+
+  &[data-axis='y'] {
+    cursor: row-resize;
+
+    &::after {
+      width: 40px;
+      height: 4px;
+    }
+  }
+}
+
+/* Beside the workbench, the parts over the kits: two boxes, one that puts away what is dropped, one that keeps it. */
+.trayShelves {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 12px minmax(110px, var(--kits-height, 38%));
+  min-height: 0;
+}
+
+.trayBody,
+.kitShelf {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 14px;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  touch-action: pan-y;
+  transition:
+    background 120ms,
+    border-color 120ms;
+}
+
+.trayBody {
+  background: rgb(255 255 255 / 0.03);
+
+  &[data-over] {
+    border-color: rgb(230 70 60 / 0.9);
+    background: rgb(230 70 60 / 0.16);
+  }
+}
+
+.kitShelf {
+  border-style: dashed;
+  border-color: rgb(61 126 255 / 0.45);
+  background: rgb(61 126 255 / 0.07);
+
+  &[data-over] {
+    border-color: var(--lego-accent);
+    background: rgb(61 126 255 / 0.22);
+  }
+}
+
+/* What a box does with what is dropped on it. */
+.zoneLabel {
+  color: rgb(255 255 255 / 0.5);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* The workbench's place: the board renders the bench plate into it at full size, filling it. */
+.benchSlot {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  touch-action: none;
+
+  /*
+   * The bench itself is the place, its edges the place's, as its neighbouring boxes; its studs lie only over whole
+   * cells. A swatch's panel open on it stands out as on the board.
+   */
+  .panel:not([data-owned]) {
+    border-radius: 12px;
+    outline: none;
+    box-shadow: none;
+    background-image: none;
+    cursor: crosshair;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: calc(var(--stud-x) - 2px);
+      top: calc(var(--stud-y) - 2px);
+      width: var(--studs-width);
+      height: var(--studs-height);
+      background-image: radial-gradient(
+        circle,
+        rgb(255 255 255 / 0.22) 0 9px,
+        rgb(255 255 255 / 0.07) 10px,
+        transparent 11px
+      );
+      background-size: 48px 48px;
+      pointer-events: none;
+    }
+  }
+}
+
+/* The bench and its selection, shrunk from the top-left corner when its parts would not fit. */
+.benchPlate {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
+
+/* A kit just kept, or the one a kept group matched: it pulses once. */
+.trayItem[data-flash] .kitPreview {
+  animation: kit-flash 1.4s ease-out;
+}
+
+@keyframes kit-flash {
+  0%,
+  40% {
+    border-radius: 10px;
+    box-shadow: 0 0 0 3px var(--lego-accent);
+  }
+
+  100% {
+    border-radius: 10px;
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
+.kitName {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: text;
+}
+
+.kitNameField {
+  width: 110px;
+  padding: 1px 4px;
+  border: 1px solid var(--lego-accent);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.1);
+  color: #ffffff;
+  font-size: 11px;
+  text-align: center;
+}
+
+.benchHint {
+  position: absolute;
+  right: 26px;
+  bottom: 22px;
+  z-index: 1;
+  color: rgb(255 255 255 / 0.35);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+/* A part selected, on the workbench or the board. */
+.part[data-selected] {
+  outline: 2px solid var(--lego-accent);
+  outline-offset: 1px;
+}
+
+/* The band dragged across the workbench or the board, and the outline around the parts it selected. */
+.band,
+.selection {
+  position: absolute;
+  z-index: 2;
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+.band {
+  border: 1.5px solid var(--lego-accent);
+  background: rgb(61 126 255 / 0.12);
+}
+
+.selection {
+  border: 2px dashed var(--lego-accent);
+}
+
+/* How to start editing, at the bottom of the board until something is first selected. */
+.editHint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  margin: 0;
+  padding: 10px 16px;
+  translate: -50% 0;
+  border-radius: 999px;
+  background: rgb(36 38 44 / 0.9);
+  color: #ffffff;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* What can be done with the selected parts, floating over their outline; see `SelectionBar`. */
+.selectionBar {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgb(36 38 44);
+  box-shadow: var(--lego-shadow);
+  pointer-events: auto;
+  touch-action: none;
+  white-space: nowrap;
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: #ffffff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background: rgb(255 255 255 / 0.1);
+  }
+
+  button[data-done] {
+    color: #7fd18b;
+  }
+}
+
+.looksGlyph {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.tray h4,
+.spawnCard h4 {
+  margin: 0 0 8px;
+  color: rgb(255 255 255 / 0.55);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.trayItems {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 8px;
+}
+
+.trayItem {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 60px;
+  max-width: 150px;
+}
+
+.trayTile {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--lego-tile);
+  color: var(--lego-ink);
+  cursor: grab;
+  touch-action: none;
+}
+
+.trayCaption {
+  max-width: 100%;
+  overflow: hidden;
+  color: rgb(255 255 255 / 0.85);
+  font-size: 11px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The spawn menu: families in a ring around a long press, the chosen family's parts in a card beside it. */
+.spawn {
+  position: absolute;
+  inset: 0;
+  z-index: 940;
+  pointer-events: none !important;
+  transition: opacity 120ms;
+
+  > * {
+    pointer-events: auto;
+  }
+
+  &[data-hidden] {
+    opacity: 0;
+
+    > * {
+      pointer-events: none;
+    }
+  }
+}
+
+.spawnRing {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.spawnCenter {
+  position: absolute;
+  left: -7px;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--lego-accent);
+  box-shadow: 0 0 0 6px rgb(61 126 255 / 0.25);
+  animation: spawn-pop 160ms ease-out both;
+}
+
+.spawnFamily {
+  position: absolute;
+  translate: -50% -50%;
+  padding: 8px 13px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(20 21 25 / 0.95);
+  color: #ffffff !important;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--lego-shadow);
+  cursor: pointer;
+  touch-action: none;
+  animation: spawn-pop 180ms cubic-bezier(0.2, 0.8, 0.2, 1.2) both;
+
+  &[aria-pressed='true'] {
+    background: var(--lego-accent);
+  }
+}
+
+@keyframes spawn-pop {
+  from {
+    opacity: 0;
+    scale: 0.5;
+  }
+}
+
+.spawnCard {
+  position: absolute;
+  max-width: 340px;
+  padding: 10px 12px 12px;
+  border-radius: 14px;
+  background: rgb(20 21 25 / 0.97);
+  color: #ffffff;
+  box-shadow: var(--lego-shadow);
+}
+
+/* A kit in the box: its parts in miniature on a plate. */
+.kitPreview {
+  position: relative;
+  cursor: grab;
+  touch-action: none;
+}
+
+.kitPreview[data-broken] {
+  cursor: default;
+  touch-action: auto;
+}
+
+.brokenKit {
+  display: grid;
+  min-height: 64px;
+  padding: 16px;
+  place-items: center;
+  border-radius: 8px;
+  background: #443a35;
+  color: #fff1df;
+  font-size: 12px;
+}
+
+.kitPlate {
+  position: relative;
+  border-radius: 8px;
+  background: var(--lego-plate);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+
+.kitScaled {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  transform-origin: 0 0;
+  color: var(--lego-ink);
+}
+
+/* The OKLCH disk's harmony and gamut mask lists as parts: the caption only from two cells tall. */
+.wheelField {
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-content: center;
+  padding: 6px;
+
+  &:not([data-captioned]) label > span {
+    display: none;
+  }
+}
+
+.editor .brokenPart,
+.brokenPart {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  overflow: hidden;
+  padding: 2px;
+  border: 0;
+  border-radius: inherit;
+  background: #443a35;
+  color: #fff1df;
+  font: inherit;
+  font-size: 10px;
+  text-align: center;
+}
+
+.brokenPart span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The frame owns the part's mode without changing the host's size or drag target. */
+.partFrame {
+  display: grid;
+  width: 100%;
+  height: 100%;
+}
+
+.partFrame > * {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Preserve the part owner and local gesture state while its drag placeholder is shown. */
+.part[data-lifted] > .content {
+  visibility: hidden;
+}
+
+/* The axes chooser belongs to the larger symmetry look. */
+.symmetryPart {
+  display: grid;
+  min-width: 0;
+
+  &[data-modes] {
+    grid-template-rows: minmax(0, 1fr) 36px;
+    padding-bottom: 4px;
+  }
+
+  select {
+    min-height: 36px;
+    width: calc(100% - 8px);
+    min-width: 0;
+    margin: 0 4px;
+    border: 1px solid var(--lego-quiet);
+    border-radius: 4px;
+    background: var(--lego-tile);
+    color: var(--lego-ink);
+    font: inherit;
+    font-size: 11px;
+  }
+}
+
+.floatingSample {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 7px;
+  background: var(--lego-plate);
+}
+
+.floatingSample::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: calc(50% - 12px);
+  width: 24px;
+  height: 4px;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.7) 1px, transparent 1.5px) 0 0 / 6px 4px;
+  opacity: 0.3;
+}
+
+.panel[data-floating] {
+  z-index: 2;
+  box-shadow: var(--lego-shadow);
+}

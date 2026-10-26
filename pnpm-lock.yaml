@@ -594,6 +594,9 @@ importers:
       '@app-game/chroma':
         specifier: workspace:*
         version: link:../../packages/chroma
+      '@app-game/paint-core':
+        specifier: workspace:*
+        version: link:../../packages/paint-core
       '@solid-primitives/event-listener':
         specifier: 'catalog:'
         version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
@@ -652,6 +655,12 @@ importers:
       '@solid-primitives/history':
         specifier: 'catalog:'
         version: 1.0.0-next.3(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
+      '@solid-primitives/raf':
+        specifier: 'catalog:'
+        version: 4.0.0-next.2(patch_hash=fe02f6a045310f51f4c8b03273171a830ec7fe41060f2132686977ec36523abf)(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
+      '@solid-primitives/set':
+        specifier: 'catalog:'
+        version: 1.0.0-next.2(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
       solid-js:
         specifier: 'catalog:'
         version: 2.0.0-rc.13
@@ -1047,6 +1056,9 @@ importers:
       '@solid-primitives/fullscreen':
         specifier: 'catalog:'
         version: 2.0.0-next.3(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
+      '@solid-primitives/intersection-observer':
+        specifier: 'catalog:'
+        version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
       '@solid-primitives/media':
         specifier: 'catalog:'
         version: 4.0.0-next.2(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
@@ -2011,6 +2023,9 @@ importers:
       '@app-game/abr-paint':
         specifier: workspace:*
         version: link:../abr-paint
+      '@app-game/abr-parser':
+        specifier: workspace:*
+        version: link:../abr-parser
       '@app-game/navigation-puck':
         specifier: workspace:*
         version: link:../navigation-puck
@@ -2036,9 +2051,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@app-game/abr-parser':
-        specifier: workspace:*
-        version: link:../abr-parser
       '@types/node':
         specifier: 25.8.0
         version: 25.8.0

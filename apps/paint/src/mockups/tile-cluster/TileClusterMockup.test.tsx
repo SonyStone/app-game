@@ -1,17 +1,26 @@
 // @vitest-environment jsdom
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { defaultOptions } from './debugOptions';
 import { TileClusterMockup } from './TileClusterMockup';
 
 let dispose: (() => void) | undefined;
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   localStorage.clear();
   Element.prototype.setPointerCapture = () => {};
 });
 afterEach(() => {
   dispose?.();
+  vi.unstubAllGlobals();
   dispose = undefined;
   document.body.replaceChildren();
 });

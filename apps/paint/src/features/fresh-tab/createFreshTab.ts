@@ -14,7 +14,7 @@ import { createImmediateSignal } from '../../shared/createImmediateSignal';
  * anything. Must be created within a Solid owner.
  */
 export function createFreshTab(options: {
-  /** Pen touches in a row without hover after it hovered here; see `createPenHover`. */
+  /** Pen touches in a row without hover once it is known to hover; see `createPenHover`. */
   lostContacts: Accessor<number>;
   /** Whether the drawing can move now: the engine is ready, and no stroke or edit is in progress. */
   idle: () => boolean;
@@ -98,10 +98,22 @@ export function arrivalStorageWaitMs(): number | undefined {
     return undefined;
   }
 
+  arrived = true;
   url.searchParams.delete(arrivalParam);
   history.replaceState(history.state, '', url.href);
   return arrivalStorageWait;
 }
+
+/**
+ * Whether this page was opened by a move, also after `arrivalStorageWaitMs` removed the mark from the address. Such a
+ * page should not trust hover remembered from earlier pages; see `createPenHover`'s `trustRemembered`.
+ */
+export function arrivedByMove() {
+  return arrived || new URL(location.href).searchParams.has(arrivalParam);
+}
+
+/** `arrivalStorageWaitMs` found the move's mark in this page. */
+let arrived = false;
 
 function readAuto() {
   try {

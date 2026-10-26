@@ -3,9 +3,9 @@ import type { Brush } from '@app-game/paint-core/brush';
 import type { Camera, Point } from '@app-game/paint-core/camera';
 import type { ColorSample, PickedColor } from '@app-game/paint-core/colorSample';
 import { createDocument } from '@app-game/paint-core/document';
-import type { CheckpointedEvent, PaintEvent, SelectionEvent, StateEvent } from '@app-game/paint-core/protocol';
 import type { DocumentRect } from '@app-game/paint-core/layersInView';
 import type { LiveListing, LiveTileBytes } from '@app-game/paint-core/liveDrawing';
+import type { CheckpointedEvent, PaintEvent, SelectionEvent, StateEvent } from '@app-game/paint-core/protocol';
 import { emptySummary } from '@app-game/paint-core/selectionMask';
 import { gpuError } from '@app-game/solid-gpu/errors';
 import type { WorkerFailure } from '@app-game/solid-gpu/worker/workerProtocol';
@@ -59,6 +59,11 @@ export function createPaintEngine(options: {
    * `undefined` stops them. See `createLayerThumbnails`.
    */
   layerThumbnails?: { size: Accessor<number | undefined>; receive: (event: LayerThumbnailsEvent) => void };
+  /**
+   * Hands over a file the engine made for the user, such as an exported PNG; a browser download by default. The
+   * Android shell app saves it natively instead (see `saveFile`).
+   */
+  save?: (blob: Blob, name: string) => void;
   /** The storage engines open, `paint-studio` by default; a live viewer's starts with `live:`, kept in memory. */
   storageName?: string;
   /**
@@ -373,7 +378,7 @@ export function createPaintEngine(options: {
           break;
         case 'download':
           if (event.requestId === undefined) {
-            downloadBlob(event.blob, event.name);
+            (options.save ?? downloadBlob)(event.blob, event.name);
           } else {
             exports.receive(event.requestId, { ok: true, value: event.blob });
           }

@@ -1,5 +1,6 @@
 import { FolderIndex, Thumbnail, type FolderGroups, type Routes } from '@app-game/app-router';
 import multitouchThumbnail from '@app-game/hammer-examples/thumbnail.png';
+import { nativeShell } from '@app-game/paint/native-shell';
 import { featureDemos, paintVariants, type PaintVariant } from '@app-game/paint/variants';
 import { Ripple } from '@app-game/ui-components/ripple';
 
@@ -16,6 +17,14 @@ export const demoRoutes: Routes[] = featureDemos.map((demo) => variantRoute(demo
 
 /** Paint's UI parts side by side in their variants and states, to compare and star; see `ComponentCanvas`. */
 export const componentCanvasRoutes: Routes[] = [
+  {
+    path: '/lego/parts',
+    name: 'Paint · LEGO parts',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() =>
+      import('@app-game/paint/lego-parts').then(({ PartsShowcase }) => ({ default: PartsShowcase }))
+    )
+  },
   {
     path: '/components',
     name: 'Paint · Component canvas',
@@ -191,12 +200,18 @@ export const paintRoutes: Routes = {
   ]
 };
 
-/** The route of a Paint variant or feature demo at `/<id>`, named `<prefix> · <name>`. */
+/**
+ * The route of a Paint variant or feature demo at `/<id>`, named `<prefix> · <name>`. It links back to the Paint
+ * experiments, except in the Android shell app, which opens one variant as an app of its own.
+ */
 function variantRoute(variant: PaintVariant, prefix: string): Routes {
+  const experimentsHref = nativeShell() ? undefined : '/paint';
   return {
     path: `/${variant.id}`,
     name: `${prefix} · ${variant.name}`,
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => variant.load().then((Variant) => ({ default: () => <Variant experimentsHref="/paint" /> })))
+    component: lazy(() =>
+      variant.load().then((Variant) => ({ default: () => <Variant experimentsHref={experimentsHref} /> }))
+    )
   };
 }

@@ -5,7 +5,14 @@ import type { AbortedError, GpuError } from '@app-game/solid-gpu/errors';
  * original exception, worker failure or runtime event for diagnostics. Renderer failures reported by the engine reuse
  * `GpuError`, and work cancelled by editor disposal resolves `AbortedError`, both from `@app-game/solid-gpu/errors`.
  */
-export type PaintError = EngineError | BrushError | FullscreenError | InstallError | GpuError | AbortedError;
+export type PaintError =
+  | EngineError
+  | BrushError
+  | LegoError
+  | FullscreenError
+  | InstallError
+  | GpuError
+  | AbortedError;
 
 /** Drawing-engine transport and command failures. */
 export type EngineError = {
@@ -47,6 +54,9 @@ export type BrushError = {
 export function brushError(code: BrushError['code'], message: string, cause?: unknown): BrushError {
   return { kind: 'brush', code, message, cause };
 }
+
+/** LEGO board or kit storage is unavailable; edits remain in memory until the page closes. */
+export type LegoError = { kind: 'lego'; code: 'storage'; message: string };
 
 /** The browser refused to enter or leave fullscreen. Drawing state is unaffected. */
 export type FullscreenError = { kind: 'fullscreen'; message: string; cause: unknown };

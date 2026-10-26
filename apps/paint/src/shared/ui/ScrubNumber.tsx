@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { createSignal, onSettled } from 'solid-js';
 import styles from './ScrubNumber.module.css';
 
 /**
@@ -31,8 +31,12 @@ export function ScrubNumber(props: {
   /** Values past `max` continue from `min` and the reverse, as angles do; otherwise they stop at the bounds. */
   wrap?: boolean | undefined;
   disabled?: boolean;
+  /** Captures caller state once when a pointer gesture begins, before any live input. */
+  onStart?: () => void;
   /** The value while it is dragged. */
   onInput?: (value: number) => void;
+  /** Restores the gesture start value on cancellation; defaults to `onInput`. */
+  onCancel?: (value: number) => void;
   /** The committed value. */
   onChange: (value: number) => void;
 }) {
@@ -41,7 +45,9 @@ export function ScrubNumber(props: {
   const [draft, setDraft] = createSignal<number>();
   const [editing, setEditing] = createSignal(false);
   /** The press in progress: where it started and the unrounded value it has reached. */
-  let press: { id: number; x: number; y: number; lastX: number; raw: number; scrubbing: boolean } | undefined;
+  let press:
+    | { id: number; x: number; y: number; lastX: number; raw: number; start: number; scrubbing: boolean }
+    | undefined;
   const step = () => props.step ?? 1;
   const shown = () => draft() ?? props.value;
   const bounded = () => props.min !== undefined && props.max !== undefined;
@@ -59,6 +65,19 @@ export function ScrubNumber(props: {
     return Number(clamped.toFixed(decimals(step())));
   };
   const text = () => `${settle(shown())}`;
+  const cancel = () => {
+    const cancelled = press;
+    if (!cancelled) {
+      return;
+    }
+
+    press = undefined;
+    setDraft(undefined);
+    if (cancelled.scrubbing) {
+      (props.onCancel ?? props.onInput)?.(cancelled.start);
+    }
+  };
+  onSettled(() => cancel);
 
   return (
     <span
@@ -79,9 +98,17 @@ export function ScrubNumber(props: {
         disabled={props.disabled}
         value={text()}
         onPointerDown={(event) => {
-          if (editing() || props.disabled || (event.pointerType === 'mouse' && event.button !== 0)) {
+          if (
+            (press && input.hasPointerCapture(press.id)) ||
+            editing() ||
+            props.disabled ||
+            (event.pointerType === 'mouse' && event.button !== 0)
+          ) {
             return;
           }
+
+          const start = press?.scrubbing ? press.start : props.value;
+          cancel();
 
           // Neither a caret nor the on-screen keyboard until the press turns out to be a tap.
           event.preventDefault();
@@ -91,9 +118,11 @@ export function ScrubNumber(props: {
             x: event.clientX,
             y: event.clientY,
             lastX: event.clientX,
-            raw: props.value,
+            raw: start,
+            start,
             scrubbing: false
           };
+          props.onStart?.();
         }}
         onPointerMove={(event) => {
           if (press?.id !== event.pointerId) {
@@ -126,7 +155,7 @@ export function ScrubNumber(props: {
           if (ended.scrubbing) {
             const value = draft();
             setDraft(undefined);
-            if (value !== undefined && value !== props.value) {
+            if (value !== undefined && value !== ended.start) {
               props.onChange(value);
             }
 
@@ -137,9 +166,15 @@ export function ScrubNumber(props: {
           input.focus();
           input.select();
         }}
-        onPointerCancel={() => {
-          press = undefined;
-          setDraft(undefined);
+        onPointerCancel={(event) => {
+          if (press?.id === event.pointerId) {
+            cancel();
+          }
+        }}
+        onLostPointerCapture={(event) => {
+          if (press?.id === event.pointerId) {
+            cancel();
+          }
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
