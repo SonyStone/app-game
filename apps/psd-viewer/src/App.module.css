@@ -446,7 +446,7 @@
 
 .canvasStatus {
   position: absolute;
-  bottom: 8px;
+  bottom: 32px;
   left: 8px;
   max-width: calc(100% - 24px);
   overflow: hidden;
