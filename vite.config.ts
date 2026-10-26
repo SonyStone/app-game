@@ -115,12 +115,19 @@ export default defineConfig({
     chunkSizeWarningLimit: 5000,
     target: 'esnext',
     outDir: resolve(__dirname, 'dist'),
-    emptyOutDir: true
+    emptyOutDir: true,
     // minify: false
+    rolldownOptions: {
+      // The Solid transform dominates build time by nature; the per-build timing report is noise.
+      checks: { pluginTimings: false }
+    }
   },
   worker: {
     format: 'es',
-    plugins: () => [solidPlugin(), typegpuPlugin({})]
+    plugins: () => [solidPlugin(), typegpuPlugin({})],
+    rolldownOptions: {
+      checks: { pluginTimings: false }
+    }
   },
   test: {
     environment: 'happy-dom',

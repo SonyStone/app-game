@@ -1,6 +1,8 @@
+@use 'sass:meta';
+
 .root {
   display: contents;
   :global {
-    @import 'dockview-core/dist/styles/dockview';
+    @include meta.load-css('dockview-core/dist/styles/dockview');
   }
 }
