@@ -118,7 +118,28 @@ const summarize = async (directory) => {
     })
   );
 };
+const phase3 = await readFile(`${directory}/phase3.json`, 'utf8')
+  .then(JSON.parse)
+  .catch(() => undefined);
 const result = {
+  phase3: phase3?.map((run) => ({
+    ...run,
+    nineTile: run.nineTile && {
+      milliseconds: run.nineTile.ms,
+      requestedTiles: run.nineTile.requests.length,
+      returnedTiles: run.nineTile.replies.length
+    },
+    acceptance: {
+      nineTiles: run.nineTile?.requests.length === 9 && run.nineTile?.replies.length === 9 && run.nineTile?.ms <= 250,
+      noRepeatedTrajectoryTiles: run.trajectory?.repeated === 0,
+      warmRevisit: run.warmRevisit?.wasmCalls === 0 && run.warmRevisit?.uploads === 0,
+      visibleWithinTwoFrames: run.diagnostics?.visibleTileMaxFrames <= 2,
+      boundedCancellation: run.diagnostics?.obsoleteBatchMaxTiles <= 1,
+      residency:
+        run.diagnostics?.peakCpuBytes <= 64 * 1024 * 1024 && run.diagnostics?.peakGpuBytes <= 128 * 1024 * 1024,
+      fiveMinuteTraversal: run.traversalMs === undefined ? null : run.traversalMs >= 300000
+    }
+  })),
   after: await summarize(directory),
   notes: [
     'Presented timing uses two animation frames after the first submitted frame containing ready tiles, not a physical display measurement.',

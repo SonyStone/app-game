@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 // Usage: pnpm benchmark [output-directory]. PSD_BENCH_CASES selects comma-separated fixture names;
 // PSD_BENCH_RUNS defaults to 3, PSD_BENCH_DPR to 1, PSD_BENCH_OPEN_ONLY=1 skips gestures/probes.
 // PSD_BENCH_BEHAVIORS=1 measures cancellation, restart and strict fallback.
+// PSD_BENCH_PHASE3=1 adds cold populated viewports, warm revisits and a five-minute PSB traversal at the chosen DPR.
+// PSD_BENCH_PHASE3_ONLY=1 skips the ordinary fixture matrix for a focused acceptance run.
 // PSD_BENCH_FEATURES=1 also runs the audit's feature/cache probes. PSD_BENCH_BACKEND selects webgpu/canvas2d.
 const app = fileURLToPath(new URL('../', import.meta.url));
 const out = resolve(process.argv[2] ?? `${tmpdir()}/psd-viewer-benchmark-${Date.now()}`);
@@ -60,7 +62,8 @@ try {
     )
   );
   for (const driver of [
-    'bench-repeat.mjs',
+    ...(env.PSD_BENCH_PHASE3_ONLY === '1' ? [] : ['bench-repeat.mjs']),
+    ...(env.PSD_BENCH_PHASE3 === '1' ? ['phase3.mjs'] : []),
     ...(env.PSD_BENCH_FEATURES === '1' ? ['features.mjs'] : []),
     ...(env.PSD_BENCH_BEHAVIORS === '1' ? ['opening-behaviors.mjs'] : [])
   ]) {
