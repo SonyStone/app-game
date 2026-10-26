@@ -141,7 +141,10 @@ export function makePsdWorkerPool(
       await primaryFlight.catch(() => undefined);
     }
 
-    const job = primary.renderWindow(...args);
+    if (args[4].aborted) {
+      return canceledWindow();
+    }
+    const job = primary.renderWindow(args[0], args[1], args[2], args[3], new AbortController().signal, args[5]);
     primaryFlight = job;
 
     try {
@@ -154,6 +157,12 @@ export function makePsdWorkerPool(
   };
 
   const renderWindow: PsdClient['renderWindow'] = async (document, settings, visibility, window, signal) => {
+    if (signal.aborted) {
+      return canceledWindow();
+    }
+    // Ordinary posted cancellation cannot interrupt synchronous WASM. Retain its slot and byte reservation until
+    // the native reply actually arrives; the outer camera interest still cancels immediately.
+    const nativeSignal = new AbortController().signal;
     const identity = key(settings, visibility);
     const parallel = window.kind === 'regions' && verified === identity && eligible(settings) && !!secondary?.document;
     if (!parallel && window.kind !== 'saved' && verified !== identity) {
@@ -168,7 +177,8 @@ export function makePsdWorkerPool(
     const session = documentEpoch;
     try {
       let result = await (spare ? spare.client.renderWindow : renderPrimary)(
-        spare?.document ?? document, settings, visibility, window, signal, parallel ? workerBytes : undefined
+        spare?.document ?? document, settings, visibility, window, spare ? nativeSignal : signal,
+        parallel ? workerBytes : undefined
       );
       if (session !== documentEpoch) {
         return { ok: false, error: { kind: 'superseded', message: 'Worker session replaced' } };
@@ -180,6 +190,9 @@ export function makePsdWorkerPool(
         if (!result.ok && !signal.aborted) {
           result = await renderPrimary(document, settings, visibility, window, signal);
         }
+      }
+      if (signal.aborted) {
+        return canceledWindow();
       }
       if (result.ok && window.kind !== 'saved' && result.value.images.every((image) => image.strategy === 'window')) {
         verified = identity;
@@ -303,6 +316,10 @@ export type WindowClient = Pick<PsdClient, 'renderWindow'> &
 
 function key(settings: PsdRenderSettings, visibility: [number, boolean][]) {
   return JSON.stringify([settings, [...new Map(visibility)].sort(([a], [b]) => a - b)]);
+}
+
+function canceledWindow() {
+  return { ok: false as const, error: { kind: 'superseded' as const, message: 'Window interest canceled' } };
 }
 
 function p95(samples: number[]) {

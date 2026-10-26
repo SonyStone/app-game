@@ -220,3 +220,23 @@ it('serializes both surviving scheduler lanes after a mode change without coales
   }
   pool.dispose();
 });
+
+it('keeps a canceled native slot and its reservation until the actual synchronous reply', async () => {
+  const { pool, main } = setup();
+  await pool.open(new ArrayBuffer(100));
+  main.hold = true;
+  const controller = new AbortController();
+  const settled = vi.fn();
+  const job = pool.renderWindow(1, photoshopDefaultSettings, [], {
+    kind: 'regions', rectangles: [{ left: 0, top: 0, width: 1, height: 1 }]
+  }, controller.signal).then((result) => {
+    settled();
+    return result;
+  });
+  controller.abort();
+  await Promise.resolve();
+  expect(settled).not.toHaveBeenCalled();
+  main.finish();
+  expect(await job).toMatchObject({ ok: false, error: { kind: 'superseded' } });
+  pool.dispose();
+});
