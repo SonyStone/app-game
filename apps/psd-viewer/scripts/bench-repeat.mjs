@@ -1,6 +1,7 @@
 // Adapted from the PSD viewer audit's bench-repeat.mjs; clean browser contexts never use a personal profile.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import { loadavg } from 'node:os';
 import { createRequire } from 'node:module';
 const require = createRequire(new URL('../package.json', import.meta.url));
 const { chromium } = require('@playwright/test');
@@ -210,7 +211,7 @@ for (const [name, dir, ext] of fixtures) {
     continue;
   }
   let browser, server, pid;
-  const result = { name, file, fileBytes: fs.statSync(file).size, started: new Date().toISOString(), rssSamples: [] };
+  const result = { loadBefore: loadavg(), name, file, fileBytes: fs.statSync(file).size, started: new Date().toISOString(), rssSamples: [] };
   try {
     server = await chromium.launchServer({
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
@@ -233,7 +234,7 @@ for (const [name, dir, ext] of fixtures) {
     const page = await context.newPage();
     result.errors = [];
     page.on('pageerror', (e) => result.errors.push(e.message));
-    await page.goto(`${process.env.PSD_BENCH_URL}/?telemetry=1&backend=${process.env.PSD_BENCH_BACKEND ?? 'webgpu'}`, {
+    await page.goto(`${process.env.PSD_BENCH_URL}/?workers=${process.env.PSD_BENCH_WORKERS ?? 1}&telemetry=1&backend=${process.env.PSD_BENCH_BACKEND ?? 'webgpu'}`, {
       waitUntil: 'networkidle'
     });
     if (name.startsWith('large-psb')) {
@@ -481,6 +482,7 @@ for (const [name, dir, ext] of fixtures) {
     await browser?.close();
     await server?.close();
   }
+  result.loadAfter = loadavg();
   fs.writeFileSync(
     `${out}/${name}.json`,
     JSON.stringify(result, (_, v) => (typeof v === 'bigint' ? String(v) : v), 2)
