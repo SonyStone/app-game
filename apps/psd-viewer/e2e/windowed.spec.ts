@@ -35,7 +35,10 @@ for (const workers of [1, 2]) {
     });
     await expect(stage(page)).toHaveAttribute('data-render-source', 'layers');
     await expect(stage(page)).toHaveAttribute('data-busy', 'false');
+    await expect(page.getByLabel('Document diagnostics', { exact: true })).not.toHaveAttribute('open');
+    await page.getByLabel('Document diagnostics', { exact: true }).locator('summary').first().click();
     await expect(page.getByRole('note')).toContainText('Windowed layer view');
+    await page.getByLabel('Document diagnostics', { exact: true }).locator('summary').first().click();
     await expect(page.getByRole('button', { name: 'Photoshop', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Difference', exact: true })).toBeDisabled();
     const canvas = page.getByRole('img', { name: 'Our render', exact: true });

@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { existsSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 
 const root = process.env.PSD_TEXT_MIXER_RESEARCH_ROOT;
 const rgb16 = `${root}/fixtures/psd/oracle-1/DSC_2530-1_2021-11-21-e28014496f83-g0/source-input/document.psd`;
 const paths = `${root}/fixtures/psd/carriers-1/paths.psd`;
-const screens = '/tmp/psd-phase5-screens';
+const screens = '/tmp/psd-phase5b-screens';
 
 /** A real huge file must reach useful saved pixels without a complete UI buffer or compressed WASM copy. */
 test('navigates the 6000x4000 RGB16 source through bounded native reads', async ({ page }) => {
@@ -50,6 +50,10 @@ test('navigates the 6000x4000 RGB16 source through bounded native reads', async 
   await page.getByRole('button', { name: '100%', exact: true }).click();
   await expect(stage).toHaveAttribute('data-render-step', '1');
   await expect(stage).toHaveAttribute('data-busy', 'false', { timeout: 60000 });
+  await expect(page.getByLabel('Document diagnostics', { exact: true })).not.toHaveAttribute('open');
+  const badge = page.getByLabel('Canvas render status');
+  await expect(badge).toContainText('Possibly stale saved pixels');
+  expect((await badge.boundingBox())!.height).toBeLessThan(24);
   await mkdir(screens, { recursive: true });
   await page.screenshot({ path: `${screens}/huge-rgb16.png` });
   const metrics = await page.evaluate(() => {
@@ -87,8 +91,65 @@ test('draws saved cubic paths and knots in the composite camera space', async ({
     'transform',
     `translate(${camera.x} ${camera.y}) scale(${camera.scale})`
   );
-  await mkdir(screens, { recursive: true });
-  await page.screenshot({ path: `${screens}/saved-path-overlay.png` });
+  const raw = await readFile(paths);
+  const headerWidth = raw.readUInt32BE(18);
+  const headerHeight = raw.readUInt32BE(14);
+  let offset = 30 + raw.readUInt32BE(26);
+  const end = offset + 4 + raw.readUInt32BE(offset);
+  offset += 4;
+  const anchors: number[][] = [];
+  while (offset < end) {
+    const id = raw.readUInt16BE(offset + 4);
+    offset += 6;
+    offset += Math.ceil((raw[offset]! + 1) / 2) * 2;
+    const length = raw.readUInt32BE(offset);
+    offset += 4;
+    if (id === 2000) {
+      for (let record = offset; record + 26 <= offset + length; record += 26) {
+        if ([1, 2, 4, 5].includes(raw.readUInt16BE(record))) {
+          anchors.push([
+            (raw.readInt32BE(record + 14) * headerWidth) / 2 ** 24,
+            (raw.readInt32BE(record + 10) * headerHeight) / 2 ** 24
+          ]);
+        }
+      }
+    }
+    offset += Math.ceil(length / 2) * 2;
+  }
+  expect(anchors).toEqual([
+    [2 - 2 ** -21, 2],
+    [21, 2],
+    [21, 14],
+    [2 - 2 ** -21, 14]
+  ]);
+  for (const zoom of ['fit', 'actual']) {
+    if (zoom === 'actual') {
+      await page.getByRole('button', { name: '100%', exact: true }).click();
+    }
+    const actual = await overlay.locator('circle').evaluateAll((circles) =>
+      circles.map((circle) => {
+        const point = (circle as SVGCircleElement).ownerSVGElement!.createSVGPoint();
+        point.x = Number(circle.getAttribute('cx'));
+        point.y = Number(circle.getAttribute('cy'));
+        const screen = point.matrixTransform((circle as SVGCircleElement).getScreenCTM()!);
+        return [screen.x, screen.y];
+      })
+    );
+    const origin = (await stage.boundingBox())!;
+    const view = await stage.evaluate((element) => ({
+      x: Number((element as HTMLElement).dataset.cameraX),
+      y: Number((element as HTMLElement).dataset.cameraY),
+      scale: Number((element as HTMLElement).dataset.cameraScale)
+    }));
+    actual.forEach(([x, y], index) => {
+      expect(x).toBeCloseTo(origin.x + view.x + anchors[index]![0]! * view.scale, 3);
+      expect(y).toBeCloseTo(origin.y + view.y + anchors[index]![1]! * view.scale, 3);
+    });
+    if (zoom === 'fit') {
+      await mkdir(screens, { recursive: true });
+      await page.screenshot({ path: `${screens}/saved-path-overlay.png` });
+    }
+  }
 });
 
 /** Keep a bounded saved-view option for the huge PSB alongside the explicit current-layer benchmark path. */
@@ -116,7 +177,9 @@ test('opens the huge PSB with a host-owned source and bounded saved regions', as
   });
   await page.mouse.up();
   await expect(stage).toHaveAttribute('data-busy', 'false', { timeout: 60000 });
+  await page.getByLabel('Document diagnostics', { exact: true }).locator('summary').first().click();
   await expect(page.getByLabel('Renderer status')).toHaveAttribute('data-render-state', 'saved');
   await expect(page.getByLabel('Renderer status')).not.toContainText('replacing with a fresh layer render');
+  await page.getByLabel('Document diagnostics', { exact: true }).locator('summary').first().click();
   await page.screenshot({ path: `${screens}/huge-psb.png` });
 });

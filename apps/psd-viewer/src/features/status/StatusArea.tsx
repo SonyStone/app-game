@@ -13,7 +13,7 @@ export function StatusArea(props: {
   layerNotes: LayerNote[];
   documentNotes: string[];
   onSelect: (index: number) => void;
-  /** Keeps the viewport size stable while the temporary preview is replaced by layer metadata. */
+  /** Identifies windowed rendering for provenance and unsupported-operation guidance. */
   windowed?: boolean;
   /** Persistent saved snapshots are never presented as a preview awaiting a current layer render. */
   sourceBacked?: boolean;

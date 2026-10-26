@@ -1,6 +1,4 @@
 .status {
-  max-height: 132px;
-  overflow: auto;
   padding: 6px 10px;
   border-top: 1px solid #1a1a1a;
   background: #262626;
@@ -14,12 +12,6 @@
   ul {
     padding-left: 16px;
   }
-}
-
-.status[data-windowed='true'] {
-  height: 132px;
-  flex-shrink: 0;
-  box-sizing: border-box;
 }
 
 .error {
