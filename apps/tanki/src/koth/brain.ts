@@ -183,8 +183,10 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
     const holding = facts.pointOurs && !facts.targetNearPoint && role !== 'flank';
     // A target with its core open dies to the next hit, which is worth more than most else.
     const finishing = facts.targetCoreOpen && facts.targetVisible ? 25 : 0;
+    // While the team gathers for a push, a bot does not drive off alone after a target it cannot shoot from where it is.
+    const restraint = facts.mustStage && !facts.underFire && !facts.inFireZone ? STAGE_RESTRAINT : 0;
     const priority =
-      (holding ? 40 : (facts.targetVisible ? 55 : 42) + (role === 'flank' ? 8 : 0) + (facts.pointOurs && facts.enemyOnPoint ? 10 : 0)) + finishing;
+      (holding ? 40 : (facts.targetVisible ? 55 : 42) + (role === 'flank' ? 8 : 0) + (facts.pointOurs && facts.enemyOnPoint ? 10 : 0)) + finishing - restraint;
     goals.push({ name: 'kill', wants: { targetDown: true }, priority });
   }
 
@@ -281,6 +283,8 @@ const OVERWATCH = 56;
 const FLANK_COST: Record<Role, number> = { assault: 1.4, flank: 0.55, support: 1.4, lead: 2.5, sniper: Infinity };
 /** Priority bonus of the goal being pursued. */
 const COMMITMENT = 6;
+/** Priority a target out of the bot's fire zone loses while the team gathers for a push. */
+const STAGE_RESTRAINT = 15;
 /** Seconds a bot expects to wait at its staging spot for the rest of the team. */
 const STAGING_WAIT = 2;
 /** Seconds of mending at the base. */

@@ -184,6 +184,7 @@ export const sr: Dictionary = {
     countdown: (say: RadioWords) => `Напад за ${say.seconds}…`,
     go: 'Напред, сви заједно!',
     followMe: 'За мном! Напред!',
+    waitForTeam: 'Чекам своје',
     captured: 'Тачка је наша!',
     regroup: 'Повлачење, прегруписавање!',
     sniper: 'Снајпер!',

@@ -8,7 +8,7 @@ import { findPosts, type Post } from './front';
 import type { Kit } from './kits';
 import { createRadio, type CalloutOptions, type RadioLine } from './radio';
 import { TACTICS } from './classes/tactics';
-import { cellAt, cellCenter, sightReach, traceClear, type NavGrid } from './navigation';
+import { cellAt, cellCenter, isOpenCell, sightReach, traceClear, type NavGrid } from './navigation';
 import { rivalOf, type CaptureState, type TeamId } from './rules';
 import type { TankClass, TankClassId } from './tanks';
 
@@ -122,6 +122,9 @@ export function createTeamBoard(
   /** Members who called for help and still need it, so each call is made once. */
   const calling = new Set<Member>();
   let focusCalledAt = -Infinity;
+  /** Members that were alive when the push went in, and since when each latecomer waits for company. */
+  const pushers = new Set<Member>();
+  const lateSince = new Map<Member, number>();
   /** Where members were destroyed lately, and until when such a spot counts as deadly. */
   const losses: { x: number; y: number; until: number }[] = [];
   let perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
@@ -130,6 +133,11 @@ export function createTeamBoard(
   let postsAt = 0;
   /** Each member's job while the team holds the point: the point itself or a post in front of it. */
   const jobs = new Map<Member, Post | 'point'>();
+  /** Open cells well inside the point, and the one the bot keeping the point stands on. */
+  const pointCells = Array.from({ length: cellCount }, (_, cell) => cell).filter(
+    (cell) => isOpenCell(grid, cell) && distanceTo(cellCenter(grid, cell), map.point) < map.point.radius - KEEPER_MARGIN
+  );
+  let keeperCell: number | undefined;
   const perchOf = new Map<Member, Perch>();
   // Teams update half an interval apart, so their work falls on different steps.
   let nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
@@ -270,10 +278,17 @@ export function createTeamBoard(
 
     /**
      * The member's spot on the point, on its own side and spread out from the others: the lead
-     * near its middle, and a sniper on its perch, from where it watches the point.
+     * near its middle, and a sniper on its perch, from where it watches the point. The bot that
+     * keeps the point while the team holds it stands where the fewest known enemies see it,
+     * close to cover (see `chooseKeeperCell`).
      */
     pointSpot(member: Member) {
       const side = team === 'red' ? Math.PI : 0;
+
+      if (jobs.get(member) === 'point' && keeperCell !== undefined) {
+        return cellCenter(grid, keeperCell);
+      }
+
       const spread = member.index % 2 === 0 ? 1 : -1;
       let angle = side + spread * 0.45;
 
@@ -334,6 +349,36 @@ export function createTeamBoard(
     },
 
     /**
+     * Whether `member` should wait at its staging spot rather than go in: it came back after the
+     * push went in, is still more than `LATE_FAR` px from the point and has no ally within
+     * `LATE_BUDDY` px, so going in now would be alone. It waits `LATE_WAIT` s at most, enough for
+     * the next wave of respawns, and goes in as soon as an ally comes by.
+     */
+    mustWait(member: Member) {
+      const at = member.tank?.hull.translation();
+
+      if (push.phase !== 'go' || pushers.has(member) || member.human || !at || distanceTo(at, map.point) < LATE_FAR) {
+        return false;
+      }
+
+      const company = members.some((other) => other !== member && other.tank && distanceTo(other.tank.hull.translation(), at) < LATE_BUDDY);
+      const since = lateSince.get(member) ?? context.clock();
+      lateSince.set(member, since);
+
+      if (company) {
+        pushers.add(member);
+        return false;
+      }
+
+      return context.clock() - since < LATE_WAIT;
+    },
+
+    /** Whether `member` keeps the point while the team holds it. */
+    keepsPoint(member: Member) {
+      return jobs.get(member) === 'point';
+    },
+
+    /**
      * The post `member` holds in front of the point while the team holds it, `undefined` when it
      * has none: it keeps to the point, has no job yet, or the team does not hold the point.
      */
@@ -372,6 +417,7 @@ export function createTeamBoard(
       decideIntent(now);
       refreshPosts(now);
       assignJobs();
+      chooseKeeperCell();
       chooseFocus();
       assignCovers();
       assignHelp(now);
@@ -392,6 +438,8 @@ export function createTeamBoard(
       launchAt = undefined;
       calling.clear();
       focusCalledAt = -Infinity;
+      pushers.clear();
+      lateSince.clear();
       perchOf.clear();
       // The walls stand as built again, and the Sniper's perch distance may have changed since.
       perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
@@ -399,6 +447,7 @@ export function createTeamBoard(
       postsRevision = grid.revision;
       postsAt = 0;
       jobs.clear();
+      keeperCell = undefined;
       nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
     }
   };
@@ -659,6 +708,9 @@ export function createTeamBoard(
       if ((launchAt !== undefined && now >= launchAt) || hurry || now - push.since > GATHER_TIMEOUT) {
         push = { ...push, phase: 'go', since: now };
         launchAt = undefined;
+        pushers.clear();
+        lateSince.clear();
+        members.filter((member) => member.tank).forEach((member) => pushers.add(member));
         const caller = leader();
         say(caller, caller?.role === 'lead' ? 'followMe' : 'go', { priority: 2, marker: { kind: 'attack', x: map.point.x, y: map.point.y } });
       }
@@ -711,6 +763,24 @@ export function createTeamBoard(
       postsRevision = grid.revision;
       postsAt = now;
       jobs.clear();
+    }
+  }
+
+  /**
+   * The spot on the point its keeper stands on: in the least danger from known enemies and as
+   * close to cover as can be, kept until another is clearly better, so the keeper does not dither.
+   */
+  function chooseKeeperCell() {
+    if (![...jobs.values()].includes('point')) {
+      keeperCell = undefined;
+      return;
+    }
+
+    const score = (cell: number) => danger[cell] * KEEPER_DANGER + Math.max(sight[cell] - grid.clearance, 0) / KEEPER_HUG;
+    const best = pointCells.reduce<number | undefined>((chosen, cell) => (chosen === undefined || score(cell) < score(chosen) ? cell : chosen), undefined);
+
+    if (keeperCell === undefined || (best !== undefined && score(best) + KEEPER_SWITCH < score(keeperCell))) {
+      keeperCell = best;
     }
   }
 
@@ -899,6 +969,13 @@ const HELP_WINDOW = 1.5;
 const HELP_RANGE = 700;
 /** Distance of the members' spots from the point's center. */
 const POINT_SPOT = 45;
+/**
+ * A member back after the push went in waits for company if it is farther than `LATE_FAR` px from
+ * the point, until an ally comes within `LATE_BUDDY` px or `LATE_WAIT` s have passed.
+ */
+const LATE_FAR = 700;
+const LATE_BUDDY = 350;
+const LATE_WAIT = 6;
 /** Share of its armor a Heavy needs to lead a push. */
 const LEAD_ARMOR = 0.5;
 /** Classes in the order they keep to the point while the team holds it. */
@@ -912,6 +989,15 @@ const POST_ORDER: Record<Post['lane'], readonly TankClassId[]> = {
   north: ['soldier', 'demoman', 'scout', 'heavy'],
   south: ['soldier', 'demoman', 'scout', 'heavy']
 };
+/**
+ * The point's keeper stands at least `KEEPER_MARGIN` px inside its edge; a spot scores
+ * `KEEPER_DANGER` per known enemy that sees it and one per `KEEPER_HUG` px from cover, and the
+ * keeper moves only for a spot `KEEPER_SWITCH` better.
+ */
+const KEEPER_MARGIN = 20;
+const KEEPER_DANGER = 10;
+const KEEPER_HUG = 30;
+const KEEPER_SWITCH = 2;
 /** Seconds after walls changed before the team looks for its posts again. */
 const POST_REFRESH = 3;
 /** Classes in the order they lead the team's push and call its plan. */

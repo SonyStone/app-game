@@ -217,7 +217,7 @@ const MIN_THROTTLE = 0.35;
 /** A tank that moved less than `STALL_DISTANCE` px over `STALL_CHECK` s is stalling; after `STUCK_TIME` s it is stuck. */
 const STALL_CHECK = 0.4;
 const STALL_DISTANCE = 6;
-const STUCK_TIME = 1.2;
+const STUCK_TIME = 1;
 const UNSTICK_TIME = 0.7;
 /** Extra cost of a step into a cell only something breakable closes, on a way planned when every way is closed. */
 const THROUGH_COST = 4;

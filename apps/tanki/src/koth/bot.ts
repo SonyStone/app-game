@@ -363,8 +363,8 @@ export function createBot(member: Member, context: BotContext) {
       atPerch: member.role === 'sniper' && distance(position, board.perchSpot(member)) < PERCHED,
       pointOurs: capture.owner === member.team,
       enemyOnPoint: rivalsOnPoint() > 0,
-      mustStage: board.phase === 'gather',
-      staged: board.phase === 'go',
+      mustStage: board.phase === 'gather' || board.mustWait(member),
+      staged: board.phase === 'go' && !board.mustWait(member),
       hasTarget: target !== undefined,
       targetNearPoint: targetAt !== undefined && distance(targetAt, map.point) < NEAR_POINT,
       targetVisible: target !== undefined && visible.has(target),
@@ -518,6 +518,13 @@ export function createBot(member: Member, context: BotContext) {
       case 'moveToSupport':
         if (task.ally?.tank) {
           board.say(member, 'helping', { ally: task.ally, marker: { kind: 'help', ...at(task.ally.tank.hull.translation()) } });
+        }
+
+        break;
+
+      case 'stage':
+        if (board.phase === 'go') {
+          board.say(member, 'waitForTeam');
         }
 
         break;
@@ -762,7 +769,7 @@ export function createBot(member: Member, context: BotContext) {
         task.arrive = 30;
         board.stage(member, distance(position, task.destination) < STAGED_RADIUS);
 
-        if (board.phase === 'go') {
+        if (board.phase === 'go' && !board.mustWait(member)) {
           return 'done';
         }
 
@@ -781,8 +788,10 @@ export function createBot(member: Member, context: BotContext) {
       }
 
       case 'guardPoint': {
-        task.destination = wander(task, board.pointSpot(member), now);
-        task.arrive = 20;
+        // The bot keeping the point stands still on its chosen spot; others shift about on theirs.
+        const keeping = board.keepsPoint(member);
+        task.destination = keeping ? board.pointSpot(member) : wander(task, board.pointSpot(member), now);
+        task.arrive = keeping ? 10 : 20;
         return context.capture().owner === member.team ? 'running' : 'failed';
       }
 
@@ -1010,17 +1019,27 @@ export function createBot(member: Member, context: BotContext) {
     const at = target.hull.translation();
     const offset = { x: position.x - at.x, y: position.y - at.y };
     const duel = TACTICS[member.tankClass.id].duel;
-    const range = Math.min(Math.max(Math.hypot(offset.x, offset.y), duel.min), duel.max);
+    const lead = member.role === 'lead';
+    const current = Math.hypot(offset.x, offset.y);
     // The lead presses in, nose and front plates to the target, rather than circling.
-    const step = member.role === 'lead' ? LEAD_ORBIT_STEP : ORBIT_STEP;
-    const angle = Math.atan2(offset.y, offset.x) + (task.side ?? 1) * step;
-    let spot = { x: at.x + Math.cos(angle) * range, y: at.y + Math.sin(angle) * range };
-
-    if (!isOpenAt(grid, spot) || !board.canSee(spot, at)) {
-      spot = position;
-      task.side = -(task.side ?? 1);
-    }
-
+    const range = Math.min(Math.max(lead ? current * LEAD_PRESS : current, duel.min), duel.max);
+    const step = lead ? LEAD_ORBIT_STEP : ORBIT_STEP;
+    const usable = (spot: Point) => isOpenAt(grid, spot) && board.canSee(spot, at);
+    const spotAt = (side: number, distance: number) => {
+      const angle = Math.atan2(offset.y, offset.x) + side * step;
+      return { x: at.x + Math.cos(angle) * distance, y: at.y + Math.sin(angle) * distance };
+    };
+    // Blocked one way, the bot circles the other way, then closer in; it stops only when boxed in, as a still tank is easy to hit.
+    const side = task.side ?? 1;
+    const options = [
+      { side, spot: spotAt(side, range) },
+      { side: -side, spot: spotAt(-side, range) },
+      { side, spot: spotAt(side, Math.max(range * 0.7, duel.min)) },
+      { side: -side, spot: spotAt(-side, Math.max(range * 0.7, duel.min)) }
+    ];
+    const choice = options.find((option) => usable(option.spot));
+    task.side = choice?.side ?? -side;
+    const spot = choice?.spot ?? position;
     task.orbit = { spot, until: now + ORBIT_INTERVAL };
     return spot;
   }
@@ -1324,11 +1343,19 @@ export function createBot(member: Member, context: BotContext) {
   /**
    * Works a charged shot: turns the hull toward a target outside the gun's arc, then charges
    * standing still, fully unless the target is close or the bot is under fire, and lets go once
-   * charged and on target. A charge for a target it can no longer shoot at is dropped.
+   * charged and on target. A charge for a target it can no longer shoot at is dropped. On its way
+   * to a perch, cover or a repair, the bot keeps driving and shoots only a target closer than
+   * `CLOSE_SHOT`, so it gets where it is going.
    */
   function charge(tank: Tank, goal: number, shot: { reacted: boolean; aligned: boolean; clear: boolean; inReach: boolean; worth: boolean; range: number }) {
     const mount = member.tankClass.mount;
     const charging = member.weapon?.charge;
+
+    if (task && PASSING.has(task.action) && shot.range > CLOSE_SHOT) {
+      context.trigger(member, { fire: false, cancel: true });
+      return {};
+    }
+
     const outside = mount.kind === 'casemate' && !inArc(tank, goal, mount.arc - ARC_MARGIN);
     const wanted = shot.range < CLOSE_SHOT || context.clock() - member.shotAt < UNDER_FIRE ? HASTY_CHARGE : 1;
     const shootable = shot.reacted && shot.clear && shot.inReach && shot.worth;
@@ -1374,6 +1401,9 @@ export type Bot = ReturnType<typeof createBot>;
 
 /** How a route weighs the danger of being seen by known enemies. */
 type Route = 'normal' | 'sneaky' | 'safe';
+
+/** Actions on the way somewhere a casemate gun does not stop for a distant shot. */
+const PASSING = new Set<BotAction>(['goToPerch', 'retreat', 'repair', 'pickUpKit', 'takeCover', 'regroup', 'stage']);
 
 /** Actions on the way somewhere, during which a bot may break through a wall that is in the way. */
 const BREACH_ACTIONS = new Set<BotAction>(['goToPoint', 'stage', 'flank', 'retreat', 'repair', 'pickUpKit', 'regroup', 'moveToSupport']);
@@ -1473,7 +1503,9 @@ const FLANK_TIMEOUT = 12;
 const REGROUP_TIME = 8;
 /** How far around the target the bot shifts every `ORBIT_INTERVAL` s in a head-on duel, at its class's range. */
 const ORBIT_STEP = 0.35;
-const LEAD_ORBIT_STEP = 0.1;
+const LEAD_ORBIT_STEP = 0.2;
+/** Share of its range the lead closes in by at each step of a duel, down to its class's closest duel range. */
+const LEAD_PRESS = 0.85;
 const ORBIT_INTERVAL = 0.8;
 /**
  * A flanker hunts enemies the team knows within `PREY_RANGE` px, counting a Sniper `PREY_SNIPER`

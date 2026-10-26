@@ -30,7 +30,9 @@ import { harnessTuning } from './tuning';
  * Slow, so it runs only with
  * `TANKI_TACTICS=1 pnpm exec vitest run src/koth/tactics.harness.test.ts --reporter=verbose`.
  * `TANKI_SEEDS` replaces the seeds with a comma-separated list; `TANKI_TUNING` applies a tuning
- * from the pause menu's class editor (see `harnessTuning`).
+ * from the pause menu's class editor (see `harnessTuning`); `TANKI_ROSTER` sets the classes of
+ * both teams, as `sniper,soldier,heavy,demoman` for the same four a side, or
+ * `sniper,soldier,heavy,demoman/scout,soldier,soldier,demoman` for red, then blue.
  */
 describe.skipIf(!import.meta.env.TANKI_TACTICS)('bot tactics', () => {
   let rapier: Rapier;
@@ -83,6 +85,22 @@ describe.skipIf(!import.meta.env.TANKI_TACTICS)('bot tactics', () => {
       lines.push(`${id.padEnd(10)} ${actions.join(', ')}`);
     }
 
+    lines.push('', 'standing still outside the base, by action, share of life:');
+
+    for (const id of TANK_CLASS_IDS) {
+      const tally = totals.get(id);
+
+      if (!tally || tally.alive === 0) {
+        continue;
+      }
+
+      const actions = Object.entries(tally.stillIn)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 6)
+        .map(([action, time]) => `${action} ${Math.round((time / tally.alive) * 100)}%`);
+      lines.push(`${id.padEnd(10)} ${actions.join(', ')}`);
+    }
+
     const spoken = [...said].sort(([, a], [, b]) => b - a).map(([line, count]) => `${line} ${(count / seeds.length).toFixed(1)}`);
     lines.push('', `radio lines per match, both teams: ${spoken.join(', ') || 'none'}`);
     console.log(lines.join('\n'));
@@ -106,6 +124,8 @@ type ClassTally = {
   range: number;
   alone: number;
   still: number;
+  /** Time standing still by the action under way. */
+  stillIn: Record<string, number>;
   kitWait: number;
   actions: Record<string, number>;
 };
@@ -195,12 +215,13 @@ function playMatch(match: KothMatch, totals: Map<TankClassId, ClassTally>, said:
 
       const inBase = Math.abs(at.x - match.map.bases[member.team].zone.x) < match.map.bases[member.team].zone.halfWidth + 40;
 
-      if (before && !inBase && distance(before, at) / dt < STILL_SPEED) {
-        tally.still += dt;
-      }
-
       const bot = match.bots.get(member);
       const action = bot?.thought().action;
+
+      if (before && !inBase && distance(before, at) / dt < STILL_SPEED) {
+        tally.still += dt;
+        tally.stillIn[action ?? 'none'] = (tally.stillIn[action ?? 'none'] ?? 0) + dt;
+      }
 
       if (action === 'pickUpKit' && match.kits.kits.some((kit) => kit.readyAt > match.time && distance(kit, at) < KIT_NEAR)) {
         tally.kitWait += dt;
@@ -228,7 +249,7 @@ function tallyOf(totals: Map<TankClassId, ClassTally>, id: TankClassId) {
   let tally = totals.get(id);
 
   if (!tally) {
-    tally = { seats: 0, lives: 0, kills: 0, deaths: 0, alive: 0, point: 0, sit: 0, held: 0, ahead: 0, contact: 0, range: 0, alone: 0, still: 0, kitWait: 0, actions: {} };
+    tally = { seats: 0, lives: 0, kills: 0, deaths: 0, alive: 0, point: 0, sit: 0, held: 0, ahead: 0, contact: 0, range: 0, alone: 0, still: 0, stillIn: {}, kitWait: 0, actions: {} };
     totals.set(id, tally);
   }
 
@@ -247,6 +268,18 @@ const STILL_SPEED = 15;
 /** A tank this close to a repair kit that is not back waits for it. */
 const KIT_NEAR = 60;
 
+/** The classes of both teams from `TANKI_ROSTER`, picked as in a match by default. */
+const ROSTER = rosterFrom(import.meta.env.TANKI_ROSTER);
+
+function rosterFrom(text: string | undefined) {
+  if (!text) {
+    return undefined;
+  }
+
+  const [red, blue = red] = text.split('/').map((team) => team.split(',') as TankClassId[]);
+  return { red, blue };
+}
+
 /** The tuning the matches run with, from `TANKI_TUNING`; none by default. */
 const TUNED = harnessTuning(import.meta.env.TANKI_TUNING);
 const PACE: Pace = { ...PACE_DEFAULTS, ...TUNED.tuning.pace };
@@ -259,7 +292,8 @@ function createMatch(rapier: Rapier, seed: number) {
     human: false,
     random: seeded(seed),
     pace: () => PACE,
-    rules: { ...CAPTURE_RULES, holdTime: 120 }
+    rules: { ...CAPTURE_RULES, holdTime: 120 },
+    roster: ROSTER
   });
 }
 

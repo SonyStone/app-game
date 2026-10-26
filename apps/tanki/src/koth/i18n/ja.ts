@@ -184,6 +184,7 @@ export const ja: Dictionary = {
     countdown: (say: RadioWords) => `攻撃まで${say.seconds}…`,
     go: '全員、突撃！',
     followMe: 'ついて来い！突撃！',
+    waitForTeam: '仲間を待つ',
     captured: '拠点を確保！',
     regroup: '後退、再集結！',
     sniper: 'スナイパーだ！',

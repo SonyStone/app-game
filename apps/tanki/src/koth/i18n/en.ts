@@ -186,6 +186,7 @@ export const en = {
     countdown: (say: RadioWords) => `Attack in ${say.seconds}…`,
     go: 'Go, all together!',
     followMe: 'On me! Push!',
+    waitForTeam: 'Waiting for backup',
     captured: 'The point is ours!',
     regroup: 'Fall back and regroup!',
     sniper: 'Sniper!',
