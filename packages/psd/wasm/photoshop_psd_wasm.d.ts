@@ -15,6 +15,12 @@ export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFont
  */
 export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
 /**
+ * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
+ * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
+ * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
+ */
+export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
+/**
  * Converts measured modern major-axis caches and segment indices into schema 7.
  * Vertical caches require zero major origins and retain source layout and glyph IDs. Metric-box
  * rotation uses binary32 arithmetic. Malformed packets, unsupported layouts or font contexts throw.
@@ -22,12 +28,6 @@ export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngin
  * it does not shape text, compute vertical font geometry or authorize edited saves.
  */
 export function projectTypeEngineLayoutCache26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
- * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
- * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
- * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
- */
-export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
 /**
  * Converts modern horizontal cache origins through the native visual-origin addition before
  * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
@@ -52,12 +52,6 @@ export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: numbe
  */
 export function readTypeFontMetrics26(bytes: Uint8Array, face_index: number): any;
 /**
- * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
- * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
- * unsupported outline programs throw. Does not shape text or authorize a document save.
- */
-export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], tx: number, ty: number): Float32Array;
-/**
  * Computes ordinary TrueType box/point baselines from supplied bytes and explicit manual leading.
  * The caller establishes line breaks; `count` is at most 1,000,000 and `leading` is finite/positive.
  * Size must be in 0.5..=32767 points.
@@ -72,6 +66,12 @@ export function computeTypeManualBaselines26(bytes: Uint8Array, face_index: numb
  * source-dependent; a returned packet is not an editor admission certificate.
  */
 export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
+/**
+ * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
+ * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
+ * unsupported outline programs throw. Does not shape text or authorize a document save.
+ */
+export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], tx: number, ty: number): Float32Array;
 /**
  * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
  */
@@ -122,6 +122,33 @@ export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
  * reconcile copyright or normalize a document for saving.
  */
 export function readPsdMetadataQueries(bytes: Uint8Array): PsdMetadataQueries;
+
+/** Document-space rectangle. Input windows must be nonempty; clipped channel results may be empty. */
+export interface PsdNativeRect { left: number; top: number; width: number; height: number }
+/** Original native samples, without unmatting, color conversion or mask application. */
+export interface PsdNativeRegion {
+  depth: 1 | 8 | 16 | 32;
+  mode: number;
+  encoding: 'big-endian-wire';
+  source: 'savedComposite' | 'layerChannels';
+  /** IDs are saved plane indices, or layer channel IDs including -2/-3 masks. */
+  planes: Array<PsdNativeRect & { id: number; bytes: Uint8Array }>;
+}
+/** Original path identity with a validated geometry projection or a per-path refusal. */
+export type PsdSavedPath = {
+  resourceId: number | null; namedIndex: number | null;
+  legacyName: Uint8Array; unicodeName: Uint16Array | null;
+  companionStream: boolean; tail: Uint8Array;
+} & ({ outcome: 'refused'; error: Error } | {
+  outcome: 'geometry'; components: Array<{
+    operation: number; fillRule: number;
+    subpaths: Array<{ recordIndex: number; closed: boolean; originationIndex: number;
+      knots: Array<{ selector: number; q24YX: number[][];
+        before: number[]; anchor: number[]; after: number[] }> }>;
+  }>;
+});
+
+
 
 /** An actual face-context leaf for diagnostic engine serialization. No font lookup is performed. */
 export interface TypeEngineFontVersion {
@@ -1506,6 +1533,14 @@ export interface LegacyMode {
 
 
 
+/** Physical source-backed primary layer metadata. Stream offsets never narrow to WASM pointers. */
+export interface PsdSourceLayer extends PsdNativeRect {
+  index: number; name: string;
+  channels: Array<{ id: number; offset: bigint; length: bigint }>;
+}
+
+
+
 /** Confirmed imported queries. Source bytes remain the writing authority. */
 export interface PsdMetadataQueries {
   /** Ordered persisted comps, null on refusal. Panel selection is not inferred. */
@@ -1948,6 +1983,25 @@ export class PsdSourceHandle {
   private constructor();
   free(): void;
   /**
+   * Lists physical primary layer records and bigint compressed-channel spans without reading pixels.
+   * Alternate Lr16/Lr32 carriers currently throw a typed unsupported refusal; savedRegion stays available.
+   * Options use PsdBudgetOptions; metadata and JavaScript copies are admitted before publication.
+   */
+  layerInfo(options: PsdBudgetOptions | null | undefined): PsdSourceLayer[];
+  /**
+   * Reads native original layer or mask pixels through host-owned source windows.
+   * Metadata is indexed per call; compressed streams remain in the file. Primary layer records only.
+   * Each channel clips independently; missing channels and alternate carriers throw typed errors.
+   */
+  layerRegion(index: number, rect: PsdNativeRect, ids: Int16Array, options: PsdBudgetOptions | null | undefined): PsdNativeRegion;
+  /**
+   * Reads selected saved process/alpha/spot planes directly from host file windows at native depth.
+   * No whole-file UI buffer or WASM compressed-file copy is needed, including for large RGB16 files.
+   * Saved pixels may be stale and retain their matte. Does not validate rows after the window.
+   * Options use PsdBudgetOptions; throws typed budget/corruption errors before oversized reads.
+   */
+  savedRegion(rect: PsdNativeRect, indices: Uint16Array, options: PsdBudgetOptions | null | undefined): PsdNativeRegion;
+  /**
    * Emits original file bytes in chunks of at most 64 KiB. The callback must consume each
    * Uint8Array before returning. It must not accumulate unaccounted chunks in linear memory.
    */
@@ -2034,8 +2088,11 @@ export interface InitOutput {
   readonly psdpreparedsave_nextChunk: (a: number, b: number) => [number, number, number, number];
   readonly psdpreparedsave_revision: (a: number) => bigint;
   readonly psdsourcehandle_info: (a: number) => [number, number, number];
+  readonly psdsourcehandle_layerInfo: (a: number, b: any) => [number, number, number];
+  readonly psdsourcehandle_layerRegion: (a: number, b: number, c: any, d: number, e: number, f: any) => [number, number, number];
   readonly psdsourcehandle_open: (a: any, b: bigint, c: any) => [number, number, number];
   readonly psdsourcehandle_readGrid: (a: number, b: bigint, c: bigint, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: any) => [number, number, number, number];
+  readonly psdsourcehandle_savedRegion: (a: number, b: any, c: number, d: number, e: any) => [number, number, number];
   readonly psdsourcehandle_writeUnchanged: (a: number, b: any, c: any) => [number, number];
   readonly rasterizeCff2Strong: (a: number, b: number, c: any, d: any, e: number, f: number, g: number) => [number, number, number];
   readonly readPsd: (a: number, b: number) => [number, number, number];
