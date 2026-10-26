@@ -1578,11 +1578,17 @@ export function createCombat(
       if (hit.target?.tank && !lob.landed) {
         shell.path.push(end);
 
-        // A grenade that flies into an open core destroys it before it goes off.
+        hit.target.lastShooter = shell.shooter;
+
+        // A grenade that flies into an open core destroys it before it goes off; one that hits the
+        // armor chips its own crater where it struck, as a rocket does, so a direct hit counts for
+        // more than a near miss.
         if (hit.part === 'core') {
-          hit.target.lastShooter = shell.shooter;
           reportHit(hit.target, shell.shooter, 'core');
           destroy(hit.target, shell.direction);
+        } else {
+          damage(hit.target, end, shell.direction, shell.spec);
+          reportHit(hit.target, shell.shooter, 'armor');
         }
 
         detonate(shell, end);
