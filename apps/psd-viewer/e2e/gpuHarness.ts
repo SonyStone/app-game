@@ -217,3 +217,70 @@ export async function runReadbacks(dpr: number) {
     opened.value.close();
   }
 }
+
+/** An exhausted first-frame time slice must still present a visible arrival in the second frame. */
+export async function runArrivalDeadline() {
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) {
+    throw new Error('WebGPU adapter required');
+  }
+
+  const device = await adapter.requestDevice();
+  const root = tgpu.initFromDevice({ device });
+  const display = makeGpuDisplay({ root, device, format: 'rgba8unorm' });
+  const target = device.createTexture({
+    size: [512, 512],
+    format: 'rgba8unorm',
+    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC
+  });
+  const arrival = { receivedAt: performance.now(), visible: true, presented: false };
+  const pixels = new Uint8Array(512 * 512 * 4).fill(255);
+  display.setTiles([
+    {
+      image: { width: 512, height: 512, pixels },
+      left: 0,
+      top: 0,
+      step: 1,
+      clip: { left: 0, top: 0, width: 512, height: 512 },
+      contentTile: true,
+      arrival
+    }
+  ]);
+  const original = Object.getOwnPropertyDescriptor(performance, 'now');
+  let clock = performance.now();
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => (clock += 3) });
+  try {
+    const firstPending = display.draw({ x: 0, y: 0, scale: 1 }, 512, 512, 1, target.createView(), true);
+    const firstPresented = arrival.presented;
+    const secondPending = display.draw({ x: 0, y: 0, scale: 1 }, 512, 512, 1, target.createView(), true);
+    const read = device.createBuffer({
+      size: pixels.byteLength,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+    });
+    try {
+      const encoder = device.createCommandEncoder();
+      encoder.copyTextureToBuffer(
+        { texture: target },
+        { buffer: read, bytesPerRow: 512 * 4 },
+        { width: 512, height: 512 }
+      );
+      device.queue.submit([encoder.finish()]);
+      await read.mapAsync(GPUMapMode.READ);
+      const exact = new Uint8Array(read.getMappedRange()).every((value) => value === 255);
+      read.unmap();
+      return { firstPending, firstPresented, secondPending, secondPresented: arrival.presented, exact };
+    } finally {
+      read.destroy();
+    }
+  } finally {
+    if (original) {
+      Object.defineProperty(performance, 'now', original);
+    } else {
+      delete (performance as Partial<Performance>).now;
+    }
+    display.destroy();
+    target.destroy();
+    root.destroy();
+    device.destroy();
+  }
+}

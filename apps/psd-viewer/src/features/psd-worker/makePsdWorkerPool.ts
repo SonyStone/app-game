@@ -38,6 +38,9 @@ export function makePsdWorkerPool(
   let primaryFlight: ReturnType<PsdClient['renderWindow']> | undefined;
   let secondaryBusy = false;
   let serialMillisecondsPerTile: number | undefined;
+  let serialServiceMilliseconds: number | undefined;
+  let parallelBatchAllowed = true;
+  const batchCosts = new Map<number, { serial?: number; parallel?: number }>();
   const serialInputs: number[] = [];
   const parallelInputs: number[] = [];
 
@@ -106,6 +109,13 @@ export function makePsdWorkerPool(
       if (!eligible(settings)) {
         stop();
       }
+      return 1;
+    }
+
+    const cost = batchCosts.get(batchBucket(independent));
+    parallelBatchAllowed = !cost?.parallel || !cost.serial || cost.parallel < cost.serial / 1.3;
+    if (!parallelBatchAllowed) {
+      viewerPerformance.record('workers.batch.serial', performance.now(), independent);
       return 1;
     }
 
@@ -187,8 +197,13 @@ export function makePsdWorkerPool(
     // the native reply actually arrives; the outer camera interest still cancels immediately.
     const nativeSignal = new AbortController().signal;
     const identity = key(settings, visibility);
-    const parallel = window.kind === 'regions' && verified === identity && eligible(settings) && !!secondary?.document;
-    if (!parallel && window.kind !== 'saved' && verified !== identity) {
+    const parallel =
+      parallelBatchAllowed &&
+      window.kind === 'regions' &&
+      verified === identity &&
+      eligible(settings) &&
+      !!secondary?.document;
+    if (window.kind !== 'saved' && verified !== identity) {
       verified = undefined;
     }
     const spare = parallel && primaryBusy > 0 && !secondaryBusy ? secondary : undefined;
@@ -219,6 +234,18 @@ export function makePsdWorkerPool(
         // A bounded-operation refusal is retried serially under the original one-worker policy.
         if (!result.ok && !signal.aborted) {
           result = await renderPrimary(document, settings, visibility, window, signal);
+        }
+      }
+      if (result.ok && window.kind === 'regions' && result.value.images.some((image) => image.populated)) {
+        const service = result.value.milliseconds / result.value.images.length;
+        if (!parallel) {
+          serialServiceMilliseconds =
+            serialServiceMilliseconds === undefined ? service : Math.min(serialServiceMilliseconds * 1.1, service);
+        } else if (serialServiceMilliseconds !== undefined && service > serialServiceMilliseconds * 1.8) {
+          // Contention is visible before a batch finishes. Its remaining jobs use the primary; the next batch
+          // gets a fresh prediction rather than losing useful parallelism for the entire document.
+          parallelBatchAllowed = false;
+          viewerPerformance.record('workers.batch.contention', performance.now(), service / serialServiceMilliseconds);
         }
       }
       if (signal.aborted) {
@@ -266,6 +293,9 @@ export function makePsdWorkerPool(
       verified = undefined;
       disabled = false;
       serialMillisecondsPerTile = undefined;
+      serialServiceMilliseconds = undefined;
+      parallelBatchAllowed = true;
+      batchCosts.clear();
       serialInputs.length = 0;
       parallelInputs.length = 0;
       sourceBytes = args[0] instanceof Blob ? args[0].size : args[0].byteLength;
@@ -287,7 +317,7 @@ export function makePsdWorkerPool(
     },
     renderWindow,
     prepareWindows,
-    /** Stops parallel work when a completed cold batch fails measured throughput. Canceled/cache-only batches abstain. */
+    /** Records cold batch cost by size. Slow batches run serially next time; empty/cache-only batches abstain. */
     reportWindowBatch(batch: {
       workers: number;
       tiles: number;
@@ -295,19 +325,28 @@ export function makePsdWorkerPool(
       milliseconds: number;
       requestMilliseconds: number;
     }) {
-      if (batch.populated < 9 || batch.milliseconds <= 0) {
+      if (batch.populated < 1 || batch.milliseconds <= 0) {
         return;
       }
+      const bucket = batchBucket(batch.tiles);
+      const cost = batchCosts.get(bucket) ?? {};
+      const perTile = batch.milliseconds / batch.tiles;
       if (batch.workers === 1) {
-        serialMillisecondsPerTile = batch.milliseconds / batch.tiles;
+        serialMillisecondsPerTile = perTile;
+        cost.serial = perTile;
+        batchCosts.set(bucket, cost);
         return;
       }
-      const serial =
-        serialMillisecondsPerTile === undefined ? batch.requestMilliseconds : serialMillisecondsPerTile * batch.tiles;
+      cost.parallel = perTile;
+      cost.serial ??= serialServiceMilliseconds ?? serialMillisecondsPerTile ?? batch.requestMilliseconds / batch.tiles;
+      serialServiceMilliseconds ??= cost.serial;
+      batchCosts.set(bucket, cost);
+      const serial = cost.serial * batch.tiles;
       const speedup = serial / batch.milliseconds;
       viewerPerformance.record('workers.batch.speedup', performance.now(), speedup);
       if (speedup < 1.3) {
-        disable('throughput');
+        parallelBatchAllowed = false;
+        viewerPerformance.record('workers.batch.serial', performance.now(), batch.tiles);
       }
     },
     /** Bounded input samples work without telemetry. Compare p95 with a measured serial baseline, or the 33 ms gate. */
@@ -349,6 +388,11 @@ export function makePsdWorkerPool(
       primary.dispose();
     }
   };
+}
+
+/** Similar cold batch sizes share predictions without applying a sparse batch's cost to larger dense work. */
+function batchBucket(tiles: number) {
+  return Math.ceil(Math.log2(Math.max(1, tiles)));
 }
 
 /** A tile consumer can prepare admitted concurrency; protocol-only clients remain serial. */

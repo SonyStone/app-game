@@ -8,11 +8,19 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: /^@solidjs\/web$/,
+        replacement: fileURLToPath(new URL('./node_modules/@solidjs/web/dist/web.dev.js', import.meta.url))
+      },
+      {
         find: /^solid-js$/,
         replacement: fileURLToPath(new URL('./node_modules/solid-js/dist/solid.dev.js', import.meta.url))
       }
     ],
     conditions: ['development', 'browser']
   },
-  test: { include: ['tests/**/*.test.{ts,tsx}'], environment: 'node' }
+  test: {
+    server: { deps: { inline: ['@solid-primitives/raf'] } },
+    include: ['tests/**/*.test.{ts,tsx}'],
+    environment: 'node'
+  }
 });

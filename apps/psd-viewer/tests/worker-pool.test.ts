@@ -27,14 +27,17 @@ it('admits a spare only after proven window work and transfers its source', asyn
 });
 
 it.each(['baseline', 'cmyk', 'depth', 'budget', 'fonts', 'fallback', 'regeneration', 'capacity', 'metadata'])(
-  'keeps %s on one worker', async (reason) => {
+  'keeps %s on one worker',
+  async (reason) => {
     const { pool, spawn } = setup(reason);
     await pool.open(new ArrayBuffer(100));
     if (reason === 'fonts') {
       await pool.addFonts([]);
     }
     await tile(pool);
-    expect(await prepare(pool, reason === 'regeneration' ? { ...photoshopDefaultSettings, typeLayers: true } : undefined)).toBe(1);
+    expect(
+      await prepare(pool, reason === 'regeneration' ? { ...photoshopDefaultSettings, typeLayers: true } : undefined)
+    ).toBe(1);
     expect(spawn).not.toHaveBeenCalled();
     pool.dispose();
   }
@@ -47,7 +50,13 @@ it('invalidates proof for changed settings or visibility, and never sends overvi
   expect(await prepare(pool)).toBe(2);
   expect(await pool.prepareWindows(1, photoshopDefaultSettings, [[1, false]], 9)).toBe(1);
   expect(await prepare(pool, { ...photoshopDefaultSettings, linearBlending: true })).toBe(1);
-  await pool.renderWindow(1, photoshopDefaultSettings, [], { kind: 'overview', step: 64 }, new AbortController().signal);
+  await pool.renderWindow(
+    1,
+    photoshopDefaultSettings,
+    [],
+    { kind: 'overview', step: 64 },
+    new AbortController().signal
+  );
   expect(ports[0].requests.filter((request) => request.type === 'renderWindow')).toHaveLength(0);
   pool.dispose();
 });
@@ -112,29 +121,43 @@ function prepare(pool: ReturnType<typeof makePsdWorkerPool>, settings = photosho
 }
 
 function tile(pool: ReturnType<typeof makePsdWorkerPool>) {
-  return pool.renderWindow(1, photoshopDefaultSettings, [], {
-    kind: 'regions', rectangles: [{ left: 0, top: 0, width: 1, height: 1 }]
-  }, new AbortController().signal);
+  return pool.renderWindow(
+    1,
+    photoshopDefaultSettings,
+    [],
+    {
+      kind: 'regions',
+      rectangles: [{ left: 0, top: 0, width: 1, height: 1 }]
+    },
+    new AbortController().signal
+  );
 }
 
-function port(reason: string): PsdWorkerPort & {
+/** Controllable service times exercise admission independently of host scheduling. */
+type TestPort = PsdWorkerPort & {
   hold: boolean;
+  serviceMs: number;
   finish(): void;
   requests: PsdRequest[];
   transfers: Transferable[][];
-} {
+};
+
+function port(reason: string): TestPort {
   const requests: PsdRequest[] = [];
   const transfers: Transferable[][] = [];
   const waiting: (() => void)[] = [];
-  const result: PsdWorkerPort & { hold: boolean; requests: PsdRequest[]; transfers: Transferable[][]; finish(): void } = {
+  const result: TestPort = {
     onmessage: null,
     onerror: null,
     onmessageerror: null,
     terminate: vi.fn(),
     hold: false,
+    serviceMs: 1,
     requests,
     transfers,
-    finish() { waiting.shift()?.(); },
+    finish() {
+      waiting.shift()?.();
+    },
     postMessage(request: PsdRequest, transfer: Transferable[]) {
       requests.push(request);
       transfers.push(transfer);
@@ -142,9 +165,21 @@ function port(reason: string): PsdWorkerPort & {
         let body: PsdReply;
         switch (request.type) {
           case 'open':
-            body = { id: request.id, type: 'opened', document: 1,
-              info: { width: 300000, height: 300000, layerRecords: reason === 'metadata' ? 5000 : 1, mode: reason === 'cmyk' ? 4 : 3, depth: reason === 'depth' ? 16 : 8 },
-              layers: [], states: {}, opening: {} } as unknown as PsdReply;
+            body = {
+              id: request.id,
+              type: 'opened',
+              document: 1,
+              info: {
+                width: 300000,
+                height: 300000,
+                layerRecords: reason === 'metadata' ? 5000 : 1,
+                mode: reason === 'cmyk' ? 4 : 3,
+                depth: reason === 'depth' ? 16 : 8
+              },
+              layers: [],
+              states: {},
+              opening: {}
+            } as unknown as PsdReply;
             break;
           case 'original':
             body = { id: request.id, type: 'original', bytes: new Blob([new ArrayBuffer(100)]) };
@@ -153,15 +188,36 @@ function port(reason: string): PsdWorkerPort & {
             body = { id: request.id, type: 'fontsAdded', fonts: [], results: [] };
             break;
           default:
-            body = { id: request.id, type: 'windowRendered', milliseconds: 1, images: [{
-              left: 0, top: 0, width: 1, height: 1, step: 1, source: 'layers',
-              strategy: reason === 'fallback' ? 'fullCanvas' : 'window', exactToLayerRender: true,
-              approximations: [], pixels: new Uint8Array([1, 2, 3, 255])
-            }] };
+            body = {
+              id: request.id,
+              type: 'windowRendered',
+              milliseconds: result.serviceMs,
+              images: [
+                {
+                  left: 0,
+                  top: 0,
+                  width: 1,
+                  height: 1,
+                  step: 1,
+                  source: 'layers',
+                  strategy: reason === 'fallback' ? 'fullCanvas' : 'window',
+                  exactToLayerRender: true,
+                  populated: true,
+                  approximations: [],
+                  pixels: new Uint8Array([1, 2, 3, 255])
+                }
+              ]
+            };
         }
-        result.onmessage?.({ data: { ...body, memory: {
-          wasmBytes: (reason === 'capacity' ? 1100 : 179) * 1024 ** 2, sourceBytes: 100
-        } } });
+        result.onmessage?.({
+          data: {
+            ...body,
+            memory: {
+              wasmBytes: (reason === 'capacity' ? 1100 : 179) * 1024 ** 2,
+              sourceBytes: 100
+            }
+          }
+        });
       };
       if (result.hold) {
         waiting.push(reply);
@@ -169,11 +225,11 @@ function port(reason: string): PsdWorkerPort & {
         queueMicrotask(reply);
       }
     }
-  } satisfies PsdWorkerPort & { hold: boolean; requests: PsdRequest[]; transfers: Transferable[][]; finish(): void };
+  };
   return result;
 }
 
-it.each(['throughput', 'interaction'])('disables a spare when measured %s fails without telemetry', async (reason) => {
+it.each(['throughput', 'interaction'])('falls back when measured %s fails without telemetry', async (reason) => {
   const { pool, ports } = setup();
   await pool.open(new ArrayBuffer(100));
   await tile(pool);
@@ -189,8 +245,13 @@ it.each(['throughput', 'interaction'])('disables a spare when measured %s fails 
       pool.reportInteraction(12);
     }
   }
-  expect(ports[0].terminate).toHaveBeenCalled();
   expect(await prepare(pool)).toBe(1);
+  if (reason === 'interaction') {
+    expect(ports[0].terminate).toHaveBeenCalled();
+  } else {
+    expect(ports[0].terminate).not.toHaveBeenCalled();
+    expect(await pool.prepareWindows(1, photoshopDefaultSettings, [], 4)).toBe(2);
+  }
   pool.dispose();
 });
 
@@ -214,7 +275,9 @@ it('serializes both surviving scheduler lanes after a mode change without coales
   main.hold = true;
   const jobs = [tile(pool), tile(pool), tile(pool)];
   for (let index = 0; index < jobs.length; index++) {
-    await vi.waitFor(() => expect(main.requests.filter((request) => request.type === 'renderWindow')).toHaveLength(index + 2));
+    await vi.waitFor(() =>
+      expect(main.requests.filter((request) => request.type === 'renderWindow')).toHaveLength(index + 2)
+    );
     main.finish();
     expect((await jobs[index]).ok).toBe(true);
   }
@@ -227,12 +290,21 @@ it('keeps a canceled native slot and its reservation until the actual synchronou
   main.hold = true;
   const controller = new AbortController();
   const settled = vi.fn();
-  const job = pool.renderWindow(1, photoshopDefaultSettings, [], {
-    kind: 'regions', rectangles: [{ left: 0, top: 0, width: 1, height: 1 }]
-  }, controller.signal).then((result) => {
-    settled();
-    return result;
-  });
+  const job = pool
+    .renderWindow(
+      1,
+      photoshopDefaultSettings,
+      [],
+      {
+        kind: 'regions',
+        rectangles: [{ left: 0, top: 0, width: 1, height: 1 }]
+      },
+      controller.signal
+    )
+    .then((result) => {
+      settled();
+      return result;
+    });
   controller.abort();
   await Promise.resolve();
   expect(settled).not.toHaveBeenCalled();
@@ -261,9 +333,16 @@ it('retires a crashed spare after semantic cancellation without rejecting the ne
   ports[0].hold = true;
   const first = tile(pool);
   const controller = new AbortController();
-  const second = pool.renderWindow(1, photoshopDefaultSettings, [], {
-    kind: 'regions', rectangles: [{ left: 2, top: 0, width: 1, height: 1 }]
-  }, controller.signal);
+  const second = pool.renderWindow(
+    1,
+    photoshopDefaultSettings,
+    [],
+    {
+      kind: 'regions',
+      rectangles: [{ left: 2, top: 0, width: 1, height: 1 }]
+    },
+    controller.signal
+  );
   controller.abort();
   ports[0].onerror!({ message: 'spare stopped' });
   expect(await second).toMatchObject({ ok: false, error: { kind: 'superseded' } });
@@ -294,7 +373,8 @@ it('releases the spare when display admission changes while document memory stil
   const spare = port('');
   let allowed = true;
   const pool = makePsdWorkerPool(makePsdClient(main), () => spare, {
-    workers: 2, parallelAllowed: () => allowed
+    workers: 2,
+    parallelAllowed: () => allowed
   });
   await pool.open(new ArrayBuffer(100));
   await tile(pool);
@@ -302,5 +382,43 @@ it('releases the spare when display admission changes while document memory stil
   allowed = false;
   expect(await prepare(pool)).toBe(1);
   expect(spare.terminate).toHaveBeenCalled();
+  pool.dispose();
+});
+
+it('predicts serial fallback for a slow mixed batch without disabling useful nine-tile batches', async () => {
+  const { pool, ports } = setup();
+  await pool.open(new ArrayBuffer(100));
+  await tile(pool);
+  await prepare(pool);
+  pool.reportWindowBatch({ workers: 1, tiles: 8, populated: 3, milliseconds: 140, requestMilliseconds: 140 });
+  pool.reportWindowBatch({ workers: 2, tiles: 8, populated: 3, milliseconds: 180, requestMilliseconds: 160 });
+  expect(await pool.prepareWindows(1, photoshopDefaultSettings, [], 8)).toBe(1);
+  expect(await pool.prepareWindows(1, photoshopDefaultSettings, [], 9)).toBe(2);
+  expect(ports[0].terminate).not.toHaveBeenCalled();
+  pool.dispose();
+});
+
+it('moves the remaining jobs of a contended batch to the primary without retiring the spare', async () => {
+  const { pool, main, ports } = setup();
+  await pool.open(new ArrayBuffer(100));
+  main.serviceMs = 10;
+  await tile(pool);
+  await prepare(pool);
+  main.serviceMs = 25;
+  ports[0].serviceMs = 25;
+  main.hold = true;
+  ports[0].hold = true;
+  const first = tile(pool);
+  const second = tile(pool);
+  main.finish();
+  ports[0].finish();
+  await Promise.all([first, second]);
+  const spareCalls = ports[0].requests.length;
+  main.hold = false;
+  const remaining = [tile(pool), tile(pool)];
+  await Promise.all(remaining);
+  expect(ports[0].requests).toHaveLength(spareCalls);
+  expect(ports[0].terminate).not.toHaveBeenCalled();
+  expect(await prepare(pool)).toBe(2);
   pool.dispose();
 });
