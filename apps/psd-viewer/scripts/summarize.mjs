@@ -73,6 +73,12 @@ const summarize = async (directory) => {
       peakCpuTileBytes: percentile(values('tiles.cpu.bytes'), 1),
       cameraReturnedTiles: regionTiles.length,
       cameraRepeatedTiles: regionTiles.length - uniqueTiles.size,
+      peakAccountedWorkerBytes: percentile(values('workers.accounted.bytes'), 1),
+      peakActualWorkerBytes: percentile(values('workers.actual.bytes'), 1),
+      selectedWorkerBudgetBytes: percentile(values('workers.budget.bytes'), 1),
+      maximumWorkers: percentile(values('workers.active'), 1),
+      loadBefore: run.loadBefore,
+      loadAfter: run.loadAfter,
       status: run.afterOpen?.status
     };
     groups.set(group, [...(groups.get(group) ?? []), metric]);

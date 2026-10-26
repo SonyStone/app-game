@@ -1,7 +1,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { tmpdir } from 'node:os';
+import { tmpdir, loadavg, cpus } from 'node:os';
 import { extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 // PSD_BENCH_RUNS defaults to 3, PSD_BENCH_DPR to 1, PSD_BENCH_OPEN_ONLY=1 skips gestures/probes.
 // PSD_BENCH_BEHAVIORS=1 measures cancellation, restart and strict fallback.
 // PSD_BENCH_PHASE3=1 adds cold populated viewports, warm revisits and a five-minute PSB traversal at the chosen DPR.
+// PSD_BENCH_PHASE6=1 compares admitted one/two-worker cold batches with exact pixel hashes and load samples.
+// PSD_BENCH_WORKERS selects 1 or 2 for the ordinary fixture/Phase 3 suites.
 // PSD_BENCH_PHASE3_ONLY=1 skips the ordinary fixture matrix for a focused acceptance run.
 // PSD_BENCH_FEATURES=1 also runs the audit's feature/cache probes. PSD_BENCH_BACKEND selects webgpu/canvas2d.
 const app = fileURLToPath(new URL('../', import.meta.url));
@@ -47,6 +49,9 @@ try {
     JSON.stringify(
       {
         build: 'production',
+        workers: Number(env.PSD_BENCH_WORKERS ?? 1),
+        load: loadavg(),
+        cpuCount: cpus().length,
         backend,
         dpr: Number(env.PSD_BENCH_DPR ?? 1),
         runs: Number(env.PSD_BENCH_RUNS ?? 3),
@@ -64,6 +69,7 @@ try {
   for (const driver of [
     ...(env.PSD_BENCH_PHASE3_ONLY === '1' ? [] : ['bench-repeat.mjs']),
     ...(env.PSD_BENCH_PHASE3 === '1' ? ['phase3.mjs'] : []),
+    ...(env.PSD_BENCH_PHASE6 === '1' ? ['phase6.mjs'] : []),
     ...(env.PSD_BENCH_FEATURES === '1' ? ['features.mjs'] : []),
     ...(env.PSD_BENCH_BEHAVIORS === '1' ? ['opening-behaviors.mjs'] : [])
   ]) {
