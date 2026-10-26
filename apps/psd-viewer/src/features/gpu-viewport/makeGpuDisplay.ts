@@ -2,7 +2,7 @@ import type { GpuContext } from '@app-game/solid-gpu/gpu';
 import tgpu, { d, std } from 'typegpu';
 import { viewerPerformance } from '../telemetry/performance';
 import type { View } from '../viewport/view';
-import type { DisplayTile } from './displayTiles';
+import { tileTextureUpload, type DisplayTile } from './displayTiles';
 
 /**
  * Displays authoritative straight RGBA8 bytes. No sRGB texture conversion is applied: filtering is explicitly
@@ -138,18 +138,14 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
 
   function allocate(tile: DisplayTile) {
     const start = performance.now();
-    const { image, clip, step } = tile;
-    const x = Math.max(0, Math.round((clip.left - tile.left) / step) - 1);
-    const y = Math.max(0, Math.round((clip.top - tile.top) / step) - 1);
-    const right = Math.min(image.width, Math.ceil((clip.left + clip.width - tile.left) / step) + 1);
-    const bottom = Math.min(image.height, Math.ceil((clip.top + clip.height - tile.top) / step) + 1);
-    const width = right - x;
-    const height = bottom - y;
+    const { clip, step } = tile;
+    const upload = tileTextureUpload(tile);
+    const { width, height } = upload;
     const texture = root.createTexture({ size: [width, height], format: 'rgba8unorm' }).$usage('sampled');
     const region = root
       .createBuffer(Region, {
         clip: d.vec4f(clip.left, clip.top, clip.width, clip.height),
-        origin: d.vec2f(tile.left + x * step, tile.top + y * step),
+        origin: d.vec2f(upload.left, upload.top),
         step,
         padding: 0
       })
@@ -157,8 +153,8 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
     try {
       device.queue.writeTexture(
         { texture: root.unwrap(texture) },
-        image.pixels.buffer as ArrayBuffer,
-        { offset: image.pixels.byteOffset + (y * image.width + x) * 4, bytesPerRow: image.width * 4 },
+        upload.source,
+        { bytesPerRow: upload.bytesPerRow },
         { width, height }
       );
       const group = root.createBindGroup(tileLayout, { source: texture.createView(), region });

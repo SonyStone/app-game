@@ -50,6 +50,30 @@ export function displayTiles(image: DisplayImage): readonly DisplayTile[] {
   return result;
 }
 
+/**
+ * Returns only the source rows needed by a bordered texture upload. The typed view shares the worker buffer.
+ * WebGPU snapshots BufferSource bytes before interpreting bytesPerRow, so passing the whole image copies excess data.
+ */
+export function tileTextureUpload(tile: DisplayTile) {
+  const { image, clip, step } = tile;
+  const x = Math.max(0, Math.round((clip.left - tile.left) / step) - 1);
+  const y = Math.max(0, Math.round((clip.top - tile.top) / step) - 1);
+  const right = Math.min(image.width, Math.ceil((clip.left + clip.width - tile.left) / step) + 1);
+  const bottom = Math.min(image.height, Math.ceil((clip.top + clip.height - tile.top) / step) + 1);
+  const width = right - x;
+  const height = bottom - y;
+  const offset = (y * image.width + x) * 4;
+  const length = ((height - 1) * image.width + width) * 4;
+  return {
+    source: new Uint8Array(image.pixels.buffer as ArrayBuffer, image.pixels.byteOffset + offset, length),
+    bytesPerRow: image.width * 4,
+    width,
+    height,
+    left: tile.left + x * step,
+    top: tile.top + y * step
+  };
+}
+
 const chunks = new WeakMap<PsdImage, readonly DisplayTile[]>();
 
 /** Keeps every upload bounded, including coarse overviews whose source image can exceed a texture's limits. */
