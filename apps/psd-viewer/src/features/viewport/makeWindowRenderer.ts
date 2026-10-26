@@ -81,7 +81,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
     }
 
     lod = chooseLod(view.scale * (size.dpr ?? 1), lod);
-    const plan = planWindow(snapshot.opened.info, view, size);
+    const plan = planWindow(snapshot.opened.info, view, size, budgetBytes);
     if (!plan || signal.aborted) {
       return undefined;
     }
@@ -395,7 +395,8 @@ export function chooseLod(scale: number, previous = 1): number {
 export function planWindow(
   document: { width: number; height: number },
   view: View,
-  viewport: { width: number; height: number }
+  viewport: { width: number; height: number },
+  budgetBytes = 64 * 1024 * 1024
 ):
   | { kind: 'overview'; step: number }
   | { kind: 'regions'; step: number; rectangle: PsdRegionRect; tiles: PsdRegionRect[] }
@@ -415,6 +416,21 @@ export function planWindow(
   const bottom = Math.min(document.height, Math.ceil((viewport.height - view.y + 96) / view.scale));
   if (right <= left || bottom <= top) {
     return undefined;
+  }
+
+  const count =
+    (Math.ceil(right / tileEdge) - Math.floor(left / tileEdge)) *
+    (Math.ceil(bottom / tileEdge) - Math.floor(top / tileEdge));
+  const coarseBytes = (count * (tileEdge + 2 * maxMipStep) ** 2 * 4 * 1.34) / maxMipStep ** 2;
+  if (coarseBytes > Math.max(1, budgetBytes - 10 * 1024 * 1024)) {
+    // Never pin more source coverage than can coexist, even at the coarsest supported region LOD.
+    // Keep the native point-sampling limitation explicit rather than allocating an unbounded pyramid.
+    let step = Math.max(1, Math.ceil(Math.sqrt((document.width * document.height) / 2_097_152)));
+    while (Math.ceil(document.width / step) * Math.ceil(document.height / step) > 2_097_152) {
+      step++;
+    }
+
+    return { kind: 'overview', step };
   }
 
   const tiles: PsdRegionRect[] = [];
