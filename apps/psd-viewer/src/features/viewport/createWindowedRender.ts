@@ -53,6 +53,8 @@ export function createWindowedRender(
       }
 
       if (!snapshot) {
+        stopPlanning();
+        renderFrame = undefined;
         renderer.clear();
         setBusy(false);
         return;
@@ -84,7 +86,7 @@ export function createWindowedRender(
       };
       startPlanning();
       return () => {
-        stopPlanning();
+        // Keep the queued frame when camera demand changes. Cancel/requeue can starve on continuous input.
         controller.abort();
         // Saved pixels must never survive an interrupted replacement.
         setRender((current) =>

@@ -502,10 +502,13 @@ function reactiveRenderer() {
     return nextFrame;
   });
   vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
-  const frame = () => {
-    for (const [id, callback] of [...frames]) {
-      frames.delete(id);
-      callback(0);
+  const frame = (beforeCallbacks?: () => void) => {
+    const scheduled = [...frames];
+    beforeCallbacks?.();
+    for (const [id, callback] of scheduled) {
+      if (frames.delete(id)) {
+        callback(0);
+      }
     }
   };
   const jobs: {
@@ -818,4 +821,22 @@ it('deduplicates both admitted lanes across camera changes and bounds obsolete w
   await renderer.render(snapshot, ...args, new AbortController().signal, vi.fn());
   expect(calls).toHaveLength(count);
   renderer.clear();
+});
+
+it('keeps planning live when every camera event arrives ahead of its scheduled frame callback', async () => {
+  const state = reactiveRenderer();
+  try {
+    flush();
+    for (let index = 0; index < 4; index++) {
+      state.frame(() => {
+        state.pan({ scale: 1 / 64, x: index + 1, y: 0 });
+        flush();
+      });
+    }
+    expect(state.jobs).toHaveLength(1);
+    expect(state.jobs[0].window.kind).toBe('saved');
+  } finally {
+    state.dispose();
+    state.jobs[0]?.resolve({ ok: false, error: { kind: 'superseded', message: 'disposed' } });
+  }
 });
