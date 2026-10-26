@@ -1,6 +1,6 @@
 import { access, type MaybeAccessor } from '@solid-primitives/utils';
 import { createMemo, createSignal } from 'solid-js';
-import { GapKey, isGapKey } from '..';
+import { type GapKey, isGapKey } from '..';
 import {
   applyGridRange,
   applyRange,
@@ -58,15 +58,15 @@ export function createSelection<K>(options: {
    * When `false`, modifier keys are ignored and clicks always use set mode.
    * @default true
    */
-  multiselect?: MaybeAccessor<boolean>;
+  multiselect?: MaybeAccessor<boolean> | undefined;
   /**
    * Grid columns for rectangular range selection.
    * When set, Shift+click selects a rectangular region instead of a linear range.
    * When `undefined`, Shift+click selects a linear range (default list behavior).
    */
-  gridColumns?: MaybeAccessor<number | undefined>;
+  gridColumns?: MaybeAccessor<number | undefined> | undefined;
   /** Called whenever the selection changes. */
-  onSelectionChange?: (keys: ReadonlyArray<K>) => void;
+  onSelectionChange?: ((keys: ReadonlyArray<K>) => void) | undefined;
 }) {
   const [selected, setSelected] = createSignal<Exclude<K, GapKey>[]>([], { ownedWrite: true });
 

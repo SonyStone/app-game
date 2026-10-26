@@ -15,8 +15,8 @@ export type DockDragSubject =
 export type DockGroupGeometry = {
   id: DockNodeId;
   panels: readonly PanelId[];
-  content?: DockRect;
-  tabList?: DockRect;
+  content?: DockRect | undefined;
+  tabList?: DockRect | undefined;
   /** Tab rectangles keyed by panel id. */
   tabs: ReadonlyMap<PanelId, DockRect>;
 };

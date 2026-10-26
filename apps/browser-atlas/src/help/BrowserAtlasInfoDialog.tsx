@@ -8,10 +8,19 @@ export function BrowserAtlasHelpDialog(props: { onClose: () => void }) {
       <section class="space-y-2">
         <h3 class="text-sm font-semibold text-neutral-100">Start here</h3>
         <p>
-          Each pane can independently show open and retained tabs, bookmarks, history, or an opened tree file. Use the
-          selector above a pane to choose a browser, then drag complete hierarchies between panes.
+          Each explorer can independently show open and retained tabs, bookmarks, history, or an opened tree file. Use
+          the selector above an explorer to choose a browser, then drag complete hierarchies between explorers.
         </p>
         <ul class="list-disc space-y-1 pl-5">
+          <li>
+            Explorers, Deleted, Backups, Cloud, and Settings are docked panels. Drag a tab beside another panel or into
+            its tab group, drag the gap between panels to resize them, and use New explorer for more explorers. The
+            layout is kept between sessions.
+          </li>
+          <li>
+            The starred explorer follows the focused browser window and shows windows revealed from the extension
+            button. Click the star on another explorer’s tab to make it primary.
+          </li>
           <li>Green actions save and close live tabs or windows; saved items restore in place.</li>
           <li>Window, Doc, Group, Note, and Rule can be clicked or dragged to choose an exact tree position.</li>
           <li>A Group is a saved future window: activate it, or drop a live tab inside it, to create that window.</li>
@@ -68,15 +77,15 @@ export function BrowserAtlasHelpDialog(props: { onClose: () => void }) {
             for the current browser session.
           </li>
           <li>
-            Backup creates a local tree snapshot. Backups can open a detached recovery tree for selective branch
-            transfer, or restore any retained recovery point in full.
+            Backup creates a local tree snapshot. Backups can open a detached recovery tree in a new explorer for
+            selective branch transfer, or restore any retained recovery point in full.
           </li>
           <li>
             Cloud connects the selected browser identity, labels manual or daily copies, and can open, restore, or
-            delete any of its latest 30 remote backups. Open loads a detached tree, so selected branches can be dragged
-            into a live browser pane without replacing everything. Localhost keeps Chrome and Firefox mock clouds
-            separate. The strip beside Cloud and the status row show no attempt, success, or failure for the current
-            browser session.
+            delete any of its latest 30 remote backups. Open loads a detached tree in a new explorer, so selected
+            branches can be dragged into a live browser explorer without replacing everything. Localhost keeps Chrome
+            and Firefox mock clouds separate. The strip beside Cloud and the status row show no attempt, success, or
+            failure for the current browser session.
           </li>
           <li>
             Tree edits are immediate: session Undo/Redo covers moves, organizer edits, and deletions; Deleted survives
@@ -248,7 +257,7 @@ const HELP_SHORTCUTS = [
   { keys: 'Enter / Shift+Enter', action: 'Add a note below or above the selected item.' },
   { keys: 'Insert', action: 'Add a note as the last child; modifiers select other placements.' },
   { keys: 'Shift+G / L', action: 'Add a group above or a separator below.' },
-  { keys: 'C', action: 'Clone the current pane view into the opposite pane.' },
+  { keys: 'C', action: 'Clone the current view into a new explorer beside it.' },
   { keys: 'W / S', action: 'Find the previous live window or undo the latest stable scroll.' },
   { keys: 'Q', action: 'Save and close all other browser windows.' },
   { keys: 'Ctrl/Cmd+B', action: 'Create a cloud backup when available, otherwise a local snapshot.' },

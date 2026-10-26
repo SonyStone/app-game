@@ -1,32 +1,41 @@
 import { createVirtualNestedList } from '@app-game/solid-virtual';
+import { createEventBus } from '@solid-primitives/event-bus';
 import type { JSX } from '@solidjs/web';
+import { Portal } from '@solidjs/web';
+import { Dock, type PanelId } from 'solid-dock';
 import type { Accessor } from 'solid-js';
-import { createEffect, createMemo, createSignal, createTrackedEffect, For, Match, onCleanup, onSettled, Show, Switch } from 'solid-js';
-import type { DocumentExplorerBackend } from './backends/document/createDocumentExplorerBackend';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  createTrackedEffect,
+  For,
+  mapArray,
+  onCleanup,
+  onSettled,
+  Show,
+  untrack
+} from 'solid-js';
 import { createDocumentExplorerBackend } from './backends/document/createDocumentExplorerBackend';
 import styles from './App.module.css';
 import type {
   ExplorerBackend,
   ExplorerBatchableCommand,
   ExplorerCloudBackupAttempt,
-  ExplorerCloudBackupConfiguration,
-  ExplorerCloudBackupStatus,
-  ExplorerCloudBackupSummary,
   ExplorerCommand,
-  ExplorerDeletedItemSummary,
   ExplorerDeleteTarget,
   ExplorerImportTarget,
-  ExplorerTreeSnapshotSummary,
   PersistentItemReference,
   PersistentItemTarget,
   PersistentMovePlacement,
   PersistentOrganizerPlacement
 } from './explorer/backend';
 import { batchExplorerCommands } from './explorer/backend';
+import type { BrowserBackendBinding, DocumentBackendBinding, ExplorerBackendBinding } from './explorer/bindings';
+import { createBrowserBinding, createDocumentBinding } from './explorer/bindings';
 import { readExplorerClipboard, serializeClipboardText, writeExplorerClipboard } from './explorer/clipboard';
 import type { ExplorerOrganizerKind } from './explorer/createExplorerDragAndDrop';
 import { affectedSources, createExplorerDragAndDrop } from './explorer/createExplorerDragAndDrop';
-import { createExplorerSources } from './explorer/createExplorerSources';
 import { createMetroTreeLines } from './explorer/createMetroTreeLines';
 import { ExplorerTreeRow } from './explorer/ExplorerTreeRow';
 import type { ExplorerHtmlRow } from './explorer/files';
@@ -39,16 +48,24 @@ import {
 } from './explorer/files';
 import type { ExplorerSourceId, ExplorerTreeNode } from './explorer/model';
 import { equalExplorerTreeNodes, EXPLORER_SOURCES, getExplorerChildren } from './explorer/model';
-import type { PortableExplorerNode } from './explorer/portable';
+import type { ExplorerDocument, PortableExplorerNode } from './explorer/portable';
 import { createPortableExplorerNode, portableChildren, portableVisibleChildren } from './explorer/portable';
 import { BrowserAtlasAboutDialog, BrowserAtlasHelpDialog } from './help/BrowserAtlasInfoDialog';
+import { cloudBackupAttemptIndicator, type CloudBackupAttemptIndicator, CloudBackupsPanel } from './panels/CloudBackupsPanel';
+import { DeletedItemsPanel } from './panels/DeletedItemsPanel';
+import { LocalBackupsPanel } from './panels/LocalBackupsPanel';
+import {
+  type BackendChange,
+  canBrowseDeletedItems as canBackendBrowseDeletedItems,
+  canUseCloudBackups as canBackendUseCloudBackups,
+  canUseLocalSnapshots as canBackendUseLocalSnapshots
+} from './panels/ServicePanelFrame';
+import { SettingsPanel } from './panels/SettingsPanel';
 import {
   DEFAULT_BROWSER_ATLAS_SETTINGS,
   readBrowserAtlasSettings,
   subscribeBrowserAtlasSettings,
   writeBrowserAtlasSettings,
-  type BrowserAtlasAppearanceSettings,
-  type BrowserAtlasColorOverride,
   type BrowserAtlasSettings
 } from './settings';
 import type { TreeKeyboardMoveDirection, TreeKeyboardOrganizerRequest } from './tree-view/createTreeKeyboardNavigation';
@@ -66,6 +83,9 @@ import { TreeSelectionHighlight } from './tree-view/TreeSelectionHighlight';
 import { classicTreeConnector, TreeAnchorBox } from './tree-view/treeLines';
 import type { TreeCollapsedSummary } from './tree-view/TreeView';
 import { TreeView } from './tree-view/TreeView';
+import { createWorkspace } from './workspace/createWorkspace';
+import { type BackendKey, documentBackendKey, PRIMARY_BROWSER_KEY, type ServicePanelKind } from './workspace/layout';
+import { PrimaryExplorerButton, WorkspaceDock } from './workspace/WorkspaceDock';
 
 /** Props for the shared browser and website explorer composition. */
 export type BrowserAtlasProps = {
@@ -73,7 +93,7 @@ export type BrowserAtlasProps = {
   backend: ExplorerBackend;
   /** User-facing name for the primary backend. Defaults to `Browser`. */
   backendLabel?: string;
-  /** Additional independent browser identities available in both pane selectors. */
+  /** Additional independent browser identities available in every explorer's selector. */
   additionalBrowserBackends?: readonly BrowserAtlasBackendOption[];
 };
 
@@ -84,45 +104,48 @@ export type BrowserAtlasBackendOption = Readonly<{
   backend: ExplorerBackend;
 }>;
 
-/** Renders the explorer with a live backend and one drop-loaded document per pane. */
+/**
+ * Renders the docked workspace: any number of explorers, each with its own
+ * document, plus the Deleted, Backups, Cloud and Settings panels. The layout and
+ * every explorer's view are stored between sessions; documents are not, so an
+ * explorer that showed one reopens on the primary browser's Explore.
+ */
 export function BrowserAtlas(props: BrowserAtlasProps) {
-  let leftPaneController: ExplorerPaneController | null = null;
-  let rightPaneController: ExplorerPaneController | null = null;
+  const explorerControllers = new Map<PanelId, ExplorerPaneController>();
+  const pendingClones = new Map<PanelId, ExplorerPaneClone>();
+  const pendingDocuments = new Map<PanelId, ExplorerDocument>();
   let pendingBrowserActionWindowId = readRequestedBrowserWindowId();
   const instanceId = createInstanceId();
-  const leftDocument = createDocumentExplorerBackend();
-  const rightDocument = createDocumentExplorerBackend();
-  const [leftDocumentLabel, setLeftDocumentLabel] = createSignal('Left file');
-  const [rightDocumentLabel, setRightDocumentLabel] = createSignal('Right file');
+  // Explorer menus, dialogs and print views render here: inside a dock panel they would be clipped,
+  // stacked below neighbouring panels, and offset by the panel's transform.
+  const overlayLayer = document.createElement('div');
   const [operationError, setOperationError] = createSignal<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [infoDialog, setInfoDialog] = createSignal<BrowserAtlasInfoDialogKind | null>(null);
   const [settings, setSettings] = createSignal<BrowserAtlasSettings>(DEFAULT_BROWSER_ATLAS_SETTINGS);
   const [clipboardMemory, setClipboardMemory] = createSignal<ExplorerClipboardMemory>(null);
   const [rootOperationDialog, setRootOperationDialog] = createSignal<ExplorerOperationDialogState | null>(null);
   const clipboard = { read: clipboardMemory, write: setClipboardMemory } satisfies ExplorerClipboardController;
-  const browserBackend = createBrowserBinding(`${instanceId}:browser`, props.backendLabel ?? 'Browser', props.backend);
-  const additionalBrowserBackends = (props.additionalBrowserBackends ?? []).map((option) =>
-    createBrowserBinding(`${instanceId}:browser:${option.id}`, option.label, option.backend)
+  const primaryBrowser = createBrowserBinding(
+    `${instanceId}:browser`,
+    PRIMARY_BROWSER_KEY,
+    props.backendLabel ?? 'Browser',
+    props.backend
   );
-  const leftFileBackend = createDocumentBinding(
-    `${instanceId}:left-file`,
-    leftDocumentLabel,
-    setLeftDocumentLabel,
-    leftDocument
+  const additionalBrowsers = (props.additionalBrowserBackends ?? []).map((option) =>
+    createBrowserBinding(`${instanceId}:browser:${option.id}`, `browser:${option.id}`, option.label, option.backend)
   );
-  const rightFileBackend = createDocumentBinding(
-    `${instanceId}:right-file`,
-    rightDocumentLabel,
-    setRightDocumentLabel,
-    rightDocument
-  );
-  const backends: readonly ExplorerBackendBinding[] = [
-    browserBackend,
-    ...additionalBrowserBackends,
-    leftFileBackend,
-    rightFileBackend
-  ];
+  const browsers: readonly BrowserBackendBinding[] = [primaryBrowser, ...additionalBrowsers];
+  const deletionBrowsers = browsers.filter((browser) => canBackendBrowseDeletedItems(browser.backend));
+  const snapshotBrowsers = browsers.filter((browser) => canBackendUseLocalSnapshots(browser.backend));
+  const cloudBrowsers = browsers.filter((browser) => canBackendUseCloudBackups(browser.backend));
+  const workspace = createWorkspace({
+    knownBrowsers: browsers.map((browser) => browser.key),
+    onError: showOperationError
+  });
+  // Each explorer owns one document for files and opened backups; it lives as long as the explorer.
+  const documents = mapArray(workspace.explorerIds, createExplorerDocument);
+  const backends = createMemo((): ExplorerBackendBindings => [primaryBrowser, ...additionalBrowsers, ...documents()]);
+  const backendChanges = createEventBus<BackendChange>();
   const dragAndDrop = createExplorerDragAndDrop({
     onCommand: executeCommand,
     canMoveAcrossBackends: canMoveAcrossBrowserBackends,
@@ -142,6 +165,14 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
         <button
           type="button"
           class="ml-auto h-6 px-2 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white"
+          title="Open another explorer panel on the browser's Explore tree"
+          onClick={openExplorer}
+        >
+          New explorer
+        </button>
+        <button
+          type="button"
+          class="h-6 px-2 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white"
           title="Open Browser Atlas in a standalone window"
           onClick={openStandaloneWindow}
         >
@@ -151,7 +182,7 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
           type="button"
           class="h-6 px-2 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white"
           aria-haspopup="dialog"
-          onClick={() => openInfoDialog('about')}
+          onClick={() => setInfoDialog('about')}
         >
           About
         </button>
@@ -159,72 +190,112 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
           type="button"
           class="h-6 px-2 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white"
           aria-haspopup="dialog"
-          onClick={() => openInfoDialog('help')}
+          onClick={() => setInfoDialog('help')}
         >
           Help
         </button>
         <button
           type="button"
           class="h-6 px-2 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white"
-          aria-expanded={settingsOpen() ? 'true' : 'false'}
-          onClick={() => {
-            setInfoDialog(null);
-            setSettingsOpen((open) => !open);
-          }}
+          title="Show or hide the Settings panel"
+          aria-pressed={workspace.isVisible('settings') ? 'true' : 'false'}
+          onClick={() => workspace.toggleUtilityPanel('settings')}
         >
           Settings
         </button>
-        <Show when={settingsOpen()}>
-          <BrowserAtlasSettingsPanel
-            settings={settings()}
-            onChange={updateSetting}
-            onAppearanceChange={(appearance) => updateSetting('appearance', appearance)}
-          />
-        </Show>
       </header>
 
-      <div class="flex h-[calc(100vh-2rem)] min-h-0 print:block print:h-auto print:overflow-visible">
-        <ExplorerPane
-          paneId="left"
-          initialBackendId={browserBackend.id}
-          initialSource="explore"
-          label="Left explorer pane"
-          backends={backends}
-          ownedDocument={leftFileBackend}
-          dragAndDrop={dragAndDrop}
-          clipboard={clipboard}
-          settings={settings}
-          cloneLabel="Clone →"
-          registerController={(controller) => {
-            leftPaneController = controller;
-            if (controller && pendingBrowserActionWindowId) {
-              controller.revealBrowserWindow(pendingBrowserActionWindowId);
-              pendingBrowserActionWindowId = null;
-            }
-          }}
-          onCloneView={(view) => rightPaneController?.applyClone(view)}
-          onCommand={executeCommand}
-          onError={showOperationError}
+      <Show when={workspace.ready()}>
+        <WorkspaceDock
+          state={workspace.dock()}
+          setState={workspace.setDock}
+          class="h-[calc(100vh-2rem)] print:hidden"
+          onClose={workspace.closePanel}
+          tabAccessory={(panelId) => (
+            <Show when={workspace.explorer(panelId)}>
+              <PrimaryExplorerButton
+                primary={workspace.primaryExplorer() === panelId}
+                onSelect={() => workspace.setPrimary(panelId)}
+              />
+            </Show>
+          )}
+          empty={
+            <button
+              type="button"
+              class="rounded border border-neutral-600 px-3 py-1.5 text-xs text-neutral-200 hover:bg-neutral-800"
+              onClick={openExplorer}
+            >
+              Open an explorer
+            </button>
+          }
+          panels={
+            <>
+              <For each={workspace.explorerIds()}>
+                {(panelId) => (
+                  <Dock.Panel id={panelId} title={explorerTitle(panelId)}>
+                    <ExplorerPane
+                      panelId={panelId}
+                      label={`Explorer ${workspace.explorer(panelId)?.number ?? ''}`}
+                      primary={workspace.primaryExplorer() === panelId}
+                      primaryBackendId={primaryBrowser.id}
+                      backendId={backendIdOf(workspace.explorer(panelId)?.backend)}
+                      source={workspace.explorer(panelId)?.source ?? 'explore'}
+                      backends={backends()}
+                      dragAndDrop={dragAndDrop}
+                      clipboard={clipboard}
+                      settings={settings}
+                      overlayMount={overlayLayer}
+                      registerController={(controller) => registerExplorerController(panelId, controller)}
+                      onBackendChange={(backendId) =>
+                        workspace.setExplorerView(panelId, { backend: backendKeyOf(backendId) })
+                      }
+                      onSourceChange={(source) => workspace.setExplorerView(panelId, { source })}
+                      onOpenDocument={(document, label) => openDocumentInExplorer(panelId, document, label)}
+                      onCloneView={(view) => cloneExplorerView(panelId, view)}
+                      onToggleServicePanel={toggleServicePanel}
+                      onBackup={(backendId) => void backupFromKeyboard(backendId)}
+                      onCommand={executeCommand}
+                      onError={showOperationError}
+                    />
+                  </Dock.Panel>
+                )}
+              </For>
+              <Dock.Panel id="deleted" title="Deleted items">
+                <DeletedItemsPanel
+                  browser={serviceBrowser('deleted')}
+                  browsers={deletionBrowsers}
+                  onBrowserChange={(browserId) => workspace.setServiceBackend('deleted', backendKeyOf(browserId))}
+                  changes={backendChanges}
+                />
+              </Dock.Panel>
+              <Dock.Panel id="backups" title="Local backups">
+                <LocalBackupsPanel
+                  browser={serviceBrowser('backups')}
+                  browsers={snapshotBrowsers}
+                  onBrowserChange={(browserId) => workspace.setServiceBackend('backups', backendKeyOf(browserId))}
+                  changes={backendChanges}
+                  confirm={confirmOperation}
+                  onOpenDocument={(document) => openDocumentInNewExplorer(document, 'backups')}
+                />
+              </Dock.Panel>
+              <Dock.Panel id="cloud" title="Cloud backups">
+                <CloudBackupsPanel
+                  browser={serviceBrowser('cloud')}
+                  browsers={cloudBrowsers}
+                  onBrowserChange={(browserId) => workspace.setServiceBackend('cloud', backendKeyOf(browserId))}
+                  changes={backendChanges}
+                  confirm={confirmOperation}
+                  onOpenDocument={(document) => openDocumentInNewExplorer(document, 'cloud')}
+                />
+              </Dock.Panel>
+              <Dock.Panel id="settings" title="Settings">
+                <SettingsPanel settings={settings()} onChange={updateSetting} onResetLayout={workspace.reset} />
+              </Dock.Panel>
+            </>
+          }
         />
-        <ExplorerPane
-          paneId="right"
-          initialBackendId={browserBackend.id}
-          initialSource="bookmarks"
-          label="Right explorer pane"
-          backends={backends}
-          ownedDocument={rightFileBackend}
-          dragAndDrop={dragAndDrop}
-          clipboard={clipboard}
-          settings={settings}
-          cloneLabel="← Clone"
-          registerController={(controller) => {
-            rightPaneController = controller;
-          }}
-          onCloneView={(view) => leftPaneController?.applyClone(view)}
-          onCommand={executeCommand}
-          onError={showOperationError}
-        />
-      </div>
+      </Show>
+      {overlayLayer}
 
       <Show when={infoDialog() === 'help'}>
         <BrowserAtlasHelpDialog onClose={() => setInfoDialog(null)} />
@@ -272,7 +343,7 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
   );
 
   async function executeCommand(backendId: string, command: ExplorerCommand): Promise<void> {
-    const binding = backends.find((candidate) => candidate.id === backendId);
+    const binding = backends().find((candidate) => candidate.id === backendId);
     if (!binding) {
       throw new Error('The destination backend is no longer available.');
     }
@@ -286,11 +357,12 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
     for (const source of affectedSources(command)) {
       binding.sources.refresh(source);
     }
+    backendChanges.emit({ backendId, change: command.kind });
   }
 
   function canMoveAcrossBrowserBackends(sourceBackendId: string, targetBackendId: string): boolean {
-    const source = backends.find((candidate) => candidate.id === sourceBackendId);
-    const target = backends.find((candidate) => candidate.id === targetBackendId);
+    const source = backends().find((candidate) => candidate.id === sourceBackendId);
+    const target = backends().find((candidate) => candidate.id === targetBackendId);
     return source?.kind === 'browser' && target?.kind === 'browser';
   }
 
@@ -311,6 +383,12 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
       });
     });
     return title === null ? null : createSavedOrganizerCommand(itemKind, placement, title);
+  }
+
+  function confirmOperation(title: string, message: string, confirmLabel: string, danger = false): Promise<boolean> {
+    return new Promise((resolve) => {
+      setRootOperationDialog({ kind: 'confirm', title, message, confirmLabel, danger, resolve });
+    });
   }
 
   function closeRootOperationDialog(value: string | boolean | null): void {
@@ -336,12 +414,176 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
     void writeBrowserAtlasSettings(nextSettings).catch(showOperationError);
   }
 
-  function revealBrowserActionWindow(windowId: string): void {
-    if (leftPaneController) {
-      leftPaneController.revealBrowserWindow(windowId);
-    } else {
-      pendingBrowserActionWindowId = windowId;
+  function openExplorer(): void {
+    workspace.addExplorer(() => ({ backend: PRIMARY_BROWSER_KEY, source: 'explore' }));
+  }
+
+  /** Opens a new explorer to the right of `panelId` with the same view, see {@link ExplorerPaneClone}. */
+  function cloneExplorerView(panelId: PanelId, view: ExplorerPaneClone): void {
+    const cloneId = workspace.addExplorer(() => ({ backend: backendKeyOf(view.backendId), source: view.source }), {
+      beside: panelId,
+      edge: 'right'
+    });
+    pendingClones.set(cloneId, view);
+  }
+
+  /** Loads `document` into the explorer's own document and shows it there. */
+  function openDocumentInExplorer(panelId: PanelId, document: ExplorerDocument, label: string): void {
+    const binding = documents().find((candidate) => candidate.key === documentBackendKey(panelId));
+    if (!binding) {
+      return;
     }
+    binding.document.replaceDocument(document);
+    binding.setLabel(label);
+    workspace.setExplorerView(panelId, { backend: binding.key });
+  }
+
+  /** Opens a backup read by a service panel in a new explorer to the left of that panel. */
+  function openDocumentInNewExplorer(document: ExplorerDocument, servicePanelId: PanelId): void {
+    workspace.addExplorer(
+      (panelId) => {
+        pendingDocuments.set(panelId, document);
+        return { backend: documentBackendKey(panelId), source: 'explore' };
+      },
+      { beside: servicePanelId, edge: 'left' }
+    );
+  }
+
+  /** Document of a new explorer: empty, or the backup it was opened for. Runs under the explorer's owner. */
+  function createExplorerDocument(panelId: PanelId): DocumentBackendBinding {
+    const initialDocument = pendingDocuments.get(panelId);
+    pendingDocuments.delete(panelId);
+    const key = documentBackendKey(panelId);
+    const number = untrack(() => workspace.explorer(panelId)?.number);
+    return createDocumentBinding(
+      `${instanceId}:${key}`,
+      key,
+      initialDocument?.title ?? `File ${number ?? ''}`,
+      createDocumentExplorerBackend(initialDocument)
+    );
+  }
+
+  function explorerTitle(panelId: PanelId): string {
+    const explorer = workspace.explorer(panelId);
+    const binding = backends().find((candidate) => candidate.key === explorer?.backend) ?? primaryBrowser;
+    const source = EXPLORER_SOURCES.find((candidate) => candidate.id === explorer?.source);
+    return `${binding.label()} · ${source?.label ?? ''}`;
+  }
+
+  function backendIdOf(key: BackendKey | undefined): string {
+    return backends().find((binding) => binding.key === key)?.id ?? primaryBrowser.id;
+  }
+
+  function backendKeyOf(backendId: string): BackendKey {
+    return backends().find((binding) => binding.id === backendId)?.key ?? PRIMARY_BROWSER_KEY;
+  }
+
+  /** Browser a service panel shows: the chosen one while it offers the feature, else the first that does. */
+  function serviceBrowser(kind: ServicePanelKind): BrowserBackendBinding | undefined {
+    const candidates = kind === 'deleted' ? deletionBrowsers : kind === 'backups' ? snapshotBrowsers : cloudBrowsers;
+    const key = workspace.serviceBackend(kind);
+    return candidates.find((browser) => browser.key === key) ?? candidates[0];
+  }
+
+  /**
+   * Toolbar action of an explorer: hides the service panel when it is visible and
+   * already shows `backendId`, otherwise shows it for that browser.
+   */
+  function toggleServicePanel(kind: ServicePanelKind, backendId: string): void {
+    const key = backendKeyOf(backendId);
+    if (workspace.isVisible(kind) && serviceBrowser(kind)?.key === key) {
+      workspace.closePanel(kind);
+      return;
+    }
+    showServicePanel(kind, backendId);
+  }
+
+  function showServicePanel(kind: ServicePanelKind, backendId: string): void {
+    workspace.setServiceBackend(kind, backendKeyOf(backendId));
+    workspace.showUtilityPanel(kind);
+  }
+
+  /**
+   * Ctrl/Cmd+B in an explorer showing Explore: a cloud backup when the browser is
+   * connected, the Cloud panel when it can connect, otherwise a local snapshot.
+   */
+  async function backupFromKeyboard(backendId: string): Promise<void> {
+    const binding = backends().find((candidate) => candidate.id === backendId);
+    if (!binding) {
+      return;
+    }
+    const createSnapshot = () => executeCommand(backendId, { kind: 'create-tree-snapshot' });
+    const canSnapshot = canBackendUseLocalSnapshots(binding.backend);
+    const cloudBackups = binding.backend.cloudBackups;
+    if (binding.kind !== 'browser' || !cloudBackups) {
+      if (canSnapshot) {
+        await createSnapshot().catch(showOperationError);
+      }
+      return;
+    }
+
+    try {
+      const connection = await cloudBackups.status();
+      if (connection.status === 'connected') {
+        await cloudBackups.create('manual').catch(showOperationError);
+        await binding.cloudAttempt.refresh();
+        showServicePanel('cloud', backendId);
+        backendChanges.emit({ backendId, change: 'cloud-backup' });
+        return;
+      }
+      if (connection.status === 'disconnected') {
+        showServicePanel('cloud', backendId);
+        return;
+      }
+      if (canSnapshot) {
+        await createSnapshot();
+      }
+    } catch (reason: unknown) {
+      if (canSnapshot) {
+        await createSnapshot().catch(showOperationError);
+      } else {
+        showOperationError(reason);
+      }
+    }
+  }
+
+  /**
+   * Tracks mounted explorers. A new explorer receives its pending clone; the
+   * primary one receives a window reveal requested before it mounted.
+   */
+  function registerExplorerController(panelId: PanelId, controller: ExplorerPaneController | null): void {
+    if (!controller) {
+      explorerControllers.delete(panelId);
+      return;
+    }
+
+    explorerControllers.set(panelId, controller);
+    const clone = pendingClones.get(panelId);
+    if (clone) {
+      pendingClones.delete(panelId);
+      controller.applyClone(clone);
+    }
+    if (pendingBrowserActionWindowId && workspace.primaryExplorer() === panelId) {
+      const windowId = pendingBrowserActionWindowId;
+      pendingBrowserActionWindowId = null;
+      workspace.activate(panelId);
+      controller.revealBrowserWindow(windowId);
+    }
+  }
+
+  /** Shows a window in the primary explorer, opening an explorer first when none is open. */
+  function revealBrowserActionWindow(windowId: string): void {
+    const panelId = workspace.primaryExplorer();
+    const controller = panelId === undefined ? undefined : explorerControllers.get(panelId);
+    if (panelId === undefined || !controller) {
+      pendingBrowserActionWindowId = windowId;
+      if (panelId === undefined && workspace.ready()) {
+        openExplorer();
+      }
+      return;
+    }
+    workspace.activate(panelId);
+    controller.revealBrowserWindow(windowId);
   }
 
   function openStandaloneWindow(): void {
@@ -363,168 +605,14 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
     }
     popup.focus();
   }
-
-  function openInfoDialog(kind: BrowserAtlasInfoDialogKind): void {
-    setSettingsOpen(false);
-    setInfoDialog(kind);
-  }
 }
 
 type BrowserAtlasInfoDialogKind = 'help' | 'about';
 
-function BrowserAtlasSettingsPanel(props: {
-  settings: BrowserAtlasSettings;
-  onChange: <TKey extends keyof BrowserAtlasSettings>(key: TKey, value: BrowserAtlasSettings[TKey]) => void;
-  onAppearanceChange: (appearance: BrowserAtlasAppearanceSettings) => void;
-}) {
-  return (
-    <div
-      class="absolute top-8 right-2 z-40 max-h-[calc(100vh-2.5rem)] w-80 overflow-y-auto rounded border border-neutral-700 bg-neutral-900 p-3 text-xs shadow-xl"
-      role="dialog"
-      aria-label="Browser Atlas settings"
-    >
-      <SettingsCheckbox
-        label="Follow the focused browser window"
-        description="Scroll the primary Explore pane when focus changes outside it."
-        checked={props.settings.autoFollowFocusedWindow}
-        onChange={(checked) => props.onChange('autoFollowFocusedWindow', checked)}
-      />
-      <SettingsCheckbox
-        label="Activate with one click"
-        description="Otherwise live and saved tabs/windows activate on double click."
-        checked={props.settings.oneClickActivation}
-        onChange={(checked) => props.onChange('oneClickActivation', checked)}
-      />
-      <SettingsCheckbox
-        label="Open Browser Atlas on startup"
-        description="Opens the extension explorer after Chromium starts."
-        checked={props.settings.openOnStartup}
-        onChange={(checked) => props.onChange('openOnStartup', checked)}
-      />
-      <SettingsCheckbox
-        label="Nest new tabs under their opener"
-        description="Tree Style Tabs: preserve which live tab opened each new tab."
-        checked={props.settings.nestNewTabsUnderOpener}
-        onChange={(checked) => props.onChange('nestNewTabsUnderOpener', checked)}
-      />
-      <SettingsCheckbox
-        label="Restore saved window position and size"
-        description="Open retained windows at their last known screen bounds."
-        checked={props.settings.restoreWindowsInOriginalBounds}
-        onChange={(checked) => props.onChange('restoreWindowsInOriginalBounds', checked)}
-      />
-      <div class="mb-3 border-t border-neutral-700 pt-3 font-medium text-neutral-200">Appearance</div>
-      <SettingsCheckbox
-        label="Use light background"
-        description="Use the original extension's experimental light color scheme."
-        checked={props.settings.appearance.lightBackground}
-        onChange={(checked) => updateAppearance('lightBackground', checked)}
-      />
-      <label class="mb-3 flex items-center gap-2">
-        <span class="flex-1">
-          <span class="block text-neutral-100">Tree lines</span>
-          <span class="block text-neutral-400">Classic connectors, or a metro map with a line per window.</span>
-        </span>
-        <select
-          class="h-6 rounded border border-neutral-700 bg-neutral-950 px-1 text-xs text-neutral-200"
-          aria-label="Tree lines"
-          value={props.settings.appearance.treeStyle}
-          onChange={(event) =>
-            updateAppearance('treeStyle', event.currentTarget.value === 'metro' ? 'metro' : 'classic')
-          }
-        >
-          <option value="classic">Classic</option>
-          <option value="metro">Metro</option>
-        </select>
-      </label>
-      <SettingsCheckbox
-        label="Highlight the path to a row"
-        description="Light up the lines to the row under the pointer, or to the focused row."
-        checked={props.settings.appearance.pathHighlight}
-        onChange={(checked) => updateAppearance('pathHighlight', checked)}
-      />
-      <SettingsColorOverride
-        label="Saved tab"
-        value={props.settings.appearance.savedTab}
-        onChange={(value) => updateAppearance('savedTab', value)}
-      />
-      <SettingsColorOverride
-        label="Open tab"
-        value={props.settings.appearance.openTab}
-        onChange={(value) => updateAppearance('openTab', value)}
-      />
-      <SettingsColorOverride
-        label="Active tab"
-        value={props.settings.appearance.activeTab}
-        onChange={(value) => updateAppearance('activeTab', value)}
-      />
-      <SettingsColorOverride
-        label="Note"
-        value={props.settings.appearance.note}
-        onChange={(value) => updateAppearance('note', value)}
-      />
-    </div>
-  );
-
-  function updateAppearance<TKey extends keyof BrowserAtlasAppearanceSettings>(
-    key: TKey,
-    value: BrowserAtlasAppearanceSettings[TKey]
-  ): void {
-    props.onAppearanceChange({ ...props.settings.appearance, [key]: value });
-  }
-}
-
-function SettingsCheckbox(props: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label class="mb-3 flex cursor-pointer gap-2 last:mb-0">
-      <input
-        type="checkbox"
-        class="mt-0.5"
-        checked={props.checked}
-        onChange={(event) => props.onChange(event.currentTarget.checked)}
-      />
-      <span>
-        <span class="block text-neutral-100">{props.label}</span>
-        <span class="block text-neutral-400">{props.description}</span>
-      </span>
-    </label>
-  );
-}
-
-function SettingsColorOverride(props: {
-  label: string;
-  value: BrowserAtlasColorOverride;
-  onChange: (value: BrowserAtlasColorOverride) => void;
-}) {
-  return (
-    <div class="mb-3 flex items-center gap-2 last:mb-0">
-      <label class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-neutral-100">
-        <input
-          type="checkbox"
-          checked={props.value.enabled}
-          aria-label={`Override ${props.label.toLocaleLowerCase()} color`}
-          onChange={(event) => props.onChange({ ...props.value, enabled: event.currentTarget.checked })}
-        />
-        <span>Override {props.label.toLocaleLowerCase()} color</span>
-      </label>
-      <input
-        type="color"
-        class="h-6 w-8 cursor-pointer border-0 bg-transparent p-0"
-        aria-label={`${props.label} color`}
-        value={props.value.color}
-        onInput={(event) => props.onChange({ ...props.value, color: event.currentTarget.value })}
-      />
-    </div>
-  );
-}
-
-type ExplorerSources = ReturnType<typeof createExplorerSources>;
 type ExplorerDragAndDrop = ReturnType<typeof createExplorerDragAndDrop>;
+
+/** Backends every explorer can show: the primary browser first, then other browsers and explorer documents. */
+type ExplorerBackendBindings = readonly [BrowserBackendBinding, ...ExplorerBackendBinding[]];
 
 type ExplorerClipboardMemory = Readonly<{
   items: readonly PortableExplorerNode[];
@@ -536,26 +624,7 @@ type ExplorerClipboardController = Readonly<{
   write: (memory: ExplorerClipboardMemory) => void;
 }>;
 
-type ExplorerBackendBinding = BrowserBackendBinding | DocumentBackendBinding;
-
-type BrowserBackendBinding = {
-  kind: 'browser';
-  id: string;
-  label: Accessor<string>;
-  backend: ExplorerBackend;
-  sources: ExplorerSources;
-};
-
-type DocumentBackendBinding = {
-  kind: 'document';
-  id: string;
-  label: Accessor<string>;
-  setLabel: (label: string) => void;
-  backend: ExplorerBackend;
-  sources: ExplorerSources;
-  document: DocumentExplorerBackend;
-};
-
+/** View copied into a new explorer by Clone: backend, source, expanded branches and scroll position. */
 type ExplorerPaneClone = Readonly<{
   backendId: string;
   source: ExplorerSourceId;
@@ -567,30 +636,6 @@ type ExplorerPaneController = Readonly<{
   applyClone: (view: ExplorerPaneClone) => void;
   revealBrowserWindow: (windowId: string) => void;
 }>;
-
-type SnapshotHistoryState =
-  | Readonly<{ status: 'closed' }>
-  | Readonly<{ status: 'loading' }>
-  | Readonly<{ status: 'ready'; snapshots: readonly ExplorerTreeSnapshotSummary[] }>
-  | Readonly<{ status: 'error'; message: string }>;
-
-type DeletionHistoryState =
-  | Readonly<{ status: 'closed' }>
-  | Readonly<{ status: 'loading' }>
-  | Readonly<{ status: 'ready'; items: readonly ExplorerDeletedItemSummary[] }>
-  | Readonly<{ status: 'error'; message: string }>;
-
-type CloudBackupPanelState =
-  | Readonly<{ status: 'closed' }>
-  | Readonly<{ status: 'loading' }>
-  | Readonly<{
-      status: 'ready';
-      connection: ExplorerCloudBackupStatus;
-      configuration: ExplorerCloudBackupConfiguration;
-      backups: readonly ExplorerCloudBackupSummary[];
-      attempt: ExplorerCloudBackupAttempt;
-    }>
-  | Readonly<{ status: 'error'; message: string }>;
 
 type ExplorerOperationDialogState =
   | Readonly<{
@@ -609,19 +654,39 @@ type ExplorerOperationDialogState =
       resolve: (value: string | null) => void;
     }>;
 
+/**
+ * One explorer panel: toolbar, search and the virtual tree of the selected backend
+ * and source. The view is controlled: `backendId` and `source` come from the
+ * workspace layout and changes are reported through `onBackendChange` and
+ * `onSourceChange`. Only the `primary` explorer follows the focused browser window.
+ */
 function ExplorerPane(props: {
-  paneId: 'left' | 'right';
-  initialBackendId: string;
-  initialSource: ExplorerSourceId;
+  /** Dock panel id; keys the stored scroll positions. */
+  panelId: string;
+  /** Accessible name of the explorer's region, `Explorer <number>`. */
   label: string;
-  backends: readonly ExplorerBackendBinding[];
-  ownedDocument: DocumentBackendBinding;
+  primary: boolean;
+  /** Browser that window reveals switch to. */
+  primaryBackendId: string;
+  backendId: string;
+  source: ExplorerSourceId;
+  backends: ExplorerBackendBindings;
   dragAndDrop: ExplorerDragAndDrop;
   clipboard: ExplorerClipboardController;
   settings: Accessor<BrowserAtlasSettings>;
-  cloneLabel: string;
+  /** Element that context menus, dialogs and print views render into. */
+  overlayMount: Element;
   registerController: (controller: ExplorerPaneController | null) => void;
+  onBackendChange: (backendId: string) => void;
+  onSourceChange: (source: ExplorerSourceId) => void;
+  /** Loads a file into this explorer's own document and shows it. */
+  onOpenDocument: (document: ExplorerDocument, label: string) => void;
+  /** Requests a new explorer with this view (C). */
   onCloneView: (view: ExplorerPaneClone) => void;
+  /** Deleted, Backups and Cloud toolbar actions for the selected browser. */
+  onToggleServicePanel: (kind: ServicePanelKind, backendId: string) => void;
+  /** Ctrl/Cmd+B on the selected backend's Explore tree. */
+  onBackup: (backendId: string) => void;
   onCommand: (backendId: string, command: ExplorerCommand) => Promise<void>;
   onError: (reason: unknown) => void;
 }) {
@@ -633,23 +698,25 @@ function ExplorerPane(props: {
   let suppressedFocusedWindowId: string | null = null;
   const scrollHistoryByContext = new Map<string, number[]>();
   const [scrollElement, setScrollElement] = createSignal<HTMLDivElement>();
-  const [selectedBackendId, setSelectedBackendId] = createSignal(props.initialBackendId);
-  const [selectedSource, setSelectedSource] = createSignal<ExplorerSourceId>(props.initialSource);
+  const selectedBackendId = () => props.backendId;
+  const setSelectedBackendId = (backendId: string) => props.onBackendChange(backendId);
+  const selectedSource = () => props.source;
+  const setSelectedSource = (source: ExplorerSourceId) => props.onSourceChange(source);
   const [expandAllUndo, setExpandAllUndo] = createSignal<ExpandAllUndo | null>(null);
   const [contextMenu, setContextMenu] = createSignal<ExplorerContextMenuState | null>(null);
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
   const [searchIndex, setSearchIndex] = createSignal(0);
   const [printDocument, setPrintDocument] = createSignal<ExplorerPrintDocument | null>(null);
-  const [snapshotHistory, setSnapshotHistory] = createSignal<SnapshotHistoryState>({ status: 'closed' });
-  const [deletionHistory, setDeletionHistory] = createSignal<DeletionHistoryState>({ status: 'closed' });
-  const [cloudBackupPanel, setCloudBackupPanel] = createSignal<CloudBackupPanelState>({ status: 'closed' });
-  const [cloudBackupAttempt, setCloudBackupAttempt] = createSignal<ExplorerCloudBackupAttempt>({ status: 'none' });
   const [pendingClone, setPendingClone] = createSignal<ExplorerPaneClone | null>(null);
   const [pendingBrowserWindowReveal, setPendingBrowserWindowReveal] = createSignal<string | null>(null);
   const [operationDialog, setOperationDialog] = createSignal<ExplorerOperationDialogState | null>(null);
-  const selectedBackend = () =>
-    props.backends.find((backend) => backend.id === selectedBackendId()) ?? props.backends[0] ?? props.ownedDocument;
+  const selectedBackend = (): ExplorerBackendBinding =>
+    props.backends.find((backend) => backend.id === selectedBackendId()) ?? props.backends[0];
+  const cloudBackupAttempt = (): ExplorerCloudBackupAttempt => {
+    const binding = selectedBackend();
+    return binding.kind === 'browser' ? binding.cloudAttempt.attempt() : { status: 'none' };
+  };
   const focusedBrowserWindowId = createMemo(() => {
     if (selectedSource() !== 'explore' || selectedBackend().kind !== 'browser') {
       return null;
@@ -728,7 +795,7 @@ function ExplorerPane(props: {
       }
     },
     onBackup() {
-      void backupFromKeyboard();
+      backupFromKeyboard();
     },
     onScrollPreviousWindow() {
       scrollToPreviousOpenWindow();
@@ -772,7 +839,7 @@ function ExplorerPane(props: {
     }
   });
   const scrollRestoration = createTreeScrollRestoration({
-    key: () => `browser-atlas:tree-scroll:v2:${props.paneId}:${selectedBackendId()}:${selectedSource()}`,
+    key: () => `browser-atlas:tree-scroll:v2:${props.panelId}:${selectedBackendId()}:${selectedSource()}`,
     ready: () => {
       const sources = selectedBackend().sources;
       return (
@@ -790,36 +857,44 @@ function ExplorerPane(props: {
 
     return () => props.registerController(null);
   });
-  createTrackedEffect(() => {
-    const clone = pendingClone();
-    if (
-      !clone ||
-      selectedBackendId() !== clone.backendId ||
-      selectedSource() !== clone.source ||
-      selectedBackend().sources.tree(clone.source) === undefined
-    ) {
-      return;
-    }
-    tree.applyExpansion(clone.expansion);
-    setPendingClone(null);
-    requestAnimationFrame(() => {
+  // A clone is applied once the pane shows the cloned view and its tree has loaded. A split
+  // compute/effect pair also sees a clone requested in the same flush as the view switch.
+  createEffect(
+    () => {
+      const clone = pendingClone();
+      return clone &&
+        selectedBackendId() === clone.backendId &&
+        selectedSource() === clone.source &&
+        selectedBackend().sources.tree(clone.source) !== undefined
+        ? clone
+        : null;
+    },
+    (clone) => {
+      if (!clone) {
+        return;
+      }
+
+      tree.applyExpansion(clone.expansion);
+      setPendingClone(null);
       requestAnimationFrame(() => {
-        const element = scrollElement();
-        if (!element) {
-          return;
-        }
-        scrollRestoration.onUserInteraction();
-        element.scrollTo({ top: clone.scrollTop });
+        requestAnimationFrame(() => {
+          const element = scrollElement();
+          if (!element) {
+            return;
+          }
+          scrollRestoration.onUserInteraction();
+          element.scrollTo({ top: clone.scrollTop });
+        });
       });
-    });
-  });
+    }
+  );
   // Tracks the request before the pane registers, so a reveal requested from the first settle is seen.
   createEffect(
     () => {
       const windowId = pendingBrowserWindowReveal();
       if (
         !windowId ||
-        selectedBackendId() !== props.initialBackendId ||
+        selectedBackendId() !== props.primaryBackendId ||
         selectedSource() !== 'explore' ||
         selectedBackend().sources.loading('explore')
       ) {
@@ -850,36 +925,13 @@ function ExplorerPane(props: {
     }
   );
   createTrackedEffect(() => {
-    selectedBackendId();
-    selectedSource();
-    setSnapshotHistory({ status: 'closed' });
-    setDeletionHistory({ status: 'closed' });
-    setCloudBackupPanel({ status: 'closed' });
-  });
-  createTrackedEffect(() => {
-    const backendId = selectedBackendId();
-    const cloudBackups = selectedBackend().backend.cloudBackups;
-    setCloudBackupAttempt({ status: 'none' });
-    if (!cloudBackups) {
-      return;
-    }
-    void cloudBackups
-      .lastAttempt()
-      .then((attempt) => {
-        if (selectedBackendId() === backendId) {
-          setCloudBackupAttempt(attempt);
-        }
-      })
-      .catch(() => undefined);
-  });
-  createTrackedEffect(() => {
     const focusedWindowId = focusedBrowserWindowId();
     if (focusedWindowId === null || focusedWindowId === observedFocusedWindowId) {
       return;
     }
     const hadObservedWindow = observedFocusedWindowId !== null;
     observedFocusedWindowId = focusedWindowId;
-    if (!hadObservedWindow || props.paneId !== 'left' || !props.settings().autoFollowFocusedWindow) {
+    if (!hadObservedWindow || !props.primary || !props.settings().autoFollowFocusedWindow) {
       return;
     }
     if (suppressedFocusedWindowId === focusedWindowId) {
@@ -895,13 +947,13 @@ function ExplorerPane(props: {
   });
   return (
     <section
-      class="relative flex min-w-0 flex-1 flex-col border-r border-neutral-700 last:border-r-0 print:block print:overflow-visible print:border-0"
+      class="relative flex h-full min-w-0 flex-col bg-neutral-950 print:block print:overflow-visible"
       aria-label={props.label}
       onKeyDown={handlePaneKeyboardShortcut}
     >
-      <div class="flex h-8 flex-none items-center gap-1 border-b border-neutral-700 bg-neutral-900 px-1 print:hidden">
+      <div class="flex h-8 flex-none items-center gap-1 overflow-x-auto border-b border-neutral-700 bg-neutral-900 px-1 [scrollbar-width:none] print:hidden">
         <select
-          class="h-6 max-w-32 min-w-0 rounded border border-neutral-700 bg-neutral-950 px-1 text-xs text-neutral-200"
+          class="h-6 max-w-32 min-w-16 rounded border border-neutral-700 bg-neutral-950 px-1 text-xs text-neutral-200"
           aria-label="Explorer data source"
           value={selectedBackendId()}
           onChange={(event) => setSelectedBackendId(event.currentTarget.value)}
@@ -932,7 +984,7 @@ function ExplorerPane(props: {
           </For>
         </div>
 
-        <div class="ml-auto flex h-7 min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
+        <div class="ml-auto flex h-7 min-w-16 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
           <input
             ref={(element) => {
               fileInput = element;
@@ -1020,7 +1072,7 @@ function ExplorerPane(props: {
             <PaneAction
               title="Browse and restore deleted hierarchies"
               label="Deleted"
-              onClick={toggleDeletionHistory}
+              onClick={() => props.onToggleServicePanel('deleted', selectedBackendId())}
             />
           </Show>
           <Show when={canUseLocalSnapshots()}>
@@ -1033,7 +1085,7 @@ function ExplorerPane(props: {
             <PaneAction
               title="Browse and restore local tree snapshots"
               label="Backups"
-              onClick={toggleSnapshotHistory}
+              onClick={() => props.onToggleServicePanel('backups', selectedBackendId())}
             />
           </Show>
           <Show when={canUseCloudBackups()}>
@@ -1041,7 +1093,7 @@ function ExplorerPane(props: {
               title="Manage manual and automatic remote tree backups"
               label="Cloud"
               indicator={cloudBackupAttemptIndicator(cloudBackupAttempt())}
-              onClick={toggleCloudBackupPanel}
+              onClick={() => props.onToggleServicePanel('cloud', selectedBackendId())}
             />
           </Show>
           <PaneAction
@@ -1058,7 +1110,7 @@ function ExplorerPane(props: {
             onClick={scrollToPreviousOpenWindow}
           />
           <PaneAction title="Undo the last tree scroll (S)" label="Undo scroll" onClick={undoScroll} />
-          <PaneAction title="Clone this view into the other pane (C)" label={props.cloneLabel} onClick={cloneView} />
+          <PaneAction title="Clone this view into a new explorer (C)" label="Clone" onClick={cloneView} />
           <button
             type="button"
             class="h-6 flex-none px-1 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-white"
@@ -1070,40 +1122,6 @@ function ExplorerPane(props: {
           </button>
         </div>
       </div>
-
-      <Show when={snapshotHistory().status !== 'closed'}>
-        <LocalSnapshotHistoryPanel
-          state={snapshotHistory()}
-          onRetry={() => void loadSnapshotHistory()}
-          onOpen={(createdAt) => void openTreeSnapshot(createdAt)}
-          onRestore={(createdAt) => void restoreTreeSnapshot(createdAt)}
-          onClose={() => setSnapshotHistory({ status: 'closed' })}
-        />
-      </Show>
-      <Show when={deletionHistory().status !== 'closed'}>
-        <DeletedItemsHistoryPanel
-          state={deletionHistory()}
-          onRetry={() => void loadDeletionHistory()}
-          onRestore={(deletionId) => void restoreDeletedItem(deletionId)}
-          onClose={() => setDeletionHistory({ status: 'closed' })}
-        />
-      </Show>
-      <Show when={cloudBackupPanel().status !== 'closed'}>
-        <CloudBackupPanel
-          providerName={selectedBackend().backend.cloudBackups?.providerName ?? 'Cloud'}
-          state={cloudBackupPanel()}
-          onRetry={() => void loadCloudBackupPanel()}
-          onConnect={() => void connectCloudBackups()}
-          onDisconnect={() => void disconnectCloudBackups()}
-          onConfigurationChange={updateCloudBackupConfigurationDraft}
-          onSaveConfiguration={() => void saveCloudBackupConfiguration()}
-          onCreate={() => void createCloudBackup()}
-          onOpen={(backupId) => void openCloudBackup(backupId)}
-          onRestore={(backupId) => void restoreCloudBackup(backupId)}
-          onDelete={(backupId) => void deleteCloudBackup(backupId)}
-          onClose={() => setCloudBackupPanel({ status: 'closed' })}
-        />
-      </Show>
 
       <Show when={searchOpen()}>
         <div
@@ -1234,25 +1252,33 @@ function ExplorerPane(props: {
 
       <Show when={contextMenu()}>
         {(menu) => (
-          <ExplorerContextMenu
-            x={menu().x}
-            y={menu().y}
-            sections={menu().multiple ? selectionContextMenuSections() : contextMenuSections(menu().item)}
-            onClose={() => setContextMenu(null)}
-          />
+          <Portal mount={props.overlayMount}>
+            <ExplorerContextMenu
+              x={menu().x}
+              y={menu().y}
+              sections={menu().multiple ? selectionContextMenuSections() : contextMenuSections(menu().item)}
+              onClose={() => setContextMenu(null)}
+            />
+          </Portal>
         )}
       </Show>
       <Show when={operationDialog()}>
         {(dialog) => (
-          <ExplorerOperationDialog
-            state={dialog()}
-            onCancel={() => closeOperationDialog(null)}
-            onConfirm={(value) => closeOperationDialog(value)}
-          />
+          <Portal mount={props.overlayMount}>
+            <ExplorerOperationDialog
+              state={dialog()}
+              onCancel={() => closeOperationDialog(null)}
+              onConfirm={(value) => closeOperationDialog(value)}
+            />
+          </Portal>
         )}
       </Show>
       <Show when={printDocument()}>
-        {(document) => <ExplorerPrintView title={document().title} rows={document().rows} />}
+        {(document) => (
+          <Portal mount={props.overlayMount}>
+            <ExplorerPrintView title={document().title} rows={document().rows} />
+          </Portal>
+        )}
       </Show>
     </section>
   );
@@ -1529,7 +1555,7 @@ function ExplorerPane(props: {
     }
     try {
       if (node.reference.kind === 'tab') {
-        if (props.paneId === 'left') {
+        if (props.primary) {
           suppressedFocusedWindowId = node.reference.windowId;
         }
         await props.onCommand(selectedBackendId(), {
@@ -1540,7 +1566,7 @@ function ExplorerPane(props: {
         return;
       }
       if (node.reference.kind === 'window') {
-        if (props.paneId === 'left') {
+        if (props.primary) {
           suppressedFocusedWindowId = node.reference.id;
         }
         await props.onCommand(selectedBackendId(), {
@@ -1802,7 +1828,7 @@ function ExplorerPane(props: {
   }
 
   function undoTree(): void {
-    void undoTreeAndRefreshHistory();
+    void props.onCommand(selectedBackendId(), { kind: 'undo-persistent-tree' }).catch(props.onError);
   }
 
   function canRedoTree(): boolean {
@@ -1810,111 +1836,23 @@ function ExplorerPane(props: {
   }
 
   function redoTree(): void {
-    void redoTreeAndRefreshHistory();
-  }
-
-  async function redoTreeAndRefreshHistory(): Promise<void> {
-    try {
-      await props.onCommand(selectedBackendId(), { kind: 'redo-persistent-tree' });
-      if (deletionHistory().status !== 'closed') {
-        await loadDeletionHistory();
-      }
-    } catch (reason: unknown) {
-      props.onError(reason);
-    }
-  }
-
-  async function undoTreeAndRefreshHistory(): Promise<void> {
-    try {
-      await props.onCommand(selectedBackendId(), { kind: 'undo-persistent-tree' });
-      if (deletionHistory().status !== 'closed') {
-        await loadDeletionHistory();
-      }
-    } catch (reason: unknown) {
-      props.onError(reason);
-    }
+    void props.onCommand(selectedBackendId(), { kind: 'redo-persistent-tree' }).catch(props.onError);
   }
 
   function canBrowseDeletedItems(): boolean {
-    return selectedSource() === 'explore' && selectedBackend().backend.deletions !== undefined;
-  }
-
-  function toggleDeletionHistory(): void {
-    if (deletionHistory().status !== 'closed') {
-      setDeletionHistory({ status: 'closed' });
-      return;
-    }
-    setSnapshotHistory({ status: 'closed' });
-    setCloudBackupPanel({ status: 'closed' });
-    void loadDeletionHistory();
-  }
-
-  async function loadDeletionHistory(): Promise<void> {
-    const history = selectedBackend().backend.deletions;
-    if (!history) {
-      setDeletionHistory({ status: 'error', message: 'This data source does not expose deleted items.' });
-      return;
-    }
-    setDeletionHistory({ status: 'loading' });
-    try {
-      setDeletionHistory({ status: 'ready', items: await history.list() });
-    } catch (reason: unknown) {
-      setDeletionHistory({
-        status: 'error',
-        message: reason instanceof Error ? reason.message : 'Deleted items could not be loaded.'
-      });
-    }
-  }
-
-  async function restoreDeletedItem(deletionId: string): Promise<void> {
-    const history = selectedBackend().backend.deletions;
-    if (!history) {
-      return;
-    }
-    setDeletionHistory({ status: 'loading' });
-    try {
-      await history.restore(deletionId);
-      selectedBackend().sources.refresh('explore');
-      setDeletionHistory({ status: 'ready', items: await history.list() });
-    } catch (reason: unknown) {
-      setDeletionHistory({
-        status: 'error',
-        message: reason instanceof Error ? reason.message : 'The selected deleted item could not be restored.'
-      });
-    }
+    return selectedSource() === 'explore' && canBackendBrowseDeletedItems(selectedBackend().backend);
   }
 
   function runDeleteCommand(command: ExplorerCommand): void {
-    void props
-      .onCommand(selectedBackendId(), command)
-      .then(() => (deletionHistory().status === 'closed' ? undefined : loadDeletionHistory()))
-      .catch(props.onError);
+    void props.onCommand(selectedBackendId(), command).catch(props.onError);
   }
 
   function canUseLocalSnapshots(): boolean {
-    const backend = selectedBackend().backend;
-    const commands = backend.capabilities.commands;
-    return (
-      selectedSource() === 'explore' &&
-      commands['create-tree-snapshot'] &&
-      commands['restore-latest-tree-snapshot'] &&
-      backend.snapshots !== undefined
-    );
+    return selectedSource() === 'explore' && canBackendUseLocalSnapshots(selectedBackend().backend);
   }
 
   function createTreeSnapshot(): void {
-    void createTreeSnapshotAndRefreshHistory();
-  }
-
-  async function createTreeSnapshotAndRefreshHistory(): Promise<void> {
-    try {
-      await props.onCommand(selectedBackendId(), { kind: 'create-tree-snapshot' });
-      if (snapshotHistory().status !== 'closed') {
-        await loadSnapshotHistory();
-      }
-    } catch (reason: unknown) {
-      props.onError(reason);
-    }
+    void props.onCommand(selectedBackendId(), { kind: 'create-tree-snapshot' }).catch(props.onError);
   }
 
   async function restoreLatestTreeSnapshot(): Promise<void> {
@@ -1928,306 +1866,16 @@ function ExplorerPane(props: {
     ) {
       return;
     }
-    await props
-      .onCommand(selectedBackendId(), { kind: 'restore-latest-tree-snapshot' })
-      .then(() => (snapshotHistory().status === 'closed' ? undefined : loadSnapshotHistory()))
-      .catch(props.onError);
-  }
-
-  function toggleSnapshotHistory(): void {
-    if (snapshotHistory().status !== 'closed') {
-      setSnapshotHistory({ status: 'closed' });
-      return;
-    }
-    setDeletionHistory({ status: 'closed' });
-    setCloudBackupPanel({ status: 'closed' });
-    void loadSnapshotHistory();
-  }
-
-  async function loadSnapshotHistory(): Promise<void> {
-    const history = selectedBackend().backend.snapshots;
-    if (!history) {
-      setSnapshotHistory({ status: 'error', message: 'This data source does not expose local backups.' });
-      return;
-    }
-    setSnapshotHistory({ status: 'loading' });
-    try {
-      setSnapshotHistory({ status: 'ready', snapshots: await history.list() });
-    } catch (reason: unknown) {
-      setSnapshotHistory({
-        status: 'error',
-        message: reason instanceof Error ? reason.message : 'Local backups could not be loaded.'
-      });
-    }
-  }
-
-  async function restoreTreeSnapshot(createdAt: number): Promise<void> {
-    const history = selectedBackend().backend.snapshots;
-    if (!history) {
-      return;
-    }
-    if (
-      !(await confirmOperation(
-        'Restore local backup?',
-        `The current saved tree will be replaced with the backup from ${formatSnapshotTime(createdAt)}.`,
-        'Restore',
-        true
-      ))
-    ) {
-      return;
-    }
-    setSnapshotHistory({ status: 'loading' });
-    try {
-      await history.restore(createdAt);
-      selectedBackend().sources.refresh('explore');
-      setSnapshotHistory({ status: 'ready', snapshots: await history.list() });
-    } catch (reason: unknown) {
-      setSnapshotHistory({
-        status: 'error',
-        message: reason instanceof Error ? reason.message : 'The selected backup could not be restored.'
-      });
-    }
-  }
-
-  async function openTreeSnapshot(createdAt: number): Promise<void> {
-    const history = selectedBackend().backend.snapshots;
-    if (!history) {
-      return;
-    }
-    setSnapshotHistory({ status: 'loading' });
-    try {
-      const document = await history.read(createdAt);
-      props.ownedDocument.document.replaceDocument(document);
-      props.ownedDocument.setLabel(document.title);
-      setSelectedBackendId(props.ownedDocument.id);
-      setSelectedSource('explore');
-      setSnapshotHistory({ status: 'closed' });
-    } catch (reason: unknown) {
-      setSnapshotHistory({
-        status: 'error',
-        message: reason instanceof Error ? reason.message : 'The selected backup could not be opened.'
-      });
-    }
+    await props.onCommand(selectedBackendId(), { kind: 'restore-latest-tree-snapshot' }).catch(props.onError);
   }
 
   function canUseCloudBackups(): boolean {
-    return selectedSource() === 'explore' && selectedBackend().backend.cloudBackups !== undefined;
+    return selectedSource() === 'explore' && canBackendUseCloudBackups(selectedBackend().backend);
   }
 
-  async function backupFromKeyboard(): Promise<void> {
-    const cloudBackups = selectedBackend().backend.cloudBackups;
-    if (selectedSource() !== 'explore' || !cloudBackups) {
-      if (canUseLocalSnapshots()) {
-        await createTreeSnapshotAndRefreshHistory();
-      }
-      return;
-    }
-
-    try {
-      const connection = await cloudBackups.status();
-      if (connection.status === 'connected') {
-        await createCloudBackup();
-        return;
-      }
-      if (connection.status === 'disconnected') {
-        setSnapshotHistory({ status: 'closed' });
-        setDeletionHistory({ status: 'closed' });
-        await loadCloudBackupPanel();
-        return;
-      }
-      if (canUseLocalSnapshots()) {
-        await createTreeSnapshotAndRefreshHistory();
-      }
-    } catch (reason: unknown) {
-      if (canUseLocalSnapshots()) {
-        await createTreeSnapshotAndRefreshHistory();
-      } else {
-        props.onError(reason);
-      }
-    }
-  }
-
-  function toggleCloudBackupPanel(): void {
-    if (cloudBackupPanel().status !== 'closed') {
-      setCloudBackupPanel({ status: 'closed' });
-      return;
-    }
-    setSnapshotHistory({ status: 'closed' });
-    setDeletionHistory({ status: 'closed' });
-    void loadCloudBackupPanel();
-  }
-
-  async function loadCloudBackupPanel(): Promise<void> {
-    const cloudBackups = selectedBackend().backend.cloudBackups;
-    if (!cloudBackups) {
-      setCloudBackupPanel({ status: 'error', message: 'This data source does not expose cloud backups.' });
-      return;
-    }
-    setCloudBackupPanel({ status: 'loading' });
-    try {
-      const [connection, configuration, attempt] = await Promise.all([
-        cloudBackups.status(),
-        cloudBackups.configuration(),
-        cloudBackups.lastAttempt()
-      ]);
-      const backups = connection.status === 'connected' ? await cloudBackups.list() : [];
-      const refreshedAttempt = await cloudBackups.lastAttempt();
-      setCloudBackupAttempt(refreshedAttempt.status === 'none' ? attempt : refreshedAttempt);
-      setCloudBackupPanel({
-        status: 'ready',
-        connection,
-        configuration,
-        backups,
-        attempt: refreshedAttempt.status === 'none' ? attempt : refreshedAttempt
-      });
-    } catch (reason: unknown) {
-      await refreshCloudBackupAttempt();
-      setCloudBackupPanel({ status: 'error', message: formatCloudBackupError(reason) });
-    }
-  }
-
-  async function refreshCloudBackupAttempt(): Promise<void> {
-    const cloudBackups = selectedBackend().backend.cloudBackups;
-    if (!cloudBackups) {
-      return;
-    }
-    try {
-      setCloudBackupAttempt(await cloudBackups.lastAttempt());
-    } catch {
-      // The provider error remains primary when its optional session-status read is unavailable.
-    }
-  }
-
-  async function connectCloudBackups(): Promise<void> {
-    const cloudBackups = selectedBackend().backend.cloudBackups;
-    if (!cloudBackups) {
-      return;
-    }
-    setCloudBackupPanel({ status: 'loading' });
-    try {
-      await cloudBackups.connect();
-      await loadCloudBackupPanel();
-    } catch (reason: unknown) {
-      setCloudBackupPanel({ status: 'error', message: formatCloudBackupError(reason) });
-    }
-  }
-
-  async function disconnectCloudBackups(): Promise<void> {
-    const cloudBackups = selectedBackend().backend.cloudBackups;
-    if (!cloudBackups) {
-      return;
-    }
-    setCloudBackupPanel({ status: 'loading' });
-    try {
-      await cloudBackups.disconnect();
-      await loadCloudBackupPanel();
-    } catch (reason: unknown) {
-      setCloudBackupPanel({ status: 'error', message: formatCloudBackupError(reason) });
-    }
-  }
-
-  function updateCloudBackupConfigurationDraft(configuration: ExplorerCloudBackupConfiguration): void {
-    const state = cloudBackupPanel();
-    if (state.status === 'ready') {
-      setCloudBackupPanel({ ...state, configuration });
-    }
-  }
-
-  async function saveCloudBackupConfiguration(): Promise<void> {
-    const cloudBackups = selectedBackend().backend.cloudBackups;
-    const state = cloudBackupPanel();
-    if (!cloudBackups || state.status !== 'ready') {
-      return;
-    }
-    setCloudBackupPanel({ status: 'loading' });
-    try {
-      await cloudBackups.configure(state.configuration);
-      await loadCloudBackupPanel();
-    } catch (reason: unknown) {
-      await refreshCloudBackupAttempt();
-      setCloudBackupPanel({ status: 'error', message: formatCloudBackupError(reason) });
-    }
-  }
-
-  async function createCloudBackup(): Promise<void> {
-    const cloudBackups = selectedBackend().backend.cloudBackups;
-    const state = cloudBackupPanel();
-    if (!cloudBackups) {
-      return;
-    }
-    setCloudBackupPanel({ status: 'loading' });
-    try {
-      if (state.status === 'ready') {
-        await cloudBackups.configure(state.configuration);
-      }
-      await cloudBackups.create('manual');
-      await loadCloudBackupPanel();
-    } catch (reason: unknown) {
-      await refreshCloudBackupAttempt();
-      setCloudBackupPanel({ status: 'error', message: formatCloudBackupError(reason) });
-    }
-  }
-
-  async function restoreCloudBackup(backupId: string): Promise<void> {
-    const cloudBackups = selectedBackend().backend.cloudBackups;
-    if (
-      !cloudBackups ||
-      !(await confirmOperation(
-        'Restore cloud backup?',
-        'The current saved tree will be replaced with this cloud backup.',
-        'Restore',
-        true
-      ))
-    ) {
-      return;
-    }
-    setCloudBackupPanel({ status: 'loading' });
-    try {
-      await cloudBackups.restore(backupId);
-      selectedBackend().sources.refresh('explore');
-      await loadCloudBackupPanel();
-    } catch (reason: unknown) {
-      setCloudBackupPanel({ status: 'error', message: formatCloudBackupError(reason) });
-    }
-  }
-
-  async function openCloudBackup(backupId: string): Promise<void> {
-    const cloudBackups = selectedBackend().backend.cloudBackups;
-    if (!cloudBackups) {
-      return;
-    }
-    setCloudBackupPanel({ status: 'loading' });
-    try {
-      const document = await cloudBackups.read(backupId);
-      props.ownedDocument.document.replaceDocument(document);
-      props.ownedDocument.setLabel(document.title);
-      setSelectedBackendId(props.ownedDocument.id);
-      setSelectedSource('explore');
-      setCloudBackupPanel({ status: 'closed' });
-    } catch (reason: unknown) {
-      setCloudBackupPanel({ status: 'error', message: formatCloudBackupError(reason) });
-    }
-  }
-
-  async function deleteCloudBackup(backupId: string): Promise<void> {
-    const cloudBackups = selectedBackend().backend.cloudBackups;
-    if (
-      !cloudBackups ||
-      !(await confirmOperation(
-        'Delete cloud backup?',
-        'This cloud backup will be permanently deleted.',
-        'Delete',
-        true
-      ))
-    ) {
-      return;
-    }
-    setCloudBackupPanel({ status: 'loading' });
-    try {
-      await cloudBackups.delete(backupId);
-      await loadCloudBackupPanel();
-    } catch (reason: unknown) {
-      setCloudBackupPanel({ status: 'error', message: formatCloudBackupError(reason) });
+  function backupFromKeyboard(): void {
+    if (selectedSource() === 'explore') {
+      props.onBackup(selectedBackendId());
     }
   }
 
@@ -2275,10 +1923,10 @@ function ExplorerPane(props: {
   }
 
   function revealBrowserWindow(windowId: string): void {
-    setSelectedBackendId(props.initialBackendId);
+    setSelectedBackendId(props.primaryBackendId);
     setSelectedSource('explore');
     setPendingBrowserWindowReveal(windowId);
-    const backend = props.backends.find((candidate) => candidate.id === props.initialBackendId);
+    const backend = props.backends.find((candidate) => candidate.id === props.primaryBackendId);
     backend?.sources.refresh('explore');
   }
 
@@ -2406,9 +2054,7 @@ function ExplorerPane(props: {
   async function openFile(file: File): Promise<void> {
     try {
       const document = await readExplorerFile(file);
-      props.ownedDocument.document.replaceDocument(document);
-      props.ownedDocument.setLabel(file.name);
-      setSelectedBackendId(props.ownedDocument.id);
+      props.onOpenDocument(document, file.name);
       if (document.sources[selectedSource()].length === 0) {
         const populatedSource = EXPLORER_SOURCES.find((source) => document.sources[source.id].length > 0);
         if (populatedSource) {
@@ -2702,7 +2348,7 @@ function ExplorerPane(props: {
       ...(canRedoTree() ? [{ label: 'Redo tree change', shortcut: 'Ctrl/Cmd+Shift+Z', run: redoTree }] : []),
       { label: 'Scroll up to previous open window', shortcut: 'W', run: scrollToPreviousOpenWindow },
       { label: 'Undo tree scroll', shortcut: 'S', run: undoScroll },
-      { label: 'Clone view into other pane', shortcut: 'C', run: cloneView },
+      { label: 'Clone view into new explorer', shortcut: 'C', run: cloneView },
       { label: 'Find visible nodes', shortcut: 'Ctrl/Cmd+F', run: openSearch },
       { label: 'Print visible tree', shortcut: 'Ctrl/Cmd+P', run: printVisibleTree },
       { label: 'Export visible tree as HTML', shortcut: 'Ctrl/Cmd+S', run: exportVisibleHtml }
@@ -3660,502 +3306,14 @@ function findTreeItemPath<T>(
 
 type PaneDragEvent = DragEvent & { currentTarget: HTMLDivElement; target: Element };
 
-/** Renders a compact action used by an explorer pane toolbar. */
-function DeletedItemsHistoryPanel(props: {
-  state: DeletionHistoryState;
-  onRetry: () => void;
-  onRestore: (deletionId: string) => void;
-  onClose: () => void;
-}) {
-  return (
-    <aside
-      class="absolute top-8 right-2 z-30 max-h-[calc(100%-2.5rem)] w-80 overflow-y-auto rounded border border-neutral-700 bg-neutral-900 p-3 text-xs shadow-xl print:hidden"
-      role="dialog"
-      aria-label="Deleted items history"
-    >
-      <div class="mb-2 flex items-center gap-2 border-b border-neutral-700 pb-2">
-        <h2 class="font-medium text-neutral-100">Deleted items</h2>
-        <button
-          type="button"
-          class="ml-auto px-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
-          aria-label="Close deleted items history"
-          onClick={props.onClose}
-        >
-          ×
-        </button>
-      </div>
-      <Switch>
-        <Match when={props.state.status === 'loading'}>
-          <p class="py-2 text-neutral-400" role="status">
-            Loading deleted items…
-          </p>
-        </Match>
-        <Match when={props.state.status === 'error' ? props.state : undefined}>
-          {(state) => (
-            <div role="alert">
-              <p class="mb-2 text-red-300">{state().message}</p>
-              <button
-                type="button"
-                class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
-                onClick={props.onRetry}
-              >
-                Retry
-              </button>
-            </div>
-          )}
-        </Match>
-        <Match when={props.state.status === 'ready' ? props.state : undefined}>
-          {(state) => (
-            <Show
-              when={state().items.length > 0}
-              fallback={<p class="py-2 text-neutral-400">No deleted hierarchies yet.</p>}
-            >
-              <ol class="space-y-2">
-                <For each={state().items}>
-                  {(item) => (
-                    <li
-                      class="flex items-center gap-2 rounded border border-neutral-700 bg-neutral-950 p-2"
-                      data-deletion-id={item.deletionId}
-                    >
-                      <div class="min-w-0 flex-1">
-                        <span class="block truncate text-neutral-200" title={item.title}>
-                          {item.title}
-                        </span>
-                        <span class="block text-neutral-400">
-                          {item.itemKind} · {item.nodeCount} {item.nodeCount === 1 ? 'node' : 'nodes'}
-                        </span>
-                        <span class="block text-neutral-500">
-                          {formatDeletionTime(item.deletedAt)} ·{' '}
-                          {item.mode === 'subtree' ? 'complete hierarchy' : 'children retained'}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
-                        aria-label={`Restore deleted ${item.title}`}
-                        onClick={() => props.onRestore(item.deletionId)}
-                      >
-                        Restore
-                      </button>
-                    </li>
-                  )}
-                </For>
-              </ol>
-            </Show>
-          )}
-        </Match>
-      </Switch>
-    </aside>
-  );
-}
-
-function formatDeletionTime(deletedAt: number): string {
-  return deletedAt > 0 ? formatSnapshotTime(deletedAt) : 'Unknown deletion time';
-}
-
-function LocalSnapshotHistoryPanel(props: {
-  state: SnapshotHistoryState;
-  onRetry: () => void;
-  onOpen: (createdAt: number) => void;
-  onRestore: (createdAt: number) => void;
-  onClose: () => void;
-}) {
-  return (
-    <aside
-      class="absolute top-8 right-2 z-30 max-h-[calc(100%-2.5rem)] w-80 overflow-y-auto rounded border border-neutral-700 bg-neutral-900 p-3 text-xs shadow-xl print:hidden"
-      role="dialog"
-      aria-label="Local backup history"
-    >
-      <div class="mb-2 flex items-center gap-2 border-b border-neutral-700 pb-2">
-        <h2 class="font-medium text-neutral-100">Local backups</h2>
-        <button
-          type="button"
-          class="ml-auto px-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
-          aria-label="Close local backup history"
-          onClick={props.onClose}
-        >
-          ×
-        </button>
-      </div>
-      <Switch>
-        <Match when={props.state.status === 'loading'}>
-          <p class="py-2 text-neutral-400" role="status">
-            Loading local backups…
-          </p>
-        </Match>
-        <Match when={props.state.status === 'error' ? props.state : undefined}>
-          {(state) => (
-            <div role="alert">
-              <p class="mb-2 text-red-300">{state().message}</p>
-              <button
-                type="button"
-                class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
-                onClick={props.onRetry}
-              >
-                Retry
-              </button>
-            </div>
-          )}
-        </Match>
-        <Match when={props.state.status === 'ready' ? props.state : undefined}>
-          {(state) => (
-            <Show
-              when={state().snapshots.length > 0}
-              fallback={<p class="py-2 text-neutral-400">No local backups yet.</p>}
-            >
-              <ol class="space-y-2">
-                <For each={state().snapshots}>
-                  {(snapshot) => (
-                    <li
-                      class="rounded border border-neutral-700 bg-neutral-950 p-2"
-                      data-created-at={snapshot.createdAt}
-                    >
-                      <div class="mb-2 min-w-0">
-                        <time
-                          class="block truncate text-neutral-200"
-                          datetime={new Date(snapshot.createdAt).toISOString()}
-                          title={new Date(snapshot.createdAt).toISOString()}
-                        >
-                          {formatSnapshotTime(snapshot.createdAt)}
-                        </time>
-                        <span class="text-neutral-400">
-                          {snapshot.nodeCount} {snapshot.nodeCount === 1 ? 'node' : 'nodes'}
-                        </span>
-                      </div>
-                      <div class="flex gap-2">
-                        <button
-                          type="button"
-                          class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
-                          aria-label={`Open backup from ${formatSnapshotTime(snapshot.createdAt)}`}
-                          onClick={() => props.onOpen(snapshot.createdAt)}
-                        >
-                          Open
-                        </button>
-                        <button
-                          type="button"
-                          class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
-                          aria-label={`Restore backup from ${formatSnapshotTime(snapshot.createdAt)}`}
-                          onClick={() => props.onRestore(snapshot.createdAt)}
-                        >
-                          Restore
-                        </button>
-                      </div>
-                    </li>
-                  )}
-                </For>
-              </ol>
-            </Show>
-          )}
-        </Match>
-      </Switch>
-    </aside>
-  );
-}
-
-function formatSnapshotTime(createdAt: number): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'medium'
-  }).format(createdAt);
-}
-
-/** Renders provider-neutral cloud connection, scheduling, retention, and recovery controls. */
-function CloudBackupPanel(props: {
-  providerName: string;
-  state: CloudBackupPanelState;
-  onRetry: () => void;
-  onConnect: () => void;
-  onDisconnect: () => void;
-  onConfigurationChange: (configuration: ExplorerCloudBackupConfiguration) => void;
-  onSaveConfiguration: () => void;
-  onCreate: () => void;
-  onOpen: (backupId: string) => void;
-  onRestore: (backupId: string) => void;
-  onDelete: (backupId: string) => void;
-  onClose: () => void;
-}) {
-  return (
-    <aside
-      class="absolute top-8 right-2 z-30 max-h-[calc(100%-2.5rem)] w-96 overflow-y-auto rounded border border-neutral-700 bg-neutral-900 p-3 text-xs shadow-xl print:hidden"
-      role="dialog"
-      aria-label={`${props.providerName} backups`}
-    >
-      <div class="mb-2 flex items-center gap-2 border-b border-neutral-700 pb-2">
-        <h2 class="font-medium text-neutral-100">{props.providerName} backups</h2>
-        <button
-          type="button"
-          class="ml-auto px-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
-          aria-label="Close cloud backups"
-          onClick={props.onClose}
-        >
-          ×
-        </button>
-      </div>
-      <Switch>
-        <Match when={props.state.status === 'loading'}>
-          <p class="py-2 text-neutral-400" role="status">
-            Loading cloud backups…
-          </p>
-        </Match>
-        <Match when={props.state.status === 'error' ? props.state : undefined}>
-          {(state) => (
-            <div role="alert">
-              <p class="mb-2 text-red-300">{state().message}</p>
-              <button
-                type="button"
-                class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
-                onClick={props.onRetry}
-              >
-                Retry
-              </button>
-            </div>
-          )}
-        </Match>
-        <Match when={props.state.status === 'ready' ? props.state : undefined}>
-          {(state) => (
-            <CloudBackupReadyPanel
-              state={state()}
-              onConnect={props.onConnect}
-              onDisconnect={props.onDisconnect}
-              onConfigurationChange={props.onConfigurationChange}
-              onSaveConfiguration={props.onSaveConfiguration}
-              onCreate={props.onCreate}
-              onOpen={props.onOpen}
-              onRestore={props.onRestore}
-              onDelete={props.onDelete}
-            />
-          )}
-        </Match>
-      </Switch>
-    </aside>
-  );
-}
-
-function CloudBackupReadyPanel(props: {
-  state: Extract<CloudBackupPanelState, { status: 'ready' }>;
-  onConnect: () => void;
-  onDisconnect: () => void;
-  onConfigurationChange: (configuration: ExplorerCloudBackupConfiguration) => void;
-  onSaveConfiguration: () => void;
-  onCreate: () => void;
-  onOpen: (backupId: string) => void;
-  onRestore: (backupId: string) => void;
-  onDelete: (backupId: string) => void;
-}) {
-  return (
-    <>
-      <CloudBackupAttemptStatus attempt={props.state.attempt} />
-      <Switch>
-        <Match when={props.state.connection.status === 'unavailable' ? props.state.connection : undefined}>
-          {(connection) => <p class="py-2 text-amber-300">{connection().reason}</p>}
-        </Match>
-        <Match when={props.state.connection.status === 'disconnected'}>
-          <p class="mb-3 text-neutral-400">
-            Connect this browser identity to create and restore durable remote copies.
-          </p>
-          <button
-            type="button"
-            class="rounded border border-blue-600 bg-blue-950 px-2 py-1 text-blue-100 hover:bg-blue-900"
-            onClick={props.onConnect}
-          >
-            Connect
-          </button>
-        </Match>
-        <Match when={props.state.connection.status === 'connected' ? props.state.connection : undefined}>
-          {(connection) => (
-            <>
-              <div class="mb-3 flex items-center gap-2 text-neutral-400">
-                <span>Connected</span>
-                <Show when={connection().accountLabel}>
-                  {(accountLabel) => <span class="truncate text-neutral-200">· {accountLabel()}</span>}
-                </Show>
-                <button type="button" class="ml-auto text-neutral-400 hover:text-white" onClick={props.onDisconnect}>
-                  Disconnect
-                </button>
-              </div>
-              <label class="mb-2 block text-neutral-300">
-                <span class="mb-1 block">Machine label</span>
-                <input
-                  type="text"
-                  class="h-7 w-full rounded border border-neutral-600 bg-neutral-950 px-2 text-neutral-100 outline-none focus:border-blue-500"
-                  aria-label="Backup machine label"
-                  placeholder="For example: work or home"
-                  value={props.state.configuration.machineLabel}
-                  onInput={(event) =>
-                    props.onConfigurationChange({
-                      ...props.state.configuration,
-                      machineLabel: event.currentTarget.value
-                    })
-                  }
-                />
-              </label>
-              <label class="mb-3 flex items-start gap-2 text-neutral-300">
-                <input
-                  type="checkbox"
-                  class="mt-0.5"
-                  aria-label="Automatic daily cloud backups"
-                  checked={props.state.configuration.automaticBackups}
-                  onChange={(event) =>
-                    props.onConfigurationChange({
-                      ...props.state.configuration,
-                      automaticBackups: event.currentTarget.checked
-                    })
-                  }
-                />
-                <span>Create an automatic backup when the newest daily copy is at least 24 hours old.</span>
-              </label>
-              <div class="mb-3 flex gap-2 border-b border-neutral-700 pb-3">
-                <button
-                  type="button"
-                  class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
-                  onClick={props.onSaveConfiguration}
-                >
-                  Save preferences
-                </button>
-                <button
-                  type="button"
-                  class="rounded border border-blue-600 bg-blue-950 px-2 py-1 text-blue-100 hover:bg-blue-900"
-                  aria-label="Create cloud backup"
-                  onClick={props.onCreate}
-                >
-                  Backup now
-                </button>
-              </div>
-              <Show
-                when={props.state.backups.length > 0}
-                fallback={<p class="py-2 text-neutral-400">No cloud backups yet.</p>}
-              >
-                <ol class="space-y-2">
-                  <For each={props.state.backups}>
-                    {(backup) => (
-                      <li
-                        class="rounded border border-neutral-700 bg-neutral-950 p-2"
-                        data-cloud-backup-id={backup.backupId}
-                      >
-                        <div class="mb-2 min-w-0">
-                          <time
-                            class="block truncate text-neutral-200"
-                            datetime={new Date(backup.createdAt).toISOString()}
-                            title={new Date(backup.createdAt).toISOString()}
-                          >
-                            {formatSnapshotTime(backup.createdAt)}
-                          </time>
-                          <span class="block text-neutral-400">
-                            {backup.mode === 'automatic' ? 'Automatic' : 'Manual'}
-                            {backup.machineLabel ? ` · ${backup.machineLabel}` : ''}
-                          </span>
-                          <span class="block text-neutral-500">
-                            {backup.nodeCount} {backup.nodeCount === 1 ? 'node' : 'nodes'} ·{' '}
-                            {formatCloudBackupSize(backup.sizeBytes)}
-                          </span>
-                        </div>
-                        <div class="flex gap-2">
-                          <button
-                            type="button"
-                            class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
-                            aria-label={`Open cloud backup from ${formatSnapshotTime(backup.createdAt)}`}
-                            onClick={() => props.onOpen(backup.backupId)}
-                          >
-                            Open
-                          </button>
-                          <button
-                            type="button"
-                            class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
-                            aria-label={`Restore cloud backup from ${formatSnapshotTime(backup.createdAt)}`}
-                            onClick={() => props.onRestore(backup.backupId)}
-                          >
-                            Restore
-                          </button>
-                          <button
-                            type="button"
-                            class="rounded border border-red-800 px-2 py-1 text-red-300 hover:bg-red-950"
-                            aria-label={`Delete cloud backup from ${formatSnapshotTime(backup.createdAt)}`}
-                            onClick={() => props.onDelete(backup.backupId)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </li>
-                    )}
-                  </For>
-                </ol>
-              </Show>
-            </>
-          )}
-        </Match>
-      </Switch>
-    </>
-  );
-}
-
-function CloudBackupAttemptStatus(props: { attempt: ExplorerCloudBackupAttempt }) {
-  const indicator = () => cloudBackupAttemptIndicator(props.attempt);
-  return (
-    <p
-      class="mb-3 flex items-center gap-2 rounded border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-neutral-300"
-      role="status"
-      data-cloud-backup-attempt={props.attempt.status}
-    >
-      <span
-        class={[
-          'h-2 w-2 flex-none rounded-full',
-          {
-            'bg-neutral-500': indicator().tone === 'none',
-            'bg-emerald-500': indicator().tone === 'success',
-            'bg-red-500': indicator().tone === 'failure'
-          }
-        ]}
-        aria-hidden="true"
-      />
-      {indicator().label}
-    </p>
-  );
-}
-
-function formatCloudBackupSize(sizeBytes: number): string {
-  if (sizeBytes < 1_024) {
-    return `${sizeBytes} B`;
-  }
-  return `${(sizeBytes / 1_024).toFixed(sizeBytes < 10_240 ? 1 : 0)} KB`;
-}
-
-function formatCloudBackupError(reason: unknown): string {
-  return reason instanceof Error ? reason.message : 'Cloud backups could not be updated.';
-}
-
-type PaneActionIndicator = Readonly<{
-  tone: ExplorerCloudBackupAttempt['status'];
-  label: string;
-}>;
-
-function cloudBackupAttemptIndicator(attempt: ExplorerCloudBackupAttempt): PaneActionIndicator {
-  switch (attempt.status) {
-    case 'none':
-      return { tone: 'none', label: 'No cloud backup attempt this browser session' };
-    case 'success':
-      return {
-        tone: 'success',
-        label: `Last ${attempt.mode} cloud backup succeeded · ${formatSnapshotTime(attempt.attemptedAt)}`
-      };
-    case 'failure':
-      return {
-        tone: 'failure',
-        label: `Last ${attempt.mode} cloud backup failed · ${attempt.message}`
-      };
-    default: {
-      const exhaustiveAttempt: never = attempt;
-      return exhaustiveAttempt;
-    }
-  }
-}
-
+/** Renders a compact action used by an explorer toolbar. */
 function PaneAction(props: {
   title: string;
   label: string;
   onClick: () => void;
   disabled?: boolean;
   dragProps?: JSX.ButtonHTMLAttributes<HTMLButtonElement> | undefined;
-  indicator?: PaneActionIndicator | undefined;
+  indicator?: CloudBackupAttemptIndicator | undefined;
 }) {
   return (
     <button
@@ -4200,27 +3358,6 @@ function TreeStatus(props: { children: string; tone?: 'muted' | 'error' }) {
       {props.children}
     </p>
   );
-}
-
-function createBrowserBinding(id: string, label: string, backend: ExplorerBackend): BrowserBackendBinding {
-  return { kind: 'browser', id, label: () => label, backend, sources: createExplorerSources(backend) };
-}
-
-function createDocumentBinding(
-  id: string,
-  label: Accessor<string>,
-  setLabel: (label: string) => void,
-  document: DocumentExplorerBackend
-): DocumentBackendBinding {
-  return {
-    kind: 'document',
-    id,
-    label,
-    setLabel,
-    backend: document.backend,
-    sources: createExplorerSources(document.backend),
-    document
-  };
 }
 
 /** Receives source-window reveal requests sent when the extension action is clicked. */

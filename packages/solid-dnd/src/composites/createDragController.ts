@@ -2,7 +2,7 @@ import { createLazyMemo } from '@solid-primitives/memo';
 import { ReactiveSet } from '@solid-primitives/set';
 import { type MaybeAccessor, access, defer } from '@solid-primitives/utils';
 import { type Accessor, createMemo, createSignal, createTrackedEffect } from 'solid-js';
-import { GapKey, isGapKey } from '..';
+import { type GapKey, isGapKey } from '..';
 import * as Place from '../core/place';
 import { type Vec2, of as vec2, Zero as Vec2Zero } from '../core/vec2';
 import { createDragOverlay } from '../primitives/createDragOverlay';

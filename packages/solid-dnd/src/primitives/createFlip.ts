@@ -4,7 +4,7 @@ import { type Rect } from '../core/rect';
 import {
   buildFlipAnimateEntries,
   type FlipAnimationBatch,
-  LayoutContainerElement,
+  type LayoutContainerElement,
   runLayoutTransitionAnimations,
   runStandardFlipAnimations
 } from './createFlipAnimations';
@@ -103,18 +103,18 @@ export function createFlip<K>(
      * Read each time `playFromFirst` is called, so it can be dynamic.
      * @default 200
      */
-    duration?: MaybeAccessor<number>;
+    duration?: MaybeAccessor<number> | undefined;
     /**
      * CSS easing string for the animation.
      * Read each time `playFromFirst` is called, so it can be dynamic.
      * @default 'linear'
      */
-    easing?: MaybeAccessor<string>;
+    easing?: MaybeAccessor<string> | undefined;
     /**
      * Called when a FLIP animation cycle starts. Receives an array of entries
      * describing each element's motion. Useful for debug visualization.
      */
-    onAnimate?: (entries: ReadonlyArray<FlipAnimateEntry<K>>) => void;
+    onAnimate?: ((entries: ReadonlyArray<FlipAnimateEntry<K>>) => void) | undefined;
   } & FlipElementSource<K>
 ) {
   const [isAnimating, setIsAnimating] = createSignal(false, { ownedWrite: true });
