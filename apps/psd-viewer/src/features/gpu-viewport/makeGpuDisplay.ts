@@ -9,7 +9,8 @@ import { makeUploadStaging } from './makeUploadStaging';
  * Displays authoritative straight RGBA8 bytes. No sRGB texture conversion is applied: filtering is explicitly
  * bilinear in premultiplied display-sRGB, with a one-source-texel halo. At >=1 physical pixel/source texel,
  * textureLoad preserves the original bytes. Coarse worker overviews remain point-sampled previews, not area mips.
- * Uploads stop after 2.5 ms or exhausting the 8 MiB staging pool per frame. Reusable mapped 64 KiB staging buffers pack only source rows, then
+ * Whole-image uploads stop after 1 ms; progressive worker regions have 2.5 ms to meet their two-frame deadline.
+ * The 8 MiB staging pool bounds each frame independently. Reusable mapped 64 KiB staging buffers pack only source rows, then
  * one encoder copies strips and draws. GPU residency, including the 8 MiB staging pool, has a
  * separate 128 MiB LRU. Geometry and texture bindings are retained; camera gestures never process resident pixels.
  */
@@ -78,6 +79,7 @@ export function makeGpuDisplay(
     draw(view: View, width: number, height: number, dpr: number, target: GPUTextureView, raw = false) {
       const start = performance.now();
       frameNumber++;
+      const uploadBudget = levels.some((group) => group.levels.length > 1) ? 2.5 : 1;
       for (const { coarse, requested } of levels) {
         for (const tile of [coarse, requested]) {
           const key = identity(tile);
@@ -101,7 +103,7 @@ export function makeGpuDisplay(
         let entry = resident.get(key);
         if (!entry) {
           // Leave headroom for one native allocation; an individual GPU call cannot be time-sliced.
-          if (performance.now() - start >= 2) {
+          if (performance.now() - start >= uploadBudget - 0.4) {
             break;
           }
 
@@ -139,12 +141,12 @@ export function makeGpuDisplay(
           }
 
           uploaded += copied;
-          if (performance.now() - start >= 2.5) {
+          if (performance.now() - start >= uploadBudget) {
             break;
           }
         }
 
-        if (blocked || performance.now() - start >= 2.5) {
+        if (blocked || performance.now() - start >= uploadBudget) {
           break;
         }
       }
@@ -284,6 +286,10 @@ export function makeGpuDisplay(
       root.unwrap(group);
       const bytesPerRow = upload.bytesPerRow;
       let source: Uint8Array<ArrayBuffer> | undefined = upload.source;
+      let sourceWords =
+        source.byteOffset % 4 === 0
+          ? new Uint32Array(source.buffer, source.byteOffset, source.byteLength / 4)
+          : undefined;
       let row = 0;
       let presented = false;
       return {
@@ -310,9 +316,26 @@ export function makeGpuDisplay(
 
           const stride = Math.ceil((width * 4) / 256) * 256;
           const rows = Math.min(height - row, Math.floor(staging.capacity / stride));
-          for (let y = 0; y < rows; y++) {
-            const offset = (row + y) * bytesPerRow;
-            slot.view.set(source!.subarray(offset, offset + width * 4), y * stride);
+          // Per-row subarray views created enough garbage to stall inside the upload loop. Retain one aligned
+          // word view for the source and each mapped slot, then copy without allocating a view for every row.
+          if (sourceWords) {
+            const input = sourceWords;
+            const output = slot.words;
+            for (let y = 0; y < rows; y++) {
+              const from = ((row + y) * bytesPerRow) / 4;
+              const to = (y * stride) / 4;
+              for (let x = 0; x < width; x++) {
+                output[to + x] = input[from + x];
+              }
+            }
+          } else {
+            for (let y = 0; y < rows; y++) {
+              const from = (row + y) * bytesPerRow;
+              const to = y * stride;
+              for (let x = 0; x < width * 4; x++) {
+                slot.view[to + x] = source![from + x];
+              }
+            }
           }
 
           slot.unmap();
@@ -325,6 +348,7 @@ export function makeGpuDisplay(
           if (row === height) {
             // GPU residency must not keep an evicted CPU tile's transferred buffer alive.
             source = undefined;
+            sourceWords = undefined;
           }
 
           viewerPerformance.record('upload.texture', start, width * rows * 4);
@@ -333,6 +357,7 @@ export function makeGpuDisplay(
         },
         destroy() {
           source = undefined;
+          sourceWords = undefined;
           texture.destroy();
           region.destroy();
         }

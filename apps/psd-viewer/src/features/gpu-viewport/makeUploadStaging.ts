@@ -14,9 +14,11 @@ export function makeUploadStaging(device: Pick<GPUDevice, 'createBuffer'>) {
       usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
       mappedAtCreation: true
     });
+    const mapped = buffer.getMappedRange();
     return {
       buffer,
-      view: new Uint8Array(buffer.getMappedRange()) as Uint8Array<ArrayBuffer> | undefined,
+      view: new Uint8Array(mapped) as Uint8Array<ArrayBuffer> | undefined,
+      words: new Uint32Array(mapped) as Uint32Array<ArrayBuffer> | undefined,
       state: 'mapped' as 'mapped' | 'copied' | 'mapping'
     };
   });
@@ -35,9 +37,11 @@ export function makeUploadStaging(device: Pick<GPUDevice, 'createBuffer'>) {
         ? {
             buffer: slot.buffer,
             view: slot.view!,
+            words: slot.words!,
             unmap() {
               slot.buffer.unmap();
               slot.view = undefined;
+              slot.words = undefined;
               slot.state = 'copied';
             }
           }
@@ -60,7 +64,9 @@ export function makeUploadStaging(device: Pick<GPUDevice, 'createBuffer'>) {
           .then(() => {
             if (!destroyed) {
               const start = performance.now();
-              slot.view = new Uint8Array(slot.buffer.getMappedRange());
+              const mapped = slot.buffer.getMappedRange();
+              slot.view = new Uint8Array(mapped);
+              slot.words = new Uint32Array(mapped);
               slot.state = 'mapped';
               viewerPerformance.record('upload.remap', start, capacity);
             }
