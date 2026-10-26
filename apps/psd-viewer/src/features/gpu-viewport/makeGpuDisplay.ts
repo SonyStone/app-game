@@ -219,6 +219,7 @@ export function makeGpuDisplay(
           pipeline.with(pass).with(cameraGroup).with(entry.group).draw(4);
           const arrival = tile.arrival && arrivalTargets.get(tile.arrival) === tile;
           if (entry.present(frameNumber, firstVisible.get(identity(tile)), !!arrival) && arrival) {
+            tile.arrival!.presented = true;
             arrivalTargets.delete(tile.arrival!);
           }
           drawn++;

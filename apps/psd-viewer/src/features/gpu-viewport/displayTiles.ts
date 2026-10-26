@@ -7,7 +7,7 @@ export type DisplayTile = {
   /** One bounded worker region and its mips; whole-render/point-preview chunks have a separate latency cohort. */
   contentTile?: boolean;
   /** Shared by all levels returned by one native region call, independent of later cached LOD switches. */
-  arrival?: { visible: boolean; receivedAt: number };
+  arrival?: { visible: boolean; receivedAt: number; presented?: boolean };
   left: number;
   top: number;
   step: number;

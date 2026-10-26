@@ -31,6 +31,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
   >();
   const canceledResults = new WeakSet<PsdResultOf<DisplayTile>>();
   const admitted = new WeakSet<DisplayTile>();
+  const arrivals = new Map<NonNullable<DisplayTile['arrival']>, PsdRegionRect>();
   let flight: Promise<unknown> | undefined;
   let cacheBytes = 0;
   let reservedBytes = 0;
@@ -50,6 +51,16 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
     publish: (image: RenderedPixels) => void
   ): Promise<PsdResultOf<RenderedPixels> | undefined> {
     camera = { view, size };
+    for (const [arrival, clip] of arrivals) {
+      if (arrival.presented || !visibleInCamera(clip, camera)) {
+        if (!arrival.presented) {
+          arrival.visible = false;
+        }
+
+        arrivals.delete(arrival);
+      }
+    }
+
     if (previous !== snapshot) {
       const affected = previous && visibilityDamage(previous, snapshot);
       for (const [key, job] of pending) {
@@ -275,15 +286,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
             width: Math.min(image.width * image.step, info.width - image.left),
             height: Math.min(image.height * image.step, info.height - image.top)
           };
-          const arrival = {
-            receivedAt: performance.now(),
-            visible:
-              !!camera &&
-              clip.left * camera.view.scale + camera.view.x < camera.size.width &&
-              (clip.left + clip.width) * camera.view.scale + camera.view.x > 0 &&
-              clip.top * camera.view.scale + camera.view.y < camera.size.height &&
-              (clip.top + clip.height) * camera.view.scale + camera.view.y > 0
-          };
+          const arrival = { receivedAt: performance.now(), visible: !!camera && visibleInCamera(clip, camera) };
           const levels = [image, ...mips]
             .map(
               (image): DisplayTile => ({
@@ -301,6 +304,10 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
             remove(key);
             cache.set(key, levels);
             admitted.add(levels.at(-1)!);
+            if (arrival.visible && window.kind === 'regions') {
+              arrivals.set(arrival, clip);
+            }
+
             if (window.kind === 'overview') {
               overviewKey = key;
             }
@@ -338,6 +345,12 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
   }
 
   function remove(key: string) {
+    const arrival = cache.get(key)?.[0]?.arrival;
+    if (arrival) {
+      arrival.visible = false;
+      arrivals.delete(arrival);
+    }
+
     cacheBytes -= cache.get(key)?.reduce((bytes, tile) => bytes + tile.image.pixels.byteLength, 0) ?? 0;
     cache.delete(key);
   }
@@ -375,6 +388,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
     }
     cache.clear();
     pending.clear();
+    arrivals.clear();
     cacheBytes = 0;
     previous = undefined;
     pinned.clear();
@@ -540,3 +554,14 @@ function intersects(a: PsdRegionRect, b: PsdRegionRect) {
 
 const tileEdge = 512;
 const maxMipStep = 16;
+
+/** Receipt interest ends when the camera leaves its drawing rectangle, before its first requested presentation. */
+function visibleInCamera(clip: PsdRegionRect, camera: { view: View; size: { width: number; height: number } }) {
+  const { view, size } = camera;
+  return (
+    clip.left * view.scale + view.x < size.width &&
+    (clip.left + clip.width) * view.scale + view.x > 0 &&
+    clip.top * view.scale + view.y < size.height &&
+    (clip.top + clip.height) * view.scale + view.y > 0
+  );
+}
