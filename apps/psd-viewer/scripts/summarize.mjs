@@ -62,6 +62,7 @@ const summarize = async (directory) => {
       preparationP95Ms: percentile(durations('frame.prepare'), 0.95),
       uploadPreparationP95Ms: percentile(durations('upload'), 0.95),
       gpuInitializationMaxMs: percentile(durations('gpu.initialize'), 1),
+      uploadRemapP95Ms: percentile(durations('upload.remap'), 0.95),
       preparationMaxMs: percentile(durations('frame.prepare'), 1),
       uploadChunkP95Ms: percentile(durations('upload.texture'), 0.95),
       uploadChunkMaxBytes: percentile(values('upload.texture'), 1),
@@ -126,7 +127,7 @@ const result = {
     'The range is observed min/max across runs on this device, not a cross-device guarantee.',
     'Frame intervals are browser RAF intervals during pan/zoom; input latency ends at display submission, not scanout.',
     'GPU timestamp duration measures the viewport pass; queue completion includes waiting and presentation scheduling.',
-    'Transferable worker buffers avoid structured-clone pixel copies; GPUQueue.writeTexture still copies into GPU storage.'
+    'Transferable worker buffers avoid structured-clone pixel copies; mapped staging strips still copy bytes before the GPU copy into textures.'
   ]
 };
 if (process.argv[3]) {

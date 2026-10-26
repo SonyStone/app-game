@@ -3,12 +3,14 @@ import tgpu, { d, std } from 'typegpu';
 import { viewerPerformance } from '../telemetry/performance';
 import type { View } from '../viewport/view';
 import { tileTextureUpload, type DisplayTile } from './displayTiles';
+import { makeUploadStaging } from './makeUploadStaging';
 
 /**
  * Displays authoritative straight RGBA8 bytes. No sRGB texture conversion is applied: filtering is explicitly
  * bilinear in premultiplied display-sRGB, with a one-source-texel halo. At >=1 physical pixel/source texel,
  * textureLoad preserves the original bytes. Coarse worker overviews remain point-sampled previews, not area mips.
- * Uploads stop after 2 MiB/1 ms per frame, with <=128 KiB source strips allowing one strip of overshoot. GPU residency is a
+ * Uploads stop after 1 ms or exhausting the 1 MiB staging pool per frame. Reusable mapped 128 KiB staging buffers pack only source rows, then
+ * one encoder copies strips and draws. GPU residency, including the 1 MiB staging pool, has a
  * separate 128 MiB LRU. Geometry and texture bindings are retained; camera gestures never process resident pixels.
  */
 export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format'>) {
@@ -33,6 +35,7 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
   let bytes = 0;
   let destroyed = false;
   const timer = makeTimer(device);
+  const staging = makeUploadStaging(device);
   // TypeGPU resolves shaders and creates native pipelines lazily. Compile once in backend initialization so tile
   // arrival frames only prepare their own resources; record the cold setup cost separately rather than hiding it.
   root.unwrap(background);
@@ -43,12 +46,23 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
   return {
     /** Reconciles immutable identities without copying bytes; unchanged tiles keep their GPU residency. */
     setTiles(next: readonly DisplayTile[]) {
+      const active = new Set(next.map(identity));
+      for (const [key, entry] of resident) {
+        if (!entry.ready && !active.has(key)) {
+          entry.destroy();
+          resident.delete(key);
+          bytes -= entry.bytes;
+        }
+      }
+
       tiles = next;
     },
     /** Uploads a bounded batch, then renders once into an opaque viewport or an explicit readback target. */
     draw(view: View, width: number, height: number, dpr: number, target: GPUTextureView, raw = false) {
       const start = performance.now();
       let uploaded = 0;
+      let blocked = false;
+      const encoder = device.createCommandEncoder();
       for (const tile of tiles) {
         if (!visible(tile, view, width / dpr, height / dpr)) {
           continue;
@@ -63,20 +77,26 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
         }
 
         while (!entry.ready) {
-          uploaded += entry.upload();
-          if (uploaded >= 2 * 1024 * 1024 || performance.now() - start >= 1) {
+          const copied = entry.upload(encoder);
+          if (!copied) {
+            blocked = true;
+            break;
+          }
+
+          uploaded += copied;
+          if (performance.now() - start >= 1) {
             break;
           }
         }
 
-        if (uploaded >= 2 * 1024 * 1024 || performance.now() - start >= 1) {
+        if (blocked || performance.now() - start >= 1) {
           break;
         }
       }
 
       const active = new Set(tiles.map(identity));
       for (const [tile, entry] of resident) {
-        if (bytes <= gpuBudgetBytes) {
+        if (bytes + staging.bytes <= gpuBudgetBytes) {
           break;
         }
 
@@ -95,7 +115,6 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
         raw: raw ? 1 : 0,
         padding: 0
       });
-      const encoder = device.createCommandEncoder();
       const timing = timer.begin();
       const pass = encoder.beginRenderPass({
         colorAttachments: [
@@ -122,11 +141,12 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
       pass.end();
       timer.resolve(encoder, !!timing);
       device.queue.submit([encoder.finish()]);
+      staging.submit();
       viewerPerformance.record('frame.prepare', start);
       if (drawn) {
         viewerPerformance.record('frame.pixels', start, drawn);
       }
-      viewerPerformance.record('gpu.explicit.bytes', performance.now(), bytes);
+      viewerPerformance.record('gpu.explicit.bytes', performance.now(), bytes + staging.bytes + 32 + timer.bytes);
       if (uploaded) {
         viewerPerformance.record('upload', start, uploaded);
       }
@@ -147,6 +167,7 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
       tiles = [];
       camera.destroy();
       timer.destroy();
+      staging.destroy();
     }
   };
 
@@ -185,18 +206,24 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
         get ready() {
           return row === height;
         },
-        upload() {
+        upload(encoder: GPUCommandEncoder) {
           const start = performance.now();
-          // Bound the BufferSource snapshot, including skipped row bytes, to 128 KiB. Long-stride whole renders
-          // use fewer rows than tightly packed worker regions. A frame can stop between any two strips.
-          const rows = Math.min(height - row, Math.max(1, Math.floor((128 * 1024 - width * 4) / bytesPerRow) + 1));
-          const offset = row * bytesPerRow;
-          const length = (rows - 1) * bytesPerRow + width * 4;
-          const strip = source!.subarray(offset, offset + length);
-          device.queue.writeTexture(
+          const slot = staging.acquire();
+          if (!slot) {
+            return 0;
+          }
+
+          const stride = Math.ceil((width * 4) / 256) * 256;
+          const rows = Math.min(height - row, Math.floor(staging.capacity / stride));
+          for (let y = 0; y < rows; y++) {
+            const offset = (row + y) * bytesPerRow;
+            slot.view.set(source!.subarray(offset, offset + width * 4), y * stride);
+          }
+
+          slot.unmap();
+          encoder.copyBufferToTexture(
+            { buffer: slot.buffer, bytesPerRow: stride },
             { texture: root.unwrap(texture), origin: { y: row } },
-            strip,
-            { bytesPerRow },
             { width, height: rows }
           );
           row += rows;
@@ -206,7 +233,7 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
           }
 
           viewerPerformance.record('upload.texture', start, width * rows * 4);
-          viewerPerformance.record('upload.source.bytes', performance.now(), length);
+          viewerPerformance.record('upload.source.bytes', performance.now(), width * rows * 4);
           return width * rows * 4;
         },
         destroy() {
@@ -326,6 +353,7 @@ function makeTimer(device: GPUDevice) {
   let busy = false;
   let measuring = false;
   return {
+    bytes: query ? 32 : 0,
     begin(): GPURenderPassTimestampWrites | undefined {
       measuring = !!query && !busy;
       return measuring ? { querySet: query!, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 } : undefined;

@@ -111,6 +111,9 @@ export async function runReadbacks(dpr: number) {
         let pending = true;
         while (pending) {
           pending = display.draw(scenario, w, h, dpr, target.createView(), scenario.raw);
+          if (pending) {
+            await new Promise(requestAnimationFrame);
+          }
         }
 
         const encoder = device.createCommandEncoder();
