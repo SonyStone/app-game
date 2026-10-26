@@ -7,6 +7,13 @@ import type {
   PsdBudgetOptions as BudgetOptions,
   PsdFontLibrary as FontLibraryHandle,
   PsdDocumentHandle,
+  PsdSourceHandle,
+  PsdNativeRect as NativeRect,
+  PsdNativeRegion as NativeRegion,
+  PsdNativeRender as NativeRender,
+  PsdNativeRenderOptions as NativeOptions,
+  PsdRegionCapability as RegionCapability,
+  PsdSavedPath as SavedPath,
   PsdRegionPixels as RegionPixels,
   PsdRegionRect as RegionRect,
   RenderedImage
@@ -272,6 +279,29 @@ export type PsdViewerDocument = {
    * `budget` overrides WASM32 admission defaults and accounts for caller-retained storage.
    */
   savedOverview(step: number, maxWorkPixels?: number, budget?: PsdBudgetOptions): PsdResult<PsdRegionPixels>;
+  /** Plans storage for a native window, preserving typed full-canvas causes and admission refusals. */
+  regionCapability(
+    rect: PsdNativeRect,
+    options?: PsdNativeRenderOptions,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdRegionCapability>;
+  /** Composites a window at native precision; output owns its storage and requires no disposal. */
+  renderNativeRegion(
+    rect: PsdNativeRect,
+    options?: PsdNativeRenderOptions,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdNativeRender>;
+  /** Reads selected original saved planes, possibly stale, without unmatting or conversion. */
+  savedRegion(rect: PsdNativeRect, indices: Uint16Array, budget?: PsdBudgetOptions): PsdResult<PsdNativeRegion>;
+  /** Reads original layer/mask channels at native depth; each plane clips independently. */
+  layerRegion(
+    index: number,
+    rect: PsdNativeRect,
+    ids: Int16Array,
+    budget?: PsdBudgetOptions
+  ): PsdResult<PsdNativeRegion>;
+  /** Queries original path identities, knots and geometry; invalid individual geometry retains a typed refusal. */
+  savedPaths(budget?: PsdBudgetOptions): PsdResult<PsdSavedPath[]>;
   /**
    * The fonts the document's type layers use, their availability in `fonts` (none when omitted), and supplied
    * releases that differ from the document's recorded versions. Availability alone does not imply exact text.
@@ -302,6 +332,183 @@ export type PsdViewerDocument = {
   /** Frees the document and its renders. Later calls fail. */
   close(): void;
 };
+
+/** Document-space native window. Each returned plane may clip independently. */
+export type PsdNativeRect = NativeRect;
+
+/** Original big-endian samples, including packed Bitmap rows and float payloads; no matte or mask processing. */
+export type PsdNativeRegion = NativeRegion;
+
+/** Straight native composite; 16-bit internal levels run from 0 to 32768, floats retain their IEEE bits. */
+export type PsdNativeRender = NativeRender;
+
+/** Storage preflight only. A successful plan does not certify strict rendering semantics. */
+export type PsdRegionCapability = Omit<RegionCapability, 'refusal'> & { refusal: PsdFailure | null };
+
+/** Native render options preserve the window compositor's depth, state, fonts and per-call budget. */
+export type PsdNativeRenderOptions = Omit<NativeOptions, 'grayProfile' | 'smartObjects' | 'availableFonts'> &
+  Partial<Pick<PsdRenderSettings, 'grayProfile' | 'smartObjects' | 'availableFonts'>>;
+
+/** Saved resource identity and Q24 geometry, or a typed refusal for that individual path. */
+export type PsdSavedPath = Omit<SavedPath, 'outcome' | 'error' | 'components'> &
+  (
+    | { outcome: 'refused'; error: PsdFailure }
+    | Pick<Extract<SavedPath, { outcome: 'geometry' }>, 'outcome' | 'components'>
+  );
+
+/** Source header and logical section spans. Offsets remain bigint throughout host reads. */
+export type PsdSourceInfo = {
+  width: number;
+  height: number;
+  depth: 1 | 8 | 16 | 32;
+  channels: number;
+  mode: number;
+  colorMode: { offset: bigint; length: bigint };
+  resources: { offset: bigint; length: bigint };
+  layers: { offset: bigint; length: bigint };
+  merged: { offset: bigint; length: bigint } | null;
+};
+
+/** Physical primary layer metadata, without importing compositor state or reading channel payloads. */
+export type PsdSourceLayer = PsdNativeRect & {
+  index: number;
+  name: string;
+  channels: { id: number; offset: bigint; length: bigint }[];
+};
+
+/** A host-owned synchronous reader, suitable for FileReaderSync in a worker or pread in Node. */
+export type PsdSourceRead = Parameters<typeof PsdSourceHandle.open>[0];
+
+/** Bounded saved/layer extraction. Alternate Lr16/Lr32 layer carriers may refuse while savedRegion remains usable. */
+export type PsdViewerSource = {
+  readonly info: PsdSourceInfo;
+  /** Reads selected saved planes without a compressed-file copy. Saved pixels may be stale and retain their matte. */
+  savedRegion(rect: PsdNativeRect, indices: Uint16Array, budget?: PsdBudgetOptions): PsdResult<PsdNativeRegion>;
+  /** Samples the saved composite on a native integer grid. Output coordinates are grid coordinates; no filtering or matte removal occurs. */
+  savedOverview(step: number, indices: Uint16Array, budget?: PsdBudgetOptions): PsdResult<PsdNativeRegion>;
+  /** Indexes primary physical records and bigint stream spans without reading pixels. */
+  layerInfo(budget?: PsdBudgetOptions): PsdResult<PsdSourceLayer[]>;
+  /** Reads original layer/mask channels, clipped independently, without applying density or feather. */
+  layerRegion(
+    index: number,
+    rect: PsdNativeRect,
+    ids: Int16Array,
+    budget?: PsdBudgetOptions
+  ): PsdResult<PsdNativeRegion>;
+  /** Releases metadata and the host reader; later operations fail. Safe to call repeatedly. */
+  close(): void;
+};
+
+/** Opens strict outer envelopes through host reads. Never materializes the full file; no global cap is raised. */
+export async function openPsdSource(
+  read: PsdSourceRead,
+  length: bigint,
+  budget?: PsdBudgetOptions
+): Promise<PsdResult<PsdViewerSource>> {
+  const codec = await loadPsdViewer();
+  const opened = attempt(() => codec.PsdSourceHandle.open(read, length, budget));
+  if (!opened.ok) {
+    return opened;
+  }
+
+  const handle = opened.value;
+  const info = attempt(() => handle.info() as PsdSourceInfo);
+  if (!info.ok) {
+    handle.free();
+    return info;
+  }
+
+  let open = true;
+  return {
+    ok: true,
+    value: {
+      info: info.value,
+      savedRegion: (rect, indices, options) =>
+        open
+          ? attempt(() => handle.savedRegion(rect, indices, options))
+          : { ok: false, error: { kind: 'invalid', message: 'the source is closed' } },
+      savedOverview: (step, indices, options) => {
+        if (!open) {
+          return { ok: false, error: { kind: 'invalid', message: 'the source is closed' } };
+        }
+        return attempt(() => {
+          if (!Number.isSafeInteger(step) || step < 1) {
+            throw new Error('Saved overview stride must be a positive integer');
+          }
+          const merged = info.value.merged;
+          if (!merged) {
+            throw Object.assign(new Error('No saved merged image'), { name: 'PsdUnsupportedError' });
+          }
+          const compressionBytes = read(merged.offset, 2);
+          const compression = new DataView(
+            compressionBytes.buffer,
+            compressionBytes.byteOffset,
+            compressionBytes.byteLength
+          ).getUint16(0);
+          const header = read(0n, 6);
+          const psb = header[5] === 2;
+          const width = Math.ceil(info.value.width / step);
+          const height = Math.ceil(info.value.height / step);
+          if (width * height * indices.length * Math.max(1, info.value.depth / 8) > 64 * 1024 ** 2) {
+            throw Object.assign(new Error('Saved overview exceeds the bounded 64 MiB output policy'), {
+              name: 'PsdBudgetError',
+              resource: 'live bytes',
+              requested: BigInt(width * height * indices.length * Math.max(1, info.value.depth / 8)),
+              limit: 64n * 1024n ** 2n
+            });
+          }
+          if (new Set(indices).size !== indices.length) {
+            throw new Error('Duplicate saved channel selection');
+          }
+          let retainedBytes = options?.retainedBytes ?? 0;
+          const planes = Array.from(indices, (id) => {
+            if (id >= info.value.channels) {
+              throw new Error('Saved channel index is outside the header');
+            }
+            const bytes = handle.readGrid(
+              merged.offset + 2n,
+              merged.length - 2n,
+              compression,
+              info.value.width,
+              info.value.height * info.value.channels,
+              info.value.depth,
+              psb,
+              0,
+              id * info.value.height,
+              info.value.width,
+              info.value.height,
+              step,
+              { ...options, retainedBytes }
+            );
+            retainedBytes += bytes.byteLength;
+            return { id, left: 0, top: 0, width, height, bytes };
+          });
+          return {
+            depth: info.value.depth,
+            mode: info.value.mode,
+            encoding: 'big-endian-wire',
+            source: 'savedComposite',
+            planes
+          };
+        });
+      },
+      layerInfo: (options) =>
+        open
+          ? attempt(() => handle.layerInfo(options) as PsdSourceLayer[])
+          : { ok: false, error: { kind: 'invalid', message: 'the source is closed' } },
+      layerRegion: (index, rect, ids, options) =>
+        open
+          ? attempt(() => handle.layerRegion(index, rect, ids, options))
+          : { ok: false, error: { kind: 'invalid', message: 'the source is closed' } },
+      close() {
+        if (open) {
+          open = false;
+          handle.free();
+        }
+      }
+    }
+  };
+}
 
 /**
  * Photoshop's rendering preferences, which documents do not record. New options are added as optional fields, which
@@ -396,7 +603,12 @@ export type PsdStates = {
 
 /** Photoshop's "Image Interpolation" preferences. */
 export type PsdInterpolation =
-  'nearestNeighbor' | 'bilinear' | 'bicubic' | 'bicubicSmoother' | 'bicubicSharper' | 'bicubicAutomatic';
+  | 'nearestNeighbor'
+  | 'bilinear'
+  | 'bicubic'
+  | 'bicubicSmoother'
+  | 'bicubicSharper'
+  | 'bicubicAutomatic';
 
 /**
  * Photoshop 26's defaults: gamma 1.0 blending off, text gamma 1.45 on, cached vector and smart-object rasters; exact
@@ -1041,6 +1253,36 @@ function makeViewerDocument(
     savedOverview(step, maxWorkPixels = 0, budget) {
       return open ? attempt(() => handle.savedOverview(step, maxWorkPixels, budget)) : closed();
     },
+    regionCapability(rect, options, fonts) {
+      return open
+        ? attempt(() => {
+            const plan = handle.regionCapability(rect, nativeRenderOptions(options), libraryOf(fonts));
+            return { ...plan, refusal: plan.refusal ? toFailure(plan.refusal) : null };
+          })
+        : closed();
+    },
+    renderNativeRegion(rect, options, fonts) {
+      return open
+        ? attempt(() => handle.renderNativeRegion(rect, nativeRenderOptions(options), libraryOf(fonts)))
+        : closed();
+    },
+    savedRegion(rect, indices, budget) {
+      return open ? attempt(() => handle.savedRegion(rect, indices, budget)) : closed();
+    },
+    layerRegion(index, rect, ids, budget) {
+      return open ? attempt(() => handle.layerRegion(index, rect, ids, budget)) : closed();
+    },
+    savedPaths(budget) {
+      return open
+        ? attempt(() =>
+            handle
+              .savedPaths(budget)
+              .map(
+                (path): PsdSavedPath => (path.outcome === 'refused' ? { ...path, error: toFailure(path.error) } : path)
+              )
+          )
+        : closed();
+    },
     fonts(fonts) {
       return open ? attempt(() => handle.documentFonts(libraryOf(fonts)) as PsdDocumentFonts) : closed();
     },
@@ -1069,12 +1311,14 @@ function makeViewerDocument(
       return attempt(() => {
         const resources = (handle.info() as PsdInfo).resources
           .filter((resource) => resource.id >= 2000 && resource.id <= 2997)
-          .map((resource): PsdPathSummary => ({
-            name: resource.name || `Path ${resource.id}`,
-            source: 'resource',
-            resourceId: resource.id,
-            geometry: 'unavailable'
-          }));
+          .map(
+            (resource): PsdPathSummary => ({
+              name: resource.name || `Path ${resource.id}`,
+              source: 'resource',
+              resourceId: resource.id,
+              geometry: 'unavailable'
+            })
+          );
         const masks = (nodes: readonly PsdLayerNode[]): PsdPathSummary[] =>
           nodes.flatMap((node) => [
             ...(node.vectorMask
@@ -1112,6 +1356,21 @@ function makeViewerDocument(
       images.clear();
       handle.free();
     }
+  };
+}
+
+/** Normalize nullable rendering defaults to the native binding's omitted fields. */
+function nativeRenderOptions(options: PsdNativeRenderOptions | undefined): NativeOptions | undefined {
+  if (!options) {
+    return undefined;
+  }
+
+  const { grayProfile, smartObjects, availableFonts, ...rest } = options;
+  return {
+    ...rest,
+    grayProfile: grayProfile ?? undefined,
+    smartObjects: smartObjects ?? undefined,
+    availableFonts: availableFonts ? [...availableFonts] : undefined
   };
 }
 
