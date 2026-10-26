@@ -251,3 +251,56 @@ it('does not reject populated parallel work using an empty-tile calibration', as
   expect(await prepare(pool)).toBe(2);
   pool.dispose();
 });
+
+it('retires a crashed spare after semantic cancellation without rejecting the next camera waiter', async () => {
+  const { pool, main, ports } = setup();
+  await pool.open(new ArrayBuffer(100));
+  await tile(pool);
+  await prepare(pool);
+  main.hold = true;
+  ports[0].hold = true;
+  const first = tile(pool);
+  const controller = new AbortController();
+  const second = pool.renderWindow(1, photoshopDefaultSettings, [], {
+    kind: 'regions', rectangles: [{ left: 2, top: 0, width: 1, height: 1 }]
+  }, controller.signal);
+  controller.abort();
+  ports[0].onerror!({ message: 'spare stopped' });
+  expect(await second).toMatchObject({ ok: false, error: { kind: 'superseded' } });
+  expect(ports[0].terminate).toHaveBeenCalled();
+  main.finish();
+  expect((await first).ok).toBe(true);
+  expect(await prepare(pool)).toBe(1);
+  pool.dispose();
+});
+
+it('preserves document admission when worker mode changes while opening', async () => {
+  const { pool, main, spawn } = setup();
+  main.hold = true;
+  const opening = pool.open(new ArrayBuffer(100));
+  pool.setWorkers(1);
+  main.finish();
+  expect((await opening).ok).toBe(true);
+  main.hold = false;
+  pool.setWorkers(2);
+  await tile(pool);
+  expect(await prepare(pool)).toBe(2);
+  expect(spawn).toHaveBeenCalledOnce();
+  pool.dispose();
+});
+
+it('releases the spare when display admission changes while document memory still fits', async () => {
+  const main = port('');
+  const spare = port('');
+  let allowed = true;
+  const pool = makePsdWorkerPool(makePsdClient(main), () => spare, {
+    workers: 2, parallelAllowed: () => allowed
+  });
+  await pool.open(new ArrayBuffer(100));
+  await tile(pool);
+  expect(await prepare(pool)).toBe(2);
+  allowed = false;
+  expect(await prepare(pool)).toBe(1);
+  expect(spare.terminate).toHaveBeenCalled();
+  pool.dispose();
+});

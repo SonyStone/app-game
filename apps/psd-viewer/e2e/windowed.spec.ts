@@ -226,3 +226,22 @@ async function hasVisiblePixels(page: Page) {
     return data.some((value, index) => index % 4 !== 3 && value !== 48 && value !== 60);
   });
 }
+
+test.describe('display admission', () => {
+  test.use({ deviceScaleFactor: 2 });
+
+  test('keeps DPR 2 serial when two workers are requested', async ({ page }) => {
+    await page.goto('/?workers=2');
+    await page.locator('input[accept=".psd,.psb"]').setInputFiles({
+      name: 'retina-admission.psb',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from(largePsb())
+    });
+    await expect(stage(page)).toHaveAttribute('data-render-source', 'layers');
+    await expect(stage(page)).toHaveAttribute('data-busy', 'false');
+    await page.getByRole('button', { name: '100%', exact: true }).click();
+    await expect(stage(page)).toHaveAttribute('data-busy', 'false');
+    expect(page.workers()).toHaveLength(1);
+    await expect(page.getByRole('combobox', { name: 'Tile workers' })).toHaveValue('2');
+  });
+});
