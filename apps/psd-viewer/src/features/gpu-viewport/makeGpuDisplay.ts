@@ -12,6 +12,7 @@ import { tileTextureUpload, type DisplayTile } from './displayTiles';
  * separate 128 MiB LRU. Geometry and texture bindings are retained; camera gestures never process resident pixels.
  */
 export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format'>) {
+  const initializing = performance.now();
   const { root, device, format } = gpu;
   const camera = root.createBuffer(Camera).$usage('uniform');
   const cameraGroup = root.createBindGroup(cameraLayout, { camera });
@@ -32,6 +33,12 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
   let bytes = 0;
   let destroyed = false;
   const timer = makeTimer(device);
+  // TypeGPU resolves shaders and creates native pipelines lazily. Compile once in backend initialization so tile
+  // arrival frames only prepare their own resources; record the cold setup cost separately rather than hiding it.
+  root.unwrap(background);
+  root.unwrap(pipeline);
+  root.unwrap(cameraGroup);
+  viewerPerformance.record('gpu.initialize', initializing);
 
   return {
     /** Reconciles immutable identities without copying bytes; unchanged tiles keep their GPU residency. */
