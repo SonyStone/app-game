@@ -100,6 +100,11 @@ export function makeGpuDisplay(
         const key = identity(tile);
         let entry = resident.get(key);
         if (!entry) {
+          // Leave headroom for one native allocation; an individual GPU call cannot be time-sliced.
+          if (performance.now() - start >= 2) {
+            break;
+          }
+
           const upload = tileTextureUpload(tile);
           const required = upload.width * upload.height * 4 + 32;
           const active = new Set(tiles.map(identity));
@@ -119,7 +124,9 @@ export function makeGpuDisplay(
             break;
           }
 
+          const allocating = performance.now();
           entry = allocate(tile);
+          viewerPerformance.record('upload.allocate', allocating);
           resident.set(key, entry);
           bytes += entry.bytes;
         }
@@ -142,6 +149,7 @@ export function makeGpuDisplay(
         }
       }
 
+      viewerPerformance.record('upload.prepare', start);
       const active = new Set(tiles.map(identity));
       for (const [tile, entry] of resident) {
         if (bytes + staging.bytes <= gpuBudgetBytes) {
@@ -155,6 +163,7 @@ export function makeGpuDisplay(
         }
       }
 
+      const encoding = performance.now();
       camera.write({
         viewport: d.vec2f(width, height),
         translation: d.vec2f(view.x * dpr, view.y * dpr),
@@ -196,8 +205,13 @@ export function makeGpuDisplay(
 
       pass.end();
       timer.resolve(encoder, !!timing);
+      viewerPerformance.record('frame.encode', encoding);
+      const submitting = performance.now();
       device.queue.submit([encoder.finish()]);
+      viewerPerformance.record('frame.submit', submitting);
+      const mapping = performance.now();
       staging.submit();
+      viewerPerformance.record('upload.remapRequest', mapping);
       viewerPerformance.record('frame.prepare', start);
       if (drawn) {
         viewerPerformance.record('frame.pixels', start, drawn);
@@ -265,6 +279,9 @@ export function makeGpuDisplay(
       .$usage('uniform');
     try {
       const group = root.createBindGroup(tileLayout, { source: texture.createView(), region });
+      // Binding creation is lazy in TypeGPU. Materialize it inside upload admission, rather than charging
+      // an uncapped first-draw allocation after the strip budget has already been exhausted.
+      root.unwrap(group);
       const bytesPerRow = upload.bytesPerRow;
       let source: Uint8Array<ArrayBuffer> | undefined = upload.source;
       let row = 0;
