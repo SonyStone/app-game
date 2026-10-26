@@ -4,6 +4,8 @@ import type { PsdImage, PsdRegionRect } from '@app-game/psd/viewer';
 export type DisplayTile = {
   /** May include a neighbor halo supporting all retained mip levels around the drawing rectangle. */
   image: PsdImage;
+  /** One bounded worker region and its mips; whole-render/point-preview chunks have a separate latency cohort. */
+  contentTile?: boolean;
   left: number;
   top: number;
   step: number;

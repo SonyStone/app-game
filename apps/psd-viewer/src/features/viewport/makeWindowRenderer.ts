@@ -277,6 +277,7 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>, budg
             .map(
               (image): DisplayTile => ({
                 image,
+                contentTile: window.kind === 'regions',
                 left: image.left,
                 top: image.top,
                 step: image.step,

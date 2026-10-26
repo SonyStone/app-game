@@ -267,7 +267,7 @@ export function makeGpuDisplay(
   }
 
   function allocate(tile: DisplayTile) {
-    const { clip, step } = tile;
+    const { clip, step, contentTile } = tile;
     const upload = tileTextureUpload(tile);
     const { width, height } = upload;
     const texture = root.createTexture({ size: [width, height], format: 'rgba8unorm' }).$usage('sampled');
@@ -296,7 +296,11 @@ export function makeGpuDisplay(
         group,
         present(frame: number, firstFrame?: number) {
           if (!presented) {
-            viewerPerformance.record('tile.visible.frames', performance.now(), frame - (firstFrame ?? frame) + 1);
+            viewerPerformance.record(
+              contentTile ? 'tile.visible.frames' : 'imageChunk.visible.frames',
+              performance.now(),
+              frame - (firstFrame ?? frame) + 1
+            );
             presented = true;
           }
         },
