@@ -1,14 +1,14 @@
 import { viewerPerformance } from '../telemetry/performance';
 
 /**
- * Reuses 64 mapped COPY_SRC buffers for bounded texture strips. Call submit after the encoder using acquired
+ * Reuses 128 mapped COPY_SRC buffers for bounded texture strips. Call submit after the encoder using acquired
  * buffers has been submitted. Remapping waits asynchronously for GPU use to finish; exhaustion defers uploads.
  * Destroy cancels pending maps and releases all buffers, including maps that finish after disposal.
  */
 export function makeUploadStaging(device: Pick<GPUDevice, 'createBuffer'>) {
   const capacity = 64 * 1024;
   let destroyed = false;
-  const slots = Array.from({ length: 64 }, () => {
+  const slots = Array.from({ length: 128 }, () => {
     const buffer = device.createBuffer({
       size: capacity,
       usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
