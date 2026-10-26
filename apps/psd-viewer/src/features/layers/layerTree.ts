@@ -77,8 +77,51 @@ export function percent(byte: number): string {
   return `${Math.round((byte / 255) * 100)}%`;
 }
 
+/** Flat panel rows retain ancestry for search, keyboard navigation and solo. */
+export function layerRows(
+  nodes: readonly PsdLayerNode[],
+  ancestors: PsdLayerNode[] = []
+): { node: PsdLayerNode; ancestors: PsdLayerNode[] }[] {
+  return topFirst(nodes).flatMap((node) => [
+    { node, ancestors },
+    ...layerRows(node.children ?? [], [...ancestors, node])
+  ]);
+}
+
+/** Search retains matching records and their ancestor groups, ignoring collapse while filtering. */
+export function filteredRows(nodes: readonly PsdLayerNode[], collapsed: ReadonlySet<number>, query: string, kind = '') {
+  const rows = layerRows(nodes);
+  const searching = Boolean(query.trim() || kind);
+  const matches = rows.filter(
+    ({ node }) =>
+      node.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) && (!kind || node.kind === kind)
+  );
+  const included = new Set(
+    matches.flatMap(({ node, ancestors }) => [node.index, ...ancestors.map((parent) => parent.index)])
+  );
+  return rows.filter(({ node, ancestors }) =>
+    searching ? included.has(node.index) : ancestors.every((parent) => !collapsed.has(parent.index))
+  );
+}
+
+/** Union of nonempty saved-record bounds; state transforms are not inferred. */
+export function contentBounds(nodes: readonly PsdLayerNode[]) {
+  const bounds = layerRows(nodes)
+    .map(({ node }) => node.bounds)
+    .filter((rect) => rect.right > rect.left && rect.bottom > rect.top);
+  return bounds.length
+    ? {
+        left: Math.min(...bounds.map((rect) => rect.left)),
+        top: Math.min(...bounds.map((rect) => rect.top)),
+        right: Math.max(...bounds.map((rect) => rect.right)),
+        bottom: Math.max(...bounds.map((rect) => rect.bottom))
+      }
+    : undefined;
+}
+
 /** What the viewer shows for 3D and video layers. */
 const pixelSourceNotes = {
   '3d': 'a 3D layer: shown as the pixels Photoshop saved; the 3D scene is not rendered',
   video: 'a video layer: shown as the frame Photoshop saved; the footage is not played'
 } as const;
+

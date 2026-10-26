@@ -313,6 +313,41 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         return;
       }
 
+      case 'channels': {
+        const info = viewer.info;
+        const bytes = Math.ceil((info.width * info.depth) / 8) * info.height * info.channels;
+        if (info.width * info.height > windowWorkPixels || bytes > 64 * 1024 * 1024) {
+          post(
+            failed(request, {
+              kind: 'unsupported',
+              message:
+                'Saved channel inspection is bounded to 4 million pixels and 64 MiB. Bounded native channel-region reads require psd-rs support.'
+            }),
+            []
+          );
+          return;
+        }
+
+        const result = viewer.savedProcessChannels();
+        post(
+          result.ok ? { id: request.id, type: 'channels', channels: result.value } : failed(request, result.error),
+          result.ok
+            ? [
+                ...result.value.planes.map((plane) => plane.bytes.buffer),
+                result.value.colorModeData.buffer,
+                ...result.value.resources.map((resource) => resource.bytes.buffer)
+              ]
+            : []
+        );
+        return;
+      }
+
+      case 'paths': {
+        const result = viewer.paths();
+        post(result.ok ? { id: request.id, type: 'paths', paths: result.value } : failed(request, result.error), []);
+        return;
+      }
+
       case 'layer': {
         const detail = viewer.layerDetail(request.index);
         if (!detail.ok) {
@@ -330,7 +365,7 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
           0
         );
         const pixels =
-          windowed && (previewPixels > windowWorkPixels || (mask && 'error' in mask))
+          previewPixels > windowWorkPixels || (mask && 'error' in mask)
             ? {
                 ok: false as const,
                 error: { kind: 'unsupported' as const, message: 'This layer is too large for a whole-layer preview.' }

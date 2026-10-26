@@ -251,7 +251,8 @@ it('adds fonts by PostScript name and rejects what it cannot read with a clear r
   const library = await createFontLibrary();
   expect(library.fonts()).toEqual([]);
   expect(library.addActiveFace(new Uint8Array(64), 0, 'invalid.ttf')).toMatchObject({
-    ok: false, error: { kind: 'invalid' }
+    ok: false,
+    error: { kind: 'invalid' }
   });
   expect(library.add(new Uint8Array(64))).toMatchObject({ ok: false, error: { kind: 'invalid' } });
   const collection = new Uint8Array(64);
@@ -269,7 +270,8 @@ it('adds fonts by PostScript name and rejects what it cannot read with a clear r
   });
   library.free();
   expect(library.addActiveFace(new Uint8Array(64), 0, 'closed.ttf')).toMatchObject({
-    ok: false, error: { message: 'the font library was freed' }
+    ok: false,
+    error: { message: 'the font library was freed' }
   });
   expect(library.add(new Uint8Array(64))).toMatchObject({
     ok: false,
@@ -381,3 +383,24 @@ function channelStreams(bytes: Uint8Array): number[][] {
     })
   );
 }
+
+it('lists typed saved path carriers and refuses path queries after close', async () => {
+  const fs = await import('node:fs/promises');
+  const result = await openPsd(
+    await fs.readFile(
+      new URL('../../../apps/psd-viewer/src/features/examples/assets/rotated-smart-object.psd', import.meta.url)
+    )
+  );
+  if (!result.ok) {
+    throw new Error(result.error.message);
+  }
+
+  const paths = result.value.paths();
+  expect(paths.ok).toBe(true);
+  if (paths.ok) {
+    expect(paths.value.every((path) => path.geometry === 'unavailable')).toBe(true);
+  }
+
+  result.value.close();
+  expect(result.value.paths().ok).toBe(false);
+});

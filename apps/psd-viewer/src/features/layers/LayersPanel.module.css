@@ -98,3 +98,29 @@
   font-size: 10px;
   white-space: nowrap;
 }
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 7px;
+  border-bottom: 1px solid #171717;
+  font-size: 11px;
+
+  input {
+    width: 100%;
+  }
+  input,
+  select,
+  button {
+    background: #242424;
+    color: #ddd;
+    border: 1px solid #555;
+    border-radius: 2px;
+    padding: 4px;
+  }
+  p {
+    margin: 3px 0;
+    color: #aaa;
+  }
+}

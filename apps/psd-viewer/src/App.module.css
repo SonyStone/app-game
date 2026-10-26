@@ -168,6 +168,7 @@
 }
 
 .inspector {
+  overflow-y: auto;
   border-left: 1px solid #1a1a1a;
 }
 
@@ -215,7 +216,7 @@
 }
 
 .inspectorBody {
-  flex: 1;
+  flex: 1 0 160px;
   min-height: 0;
   overflow: auto;
 }
