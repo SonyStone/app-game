@@ -180,10 +180,10 @@ it.each(['throughput', 'interaction'])('disables a spare when measured %s fails 
   for (let index = 0; index < 32; index++) {
     pool.reportInteraction(10);
   }
-  pool.reportWindowBatch({ workers: 1, tiles: 9, milliseconds: 180, workerMilliseconds: 180 });
+  pool.reportWindowBatch({ workers: 1, tiles: 9, populated: 9, milliseconds: 180, requestMilliseconds: 180 });
   await prepare(pool);
   if (reason === 'throughput') {
-    pool.reportWindowBatch({ workers: 2, tiles: 9, milliseconds: 160, workerMilliseconds: 180 });
+    pool.reportWindowBatch({ workers: 2, tiles: 9, populated: 9, milliseconds: 160, requestMilliseconds: 180 });
   } else {
     for (let index = 0; index < 32; index++) {
       pool.reportInteraction(12);
@@ -238,5 +238,16 @@ it('keeps a canceled native slot and its reservation until the actual synchronou
   expect(settled).not.toHaveBeenCalled();
   main.finish();
   expect(await job).toMatchObject({ ok: false, error: { kind: 'superseded' } });
+  pool.dispose();
+});
+
+it('does not reject populated parallel work using an empty-tile calibration', async () => {
+  const { pool, ports } = setup();
+  await pool.open(new ArrayBuffer(100));
+  await tile(pool);
+  await prepare(pool);
+  pool.reportWindowBatch({ workers: 2, tiles: 9, populated: 0, milliseconds: 500, requestMilliseconds: 10 });
+  expect(ports[0].terminate).not.toHaveBeenCalled();
+  expect(await prepare(pool)).toBe(2);
   pool.dispose();
 });

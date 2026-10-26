@@ -110,13 +110,6 @@ for (let run = 1; run <= Number(process.env.PSD_BENCH_RUNS ?? 3); run++) {
       };
       result.ninePresentedMs = await jump('nine', { x: 4352, y: 7424 });
       await page.screenshot({ path: `${out}/assets/phase6-r${run}-w${workers}-dpr${result.dpr}.png` });
-      await page.evaluate(() => { __parallel.phase = 'prepare-large'; });
-      await jump('prepare-large', { x: 10000, y: 12000 });
-      await page.getByRole('spinbutton', { name: 'Zoom percentage' }).fill('50');
-      await page.getByRole('spinbutton', { name: 'Zoom percentage' }).press('Enter');
-      await page.getByRole('spinbutton', { name: 'Zoom percentage' }).blur();
-      await settle();
-      result.largePresentedMs = await jump('large', { x: 3840, y: 6912 });
       await page.mouse.move(center.x, center.y);
       await page.mouse.down();
       await page.evaluate(async ({ center }) => {
@@ -132,6 +125,13 @@ for (let run = 1; run <= Number(process.env.PSD_BENCH_RUNS ?? 3); run++) {
       }, { center });
       await page.mouse.up();
       await settle();
+      await page.evaluate(() => { __parallel.phase = 'prepare-large'; });
+      await jump('prepare-large', { x: 10000, y: 12000 });
+      await page.getByRole('spinbutton', { name: 'Zoom percentage' }).fill('50');
+      await page.getByRole('spinbutton', { name: 'Zoom percentage' }).press('Enter');
+      await page.getByRole('spinbutton', { name: 'Zoom percentage' }).blur();
+      await settle();
+      result.largePresentedMs = await jump('large', { x: 3840, y: 6912 });
       const raw = await page.evaluate(async () => ({ ...__parallel, hashes: await Promise.all(__parallel.hashes) }));
       await writeFile(`${out}/phase6-r${run}-w${workers}-raw.json`, JSON.stringify(raw));
       const percentile = (values, p) => values.sort((a, b) => a - b)[Math.ceil(values.length * p) - 1] ?? null;

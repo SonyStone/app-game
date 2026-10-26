@@ -252,8 +252,8 @@ export function makePsdWorkerPool(
     renderWindow,
     prepareWindows,
     /** Stops parallel work when a completed cold batch fails measured throughput. Canceled/cache-only batches abstain. */
-    reportWindowBatch(batch: { workers: number; tiles: number; milliseconds: number; workerMilliseconds: number }) {
-      if (batch.tiles < 9 || batch.milliseconds <= 0) {
+    reportWindowBatch(batch: { workers: number; tiles: number; populated: number; milliseconds: number; requestMilliseconds: number }) {
+      if (batch.populated < 9 || batch.milliseconds <= 0) {
         return;
       }
       if (batch.workers === 1) {
@@ -261,7 +261,7 @@ export function makePsdWorkerPool(
         return;
       }
       const serial = serialMillisecondsPerTile === undefined
-        ? batch.workerMilliseconds
+        ? batch.requestMilliseconds
         : serialMillisecondsPerTile * batch.tiles;
       const speedup = serial / batch.milliseconds;
       viewerPerformance.record('workers.batch.speedup', performance.now(), speedup);

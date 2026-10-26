@@ -174,4 +174,8 @@ export function requiresWindowedRendering(size: { width: number; height: number 
 export const windowWorkPixels = 4_194_304;
 
 /** Filtered display products accompany canonical source bytes; saved overviews never acquire a mip claim. */
-export type WindowPixels = PsdRegionPixels & { mips?: PsdRegionPixels[] };
+export type WindowPixels = PsdRegionPixels & {
+  /** Whether source output contains nonzero alpha; only populated batches calibrate throughput. */
+  populated?: boolean;
+  mips?: PsdRegionPixels[];
+};
