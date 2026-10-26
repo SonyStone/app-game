@@ -586,7 +586,7 @@ function calloutsOnScreen(
 
 const BUBBLE_FADE = 0.4;
 const MARKER_FADE = 0.8;
-const EDGE_INSET = 28;
+const EDGE_INSET = 34;
 
 /** The radio shot from the speaker at `from` to the marker at `to`, on screen, cut short at both ends; none if too short. */
 function shotBetween(from: { x: number; y: number }, to: { x: number; y: number }, opacity: number) {
@@ -607,7 +607,7 @@ function shotBetween(from: { x: number; y: number }, to: { x: number; y: number 
 }
 
 const SHOT_START = 22;
-const SHOT_END = 8;
+const SHOT_END = 12;
 const SHOT_SHORTEST = 24;
 const SHOT_SPEED = 1200;
 /** Seconds a shot flies at least and at most, so a near one is still seen and a far one does not keep the marker waiting. */

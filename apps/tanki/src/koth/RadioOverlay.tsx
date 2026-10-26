@@ -82,7 +82,7 @@ export function RadioOverlay(props: { callouts: readonly CalloutView[] }) {
                 >
                   <MarkerIcon kind={marker().kind} />
                   <Show when={marker().edge}>
-                    {(edge) => <span class="tk-marker-arrow" style={{ transform: `rotate(${edge()}rad) translateX(17px)` }} />}
+                    {(edge) => <span class="tk-marker-arrow" style={{ transform: `rotate(${edge()}rad) translateX(24px)` }} />}
                   </Show>
                 </div>
               )}
@@ -122,15 +122,15 @@ function RadioShot(props: {
     <g class="tk-shot" style={{ opacity: props.opacity, '--tk-shot-team': TEAM_CSS[props.team], '--tk-shot-flight': `${flight}s` }}>
       <line class="tk-shot-trail" x1={props.from.x} y1={props.from.y} x2={props.to.x} y2={props.to.y} pathLength={1} />
       <line class="tk-shot-tracer" x1={props.from.x} y1={props.from.y} x2={props.to.x} y2={props.to.y} pathLength={1} />
-      <circle class="tk-shot-hit" cx={props.to.x} cy={props.to.y} r="14" />
+      <circle class="tk-shot-hit" cx={props.to.x} cy={props.to.y} r="20" />
     </g>
   );
 }
 
-/** The marker's glyph, 22 px, in ink on paper with the team's color where it matters. */
+/** The marker's glyph, 32 px, in ink on paper with the team's color where it matters. */
 function MarkerIcon(props: { kind: MarkerKind }) {
   return (
-    <svg viewBox="-11 -11 22 22" width="22" height="22">
+    <svg viewBox="-11 -11 22 22" width="32" height="32">
       <circle r="9.5" fill={PAPER} stroke={INK} stroke-width="2" />
       {(() => {
         switch (props.kind) {
