@@ -64,7 +64,8 @@ import { TANK_CLASS_IDS, type TankClassId } from './tanks';
  *
  * The interface is drawn as constructivist posters (see `poster.css`) and speaks English, Russian,
  * Japanese or Serbian, picked in the menu and kept for the next visit; `?lang=ja` picks one for a
- * visit (see `createKothI18n`).
+ * visit, and the address always names the language shown, so a copied link keeps it (see
+ * `createKothI18n`).
  */
 export default function KothRoute() {
   const address = new URLSearchParams(window.location.search);

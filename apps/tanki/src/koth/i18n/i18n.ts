@@ -24,10 +24,14 @@ export type LanguageId = (typeof LANGUAGES)[number]['id'];
  * The game's language: `t` translates a dotted key of `Dictionary` (`t('menu.resume')`,
  * `t('hud.kills', 3)`), and `choose` switches the language at once and keeps it for the next
  * visit. English is the default; `?lang=ru` in the address overrides the kept choice for that visit.
+ * The address always names the language shown, from the start and after every switch, so a link
+ * copied from it opens the game in the same language.
  */
 export function createKothI18n() {
   const [language, setLanguage] = createSignal(initialLanguage());
   const dictionary = createMemo(() => flatten(DICTIONARIES[language()]));
+
+  showInAddress(language());
 
   return {
     language,
@@ -36,6 +40,7 @@ export function createKothI18n() {
     /** Switches to `id` and keeps it in local storage; a blocked storage only forgets it. */
     choose(id: LanguageId) {
       setLanguage(id);
+      showInAddress(id);
 
       try {
         localStorage.setItem(LANGUAGE_KEY, id);
@@ -52,6 +57,16 @@ const DICTIONARIES: Record<LanguageId, Dictionary> = { en, ru, ja, sr };
 function initialLanguage(): LanguageId {
   const asked = new URLSearchParams(window.location.search).get('lang') ?? keptLanguage();
   return LANGUAGES.find((language) => language.id === asked)?.id ?? 'en';
+}
+
+/** Puts `id` into the address as `?lang=`, keeping its other parameters, without a new history entry. */
+function showInAddress(id: LanguageId) {
+  const url = new URL(window.location.href);
+
+  if (url.searchParams.get('lang') !== id) {
+    url.searchParams.set('lang', id);
+    window.history.replaceState(window.history.state, '', url);
+  }
 }
 
 /** The language kept from the last visit, if the storage can be read. */
