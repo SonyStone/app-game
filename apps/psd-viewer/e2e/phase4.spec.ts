@@ -65,7 +65,7 @@ test('saved masks, native channels and typed paths are explicitly labeled', asyn
   await expect(page.getByRole('status', { name: 'Pixel inspection' })).toContainText('RGBA');
   await expect(page.getByLabel('Saved native sample')).toContainText('Saved native value');
   await page.getByRole('button', { name: 'List saved paths' }).click();
-  await expect(page.getByText(/Geometry overlay requires a typed/)).toBeVisible();
+  await expect(page.getByText(/Select a path to overlay its saved curves/)).toBeVisible();
   await page.locator('[data-layer-index="1"]').click();
   await expect(page.getByRole('combobox', { name: 'Mask view', exact: true })).toBeEnabled();
   await page.getByRole('combobox', { name: 'Mask view', exact: true }).selectOption('overlay');
@@ -209,7 +209,7 @@ test('exports display RGB8 current render, saved layer/mask, viewport, diagnosti
         );
         const { inflateSync } = await import('node:zlib');
         const chunks: Buffer[] = [];
-        for (let offset = 8; offset < bytes.length;) {
+        for (let offset = 8; offset < bytes.length; ) {
           const length = bytes.readUInt32BE(offset);
           if (bytes.toString('ascii', offset + 4, offset + 8) === 'IDAT') {
             chunks.push(bytes.subarray(offset + 8, offset + 8 + length));

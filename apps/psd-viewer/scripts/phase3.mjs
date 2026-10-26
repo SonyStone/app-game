@@ -70,7 +70,7 @@ for (let run = 1; run <= runs; run++) {
         }
       };
     });
-    await page.goto(`${process.env.PSD_BENCH_URL}/?workers=${process.env.PSD_BENCH_WORKERS ?? 1}&telemetry=1`);
+    await page.goto(`${process.env.PSD_BENCH_URL}/?current=1&workers=${process.env.PSD_BENCH_WORKERS ?? 1}&telemetry=1`);
     const stage = page.locator('[data-busy]');
     const settle = async () => {
       await page.waitForFunction(

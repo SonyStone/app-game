@@ -29,7 +29,7 @@ it('cancels a source read immediately and ignores its late completion after a re
       expect(session.opening()).toBe(false);
     });
     expect(open).toHaveBeenCalledTimes(1);
-    expect(open.mock.calls[0]?.[0].byteLength).toBe(26);
+    expect(open.mock.calls[0]?.[0]).toMatchObject({ byteLength: 26 });
     expect(session.source()?.name).toBe('next.psd');
     expect(session.opened()).toMatchObject({ ok: false, error: { message: 'next result' } });
   } finally {

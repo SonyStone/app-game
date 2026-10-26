@@ -37,6 +37,9 @@ export function nativeSample(
   x: number,
   y: number
 ): number | undefined {
+  const origin = channels as PsdSavedProcessChannels & { left?: number; top?: number };
+  x -= origin.left ?? 0;
+  y -= origin.top ?? 0;
   const plane = channels.planes[planeIndex];
   if (!plane || x < 0 || y < 0 || x >= channels.width || y >= channels.height) {
     return undefined;

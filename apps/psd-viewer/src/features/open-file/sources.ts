@@ -3,7 +3,11 @@ import type { PsdSource } from '../document';
 
 /** A chosen or dropped file as a document source. */
 export function fileSource(file: File): PsdSource {
-  return { name: file.name, read: () => file.arrayBuffer() };
+  return {
+    name: file.name,
+    read: async () => file,
+    mode: new URLSearchParams(location.search).get('current') === '1' ? 'strict' : undefined
+  };
 }
 
 /** A document fetched from `url`, such as a bundled example, opened with `settings`. */

@@ -618,7 +618,7 @@ it('exposes bounded saved channels and typed saved paths without changing render
   const before = value(await client.render(opened.document, settings, []));
   const channels = value(await client.channels(opened.document));
   expect(channels.planes.length).toBeGreaterThanOrEqual(3);
-  expect(channels.width).toBe(opened.info.width);
+  expect(channels.width).toBe(Math.min(256, opened.info.width));
   expect(channels.planes[0]!.bytes.length).toBeGreaterThan(0);
   expect(Array.isArray(value(await client.paths(opened.document)))).toBe(true);
   const after = value(await client.render(opened.document, settings, []));
@@ -638,7 +638,7 @@ it('downloads the byte-identical original after transient visibility and state r
   client.dispose();
 });
 
-it('refuses oversized layer previews before decoding even on an admitted small canvas', async () => {
+it('reads a bounded layer window without whole-layer decoding even for oversized source bounds', async () => {
   const { client } = connect();
   const opened = value(await client.open(await example('adjustment-stack.psd')));
   const saved = value(await client.layer(opened.document, 0)).detail;
@@ -650,8 +650,8 @@ it('refuses oversized layer previews before decoding even on an admitted small c
   const pixels = vi.spyOn(codec.PsdDocumentHandle.prototype, 'layerPixels');
   try {
     expect(value(await client.layer(opened.document, 0)).pixels).toMatchObject({
-      ok: false,
-      error: { kind: 'unsupported', message: expect.stringContaining('too large') }
+      ok: true,
+      value: { width: Math.min(256, opened.info.width), height: Math.min(256, opened.info.height) }
     });
     expect(pixels).not.toHaveBeenCalled();
   } finally {

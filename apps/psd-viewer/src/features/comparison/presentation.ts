@@ -10,6 +10,8 @@ export function presentationSource(options: {
   blinkSaved: boolean;
   initial: 'saved' | 'chosen' | undefined;
   savedWindow: boolean;
+  /** The saved snapshot is the selected bounded view, rather than a temporary opening preview. */
+  savedSnapshot?: boolean;
   hasRender: boolean;
   pending: boolean;
 }) {
@@ -20,6 +22,10 @@ export function presentationSource(options: {
   const overlay = options.maskOverlay ? ', with selected saved mask overlay' : '';
   if (options.view === 'photoshop' || (options.view === 'blink' && options.blinkSaved)) {
     return `Photoshop's saved merged composite, which may be stale${overlay}`;
+  }
+
+  if (options.savedSnapshot && options.savedWindow) {
+    return `saved composite, possibly stale; original matte retained; settings and visibility do not change these pixels${overlay}`;
   }
 
   if (options.initial === 'saved' || options.savedWindow) {

@@ -11,7 +11,7 @@ const recoveryRefusal = `${corpus}/Nintendo_Super_Famicom__Nintendo_Super_Famico
 /** Observes real uploads and worker requests without changing their scheduling. */
 async function observe(page: import('@playwright/test').Page) {
   await page.addInitScript(() => {
-    new PerformanceObserver(list => {
+    new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         if (entry.name === 'psd:upload') {
           performance.mark('test:upload', { startTime: entry.startTime });
@@ -73,7 +73,7 @@ test('cancel and restart respond within 100ms while a large composite is running
   await observe(page);
   await page.goto('/');
   await page.locator('input[accept=".psd,.psb"]').setInputFiles(many);
-  await page.waitForFunction(() => performance.getEntriesByName('test:request:detectBlending').length > 0);
+  await page.waitForFunction(() => performance.getEntriesByName('test:request:renderWindow').length > 0);
   const canceled = await page.evaluate(async () => {
     const start = performance.now();
     const button = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Cancel')!;

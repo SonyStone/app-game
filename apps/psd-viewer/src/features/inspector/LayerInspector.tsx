@@ -94,6 +94,7 @@ function PixelPreview(props: { pixels: PsdLayerPixels }) {
   return (
     <section class={styles.section} aria-label="Layer pixels">
       <h3>Pixels</h3>
+      <p>Bounded saved layer and mask window. Density, feather and effects are not applied.</p>
       <div class={styles.previews}>
         <Show when={props.pixels.width && props.pixels.height} fallback={<span class={styles.muted}>No pixels</span>}>
           <figure>

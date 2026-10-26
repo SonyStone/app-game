@@ -11,6 +11,9 @@ import { ExportPanel } from './features/export/ExportPanel';
 import { createFonts, FontsPanel, TextSupportSection } from './features/fonts';
 import { GpuViewport } from './features/gpu-viewport/GpuViewport';
 import type { DisplayImage } from './features/gpu-viewport/displayTiles';
+import { NativeInspection } from './features/inspection/NativeInspection';
+import { PathOverlay } from './features/inspection/PathOverlay';
+import { inspectionRect } from './features/psd-worker/nativePixels';
 import { InspectionPanel } from './features/inspection/InspectionPanel';
 import { admittedMask, maskImage } from './features/inspection/pixels';
 import { DocumentInspector, LayerInspector } from './features/inspector';
@@ -66,10 +69,32 @@ export function App() {
   const { choice: stateChoice, choose: chooseState, withState } = createStateChoice(source);
   const document = () => valueOf(opened());
   const viewport = createViewport(() => document()?.info, source);
-  const windowed = () => Boolean(document() && requiresWindowedRendering(document()!.info));
+  const windowed = () =>
+    Boolean(document() && requiresWindowedRendering((valueOf(plannedOpened()) ?? document())!.info));
   const renderSettings = fonts.withFonts(withState(settings));
-  const wholeRender = createPsdRender(client, () => (blending.settled() ? opened() : undefined), renderSettings, pairs);
-  const windows = createWindowedRender(client, opened, renderSettings, pairs, viewport);
+  const capability = createMemo(() => {
+    const current = document();
+    return current && !current.sourceBacked
+      ? client.capability(current.document, renderSettings(), pairs())
+      : undefined;
+  });
+  const plannedOpened = createMemo(() => {
+    const current = opened();
+    const plan = capability();
+    return current?.ok && plan?.ok && current.value.info.windowed !== plan.value.windowed
+      ? {
+          ok: true as const,
+          value: { ...current.value, info: { ...current.value.info, windowed: plan.value.windowed } }
+        }
+      : current;
+  });
+  const wholeRender = createPsdRender(
+    client,
+    () => (blending.settled() ? plannedOpened() : undefined),
+    renderSettings,
+    pairs
+  );
+  const windows = createWindowedRender(client, plannedOpened, renderSettings, pairs, viewport);
   const render = () => (windowed() ? windows.render() : wholeRender());
   const renderWindow = () => valueOf(render())?.window;
   const { view, setView, merged, difference, blinkSaved, wipe, setWipe } = createComparison(
@@ -86,11 +111,18 @@ export function App() {
   const selectedBounds = () =>
     selected() === undefined ? undefined : findLayer(document()?.layers ?? [], selected()!)?.bounds;
 
+  const [layerWindow, setLayerWindow] = createSignal<ReturnType<typeof inspectionRect> | undefined>(() => {
+    selected();
+    source();
+    return undefined;
+  });
   const [tab, setTab] = createSignal<'layer' | 'document'>('document');
   const layer = createMemo(() => {
     const document = opened();
     const index = selected();
-    return document?.ok && index !== undefined ? client.layer(document.value.document, index) : undefined;
+    return document?.ok && index !== undefined
+      ? client.layer(document.value.document, index, layerWindow())
+      : undefined;
   });
   const selectLayer = (index: number) => {
     setSelected(index);
@@ -112,12 +144,39 @@ export function App() {
     source();
     return undefined;
   });
+  const [channelPoint, setChannelPoint] = createSignal<{ x: number; y: number }>();
   const channels = createMemo(() =>
-    document() && channelDocument() === document()!.document ? client.channels(document()!.document) : undefined
+    document() && channelDocument() === document()!.document
+      ? client.channels(document()!.document, inspectionRect(document()!.info, channelPoint()))
+      : undefined
   );
   const paths = createMemo(() =>
     document() && pathDocument() === document()!.document ? client.paths(document()!.document) : undefined
   );
+  const [selectedPath, setSelectedPath] = createSignal<number | undefined>(() => {
+    source();
+    return undefined;
+  });
+  const path = () => {
+    const value = valueOf(paths())?.[selectedPath() ?? -1];
+    return value?.outcome === 'geometry' ? value : undefined;
+  };
+  const [nativePoint, setNativePoint] = createSignal<{ x: number; y: number } | undefined>(() => {
+    source();
+    return undefined;
+  });
+  const native = createMemo(() => {
+    const current = document();
+    const point = nativePoint();
+    return current && point
+      ? client.inspect(
+          current.document,
+          { left: point.x, top: point.y, width: 1, height: 1 },
+          renderSettings(),
+          pairs()
+        )
+      : undefined;
+  });
   const [maskMode, setMaskMode] = createSignal<'off' | 'overlay' | 'only'>(() => {
     selected();
     source();
@@ -174,6 +233,7 @@ export function App() {
       blinkSaved: blinkSaved(),
       initial: !latest(render) ? initial.preview()?.source : undefined,
       savedWindow: renderWindow()?.source === 'savedComposite',
+      savedSnapshot: document()?.sourceBacked,
       hasRender: Boolean(latest(render)?.ok),
       pending: isPending(wholeRender) || (view() === 'difference' && isPending(difference))
     });
@@ -474,6 +534,7 @@ export function App() {
                   />
                 )}
               </Show>
+              <Show when={path()}>{(saved) => <PathOverlay path={saved()} view={viewport.view()} />}</Show>
               <Show when={revealed() && selectedBounds()}>
                 {(bounds) => <BoundsOverlay bounds={bounds()} view={viewport.view()} />}
               </Show>
@@ -531,13 +592,48 @@ export function App() {
                   </Show>
                   <Show when={windowed()}>
                     <p role="note">
-                      Windowed layer view. Large canvases use the strict reader and your blending preferences. Photoshop
-                      recovery, automatic blending detection and whole-image comparison are unavailable at this size.
+                      Windowed layer view. Your blending preferences apply. Automatic blending detection and whole-image
+                      comparison are disabled for this view.
                     </p>
                   </Show>
+                  <Show when={current().sourceBacked}>
+                    <p role="note">
+                      Source-backed saved view. May be stale; settings and visibility do not alter saved pixels.{' '}
+                      {current().sourceLayerFailure?.message}
+                    </p>
+                    <button
+                      onClick={() => {
+                        const current = source();
+                        if (current) {
+                          open({ ...current, mode: 'strict' });
+                        }
+                      }}
+                    >
+                      Render current layers
+                    </button>
+                  </Show>
+                  <details aria-label="Region capability diagnostics">
+                    <summary>Region capability and admission</summary>
+                    <pre style={{ 'white-space': 'pre-wrap' }}>
+                      {JSON.stringify(
+                        capability() ??
+                          current().capability ?? {
+                            sourceBacked: current().sourceBacked,
+                            layerRefusal: current().sourceLayerFailure
+                          },
+                        (_, value) => (typeof value === 'bigint' ? value.toString() : value),
+                        2
+                      )}
+                    </pre>
+                    <p>
+                      Storage plan only. The caller rounds required live storage to 64 MiB above a 512 MiB baseline, up
+                      to 2 GiB. Allocation cap unchanged. Source sessions read bounded host file slices.
+                    </p>
+                  </details>
                   <StatusArea
                     render={render()}
                     windowed={windowed()}
+                    sourceBacked={current().sourceBacked}
                     layerNotes={layerNotes()}
                     documentNotes={current().info.notes}
                     onSelect={selectLayer}
@@ -648,6 +744,9 @@ export function App() {
                   source: source()?.name,
                   originalUnchanged: true,
                   info: document()?.info,
+                  capability: capability() ?? document()?.capability,
+                  sourceBacked: document()?.sourceBacked,
+                  sourceLayerFailure: document()?.sourceLayerFailure,
                   opening: document()?.opening,
                   state: stateChoice(),
                   renderSettings: renderSettings(),
@@ -676,14 +775,28 @@ export function App() {
                   }
                 })}
               />
+              <NativeInspection
+                result={native()}
+                onInspect={() => {
+                  const p = point();
+                  const size = document()?.info;
+                  if (p && size && p.x >= 0 && p.y >= 0 && p.x < size.width && p.y < size.height) {
+                    setNativePoint({ x: p.x, y: p.y });
+                  }
+                }}
+              />
               <InspectionPanel
                 image={inspectionImage()}
                 point={point()}
                 channels={channels()}
                 paths={paths()}
-                onChannels={() => setChannelDocument(document()!.document)}
+                onChannels={() => {
+                  setChannelPoint(point());
+                  setChannelDocument(document()!.document);
+                }}
                 onPaths={() => setPathDocument(document()!.document)}
-                onLayer={selectLayer}
+                selectedPath={selectedPath()}
+                onPath={setSelectedPath}
                 maskMode={maskMode()}
                 onMaskMode={setMaskMode}
                 hasMask={Boolean(mask())}
@@ -717,6 +830,17 @@ export function App() {
                             Saved-record properties and pixels. Comp/frame transforms and transient visibility do not
                             change this inspection.
                           </p>
+                          <button
+                            disabled={!point()}
+                            onClick={() => {
+                              const current = document();
+                              if (current) {
+                                setLayerWindow(inspectionRect(current.info, point()));
+                              }
+                            }}
+                          >
+                            Read layer window at pointer
+                          </button>
                           <LayerInspector contents={contents()} />
                           <Show when={layerTextSupport()}>
                             {(support) => <TextSupportSection support={support()} />}
@@ -781,7 +905,9 @@ export function App() {
     }
 
     if (current.value.window?.source === 'savedComposite') {
-      return 'Temporary saved preview, rendering fresh layers…';
+      return document()?.sourceBacked
+        ? 'Source-backed saved composite, may be stale'
+        : 'Temporary saved preview, rendering fresh layers…';
     }
 
     const approximate = current.value.approximations.length ? ', approximated' : '';

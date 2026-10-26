@@ -70,6 +70,14 @@ export function ExportPanel(props: {
         PNG is display RGB8. Current state: {props.state}. PSD bytes stay unchanged. {props.fidelity}
       </p>
       <p>Viewport source: {props.viewportSource}. Display RGB8.</p>
+      <Show when={props.layer}>
+        {(layer) => (
+          <p>
+            Layer PNG uses the inspected saved window: {layer().width} × {layer().height} at {layer().left},{' '}
+            {layer().top}. Masks use their own bounded plane window.
+          </p>
+        )}
+      </Show>
       <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '4px' }}>
         <button
           disabled={working() || props.busy || !props.shown}
@@ -92,7 +100,14 @@ export function ExportPanel(props: {
         </button>
         <button
           disabled={working() || props.busy || !props.layer?.width || !props.layer?.height}
-          onClick={() => void run(() => png(props.layer!, `saved-layer-${props.layerName}`))}
+          onClick={() =>
+            void run(() =>
+              png(
+                props.layer!,
+                `saved-layer-${props.layerName}-window-${props.layer!.left}-${props.layer!.top}-${props.layer!.width}x${props.layer!.height}`
+              )
+            )
+          }
         >
           Export selected layer PNG
         </button>
@@ -106,7 +121,16 @@ export function ExportPanel(props: {
           disabled={working()}
           onClick={() =>
             download(
-              new Blob([JSON.stringify(props.report(), null, 2)], { type: 'application/json' }),
+              new Blob(
+                [
+                  JSON.stringify(
+                    props.report(),
+                    (_, value) => (typeof value === 'bigint' ? value.toString() : value),
+                    2
+                  )
+                ],
+                { type: 'application/json' }
+              ),
               `${props.name}-diagnostics.json`
             )
           }

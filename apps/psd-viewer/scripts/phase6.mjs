@@ -79,7 +79,7 @@ for (let run = 1; run <= Number(process.env.PSD_BENCH_RUNS ?? 3); run++) {
           }
         };
       });
-      await page.goto(`${process.env.PSD_BENCH_URL}/?telemetry=1&workers=${workers}`);
+      await page.goto(`${process.env.PSD_BENCH_URL}/?current=1&telemetry=1&workers=${workers}`);
       const settle = async () => {
         await page.waitForFunction(() => document.querySelector('[data-busy]')?.dataset.busy === 'false' && document.querySelector('canvas'), {}, { timeout: 120000 });
         await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));

@@ -10,13 +10,13 @@ import { viewerPerformance } from '../telemetry/performance';
  */
 export type PsdSource = {
   name: string;
-  read: () => Promise<ArrayBuffer>;
+  read: () => Promise<ArrayBuffer | Blob>;
   /** Settings to apply with the document, such as the Color Settings an example was saved under. */
   settings?: PsdRenderSettings;
   /** Answers to the prompts Photoshop shows while opening the file; none until a prompt was shown. */
   answers?: PsdOpenAnswers;
-  /** Strict reading skips Photoshop recovery and repair; saved pixels may still be available. */
-  mode?: 'strict';
+  /** Strict skips recovery; source uses only host-backed saved pixels and original channel windows. */
+  mode?: 'strict' | 'source';
 };
 
 /** Owns opening, cancellation and retry. Late reads/replies never republish an abandoned document. */
@@ -109,10 +109,10 @@ async function readAndOpen(
   signal: AbortSignal
 ): Promise<PsdResultOf<OpenedPsd>> {
   const reading = performance.now();
-  let bytes: ArrayBuffer;
+  let bytes: ArrayBuffer | Blob;
   try {
     bytes = await source.read();
-    viewerPerformance.record('source.read', reading, bytes.byteLength);
+    viewerPerformance.record('source.read', reading, bytes instanceof Blob ? bytes.size : bytes.byteLength);
   } catch (error) {
     return { ok: false, error: { kind: 'invalid', message: `${source.name} could not be read: ${String(error)}` } };
   }

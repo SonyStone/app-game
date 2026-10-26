@@ -59,9 +59,9 @@ export function makePsdWorkerPool(
     const main = primary.memory();
     const spare = secondary?.client.memory();
     const actual = main.wasmBytes + main.sourceBytes + (spare?.wasmBytes ?? 0) + (spare?.sourceBytes ?? 0);
-    const reserved = displayAndHostBytes + (secondary || preparing
-      ? 2 * (workerBytes + sourceBytes)
-      : Math.max(workerBytes, main.wasmBytes) + sourceBytes);
+    const reserved =
+      displayAndHostBytes +
+      (secondary || preparing ? 2 * (workerBytes + sourceBytes) : Math.max(workerBytes, main.wasmBytes) + sourceBytes);
     viewerPerformance.record('workers.actual.bytes', performance.now(), actual);
     viewerPerformance.record('workers.accounted.bytes', performance.now(), reserved);
     viewerPerformance.record('workers.budget.bytes', performance.now(), budgetBytes);
@@ -71,12 +71,22 @@ export function makePsdWorkerPool(
 
   function eligible(settings: PsdRenderSettings) {
     return (
-      workers === 2 && (options.parallelAllowed?.() ?? true) && !disabled && !hasFonts &&
-      !!opened && requiresWindowedRendering(opened.info) &&
-      opened.info.depth === 8 && [1, 3].includes(opened.info.mode) &&
-      opened.info.layerRecords <= 4096 && metadataBytes <= 8 * mib &&
-      !settings.typeLayers && !settings.vectorPaths && !settings.smartObjects &&
-      primary.memory().wasmBytes > 0 && primary.memory().wasmBytes <= workerBytes &&
+      workers === 2 &&
+      (options.parallelAllowed?.() ?? true) &&
+      !disabled &&
+      !hasFonts &&
+      !!opened &&
+      !opened.sourceBacked &&
+      requiresWindowedRendering(opened.info) &&
+      opened.info.depth === 8 &&
+      [1, 3].includes(opened.info.mode) &&
+      opened.info.layerRecords <= 4096 &&
+      metadataBytes <= 8 * mib &&
+      !settings.typeLayers &&
+      !settings.vectorPaths &&
+      !settings.smartObjects &&
+      primary.memory().wasmBytes > 0 &&
+      primary.memory().wasmBytes <= workerBytes &&
       2 * (workerBytes + sourceBytes) + displayAndHostBytes <= budgetBytes
     );
   }
@@ -87,7 +97,12 @@ export function makePsdWorkerPool(
     visibility: [number, boolean][],
     independent: number
   ): Promise<1 | 2> {
-    if (document !== opened?.document || independent < 2 || !eligible(settings) || verified !== key(settings, visibility)) {
+    if (
+      document !== opened?.document ||
+      independent < 2 ||
+      !eligible(settings) ||
+      verified !== key(settings, visibility)
+    ) {
       if (!eligible(settings)) {
         stop();
       }
@@ -185,13 +200,20 @@ export function makePsdWorkerPool(
     const session = documentEpoch;
     try {
       let result = await (spare ? spare.client.renderWindow : renderPrimary)(
-        spare?.document ?? document, settings, visibility, window, spare ? nativeSignal : signal,
+        spare?.document ?? document,
+        settings,
+        visibility,
+        window,
+        spare ? nativeSignal : signal,
         parallel ? workerBytes : undefined
       );
       if (session !== documentEpoch) {
         return { ok: false, error: { kind: 'superseded', message: 'Worker session replaced' } };
       }
-      if (!account() || (parallel && (!result.ok || result.value.images.some((image) => image.strategy !== 'window')))) {
+      if (
+        !account() ||
+        (parallel && (!result.ok || result.value.images.some((image) => image.strategy !== 'window')))
+      ) {
         disabled = true;
         stop();
         // A bounded-operation refusal is retried serially under the original one-worker policy.
@@ -246,7 +268,7 @@ export function makePsdWorkerPool(
       serialMillisecondsPerTile = undefined;
       serialInputs.length = 0;
       parallelInputs.length = 0;
-      sourceBytes = args[0].byteLength;
+      sourceBytes = args[0] instanceof Blob ? args[0].size : args[0].byteLength;
       const current = documentEpoch;
       const result = await primary.open(...args);
       if (current === documentEpoch && result.ok) {
@@ -254,7 +276,8 @@ export function makePsdWorkerPool(
         // Reserve eight times the UTF-16 JSON payload for both object trees and transient open replies.
         // A metadata-heavy document stays serial rather than multiplying an unbounded JS snapshot.
         try {
-          metadataBytes = JSON.stringify(opened).length * 2;
+          metadataBytes =
+            JSON.stringify(opened, (_, value) => (typeof value === 'bigint' ? value.toString() : value)).length * 2;
         } catch {
           metadataBytes = Infinity;
         }
@@ -265,7 +288,13 @@ export function makePsdWorkerPool(
     renderWindow,
     prepareWindows,
     /** Stops parallel work when a completed cold batch fails measured throughput. Canceled/cache-only batches abstain. */
-    reportWindowBatch(batch: { workers: number; tiles: number; populated: number; milliseconds: number; requestMilliseconds: number }) {
+    reportWindowBatch(batch: {
+      workers: number;
+      tiles: number;
+      populated: number;
+      milliseconds: number;
+      requestMilliseconds: number;
+    }) {
       if (batch.populated < 9 || batch.milliseconds <= 0) {
         return;
       }
@@ -273,9 +302,8 @@ export function makePsdWorkerPool(
         serialMillisecondsPerTile = batch.milliseconds / batch.tiles;
         return;
       }
-      const serial = serialMillisecondsPerTile === undefined
-        ? batch.requestMilliseconds
-        : serialMillisecondsPerTile * batch.tiles;
+      const serial =
+        serialMillisecondsPerTile === undefined ? batch.requestMilliseconds : serialMillisecondsPerTile * batch.tiles;
       const speedup = serial / batch.milliseconds;
       viewerPerformance.record('workers.batch.speedup', performance.now(), speedup);
       if (speedup < 1.3) {
