@@ -4,7 +4,7 @@ import { aimAngle } from './aim';
 import type { Tank } from './bodies';
 import { createCamera, screenToWorld, worldToScreen, zoomCamera } from './camera';
 import type { Aim } from './input';
-import { createLookAhead } from './lookahead';
+import { createLookAhead, type Bounds } from './lookahead';
 
 type Point = { x: number; y: number };
 
@@ -173,6 +173,43 @@ describe('the look-ahead camera', () => {
     expect(Math.max(Math.abs(goal.x - center.x) / (screen.width / 2), Math.abs(goal.y - center.y) / (screen.height / 2))).toBeCloseTo(0.3, 3);
   });
 
+  it('with slack, shows no more than a strip of empty ground beyond the map, and keeps the tank on the screen', () => {
+    const bounds = { minX: -1300, minY: -460, maxX: 1300, maxY: 460 };
+    const scene = createScene({ x: -1250, y: 0 }, { slack: 0.3, bounds, rotation: 0 });
+    // Aiming back at the map's edge, which a rigid view would lead past it.
+    scene.sweep(center, { x: 100, y: 450 }, 6);
+
+    for (let frame = 0; frame < 120; frame++) {
+      scene.frame();
+    }
+
+    const corner = screenToWorld(scene.camera, { x: 0, y: 0 }, screen);
+    expect(corner.x).toBeGreaterThanOrEqual(bounds.minX - 40 - 1e-6);
+    const tank = worldToScreen(scene.camera, scene.pivot(), screen);
+    expect(tank.x).toBeGreaterThanOrEqual(110 - 1e-6);
+  });
+
+  it("with slack, keeps the gun's aim through the Sniper's scope zooming about the tank", () => {
+    const scene = createScene({ x: -200, y: 80 }, { slack: 0.3 });
+    const scope = createScope();
+    scene.sweep(center, { x: 1290, y: 300 }, 5);
+
+    // The lead eases out first, pushing the view, which a still cursor does not keep the aim through.
+    for (let frame = 0; frame < 60; frame++) {
+      scene.frame();
+    }
+
+    const held = scene.frame();
+    let drift = 0;
+
+    for (let frame = 0; frame < 240; frame++) {
+      const now = scene.frame((camera) => scope.step(camera, screen, worldToScreen(camera, scene.pivot(), screen), frame < 150, FRAME));
+      drift = Math.max(drift, Math.abs(angleBetween(now.angle, held.angle)));
+    }
+
+    expect((drift * 180) / Math.PI).toBeLessThan(0.2);
+  });
+
   it('leads along a stick’s direction, which the camera never turns', () => {
     const scene = createScene({ x: 10, y: -30 });
     const stick: Aim = { kind: 'direction', angle: 2.2 };
@@ -222,11 +259,14 @@ describe('the look-ahead camera', () => {
  * for the cursor before aiming, the gun aims at the ground under the cursor, then the view eases
  * with the frame's time. The hull turns about its center; the gun turns at `MOUNT` off it.
  */
-function createScene(start: Point, options: { share?: number; size?: { width: number; height: number }; slack?: number } = {}) {
+function createScene(
+  start: Point,
+  options: { share?: number; size?: { width: number; height: number }; slack?: number; bounds?: Bounds; rotation?: number } = {}
+) {
   const size = options.size ?? screen;
   const share = options.share ?? SHARE;
   const slack = options.slack ?? 0;
-  const camera = { ...createCamera(start), zoom: 1.6, rotation: 0.3 };
+  const camera = { ...createCamera(start), zoom: 1.6, rotation: options.rotation ?? 0.3 };
   const lookAhead = createLookAhead();
   const hull = { ...start, rotation: 0 };
   let cursor: Aim = { kind: 'point', x: size.width / 2, y: size.height / 2 };
@@ -246,12 +286,12 @@ function createScene(start: Point, options: { share?: number; size?: { width: nu
      */
     frame(between?: (view: typeof camera) => void, aim?: Aim) {
       cursor = aim ?? cursor;
-      lookAhead.place(camera, size, pivot(), cursor, { share, dt: 0, slack });
+      lookAhead.place(camera, size, pivot(), cursor, { share, dt: 0, slack, bounds: options.bounds });
       const from = pivot();
       const angle = aimAngle(undefined as unknown as Tank, cursor, camera, size, from)!;
       const aimed = cursor.kind === 'point' ? screenToWorld(camera, cursor, size) : from;
       between?.(camera);
-      lookAhead.place(camera, size, pivot(), cursor, { share, dt: FRAME, slack });
+      lookAhead.place(camera, size, pivot(), cursor, { share, dt: FRAME, slack, bounds: options.bounds });
       return { angle, aimed, pivot: from };
     },
 

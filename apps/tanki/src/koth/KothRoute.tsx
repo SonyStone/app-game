@@ -286,6 +286,12 @@ function KothScene(props: {
   const input = makeArenaInput(canvas);
   const camera = createCamera(match.seat.tank?.hull.translation() ?? { x: 0, y: 0 });
   const lookAhead = createLookAhead();
+  const mapBounds = {
+    minX: -match.map.halfWidth,
+    minY: -match.map.halfHeight,
+    maxX: match.map.halfWidth,
+    maxY: match.map.halfHeight
+  };
   let lastTime: number | undefined;
   let pendingStep = 0;
   let seenRestarts = untrack(() => props.restarts);
@@ -372,7 +378,7 @@ function KothScene(props: {
 
     // The view goes onto the tank as it stands for the cursor as it is, so the gun aims at the ground the frame shows under the cursor.
     if (pivot) {
-      lookAhead.place(camera, screen, pivot, controls.aim, { share: pace.lead, dt: 0, slack: slackOf(pace) });
+      lookAhead.place(camera, screen, pivot, controls.aim, { share: pace.lead, dt: 0, slack: slackOf(pace), bounds: mapBounds });
     }
 
     const aim = player && pivot ? aimAngle(player, controls.aim, camera, screen, pivot) : undefined;
@@ -410,10 +416,10 @@ function KothScene(props: {
   /**
    * Leads the player's tank toward the aim (see `createLookAhead`), follows a watched tank, or
    * frames the whole map while watching. While the player's casemate gun charges a shot, the view
-   * zooms out, as a sniper's scope shows more (see `createScope`). A view with slack zooms about
-   * the cursor and gives the tank the scope's wider box, so the ground under a still cursor stays
-   * put; a rigid view zooms about the tank, which the lead keeps where it is on the screen, and the
-   * ground under a still cursor slides out along the gun's line. Either way the gun keeps its aim.
+   * zooms out, as a sniper's scope shows more (see `createScope`), about the tank, which keeps
+   * its place on the screen: the ground under a still cursor slides out along the gun's line, and
+   * the gun keeps its aim. Zooming about the cursor instead threw the tank toward the cursor and
+   * showed the empty ground behind it. A view with slack gives the tank the scope's wider box.
    */
   function placeCamera(screen: { width: number; height: number }, dt: number, aim: Aim | undefined) {
     const followed = props.watching ? (watched === undefined ? undefined : match.members[watched]) : match.seat;
@@ -459,9 +465,8 @@ function KothScene(props: {
       return;
     }
 
-    const anchor = props.pace.slack > 0 && aim?.kind === 'point' ? aim : worldToScreen(camera, pivot, screen);
-    scope.step(camera, screen, anchor, scoped, dt);
-    lookAhead.place(camera, screen, pivot, aim, { share: props.pace.lead, dt, slack: slackOf(props.pace) });
+    scope.step(camera, screen, worldToScreen(camera, pivot, screen), scoped, dt);
+    lookAhead.place(camera, screen, pivot, aim, { share: props.pace.lead, dt, slack: slackOf(props.pace), bounds: mapBounds });
   }
 
   /** The view's slack for `pace`, widened while the scope is open; none for a rigid view. */
@@ -529,7 +534,9 @@ function thoughtsOnScreen(
 /**
  * What the bots say on the radio, placed on screen: the player's team's lines, or both teams'
  * while watching. A bubble fades over its last `BUBBLE_FADE` s and a marker over its last
- * `MARKER_FADE` s; a marker off the screen is held `EDGE_INSET` px inside its edge.
+ * `MARKER_FADE` s; a marker off the screen is held `EDGE_INSET` px inside its edge. The arrow runs
+ * from `ARROW_START` px off the speaker's tank to `ARROW_END` px short of the marker, and is left
+ * out when that leaves less than `ARROW_SHORTEST` px.
  */
 function calloutsOnScreen(
   match: KothMatch,
@@ -552,17 +559,18 @@ function calloutsOnScreen(
         y: Math.min(Math.max(marker.y, EDGE_INSET), screen.height - EDGE_INSET)
       };
       const off = marker && held && (held.x !== marker.x || held.y !== marker.y);
+      const bubbleOpacity = Math.min((BUBBLE_TIME - said) / BUBBLE_FADE, 1);
 
       return {
         id: callout.id,
         team: callout.team,
         line: callout.line,
-        seat: callout.seat,
         tankClass: callout.tankClass,
         ally: callout.ally,
         lane: callout.lane,
         seconds: callout.seconds,
-        bubble: speaker && { x: speaker.x, y: speaker.y, opacity: Math.min((BUBBLE_TIME - said) / BUBBLE_FADE, 1) },
+        bubble: speaker && { x: speaker.x, y: speaker.y, opacity: bubbleOpacity },
+        arrow: speaker && held ? arrowBetween(speaker, held, bubbleOpacity) : undefined,
         marker:
           callout.marker && held
             ? {
@@ -579,6 +587,27 @@ function calloutsOnScreen(
 const BUBBLE_FADE = 0.4;
 const MARKER_FADE = 0.8;
 const EDGE_INSET = 28;
+
+/** The radio arrow from the speaker at `from` to the marker at `to`, on screen, cut short at both ends; none if too short. */
+function arrowBetween(from: { x: number; y: number }, to: { x: number; y: number }, opacity: number) {
+  const length = Math.hypot(to.x - from.x, to.y - from.y);
+  const shown = length - ARROW_START - ARROW_END;
+
+  if (shown < ARROW_SHORTEST) {
+    return undefined;
+  }
+
+  const along = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
+  return {
+    from: { x: from.x + along.x * ARROW_START, y: from.y + along.y * ARROW_START },
+    to: { x: to.x - along.x * ARROW_END, y: to.y - along.y * ARROW_END },
+    opacity
+  };
+}
+
+const ARROW_START = 22;
+const ARROW_END = 15;
+const ARROW_SHORTEST = 24;
 
 /** Sizes the canvas's drawing buffer to its CSS size times the device pixel ratio; returns the CSS size. */
 function fitCanvas(canvas: HTMLCanvasElement) {
