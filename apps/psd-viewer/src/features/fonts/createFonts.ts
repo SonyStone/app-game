@@ -22,6 +22,7 @@ export function createFonts(
   const [refusals, setRefusals] = createSignal<FontRefusal[]>([]);
   const [adding, setAdding] = createSignal(false);
   const library = createMemo(() => {
+    opened();
     revision();
     return client.fonts();
   });

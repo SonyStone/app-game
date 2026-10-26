@@ -37,12 +37,18 @@ import {
  */
 export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable[]) => void) {
   const telemetry = makePerformanceRecorder();
+  let wasmMemory: WebAssembly.Memory | undefined;
+  let requestStart = 0;
+  let requestName = '';
   function post(reply: PsdReply, transfer: Transferable[]) {
+    telemetry.record(`request.${requestName}`, requestStart);
     telemetry.record(
       'transfer.bytes',
       performance.now(),
       transfer.reduce<number>((sum, value) => sum + (value instanceof ArrayBuffer ? value.byteLength : 0), 0)
     );
+    telemetry.record('wasm.linear.bytes', performance.now(), wasmMemory?.buffer.byteLength ?? 0);
+    telemetry.record('transfer.postedAt', performance.now(), performance.timeOrigin + performance.now());
     send({ ...reply, performance: telemetry.take() }, transfer);
   }
 
@@ -64,9 +70,9 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       .then(async () => {
         telemetry.enable(request.telemetry ?? false);
         telemetry.record('queue.wait', queued);
-        const started = performance.now();
+        requestStart = performance.now();
+        requestName = request.type;
         await handle(request);
-        telemetry.record(`request.${request.type}`, started);
       })
       .catch((error: unknown) => {
         post({ id: request.id, type: 'failed', error: { kind: 'invalid', message: String(error) } }, []);
@@ -84,11 +90,21 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         header.getUint32(0) === 0x38425053 &&
         requiresWindowedRendering({ width: header.getUint32(18), height: header.getUint32(14) });
       const loading = performance.now();
-      await loadPsdViewer();
+      const codec = await loadPsdViewer();
+      if (request.telemetry) {
+        try {
+          wasmMemory = (await codec.default()).memory;
+        } catch {
+          // Memory diagnostics must not change whether the file can open.
+        }
+      }
       telemetry.record('wasm.load', loading);
       telemetry.record('source.retained.bytes', performance.now(), request.bytes.byteLength);
       const opening = performance.now();
-      const opened = large ? await openPsd(request.bytes) : await openPsdLikePhotoshop(request.bytes, request.answers);
+      const opened =
+        large || request.mode === 'strict'
+          ? await openPsd(request.bytes)
+          : await openPsdLikePhotoshop(request.bytes, request.answers);
       telemetry.record('open', opening);
       if (!opened.ok) {
         post({ id: request.id, type: 'failed', error: opened.error }, []);

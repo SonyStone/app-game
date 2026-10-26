@@ -1,5 +1,5 @@
 import type { PsdRenderSettings } from '@app-game/psd/viewer';
-import { createMemo, createSignal, untrack, type Accessor } from 'solid-js';
+import { createMemo, createSignal, isPending, untrack, type Accessor } from 'solid-js';
 import type { OpenedPsd, PsdClient, PsdResultOf } from '../psd-worker';
 
 /**
@@ -7,7 +7,7 @@ import type { OpenedPsd, PsdClient, PsdResultOf } from '../psd-worker';
  * worker renders it with "Blend RGB Colors Using Gamma 1.0" off and on, and for documents with type layers also with
  * "Blend Text Colors Using Gamma" toggled; the settings whose render matches Photoshop's merged image more closely
  * apply to that document. `settings` are the stored preferences; the returned `settings` are the ones to render with,
- * pending until the detection settles so the document is not first shown another way. A value passed to `choose`
+ * applied after the initial preview has been presented and detection settles. A value passed to `choose`
  * overrides the detection of that setting until another document opens; `undefined` returns to it. Where the detection
  * cannot decide (no merged image, no render, or both settings equally close), the stored preference applies.
  * `detected` names the settings currently taken from the detection.
@@ -19,11 +19,12 @@ export function createBlendingDetection(
   client: PsdClient,
   opened: Accessor<PsdResultOf<OpenedPsd> | undefined>,
   settings: Accessor<PsdRenderSettings>,
-  visibility: Accessor<[number, boolean][]>
+  visibility: Accessor<[number, boolean][]>,
+  ready: Accessor<boolean>
 ) {
   const detection = createMemo(() => {
     const document = opened();
-    return document?.ok
+    return document?.ok && ready()
       ? client.detectBlending(document.value.document, untrack(settings), untrack(visibility))
       : undefined;
   });
@@ -63,7 +64,9 @@ export function createBlendingDetection(
     setChosen((current) => ({ ...current, ...patch }));
   }
 
-  return { settings: effective, detection, detected, choose };
+  const settled = () => ready() && !isPending(detection);
+
+  return { settings: effective, detection, detected, choose, settled };
 }
 
 /** Explicit choices of the detected settings for the open document; an absent field follows the detection. */

@@ -30,35 +30,87 @@ import type {
  * coalesced: one runs at a time, and a render requested while another runs waits as the only queued render, replacing
  * (and resolving as `superseded`) any render queued before it, so quick visibility toggles never pile up work. Other
  * requests go straight to the worker, which answers in arrival order. A crashed worker rejects every pending and later
- * call. `dispose` terminates the worker; pending calls then never settle.
+ * call. With a replacement factory, `restart` settles old calls as superseded and starts a clean worker, replaying
+ * caller-supplied font bytes. `dispose` terminates the worker and releases retained inputs; pending calls never settle.
  */
-export function makePsdClient(worker: PsdWorkerPort) {
+export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWorkerPort) {
   const pending = new Map<number, { resolve: (reply: PsdReply) => void; reject: (error: Error) => void }>();
   let nextId = 0;
+  let epoch = 0;
+  const fontInputs: { fonts: ArrayBuffer[]; sources?: string[] }[] = [];
   let crash: Error | undefined;
   let rendering = false;
   let queued: { request: RenderRequest; settle: (reply: PsdReply) => void; reject: (error: Error) => void } | undefined;
 
-  worker.onmessage = (event) => {
-    const entry = pending.get(event.data.id);
-    if (entry) {
-      pending.delete(event.data.id);
-      entry.resolve(event.data);
+  attach();
+
+  function attach() {
+    worker.onmessage = (event) => {
+      const entry = pending.get(event.data.id);
+      if (entry) {
+        pending.delete(event.data.id);
+        const posted = event.data.performance?.find((sample) => sample.name === 'transfer.postedAt');
+        if (posted?.value !== undefined) {
+          viewerPerformance.record('transfer.delivery', posted.value - performance.timeOrigin);
+        }
+
+        entry.resolve(event.data);
+      }
+    };
+    worker.onerror = (event) => {
+      event.preventDefault?.();
+      fail(new Error(event.message || 'The PSD worker stopped'));
+    };
+    worker.onmessageerror = () => fail(new Error('A PSD worker message could not be read'));
+  }
+
+  /** Replaces a busy worker immediately, settling old calls and restoring supplied session fonts. */
+  function restart() {
+    if (!replacement) {
+      return;
     }
-  };
-  worker.onerror = (event) => {
-    event.preventDefault?.();
-    fail(new Error(event.message || 'The PSD worker stopped'));
-  };
-  worker.onmessageerror = () => fail(new Error('A PSD worker message could not be read'));
+
+    epoch++;
+    viewerPerformance.record('cancellation.pending', performance.now(), pending.size);
+    worker.onmessage = null;
+    worker.onerror = null;
+    worker.onmessageerror = null;
+    worker.terminate();
+    const canceled: PsdReply = {
+      id: 0,
+      type: 'failed',
+      error: { kind: 'superseded', message: 'Document operation canceled' }
+    };
+    for (const entry of pending.values()) {
+      entry.resolve(canceled);
+    }
+
+    pending.clear();
+    queued?.settle(canceled);
+    queued = undefined;
+    rendering = false;
+    crash = undefined;
+    worker = replacement();
+    attach();
+    for (const input of fontInputs) {
+      const replay = input.fonts.map((bytes) => bytes.slice(0));
+      void send({ type: 'addFonts', fonts: replay, sources: input.sources }, replay);
+    }
+
+    viewerPerformance.record('cancellation.workerRestart', performance.now(), 1);
+  }
 
   /**
    * Opens `bytes` as Photoshop does, with `answers` to its prompts; the bytes are transferred to the worker, which
    * closes the document it held before. A prompt Photoshop shows that `answers` leaves unanswered fails as
    * `needsAnswer` with the prompt: open again with its answer.
    */
-  async function open(bytes: ArrayBuffer, answers: PsdOpenAnswers = {}): Promise<PsdResultOf<OpenedPsd>> {
-    const reply = await send({ type: 'open', bytes, answers }, [bytes]);
+  async function open(
+    bytes: ArrayBuffer,
+    answers: PsdOpenAnswers = {},
+    mode?: 'strict'
+  ): Promise<PsdResultOf<OpenedPsd>> {
+    const reply = await send({ type: 'open', bytes, answers, mode }, [bytes]);
     return reply.type === 'opened'
       ? {
           ok: true,
@@ -183,7 +235,18 @@ export function makePsdClient(worker: PsdWorkerPort) {
     fonts: ArrayBuffer[],
     sources?: string[]
   ): Promise<PsdResultOf<{ results: PsdResultOf<SessionFont[]>[]; fonts: SessionFont[] }>> {
+    const retained = { fonts: fonts.map((bytes) => bytes.slice(0)), sources };
     const reply = await send({ type: 'addFonts', fonts, sources }, fonts);
+    if (reply.type === 'fontsAdded') {
+      const accepted = reply.results.flatMap((result, index) => (result.ok ? [index] : []));
+      if (accepted.length) {
+        fontInputs.push({
+          fonts: accepted.map((index) => retained.fonts[index]),
+          sources: retained.sources ? accepted.map((index) => retained.sources![index]) : undefined
+        });
+      }
+    }
+
     return reply.type === 'fontsAdded'
       ? { ok: true, value: { results: reply.results, fonts: reply.fonts } }
       : failure(reply);
@@ -211,8 +274,13 @@ export function makePsdClient(worker: PsdWorkerPort) {
   }
 
   function dispose() {
+    epoch++;
+    worker.onmessage = null;
+    worker.onerror = null;
+    worker.onmessageerror = null;
     worker.terminate();
     pending.clear();
+    fontInputs.length = 0;
     queued = undefined;
   }
 
@@ -221,12 +289,17 @@ export function makePsdClient(worker: PsdWorkerPort) {
       return;
     }
 
+    const generation = epoch;
     const job = queued;
     queued = undefined;
     rendering = true;
     send(job.request)
       .then(job.settle, job.reject)
       .finally(() => {
+        if (generation !== epoch) {
+          return;
+        }
+
         rendering = false;
         startRender();
       });
@@ -238,8 +311,15 @@ export function makePsdClient(worker: PsdWorkerPort) {
     }
 
     const id = ++nextId;
+    const sent = performance.now();
     return new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
+      pending.set(id, {
+        resolve: (reply) => {
+          viewerPerformance.record(`request.latency.${request.type}`, sent);
+          resolve(reply);
+        },
+        reject
+      });
       worker.postMessage({ ...request, id, telemetry: performanceEnabled() } as PsdRequest, transfer);
     });
   }
@@ -267,7 +347,8 @@ export function makePsdClient(worker: PsdWorkerPort) {
     fonts,
     documentFonts,
     textSupport,
-    dispose
+    dispose,
+    restart
   };
 }
 

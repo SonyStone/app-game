@@ -26,7 +26,17 @@ export function StatusArea(props: {
       class={styles.status}
       aria-label="Renderer status"
       data-windowed={windowed() ? 'true' : undefined}
-      data-render-state={failure() ? 'failed' : approximations().length ? 'approximate' : 'exact'}
+      data-render-state={
+        !props.render
+          ? 'unrendered'
+          : failure()
+            ? 'failed'
+            : saved()
+              ? 'preview'
+              : approximations().length
+                ? 'approximate'
+                : 'exact'
+      }
     >
       <Show when={failure()}>
         {(error) => (

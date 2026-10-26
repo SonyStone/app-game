@@ -390,3 +390,16 @@
   gap: 8px;
   color: #ffb3a9;
 }
+
+.previewLabel {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  max-width: 420px;
+  margin: 0;
+  padding: 8px;
+  background: #3a3020;
+  color: #f0d7a4;
+  pointer-events: none;
+  z-index: 2;
+}

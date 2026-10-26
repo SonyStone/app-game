@@ -27,7 +27,7 @@ export function RgbaCanvas(props: { image: PsdImage; label: string; class?: stri
       canvas.getContext('2d')?.putImageData(new ImageData(pixels, image.width, image.height), 0, 0);
       viewerPerformance.record('upload', start, pixels.byteLength);
       viewerPerformance.record('canvas.backing.bytes.estimate', performance.now(), image.width * image.height * 4);
-      viewerPerformance.record('gpu.bytes.estimate', performance.now(), 0);
+      viewerPerformance.record('gpu.explicit.bytes', performance.now(), 0);
       requestAnimationFrame(() => viewerPerformance.record('frame.uploadToFrame', start));
     }
   );
