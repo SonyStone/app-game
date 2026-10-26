@@ -60,6 +60,8 @@ const summarize = async (directory) => {
       gestureFrameP99Ms: percentile([...intervals], 0.99),
       inputToNextFrameP95Ms: percentile(durations('frame.inputToNextFrame', true), 0.95),
       preparationP95Ms: percentile(durations('frame.prepare'), 0.95),
+      uploadPreparationP95Ms: percentile(durations('upload'), 0.95),
+      gpuInitializationMaxMs: percentile(durations('gpu.initialize'), 1),
       preparationMaxMs: percentile(durations('frame.prepare'), 1),
       uploadChunkP95Ms: percentile(durations('upload.texture'), 0.95),
       uploadChunkMaxBytes: percentile(values('upload.texture'), 1),
@@ -102,6 +104,8 @@ const summarize = async (directory) => {
               'gestureFrameP99Ms',
               'inputToNextFrameP95Ms',
               'preparationP95Ms',
+              'uploadPreparationP95Ms',
+              'gpuInitializationMaxMs',
               'gpuTimestampP95Ms',
               'queueCompletionP95Ms'
             ].map((key) => [key, range(key)])
