@@ -23,6 +23,7 @@ export function makePsdWorkerPool(
   let generation = 0;
   let documentEpoch = 0;
   let sourceBytes = 0;
+  let metadataBytes = 0;
   let hasFonts = false;
   let disabled = false;
   let verified: string | undefined;
@@ -65,6 +66,7 @@ export function makePsdWorkerPool(
     return (
       workers === 2 && !disabled && !hasFonts && !!opened && requiresWindowedRendering(opened.info) &&
       opened.info.depth === 8 && [1, 3].includes(opened.info.mode) &&
+      opened.info.layerRecords <= 4096 && metadataBytes <= 8 * mib &&
       !settings.typeLayers && !settings.vectorPaths && !settings.smartObjects &&
       primary.memory().wasmBytes > 0 && primary.memory().wasmBytes <= workerBytes &&
       2 * (workerBytes + sourceBytes) + displayAndHostBytes <= budgetBytes
@@ -138,8 +140,10 @@ export function makePsdWorkerPool(
     while (primaryFlight) {
       await primaryFlight.catch(() => undefined);
     }
+
     const job = primary.renderWindow(...args);
     primaryFlight = job;
+
     try {
       return await job;
     } finally {
@@ -221,6 +225,13 @@ export function makePsdWorkerPool(
       const result = await primary.open(...args);
       if (current === generation && result.ok) {
         opened = result.value;
+        // Reserve eight times the UTF-16 JSON payload for both object trees and transient open replies.
+        // A metadata-heavy document stays serial rather than multiplying an unbounded JS snapshot.
+        try {
+          metadataBytes = JSON.stringify(opened).length * 2;
+        } catch {
+          metadataBytes = Infinity;
+        }
       }
       account();
       return result;
