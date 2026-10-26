@@ -9,9 +9,11 @@ import type {
   PsdLayerPixels,
   PsdOpenAnswers,
   PsdOpening,
+  PsdPathSummary,
   PsdRegionPixels,
   PsdRegionRect,
   PsdRenderSettings,
+  PsdSavedProcessChannels,
   PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
@@ -49,6 +51,8 @@ type PsdRequestBody =
       visibility: [number, boolean][];
       window: WindowRequest;
     }
+  | { id: number; type: 'channels'; document: number }
+  | { id: number; type: 'paths'; document: number }
   | { id: number; type: 'merged'; document: number }
   | { id: number; type: 'difference'; document: number; render: number }
   | {
@@ -85,6 +89,8 @@ type PsdReplyBody =
     }
   | { id: number; type: 'rendered'; render: RenderedPixels }
   | { id: number; type: 'windowRendered'; images: WindowPixels[]; milliseconds: number }
+  | { id: number; type: 'channels'; channels: PsdSavedProcessChannels }
+  | { id: number; type: 'paths'; paths: PsdPathSummary[] }
   | { id: number; type: 'merged'; image: PsdImage }
   | { id: number; type: 'difference'; difference: PsdDifference }
   | { id: number; type: 'blending'; detection: BlendingDetection }

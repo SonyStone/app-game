@@ -31,3 +31,9 @@
   font-size: 11px;
   color: #d9c08f;
 }
+
+.actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}

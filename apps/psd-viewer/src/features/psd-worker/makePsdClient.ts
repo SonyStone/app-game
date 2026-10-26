@@ -8,7 +8,9 @@ import type {
   PsdLayerPixels,
   PsdOpenAnswers,
   PsdOpening,
+  PsdPathSummary,
   PsdRenderSettings,
+  PsdSavedProcessChannels,
   PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
@@ -219,7 +221,19 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
     return reply.type === 'blending' ? { ok: true, value: reply.detection } : failure(reply);
   }
 
-  /** One layer's detail and, where it has any, its own pixels. */
+  /** Reads saved native channel planes on demand, subject to worker admission. */
+  async function channels(document: number): Promise<PsdResultOf<PsdSavedProcessChannels>> {
+    const reply = await send({ type: 'channels', document });
+    return reply.type === 'channels' ? { ok: true, value: reply.channels } : failure(reply);
+  }
+
+  /** Lists typed saved path carriers; never parses descriptors in the UI. */
+  async function paths(document: number): Promise<PsdResultOf<PsdPathSummary[]>> {
+    const reply = await send({ type: 'paths', document });
+    return reply.type === 'paths' ? { ok: true, value: reply.paths } : failure(reply);
+  }
+
+  /** One layer's saved-record detail and admitted RGB8 pixels. */
   async function layer(document: number, index: number): Promise<PsdResultOf<LayerContents>> {
     const reply = await send({ type: 'layer', document, index });
     return reply.type === 'layer'
@@ -343,6 +357,8 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
     difference,
     detectBlending,
     layer,
+    channels,
+    paths,
     addFonts,
     fonts,
     documentFonts,

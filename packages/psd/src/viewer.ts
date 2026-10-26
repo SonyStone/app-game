@@ -2,10 +2,10 @@
 // Photoshop saved, by the viewer module built in photoshop-analysis/psd-wasm with its `viewer` feature. Paint's flat
 // codec (`readPsd`, `writePsd` in ./index) stays in its own, much smaller module.
 import type {
-  PsdFontLibrary as FontLibraryHandle,
-  PsdBudgetOptions as BudgetOptions,
-  PsdBudgetError as BudgetError,
   PsdAllocationError as AllocationError,
+  PsdBudgetError as BudgetError,
+  PsdBudgetOptions as BudgetOptions,
+  PsdFontLibrary as FontLibraryHandle,
   PsdDocumentHandle,
   PsdRegionPixels as RegionPixels,
   PsdRegionRect as RegionRect,
@@ -293,6 +293,8 @@ export type PsdViewerDocument = {
    * next-open rendering errors. Equality applies only to these pixels and does not authorize an edit.
    */
   difference(render: PsdRender): PsdResult<PsdDifference>;
+  /** Lists saved named path resources and vector-mask carriers without interpreting descriptors. Geometry is unavailable in this WASM binding. */
+  paths(): PsdResult<PsdPathSummary[]>;
   /** Everything known about one layer record. */
   layerDetail(index: number): PsdResult<PsdLayerDetail>;
   /** One layer's own pixels and mask channels at 8 bits. */
@@ -394,12 +396,7 @@ export type PsdStates = {
 
 /** Photoshop's "Image Interpolation" preferences. */
 export type PsdInterpolation =
-  | 'nearestNeighbor'
-  | 'bilinear'
-  | 'bicubic'
-  | 'bicubicSmoother'
-  | 'bicubicSharper'
-  | 'bicubicAutomatic';
+  'nearestNeighbor' | 'bilinear' | 'bicubic' | 'bicubicSmoother' | 'bicubicSharper' | 'bicubicAutomatic';
 
 /**
  * Photoshop 26's defaults: gamma 1.0 blending off, text gamma 1.45 on, cached vector and smart-object rasters; exact
@@ -676,6 +673,16 @@ export type PsdDifference = PsdImage & {
   max: number;
   /** Counts of the 32 smallest absolute differences that occur. */
   histogram: { difference: number; samples: number }[];
+};
+
+/** Saved path carrier metadata. Geometry requires a future typed WASM query. */
+export type PsdPathSummary = {
+  name: string;
+  source: 'resource' | 'vectorMask';
+  resourceId?: number;
+  layerIndex?: number;
+  disabled?: boolean;
+  geometry: 'unavailable';
 };
 
 /** A rectangle as Photoshop stores it, bottom and right exclusive. */
@@ -991,8 +998,13 @@ function makeViewerDocument(
     },
     renderColor(settings, color, visibility = [], fonts) {
       return open
-        ? attempt(() =>
-            handle.renderColor({ ...settings, visibility: [...visibility] }, color, libraryOf(fonts)) as PsdColorRender
+        ? attempt(
+            () =>
+              handle.renderColor(
+                { ...settings, visibility: [...visibility] },
+                color,
+                libraryOf(fonts)
+              ) as PsdColorRender
           )
         : closed();
     },
@@ -1048,6 +1060,38 @@ function makeViewerDocument(
       }
 
       return attempt(() => handle.difference(image) as PsdDifference);
+    },
+    paths() {
+      if (!open) {
+        return closed();
+      }
+
+      return attempt(() => {
+        const resources = (handle.info() as PsdInfo).resources
+          .filter((resource) => resource.id >= 2000 && resource.id <= 2997)
+          .map((resource): PsdPathSummary => ({
+            name: resource.name || `Path ${resource.id}`,
+            source: 'resource',
+            resourceId: resource.id,
+            geometry: 'unavailable'
+          }));
+        const masks = (nodes: readonly PsdLayerNode[]): PsdPathSummary[] =>
+          nodes.flatMap((node) => [
+            ...(node.vectorMask
+              ? [
+                  {
+                    name: `${node.name} vector mask`,
+                    source: 'vectorMask' as const,
+                    layerIndex: node.index,
+                    disabled: node.vectorMask.disabled,
+                    geometry: 'unavailable' as const
+                  }
+                ]
+              : []),
+            ...masks(node.children ?? [])
+          ]);
+        return [...resources, ...masks(layers)];
+      });
     },
     layerDetail(index) {
       return open ? attempt(() => handle.layerDetail(index) as PsdLayerDetail) : closed();

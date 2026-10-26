@@ -8,8 +8,13 @@ import { ExamplesMenu } from './features/examples';
 import { createFonts, FontsPanel, TextSupportSection } from './features/fonts';
 import { GpuViewport } from './features/gpu-viewport/GpuViewport';
 import type { DisplayImage } from './features/gpu-viewport/displayTiles';
+import { InspectionPanel } from './features/inspection/InspectionPanel';
+import { admittedMask, maskImage } from './features/inspection/pixels';
 import { DocumentInspector, LayerInspector } from './features/inspector';
 import { collectNotes, createLayerVisibility, LayersPanel, layerVisibility } from './features/layers';
+import { BoundsOverlay } from './features/layers/BoundsOverlay';
+import { contentBounds, findLayer } from './features/layers/layerTree';
+import { Navigator } from './features/navigation/Navigator';
 import { createFileDrop, fileSource, firstPsd, urlSource } from './features/open-file';
 import { OpenFailure } from './features/open-file/OpenFailure';
 import { createOpenPrompt, OpeningReport, OpenPromptDialog } from './features/open-like-photoshop';
@@ -20,6 +25,7 @@ import { ariaState } from './features/shared/format';
 import { createStateChoice, StatesPanel } from './features/states';
 import { StatusArea } from './features/status';
 import { createViewport } from './features/viewport';
+import { RgbaCanvas } from './features/viewport/RgbaCanvas';
 import { createWindowedRender } from './features/viewport/createWindowedRender';
 
 /**
@@ -37,7 +43,7 @@ export function App() {
   const { source, opened, opening, canceled, open, cancel, retry } = createPsdDocument(client);
   const { prompt, answer } = createOpenPrompt(source, opened, open);
   const { settings: stored, update, replace, reset } = createRenderSettings();
-  const { overrides, pairs, setVisible } = createLayerVisibility(source);
+  const { overrides, pairs, setVisible, restoreSaved, solo } = createLayerVisibility(source);
   const initial = createOpeningPreview(client, opened, stored);
   const blending = createBlendingDetection(client, opened, stored, pairs, initial.ready);
   const settings = blending.settings;
@@ -59,6 +65,13 @@ export function App() {
     initial.preview()?.source === 'saved' ? initial.preview()?.image : undefined
   );
 
+  const [revealed, setRevealed] = createSignal(() => {
+    source();
+    return false;
+  });
+  const selectedBounds = () =>
+    selected() === undefined ? undefined : findLayer(document()?.layers ?? [], selected()!)?.bounds;
+
   const [tab, setTab] = createSignal<'layer' | 'document'>('document');
   const layer = createMemo(() => {
     const document = opened();
@@ -76,11 +89,49 @@ export function App() {
     return failure?.kind === 'needsAnswer' ? undefined : failure;
   };
   const layerContents = () => valueOf(layer());
+  const [point, setPoint] = createSignal<{ x: number; y: number }>();
+  const [channelDocument, setChannelDocument] = createSignal<number | undefined>(() => {
+    source();
+    return undefined;
+  });
+  const [pathDocument, setPathDocument] = createSignal<number | undefined>(() => {
+    source();
+    return undefined;
+  });
+  const channels = createMemo(() =>
+    document() && channelDocument() === document()!.document ? client.channels(document()!.document) : undefined
+  );
+  const paths = createMemo(() =>
+    document() && pathDocument() === document()!.document ? client.paths(document()!.document) : undefined
+  );
+  const [maskMode, setMaskMode] = createSignal<'off' | 'overlay' | 'only'>(() => {
+    selected();
+    source();
+    return 'off' as const;
+  });
+  const [maskIndex, setMaskIndex] = createSignal(() => {
+    selected();
+    source();
+    return 0;
+  });
+  const layerPixels = () => layerContents()?.pixels;
+  const masks = () => {
+    const pixels = layerPixels();
+    return pixels?.ok ? pixels.value.masks : [];
+  };
+  const mask = createMemo(() => admittedMask(masks()[maskIndex()], document()?.info));
+  const maskPixels = createMemo(() =>
+    mask() && maskMode() !== 'off' ? maskImage(mask()!, maskMode() === 'overlay') : undefined
+  );
   const documentFonts = () => valueOf(fonts.report());
   const layerTextSupport = () => valueOf(fonts.layerSupport());
   const layerFailure = () => failureOf(layer());
   const differenceValue = () => valueOf(difference());
   const shown = createMemo<DisplayImage | undefined>(() => {
+    if (maskMode() === 'only' && maskPixels()) {
+      return maskPixels();
+    }
+
     const result = view() === 'ours' ? latest(render) : view() === 'photoshop' ? merged() : difference();
     return result?.ok ? result.value : view() === 'ours' && !result ? initial.preview()?.image : undefined;
   });
@@ -180,12 +231,32 @@ export function App() {
           <button type="button" aria-label="Zoom out" onClick={viewport.zoomOut}>
             −
           </button>
-          <output aria-label="Zoom level">{viewport.percent()}%</output>
+          <input
+            aria-label="Zoom percentage"
+            type="number"
+            min="0.002"
+            max="6400"
+            step="10"
+            value={viewport.percent()}
+            style={{ width: '65px' }}
+            onChange={(event) => viewport.setPercent(event.currentTarget.valueAsNumber)}
+          />
+          %
           <button type="button" aria-label="Zoom in" onClick={viewport.zoomIn}>
             +
           </button>
           <button type="button" aria-pressed={ariaState(viewport.isFitted())} onClick={viewport.fit}>
             Fit
+          </button>
+          <button type="button" onClick={() => viewport.fitBounds(contentBounds(document()?.layers ?? []))}>
+            Fit content
+          </button>
+          <button
+            type="button"
+            disabled={selected() === undefined}
+            onClick={() => viewport.fitBounds(selectedBounds())}
+          >
+            Fit selection
           </button>
           <button type="button" onClick={viewport.actualSize}>
             100%
@@ -216,6 +287,17 @@ export function App() {
                   onVisible={setVisible}
                   selected={latest(selected)}
                   onSelect={selectLayer}
+                  onReveal={() => setRevealed(true)}
+                  onFit={() => {
+                    setRevealed(true);
+                    viewport.fitBounds(selectedBounds());
+                  }}
+                  onSolo={() => {
+                    if (selected() !== undefined) {
+                      solo(current().layers, selected()!);
+                    }
+                  }}
+                  onReset={restoreSaved}
                 />
               )}
             </Show>
@@ -224,7 +306,18 @@ export function App() {
             <div
               ref={viewport.setElement}
               class={styles.viewport}
+              tabindex={0}
+              aria-label="Canvas. Arrow keys pan; plus and minus zoom; 0 fits document; 1 shows actual size."
               {...viewport.surface}
+              onPointerMove={(event) => {
+                viewport.surface.onPointerMove(event);
+                const rect = event.currentTarget.getBoundingClientRect();
+                const camera = viewport.view();
+                setPoint({
+                  x: Math.floor((event.clientX - rect.left - camera.x) / camera.scale),
+                  y: Math.floor((event.clientY - rect.top - camera.y) / camera.scale)
+                });
+              }}
               data-view={view()}
               data-camera-scale={viewport.view().scale}
               data-camera-x={viewport.view().x}
@@ -256,6 +349,26 @@ export function App() {
                     }
                   />
                 )}
+              </Show>
+              <Show when={maskMode() === 'overlay' && maskPixels()}>
+                {(image) => (
+                  <RgbaCanvas
+                    image={image()}
+                    label="Saved mask red overlay"
+                    style={{
+                      position: 'absolute',
+                      'pointer-events': 'none',
+                      left: `${viewport.view().x + mask()!.left * viewport.view().scale}px`,
+                      top: `${viewport.view().y + mask()!.top * viewport.view().scale}px`,
+                      width: `${mask()!.width * viewport.view().scale}px`,
+                      height: `${mask()!.height * viewport.view().scale}px`,
+                      'image-rendering': 'pixelated'
+                    }}
+                  />
+                )}
+              </Show>
+              <Show when={revealed() && selectedBounds()}>
+                {(bounds) => <BoundsOverlay bounds={bounds()} view={viewport.view()} />}
               </Show>
               <Show when={initial.preview() && !latest(render)}>
                 <p class={styles.previewLabel} role="note" data-preview={initial.preview()?.source}>
@@ -327,6 +440,17 @@ export function App() {
             </Show>
           </section>
           <aside class={styles.inspector} aria-label="Inspector">
+            <Show when={document()}>
+              {(current) => (
+                <Navigator
+                  image={shown()}
+                  document={current().info}
+                  view={viewport.view()}
+                  size={viewport.size()}
+                  onCenter={viewport.centerOn}
+                />
+              )}
+            </Show>
             <RenderSettingsPanel
               settings={latest(settings)}
               detected={{
@@ -350,7 +474,14 @@ export function App() {
               }}
             />
             <Show when={savedStates()}>
-              {(states) => <StatesPanel states={states()} choice={stateChoice()} onChoose={chooseState} />}
+              {(states) => (
+                <StatesPanel
+                  states={states()}
+                  choice={stateChoice()}
+                  busy={Boolean(activity())}
+                  onChoose={chooseState}
+                />
+              )}
             </Show>
             <Show when={documentFonts()?.layers.length ? documentFonts() : undefined}>
               {(report) => (
@@ -373,6 +504,23 @@ export function App() {
                 />
               )}
             </Show>
+            <Show when={document()}>
+              <InspectionPanel
+                image={shown()}
+                point={point()}
+                channels={channels()}
+                paths={paths()}
+                onChannels={() => setChannelDocument(document()!.document)}
+                onPaths={() => setPathDocument(document()!.document)}
+                onLayer={selectLayer}
+                maskMode={maskMode()}
+                onMaskMode={setMaskMode}
+                hasMask={Boolean(mask())}
+                masks={masks()}
+                maskIndex={maskIndex()}
+                onMaskIndex={setMaskIndex}
+              />
+            </Show>
             <div class={styles.tabs} role="group" aria-label="Inspector view">
               <button type="button" aria-pressed={ariaState(tab() === 'layer')} onClick={() => setTab('layer')}>
                 Layer
@@ -394,6 +542,10 @@ export function App() {
                     >
                       {(contents) => (
                         <>
+                          <p role="note">
+                            Saved-record properties and pixels. Comp/frame transforms and transient visibility do not
+                            change this inspection.
+                          </p>
                           <LayerInspector contents={contents()} />
                           <Show when={layerTextSupport()}>
                             {(support) => <TextSupportSection support={support()} />}

@@ -337,7 +337,10 @@ it.skipIf(!arialPaths.every((path) => existsSync(path)))(
     const added = value(await client.addFonts(fonts));
     // The buffers are transferred, not copied.
     expect(transferred[sent.findIndex((request) => request.type === 'addFonts')]).toEqual(fonts);
-    expect(added.results.map((result) => result.ok && result.value.map((face) => face.name))).toEqual([['ArialMT'], ['Arial-BoldMT']]);
+    expect(added.results.map((result) => result.ok && result.value.map((face) => face.name))).toEqual([
+      ['ArialMT'],
+      ['Arial-BoldMT']
+    ]);
     expect(value(await client.fonts()).map((entry) => entry.name)).toEqual(['Arial-BoldMT', 'ArialMT']);
     expect(value(await client.documentFonts(document))).toEqual({
       fonts: [{ name: 'Arial-BoldMT', available: true, layers: [1] }],
@@ -522,29 +525,36 @@ async function testAsset(name: string): Promise<ArrayBuffer> {
 
 const helveticaCollection = '/System/Library/Fonts/HelveticaNeue.ttc';
 
-it.skipIf(!existsSync(helveticaCollection))('registers real TTC faces with original indices across documents', async () => {
-  const { client } = connect();
-  const added = value(await client.addFonts([await systemFont(helveticaCollection)], ['HelveticaNeue.ttc']));
-  const faces = added.results[0];
-  expect(faces?.ok).toBe(true);
-  if (!faces?.ok) {
-    throw new Error('collection registration failed');
+it.skipIf(!existsSync(helveticaCollection))(
+  'registers real TTC faces with original indices across documents',
+  async () => {
+    const { client } = connect();
+    const added = value(await client.addFonts([await systemFont(helveticaCollection)], ['HelveticaNeue.ttc']));
+    const faces = added.results[0];
+    expect(faces?.ok).toBe(true);
+    if (!faces?.ok) {
+      throw new Error('collection registration failed');
+    }
+
+    for (const [name, faceIndex] of [
+      ['HelveticaNeue', 0],
+      ['HelveticaNeue-Bold', 1],
+      ['HelveticaNeue-Light', 7],
+      ['HelveticaNeue-Medium', 10]
+    ] as const) {
+      expect(faces.value.find((face) => face.name === name)).toMatchObject({ faceIndex, active: true, raster: false });
+    }
+
+    const first = value(await client.open(await example('type-with-layer-styles.psd')));
+    const baseline = value(await client.render(first.document, settings, []));
+    // A partial collection does not turn Arial into a known-missing active face.
+    expect(value(await client.difference(first.document, baseline.render)).differingSamples).toBe(0);
+    const second = value(await client.open(await example('type-with-layer-styles.psd')));
+    expect(value(await client.fonts())).toEqual(added.fonts);
+    expect(value(await client.render(second.document, settings, [])).pixels).toEqual(baseline.pixels);
+    client.dispose();
   }
-
-  for (const [name, faceIndex] of [['HelveticaNeue', 0], ['HelveticaNeue-Bold', 1], ['HelveticaNeue-Light', 7], ['HelveticaNeue-Medium', 10]] as const) {
-    expect(faces.value.find((face) => face.name === name)).toMatchObject({ faceIndex, active: true, raster: false });
-  }
-
-  const first = value(await client.open(await example('type-with-layer-styles.psd')));
-  const baseline = value(await client.render(first.document, settings, []));
-  // A partial collection does not turn Arial into a known-missing active face.
-  expect(value(await client.difference(first.document, baseline.render)).differingSamples).toBe(0);
-  const second = value(await client.open(await example('type-with-layer-styles.psd')));
-  expect(value(await client.fonts())).toEqual(added.fonts);
-  expect(value(await client.render(second.document, settings, [])).pixels).toEqual(baseline.pixels);
-  client.dispose();
-});
-
+);
 
 it('abstains from imported font decisions without face bytes, including names-only inventories', async () => {
   const { client } = connect();
@@ -567,7 +577,9 @@ it('restarts independently of an old render and keeps the replacement render que
       onmessage: null,
       onerror: null,
       onmessageerror: null,
-      postMessage: message => { sent.push(message); },
+      postMessage: (message) => {
+        sent.push(message);
+      },
       terminate: vi.fn()
     };
     ports.push({ port, sent });
@@ -588,11 +600,28 @@ it('restarts independently of an old render and keeps the replacement render que
   const second = client.render(1, settings, [[2, false]]);
   const current = ports[1];
   expect(current.sent).toHaveLength(1);
-  const reply = () => current.port.onmessage?.({ data: { id: current.sent.at(-1)!.id, type: 'failed', error: { kind: 'unsupported', message: 'test reply' } } });
+  const reply = () =>
+    current.port.onmessage?.({
+      data: { id: current.sent.at(-1)!.id, type: 'failed', error: { kind: 'unsupported', message: 'test reply' } }
+    });
   reply();
   await first;
   await vi.waitFor(() => expect(current.sent).toHaveLength(2));
   reply();
   await second;
+  client.dispose();
+});
+
+it('exposes bounded saved channels and typed saved paths without changing render state', async () => {
+  const { client } = connect();
+  const opened = value(await client.open(await example('type-with-layer-styles.psd')));
+  const before = value(await client.render(opened.document, settings, []));
+  const channels = value(await client.channels(opened.document));
+  expect(channels.planes.length).toBeGreaterThanOrEqual(3);
+  expect(channels.width).toBe(opened.info.width);
+  expect(channels.planes[0]!.bytes.length).toBeGreaterThan(0);
+  expect(Array.isArray(value(await client.paths(opened.document)))).toBe(true);
+  const after = value(await client.render(opened.document, settings, []));
+  expect(after.pixels).toEqual(before.pixels);
   client.dispose();
 });
