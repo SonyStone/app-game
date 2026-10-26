@@ -378,9 +378,13 @@
   position: absolute;
   top: 8px;
   left: 8px;
-  max-width: 420px;
+  max-width: calc(100% - 24px);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   margin: 0;
-  padding: 8px;
+  padding: 4px 6px;
   background: #3a3020;
   color: #f0d7a4;
   pointer-events: none;
@@ -420,4 +424,38 @@
   summary {
     cursor: pointer;
   }
+}
+
+/* A stable single line leaves canvas space to pixels. Expanded reports scroll independently. */
+.diagnostics {
+  flex-shrink: 0;
+  font-size: 11px;
+  background: #262626;
+  border-top: 1px solid #1a1a1a;
+
+  > summary {
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+
+  &[open] {
+    max-height: 180px;
+    overflow: auto;
+  }
+}
+
+.canvasStatus {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin: 0;
+  padding: 4px 6px;
+  background: #3a3020;
+  color: #f0d7a4;
+  font-size: 11px;
+  pointer-events: none;
 }

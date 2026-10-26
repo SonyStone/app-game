@@ -73,7 +73,11 @@ test('cancel and restart respond within 100ms while a large composite is running
   await observe(page);
   await page.goto('/');
   await page.locator('input[accept=".psd,.psb"]').setInputFiles(many);
-  await page.waitForFunction(() => performance.getEntriesByName('test:request:renderWindow').length > 0);
+  await page.waitForFunction(
+    () =>
+      performance.getEntriesByName('test:request:renderWindow').length > 0 ||
+      performance.getEntriesByName('test:request:detectBlending').length > 0
+  );
   const canceled = await page.evaluate(async () => {
     const start = performance.now();
     const button = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Cancel')!;
@@ -120,6 +124,7 @@ test('offers strict reading after recovery exceeds resources and opens the next 
   await picker.setInputFiles(recoveryRefusal);
   await expect(page.locator('footer')).toContainText('Failed to open');
   await page.getByRole('button', { name: 'Retry strict reading' }).click();
+  await page.getByLabel('Document diagnostics', { exact: true }).locator('summary').first().click();
   await expect(page.getByText('Strict reading.', { exact: false }).last()).toBeVisible();
   await expect(page.locator('[data-render-id]')).toHaveAttribute('data-busy', 'false', { timeout: 30_000 });
   await picker.setInputFiles(fileURLToPath(new URL('adjustment-stack.psd', assets)));

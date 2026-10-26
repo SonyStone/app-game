@@ -11,10 +11,9 @@ import { ExportPanel } from './features/export/ExportPanel';
 import { createFonts, FontsPanel, TextSupportSection } from './features/fonts';
 import { GpuViewport } from './features/gpu-viewport/GpuViewport';
 import type { DisplayImage } from './features/gpu-viewport/displayTiles';
+import { InspectionPanel } from './features/inspection/InspectionPanel';
 import { NativeInspection } from './features/inspection/NativeInspection';
 import { PathOverlay } from './features/inspection/PathOverlay';
-import { inspectionRect } from './features/psd-worker/nativePixels';
-import { InspectionPanel } from './features/inspection/InspectionPanel';
 import { admittedMask, maskImage } from './features/inspection/pixels';
 import { DocumentInspector, LayerInspector } from './features/inspector';
 import { collectNotes, createLayerVisibility, LayersPanel, layerVisibility } from './features/layers';
@@ -26,6 +25,7 @@ import { OpenFailure } from './features/open-file/OpenFailure';
 import { createOpenPrompt, OpeningReport, OpenPromptDialog } from './features/open-like-photoshop';
 import { createPsdWorker, makePsdClient, type PsdResultOf, type WorkerFailure } from './features/psd-worker';
 import { makePsdWorkerPool } from './features/psd-worker/makePsdWorkerPool';
+import { inspectionRect } from './features/psd-worker/nativePixels';
 import { requiresWindowedRendering } from './features/psd-worker/protocol';
 import { createRenderSettings, RenderSettingsPanel } from './features/render-settings';
 import { ariaState } from './features/shared/format';
@@ -541,9 +541,25 @@ export function App() {
               <Show when={initial.preview() && !latest(render)}>
                 <p class={styles.previewLabel} role="note" data-preview={initial.preview()?.source}>
                   {initial.preview()?.source === 'saved'
-                    ? 'Saved preview. May be stale; does not reflect changed settings or visibility.'
-                    : 'Chosen-settings preview. Blending detection has not settled.'}{' '}
-                  Blending fidelity is unverified until detection finishes.
+                    ? 'Saved preview · possibly stale saved pixels'
+                    : 'Chosen-settings preview · verifying blending'}
+                </p>
+              </Show>
+              <Show when={windowed() && latest(render)?.ok}>
+                <p class={styles.canvasStatus} role="status" aria-label="Canvas render status">
+                  {valueOf(render())?.window?.source === 'savedComposite'
+                    ? 'Possibly stale saved pixels'
+                    : valueOf(render())?.approximations.length
+                      ? 'Current layers · approximated'
+                      : 'Current layers'}
+                  <Show when={valueOf(render())?.quality}>
+                    {(quality) => (
+                      <>
+                        {' '}
+                        · {quality().completed}/{quality().required} tiles
+                      </>
+                    )}
+                  </Show>
                 </p>
               </Show>
               <Show when={!latest(source)}>
@@ -583,24 +599,7 @@ export function App() {
             <Show when={document()}>
               {(current) => (
                 <>
-                  <OpeningReport opening={current().opening} />
-                  <Show when={source()?.mode === 'strict'}>
-                    <p role="note">
-                      Strict reading. Photoshop recovery and repairs were skipped. Layers may differ from a recovered
-                      opening; Photoshop view shows the saved composite when available.
-                    </p>
-                  </Show>
-                  <Show when={windowed()}>
-                    <p role="note">
-                      Windowed layer view. Your blending preferences apply. Automatic blending detection and whole-image
-                      comparison are disabled for this view.
-                    </p>
-                  </Show>
                   <Show when={current().sourceBacked}>
-                    <p role="note">
-                      Source-backed saved view. May be stale; settings and visibility do not alter saved pixels.{' '}
-                      {current().sourceLayerFailure?.message}
-                    </p>
                     <button
                       onClick={() => {
                         const current = source();
@@ -612,32 +611,54 @@ export function App() {
                       Render current layers
                     </button>
                   </Show>
-                  <details aria-label="Region capability diagnostics">
-                    <summary>Region capability and admission</summary>
-                    <pre style={{ 'white-space': 'pre-wrap' }}>
-                      {JSON.stringify(
-                        capability() ??
-                          current().capability ?? {
-                            sourceBacked: current().sourceBacked,
-                            layerRefusal: current().sourceLayerFailure
-                          },
-                        (_, value) => (typeof value === 'bigint' ? value.toString() : value),
-                        2
-                      )}
-                    </pre>
-                    <p>
-                      Storage plan only. The caller rounds required live storage to 64 MiB above a 512 MiB baseline, up
-                      to 2 GiB. Allocation cap unchanged. Source sessions read bounded host file slices.
-                    </p>
+                  <details class={styles.diagnostics} aria-label="Document diagnostics">
+                    <summary>Diagnostics · {valueOf(render())?.approximations.length ?? 0} approximations</summary>
+                    <OpeningReport opening={current().opening} />
+                    <Show when={source()?.mode === 'strict'}>
+                      <p role="note">
+                        Strict reading. Photoshop recovery and repairs were skipped. Layers may differ from a recovered
+                        opening; Photoshop view shows the saved composite when available.
+                      </p>
+                    </Show>
+                    <Show when={windowed()}>
+                      <p role="note">
+                        Windowed layer view. Your blending preferences apply. Automatic blending detection and
+                        whole-image comparison are disabled for this view.
+                      </p>
+                    </Show>
+                    <Show when={current().sourceBacked}>
+                      <p role="note">
+                        Source-backed saved view. May be stale; settings and visibility do not alter saved pixels.{' '}
+                        {current().sourceLayerFailure?.message}
+                      </p>
+                    </Show>
+                    <details aria-label="Region capability diagnostics">
+                      <summary>Region capability and admission</summary>
+                      <pre style={{ 'white-space': 'pre-wrap' }}>
+                        {JSON.stringify(
+                          capability() ??
+                            current().capability ?? {
+                              sourceBacked: current().sourceBacked,
+                              layerRefusal: current().sourceLayerFailure
+                            },
+                          (_, value) => (typeof value === 'bigint' ? value.toString() : value),
+                          2
+                        )}
+                      </pre>
+                      <p>
+                        Storage plan only. The caller rounds required live storage to 64 MiB above a 512 MiB baseline,
+                        up to 2 GiB. Allocation cap unchanged. Source sessions read bounded host file slices.
+                      </p>
+                    </details>
+                    <StatusArea
+                      render={render()}
+                      windowed={windowed()}
+                      sourceBacked={current().sourceBacked}
+                      layerNotes={layerNotes()}
+                      documentNotes={current().info.notes}
+                      onSelect={selectLayer}
+                    />
                   </details>
-                  <StatusArea
-                    render={render()}
-                    windowed={windowed()}
-                    sourceBacked={current().sourceBacked}
-                    layerNotes={layerNotes()}
-                    documentNotes={current().info.notes}
-                    onSelect={selectLayer}
-                  />
                 </>
               )}
             </Show>
