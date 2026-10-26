@@ -1,6 +1,7 @@
 import { abrViewerRoutes } from '@app-game/abr-viewer/routes';
 import { Thumbnail, type Routes } from '@app-game/app-router';
 import { browserAtlasRoutes } from '@app-game/browser-atlas/routes';
+import { cspSutViewerRoutes } from '@app-game/csp-sut-viewer/routes';
 import { escyRoutes } from '@app-game/ecsy-pages/routes';
 import { filmAnnotationPlayerRoutes } from '@app-game/film-annotation-player/routes';
 import { cardStackRoutes, notebookRoute } from '@app-game/folder-tabs/routes';
@@ -67,6 +68,7 @@ export const routes: Routes[] = [
   cardStackRoutes,
   notebookRoute,
   abrViewerRoutes,
+  cspSutViewerRoutes,
   psdViewerRoutes,
   nightDefenseRoutes,
   {

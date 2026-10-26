@@ -9,6 +9,7 @@
     "@app-game/abr-viewer": "workspace:*",
     "@app-game/app-router": "workspace:*",
     "@app-game/browser-atlas": "workspace:*",
+    "@app-game/csp-sut-viewer": "workspace:*",
     "@app-game/dnd-playground": "workspace:*",
     "@app-game/ecsy-pages": "workspace:*",
     "@app-game/excalibur-examples": "workspace:*",

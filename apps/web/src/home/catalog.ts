@@ -163,6 +163,12 @@ export const catalog: ProjectGroup[] = [
         art: gpuTextPreview
       },
       {
+        href: '/csp-sut-viewer',
+        name: 'CSP Sub Tool Viewer',
+        sources: ['apps/csp-sut-viewer', 'packages/csp-sut'],
+        icon: brushIcon
+      },
+      {
         href: '/abr-viewer',
         name: 'ABR Viewer',
         sources: ['apps/abr-viewer', 'packages/abr-parser', 'packages/abr-brush', 'packages/abr-paint'],
