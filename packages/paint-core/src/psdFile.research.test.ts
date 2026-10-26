@@ -1,5 +1,5 @@
 import { readPsd, readPsdSource, type PsdNewDocumentContext } from '@app-game/psd';
-import { openPsd, type PsdResult } from '@app-game/psd/viewer';
+import { openPsd, type PsdViewerDocument, type PsdResult } from '@app-game/psd/viewer';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -38,6 +38,7 @@ it.each(fixtures)('matches the native merged RGBA for $id', async (fixture) => {
   const document = value(await openPsd(bytes));
   try {
     const merged = value(document.merged());
+    expectStrictTiles(document, fixture.linear);
     expect(document.info).toMatchObject({
       width: fixture.width,
       height: fixture.height,
@@ -87,6 +88,7 @@ it.skipIf(!researchRoot)('matches all 66 native export recompositions and preser
       const native = value(await openPsd(await readFile(join(root, measurement.recomposed))));
       try {
         expect(value(actual.merged()), check.id).toEqual(value(native.merged()));
+        expectStrictTiles(actual, facts.linear);
         expect(actual.info, check.id).toMatchObject({ width: original.width, height: original.height });
         if (check.id === 'psb-wide') {
           expect(actual.info).toMatchObject({ width: 30001, height: 2, psb: true });
@@ -136,4 +138,44 @@ function value<T>(result: PsdResult<T>): T {
   }
 
   return result.value;
+}
+
+/** Verifies byte parity against the whole strict render, including small tile boundaries inside the operands. */
+function expectStrictTiles(document: PsdViewerDocument, linearBlending: boolean): void {
+  const settings = {
+    linearBlending,
+    approximate: false,
+    textGamma: 1.45,
+    vectorPaths: false,
+    typeLayers: false,
+    smartObjects: null
+  };
+  const whole = value(document.render(settings));
+  try {
+    const assembled = new Uint8Array(whole.pixels.length);
+    const tileSize = whole.width > 30000 ? 1024 : 13;
+    for (let top = 0; top < whole.height; top += tileSize) {
+      for (let left = 0; left < whole.width; left += tileSize) {
+        const tile = value(document.renderRegion({
+          left,
+          top,
+          width: Math.min(tileSize, whole.width - left),
+          height: Math.min(tileSize, whole.height - top)
+        }, settings));
+        expect(tile.approximations).toEqual([]);
+        expect(tile.exactToLayerRender).toBe(true);
+        for (let y = 0; y < tile.height; y++) {
+          assembled.set(
+            tile.pixels.subarray(y * tile.width * 4, (y + 1) * tile.width * 4),
+            ((top + y) * whole.width + left) * 4
+          );
+        }
+      }
+    }
+
+    expect(whole.approximations).toEqual([]);
+    expect(assembled).toEqual(whole.pixels);
+  } finally {
+    whole.dispose();
+  }
 }
