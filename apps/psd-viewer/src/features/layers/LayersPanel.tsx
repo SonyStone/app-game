@@ -116,6 +116,7 @@ export function LayersPanel(props: {
           value={kind()}
           onChange={(event) => {
             setKind(event.currentTarget.value);
+            element()!.scrollTop = 0;
             setScroll(0);
           }}
         >

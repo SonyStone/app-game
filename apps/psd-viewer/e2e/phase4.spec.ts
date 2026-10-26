@@ -261,6 +261,14 @@ test('finds and reveals a named layer among 350 records with a bounded DOM and u
   await expect(page.locator('[data-busy]')).toHaveAttribute('data-render-id', /\d+/);
   const tree = page.getByRole('tree', { name: 'Layers', exact: true });
   expect(await tree.getByRole('treeitem').count()).toBeLessThan(80);
+  await tree.evaluate((element) => {
+    element.scrollTop = 7000;
+  });
+  await expect.poll(() => tree.evaluate((element) => element.scrollTop)).toBeGreaterThan(6000);
+  await page.getByRole('combobox', { name: 'Filter layer kind' }).selectOption('pixel');
+  await expect.poll(() => tree.evaluate((element) => element.scrollTop)).toBe(0);
+  await expect(tree.getByRole('treeitem').first()).toBeInViewport();
+
   await page.getByRole('searchbox', { name: 'Search layers' }).fill('Named record 125');
   await expect(tree.getByRole('treeitem')).toHaveCount(1);
   await tree.focus();
@@ -307,3 +315,29 @@ for (const { mode, depth, values, unit } of [
     await expect(stats).toContainText(unit);
   });
 }
+
+test('explains a refused layer preview and disables its PNG export', async ({ page }) => {
+  await page.addInitScript(() => {
+    const Native = Worker;
+    window.Worker = class extends Native {
+      constructor(...args: ConstructorParameters<typeof Worker>) {
+        super(...args);
+        this.addEventListener('message', (event) => {
+          if (event.data.type === 'layer') {
+            event.data.pixels = {
+              ok: false,
+              error: { kind: 'unsupported', message: 'This layer is too large for a whole-layer preview.' }
+            };
+          }
+        });
+      }
+    };
+  });
+  await page.goto('/');
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(asset('adjustment-stack.psd'));
+  await expect(page.locator('[data-busy]')).toHaveAttribute('data-render-id', /\d+/);
+  await page.locator('[data-layer-index="0"]').click();
+  await expect(page.getByText(/Saved layer pixel preview unavailable: This layer is too large/)).toBeVisible();
+  await page.getByText('Export and original download', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Export selected layer PNG', exact: true })).toBeDisabled();
+});
