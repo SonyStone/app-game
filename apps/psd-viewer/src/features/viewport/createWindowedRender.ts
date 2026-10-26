@@ -6,8 +6,9 @@ import type { createViewport } from './createViewport';
 import { makeWindowRenderer } from './makeWindowRenderer';
 
 /**
- * Binds the worker tile cache to rendering inputs and the viewport. Every update aborts the previous request; late
- * completions cannot replace current pixels. Pan/zoom remains synchronous while fresh pixels arrive independently.
+ * Binds the worker tile cache to rendering inputs and the viewport. Each camera update cancels previous interest;
+ * current-content worker completions enter the shared LRU, while only current demand can publish a frame.
+ * Pan/zoom remains synchronous while fresh pixels arrive independently.
  * The temporary saved first frame is cleared on failure, edits or cancellation. Disposal releases cached pixels.
  */
 export function createWindowedRender(

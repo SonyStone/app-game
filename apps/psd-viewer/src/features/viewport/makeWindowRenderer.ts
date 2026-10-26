@@ -1,19 +1,21 @@
 import type { PsdRegionPixels, PsdRegionRect, PsdRenderSettings } from '@app-game/psd/viewer';
+import type { DisplayTile } from '../gpu-viewport/displayTiles';
 import type { OpenedPsd, PsdClient, PsdResultOf, RenderedPixels } from '../psd-worker';
 import { windowWorkPixels } from '../psd-worker/protocol';
 import { viewerPerformance } from '../telemetry/performance';
 import type { View } from './view';
 
 /**
- * A byte-limited LRU of fresh tiles and overviews for one document/settings/visibility/font snapshot. Requests run
- * in small batches, checking cancellation between calls. A saved preview is offered only on the first request for a
- * document, never cached, and the caller must replace it with the returned fresh result, including on failure.
+ * Retains transferred source tiles, never assembling a viewport-sized CPU image. Camera cancellation changes
+ * interest only: an in-flight single tile is salvaged and shared by later demand for the same content snapshot.
+ * Semantic changes abort old requests and invalidate the bounded 32 MiB LRU. Each completed tile is published.
  */
 export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>) {
-  const cache = new Map<string, PsdRegionPixels>();
+  const cache = new Map<string, DisplayTile>();
+  const pending = new Map<string, Promise<PsdResultOf<DisplayTile>>>();
   let cacheBytes = 0;
   let previous: WindowSnapshot | undefined;
-  let previewSnapshot: WindowSnapshot | undefined;
+  let lifetime = new AbortController();
   let previewedDocument: number | undefined;
   let nextRender = 0;
 
@@ -22,12 +24,10 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>) {
     view: View,
     size: { width: number; height: number },
     signal: AbortSignal,
-    preview: (image: RenderedPixels) => void
+    publish: (image: RenderedPixels) => void
   ): Promise<PsdResultOf<RenderedPixels> | undefined> {
     if (previous !== snapshot) {
-      const firstDocumentRequest = previous?.opened.document !== snapshot.opened.document;
       clear();
-      previewSnapshot = firstDocumentRequest ? snapshot : undefined;
       previous = snapshot;
     }
 
@@ -38,102 +38,85 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>) {
 
     const start = performance.now();
     const { document, info } = snapshot.opened;
-    const request = (window: Parameters<PsdClient['renderWindow']>[3]) =>
-      client.renderWindow(document, snapshot.settings, snapshot.visibility, window, signal);
-    const frame = (image: PsdRegionPixels): RenderedPixels => ({
-      ...image,
-      depth: info.depth as RenderedPixels['depth'],
-      render: ++nextRender,
-      milliseconds: performance.now() - start,
-      window: {
-        left: image.left,
-        top: image.top,
-        step: image.step,
-        source: image.source,
-        strategy: image.strategy,
-        exactToLayerRender: image.exactToLayerRender
-      },
-      approximations: image.exactToLayerRender
-        ? image.approximations
-        : [...image.approximations, 'Temporary saved preview: may be stale; replacing with a fresh layer render.']
-    });
-
-    if (plan.kind === 'overview') {
-      const key = `overview:${plan.step}`;
-      const cached = get(key);
-      if (cached) {
-        return { ok: true, value: frame(cached) };
+    const keys = plan.kind === 'overview' ? [`overview:${plan.step}`] : plan.tiles.map(tileKey);
+    const frame = (tiles: DisplayTile[]): RenderedPixels => {
+      const images = tiles.map((tile) => tile.image as PsdRegionPixels);
+      const saved = images.some((image) => image.source === 'savedComposite');
+      return {
+        width: info.width,
+        height: info.height,
+        pixels: new Uint8Array(0),
+        tiles,
+        depth: info.depth as RenderedPixels['depth'],
+        render: ++nextRender,
+        milliseconds: performance.now() - start,
+        window: {
+          left: 0,
+          top: 0,
+          step: plan.step,
+          source: saved ? 'savedComposite' : 'layers',
+          strategy: images.some((image) => image.strategy === 'fullCanvas') ? 'fullCanvas' : 'window',
+          exactToLayerRender: !saved && images.every((image) => image.exactToLayerRender)
+        },
+        approximations: [
+          ...new Set(images.flatMap((image) => image.approximations)),
+          ...(saved ? ['Temporary saved preview: may be stale; replacing with a fresh layer render.'] : []),
+          ...(plan.kind === 'overview'
+            ? ['Coarse preview uses integer point sampling; zoom in for strict source pixels.']
+            : [])
+        ]
+      };
+    };
+    const available = () => {
+      const overview =
+        plan.kind === 'regions' ? [...cache.entries()].find(([key]) => key.startsWith('overview:'))?.[1] : undefined;
+      return [
+        ...(overview ? [overview] : []),
+        ...keys.flatMap((key) => {
+          const tile = get(key);
+          return tile ? [tile] : [];
+        })
+      ];
+    };
+    const present = () => {
+      const tiles = available();
+      if (tiles.length && !signal.aborted && previous === snapshot) {
+        publish(frame(tiles));
       }
+    };
+    present();
 
-      if (previewSnapshot === snapshot && previewedDocument !== document) {
-        const saved = await request({ kind: 'saved', step: plan.step });
-        if (signal.aborted) {
-          return undefined;
-        }
-
-        previewedDocument = document;
-        if (saved.ok) {
-          preview(frame(saved.value.images[0]));
-        }
-      }
-
-      const fresh = await request({ kind: 'overview', step: plan.step });
-      if (signal.aborted) {
+    if (plan.kind === 'overview' && previewedDocument !== document) {
+      previewedDocument = document;
+      const saved = await request(`saved:${plan.step}`, { kind: 'saved', step: plan.step });
+      if (signal.aborted || previous !== snapshot) {
         return undefined;
       }
 
-      if (!fresh.ok) {
-        return fresh;
+      if (saved.ok) {
+        publish(frame([saved.value]));
       }
-
-      const image = fresh.value.images[0];
-      put(key, image);
-      return { ok: true, value: frame(image) };
     }
 
     previewedDocument = document;
-    // Region calls return full-resolution pixels. Assemble only the visible sampled surface, releasing each batch
-    // after copying it; even at intermediate zooms, neither the surface nor the LRU grows with document area.
-    const image: PsdRegionPixels = {
-      ...plan.rectangle,
-      width: Math.ceil(plan.rectangle.width / plan.step),
-      height: Math.ceil(plan.rectangle.height / plan.step),
-      pixels: new Uint8Array(
-        Math.ceil(plan.rectangle.width / plan.step) * Math.ceil(plan.rectangle.height / plan.step) * 4
-      ),
-      step: plan.step,
-      strategy: 'window',
-      source: 'layers',
-      exactToLayerRender: true,
-      approximations: []
-    };
-    const approximations = new Set<string>();
-    const copy = (tile: PsdRegionPixels) => {
-      copySamples(tile, image);
-      tile.approximations.forEach((text) => approximations.add(text));
-      if (tile.strategy === 'fullCanvas') {
-        image.strategy = 'fullCanvas';
-      }
-
-      image.exactToLayerRender &&= tile.exactToLayerRender;
-    };
-    const missing: PsdRegionRect[] = [];
-    for (const rectangle of plan.tiles) {
-      const tile = get(tileKey(rectangle));
-      if (tile) {
-        copy(tile);
-      } else {
-        missing.push(rectangle);
-      }
-    }
-
-    for (let index = 0; index < missing.length; index += 4) {
-      if (signal.aborted) {
+    for (let index = 0; index < keys.length; index++) {
+      if (signal.aborted || previous !== snapshot) {
         return undefined;
       }
 
-      const result = await request({ kind: 'regions', rectangles: missing.slice(index, index + 4) });
-      if (signal.aborted) {
+      const key = keys[index];
+      if (get(key)) {
+        continue;
+      }
+
+      const core = plan.kind === 'regions' ? plan.tiles[index] : undefined;
+      const result = await request(
+        key,
+        core ? { kind: 'regions', rectangles: [withBorder(core, info)] } : { kind: 'overview', step: plan.step },
+        core
+      );
+      if (signal.aborted || previous !== snapshot) {
+        viewerPerformance.record('cancellation.salvagedTiles', performance.now(), result.ok ? 1 : 0);
         return undefined;
       }
 
@@ -141,43 +124,84 @@ export function makeWindowRenderer(client: Pick<PsdClient, 'renderWindow'>) {
         return result;
       }
 
-      for (const tile of result.value.images) {
-        copy(tile);
-        put(tileKey(tile), tile);
-      }
+      present();
     }
 
-    viewerPerformance.record('coverage.tiles', start, plan.tiles.length);
-    viewerPerformance.record('coverage.cachedTiles', performance.now(), plan.tiles.length - missing.length);
-    image.approximations = [...approximations];
-    return { ok: true, value: frame(image) };
+    viewerPerformance.record('coverage.tiles', start, keys.length);
+    return { ok: true, value: frame(available()) };
+
+    function request(key: string, window: Parameters<PsdClient['renderWindow']>[3], core?: PsdRegionRect) {
+      const existing = pending.get(key);
+      if (existing) {
+        return existing;
+      }
+
+      const controller = lifetime;
+      const job = client
+        .renderWindow(document, snapshot.settings, snapshot.visibility, window, controller.signal)
+        .then((result) => {
+          if (!result.ok) {
+            return result;
+          }
+
+          const image = result.value.images[0];
+          const tile: DisplayTile = {
+            image,
+            left: image.left,
+            top: image.top,
+            step: image.step,
+            clip: core ?? {
+              left: image.left,
+              top: image.top,
+              width: image.width * image.step,
+              height: image.height * image.step
+            }
+          };
+          if (!controller.signal.aborted && previous === snapshot && window.kind !== 'saved') {
+            put(key, tile);
+          }
+
+          return { ok: true as const, value: tile };
+        })
+        .finally(() => {
+          if (pending.get(key) === job) {
+            pending.delete(key);
+          }
+        });
+      pending.set(key, job);
+      return job;
+    }
   }
 
   function get(key: string) {
-    const image = cache.get(key);
-    if (image) {
+    const tile = cache.get(key);
+    if (tile) {
       cache.delete(key);
-      cache.set(key, image);
+      cache.set(key, tile);
     }
 
-    return image;
+    return tile;
   }
 
-  function put(key: string, image: PsdRegionPixels) {
-    cacheBytes -= cache.get(key)?.pixels.byteLength ?? 0;
+  function put(key: string, tile: DisplayTile) {
+    cacheBytes -= cache.get(key)?.image.pixels.byteLength ?? 0;
     cache.delete(key);
-    cache.set(key, image);
-    cacheBytes += image.pixels.byteLength;
-    viewerPerformance.record('tiles.cpu.bytes', performance.now(), cacheBytes);
+    cache.set(key, tile);
+    cacheBytes += tile.image.pixels.byteLength;
     while (cacheBytes > cacheLimitBytes) {
       const oldest = cache.keys().next().value!;
-      cacheBytes -= cache.get(oldest)!.pixels.byteLength;
+      cacheBytes -= cache.get(oldest)!.image.pixels.byteLength;
       cache.delete(oldest);
     }
+
+    viewerPerformance.record('tiles.cpu.bytes', performance.now(), cacheBytes);
   }
 
   function clear() {
+    lifetime.abort();
+    lifetime = new AbortController();
     cache.clear();
+    pending.clear();
     cacheBytes = 0;
     previous = undefined;
   }
@@ -190,8 +214,8 @@ export type WindowSnapshot = { opened: OpenedPsd; settings: PsdRenderSettings; v
 
 /**
  * Uses an integer overview stride near one sample per CSS pixel when its total output fits two million pixels.
- * Otherwise requests 512-pixel tiles covering the viewport plus 96 CSS pixels. The assembled surface is sampled at
- * that stride and limited to four million pixels, including on unusually large displays.
+ * Otherwise requests 512-pixel source tiles covering the viewport plus 96 CSS pixels. Regions retain full-resolution
+ * bytes with a one-texel filtering border; the display handles scaling without an assembled surface.
  */
 export function planWindow(
   document: { width: number; height: number },
@@ -243,30 +267,20 @@ export function planWindow(
   };
 }
 
-/** Copies exact document-space samples, including strides that do not divide tile edges. */
-function copySamples(tile: PsdRegionPixels, output: PsdRegionPixels) {
-  const x0 = Math.max(0, Math.ceil((tile.left - output.left) / output.step));
-  const y0 = Math.max(0, Math.ceil((tile.top - output.top) / output.step));
-  const x1 = Math.min(output.width, Math.ceil((tile.left + tile.width - output.left) / output.step));
-  const y1 = Math.min(output.height, Math.ceil((tile.top + tile.height - output.top) / output.step));
-  for (let y = y0; y < y1; y++) {
-    if (output.step === 1) {
-      const source = ((output.top + y - tile.top) * tile.width + output.left + x0 - tile.left) * 4;
-      output.pixels.set(tile.pixels.subarray(source, source + (x1 - x0) * 4), (y * output.width + x0) * 4);
-      continue;
-    }
-
-    for (let x = x0; x < x1; x++) {
-      const source =
-        ((output.top + y * output.step - tile.top) * tile.width + output.left + x * output.step - tile.left) * 4;
-      const target = (y * output.width + x) * 4;
-      output.pixels.set(tile.pixels.subarray(source, source + 4), target);
-    }
-  }
-}
-
 function tileKey(rectangle: Pick<PsdRegionRect, 'left' | 'top'>): string {
   return `${rectangle.left}:${rectangle.top}`;
+}
+
+/** Expands source support without overlapping the drawing rectangles. */
+function withBorder(rectangle: PsdRegionRect, size: { width: number; height: number }): PsdRegionRect {
+  const left = Math.max(0, rectangle.left - 1);
+  const top = Math.max(0, rectangle.top - 1);
+  return {
+    left,
+    top,
+    width: Math.min(size.width, rectangle.left + rectangle.width + 1) - left,
+    height: Math.min(size.height, rectangle.top + rectangle.height + 1) - top
+  };
 }
 
 const tileEdge = 512;

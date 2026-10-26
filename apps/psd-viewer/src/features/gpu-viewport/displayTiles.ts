@@ -1,0 +1,86 @@
+import type { PsdImage, PsdRegionRect } from '@app-game/psd/viewer';
+
+/** Immutable straight display-sRGB bytes and a nonoverlapping document-space drawing rectangle. */
+export type DisplayTile = {
+  /** May include a one-texel neighbor halo around the drawing rectangle. */
+  image: PsdImage;
+  left: number;
+  top: number;
+  step: number;
+  clip: PsdRegionRect;
+};
+
+/** Whole renders and worker regions share the same display contract; tiled frames allocate no assembled pixels. */
+export type DisplayImage = PsdImage & {
+  tiles?: readonly DisplayTile[];
+  window?: { left: number; top: number; step: number };
+};
+
+/** Splits whole renders into bounded texture uploads, retaining the transferred buffer without copying its rows. */
+export function displayTiles(image: DisplayImage): readonly DisplayTile[] {
+  if (image.tiles) {
+    return image.tiles.flatMap(splitTile);
+  }
+
+  const cached = chunks.get(image);
+  if (cached) {
+    return cached;
+  }
+
+  const result: DisplayTile[] = [];
+  const { left = 0, top = 0, step = 1 } = image.window ?? {};
+  for (let y = 0; y < image.height; y += 512) {
+    for (let x = 0; x < image.width; x += 512) {
+      result.push({
+        image,
+        left,
+        top,
+        step,
+        clip: {
+          left: left + x * step,
+          top: top + y * step,
+          width: Math.min(512, image.width - x) * step,
+          height: Math.min(512, image.height - y) * step
+        }
+      });
+    }
+  }
+
+  chunks.set(image, result);
+  return result;
+}
+
+const chunks = new WeakMap<PsdImage, readonly DisplayTile[]>();
+
+/** Keeps every upload bounded, including coarse overviews whose source image can exceed a texture's limits. */
+function splitTile(tile: DisplayTile): readonly DisplayTile[] {
+  const cached = tileChunks.get(tile);
+  if (cached) {
+    return cached;
+  }
+
+  const edge = 512 * tile.step;
+  if (tile.clip.width <= edge && tile.clip.height <= edge) {
+    return [tile];
+  }
+
+  const result: DisplayTile[] = [];
+  for (let y = 0; y < tile.clip.height; y += edge) {
+    for (let x = 0; x < tile.clip.width; x += edge) {
+      result.push({
+        ...tile,
+        clip: {
+          left: tile.clip.left + x,
+          top: tile.clip.top + y,
+          width: Math.min(edge, tile.clip.width - x),
+          height: Math.min(edge, tile.clip.height - y)
+        }
+      });
+    }
+  }
+
+  tileChunks.set(tile, result);
+  return result;
+}
+
+const tileChunks = new WeakMap<DisplayTile, readonly DisplayTile[]>();

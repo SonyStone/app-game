@@ -15,6 +15,7 @@ import type {
   PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
+import type { DisplayTile } from '../gpu-viewport/displayTiles';
 import type { SessionFont } from '../fonts/addFontFile';
 import type { PsdPerformanceSample } from '../telemetry/performance';
 
@@ -117,6 +118,8 @@ export type BlendingDetection = {
 
 /** A render as it crosses to the UI: its id names it in `difference` requests. */
 export type RenderedPixels = PsdImage & {
+  /** Retained display tiles. When present, pixels is empty and must not be treated as an assembled surface. */
+  tiles?: readonly DisplayTile[];
   render: number;
   depth: 8 | 16 | 32;
   milliseconds: number;
