@@ -21,7 +21,10 @@
     "@solid-primitives/event-listener": "catalog:",
     "@solid-primitives/resize-observer": "catalog:",
     "@solidjs/web": "catalog:",
-    "solid-js": "catalog:"
+    "solid-js": "catalog:",
+    "@app-game/solid-gpu": "workspace:*",
+    "@solid-primitives/raf": "catalog:",
+    "typegpu": "^0.11.4"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
@@ -30,6 +33,8 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@webgpu/types": "^0.1.70",
+    "unplugin-typegpu": "^0.11.3"
   }
 }

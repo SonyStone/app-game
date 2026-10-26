@@ -1147,9 +1147,15 @@ importers:
       '@app-game/psd':
         specifier: workspace:*
         version: link:../../packages/psd
+      '@app-game/solid-gpu':
+        specifier: workspace:*
+        version: link:../../packages/solid-gpu
       '@solid-primitives/event-listener':
         specifier: 'catalog:'
         version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
+      '@solid-primitives/raf':
+        specifier: 'catalog:'
+        version: 4.0.0-next.2(patch_hash=fe02f6a045310f51f4c8b03273171a830ec7fe41060f2132686977ec36523abf)(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
       '@solid-primitives/resize-observer':
         specifier: 'catalog:'
         version: 4.0.0-next.3(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)
@@ -1159,6 +1165,9 @@ importers:
       solid-js:
         specifier: 'catalog:'
         version: 2.0.0-rc.13
+      typegpu:
+        specifier: ^0.11.4
+        version: 0.11.4
     devDependencies:
       '@playwright/test':
         specifier: 'catalog:'
@@ -1166,12 +1175,18 @@ importers:
       '@unocss/vite':
         specifier: 'catalog:'
         version: 66.6.8(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
+      '@webgpu/types':
+        specifier: ^0.1.70
+        version: 0.1.70
       jsdom:
         specifier: 'catalog:'
         version: 29.1.1
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+      unplugin-typegpu:
+        specifier: ^0.11.3
+        version: 0.11.3(typegpu@0.11.4)
       vite:
         specifier: 'catalog:'
         version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4)

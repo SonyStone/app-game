@@ -1,4 +1,3 @@
-import type { PsdImage } from '@app-game/psd/viewer';
 import { createMemo, createSignal, Errored, isPending, latest, onCleanup, Show } from 'solid-js';
 import styles from './App.module.css';
 import { createBlendingDetection } from './features/blending-detection';
@@ -7,24 +6,20 @@ import { createPsdDocument, createPsdRender, type PsdSource } from './features/d
 import { createOpeningPreview } from './features/document/createOpeningPreview';
 import { ExamplesMenu } from './features/examples';
 import { createFonts, FontsPanel, TextSupportSection } from './features/fonts';
+import { GpuViewport } from './features/gpu-viewport/GpuViewport';
+import type { DisplayImage } from './features/gpu-viewport/displayTiles';
 import { DocumentInspector, LayerInspector } from './features/inspector';
 import { collectNotes, createLayerVisibility, LayersPanel, layerVisibility } from './features/layers';
 import { createFileDrop, fileSource, firstPsd, urlSource } from './features/open-file';
 import { OpenFailure } from './features/open-file/OpenFailure';
 import { createOpenPrompt, OpeningReport, OpenPromptDialog } from './features/open-like-photoshop';
-import {
-  createPsdWorker,
-  makePsdClient,
-  type PsdResultOf,
-  type RenderedPixels,
-  type WorkerFailure
-} from './features/psd-worker';
+import { createPsdWorker, makePsdClient, type PsdResultOf, type WorkerFailure } from './features/psd-worker';
 import { requiresWindowedRendering } from './features/psd-worker/protocol';
 import { createRenderSettings, RenderSettingsPanel } from './features/render-settings';
 import { ariaState } from './features/shared/format';
 import { createStateChoice, StatesPanel } from './features/states';
 import { StatusArea } from './features/status';
-import { createViewport, RgbaCanvas } from './features/viewport';
+import { createViewport } from './features/viewport';
 import { createWindowedRender } from './features/viewport/createWindowedRender';
 
 /**
@@ -49,7 +44,7 @@ export function App() {
     source();
     return undefined;
   });
-  const fonts = createFonts(client, () => initial.ready() ? opened() : undefined, selected);
+  const fonts = createFonts(client, () => (initial.ready() ? opened() : undefined), selected);
   const { choice: stateChoice, choose: chooseState, withState } = createStateChoice(source);
   const document = () => valueOf(opened());
   const viewport = createViewport(() => document()?.info, source);
@@ -84,7 +79,7 @@ export function App() {
   const layerTextSupport = () => valueOf(fonts.layerSupport());
   const layerFailure = () => failureOf(layer());
   const differenceValue = () => valueOf(difference());
-  const shown = createMemo<(PsdImage & { window?: RenderedPixels['window'] }) | undefined>(() => {
+  const shown = createMemo<DisplayImage | undefined>(() => {
     const result = view() === 'ours' ? latest(render) : view() === 'photoshop' ? merged() : difference();
     return result?.ok ? result.value : view() === 'ours' && !result ? initial.preview()?.image : undefined;
   });
@@ -236,30 +231,21 @@ export function App() {
             >
               <Show when={shown()}>
                 {(image) => (
-                  <div
-                    class={styles.imageLayer}
-                    style={{
-                      transform: image().window
-                        ? `${viewport.transform()} translate(${image().window!.left}px, ${image().window!.top}px) scale(${image().window!.step})`
-                        : viewport.transform(),
-                      width: `${image().width}px`,
-                      height: `${image().height}px`
-                    }}
-                  >
-                    <RgbaCanvas
-                      class={viewport.view().scale >= 2 ? `${styles.canvas} ${styles.pixelated}` : styles.canvas}
-                      image={image()}
-                      label={
-                        view() === 'ours'
-                          ? !latest(render) && initial.preview()
-                            ? 'Opening preview'
-                            : 'Our render'
-                          : view() === 'photoshop'
-                            ? "Photoshop's merged image"
-                            : 'Difference heat map'
-                      }
-                    />
-                  </div>
+                  <GpuViewport
+                    image={image()}
+                    onPresented={initial.presented}
+                    view={viewport.view()}
+                    size={viewport.size()}
+                    label={
+                      view() === 'ours'
+                        ? !latest(render) && initial.preview()
+                          ? 'Opening preview'
+                          : 'Our render'
+                        : view() === 'photoshop'
+                          ? "Photoshop's merged image"
+                          : 'Difference heat map'
+                    }
+                  />
                 )}
               </Show>
               <Show when={initial.preview() && !latest(render)}>

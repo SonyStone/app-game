@@ -11,11 +11,13 @@ export function createOpeningPreview(
 ) {
   const [preview, setPreview] = createSignal<{ image: PsdImage; source: 'saved' | 'chosen' }>();
   const [ready, setReady] = createSignal(false);
+  let acknowledge: ((image: PsdImage) => void) | undefined;
   createEffect(
     () => opened(),
     (document) => {
       setPreview(undefined);
       setReady(false);
+      acknowledge = undefined;
       if (!document?.ok) {
         return;
       }
@@ -42,14 +44,25 @@ export function createOpeningPreview(
             setPreview({ image: value.value, source });
           }
 
-          // Give the canvas upload and a browser paint their own turns before CPU detection starts.
-          frame = requestAnimationFrame(() => {
+          if (!value.ok) {
+            setReady(true);
+            return;
+          }
+
+          // Device initialization and chunked uploads can outlast two RAFs. The display acknowledges real pixels.
+          acknowledge = (image) => {
+            if (image !== value.value || frame) {
+              return;
+            }
+
             frame = requestAnimationFrame(() => {
-              if (active) {
-                setReady(true);
-              }
+              frame = requestAnimationFrame(() => {
+                if (active) {
+                  setReady(true);
+                }
+              });
             });
-          });
+          };
         },
         () => {
           if (active) {
@@ -64,5 +77,5 @@ export function createOpeningPreview(
     }
   );
 
-  return { preview, ready };
+  return { preview, ready, presented: (image: PsdImage) => acknowledge?.(image) };
 }
