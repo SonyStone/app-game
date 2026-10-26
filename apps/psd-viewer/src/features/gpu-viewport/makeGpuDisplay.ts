@@ -8,7 +8,7 @@ import { tileTextureUpload, type DisplayTile } from './displayTiles';
  * Displays authoritative straight RGBA8 bytes. No sRGB texture conversion is applied: filtering is explicitly
  * bilinear in premultiplied display-sRGB, with a one-source-texel halo. At >=1 physical pixel/source texel,
  * textureLoad preserves the original bytes. Coarse worker overviews remain point-sampled previews, not area mips.
- * Uploads stop after 2 MiB/2 ms per frame, with <=256 KiB source strips allowing one strip of overshoot. GPU residency is a
+ * Uploads stop after 2 MiB/1 ms per frame, with <=128 KiB source strips allowing one strip of overshoot. GPU residency is a
  * separate 128 MiB LRU. Geometry and texture bindings are retained; camera gestures never process resident pixels.
  */
 export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format'>) {
@@ -64,12 +64,12 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
 
         while (!entry.ready) {
           uploaded += entry.upload();
-          if (uploaded >= 2 * 1024 * 1024 || performance.now() - start >= 2) {
+          if (uploaded >= 2 * 1024 * 1024 || performance.now() - start >= 1) {
             break;
           }
         }
 
-        if (uploaded >= 2 * 1024 * 1024 || performance.now() - start >= 2) {
+        if (uploaded >= 2 * 1024 * 1024 || performance.now() - start >= 1) {
           break;
         }
       }
@@ -187,9 +187,9 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
         },
         upload() {
           const start = performance.now();
-          // Bound the BufferSource snapshot, including skipped row bytes, to 256 KiB. Long-stride whole renders
+          // Bound the BufferSource snapshot, including skipped row bytes, to 128 KiB. Long-stride whole renders
           // use fewer rows than tightly packed worker regions. A frame can stop between any two strips.
-          const rows = Math.min(height - row, Math.max(1, Math.floor((256 * 1024 - width * 4) / bytesPerRow) + 1));
+          const rows = Math.min(height - row, Math.max(1, Math.floor((128 * 1024 - width * 4) / bytesPerRow) + 1));
           const offset = row * bytesPerRow;
           const length = (rows - 1) * bytesPerRow + width * 4;
           const strip = source!.subarray(offset, offset + length);
