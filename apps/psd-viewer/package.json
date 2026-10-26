@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview --port 4070",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "benchmark": "node scripts/benchmark.mjs"
   },
   "dependencies": {
     "@app-game/app-router": "workspace:*",

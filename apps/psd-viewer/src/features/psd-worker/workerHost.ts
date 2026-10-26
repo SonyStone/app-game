@@ -1,5 +1,6 @@
 import {
   createFontLibrary,
+  loadPsdViewer,
   openPsd,
   openPsdLikePhotoshop,
   type PsdFailure,
@@ -10,6 +11,7 @@ import {
   type PsdViewerDocument
 } from '@app-game/psd/viewer';
 import { addFontFile, type SessionFont } from '../fonts/addFontFile';
+import { makePerformanceRecorder } from '../telemetry/performance';
 import {
   requiresWindowedRendering,
   windowWorkPixels,
@@ -32,7 +34,17 @@ import {
  * documents, for imported cache mixing and optional rerasterization. Adding fonts releases prepared renders. Requests
  * run one at a time in arrival order. `post` sends a reply with the buffers to transfer.
  */
-export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable[]) => void) {
+export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable[]) => void) {
+  const telemetry = makePerformanceRecorder();
+  function post(reply: PsdReply, transfer: Transferable[]) {
+    telemetry.record(
+      'transfer.bytes',
+      performance.now(),
+      transfer.reduce<number>((sum, value) => sum + (value instanceof ArrayBuffer ? value.byteLength : 0), 0)
+    );
+    send({ ...reply, performance: telemetry.take() }, transfer);
+  }
+
   let document: { id: number; viewer: PsdViewerDocument; inputBytes: number } | undefined;
   let fonts: PsdFontLibrary | undefined;
   const sessionFonts = new Map<string, SessionFont>();
@@ -46,8 +58,15 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
 
   /** Queues a request; replies arrive through `post`, failures as `failed` replies. */
   function receive(request: PsdRequest) {
+    const queued = performance.now();
     queue = queue
-      .then(() => handle(request))
+      .then(async () => {
+        telemetry.enable(request.telemetry ?? false);
+        telemetry.record('queue.wait', queued);
+        const started = performance.now();
+        await handle(request);
+        telemetry.record(`request.${request.type}`, started);
+      })
       .catch((error: unknown) => {
         post({ id: request.id, type: 'failed', error: { kind: 'invalid', message: String(error) } }, []);
       });
@@ -63,7 +82,13 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
         header.byteLength >= 26 &&
         header.getUint32(0) === 0x38425053 &&
         requiresWindowedRendering({ width: header.getUint32(18), height: header.getUint32(14) });
+      const loading = performance.now();
+      await loadPsdViewer();
+      telemetry.record('wasm.load', loading);
+      telemetry.record('source.retained.bytes', performance.now(), request.bytes.byteLength);
+      const opening = performance.now();
       const opened = large ? await openPsd(request.bytes) : await openPsdLikePhotoshop(request.bytes, request.answers);
+      telemetry.record('open', opening);
       if (!opened.ok) {
         post({ id: request.id, type: 'failed', error: opened.error }, []);
         return;
@@ -155,6 +180,7 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
           return;
         }
 
+        telemetry.record('tile.render', start);
         const images = Array.isArray(result.value) ? result.value : [result.value];
         post(
           { id: request.id, type: 'windowRendered', images, milliseconds: performance.now() - start },
@@ -167,9 +193,10 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
         const reused = prepared.get(key);
         prepared.delete(key);
         releasePrepared();
+        telemetry.record(reused ? 'render.reused' : 'render.new', performance.now(), 1);
         const rendered = reused
           ? { ok: true as const, value: reused }
-          : viewer.render(request.settings, request.visibility, fonts);
+          : composite(viewer, request.settings, request.visibility);
         if (!rendered.ok) {
           post({ id: request.id, type: 'failed', error: rendered.error }, []);
           return;
@@ -233,9 +260,11 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
 
       case 'detectBlending': {
         releasePrepared();
+        const detecting = performance.now();
         const detection = windowed
           ? { linearBlending: null, textGamma: null, differing: { encoded: null, linear: null, otherTextGamma: null } }
           : detectBlending(viewer, request.settings, request.visibility);
+        telemetry.record('detection', detecting);
         post({ id: request.id, type: 'blending', detection }, []);
         return;
       }
@@ -314,7 +343,7 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
     let approximate = settings.approximate;
     const differing = (patch: Partial<PsdRenderSettings>) => {
       const tried = { ...settings, ...patch, approximate };
-      const rendered = viewer.render(tried, visibility, fonts);
+      const rendered = composite(viewer, tried, visibility);
       if (!rendered.ok) {
         return null;
       }
@@ -342,6 +371,17 @@ export function makePsdWorkerHost(post: (reply: PsdReply, transfer: Transferable
     const toggled = closer(best, otherTextGamma);
     const textGamma = toggled === null ? null : toggled === (settings.textGamma === null);
     return { linearBlending, textGamma, differing: { encoded, linear, otherTextGamma } };
+  }
+
+  function composite(viewer: PsdViewerDocument, settings: PsdRenderSettings, visibility: [number, boolean][]) {
+    const start = performance.now();
+    const result = viewer.render(settings, visibility, fonts);
+    telemetry.record('composite', start, 1);
+    if (result.ok) {
+      telemetry.record('render.rgba.bytes', performance.now(), result.value.pixels.byteLength);
+    }
+
+    return result;
   }
 
   function releasePrepared() {

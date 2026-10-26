@@ -14,6 +14,7 @@ import type {
   PsdTextSupport
 } from '@app-game/psd/viewer';
 import type { SessionFont } from '../fonts/addFontFile';
+import { performanceEnabled, viewerPerformance } from '../telemetry/performance';
 import type {
   BlendingDetection,
   PsdReply,
@@ -122,6 +123,7 @@ export function makePsdClient(worker: PsdWorkerPort) {
         }
       };
       const abort = () => {
+        viewerPerformance.record('cancellation', performance.now(), 1);
         if (queued === job) {
           queued = undefined;
         }
@@ -238,7 +240,7 @@ export function makePsdClient(worker: PsdWorkerPort) {
     const id = ++nextId;
     return new Promise((resolve, reject) => {
       pending.set(id, { resolve, reject });
-      worker.postMessage({ ...request, id } as PsdRequest, transfer);
+      worker.postMessage({ ...request, id, telemetry: performanceEnabled() } as PsdRequest, transfer);
     });
   }
 

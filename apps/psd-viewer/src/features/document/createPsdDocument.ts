@@ -2,6 +2,7 @@ import type { PsdOpenAnswers, PsdRenderSettings } from '@app-game/psd/viewer';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 import type { OpenedPsd, PsdClient, PsdResultOf } from '../psd-worker';
 import { requiresWindowedRendering } from '../psd-worker/protocol';
+import { viewerPerformance } from '../telemetry/performance';
 
 /**
  * A file to open: its name for display, how to read its bytes, rendering settings it was captured with, and the
@@ -55,9 +56,11 @@ export function createPsdRender(
 
 /** Reads the source and opens it; a source that cannot be read fails like an unreadable file. */
 async function readAndOpen(client: PsdClient, source: PsdSource): Promise<PsdResultOf<OpenedPsd>> {
+  const reading = performance.now();
   let bytes: ArrayBuffer;
   try {
     bytes = await source.read();
+    viewerPerformance.record('source.read', reading, bytes.byteLength);
   } catch (error) {
     return { ok: false, error: { kind: 'invalid', message: `${source.name} could not be read: ${String(error)}` } };
   }

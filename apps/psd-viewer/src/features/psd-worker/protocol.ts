@@ -16,6 +16,7 @@ import type {
   PsdTextSupport
 } from '@app-game/psd/viewer';
 import type { SessionFont } from '../fonts/addFontFile';
+import type { PsdPerformanceSample } from '../telemetry/performance';
 
 /**
  * A request to the PSD worker. `id` pairs it with its reply. `open` opens as Photoshop does, with `answers` to the
@@ -26,7 +27,10 @@ import type { SessionFont } from '../fonts/addFontFile';
  * transferred), and cached renders use its active faces with `typeLayers: false`. Optional `typeLayers` renders use its raster fonts.
  * Supplied files are partial input, so they never become an `availableFonts` missing-font inventory.
  */
-export type PsdRequest =
+export type PsdRequest = PsdRequestBody & { telemetry?: boolean };
+
+/** Request payload, independent of optional diagnostics. */
+type PsdRequestBody =
   | { id: number; type: 'open'; bytes: ArrayBuffer; answers?: PsdOpenAnswers }
   | {
       id: number;
@@ -65,7 +69,10 @@ export type PsdRequest =
  * The worker's answer to the request with the same `id`. Pixel buffers are transferred, never copied.
  * `documentFonts` and `textSupport` preserve the facade's release mismatches, separately from font availability.
  */
-export type PsdReply =
+export type PsdReply = PsdReplyBody & { performance?: PsdPerformanceSample[] };
+
+/** Reply payload, independent of optional diagnostics. */
+type PsdReplyBody =
   | {
       id: number;
       type: 'opened';
