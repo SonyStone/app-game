@@ -135,8 +135,13 @@ function createDuel(
       }
     },
 
-    /** Holds the trigger, aiming at the target's core, until it blows up or `most` shots were fired; returns the shots fired. */
+    /**
+     * Holds the trigger, aiming at the target's core, until it blows up or `most` shots were
+     * fired; returns the shots fired. A gatling is revved first, so its rounds start at once.
+     */
     fireUntilDestroyed(most: number) {
+      weapon.step(1, { fire: false, rev: true });
+
       for (let step = 0; step < 1200 && combat.armorOf(target) && shots < most; step++) {
         stepOnce(true);
       }

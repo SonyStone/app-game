@@ -681,7 +681,7 @@ export function createBot(member: Member, context: BotContext) {
 
     const weapon = tankClass.weapon;
     const shots = hits / accuracy;
-    const charging = weapon.kind === 'charge' ? shots * weapon.time : 0;
+    const charging = weapon.kind === 'charge' ? shots * weapon.time : weapon.kind === 'spin' ? weapon.spinUp * (1 - (member.weapon?.spin ?? 0)) : 0;
     return shots * tankClass.interval + charging + exposure;
   }
 
@@ -1298,8 +1298,9 @@ export function createBot(member: Member, context: BotContext) {
         return charge(tank, goal, { reacted, aligned, clear, inReach, worth, range });
 
       default:
-        // Held while the shot is worth it: the gun fires as its cadence allows, and a gatling keeps spinning.
-        context.trigger(member, { fire: reacted && aligned && worth && inReach && clear });
+        // Held while the shot is worth it: the gun fires as its cadence allows. A gatling revs as
+        // soon as a target in sight comes near its reach, so it fires the moment it is on target.
+        context.trigger(member, { fire: reacted && aligned && worth && inReach && clear, rev: weaponSpec.kind === 'spin' && range < tactics.reach * REV_REACH });
         return {};
     }
   }
@@ -1334,9 +1335,11 @@ export function createBot(member: Member, context: BotContext) {
     }
 
     turnTurret(tank, goal, dt * IDLE_TURN, member.tankClass.turretSpeed);
-    // A charge is held a moment for a target that slipped out of sight, then dropped unfired.
+    // A charge is held a moment for a target that slipped out of sight, then dropped unfired; a
+    // gatling keeps revving for an enemy known to be just out of sight within its reach.
     const holding = member.weapon?.charge !== undefined && context.clock() - gun.seenAt < KEEP_CHARGE;
-    context.trigger(member, { fire: holding, cancel: !holding });
+    const rev = member.tankClass.weapon.kind === 'spin' && threat !== undefined && distance(position, threat.position) < TACTICS[member.tankClass.id].reach;
+    context.trigger(member, { fire: holding, cancel: !holding, rev });
     const mount = member.tankClass.mount;
 
     // A casemate gun on watch turns its hull toward what it watches, once it looks well away; on the move its hull leads the way.
@@ -1626,6 +1629,8 @@ const WATCH_SLACK = 0.25;
 const HASTY_CHARGE = 0.45;
 const CLOSE_SHOT = 300;
 const KEEP_CHARGE = 1.5;
+/** A gatling revs for a target in sight within this share of its class's reach. */
+const REV_REACH = 1.2;
 /**
  * A shell flying at the tank is dodged if it would pass within `DODGE_MISS` px and arrives
  * within `DODGE_LOOKAHEAD` s but no sooner than `DODGE_REACTION` s, at its class's chance to

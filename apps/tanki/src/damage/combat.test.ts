@@ -143,19 +143,17 @@ describe('blasts', () => {
     expect(shoved(400)).toBeGreaterThan(0);
   });
 
-  it('spare teammates, and only push their own tank, which a hard enough push throws into the air', () => {
+  it('spare teammates and their own tank, which they neither chip nor push', () => {
     const { combat } = createBattle({ friendlyFire: false });
     const shooter = combat.spawnTank({ x: 0, y: 0, rotation: 0 }, { color: 0, team: 'red' });
     const mate = combat.spawnTank({ x: 0, y: 60, rotation: 0 }, { color: 0, team: 'red' });
     combat.step(1 / 60);
 
-    combat.blast({ x: -28, y: 0 }, { ...blast, knockback: 450, self: 2.8 }, shooter);
-
-    expect(combat.isAirborne(shooter)).toBe(true);
+    combat.blast({ x: -28, y: 0 }, { ...blast, knockback: 4000 }, shooter);
     run(combat, 0.6);
 
     expect(combat.isAirborne(shooter)).toBe(false);
-    expect(shooter.hull.translation().x).toBeGreaterThan(80);
+    expect(Math.abs(shooter.hull.translation().x)).toBeLessThan(2);
     expect(combat.armorLeft(shooter)).toBe(1);
     expect(combat.armorLeft(mate)).toBe(1);
   });

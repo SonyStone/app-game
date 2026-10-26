@@ -126,8 +126,6 @@ export type BlastSpec = {
    * makes the blast a wall breaker. Defaults to 1.
    */
   structures?: number;
-  /** Share of the knockback the shooter's own tank takes, which lets it jump; its armor is spared. Defaults to 1. */
-  self?: number;
 };
 
 /** How a tank's turret is drawn and where its muzzle is. */
@@ -2091,8 +2089,8 @@ export function createCombat(
 
       const falloff = 1 - 0.5 * (reach.distance / spec.radius);
 
+      // A blast spares its own tank altogether: with no height to jump to, a push from its own shot would only throw it about.
       if (own) {
-        throwBody(body, reach.direction, spec.knockback * falloff * (spec.self ?? 1));
         continue;
       }
 

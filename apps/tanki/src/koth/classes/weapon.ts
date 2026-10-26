@@ -8,9 +8,12 @@ import type { TankClass } from '../tanks';
  *
  * - `single`: a shell per shot, as the Soldier's rocket launcher.
  * - `volley`: `pellets` shells at once, spread evenly over `spread` radians, as a shotgun.
- * - `spin`: a gatling that fires the moment the trigger is pulled, each round up to about `spread`
- *   radians off. Its barrels spin while it fires and run down after; firing slows the tank to
- *   `slowdown` of its speed, as the Heavy slows to a crawl with his minigun spinning.
+ * - `spin`: a gatling whose barrels take `spinUp` seconds to spin up before the first round, each
+ *   round up to about `spread` radians off. Its barrels spin while the trigger is held, or while
+ *   it is revved without firing (`Trigger.rev`), and run down over `BARRELS_DOWN` s after, so a
+ *   gatling caught cold gives its target a moment to get away, and one revved ahead fires at once.
+ *   Spinning slows the tank to `slowdown` of its speed, as the Heavy slows to a crawl with his
+ *   minigun spinning.
  * - `lob`: a grenade thrown to where the gun is aimed.
  * - `charge`: holding the trigger charges the shot for up to `time` seconds and letting go fires
  *   it: from the class's `shell` with no charge to `full` at full charge (see `chargedShell`), a
@@ -21,15 +24,15 @@ import type { TankClass } from '../tanks';
 export type WeaponSpec =
   | { kind: 'single' }
   | { kind: 'volley'; pellets: number; spread: number }
-  | { kind: 'spin'; spread: number; slowdown: number }
+  | { kind: 'spin'; spread: number; slowdown: number; spinUp: number }
   | { kind: 'lob' }
   | { kind: 'charge'; time: number; full: ShellSpec; slowdown: number };
 
 /**
- * What the trigger is doing this step: held, how far away a grenade should land, and whether
- * letting go drops a charge instead of firing it.
+ * What the trigger is doing this step: held, how far away a grenade should land, whether letting
+ * go drops a charge instead of firing it, and whether a gatling's barrels spin without firing.
  */
-export type Trigger = { fire: boolean; reach?: number; cancel?: boolean };
+export type Trigger = { fire: boolean; reach?: number; cancel?: boolean; rev?: boolean };
 
 /**
  * The weapon of a tank of `tankClass`: the wait between its shots and the trigger of its
@@ -125,9 +128,10 @@ export function createWeapon(tankClass: TankClass, random: () => number) {
       }
 
       case 'spin': {
-        spin = trigger.fire ? Math.min(spin + dt / BARRELS_UP, 1) : Math.max(spin - dt / BARRELS_DOWN, 0);
+        const spinning = trigger.fire || trigger.rev;
+        spin = spinning ? (spec.spinUp > 0 ? Math.min(spin + dt / spec.spinUp, 1) : 1) : Math.max(spin - dt / BARRELS_DOWN, 0);
 
-        if (!trigger.fire || !ready) {
+        if (!trigger.fire || !ready || spin < 1) {
           return [];
         }
 
@@ -163,8 +167,7 @@ export type Weapon = ReturnType<typeof createWeapon>;
 
 /** Seconds of wait so short they count as none. */
 const EPSILON = 1e-9;
-/** Seconds a gatling's barrels take to spin up as it fires, and to run down once it stops. */
-const BARRELS_UP = 0.15;
+/** Seconds a gatling's barrels take to run down once it stops. */
 const BARRELS_DOWN = 0.5;
 
 /**

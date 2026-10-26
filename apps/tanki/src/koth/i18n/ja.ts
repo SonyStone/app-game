@@ -63,11 +63,11 @@ export const ja: Dictionary = {
     blastHole: '爆発クレーター',
     blastDepth: '爆発の深さ',
     blastKnockback: '爆風',
-    selfPush: 'ロケットジャンプ',
     wallDamage: '壁へのダメージ',
     fragments: '破片',
     fuse: '信管',
     chargeTime: 'チャージ時間',
+    spinUp: 'スピンアップ',
     railPower: 'レール貫通力',
     fullRailPower: 'フル貫通力',
     fullRange: 'フル射程',
@@ -135,7 +135,7 @@ export const ja: Dictionary = {
   short: { scout: 'スカ', soldier: 'ソル', heavy: 'ヘビ', demoman: 'デモ', sniper: 'スナ' },
   classRole: {
     scout: '高速で側面へ。至近距離の散弾、背後から最も危険。占拠速度2倍',
-    soldier: '爆風と破片のロケット。足元に撃ってロケットジャンプ',
+    soldier: '爆風と破片のロケット。直撃が最も深く削る',
     heavy: '低速・重装甲。至近距離で装甲を削るガトリング。拠点を守る',
     demoman: '遮蔽物越しに跳ねるグレネードを投げる。大爆発。壁を壊す',
     sniper: '固定砲：押してチャージ。スコープでコアが見える。レールがコアを貫けば撃破'

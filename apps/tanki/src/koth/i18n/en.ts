@@ -65,11 +65,11 @@ export const en = {
     blastHole: 'Blast crater',
     blastDepth: 'Blast depth',
     blastKnockback: 'Blast push',
-    selfPush: 'Rocket jump',
     wallDamage: 'Wall damage',
     fragments: 'Fragments',
     fuse: 'Fuse',
     chargeTime: 'Charge time',
+    spinUp: 'Spin-up',
     railPower: 'Rail power',
     fullRailPower: 'Full power',
     fullRange: 'Full range',
@@ -137,7 +137,7 @@ export const en = {
   short: { scout: 'Sc', soldier: 'So', heavy: 'Hv', demoman: 'De', sniper: 'Sn' },
   classRole: {
     scout: 'Fast flanker; a point-blank scattergun, deadliest from behind; captures 2x',
-    soldier: 'Rockets with splash and shrapnel; rocket-jump by firing at your feet',
+    soldier: 'Rockets with splash and shrapnel; a direct hit chips deepest',
     heavy: 'Slow, plated; a gatling stream that drills armor up close; holds the point',
     demoman: 'Lobs bouncing grenades over cover; big splash; breaks walls',
     sniper: 'Casemate gun: hold to charge; the scope shows cores; a rail through one kills'

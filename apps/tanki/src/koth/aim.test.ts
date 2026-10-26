@@ -174,7 +174,7 @@ describe('the aim forecast', () => {
         const angle = (turn / 8) * Math.PI * 2 + 0.2;
 
         for (const id of ['soldier', 'scout', 'heavy', 'demoman'] as const) {
-          // A fresh tank for every shot: a rocket jump may have thrown the last one into a wall.
+          // A fresh tank for every shot: a blast may have thrown the last one into a wall.
           const shooter = spawn(combat, id, spot, 'red');
           combat.step(1 / 60);
           const forecast = forecastShot(combat, shooter, TANK_CLASSES[id], angle, 260)!;
