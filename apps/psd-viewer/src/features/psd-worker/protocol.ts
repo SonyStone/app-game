@@ -9,7 +9,10 @@ import type {
   PsdLayerPixels,
   PsdOpenAnswers,
   PsdOpening,
-  PsdPathSummary,
+  PsdSavedPath,
+  PsdNativeRegion,
+  PsdNativeRender,
+  PsdRegionCapability,
   PsdRegionPixels,
   PsdRegionRect,
   PsdRenderSettings,
@@ -34,7 +37,7 @@ export type PsdRequest = PsdRequestBody & { telemetry?: boolean };
 
 /** Request payload, independent of optional diagnostics. */
 type PsdRequestBody =
-  | { id: number; type: 'open'; bytes: ArrayBuffer; answers?: PsdOpenAnswers; mode?: 'strict' }
+  | { id: number; type: 'open'; bytes: ArrayBuffer | Blob; answers?: PsdOpenAnswers; mode?: 'strict' | 'source' }
   | {
       id: number;
       type: 'render';
@@ -54,7 +57,16 @@ type PsdRequestBody =
       liveBytes?: number;
     }
   | { id: number; type: 'original'; document: number }
-  | { id: number; type: 'channels'; document: number }
+  | { id: number; type: 'channels'; document: number; rect?: PsdRegionRect }
+  | { id: number; type: 'capability'; document: number; settings: PsdRenderSettings; visibility: [number, boolean][] }
+  | {
+      id: number;
+      type: 'inspect';
+      document: number;
+      rect: PsdRegionRect;
+      settings: PsdRenderSettings;
+      visibility: [number, boolean][];
+    }
   | { id: number; type: 'paths'; document: number }
   | { id: number; type: 'merged'; document: number }
   | { id: number; type: 'difference'; document: number; render: number }
@@ -66,7 +78,7 @@ type PsdRequestBody =
       settings: PsdRenderSettings;
       visibility: [number, boolean][];
     }
-  | { id: number; type: 'layer'; document: number; index: number }
+  | { id: number; type: 'layer'; document: number; index: number; rect?: PsdRegionRect }
   | { id: number; type: 'addFonts'; fonts: ArrayBuffer[]; sources?: string[] }
   | { id: number; type: 'listFonts' }
   | { id: number; type: 'documentFonts'; document: number }
@@ -93,12 +105,18 @@ type PsdReplyBody =
       layers: PsdLayerNode[];
       states: PsdStates;
       opening: PsdOpening;
+      windowed?: boolean;
+      sourceBacked?: boolean;
+      capability?: PsdResultOf<PsdRegionCapability>;
+      sourceLayerFailure?: PsdFailure;
     }
   | { id: number; type: 'rendered'; render: RenderedPixels }
   | { id: number; type: 'windowRendered'; images: WindowPixels[]; milliseconds: number }
   | { id: number; type: 'original'; bytes: Blob }
   | { id: number; type: 'channels'; channels: PsdSavedProcessChannels }
-  | { id: number; type: 'paths'; paths: PsdPathSummary[] }
+  | { id: number; type: 'paths'; paths: PsdSavedPath[] }
+  | { id: number; type: 'capability'; capability: PsdRegionCapability; windowed: boolean }
+  | { id: number; type: 'inspect'; saved: PsdResultOf<PsdNativeRegion>; current: PsdResultOf<PsdNativeRender> }
   | { id: number; type: 'merged'; image: PsdImage }
   | { id: number; type: 'difference'; difference: PsdDifference }
   | { id: number; type: 'blending'; detection: BlendingDetection }
@@ -159,15 +177,15 @@ export type WorkerFailure = PsdFailure | { kind: 'stale' | 'superseded'; message
 /** A value or a failure, as the worker reports parts of a reply that may fail on their own. */
 export type PsdResultOf<T> = { ok: true; value: T } | { ok: false; error: WorkerFailure };
 
-/** Bounded rendering operations. Saved pixels are only a temporary first frame. */
+/** Bounded rendering operations. Saved pixels are temporary for parsed documents and authoritative only as a saved snapshot in source sessions. */
 export type WindowRequest =
   | { kind: 'regions'; rectangles: PsdRegionRect[]; mipStep?: number }
   | { kind: 'overview'; step: number }
   | { kind: 'saved'; step: number };
 
 /** Above this canvas size, avoid whole-document recovery, rendering and comparison allocations. */
-export function requiresWindowedRendering(size: { width: number; height: number }): boolean {
-  return size.width * size.height > 16_777_216 || size.width > 16_384 || size.height > 16_384;
+export function requiresWindowedRendering(size: { width: number; height: number; windowed?: boolean }): boolean {
+  return size.windowed ?? (size.width * size.height > 16_777_216 || size.width > 16_384 || size.height > 16_384);
 }
 
 /** At most four million work pixels per window call, including conservative spatial fallbacks. */

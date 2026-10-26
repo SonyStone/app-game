@@ -1,8 +1,9 @@
-import type { PsdPathSummary, PsdSavedProcessChannels } from '@app-game/psd/viewer';
+import type { PsdSavedPath, PsdSavedProcessChannels } from '@app-game/psd/viewer';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import type { DisplayImage } from '../gpu-viewport/displayTiles';
 import type { PsdResultOf } from '../psd-worker';
 import { RgbaCanvas } from '../viewport';
+import { pathName } from './PathOverlay';
 import { channelImage, displayPixel, nativeSample } from './pixels';
 
 /** Explicit on-demand saved-channel inspection; native samples never masquerade as the current render. */
@@ -10,10 +11,11 @@ export function InspectionPanel(props: {
   image: DisplayImage | undefined;
   point: { x: number; y: number } | undefined;
   channels: PsdResultOf<PsdSavedProcessChannels> | undefined;
-  paths: PsdResultOf<PsdPathSummary[]> | undefined;
+  paths: PsdResultOf<PsdSavedPath[]> | undefined;
   onChannels: () => void;
   onPaths: () => void;
-  onLayer: (index: number) => void;
+  selectedPath: number | undefined;
+  onPath: (index: number | undefined) => void;
   maskMode: string;
   onMaskMode: (mode: 'off' | 'overlay' | 'only') => void;
   hasMask: boolean;
@@ -76,8 +78,8 @@ export function InspectionPanel(props: {
         </select>
       </label>
       <p>
-        Mask source: saved layer channel, display RGB8. Saved plane bounds; empty masks show default fill. Comp/frame
-        transforms are not applied.
+        Mask source: saved layer channel, display RGB8. Bounded saved plane window; empty masks show default fill.
+        Comp/frame transforms are not applied.
       </p>
       <button onClick={props.onChannels}>Load saved channels</button>
       <Show when={props.channels && !props.channels.ok ? props.channels.error.message : undefined}>
@@ -86,7 +88,11 @@ export function InspectionPanel(props: {
       <Show when={channels()}>
         {(saved) => (
           <>
-            <p>Saved native planes, {saved().depth}-bit. May be stale; independent of current state and visibility.</p>
+            <p>
+              Bounded saved native planes, {saved().depth}-bit. May be stale; independent of current state and
+              visibility.
+            </p>
+            <Show when={saved().metadataError}>{(message) => <p>{message()}</p>}</Show>
             <select
               aria-label="Saved channel"
               value={plane()}
@@ -130,18 +136,23 @@ export function InspectionPanel(props: {
           <>
             <ul>
               <For each={paths()}>
-                {(path) => (
+                {(path, index) => (
                   <li>
-                    {path.name} · {path.source}
-                    {path.disabled ? ' · disabled' : ''}
-                    <Show when={path.layerIndex !== undefined}>
-                      <button onClick={() => props.onLayer(path.layerIndex!)}>Select path layer</button>
-                    </Show>
+                    <button
+                      aria-pressed={props.selectedPath === index() ? 'true' : 'false'}
+                      disabled={path.outcome !== 'geometry'}
+                      onClick={() => props.onPath(props.selectedPath === index() ? undefined : index())}
+                    >
+                      {pathName(path)} ·{' '}
+                      {path.outcome === 'geometry'
+                        ? `${path.components.reduce((count, component) => count + component.subpaths.length, 0)} subpaths`
+                        : `${path.error.kind}: ${path.error.message}`}
+                    </button>
                   </li>
                 )}
               </For>
             </ul>
-            <p>{paths().length} saved paths. Geometry overlay requires a typed psd-rs/WASM geometry query.</p>
+            <p>{paths().length} saved paths. Select a path to overlay its saved curves, anchors and handles.</p>
           </>
         )}
       </Show>

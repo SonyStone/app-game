@@ -73,7 +73,7 @@ test('shows a budget refusal as an open failure and can open another file', asyn
   const source = test.info().outputPath('over-budget.psb');
   await writeFile(source, largePsb());
   await truncate(source, 128 * 1024 * 1024 + 1);
-  await page.goto('/');
+  await page.goto('/?current=1');
   const picker = page.locator('input[accept=".psd,.psb"]');
   await picker.setInputFiles(source);
   const failure = page.locator('[data-failure="budget"]');
@@ -99,7 +99,7 @@ test('measures the real large PSB open, pan, zoom and worker memory', async ({ p
   test.setTimeout(120_000);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/?current=1');
   await page.locator('input[accept=".psd,.psb"]').waitFor({ state: 'attached' });
   await page.evaluate(() => {
     const timing = { start: 0, frames: [] as { time: number; source: string; busy: string }[] };

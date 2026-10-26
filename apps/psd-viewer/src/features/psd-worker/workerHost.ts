@@ -2,6 +2,14 @@ import {
   createFontLibrary,
   loadPsdViewer,
   openPsd,
+  openPsdSource,
+  type PsdViewerSource,
+  type PsdInfo,
+  type PsdNativeRenderOptions,
+  type PsdRegionRect,
+  type PsdLayerDetail,
+  type PsdLayerPixels,
+  type PsdSavedProcessChannels,
   openPsdLikePhotoshop,
   photoshopDefaultSettings,
   type PsdFailure,
@@ -20,6 +28,7 @@ import {
   type PsdReply,
   type PsdRequest
 } from './protocol';
+import { inspectionRect, wireDisplay, wireSample } from './nativePixels';
 import { regionMips } from './regionMips';
 
 /**
@@ -60,7 +69,18 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
     );
   }
 
-  let document: { id: number; viewer: PsdViewerDocument; inputBytes: number; original: ArrayBuffer } | undefined;
+  let document:
+    | {
+        id: number;
+        viewer?: PsdViewerDocument;
+        source?: PsdViewerSource;
+        inputBytes: number;
+        original: ArrayBuffer | Blob;
+        info: PsdInfo;
+        sourceLayers?: import('@app-game/psd/viewer').PsdSourceLayer[];
+        windowed: boolean;
+      }
+    | undefined;
   let fonts: PsdFontLibrary | undefined;
   const sessionFonts = new Map<string, SessionFont>();
   const suppliedFonts = () => [...sessionFonts.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -92,7 +112,9 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
     if (request.type === 'open') {
       close();
       // Recovery opening decodes whole channels. Inspect only the fixed header before choosing that path.
-      const header = new DataView(request.bytes);
+      const blob = request.bytes instanceof Blob ? request.bytes : undefined;
+      const reader = blob ? new FileReaderSync() : undefined;
+      const header = new DataView(blob ? reader!.readAsArrayBuffer(blob.slice(0, 26)) : (request.bytes as ArrayBuffer));
       const large =
         header.byteLength >= 26 &&
         header.getUint32(0) === 0x38425053 &&
@@ -101,12 +123,68 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       const codec = await loadPsdViewer();
       wasmMemory = (await codec.default()).memory;
       telemetry.record('wasm.load', loading);
-      telemetry.record('source.retained.bytes', performance.now(), request.bytes.byteLength);
+      if (
+        blob &&
+        (request.mode === 'source' ||
+          ((blob.size > 128 * 1024 ** 2 || (header.getUint16(4) === 2 && blob.size > 64 * 1024 ** 2)) &&
+            request.mode !== 'strict'))
+      ) {
+        const blocks = new Map<number, Uint8Array>();
+        const result = await openPsdSource((offset, length) => {
+          if (offset > BigInt(Number.MAX_SAFE_INTEGER)) {
+            throw new Error('Blob offset exceeds safe host addressing');
+          }
+          const position = Number(offset);
+          if (length <= 64) {
+            // RLE row tables contain thousands of tiny words. Cache at most eight 8 KiB host slices.
+            const base = Math.floor(position / 8192) * 8192;
+            let bytes = blocks.get(base);
+            if (!bytes) {
+              bytes = new Uint8Array(reader!.readAsArrayBuffer(blob.slice(base, base + 8192 + 64)));
+              telemetry.record('source.read.max', performance.now(), bytes.length);
+              blocks.set(base, bytes);
+              if (blocks.size > 8) {
+                blocks.delete(blocks.keys().next().value!);
+              }
+            }
+            return bytes.subarray(position - base, position - base + length);
+          }
+          telemetry.record('source.read.max', performance.now(), length);
+          return new Uint8Array(reader!.readAsArrayBuffer(blob.slice(position, position + length)));
+        }, BigInt(blob.size));
+        if (!result.ok) {
+          post(failed(request, result.error), []);
+          return;
+        }
+
+        const source = result.value;
+        const indexed = source.layerInfo();
+        const sourceLayers = indexed.ok ? indexed.value : [];
+        const info = sourceInfo(source, header.getUint16(4) === 2, sourceLayers.length);
+        document = { id: ++nextDocument, source, info, sourceLayers, inputBytes: 0, original: blob, windowed: true };
+        post(
+          {
+            id: request.id,
+            type: 'opened',
+            document: document.id,
+            info,
+            layers: sourceLayers.map(sourceNode),
+            states: { comps: [], frames: [], errors: [], lastAppliedComp: null, activeFrame: null },
+            opening: { reader: 'strict', alerts: [], repairs: [] },
+            windowed: true,
+            sourceBacked: true,
+            sourceLayerFailure: indexed.ok ? undefined : indexed.error
+          },
+          []
+        );
+        return;
+      }
+
+      const bytes = blob ? reader!.readAsArrayBuffer(blob) : (request.bytes as ArrayBuffer);
+      telemetry.record('source.retained.bytes', performance.now(), bytes.byteLength);
       const opening = performance.now();
       const opened =
-        large || request.mode === 'strict'
-          ? await openPsd(request.bytes)
-          : await openPsdLikePhotoshop(request.bytes, request.answers);
+        large || request.mode === 'strict' ? await openPsd(bytes) : await openPsdLikePhotoshop(bytes, request.answers);
       telemetry.record('open', opening);
       if (!opened.ok) {
         post({ id: request.id, type: 'failed', error: opened.error }, []);
@@ -116,9 +194,17 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       document = {
         id: ++nextDocument,
         viewer: opened.value,
-        inputBytes: request.bytes.byteLength,
-        original: request.bytes
+        inputBytes: bytes.byteLength,
+        original: blob ?? bytes,
+        info: opened.value.info,
+        windowed: large
       };
+      const capability = planFor(opened.value, photoshopDefaultSettings, []);
+      document.windowed =
+        large ||
+        (capability.ok &&
+          capability.value.strategy === 'window' &&
+          opened.value.info.width * opened.value.info.height >= 1_048_576);
       post(
         {
           id: request.id,
@@ -127,7 +213,9 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
           info: opened.value.info,
           layers: [...opened.value.layers],
           states: opened.value.states,
-          opening: opened.value.opening
+          opening: opened.value.opening,
+          windowed: document.windowed,
+          capability
         },
         []
       );
@@ -173,8 +261,14 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       return;
     }
 
-    const viewer = document.viewer;
-    const windowed = requiresWindowedRendering(viewer.info);
+    if (document.source) {
+      handleSource(request as Exclude<PsdRequest, { type: 'open' | 'close' | 'addFonts' | 'listFonts' }>);
+      return;
+    }
+
+    const viewer = document.viewer!;
+    const readBudget = { liveBytes: 2 * 1024 ** 3, retainedBytes: document.inputBytes };
+    const windowed = document.windowed;
     if (windowed && ['render', 'merged', 'difference', 'textSupport'].includes(request.type)) {
       post(
         failed(request, {
@@ -187,12 +281,56 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
     }
 
     switch (request.type) {
+      case 'capability': {
+        const result = planFor(viewer, request.settings, request.visibility);
+        if (!result.ok) {
+          post(failed(request, result.error), []);
+          return;
+        }
+
+        document.windowed =
+          requiresWindowedRendering(viewer.info) ||
+          (result.value.strategy === 'window' && viewer.info.width * viewer.info.height >= 1_048_576);
+        post({ id: request.id, type: 'capability', capability: result.value, windowed: document.windowed }, []);
+        return;
+      }
+      case 'inspect': {
+        const saved = viewer.savedRegion(request.rect, savedIds(viewer.info), readBudget);
+        const current = viewer.renderNativeRegion(
+          request.rect,
+          nativeOptions(request.settings, request.visibility),
+          fonts
+        );
+        post({ id: request.id, type: 'inspect', saved, current }, [
+          ...(saved.ok ? saved.value.planes.map((plane) => plane.bytes.buffer) : []),
+          ...(current.ok ? [current.value.samples.buffer] : [])
+        ]);
+        return;
+      }
       case 'renderWindow': {
         const start = performance.now();
-        // Admission includes the host input in addition to WASM-owned document storage.
-        const budget = { liveBytes: request.liveBytes ?? 2 * 1024 * 1024 * 1024, retainedBytes: document.inputBytes };
-        const settings = { ...request.settings, maxWorkPixels: windowWorkPixels, budget };
         const window = request.window;
+        // A storage plan chooses the caller's live budget. Fonts and the retained host source stay accounted.
+        let liveBytes = request.liveBytes ?? 512 * 1024 ** 2;
+        if (window.kind === 'regions') {
+          for (const rect of window.rectangles) {
+            const plan = viewer.regionCapability(rect, nativeOptions(request.settings, request.visibility), fonts);
+            if (!plan.ok || plan.value.refusal) {
+              post(failed(request, plan.ok ? plan.value.refusal! : plan.error), []);
+              return;
+            }
+            const required = Math.ceil(Number(plan.value.liveBytes) / (64 * 1024 ** 2)) * 64 * 1024 ** 2;
+            if (request.liveBytes === undefined) {
+              liveBytes = Math.max(liveBytes, required);
+            }
+            telemetry.record('region.live.required.bytes', performance.now(), Number(plan.value.liveBytes));
+          }
+        } else {
+          liveBytes = request.liveBytes ?? 2 * 1024 ** 3;
+        }
+        telemetry.record('region.live.budget.bytes', performance.now(), liveBytes);
+        const budget = { liveBytes, retainedBytes: document.inputBytes };
+        const settings = { ...request.settings, maxWorkPixels: windowWorkPixels, budget };
         const result =
           window.kind === 'regions'
             ? viewer.renderRegions(window.rectangles, settings, request.visibility, fonts)
@@ -333,39 +471,24 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       }
 
       case 'channels': {
-        const info = viewer.info;
-        const bytes =
-          Math.ceil((info.width * info.depth) / 8) * info.height * info.channels +
-          info.colorModeDataSize +
-          info.resources.reduce((sum, resource) => sum + resource.size, 0);
-        if (info.width * info.height > windowWorkPixels || bytes > 64 * 1024 * 1024) {
-          post(
-            failed(request, {
-              kind: 'unsupported',
-              message:
-                'Saved channel inspection is bounded to 4 million pixels and 64 MiB. Bounded native channel-region reads require psd-rs support.'
-            }),
-            []
-          );
-          return;
-        }
-
-        const result = viewer.savedProcessChannels();
+        const rect = request.rect ?? inspectionRect(viewer.info);
+        const result = viewer.savedRegion(
+          rect,
+          Uint16Array.from({ length: viewer.info.channels }, (_, i) => i),
+          readBudget
+        );
+        const channels = result.ok ? { ok: true as const, value: channelPreview(result.value, rect) } : result;
         post(
-          result.ok ? { id: request.id, type: 'channels', channels: result.value } : failed(request, result.error),
-          result.ok
-            ? [
-                ...result.value.planes.map((plane) => plane.bytes.buffer),
-                result.value.colorModeData.buffer,
-                ...result.value.resources.map((resource) => resource.bytes.buffer)
-              ]
-            : []
+          channels.ok
+            ? { id: request.id, type: 'channels', channels: channels.value }
+            : failed(request, channels.error),
+          channels.ok ? channels.value.planes.map((plane) => plane.bytes.buffer) : []
         );
         return;
       }
 
       case 'paths': {
-        const result = viewer.paths();
+        const result = viewer.savedPaths();
         post(result.ok ? { id: request.id, type: 'paths', paths: result.value } : failed(request, result.error), []);
         return;
       }
@@ -377,22 +500,10 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
           return;
         }
 
-        // Adjustment and group records hold no pixels; their failure is part of the reply, not of the request.
-        const bounds = detail.value.properties.bounds;
-        const mask = detail.value.mask;
-        const rectangles =
-          mask && !('error' in mask) ? [bounds, mask.rect, ...(mask.real ? [mask.real.rect] : [])] : [bounds];
-        const previewPixels = rectangles.reduce(
-          (area, rect) => area + Math.max(0, rect.right - rect.left) * Math.max(0, rect.bottom - rect.top),
-          0
-        );
-        const pixels =
-          previewPixels > windowWorkPixels || (mask && 'error' in mask)
-            ? {
-                ok: false as const,
-                error: { kind: 'unsupported' as const, message: 'This layer is too large for a whole-layer preview.' }
-              }
-            : viewer.layerPixels(request.index);
+        const rect = request.rect ?? layerPreviewRect(detail.value, viewer.info);
+        const ids = Int16Array.from(detail.value.properties.channels);
+        const region = viewer.layerRegion(request.index, rect, ids, readBudget);
+        const pixels = region.ok ? layerPreview(region.value, rect, detail.value) : region;
         const transfer = pixels.ok
           ? [pixels.value.pixels.buffer, ...pixels.value.masks.map((mask) => mask.values.buffer)]
           : [];
@@ -400,6 +511,152 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         return;
       }
     }
+  }
+
+  /** Preflight retains host source accounting and explicitly opts into the backend's larger text budget. */
+  function nativeOptions(
+    settings: import('@app-game/psd/viewer').PsdRenderSettings,
+    visibility: [number, boolean][]
+  ): PsdNativeRenderOptions {
+    const { grayProfile, smartObjects, availableFonts, ...rest } = settings;
+    return {
+      ...rest,
+      grayProfile: grayProfile ?? undefined,
+      smartObjects: smartObjects ?? undefined,
+      availableFonts: availableFonts ? [...availableFonts] : undefined,
+      visibility,
+      maxWorkPixels: windowWorkPixels,
+      budget: { liveBytes: 2 * 1024 ** 3, retainedBytes: document?.inputBytes ?? 0 }
+    };
+  }
+
+  function planFor(viewer: PsdViewerDocument, settings: PsdRenderSettings, visibility: [number, boolean][]) {
+    return viewer.regionCapability(
+      { left: 0, top: 0, width: Math.min(544, viewer.info.width), height: Math.min(544, viewer.info.height) },
+      nativeOptions(settings, visibility),
+      fonts
+    );
+  }
+
+  /** Source sessions never silently compose layers or claim saved pixels reflect visibility/settings. */
+  function handleSource(request: Exclude<PsdRequest, { type: 'open' | 'close' | 'addFonts' | 'listFonts' }>) {
+    const source = document!.source!;
+    const info = document!.info;
+    if (request.type === 'original') {
+      post({ id: request.id, type: 'original', bytes: new Blob([document!.original]) }, []);
+      return;
+    }
+
+    if (request.type === 'inspect') {
+      const saved = source.savedRegion(request.rect, savedIds(info));
+      post(
+        { id: request.id, type: 'inspect', saved, current: sourceUnsupported() },
+        saved.ok ? saved.value.planes.map((plane) => plane.bytes.buffer) : []
+      );
+      return;
+    }
+
+    if (request.type === 'channels') {
+      const rect = request.rect ?? inspectionRect(info);
+      const result = source.savedRegion(
+        rect,
+        Uint16Array.from({ length: info.channels }, (_, i) => i)
+      );
+      post(
+        result.ok
+          ? { id: request.id, type: 'channels', channels: channelPreview(result.value, rect) }
+          : failed(request, result.error),
+        result.ok ? result.value.planes.map((plane) => plane.bytes.buffer) : []
+      );
+      return;
+    }
+
+    if (request.type === 'layer') {
+      const layer = document!.sourceLayers?.find((layer) => layer.index === request.index);
+      if (!layer) {
+        post(failed(request, { kind: 'unsupported', message: 'This source layer carrier cannot be indexed.' }), []);
+        return;
+      }
+      const detail = sourceDetail(layer);
+      const rect = request.rect ?? layerPreviewRect(detail, info);
+      const region = source.layerRegion(
+        layer.index,
+        rect,
+        Int16Array.from(layer.channels.map((channel) => channel.id))
+      );
+      const pixels = region.ok ? layerPreview(region.value, rect, detail) : region;
+      post(
+        { id: request.id, type: 'layer', detail, pixels },
+        pixels.ok ? [pixels.value.pixels.buffer, ...pixels.value.masks.map((mask) => mask.values.buffer)] : []
+      );
+      return;
+    }
+
+    if (request.type === 'documentFonts') {
+      post({ id: request.id, type: 'documentFonts', report: { layers: [], fonts: [], releaseMismatches: [] } }, []);
+      return;
+    }
+
+    if (request.type === 'renderWindow') {
+      if (![0, 1, 3].includes(info.mode)) {
+        post(
+          failed(request, {
+            kind: 'unsupported',
+            message: `Source-backed display conversion for mode ${info.mode} is unavailable. Native saved planes remain inspectable.`
+          }),
+          []
+        );
+        return;
+      }
+
+      const start = performance.now();
+      const window = request.window;
+      const images: import('./protocol').WindowPixels[] = [];
+      if (window.kind === 'regions') {
+        for (const rect of window.rectangles) {
+          const result = source.savedRegion(rect, savedIds(info));
+          if (!result.ok) {
+            post(failed(request, result.error), []);
+            return;
+          }
+          const image = wireDisplay(result.value, rect);
+          images.push({
+            ...image,
+            populated: hasVisiblePixels(image.pixels),
+            ...(window.mipStep ? { mips: regionMips(image, window.mipStep) } : {})
+          });
+        }
+      } else {
+        const step = window.step;
+        const width = Math.ceil(info.width / step);
+        const height = Math.ceil(info.height / step);
+        const result = source.savedOverview(step, savedIds(info));
+        if (!result.ok) {
+          post(failed(request, result.error), []);
+          return;
+        }
+        const pixels = wireDisplay(result.value, { left: 0, top: 0, width, height }).pixels;
+        images.push({
+          left: 0,
+          top: 0,
+          width,
+          height,
+          step,
+          pixels,
+          source: 'savedComposite',
+          strategy: 'window',
+          exactToLayerRender: false,
+          approximations: ['Source-backed saved composite may be stale; original matte retained.']
+        });
+      }
+      post(
+        { id: request.id, type: 'windowRendered', images, milliseconds: performance.now() - start },
+        images.flatMap((image) => [image.pixels.buffer, ...(image.mips ?? []).map((mip) => mip.pixels.buffer)])
+      );
+      return;
+    }
+
+    post(failed(request, sourceUnsupported().error), []);
   }
 
   /**
@@ -473,7 +730,8 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
   function close() {
     releasePrepared();
     renders.clear();
-    document?.viewer.close();
+    document?.viewer?.close();
+    document?.source?.close();
     document = undefined;
   }
 
@@ -525,4 +783,175 @@ function hasVisiblePixels(pixels: Uint8Array) {
   }
 
   return false;
+}
+
+/** Saved color planes plus alpha only when known; extra auxiliary plates are loaded separately by the channel panel. */
+function savedIds(info: Pick<PsdInfo, 'mode' | 'channels' | 'mergedImage'>) {
+  const colors = info.mode === 3 || info.mode === 9 ? 3 : info.mode === 4 ? 4 : 1;
+  return Uint16Array.from({ length: Math.min(info.channels, colors + (info.mergedImage?.alpha ? 1 : 0)) }, (_, i) => i);
+}
+
+function sourceUnsupported() {
+  return {
+    ok: false as const,
+    error: {
+      kind: 'unsupported' as const,
+      message:
+        'Source-backed view reads potentially stale saved pixels. Current layer composition and document-wide metadata require the eager reader.'
+    }
+  };
+}
+
+function sourceInfo(source: PsdViewerSource, psb: boolean, layers: number): PsdInfo {
+  const info = source.info;
+  return {
+    ...info,
+    psb,
+    modeName:
+      ({ 0: 'Bitmap', 1: 'Grayscale', 3: 'RGB', 4: 'CMYK', 9: 'Lab' } as Record<number, string>)[info.mode] ??
+      `Mode ${info.mode}`,
+    colorModeDataSize: Number(info.colorMode.length),
+    resources: [],
+    resourcesTailSize: 0,
+    blocks: [],
+    layerSource: 'source-backed primary records',
+    layerRecords: layers,
+    groups: 0,
+    globalMaskSize: 0,
+    mergedTransparency: false,
+    mergedImage: info.merged
+      ? { compression: 'source-backed', alpha: false, matte: true, size: Number(info.merged.length) }
+      : null,
+    notes: [
+      'Source-backed saved image may be stale; original matte retained. Alpha interpretation, profiles, comps and document-wide state are not imported.'
+    ]
+  };
+}
+
+function sourceNode(layer: import('@app-game/psd/viewer').PsdSourceLayer): PsdLayerNode {
+  return {
+    index: layer.index,
+    name: layer.name,
+    kind: 'pixel',
+    bounds: { left: layer.left, top: layer.top, right: layer.left + layer.width, bottom: layer.top + layer.height },
+    visible: true,
+    opacity: 255,
+    fill: 255,
+    blendMode: 'normal',
+    clipped: false,
+    background: false,
+    transparencyShapesLayer: true,
+    legacyOpacity: null,
+    mask: null,
+    vectorMask: null,
+    effects: null,
+    keys: [],
+    notes: ['Source metadata only; visibility and blend state are unavailable.']
+  };
+}
+
+function sourceDetail(layer: import('@app-game/psd/viewer').PsdSourceLayer): PsdLayerDetail {
+  return {
+    index: layer.index,
+    name: layer.name,
+    kind: 'pixel',
+    properties: {
+      blendMode: 'unavailable',
+      blendKey: '',
+      opacity: 255,
+      fill: 255,
+      legacyOpacity: null,
+      visible: true,
+      clipped: false,
+      transparencyLocked: false,
+      knockout: 'none',
+      blendClippedAsGroup: false,
+      blendInteriorAsGroup: false,
+      transparencyShapesLayer: false,
+      layerMaskHidesEffects: false,
+      vectorMaskHidesEffects: false,
+      bounds: sourceNode(layer).bounds,
+      channels: layer.channels.map((channel) => channel.id),
+      blendIf: null
+    },
+    mask: null,
+    vectorMask: null,
+    effects: null,
+    adjustment: null,
+    text: null,
+    smartObject: null,
+    notes: ['Bounded original source channels only; rendering properties are unavailable.'],
+    blocks: []
+  };
+}
+
+function layerPreviewRect(detail: PsdLayerDetail, info: PsdInfo): PsdRegionRect {
+  const bounds = detail.properties.bounds;
+  const left = Math.max(0, Math.min(info.width - 1, bounds.left));
+  const top = Math.max(0, Math.min(info.height - 1, bounds.top));
+  return {
+    left,
+    top,
+    width: Math.max(1, Math.min(256, info.width - left, bounds.right - left)),
+    height: Math.max(1, Math.min(256, info.height - top, bounds.bottom - top))
+  };
+}
+
+function channelPreview(
+  region: import('@app-game/psd/viewer').PsdNativeRegion,
+  rect: PsdRegionRect
+): PsdSavedProcessChannels & { left: number; top: number } {
+  return {
+    ...rect,
+    depth: region.depth,
+    mode: region.mode,
+    planes: region.planes.map((plane) => ({
+      index: plane.id,
+      bytes: plane.bytes,
+      name: `Channel ${plane.id}`,
+      role:
+        plane.id < (region.mode === 4 ? 4 : region.mode === 3 || region.mode === 9 ? 3 : 1) ? 'process' : 'auxiliary',
+      visible: true
+    })),
+    colorModeData: new Uint8Array(),
+    resources: [],
+    metadataError: 'Bounded planes only; channel names and profile metadata are not imported.',
+    source: region.source
+  };
+}
+
+function layerPreview(
+  region: import('@app-game/psd/viewer').PsdNativeRegion,
+  rect: PsdRegionRect,
+  detail: PsdLayerDetail
+): import('./protocol').PsdResultOf<PsdLayerPixels> {
+  if (![0, 1, 3].includes(region.mode)) {
+    return {
+      ok: false,
+      error: {
+        kind: 'unsupported',
+        message: 'Native layer channels are available; this layer preview requires RGB/Gray display conversion.'
+      }
+    };
+  }
+  const pixels = region.planes.some((plane) => plane.id >= 0)
+    ? wireDisplay(region, rect).pixels
+    : new Uint8Array(rect.width * rect.height * 4);
+  const masks = region.planes
+    .filter((plane) => plane.id === -2 || plane.id === -3)
+    .map((plane) => {
+      const maximum = region.depth === 16 ? 65535 : region.depth === 8 ? 255 : 1;
+      const values = Uint8Array.from({ length: plane.width * plane.height }, (_, i) =>
+        Math.round(
+          ((wireSample(region, plane.id, plane.left + (i % plane.width), plane.top + Math.floor(i / plane.width)) ??
+            0) /
+            maximum) *
+            255
+        )
+      );
+      const mask = detail.mask && !('error' in detail.mask) ? detail.mask : undefined;
+      const metadata = plane.id === -3 ? mask?.real : mask;
+      return { ...plane, values, defaultColor: metadata?.defaultColor ?? 255, disabled: metadata?.disabled ?? false };
+    });
+  return { ok: true, value: { ...rect, pixels, masks } };
 }

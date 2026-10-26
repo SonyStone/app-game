@@ -15,7 +15,8 @@ export default defineConfig({
     trace: 'retain-on-failure'
   },
   webServer: {
-    command: 'pnpm exec vite --host 127.0.0.1 --port 3131 --strictPort',
+    command: 'node ../../node_modules/vite/bin/vite.js --host 127.0.0.1 --port 3131 --strictPort',
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
     url: 'http://127.0.0.1:3131',
     reuseExistingServer: false,
     timeout: 60_000

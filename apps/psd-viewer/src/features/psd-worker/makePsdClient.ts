@@ -8,7 +8,9 @@ import type {
   PsdLayerPixels,
   PsdOpenAnswers,
   PsdOpening,
-  PsdPathSummary,
+  PsdSavedPath,
+  PsdRegionCapability,
+  PsdRegionRect,
   PsdRenderSettings,
   PsdSavedProcessChannels,
   PsdStates,
@@ -113,20 +115,24 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
    * `needsAnswer` with the prompt: open again with its answer.
    */
   async function open(
-    bytes: ArrayBuffer,
+    bytes: ArrayBuffer | Blob,
     answers: PsdOpenAnswers = {},
-    mode?: 'strict'
+    mode?: 'strict' | 'source'
   ): Promise<PsdResultOf<OpenedPsd>> {
-    const reply = await send({ type: 'open', bytes, answers, mode }, [bytes]);
+    const reply = await send({ type: 'open', bytes, answers, mode }, bytes instanceof ArrayBuffer ? [bytes] : []);
     return reply.type === 'opened'
       ? {
           ok: true,
           value: {
             document: reply.document,
-            info: reply.info,
+            info: { ...reply.info, windowed: reply.windowed },
             layers: reply.layers,
             states: reply.states,
-            opening: reply.opening
+            opening: reply.opening,
+            windowed: reply.windowed,
+            sourceBacked: reply.sourceBacked,
+            capability: reply.capability,
+            sourceLayerFailure: reply.sourceLayerFailure
           }
         }
       : failure(reply);
@@ -234,22 +240,43 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
   }
 
   /** Reads saved native channel planes on demand, subject to worker admission. */
-  async function channels(document: number): Promise<PsdResultOf<PsdSavedProcessChannels>> {
-    const reply = await send({ type: 'channels', document });
+  async function channels(document: number, rect?: PsdRegionRect): Promise<PsdResultOf<PsdSavedProcessChannels>> {
+    const reply = await send({ type: 'channels', document, rect });
     return reply.type === 'channels' ? { ok: true, value: reply.channels } : failure(reply);
   }
 
   /** Lists typed saved path carriers; never parses descriptors in the UI. */
-  async function paths(document: number): Promise<PsdResultOf<PsdPathSummary[]>> {
+  async function paths(document: number): Promise<PsdResultOf<PsdSavedPath[]>> {
     const reply = await send({ type: 'paths', document });
     return reply.type === 'paths' ? { ok: true, value: reply.paths } : failure(reply);
   }
 
   /** One layer's saved-record detail and admitted RGB8 pixels. */
-  async function layer(document: number, index: number): Promise<PsdResultOf<LayerContents>> {
-    const reply = await send({ type: 'layer', document, index });
+  async function layer(document: number, index: number, rect?: PsdRegionRect): Promise<PsdResultOf<LayerContents>> {
+    const reply = await send({ type: 'layer', document, index, rect });
     return reply.type === 'layer'
       ? { ok: true, value: { detail: reply.detail, pixels: reply.pixels } }
+      : failure(reply);
+  }
+
+  /** Preflights current settings and returns typed storage causes without rendering pixels. */
+  async function capability(document: number, settings: PsdRenderSettings, visibility: [number, boolean][]) {
+    const reply = await send({ type: 'capability', document, settings, visibility });
+    return reply.type === 'capability'
+      ? { ok: true as const, value: { plan: reply.capability, windowed: reply.windowed } }
+      : failure(reply);
+  }
+
+  /** Reads a native current/saved comparison window without converting through display RGB8. */
+  async function inspect(
+    document: number,
+    rect: PsdRegionRect,
+    settings: PsdRenderSettings,
+    visibility: [number, boolean][]
+  ) {
+    const reply = await send({ type: 'inspect', document, rect, settings, visibility });
+    return reply.type === 'inspect'
+      ? { ok: true as const, value: { saved: reply.saved, current: reply.current } }
       : failure(reply);
   }
 
@@ -367,6 +394,8 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
 
   return {
     open,
+    capability,
+    inspect,
     render,
     renderWindow,
     merged,
@@ -404,10 +433,14 @@ export type PsdWorkerPort = {
  */
 export type OpenedPsd = {
   document: number;
-  info: PsdInfo;
+  info: PsdInfo & { windowed?: boolean };
   layers: PsdLayerNode[];
   states: PsdStates;
   opening: PsdOpening;
+  windowed?: boolean;
+  sourceBacked?: boolean;
+  capability?: PsdResultOf<PsdRegionCapability>;
+  sourceLayerFailure?: import('@app-game/psd/viewer').PsdFailure;
 };
 
 /** A layer's detail, and its pixels or why it has none. */

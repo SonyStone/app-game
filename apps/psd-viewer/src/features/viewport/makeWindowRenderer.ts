@@ -95,7 +95,13 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
     }
 
     lod = chooseLod(view.scale * (size.dpr ?? 1), lod);
-    const plan = planWindow(snapshot.opened.info, view, size, budgetBytes);
+    const plan = planWindow(
+      snapshot.opened.info,
+      view,
+      size,
+      budgetBytes,
+      snapshot.opened.windowed === true && snapshot.opened.info.width * snapshot.opened.info.height <= 16_777_216
+    );
     if (!plan || signal.aborted) {
       return undefined;
     }
@@ -161,7 +167,13 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
               .filter((image) => plan.kind === 'overview' || image.step <= step)
               .flatMap((image) => image.approximations)
           ),
-          ...(saved ? ['Temporary saved preview: may be stale; replacing with a fresh layer render.'] : []),
+          ...(saved
+            ? [
+                snapshot.opened.sourceBacked
+                  ? 'Source-backed saved composite may be stale; settings and visibility do not change these pixels.'
+                  : 'Temporary saved preview: may be stale; replacing with a fresh layer render.'
+              ]
+            : []),
           ...(plan.kind === 'overview'
             ? ['Coarse preview uses integer point sampling; zoom in for strict source pixels.']
             : [])
@@ -197,9 +209,18 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
     let requestMilliseconds = 0;
     let populatedTiles = 0;
 
-    if (plan.kind === 'overview' && previewedDocument !== document && snapshot.visibility.length === 0) {
+    if (
+      !snapshot.opened.sourceBacked &&
+      (plan.kind === 'overview' || (snapshot.opened.windowed === true && info.width * info.height <= 16_777_216)) &&
+      previewedDocument !== document &&
+      snapshot.visibility.length === 0
+    ) {
       previewedDocument = document;
-      const saved = await request(`saved:${plan.step}`, { kind: 'saved', step: plan.step });
+      const previewStep =
+        plan.kind === 'overview'
+          ? plan.step
+          : Math.max(1, Math.ceil(Math.sqrt((info.width * info.height) / 1_048_576)));
+      const saved = await request(`saved:${previewStep}`, { kind: 'saved', step: previewStep });
       if (signal.aborted || previous !== snapshot) {
         return undefined;
       }
@@ -210,11 +231,15 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
     }
 
     previewedDocument = document;
-    const concurrency = plan.kind === 'regions' && client.prepareWindows
-      ? await client.prepareWindows(
-          document, snapshot.settings, snapshot.visibility, keys.filter((key) => !current(key, step)).length
-        )
-      : 1;
+    const concurrency =
+      plan.kind === 'regions' && client.prepareWindows
+        ? await client.prepareWindows(
+            document,
+            snapshot.settings,
+            snapshot.visibility,
+            keys.filter((key) => !current(key, step)).length
+          )
+        : 1;
     let nextIndex = 0;
     let failed: Extract<PsdResultOf<DisplayTile>, { ok: false }> | undefined;
     const run = async () => {
@@ -342,7 +367,11 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
               })
             )
             .sort((a, b) => b.step - a.step);
-          if (!controller.signal.aborted && pending.get(key)?.result === job && window.kind !== 'saved') {
+          if (
+            !controller.signal.aborted &&
+            pending.get(key)?.result === job &&
+            (window.kind !== 'saved' || snapshot.opened.sourceBacked)
+          ) {
             remove(key);
             cache.set(key, levels);
             admitted.add(levels.at(-1)!);
@@ -460,7 +489,8 @@ export function planWindow(
   document: { width: number; height: number },
   view: View,
   viewport: { width: number; height: number },
-  budgetBytes = 64 * 1024 * 1024
+  budgetBytes = 64 * 1024 * 1024,
+  sourceTiles = false
 ):
   | { kind: 'overview'; step: number }
   | { kind: 'regions'; step: number; rectangle: PsdRegionRect; tiles: PsdRegionRect[] }
@@ -470,7 +500,11 @@ export function planWindow(
   }
 
   const step = Math.max(1, Math.floor(1 / view.scale));
-  if (view.scale < 1 && Math.ceil(document.width / step) * Math.ceil(document.height / step) <= 2_097_152) {
+  if (
+    !sourceTiles &&
+    view.scale < 1 &&
+    Math.ceil(document.width / step) * Math.ceil(document.height / step) <= 2_097_152
+  ) {
     return { kind: 'overview', step };
   }
 

@@ -15,6 +15,8 @@ export function StatusArea(props: {
   onSelect: (index: number) => void;
   /** Keeps the viewport size stable while the temporary preview is replaced by layer metadata. */
   windowed?: boolean;
+  /** Persistent saved snapshots are never presented as a preview awaiting a current layer render. */
+  sourceBacked?: boolean;
 }) {
   const failure = () => (props.render && !props.render.ok ? props.render.error : undefined);
   const approximations = () => (props.render?.ok ? props.render.value.approximations : []);
@@ -33,7 +35,9 @@ export function StatusArea(props: {
           : failure()
             ? 'failed'
             : saved()
-              ? 'preview'
+              ? props.sourceBacked
+                ? 'saved'
+                : 'preview'
               : approximations().length
                 ? 'approximate'
                 : 'exact'
@@ -42,11 +46,13 @@ export function StatusArea(props: {
       <Show when={quality()}>
         {(progress) => (
           <p role="status" aria-label="Tile refinement">
-            {progress().kind === 'pointPreview'
-              ? 'Coarse preview'
-              : progress().coarse
-                ? 'Coarse coverage · refining'
-                : 'Fresh coverage'}{' '}
+            {props.sourceBacked
+              ? 'Saved coverage'
+              : progress().kind === 'pointPreview'
+                ? 'Coarse preview'
+                : progress().coarse
+                  ? 'Coarse coverage · refining'
+                  : 'Fresh coverage'}{' '}
             · {progress().completed}/{progress().required} tiles
             {' · '}
             {progress().kind === 'pointPreview'
@@ -75,9 +81,17 @@ export function StatusArea(props: {
       </Show>
       <Show when={approximations().length}>
         <p class={styles.approximate}>
-          <strong>{saved() ? 'Temporary saved preview:' : 'Not exactly as in Photoshop:'}</strong>{' '}
+          <strong>
+            {saved()
+              ? props.sourceBacked
+                ? 'Saved composite:'
+                : 'Temporary saved preview:'
+              : 'Not exactly as in Photoshop:'}
+          </strong>{' '}
           {saved()
-            ? 'may be stale; replacing with a fresh layer render.'
+            ? props.sourceBacked
+              ? 'may be stale; settings and visibility do not alter saved pixels.'
+              : 'may be stale; replacing with a fresh layer render.'
             : 'This render approximates what is listed below.'}
           <Show when={!windowed()}> Photoshop's own image is in the Photoshop view.</Show>
         </p>
