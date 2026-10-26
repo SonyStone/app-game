@@ -38,7 +38,9 @@ import { createWeapon } from './weapon';
  * seeds with a comma-separated list: a class's kills against deaths moves by 0.2-0.5 from one set
  * of twelve to another, so a change is worth checking on a second set. `TANKI_VICTIMS` lists the
  * classes the kill times are taken against; defaults to `soldier,heavy,scout`. `TANKI_ROSTER`
- * sets the classes of both teams in the full matches (see `ROSTER`).
+ * sets the classes of both teams in the full matches (see `ROSTER`); `TANKI_RESULT` makes them
+ * print their raw counts as one JSON line for `scripts/sim.mjs`, which runs shards of seeds in
+ * parallel: `pnpm sim --seeds 36`.
  */
 describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
   let rapier: Rapier;
@@ -388,6 +390,11 @@ describe.skipIf(!import.meta.env.TANKI_BALANCE)('class balance', () => {
     }
 
     console.log(lines.join('\n'));
+
+    // For `scripts/sim.mjs`, which runs shards of seeds in parallel and adds their raw counts up.
+    if (import.meta.env.TANKI_RESULT) {
+      console.log(`TANKI_RESULT ${JSON.stringify({ seeds, wins, stalls, longest, matches, totals: Object.fromEntries(totals) })}`);
+    }
   }, 900_000);
 });
 

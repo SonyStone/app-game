@@ -81,10 +81,21 @@ export function findShortcuts(grid: NavGrid, map: KothMap, team: TeamId, breakab
  * other along a way at most `OPENED_DETOUR` times as long as the straight line, plus a little.
  */
 export function isOpened(grid: NavGrid, shortcut: Shortcut) {
+  // The answer changes only when walls do, so it is kept until the grid's next revision.
+  const known = openedCache.get(shortcut);
+
+  if (known && known.revision === grid.revision) {
+    return known.opened;
+  }
+
   const [one, other] = shortcut.sides;
   const way = findPath(grid, one, other);
-  return way !== undefined && pathLength(way) < Math.hypot(other.x - one.x, other.y - one.y) * OPENED_DETOUR + OPENED_SLACK;
+  const opened = way !== undefined && pathLength(way) < Math.hypot(other.x - one.x, other.y - one.y) * OPENED_DETOUR + OPENED_SLACK;
+  openedCache.set(shortcut, { revision: grid.revision, opened });
+  return opened;
 }
+
+const openedCache = new WeakMap<Shortcut, { revision: number; opened: boolean }>();
 
 /** The ways to the point, the hall first: the most used, so the first post filled. */
 export const LANES: readonly Lane[] = ['center', 'north', 'south'];
