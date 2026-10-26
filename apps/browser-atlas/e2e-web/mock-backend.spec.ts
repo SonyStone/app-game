@@ -68,21 +68,21 @@ test('opens current Help and About dialogs in the localhost app', async ({ page 
   await page.getByRole('button', { name: 'Pop out', exact: true }).click();
   const popup = await popupPromise;
   await expect(popup.getByRole('heading', { name: 'Browser Atlas' })).toBeVisible();
-  await expect(popup.getByRole('region', { name: 'Left explorer pane' })).toBeVisible();
+  await expect(popup.getByRole('region', { name: 'Explorer 1' })).toBeVisible();
   await popup.close();
 });
 
 test('reveals the mock browser window requested by the extension-action URL', async ({ page }) => {
   await page.goto('/browser-atlas?focusWindowId=1002');
 
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   await expect(leftPane.locator('[data-node-id="explore-window-1002"]')).toBeFocused();
 });
 
 test('supports persistent tab lifecycle and moves tabs between mock windows', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
 
   const sourceTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
@@ -111,8 +111,8 @@ test('supports persistent tab lifecycle and moves tabs between mock windows', as
 
 test('moves tabs and windows between independent mock browsers', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('combobox', { name: 'Explorer data source' }).selectOption({ label: 'Firefox (mock)' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
 
@@ -148,8 +148,8 @@ test('moves tabs and windows between independent mock browsers', async ({ page }
 
 test('copies a tab between independent mock browsers when Alt is held', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('combobox', { name: 'Explorer data source' }).selectOption({ label: 'Firefox (mock)' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
 
@@ -170,7 +170,7 @@ test('copies a tab between independent mock browsers when Alt is held', async ({
 
 test('shows original live-window and live-tab statistics for collapsed mock branches', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const liveWindow = leftPane.locator('[data-node-id="explore-window-1001"]');
 
   await liveWindow.getByRole('button', { name: 'Collapse node' }).click();
@@ -193,7 +193,7 @@ test('shows original live-window and live-tab statistics for collapsed mock bran
 
 test('persists interaction settings and defaults tab activation to double click', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const firstSavedLink = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-chrome"] a');
 
   await firstSavedLink.click();
@@ -217,7 +217,8 @@ test('persists interaction settings and defaults tab activation to double click'
   await expect.poll(() => readFocusedMockWindowId(page)).toBe(1002);
 
   await page.reload();
-  await page.getByRole('button', { name: 'Settings' }).click();
+  // The Settings panel stays open across reloads, like every other dock panel.
+  await expect(page.getByRole('region', { name: 'Browser Atlas settings' })).toBeVisible();
   await expect(page.getByLabel('Activate with one click')).toBeChecked();
   await expect(page.getByLabel('Open Browser Atlas on startup')).toBeChecked();
   await expect(page.getByLabel('Nest new tabs under their opener')).toBeChecked();
@@ -226,7 +227,7 @@ test('persists interaction settings and defaults tab activation to double click'
 
 test('restores mock windows in retained bounds and honors the original-bounds setting', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const savedWindow = leftPane.locator('[data-node-id="explore-saved-window-mock-saved-window-reference"]');
 
   await savedWindow.getByTitle('Restore this saved window').click();
@@ -257,7 +258,7 @@ test('restores mock windows in retained bounds and honors the original-bounds se
 
 test('applies and persists original appearance settings in the localhost mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const activeTabTitle = leftPane.locator('[data-node-id="explore-tab-2001"] span.truncate').first();
   const openTabTitle = leftPane.locator('[data-node-id="explore-tab-2002"] span.truncate').first();
   const savedTabTitle = leftPane
@@ -291,7 +292,7 @@ test('applies and persists original appearance settings in the localhost mock', 
   await expect(page.locator('main')).toHaveAttribute('data-browser-atlas-theme', 'light');
   await expect(activeTabTitle).toHaveCSS('color', 'rgb(171, 205, 239)');
   await expect(openTabTitle).toHaveCSS('color', 'rgb(101, 67, 33)');
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByRole('region', { name: 'Browser Atlas settings' })).toBeVisible();
   await expect(page.getByLabel('Override saved tab color')).toBeChecked();
   await expect(page.getByLabel('Saved tab color', { exact: true })).toHaveValue('#123456');
   await expect(page.getByLabel('Override note color')).toBeChecked();
@@ -325,8 +326,8 @@ test('fills appearance defaults when reading pre-appearance settings', async ({ 
 test('auto-follows focus changes from the opposite mock pane and honors its setting', async ({ page }) => {
   await page.setViewportSize({ width: 1200, height: 180 });
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
   const leftScroller = leftPane.getByRole('tabpanel');
   const targetWindow = rightPane.locator('[data-node-id="explore-window-1002"]');
@@ -353,7 +354,7 @@ test('auto-follows focus changes from the opposite mock pane and honors its sett
 
 test('keeps custom live and saved window titles in the website mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const liveWindow = leftPane.locator('[data-node-id="explore-window-1001"]');
 
   await selectTreeRow(liveWindow);
@@ -374,7 +375,7 @@ test('keeps custom live and saved window titles in the website mock', async ({ p
 
 test('restores only the latest saved window session with Alt activation in the website mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const liveWindow = leftPane.locator('[data-node-id="explore-window-1001"]');
   const liveTab = leftPane.locator('[data-node-id="explore-tab-2001"]');
   const menu = page.getByRole('menu', { name: 'Tree commands' });
@@ -428,7 +429,7 @@ test('restores only the latest saved window session with Alt activation in the w
 
 test('opens saved links in a new or last mock window without restoring the saved copy', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const savedTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-design"]');
   const savedLink = savedTab.getByRole('link', { name: 'Tabs Outliner architecture notes' });
   const url = 'https://example.com/browser-atlas/design';
@@ -480,8 +481,8 @@ test('opens saved links in a new or last mock window without restoring the saved
 
 test('allows every persistent node kind to contain descendants', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
 
   const savedWindow = leftPane.locator('[data-node-id="explore-saved-window-mock-saved-window-reference"]');
@@ -498,8 +499,8 @@ test('allows every persistent node kind to contain descendants', async ({ page }
 
 test('creates precisely placed organizers by dragging the toolbar tools in the website mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
   const liveTab = rightPane.locator('[data-node-id="explore-tab-2002"]');
 
@@ -532,8 +533,8 @@ test('creates precisely placed organizers by dragging the toolbar tools in the w
 
 test('creates a live mock window where the Window toolbar tool is dropped', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
   const projectGroup = rightPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
 
@@ -554,8 +555,8 @@ test('creates a live mock window where the Window toolbar tool is dropped', asyn
 
 test('creates and retains a protected Google Doc where the Doc toolbar tool is dropped', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
   const projectGroup = rightPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
 
@@ -584,8 +585,8 @@ test('creates and retains a protected Google Doc where the Doc toolbar tool is d
 
 test('copies a complete persistent hierarchy with Alt-drag in the website mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
 
   const sourceWindow = leftPane.locator('[data-node-id="explore-saved-window-mock-saved-window-reference"]');
@@ -606,8 +607,8 @@ test('copies a complete persistent hierarchy with Alt-drag in the website mock',
 
 test('keeps a live tab inside a saved note without moving its browser tab', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
 
   const liveTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
@@ -625,7 +626,7 @@ test('keeps a live tab inside a saved note without moving its browser tab', asyn
 
 test('opens a saved group as a live mock window', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   await leftPane.locator('[data-node-id="explore-root"]').click();
   await acceptNextPrompt(page, 'Mock window group', () => leftPane.getByTitle('Create a saved group').click());
 
@@ -657,8 +658,8 @@ test('opens a saved group as a live mock window', async ({ page }) => {
 
 test('turns a saved group into a new mock window when a live tab is dropped inside', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await leftPane.locator('[data-node-id="explore-root"]').click();
   await acceptNextPrompt(page, 'Dropped tab window', () => leftPane.getByTitle('Create a saved group').click());
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
@@ -688,8 +689,8 @@ test('turns a saved group into a new mock window when a live tab is dropped insi
 
 test('liberates a live tab into a new mock window by dropping it on the Explore root', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
   const liveTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
 
@@ -717,7 +718,7 @@ test('liberates a live tab into a new mock window by dropping it on the Explore 
 
 test('attaches notes to live tabs and preserves their context on close', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const liveTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
   await liveTab.click();
   acceptNextOperationDialog(page, 'Why this tab matters');
@@ -739,7 +740,7 @@ test('attaches notes to live tabs and preserves their context on close', async (
 
 test('save-closes only the selected live mock tab while its hierarchy is expanded', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const sourceTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
   const nestedWindow = leftPane.locator('[data-node-id="explore-window-1002"]');
   await selectTreeRow(nestedWindow);
@@ -758,7 +759,7 @@ test('save-closes only the selected live mock tab while its hierarchy is expande
 
 test('save-closes every live mock descendant hidden beneath a collapsed tab', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const sourceTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
   const nestedWindow = leftPane.locator('[data-node-id="explore-window-1002"]');
   await selectTreeRow(nestedWindow);
@@ -785,7 +786,7 @@ test('save-closes every live mock descendant hidden beneath a collapsed tab', as
 
 test('supports F2 inline tab notes and original note-to-organizer shorthands in the mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const liveTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
 
   await liveTab.focus();
@@ -818,7 +819,7 @@ test('supports F2 inline tab notes and original note-to-organizer shorthands in 
 
 test('imports selected text and links into the persistent mock tree', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const projectGroup = leftPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
 
   await dropExternalData(projectGroup, { 'text/plain': 'Selected research context' });
@@ -859,7 +860,7 @@ test('imports selected text and links into the persistent mock tree', async ({ p
 
 test('exports native URI, HTML, text, and complete hierarchy drag formats in the website mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const savedWindow = leftPane.locator('[data-node-id="explore-saved-window-mock-saved-window-reference"]');
   const targetNote = leftPane.locator('[data-node-id="explore-saved-note-mock-note-next"]');
   const transfer = await dispatchDragWrite(savedWindow);
@@ -880,7 +881,7 @@ test('exports native URI, HTML, text, and complete hierarchy drag formats in the
 test('copies, cuts, and pastes complete hierarchies through the website clipboard mock', async ({ page }) => {
   await page.goto('/browser-atlas');
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(page.url()).origin });
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const savedWindow = leftPane.locator('[data-node-id="explore-saved-window-mock-saved-window-reference"]');
   const note = leftPane.locator('[data-node-id="explore-saved-note-mock-note-next"]');
 
@@ -912,7 +913,7 @@ test('copies, cuts, and pastes complete hierarchies through the website clipboar
 
 test('offers clipboard, organizer, and structural commands from the tree context menu', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const savedWindow = leftPane.locator('[data-node-id="explore-saved-window-mock-saved-window-reference"]');
   const note = leftPane.locator('[data-node-id="explore-saved-note-mock-note-next"]');
 
@@ -931,7 +932,7 @@ test('offers clipboard, organizer, and structural commands from the tree context
   await expect(menu.getByRole('menuitem', { name: /Export visible tree as HTML/ })).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: /Scroll up to previous open window/ })).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: /Undo tree scroll/ })).toBeVisible();
-  await expect(menu.getByRole('menuitem', { name: /Clone view into other pane/ })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: /Clone view into new explorer/ })).toBeVisible();
   await menu.getByRole('menuitem', { name: /Copy hierarchy/ }).click();
 
   await note.click({ button: 'right' });
@@ -977,8 +978,8 @@ test('offers clipboard, organizer, and structural commands from the tree context
 
 test('restores a saved hierarchy into an existing mock window by dropping it', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
 
   const savedWindow = leftPane.locator('[data-node-id="explore-saved-window-mock-saved-window-reference"]');
@@ -997,7 +998,7 @@ test('restores a saved hierarchy into an existing mock window by dropping it', a
 
 test('opens a new browser window in the website mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const existingTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
   await expect(leftPane.locator('[data-node-id^="explore-window-"]')).toHaveCount(2);
   await existingTab.evaluate((element) => element.setAttribute('data-render-instance', 'preserved'));
@@ -1014,7 +1015,7 @@ test('opens a new browser window in the website mock', async ({ page }) => {
 
 test('expands every branch and restores the previous collapsed set', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const liveWindow = leftPane.locator('[data-node-id="explore-window-1001"]');
   const projectGroup = leftPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
   const liveTab = leftPane.locator('[data-node-id="explore-tab-2001"]');
@@ -1036,7 +1037,7 @@ test('expands every branch and restores the previous collapsed set', async ({ pa
 
 test('creates and restores local tree snapshots in the website mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   await leftPane.getByTitle('Create a local tree snapshot').click();
 
   await leftPane.locator('[data-node-id="explore-root"]').click();
@@ -1056,8 +1057,8 @@ test('creates and restores local tree snapshots in the website mock', async ({ p
 
 test('browses and selectively restores local snapshot history in the website mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   const root = leftPane.locator('[data-node-id="explore-root"]');
   await leftPane.getByTitle('Create a local tree snapshot').click();
 
@@ -1073,45 +1074,58 @@ test('browses and selectively restores local snapshot history in the website moc
   );
   await leftPane.getByTitle('Browse and restore local tree snapshots').click();
 
-  const history = leftPane.getByRole('dialog', { name: 'Local backup history' });
+  const history = page.getByRole('region', { name: 'Local backup history' });
   const entries = history.locator('li[data-created-at]');
   await expect(entries).toHaveCount(2);
   await expect(entries.first()).toContainText(/\d+ nodes?/u);
   await expect(entries.nth(1)).toContainText(/\d+ nodes?/u);
 
+  // Open shows the backup in a new explorer and keeps the Backups panel beside it.
   await entries.first().getByRole('button', { name: /Open backup from/u }).click();
+  const backupPane = page.getByRole('region', { name: 'Explorer 3' });
   await expect(
-    leftPane.getByRole('combobox', { name: 'Explorer data source' }).locator('option:checked')
+    backupPane.getByRole('combobox', { name: 'Explorer data source' }).locator('option:checked')
   ).toContainText('Local backup');
-  await expect(leftPane.getByText('First post-backup group', { exact: true })).toBeVisible();
-  await expect(leftPane.getByText('Second post-backup group', { exact: true })).toHaveCount(0);
+  await expect(backupPane.getByText('First post-backup group', { exact: true })).toBeVisible();
+  await expect(backupPane.getByText('Second post-backup group', { exact: true })).toHaveCount(0);
+  await expect(leftPane.getByText('Second post-backup group', { exact: true })).toBeVisible();
+  await expect(entries).toHaveCount(2);
 
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
   await expect(rightPane.getByText('Second post-backup group', { exact: true })).toBeVisible();
+  // The toolbar button of another explorer on the same browser hides the visible panel.
   await rightPane.getByTitle('Browse and restore local tree snapshots').click();
-  const rightHistory = rightPane.getByRole('dialog', { name: 'Local backup history' });
+  await expect(history).toHaveCount(0);
+  await rightPane.getByTitle('Browse and restore local tree snapshots').click();
   acceptNextOperationDialog(page);
-  await rightHistory.getByRole('button', { name: /Restore backup from/u }).nth(1).click();
+  await history.getByRole('button', { name: /Restore backup from/u }).nth(1).click();
   await expect(rightPane.getByText('First post-backup group', { exact: true })).toHaveCount(0);
   await expect(rightPane.getByText('Second post-backup group', { exact: true })).toHaveCount(0);
-  await expect(rightHistory.locator('li[data-created-at]')).toHaveCount(1);
+  await expect(entries).toHaveCount(1);
+  // Backups made from a toolbar reload the open panel.
+  await rightPane.getByTitle('Create a local tree snapshot').click();
+  await expect(entries).toHaveCount(2);
 
   await page.reload();
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
   await expect(rightPane.getByText('First post-backup group', { exact: true })).toHaveCount(0);
-  await rightPane.getByTitle('Browse and restore local tree snapshots').click();
-  await expect(rightPane.getByRole('dialog', { name: 'Local backup history' }).locator('li[data-created-at]')).toHaveCount(1);
+  await expect(entries).toHaveCount(2);
+  // Documents are not stored: the backup's explorer reopens on the browser's Explore.
+  await expect(
+    backupPane.getByRole('combobox', { name: 'Explorer data source' }).locator('option:checked')
+  ).toHaveText('Chrome (mock)');
+  await expect(backupPane.getByRole('tab', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('manages independent automatic and manual cloud backups in the website mocks', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   const cloudButton = leftPane.getByTitle('Manage manual and automatic remote tree backups');
+  const cloudPanel = page.getByRole('region', { name: 'Mock Cloud Drive backups' });
   await expect(cloudButton).toHaveAttribute('data-action-status', 'none');
   await cloudButton.click();
 
-  let cloudPanel = leftPane.getByRole('dialog', { name: 'Mock Cloud Drive backups' });
   await expect(cloudPanel.locator('[data-cloud-backup-attempt="none"]')).toContainText(
     'No cloud backup attempt this browser session'
   );
@@ -1122,14 +1136,21 @@ test('manages independent automatic and manual cloud backups in the website mock
   await cloudPanel.getByLabel('Automatic daily cloud backups').check();
   await cloudPanel.getByRole('button', { name: 'Save preferences' }).click();
 
-  let cloudEntries = cloudPanel.locator('li[data-cloud-backup-id]');
+  const cloudEntries = cloudPanel.locator('li[data-cloud-backup-id]');
   await expect(cloudEntries).toHaveCount(1);
   await expect(cloudEntries.first()).toContainText('Automatic · workstation');
   await expect(cloudPanel.locator('[data-cloud-backup-attempt="success"]')).toContainText(
     'Last automatic cloud backup succeeded'
   );
   await expect(cloudButton).toHaveAttribute('data-action-status', 'success');
-  await cloudPanel.getByRole('button', { name: 'Close cloud backups' }).click();
+  // Every explorer on the same browser shows its latest attempt.
+  await rightPane.getByRole('tab', { name: 'Explore' }).click();
+  await expect(rightPane.getByTitle('Manage manual and automatic remote tree backups')).toHaveAttribute(
+    'data-action-status',
+    'success'
+  );
+  await closeDockPanel(page, 'Cloud backups');
+  await expect(cloudPanel).toHaveCount(0);
 
   await leftPane.locator('[data-node-id="explore-root"]').click();
   await acceptNextPrompt(page, 'Cloud restore marker', () =>
@@ -1141,25 +1162,25 @@ test('manages independent automatic and manual cloud backups in the website mock
   await expect(restoreMarker).toBeVisible();
 
   await cloudButton.click();
-  cloudPanel = leftPane.getByRole('dialog', { name: 'Mock Cloud Drive backups' });
   await cloudPanel.getByRole('button', { name: 'Create cloud backup' }).click();
-  cloudEntries = cloudPanel.locator('li[data-cloud-backup-id]');
   await expect(cloudEntries).toHaveCount(2);
   await expect(cloudEntries.filter({ hasText: 'Manual · workstation' })).toHaveCount(1);
-  await cloudPanel.getByRole('button', { name: 'Close cloud backups' }).click();
+  await cloudButton.click();
+  await expect(cloudPanel).toHaveCount(0);
 
   await restoreMarker.getByRole('button', { name: 'Delete Cloud restore marker' }).click();
   await expect(restoreMarker).toHaveCount(0);
 
   await cloudButton.click();
-  cloudPanel = leftPane.getByRole('dialog', { name: 'Mock Cloud Drive backups' });
-  const manualBackup = cloudPanel.locator('li[data-cloud-backup-id]').filter({ hasText: 'Manual · workstation' });
+  const manualBackup = cloudEntries.filter({ hasText: 'Manual · workstation' });
   await manualBackup.getByRole('button', { name: /Open cloud backup from/u }).click();
+  const backupPane = page.getByRole('region', { name: 'Explorer 3' });
   await expect(
-    leftPane.getByRole('combobox', { name: 'Explorer data source' }).locator('option:checked')
+    backupPane.getByRole('combobox', { name: 'Explorer data source' }).locator('option:checked')
   ).toContainText('Cloud backup');
-  const openedRestoreMarker = leftPane.getByRole('treeitem', { name: /Cloud restore marker/u });
+  const openedRestoreMarker = backupPane.getByRole('treeitem', { name: /Cloud restore marker/u });
   await expect(openedRestoreMarker).toBeVisible();
+  await expect(cloudPanel).toBeVisible();
 
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
   const projectGroup = rightPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
@@ -1169,39 +1190,34 @@ test('manages independent automatic and manual cloud backups in the website mock
   });
   await expect.poll(() => readMockChildLabelsByLabel(page, 'Browser Atlas project')).toContain('Cloud restore marker');
 
-  const rightCloudButton = rightPane.getByTitle('Manage manual and automatic remote tree backups');
-  await rightCloudButton.click();
-  cloudPanel = rightPane.getByRole('dialog', { name: 'Mock Cloud Drive backups' });
-  const restorableManualBackup = cloudPanel
-    .locator('li[data-cloud-backup-id]')
-    .filter({ hasText: 'Manual · workstation' });
+  const restorableManualBackup = cloudEntries.filter({ hasText: 'Manual · workstation' });
   acceptNextOperationDialog(page);
   await restorableManualBackup.getByRole('button', { name: /Restore cloud backup from/u }).click();
   await expect(rightPane.getByText('Cloud restore marker', { exact: true })).toBeVisible();
-  await expect(cloudPanel.locator('li[data-cloud-backup-id]')).toHaveCount(2);
+  await expect(cloudEntries).toHaveCount(2);
 
   await cloudPanel.getByLabel('Automatic daily cloud backups').uncheck();
   await cloudPanel.getByRole('button', { name: 'Save preferences' }).click();
-  const automaticBackup = cloudPanel.locator('li[data-cloud-backup-id]').filter({ hasText: 'Automatic · workstation' });
+  const automaticBackup = cloudEntries.filter({ hasText: 'Automatic · workstation' });
   acceptNextOperationDialog(page);
   await automaticBackup.getByRole('button', { name: /Delete cloud backup from/u }).click();
-  await expect(cloudPanel.locator('li[data-cloud-backup-id]')).toHaveCount(1);
+  await expect(cloudEntries).toHaveCount(1);
 
   await page.reload();
-  await rightPane.getByRole('tab', { name: 'Explore' }).click();
   await expect(rightPane.getByText('Cloud restore marker', { exact: true })).toBeVisible();
-  await rightCloudButton.click();
-  cloudPanel = rightPane.getByRole('dialog', { name: 'Mock Cloud Drive backups' });
   await expect(cloudPanel.getByText('chrome@browser-atlas.test')).toBeVisible();
   await expect(cloudPanel.getByLabel('Backup machine label')).toHaveValue('workstation');
   await expect(cloudPanel.getByLabel('Automatic daily cloud backups')).not.toBeChecked();
-  await expect(cloudPanel.locator('li[data-cloud-backup-id]')).toHaveCount(1);
-  await cloudPanel.getByRole('button', { name: 'Close cloud backups' }).click();
+  await expect(cloudEntries).toHaveCount(1);
 
+  const rightCloudButton = rightPane.getByTitle('Manage manual and automatic remote tree backups');
   await rightPane.getByLabel('Explorer data source').selectOption({ label: 'Firefox (mock)' });
   await expect(rightCloudButton).toHaveAttribute('data-action-status', 'none');
+  // The panel is visible on Chrome, so Firefox's toolbar button switches it to Firefox.
   await rightCloudButton.click();
-  cloudPanel = rightPane.getByRole('dialog', { name: 'Mock Cloud Drive backups' });
+  await expect(cloudPanel.getByRole('combobox', { name: 'Browser' }).locator('option:checked')).toHaveText(
+    'Firefox (mock)'
+  );
   await expect(cloudPanel.locator('[data-cloud-backup-attempt="none"]')).toBeVisible();
   await expect(cloudPanel.getByText('Connect this browser identity')).toBeVisible();
   await cloudPanel.getByRole('button', { name: 'Connect', exact: true }).click();
@@ -1219,11 +1235,13 @@ test('shows the latest failed mock cloud attempt for the current browser session
     }));
   }, { storageKey: MOCK_CLOUD_ATTEMPT_STORAGE_KEY });
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const cloudButton = leftPane.getByTitle('Manage manual and automatic remote tree backups');
   await expect(cloudButton).toHaveAttribute('data-action-status', 'failure');
   await cloudButton.click();
-  const attempt = leftPane.locator('[data-cloud-backup-attempt="failure"]');
+  const attempt = page
+    .getByRole('region', { name: 'Mock Cloud Drive backups' })
+    .locator('[data-cloud-backup-attempt="failure"]');
   await expect(attempt).toContainText('Last automatic cloud backup failed');
   await expect(attempt).toContainText('Simulated mock provider outage');
 
@@ -1233,7 +1251,7 @@ test('shows the latest failed mock cloud attempt for the current browser session
 
 test('opens original Tabs Outliner tree exports as editable localhost documents', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   await leftPane.locator('input[type="file"]').setInputFiles({
     name: 'legacy-tabs-outliner.tree',
     mimeType: 'application/json',
@@ -1259,7 +1277,7 @@ test('opens original Tabs Outliner tree exports as editable localhost documents'
 
 test('browses and selectively restores deleted hierarchies in the website mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const root = leftPane.locator('[data-node-id="explore-root"]');
 
   await root.click();
@@ -1278,11 +1296,14 @@ test('browses and selectively restores deleted hierarchies in the website mock',
     .filter({ hasText: 'Second deleted history group' });
 
   await firstGroup.getByRole('button', { name: 'Delete First deleted history group' }).click();
-  await secondGroup.getByRole('button', { name: 'Delete Second deleted history group' }).click();
   await leftPane.getByTitle('Browse and restore deleted hierarchies').click();
 
-  const history = leftPane.getByRole('dialog', { name: 'Deleted items history' });
+  const history = page.getByRole('region', { name: 'Deleted items history' });
   const entries = history.locator('li[data-deletion-id]');
+  await expect(leftPane.locator(history)).toHaveCount(0);
+  await expect(entries).toHaveCount(1);
+  // The open panel reloads after deletions made in any explorer of its browser.
+  await secondGroup.getByRole('button', { name: 'Delete Second deleted history group' }).click();
   await expect(entries).toHaveCount(2);
   await expect(entries.first()).toContainText('Second deleted history group');
   await expect(entries.nth(1)).toContainText('First deleted history group');
@@ -1295,14 +1316,22 @@ test('browses and selectively restores deleted hierarchies in the website mock',
   await expect(entries).toHaveCount(1);
   await expect(entries.first()).toContainText('Second deleted history group');
 
+  await history.getByRole('combobox', { name: 'Browser' }).selectOption({ label: 'Firefox (mock)' });
+  await expect(history.getByText('No deleted hierarchies yet.')).toBeVisible();
+  await history.getByRole('combobox', { name: 'Browser' }).selectOption({ label: 'Chrome (mock)' });
+  await expect(entries).toHaveCount(1);
+
   await page.reload();
   await expect(firstGroup).toBeVisible();
   await expect(secondGroup).toHaveCount(0);
+  await expect(entries).toHaveCount(1);
+  await leftPane.getByTitle('Browse and restore deleted hierarchies').click();
+  await expect(history).toHaveCount(0);
 });
 
 test('supports save, delete, undo, cloud backup, and save-all keyboard shortcuts', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const liveTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
   await liveTab.click();
   await liveTab.press('Backspace');
@@ -1319,11 +1348,14 @@ test('supports save, delete, undo, cloud backup, and save-all keyboard shortcuts
   await expect(savedTab).toBeVisible();
 
   await leftPane.getByTitle('Manage manual and automatic remote tree backups').click();
-  const cloudPanel = leftPane.getByRole('dialog', { name: 'Mock Cloud Drive backups' });
+  const cloudPanel = page.getByRole('region', { name: 'Mock Cloud Drive backups' });
   await cloudPanel.getByRole('button', { name: 'Connect', exact: true }).click();
-  await cloudPanel.getByRole('button', { name: 'Close cloud backups' }).click();
+  await expect(cloudPanel.getByText('No cloud backups yet.')).toBeVisible();
+  await closeDockPanel(page, 'Cloud backups');
+  await expect(cloudPanel).toHaveCount(0);
   await root.press('Control+b');
   await expect.poll(() => readMockCloudBackupCount(page)).toBeGreaterThan(0);
+  await expect(cloudPanel.locator('li[data-cloud-backup-id]')).toHaveCount(1);
 
   acceptNextOperationDialog(page);
   await root.press('q');
@@ -1332,7 +1364,7 @@ test('supports save, delete, undo, cloud backup, and save-all keyboard shortcuts
 
 test('supports original note placement shortcuts and page navigation in the website mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const visibleRows = leftPane.getByRole('treeitem');
   const root = leftPane.locator('[data-node-id="explore-root"]');
   const tenthRowId = await visibleRows.nth(10).getAttribute('data-node-id');
@@ -1391,7 +1423,7 @@ test('supports original note placement shortcuts and page navigation in the webs
 
 test('moves persistent hierarchies with the original structural keyboard shortcuts', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const note = leftPane.locator('[data-node-id="explore-saved-note-mock-note-next"]');
   const separator = leftPane.locator('[data-node-id="explore-saved-separator-mock-separator"]');
 
@@ -1492,7 +1524,7 @@ test('moves persistent hierarchies with the original structural keyboard shortcu
 
 test('flattens tabs without crossing organizers and includes nested organizers when collapsed', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const project = leftPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
 
   await selectTreeRow(project);
@@ -1515,7 +1547,7 @@ test('flattens tabs without crossing organizers and includes nested organizers w
 
 test('reveals and focuses the current mock browser window from the toolbar', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const targetWindow = leftPane.locator('[data-node-id="explore-window-1002"]');
   await leftPane.locator('[data-node-id="explore-tab-2003"] a').dblclick();
   await expect.poll(() => readFocusedMockWindowId(page)).toBe(1002);
@@ -1533,7 +1565,7 @@ test('reveals and focuses the current mock browser window from the toolbar', asy
 test('scrolls to the previous open window and undoes the scroll in the website mock', async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 180 });
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const scroller = leftPane.getByRole('tabpanel');
   await expect.poll(() => scroller.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   await scroller.evaluate((element) => {
@@ -1549,14 +1581,15 @@ test('scrolls to the previous open window and undoes the scroll in the website m
   await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBe(startingPosition);
 });
 
-test('clones backend, source, expansion, and scroll state between mock panes', async ({ page }) => {
+test('clones backend, source, expansion, and scroll state into a new explorer', async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 180 });
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
+  const clonePane = page.getByRole('region', { name: 'Explorer 3' });
   const leftScroller = leftPane.getByRole('tabpanel');
-  const rightScroller = rightPane.getByRole('tabpanel');
-  await rightPane.getByRole('combobox', { name: 'Explorer data source' }).selectOption({ label: 'Right file' });
+  const cloneScroller = clonePane.getByRole('tabpanel');
+  await rightPane.getByRole('combobox', { name: 'Explorer data source' }).selectOption({ label: 'File 2' });
   const leftProject = leftPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
   await leftProject.getByRole('button', { name: 'Collapse node' }).click();
   await leftScroller.evaluate((element) => {
@@ -1565,23 +1598,37 @@ test('clones backend, source, expansion, and scroll state between mock panes', a
   const leftPosition = await leftScroller.evaluate((element) => element.scrollTop);
 
   await leftPane.dispatchEvent('keydown', { key: 'c' });
-  await expect(rightPane.getByRole('tab', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
-  await expect(rightPane.getByRole('combobox', { name: 'Explorer data source' })).toHaveValue(
+  await expect(clonePane.getByRole('tab', { name: 'Explore' })).toHaveAttribute('aria-selected', 'true');
+  await expect(clonePane.getByRole('combobox', { name: 'Explorer data source' })).toHaveValue(
     await leftPane.getByRole('combobox', { name: 'Explorer data source' }).inputValue()
   );
-  const rightProject = rightPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
-  await expect(rightProject).toHaveAttribute('aria-expanded', 'false');
-  await expect(rightPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-design"]')).toHaveCount(0);
-  await expect.poll(() => rightScroller.evaluate((element) => element.scrollTop)).toBe(leftPosition);
+  const cloneProject = clonePane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
+  await expect(cloneProject).toHaveAttribute('aria-expanded', 'false');
+  await expect(clonePane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-design"]')).toHaveCount(0);
+  await expect.poll(() => cloneScroller.evaluate((element) => element.scrollTop)).toBe(leftPosition);
+  await expect(rightPane.getByRole('combobox', { name: 'Explorer data source' }).locator('option:checked')).toHaveText(
+    'File 2'
+  );
+  // The clone opens to the right of its source, before the other explorers.
+  const [leftBox, cloneBox, rightBox] = await Promise.all([
+    leftPane.boundingBox(),
+    clonePane.boundingBox(),
+    rightPane.boundingBox()
+  ]);
+  expect(cloneBox!.x).toBeGreaterThan(leftBox!.x);
+  expect(cloneBox!.x).toBeLessThan(rightBox!.x);
 
-  await rightProject.getByRole('button', { name: 'Expand node' }).click();
-  await rightScroller.evaluate((element) => {
+  await cloneProject.getByRole('button', { name: 'Expand node' }).click();
+  await cloneScroller.evaluate((element) => {
     element.scrollTop = 0;
   });
-  await rightPane.getByTitle('Clone this view into the other pane (C)').click();
-  await expect(leftProject).toHaveAttribute('aria-expanded', 'true');
-  await expect(leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-design"]')).toBeVisible();
-  await expect.poll(() => leftScroller.evaluate((element) => element.scrollTop)).toBe(0);
+  await clonePane.getByTitle('Clone this view into a new explorer (C)').click();
+  const secondClonePane = page.getByRole('region', { name: 'Explorer 4' });
+  const secondCloneProject = secondClonePane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
+  await expect(secondCloneProject).toHaveAttribute('aria-expanded', 'true');
+  await expect(secondClonePane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-design"]')).toBeVisible();
+  await expect.poll(() => secondClonePane.getByRole('tabpanel').evaluate((element) => element.scrollTop)).toBe(0);
+  await expect(leftProject).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('uses in-app confirmation and supports persistent delete Undo and Redo', async ({ page }) => {
@@ -1591,7 +1638,7 @@ test('uses in-app confirmation and supports persistent delete Undo and Redo', as
     void dialog.dismiss();
   });
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   await expect(
     leftPane.locator(
       '[data-node-id="explore-saved-window-mock-crashed-window"] [data-transient-status="crash-recovered"]'
@@ -1629,7 +1676,7 @@ test('uses in-app confirmation and supports persistent delete Undo and Redo', as
 
 test('undoes consecutive persistent tree changes one change at a time', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const undo = leftPane.getByTitle('Undo the latest persistent tree change');
   const designTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-design"]');
   const chromeTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-chrome"]');
@@ -1650,7 +1697,7 @@ test('undoes consecutive persistent tree changes one change at a time', async ({
 
 test('promotes children of expanded deletions, removes collapsed subtrees, and undoes both in the mock', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const project = leftPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
   const menu = page.getByRole('menu', { name: 'Tree commands' });
 
@@ -1696,7 +1743,7 @@ test('promotes children of expanded deletions, removes collapsed subtrees, and u
 
 test('applies collapse-sensitive deletion to live mock tabs with inline context', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const sourceTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
   await selectTreeRow(sourceTab);
   acceptNextOperationDialog(page, 'Promoted live context');
@@ -1728,7 +1775,7 @@ test('applies collapse-sensitive deletion to live mock tabs with inline context'
 
 test('searches, prints, and exports all visible mock rows with the original global shortcuts', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const root = leftPane.locator('[data-node-id="explore-root"]');
   const project = leftPane.locator('[data-node-id="explore-saved-group-mock-saved-project"]');
   await project.getByRole('button', { name: 'Collapse node' }).click();
@@ -1820,7 +1867,7 @@ test('searches, prints, and exports all visible mock rows with the original glob
 
 test('selects rows by dragging from empty row space without moving them', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const atlasTab = leftPane.locator('[data-node-id="explore-tab-2001"]');
   const mdnTab = leftPane.locator('[data-node-id="explore-tab-2003"]');
   const marquee = leftPane.locator('[data-tree-marquee]');
@@ -1872,7 +1919,7 @@ test('selects rows by dragging from empty row space without moving them', async 
 test('selects rows with a pen and scrolls while the rectangle reaches past the tree', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 300 });
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const atlasTab = leftPane.locator('[data-node-id="explore-tab-2001"]');
   const solidTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
   const draftTab = leftPane
@@ -1925,7 +1972,7 @@ test('selects rows with a pen and scrolls while the rectangle reaches past the t
 
 test('changes the selection with Shift, Ctrl/Cmd, and keyboard ranges', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const researchWindow = leftPane.locator('[data-node-id="explore-window-1001"]');
   const solidTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
   const readingWindow = leftPane.locator('[data-node-id="explore-window-1002"]');
@@ -1972,20 +2019,26 @@ test('changes the selection with Shift, Ctrl/Cmd, and keyboard ranges', async ({
 
 test('deletes and save-closes a multi-row selection as one undoable change', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const undo = leftPane.getByTitle('Undo the latest persistent tree change');
   const designTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-design"]');
   const chromeTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-chrome"]');
 
+  await leftPane.getByTitle('Browse and restore deleted hierarchies').click();
+  const deletions = page.getByRole('region', { name: 'Deleted items history' }).locator('li[data-deletion-id]');
+  await expect(deletions).toHaveCount(0);
   await clickEmptyRowSpace(designTab);
   await clickEmptyRowSpace(chromeTab, [CLIPBOARD_MODIFIER]);
   await chromeTab.press('Delete');
   await expect(designTab).toHaveCount(0);
   await expect(chromeTab).toHaveCount(0);
+  // The open Deleted panel reloads after the batch.
+  await expect(deletions).toHaveCount(2);
   await undo.click();
   await expect(designTab).toBeVisible();
   await expect(chromeTab).toBeVisible();
   await expect(undo).toBeDisabled();
+  await expect(deletions).toHaveCount(0);
 
   const atlasTab = leftPane.locator('[data-node-id="explore-tab-2001"]');
   const solidTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
@@ -2003,7 +2056,7 @@ test('deletes and save-closes a multi-row selection as one undoable change', asy
 test('copies, cuts, and offers selection commands for several hierarchies', async ({ page }) => {
   await page.goto('/browser-atlas');
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(page.url()).origin });
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const menu = page.getByRole('menu', { name: 'Tree commands' });
   const savedWindow = leftPane.locator('[data-node-id="explore-saved-window-mock-saved-window-reference"]');
   const chromeTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-chrome"]');
@@ -2040,8 +2093,8 @@ test('copies, cuts, and offers selection commands for several hierarchies', asyn
 
 test('drags a selection from the empty space of a selected row', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
   const atlasTab = leftPane.locator('[data-node-id="explore-tab-2001"]');
   const solidTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
@@ -2062,8 +2115,8 @@ test('drags a selection from the empty space of a selected row', async ({ page }
 
 test('drags every selected row together within and between mock browsers', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
-  const rightPane = page.getByRole('region', { name: 'Right explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
+  const rightPane = page.getByRole('region', { name: 'Explorer 2' });
   await rightPane.getByRole('tab', { name: 'Explore' }).click();
   const atlasTab = leftPane.locator('[data-node-id="explore-tab-2001"]');
   const solidTab = leftPane.locator('[data-node-id="explore-tab-2002"]');
@@ -2105,7 +2158,7 @@ test('drags every selected row together within and between mock browsers', async
 
 test('lights the path to the hovered row and turns it off in the settings', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const firefoxTab = leftPane.locator('[data-node-id="explore-saved-tab-mock-saved-tab-firefox"]');
   const pathState = (id: string) => leftPane.locator(`[data-node-id="${id}"]`).getAttribute('data-tree-path');
 
@@ -2132,7 +2185,7 @@ test('lights the path to the hovered row and turns it off in the settings', asyn
 
 test('draws the tree as a metro map whose line numbers stay with their windows', async ({ page }) => {
   await page.goto('/browser-atlas');
-  const leftPane = page.getByRole('region', { name: 'Left explorer pane' });
+  const leftPane = page.getByRole('region', { name: 'Explorer 1' });
   const badge = (id: string) => leftPane.locator(`[data-node-id="${id}"] > button [data-metro-line]`);
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByLabel('Tree lines').selectOption('metro');
@@ -2712,6 +2765,11 @@ async function pressOrganizerShortcut(
 ): Promise<void> {
   await selectTreeRow(target);
   await acceptNextPrompt(page, title, () => target.press(shortcut));
+}
+
+/** Closes a dock panel with the close button of its tab. */
+async function closeDockPanel(page: Page, title: string): Promise<void> {
+  await page.getByRole('tab', { name: title, exact: true }).getByRole('button', { name: 'Close panel' }).click();
 }
 
 function acceptNextOperationDialog(page: Page, value?: string): void {

@@ -74,20 +74,20 @@ export type DragCancelEvent<TData = unknown, TElement extends HTMLElement = HTML
   /** Pointer position at the initial pointerdown. */
   origin: Vec2;
   /** The PointerEvent that cancelled this drag, when cancellation came from the pointer stream. */
-  pointerEvent?: PointerEvent;
+  pointerEvent?: PointerEvent | undefined;
 };
 
 export type DragSensorCallbacks<TData = unknown, TElement extends HTMLElement = HTMLElement> = {
   /** Called when drag starts (threshold exceeded). */
-  onDragStart?: (event: DragStartEvent<TData, TElement>) => void;
+  onDragStart?: ((event: DragStartEvent<TData, TElement>) => void) | undefined;
   /** Called on every pointer move during an active drag. */
-  onDragMove?: (event: DragMoveEvent<TData, TElement>) => void;
+  onDragMove?: ((event: DragMoveEvent<TData, TElement>) => void) | undefined;
   /** Called when the pointer is released during an active drag. */
-  onDragEnd?: (event: DragEndEvent<TData, TElement>) => void;
+  onDragEnd?: ((event: DragEndEvent<TData, TElement>) => void) | undefined;
   /** Called when the drag is cancelled after it started. */
-  onDragCancel?: (event: DragCancelEvent<TData, TElement>) => void;
+  onDragCancel?: ((event: DragCancelEvent<TData, TElement>) => void) | undefined;
   /** Called when the pointer is released without exceeding the drag threshold. */
-  onClick?: (event: PointerEvent, source: DragSource<TData, TElement>) => void;
+  onClick?: ((event: PointerEvent, source: DragSource<TData, TElement>) => void) | undefined;
 };
 
 export type DragSensorFactoryOptions = {
@@ -96,7 +96,7 @@ export type DragSensorFactoryOptions = {
    * This prevents accidental drags on click.
    * @default 8
    */
-  threshold?: MaybeAccessor<number>;
+  threshold?: MaybeAccessor<number> | undefined;
   /**
    * Use a hidden proxy element for pointer capture instead of the source element.
    *
@@ -104,7 +104,7 @@ export type DragSensorFactoryOptions = {
    *
    * @default false
    */
-  proxyCapture?: MaybeAccessor<boolean>;
+  proxyCapture?: MaybeAccessor<boolean> | undefined;
 };
 
 export type CreateDragSensorOptions<TData = unknown, TElement extends HTMLElement = HTMLElement> = DragSensorCallbacks<
@@ -112,13 +112,13 @@ export type CreateDragSensorOptions<TData = unknown, TElement extends HTMLElemen
   TElement
 > & {
   /** Stable identity/data for this one target sensor. Snapshotted on pointerdown. */
-  data?: MaybeAccessor<TData>;
+  data?: MaybeAccessor<TData> | undefined;
   /** Optional target-level threshold override. */
-  threshold?: MaybeAccessor<number>;
+  threshold?: MaybeAccessor<number> | undefined;
   /** Optional target-level proxy-capture override. */
-  proxyCapture?: MaybeAccessor<boolean>;
+  proxyCapture?: MaybeAccessor<boolean> | undefined;
   /** Optional target-level disabled gate. */
-  disabled?: MaybeAccessor<boolean>;
+  disabled?: MaybeAccessor<boolean> | undefined;
 };
 
 /** Backward-compatible option name for the old one-call primitive. */

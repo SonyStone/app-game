@@ -18,9 +18,12 @@
   },
   "dependencies": {
     "@app-game/solid-virtual": "workspace:*",
+    "@solid-primitives/event-bus": "catalog:",
     "@solid-primitives/history": "catalog:",
     "@solid-primitives/raf": "catalog:",
+    "@solid-primitives/scheduled": "catalog:",
     "@solid-primitives/set": "catalog:",
+    "solid-dock": "workspace:*",
     "solid-js": "catalog:"
   },
   "devDependencies": {

@@ -44,7 +44,7 @@ export type DockGroupNode = {
   type: 'group';
   panels: PanelId[];
   /** Visible panel. Falls back to the first panel when missing or stale. */
-  active?: PanelId;
+  active?: PanelId | undefined;
 };
 
 /** Side of a group or of the whole dock. */
@@ -445,7 +445,7 @@ export function normalizeDockState(state: DockState): void {
         const total = child.sizes.reduce((sum, size) => sum + size, 0);
         child.children.forEach((grandchildId, grandchildIndex) => {
           children.push(grandchildId);
-          sizes.push((weight * child.sizes[grandchildIndex]) / total);
+          sizes.push((weight * child.sizes[grandchildIndex]!) / total);
         });
         reachable.delete(replacement);
         return;
@@ -562,7 +562,8 @@ function insertBeside(state: DockState, targetId: DockNodeId, nodeId: DockNodeId
   if (parent?.type === 'split' && parent.direction === direction) {
     alignSizes(parent);
     const index = parent.children.indexOf(targetId);
-    const weight = parent.sizes[index];
+    // alignSizes gives every child a weight, and the target is a child.
+    const weight = parent.sizes[index]!;
     parent.sizes[index] = weight * (1 - share);
     const at = before ? index : index + 1;
     parent.children.splice(at, 0, nodeId);

@@ -195,7 +195,7 @@ export function createNestable<K>(options: {
     const keys = activeItems(container);
     if (keys.length === 0) return { containerKey: place.parent, offset: 0 };
 
-    const lastRect = container.getRect(keys[keys.length - 1]);
+    const lastRect = container.getRect(keys[keys.length - 1]!);
     if (!lastRect) {
       return undefined;
     }
