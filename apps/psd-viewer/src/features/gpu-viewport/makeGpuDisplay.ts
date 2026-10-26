@@ -8,7 +8,7 @@ import { tileTextureUpload, type DisplayTile } from './displayTiles';
  * Displays authoritative straight RGBA8 bytes. No sRGB texture conversion is applied: filtering is explicitly
  * bilinear in premultiplied display-sRGB, with a one-source-texel halo. At >=1 physical pixel/source texel,
  * textureLoad preserves the original bytes. Coarse worker overviews remain point-sampled previews, not area mips.
- * Uploads stop after 2 MiB/2 ms per frame, allowing one <=514-square chunk of overshoot. GPU residency is a
+ * Uploads stop after 2 MiB/2 ms per frame, with <=256 KiB source strips allowing one strip of overshoot. GPU residency is a
  * separate 128 MiB LRU. Geometry and texture bindings are retained; camera gestures never process resident pixels.
  */
 export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format'>) {
@@ -43,14 +43,25 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
       const start = performance.now();
       let uploaded = 0;
       for (const tile of tiles) {
-        if (resident.has(identity(tile)) || !visible(tile, view, width / dpr, height / dpr)) {
+        if (!visible(tile, view, width / dpr, height / dpr)) {
           continue;
         }
 
-        const entry = allocate(tile);
-        resident.set(identity(tile), entry);
-        bytes += entry.bytes;
-        uploaded += entry.bytes;
+        const key = identity(tile);
+        let entry = resident.get(key);
+        if (!entry) {
+          entry = allocate(tile);
+          resident.set(key, entry);
+          bytes += entry.bytes;
+        }
+
+        while (!entry.ready) {
+          uploaded += entry.upload();
+          if (uploaded >= 2 * 1024 * 1024 || performance.now() - start >= 2) {
+            break;
+          }
+        }
+
         if (uploaded >= 2 * 1024 * 1024 || performance.now() - start >= 2) {
           break;
         }
@@ -89,13 +100,15 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
         background.with(pass).with(cameraGroup).draw(3);
       }
 
+      let drawn = 0;
       for (const tile of tiles) {
         const entry = resident.get(identity(tile));
-        if (entry && visible(tile, view, width / dpr, height / dpr)) {
+        if (entry?.ready && visible(tile, view, width / dpr, height / dpr)) {
           // Touch in draw order for LRU eviction; coarse ancestors draw before fine coverage.
           resident.delete(identity(tile));
           resident.set(identity(tile), entry);
           pipeline.with(pass).with(cameraGroup).with(entry.group).draw(4);
+          drawn++;
         }
       }
 
@@ -103,13 +116,18 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
       timer.resolve(encoder, !!timing);
       device.queue.submit([encoder.finish()]);
       viewerPerformance.record('frame.prepare', start);
+      if (drawn) {
+        viewerPerformance.record('frame.pixels', start, drawn);
+      }
       viewerPerformance.record('gpu.explicit.bytes', performance.now(), bytes);
       if (uploaded) {
         viewerPerformance.record('upload', start, uploaded);
       }
 
       timer.finish(start, () => destroyed);
-      return tiles.some((tile) => !resident.has(identity(tile)) && visible(tile, view, width / dpr, height / dpr));
+      return tiles.some(
+        (tile) => !resident.get(identity(tile))?.ready && visible(tile, view, width / dpr, height / dpr)
+      );
     },
     /** Releases textures, tile uniforms and timing buffers before the device scope closes. */
     destroy() {
@@ -137,7 +155,6 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
   }
 
   function allocate(tile: DisplayTile) {
-    const start = performance.now();
     const { clip, step } = tile;
     const upload = tileTextureUpload(tile);
     const { width, height } = upload;
@@ -151,18 +168,42 @@ export function makeGpuDisplay(gpu: Pick<GpuContext, 'root' | 'device' | 'format
       })
       .$usage('uniform');
     try {
-      device.queue.writeTexture(
-        { texture: root.unwrap(texture) },
-        upload.source,
-        { bytesPerRow: upload.bytesPerRow },
-        { width, height }
-      );
       const group = root.createBindGroup(tileLayout, { source: texture.createView(), region });
-      viewerPerformance.record('upload.texture', start, width * height * 4);
+      const bytesPerRow = upload.bytesPerRow;
+      let source: Uint8Array<ArrayBuffer> | undefined = upload.source;
+      let row = 0;
       return {
         group,
         bytes: width * height * 4 + 32,
+        get ready() {
+          return row === height;
+        },
+        upload() {
+          const start = performance.now();
+          // Bound the BufferSource snapshot, including skipped row bytes, to 256 KiB. Long-stride whole renders
+          // use fewer rows than tightly packed worker regions. A frame can stop between any two strips.
+          const rows = Math.min(height - row, Math.max(1, Math.floor((256 * 1024 - width * 4) / bytesPerRow) + 1));
+          const offset = row * bytesPerRow;
+          const length = (rows - 1) * bytesPerRow + width * 4;
+          const strip = source!.subarray(offset, offset + length);
+          device.queue.writeTexture(
+            { texture: root.unwrap(texture), origin: { y: row } },
+            strip,
+            { bytesPerRow },
+            { width, height: rows }
+          );
+          row += rows;
+          if (row === height) {
+            // GPU residency must not keep an evicted CPU tile's transferred buffer alive.
+            source = undefined;
+          }
+
+          viewerPerformance.record('upload.texture', start, width * rows * 4);
+          viewerPerformance.record('upload.source.bytes', performance.now(), length);
+          return width * rows * 4;
+        },
         destroy() {
+          source = undefined;
           texture.destroy();
           region.destroy();
         }

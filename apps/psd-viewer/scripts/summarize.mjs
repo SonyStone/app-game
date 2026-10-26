@@ -13,6 +13,7 @@ const summarize = async (directory) => {
     const samples = openingEvents.flatMap((event) => event.performance ?? []);
     const first = run.data?.uploads?.[0] ?? uploads[0];
     const last = uploads.at(-1);
+    const presentation = run.data?.presentations?.[0] ?? first;
     const telemetry = run.data?.performance ?? [];
     const percentile = (values, p) => {
       values.sort((a, b) => a - b);
@@ -35,7 +36,7 @@ const summarize = async (directory) => {
       error: run.error ?? run.openTimeout ?? openingEvents.findLast((event) => event.error)?.error,
       pageErrors: run.errors,
       firstUploadMs: first ? first.end - run.afterOpen.start : null,
-      firstPresentedMs: first ? first.presented - run.afterOpen.start : null,
+      firstPresentedMs: presentation ? presentation.presented - run.afterOpen.start : null,
       freshUploadMs: last ? last.end - run.afterOpen.start : null,
       sourceReadMs: run.data?.performance.find((sample) => sample.name === 'psd:source.read')?.duration,
       wasmLoadMs: samples.find((sample) => sample.name === 'wasm.load')?.duration,
@@ -62,6 +63,7 @@ const summarize = async (directory) => {
       preparationMaxMs: percentile(durations('frame.prepare'), 1),
       uploadChunkP95Ms: percentile(durations('upload.texture'), 0.95),
       uploadChunkMaxBytes: percentile(values('upload.texture'), 1),
+      uploadSourceMaxBytes: percentile(values('upload.source.bytes'), 1),
       gpuTimestampP95Ms: percentile(values('gpu.timestamp.ms'), 0.95),
       queueCompletionP95Ms: percentile(durations('gpu.queueCompletion'), 0.95),
       peakGpuExplicitBytes: percentile(values('gpu.explicit.bytes'), 1),
@@ -114,7 +116,7 @@ const summarize = async (directory) => {
 const result = {
   after: await summarize(directory),
   notes: [
-    'Presented timing uses two animation frames after the upload, not a physical display measurement.',
+    'Presented timing uses two animation frames after the first submitted frame containing ready tiles, not a physical display measurement.',
     'WASM linear memory is a high-water allocation; RSS is sampled across this isolated browser process tree.',
     'Neither byte estimate nor RSS is a native sample-comparison result. Native results are in features.json.',
     'The range is observed min/max across runs on this device, not a cross-device guarantee.',
