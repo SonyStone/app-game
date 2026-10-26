@@ -116,7 +116,10 @@ export function createTeamBoard(
   const help = new Map<Member, { ally: Member; attacker: Tank }>();
   const covers = new Map<Member, Member>();
   const staging = new Map<Member, { arrived: boolean; at: number }>();
-  let intent: 'push' | 'hold' | 'regroup' = 'push';
+  let intent: 'push' | 'hold' | 'regroup' | 'fallBack' = 'push';
+  /** When the team began to fall back to mend, and the bot covering its retreat. */
+  let fallBackSince = 0;
+  let coverer: Member | undefined;
   let push: { phase: 'none' | 'gather' | 'go'; since: number; lane: 'north' | 'south' } = { phase: 'none', since: 0, lane: 'north' };
   let focus: Tank | undefined;
   const radio = createRadio(context.clock);
@@ -148,6 +151,8 @@ export function createTeamBoard(
   /** Shortcuts a bot broke through, open at least as wide as a hull though the grid may not count them open yet. */
   const opened = new Set<Shortcut>();
   const perchOf = new Map<Member, Perch>();
+  /** Snipers fallen back to their base from an unsafe perch, and when their perch was last unsafe. */
+  const fallenBack = new Map<Member, number>();
   // Teams update half an interval apart, so their work falls on different steps.
   let nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
 
@@ -342,11 +347,16 @@ export function createTeamBoard(
     },
 
     /**
-     * Where a sniper watches from, and where it looks while nothing is in sight: its perch,
-     * kept until an enemy comes close or an enemy Sniper takes aim at it, then the best safe one.
+     * Where a sniper watches from, and where it looks while nothing is in sight: its perch, or
+     * its base while the perch is unsafe (see `perchSpot`).
      */
     perchSpot(member: Member): Perch {
       return perchSpot(member);
+    },
+
+    /** Whether `member` covers the team's retreat from a perch while the team falls back to mend. */
+    coversRetreat(member: Member) {
+      return intent === 'fallBack' && coverer === member;
     },
 
     /**
@@ -417,8 +427,7 @@ export function createTeamBoard(
 
     /** The member's own spot in the base. */
     baseSpot(member: Member) {
-      const spawn = map.bases[team].spawns[member.index % map.bases[team].spawns.length];
-      return { x: spawn.x, y: spawn.y };
+      return baseSpotOf(member);
     },
 
     /** Refreshes knowledge, danger, roles, intent, the push, focus and help a few times a second. */
@@ -455,6 +464,8 @@ export function createTeamBoard(
       staging.clear();
       danger.fill(0);
       intent = 'push';
+      fallBackSince = 0;
+      coverer = undefined;
       push = { phase: 'none', since: 0, lane: 'north' };
       focus = undefined;
       losses.length = 0;
@@ -465,6 +476,7 @@ export function createTeamBoard(
       pushers.clear();
       lateSince.clear();
       perchOf.clear();
+      fallenBack.clear();
       // The walls stand as built again, and the Sniper's perch distance may have changed since.
       perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
       posts = findPosts(grid, map, team);
@@ -485,29 +497,40 @@ export function createTeamBoard(
   }
 
   /**
-   * The perch `member` watches from: the one it has for as long as it is safe there, else the
-   * best safe perch no teammate has, the nearer the better. A perch is not safe once a known enemy
-   * comes within `PERCH_THREAT` px of it or a known enemy Sniper aims at it; a Sniper that has to
-   * move says so on the radio.
+   * Where `member` watches from: the best perch no teammate has, kept for good, as the best ones
+   * lie in the middle, by the hall, from where the Sniper sees the most. While a known enemy comes
+   * within `PERCH_THREAT` px of it or a known enemy Sniper aims at it, the Sniper does not fight
+   * for it or look for another but falls back to its base, saying so, and comes back once the
+   * perch has been safe for `PERCH_CLEAR` s.
    */
   function perchSpot(member: Member): Perch {
-    const current = perchOf.get(member);
+    let perch = perchOf.get(member);
 
-    if (current && !threatened(current)) {
-      return current;
+    if (!perch) {
+      const taken = new Set([...perchOf.entries()].filter(([other]) => other !== member && other.tank).map(([, spot]) => spot));
+      perch = perches.find((candidate) => !taken.has(candidate)) ?? { ...map.lanes[team].center, watch: map.point, score: 0 };
+      perchOf.set(member, perch);
     }
 
-    const at = member.tank?.hull.translation() ?? current ?? map.lanes[team].center;
-    const taken = new Set([...perchOf.entries()].filter(([other]) => other !== member && other.tank).map(([, spot]) => spot));
-    const value = (perch: Perch) => perch.score - distanceTo(perch, at) / PERCH_TRAVEL - danger[cellAt(grid, perch)] * PERCH_EXPOSURE - (threatened(perch) ? PERCH_UNSAFE : 0);
-    const best = perches.filter((perch) => !taken.has(perch)).sort((a, b) => value(b) - value(a))[0] ?? { ...map.lanes[team].center, watch: map.point, score: 0 };
-    perchOf.set(member, best);
+    const now = context.clock();
 
-    if (current && best !== current && member.tank) {
-      radio.say(member, 'relocate', { priority: 2, marker: { kind: 'hold', x: best.x, y: best.y } });
+    if (threatened(perch)) {
+      if (!fallenBack.has(member) && member.tank) {
+        radio.say(member, 'fallBack', { priority: 2, marker: { kind: 'danger', x: perch.x, y: perch.y } });
+      }
+
+      fallenBack.set(member, now);
+    } else if (now - (fallenBack.get(member) ?? -Infinity) > PERCH_CLEAR) {
+      fallenBack.delete(member);
     }
 
-    return best;
+    return fallenBack.has(member) ? { ...baseSpotOf(member), watch: perch, score: 0 } : perch;
+  }
+
+  /** The member's own spot in the base. */
+  function baseSpotOf(member: Member) {
+    const spawn = map.bases[team].spawns[member.index % map.bases[team].spawns.length];
+    return { x: spawn.x, y: spawn.y };
   }
 
   /** Whether a known enemy is close to `perch`, or a known enemy Sniper sees it and has its gun on it. */
@@ -690,12 +713,33 @@ export function createTeamBoard(
     const enemyClock = capture.held[rivalOf(team)] / context.holdTime;
     const before = intent;
 
+    const fit = members.filter((member) => member.tank && !battered(member));
+    const hurt = alive - fit.length;
+
     if (capture.owner === team) {
       intent = 'hold';
+    } else if (
+      enemyClock < FALL_BACK_CLOCK &&
+      (intent === 'fallBack' ? hurt > alive * FALL_BACK_DONE && now - fallBackSince < FALL_BACK_TIME : alive >= 2 && hurt >= Math.max(2, Math.ceil(alive * FALL_BACK_SHARE)))
+    ) {
+      if (intent !== 'fallBack') {
+        fallBackSince = now;
+        // The fittest bot that is no Sniper stays to cover the retreat; a Sniper keeps its perch anyway.
+        coverer = fit
+          .filter((member) => !member.human && member.role !== 'sniper')
+          .sort((a, b) => combat.armorLeft(b.tank!) - combat.armorLeft(a.tank!))[0];
+      }
+
+      intent = 'fallBack';
     } else if (alive <= rivalsAlive - 2 && enemyClock < 0.8) {
       intent = 'regroup';
     } else if (intent !== 'regroup' || alive >= rivalsAlive - 1) {
       intent = 'push';
+    }
+
+    // The bot covering a retreat that ended, or that was destroyed meanwhile, covers no more.
+    if (intent !== 'fallBack' || !coverer?.tank) {
+      coverer = undefined;
     }
 
     if (intent !== before) {
@@ -758,7 +802,19 @@ export function createTeamBoard(
       say(holder, 'captured', { priority: 2 });
     } else if (intent === 'regroup') {
       say(leader(), 'regroup', { priority: 2, marker: { kind: 'gather', ...map.lanes[team].center } });
+    } else if (intent === 'fallBack') {
+      say(leader(), 'fallBackTeam', { priority: 2, marker: { kind: 'gather', ...map.lanes[team].center } });
+
+      if (coverer) {
+        const perch = perchSpot(coverer);
+        say(coverer, 'coverRetreat', { priority: 2, marker: { kind: 'hold', x: perch.x, y: perch.y } });
+      }
     }
+  }
+
+  /** Whether a member's tank is badly hit: its core open or its armor below its class's retreat share. */
+  function battered(member: Member) {
+    return member.tank !== undefined && (combat.isCoreOpen(member.tank) || combat.armorLeft(member.tank) < TACTICS[member.tankClass.id].retreat);
   }
 
   /**
@@ -1086,6 +1142,16 @@ const KEEPER_HUG = 30;
 const KEEPER_SWITCH = 2;
 /** Seconds after walls changed before the team looks for its posts again. */
 const POST_REFRESH = 3;
+/**
+ * The team falls back to mend when at least `FALL_BACK_SHARE` of its living members, and two, are
+ * badly hit and the enemy has held the point for less than `FALL_BACK_CLOCK` of the time that
+ * wins; it goes in again once no more than `FALL_BACK_DONE` of them are, or after
+ * `FALL_BACK_TIME` s.
+ */
+const FALL_BACK_SHARE = 0.6;
+const FALL_BACK_CLOCK = 0.75;
+const FALL_BACK_DONE = 0.25;
+const FALL_BACK_TIME = 30;
 /** Classes in the order they lead the team's push and call its plan. */
 const LEAD_ORDER: readonly TankClassId[] = ['heavy', 'soldier', 'demoman', 'scout', 'sniper'];
 /** Seconds of countdown from everyone at their staging spot to going in. */
@@ -1096,17 +1162,15 @@ const FOCUS_CALL = 8;
 const DEADLY_TIME = 20;
 const DEADLY_RADIUS = 110;
 /**
- * A Sniper leaves its perch when a known enemy comes within `PERCH_THREAT` px or an enemy Sniper
- * within `SNIPER_SIGHT` px sees it with its gun within `SNIPER_AIMED` of it. Choosing another, a perch scores `PERCH_EXPOSURE` less per
- * enemy that sees it, one less per `PERCH_TRAVEL` px away, and `PERCH_UNSAFE` less if not safe.
+ * A Sniper falls back from its perch when a known enemy comes within `PERCH_THREAT` px of it, as
+ * close as a brawler gets before it fires, or an enemy Sniper within `SNIPER_SIGHT` px sees it
+ * with its gun within `SNIPER_AIMED` rad of it; it comes back once the perch has been safe for
+ * `PERCH_CLEAR` s.
  */
-const PERCH_THREAT = 320;
+const PERCH_THREAT = 220;
 const SNIPER_SIGHT = 900;
-/** Radians an enemy Sniper's gun may be off a perch and still count as aimed at it. */
 const SNIPER_AIMED = 0.3;
-const PERCH_EXPOSURE = 10;
-const PERCH_TRAVEL = 40;
-const PERCH_UNSAFE = 1000;
+const PERCH_CLEAR = 2;
 /** Half size of a crate's armor. */
 const CRATE_HALF = { x: 21.25, y: 46.25 };
 const CRATE_COST = 3;

@@ -38,6 +38,9 @@ export type Role = 'assault' | 'flank' | 'support' | 'lead' | 'sniper';
  * - `allyNeedsHelp`: the team asked this bot to help an ally under fire; `attackerInRange` and
  *   `allyCovered` follow from helping.
  * - `regroupCalled`, `regrouped`: the team is too weak to fight and gathers to wait for respawns.
+ * - `fallBackCalled`: most of the team is badly hit, so it falls back to mend at its base and
+ *   goes in again together; `coveringRetreat`: the bot was asked to cover the retreat from a
+ *   perch, shooting at the point without going onto it.
  * - `atPerch`: a sniper is at its perch, from where it watches the point.
  * - Goal results that never hold in the world: `targetDown`, `guarding`.
  */
@@ -67,6 +70,8 @@ export type BotFact =
   | 'attackerInRange'
   | 'allyCovered'
   | 'regroupCalled'
+  | 'fallBackCalled'
+  | 'coveringRetreat'
   | 'regrouped'
   | 'atPerch'
   | 'wayOpened'
@@ -161,13 +166,21 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
     goals.push({ name: 'patch', wants: { coreOpen: false }, priority: desperate ? 45 : 78 });
   }
 
+  // When the team falls back to mend, every badly hit bot goes, before anything but its life.
+  const fallingBack = facts.fallBackCalled && !desperate;
+
   if (facts.coreOpen) {
-    goals.push({ name: 'repair', wants: { combatReady: true }, priority: desperate ? 40 : 75 });
+    goals.push({ name: 'repair', wants: { combatReady: true }, priority: desperate ? 40 : fallingBack ? FALL_BACK : 75 });
   } else if (facts.armorLow) {
-    goals.push({ name: 'repair', wants: { combatReady: true }, priority: desperate ? 30 : kitNear && situation.kitRestores ? 58 : 46 });
+    goals.push({ name: 'repair', wants: { combatReady: true }, priority: desperate ? 30 : fallingBack ? FALL_BACK : kitNear && situation.kitRestores ? 58 : 46 });
   }
 
-  if (!facts.pointOurs && (role !== 'sniper' || desperate)) {
+  // The bot covering the retreat watches the point from a perch, as a Sniper does.
+  if (fallingBack && facts.coveringRetreat) {
+    goals.push({ name: 'defend', wants: { guarding: true }, priority: COVER_RETREAT });
+  }
+
+  if (!facts.pointOurs && !fallingBack && (role !== 'sniper' || desperate)) {
     // A locked point cannot be taken yet, so enemies in the way are worth more until it opens.
     const rush = role === 'flank' && !facts.enemyOnPoint && !facts.pointLocked ? RUSH : 0;
     const wait = facts.pointLocked ? LOCKED_WAIT : 0;
@@ -220,6 +233,8 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
 export function botActions(situation: Situation): GoapAction<BotAction>[] {
   const { travel, role, facts } = situation;
   const hasPost = Number.isFinite(travel.post ?? Infinity);
+  // A Sniper works from a perch, and so does a bot covering its team's retreat.
+  const perches = role === 'sniper' || (facts.fallBackCalled === true && facts.coveringRetreat === true);
   const killed: Facts = situation.targetClearsPoint ? { targetDown: true, enemyOnPoint: false } : { targetDown: true };
   const actions: GoapAction<BotAction>[] = [
     {
@@ -268,8 +283,8 @@ export function botActions(situation: Situation): GoapAction<BotAction>[] {
       cost: travel.kit
     },
     // A sniper guards the point from its perch instead of on it.
-    { name: 'goToPerch', requires: {}, effects: { atPerch: true, inCover: false }, cost: role === 'sniper' ? (travel.perch ?? Infinity) + 0.5 : Infinity },
-    { name: 'overwatch', requires: { atPerch: true }, effects: { guarding: true }, cost: role === 'sniper' ? 1 : Infinity },
+    { name: 'goToPerch', requires: {}, effects: { atPerch: true, inCover: false }, cost: perches ? (travel.perch ?? Infinity) + 0.5 : Infinity },
+    { name: 'overwatch', requires: { atPerch: true }, effects: { guarding: true }, cost: perches ? 1 : Infinity },
     { name: 'openWay', requires: {}, effects: { wayOpened: true }, cost: (travel.breach ?? Infinity) + BREAK_TIME }
   ];
 
@@ -296,6 +311,9 @@ const OVERWATCH = 56;
 const FLANK_COST: Record<Role, number> = { assault: 1.4, flank: 0.55, support: 1.4, lead: 2.5, sniper: Infinity };
 /** Priority bonus of the goal being pursued. */
 const COMMITMENT = 6;
+/** Priority of mending for a badly hit bot while its team falls back, and of covering the retreat from a perch. */
+const FALL_BACK = 82;
+const COVER_RETREAT = 70;
 /** Priority of breaking open a wall the team asked for, and the seconds breaking it is reckoned to take. */
 const BREACH = 58;
 const BREAK_TIME = 4;

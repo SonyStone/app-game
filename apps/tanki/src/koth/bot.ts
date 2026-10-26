@@ -367,7 +367,7 @@ export function createBot(member: Member, context: BotContext) {
     return {
       onPoint: onPoint(map, position),
       pointLocked: capture.locked > 0,
-      atPerch: member.role === 'sniper' && distance(position, board.perchSpot(member)) < PERCHED,
+      atPerch: (member.role === 'sniper' || board.coversRetreat(member)) && distance(position, board.perchSpot(member)) < PERCHED,
       pointOurs: capture.owner === member.team,
       enemyOnPoint: rivalsOnPoint() > 0,
       mustStage: board.phase === 'gather' || board.mustWait(member),
@@ -388,7 +388,9 @@ export function createBot(member: Member, context: BotContext) {
       combatReady: !coreOpen && armor >= TACTICS[member.tankClass.id].retreat,
       allyNeedsHelp: help !== undefined,
       attackerInRange: help !== undefined && visible.has(help.attacker) && distance(position, help.attacker.hull.translation()) < reach,
-      regroupCalled: board.intent === 'regroup'
+      regroupCalled: board.intent === 'regroup' || (board.intent === 'fallBack' && !board.coversRetreat(member)),
+      fallBackCalled: board.intent === 'fallBack',
+      coveringRetreat: board.coversRetreat(member)
     };
   }
 
@@ -637,7 +639,7 @@ export function createBot(member: Member, context: BotContext) {
         base: travel(board.baseSpot(member)),
         rally: travel(board.rally()),
         kit: choice?.travel ?? Infinity,
-        perch: member.role === 'sniper' ? travel(board.perchSpot(member)) : Infinity,
+        perch: member.role === 'sniper' || board.coversRetreat(member) ? travel(board.perchSpot(member)) : Infinity,
         post: travel(board.postOf(member)?.at),
         // The wall itself cannot be driven to; the way to it is the way to the nearer of the places it joins.
         breach: Math.min(travel(board.breachOf(member)?.from), travel(board.breachOf(member)?.to))
@@ -1039,7 +1041,7 @@ export function createBot(member: Member, context: BotContext) {
         task.arrive = 30;
         const gathered = context.allies.filter((ally) => ally.tank && distance(ally.tank.hull.translation(), rally) < 180).length;
         const waited = now - task.startedAt > REGROUP_TIME;
-        return board.intent !== 'regroup' || waited || gathered >= 3 ? 'done' : 'running';
+        return (board.intent !== 'regroup' && board.intent !== 'fallBack') || waited || gathered >= 3 ? 'done' : 'running';
       }
     }
   }
@@ -1319,7 +1321,7 @@ export function createBot(member: Member, context: BotContext) {
     let goal: number;
 
     const post = task?.action === 'holdPost' ? board.postOf(member) : undefined;
-    const perch = member.role === 'sniper' ? board.perchSpot(member) : undefined;
+    const perch = member.role === 'sniper' || board.coversRetreat(member) ? board.perchSpot(member) : undefined;
 
     // At its post or perch, the gun watches the way the enemy comes by, so a Sniper's scope sees them come out.
     if (threat) {
@@ -1662,7 +1664,7 @@ function worthReplanning(before: Partial<Record<BotFact, boolean>>, after: Parti
 }
 
 /** Facts whose every change makes a bot plan again. */
-const EITHER_WAY: BotFact[] = ['pointOurs', 'enemyOnPoint', 'mustStage', 'staged', 'regroupCalled', 'pointLocked'];
+const EITHER_WAY: BotFact[] = ['pointOurs', 'enemyOnPoint', 'mustStage', 'staged', 'regroupCalled', 'pointLocked', 'fallBackCalled', 'coveringRetreat'];
 /** Facts that make a bot plan again when they become true. */
 const WHEN_RAISED: BotFact[] = ['hasTarget', 'targetVisible', 'coreOpen', 'armorLow', 'underFire', 'allyNeedsHelp'];
 
