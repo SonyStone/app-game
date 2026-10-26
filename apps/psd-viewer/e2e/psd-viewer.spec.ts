@@ -318,6 +318,7 @@ test('opens damaged files as Photoshop does, asking its prompt first', async ({ 
   await prompt.getByRole('button', { name: 'Flatten' }).click();
   await expect(prompt).toHaveCount(0);
   await settled(page);
+  await expandDiagnostics(page);
   await expect(report.getByRole('list', { name: 'Repairs' })).toContainText(
     'The stored composite opened as the Background instead of the layers'
   );
