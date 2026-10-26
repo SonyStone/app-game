@@ -74,7 +74,9 @@ export function App() {
   const renderSettings = fonts.withFonts(withState(settings));
   const capability = createMemo(() => {
     const current = document();
-    return current && !current.sourceBacked
+    return current &&
+      !current.sourceBacked &&
+      (initial.ready() || requiresWindowedRendering({ width: current.info.width, height: current.info.height }))
       ? client.capability(current.document, renderSettings(), pairs())
       : undefined;
   });
@@ -94,7 +96,23 @@ export function App() {
     renderSettings,
     pairs
   );
-  const windows = createWindowedRender(client, plannedOpened, renderSettings, pairs, viewport);
+  const windows = createWindowedRender(
+    client,
+    () => {
+      const current = plannedOpened();
+      return initial.ready() ||
+        (current?.ok &&
+          requiresWindowedRendering({
+            width: current.value.info.width,
+            height: current.value.info.height
+          }))
+        ? current
+        : undefined;
+    },
+    renderSettings,
+    pairs,
+    viewport
+  );
   const render = () => (windowed() ? windows.render() : wholeRender());
   const renderWindow = () => valueOf(render())?.window;
   const { view, setView, merged, difference, blinkSaved, wipe, setWipe } = createComparison(
