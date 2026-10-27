@@ -15,6 +15,7 @@ type Point = { x: number; y: number };
  *
  * @param kill - The kill, with the members as the match and the tape number them.
  * @param who - The killer's seat and class, as the display names them; none for a tank lost to its own side or nobody.
+ * @param budget - Seconds the film may take at most, as until the tank is back (see `directKillCam`).
  */
 export function createKillCam(
   renderer: ReturnType<typeof createRangeRenderer>,
@@ -22,14 +23,15 @@ export function createKillCam(
   chronicle: Chronicle,
   kill: KillCamKill,
   who: { killer: SeatHud | undefined; tankClass: TankClassId | undefined },
-  camera: Camera
+  camera: Camera,
+  budget = Infinity
 ) {
-  const film = directKillCam(tape, chronicle, kill);
+  const film = directKillCam(tape, chronicle, kill, budget);
   const player = createTapePlayer(renderer, tape);
   const view = { ...camera };
   // Close-ups zoom in from the view as it was, or from a near one when that showed the whole map.
   const base = Math.max(camera.zoom, LEAST_ZOOM);
-  let elapsed = 0;
+  let elapsed = film.skip;
 
   return {
     film,
@@ -99,8 +101,12 @@ export type KillCamKill = { death: number; killer: number | undefined; victim: n
  * - `out`: the bars and the grey go.
  *
  * With no killer, `approach` shows the tank's last moments in place of the killer, shot and flight.
+ *
+ * A film longer than `budget` seconds is cut from its start, as the kill itself matters most: the
+ * killer's shot, then the freeze and the rewind, are shortened down to `SHORTEST`, the killer's
+ * from its start on; a film still too long begins `skip` s in.
  */
-export function directKillCam(tape: Tape, chronicle: Chronicle, kill: KillCamKill) {
+export function directKillCam(tape: Tape, chronicle: Chronicle, kill: KillCamKill, budget = Infinity) {
   const death = kill.death;
   const shot = kill.killer === undefined ? undefined : fatalShotOf(tape, kill.killer, death, kill.at);
   const fired = shot?.fired ?? death - UNSEEN_FLIGHT;
@@ -130,6 +136,27 @@ export function directKillCam(tape: Tape, chronicle: Chronicle, kill: KillCamKil
     { kind: 'out', length: 0.35, from: held + 50, to: held + 70 }
   );
 
+  let excess = shots.reduce((sum, each) => sum + each.length, 0) - budget;
+
+  for (const [kind, shortest] of Object.entries(SHORTEST)) {
+    const each = shots.find((one) => one.kind === kind);
+
+    if (!each) {
+      continue;
+    }
+
+    const cut = Math.min(Math.max(excess, 0), each.length - shortest);
+
+    // The killer's shot keeps its pace, beginning later, and the rewind runs back only that far.
+    if (each.kind === 'killer' || each.kind === 'approach') {
+      each.from = each.to - ((each.to - each.from) * (each.length - cut)) / each.length;
+      shots[1].to = each.from;
+    }
+
+    each.length -= cut;
+    excess -= cut;
+  }
+
   const path = shot?.path ?? [];
   const hitPoint = path.at(-1) ?? kill.at;
   const killerAt = (time: number) => (kill.killer === undefined ? undefined : memberAt(tape, kill.killer, time));
@@ -137,6 +164,8 @@ export function directKillCam(tape: Tape, chronicle: Chronicle, kill: KillCamKil
   return {
     shots,
     length: shots.reduce((sum, each) => sum + each.length, 0),
+    /** Seconds of the film's start left out, when shortening its first shots was not enough. */
+    skip: Math.max(excess, 0),
     /** The fatal shot found on the tape, if any. */
     shot,
     /** Where the shot struck, or where the tank was without one. */
@@ -379,6 +408,8 @@ function smooth(share: number) {
   return share * share * (3 - 2 * share);
 }
 
+/** The seconds the first shots are shortened to at most when a film must be short, in the order they are. */
+const SHORTEST = { killer: 0.4, approach: 0.6, freeze: 0.2, rewind: 0.3 };
 /** Seconds of the killer shown before its shot at most, and of the tape before the kill at most. */
 const KILLER_TIME = 0.9;
 const MOST_BEFORE = 3;

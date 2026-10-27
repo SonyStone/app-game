@@ -681,7 +681,10 @@ function KothScene(props: {
     // The kill-cam begins, a moment after the tank went: the match goes on, taped, while the film shows how.
     if (killCam && !killCam.film && recorded.steps >= killCam.kill.begin) {
       killCam.kill.begin = recorded.steps;
-      killCam.film = createKillCam(renderer, recorder.tape, recorded.chronicle, killCam.kill, killCam.who, camera);
+      // The film fits before the tank is back, in seconds of the screen, as the match's own run faster or slower.
+      const respawnIn = match.hud().player.respawnIn;
+      const budget = respawnIn > 0 ? (respawnIn * SLOW_MOTION) / pace.speed - KILL_CAM_MARGIN : Infinity;
+      killCam.film = createKillCam(renderer, recorder.tape, recorded.chronicle, killCam.kill, killCam.who, camera, budget);
       recorder.mute();
     }
 
@@ -819,8 +822,9 @@ type KillCam = {
   film: ReturnType<typeof createKillCam> | undefined;
 };
 
-/** Seconds of the match after the player's tank went that the kill-cam begins. */
+/** Seconds of the match after the player's tank went that the kill-cam begins, and that it leaves before the tank is back. */
 const KILL_CAM_DELAY = 1.5;
+const KILL_CAM_MARGIN = 0.3;
 /** How far inside the screen's edges the revenge mark is held, and how far over its tank it floats, in screen and world px. */
 const REVENGE_INSET = 40;
 const REVENGE_ABOVE = 34;

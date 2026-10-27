@@ -53,6 +53,15 @@ describe('the kill-cam', { timeout: 120_000 }, () => {
       expect(kinds).toEqual(['freeze', 'rewind', 'killer', 'fire', 'flight', 'blast', 'out']);
       film.shots.forEach((shot) => expect(shot.kind === 'rewind' ? shot.to < shot.from : shot.to >= shot.from).toBe(true));
 
+      // Cut to fit a short wait for the tank, the film loses its start and keeps the kill.
+      for (const budget of [3.5, 2]) {
+        const short = directKillCam(recorder.tape, chronicle, { death: kill.step, killer: indexOf(kill.killer), victim: indexOf(kill.victim), at: kill, begin: kill.step + 90 }, budget);
+        expect(short.length - short.skip).toBeCloseTo(Math.min(budget, film.length), 6);
+        expect(short.shots.slice(3)).toEqual(film.shots.slice(3));
+        expect(short.shots[2].to).toBe(film.shots[2].to);
+        expect(short.shots[1].to).toBe(short.shots[2].from);
+      }
+
       if (!film.shot) {
         continue;
       }
