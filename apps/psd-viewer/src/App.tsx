@@ -53,7 +53,7 @@ export function App() {
     parallelAllowed: () => devicePixelRatio <= 1
   });
   const [gpuComposite, setGpuComposite] = createSignal(
-    new URLSearchParams(location.search).get('gpuComposite') === '1' &&
+    (new URLSearchParams(location.search).get('gpuComposite') ?? import.meta.env.VITE_PSD_GPU_COMPOSITE ?? '0') !== '0' &&
       new URLSearchParams(location.search).get('backend') !== 'canvas2d'
   );
   const [displayBusy, setDisplayBusy] = createSignal(false);
@@ -79,30 +79,18 @@ export function App() {
   const windowed = () =>
     Boolean(document() && requiresWindowedRendering((valueOf(plannedOpened()) ?? document())!.info));
   const renderSettings = fonts.withFonts(withState(settings));
+  // GPU edits use the saved stack's admission, so resident previews do not wait on the planning queue.
+  // Strict rendering still validates every current settings/visibility identity independently.
   const capability = createMemo(() => {
     const current = document();
     return current &&
-      !gpuComposite() &&
       !current.sourceBacked &&
       (requiresWindowedRendering({ width: current.info.width, height: current.info.height }) || initial.ready())
-      ? client.capability(current.document, renderSettings(), pairs())
-      : undefined;
-  });
-  const gpuOpened = createMemo(() => {
-    const current = opened();
-    return current?.ok && gpuComposite() && !current.value.sourceBacked
-      ? {
-          ok: true as const,
-          value: { ...current.value, windowed: true, info: { ...current.value.info, windowed: true } }
-        }
+      ? client.capability(current.document, renderSettings(), gpuComposite() ? [] : pairs())
       : undefined;
   });
   const plannedOpened = createMemo(() => {
     const current = opened();
-    const gpu = gpuOpened();
-    if (gpu) {
-      return gpu;
-    }
     const plan = capability();
     return current?.ok && plan?.ok && current.value.info.windowed !== plan.value.windowed
       ? {
@@ -115,7 +103,9 @@ export function App() {
     client,
     () => (blending.settled() ? plannedOpened() : undefined),
     renderSettings,
-    pairs
+    pairs,
+    gpuComposite,
+    fonts.revision
   );
   const windows = createWindowedRender(
     client,
@@ -133,10 +123,18 @@ export function App() {
     renderSettings,
     pairs,
     viewport,
-    gpuComposite,
+    // Saved source windows have no layer operands. Selecting two workers keeps the measured CPU
+    // throughput path and its full tile budget instead of serializing it behind GPU preparation.
+    () => gpuComposite() && !document()?.sourceBacked && workerCount() === 1,
     fonts.revision
   );
+  // Keep display updates independent of the pending strict promise; activity still tracks its pending state.
   const render = () => (windowed() ? windows.render() : wholeRender());
+  const compositeDiagnostics = () =>
+    gpuComposite() ? (windowed() ? windows.compositeDiagnostics() : wholeRender.diagnostics()) : undefined;
+  // Whole renders remain authoritative for every comparison, inspection and export. A GPU candidate
+  // participates only in the ordinary layer display, until this exact identity has been checked.
+  const gpuPreview = () => (!windowed() && view() === 'ours' ? wholeRender.preview() : undefined);
   const renderWindow = () => valueOf(render())?.window;
   const { view, setView, merged, difference, blinkSaved, wipe, setWipe } = createComparison(
     client,
@@ -245,7 +243,7 @@ export function App() {
   const layerTextSupport = () => valueOf(fonts.layerSupport());
   const layerFailure = () => failureOf(layer());
   const differenceValue = () => valueOf(difference());
-  const shown = createMemo<DisplayImage | undefined>(() => {
+  const strictShown = createMemo<DisplayImage | undefined>(() => {
     if (maskMode() === 'only' && maskPixels()) {
       return maskPixels();
     }
@@ -256,13 +254,31 @@ export function App() {
         : view() === 'difference'
           ? difference()
           : latest(render);
+    if (windowed() && (valueOf(render())?.compositing?.preview ?? 0) > 0) {
+      return undefined;
+    }
+
     return result?.ok ? result.value : view() === 'ours' && !result ? initial.preview()?.image : undefined;
   });
+  const shown = () => {
+    if (maskMode() !== 'only') {
+      const preview = gpuPreview();
+      if (preview) {
+        return preview;
+      }
+
+      if (windowed()) {
+        return valueOf(render()) ?? strictShown();
+      }
+    }
+
+    return strictShown();
+  };
   const inspectionImage = () => {
     const split = view() === 'split' || view() === 'wipe';
     const screenX = point()?.viewportX ?? 0;
     const divider = (viewport.size().width * (view() === 'split' ? 50 : wipe())) / 100;
-    return split && maskMode() !== 'only' && screenX >= divider ? valueOf(merged()) : shown();
+    return split && maskMode() !== 'only' && screenX >= divider ? valueOf(merged()) : strictShown();
   };
   const presentation = () =>
     presentationSource({
@@ -276,8 +292,8 @@ export function App() {
       savedWindow: renderWindow()?.source === 'savedComposite',
       savedSnapshot: document()?.sourceBacked,
       hasRender: Boolean(latest(render)?.ok),
-      gpuPreview: (valueOf(render())?.compositing?.preview ?? 0) > 0,
-      pending: isPending(wholeRender) || (view() === 'difference' && isPending(difference))
+      gpuPreview: !!gpuPreview() || (valueOf(render())?.compositing?.preview ?? 0) > 0,
+      pending: wholeRender.pending() || (view() === 'difference' && isPending(difference))
     });
   const shownFailure = () => {
     const result = view() === 'photoshop' ? merged() : view() === 'difference' ? difference() : render();
@@ -300,7 +316,7 @@ export function App() {
       return initial.ready() ? 'Detecting blending…' : 'Loading preview…';
     }
 
-    if (windows.busy() || isPending(wholeRender)) {
+    if (windows.busy() || wholeRender.pending()) {
       return 'Rendering…';
     }
 
@@ -587,15 +603,23 @@ export function App() {
                     : 'Chosen-settings preview · verifying blending'}
                 </p>
               </Show>
-              <Show when={windowed() && latest(render)?.ok}>
+              <Show
+                when={
+                  (windowed() && latest(render)?.ok) ||
+                  gpuPreview() ||
+                  (!windowed() && latest(render)?.ok && compositeDiagnostics())
+                }
+              >
                 <p class={styles.canvasStatus} role="status" aria-label="Canvas render status">
                   {valueOf(render())?.window?.source === 'savedComposite'
                     ? 'Possibly stale saved pixels'
-                    : (valueOf(render())?.compositing?.preview ?? 0) > 0
+                    : gpuPreview() || (valueOf(render())?.compositing?.preview ?? 0) > 0
                       ? 'GPU interactive preview · strict verification pending'
                       : valueOf(render())?.approximations.length
                         ? 'Current layers · approximated'
-                        : valueOf(render())?.compositing
+                        : valueOf(render())?.compositing ||
+                            compositeDiagnostics()?.state === 'verified' ||
+                            compositeDiagnostics()?.state === 'disabled'
                           ? 'Strict CPU tiles'
                           : 'Current layers'}
                   <Show when={valueOf(render())?.quality}>
@@ -713,7 +737,7 @@ export function App() {
             <Show when={document()}>
               {(current) => (
                 <Navigator
-                  image={shown()}
+                  image={strictShown()}
                   document={current().info}
                   view={viewport.view()}
                   size={viewport.size()}
@@ -728,10 +752,10 @@ export function App() {
                   checked={gpuComposite()}
                   onChange={(event) => setGpuComposite(event.currentTarget.checked)}
                 />
-                Experimental GPU compositing
+                GPU compositing
               </label>
               <p>RGB8 admitted stacks only. GPU previews are checked against strict CPU tiles in the background.</p>
-              <Show when={gpuComposite() && windows.compositeDiagnostics()}>
+              <Show when={gpuComposite() && compositeDiagnostics()}>
                 {(diagnostics) => (
                   <details open aria-label="GPU compositing diagnostics">
                     <summary>
@@ -824,7 +848,7 @@ export function App() {
                   valueOf(render())?.approximations.join('; ') || 'Current render has no reported approximations.'
                 }
                 busy={Boolean(activity())}
-                shown={shown()}
+                shown={strictShown()}
                 full={windowed() ? undefined : valueOf(render())}
                 view={viewport.view()}
                 size={viewport.size()}
@@ -854,7 +878,7 @@ export function App() {
                   opening: document()?.opening,
                   state: stateChoice(),
                   renderSettings: renderSettings(),
-                  gpuCompositing: gpuComposite() ? windows.compositeDiagnostics() : undefined,
+                  gpuCompositing: gpuComposite() ? compositeDiagnostics() : undefined,
                   transientVisibility: pairs(),
                   fidelity: 'display RGB8',
                   performance: viewerPerformance.snapshot(),
