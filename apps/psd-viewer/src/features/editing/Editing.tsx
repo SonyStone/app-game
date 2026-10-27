@@ -4,6 +4,7 @@ import type { OpenedPsd, PsdClient } from '../psd-worker';
 import {
   historyLimit,
   preferredContract,
+  readableRefusal,
   viewerAgent,
   type EditingCommand,
   type EditingFailure,
@@ -22,8 +23,9 @@ export function Editing(props: {
   document: OpenedPsd;
   name: string;
   /** Public monotonic editor revision, independent of replay's native revision. */
-  onRevision: (revision: number) => void;
+  onRevision: (revision: number, display?: EditingState['display']) => void;
 }) {
+  const [linearBlending, setLinearBlending] = createSignal(false);
   const [enabled, setEnabled] = createSignal(false);
   const [state, setState] = createSignal<EditingState>();
   const [failure, setFailure] = createSignal<EditingFailure>();
@@ -35,6 +37,7 @@ export function Editing(props: {
   const [opacity, setOpacity] = createSignal(255);
   const [fill, setFill] = createSignal(255);
   const [blend, setBlend] = createSignal('normal');
+  const [pixelColor, setPixelColor] = createSignal('#000000');
   const [groupName, setGroupName] = createSignal('Group 1');
   const [expanded, setExpanded] = createSignal(true);
   const [groupIds, setGroupIds] = createSignal<number[]>([]);
@@ -89,7 +92,7 @@ export function Editing(props: {
       } else if (result.value.kind === 'state') {
         const next = result.value.state;
         setState(next);
-        props.onRevision(next.revision);
+        props.onRevision(next.revision, next.display);
       }
     } catch (error) {
       if (active) {
@@ -103,11 +106,53 @@ export function Editing(props: {
   }
 
   function edit(command: EditingCommand) {
-    return request({ kind: 'edit', revision: state()?.revision ?? 0, command });
+    return request({
+      kind: 'edit',
+      revision: state()?.revision ?? 0,
+      command,
+      options: { mode: 'source', linearBlending: linearBlending() }
+    });
   }
 
   function tree(edit: PsdExactRasterTreeEdit) {
-    return void request({ kind: 'edit', revision: state()?.revision ?? 0, command: { kind: 'tree', edit } });
+    return void request({
+      kind: 'edit',
+      revision: state()?.revision ?? 0,
+      command: { kind: 'tree', edit },
+      options: { mode: 'source', linearBlending: linearBlending() }
+    });
+  }
+
+  /** A bounded opaque RGB8 fill uses complete same-rectangle samples; native-plane conversion is not guessed. */
+  function replacePixels(layerId: number) {
+    const process = state()?.process;
+    const layer = process?.ok ? process.value.layers.find((layer) => layer.layerId === layerId) : undefined;
+    if (!process?.ok || process.value.mode !== 3 || process.value.depth !== 8 || !layer) {
+      setFailure({
+        code: 'HostOperandRequired',
+        propertyPath: 'pixels.nativePlanes',
+        message: 'Color replacement requires an RGB 8-bit layer. Native process-plane conversion is unavailable.'
+      });
+      return;
+    }
+    const width = layer.right - layer.left;
+    const height = layer.bottom - layer.top;
+    if (width <= 0 || height <= 0 || width * height > 4_000_000) {
+      setFailure({
+        code: 'Budget',
+        message: 'Color replacement requires a nonempty layer of at most four million pixels.'
+      });
+      return;
+    }
+    const color = pixelColor();
+    const rgba = new Uint8Array(width * height * 4);
+    for (let at = 0; at < rgba.length; at += 4) {
+      rgba[at] = Number.parseInt(color.slice(1, 3), 16);
+      rgba[at + 1] = Number.parseInt(color.slice(3, 5), 16);
+      rgba[at + 2] = Number.parseInt(color.slice(5, 7), 16);
+      rgba[at + 3] = 255;
+    }
+    tree({ kind: 'replacePixels', layerId, pixels: { left: layer.left, top: layer.top, width, height, rgba } });
   }
 
   async function save() {
@@ -166,7 +211,7 @@ export function Editing(props: {
           const next = !enabled();
           setEnabled(next);
           if (next && !state()) {
-            void request({ kind: 'open' });
+            void request({ kind: 'open', basename: props.name });
           }
         }}
       >
@@ -174,10 +219,22 @@ export function Editing(props: {
       </button>
       <Show when={enabled()}>
         <p>Guarded editing. Original source bytes are retained. Viewing overrides do not edit the file.</p>
-        <p role="note">
-          Raster/tree operations currently refuse: the exact backend requires Photoshop attribution. The edit call
-          remains authoritative for metadata.
-        </p>
+        <p role="note">Each accepted action saves a revision. The next action edits that saved revision.</p>
+        <label>
+          How to save
+          <select aria-label="How to save" value="source">
+            <option value="source">Keep the source's settings</option>
+          </select>
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            aria-label="Blend RGB colors using gamma 1"
+            checked={linearBlending()}
+            onChange={(event) => setLinearBlending(event.currentTarget.checked)}
+          />
+          Blend RGB colors using gamma 1
+        </label>
         <div class={styles.actions}>
           <button
             type="button"
@@ -215,17 +272,15 @@ export function Editing(props: {
               Preferred contract: <code>{contract()}</code>. No retry with a weaker contract.
             </p>
             <p>
-              Saving agent: {viewerAgent}. File stem: {props.name.replace(/\.(psd|psb)$/i, '')}. Exact tree saving is
-              blocked at <code>save.softwareAgent</code>.
+              Saving agent: {viewerAgent}. File stem: {props.name.replace(/\.(psd|psb)$/i, '')}.
             </p>
             <p>
-              v3 additionally needs a complete active PostScript font inventory, localized Background/proof labels and
-              host preferences. The browser cannot establish these. They are refused, not guessed or copied from the
-              imported file.
+              Source settings carry the file's witnessed display, locale and color settings. Text/font dependencies and
+              missing source settings can still prevent an edit. No current-host integration is connected.
             </p>
             <p>
-              File Info copyright is blocked because its writer hardcodes a Photoshop agent. Title has an unresolved
-              backend companion writer. Resolution is attempted without resampling; the backend checks all companions.
+              File Info public domain and resolution use bounded source-preserving metadata saves. Other copyright
+              transitions and title edits retain their named refusals.
             </p>
             <p>
               Inspection: tree {state()!.tree.ok ? 'available' : 'refused'}, source{' '}
@@ -239,7 +294,7 @@ export function Editing(props: {
             </p>
           </details>
           <fieldset disabled={busy()}>
-            <legend>Layer requests · currently refused honestly</legend>
+            <legend>Layer editing</legend>
             <label>
               Layer{' '}
               <select
@@ -337,6 +392,22 @@ export function Editing(props: {
                   <button type="button" onClick={() => tree({ kind: 'blend', layerId: layer().id, blend: blend() })}>
                     Apply blend mode
                   </button>
+                  <details>
+                    <summary>Replace layer pixels</summary>
+                    <p>Fill the existing RGB 8-bit layer rectangle with an opaque color.</p>
+                    <label>
+                      Replacement color
+                      <input
+                        type="color"
+                        aria-label="Replacement color"
+                        value={pixelColor()}
+                        onInput={(event) => setPixelColor(event.currentTarget.value)}
+                      />
+                    </label>
+                    <button type="button" onClick={() => replacePixels(layer().id)}>
+                      Fill layer pixels
+                    </button>
+                  </details>
                   <button type="button" onClick={() => tree({ kind: 'delete', layerId: layer().id })}>
                     Delete layer
                   </button>
@@ -484,6 +555,7 @@ export function Editing(props: {
         <Show when={failure()}>
           {(error) => (
             <div role="alert" data-refusal-code={error().code} class={styles.refusal}>
+              <p>{readableRefusal(error())}</p>
               <strong>{error().code}</strong>
               <Show when={failurePath(error())}>{(path) => <code>{path()}</code>}</Show>
               <details open={false}>
@@ -527,7 +599,7 @@ function sourceLayers(
   parent: number | null = null,
   depth = 0
 ): ReturnType<typeof flatten> {
-  return [...nodes].reverse().flatMap((node, index) => {
+  return nodes.flatMap((node, index) => {
     const id = ids.get(node.index);
     if (id === undefined || id === null) {
       return [];

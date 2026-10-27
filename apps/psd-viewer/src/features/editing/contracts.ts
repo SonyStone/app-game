@@ -4,14 +4,16 @@ import type {
   PsdEditorSession,
   PsdExactRasterTreeEdit,
   PsdReopenSaveContract,
+  PsdSourceHostSaveContext,
   PsdStateMetadataEdit
 } from '@app-game/psd/editor';
+import type { PsdInfo, PsdLayerNode, PsdStates } from '@app-game/psd/viewer';
 
 /** A viewer refusal retains a machine-readable dependency path, independently of backend exceptions. */
 export type EditingFailure =
   | PsdEditorFailure
   | {
-      code: 'HostAttributionRequired' | 'HostOperandRequired' | 'HistoryLimit' | 'StaleRevision';
+      code: 'HostOperandRequired' | 'HistoryLimit' | 'StaleRevision';
       message: string;
       propertyPath: string;
     };
@@ -32,13 +34,15 @@ export type EditingState = {
   tree: ReturnType<PsdEditorSession['inspect']>;
   source: ReturnType<PsdEditorSession['inspectSource']>;
   process: ReturnType<PsdEditorSession['inspectProcess']>;
+  /** Renderer metadata after a visual transaction; absent for pixel-preserving metadata changes. */
+  display?: { info: PsdInfo; layers: PsdLayerNode[]; states: PsdStates };
   cost: { milliseconds: number; replayed: number; sourceBytes: number };
 };
 
 /** Save IDs name frozen resources and remain usable after later edits. */
 export type EditingRequest =
-  | { kind: 'open' }
-  | { kind: 'edit'; revision: number; command: EditingCommand }
+  | { kind: 'open'; basename?: string }
+  | { kind: 'edit'; revision: number; command: EditingCommand; options?: EditingSaveOptions }
   | { kind: 'undo' | 'redo'; revision: number }
   | { kind: 'freeze'; revision: number }
   | { kind: 'chunk'; save: string; maxBytes: number }
@@ -57,33 +61,63 @@ export const viewerAgent = 'PSD Viewer';
 /** Maximum commands replayed for any commit or undo. No source or history eviction changes undo semantics. */
 export const historyLimit = 64;
 
-/** First preservation contract considered. Unavailable host operands refuse before any downgrade. */
-export const preferredContract = 'photoshop26.reopen-equivalent/v3-carried-untouched' satisfies PsdReopenSaveContract;
+/** Browser save choice. Strict current-host saving is unavailable without a real host integration. */
+export type EditingSaveOptions = {
+  mode: 'source';
+  /** Explicit RGB blend gamma choice, independent of carried source host facts. */
+  linearBlending: boolean;
+};
+
+/** Each tree action saves one pristine source under v5; refusal never selects a weaker contract. */
+export const preferredContract = 'photoshop26.reopen-equivalent/v5-source-host' satisfies PsdReopenSaveContract;
 
 /**
- * The bundled exact-save validator requires an Adobe Photoshop agent. File Info copyright also emits a
- * hardcoded Photoshop event/EXIF agent. Neither is an honest browser operation. Refuse before mutation;
- * this host guard does not relax or replace backend admission for operations that can be attempted.
+ * Captures genuine runtime operands once per action, then retains them unchanged for undo/redo replay.
+ * No native compositor, profile, locale or font operands are accepted by this browser path.
  */
-export function hostRefusal(command: EditingCommand): EditingFailure | undefined {
-  if (command.kind === 'tree') {
-    return {
-      code: 'HostAttributionRequired',
-      propertyPath: 'save.softwareAgent',
-      message: `The bundled exact-edit contract requires an Adobe Photoshop identity. ${viewerAgent} cannot claim it. No edit or weaker contract was attempted.`
-    };
-  }
+export function sourceSaveOperands(
+  basename: string,
+  options: EditingSaveOptions
+): Omit<PsdSourceHostSaveContext, 'sourceBytes'> {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return {
+    contract: preferredContract,
+    save: {
+      basename: basename.replace(/\.(psd|psb)$/i, ''),
+      saveTime: now.toISOString().slice(0, 19) + '+00:00',
+      exifTime: `${now.getFullYear()}:${pad(now.getMonth() + 1)}:${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
+      instanceId: `xmp.iid:${crypto.randomUUID()}`,
+      documentId: `adobe:docid:photoshop:${crypto.randomUUID()}`,
+      softwareAgent: viewerAgent,
+      linearBlending: options.linearBlending
+    },
+    editTime: now.valueOf() / 1000
+  };
+}
 
-  if (command.edit.kind === 'fileInfoCopyright') {
-    return {
-      code: 'HostAttributionRequired',
-      propertyPath: 'metadata.fileInfo.softwareAgent',
-      message:
-        'The bundled copyright writer hardcodes a Photoshop history/EXIF agent and accepts no truthful saving-agent operand.'
-    };
+/** Concise explanations retain the backend's named dependency separately for diagnosis. */
+export function readableRefusal(error: EditingFailure): string {
+  const path = 'propertyPath' in error ? error.propertyPath : '';
+  if (/typeRendering|font|Txt2|typeGraph/i.test(path)) {
+    return 'This document has text layers whose fonts the browser cannot vouch for.';
   }
-
-  return undefined;
+  if (/background.*name/i.test(path)) {
+    return 'Changing Background needs a localized layer name that this file does not establish.';
+  }
+  if (/grid|guide/i.test(path)) {
+    return 'This file does not establish the grid or guide settings needed to save this edit.';
+  }
+  if (/profile|icc|working/i.test(path)) {
+    return 'This file does not establish the color profile needed to save this edit.';
+  }
+  if (/label|locale|transparencyName|proof/i.test(path)) {
+    return 'This file does not establish the localized labels needed to save this edit.';
+  }
+  if (/initial|creation|xmp/i.test(path)) {
+    return 'This file lacks the initialized document history needed to save this edit.';
+  }
+  return error.message;
 }
 
 /** Retains backend refusal fields while dropping exception objects before worker transfer. */

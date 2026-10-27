@@ -743,3 +743,36 @@ it('renders shared support once for tile cuts, retains its bytes after transfer,
     client.dispose();
   }
 });
+
+it('invalidates cached pixels after a v5 edit while preserving original download and refusing stale revisions', async () => {
+  const original = await readFile(new URL('../../../packages/psd/test/editor/source-host-rgb8.psd', import.meta.url));
+  const { client } = connect();
+  const opened = value(await client.open(new Uint8Array(original).buffer));
+  try {
+    const before = value(await client.render(opened.document, settings, []));
+    await client.editor(opened.document, { kind: 'open', basename: 'source-host-rgb8.psd' });
+    const edited = await client.editor(opened.document, {
+      kind: 'edit',
+      revision: 0,
+      command: { kind: 'tree', edit: { kind: 'opacity', layerId: 3, opacity: 173 } }
+    });
+    expect(edited).toMatchObject({
+      ok: true,
+      value: { kind: 'state', state: { revision: 1, display: { layers: expect.any(Array) } } }
+    });
+    const after = value(await client.render(opened.document, settings, []));
+    expect(after.pixels).not.toEqual(before.pixels);
+    expect(new Uint8Array(await value(await client.original(opened.document)).arrayBuffer())).toEqual(
+      new Uint8Array(original)
+    );
+    expect(await client.editor(opened.document, { kind: 'undo', revision: 0 })).toMatchObject({
+      ok: false,
+      error: { code: 'StaleRevision' }
+    });
+    await client.editor(opened.document, { kind: 'undo', revision: 1 });
+    const undone = value(await client.render(opened.document, settings, []));
+    expect(undone.pixels).toEqual(before.pixels);
+  } finally {
+    client.dispose();
+  }
+});

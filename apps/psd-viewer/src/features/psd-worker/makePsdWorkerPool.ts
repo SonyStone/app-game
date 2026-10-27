@@ -317,6 +317,13 @@ export function makePsdWorkerPool(
     },
     renderWindow,
     prepareWindows,
+    /** A spare holds original bytes, so any edit attempt retires it until a new document opens. */
+    async editor(...args: Parameters<PsdClient['editor']>) {
+      if (['edit', 'undo', 'redo'].includes(args[1].kind)) {
+        disable('editing');
+      }
+      return primary.editor(...args);
+    },
     /** Records cold batch cost by size. Slow batches run serially next time; empty/cache-only batches abstain. */
     reportWindowBatch(batch: {
       workers: number;

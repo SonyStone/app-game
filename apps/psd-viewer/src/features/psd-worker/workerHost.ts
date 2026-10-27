@@ -1,4 +1,5 @@
 import { loadPsd } from '@app-game/psd';
+import { openPsdEditor } from '@app-game/psd/editor';
 import {
   createFontLibrary,
   loadPsdViewer,
@@ -89,6 +90,7 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       }
     | undefined;
   let editing: Awaited<ReturnType<typeof makeEditingSession>> | undefined;
+  let editedDisplay = false;
   let fonts: PsdFontLibrary | undefined;
   const sessionFonts = new Map<string, SessionFont>();
   const suppliedFonts = () => [...sessionFonts.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -273,6 +275,7 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
     }
 
     if (request.type === 'editor') {
+      editedDisplay = false;
       if (!editing && request.request.kind === 'open') {
         const size = document.original instanceof Blob ? document.original.size : document.original.byteLength;
         // Two editor parses, renderer, replay and prepared bytes must coexist. Do not weaken huge-file opening.
@@ -304,28 +307,51 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         editorSourceBytes = document.original instanceof Blob ? bytes.byteLength : 0;
         const codec = await loadPsd();
         editorMemory = (await codec.default()).memory;
-        editing = await makeEditingSession(bytes, async (updated) => {
-          const reopened = await openPsd(updated);
-          if (!reopened.ok) {
-            return {
-              ok: false,
-              error: {
-                code: 'RenderRequired',
-                message: `Edited source could not reopen strictly: ${reopened.error.message}`
+        editing = await makeEditingSession(
+          bytes,
+          async (updated, visual) => {
+            const reopened = await openPsd(updated);
+            if (!reopened.ok) {
+              return {
+                ok: false,
+                error: {
+                  code: 'RenderRequired',
+                  message: `Edited source could not reopen strictly: ${reopened.error.message}`
+                }
+              };
+            }
+            editedDisplay = visual;
+            if (visual) {
+              wholeCache = undefined;
+              wholeCosts.clear();
+              windowCosts.clear();
+              releasePrepared();
+              for (const render of renders.values()) {
+                render.dispose();
               }
-            };
-          }
-          // Admitted metadata operations preserve all encoded pixel/cache operands. Keep content identity,
-          // resident GPU/tile products and original bytes, while future inspection uses the edited source.
-          document!.viewer!.close();
-          document!.viewer = reopened.value;
-          document!.info = reopened.value.info;
-          return { ok: true, value: undefined };
-        });
+              renders.clear();
+            }
+            // Metadata preserves resident pixels; visual revisions invalidate every source-derived cache.
+            document!.viewer!.close();
+            document!.viewer = reopened.value;
+            document!.info = reopened.value.info;
+            return { ok: true, value: undefined };
+          },
+          openPsdEditor,
+          request.request.basename
+        );
       }
       const result = editing?.ok
         ? await editing.value.receive(request.request)
         : (editing ?? { ok: false as const, error: { code: 'Disposed' as const, message: 'Enter Edit mode first.' } });
+      if (result.ok && result.value.kind === 'state' && editedDisplay && document.viewer) {
+        // Refresh layer/record identities even when undo restores the original stack.
+        result.value.state.display = {
+          info: document.viewer.info,
+          layers: [...document.viewer.layers],
+          states: document.viewer.states
+        };
+      }
       const transfer =
         result.ok && result.value.kind === 'chunk' && result.value.bytes
           ? [result.value.bytes.buffer as ArrayBuffer]

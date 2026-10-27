@@ -62,7 +62,7 @@ export function App() {
   const openingDisplay: DisplayImage = { width: 0, height: 0, pixels: new Uint8Array(0) };
   onCleanup(client.dispose);
 
-  const { source, opened, opening, canceled, open, cancel, retry } = createPsdDocument(client);
+  const { source, opened, opening, canceled, open, cancel, retry, updateEdited } = createPsdDocument(client);
   const { prompt, answer } = createOpenPrompt(source, opened, open);
   const { settings: stored, update, replace, reset } = createRenderSettings();
   const { overrides, pairs, setVisible, restoreSaved, solo } = createLayerVisibility(source);
@@ -461,7 +461,20 @@ export function App() {
               {(original) => (
                 <Show when={document()}>
                   {(current) => (
-                    <Editing client={client} document={current()} name={original.name} onRevision={setEditorRevision} />
+                    <Editing
+                      client={client}
+                      document={current()}
+                      name={original.name}
+                      onRevision={(revision, display) => {
+                        setEditorRevision(revision);
+                        if (display) {
+                          restoreSaved();
+                          chooseState(null);
+                          setSelected(undefined);
+                          updateEdited(display);
+                        }
+                      }}
+                    />
                   )}
                 </Show>
               )}
