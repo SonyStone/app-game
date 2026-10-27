@@ -98,21 +98,38 @@ describe('a match on tape', { timeout: 120_000 }, () => {
 
     // Halfway between two frames every body is on its way from where it was, none off toward
     // another of its kind, as a turret toward the next tank's when a body ahead of it came or went.
+    // Lights, as a shell's glow, go halfway from where they were to where they are next.
     let between = 0;
+    let lightsBetween = 0;
 
     for (let step = 20 * 60; step < 45 * 60 - 1; step += 3) {
       player.show(step);
-      const from = shown.frame().bodies;
+      const from = shown.frame();
+      player.show(step + 1);
+      const to = shown.frame();
       player.show(step + 0.5);
+      const halfway = shown.frame();
 
-      for (const body of shown.frame().bodies) {
-        const near = from.filter((other) => other.kind === body.kind && other.cols === body.cols && other.rows === body.rows && Object.is(other.slot, body.slot));
+      for (const body of halfway.bodies) {
+        const near = from.bodies.filter((other) => other.kind === body.kind && other.cols === body.cols && other.rows === body.rows && Object.is(other.slot, body.slot));
         expect(Math.min(...near.map((other) => Math.hypot(other.x - body.x, other.y - body.y)))).toBeLessThan(20);
         between++;
+      }
+
+      for (const light of halfway.lights) {
+        const same = (other: number[]) => other.slice(4).every((value, index) => value === light[4 + index]);
+        const was = from.lights.filter(same);
+        const will = to.lights.filter(same);
+        expect(Math.min(...was.map((other) => Math.hypot(other[0] - light[0], other[1] - light[1])))).toBeLessThan(20);
+        const moved = was.some((a) =>
+          will.some((b) => Math.hypot(b[0] - a[0], b[1] - a[1]) > 1 && Math.hypot(light[0] - (a[0] + b[0]) / 2, light[1] - (a[1] + b[1]) / 2) < 0.01)
+        );
+        lightsBetween += moved ? 1 : 0;
       }
     }
 
     expect(between).toBeGreaterThan(10_000);
+    expect(lightsBetween).toBeGreaterThan(20);
     expect(seen.size).toBeGreaterThan(30);
     expect(seen.get(steps.at(-1)!)!.balls.length).toBeGreaterThan(0);
     // 45 s of a match, its map's fields included, in a few megabytes.

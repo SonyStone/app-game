@@ -187,8 +187,8 @@ export function createTapePlayer(target: Renderer, tape: Tape) {
   let applied = 0;
   let shownIndex: number | undefined;
   let shownTime = 0;
-  /** The bodies of the frame shown last paired with those of the frame after it (see `partnersOf`). */
-  let paired: { index: number; partners: Int32Array } | undefined;
+  /** The bodies and lights of the frame shown last paired with those of the frame after it (see `partnersOf`). */
+  let paired: { index: number; partners: Int32Array; lights: Int32Array } | undefined;
 
   return {
     /**
@@ -212,7 +212,8 @@ export function createTapePlayer(target: Renderer, tape: Tape) {
       const after = share > 0 ? tape.bodiesAt(index + 1) : undefined;
 
       if (after && paired?.index !== index) {
-        paired = { index, partners: partnersOf(bodies, after, next.step - frame.step) };
+        const steps = next.step - frame.step;
+        paired = { index, partners: partnersOf(bodies, after, BODY, SAME_BODY, 1, steps), lights: partnersOf(frame.lights, next.lights, LIGHT, SAME_LIGHT, 0, steps) };
       }
 
       fieldsTo(frame.uploads);
@@ -223,9 +224,14 @@ export function createTapePlayer(target: Renderer, tape: Tape) {
         target.addBody(unpack(bodies, offset, partner < 0 ? undefined : after, partner * BODY, share));
       }
 
-      for (let offset = 0; offset < frame.lights.length; offset += 8) {
+      for (let offset = 0; offset < frame.lights.length; offset += LIGHT) {
         const light = frame.lights;
-        target.addLight(light[offset], light[offset + 1], light[offset + 2], light[offset + 3], [light[offset + 4], light[offset + 5], light[offset + 6]], light[offset + 7]);
+        const partner = after ? paired!.lights[offset / LIGHT] : -1;
+        // Position, radius and brightness move toward the same light's in the frame after.
+        const [x, y, radius, intensity] = [0, 1, 2, 3].map((field) =>
+          partner < 0 ? light[offset + field] : light[offset + field] + (next.lights[partner * LIGHT + field] - light[offset + field]) * share
+        );
+        target.addLight(x, y, radius, intensity, [light[offset + 4], light[offset + 5], light[offset + 6]], light[offset + 7]);
       }
 
       const smokeTime = frame.smokeTime + (next && share > 0 ? (next.smokeTime - frame.smokeTime) * share : 0);
@@ -689,14 +695,16 @@ function unpack(bodies: Float32Array, offset: number, after: Float32Array | unde
 }
 
 /**
- * Pairs each body of `before` with the same body in `after`, a frame `steps` steps later: the
- * index of its partner there, or -1 when it has none. Bodies carry no names, so a partner is the
- * nearest body of the same kind, shape and field not paired yet, within `MAX_TRAVEL` px a step.
- * The body at the same place in the list will not do: whenever one ahead of it comes or goes, a
- * tank's turret pairs with the next tank's, and flies across the map between them.
+ * Pairs each body or light of `before`, packed `stride` numbers each, with the same one in
+ * `after`, a frame `steps` steps later: the index of its partner there, or -1 when it has none.
+ * They carry no names, so a partner is the nearest one, by its x and y at `position`, that has
+ * the same numbers at `same` (a body's kind, shape and field; a light's color and height) and is
+ * not paired yet, within `MAX_TRAVEL` px a step. The one at the same place in the list will not
+ * do: whenever one ahead of it comes or goes, a tank's turret pairs with the next tank's, and
+ * flies across the map between them.
  */
-function partnersOf(before: Float32Array, after: Float32Array, steps: number) {
-  const partners = new Int32Array(before.length / BODY).fill(-1);
+function partnersOf(before: Float32Array, after: Float32Array, stride: number, same: readonly number[], position: number, steps: number) {
+  const partners = new Int32Array(before.length / stride).fill(-1);
   const groups = new Map<string, { before: number[]; after: number[] }>();
   const reach = (MAX_TRAVEL * steps) ** 2;
 
@@ -704,8 +712,8 @@ function partnersOf(before: Float32Array, after: Float32Array, steps: number) {
     [before, 'before'],
     [after, 'after']
   ] as const) {
-    for (let body = 0; body * BODY < bodies.length; body++) {
-      const key = SAME_BODY.map((field) => bodies[body * BODY + field]).join();
+    for (let body = 0; body * stride < bodies.length; body++) {
+      const key = same.map((field) => bodies[body * stride + field]).join();
       let group = groups.get(key);
 
       if (!group) {
@@ -717,7 +725,8 @@ function partnersOf(before: Float32Array, after: Float32Array, steps: number) {
     }
   }
 
-  const distance = (from: number, to: number) => (after[to * BODY + 1] - before[from * BODY + 1]) ** 2 + (after[to * BODY + 2] - before[from * BODY + 2]) ** 2;
+  const distance = (from: number, to: number) =>
+    (after[to * stride + position] - before[from * stride + position]) ** 2 + (after[to * stride + position + 1] - before[from * stride + position + 1]) ** 2;
 
   for (const group of groups.values()) {
     const pairs: [number, number, number][] = [];
@@ -747,6 +756,9 @@ function partnersOf(before: Float32Array, after: Float32Array, steps: number) {
 
 /** The packed fields a body keeps from frame to frame: kind, origin, size and field slot. */
 const SAME_BODY = [0, 4, 5, 7, 8, 9];
+/** Numbers a light is kept in, as `addLight` takes them, and those it keeps from frame to frame: color and height. */
+const LIGHT = 8;
+const SAME_LIGHT = [4, 5, 6, 7];
 /** The farthest anything drawn moves in a step, in px: a fast shell, paced up, with room to spare. */
 const MAX_TRAVEL = 40;
 
