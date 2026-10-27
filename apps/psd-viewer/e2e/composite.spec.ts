@@ -92,6 +92,14 @@ test('experimental preview labeling, zero-sample verification and forced mismatc
     const Native = Worker;
     window.Worker = class extends Native {
       postMessage(message: unknown, transfer: Transferable[] | StructuredSerializeOptions = []) {
+        if (
+          Reflect.get(window, '__holdCapabilities') &&
+          typeof message === 'object' &&
+          message &&
+          Reflect.get(message, 'type') === 'capability'
+        ) {
+          return;
+        }
         if (typeof message === 'object' && message && Reflect.get(message, 'type') === 'renderWindow') {
           setTimeout(
             () =>
@@ -133,6 +141,12 @@ test('experimental preview labeling, zero-sample verification and forced mismatc
       await expect(page.getByRole('status', { name: 'Canvas render status' })).toContainText('Strict CPU tiles');
       await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false');
       await page.screenshot({ path: `${screenshots}/strict-verified.png` });
+      // Resident GPU previews must not wait for the authoritative worker's planning queue.
+      await page.evaluate(() => Reflect.set(window, '__holdCapabilities', true));
+      await page.locator('[role=tree] input[type=checkbox]').first().click();
+      await expect(page.getByRole('status', { name: 'Canvas render status' })).toContainText('GPU interactive preview');
+      await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false');
+      await page.evaluate(() => Reflect.set(window, '__holdCapabilities', false));
       await page.evaluate(() => Reflect.get(window, '__compositeDevices').at(-1).destroy());
       await expect(page.locator('canvas[data-backend=canvas2d]')).toBeVisible();
       await page.locator('[role=tree] input[type=checkbox]').first().click();
