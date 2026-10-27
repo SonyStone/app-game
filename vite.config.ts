@@ -11,6 +11,7 @@ import wasm from 'vite-plugin-wasm';
 import { choicesBridge } from './apps/paint/choicesBridge';
 import { layoutsBridge } from './apps/paint/layoutsBridge';
 import { recordingBridge } from './apps/paint/recordingBridge';
+import { linkPreviews } from './apps/web/linkPreviews';
 import { workspaceUpdates } from './apps/web/workspaceUpdates';
 import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
 import { vitePluginMarkdown } from './packages/vite-plugin-markdown/src';
@@ -66,7 +67,22 @@ export default defineConfig({
     choicesBridge(),
     layoutsBridge(),
     // The start page lists the projects changed last, from git.
-    workspaceUpdates()
+    workspaceUpdates(),
+    // A link to the game pasted into a chat shows its picture and name.
+    linkPreviews(
+      [
+        {
+          path: '/tanki',
+          site: 'Tanki',
+          title: 'Tanki: King of the Hill',
+          description:
+            'Top-down arcade tanks in the browser: red against blue for the hill, five classes, walls that break, and bots that fight as a team.',
+          image: resolve(apps, 'tanki/link-preview.jpg'),
+          color: '#c9473b'
+        }
+      ],
+      'https://app-game-one.vercel.app'
+    )
   ],
   server: {
     port: devServerPort,
