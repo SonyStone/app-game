@@ -14,7 +14,7 @@ test('navigates the 6000x4000 RGB16 source through bounded native reads', async 
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.addInitScript(() => {
-    const observed: { memory: number[]; reads: number[] } = { memory: [], reads: [] };
+    const observed: { memory: number[]; reads: number[]; overviews: number } = { memory: [], reads: [], overviews: 0 };
     (window as unknown as { sourceMetrics: typeof observed }).sourceMetrics = observed;
     const NativeWorker = Worker;
     window.Worker = class extends NativeWorker {
@@ -31,6 +31,19 @@ test('navigates the 6000x4000 RGB16 source through bounded native reads', async 
           }
         });
       }
+      postMessage(
+        message: { type: string; window?: { kind: string } },
+        transfer: Transferable[] | StructuredSerializeOptions = []
+      ) {
+        if (message.type === 'renderWindow' && message.window?.kind === 'overview') {
+          observed.overviews++;
+        }
+        if (Array.isArray(transfer)) {
+          super.postMessage(message, transfer);
+        } else {
+          super.postMessage(message, transfer);
+        }
+      }
     };
     const original = Blob.prototype.arrayBuffer;
     Blob.prototype.arrayBuffer = function () {
@@ -46,6 +59,9 @@ test('navigates the 6000x4000 RGB16 source through bounded native reads', async 
   await expect(stage).toHaveAttribute('data-render-source', 'savedComposite', { timeout: 90000 });
   await expect(stage).toHaveAttribute('data-busy', 'false', { timeout: 90000 });
   await expect(page.locator('footer')).toContainText('6000 × 4000 · 16-bit RGB');
+  expect(
+    await page.evaluate(() => (window as unknown as { sourceMetrics: { overviews: number } }).sourceMetrics.overviews)
+  ).toBe(1);
   await expect(page.locator('footer')).toContainText('may be stale');
   await page.getByRole('button', { name: '100%', exact: true }).click();
   await expect(stage).toHaveAttribute('data-render-step', '1');
