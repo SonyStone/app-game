@@ -16,6 +16,7 @@ import type {
   PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
+import type { EditingRequest, EditingResponse, EditingResult } from '../editing/contracts';
 import type { SessionFont } from '../fonts/addFontFile';
 import { performanceEnabled, viewerPerformance } from '../telemetry/performance';
 import type {
@@ -398,6 +399,19 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
     inspect,
     render,
     renderWindow,
+    /** Editor operations share the worker lifetime; frozen saves use independent IDs. */
+    async editor(document: number, request: EditingRequest): Promise<EditingResult<EditingResponse>> {
+      const reply = await send({ type: 'editor', document, request });
+      return reply.type === 'editor'
+        ? reply.result
+        : {
+            ok: false,
+            error: {
+              code: 'Disposed',
+              message: reply.type === 'failed' ? reply.error.message : 'The editor worker stopped.'
+            }
+          };
+    },
     /** Reads bounded layer operands after conservative exact-compositor admission. */
     async gpuLayers(document: number, rect: PsdRegionRect, settings: PsdRenderSettings) {
       const reply = await send({ type: 'gpuLayers', document, rect, settings });

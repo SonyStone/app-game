@@ -1,3 +1,4 @@
+import { loadPsd } from '@app-game/psd';
 import {
   createFontLibrary,
   loadPsdViewer,
@@ -19,6 +20,7 @@ import {
   type PsdViewerDocument,
   type PsdViewerSource
 } from '@app-game/psd/viewer';
+import { makeEditingSession } from '../editing/makeEditingSession';
 import { addFontFile, type SessionFont } from '../fonts/addFontFile';
 import { makePerformanceRecorder } from '../telemetry/performance';
 import { inspectionRect, wireDisplay, wireSample } from './nativePixels';
@@ -50,6 +52,9 @@ import { preferWholeRender } from './windowCost';
 export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable[]) => void) {
   const telemetry = makePerformanceRecorder();
   let wasmMemory: WebAssembly.Memory | undefined;
+  let editorMemory: WebAssembly.Memory | undefined;
+  let editorSourceBytes = 0;
+  const wasmBytes = () => (wasmMemory?.buffer.byteLength ?? 0) + (editorMemory?.buffer.byteLength ?? 0);
   let requestStart = 0;
   let requestName = '';
   function post(reply: PsdReply, transfer: Transferable[]) {
@@ -59,12 +64,12 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       performance.now(),
       transfer.reduce<number>((sum, value) => sum + (value instanceof ArrayBuffer ? value.byteLength : 0), 0)
     );
-    telemetry.record('wasm.linear.bytes', performance.now(), wasmMemory?.buffer.byteLength ?? 0);
+    telemetry.record('wasm.linear.bytes', performance.now(), wasmBytes());
     telemetry.record('transfer.postedAt', performance.now(), performance.timeOrigin + performance.now());
     send(
       {
         ...reply,
-        memory: { wasmBytes: wasmMemory?.buffer.byteLength ?? 0, sourceBytes: document?.inputBytes ?? 0 },
+        memory: { wasmBytes: wasmBytes(), sourceBytes: (document?.inputBytes ?? 0) + editorSourceBytes },
         performance: telemetry.take()
       },
       transfer
@@ -83,6 +88,7 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         windowed: boolean;
       }
     | undefined;
+  let editing: Awaited<ReturnType<typeof makeEditingSession>> | undefined;
   let fonts: PsdFontLibrary | undefined;
   const sessionFonts = new Map<string, SessionFont>();
   const suppliedFonts = () => [...sessionFonts.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -266,13 +272,78 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       return;
     }
 
+    if (request.type === 'editor') {
+      if (!editing && request.request.kind === 'open') {
+        const size = document.original instanceof Blob ? document.original.size : document.original.byteLength;
+        // Two editor parses, renderer, replay and prepared bytes must coexist. Do not weaken huge-file opening.
+        if (document.source || size > 64 * 1024 ** 2) {
+          post(
+            {
+              id: request.id,
+              type: 'editor',
+              result: {
+                ok: false,
+                error: {
+                  code: 'ResourceBudget',
+                  message:
+                    'Editing requires an eager source of at most 64 MiB. Source-backed viewing and original download remain available.',
+                  resource: 'editor.sourceBytes',
+                  requested: BigInt(size),
+                  limit: 64n * 1024n ** 2n
+                }
+              }
+            },
+            []
+          );
+          return;
+        }
+        const bytes =
+          document.original instanceof Blob
+            ? new Uint8Array(await document.original.arrayBuffer())
+            : new Uint8Array(document.original);
+        editorSourceBytes = document.original instanceof Blob ? bytes.byteLength : 0;
+        const codec = await loadPsd();
+        editorMemory = (await codec.default()).memory;
+        editing = await makeEditingSession(bytes, async (updated) => {
+          const reopened = await openPsd(updated);
+          if (!reopened.ok) {
+            return {
+              ok: false,
+              error: {
+                code: 'RenderRequired',
+                message: `Edited source could not reopen strictly: ${reopened.error.message}`
+              }
+            };
+          }
+          // Admitted metadata operations preserve all encoded pixel/cache operands. Keep content identity,
+          // resident GPU/tile products and original bytes, while future inspection uses the edited source.
+          document!.viewer!.close();
+          document!.viewer = reopened.value;
+          document!.info = reopened.value.info;
+          return { ok: true, value: undefined };
+        });
+      }
+      const result = editing?.ok
+        ? await editing.value.receive(request.request)
+        : (editing ?? { ok: false as const, error: { code: 'Disposed' as const, message: 'Enter Edit mode first.' } });
+      const transfer =
+        result.ok && result.value.kind === 'chunk' && result.value.bytes
+          ? [result.value.bytes.buffer as ArrayBuffer]
+          : [];
+      post({ id: request.id, type: 'editor', result }, transfer);
+      return;
+    }
+
     if (document.source) {
-      handleSource(request as Exclude<PsdRequest, { type: 'open' | 'close' | 'addFonts' | 'listFonts' }>);
+      handleSource(request as Exclude<PsdRequest, { type: 'open' | 'close' | 'addFonts' | 'listFonts' | 'editor' }>);
       return;
     }
 
     const viewer = document.viewer!;
-    const readBudget = { liveBytes: 2 * 1024 ** 3, retainedBytes: document.inputBytes };
+    const readBudget = {
+      liveBytes: 2 * 1024 ** 3,
+      retainedBytes: document.inputBytes + editorSourceBytes + (editorMemory?.buffer.byteLength ?? 0)
+    };
     const windowed = document.windowed;
     if (
       (windowed && ['render', 'difference', 'textSupport'].includes(request.type)) ||
@@ -438,7 +509,10 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
           liveBytes = request.liveBytes ?? 2 * 1024 ** 3;
         }
         telemetry.record('region.live.budget.bytes', performance.now(), liveBytes);
-        const budget = { liveBytes, retainedBytes: document.inputBytes };
+        const budget = {
+          liveBytes,
+          retainedBytes: document.inputBytes + editorSourceBytes + (editorMemory?.buffer.byteLength ?? 0)
+        };
         const settings = { ...request.settings, maxWorkPixels: windowWorkPixels, budget };
         const result =
           window.kind === 'regions'
@@ -665,7 +739,10 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       availableFonts: availableFonts ? [...availableFonts] : undefined,
       visibility,
       maxWorkPixels: windowWorkPixels,
-      budget: { liveBytes: 2 * 1024 ** 3, retainedBytes: document?.inputBytes ?? 0 }
+      budget: {
+        liveBytes: 2 * 1024 ** 3,
+        retainedBytes: (document?.inputBytes ?? 0) + editorSourceBytes + (editorMemory?.buffer.byteLength ?? 0)
+      }
     };
   }
 
@@ -716,7 +793,9 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
   }
 
   /** Source sessions never silently compose layers or claim saved pixels reflect visibility/settings. */
-  function handleSource(request: Exclude<PsdRequest, { type: 'open' | 'close' | 'addFonts' | 'listFonts' }>) {
+  function handleSource(
+    request: Exclude<PsdRequest, { type: 'open' | 'close' | 'addFonts' | 'listFonts' | 'editor' }>
+  ) {
     const source = document!.source!;
     const info = document!.info;
     if (request.type === 'original') {
@@ -909,6 +988,11 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
   }
 
   function close() {
+    if (editing?.ok) {
+      editing.value.dispose();
+    }
+    editing = undefined;
+    editorSourceBytes = 0;
     wholeCache = undefined;
     wholeCosts.clear();
     windowCosts.clear();
