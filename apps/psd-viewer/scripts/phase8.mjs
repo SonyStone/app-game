@@ -1,76 +1,423 @@
-// Production UI corpus. Research inputs are read only; no Photoshop or personal browser profile is used.
+// Real production UI saves. Research sources are read-only; browsers use temporary profiles.
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { loadavg } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 const require = createRequire(new URL('../package.json', import.meta.url));
 const { chromium } = require('@playwright/test');
 const repo = fileURLToPath(new URL('../../..', import.meta.url));
 const research = process.env.PSD_TEXT_MIXER_RESEARCH_ROOT;
-if (!research) {
-  throw new Error('Set PSD_TEXT_MIXER_RESEARCH_ROOT to the read-only fixture checkout.');
-}
-const output = '/tmp/psd-phase8-saves';
-const screens = '/tmp/psd-phase8-screens';
+assert(research, 'Set PSD_TEXT_MIXER_RESEARCH_ROOT to the read-only fixture checkout.');
+const output = process.env.PSD_EDIT_SAVES ?? '/tmp/psd-viewer-v5-saves';
+const screens = process.env.PSD_EDIT_SCREENS ?? '/tmp/psd-viewer-v5-screens';
+const reportFile = process.env.PSD_EDIT_REPORT ?? '/tmp/psd-viewer-v5-report.json';
 await fs.mkdir(output, { recursive: true });
 await fs.mkdir(screens, { recursive: true });
 const codec = await import(`${repo}/packages/psd/wasm/photoshop_psd_wasm.js`);
 await codec.default({ module_or_path: await fs.readFile(`${repo}/packages/psd/wasm/photoshop_psd_wasm_bg.wasm`) });
+const viewer = await import(`${repo}/packages/psd/wasm-viewer/photoshop_psd_viewer.js`);
+await viewer.default({
+  module_or_path: await fs.readFile(`${repo}/packages/psd/wasm-viewer/photoshop_psd_viewer_bg.wasm`)
+});
+const contract = 'photoshop26.reopen-equivalent/v5-source-host';
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const json = (value) => JSON.stringify(value, (_, value) => (typeof value === 'bigint' ? value.toString() : value), 2);
-const discovery = [];
-const seen = new Set();
-for (const set of ['oracle-1', 'oracle-2']) {
-  const root = path.join(research, 'fixtures/psd', set);
-  for (const name of (await fs.readdir(root)).sort()) {
-    const file = path.join(root, name, 'source-input/document.psd');
-    const stat = await fs.stat(file).catch(() => undefined);
-    if (!stat || stat.size > 8 * 1024 ** 2) {
-      continue;
+const evidence = path.join(research, 'evidence');
+const own = JSON.parse(await fs.readFile(`${evidence}/2026-10-25-psd-E-own-5/census-final.json`)).operations;
+const publicRows = JSON.parse(await fs.readFile(`${evidence}/2026-10-27-psd-E-own-agent/public-requests.json`));
+const families = [
+  'rename',
+  'opacity',
+  'pixels',
+  'out',
+  'delete',
+  'group-group-selected',
+  'group-opacity',
+  'group-blend',
+  'group-visibility',
+  'group-out',
+  'group-delete',
+  'group-ungroup'
+];
+const metric = Object.fromEntries(
+  families.map((family, index) => [family, [387, 168, 353, 343, 199, 380, 189, 189, 189, 167, 167, 167][index]])
+);
+const census = [];
+const attempts = [];
+const saves = [];
+const errors = [];
+const costs = [];
+if (process.env.PSD_EDIT_RESUME === '1') {
+  const previous = JSON.parse(await fs.readFile(path.join(output, 'manifest.json')));
+  attempts.push(...previous.attempts);
+  saves.push(...previous.saves);
+}
+
+/** Genuine clocks, fresh identities and source bytes are the only runtime inputs to v5. */
+function context(file, bytes) {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, '0');
+  return {
+    contract,
+    sourceBytes: bytes,
+    editTime: now.valueOf() / 1000,
+    save: {
+      basename: path.parse(file).name,
+      saveTime: now.toISOString().slice(0, 19) + '+00:00',
+      exifTime: `${now.getFullYear()}:${pad(now.getMonth() + 1)}:${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
+      instanceId: `xmp.iid:${crypto.randomUUID()}`,
+      documentId: `adobe:docid:photoshop:${crypto.randomUUID()}`,
+      softwareAgent: 'PSD Viewer',
+      linearBlending: false
     }
-    const bytes = await fs.readFile(file);
-    const sourceHash = hash(bytes);
-    if (seen.has(sourceHash) || bytes.readUInt32BE(18) * bytes.readUInt32BE(14) > 1_048_576) {
-      continue;
+  };
+}
+
+/** Reproduces the frozen command using target identity/geometry only, never its captured host context. */
+function command(row, input) {
+  const layerId = row.targetId;
+  const native = input.readUInt16BE(24) !== 3 || input.readUInt16BE(22) !== 8;
+  if (row.op === 'pixels') {
+    const [left, top, right, bottom] = row.bounds;
+    const width = right - left,
+      height = bottom - top;
+    if (native) {
+      const colors = input.readUInt16BE(24) === 4 ? 4 : input.readUInt16BE(24) === 1 ? 1 : 3;
+      const size = width * height * (input.readUInt16BE(22) / 8);
+      return {
+        kind: 'replaceProcessPlanes',
+        layerId,
+        planes: Array.from({ length: colors + 1 }, (_, index) => new Uint8Array(size).fill(index === colors ? 255 : 0))
+      };
     }
-    seen.add(sourceHash);
-    let session;
-    try {
-      session = new codec.PsdEditorSession(bytes);
-      session.editStateMetadata([{ kind: 'resolutionNoResample', ppi: 91 }]);
-      discovery.push({ file, sourceHash, admitted: true });
-    } catch (error) {
-      discovery.push({
+    return {
+      kind: 'replacePixels',
+      layerId,
+      pixels: {
+        left,
+        top,
+        width,
+        height,
+        rgba: Uint8Array.from({ length: width * height * 4 }, (_, index) => (index % 4 === 3 ? 255 : 0))
+      }
+    };
+  }
+  if (native && row.op === 'rename') {
+    return { kind: 'renameProcessLayer', layerId, name: 'renamed' };
+  }
+  if (native && ['opacity', 'group-opacity'].includes(row.op)) {
+    return { kind: 'setProcessOpacity', layerId, opacity: 173 };
+  }
+  switch (row.op) {
+    case 'rename':
+      return { kind: 'rename', layerId, name: 'renamed' };
+    case 'opacity':
+    case 'group-opacity':
+      return { kind: 'opacity', layerId, opacity: 173 };
+    case 'out':
+    case 'group-out':
+      return { kind: 'move', layerId, index: 0 };
+    case 'delete':
+    case 'group-delete':
+      return { kind: 'delete', layerId };
+    case 'group-blend':
+      return { kind: 'blend', layerId, blend: 'multiply' };
+    case 'group-visibility':
+      return { kind: 'visible', layerId, visible: row.visible ?? false };
+    case 'group-ungroup':
+      return { kind: 'ungroupLayer', layerId };
+    case 'group-group-selected':
+      return { kind: 'groupSelectedLayers', layerIds: [layerId], name: 'Group 1', expanded: true };
+    case 'fill':
+      return { kind: 'fill', layerId, fill: 173 };
+    case 'blend':
+      return { kind: 'blend', layerId, blend: 'multiply' };
+    case 'visibility':
+      return { kind: 'visible', layerId, visible: row.visible ?? false };
+    case 'resolution':
+      return { kind: 'resolutionNoResample', ppi: 144 };
+    case 'fileInfoCopyright':
+      return { kind: 'fileInfoCopyright', status: 'publicDomain' };
+    default:
+      throw new Error(row.op);
+  }
+}
+
+/** Always releases the frozen resource, including on read failure. */
+function collect(save) {
+  try {
+    const chunks = [];
+    for (let chunk; (chunk = save.nextChunk(1024 * 1024)); ) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  } finally {
+    save.dispose();
+    save.free();
+  }
+}
+
+/** Read-only independent reopen records complete order, hierarchy, persisted IDs and scalar properties. */
+function stack(bytes) {
+  const editor = new codec.PsdEditorSession(bytes);
+  const document = viewer.PsdDocumentHandle.open(bytes);
+  try {
+    const ids = new Map(editor.inspectSource().layers.map((layer) => [layer.recordIndex, layer.layerId]));
+    const project = (nodes) =>
+      nodes.map((node) => ({
+        id: ids.get(node.index),
+        name: node.name,
+        visible: node.visible,
+        opacity: node.opacity,
+        fill: node.fill,
+        blend: node.blendMode,
+        children: project(node.children ?? [])
+      }));
+    return project(document.layers());
+  } finally {
+    editor.dispose();
+    editor.free();
+    document.free();
+  }
+}
+
+/** Executes a single independent transaction. Only a named missing-event refusal permits a preparation retry. */
+function probe(row, bytes, expectedStack = false) {
+  const session = new codec.PsdEditorSession(bytes);
+  const ctx = context(row.file, bytes);
+  const edit = command(row, bytes);
+  try {
+    if (['resolution', 'fileInfoCopyright'].includes(row.op)) {
+      session.editStateMetadata([
+        {
+          ...edit,
+          ...(row.op === 'fileInfoCopyright'
+            ? {
+                saveContext: {
+                  modifiedAt: ctx.save.saveTime,
+                  instanceId: ctx.save.instanceId,
+                  documentId: ctx.save.documentId,
+                  softwareAgent: ctx.save.softwareAgent
+                }
+              }
+            : {})
+        }
+      ]);
+    } else {
+      try {
+        session.editRasterTreeExact([edit], ctx);
+      } catch (error) {
+        if (!error.propertyPath?.includes('save.xmp.initial-event')) {
+          throw error;
+        }
+        ctx.initialEvent = {
+          instanceId: `xmp.iid:${crypto.randomUUID()}`,
+          when: new Date().toISOString().slice(0, 19) + '+00:00'
+        };
+        session.editRasterTreeExact([edit], ctx);
+      }
+    }
+    return { admitted: true, expectedStack: expectedStack ? stack(collect(session.prepareSave(false))) : undefined };
+  } catch (error) {
+    assert.equal(session.revision, 0n);
+    assert.deepEqual(collect(session.prepareSave(false)), bytes);
+    return { admitted: false, refusal: { code: error.code, propertyPath: error.propertyPath, message: error.message } };
+  } finally {
+    session.dispose();
+    session.free();
+  }
+}
+
+/** Family denominators include refusals; UI sampling is reported separately from the complete API census. */
+function shares(rows) {
+  return [...new Set(rows.map((row) => row.op))].map((op) => {
+    const group = rows.filter((row) => row.op === op);
+    return {
+      family: op,
+      admitted: group.filter((row) => row.admitted).length,
+      attempts: group.length,
+      share: group.filter((row) => row.admitted).length / group.length
+    };
+  });
+}
+
+async function persist() {
+  await fs.writeFile(path.join(output, 'manifest.json'), json({ contract, saves, attempts, errors }));
+  await fs.writeFile(
+    reportFile,
+    json({
+      generatedAt: new Date().toISOString(),
+      editedSaves: saves.length,
+      distinctSavedSources: new Set(saves.map((row) => row.sourceHash)).size,
+      census: {
+        own: shares(census.filter((row) => row.cohort === 'own')),
+        public: shares(census.filter((row) => row.cohort === 'public')),
+        comparison: families.map((family) => {
+          const rows = census.filter((row) => row.cohort === 'own' && row.op === family);
+          const denominator = family.startsWith('group-') && family !== 'group-group-selected' ? 225 : 466;
+          return {
+            family,
+            measured: `${rows.filter((row) => row.admitted).length}/${rows.length}`,
+            metric: `${metric[family]}/${denominator}`
+          };
+        })
+      },
+      ui: { admission: shares(attempts), attempts: attempts.length, costs },
+      refusals: Object.entries(
+        Object.groupBy(
+          attempts.filter((row) => !row.admitted),
+          (row) => row.refusal.propertyPath ?? row.refusal.code
+        )
+      ).map(([reason, rows]) => ({ reason, count: rows.length })),
+      operands:
+        'Pristine source bytes, runtime clocks, crypto.randomUUID, PSD Viewer agent and user choices only. No host profile requested.',
+      limitations: [
+        'Photoshop verification is pending a later round.',
+        'The full API census and deliberately stratified real-UI sample have separate denominators.',
+        'The color-fill UI supports opaque RGB8 samples; native process replacement is measured only in the API census.'
+      ],
+      errors
+    })
+  );
+}
+
+// Reuse only this driver's completed census when resuming UI work.
+const censusFile = path.join(output, 'census.json');
+if (process.env.PSD_EDIT_RESUME === '1') {
+  census.push(...JSON.parse(await fs.readFile(censusFile)));
+} else {
+  for (const [cohort, rows] of [
+    ['own', own],
+    ['public', publicRows]
+  ]) {
+    let previous, bytes;
+    for (const row of rows
+      .filter((row) => row.applicable && row.targetId > 0)
+      .sort((a, b) => a.source.localeCompare(b.source))) {
+      const file = path.resolve(research, row.source);
+      if (file !== previous) {
+        previous = file;
+        bytes = await fs.readFile(file);
+      }
+      const result = probe({ ...row, file }, bytes);
+      census.push({
+        cohort,
         file,
-        sourceHash,
-        admitted: false,
-        code: error.code,
-        path: error.propertyPath,
-        message: error.message
+        sourceHash: hash(bytes),
+        op: row.op,
+        targetId: row.targetId,
+        bounds: row.bounds,
+        split: row.split,
+        mode: bytes.readUInt16BE(24),
+        depth: bytes.readUInt16BE(22),
+        ...result
       });
+      if (census.length % 250 === 0) {
+        console.log(`Census ${census.length}, load ${loadavg()}`);
+      }
+    }
+  }
+  await fs.writeFile(censusFile, json(census));
+}
+await persist();
+/** Drag sampling needs two distinct root siblings; self-move decisions remain in the complete census. */
+function uiRequestAvailable(row) {
+  if (row.op === 'pixels') {
+    return row.mode === 3 && row.depth === 8;
+  }
+  if (row.op === 'out' || row.op === 'group-out') {
+    const roots = stack(readFileSync(row.file));
+    return roots.length > 1 && roots[0].id !== row.targetId && roots.some((layer) => layer.id === row.targetId);
+  }
+  return true;
+}
+
+const selected = [];
+for (const family of families) {
+  const eligible = census.filter(
+    (row) => row.cohort === 'own' && row.op === family && row.admitted && uiRequestAvailable(row)
+  );
+  // Spread positives over source-profile directories and tune/held-out inputs, not just the easiest prefix.
+  const strata = Object.values(
+    Object.groupBy(eligible, (row) => `${row.file.split('/psd/')[1].split('/').slice(0, 2).join('/')}|${row.split}`)
+  );
+  for (let index = 0; selected.filter((row) => row.op === family).length < 11; index++) {
+    for (const group of strata) {
+      if (group[index] && selected.filter((row) => row.op === family).length < 11) {
+        selected.push(group[index]);
+      }
+    }
+    assert(index < eligible.length, `No UI positives for ${family}`);
+  }
+  selected.push(
+    ...census
+      .filter((row) => row.cohort === 'public' && row.op === family && !row.admitted && uiRequestAvailable(row))
+      .slice(0, 2)
+  );
+  selected.push(
+    ...census
+      .filter((row) => row.cohort === 'own' && row.op === family && !row.admitted && uiRequestAvailable(row))
+      .slice(0, 1)
+  );
+}
+// Own-agent first-preparation and source-host leaf controls are independent of the frozen original census.
+for (const directory of ['E-own-agent', 'E-own-source']) {
+  for (const name of (await fs.readdir(path.join(research, 'fixtures/psd', directory)))
+    .filter((name) => /\.(psd|psb)$/.test(name))
+    .sort()) {
+    const file = path.join(research, 'fixtures/psd', directory, name);
+    const bytes = await fs.readFile(file);
+    const editor = new codec.PsdEditorSession(bytes);
+    try {
+      const targetId = editor.inspectProcess().layers.find((layer) => layer.layerId !== null)?.layerId;
+      if (!targetId) {
+        continue;
+      }
+      const row = { file, op: 'rename', targetId, sourceHash: hash(bytes), cohort: directory };
+      selected.push({ ...row, ...probe(row, bytes) });
     } finally {
-      session?.dispose();
-      session?.free();
+      editor.dispose();
+      editor.free();
     }
   }
 }
-await fs.writeFile(path.join(output, 'discovery.json'), json(discovery));
-const admitted = discovery.filter((entry) => entry.admitted);
-assert(admitted.length >= 20, 'Not enough public resolution fixtures; do not manufacture admissions.');
-// Fifty distinct eligible documents, then ten different PPI edits on the first ten. No claimed tree admissions.
-const sources = Array.from({ length: 60 }, (_, index) => ({
-  ...admitted[index % admitted.length],
-  ppi: index < admitted.length ? 91 : 137
-}));
-const attempts = [];
-const saves = [];
-const costs = [];
-const errors = [];
-let browser;
+for (const op of ['fill', 'blend', 'visibility', 'resolution', 'fileInfoCopyright']) {
+  for (const row of census
+    .filter((row) => row.cohort === 'own' && row.op === 'rename' && row.admitted && row.mode === 3 && row.depth === 8)
+    .slice(0, 3)) {
+    const candidate = { ...row, op };
+    selected.push({ ...candidate, ...probe(candidate, await fs.readFile(candidate.file)) });
+  }
+}
+const metadataFile = path.join(repo, 'packages/psd/test/editor/metadata.psd');
+const metadataBytes = await fs.readFile(metadataFile);
+selected.push({
+  file: metadataFile,
+  op: 'fileInfoCopyright',
+  targetId: 4,
+  sourceHash: hash(metadataBytes),
+  cohort: 'owned-metadata-control'
+});
+
+let resolutionSources = 0;
+for (const file of new Set(census.filter((row) => row.cohort === 'public').map((row) => row.file))) {
+  const bytes = await fs.readFile(file);
+  const row = { file, op: 'resolution', targetId: 0, sourceHash: hash(bytes), cohort: 'public-metadata' };
+  if (probe(row, bytes).admitted) {
+    selected.push(row);
+    if (++resolutionSources === 3) {
+      break;
+    }
+  }
+}
+assert.equal(resolutionSources, 3, 'Need three real public resolution controls.');
+
 const dist = path.join(repo, 'apps/psd-viewer/dist');
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm' };
 const server = createServer(async (request, response) => {
@@ -85,249 +432,198 @@ const server = createServer(async (request, response) => {
     response.writeHead(404).end();
   }
 });
+let browser;
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const url = `http://127.0.0.1:${server.address().port}`;
-async function open(page, file) {
-  await page.goto(url);
-  await page.locator('input[accept=".psd,.psb"]').setInputFiles(file);
-  await page.getByRole('button', { name: 'Edit', exact: true }).waitFor({ timeout: 60000 });
-  await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await page.getByRole('button', { name: 'Save as…' }).waitFor();
-  await page.waitForFunction(() =>
-    document.querySelector('[aria-label="Editor status"]')?.textContent.includes('Revision 0.')
-  );
-}
-async function record(page, source, family, operation) {
-  const before = Number(await page.getByLabel('Guarded editing').getAttribute('data-editor-revision'));
-  const replies = await page.evaluate(() => window.__editorReplies.length);
-  await operation();
-  await page.waitForFunction((count) => window.__editorReplies.length > count, replies);
-  const reply = await page.evaluate(() => window.__editorReplies.at(-1));
-  const after = reply.ok && reply.value.kind === 'state' ? reply.value.state.revision : before;
-  attempts.push({
-    source: source.file,
-    sourceHash: source.sourceHash,
-    family,
-    contract:
-      family === 'resolution' || family.startsWith('fileInfo')
-        ? 'editStateMetadata'
-        : 'photoshop26.reopen-equivalent/v3-carried-untouched',
-    admitted: reply.ok,
-    before,
-    after,
-    refusal: reply.ok ? undefined : reply.error,
-    load: loadavg()
-  });
-  if (!reply.ok) {
-    assert.equal(Number(await page.getByLabel('Guarded editing').getAttribute('data-editor-revision')), before);
+
+/** Waits for real worker acknowledgments but never sends an edit outside the UI. */
+async function operate(page, row) {
+  const count = await page.evaluate(() => window.__editorReplies.length);
+  const button = (name) => page.getByRole('button', { name, exact: true });
+  if (!['resolution', 'fileInfoCopyright'].includes(row.op)) {
+    await page.getByLabel('Edit layer', { exact: true }).selectOption(String(row.targetId));
   }
-  return reply;
+  switch (row.op) {
+    case 'rename':
+      await page.getByLabel('Layer name', { exact: true }).fill('renamed');
+      await button('Rename layer').click();
+      break;
+    case 'opacity':
+    case 'group-opacity':
+      await page.getByLabel('Edit opacity', { exact: true }).fill('173');
+      await button('Apply opacity').click();
+      break;
+    case 'fill':
+      await page.getByLabel('Edit Fill', { exact: true }).fill('173');
+      await button('Apply Fill').click();
+      break;
+    case 'blend':
+    case 'group-blend':
+      await page.getByLabel('Edit blend mode', { exact: true }).selectOption('multiply');
+      await button('Apply blend mode').click();
+      break;
+    case 'visibility':
+    case 'group-visibility':
+      await page.getByRole('button', { name: /^(Hide|Show) layer$/ }).click();
+      break;
+    case 'pixels':
+      await page.getByText('Replace layer pixels', { exact: true }).click();
+      await button('Fill layer pixels').click();
+      break;
+    case 'delete':
+    case 'group-delete':
+      await button('Delete layer').click();
+      break;
+    case 'group-ungroup':
+      await button('Ungroup layer').click();
+      break;
+    case 'out':
+    case 'group-out': {
+      await page.getByText('Reorder by drag and group selection', { exact: true }).click();
+      const source = page.locator(`[data-edit-layer-id="${row.targetId}"]`);
+      const destination = page.locator('[data-edit-layer-id]').first();
+      assert.notEqual(
+        await source.getAttribute('data-edit-layer-id'),
+        await destination.getAttribute('data-edit-layer-id'),
+        'A UI move must change the stack'
+      );
+      await source.dragTo(destination);
+      break;
+    }
+    case 'group-group-selected': {
+      await page.getByText('Reorder by drag and group selection', { exact: true }).click();
+      await page.locator(`[data-edit-layer-id="${row.targetId}"] input`).check();
+      await page.getByLabel('Group name', { exact: true }).fill('Group 1');
+      await button('Group selected layers').click();
+      break;
+    }
+    case 'resolution':
+      await page.getByLabel('Resolution ppi').fill('144');
+      await button('Apply resolution').click();
+      break;
+    case 'fileInfoCopyright':
+      await button('Apply copyright').click();
+      break;
+    default:
+      throw new Error(row.op);
+  }
+  await page.waitForFunction((count) => window.__editorReplies.length > count, count);
+  return page.evaluate(() => window.__editorReplies.at(-1));
 }
+
 try {
   browser = await chromium.launch({
     headless: true,
-    executablePath:
-      process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
     args: ['--enable-unsafe-webgpu']
   });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
-  await context.addInitScript(() => {
-    // Force the supported download branch; OS save modals cannot be automated by headless Chrome.
+  const browserContext = await browser.newContext({ viewport: { width: 1440, height: 1200 } });
+  await browserContext.addInitScript(() => {
     Reflect.set(window, 'showSaveFilePicker', undefined);
     window.__editorReplies = [];
     const Native = Worker;
     window.Worker = class extends Native {
       constructor(...args) {
         super(...args);
-        this.addEventListener('message', (event) => {
-          if (event.data.type === 'editor') {
-            window.__editorReplies.push(event.data.result);
+        this.addEventListener('message', ({ data }) => {
+          if (data.type === 'editor') {
+            window.__editorReplies.push(data.result);
           }
         });
       }
     };
   });
-  const page = await context.newPage();
+  const page = await browserContext.newPage();
+  page.setDefaultTimeout(60_000);
   page.on('pageerror', (error) => errors.push(error.message));
-  for (let index = 0; index < sources.length; index++) {
-    const source = sources[index];
-    await open(page, source.file);
-    if (index === 0) {
-      await page.screenshot({ path: `${screens}/edit-mode.png` });
+  for (const row of selected) {
+    if (attempts.some((attempt) => attempt.source === row.file && attempt.op === row.op)) {
+      continue;
     }
-    const result = await record(page, source, 'resolution', async () => {
-      await page.getByLabel('Resolution ppi').fill(String(source.ppi));
-      await page.getByRole('button', { name: 'Apply resolution', exact: true }).click();
-    });
-    assert(result.ok, json(result));
-    costs.push(result.value.state.cost);
-    const downloaded = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Save as…' }).click();
-    const download = await downloaded;
-    const filename = `${String(index + 1).padStart(3, '0')}-${source.sourceHash.slice(0, 12)}-resolution-${source.ppi}.psd`;
-    await download.saveAs(path.join(output, filename));
+    await page.goto(url);
+    await page.locator('input[accept=".psd,.psb"]').setInputFiles(row.file);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await page.waitForFunction(() =>
-      document.querySelector('[aria-label="Save status"]')?.textContent.includes('Saved revision')
+      document.querySelector('[aria-label="Editor status"]')?.textContent.includes('Revision 0.')
     );
-    if (index === 0) {
-      await page.screenshot({ path: `${screens}/save-flow.png` });
-      await page.getByRole('button', { name: 'Undo', exact: true }).click();
-      await page.waitForFunction(() =>
-        document.querySelector('[aria-label="Editor status"]')?.textContent.includes('Revision 2.')
-      );
-      const undone = await page.evaluate(() => window.__editorReplies.at(-1));
-      costs.push(undone.value.state.cost);
-      await page.getByRole('button', { name: 'Redo', exact: true }).click();
-      await page.waitForFunction(() =>
-        document.querySelector('[aria-label="Editor status"]')?.textContent.includes('Revision 3.')
-      );
-      costs.push((await page.evaluate(() => window.__editorReplies.at(-1))).value.state.cost);
+    const original = await fs.readFile(row.file);
+    if (row.op === 'visibility' || row.op === 'group-visibility') {
+      const flattened = (nodes) => nodes.flatMap((node) => [node, ...flattened(node.children)]);
+      row.visible = !flattened(stack(original)).find((node) => node.id === row.targetId).visible;
     }
-    const bytes = await fs.readFile(path.join(output, filename));
-    const original = await fs.readFile(source.file);
-    const before = new codec.PsdEditorSession(original);
-    const after = new codec.PsdEditorSession(bytes);
-    try {
-      assert.deepEqual(after.inspectProcess(), before.inspectProcess());
-      assert.deepEqual(after.inspectSource().layers, before.inspectSource().layers);
-      // Independent full decoder verifies stack order, names, blend/opacity and every decoded layer sample.
-      assert.deepEqual(codec.readPsd(bytes), codec.readPsd(original));
-      assert.notEqual(hash(bytes), hash(original));
-      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-      let at = 30 + view.getUint32(26);
-      const end = at + 4 + view.getUint32(at);
-      at += 4;
-      let ppi;
-      while (at < end) {
-        const id = view.getUint16(at + 4);
-        const pascal = bytes[at + 6] + 1;
-        const lengthAt = at + 6 + pascal + (pascal % 2);
-        const length = view.getUint32(lengthAt);
-        if (id === 1005) {
-          ppi = view.getUint32(lengthAt + 4) / 65536;
-        }
-        at = lengthAt + 4 + length + (length % 2);
+    const expected = probe(row, original, true);
+    const reply = await operate(page, row);
+    const admitted = reply.ok;
+    const attempt = {
+      source: row.file,
+      sourceHash: row.sourceHash,
+      cohort: row.cohort,
+      op: row.op,
+      contract: ['resolution', 'fileInfoCopyright'].includes(row.op) ? 'editStateMetadata' : contract,
+      edits: [command(row, original)],
+      admitted,
+      expectedAdmission: expected.admitted,
+      refusal: admitted ? undefined : reply.error,
+      load: loadavg()
+    };
+    // Omit potentially large sample buffers from the manifest; black opaque replacement is reproducible from geometry.
+    if (row.op === 'pixels') {
+      attempt.edits = [{ kind: 'replacePixels', layerId: row.targetId, bounds: row.bounds, rgba: 'opaque black' }];
+    }
+    attempts.push(attempt);
+    assert.equal(admitted, expected.admitted, json(attempt));
+    if (!admitted) {
+      assert.equal(await page.getByLabel('Guarded editing').getAttribute('data-editor-revision'), '0');
+      if (
+        !(await fs.stat(`${screens}/readable-refusal.png`).catch(() => undefined)) &&
+        /type|font/i.test(reply.error.propertyPath ?? '')
+      ) {
+        await page.locator('[data-refusal-code]').scrollIntoViewIfNeeded();
+        await page.screenshot({ path: `${screens}/readable-refusal.png` });
       }
-      assert.equal(ppi, source.ppi);
+    } else {
+      costs.push(reply.value.state.cost);
+      const downloadPromise = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Save as…' }).click();
+      const download = await downloadPromise;
+      const filename = `${String(saves.length + 1).padStart(3, '0')}-${row.sourceHash.slice(0, 12)}-${row.op}.${path.extname(row.file).slice(1)}`;
+      await download.saveAs(path.join(output, filename));
+      await page.waitForFunction(() =>
+        document.querySelector('[aria-label="Save status"]')?.textContent.includes('Saved revision 1')
+      );
+      const bytes = await fs.readFile(path.join(output, filename));
+      const reopened = stack(bytes);
+      assert.deepEqual(reopened, expected.expectedStack, `${row.op} stack mismatch`);
+      assert.notEqual(hash(bytes), hash(original));
       saves.push({
         filename,
-        source: source.file,
-        sourceHash: source.sourceHash,
+        source: row.file,
+        sourceHash: row.sourceHash,
         outputHash: hash(bytes),
-        edits: [{ kind: 'resolutionNoResample', ppi: source.ppi }],
-        contract: 'editStateMetadata',
-        expectedOutcome: {
-          stack: after.inspectProcess().layers,
-          resolutionPpi: source.ppi,
-          layerSamples: 'byte-identical decoded samples',
-          photoshop26: 'pending separate research round'
-        },
-        reopen: 'psd-rs/WASM passed'
+        edits: attempt.edits,
+        contract: attempt.contract,
+        expectedOutcome: { stack: reopened, photoshopVerification: 'pending later round' },
+        reopen: 'psd-rs core editor and production viewer passed'
       });
-    } finally {
-      before.dispose();
-      before.free();
-      after.dispose();
-      after.free();
+      if (saves.length === 1) {
+        await page.getByLabel('How to save').scrollIntoViewIfNeeded();
+        await page.screenshot({ path: `${screens}/save-option.png` });
+        await page.getByLabel('Layer name', { exact: true }).scrollIntoViewIfNeeded();
+        await page.screenshot({ path: `${screens}/admitted-edit.png` });
+      }
     }
-    console.log(`Saved and reopened ${index + 1}/60`);
-    await fs.writeFile(path.join(output, 'manifest.json'), json({ saves, attempts, errors }));
+    console.log(
+      `UI ${attempts.length}/${selected.length}: ${row.op} ${admitted ? `saved ${saves.length}` : reply.error.propertyPath}`
+    );
+    await persist();
   }
-  // Distinct public input fixtures exercise every requested tree family, as actual UI requests.
-  for (const source of admitted.filter((_, index) => [0, 6, 8].includes(index))) {
-    await open(page, source.file);
-    await page.getByLabel('Edit layer', { exact: true }).selectOption({ index: 1 });
-    for (const [family, button] of [
-      ['rename', 'Rename layer'],
-      ['visibility', 'Hide layer'],
-      ['opacity', 'Apply opacity'],
-      ['fill', 'Apply Fill'],
-      ['blend', 'Apply blend mode'],
-      ['delete', 'Delete layer'],
-      ['ungroup', 'Ungroup layer'],
-      ['fileInfoTitle', 'Apply title'],
-      ['fileInfoCopyright', 'Apply copyright']
-    ]) {
-      await record(page, source, family, async () => {
-        const control =
-          family === 'visibility'
-            ? page.getByRole('button', { name: /^(Hide|Show) layer$/ })
-            : page.getByRole('button', { name: button, exact: true });
-        await control.click();
-      });
-    }
-    await page.getByText('Reorder by drag and group selection', { exact: true }).click();
-    await page.locator('[aria-label^="Group selection:"]').first().check();
-    await record(page, source, 'group', () => page.getByRole('button', { name: 'Group selected layers' }).click());
-    const rows = page.locator('[data-edit-layer-id]');
-    if ((await rows.count()) >= 2) {
-      await record(page, source, 'reorder', () => rows.first().dragTo(rows.nth(1)));
-    }
-    await page.getByText('Refusal details', { exact: true }).click();
-    await page.screenshot({ path: `${screens}/refused-edit.png` });
-  }
-  // Negative resolution admission on three additional public fixtures.
-  for (const source of discovery.filter((entry) => !entry.admitted).slice(0, 3)) {
-    await open(page, source.file);
-    await record(page, source, 'resolution', () => page.getByRole('button', { name: 'Apply resolution' }).click());
-  }
-  assert(saves.length >= 60);
-  assert(attempts.filter((entry) => !entry.admitted).length >= 20);
+  assert(saves.length >= 120, `Only ${saves.length} edited saves`);
   assert.deepEqual(errors, []);
+} catch (error) {
+  errors.push(error.stack ?? String(error));
+  throw error;
 } finally {
   await browser?.close();
   await new Promise((resolve) => server.close(resolve));
-  await fs.writeFile(path.join(output, 'manifest.json'), json({ saves, attempts, errors }));
-  const groups = new Map();
-  for (const attempt of attempts) {
-    const key = `${attempt.family}|${attempt.contract}`;
-    const group = groups.get(key) ?? { family: attempt.family, contract: attempt.contract, attempts: 0, admitted: 0 };
-    group.attempts++;
-    group.admitted += Number(attempt.admitted);
-    groups.set(key, group);
-  }
-  const refusalCounts = new Map();
-  for (const attempt of attempts.filter((entry) => !entry.admitted)) {
-    const key = `${attempt.refusal.code}|${attempt.refusal.propertyPath ?? ''}`;
-    refusalCounts.set(key, (refusalCounts.get(key) ?? 0) + 1);
-  }
-  const report = {
-    generatedAt: new Date().toISOString(),
-    publicDiscovery: {
-      eligible: admitted.length,
-      inspected: discovery.length,
-      selection:
-        'oracle-1/2 original public inputs, unique SHA256, PSD, <=8 MiB and <=1,048,576 pixels; resolution eligibility preflight is separate from UI attempt denominator'
-    },
-    editedSaves: saves.length,
-    distinctSavedSources: new Set(saves.map((save) => save.sourceHash)).size,
-    admissions: [...groups.values()].map((group) => ({ ...group, share: group.admitted / group.attempts })),
-    topRefusals: [...refusalCounts].sort((a, b) => b[1] - a[1]).map(([reason, count]) => ({ reason, count })),
-    hostOperands: {
-      savingAgent: 'PSD Viewer',
-      asked: [],
-      refused: [
-        'Raster/tree exact-save Adobe Photoshop identity',
-        'File Info copyright hardcoded Photoshop agent',
-        'complete active PostScript font inventory',
-        'localized Background/proof/transparency labels',
-        'Photoshop host preferences and compositor identity'
-      ],
-      rationale:
-        'No admitted operation consumes save clocks/UUIDs. These are not fabricated. Raster and copyright paths refuse before any edit; resolution preserves existing attribution and needs only explicit PPI.'
-    },
-    undo: {
-      strategy:
-        'reopen original and replay at most 64 exact committed metadata commands; one frozen save; eager source <=64 MiB',
-      samples: costs,
-      maxMilliseconds: Math.max(0, ...costs.map((cost) => cost.milliseconds)),
-      maxReplayed: Math.max(0, ...costs.map((cost) => cost.replayed))
-    },
-    limitations: [
-      'No truthful raster/tree or copyright edit admission exists in the bundled backend. All 60 edited saves are resolution metadata edits, not 60 successful tree edits.',
-      'Photoshop 26 opening is intentionally deferred to a separate research round.'
-    ],
-    errors
-  };
-  await fs.writeFile('/tmp/psd-phase8-report.json', json(report));
+  await persist();
 }
