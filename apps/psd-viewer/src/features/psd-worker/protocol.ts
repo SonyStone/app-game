@@ -1,3 +1,4 @@
+import type { PsdGpuLayers } from '@app-game/psd/gpu';
 import type {
   PsdDifference,
   PsdDocumentFonts,
@@ -7,15 +8,15 @@ import type {
   PsdLayerDetail,
   PsdLayerNode,
   PsdLayerPixels,
-  PsdOpenAnswers,
-  PsdOpening,
-  PsdSavedPath,
   PsdNativeRegion,
   PsdNativeRender,
+  PsdOpenAnswers,
+  PsdOpening,
   PsdRegionCapability,
   PsdRegionPixels,
   PsdRegionRect,
   PsdRenderSettings,
+  PsdSavedPath,
   PsdSavedProcessChannels,
   PsdStates,
   PsdTextSupport
@@ -56,6 +57,7 @@ type PsdRequestBody =
       /** Per-worker native admission, including the retained host source. */
       liveBytes?: number;
     }
+  | { id: number; type: 'gpuLayers'; document: number; rect: PsdRegionRect; settings: PsdRenderSettings }
   | { id: number; type: 'original'; document: number }
   | { id: number; type: 'channels'; document: number; rect?: PsdRegionRect }
   | { id: number; type: 'capability'; document: number; settings: PsdRenderSettings; visibility: [number, boolean][] }
@@ -110,6 +112,7 @@ type PsdReplyBody =
       capability?: PsdResultOf<PsdRegionCapability>;
       sourceLayerFailure?: PsdFailure;
     }
+  | { id: number; type: 'gpuLayers'; source: PsdGpuLayers }
   | { id: number; type: 'rendered'; render: RenderedPixels }
   | { id: number; type: 'windowRendered'; images: WindowPixels[]; milliseconds: number }
   | { id: number; type: 'original'; bytes: Blob }
@@ -160,6 +163,8 @@ export type RenderedPixels = PsdImage & {
     coarse: boolean;
     kind: 'pointPreview' | 'source' | 'filtered';
   };
+  /** GPU candidates remain previews until this exact tile identity has strict bytes. */
+  compositing?: { preview: number };
   render: number;
   depth: 8 | 16 | 32;
   milliseconds: number;

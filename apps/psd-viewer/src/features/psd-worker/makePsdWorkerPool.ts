@@ -397,6 +397,7 @@ function batchBucket(tiles: number) {
 
 /** A tile consumer can prepare admitted concurrency; protocol-only clients remain serial. */
 export type WindowClient = Pick<PsdClient, 'renderWindow'> &
+  Partial<Pick<PsdClient, 'gpuLayers'>> &
   Partial<Pick<ReturnType<typeof makePsdWorkerPool>, 'prepareWindows' | 'reportWindowBatch'>>;
 
 function key(settings: PsdRenderSettings, visibility: [number, boolean][]) {

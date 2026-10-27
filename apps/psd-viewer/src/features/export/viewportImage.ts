@@ -10,6 +10,10 @@ export function viewportImage(
   saved?: { image: PsdImage; divider: number },
   mask?: DisplayImage
 ): PsdImage {
+  if (displayTiles(image).some((tile) => tile.gpu)) {
+    throw new Error('Wait for strict CPU tiles before exporting the GPU preview.');
+  }
+
   const width = Math.max(1, Math.round(size.width));
   const height = Math.max(1, Math.round(size.height));
   if (width * height > 16_777_216) {

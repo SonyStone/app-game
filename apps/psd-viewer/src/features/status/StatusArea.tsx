@@ -23,7 +23,9 @@ export function StatusArea(props: {
   const windowed = () => props.windowed || (props.render?.ok && props.render.value.window !== undefined);
   const quality = () => (props.render?.ok ? props.render.value.quality : undefined);
   const saved = () => props.render?.ok && props.render.value.window?.source === 'savedComposite';
-  const clean = () => !failure() && !approximations().length && !props.layerNotes.length && !props.documentNotes.length;
+  const gpuPreview = () => props.render?.ok && (props.render.value.compositing?.preview ?? 0) > 0;
+  const clean = () =>
+    !gpuPreview() && !failure() && !approximations().length && !props.layerNotes.length && !props.documentNotes.length;
   return (
     <section
       class={styles.status}
@@ -34,15 +36,35 @@ export function StatusArea(props: {
           ? 'unrendered'
           : failure()
             ? 'failed'
-            : saved()
-              ? props.sourceBacked
-                ? 'saved'
-                : 'preview'
-              : approximations().length
-                ? 'approximate'
-                : 'exact'
+            : gpuPreview()
+              ? 'preview'
+              : saved()
+                ? props.sourceBacked
+                  ? 'saved'
+                  : 'preview'
+                : approximations().length
+                  ? 'approximate'
+                  : 'exact'
       }
     >
+      <Show when={gpuPreview()}>
+        <p role="status" aria-label="GPU fidelity">
+          GPU interactive preview · strict verification pending for this exact tile/settings/visibility identity.
+        </p>
+      </Show>
+      <Show
+        when={
+          !gpuPreview() &&
+          !saved() &&
+          props.render?.ok &&
+          props.render.value.compositing &&
+          props.render.value.window?.exactToLayerRender
+        }
+      >
+        <p role="status" aria-label="GPU fidelity">
+          Strict CPU tiles · GPU comparisons require zero differing RGBA samples.
+        </p>
+      </Show>
       <Show when={quality()}>
         {(progress) => (
           <p role="status" aria-label="Tile refinement">

@@ -8,10 +8,10 @@ import type {
   PsdLayerPixels,
   PsdOpenAnswers,
   PsdOpening,
-  PsdSavedPath,
   PsdRegionCapability,
   PsdRegionRect,
   PsdRenderSettings,
+  PsdSavedPath,
   PsdSavedProcessChannels,
   PsdStates,
   PsdTextSupport
@@ -398,6 +398,11 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
     inspect,
     render,
     renderWindow,
+    /** Reads bounded layer operands after conservative exact-compositor admission. */
+    async gpuLayers(document: number, rect: PsdRegionRect, settings: PsdRenderSettings) {
+      const reply = await send({ type: 'gpuLayers', document, rect, settings });
+      return reply.type === 'gpuLayers' ? { ok: true as const, value: reply.source } : failure(reply);
+    },
     merged,
     difference,
     detectBlending,

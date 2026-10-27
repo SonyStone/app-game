@@ -11,3 +11,33 @@ export function withTopBlendKey(bytes: ArrayBuffer, key: string): ArrayBuffer {
   patched.set(new TextEncoder().encode(key), at + 4);
   return patched.buffer;
 }
+
+/** Gives the flat-writer top record a modern version, avoiding Photoshop's historical Fill reinterpretation. */
+export function withModernTop(bytes: Uint8Array): ArrayBuffer {
+  const input = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let at = 26;
+  at += 4 + input.getUint32(at);
+  at += 4 + input.getUint32(at);
+  const section = at;
+  const layerInfo = at + 4;
+  at += 8;
+  const count = Math.abs(input.getInt16(at));
+  at += 2;
+  let extra = 0;
+  for (let i = 0; i < count; i++) {
+    at += 16;
+    const channels = input.getUint16(at);
+    at += 2 + channels * 6 + 12;
+    extra = at;
+    at += 4 + input.getUint32(at);
+  }
+  const output = new Uint8Array(bytes.length + 16);
+  output.set(bytes.subarray(0, at));
+  output.set([56, 66, 73, 77, 108, 121, 118, 114, 0, 0, 0, 4, 0, 0, 0, 70], at);
+  output.set(bytes.subarray(at), at + 16);
+  const view = new DataView(output.buffer);
+  for (const offset of [section, layerInfo, extra]) {
+    view.setUint32(offset, input.getUint32(offset) + 16);
+  }
+  return output.buffer;
+}

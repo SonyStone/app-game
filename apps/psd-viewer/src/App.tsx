@@ -51,6 +51,10 @@ export function App() {
     // Repeated DPR 2 measurements regressed interaction p95. Keep that display on the serial baseline.
     parallelAllowed: () => devicePixelRatio <= 1
   });
+  const [gpuComposite, setGpuComposite] = createSignal(
+    new URLSearchParams(location.search).get('gpuComposite') === '1' &&
+      new URLSearchParams(location.search).get('backend') !== 'canvas2d'
+  );
   const [displayBusy, setDisplayBusy] = createSignal(false);
   // An empty tile set initializes the same display scope while the document worker opens the file.
   const openingDisplay: DisplayImage = { width: 0, height: 0, pixels: new Uint8Array(0) };
@@ -82,9 +86,22 @@ export function App() {
       ? client.capability(current.document, renderSettings(), pairs())
       : undefined;
   });
+  const gpuOpened = createMemo(() => {
+    const current = opened();
+    return current?.ok && gpuComposite() && !current.value.sourceBacked
+      ? {
+          ok: true as const,
+          value: { ...current.value, windowed: true, info: { ...current.value.info, windowed: true } }
+        }
+      : undefined;
+  });
   const plannedOpened = createMemo(() => {
     const current = opened();
     const plan = capability();
+    const gpu = gpuOpened();
+    if (gpu) {
+      return gpu;
+    }
     return current?.ok && plan?.ok && current.value.info.windowed !== plan.value.windowed
       ? {
           ok: true as const,
@@ -113,7 +130,8 @@ export function App() {
     },
     renderSettings,
     pairs,
-    viewport
+    viewport,
+    gpuComposite
   );
   const render = () => (windowed() ? windows.render() : wholeRender());
   const renderWindow = () => valueOf(render())?.window;
@@ -255,6 +273,7 @@ export function App() {
       savedWindow: renderWindow()?.source === 'savedComposite',
       savedSnapshot: document()?.sourceBacked,
       hasRender: Boolean(latest(render)?.ok),
+      gpuPreview: (valueOf(render())?.compositing?.preview ?? 0) > 0,
       pending: isPending(wholeRender) || (view() === 'difference' && isPending(difference))
     });
   const shownFailure = () => {
@@ -569,9 +588,13 @@ export function App() {
                 <p class={styles.canvasStatus} role="status" aria-label="Canvas render status">
                   {valueOf(render())?.window?.source === 'savedComposite'
                     ? 'Possibly stale saved pixels'
-                    : valueOf(render())?.approximations.length
-                      ? 'Current layers · approximated'
-                      : 'Current layers'}
+                    : (valueOf(render())?.compositing?.preview ?? 0) > 0
+                      ? 'GPU interactive preview · strict verification pending'
+                      : valueOf(render())?.approximations.length
+                        ? 'Current layers · approximated'
+                        : valueOf(render())?.compositing
+                          ? 'Strict CPU tiles'
+                          : 'Current layers'}
                   <Show when={valueOf(render())?.quality}>
                     {(quality) => (
                       <>
@@ -695,6 +718,46 @@ export function App() {
                 />
               )}
             </Show>
+            <section aria-label="GPU compositing" style={{ padding: '10px' }}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={gpuComposite()}
+                  onChange={(event) => setGpuComposite(event.currentTarget.checked)}
+                />
+                Experimental GPU compositing
+              </label>
+              <p>RGB8 admitted stacks only. GPU previews are checked against strict CPU tiles in the background.</p>
+              <Show when={gpuComposite() && windows.compositeDiagnostics()}>
+                {(diagnostics) => (
+                  <details open aria-label="GPU compositing diagnostics">
+                    <summary>
+                      GPU compositing ·{' '}
+                      {diagnostics().state === 'verified'
+                        ? 'last comparison verified'
+                        : diagnostics().state === 'preview'
+                          ? 'candidate prepared'
+                          : diagnostics().state}
+                    </summary>
+                    <p>{diagnostics().reason}</p>
+                    <p>
+                      {diagnostics().verifiedTiles} tiles verified · {diagnostics().differingSamples} differing RGBA
+                      samples
+                    </p>
+                    <p>
+                      Layer regions: {(diagnostics().preparedBytes / 1024 / 1024).toFixed(2)} MiB CPU; preparation{' '}
+                      {diagnostics().preparationMs.toFixed(1)} ms. GPU source budget 64 MiB; display textures budgeted
+                      separately.
+                    </p>
+                    <Show when={diagnostics().mismatches.length}>
+                      <pre style={{ 'max-height': '220px', overflow: 'auto', 'white-space': 'pre-wrap' }}>
+                        {JSON.stringify(diagnostics().mismatches, null, 2)}
+                      </pre>
+                    </Show>
+                  </details>
+                )}
+              </Show>
+            </section>
             <RenderSettingsPanel
               settings={latest(settings)}
               detected={{
@@ -791,6 +854,7 @@ export function App() {
                   opening: document()?.opening,
                   state: stateChoice(),
                   renderSettings: renderSettings(),
+                  gpuCompositing: gpuComposite() ? windows.compositeDiagnostics() : undefined,
                   transientVisibility: pairs(),
                   fidelity: 'display RGB8',
                   performance: viewerPerformance.snapshot(),
@@ -805,6 +869,7 @@ export function App() {
                         depth: value.depth,
                         approximations: value.approximations,
                         quality: value.quality,
+                        compositing: value.compositing,
                         window: value.window
                       }
                     );

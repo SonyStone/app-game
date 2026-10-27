@@ -1,4 +1,5 @@
 import type { PsdLayerNode, PsdRegionPixels, PsdRegionRect, PsdRenderSettings } from '@app-game/psd/viewer';
+import { makeCompositePreviews, type CompositeDiagnostics } from '../gpu-composite/makeCompositePreviews';
 import { displayTileLevels, type DisplayTile } from '../gpu-viewport/displayTiles';
 import type { OpenedPsd, PsdClient, PsdResultOf, RenderedPixels } from '../psd-worker';
 import type { WindowClient } from '../psd-worker/makePsdWorkerPool';
@@ -11,7 +12,11 @@ import type { View } from './view';
  * Visibility edits retain provably unaffected coverage. Settings, fonts and document changes invalidate all pixels.
  * The CPU budget defaults to 64 MiB and must be at least 16 MiB; pending transfers and every mip level count.
  */
-export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024 * 1024) {
+export function makeWindowRenderer(
+  client: WindowClient,
+  budgetBytes = 64 * 1024 * 1024,
+  compositeChanged?: (state: CompositeDiagnostics) => void
+) {
   if (!Number.isFinite(budgetBytes) || budgetBytes < 16 * 1024 * 1024) {
     throw new RangeError('CPU tile residency requires at least 16 MiB, including pending transfers.');
   }
@@ -21,6 +26,7 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
   const uploadReserveBytes = 2 * 1024 * 1024;
   const cacheLimitBytes = budgetBytes - uploadReserveBytes;
   const cache = new Map<string, DisplayTile[]>();
+  const compositor = makeCompositePreviews(client, compositeChanged);
   const pending = new Map<
     string,
     {
@@ -146,6 +152,12 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
           coarse: completed < keys.length || plan.kind === 'overview',
           kind: plan.kind === 'overview' ? 'pointPreview' : step === 1 ? 'source' : 'filtered'
         },
+        compositing:
+          snapshot.gpuComposite && !saved
+            ? {
+                preview: tiles.filter((tile) => !!tile.gpu).length
+              }
+            : undefined,
         depth: info.depth as RenderedPixels['depth'],
         render: ++nextRender,
         milliseconds: performance.now() - start,
@@ -159,7 +171,7 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
             !saved &&
             tiles
               .filter((tile) => tile.step <= step)
-              .every((tile) => (tile.image as PsdRegionPixels).exactToLayerRender)
+              .every((tile) => !tile.gpu && (tile.image as PsdRegionPixels).exactToLayerRender)
         },
         approximations: [
           ...new Set(
@@ -232,7 +244,7 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
 
     previewedDocument = document;
     const concurrency =
-      plan.kind === 'regions' && client.prepareWindows
+      !snapshot.gpuComposite && plan.kind === 'regions' && client.prepareWindows
         ? await client.prepareWindows(
             document,
             snapshot.settings,
@@ -334,10 +346,47 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
         batchStart ??= performance.now();
       }
       const requestedAt = performance.now();
-      const job = client
-        .renderWindow(document, snapshot.settings, snapshot.visibility, window, controller.signal)
+      let candidate: Awaited<ReturnType<typeof compositor.prepare>>;
+      const prepare = async () => {
+        if (snapshot.gpuComposite && window.kind === 'regions' && core) {
+          candidate = await compositor.prepare(snapshot, window.rectangles[0], core, () => {
+            for (const [cachedKey, levels] of cache) {
+              if (levels.some((tile) => tile.gpu)) {
+                remove(cachedKey);
+              }
+            }
+            present();
+          });
+          if (candidate && !controller.signal.aborted && previous === snapshot) {
+            remove(key);
+            cache.set(key, [candidate.tile]);
+            present();
+            if (camera && visibleInCamera(core, camera)) {
+              // Give resident compute its first frame before starting the authoritative background task.
+              // Missing/failed backends must still make progress without a submission callback.
+              await new Promise<void>((resolve) => {
+                const timeout = setTimeout(resolve, 50);
+                void candidate!.submitted.then(() => {
+                  clearTimeout(timeout);
+                  resolve();
+                });
+              });
+            }
+          }
+        }
+      };
+      const rendered =
+        snapshot.gpuComposite && window.kind === 'regions' && core
+          ? prepare().then(() =>
+              client.renderWindow(document, snapshot.settings, snapshot.visibility, window, controller.signal)
+            )
+          : client.renderWindow(document, snapshot.settings, snapshot.visibility, window, controller.signal);
+      const job = rendered
         .then((result) => {
           if (!result.ok) {
+            if (result.error.kind !== 'superseded' && result.error.kind !== 'stale') {
+              candidate?.tile.gpu?.onFailure(`Strict verification refused: ${result.error.message}`);
+            }
             return result;
           }
 
@@ -347,6 +396,7 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
             populatedTiles += result.value.images[0].populated ? 1 : 0;
           }
           const { mips = [], ...image } = result.value.images[0];
+          candidate?.strict(image);
           const clip = core ?? {
             left: image.left,
             top: image.top,
@@ -410,7 +460,7 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
   }
 
   function current(key: string, step: number) {
-    return cache.get(key)?.some((tile) => tile.step <= step);
+    return cache.get(key)?.some((tile) => !tile.gpu && tile.step <= step);
   }
 
   function remove(key: string) {
@@ -456,6 +506,7 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
       job.controller.abort();
     }
     cache.clear();
+    compositor.clear();
     pending.clear();
     arrivals.clear();
     cacheBytes = 0;
@@ -468,7 +519,12 @@ export function makeWindowRenderer(client: WindowClient, budgetBytes = 64 * 1024
 }
 
 /** Identity changes for content settings/fonts/visibility, while pan and zoom retain the same snapshot. */
-export type WindowSnapshot = { opened: OpenedPsd; settings: PsdRenderSettings; visibility: [number, boolean][] };
+export type WindowSnapshot = {
+  opened: OpenedPsd;
+  settings: PsdRenderSettings;
+  visibility: [number, boolean][];
+  gpuComposite?: boolean;
+};
 
 /** Keeps the current power-of-two LOD within a 20% dead band; physical pixel scale includes DPR. */
 export function chooseLod(scale: number, previous = 1): number {
@@ -582,7 +638,11 @@ function withBorder(rectangle: PsdRegionRect, size: { width: number; height: num
 
 /** Visibility changes use compositing influence, including group children; unknown style extents invalidate globally. */
 function visibilityDamage(before: WindowSnapshot, after: WindowSnapshot): PsdRegionRect[] | undefined {
-  if (before.opened !== after.opened || before.settings !== after.settings) {
+  if (
+    before.opened !== after.opened ||
+    before.settings !== after.settings ||
+    before.gpuComposite !== after.gpuComposite
+  ) {
     return undefined;
   }
 
