@@ -150,13 +150,26 @@ export async function makeEditingSession(
                 error: { code: 'Budget', message: 'Finish or cancel the current frozen save first.' }
               };
             }
+            // Generate the handle before allocating frozen bytes. In insecure contexts randomUUID may be absent.
+            let save: string;
+            try {
+              save = crypto.randomUUID();
+            } catch {
+              return {
+                ok: false,
+                error: {
+                  code: 'HostOperandRequired',
+                  propertyPath: 'save.identity',
+                  message: 'A secure browser context with crypto.randomUUID is required for independent save handles.'
+                }
+              };
+            }
             const frozen = wireResult(session.prepareSave());
             if (!frozen.ok) {
               return frozen;
             }
 
             // A late release from a replaced worker must never collide with a new session's save.
-            const save = crypto.randomUUID();
             saves.set(save, frozen.value);
             return { ok: true, value: { kind: 'frozen', save, revision } };
           }

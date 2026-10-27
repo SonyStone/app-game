@@ -407,7 +407,10 @@ export function makePsdClient(worker: PsdWorkerPort, replacement?: () => PsdWork
         : {
             ok: false,
             error: {
-              code: 'Disposed',
+              code:
+                reply.type === 'failed' && (reply.error.kind === 'stale' || reply.error.kind === 'superseded')
+                  ? 'Disposed'
+                  : 'Unknown',
               message: reply.type === 'failed' ? reply.error.message : 'The editor worker stopped.'
             }
           };

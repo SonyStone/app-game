@@ -223,7 +223,10 @@ it('records the honest-host contract boundary against real WASM, with no byte or
       },
       layerTimes: [{ layerId: 4, time: Date.now() / 1000 }]
     });
-    expect(refused).toMatchObject({ ok: false });
+    expect(refused).toMatchObject({
+      ok: false,
+      error: { code: 'Invalid', message: expect.stringContaining('explicit Photoshop-format save context required') }
+    });
     expect(value(session.sourceSnapshot())).toEqual(before);
     expect(preferredContract).toContain('/v3-');
     expect(
@@ -315,5 +318,26 @@ it('uses distinct frozen-save identities across replaced sessions, so late relea
   } finally {
     first.dispose();
     second.dispose();
+  }
+});
+
+it('refuses unavailable secure save identities before allocating a frozen save and permits a later retry', async () => {
+  const host = value(await makeEditingSession(await source(), async () => ({ ok: true, value: undefined })));
+  const random = vi.spyOn(crypto, 'randomUUID').mockImplementation(() => {
+    throw new Error('insecure context');
+  });
+  try {
+    expect(await host.receive({ kind: 'freeze', revision: 0 })).toMatchObject({
+      ok: false,
+      error: { code: 'HostOperandRequired', propertyPath: 'save.identity' }
+    });
+    random.mockRestore();
+    expect(await host.receive({ kind: 'freeze', revision: 0 })).toMatchObject({
+      ok: true,
+      value: { kind: 'frozen', revision: 0 }
+    });
+  } finally {
+    random.mockRestore();
+    host.dispose();
   }
 });
