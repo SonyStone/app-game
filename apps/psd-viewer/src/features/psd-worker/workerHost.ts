@@ -613,6 +613,16 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
         return;
       }
 
+      case 'gpuLayers': {
+        const { prepareGpuLayers } = await import('@app-game/psd/gpu');
+        const result = prepareGpuLayers(viewer, request.rect, request.settings, document.inputBytes);
+        post(
+          result.ok ? { id: request.id, type: 'gpuLayers', source: result.value } : failed(request, result.error),
+          result.ok ? result.value.layers.map((layer) => layer.samples.buffer) : []
+        );
+        return;
+      }
+
       case 'layer': {
         const detail = viewer.layerDetail(request.index);
         if (!detail.ok) {

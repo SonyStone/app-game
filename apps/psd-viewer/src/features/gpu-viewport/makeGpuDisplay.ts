@@ -1,5 +1,6 @@
 import type { GpuContext } from '@app-game/solid-gpu/gpu';
 import tgpu, { d, std } from 'typegpu';
+import type { makeGpuCompositor } from '../gpu-composite/makeGpuCompositor';
 import { viewerPerformance } from '../telemetry/performance';
 import type { View } from '../viewport/view';
 import { displayTileLevels, tileTextureUpload, type DisplayTile } from './displayTiles';
@@ -51,6 +52,9 @@ export function makeGpuDisplay(
   const arrivalTargets = new WeakMap<object, DisplayTile>();
   const timer = makeTimer(device);
   const staging = makeUploadStaging(device);
+  let compositor: ReturnType<typeof makeGpuCompositor> | undefined;
+  let compositorFactory: typeof makeGpuCompositor | undefined;
+  let compositorLoading: Promise<void> | undefined;
   // TypeGPU resolves shaders and creates native pipelines lazily. Compile once in backend initialization so tile
   // arrival frames only prepare their own resources; record the cold setup cost separately rather than hiding it.
   root.unwrap(background);
@@ -61,6 +65,21 @@ export function makeGpuDisplay(
   return {
     /** Reconciles immutable identities without copying bytes; unchanged tiles keep their GPU residency. */
     setTiles(next: readonly DisplayTile[], step = 1) {
+      if (!compositorLoading && next.some((tile) => tile.gpu)) {
+        const start = performance.now();
+        compositorLoading = import('../gpu-composite/makeGpuCompositor')
+          .then((module) => {
+            if (!destroyed) {
+              compositorFactory = module.makeGpuCompositor;
+              viewerPerformance.record('composite.module', start);
+            }
+          })
+          .catch((error: unknown) => {
+            for (const tile of next) {
+              tile.gpu?.onFailure(String(error));
+            }
+          });
+      }
       const active = new Set(next.map(identity));
       for (const [key, entry] of resident) {
         if (!entry.ready && !active.has(key)) {
@@ -123,6 +142,9 @@ export function makeGpuDisplay(
         (a, b) => (firstVisible.get(identity(a)) ?? frameNumber) - (firstVisible.get(identity(b)) ?? frameNumber)
       );
       for (const tile of uploads) {
+        if (tile.gpu && !compositorFactory) {
+          continue;
+        }
         if (!visible(tile, view, width / dpr, height / dpr)) {
           continue;
         }
@@ -140,7 +162,7 @@ export function makeGpuDisplay(
             continue;
           }
 
-          const upload = tileTextureUpload(tile);
+          const upload = textureUpload(tile);
           const required = upload.width * upload.height * 4 + 32;
           const active = new Set(tiles.map(identity));
           for (const [old, resource] of resident) {
@@ -250,6 +272,7 @@ export function makeGpuDisplay(
       viewerPerformance.record('frame.submit', submitting);
       const mapping = performance.now();
       staging.submit();
+      compositor?.submitted();
       viewerPerformance.record('upload.remapRequest', mapping);
       viewerPerformance.record('frame.prepare', start);
       if (drawn) {
@@ -290,6 +313,7 @@ export function makeGpuDisplay(
       camera.destroy();
       timer.destroy();
       staging.destroy();
+      compositor?.destroy();
     }
   };
 
@@ -306,7 +330,9 @@ export function makeGpuDisplay(
 
   function allocate(tile: DisplayTile) {
     const { clip, step, contentTile } = tile;
-    const upload = tileTextureUpload(tile);
+    let candidate = tile.gpu;
+    const gpuCandidate = !!candidate;
+    const upload = textureUpload(tile);
     const { width, height } = upload;
     const texture = root.createTexture({ size: [width, height], format: 'rgba8unorm' }).$usage('sampled');
     const region = root
@@ -334,6 +360,9 @@ export function makeGpuDisplay(
         group,
         present(frame: number, firstFrame: number | undefined, arrival: boolean) {
           if (!presented) {
+            if (gpuCandidate) {
+              viewerPerformance.record('composite.preview.presented');
+            }
             viewerPerformance.record(
               contentTile ? (arrival ? 'tile.visible.frames' : 'tile.refinement.frames') : 'imageChunk.visible.frames',
               performance.now(),
@@ -353,6 +382,17 @@ export function makeGpuDisplay(
           return row === height;
         },
         upload(encoder: GPUCommandEncoder) {
+          if (candidate) {
+            compositor ??= compositorFactory!(device);
+            const work = candidate;
+            candidate = undefined;
+            const encoded = compositor.encode(work, encoder, root.unwrap(texture));
+            // A refusal is replaced by the already pending strict worker; do not spin another compute each frame.
+            row = height;
+            source = undefined;
+            sourceWords = undefined;
+            return encoded ? width * height * 4 : 1;
+          }
           const start = performance.now();
           const slot = staging.acquire();
           if (!slot) {
@@ -401,6 +441,7 @@ export function makeGpuDisplay(
           return width * rows * 4;
         },
         destroy() {
+          candidate = undefined;
           source = undefined;
           sourceWords = undefined;
           texture.destroy();
@@ -562,4 +603,19 @@ function makeTimer(device: GPUDevice) {
       read?.destroy();
     }
   };
+}
+
+/** GPU candidates have no host composite pixels; their full bordered output is written by compute. */
+function textureUpload(tile: DisplayTile) {
+  if (tile.gpu) {
+    return {
+      source: new Uint8Array(0),
+      bytesPerRow: tile.image.width * 4,
+      width: tile.image.width,
+      height: tile.image.height,
+      left: tile.left,
+      top: tile.top
+    };
+  }
+  return tileTextureUpload(tile);
 }

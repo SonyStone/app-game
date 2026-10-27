@@ -12,8 +12,11 @@ export function makeCanvasDisplay() {
   let pattern: CanvasPattern | null = null;
   return {
     setTiles(next: readonly DisplayTile[], step = 1) {
-      tiles = next;
-      levels = displayTileLevels(next, step);
+      for (const tile of next) {
+        tile.gpu?.onFailure('GPU display unavailable; strict CPU tiles replace previews.');
+      }
+      tiles = next.filter((tile) => !tile.gpu);
+      levels = displayTileLevels(tiles, step);
     },
     draw(canvas: HTMLCanvasElement, view: View, width: number, height: number, dpr: number) {
       const start = performance.now();

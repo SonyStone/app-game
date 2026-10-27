@@ -14,6 +14,8 @@ export function presentationSource(options: {
   savedSnapshot?: boolean;
   hasRender: boolean;
   pending: boolean;
+  /** Visible GPU output has not yet passed this identity's strict comparison. */
+  gpuPreview?: boolean;
 }) {
   if (options.maskOnly) {
     return 'selected saved mask plane before state transforms';
@@ -38,6 +40,10 @@ export function presentationSource(options: {
 
   if (!options.hasRender) {
     return 'no admitted current render';
+  }
+
+  if (options.gpuPreview) {
+    return `GPU interactive preview of ${options.state}; strict verification pending${overlay}`;
   }
 
   const current = options.pending

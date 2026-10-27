@@ -5,6 +5,9 @@ import { displayTiles, type DisplayImage, type DisplayTile } from '../gpu-viewpo
 export function displayPixel(image: DisplayImage, x: number, y: number) {
   let tile: DisplayTile | undefined;
   for (const candidate of displayTiles(image)) {
+    if (candidate.gpu) {
+      continue;
+    }
     if (
       x >= candidate.clip.left &&
       y >= candidate.clip.top &&

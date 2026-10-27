@@ -1,9 +1,12 @@
 import type { PsdImage, PsdRegionRect } from '@app-game/psd/viewer';
+import type { GpuTileWork } from '../gpu-composite/makeGpuCompositor';
 
 /** Immutable straight display-sRGB bytes and a nonoverlapping document-space drawing rectangle. */
 export type DisplayTile = {
   /** May include a neighbor halo supporting all retained mip levels around the drawing rectangle. */
   image: PsdImage;
+  /** Candidate GPU output is a preview until its exact identity passes strict comparison. */
+  gpu?: GpuTileWork;
   /** One bounded worker region and its mips; whole-render/point-preview chunks have a separate latency cohort. */
   contentTile?: boolean;
   /** Shared by all levels returned by one native region call, independent of later cached LOD switches. */

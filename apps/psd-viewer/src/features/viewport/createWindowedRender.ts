@@ -2,6 +2,7 @@ import type { PsdRenderSettings } from '@app-game/psd/viewer';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createRAF } from '@solid-primitives/raf';
 import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
+import type { CompositeDiagnostics } from '../gpu-composite/makeCompositePreviews';
 import type { OpenedPsd, PsdResultOf, RenderedPixels } from '../psd-worker';
 import type { WindowClient } from '../psd-worker/makePsdWorkerPool';
 import { requiresWindowedRendering } from '../psd-worker/protocol';
@@ -19,9 +20,11 @@ export function createWindowedRender(
   opened: Accessor<PsdResultOf<OpenedPsd> | undefined>,
   settings: Accessor<PsdRenderSettings>,
   visibility: Accessor<[number, boolean][]>,
-  viewport: Pick<ReturnType<typeof createViewport>, 'view' | 'size'>
+  viewport: Pick<ReturnType<typeof createViewport>, 'view' | 'size'>,
+  gpuComposite: Accessor<boolean> = () => false
 ) {
-  const renderer = makeWindowRenderer(client);
+  const [compositeDiagnostics, setCompositeDiagnostics] = createSignal<CompositeDiagnostics>();
+  const renderer = makeWindowRenderer(client, undefined, setCompositeDiagnostics);
   const [dpr, setDpr] = createSignal(typeof devicePixelRatio === 'number' ? devicePixelRatio : 1);
   createEventListener(
     () => (typeof window === 'undefined' ? undefined : window),
@@ -34,7 +37,7 @@ export function createWindowedRender(
   const snapshot = createMemo(() => {
     const document = opened();
     return document?.ok && requiresWindowedRendering(document.value.info)
-      ? { opened: document.value, settings: settings(), visibility: visibility() }
+      ? { opened: document.value, settings: settings(), visibility: visibility(), gpuComposite: gpuComposite() }
       : undefined;
   });
   let previous: ReturnType<typeof snapshot>;
@@ -96,5 +99,5 @@ export function createWindowedRender(
     }
   );
 
-  return { render, busy };
+  return { render, busy, compositeDiagnostics };
 }
