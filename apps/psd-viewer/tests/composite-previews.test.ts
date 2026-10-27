@@ -234,3 +234,93 @@ it('a camera replacement still waits for strict publication when a GPU preview i
     doc.close();
   }
 });
+
+it('clearing a pending preparation prevents late CPU residency and preview publication', async () => {
+  const opened = await openPsd(
+    await readFile(new URL('../../../packages/psd/test/editor/flat-rgb8.psd', import.meta.url))
+  );
+  if (!opened.ok) {
+    throw new Error(opened.error.message);
+  }
+  const doc = opened.value;
+  const rect = { left: 0, top: 0, width: 2, height: 2 };
+  const snapshot: WindowSnapshot = {
+    opened: { document: 1, info: doc.info, layers: [...doc.layers], states: doc.states, opening: doc.opening },
+    settings: photoshopDefaultSettings,
+    visibility: []
+  };
+  let complete!: (result: Awaited<ReturnType<PsdClient['gpuLayers']>>) => void;
+  const changes: CompositeDiagnostics[] = [];
+  const previews = makeCompositePreviews(
+    {
+      renderWindow: vi.fn(),
+      gpuLayers: vi.fn(
+        () =>
+          new Promise<Awaited<ReturnType<PsdClient['gpuLayers']>>>((resolve) => {
+            complete = resolve;
+          })
+      )
+    },
+    (state) => changes.push(state)
+  );
+  try {
+    const pending = previews.prepare(snapshot, rect, rect, vi.fn());
+    previews.clear();
+    complete(prepareGpuLayers(doc, rect, snapshot.settings));
+    expect(await pending).toBeUndefined();
+    expect(changes.at(-1)?.preparedBytes).toBe(0);
+    expect(changes.some((state) => state.state === 'preview')).toBe(false);
+  } finally {
+    previews.clear();
+    doc.close();
+  }
+});
+
+it('refuses a single operand set larger than the CPU LRU instead of retaining it outside the budget', async () => {
+  const opened = await openPsd(
+    await readFile(new URL('../../../packages/psd/test/editor/flat-rgb8.psd', import.meta.url))
+  );
+  if (!opened.ok) {
+    throw new Error(opened.error.message);
+  }
+  const doc = opened.value;
+  const rect = { left: 0, top: 0, width: 2, height: 2 };
+  const prepared = prepareGpuLayers(doc, rect, photoshopDefaultSettings);
+  if (!prepared.ok) {
+    doc.close();
+    throw new Error(prepared.error.message);
+  }
+  const changes: CompositeDiagnostics[] = [];
+  const previews = makeCompositePreviews(
+    {
+      renderWindow: vi.fn(),
+      gpuLayers: vi.fn(async () => ({
+        ok: true as const,
+        value: {
+          ...prepared.value,
+          layers: [{ ...prepared.value.layers[0], samples: new Uint32Array(4 * 1024 * 1024 + 1) }]
+        }
+      }))
+    },
+    (state) => changes.push(state)
+  );
+  try {
+    expect(
+      await previews.prepare(
+        {
+          opened: { document: 1, info: doc.info, layers: [...doc.layers], states: doc.states, opening: doc.opening },
+          settings: photoshopDefaultSettings,
+          visibility: []
+        },
+        rect,
+        rect,
+        vi.fn()
+      )
+    ).toBeUndefined();
+    expect(changes.at(-1)).toMatchObject({ state: 'unsupported', preparedBytes: 0 });
+    expect(changes.at(-1)?.reason).toContain('16 MiB');
+  } finally {
+    previews.clear();
+    doc.close();
+  }
+});
