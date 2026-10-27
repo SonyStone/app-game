@@ -13,7 +13,8 @@ import {
 /**
  * Owns independently saved source-relative revisions beside the renderer, strictly reopened before publication.
  * Replay keeps exact operands, admits no weaker contract and bounds history to 64 operations. Prepared saves
- * own independent bytes until release/disposal. The caller serializes requests and disposes on document close.
+ * own independent bytes until release/disposal. publish receives whether the changed action affects the tree,
+ * so metadata after a tree edit still retains resident pixels. The caller serializes requests and disposes on close.
  */
 export async function makeEditingSession(
   source: Uint8Array,
@@ -54,7 +55,7 @@ export async function makeEditingSession(
   const current = (): EditingResult<EditingResponse> => ({ ok: true, value: { kind: 'state', state: state() } });
 
   /** Stages replay privately so writer, strict-open and allocation failures cannot half-commit. */
-  async function commit(commands: SavedAction[], nextPosition: number) {
+  async function commit(commands: SavedAction[], nextPosition: number, visual: boolean) {
     const started = performance.now();
     const candidate = wireResult(await open(source));
     if (!candidate.ok) {
@@ -64,9 +65,6 @@ export async function makeEditingSession(
     let accepted = false;
     let staged = candidate.value;
     let bytes = source;
-    const visual = [...history.slice(0, position), ...commands.slice(0, nextPosition)].some(
-      (action) => action.command.kind === 'tree'
-    );
     try {
       for (const action of commands.slice(0, nextPosition)) {
         const applied = apply(staged, action.command, action.operands, bytes);
@@ -193,7 +191,8 @@ export async function makeEditingSession(
             }
             return commit(
               [...history.slice(0, position), { command: structuredClone(request.command), operands, payloadBytes }],
-              position + 1
+              position + 1,
+              request.command.kind === 'tree'
             );
           }
           case 'undo':
@@ -203,7 +202,7 @@ export async function makeEditingSession(
               return { ok: false, error: { code: 'Invalid', message: `Nothing to ${request.kind}.` } };
             }
 
-            return commit(history, next);
+            return commit(history, next, history[Math.min(position, next)]!.command.kind === 'tree');
           }
           case 'freeze': {
             // A single bounded frozen save avoids accumulating unbounded WASM byte buffers.

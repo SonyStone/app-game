@@ -429,3 +429,39 @@ it('bounds pixel history inputs before cloning or mutating a session and permits
     host.dispose();
   }
 });
+
+it('keeps metadata publication nonvisual after a committed v5 tree edit and when undoing that metadata', async () => {
+  const source = new Uint8Array(
+    await readFile(new URL('../../../packages/psd/test/editor/source-host-rgb8.psd', import.meta.url))
+  );
+  const publications: { bytes: Uint8Array; visual: boolean }[] = [];
+  const host = value(
+    await makeEditingSession(source, async (bytes, visual) => {
+      publications.push({ bytes: bytes.slice(), visual });
+      return { ok: true, value: undefined };
+    })
+  );
+  try {
+    value(
+      await host.receive({
+        kind: 'edit',
+        revision: 0,
+        command: { kind: 'tree', edit: { kind: 'rename', layerId: 3, name: 'changed' } }
+      })
+    );
+    value(
+      await host.receive({
+        kind: 'edit',
+        revision: 1,
+        command: { kind: 'metadata', edit: { kind: 'printCaption', enabled: true } }
+      })
+    );
+    expect(publications.map((entry) => entry.visual)).toEqual([true, false]);
+    expect(publications[1]!.bytes).not.toEqual(publications[0]!.bytes);
+    expect(await readPsd(publications[1]!.bytes)).toEqual(await readPsd(publications[0]!.bytes));
+    value(await host.receive({ kind: 'undo', revision: 2 }));
+    expect(publications[2]).toEqual({ bytes: publications[0]!.bytes, visual: false });
+  } finally {
+    host.dispose();
+  }
+});
