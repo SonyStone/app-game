@@ -24,7 +24,8 @@ export function makeWindowRenderer(
   // A display upload may still retain one source buffer after LRU eviction, until the next frame reconciles tiles.
   // Its 544-square RGBA source is below 2 MiB. Reserve that headroom rather than hiding it outside CPU accounting.
   const uploadReserveBytes = 2 * 1024 * 1024;
-  const cacheLimitBytes = budgetBytes - uploadReserveBytes;
+  // Compositing reserves 16 MiB for operands, 24 MiB for preparation, and 4 MiB for verification/transfer.
+  const cacheLimitBytes = () => budgetBytes - uploadReserveBytes - (previous?.gpuComposite ? 44 * 1024 * 1024 : 0);
   const cache = new Map<string, DisplayTile[]>();
   const compositor = makeCompositePreviews(client, compositeChanged);
   const pending = new Map<
@@ -244,7 +245,7 @@ export function makeWindowRenderer(
 
     previewedDocument = document;
     const concurrency =
-      !snapshot.gpuComposite && plan.kind === 'regions' && client.prepareWindows
+      (!snapshot.gpuComposite || compositor.unavailable(snapshot)) && plan.kind === 'regions' && client.prepareWindows
         ? await client.prepareWindows(
             document,
             snapshot.settings,
@@ -408,6 +409,7 @@ export function makeWindowRenderer(
             .map(
               (image): DisplayTile => ({
                 image,
+                textureIdentity: image.step === 1 && candidate?.matches() ? candidate.tile.textureIdentity : undefined,
                 contentTile: window.kind === 'regions',
                 arrival,
                 left: image.left,
@@ -478,7 +480,7 @@ export function makeWindowRenderer(
     // Drop unneeded fine levels before coarse coverage. Visible requested levels and one overview are pinned.
     for (const [key, levels] of cache) {
       while (
-        cacheBytes + reservedBytes > cacheLimitBytes &&
+        cacheBytes + reservedBytes > cacheLimitBytes() &&
         levels.length > 1 &&
         (!pinned.has(key) || levels.at(-1)!.step < lod)
       ) {
@@ -487,7 +489,7 @@ export function makeWindowRenderer(
     }
 
     for (const key of cache.keys()) {
-      if (cacheBytes + reservedBytes <= cacheLimitBytes) {
+      if (cacheBytes + reservedBytes <= cacheLimitBytes()) {
         break;
       }
 
@@ -520,6 +522,8 @@ export function makeWindowRenderer(
 
 /** Identity changes for content settings/fonts/visibility, while pan and zoom retain the same snapshot. */
 export type WindowSnapshot = {
+  /** Supplied-font context revision, included in every operand and verification identity. */
+  revision?: number;
   opened: OpenedPsd;
   settings: PsdRenderSettings;
   visibility: [number, boolean][];
@@ -640,6 +644,7 @@ function withBorder(rectangle: PsdRegionRect, size: { width: number; height: num
 function visibilityDamage(before: WindowSnapshot, after: WindowSnapshot): PsdRegionRect[] | undefined {
   if (
     before.opened !== after.opened ||
+    before.revision !== after.revision ||
     before.settings !== after.settings ||
     before.gpuComposite !== after.gpuComposite
   ) {
@@ -654,6 +659,8 @@ function visibilityDamage(before: WindowSnapshot, after: WindowSnapshot): PsdReg
   const unbounded = (node: PsdLayerNode) =>
     node.kind === 'adjustment' ||
     node.kind === 'fill' ||
+    node.kind === 'shape' ||
+    !!node.vectorMask ||
     !!node.effects?.some((effect) => effect.enabled) ||
     (node.kind === 'text' && after.settings.typeLayers) ||
     (node.kind === 'smartObject' && after.settings.smartObjects !== null);

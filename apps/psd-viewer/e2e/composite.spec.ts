@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
-const screenshots = '/tmp/psd-phase7a-screens';
+const screenshots = '/tmp/psd-phase7b-screens';
 
 test('integer GPU compositing matches exhaustive byte grids for every admitted mode', async ({ page }) => {
   test.setTimeout(180_000);
@@ -10,9 +10,9 @@ test('integer GPU compositing matches exhaustive byte grids for every admitted m
     const module = '/e2e/compositeHarness.ts';
     return (await import(/* @vite-ignore */ module)).runGpuArithmetic();
   });
-  await writeFile('/tmp/psd-phase7a-gpu-arithmetic.json', JSON.stringify(result, null, 2));
+  await writeFile('/tmp/psd-phase7b-gpu-arithmetic.json', JSON.stringify(result, null, 2));
   expect(result.errors).toEqual([]);
-  expect(result.results).toHaveLength(360);
+  expect(result.results).toHaveLength(480);
   for (const scenario of result.results) {
     expect(scenario.differing, JSON.stringify(scenario)).toBe(0);
   }
@@ -27,6 +27,13 @@ test('fixture regions and visibility identities require zero RGBA differences fr
   if (root) {
     fixtures.push(
       ...[
+        'oracle-1/Demo_Project__MOOMaskedIconView_Demo__Images__Icons__PSDs__Eye-820703ece35b-g1/native.psd',
+        'oracle-1/Demo_Project__MOOMaskedIconView_Demo__Images__Icons__PSDs__Rounded_Rect-425d767c06f1-g0/native-input/document.psd',
+        'oracle-1/tests__fixtures__clipping__pixel-with-blend-e6d8f722bf9b-g0/native.psd',
+        'oracle-1/tests__fixtures__clipping__clipping-2-vector-with-transform-cad400aae019-g0/forced.psd',
+        'oracle-1/test-fixtures__psd__photoshop-text-rtl-hebrew-2a7cfb4332bb-g1/native.psd',
+        'oracle-1/tests__PsdSharp.Tests__PSDs__LayersAndMasks-8aa75fead08c-g1/native.psd',
+        'am-oracle-1/p12-adjustment-no-adjustment-levels-g0-native.psd',
         'oracle-1/FastGUI__Assets__NGUI__Examples__Atlases__Fantasy__Fantasy_Atlas-9dda5bba9b51-g0/native.psd',
         'oracle-1/gothicvania-cemetery-files__PSD__sprites__ghost-2b6946b965a5-g0/native-input/document.psd',
         'oracle-1/examples__files__replace_images-321f9abb3c96-g0/source-input/document.psd',
@@ -65,7 +72,7 @@ test('fixture regions and visibility identities require zero RGBA differences fr
     }
     results.push({ fixture, scenarios });
   }
-  await writeFile('/tmp/psd-phase7a-gpu-fixtures.json', JSON.stringify(results, null, 2));
+  await writeFile('/tmp/psd-phase7b-gpu-fixtures.json', JSON.stringify(results, null, 2));
   expect(results.flatMap((r) => r.scenarios).filter((s) => 'differing' in s).length).toBeGreaterThan(30);
 });
 
@@ -129,9 +136,17 @@ test('experimental preview labeling, zero-sample verification and forced mismatc
     if (mismatch) {
       await expect(page.getByLabel('GPU compositing diagnostics')).toContainText('GPU mismatch');
       await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false');
+      await expect(page.getByLabel('GPU mismatch summary')).toContainText('First difference at');
+      await expect(page.getByRole('button', { name: 'Copy details', exact: true })).toBeVisible();
+      await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+      await page.getByRole('button', { name: 'Copy details', exact: true }).click();
+      await expect(page.getByLabel('GPU mismatch summary').getByRole('status')).toHaveText('Copied');
+      const copied = await page.evaluate(() => navigator.clipboard.readText());
+      expect(JSON.parse(copied).mismatches[0].tile).toHaveProperty('width');
+      await expect(page.getByLabel('GPU compositing diagnostics').locator('pre')).toHaveCount(0);
       await page.screenshot({ path: `${screenshots}/forced-mismatch-diagnostics.png` });
       await writeFile(
-        '/tmp/psd-phase7a-forced-mismatch.json',
+        '/tmp/psd-phase7b-forced-mismatch.json',
         JSON.stringify(await page.getByLabel('GPU compositing diagnostics').textContent())
       );
       await page.locator('[role=tree] input[type=checkbox]').first().click();
@@ -159,4 +174,42 @@ test('experimental preview labeling, zero-sample verification and forced mismatc
     await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false');
   }
   expect(errors).toEqual([]);
+});
+
+test('clipping and adjustment arithmetic controls match strict RGBA on the GPU', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto('/');
+  const results: Awaited<ReturnType<typeof import('./compositeHarness').runGpuOperandControls>> = await page.evaluate(
+    async () => {
+      const module = '/e2e/compositeHarness.ts';
+      return (await import(/* @vite-ignore */ module)).runGpuOperandControls();
+    }
+  );
+  await writeFile('/tmp/psd-phase7b-gpu-operands.json', JSON.stringify(results, null, 2));
+  for (const control of results) {
+    expect(
+      control.scenarios.some((scenario) => 'differing' in scenario),
+      control.name
+    ).toBe(true);
+    for (const scenario of control.scenarios) {
+      expect('differing' in scenario ? scenario.differing : scenario.refused, control.name).toBe(0);
+    }
+  }
+});
+
+test('shows a widened cached-text document with verified GPU compositing', async ({ page }) => {
+  const root = process.env.PSD_TEXT_MIXER_RESEARCH_ROOT;
+  test.skip(!root, 'Requires the read-only research fixture corpus.');
+  await page.goto('/?gpuComposite=1&telemetry=1');
+  await page
+    .locator('input[type=file]')
+    .first()
+    .setInputFiles(
+      `${root}/fixtures/psd/oracle-1/test-fixtures__psd__photoshop-text-rtl-hebrew-2a7cfb4332bb-g1/native.psd`
+    );
+  await expect(page.getByLabel('GPU compositing diagnostics')).toContainText('verified');
+  await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false');
+  await page.getByRole('button', { name: '100%', exact: true }).click();
+  await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false');
+  await page.screenshot({ path: `${screenshots}/widened-text.png` });
 });

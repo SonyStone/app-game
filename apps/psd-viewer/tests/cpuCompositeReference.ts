@@ -1,5 +1,6 @@
 import type { PsdGpuLayers } from '@app-game/psd/gpu';
 import tables from '../src/features/gpu-composite/integerTables.json';
+import textTables from '../src/features/gpu-composite/textTables.json';
 
 /** Independent scalar transcription of psd-rs blend.rs, pixel.rs, gamma.rs and Renderer::collapses for tests. */
 export function cpuCompositeReference(
@@ -9,7 +10,75 @@ export function cpuCompositeReference(
 ) {
   const pixels = new Uint8Array(source.rect.width * source.rect.height * 4);
   const shown = new Map(visibility);
-  for (const layer of source.layers) {
+  const active = source.layers.filter(
+    (layer) => (shown.get(layer.index) ?? layer.visible) && !layer.ancestors.some((id) => shown.get(id) === false)
+  );
+  const groups = new Set(active.filter((layer) => layer.isolated).map((layer) => layer.index));
+  const parent = (layer: (typeof active)[number]) => layer.ancestors.findLast((index) => groups.has(index));
+  const roots = active.filter((layer) => parent(layer) === undefined);
+  for (let layer of roots) {
+    if (layer.isolated) {
+      const childPixels = cpuCompositeReference(
+        {
+          ...source,
+          layers: active
+            .filter((child) => child.ancestors.includes(layer.index))
+            .map((child) => ({ ...child, ancestors: child.ancestors.slice(child.ancestors.indexOf(layer.index) + 1) }))
+        },
+        gamma,
+        visibility
+      );
+      const samples = layer.samples.slice();
+      for (let i = 0; i < childPixels.length / 4; i++) {
+        samples[i * 2] =
+          childPixels[i * 4] |
+          (childPixels[i * 4 + 1] << 8) |
+          (childPixels[i * 4 + 2] << 16) |
+          (childPixels[i * 4 + 3] << 24);
+      }
+      layer = { ...layer, samples };
+    }
+    if (layer.clipBase !== undefined) {
+      continue;
+    }
+    const clips = roots.filter((clip) => clip.clipBase === layer.index);
+    if (clips.length) {
+      const base = {
+        ...layer,
+        bounds: source.rect,
+        opacity: 255,
+        fill: 255,
+        density: 255,
+        mode: 0,
+        samples: new Uint32Array(source.rect.width * source.rect.height * 2)
+      };
+      for (let y = 0; y < layer.bounds.height; y++) {
+        for (let x = 0; x < layer.bounds.width; x++) {
+          const at =
+            ((y + layer.bounds.top - source.rect.top) * source.rect.width + x + layer.bounds.left - source.rect.left) *
+            2;
+          base.samples[at] = layer.samples[(y * layer.bounds.width + x) * 2] | 0xff000000;
+          base.samples[at + 1] = 255;
+        }
+      }
+      const colors = cpuCompositeReference(
+        { ...source, layers: [base, ...clips.map((clip) => ({ ...clip, clipBase: undefined }))] },
+        gamma,
+        visibility
+      );
+      const samples = layer.samples.slice();
+      for (let y = 0; y < layer.bounds.height; y++) {
+        for (let x = 0; x < layer.bounds.width; x++) {
+          const at =
+            ((y + layer.bounds.top - source.rect.top) * source.rect.width + x + layer.bounds.left - source.rect.left) *
+            4;
+          const i = (y * layer.bounds.width + x) * 2;
+          samples[i] = (samples[i] & 0xff000000) | colors[at] | (colors[at + 1] << 8) | (colors[at + 2] << 16);
+        }
+      }
+      layer = { ...layer, samples, staged: true };
+    }
+    const mixer = layer.textGamma ? 2 : gamma;
     if (!(shown.get(layer.index) ?? layer.visible) || layer.ancestors.some((id) => shown.get(id) === false)) {
       continue;
     }
@@ -23,11 +92,42 @@ export function cpuCompositeReference(
         const shape = mul(packed >>> 24, 255 - mul(255 - layer.samples[sample + 1], layer.density));
         const backdrop = [...pixels.subarray(at, at + 4)];
         const mode = layer.mode;
+        if (layer.adjustment) {
+          const coverage = mul(255 - mul(255 - layer.samples[sample + 1], layer.density), layer.opacity);
+          if (backdrop[3] !== 0 && coverage !== 0) {
+            const luminance = (4915 * backdrop[0] + 9667 * backdrop[1] + 1802 * backdrop[2] + 8192) >> 14;
+            const adjusted = backdrop
+              .slice(0, 3)
+              .map((value, channel) =>
+                layer.adjustment === 2
+                  ? luminance >= layer.threshold!
+                    ? 255
+                    : 0
+                  : layer.samples[(layer.bounds.width * layer.bounds.height + channel * 256 + value) * 2]
+              );
+            pixels.set(
+              adjusted
+                .map((value, channel) =>
+                  mix(backdrop[channel], fillBlend(backdrop[channel], value, layer.fill, mode), coverage, gamma)
+                )
+                .concat(backdrop[3]),
+              at
+            );
+          }
+          continue;
+        }
         let result;
-        if (!gamma && !special(mode)) {
+        if (layer.isolated && !mixer) {
+          result = interpolate(
+            backdrop,
+            interpolate(backdrop, paint(backdrop, color, layer.fill, mode), shape, mixer),
+            layer.opacity,
+            mixer
+          );
+        } else if (!mixer && !layer.staged && !special(mode)) {
           result = paint(backdrop, color, mul(shape, mul(layer.fill, layer.opacity)), mode);
         } else if (shape !== 0 && layer.opacity !== 0) {
-          result = interpolate(backdrop, paint(backdrop, color, layer.fill, mode), mul(shape, layer.opacity), gamma);
+          result = interpolate(backdrop, paint(backdrop, color, layer.fill, mode), mul(shape, layer.opacity), mixer);
         } else {
           result = backdrop;
         }
@@ -141,19 +241,20 @@ function paint(b: number[], s: number[], fill: number, mode: number) {
     total
   ];
 }
-function mix(b: number, s: number, weight: number, gamma: boolean) {
+function mix(b: number, s: number, weight: number, gamma: boolean | 2) {
   if (!gamma || weight === 0 || weight === 255) {
     return lerp(b, s, weight);
   }
-  const from = tables.values[b];
-  const delta = tables.values[s] - from;
+  const values = gamma === 2 ? textTables.values : tables.values;
+  const from = values[b];
+  const delta = values[s] - from;
   const value = from + Math.sign(delta) * Math.floor((Math.abs(delta) * weight + 127) / 255);
   const index = value >> 3;
-  const lo = tables.values[256 + index];
-  const hi = tables.values[256 + Math.min(index + 1, 4096)];
+  const lo = values[256 + index];
+  const hi = values[256 + Math.min(index + 1, 4096)];
   return (255 * (lo + Math.floor(((hi - lo) * (value & 7) + 4) / 8)) + 16384) >> 15;
 }
-function interpolate(b: number[], s: number[], weight: number, gamma: boolean) {
+function interpolate(b: number[], s: number[], weight: number, gamma: boolean | 2) {
   const kept = mul(b[3], 255 - weight);
   const added = mul(s[3], weight);
   return [0, 1, 2].map((c) => mix(b[c], s[c], norm(added, kept + added), gamma)).concat(kept + added);

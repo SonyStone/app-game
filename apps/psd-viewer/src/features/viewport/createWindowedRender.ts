@@ -21,7 +21,8 @@ export function createWindowedRender(
   settings: Accessor<PsdRenderSettings>,
   visibility: Accessor<[number, boolean][]>,
   viewport: Pick<ReturnType<typeof createViewport>, 'view' | 'size'>,
-  gpuComposite: Accessor<boolean> = () => false
+  gpuComposite: Accessor<boolean> = () => false,
+  fontRevision: Accessor<number> = () => 0
 ) {
   const [compositeDiagnostics, setCompositeDiagnostics] = createSignal<CompositeDiagnostics>();
   const renderer = makeWindowRenderer(client, undefined, setCompositeDiagnostics);
@@ -37,7 +38,13 @@ export function createWindowedRender(
   const snapshot = createMemo(() => {
     const document = opened();
     return document?.ok && requiresWindowedRendering(document.value.info)
-      ? { opened: document.value, settings: settings(), visibility: visibility(), gpuComposite: gpuComposite() }
+      ? {
+          opened: document.value,
+          settings: settings(),
+          visibility: visibility(),
+          gpuComposite: gpuComposite(),
+          revision: fontRevision()
+        }
       : undefined;
   });
   let previous: ReturnType<typeof snapshot>;
@@ -50,6 +57,12 @@ export function createWindowedRender(
   createEffect(
     () => ({ snapshot: snapshot(), view: viewport.view(), size: viewport.size(), dpr: dpr() }),
     ({ snapshot, view, size, dpr }) => {
+      const visibilityEdit =
+        !!snapshot?.gpuComposite &&
+        !!previous &&
+        previous.opened === snapshot.opened &&
+        JSON.stringify(previous.settings) === JSON.stringify(snapshot.settings) &&
+        previous.visibility !== snapshot.visibility;
       if (previous !== snapshot) {
         setRender(undefined);
         previous = snapshot;
@@ -87,7 +100,13 @@ export function createWindowedRender(
             }
           );
       };
-      startPlanning();
+      if (visibilityEdit) {
+        // Resident operands can be published before the next display RAF. Camera-only work remains coalesced.
+        stopPlanning();
+        renderFrame();
+      } else {
+        startPlanning();
+      }
       return () => {
         // Keep the queued frame when camera demand changes. Cancel/requeue can starve on continuous input.
         controller.abort();

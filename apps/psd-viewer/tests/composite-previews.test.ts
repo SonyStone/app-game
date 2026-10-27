@@ -31,7 +31,7 @@ it('verifies the complete identity with zero tolerance, including transparent RG
   try {
     const first = await previews.prepare(snapshot, rect, rect, mismatch);
     const strict = doc.renderRegion(rect, snapshot.settings);
-    expect(first?.tile.gpu?.identity).toContain('rgb8-integer-v1');
+    expect(first?.tile.gpu?.identity).toContain('rgb8-integer-v2');
     expect(strict.ok).toBe(true);
     if (!first || !strict.ok) {
       return;
@@ -43,6 +43,9 @@ it('verifies the complete identity with zero tolerance, including transparent RG
     const second = await previews.prepare({ ...snapshot, visibility: [[0, false]] }, rect, rect, mismatch);
     expect(second?.tile.gpu?.identity).not.toBe(first.tile.gpu?.identity);
     expect(client.gpuLayers).toHaveBeenCalledOnce();
+    const fontRevision = await previews.prepare({ ...snapshot, revision: 1 }, rect, rect, mismatch);
+    expect(fontRevision?.tile.gpu?.identity).not.toBe(first.tile.gpu?.identity);
+    expect(client.gpuLayers).toHaveBeenCalledTimes(2);
     const corrupted = strict.value.pixels.slice();
     corrupted[0] ^= 1;
     second!.strict(strict.value);
