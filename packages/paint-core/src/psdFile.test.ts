@@ -55,6 +55,7 @@ it('exports a region and refuses an empty drawing', async () => {
   await expect(writePsdFile([{ ...paper, tiles: new Map() }], read)).rejects.toThrow('nothing to export');
 });
 
+// Two 513x514 strict renders plus the export exceed the 5 s default on shared CI runners.
 it.each([false, true])('preserves the whole strict composite across 512-pixel edges with linear blending %s', async (linearBlending) => {
   // An opaque base keeps the saved composite's white-matte round trip lossless.
   const layers = [
@@ -88,7 +89,7 @@ it.each([false, true])('preserves the whole strict composite across 512-pixel ed
   } finally {
     document.close();
   }
-});
+}, 60_000);
 
 it('opens an exported PSD as a drawing with its layers and settings', async () => {
   const paper = solidLayer('Paper', [255, 255, 255, 255], 0, 0, 200, 100);
