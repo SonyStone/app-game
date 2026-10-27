@@ -86,13 +86,14 @@ export function makeCompositePreviews(client: WindowClient, changed: (state: Com
       if (disabled || rejectedSettings.has(settingsKey) || snapshot.opened.sourceBacked || !client.gpuLayers) {
         return undefined;
       }
+      const preparationGeneration = generation;
       const sourceKey = JSON.stringify([settingsKey, rect]);
       let source = sources.get(sourceKey);
       if (!source) {
         const start = performance.now();
         notify({ state: 'preparing' });
         const prepared = await client.gpuLayers(snapshot.opened.document, rect, snapshot.settings);
-        if (documentLayers !== snapshot.opened.layers || disabled) {
+        if (documentLayers !== snapshot.opened.layers || generation !== preparationGeneration || disabled) {
           return undefined;
         }
         if (!prepared.ok) {
@@ -104,6 +105,10 @@ export function makeCompositePreviews(client: WindowClient, changed: (state: Com
         }
         source = prepared.value;
         const required = source.layers.reduce((sum, layer) => sum + layer.samples.byteLength, 0);
+        if (required > 16 * 1024 * 1024) {
+          notify({ state: 'unsupported', reason: 'GPU operands exceed the 16 MiB CPU residency budget.' });
+          return undefined;
+        }
         for (const [key, cached] of sources) {
           if (bytes + required <= 16 * 1024 * 1024) {
             break;
@@ -241,6 +246,7 @@ export function makeCompositePreviews(client: WindowClient, changed: (state: Com
     },
     /** Releases CPU source residency. A mismatch remains disabled until a different document is opened. */
     clear() {
+      generation++;
       sources.clear();
       bytes = 0;
       notify({ preparedBytes: 0 });
