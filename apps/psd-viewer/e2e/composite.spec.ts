@@ -86,7 +86,7 @@ test('experimental preview labeling, zero-sample verification and forced mismatc
     const module = '/e2e/compositeHarness.ts';
     return (await import(/* @vite-ignore */ module)).createCompositeFixture(768, 512, 4);
   });
-  // Retain the real worker result briefly so both fidelity states can be inspected without racing a frame.
+  // Retain real verification requests until the preview is observed, then release them for exact checking.
   await page.addInitScript(() => {
     const devices: GPUDevice[] = [];
     Reflect.set(window, '__compositeDevices', devices);
@@ -96,6 +96,14 @@ test('experimental preview labeling, zero-sample verification and forced mismatc
       devices.push(device);
       return device;
     };
+    const pendingWindows: (() => void)[] = [];
+    Reflect.set(window, '__holdWindows', true);
+    Reflect.set(window, '__releaseWindows', () => {
+      Reflect.set(window, '__holdWindows', false);
+      for (const send of pendingWindows.splice(0)) {
+        send();
+      }
+    });
     const Native = Worker;
     window.Worker = class extends Native {
       postMessage(message: unknown, transfer: Transferable[] | StructuredSerializeOptions = []) {
@@ -108,11 +116,13 @@ test('experimental preview labeling, zero-sample verification and forced mismatc
           return;
         }
         if (typeof message === 'object' && message && Reflect.get(message, 'type') === 'renderWindow') {
-          setTimeout(
-            () =>
-              Array.isArray(transfer) ? super.postMessage(message, transfer) : super.postMessage(message, transfer),
-            200
-          );
+          const send = () =>
+            Array.isArray(transfer) ? super.postMessage(message, transfer) : super.postMessage(message, transfer);
+          if (Reflect.get(window, '__holdWindows')) {
+            pendingWindows.push(send);
+          } else {
+            send();
+          }
         } else {
           if (Array.isArray(transfer)) {
             super.postMessage(message, transfer);
@@ -129,10 +139,12 @@ test('experimental preview labeling, zero-sample verification and forced mismatc
       .locator('input[type=file]')
       .first()
       .setInputFiles({ name: 'gpu-stack.psd', mimeType: 'image/vnd.adobe.photoshop', buffer: Buffer.from(bytes) });
+    // Hold strict replies until the real GPU frame is observable, independent of machine load.
+    await expect(page.getByRole('status', { name: 'Canvas render status' })).toContainText('GPU interactive preview');
     if (!mismatch) {
-      await expect(page.getByRole('status', { name: 'Canvas render status' })).toContainText('GPU interactive preview');
       await page.screenshot({ path: `${screenshots}/gpu-preview.png` });
     }
+    await page.evaluate(() => Reflect.get(window, '__releaseWindows')());
     if (mismatch) {
       await expect(page.getByLabel('GPU compositing diagnostics')).toContainText('GPU mismatch');
       await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false');
@@ -157,11 +169,17 @@ test('experimental preview labeling, zero-sample verification and forced mismatc
       await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false');
       await page.screenshot({ path: `${screenshots}/strict-verified.png` });
       // Resident GPU previews must not wait for the authoritative worker's planning queue.
-      await page.evaluate(() => Reflect.set(window, '__holdCapabilities', true));
+      await page.evaluate(() => {
+        Reflect.set(window, '__holdCapabilities', true);
+        Reflect.set(window, '__holdWindows', true);
+      });
       await page.locator('[role=tree] input[type=checkbox]').first().click();
       await expect(page.getByRole('status', { name: 'Canvas render status' })).toContainText('GPU interactive preview');
       await expect(page.locator('[data-busy]')).toHaveAttribute('data-busy', 'false');
-      await page.evaluate(() => Reflect.set(window, '__holdCapabilities', false));
+      await page.evaluate(() => {
+        Reflect.set(window, '__holdCapabilities', false);
+        Reflect.get(window, '__releaseWindows')();
+      });
       await page.evaluate(() => Reflect.get(window, '__compositeDevices').at(-1).destroy());
       await expect(page.locator('canvas[data-backend=canvas2d]')).toBeVisible();
       await page.locator('[role=tree] input[type=checkbox]').first().click();
