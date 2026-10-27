@@ -101,12 +101,13 @@ export function makeWindowRenderer(
       previous = snapshot;
     }
 
+    const tileBudgetBytes = cacheLimitBytes() + uploadReserveBytes;
     lod = chooseLod(view.scale * (size.dpr ?? 1), lod);
     const plan = planWindow(
       snapshot.opened.info,
       view,
       size,
-      budgetBytes,
+      tileBudgetBytes,
       snapshot.opened.windowed === true && snapshot.opened.info.width * snapshot.opened.info.height <= 16_777_216
     );
     if (!plan || signal.aborted) {
@@ -115,7 +116,7 @@ export function makeWindowRenderer(
 
     if (plan.kind === 'regions') {
       const minimum = Math.sqrt(
-        (plan.tiles.length * (tileEdge + 32) ** 2 * 4 * 1.34) / Math.max(1, budgetBytes - 10 * 1024 * 1024)
+        (plan.tiles.length * (tileEdge + 32) ** 2 * 4 * 1.34) / Math.max(1, tileBudgetBytes - 10 * 1024 * 1024)
       );
       lod = Math.min(maxMipStep, Math.max(lod, 2 ** Math.max(0, Math.ceil(Math.log2(minimum)))));
     }

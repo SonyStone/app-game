@@ -6,6 +6,7 @@ import { largePsb } from '../../../packages/psd/test/largePsb';
 import type { DisplayTile } from '../src/features/gpu-viewport/displayTiles';
 import { makePsdClient, type PsdClient, type PsdResultOf, type PsdWorkerPort } from '../src/features/psd-worker';
 import type { PsdRequest, WindowRequest } from '../src/features/psd-worker/protocol';
+import { regionMips } from '../src/features/psd-worker/regionMips';
 import { makePsdWorkerHost } from '../src/features/psd-worker/workerHost';
 import { viewerPerformance } from '../src/features/telemetry/performance';
 import { createWindowedRender } from '../src/features/viewport/createWindowedRender';
@@ -869,4 +870,36 @@ it('keeps planning live when every camera event arrives ahead of its scheduled f
     state.dispose();
     state.jobs[0]?.resolve({ ok: false, error: { kind: 'superseded', message: 'disposed' } });
   }
+});
+
+it('budgets pinned composite coverage after reserving operands, preparation and readback', async () => {
+  const { client } = synthetic();
+  const renderer = makeWindowRenderer({
+    async renderWindow(...args: Parameters<PsdClient['renderWindow']>) {
+      const result = await client.renderWindow(...args);
+      if (!result.ok) {
+        return result;
+      }
+      return {
+        ok: true as const,
+        value: {
+          ...result.value,
+          images: result.value.images.map((image) => ({ ...image, mips: regionMips(image, 16) }))
+        }
+      };
+    }
+  });
+  const snapshot = { ...fakeSnapshot(8192, 8192), gpuComposite: true };
+  const rendered = value(
+    await renderer.render(
+      snapshot,
+      { scale: 1, x: 0, y: 0 },
+      { width: 3500, height: 3500 },
+      new AbortController().signal,
+      vi.fn()
+    )
+  );
+  expect(rendered.quality?.step).toBeGreaterThan(1);
+  expect(renderer.cacheBytes()).toBeLessThanOrEqual(18 * 1024 * 1024);
+  renderer.clear();
 });
