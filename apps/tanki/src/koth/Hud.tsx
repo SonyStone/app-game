@@ -168,6 +168,7 @@ function KillFeed(props: { feed: HudState['feed'] }) {
             <Show when={entry().killer}>
               {(killer) => <span style={{ color: TEAM_CSS[killer().team] }}>{seatName(t, killer())}</span>}
             </Show>
+            <Show when={entry().turret}>{(turret) => <span style={{ color: TEAM_CSS[turret()] }}>{t('seat.turret')}</span>}</Show>
             <span class="px-1.5">✕</span>
             <span style={{ color: TEAM_CSS[entry().victim.team] }}>{seatName(t, entry().victim)}</span>
           </div>

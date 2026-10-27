@@ -154,6 +154,7 @@ export const ru: Dictionary = {
   seat: {
     you: 'Вы',
     youBot: 'Вы (бот)',
+    turret: 'Турель',
     red: (seat: number) => `Красный ${seat}`,
     blue: (seat: number) => `Синий ${seat}`
   },

@@ -8,6 +8,8 @@ export type KothBase = {
   /** Axis-aligned zone around its center. */
   zone: { x: number; y: number; halfWidth: number; halfHeight: number };
   spawns: readonly Placement[];
+  /** Where the base's turret stands, on the room's wall above a corner (see `createBaseTurrets`); a base without one has none. */
+  turret?: Point;
 };
 
 /**
@@ -34,7 +36,8 @@ export type KitPlacement = Point & { size: 'small' | 'large' };
  * spawn to the point, about two screens of the way.
  *
  * - Each team spawns in a room of steel, which no shot breaks, at a short end. It has a door to
- *   the north street and one to the hall behind a shield that hides the room from the hall.
+ *   the north street and one to the hall behind a shield that hides the room from the hall, and
+ *   a turret on its wall above a corner that guards it.
  * - Three routes lead to the point: the hall in the middle, which winds between teeth and a
  *   pillar, and the north and south streets, which are longer. The south street is reached from
  *   the yard in front of the room. The streets enter the plaza by doorways beside its edge.
@@ -103,6 +106,8 @@ function createMap(): KothMap {
     block(-30, 92, 30, 160, 'concrete')
   ];
   const redCrates: Placement[] = [{ x: -1200, y: -340, rotation: 0 }];
+  // On the north wall, above the room's back corner, where it sees the whole room and both doors.
+  const redTurret = { x: -1278, y: -185 };
   const redSpawns = [-105, -35, 35, 105].map((y) => ({ x: -1205, y, rotation: 0 }));
   const redLanes = { center: { x: -660, y: 0 }, north: { x: -815, y: -410 }, south: { x: -765, y: 330 } };
   const redKits: KitPlacement[] = [
@@ -119,8 +124,8 @@ function createMap(): KothMap {
     crates: [...redCrates, ...redCrates.map(mirrorPlacement)],
     point: { x: 0, y: 0, radius: 90 },
     bases: {
-      red: { zone: { x: -1205, y: 0, halfWidth: 95, halfHeight: 170 }, spawns: redSpawns },
-      blue: { zone: { x: 1205, y: 0, halfWidth: 95, halfHeight: 170 }, spawns: redSpawns.map(mirrorPlacement) }
+      red: { zone: { x: -1205, y: 0, halfWidth: 95, halfHeight: 170 }, spawns: redSpawns, turret: redTurret },
+      blue: { zone: { x: 1205, y: 0, halfWidth: 95, halfHeight: 170 }, spawns: redSpawns.map(mirrorPlacement), turret: mirrorPoint(redTurret) }
     },
     lanes: {
       red: redLanes,

@@ -17,6 +17,7 @@ import { advanceCapture, CAPTURE_RULES, createCaptureState, rivalOf, TEAMS, type
 import { createScenery } from './scenery';
 import { MEDIUM_TANK, type TankClassId } from './tanks';
 import { createTeamBoard, ROLE_OF_CLASS, type Member, type TeamBoard } from './team';
+import { createBaseTurrets } from './turret';
 
 type Point = { x: number; y: number };
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
@@ -103,12 +104,14 @@ export function createKothMatch(
   const grid = createNavGrid(map);
   const scenery = createScenery(renderer, map, { red: rgb(TEAM_COLORS.red), blue: rgb(TEAM_COLORS.blue) });
   const kits = createKits(renderer, map.kits, combat);
+  const turrets = createBaseTurrets(combat, map, TEAM_COLORS, random);
   let time = 0;
   let playerKitAt = -Infinity;
   let capture = createCaptureState(rules);
   let nextRepair = 0;
   let feedId = 0;
-  const feed: { id: number; at: number; killer?: Member; victim: Member }[] = [];
+  /** Kills lately, by whom: a member, or the base turret of the team `turret`, or neither. */
+  const feed: { id: number; at: number; killer?: Member; turret?: TeamId; victim: Member }[] = [];
   /**
    * What each bot's lives went like, for switching a class that does not work out (see
    * `adaptClass`): its kill count when its tank came out, its last lives, when it last switched
@@ -218,6 +221,10 @@ export function createKothMatch(
         }
       }
 
+      turrets.step(
+        dt,
+        members.flatMap((member) => (member.tank ? [{ tank: member.tank, team: member.team }] : []))
+      );
       arm(dt);
       combat.step(dt);
       updateGrid();
@@ -327,6 +334,7 @@ export function createKothMatch(
           .map((entry) => ({
             id: entry.id,
             killer: entry.killer && seatOf(entry.killer),
+            turret: entry.turret,
             victim: seatOf(entry.victim)
           }))
       };
@@ -644,7 +652,8 @@ export function createKothMatch(
       credited.kills++;
     }
 
-    feed.push({ id: feedId++, at: time, killer: credited, victim: member });
+    const turret = credited ? undefined : turrets.guarding(at);
+    feed.push({ id: feedId++, at: time, killer: credited, turret: turret !== member.team ? turret : undefined, victim: member });
     const enemy = credited && credited.team !== member.team ? credited : undefined;
     options.onKill?.({ victim: member, victimTank: victim, victimClass: member.tankClass.id, killer: enemy, killerClass: enemy?.tankClass.id });
     reconsiderClass(member, credited && credited.team !== member.team ? credited.tankClass.id : undefined);

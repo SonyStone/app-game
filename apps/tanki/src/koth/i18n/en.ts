@@ -156,6 +156,7 @@ export const en = {
   seat: {
     you: 'You',
     youBot: 'You (bot)',
+    turret: 'Turret',
     red: (seat: number) => `Red ${seat}`,
     blue: (seat: number) => `Blue ${seat}`
   },

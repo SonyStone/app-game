@@ -13,7 +13,7 @@ import type { Member } from './team';
 /**
  * Short staged situations that show whether the bots handle the moments a player notices, each
  * with the behavior expected and a measure of it, played on `SEEDS` seeds: a Sniper rushed by a
- * Scout, a badly hit team facing a fresh one, the Sniper's place in an ordinary match, a push
+ * Scout, Scouts raiding a Sniper in its base, a badly hit team facing a fresh one, the Sniper's place in an ordinary match, a push
  * against a perched Sniper, a Sniper covering its team beyond a held point, a lone bot back while
  * the enemy holds the point, an empty point, a push behind the Heavy, a gathering with hurt
  * teammates, two hurt tanks and one repair kit, a repair kit under the enemy's eyes and the fence
@@ -85,6 +85,31 @@ const SCENARIOS: Scenario[] = [
       const lived = sniper.deaths === 0;
       const killed = scout.deaths > 0;
       return { pass: lived || killed, note: lived ? (killed ? 'killed the scout' : fellBack ? 'fell back and lived' : 'lived') : killed ? 'traded with the scout' : 'died to the scout' };
+    }
+  },
+  {
+    name: 'scouts raiding a sniper in its base',
+    expected: 'two Scouts that hunt a Sniper staying in its spawn room pay for it: the base turret destroys one of them or the Sniper lives through 25 s',
+    roster: { red: ['sniper'], blue: ['scout', 'scout'] },
+    play(stage) {
+      const sniper = stage.seat('red', 'sniper');
+      const scouts = stage.team('blue');
+      // The Sniper stays in its room, as a player mending there does.
+      stage.place(sniper, stage.match.map.bases.red.spawns[1], 0);
+      stage.freeze(sniper);
+      scouts.forEach((scout, index) => stage.place(scout, { x: -1040 + index * 50, y: 0 }, Math.PI));
+      stage.holdPointFor('blue');
+      let inside = 0;
+      let steps = 0;
+      stage.run(25, () => {
+        steps += 1;
+        inside += scouts.some((scout) => scout.tank && inBase(stage.match.map.bases.red, scout.tank.hull.translation())) ? 1 : 0;
+      });
+      const lost = scouts.reduce((sum, scout) => sum + scout.deaths, 0);
+      return {
+        pass: lost > 0 || sniper.deaths === 0,
+        note: `${lost} Scouts lost, the Sniper died ${sniper.deaths}×, a Scout in the room ${Math.round((inside / steps) * 100)}% of the time`
+      };
     }
   },
   {

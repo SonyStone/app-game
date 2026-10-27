@@ -154,6 +154,7 @@ export const ja: Dictionary = {
   seat: {
     you: 'あなた',
     youBot: 'あなた (ボット)',
+    turret: 'タレット',
     red: (seat: number) => `赤 ${seat}`,
     blue: (seat: number) => `青 ${seat}`
   },
