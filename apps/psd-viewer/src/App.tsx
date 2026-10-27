@@ -81,6 +81,7 @@ export function App() {
   const capability = createMemo(() => {
     const current = document();
     return current &&
+      !gpuComposite() &&
       !current.sourceBacked &&
       (requiresWindowedRendering({ width: current.info.width, height: current.info.height }) || initial.ready())
       ? client.capability(current.document, renderSettings(), pairs())
@@ -97,11 +98,11 @@ export function App() {
   });
   const plannedOpened = createMemo(() => {
     const current = opened();
-    const plan = capability();
     const gpu = gpuOpened();
     if (gpu) {
       return gpu;
     }
+    const plan = capability();
     return current?.ok && plan?.ok && current.value.info.windowed !== plan.value.windowed
       ? {
           ok: true as const,
