@@ -105,6 +105,7 @@ export function makeWindowRenderer(
       previous = snapshot;
     }
 
+    const reservedForGpu = snapshot.gpuComposite && !compositor.unavailable(snapshot);
     const tileBudgetBytes = cacheLimitBytes() + uploadReserveBytes;
     lod = chooseLod(view.scale * (size.dpr ?? 1), lod);
     const plan = planWindow(
@@ -331,6 +332,12 @@ export function makeWindowRenderer(
         populated: populatedTiles
       });
     }
+
+    if (reservedForGpu && compositor.unavailable(snapshot)) {
+      // Refine the same camera with its restored CPU budget before marking the request complete.
+      return render(snapshot, view, size, signal, publish);
+    }
+
     viewerPerformance.record('coverage.tiles', start, keys.length);
     return { ok: true, value: frame(available()) };
 

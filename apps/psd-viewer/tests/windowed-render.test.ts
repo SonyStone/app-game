@@ -936,7 +936,7 @@ it('restores ordinary CPU tile coverage after GPU operand preparation is refused
       vi.fn()
     );
   try {
-    expect(value(await render()).quality?.step).toBeGreaterThan(1);
+    expect(value(await render()).quality?.step).toBe(1);
     expect(value(await render()).quality?.step).toBe(1);
     expect(gpuLayers).toHaveBeenCalledOnce();
   } finally {
