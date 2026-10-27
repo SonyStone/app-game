@@ -95,6 +95,24 @@ describe('a match on tape', { timeout: 120_000 }, () => {
     }
 
     expect(checked).toBeGreaterThan(100);
+
+    // Halfway between two frames every body is on its way from where it was, none off toward
+    // another of its kind, as a turret toward the next tank's when a body ahead of it came or went.
+    let between = 0;
+
+    for (let step = 20 * 60; step < 45 * 60 - 1; step += 3) {
+      player.show(step);
+      const from = shown.frame().bodies;
+      player.show(step + 0.5);
+
+      for (const body of shown.frame().bodies) {
+        const near = from.filter((other) => other.kind === body.kind && other.cols === body.cols && other.rows === body.rows && Object.is(other.slot, body.slot));
+        expect(Math.min(...near.map((other) => Math.hypot(other.x - body.x, other.y - body.y)))).toBeLessThan(20);
+        between++;
+      }
+    }
+
+    expect(between).toBeGreaterThan(10_000);
     expect(seen.size).toBeGreaterThan(30);
     expect(seen.get(steps.at(-1)!)!.balls.length).toBeGreaterThan(0);
     // 45 s of a match, its map's fields included, in a few megabytes.

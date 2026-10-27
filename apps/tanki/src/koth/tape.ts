@@ -187,6 +187,8 @@ export function createTapePlayer(target: Renderer, tape: Tape) {
   let applied = 0;
   let shownIndex: number | undefined;
   let shownTime = 0;
+  /** The bodies of the frame shown last paired with those of the frame after it (see `partnersOf`). */
+  let paired: { index: number; partners: Int32Array } | undefined;
 
   return {
     /**
@@ -209,11 +211,16 @@ export function createTapePlayer(target: Renderer, tape: Tape) {
       const bodies = tape.bodiesAt(index);
       const after = share > 0 ? tape.bodiesAt(index + 1) : undefined;
 
+      if (after && paired?.index !== index) {
+        paired = { index, partners: partnersOf(bodies, after, next.step - frame.step) };
+      }
+
       fieldsTo(frame.uploads);
       target.beginBodies();
 
       for (let offset = 0; offset < bodies.length; offset += BODY) {
-        target.addBody(unpack(bodies, offset, after, share));
+        const partner = after ? paired!.partners[offset / BODY] : -1;
+        target.addBody(unpack(bodies, offset, partner < 0 ? undefined : after, partner * BODY, share));
       }
 
       for (let offset = 0; offset < frame.lights.length; offset += 8) {
@@ -645,19 +652,19 @@ function pack(body: BodyDraw, into: Float32Array, offset: number) {
 }
 
 /**
- * The body packed at `offset` of `bodies`, moved a `share` of the way to the same body in `after`
- * when it is there, of the same kind, field and size, at the same place in the list.
+ * The body packed at `offset` of `bodies`, moved a `share` of the way to the same body, packed at
+ * `toward` of `after`, when it is there.
  */
-function unpack(bodies: Float32Array, offset: number, after: Float32Array | undefined, share: number): BodyDraw {
+function unpack(bodies: Float32Array, offset: number, after: Float32Array | undefined, toward: number, share: number): BodyDraw {
   const optional = (index: number) => (Number.isNaN(bodies[offset + index]) ? undefined : bodies[offset + index]);
   let x = bodies[offset + 1];
   let y = bodies[offset + 2];
   let angle = bodies[offset + 3];
 
-  if (after && offset + BODY <= after.length && [0, 4, 5, 7, 8, 9].every((index) => Object.is(after[offset + index], bodies[offset + index]))) {
-    x += (after[offset + 1] - x) * share;
-    y += (after[offset + 2] - y) * share;
-    angle += Math.atan2(Math.sin(after[offset + 3] - angle), Math.cos(after[offset + 3] - angle)) * share;
+  if (after) {
+    x += (after[toward + 1] - x) * share;
+    y += (after[toward + 2] - y) * share;
+    angle += Math.atan2(Math.sin(after[toward + 3] - angle), Math.cos(after[toward + 3] - angle)) * share;
   }
 
   return {
@@ -680,6 +687,68 @@ function unpack(bodies: Float32Array, offset: number, after: Float32Array | unde
     margin: optional(18)
   };
 }
+
+/**
+ * Pairs each body of `before` with the same body in `after`, a frame `steps` steps later: the
+ * index of its partner there, or -1 when it has none. Bodies carry no names, so a partner is the
+ * nearest body of the same kind, shape and field not paired yet, within `MAX_TRAVEL` px a step.
+ * The body at the same place in the list will not do: whenever one ahead of it comes or goes, a
+ * tank's turret pairs with the next tank's, and flies across the map between them.
+ */
+function partnersOf(before: Float32Array, after: Float32Array, steps: number) {
+  const partners = new Int32Array(before.length / BODY).fill(-1);
+  const groups = new Map<string, { before: number[]; after: number[] }>();
+  const reach = (MAX_TRAVEL * steps) ** 2;
+
+  for (const [bodies, side] of [
+    [before, 'before'],
+    [after, 'after']
+  ] as const) {
+    for (let body = 0; body * BODY < bodies.length; body++) {
+      const key = SAME_BODY.map((field) => bodies[body * BODY + field]).join();
+      let group = groups.get(key);
+
+      if (!group) {
+        group = { before: [], after: [] };
+        groups.set(key, group);
+      }
+
+      group[side].push(body);
+    }
+  }
+
+  const distance = (from: number, to: number) => (after[to * BODY + 1] - before[from * BODY + 1]) ** 2 + (after[to * BODY + 2] - before[from * BODY + 2]) ** 2;
+
+  for (const group of groups.values()) {
+    const pairs: [number, number, number][] = [];
+
+    for (const from of group.before) {
+      for (const to of group.after) {
+        const apart = distance(from, to);
+
+        if (apart <= reach) {
+          pairs.push([apart, from, to]);
+        }
+      }
+    }
+
+    const taken = new Set<number>();
+
+    for (const [, from, to] of pairs.sort((a, b) => a[0] - b[0])) {
+      if (partners[from] < 0 && !taken.has(to)) {
+        partners[from] = to;
+        taken.add(to);
+      }
+    }
+  }
+
+  return partners;
+}
+
+/** The packed fields a body keeps from frame to frame: kind, origin, size and field slot. */
+const SAME_BODY = [0, 4, 5, 7, 8, 9];
+/** The farthest anything drawn moves in a step, in px: a fast shell, paced up, with room to spare. */
+const MAX_TRAVEL = 40;
 
 /** Where member `member` was between `frame` and `next`, a `share` of the way, or `undefined` while it waited to respawn. */
 function positionOf(frame: TapeFrame, next: TapeFrame | undefined, share: number, member: number) {
