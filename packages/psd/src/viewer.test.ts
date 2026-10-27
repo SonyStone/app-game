@@ -250,6 +250,10 @@ function u32(value: number) {
 it('adds fonts by PostScript name and rejects what it cannot read with a clear reason', async () => {
   const library = await createFontLibrary();
   expect(library.fonts()).toEqual([]);
+  expect(library.addActiveFace(new Uint8Array(64), 0, 'invalid.ttf')).toMatchObject({
+    ok: false,
+    error: { kind: 'invalid' }
+  });
   expect(library.add(new Uint8Array(64))).toMatchObject({ ok: false, error: { kind: 'invalid' } });
   const collection = new Uint8Array(64);
   collection.set(new TextEncoder().encode('ttcf'));
@@ -265,6 +269,10 @@ it('adds fonts by PostScript name and rejects what it cannot read with a clear r
     error: { kind: 'unsupported' }
   });
   library.free();
+  expect(library.addActiveFace(new Uint8Array(64), 0, 'closed.ttf')).toMatchObject({
+    ok: false,
+    error: { message: 'the font library was freed' }
+  });
   expect(library.add(new Uint8Array(64))).toMatchObject({
     ok: false,
     error: { message: 'the font library was freed' }
@@ -273,7 +281,7 @@ it('adds fonts by PostScript name and rejects what it cannot read with a clear r
 
 it('reports no fonts or text support for a document without type layers, and renders it with typeLayers', async () => {
   const opened = await document();
-  expect(value(opened.fonts())).toEqual({ fonts: [], layers: [] });
+  expect(value(opened.fonts())).toEqual({ fonts: [], layers: [], releaseMismatches: [] });
   expect(value(opened.textSupport(0))).toBeNull();
   const render = value(opened.render({ ...photoshopDefaultSettings, typeLayers: true }));
   expect(render.approximations).toEqual([]);
@@ -375,3 +383,24 @@ function channelStreams(bytes: Uint8Array): number[][] {
     })
   );
 }
+
+it('lists typed saved path carriers and refuses path queries after close', async () => {
+  const fs = await import('node:fs/promises');
+  const result = await openPsd(
+    await fs.readFile(
+      new URL('../../../apps/psd-viewer/src/features/examples/assets/rotated-smart-object.psd', import.meta.url)
+    )
+  );
+  if (!result.ok) {
+    throw new Error(result.error.message);
+  }
+
+  const paths = result.value.paths();
+  expect(paths.ok).toBe(true);
+  if (paths.ok) {
+    expect(paths.value.every((path) => path.geometry === 'unavailable')).toBe(true);
+  }
+
+  result.value.close();
+  expect(result.value.paths().ok).toBe(false);
+});

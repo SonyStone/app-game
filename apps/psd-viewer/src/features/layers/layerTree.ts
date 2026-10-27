@@ -40,6 +40,27 @@ export function findLayer(nodes: readonly PsdLayerNode[], index: number): PsdLay
   return undefined;
 }
 
+/** Effective visibility of a record, including every parent group; undefined if the record is absent. */
+export function layerVisibility(
+  nodes: readonly PsdLayerNode[],
+  index: number,
+  overrides: ReadonlyMap<number, boolean>
+): boolean | undefined {
+  for (const node of nodes) {
+    const visible = overrides.get(node.index) ?? node.visible;
+    if (node.index === index) {
+      return visible;
+    }
+
+    const child = layerVisibility(node.children ?? [], index, overrides);
+    if (child !== undefined) {
+      return visible && child;
+    }
+  }
+
+  return undefined;
+}
+
 /** Short type labels for the panel's kind column. */
 export const kindLabels: Record<PsdLayerNode['kind'], string> = {
   group: 'Group',
@@ -54,6 +75,48 @@ export const kindLabels: Record<PsdLayerNode['kind'], string> = {
 /** A byte opacity as a percentage, as Photoshop's panels show it. */
 export function percent(byte: number): string {
   return `${Math.round((byte / 255) * 100)}%`;
+}
+
+/** Flat panel rows retain ancestry for search, keyboard navigation and solo. */
+export function layerRows(
+  nodes: readonly PsdLayerNode[],
+  ancestors: PsdLayerNode[] = []
+): { node: PsdLayerNode; ancestors: PsdLayerNode[] }[] {
+  return topFirst(nodes).flatMap((node) => [
+    { node, ancestors },
+    ...layerRows(node.children ?? [], [...ancestors, node])
+  ]);
+}
+
+/** Search retains matching records and their ancestor groups, ignoring collapse while filtering. */
+export function filteredRows(nodes: readonly PsdLayerNode[], collapsed: ReadonlySet<number>, query: string, kind = '') {
+  const rows = layerRows(nodes);
+  const searching = Boolean(query.trim() || kind);
+  const matches = rows.filter(
+    ({ node }) =>
+      node.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) && (!kind || node.kind === kind)
+  );
+  const included = new Set(
+    matches.flatMap(({ node, ancestors }) => [node.index, ...ancestors.map((parent) => parent.index)])
+  );
+  return rows.filter(({ node, ancestors }) =>
+    searching ? included.has(node.index) : ancestors.every((parent) => !collapsed.has(parent.index))
+  );
+}
+
+/** Union of nonempty saved-record bounds; state transforms are not inferred. */
+export function contentBounds(nodes: readonly PsdLayerNode[]) {
+  const bounds = layerRows(nodes)
+    .map(({ node }) => node.bounds)
+    .filter((rect) => rect.right > rect.left && rect.bottom > rect.top);
+  return bounds.length
+    ? {
+        left: Math.min(...bounds.map((rect) => rect.left)),
+        top: Math.min(...bounds.map((rect) => rect.top)),
+        right: Math.max(...bounds.map((rect) => rect.right)),
+        bottom: Math.max(...bounds.map((rect) => rect.bottom))
+      }
+    : undefined;
 }
 
 /** What the viewer shows for 3D and video layers. */

@@ -1,3 +1,4 @@
+import type { PsdNewDocumentContext } from '@app-game/psd';
 import { makeTimer } from '@solid-primitives/timer';
 import { createRoot, onCleanup } from 'solid-js';
 import { attempt, createTaskQueue, unwrapResult, type Result } from './asyncResult';
@@ -14,6 +15,7 @@ import { createResourceSession } from './composition/resourceSession';
 import { restoreFeatureData } from './composition/documentFeature';
 import { readPaintFile, writePaintFile } from './paintFile';
 import { isPsdFile, readPsdFile, writePsdFile } from './psdFile';
+import srgbProfileUrl from './assets/sRGB.icc?url';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { mergeTilePixels } from './layerMerge';
 import { captureSelection, editSelection, type SelectionPixels } from './selection';
@@ -216,7 +218,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       cancel();
       // A selection belongs to the drawing it was made in.
       changeSelection(emptySelection);
-      document.replace(next.layers, next.activeId, next.linearBlending);
+      document.replace(next.layers, next.activeId, next.linearBlending, next.psdIdentity);
       syncBlending();
       camera = next.camera;
       featureData = restoreFeatureData(modules.features, next.features);
@@ -589,7 +591,14 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       status();
       try {
         await tileStore.save(
-          snapshotDocument(document.layers, document.active.id, camera, featureData, document.linearBlending()),
+          snapshotDocument(
+            document.layers,
+            document.active.id,
+            camera,
+            featureData,
+            document.linearBlending(),
+            document.psdIdentity()
+          ),
           await handoff?.()
         );
         savedVersion = Math.max(savedVersion, version);
@@ -818,7 +827,16 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       // A new renderer starts smooth and without a grid.
       if (!pixelView.smooth || pixelView.grid) renderer.setPixelView(pixelView);
       await renderer.prepareOverview(document.layers);
-      await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, featureData, document.linearBlending()));
+      await tileStore.save(
+        snapshotDocument(
+          document.layers,
+          document.active.id,
+          camera,
+          featureData,
+          document.linearBlending(),
+          document.psdIdentity()
+        )
+      );
     };
     onCleanup(() => {
       active = false;
@@ -924,7 +942,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             tileStore = lockedStorage(await modules.storage(storageName), lock.held);
             const previous = await tileStore.load();
             if (previous) {
-              document.replace(previous.layers, previous.activeId, previous.linearBlending);
+              document.replace(previous.layers, previous.activeId, previous.linearBlending, previous.psdIdentity);
               camera = previous.camera;
               featureData = restoreFeatureData(modules.features, previous.features);
               document.persist(tileStore.capture);
@@ -1209,7 +1227,14 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             post({
               type: 'download',
               blob: await writePaintFile(
-                snapshotDocument(document.layers, document.active.id, camera, featureData, document.linearBlending()),
+                snapshotDocument(
+                  document.layers,
+                  document.active.id,
+                  camera,
+                  featureData,
+                  document.linearBlending(),
+                  document.psdIdentity()
+                ),
                 tileStore.read
               ),
               name: 'drawing.paint',
@@ -1246,7 +1271,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'live-apply': {
             await end();
             const applied = await applyLiveState(document.layers, command.state);
-            document.replace(applied.layers, command.state.activeId, command.state.linearBlending);
+            document.replace(applied.layers, command.state.activeId, command.state.linearBlending, document.psdIdentity());
             syncBlending();
             if (renderer && !lost) {
               for (const id of applied.removed) renderer.releaseLayer(id);
@@ -1304,15 +1329,64 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               });
             });
             break;
-          case 'psd':
+          case 'psd': {
             await end();
+            const name = command.name ?? 'drawing.psd';
+            const profileResponse = await fetch(srgbProfileUrl);
+            if (!profileResponse.ok) {
+              throw new Error('Cannot load the document sRGB profile.');
+            }
+
+            const profile = new Uint8Array(await profileResponse.arrayBuffer());
+            const identity = document.psdIdentity();
+            const saveTime = new Date().toISOString().replace(/\.\d{3}Z$/, '+00:00');
+            const context: PsdNewDocumentContext = {
+              creation: identity.creation,
+              save: {
+                basename: name.split(/[\\/]/).at(-1)!.replace(/\.(psd|psb)$/i, ''),
+                saveTime,
+                exifTime: saveTime.slice(0, 19).replaceAll('-', ':').replace('T', ' '),
+                instanceId: `xmp.iid:${crypto.randomUUID()}`,
+                documentId: `adobe:docid:photoshop:${crypto.randomUUID()}`,
+                softwareAgent: 'Paint',
+                linearBlending: document.linearBlending()
+              },
+              // New Paint documents use 72 ppi, a 32-pixel grid and English PSD labels. These are export defaults;
+              // Paint has no document resolution, guide color, proof selection or lighting controls to preserve.
+              resources: {
+                writerName: 'Paint',
+                readerName: 'Paint',
+                mergedComposite: true,
+                displayUnit: 1,
+                missingResolution: [72 * 65536, 1],
+                missingGrid: [32 * 32, 32 * 32],
+                legacyGuideColor: [255, 0, 255, 255],
+                transparencyName: 'Transparency',
+                taggedSrgb: true
+              },
+              document: {
+                // The export merger is CPU-only and single-threaded. These are the PSD compatibility identifiers
+                // for that policy, not a claim that Paint runs Adobe's compositor. Paint has no OCIO display/view.
+                compositor: { engine: 'compCore', gpu: 'off', threads: 'off', gpuSupport: 'supported' },
+                iccDisplay: '',
+                iccView: '',
+                newCredentialsEnabled: false
+              },
+              profile,
+              layerIds: document.layers.map((layer) => identity.layers[layer.id]!.id),
+              layerTimes: document.layers.map((layer) => identity.layers[layer.id]!.time),
+              globalAngle: 90,
+              globalAltitude: 30,
+              proofSetupName: 'Working CMYK'
+            };
             post({
               type: 'download',
-              blob: await writePsdFile(document.layers, tileStore.read, command.region, document.linearBlending()),
-              name: command.name ?? 'drawing.psd',
+              blob: await writePsdFile(document.layers, tileStore.read, command.region, document.linearBlending(), context),
+              name,
               requestId: command.requestId
             });
             break;
+          }
           case 'edit': {
             const result = await attempt(() => runEdit(command));
             if (command.requestId !== undefined) {

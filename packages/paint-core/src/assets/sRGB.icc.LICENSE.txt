@@ -1,0 +1,18 @@
+sRGB Color Space Profile.icm, bundled unchanged as sRGB.icc.
+Copyright (c) 1998 Hewlett-Packard Company
+
+To anyone who acknowledges that the file "sRGB Color Space Profile.icm"
+is provided "AS IS" WITH NO EXPRESS OR IMPLIED WARRANTY:
+permission to use, copy and distribute this file for any purpose is hereby
+granted without fee, provided that the file is not changed including the HP
+copyright notice tag, and that the name of Hewlett-Packard Company not be
+used in advertising or publicity pertaining to distribution of the software
+without specific, written prior permission. Hewlett-Packard Company makes
+no representations about the suitability of this software for any purpose.
+
+Original license: http://www.srgb.com/usingsrgb.html
+Retained license: https://sources.debian.org/copyright/license/icc-profiles/2.1-2/#sRGB
+Source: photoshop-analysis/fixtures/psd/E-own-2/host-srgb.icc at 416f12881f.
+MD5: 1d3fda2edb4a89ab60a23c5f7c7d81dd
+This is the HP sRGB profile, not an Adobe profile. Its original rendering-intent
+header and copyright tag are retained without modification.

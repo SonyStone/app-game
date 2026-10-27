@@ -78,3 +78,15 @@
     background: linear-gradient(90deg, rgb(255 230 0), rgb(255 48 0), rgb(255 0 255));
   }
 }
+
+.tools {
+  padding: 5px 10px;
+  background: #242424;
+  font-size: 11px;
+  button {
+    margin: 3px 4px 3px 0;
+  }
+  input {
+    vertical-align: middle;
+  }
+}

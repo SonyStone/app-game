@@ -1,3 +1,4 @@
+import type { PsdRect } from '@app-game/psd/viewer';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
@@ -31,6 +32,18 @@ export function createViewport(
   const center = () => ({ x: (size.width ?? 0) / 2, y: (size.height ?? 0) / 2 });
   const zoomIn = () => zoomAt(zoomStep, center());
   const zoomOut = () => zoomAt(1 / zoomStep, center());
+  /** Sets an absolute zoom percentage about the viewport center. */
+  function setPercent(percent: number) {
+    if (Number.isFinite(percent) && percent > 0) {
+      zoomAt(percent / 100 / view().scale, center());
+    }
+  }
+
+  /** Centers a document coordinate without changing scale. */
+  function centerOn(point: { x: number; y: number }) {
+    setManual({ scale: view().scale, x: center().x - point.x * view().scale, y: center().y - point.y * view().scale });
+  }
+
   const fit = () => setManual(undefined);
 
   /** Shows the image at 100%, centered. */
@@ -47,6 +60,19 @@ export function createViewport(
     });
   }
 
+  /** Fits saved-record bounds, including layers extending beyond the document. */
+  function fitBounds(bounds: PsdRect | undefined) {
+    if (!bounds || bounds.right <= bounds.left || bounds.bottom <= bounds.top) {
+      return;
+    }
+
+    const next = fitView(
+      { width: size.width ?? 0, height: size.height ?? 0 },
+      { width: bounds.right - bounds.left, height: bounds.bottom - bounds.top }
+    );
+    setManual({ ...next, x: next.x - bounds.left * next.scale, y: next.y - bounds.top * next.scale });
+  }
+
   createEventListener<{ wheel: WheelEvent }>(
     element,
     'wheel',
@@ -60,10 +86,42 @@ export function createViewport(
     { passive: false }
   );
 
+  createEventListener<{ keydown: KeyboardEvent }>(element, 'keydown', (event) => {
+    if (event.target !== element()) {
+      return;
+    }
+
+    const distance = event.shiftKey ? 160 : 40;
+    const deltas: Record<string, { x: number; y: number }> = {
+      ArrowLeft: { x: distance, y: 0 },
+      ArrowRight: { x: -distance, y: 0 },
+      ArrowUp: { x: 0, y: distance },
+      ArrowDown: { x: 0, y: -distance }
+    };
+    if (deltas[event.key]) {
+      event.preventDefault();
+      setManual(panView(view(), deltas[event.key]!));
+    } else if (['+', '=', '-', '0', '1'].includes(event.key)) {
+      event.preventDefault();
+      if (event.key === '-') {
+        zoomOut();
+      } else if (event.key === '0') {
+        fit();
+      } else if (event.key === '1') {
+        actualSize();
+      } else {
+        zoomIn();
+      }
+    }
+  });
+
   let drag: { x: number; y: number } | undefined;
   const surface = {
     onPointerDown(event: PointerEvent & { currentTarget: HTMLElement }) {
-      if (event.button !== 0) {
+      if (
+        event.button !== 0 ||
+        (event.target instanceof Element && event.target.closest('button, input, select, a, [role=button]'))
+      ) {
         return;
       }
 
@@ -92,7 +150,22 @@ export function createViewport(
     return `translate(${x}px, ${y}px) scale(${scale})`;
   };
 
-  return { setElement, surface, transform, view, percent, isFitted, zoomIn, zoomOut, fit, actualSize };
+  return {
+    setElement,
+    surface,
+    transform,
+    view,
+    size: () => ({ width: size.width ?? 0, height: size.height ?? 0 }),
+    percent,
+    isFitted,
+    zoomIn,
+    zoomOut,
+    fit,
+    actualSize,
+    fitBounds,
+    setPercent,
+    centerOn
+  };
 }
 
 /** The factor of one zoom button press. */

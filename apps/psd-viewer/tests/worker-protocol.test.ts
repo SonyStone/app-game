@@ -1,7 +1,13 @@
-import { photoshopDefaultSettings, type PsdInterpolation, type PsdRenderSettings } from '@app-game/psd/viewer';
+import {
+  loadPsdViewer,
+  photoshopDefaultSettings,
+  type PsdInterpolation,
+  type PsdRenderSettings
+} from '@app-game/psd/viewer';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { expect, it, vi } from 'vitest';
+import { withDifferentFontVersion } from '../../../packages/psd/test/fontRelease';
 import { makePsdClient, type PsdResultOf, type PsdWorkerPort } from '../src/features/psd-worker';
 import type { PsdReply, PsdRequest } from '../src/features/psd-worker/protocol';
 import { makePsdWorkerHost } from '../src/features/psd-worker/workerHost';
@@ -51,6 +57,62 @@ const interpolations: PsdInterpolation[] = [
   'bicubicSharper',
   'bicubicAutomatic'
 ];
+
+it('reuses detection renders for equal Gray profiles and invalidates them when profile bytes change', async () => {
+  const { client } = connect();
+  const opened = value(await client.open(await example('adjustment-stack.psd')));
+  const codec = await loadPsdViewer();
+  const render = vi.spyOn(codec.PsdDocumentHandle.prototype, 'render');
+  const profiled = { ...settings, grayProfile: Uint8Array.of(1, 2, 3) };
+  try {
+    value(await client.detectBlending(opened.document, profiled, []));
+    const detected = render.mock.calls.length;
+    expect(detected).toBeGreaterThan(0);
+    value(await client.render(opened.document, { ...profiled, grayProfile: profiled.grayProfile.slice() }, []));
+    expect(render).toHaveBeenCalledTimes(detected);
+
+    value(await client.detectBlending(opened.document, profiled, []));
+    const beforeChange = render.mock.calls.length;
+    value(await client.render(opened.document, { ...profiled, grayProfile: Uint8Array.of(1, 2, 4) }, []));
+    expect(render).toHaveBeenCalledTimes(beforeChange + 1);
+    expect(render.mock.lastCall?.[0]).toMatchObject({ grayProfile: Uint8Array.of(1, 2, 4) });
+  } finally {
+    render.mockRestore();
+    client.dispose();
+  }
+});
+
+it('reuses a prepared render when absent state becomes null and defaults are explicit', async () => {
+  const { client } = connect();
+  const opened = value(await client.open(await example('adjustment-stack.psd')));
+  const codec = await loadPsdViewer();
+  const render = vi.spyOn(codec.PsdDocumentHandle.prototype, 'render');
+  try {
+    value(await client.detectBlending(opened.document, settings, []));
+    const composites = render.mock.calls.length;
+    value(
+      await client.render(
+        opened.document,
+        {
+          ...settings,
+          state: null,
+          grayProfile: null,
+          availableFonts: null
+        },
+        []
+      )
+    );
+    expect(render).toHaveBeenCalledTimes(composites);
+
+    value(await client.detectBlending(opened.document, { ...settings, state: null }, []));
+    const next = render.mock.calls.length;
+    value(await client.render(opened.document, settings, []));
+    expect(render).toHaveBeenCalledTimes(next);
+  } finally {
+    render.mockRestore();
+    client.dispose();
+  }
+});
 
 it('opens, renders and compares an example our renderer reproduces exactly', async () => {
   const { client } = connect();
@@ -168,6 +230,7 @@ it('composites CMYK exactly in its channels without the approximate option', asy
   // Only the display conversion to sRGB is approximate.
   expect(render.approximations).toHaveLength(1);
   expect(render.approximations[0]).toMatch(/^8-bit CMYK: composited exactly in its CMYK channels; only the display/);
+  expect(render.pixels).toEqual(value(await client.merged(cmyk.document)).pixels);
   expect(value(await client.difference(cmyk.document, render.render))).toMatchObject({
     unit: 'CMYK level',
     samples: 96 * 96 * 4,
@@ -234,12 +297,14 @@ it('reports the fonts a document needs and refuses to re-render text without the
   expect(value(await client.fonts())).toEqual([]);
   expect(value(await client.documentFonts(document))).toEqual({
     fonts: [{ name: 'Arial-BoldMT', available: false, layers: [1] }],
-    layers: [{ index: 1, name: 'STYLED', visible: true, fonts: ['Arial-BoldMT'] }]
+    layers: [{ index: 1, name: 'STYLED', visible: true, fonts: ['Arial-BoldMT'] }],
+    releaseMismatches: []
   });
   expect(value(await client.textSupport(document, 0))).toBeNull();
   expect(value(await client.textSupport(document, 1))).toEqual({
     fonts: ['Arial-BoldMT'],
     missing: ['Arial-BoldMT'],
+    releaseMismatches: [],
     supported: false,
     reason: 'text rendering: font Arial-BoldMT was not supplied'
   });
@@ -272,14 +337,20 @@ it.skipIf(!arialPaths.every((path) => existsSync(path)))(
     const added = value(await client.addFonts(fonts));
     // The buffers are transferred, not copied.
     expect(transferred[sent.findIndex((request) => request.type === 'addFonts')]).toEqual(fonts);
-    expect(added.results.map((result) => result.ok && result.value.name)).toEqual(['ArialMT', 'Arial-BoldMT']);
-    expect(value(await client.fonts()).map((entry) => entry.name)).toEqual(['Arial-BoldMT', 'ArialMT']);
-    expect(value(await client.documentFonts(document)).fonts).toEqual([
-      { name: 'Arial-BoldMT', available: true, layers: [1] }
+    expect(added.results.map((result) => result.ok && result.value.map((face) => face.name))).toEqual([
+      ['ArialMT'],
+      ['Arial-BoldMT']
     ]);
+    expect(value(await client.fonts()).map((entry) => entry.name)).toEqual(['Arial-BoldMT', 'ArialMT']);
+    expect(value(await client.documentFonts(document))).toEqual({
+      fonts: [{ name: 'Arial-BoldMT', available: true, layers: [1] }],
+      layers: [{ index: 1, name: 'STYLED', visible: true, fonts: ['Arial-BoldMT'] }],
+      releaseMismatches: []
+    });
     expect(value(await client.textSupport(document, 1))).toEqual({
       fonts: ['Arial-BoldMT'],
       missing: [],
+      releaseMismatches: [],
       supported: true
     });
 
@@ -291,6 +362,34 @@ it.skipIf(!arialPaths.every((path) => existsSync(path)))(
       differingSamples: 0,
       max: 0
     });
+  }
+);
+
+it.skipIf(!existsSync(arialPaths[1]!))(
+  'preserves supplied release mismatches separately from missing fonts through the worker',
+  async () => {
+    const { client } = connect();
+    const { document } = value(await client.open(await example('type-with-layer-styles.psd')));
+    value(await client.addFonts([withDifferentFontVersion(await systemFont(arialPaths[1]!))]));
+    const report = value(await client.documentFonts(document));
+    expect(report.fonts).toEqual([{ name: 'Arial-BoldMT', available: true, layers: [1] }]);
+    expect(report.releaseMismatches).toEqual([
+      {
+        name: 'Arial-BoldMT',
+        reason: 'font present but a different release',
+        recordedVersion: 'Version 5.01.2x',
+        suppliedVersion: expect.stringMatching(/^X+$/)
+      }
+    ]);
+    expect(value(await client.textSupport(document, 1))).toEqual({
+      fonts: ['Arial-BoldMT'],
+      missing: [],
+      releaseMismatches: report.releaseMismatches,
+      supported: false,
+      reason: 'font present but a different release'
+    });
+    expect(value(await client.textSupport(document, 0))).toBeNull();
+    client.dispose();
   }
 );
 
@@ -423,3 +522,224 @@ async function testAsset(name: string): Promise<ArrayBuffer> {
   const bytes = await readFile(new URL(`assets/${name}`, import.meta.url));
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
+
+const helveticaCollection = '/System/Library/Fonts/HelveticaNeue.ttc';
+
+it.skipIf(!existsSync(helveticaCollection))(
+  'registers real TTC faces with original indices across documents',
+  async () => {
+    const { client } = connect();
+    const added = value(await client.addFonts([await systemFont(helveticaCollection)], ['HelveticaNeue.ttc']));
+    const faces = added.results[0];
+    expect(faces?.ok).toBe(true);
+    if (!faces?.ok) {
+      throw new Error('collection registration failed');
+    }
+
+    for (const [name, faceIndex] of [
+      ['HelveticaNeue', 0],
+      ['HelveticaNeue-Bold', 1],
+      ['HelveticaNeue-Light', 7],
+      ['HelveticaNeue-Medium', 10]
+    ] as const) {
+      expect(faces.value.find((face) => face.name === name)).toMatchObject({ faceIndex, active: true, raster: false });
+    }
+
+    const first = value(await client.open(await example('type-with-layer-styles.psd')));
+    const baseline = value(await client.render(first.document, settings, []));
+    // A partial collection does not turn Arial into a known-missing active face.
+    expect(value(await client.difference(first.document, baseline.render)).differingSamples).toBe(0);
+    const second = value(await client.open(await example('type-with-layer-styles.psd')));
+    expect(value(await client.fonts())).toEqual(added.fonts);
+    expect(value(await client.render(second.document, settings, [])).pixels).toEqual(baseline.pixels);
+    client.dispose();
+  }
+);
+
+it('abstains from imported font decisions without face bytes, including names-only inventories', async () => {
+  const { client } = connect();
+  const { document } = value(await client.open(await example('type-with-layer-styles.psd')));
+  const baseline = value(await client.render(document, settings, []));
+  for (const availableFonts of [undefined, null, [], ['Arial-BoldMT']]) {
+    const render = value(await client.render(document, { ...settings, availableFonts }, []));
+    expect(render.pixels).toEqual(baseline.pixels);
+    expect(render.approximations).toEqual(baseline.approximations);
+  }
+
+  client.dispose();
+});
+
+it('restarts independently of an old render and keeps the replacement render queue single-flight', async () => {
+  const ports: { port: PsdWorkerPort; sent: PsdRequest[] }[] = [];
+  function replacement() {
+    const sent: PsdRequest[] = [];
+    const port: PsdWorkerPort = {
+      onmessage: null,
+      onerror: null,
+      onmessageerror: null,
+      postMessage: (message) => {
+        sent.push(message);
+      },
+      terminate: vi.fn()
+    };
+    ports.push({ port, sent });
+    return port;
+  }
+  const client = makePsdClient(replacement(), replacement);
+  const old = client.render(1, settings, []);
+  const waiting = client.render(1, settings, [[1, false]]);
+  const oldPort = ports[0].port;
+  client.restart();
+  expect(oldPort.terminate).toHaveBeenCalledOnce();
+  expect(oldPort.onmessage).toBeNull();
+  expect(await old).toMatchObject({ ok: false, error: { kind: 'superseded' } });
+  expect(await waiting).toMatchObject({ ok: false, error: { kind: 'superseded' } });
+  const first = client.render(1, settings, []);
+  await Promise.resolve();
+  await Promise.resolve();
+  const second = client.render(1, settings, [[2, false]]);
+  const current = ports[1];
+  expect(current.sent).toHaveLength(1);
+  const reply = () =>
+    current.port.onmessage?.({
+      data: { id: current.sent.at(-1)!.id, type: 'failed', error: { kind: 'unsupported', message: 'test reply' } }
+    });
+  reply();
+  await first;
+  await vi.waitFor(() => expect(current.sent).toHaveLength(2));
+  reply();
+  await second;
+  client.dispose();
+});
+
+it('exposes bounded saved channels and typed saved paths without changing render state', async () => {
+  const { client } = connect();
+  const opened = value(await client.open(await example('type-with-layer-styles.psd')));
+  const before = value(await client.render(opened.document, settings, []));
+  const channels = value(await client.channels(opened.document));
+  expect(channels.planes.length).toBeGreaterThanOrEqual(3);
+  expect(channels.width).toBe(Math.min(256, opened.info.width));
+  expect(channels.planes[0]!.bytes.length).toBeGreaterThan(0);
+  expect(Array.isArray(value(await client.paths(opened.document)))).toBe(true);
+  const after = value(await client.render(opened.document, settings, []));
+  expect(after.pixels).toEqual(before.pixels);
+  client.dispose();
+});
+
+it('downloads the byte-identical original after transient visibility and state renders', async () => {
+  const { client } = connect();
+  const input = await example('layer-comps.psd');
+  const original = new Uint8Array(input.slice(0));
+  const opened = value(await client.open(input));
+  const state = opened.states.comps[0];
+  value(await client.render(opened.document, { ...settings, state: state ? { comp: state.id } : null }, [[0, false]]));
+  const downloaded = value(await client.original(opened.document));
+  expect(new Uint8Array(await downloaded.arrayBuffer())).toEqual(original);
+  client.dispose();
+});
+
+it('reads a bounded layer window without whole-layer decoding even for oversized source bounds', async () => {
+  const { client } = connect();
+  const opened = value(await client.open(await example('adjustment-stack.psd')));
+  const saved = value(await client.layer(opened.document, 0)).detail;
+  const codec = await loadPsdViewer();
+  const detail = vi.spyOn(codec.PsdDocumentHandle.prototype, 'layerDetail').mockReturnValueOnce({
+    ...saved,
+    properties: { ...saved.properties, bounds: { left: 0, top: 0, right: 100000, bottom: 100000 } }
+  });
+  const pixels = vi.spyOn(codec.PsdDocumentHandle.prototype, 'layerPixels');
+  try {
+    expect(value(await client.layer(opened.document, 0)).pixels).toMatchObject({
+      ok: true,
+      value: { width: Math.min(256, opened.info.width), height: Math.min(256, opened.info.height) }
+    });
+    expect(pixels).not.toHaveBeenCalled();
+  } finally {
+    detail.mockRestore();
+    pixels.mockRestore();
+    client.dispose();
+  }
+});
+
+it('renders shared support once for tile cuts, retains its bytes after transfer, and invalidates after edits', async () => {
+  const { client } = connect();
+  const opened = value(await client.open(await example('adjustment-stack.psd')));
+  const codec = await loadPsdViewer();
+  const render = vi.spyOn(codec.PsdDocumentHandle.prototype, 'render');
+  const rectangles = [
+    { left: 2, top: 3, width: 7, height: 9 },
+    { left: 10, top: 12, width: 5, height: 4 }
+  ];
+  try {
+    const first = value(
+      await client.renderWindow(
+        opened.document,
+        settings,
+        [],
+        {
+          kind: 'regions',
+          rectangles: [rectangles[0]!],
+          mipStep: 4
+        },
+        new AbortController().signal
+      )
+    );
+    const detached = structuredClone(first, { transfer: [first.images[0]!.pixels.buffer] });
+    const second = value(
+      await client.renderWindow(
+        opened.document,
+        settings,
+        [],
+        {
+          kind: 'regions',
+          rectangles: [rectangles[1]!]
+        },
+        new AbortController().signal
+      )
+    );
+    expect(render).toHaveBeenCalledTimes(1);
+    const whole = value(await client.render(opened.document, settings, []));
+    for (const [image, rect] of [
+      [detached.images[0]!, rectangles[0]!],
+      [second.images[0]!, rectangles[1]!]
+    ] as const) {
+      expect(image.strategy).toBe('fullCanvas');
+      expect(image.exactToLayerRender).toBe(true);
+      for (let y = 0; y < rect.height; y++) {
+        const offset = ((rect.top + y) * whole.width + rect.left) * 4;
+        expect(image.pixels.subarray(y * rect.width * 4, (y + 1) * rect.width * 4)).toEqual(
+          whole.pixels.subarray(offset, offset + rect.width * 4)
+        );
+      }
+    }
+    const count = render.mock.calls.length;
+    value(
+      await client.renderWindow(
+        opened.document,
+        settings,
+        [[0, false]],
+        {
+          kind: 'regions',
+          rectangles
+        },
+        new AbortController().signal
+      )
+    );
+    expect(render).toHaveBeenCalledTimes(count + 1);
+    expect(
+      await client.renderWindow(
+        opened.document,
+        settings,
+        [],
+        {
+          kind: 'regions',
+          rectangles: [{ left: -1, top: 0, width: 5, height: 4 }]
+        },
+        new AbortController().signal
+      )
+    ).toMatchObject({ ok: false, error: { kind: 'invalid' } });
+  } finally {
+    render.mockRestore();
+    client.dispose();
+  }
+});

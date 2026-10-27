@@ -1,0 +1,69 @@
+.editing {
+  flex: 0 1 auto;
+  overflow-y: auto;
+  max-height: 75%;
+  padding: 10px;
+  border-bottom: 1px solid #40444c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.editing p {
+  margin: 8px 0;
+}
+.editing fieldset {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 8px;
+  border: 1px solid #555;
+  min-width: 0;
+}
+.editing label {
+  display: grid;
+  gap: 3px;
+}
+.editing input,
+.editing select {
+  min-width: 0;
+  max-width: 100%;
+  color: inherit;
+  background: #25282e;
+  border: 1px solid #616672;
+  padding: 4px;
+}
+.editing label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+}
+.editing code {
+  overflow-wrap: anywhere;
+}
+.editing summary {
+  cursor: pointer;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.refusal {
+  padding: 8px;
+  border: 1px solid #d79c4a;
+  background: #3c2c1c;
+  position: sticky;
+  bottom: 0;
+}
+.refusal > code {
+  display: block;
+}
+.stack {
+  max-height: 180px;
+  overflow: auto;
+  list-style: none;
+  padding: 0;
+}
+.stack li {
+  padding: 5px;
+  border-bottom: 1px solid #555;
+  cursor: grab;
+}

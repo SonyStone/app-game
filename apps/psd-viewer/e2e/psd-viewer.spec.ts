@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { fontFileFaces } from '../../../packages/psd/src/fontFile';
+import { withDifferentFontVersion } from '../../../packages/psd/test/fontRelease';
 import { truncated, withChannelCompression } from '../tests/damagedPsd';
 import { withTopBlendKey } from '../tests/patchedPsd';
 
@@ -12,6 +14,14 @@ const stage = (page: Page) => page.locator('[data-busy]');
 
 async function settled(page: Page) {
   await expect(stage(page)).toHaveAttribute('data-busy', 'false');
+}
+
+/** Opens the collapsed reports only when a test inspects their contents. */
+async function expandDiagnostics(page: Page) {
+  const panel = page.getByLabel('Document diagnostics', { exact: true });
+  if ((await panel.getAttribute('open')) === null) {
+    await panel.locator('summary').first().click();
+  }
 }
 
 test('renders an example, re-renders on a layer toggle, and reports an exact difference', async ({ page }) => {
@@ -106,6 +116,7 @@ test('a dropped CMYK document composites exactly in its CMYK channels', async ({
     element.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: transfer }));
   }, bytes);
   await settled(page);
+  await expandDiagnostics(page);
   const status = page.getByRole('region', { name: 'Renderer status' });
   await expect(status).toHaveAttribute('data-render-state', 'approximate');
   await expect(status.getByRole('list', { name: 'Approximations' })).toContainText(
@@ -132,6 +143,7 @@ test('shows a document the exact path refuses approximated, saying what it appro
     element.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: transfer }));
   }, bytes);
   await settled(page);
+  await expandDiagnostics(page);
   const status = page.getByRole('region', { name: 'Renderer status' });
   await expect(status).toHaveAttribute('data-render-state', 'approximate');
   await expect(status).toContainText('Not exactly as in Photoshop');
@@ -163,6 +175,7 @@ test('renders a saved layer comp picked under Saved states', async ({ page }) =>
   await expect(stage(page)).not.toHaveAttribute('data-render-id', saved!);
   await settled(page);
   await expect(states).toContainText("Photoshop's merged image shows the document as saved");
+  await expandDiagnostics(page);
   await expect(page.getByRole('region', { name: 'Renderer status' })).toHaveAttribute('data-render-state', 'exact');
   expect(errors).toEqual([]);
 });
@@ -174,6 +187,39 @@ function toArrayBuffer(buffer: Buffer): ArrayBuffer {
 
 /** The system's Arial Bold, the font of the type example; never copied into the repository. */
 const arialBold = '/System/Library/Fonts/Supplemental/Arial Bold.ttf';
+
+test('distinguishes a present font with a different release from exact text support', async ({ page }) => {
+  test.skip(!existsSync(arialBold), 'needs the system Arial Bold');
+  await page.goto('/');
+  await page
+    .locator('input[accept=".psd,.psb"]')
+    .setInputFiles(fileURLToPath(new URL('type-with-layer-styles.psd', assets)));
+  await settled(page);
+  await page.locator('[data-layer-index="1"]').click();
+  const support = page.getByRole('region', { name: 'Text re-rendering' });
+  await expect(support).toContainText('font Arial-BoldMT was not supplied');
+
+  const original = await readFile(arialBold);
+  const changed = withDifferentFontVersion(
+    original.buffer.slice(original.byteOffset, original.byteOffset + original.byteLength) as ArrayBuffer
+  );
+  const fonts = page.getByRole('region', { name: 'Fonts' });
+  await fonts.getByLabel('Font files').setInputFiles({
+    name: 'different-release.ttf',
+    mimeType: 'font/ttf',
+    buffer: Buffer.from(changed)
+  });
+  await expect(fonts.locator('[data-font-status="different-release"]')).toContainText('different release');
+  await expect(fonts.locator('[data-font-status="missing"]')).toHaveCount(0);
+  await expect(fonts.locator('[data-text-layer="1"]')).toHaveAttribute('data-text-mixing', 'releaseMismatch');
+  await expect(fonts.locator('[data-text-layer="1"]')).toContainText(
+    'font present, different release — text not exact'
+  );
+  await expect(support).toHaveAttribute('data-text-support', 'refused');
+  await expect(support).toContainText('font present, different release — text not exact');
+  await expect(support).toContainText('Arial-BoldMT: recorded Version 5.01.2x; supplied X');
+  await expect(support).not.toContainText('Re-renders exactly');
+});
 
 test('re-renders text with a font file the user adds and matches the merged image', async ({ page }) => {
   test.skip(!existsSync(arialBold), 'needs the system Arial Bold');
@@ -195,15 +241,22 @@ test('re-renders text with a font file the user adds and matches the merged imag
   await expect(support).toHaveAttribute('data-text-support', 'refused');
   await expect(support).toContainText('font Arial-BoldMT was not supplied');
 
+  const beforeFonts = await stage(page).getAttribute('data-render-id');
+  await expect(fonts.locator('[data-text-layer="1"]')).toHaveAttribute('data-text-mixing', 'unrendered');
   await fonts.locator('input[type=file]').setInputFiles(arialBold);
+  await expect(stage(page)).not.toHaveAttribute('data-render-id', beforeFonts!);
+  await settled(page);
+  await expect(toggle).not.toBeChecked();
   await expect(fonts.locator('[data-font-status="available"]')).toHaveCount(1);
   await expect(support).toHaveAttribute('data-text-support', 'supported');
+  await expect(fonts.locator('[data-text-layer="1"]')).toHaveAttribute('data-text-mixing', 'path');
   await expect(toggle).toBeEnabled();
 
   const cached = await stage(page).getAttribute('data-render-id');
   await toggle.check();
   await expect(stage(page)).not.toHaveAttribute('data-render-id', cached!);
   await settled(page);
+  await expandDiagnostics(page);
   await expect(page.getByRole('region', { name: 'Renderer status' })).toHaveAttribute('data-render-state', 'exact');
 
   await page.getByRole('button', { name: 'Difference', exact: true }).click();
@@ -252,6 +305,7 @@ test('opens damaged files as Photoshop does, asking its prompt first', async ({ 
   await expect(prompt).toHaveCount(0);
   await settled(page);
   await expect(page.getByRole('img', { name: 'Our render' })).toBeVisible();
+  await expandDiagnostics(page);
   await expect(report.getByRole('list', { name: 'Photoshop alerts' })).toContainText(`${message} Answered OK.`);
   await expect(report.getByRole('list', { name: 'Repairs' })).toContainText(
     'Channels read as Photoshop decodes them in "probe top"'
@@ -264,6 +318,7 @@ test('opens damaged files as Photoshop does, asking its prompt first', async ({ 
   await prompt.getByRole('button', { name: 'Flatten' }).click();
   await expect(prompt).toHaveCount(0);
   await settled(page);
+  await expandDiagnostics(page);
   await expect(report.getByRole('list', { name: 'Repairs' })).toContainText(
     'The stored composite opened as the Background instead of the layers'
   );
@@ -292,4 +347,141 @@ test('opens damaged files as Photoshop does, asking its prompt first', async ({ 
   await expect(refusal).toContainText('extends past its container');
   await expect(prompt).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+const helveticaCollection = '/System/Library/Fonts/HelveticaNeue.ttc';
+
+test('adds every TTC face for cached text and keeps them for later documents', async ({ page }) => {
+  test.skip(!existsSync(helveticaCollection), 'needs the system Helvetica Neue collection');
+  const faces = fontFileFaces(new Uint8Array(await readFile(helveticaCollection)));
+  await page.goto('/');
+  const documentPath = fileURLToPath(new URL('type-with-layer-styles.psd', assets));
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(documentPath);
+  await expect(stage(page)).toHaveAttribute('data-render-id', /\d+/);
+  await settled(page);
+  const fonts = page.getByRole('region', { name: 'Fonts' });
+  const before = await stage(page).getAttribute('data-render-id');
+  await fonts.getByLabel('Font files').setInputFiles(helveticaCollection);
+  await expect(stage(page)).not.toHaveAttribute('data-render-id', before!);
+  await settled(page);
+  const inventory = fonts.locator('header span');
+  await expect(inventory).toHaveText(`${faces.length} in library`);
+  for (const face of faces) {
+    await expect(inventory).toHaveAttribute('title', new RegExp(face.name));
+  }
+
+  await expect(fonts.getByRole('checkbox', { name: 'Re-render text' })).not.toBeChecked();
+  await expect(fonts.locator('[data-font-status="missing"]')).toHaveCount(1);
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(documentPath);
+  await expect(inventory).toHaveText(`${faces.length} in library`);
+  await settled(page);
+  await page.getByRole('button', { name: 'Difference', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Difference statistics' })).toHaveAttribute('data-mismatches', '0');
+});
+
+test('asks for installed fonts only after a click and keeps the file picker after permission is denied', async ({
+  page
+}) => {
+  await page.addInitScript(() => {
+    let calls = 0;
+    Object.defineProperty(window, '__fontQueries', { get: () => calls });
+    Object.defineProperty(window, 'queryLocalFonts', {
+      value: async () => {
+        calls++;
+        throw new DOMException('User denied font access', 'NotAllowedError');
+      }
+    });
+  });
+  await page.goto('/');
+  await page
+    .locator('input[accept=".psd,.psb"]')
+    .setInputFiles(fileURLToPath(new URL('type-with-layer-styles.psd', assets)));
+  const fonts = page.getByRole('region', { name: 'Fonts' });
+  await expect(fonts).toBeVisible();
+  expect(await page.evaluate(() => Reflect.get(window, '__fontQueries'))).toBe(0);
+  await fonts.getByRole('button', { name: 'Use installed fonts' }).click();
+  await expect(fonts.getByRole('list', { name: 'Fonts not added' })).toContainText('User denied font access');
+  expect(await page.evaluate(() => Reflect.get(window, '__fontQueries'))).toBe(1);
+  await expect(fonts.getByRole('button', { name: 'Add font files…' })).toBeEnabled();
+});
+
+/** Optional read-only check against a public source and the captured Photoshop 26 reopen, never bundled. */
+const researchRoot = process.env.PSD_TEXT_MIXER_RESEARCH_ROOT;
+
+test('matches the Photoshop 26 public 33437 reopen after adding original collection bytes', async ({ page }) => {
+  test.skip(
+    !researchRoot || !existsSync(helveticaCollection),
+    'set PSD_TEXT_MIXER_RESEARCH_ROOT and supply system Helvetica Neue'
+  );
+  const source = `${researchRoot}/private/psd-downloads/github/iamdaiyuan__dribbble_psd_files/dribbble_psd__33437.psd`;
+  const native = await readFile(`${researchRoot}/fixtures/psd/text-mixer-1/public-33437-g0/native.png`);
+  // This native sample comparison reads the authoritative worker output, independent of display scaling/checkerboard.
+  await page.addInitScript(() => {
+    const NativeWorker = Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        this.addEventListener('message', (event) => {
+          if (event.data.type === 'rendered') {
+            Reflect.set(window, '__nativeRender', event.data.render.pixels);
+          }
+        });
+      }
+    };
+  });
+  await page.goto('/');
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(source);
+  await expect(stage(page)).toHaveAttribute('data-render-id', /\d+/);
+  await settled(page);
+
+  const compare = () =>
+    page.getByRole('img', { name: 'Our render', exact: true }).evaluate(async (element, encoded) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${encoded}`;
+      await image.decode();
+      const reference = document.createElement('canvas');
+      reference.width = image.width;
+      reference.height = image.height;
+      reference.getContext('2d')!.drawImage(image, 0, 0);
+      const expected = reference.getContext('2d')!.getImageData(0, 0, image.width, image.height).data;
+      const actual = Reflect.get(window, '__nativeRender') as Uint8Array;
+      let rgb = 0;
+      let alpha = 0;
+      let max = 0;
+      actual.forEach((sample, index) => {
+        const difference = Math.abs(sample - expected[index]);
+        if (difference) {
+          if (index % 4 === 3) {
+            alpha++;
+          } else {
+            rgb++;
+          }
+
+          max = Math.max(max, difference);
+        }
+      });
+      return { rgb, alpha, max };
+    }, native.toString('base64'));
+
+  const before = await compare();
+  expect(before.rgb).toBeGreaterThan(0);
+  const render = await stage(page).getAttribute('data-render-id');
+  const fonts = page.getByRole('region', { name: 'Fonts' });
+  await fonts.getByLabel('Font files').setInputFiles(helveticaCollection);
+  await expect(stage(page)).not.toHaveAttribute('data-render-id', render!);
+  await settled(page);
+  await expect(fonts.getByRole('checkbox', { name: 'Re-render text' })).not.toBeChecked();
+  await expect(fonts.locator('[data-font-status="available"]')).toHaveCount(1);
+  await expect(fonts.locator('[data-text-mixing="approximate"]')).toHaveCount(4);
+  await expandDiagnostics(page);
+  await expect(page.getByRole('list', { name: 'Approximations', exact: true })).toContainText('font-bbox descender');
+  const after = await compare();
+  expect(after).toEqual({ rgb: 0, alpha: 0, max: 0 });
+  const withFonts = await stage(page).getAttribute('data-render-id');
+  await page.locator('input[accept=".psd,.psb"]').setInputFiles(source);
+  await expect(stage(page)).not.toHaveAttribute('data-render-id', withFonts!);
+  await settled(page);
+  expect(await compare()).toEqual(after);
+  await expect(fonts.locator('[data-font-status="available"]')).toHaveCount(1);
+  console.log('33437 vs Photoshop 26 reopen:', { before, after });
 });

@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { readPsd, readPsdSource, type PsdNewDocumentContext } from '@app-game/psd';
 import { createBrushResources } from '@app-game/abr-paint/resources';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createRendererDouble } from '../tests/fixtures/rendererDouble';
@@ -21,6 +23,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 it('persists navigation in the view record without a full checkpoint', async () => {
@@ -46,6 +49,108 @@ it('blends in linear light as the document says, and saves the setting with it',
   await vi.advanceTimersByTimeAsync(400);
   await waitFor(() => storage.save.mock.calls.length > 0);
   expect(storage.save.mock.calls.at(-1)![0]).toMatchObject({ blending: 'classic' });
+});
+
+it.each([false, true])(
+  'exports complete PSDs with persistent creation and fresh save facts, linear=%s',
+  async (linear) => {
+    const profile = new Uint8Array(await readFile(new URL('./assets/sRGB.icc', import.meta.url)));
+    const fetchProfile = vi.fn(async () => new Response(profile));
+    vi.stubGlobal('fetch', fetchProfile);
+    const { runtime, document, events, waitFor } = await start();
+    document.setLinearBlending(linear);
+    const paper = document.active.id;
+    const pixels = new Uint8Array(TILE_BYTES);
+    pixels.set([64, 32, 16, 128]);
+    document.commit([{ layerId: paper, key: '-1,0', before: undefined, after: pixels }]);
+    document.changeLayer({ type: 'add' });
+    document.changeLayer({ type: 'update', id: document.active.id, patch: { visible: false } });
+    const identity = document.psdIdentity();
+    const region = { left: -256, top: 0, width: 2, height: 1 };
+    const downloads = () =>
+      events.filter((event): event is Extract<PaintEvent, { type: 'download' }> => event.type === 'download');
+    const captured: PsdNewDocumentContext[] = [];
+    const psd = await import('@app-game/psd');
+    const originalWrite = psd.writePsd;
+    const writer = vi.spyOn(psd, 'writePsd').mockImplementation(async (document, composite, context) => {
+      expect(context).toBeDefined();
+      captured.push(structuredClone(context!));
+      return originalWrite(document, composite, context);
+    });
+    try {
+      runtime.send({ type: 'psd', name: 'folder/my painting.PSD', region, requestId: 'first' });
+      await waitFor(() => downloads().length === 1);
+      await vi.advanceTimersByTimeAsync(2000);
+      runtime.send({ type: 'psd', name: 'my painting.psb', region, requestId: 'second' });
+      await waitFor(() => downloads().length === 2);
+      expect(downloads().map((event) => event.name)).toEqual(['folder/my painting.PSD', 'my painting.psb']);
+      expect(captured).toHaveLength(4);
+      expect(captured[1]).toEqual(captured[0]);
+      expect(captured[3]).toEqual(captured[2]);
+      const first = captured[0]!,
+        second = captured[2]!;
+      expect(first.creation).toEqual(identity.creation);
+      expect(second.creation).toEqual(first.creation);
+      expect(second.layerIds).toEqual(first.layerIds);
+      expect(second.layerTimes).toEqual(first.layerTimes);
+      expect(second.save.instanceId).not.toBe(first.save.instanceId);
+      expect(second.save.documentId).not.toBe(first.save.documentId);
+      expect(Date.parse(second.save.saveTime)).toBeGreaterThan(Date.parse(first.save.saveTime));
+      expect(first.save).toMatchObject({ basename: 'my painting', softwareAgent: 'Paint', linearBlending: linear });
+      expect(first.save.exifTime).toBe(first.save.saveTime.slice(0, 19).replaceAll('-', ':').replace('T', ' '));
+      expect(first.profile).toEqual(profile);
+      expect(new DataView(first.profile.buffer).getUint32(64)).toBe(0);
+      expect(first.document.compositor).toEqual({
+        engine: 'compCore',
+        gpu: 'off',
+        threads: 'off',
+        gpuSupport: 'supported'
+      });
+      const bytes = new Uint8Array(await downloads()[0]!.blob.arrayBuffer());
+      const source = await readPsdSource(bytes);
+      expect(source.layers.map((layer) => layer.layerId)).toEqual(
+        document.layers.map((layer) => identity.layers[layer.id]!.id)
+      );
+      const xmp = new TextDecoder().decode(source.xmp!);
+      expect(xmp).toContain('created');
+      expect(xmp).toContain('saved');
+      expect(xmp).toContain(first.creation.originalDocumentId);
+      expect(xmp).toContain('Paint');
+      expect(xmp).not.toContain('Adobe Photoshop');
+      const decoded = await readPsd(bytes);
+      expect(decoded.layers).toHaveLength(2);
+      expect(decoded.layers[0]!.pixels).toEqual(new Uint8Array([128, 64, 32, 128]));
+      expect(decoded.layers[1]).toMatchObject({ width: 0, height: 0, visible: false });
+      expect(fetchProfile).toHaveBeenCalledTimes(2);
+    } finally {
+      writer.mockRestore();
+    }
+  }
+);
+
+it('restores creation facts and allocated layer IDs when a drawing engine reopens its checkpoint', async () => {
+  const openStorage = createMemoryStorage();
+  const first = await start({ openStorage });
+  first.document.changeLayer({ type: 'add' });
+  const identity = first.document.psdIdentity();
+  await stop(first);
+  const second = await start({ openStorage });
+  expect(second.document.psdIdentity()).toEqual(identity);
+  await stop(second);
+});
+
+it('refuses a PSD download when the profile asset cannot be loaded', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('', { status: 404 }))
+  );
+  const { runtime, events, waitFor } = await start();
+  runtime.send({ type: 'psd', region: { left: 0, top: 0, width: 1, height: 1 } });
+  await waitFor(() => events.some((event) => event.type === 'error'));
+  expect(events.find((event) => event.type === 'error')).toMatchObject({
+    message: 'Cannot load the document sRGB profile.'
+  });
+  expect(events.some((event) => event.type === 'download')).toBe(false);
 });
 
 it('keeps GPU tile caches for layer selection and property changes, releasing only deleted layers', async () => {

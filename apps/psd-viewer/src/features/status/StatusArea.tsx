@@ -13,16 +13,78 @@ export function StatusArea(props: {
   layerNotes: LayerNote[];
   documentNotes: string[];
   onSelect: (index: number) => void;
+  /** Identifies windowed rendering for provenance and unsupported-operation guidance. */
+  windowed?: boolean;
+  /** Persistent saved snapshots are never presented as a preview awaiting a current layer render. */
+  sourceBacked?: boolean;
 }) {
   const failure = () => (props.render && !props.render.ok ? props.render.error : undefined);
   const approximations = () => (props.render?.ok ? props.render.value.approximations : []);
-  const clean = () => !failure() && !approximations().length && !props.layerNotes.length && !props.documentNotes.length;
+  const windowed = () => props.windowed || (props.render?.ok && props.render.value.window !== undefined);
+  const quality = () => (props.render?.ok ? props.render.value.quality : undefined);
+  const saved = () => props.render?.ok && props.render.value.window?.source === 'savedComposite';
+  const gpuPreview = () => props.render?.ok && (props.render.value.compositing?.preview ?? 0) > 0;
+  const clean = () =>
+    !gpuPreview() && !failure() && !approximations().length && !props.layerNotes.length && !props.documentNotes.length;
   return (
     <section
       class={styles.status}
       aria-label="Renderer status"
-      data-render-state={failure() ? 'failed' : approximations().length ? 'approximate' : 'exact'}
+      data-windowed={windowed() ? 'true' : undefined}
+      data-render-state={
+        !props.render
+          ? 'unrendered'
+          : failure()
+            ? 'failed'
+            : gpuPreview()
+              ? 'preview'
+              : saved()
+                ? props.sourceBacked
+                  ? 'saved'
+                  : 'preview'
+                : approximations().length
+                  ? 'approximate'
+                  : 'exact'
+      }
     >
+      <Show when={gpuPreview()}>
+        <p role="status" aria-label="GPU fidelity">
+          GPU interactive preview · strict verification pending for this exact tile/settings/visibility identity.
+        </p>
+      </Show>
+      <Show
+        when={
+          !gpuPreview() &&
+          !saved() &&
+          props.render?.ok &&
+          props.render.value.compositing &&
+          props.render.value.window?.exactToLayerRender
+        }
+      >
+        <p role="status" aria-label="GPU fidelity">
+          Strict CPU tiles · GPU comparisons require zero differing RGBA samples.
+        </p>
+      </Show>
+      <Show when={quality()}>
+        {(progress) => (
+          <p role="status" aria-label="Tile refinement">
+            {props.sourceBacked
+              ? 'Saved coverage'
+              : progress().kind === 'pointPreview'
+                ? 'Coarse preview'
+                : progress().coarse
+                  ? 'Coarse coverage · refining'
+                  : 'Fresh coverage'}{' '}
+            · {progress().completed}/{progress().required} tiles
+            {' · '}
+            {progress().kind === 'pointPreview'
+              ? `point samples every ${progress().step} source pixels`
+              : progress().step === 1
+                ? 'source pixels'
+                : `filtered LOD ${Math.log2(progress().step)}`}
+          </p>
+        )}
+      </Show>
       <Show when={failure()}>
         {(error) => (
           <p class={styles.error}>
@@ -31,8 +93,9 @@ export function StatusArea(props: {
             <Show when={error().kind === 'unsupported'}>
               <span>
                 {' '}
-                Photoshop's merged image is still shown in the Photoshop view; try other render settings, or Approximate
-                unsupported settings.
+                {windowed()
+                  ? 'Try other render settings, or Approximate unsupported settings.'
+                  : "Photoshop's merged image is still shown in the Photoshop view; try other render settings, or Approximate unsupported settings."}
               </span>
             </Show>
           </p>
@@ -40,8 +103,19 @@ export function StatusArea(props: {
       </Show>
       <Show when={approximations().length}>
         <p class={styles.approximate}>
-          <strong>Not exactly as in Photoshop:</strong> this render approximates what is listed below. Photoshop's own
-          image is in the Photoshop view.
+          <strong>
+            {saved()
+              ? props.sourceBacked
+                ? 'Saved composite:'
+                : 'Temporary saved preview:'
+              : 'Not exactly as in Photoshop:'}
+          </strong>{' '}
+          {saved()
+            ? props.sourceBacked
+              ? 'may be stale; settings and visibility do not alter saved pixels.'
+              : 'may be stale; replacing with a fresh layer render.'
+            : 'This render approximates what is listed below.'}
+          <Show when={!windowed()}> Photoshop's own image is in the Photoshop view.</Show>
         </p>
         <ul class={styles.approximate} aria-label="Approximations">
           <For each={approximations()}>

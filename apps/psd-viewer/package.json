@@ -12,21 +12,28 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview --port 4070",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "benchmark": "node scripts/benchmark.mjs"
   },
   "dependencies": {
     "@app-game/app-router": "workspace:*",
     "@app-game/psd": "workspace:*",
+    "@app-game/solid-gpu": "workspace:*",
     "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/raf": "catalog:",
     "@solid-primitives/resize-observer": "catalog:",
+    "@solid-primitives/timer": "catalog:",
     "@solidjs/web": "catalog:",
-    "solid-js": "catalog:"
+    "solid-js": "catalog:",
+    "typegpu": "^0.11.4"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
     "@unocss/vite": "catalog:",
+    "@webgpu/types": "^0.1.70",
     "jsdom": "catalog:",
     "typescript": "catalog:",
+    "unplugin-typegpu": "^0.11.3",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:",
     "vitest": "catalog:"
