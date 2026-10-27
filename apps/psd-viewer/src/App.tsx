@@ -78,7 +78,7 @@ export function App() {
     const current = document();
     return current &&
       !current.sourceBacked &&
-      (initial.ready() || requiresWindowedRendering({ width: current.info.width, height: current.info.height }))
+      (requiresWindowedRendering({ width: current.info.width, height: current.info.height }) || initial.ready())
       ? client.capability(current.document, renderSettings(), pairs())
       : undefined;
   });
@@ -102,12 +102,12 @@ export function App() {
     client,
     () => {
       const current = plannedOpened();
-      return initial.ready() ||
-        (current?.ok &&
-          requiresWindowedRendering({
-            width: current.value.info.width,
-            height: current.value.info.height
-          }))
+      return (current?.ok &&
+        requiresWindowedRendering({
+          width: current.value.info.width,
+          height: current.value.info.height
+        })) ||
+        initial.ready()
         ? current
         : undefined;
     },
