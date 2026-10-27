@@ -13,7 +13,7 @@ import { isOpened, type Shortcut } from './front';
 import { inBase, onPoint, type KothMap } from './map';
 import { cellAt, floodCosts, isOpenAt, searchNearest, cellCenter, sightClear, type NavGrid } from './navigation';
 import { captureRate, rivalOf, type CaptureRules, type CaptureState } from './rules';
-import { DANGER_RANGE, type Member, type TeamBoard } from './team';
+import { type Member, type TeamBoard } from './team';
 
 type Point = { x: number; y: number };
 
@@ -360,7 +360,7 @@ export function createBot(member: Member, context: BotContext) {
     const underFire = context.clock() - member.shotAt < UNDER_FIRE;
     const inCover = board
       .known()
-      .every((sighting) => distance(sighting.position, position) > DANGER_RANGE || !combat.lineOfSight(sighting.position, position));
+      .every((sighting) => distance(sighting.position, position) > board.threatReach(sighting.tank) || !combat.lineOfSight(sighting.position, position));
 
     const reach = TACTICS[member.tankClass.id].reach;
 
@@ -625,7 +625,7 @@ export function createBot(member: Member, context: BotContext) {
     const progress = capture.capturer === member.team ? capture.progress : 0;
     const targetAt = target && whereIs(target);
     cover = findCover(position);
-    const choice = chooseKit(costs);
+    const choice = chooseKit(costs, travel(board.baseSpot(member)));
     kit = choice?.kit;
     const armor = combat.armorLeft(tank);
 
@@ -701,19 +701,33 @@ export function createBot(member: Member, context: BotContext) {
    * `SMALL_KIT_PENALTY` seconds longer for mending less, and a kit known enemies see counting
    * `KIT_EXPOSURE` seconds longer per enemy. The bot waits a moment for a kit to come back only
    * where no enemy sees it, never drives to one more than `KIT_DANGER` enemies see, and leaves
-   * alone a kit an ally was just destroyed at (see `TeamBoard.isDeadly`).
+   * alone a kit an ally was just destroyed at (see `TeamBoard.isDeadly`) or one a teammate gets
+   * to first (see `TeamBoard.kitClaimed`). A kit no nearer than the base, where the bot mends in
+   * full, or on the enemy's side of a point the team does not hold, is no kit to go for: a bot
+   * whose kit was taken goes home rather than from kit to kit across the map.
    *
    * @param costs - Driving costs from the bot to every cell, from `floodCosts`.
+   * @param home - Seconds of driving to the bot's base.
    */
-  function chooseKit(costs: Float32Array) {
+  function chooseKit(costs: Float32Array, home: number) {
     const now = context.clock();
+    const enemySide = Math.sign(map.bases[rivalOf(member.team)].zone.x - map.point.x);
+    const ours = context.capture().owner === member.team;
     let best: { kit: Readonly<Kit>; travel: number } | undefined;
 
     for (const candidate of context.kits) {
       const travel = costs[cellAt(grid, candidate)] / (member.tankClass.speed * TRAVEL_SHARE);
       const exposure = board.danger(cellAt(grid, candidate));
+      const beyond = !ours && (candidate.x - map.point.x) * enemySide > 0;
 
-      if (!Number.isFinite(travel) || exposure > KIT_DANGER || board.isDeadly(candidate)) {
+      if (
+        !Number.isFinite(travel) ||
+        travel >= home ||
+        beyond ||
+        exposure > KIT_DANGER ||
+        board.isDeadly(candidate) ||
+        board.kitClaimed(member, candidate, now + travel)
+      ) {
         continue;
       }
 
@@ -1012,9 +1026,14 @@ export function createBot(member: Member, context: BotContext) {
         // A kit not back yet is waited for only while no enemy sees it, and never where an ally just died.
         const waiting = task.kit.kit.readyAt > now;
 
-        if (board.isDeadly(task.kit.kit) || (waiting && board.danger(cellAt(grid, task.kit.kit)) > 0)) {
+        // A teammate that gets there first has it: one kit is no use to two tanks.
+        const eta = now + distance(position, task.kit.kit) / (member.tankClass.speed * TRAVEL_SHARE);
+
+        if (board.isDeadly(task.kit.kit) || (waiting && board.danger(cellAt(grid, task.kit.kit)) > 0) || board.kitClaimed(member, task.kit.kit, eta)) {
           return 'failed';
         }
+
+        board.claimKit(member, task.kit.kit, eta);
 
         task.destination = task.kit.kit;
         task.route = 'safe';

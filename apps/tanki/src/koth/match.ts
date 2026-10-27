@@ -166,6 +166,9 @@ export function createKothMatch(
     /** The bot driving each seat that has one. */
     bots,
 
+    /** Each team's board, for tests and tools. */
+    boards,
+
     /** The battle core, for tests and tools. */
     combat,
 

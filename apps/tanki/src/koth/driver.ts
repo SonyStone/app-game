@@ -31,8 +31,6 @@ export function createDriver(grid: NavGrid) {
   let check: { at: number; position: Point } | undefined;
   let stuckSince: number | undefined;
   let unstick: { until: number; direction: Point } | undefined;
-  // Ways out tried since the tank last moved.
-  let tries = 0;
   const tried: Point[] = [];
   let longestStall = 0;
   let stalls = 0;
@@ -114,7 +112,6 @@ export function createDriver(grid: NavGrid) {
         const direction = wayOut(grid, position, toward, tried);
         unstick = { until: now + UNSTICK_TIME, direction };
         tried.push(direction);
-        tries++;
         plannedAt = -Infinity;
         return unstick.direction;
       }
@@ -136,7 +133,6 @@ export function createDriver(grid: NavGrid) {
       check = undefined;
       stuckSince = undefined;
       unstick = undefined;
-      tries = 0;
       tried.length = 0;
     }
   };
@@ -195,7 +191,6 @@ export function createDriver(grid: NavGrid) {
       longestStall = Math.max(longestStall, now - stuckSince);
     } else {
       stuckSince = undefined;
-      tries = 0;
       tried.length = 0;
     }
 

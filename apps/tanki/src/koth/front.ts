@@ -42,10 +42,11 @@ export function findPosts(grid: NavGrid, map: KothMap, team: TeamId): Post[] {
 /**
  * A wall on the team's own side worth breaking open: it shuts a short way between the team's
  * staging spot in the hall and one in a side street, so opening it lets the team switch lanes
- * quickly. `cells` are the grid cells it closes, `wall` the middle of them, and `sides` the open
- * spots just before and just beyond it, from where a tank breaks through.
+ * quickly, or it closes a Sniper's view from its perch (see `Perch.opening`). `lane` is where it
+ * is, `cells` the grid cells it closes, if known, `wall` its middle, and `sides` the open spots
+ * just before and just beyond it, from where a tank breaks through.
  */
-export type Shortcut = { lane: Exclude<Lane, 'center'>; from: Point; to: Point; wall: Point; cells: number[]; sides: [Point, Point] };
+export type Shortcut = { lane: Lane; from: Point; to: Point; wall: Point; cells: number[]; sides: [Point, Point] };
 
 /**
  * The shortcuts of `team` (see `Shortcut`): for each side street, the way from the hall's staging

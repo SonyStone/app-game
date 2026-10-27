@@ -188,6 +188,7 @@ export const sr: Dictionary = {
     waitForTeam: 'Чекам',
     switchClass: (say: RadioWords) => `→ ${say.tankClass}`,
     breaching: 'Пробијам',
+    clearView: 'Срушите!',
     wayOpen: 'Пролаз!',
     fallBackTeam: 'Повлачење',
     coverRetreat: 'Покривам',

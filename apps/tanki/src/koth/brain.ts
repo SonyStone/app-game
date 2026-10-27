@@ -172,7 +172,9 @@ export function botGoals(situation: Situation): GoapGoal<BotGoal>[] {
   if (facts.coreOpen) {
     goals.push({ name: 'repair', wants: { combatReady: true }, priority: desperate ? 40 : fallingBack ? FALL_BACK : 75 });
   } else if (facts.armorLow) {
-    goals.push({ name: 'repair', wants: { combatReady: true }, priority: desperate ? 30 : fallingBack ? FALL_BACK : kitNear && situation.kitRestores ? 58 : 46 });
+    // While the team gathers for a push, a badly hit bot mends first, as it would be no help in it.
+    const mend = fallingBack ? FALL_BACK : facts.mustStage ? MEND_BEFORE_PUSH : kitNear && situation.kitRestores ? 58 : 46;
+    goals.push({ name: 'repair', wants: { combatReady: true }, priority: desperate ? 30 : mend });
   }
 
   // The bot covering the retreat watches the point from a perch, as a Sniper does.
@@ -314,6 +316,8 @@ const FLANK_COST: Record<Role, number> = { assault: 1.4, flank: 0.55, support: 1
 const COMMITMENT = 6;
 /** Priority of answering the team's call to regroup. */
 const REGROUP = 85;
+/** Priority of mending for a bot with its armor low while its team gathers for a push. */
+const MEND_BEFORE_PUSH = 70;
 /** Priority of mending for a badly hit bot while its team falls back, and of covering the retreat from a perch. */
 const FALL_BACK = 82;
 const COVER_RETREAT = 70;

@@ -188,6 +188,7 @@ export const ja: Dictionary = {
     waitForTeam: '待機',
     switchClass: (say: RadioWords) => `→ ${say.tankClass}`,
     breaching: '突破',
+    clearView: '壊して！',
     wayOpen: '開いた！',
     fallBackTeam: '後退',
     coverRetreat: '援護',

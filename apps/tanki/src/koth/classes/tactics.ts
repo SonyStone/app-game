@@ -42,7 +42,7 @@ export const TACTICS: Record<TankClassId, ClassTactics> = {
   soldier: { reach: 470, duel: { min: 200, max: 380 }, hits: { rear: 2, side: 3, front: 4 }, aimError: 1, dodge: 0.5, steadiness: 1, retreat: 0.72, point: 0 },
   heavy: { reach: 380, duel: { min: 90, max: 240 }, hits: { rear: 4, side: 8, front: 16 }, aimError: 3, dodge: 0.3, steadiness: 1, retreat: 0.72, point: 0 },
   demoman: { reach: 480, duel: { min: 290, max: 450 }, hits: { rear: 2, side: 3, front: 5 }, aimError: 1.3, dodge: 0.5, steadiness: 1, retreat: 0.72, point: 0 },
-  sniper: { reach: 900, duel: { min: 420, max: 720 }, hits: { rear: 1, side: 1, front: 1 }, aimError: 0.8, dodge: 0.4, steadiness: 2, retreat: 0.72, point: 0, perch: 420 }
+  sniper: { reach: 900, duel: { min: 420, max: 720 }, hits: { rear: 1, side: 1, front: 1 }, aimError: 0.8, dodge: 0.4, steadiness: 2, retreat: 0.72, point: 0, perch: 600 }
 };
 
 /**

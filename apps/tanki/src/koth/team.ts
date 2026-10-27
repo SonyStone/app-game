@@ -104,6 +104,8 @@ export function createTeamBoard(
 ) {
   const { combat, grid, map } = context;
   const sightings = new Map<Tank, Sighting>();
+  // Repair kits members drive to, with when they expect to get there.
+  const claims = new Map<Point, { member: Member; eta: number; until: number }>();
   const cellCount = grid.cols * grid.rows;
   /** Distance to walls, wrecks, crates and rubble for sight traces. */
   const sight = new Float32Array(cellCount);
@@ -224,6 +226,23 @@ export function createTeamBoard(
     },
 
     /**
+     * Claims `kit` for `member`, who expects to reach it at `eta` (clock seconds), so teammates
+     * leave it to the one there first (see `kitClaimed`). A claim lasts `CLAIM_TIME` s unless renewed.
+     */
+    claimKit(member: Member, kit: Point, eta: number) {
+      claims.set(kit, { member, eta, until: context.clock() + CLAIM_TIME });
+    },
+
+    /**
+     * Whether a teammate of `member` other than itself claimed `kit` and gets there before `eta`:
+     * two tanks never drive to the same kit, as only one of them can have it.
+     */
+    kitClaimed(member: Member, kit: Point, eta: number) {
+      const claim = claims.get(kit);
+      return claim !== undefined && claim.member !== member && claim.member.tank !== undefined && claim.until > context.clock() && claim.eta <= eta;
+    },
+
+    /**
      * Records that `member` sees `tank` now. An enemy sniper the team did not know of is called
      * out with a marker where it is.
      */
@@ -236,6 +255,11 @@ export function createTeamBoard(
         const at = tank.hull.translation();
         radio.say(member, 'sniper', { priority: 2, tankClass: 'sniper', marker: { kind: 'enemy', x: at.x, y: at.y, on: tank } });
       }
+    },
+
+    /** How far `tank`, an enemy, can hit from, for whether it endangers a spot it sees. */
+    threatReach(tank: Tank) {
+      return threatReach(tank);
     },
 
     /** Exposure of a cell to known enemies' guns: 0 out of their sight, about 1 per enemy that sees it. */
@@ -453,6 +477,7 @@ export function createTeamBoard(
     /** Forgets everything, for a new match. */
     reset() {
       sightings.clear();
+      claims.clear();
       help.clear();
       covers.clear();
       staging.clear();
@@ -676,18 +701,19 @@ export function createTeamBoard(
 
   /**
    * Adds every known enemy's view to the danger map: the outline of what it can see, from rays
-   * cast through walls and crates, and every open cell within range and inside that outline,
+   * cast through walls and crates, and every open cell within its reach (see `threatReach`) and inside that outline,
    * weighted more in front of its gun.
    */
   function buildDanger() {
     danger.fill(0);
 
     for (const threat of sightings.values()) {
-      const reach = sightReach(grid, sight, threat.position, DANGER_RANGE, SIGHT_RAYS, rubbleSight);
-      const minCol = Math.max(Math.floor((threat.position.x - DANGER_RANGE - grid.originX) / grid.cell), 0);
-      const maxCol = Math.min(Math.ceil((threat.position.x + DANGER_RANGE - grid.originX) / grid.cell), grid.cols - 1);
-      const minRow = Math.max(Math.floor((threat.position.y - DANGER_RANGE - grid.originY) / grid.cell), 0);
-      const maxRow = Math.min(Math.ceil((threat.position.y + DANGER_RANGE - grid.originY) / grid.cell), grid.rows - 1);
+      const range = threatReach(threat.tank);
+      const reach = sightReach(grid, sight, threat.position, range, SIGHT_RAYS, rubbleSight);
+      const minCol = Math.max(Math.floor((threat.position.x - range - grid.originX) / grid.cell), 0);
+      const maxCol = Math.min(Math.ceil((threat.position.x + range - grid.originX) / grid.cell), grid.cols - 1);
+      const minRow = Math.max(Math.floor((threat.position.y - range - grid.originY) / grid.cell), 0);
+      const maxRow = Math.min(Math.ceil((threat.position.y + range - grid.originY) / grid.cell), grid.rows - 1);
 
       for (let row = minRow; row <= maxRow; row++) {
         for (let col = minCol; col <= maxCol; col++) {
@@ -701,7 +727,7 @@ export function createTeamBoard(
           const dy = grid.originY + row * grid.cell - threat.position.y;
           const distance = Math.hypot(dx, dy);
 
-          if (distance > DANGER_RANGE) {
+          if (distance > range) {
             continue;
           }
 
@@ -717,6 +743,11 @@ export function createTeamBoard(
         }
       }
     }
+  }
+
+  /** How far `tank`, an enemy, can hit from: `SNIPER_REACH` px for a Sniper, `DANGER_RANGE` for the rest. */
+  function threatReach(tank: Tank) {
+    return context.rivals.find((rival) => rival.tank === tank)?.tankClass.id === 'sniper' ? SNIPER_REACH : DANGER_RANGE;
   }
 
   /** Gives every member the role of its class: see `ROLE_OF_CLASS`. */
@@ -790,11 +821,18 @@ export function createTeamBoard(
 
     if (push.phase === 'gather') {
       const waiting = [...staging.entries()].filter(([member, entry]) => member.tank && now - entry.at < 0.5);
-      const arrived = waiting.filter(([, entry]) => entry.arrived).length;
-      // A push needs two tanks; a lone one waits for teammates back from respawn soon rather than going in alone.
+      // A badly hit tank at the staging spot is no help in a push: it goes to mend, and the team waits for it.
+      const arrived = waiting.filter(([member, entry]) => entry.arrived && !battered(member)).length;
+      // The player counts in when at the rally point, fit to fight.
+      const rally = map.lanes[team].center;
+      const playerReady = members.some((member) => member.human && member.tank && !battered(member) && distanceTo(member.tank.hull.translation(), rally) < PLAYER_RALLY);
+      const ready = arrived + (playerReady ? 1 : 0);
+      // A push needs two fit tanks and all but one of those alive; the team waits for those mending or back from
+      // respawn soon rather than going in short, unless the enemy is close to winning or the wait drags on.
       const reinforced = members.some((member) => !member.tank && member.respawnAt !== undefined && member.respawnAt - now < REINFORCEMENTS);
-      const tooFew = alive < 2 && reinforced;
-      const everyone = !tooFew && waiting.length > 0 && arrived === waiting.length && (waiting.length >= 2 || now - push.since > 3);
+      const mending = members.some((member) => battered(member));
+      const tooFew = ready < Math.max(2, alive - 1) && (reinforced || mending) && enemyClock < FEW_CLOCK && now - push.since < GATHER_PATIENCE;
+      const everyone = !tooFew && waiting.length > 0 && arrived === waiting.length && (ready >= 2 || now - push.since > 3);
 
       // No waiting while the enemy is about to take a point nobody holds.
       const hurry = capture.capturer === rivalOf(team) && capture.owner !== rivalOf(team) && capture.progress > HURRY_PROGRESS;
@@ -890,14 +928,19 @@ export function createTeamBoard(
   }
 
   /**
-   * While the team pushes for the point, has one bot break open a shortcut still shut: the first
-   * of a Demoman, a Heavy and a Soldier within `OPENER_RANGE` px of it with most of its armor. The
-   * bot says when it is through (see `finishBreach`). A breach that takes longer than `BREACH_TIME` s, or whose bot
-   * is destroyed, is given up, and that shortcut waits `BREACH_RETRY` s before it is tried again.
+   * Has one bot break open a wall still standing, but not while a push goes in: while the team
+   * gathers for a push, a shortcut (see `findShortcuts`), else, while it gathers or holds, the wall across the view of a
+   * Sniper at its perch (see `Perch.opening`), which the Sniper asks for. The bot is the first of
+   * a Demoman, a Soldier and a Heavy within `OPENER_RANGE` px of the wall with most of its armor.
+   * It says when it is through (see `finishBreach`). A breach that takes longer than `BREACH_TIME`
+   * s, or whose bot is destroyed, is given up, and that wall waits `BREACH_RETRY` s before it is
+   * tried again.
    */
   function assignBreach(now: number) {
     if (breach) {
-      if (!breach.member.tank || now - breach.since > BREACH_TIME || intent !== 'push') {
+      const view = breach.shortcut.lane === 'center';
+
+      if (!breach.member.tank || now - breach.since > BREACH_TIME || (view ? intent === 'regroup' || intent === 'fallBack' : intent !== 'push')) {
         triedAt.set(breach.shortcut, now);
         breach = undefined;
       }
@@ -905,8 +948,12 @@ export function createTeamBoard(
       return;
     }
 
-    const shut = (candidate: Shortcut) => !opened.has(candidate) && !isOpened(grid, candidate);
-    const shortcut = intent === 'push' ? shortcuts.find((candidate) => shut(candidate) && now - (triedAt.get(candidate) ?? -Infinity) > BREACH_RETRY) : undefined;
+    const shut = (candidate: Shortcut) => !opened.has(candidate) && !isOpened(grid, candidate) && now - (triedAt.get(candidate) ?? -Infinity) > BREACH_RETRY;
+    const sniper = members.find((member) => member.tank && member.role === 'sniper' && !member.human && perchOf.get(member)?.opening);
+    const perch = sniper && perchOf.get(sniper)!;
+    const view = perch && intent !== 'regroup' && intent !== 'fallBack' && sniper.tank && distanceTo(sniper.tank.hull.translation(), perch) < VIEW_ASK ? perch.opening : undefined;
+    // Nobody leaves a push under way to break a wall.
+    const shortcut = (intent === 'push' && push.phase !== 'go' ? shortcuts.find(shut) : undefined) ?? (view && push.phase !== 'go' && shut(view) ? view : undefined);
 
     if (!shortcut) {
       return;
@@ -925,6 +972,10 @@ export function createTeamBoard(
 
     if (opener) {
       breach = { member: opener, shortcut, since: now };
+
+      if (shortcut === view && sniper) {
+        radio.say(sniper, 'clearView', { priority: 2, ally: opener, marker: { kind: 'breach', ...shortcut.wall } });
+      }
     }
   }
 
@@ -1113,18 +1164,27 @@ export type TeamBoard = ReturnType<typeof createTeamBoard>;
  */
 export const ROLE_OF_CLASS: Record<TankClassId, Role> = { scout: 'flank', soldier: 'assault', heavy: 'lead', demoman: 'support', sniper: 'sniper' };
 const UPDATE_INTERVAL = 0.25;
+/** Seconds a claim on a repair kit lasts unless its member renews it. */
+const CLAIM_TIME = 0.6;
 /** Seconds the team remembers an enemy it no longer sees. */
 const MEMORY = 4;
 /** Directions in which an enemy's view is traced for the danger map. */
 const SIGHT_RAYS = 360;
 /** Enemies beyond this many pixels are no danger: too far to see a tank to aim at. */
-export const DANGER_RANGE = 520;
+const DANGER_RANGE = 520;
+/** A Sniper's scope and rail reach this far, without charging, so it endangers all it sees within it. */
+const SNIPER_REACH = 900;
 /** The point counts as defended when an enemy was seen this close to it. */
 const DEFENDED_RADIUS = 350;
 /** How far from its planned staging spot, in path pixels, a member looks for one the enemy does not see. */
 const STAGE_SEARCH = 600;
 /** A lone tank waits to push while a teammate comes back from respawn within this many seconds. */
 const REINFORCEMENTS = 10;
+/** The enemy's share of the hold time up to which a team short of fit tanks waits for the rest before pushing, and the longest it waits, in seconds. */
+const FEW_CLOCK = 0.8;
+const GATHER_PATIENCE = 20;
+/** The player within this many pixels of the rally point counts as gathered for a push. */
+const PLAYER_RALLY = 300;
 /** Seconds the team waits for stragglers before it pushes anyway, and how long a push lasts. */
 const GATHER_TIMEOUT = 6;
 /** Capture progress of the enemy on a free point at which the team stops gathering and goes. */
@@ -1155,10 +1215,12 @@ const POST_ORDER: Record<Post['lane'], readonly TankClassId[]> = {
   north: ['soldier', 'demoman', 'scout', 'heavy'],
   south: ['soldier', 'demoman', 'scout', 'heavy']
 };
-/** Classes in the order they are asked to open a shortcut, the armor share they need and how near they must be. */
-const OPENERS: readonly TankClassId[] = ['demoman', 'heavy', 'soldier'];
+/** Classes in the order they are asked to open a shortcut, the Heavy last as it leads the push; the armor share they need and how near they must be. */
+const OPENERS: readonly TankClassId[] = ['demoman', 'soldier', 'heavy'];
 const OPENER_ARMOR = 0.6;
 const OPENER_RANGE = 700;
+/** A Sniper asks for the wall across its view once it is this close to its perch, in pixels. */
+const VIEW_ASK = 200;
 /** Thickest wall a shortcut goes through, in pixels; seconds a breach may take, and before a given-up one is tried again. */
 const SHORTCUT_THICKNESS = 40;
 const BREACH_TIME = 20;
@@ -1202,7 +1264,7 @@ const DEADLY_RADIUS = 110;
 const PERCH_THREAT = 220;
 const SNIPER_SIGHT = 900;
 const SNIPER_AIMED = 0.3;
-const PERCH_CLEAR = 2;
+const PERCH_CLEAR = 5;
 /** Half size of a crate's armor. */
 const CRATE_HALF = { x: 21.25, y: 46.25 };
 const CRATE_COST = 3;

@@ -13,15 +13,16 @@ import type { Member } from './team';
 /**
  * Short staged situations that show whether the bots handle the moments a player notices, each
  * with the behavior expected and a measure of it, played on `SEEDS` seeds: a Sniper rushed by a
- * Scout, a badly hit team facing a fresh one, the Sniper's place in an ordinary match, a lone bot
- * back while the enemy holds the point, an empty point, a push behind the Heavy, a repair kit
- * under the enemy's eyes and the fence a team should break open. It prints, per scenario, how
+ * Scout, a badly hit team facing a fresh one, the Sniper's place in an ordinary match, a push
+ * against a perched Sniper, a lone bot back while the enemy holds the point, an empty point, a
+ * push behind the Heavy, a gathering with hurt teammates, two hurt tanks and one repair kit, a
+ * repair kit under the enemy's eyes and the fence a team should break open. It prints, per scenario, how
  * often the bots did what was expected and what they did instead; it asserts nothing, as it
  * measures the bots for tuning their behavior before their balance.
  *
  * Slow, so it runs only with
  * `TANKI_SCENARIOS=1 pnpm exec vitest run src/koth/scenarios.harness.test.ts --reporter=verbose`;
- * `-t sniper` and the like run some of them.
+ * `-t sniper` and the like run some of them, and `TANKI_SEEDS=11,23` on other seeds.
  */
 describe.skipIf(!import.meta.env.TANKI_SCENARIOS)('bot scenarios', () => {
   let rapier: Rapier;
@@ -32,19 +33,20 @@ describe.skipIf(!import.meta.env.TANKI_SCENARIOS)('bot scenarios', () => {
 
   for (const scenario of SCENARIOS) {
     it(scenario.name, () => {
-      const outcomes = SEEDS.map((seed) => scenario.play(stage(rapier, seed, scenario.roster)));
+      const seeds: number[] = import.meta.env.TANKI_SEEDS?.split(',').map(Number) ?? SEEDS;
+      const outcomes = seeds.map((seed) => ({ seed, ...scenario.play(stage(rapier, seed, scenario.roster)) }));
       const passed = outcomes.filter((outcome) => outcome.pass).length;
-      const notes = new Map<string, number>();
+      const notes = new Map<string, number[]>();
 
       for (const outcome of outcomes) {
-        notes.set(outcome.note, (notes.get(outcome.note) ?? 0) + 1);
+        notes.set(outcome.note, [...(notes.get(outcome.note) ?? []), outcome.seed]);
       }
 
       console.log(
         [
           `${scenario.name}: ${passed}/${outcomes.length} as expected`,
           `  expected: ${scenario.expected}`,
-          ...[...notes].sort(([, a], [, b]) => b - a).map(([note, count]) => `  ${count}× ${note}`)
+          ...[...notes].sort(([, a], [, b]) => b.length - a.length).map(([note, seeds]) => `  ${seeds.length}× ${note} (seed ${seeds.join(', ')})`)
         ].join('\n')
       );
     }, 600_000);
@@ -72,8 +74,8 @@ const SCENARIOS: Scenario[] = [
     play(stage) {
       const sniper = stage.seat('red', 'sniper');
       const scout = stage.seat('blue', 'scout');
-      stage.place(sniper, { x: -330, y: -70 }, 0);
-      stage.place(scout, { x: 330, y: -50 }, Math.PI);
+      stage.place(sniper, { x: -550, y: -90 }, 0);
+      stage.place(scout, { x: 110, y: -50 }, Math.PI);
       let fellBack = false;
       stage.run(20, () => {
         fellBack ||= sniper.tank !== undefined && inBase(stage.match.map.bases.red, sniper.tank.hull.translation());
@@ -107,23 +109,55 @@ const SCENARIOS: Scenario[] = [
   },
   {
     name: 'sniper takes the middle',
-    expected: 'in an ordinary match the Sniper spends most of its life on a middle perch or safe in its base, not in the corners',
+    expected: 'in an ordinary match the Sniper spends most of its life on a perch in the hall, 540-680 px from the point, or safe in its base, and drives at most a third of it',
     roster: { red: ['sniper', 'soldier', 'heavy', 'demoman'], blue: ['soldier', 'soldier', 'heavy', 'demoman'] },
     play(stage) {
       const sniper = stage.seat('red', 'sniper');
       const where = { middle: 0, base: 0, elsewhere: 0 };
+      let driving = 0;
+      let last: { x: number; y: number } | undefined;
       stage.run(70, () => {
         const at = sniper.tank?.hull.translation();
+        const before = last;
+        last = at && { x: at.x, y: at.y };
 
         if (!at || stage.match.time < 20) {
           return;
         }
 
-        where[inBase(stage.match.map.bases.red, at) ? 'base' : at.x > -480 && at.x < -270 && Math.abs(at.y) < 160 ? 'middle' : 'elsewhere'] += 1;
+        const inBaseNow = inBase(stage.match.map.bases.red, at);
+        where[inBaseNow ? 'base' : at.x > -720 && at.x < -460 && Math.abs(at.y) < 170 ? 'middle' : 'elsewhere'] += 1;
+
+        if (before && !inBaseNow && Math.hypot(at.x - before.x, at.y - before.y) * 60 > 15) {
+          driving += 1;
+        }
       });
       const total = Math.max(where.middle + where.base + where.elsewhere, 1);
       const share = (count: number) => Math.round((count / total) * 100);
-      return { pass: where.middle / total >= 0.4 && where.elsewhere / total <= 0.35, note: `middle ${share(where.middle)}%, base ${share(where.base)}%, elsewhere ${share(where.elsewhere)}%` };
+      return {
+        pass: where.middle / total >= 0.4 && where.elsewhere / total <= 0.35 && driving / total <= 0.34,
+        note: `middle ${share(where.middle)}%, base ${share(where.base)}%, elsewhere ${share(where.elsewhere)}%, driving ${share(driving)}%`
+      };
+    }
+  },
+  {
+    name: 'sniper against a push',
+    expected: 'a team pushing a point an enemy Sniper watches from its perch loses at most two tanks to it in 40 s',
+    roster: { red: ['heavy', 'soldier', 'demoman', 'scout'], blue: ['sniper', 'soldier', 'heavy', 'demoman'] },
+    play(stage) {
+      const sniper = stage.seat('blue', 'sniper');
+      stage.team('red').forEach((member, index) => stage.place(member, { x: -660, y: (index - 1.5) * 70 }, 0));
+      stage.place(sniper, { x: 550, y: -90 }, Math.PI);
+      stage.holdPointFor('blue');
+      let sniperDied: number | undefined;
+      stage.run(40, () => {
+        sniperDied ??= sniper.deaths > 0 ? stage.match.time : undefined;
+      });
+      const lost = stage.team('red').reduce((sum, member) => sum + member.deaths, 0);
+      return {
+        pass: sniper.kills <= 2,
+        note: `the Sniper destroyed ${sniper.kills} of ${lost} lost${sniperDied === undefined ? '' : `, died at ${roundTo(sniperDied)} s`}`
+      };
     }
   },
   {
@@ -178,6 +212,49 @@ const SCENARIOS: Scenario[] = [
       const alone = [...first.values()].filter((together) => !together).length;
       const heavyFirst = [...first.keys()][0]?.tankClass.id === 'heavy';
       return { pass: alone <= 1, note: `${alone} of ${first.size} met the enemy alone${heavyFirst ? ', the Heavy first' : ''}` };
+    }
+  },
+  {
+    name: 'gathering with hurt teammates',
+    expected: 'with two teammates mending, the Heavy waits at the gathering spot instead of going in alone',
+    roster: { red: ['heavy', 'soldier', 'demoman', 'soldier'], blue: ['soldier', 'heavy', 'demoman', 'soldier'] },
+    play(stage) {
+      const red = stage.team('red');
+      const heavy = stage.seat('red', 'heavy');
+      red.forEach((member, index) => stage.place(member, { x: -660, y: (index - 1.5) * 70 }, 0));
+      stage.wear(stage.seat('red', 'soldier'), 0.5);
+      stage.wear(stage.seat('red', 'demoman'), 0.5);
+      stage.holdPointFor('blue');
+      let met: { at: number; together: boolean } | undefined;
+      stage.run(30, () => {
+        met ??= heavy.tank && stage.sees(heavy, 450) ? { at: stage.match.time, together: stage.allyNear(heavy, 300) } : undefined;
+      });
+      return {
+        pass: met === undefined || met.together,
+        note: met === undefined ? 'never met the enemy' : `met the enemy ${met.together ? 'with' : 'without'} the others at ${roundTo(met.at)} s${heavy.deaths > 0 ? ', died' : ''}`
+      };
+    }
+  },
+  {
+    name: 'two hurt tanks, one kit',
+    expected: 'of two hurt tanks beside one repair kit only one drives for it',
+    roster: { red: ['soldier', 'demoman'], blue: ['soldier'] },
+    play(stage) {
+      const [one, other] = stage.team('red');
+      stage.match.bench(stage.seat('blue', 'soldier'), 20);
+      stage.place(one, { x: -760, y: 300 }, 0);
+      stage.place(other, { x: -760, y: 360 }, 0);
+      stage.wear(one, 0.5);
+      stage.wear(other, 0.5);
+      let both = 0;
+      stage.run(10, () => {
+        const [a, b] = [one, other].map((member) => stage.match.bots.get(member)?.thought());
+
+        if (a?.action === 'pickUpKit' && b?.action === 'pickUpKit' && a.destination === b.destination) {
+          both += 1 / 60;
+        }
+      });
+      return { pass: both < 0.3, note: `both drove for one kit ${roundTo(both)} s` };
     }
   },
   {

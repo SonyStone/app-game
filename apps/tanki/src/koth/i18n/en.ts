@@ -190,6 +190,7 @@ export const en = {
     waitForTeam: 'Waiting',
     switchClass: (say: RadioWords) => `→ ${say.tankClass}`,
     breaching: 'Breach',
+    clearView: 'Break it!',
     wayOpen: 'Open!',
     fallBackTeam: 'Fall back',
     coverRetreat: 'Cover',
