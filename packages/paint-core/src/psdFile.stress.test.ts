@@ -46,7 +46,7 @@ it.each(sizes)('exports a dense %i-square canvas with bounded strict render scra
   try {
     expect(document.info).toMatchObject({ width: size, height: size, layerRecords: 3 });
     // Sample the saved composite with row streaming, including both sides of composite tile boundaries.
-    for (const step of [1023, 1024]) {
+    for (const step of [511, 512, 1023, 1024]) {
       const saved = value(document.savedOverview(step, 0, { liveBytes: bytes.byteLength * 4 + 512 * 1024 * 1024 }));
       for (let y = 0; y < saved.height; y++) {
         for (let x = 0; x < saved.width; x++) {

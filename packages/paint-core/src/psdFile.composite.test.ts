@@ -52,7 +52,7 @@ it('writes the exact straight pixels with the same document and caller context t
     vectorPaths: false,
     typeLayers: false,
     smartObjects: null,
-    maxWorkPixels: 1024 * 1024,
+    maxWorkPixels: 512 * 512,
     budget: expect.objectContaining({ allocationBytes: 128 * 1024 * 1024 })
   });
   expect(close).toHaveBeenCalledOnce();
@@ -110,8 +110,8 @@ it('closes the document if the final serialization throws', async () => {
 });
 
 it('assembles bounded tiles row by row, including both partial canvas edges', async () => {
-  const width = 1025;
-  const height = 1026;
+  const width = 513;
+  const height = 514;
   render.mockImplementation((rectangle) => {
     const pixels = new Uint8Array(rectangle.width * rectangle.height * 4);
     for (let y = 0; y < rectangle.height; y++) {
@@ -124,10 +124,10 @@ it('assembles bounded tiles row by row, including both partial canvas edges', as
   });
   await writePsdFile([layer], async () => new Uint8Array(), { left: -3, top: 7, width, height });
   expect(render.mock.calls.map(([rectangle]) => rectangle)).toEqual([
-    { left: 0, top: 0, width: 1024, height: 1024 },
-    { left: 1024, top: 0, width: 1, height: 1024 },
-    { left: 0, top: 1024, width: 1024, height: 2 },
-    { left: 1024, top: 1024, width: 1, height: 2 }
+    { left: 0, top: 0, width: 512, height: 512 },
+    { left: 512, top: 0, width: 1, height: 512 },
+    { left: 0, top: 512, width: 512, height: 2 },
+    { left: 512, top: 512, width: 1, height: 2 }
   ]);
   const composite = vi.mocked(writePsd).mock.calls[1]![1];
   for (let y = 0; y < height; y++) {
@@ -146,10 +146,10 @@ it('assembles bounded tiles row by row, including both partial canvas edges', as
 });
 
 it('closes the document and refuses an approximation in a later tile', async () => {
-  render.mockReturnValueOnce({ ok: true, value: { ...image, width: 1024, pixels: new Uint8Array(4096) } });
-  render.mockReturnValueOnce({ ok: true, value: { ...image, left: 1024, approximations: ['later tile'] } });
+  render.mockReturnValueOnce({ ok: true, value: { ...image, width: 512, pixels: new Uint8Array(2048) } });
+  render.mockReturnValueOnce({ ok: true, value: { ...image, left: 512, approximations: ['later tile'] } });
   await expect(writePsdFile([layer], async () => new Uint8Array(), {
-    left: 0, top: 0, width: 1025, height: 1
+    left: 0, top: 0, width: 513, height: 1
   })).rejects.toMatchObject({ code: 'Approximation', message: 'later tile' });
   expect(close).toHaveBeenCalledOnce();
   expect(writePsd).toHaveBeenCalledOnce();
