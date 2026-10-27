@@ -70,7 +70,7 @@ export interface PsdEditorSession {
    * insertion/deletion/reorder and grouping below six levels, and same-target scalar batches. RGB16 admits rename/opacity;
    * Gray8 and embedded-SWOP CMYK8 also admit opaque native process planes, with explicit preview conversion.
    * Positions are bottom to top after removal. Insert returns allocated IDs and needs the new ID's time.
-   * Rename/opacity/Fill/blend/pixels/mask need one target time; hide/delete/move preserve times and take none.
+   * In v1-v4, rename/opacity/Fill/blend/pixels/mask need one target time; hide/delete/move preserve times and take none.
    * Grouping needs the header and hidden end ID's times plus explicit panel expansion; ungrouping takes no times.
    * Without writers, sources need measured profiles, native metadata, 72 ppi and unscaled opaque previews.
    * Prepared writers consume actual host resource, compositor, ICC, credential and initial-history operands.
@@ -89,7 +89,8 @@ export interface PsdEditorSession {
    * remain authoritative; callers must handle Dependency rather than infer admission from inspection.
    * v4-honest-agent accepts an honest application name with explicit real current-host writers.
    * v5-source-host accepts one command on pristine source bytes, real clocks/crypto.randomUUID identities,
-   * the honest agent and user choices only. Host facts come from the source; missing source witnesses refuse.
+   * the honest agent and user choices only. The library derives affected identities and layerTimes internally.
+   * Host facts come from the source; missing source witnesses refuse. Legacy v1-v3 retain native attribution requirements.
    * Each accepted v5 product may be opened as a new source, not treated as a pending multi-command batch.
    * This contract excludes Adobe JPEG entropy and container byte equivalence. No timestamps or save identities are generated.
    */
@@ -168,6 +169,7 @@ export type PsdReopenSaveContract = PsdReopenSaveContext['contract'];
 /**
  * Current-save basename, real ISO/local EXIF timestamps, crypto.randomUUID identities, honest agent and gamma-1
  * preference. The host supplies every value; the facade never reads a clock or generates save identities.
+ * An honest agent is 1-255 printable ASCII bytes excluding <, > and &. It has no Photoshop default.
  */
 export type PsdPhotoshop26SaveContext = PsdReopenSaveContext['save'];
 
@@ -185,7 +187,11 @@ export type PsdSourceHostSaveContext = Extract<
   { contract: 'photoshop26.reopen-equivalent/v5-source-host' }
 >;
 
-/** Honest v4 attribution with real explicit host writers, optional carried type facts and localized Background name. */
+/**
+ * Honest v4 attribution with real explicit host writers, optional carried type facts and localized Background name.
+ * Resource writerName/readerName and any initialEvent.softwareAgent must equal save.softwareAgent.
+ * Source metadata alone cannot establish current host facts; no compositor, locale, profile or font defaults are inferred.
+ */
 export type PsdHonestAgentSaveContext = Extract<
   PsdReopenSaveContext,
   { contract: 'photoshop26.reopen-equivalent/v4-honest-agent' }
