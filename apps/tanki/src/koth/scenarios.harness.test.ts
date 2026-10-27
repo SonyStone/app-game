@@ -14,9 +14,10 @@ import type { Member } from './team';
  * Short staged situations that show whether the bots handle the moments a player notices, each
  * with the behavior expected and a measure of it, played on `SEEDS` seeds: a Sniper rushed by a
  * Scout, a badly hit team facing a fresh one, the Sniper's place in an ordinary match, a push
- * against a perched Sniper, a lone bot back while the enemy holds the point, an empty point, a
- * push behind the Heavy, a gathering with hurt teammates, two hurt tanks and one repair kit, a
- * repair kit under the enemy's eyes and the fence a team should break open. It prints, per scenario, how
+ * against a perched Sniper, a Sniper covering its team beyond a held point, a lone bot back while
+ * the enemy holds the point, an empty point, a push behind the Heavy, a gathering with hurt
+ * teammates, two hurt tanks and one repair kit, a repair kit under the enemy's eyes and the fence
+ * a team should break open. It prints, per scenario, how
  * often the bots did what was expected and what they did instead; it asserts nothing, as it
  * measures the bots for tuning their behavior before their balance.
  *
@@ -115,6 +116,7 @@ const SCENARIOS: Scenario[] = [
       const sniper = stage.seat('red', 'sniper');
       const where = { middle: 0, base: 0, elsewhere: 0 };
       let driving = 0;
+      let seeing = 0;
       let last: { x: number; y: number } | undefined;
       stage.run(70, () => {
         const at = sniper.tank?.hull.translation();
@@ -125,6 +127,7 @@ const SCENARIOS: Scenario[] = [
           return;
         }
 
+        seeing += stage.sees(sniper, 900) ? 1 : 0;
         const inBaseNow = inBase(stage.match.map.bases.red, at);
         where[inBaseNow ? 'base' : at.x > -720 && at.x < -460 && Math.abs(at.y) < 170 ? 'middle' : 'elsewhere'] += 1;
 
@@ -136,7 +139,7 @@ const SCENARIOS: Scenario[] = [
       const share = (count: number) => Math.round((count / total) * 100);
       return {
         pass: where.middle / total >= 0.4 && where.elsewhere / total <= 0.35 && driving / total <= 0.34,
-        note: `middle ${share(where.middle)}%, base ${share(where.base)}%, elsewhere ${share(where.elsewhere)}%, driving ${share(driving)}%`
+        note: `middle ${share(where.middle)}%, base ${share(where.base)}%, elsewhere ${share(where.elsewhere)}%, driving ${share(driving)}%, seeing ${share(seeing)}%, kills ${sniper.kills}, deaths ${sniper.deaths}`
       };
     }
   },
@@ -157,6 +160,43 @@ const SCENARIOS: Scenario[] = [
       return {
         pass: sniper.kills <= 2,
         note: `the Sniper destroyed ${sniper.kills} of ${lost} lost${sniperDied === undefined ? '' : `, died at ${roundTo(sniperDied)} s`}`
+      };
+    }
+  },
+  {
+    name: 'sniper covers a held point',
+    expected: 'with the point taken and its team fighting on beyond it, out of its perch\'s view, the Sniper moves up behind its team and sees the enemy within 10 s, from 560 px or more',
+    roster: { red: ['sniper', 'soldier', 'heavy', 'demoman'], blue: ['soldier', 'scout', 'heavy', 'demoman'] },
+    play(stage) {
+      const sniper = stage.seat('red', 'sniper');
+      const [, ...others] = stage.team('red');
+      // The enemy stands where the fight was, so the fight stays out of the perch's view.
+      stage.place(sniper, { x: -550, y: -90 }, 0);
+      others.forEach((member, index) => stage.place(member, { x: 300 + index * 50, y: -40 - index * 20 }, 0));
+      stage.team('blue').forEach((member, index) => stage.place(member, { x: 600 + (index % 2) * 60, y: index < 2 ? -80 : -150 }, Math.PI));
+      stage.team('blue').forEach((member) => stage.freeze(member));
+      stage.holdPointFor('red');
+      let seen: number | undefined;
+      let closest = Infinity;
+      let ahead = false;
+      stage.run(12, () => {
+        const at = sniper.tank?.hull.translation();
+
+        if (!at) {
+          return;
+        }
+
+        seen ??= stage.sees(sniper, 900) ? stage.match.time : undefined;
+        ahead ||= others.every((member) => !member.tank || member.tank.hull.translation().x < at.x);
+        stage.team('blue').forEach((member) => {
+          const there = member.tank?.hull.translation();
+          closest = there ? Math.min(closest, Math.hypot(there.x - at.x, there.y - at.y)) : closest;
+        });
+      });
+      const where = seen === undefined ? 'never saw the enemy' : `saw the enemy at ${roundTo(seen)} s`;
+      return {
+        pass: seen !== undefined && seen < 10 && closest >= 560 && !ahead && sniper.deaths === 0,
+        note: `${where}, came within ${Math.round(closest)} px of it${ahead ? ', ahead of its whole team' : ''}`
       };
     }
   },

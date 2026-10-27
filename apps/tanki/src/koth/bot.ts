@@ -87,6 +87,8 @@ export function createBot(member: Member, context: BotContext) {
   let kit: Readonly<Kit> | undefined;
   let gun: Aim = { target: undefined, since: 0, reaction: 0, offset: undefined, shots: 0, seenAt: -Infinity, settledFrom: 0, lag: undefined };
   let dodge: { until: number; direction: Point } | undefined;
+  /** Where a casemate hull turning on the spot stood in its turn at the last look, to tell a wedged one (see `wedged`). */
+  let swing: { at: number; rotation: number } | undefined;
   /** The drive direction the driver planned last step, where an idle turret looks. */
   let lastMove: Point = { x: 0, y: 0 };
   const judged = new Set<number>();
@@ -221,17 +223,53 @@ export function createBot(member: Member, context: BotContext) {
       // A casemate gun turns its whole hull to aim, on the spot, at a wall to break too; a charging one holds still.
       const turnTo = breach?.aim !== undefined ? (mount.kind === 'casemate' && !inArc(tank, breach.aim, mount.arc - ARC_MARGIN) ? breach.aim : undefined) : stance.turnTo;
 
-      if (turnTo !== undefined && mount.kind === 'casemate' && !dodge) {
+      const pivoting = turnTo !== undefined && mount.kind === 'casemate' && !dodge;
+      // A hull wedged where it cannot swing round, as in a crater shot into a building, backs out and tries again.
+      const backing = pivoting ? driver.backingOut(now) : undefined;
+
+      if (backing) {
+        member.pivot = undefined;
+        swing = undefined;
+        move = backing;
+      } else if (pivoting) {
         member.pivot ??= { x: position.x, y: position.y };
         move = turnInPlace(tank, member.pivot, turnTo, mount.traverse, tank.pullSpeed);
+
+        if (wedged(tank, now)) {
+          driver.backOut(now, position, tank.hull.rotation());
+          member.pivot = undefined;
+        }
       } else {
         member.pivot = undefined;
+        swing = undefined;
       }
 
       lastMove = planned;
       combat.drive(tank, move);
     }
   };
+
+  /**
+   * Whether the casemate hull turning on the spot is wedged: it turned less than `WEDGED_TURN`
+   * rad over the last `WEDGED_TIME` s, as it does when the sides of a crater or a corner keep it
+   * from swinging round. A turn that goes on turns faster than that until within the gun's arc.
+   */
+  function wedged(tank: Tank, now: number) {
+    const rotation = tank.hull.rotation();
+
+    if (!swing) {
+      swing = { at: now, rotation };
+      return false;
+    }
+
+    if (now - swing.at < WEDGED_TIME) {
+      return false;
+    }
+
+    const turned = Math.abs(angleBetween(swing.rotation, rotation));
+    swing = { at: now, rotation };
+    return turned < WEDGED_TURN;
+  }
 
   /**
    * The drive direction of a sidestep away from an enemy shell about to hit the tank, or
@@ -1647,6 +1685,9 @@ const GROUP_REACH = 1.2;
  * a target out of sight for `KEEP_CHARGE` s.
  */
 const ARC_MARGIN = 0.03;
+/** A casemate hull that turned on the spot less than `WEDGED_TURN` rad in `WEDGED_TIME` s is wedged. */
+const WEDGED_TIME = 0.5;
+const WEDGED_TURN = 0.08;
 /** A casemate gun on watch turns toward threats within `WATCH_RANGE` px, once its view is `WATCH_SLACK` rad past its arc. */
 const WATCH_RANGE = 650;
 const WATCH_SLACK = 0.25;

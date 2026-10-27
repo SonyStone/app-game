@@ -153,6 +153,10 @@ export function createTeamBoard(
   /** Shortcuts a bot broke through, open at least as wide as a hull though the grid may not count them open yet. */
   const opened = new Set<Shortcut>();
   const perchOf = new Map<Member, Perch>();
+  /** Each bot Sniper's lookout while its perch is of no use, and when it last saw an enemy from there (see `chooseLookouts`). */
+  const lookoutOf = new Map<Member, { perch: Perch; coveredAt: number }>();
+  /** Since when each bot Sniper's perch has seen none of the enemies the team sees. */
+  const blindSince = new Map<Member, number>();
   /** Each member's staging spot out of the known enemies' sight, found anew every update. */
   const safeStaging = new Map<Member, Point>();
   /** Snipers fallen back to their base from an unsafe perch, and when their perch was last unsafe. */
@@ -364,8 +368,9 @@ export function createTeamBoard(
     },
 
     /**
-     * Where a sniper watches from, and where it looks while nothing is in sight: its perch, or
-     * its base while the perch is unsafe (see `perchSpot`).
+     * Where a sniper watches from, and where it looks while nothing is in sight: its perch, a spot
+     * forward of it while the fight is out of the perch's view, or its base while the perch is
+     * unsafe (see `perchSpot`).
      */
     perchSpot(member: Member): Perch {
       return perchSpot(member);
@@ -465,6 +470,7 @@ export function createTeamBoard(
       buildDanger();
       assignRoles();
       decideIntent(now);
+      chooseLookouts(now);
       refreshPosts(now);
       assignBreach(now);
       assignJobs();
@@ -495,6 +501,8 @@ export function createTeamBoard(
       pushers.clear();
       lateSince.clear();
       perchOf.clear();
+      lookoutOf.clear();
+      blindSince.clear();
       fallenBack.clear();
       // The walls stand as built again, and the Sniper's perch distance may have changed since.
       perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
@@ -520,6 +528,8 @@ export function createTeamBoard(
    * lie in the middle, by the hall, from where the Sniper sees the most. While the perch is too
    * dangerous (see `threatened`), the Sniper does not fight for it or look for another but falls
    * back to its base, saying so, and comes back once the perch has been safe for `PERCH_CLEAR` s.
+   * A bot Sniper whose team fights on beyond the point, out of its perch's view, watches from a
+   * lookout instead while it has a safe one (see `chooseLookouts`).
    */
   function perchSpot(member: Member): Perch {
     let perch = perchOf.get(member);
@@ -532,8 +542,15 @@ export function createTeamBoard(
 
     const now = context.clock();
 
+    let lookout = lookoutOf.get(member)?.perch;
+
+    if (lookout && threatened(lookout)) {
+      lookoutOf.delete(member);
+      lookout = undefined;
+    }
+
     if (threatened(perch)) {
-      if (!fallenBack.has(member) && member.tank) {
+      if (!fallenBack.has(member) && member.tank && !lookout) {
         radio.say(member, 'fallBack', { priority: 2, marker: { kind: 'base', ...baseSpotOf(member) } });
       }
 
@@ -542,7 +559,122 @@ export function createTeamBoard(
       fallenBack.delete(member);
     }
 
-    return fallenBack.has(member) ? { ...baseSpotOf(member), watch: perch, score: 0 } : perch;
+    return lookout ?? (fallenBack.has(member) ? { ...baseSpotOf(member), watch: perch, score: 0 } : perch);
+  }
+
+  /**
+   * Sends each bot Sniper up to a lookout when its team holds the point and fights on beyond it,
+   * out of the view of the perch, which faces the point and sees little past it: once the perch
+   * has seen none of the enemies seen in the last `LOOKOUT_FRESH` s for `LOOKOUT_WAIT` s. Without
+   * the point the Sniper waits on its perch for the enemy to come for it. A lookout is the open
+   * spot hidden from every known enemy (see `isHidden`), within `LOOKOUT_RANGE` px of the perch,
+   * that sees the most of those enemies within `LOOKOUT_SIGHT` px, at least `LOOKOUT_GAP` px from
+   * each, nearest to the Sniper: `LOOKOUT_BEHIND` px behind the foremost teammate, at most
+   * `LOOKOUT_CROSS` px past the point and no farther back than the perch. The Sniper keeps its
+   * lookout while it sees an enemy from there and `LOOKOUT_KEEP` s longer, and goes back to its
+   * perch once the perch sees an enemy, the point is lost or the team regroups or falls back.
+   */
+  function chooseLookouts(now: number) {
+    const fresh = [...sightings.values()].filter((sighting) => now - sighting.seenAt < LOOKOUT_FRESH);
+    const reaches = new Map<Sighting, Float32Array>();
+    const seen = (spot: Point) =>
+      fresh.filter((sighting) => {
+        const reach = reaches.get(sighting) ?? sightReach(grid, sight, sighting.position, LOOKOUT_SIGHT, SIGHT_RAYS, rubbleSight);
+        reaches.set(sighting, reach);
+        return inReach(reach, sighting.position, spot);
+      });
+
+    for (const member of members) {
+      const home = perchOf.get(member);
+      const lookout = lookoutOf.get(member);
+
+      if (!member.tank || member.human || member.role !== 'sniper' || !home || intent === 'regroup' || intent === 'fallBack') {
+        lookoutOf.delete(member);
+        blindSince.delete(member);
+        continue;
+      }
+
+      if (context.capture().owner !== team || seen(home).length > 0) {
+        lookoutOf.delete(member);
+        blindSince.delete(member);
+        continue;
+      }
+
+      if (lookout && seen(lookout.perch).length > 0) {
+        lookout.coveredAt = now;
+        continue;
+      }
+
+      const kept = lookout !== undefined && now - lookout.coveredAt < LOOKOUT_KEEP;
+
+      if (fresh.length === 0) {
+        blindSince.delete(member);
+
+        if (!kept) {
+          lookoutOf.delete(member);
+        }
+
+        continue;
+      }
+
+      const blind = blindSince.get(member) ?? now;
+      blindSince.set(member, blind);
+
+      if (kept || now - blind < LOOKOUT_WAIT) {
+        continue;
+      }
+
+      const allies = members.filter((other) => other !== member && other.tank);
+      const perch = lookoutSpot(member.tank.hull.translation(), home, allies, seen);
+
+      if (perch) {
+        lookoutOf.set(member, { perch, coveredAt: now });
+      } else {
+        lookoutOf.delete(member);
+      }
+    }
+  }
+
+  /**
+   * The lookout of a Sniper at `from` whose perch is `home`, as `chooseLookouts` describes,
+   * watching the middle of the enemies it sees there.
+   */
+  function lookoutSpot(from: Point, home: Point, allies: readonly Member[], seen: (spot: Point) => Sighting[]): Perch | undefined {
+    const side = team === 'red' ? -1 : 1;
+    const ahead = (spot: Point) => (spot.x - map.point.x) * side;
+    // How far toward its own side of the point a spot must lie, the point's middle at 0: behind the foremost teammate, or the perch without one.
+    const front = Math.max(Math.min(...allies.map((ally) => ahead(ally.tank!.hull.translation()))) + LOOKOUT_BEHIND, -LOOKOUT_CROSS);
+    const back = Math.min(ahead(home), front);
+    const minCol = Math.max(Math.floor((home.x - LOOKOUT_RANGE - grid.originX) / grid.cell), 0);
+    const maxCol = Math.min(Math.ceil((home.x + LOOKOUT_RANGE - grid.originX) / grid.cell), grid.cols - 1);
+    const minRow = Math.max(Math.floor((home.y - LOOKOUT_RANGE - grid.originY) / grid.cell), 0);
+    const maxRow = Math.min(Math.ceil((home.y + LOOKOUT_RANGE - grid.originY) / grid.cell), grid.rows - 1);
+    let best: Perch | undefined;
+
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        const cell = row * grid.cols + col;
+        const at = cellCenter(grid, cell);
+
+        if (!isOpenCell(grid, cell) || !isHidden(cell) || ahead(at) < back || distanceTo(at, home) > LOOKOUT_RANGE) {
+          continue;
+        }
+
+        const watched = seen(at);
+
+        if (watched.length === 0 || watched.some((sighting) => distanceTo(at, sighting.position) < LOOKOUT_GAP)) {
+          continue;
+        }
+
+        const score = watched.length * LOOKOUT_SEEN - distanceTo(at, from) / LOOKOUT_TRAVEL;
+
+        if (!best || score > best.score) {
+          best = { x: at.x, y: at.y, watch: centroidOf(watched.map((sighting) => sighting.position)), score };
+        }
+      }
+    }
+
+    return best;
   }
 
   /**
@@ -1265,9 +1397,44 @@ const PERCH_THREAT = 220;
 const SNIPER_SIGHT = 900;
 const SNIPER_AIMED = 0.3;
 const PERCH_CLEAR = 5;
+/**
+ * A bot Sniper on a held point whose perch has seen none of the enemies seen in the last
+ * `LOOKOUT_FRESH` s for `LOOKOUT_WAIT` s watches from a lookout (see `chooseLookouts`): a spot
+ * within `LOOKOUT_RANGE` px of its perch that sees them within `LOOKOUT_SIGHT` px and at least
+ * `LOOKOUT_GAP` px away, beyond the 470-480 px a Soldier and a Demoman fire at, `LOOKOUT_BEHIND`
+ * px behind its foremost teammate and at most `LOOKOUT_CROSS` px past the point. Each enemy it
+ * sees there scores `LOOKOUT_SEEN`, each `LOOKOUT_TRAVEL` px to drive there one less. It keeps the
+ * spot `LOOKOUT_KEEP` s after it saw the last enemy from there.
+ */
+const LOOKOUT_FRESH = 2;
+const LOOKOUT_WAIT = 3;
+const LOOKOUT_SIGHT = 850;
+const LOOKOUT_GAP = 560;
+const LOOKOUT_RANGE = 650;
+const LOOKOUT_BEHIND = 60;
+const LOOKOUT_CROSS = 150;
+const LOOKOUT_SEEN = 3;
+const LOOKOUT_TRAVEL = 250;
+const LOOKOUT_KEEP = 4;
 /** Half size of a crate's armor. */
 const CRATE_HALF = { x: 21.25, y: 46.25 };
 const CRATE_COST = 3;
+
+/**
+ * Whether `to` is in the sight of a viewer at `from` whose free sight along each of
+ * `SIGHT_RAYS` directions `reach` holds, as `sightReach` gives it.
+ */
+function inReach(reach: Float32Array, from: Point, to: Point) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const bin = ((Math.atan2(dy, dx) / (Math.PI * 2)) * SIGHT_RAYS + SIGHT_RAYS) % SIGHT_RAYS;
+  return Math.hypot(dx, dy) <= Math.min(reach[Math.floor(bin) % SIGHT_RAYS], reach[Math.ceil(bin) % SIGHT_RAYS]);
+}
+
+/** The middle of `points`. */
+function centroidOf(points: readonly Point[]): Point {
+  return { x: points.reduce((sum, point) => sum + point.x, 0) / points.length, y: points.reduce((sum, point) => sum + point.y, 0) / points.length };
+}
 
 /** Signed distance to an axis-aligned box of half size `halfX` x `halfY` around the origin. */
 function boxDistance(x: number, y: number, halfX: number, halfY: number) {

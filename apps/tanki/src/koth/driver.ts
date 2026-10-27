@@ -122,6 +122,25 @@ export function createDriver(grid: NavGrid) {
       return { x: steered.x * throttle * ease, y: steered.y * throttle * ease };
     },
 
+    /**
+     * Backs the tank out for a moment the way with the most room, as from being stuck, for a hull
+     * that is not driving but cannot do what it does instead, as a casemate wedged in a crater
+     * that cannot turn on the spot: never the way the hull's nose, at `heading`, points nor one
+     * tried already since the tank last moved. `backingOut` gives the direction meanwhile.
+     */
+    backOut(now: number, position: Point, heading: number) {
+      stalls++;
+      const direction = wayOut(grid, position, { x: Math.cos(heading), y: Math.sin(heading) }, tried);
+      unstick = { until: now + UNSTICK_TIME, direction };
+      tried.push(direction);
+      plannedAt = -Infinity;
+    },
+
+    /** The drive direction while the tank backs out of where it got stuck, else `undefined`. */
+    backingOut(now: number) {
+      return unstick && now < unstick.until ? unstick.direction : undefined;
+    },
+
     /** Forgets the path and the stall history, for a new tank; the clock may have started over. */
     reset() {
       last = undefined;
