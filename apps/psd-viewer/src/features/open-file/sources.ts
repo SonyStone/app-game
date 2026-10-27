@@ -1,11 +1,34 @@
 import type { PsdRenderSettings } from '@app-game/psd/viewer';
 import type { PsdSource } from '../document';
+import { requiresWindowedRendering } from '../psd-worker/protocol';
 
-/** A chosen or dropped file as a document source. */
+/**
+ * A chosen or dropped file. Small canvases use an asynchronous transferable read while the display warms.
+ * Files over 128 MiB, PSBs over 64 MiB, and huge canvases retain bounded worker-owned Blob reads.
+ */
 export function fileSource(file: File): PsdSource {
   return {
     name: file.name,
-    read: async () => file,
+    read: async () => {
+      if (file.size > 128 * 1024 ** 2) {
+        return file;
+      }
+
+      const header = new DataView(await file.slice(0, 26).arrayBuffer());
+      if (
+        header.byteLength >= 26 &&
+        header.getUint32(0) === 0x38425053 &&
+        ((header.getUint16(4) === 2 && file.size > 64 * 1024 ** 2) ||
+          requiresWindowedRendering({
+            width: header.getUint32(18),
+            height: header.getUint32(14)
+          }))
+      ) {
+        return file;
+      }
+
+      return file.arrayBuffer();
+    },
     mode: new URLSearchParams(location.search).get('current') === '1' ? 'strict' : undefined
   };
 }
