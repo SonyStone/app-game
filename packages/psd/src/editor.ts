@@ -87,6 +87,8 @@ export interface PsdEditorSession {
    * unsupported histories/profiles, mixed-target/structural batches and active OCIO return named atomic refusals.
    * Missing context refuses nonempty batches; an empty batch certifies no save. Source-specific writer guards
    * remain authoritative; callers must handle Dependency rather than infer admission from inspection.
+   * The bundled validator currently requires a softwareAgent beginning with "Adobe Photoshop ". A non-Adobe
+   * host must refuse this path rather than claim that identity. New-document creation has a separate honest-agent contract.
    * This contract excludes Adobe JPEG entropy and container byte equivalence. No timestamps or save identities are generated.
    */
   editRasterTreeExact(
@@ -95,7 +97,9 @@ export interface PsdEditorSession {
   ): PsdEditorResult<PsdEditOutcome>;
   /**
    * Applies nonvisual metadata writes atomically. File Info publicDomain requires explicit lifecycle values and
-   * canonical PS26 XMP/IIM/MD5/EXIF companions. Other copyright transitions, titles and scalar XMP writes refuse.
+   * canonical PS26 XMP/IIM/MD5/EXIF companions. Its bundled copyright writer hardcodes Photoshop attribution;
+   * non-Adobe hosts must refuse copyright writes until a truthful agent operand is supported.
+   * Other copyright transitions, titles and scalar XMP writes refuse.
    */
   editStateMetadata(batch: readonly PsdStateMetadataEdit[]): PsdEditorResult<PsdEditOutcome>;
   /**

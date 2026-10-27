@@ -6,6 +6,7 @@ import { ComparisonTools } from './features/comparison/ComparisonTools';
 import { presentationSource } from './features/comparison/presentation';
 import { createPsdDocument, createPsdRender, type PsdSource } from './features/document';
 import { createOpeningPreview } from './features/document/createOpeningPreview';
+import { Editing } from './features/editing/Editing';
 import { ExamplesMenu } from './features/examples';
 import { ExportPanel } from './features/export/ExportPanel';
 import { createFonts, FontsPanel, TextSupportSection } from './features/fonts';
@@ -75,6 +76,10 @@ export function App() {
   const fonts = createFonts(client, () => (initial.ready() ? opened() : undefined), selected);
   const { choice: stateChoice, choose: chooseState, withState } = createStateChoice(source);
   const document = () => valueOf(opened());
+  const [editorRevision, setEditorRevision] = createSignal(() => {
+    source();
+    return 0;
+  });
   const viewport = createViewport(() => document()?.info, source);
   const windowed = () =>
     Boolean(document() && requiresWindowedRendering((valueOf(plannedOpened()) ?? document())!.info));
@@ -452,6 +457,15 @@ export function App() {
               <h2>Layers</h2>
               <span>{document() ? `${document()!.info.layerRecords} records` : ''}</span>
             </header>
+            <Show when={source()} keyed>
+              {(original) => (
+                <Show when={document()}>
+                  {(current) => (
+                    <Editing client={client} document={current()} name={original.name} onRevision={setEditorRevision} />
+                  )}
+                </Show>
+              )}
+            </Show>
             <Show when={document()} fallback={<p class={styles.empty}>Open a document to see its layers.</p>}>
               {(current) => (
                 <LayersPanel
@@ -506,6 +520,7 @@ export function App() {
                   y: Math.floor((event.clientY - rect.top - camera.y) / camera.scale)
                 });
               }}
+              data-editor-revision={editorRevision()}
               data-view={view()}
               data-camera-scale={viewport.view().scale}
               data-camera-x={viewport.view().x}

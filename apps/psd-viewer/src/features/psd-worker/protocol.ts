@@ -21,6 +21,7 @@ import type {
   PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
+import type { EditingRequest, EditingResponse, EditingResult } from '../editing/contracts';
 import type { SessionFont } from '../fonts/addFontFile';
 import type { DisplayTile } from '../gpu-viewport/displayTiles';
 import type { PsdPerformanceSample } from '../telemetry/performance';
@@ -85,6 +86,7 @@ type PsdRequestBody =
   | { id: number; type: 'listFonts' }
   | { id: number; type: 'documentFonts'; document: number }
   | { id: number; type: 'textSupport'; document: number; index: number }
+  | { id: number; type: 'editor'; document: number; request: EditingRequest }
   | { id: number; type: 'close' };
 
 /**
@@ -135,6 +137,7 @@ type PsdReplyBody =
   | { id: number; type: 'fonts'; fonts: SessionFont[] }
   | { id: number; type: 'documentFonts'; report: PsdDocumentFonts }
   | { id: number; type: 'textSupport'; support: PsdTextSupport | null }
+  | { id: number; type: 'editor'; result: EditingResult<EditingResponse> }
   | { id: number; type: 'closed' }
   | { id: number; type: 'failed'; error: WorkerFailure };
 
