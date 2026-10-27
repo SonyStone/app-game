@@ -1,5 +1,6 @@
 import type { Tank } from '../arena/bodies';
 import type { KothKill, KothMatch } from './match';
+import type { Lane, MarkerKind, RadioLine } from './radio';
 import type { TeamId } from './rules';
 import type { TankClassId } from './tanks';
 
@@ -59,12 +60,13 @@ export type ChronicleThought = {
 export type ChronicleCallout = {
   step: number;
   member: number;
-  line: string;
+  line: RadioLine;
   tankClass?: TankClassId;
   ally?: number;
-  lane?: string;
+  lane?: Lane;
   seconds?: number;
-  marker?: { kind: string; x: number; y: number };
+  /** Where the marker was put, and the member whose tank it is on, if any, which it follows while that tank lives. */
+  marker?: { kind: MarkerKind; x: number; y: number; on?: number };
 };
 
 /**
@@ -86,7 +88,8 @@ export function createChronicler(match: KothMatch, every = 15) {
   };
   const tanks = new Map<number, Tank | undefined>();
   const lastThought = new Map<number, string>();
-  let lastCallout = -1;
+  // Each team's radio numbers its own lines.
+  const lastCallout = { red: -1, blue: -1 };
   let lastCapture = '';
 
   return {
@@ -102,9 +105,11 @@ export function createChronicler(match: KothMatch, every = 15) {
         tanks.set(member.id, member.tank);
       }
 
-      for (const callout of [...match.boards.red.callouts, ...match.boards.blue.callouts].sort((a, b) => a.id - b.id)) {
-        if (callout.id > lastCallout) {
-          lastCallout = callout.id;
+      for (const callout of [...match.boards.red.callouts, ...match.boards.blue.callouts]) {
+        const team = callout.member.team;
+
+        if (callout.id > lastCallout[team]) {
+          lastCallout[team] = callout.id;
           chronicle.radio.push({
             step,
             member: callout.member.id,
@@ -113,7 +118,12 @@ export function createChronicler(match: KothMatch, every = 15) {
             ally: callout.ally?.id,
             lane: callout.lane,
             seconds: callout.seconds,
-            marker: callout.marker && { kind: callout.marker.kind, x: tenth(callout.marker.x), y: tenth(callout.marker.y) }
+            marker: callout.marker && {
+              kind: callout.marker.kind,
+              x: tenth(callout.marker.x),
+              y: tenth(callout.marker.y),
+              on: callout.marker.on && [...tanks].find(([, tank]) => tank === callout.marker!.on)?.[0]
+            }
           });
         }
       }

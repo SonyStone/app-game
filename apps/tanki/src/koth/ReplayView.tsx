@@ -10,7 +10,7 @@ import { DEFAULT_LAYERS, drawDebug, reportMember, type DebugLayer, type MemberRe
 import { BotPanel } from './BotPanel';
 import { BotThoughts, KothHud, type HudState, type ThoughtView } from './Hud';
 import { useKothI18n } from './i18n/i18n';
-import { calloutsOnScreen, fitCanvas, thoughtsOnScreen } from './onScreen';
+import { calloutsAt, fitCanvas, thoughtsOnScreen } from './onScreen';
 import './poster.css';
 import { RadioOverlay, type CalloutView } from './RadioOverlay';
 import type { Recording } from './recording';
@@ -441,8 +441,8 @@ function ReplayScene(props: {
       diverged: builder?.diverged ?? thinker.diverged,
       syncing: !synced,
       state: shown?.hud,
-      thoughts: synced ? thoughtsOnScreen(match, camera, screen).filter((thought) => props.allThoughts || thought.id === props.selected) : [],
-      callouts: synced ? calloutsOnScreen(match, camera, screen, true) : [],
+      thoughts: synced ? thoughtsOnScreen(match, camera, screen).filter((thought) => props.allThoughts || thought.id === props.selected).map(onTape) : [],
+      callouts: calloutsAt(recording.chronicle, time, positionOf, camera, screen),
       selection: ring && team && { ...ring, radius: RING_RADIUS * camera.zoom, team },
       report: synced && props.selected !== undefined ? reportMember(match, props.selected) : undefined
     });
@@ -487,6 +487,17 @@ function ReplayScene(props: {
     }
 
     drawDebug(context, camera, screen, thinker.match, synced ? props.selected : undefined, props.layers);
+  }
+
+  /** Where member `id`'s tank is as the tape draws it now, between steps too; `undefined` while it waits to respawn. */
+  function positionOf(id: number) {
+    return members[tape.members.findIndex((member) => member.id === id)];
+  }
+
+  /** A bot's thought, its label over its tank as the tape draws it, between steps too, rather than at the step the second run is on. */
+  function onTape(thought: ThoughtView): ThoughtView {
+    const at = positionOf(thought.id);
+    return at ? { ...thought, ...worldToScreen(camera, at, screen) } : thought;
   }
 
   /** Frames the whole map, follows the picked tank, or leaves the view where the player put it. */

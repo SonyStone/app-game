@@ -20,7 +20,7 @@ describe('a recorded match on its timeline', () => {
     ],
     kills: [{ step: 500, victim: 1, victimClass: 'soldier', killer: 0, killerClass: 'soldier', x: 0, y: 0 }],
     thoughts: [thought(0, 'goToPoint'), thought(100, 'goToPoint'), thought(200, 'attackFront', 0), thought(300, 'attackFront', 0), thought(720, 'goToPoint')],
-    radio: [{ step: 210, member: 1, line: 'enemy', tankClass: 'soldier' }],
+    radio: [{ step: 210, member: 1, line: 'focus', tankClass: 'soldier' }],
     capture: [{ step: 0 }, { step: 800, owner: 'blue' }]
   };
   const timeline = timelineOf(chronicle, 1200);
