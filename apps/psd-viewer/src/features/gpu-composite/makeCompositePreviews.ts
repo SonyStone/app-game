@@ -97,16 +97,25 @@ export function makeCompositePreviews(client: WindowClient, changed: (state: Com
           return undefined;
         }
         if (!prepared.ok) {
-          if (prepared.error.kind === 'unsupported') {
+          if (prepared.error.kind === 'unsupported' || prepared.error.kind === 'budget') {
             rejectedSettings.add(settingsKey);
+            sources.clear();
+            bytes = 0;
           }
-          notify({ state: 'unsupported', reason: prepared.error.message });
+          notify({ state: 'unsupported', reason: prepared.error.message, preparedBytes: bytes });
           return undefined;
         }
         source = prepared.value;
         const required = source.layers.reduce((sum, layer) => sum + layer.samples.byteLength, 0);
         if (required > 16 * 1024 * 1024) {
-          notify({ state: 'unsupported', reason: 'GPU operands exceed the 16 MiB CPU residency budget.' });
+          rejectedSettings.add(settingsKey);
+          sources.clear();
+          bytes = 0;
+          notify({
+            state: 'unsupported',
+            reason: 'GPU operands exceed the 16 MiB CPU residency budget.',
+            preparedBytes: 0
+          });
           return undefined;
         }
         for (const [key, cached] of sources) {

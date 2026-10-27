@@ -305,20 +305,52 @@ it('refuses a single operand set larger than the CPU LRU instead of retaining it
     (state) => changes.push(state)
   );
   try {
-    expect(
-      await previews.prepare(
-        {
-          opened: { document: 1, info: doc.info, layers: [...doc.layers], states: doc.states, opening: doc.opening },
-          settings: photoshopDefaultSettings,
-          visibility: []
-        },
-        rect,
-        rect,
-        vi.fn()
-      )
-    ).toBeUndefined();
+    const snapshot: WindowSnapshot = {
+      opened: { document: 1, info: doc.info, layers: [...doc.layers], states: doc.states, opening: doc.opening },
+      settings: photoshopDefaultSettings,
+      visibility: []
+    };
+    expect(await previews.prepare(snapshot, rect, rect, vi.fn())).toBeUndefined();
     expect(changes.at(-1)).toMatchObject({ state: 'unsupported', preparedBytes: 0 });
     expect(changes.at(-1)?.reason).toContain('16 MiB');
+    expect(previews.unavailable(snapshot)).toBe(true);
+  } finally {
+    previews.clear();
+    doc.close();
+  }
+});
+
+it('releases prior operands before restoring the full CPU budget for refused settings', async () => {
+  const opened = await openPsd(
+    await readFile(new URL('../../../packages/psd/test/editor/flat-rgb8.psd', import.meta.url))
+  );
+  if (!opened.ok) {
+    throw new Error(opened.error.message);
+  }
+  const doc = opened.value;
+  const rect = { left: 0, top: 0, width: 8, height: 8 };
+  const snapshot: WindowSnapshot = {
+    opened: { document: 1, info: doc.info, layers: [...doc.layers], states: doc.states, opening: doc.opening },
+    settings: photoshopDefaultSettings,
+    visibility: []
+  };
+  const changes: CompositeDiagnostics[] = [];
+  const previews = makeCompositePreviews(
+    {
+      renderWindow: vi.fn(),
+      gpuLayers: vi.fn(async (...[_document, rect, settings]: Parameters<PsdClient['gpuLayers']>) =>
+        prepareGpuLayers(doc, rect, settings)
+      )
+    },
+    (state) => changes.push(state)
+  );
+  try {
+    expect(await previews.prepare(snapshot, rect, rect, vi.fn())).toBeDefined();
+    expect(changes.at(-1)!.preparedBytes).toBeGreaterThan(0);
+    const refused = { ...snapshot, settings: { ...snapshot.settings, linearBlending: true } };
+    expect(await previews.prepare(refused, rect, rect, vi.fn())).toBeUndefined();
+    expect(previews.unavailable(refused)).toBe(true);
+    expect(changes.at(-1)).toMatchObject({ state: 'unsupported', preparedBytes: 0 });
   } finally {
     previews.clear();
     doc.close();

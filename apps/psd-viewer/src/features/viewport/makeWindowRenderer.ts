@@ -24,8 +24,12 @@ export function makeWindowRenderer(
   // A display upload may still retain one source buffer after LRU eviction, until the next frame reconciles tiles.
   // Its 544-square RGBA source is below 2 MiB. Reserve that headroom rather than hiding it outside CPU accounting.
   const uploadReserveBytes = 2 * 1024 * 1024;
-  // Compositing reserves 16 MiB for operands, 24 MiB for preparation, and 4 MiB for verification/transfer.
-  const cacheLimitBytes = () => budgetBytes - uploadReserveBytes - (previous?.gpuComposite ? 44 * 1024 * 1024 : 0);
+  // Active compositing reserves 16 MiB for operands, 24 MiB for preparation, and 4 MiB for verification/transfer.
+  // A known refusal releases that reservation so the strict CPU fallback retains its ordinary coverage.
+  const cacheLimitBytes = () =>
+    budgetBytes -
+    uploadReserveBytes -
+    (previous?.gpuComposite && !compositor.unavailable(previous) ? 44 * 1024 * 1024 : 0);
   const cache = new Map<string, DisplayTile[]>();
   const compositor = makeCompositePreviews(client, compositeChanged);
   const pending = new Map<
