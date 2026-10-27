@@ -1105,23 +1105,206 @@
 
 /* Kill-cam */
 
-.tk-killcam {
+.tk-killcam-grey {
+  position: absolute;
+  inset: 0;
+}
+/* Black bars, moved in and out by the film; the top one stamps the title, the bottom one tells the shot. */
+.tk-killcam-bar {
+  position: absolute;
+  right: 0;
+  left: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 12px;
+  justify-content: space-between;
+  gap: 16px;
+  height: 11vh;
+  padding: 0 28px;
+  color: var(--paper-light);
+  background: var(--ink);
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tk-killcam-bar.tk-top {
+  top: 0;
+}
+.tk-killcam-bar.tk-bottom {
+  bottom: 0;
+}
+.tk-killcam-bar .tk-note {
+  margin-left: auto;
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.7;
+}
+.tk-killcam-bar.tk-top b {
+  padding: 2px 12px;
+  color: var(--paper-light);
+  background: var(--red);
+  border: 3px solid var(--paper-light);
+  transform: rotate(-2deg);
+}
+/* The tape running back: scan lines that crawl, a shaking picture and a blinking label. */
+.tk-killcam-rewind {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.08) 0 2px, transparent 2px 5px);
+  animation: tk-rewind-crawl 0.25s linear infinite;
+}
+.tk-killcam-rewind b {
+  position: absolute;
+  top: calc(11vh + 18px);
+  right: 32px;
+  color: var(--paper-light);
+  font-size: 34px;
+  letter-spacing: 0.1em;
+  text-shadow: 3px 0 0 var(--red), -3px 0 0 var(--blue);
+  animation: tk-rewind-blink 0.5s steps(2) infinite;
+}
+@keyframes tk-rewind-crawl {
+  from {
+    background-position-y: 0;
+  }
+  to {
+    background-position-y: 10px;
+  }
+}
+@keyframes tk-rewind-blink {
+  to {
+    visibility: hidden;
+  }
+}
+/* Who did it: a plate in the killer's team color with what it had in mind. */
+.tk-killcam-card {
+  position: absolute;
+  top: calc(11vh + 24px);
+  left: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 360px;
+  padding: 10px 16px 12px;
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 3px solid var(--ink);
+  border-left: 12px solid var(--team);
+  box-shadow: 6px 6px 0 var(--ink);
+}
+.tk-killcam-card .tk-note {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.tk-killcam-card b {
+  font-size: 30px;
+  line-height: 1.05;
+  text-transform: uppercase;
+  color: var(--team);
+}
+.tk-killcam-card i {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 1px 8px;
+  font-style: normal;
   font-size: 13px;
   color: var(--paper-light);
   background: var(--red);
-  border: 3px solid var(--ink);
-  box-shadow: 4px 4px 0 var(--ink);
+  text-transform: uppercase;
+}
+.tk-killcam-card p {
+  margin: 6px 0 0;
+  font-size: 16px;
+  font-style: italic;
+}
+/* «BAM!» in a comic burst where the shot struck. */
+.tk-killcam-bam {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 230px;
+  height: 230px;
+}
+.tk-killcam-bam svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.tk-killcam-bam polygon {
+  fill: var(--yellow);
+  stroke: var(--ink);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+.tk-killcam-bam b {
+  position: relative;
+  font-size: 46px;
+  color: var(--red);
+  -webkit-text-stroke: 2px var(--ink);
+  text-shadow: 4px 4px 0 var(--ink);
+}
+
+/* Revenge */
+
+.tk-revenge-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -100%);
+}
+.tk-revenge-mark b {
+  padding: 1px 8px;
+  font-size: 13px;
+  color: var(--paper-light);
+  background: var(--red);
+  border: 2px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   white-space: nowrap;
 }
-.tk-killcam .tk-note {
-  text-transform: none;
-  letter-spacing: 0;
+.tk-revenge-mark i {
+  font-style: normal;
+  color: var(--red);
+  font-size: 18px;
+  -webkit-text-stroke: 1px var(--ink);
+}
+.tk-revenge {
+  transform: translate(-50%, -50%);
+  animation: tk-revenge 1.6s ease-out forwards;
+}
+.tk-revenge b {
+  display: block;
+  padding: 4px 24px;
+  font-size: 72px;
+  color: var(--yellow);
+  background: var(--red);
+  border: 4px solid var(--ink);
+  box-shadow: 8px 8px 0 var(--ink);
+  -webkit-text-stroke: 2px var(--ink);
+  letter-spacing: 0.04em;
+  transform: rotate(-4deg);
+}
+@keyframes tk-revenge {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.2);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  25% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
 }
 .tk-highlight {
   display: flex;

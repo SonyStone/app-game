@@ -303,9 +303,51 @@ export const ja: Dictionary = {
   },
   killCam: {
     title: 'キルカム',
-    by: (name, tankClass) => `${name}${tankClass ? `（${tankClass}）` : ''}に撃破された`,
+    killedBy: 'あなたを撃破',
     lost: '戦車を失った',
-    skip: '任意のキーでスキップ'
+    skip: '任意のキーでスキップ',
+    rewind: '◀◀ REW',
+    bam: 'ドーン！',
+    onYou: 'あなたを狙っていた',
+    streak: (count) => `${count}連続撃破`,
+    range: (range) => `${range} px の射撃`,
+    armor: (percent) => `残り装甲 ${percent}%`,
+    goals: {
+      survive: '生き延びようとしていた',
+      patch: 'コアを修理中',
+      repair: '修理に向かっていた',
+      defend: '守りを固めていた',
+      capture: '拠点を取りに',
+      kill: '狩りの最中',
+      support: '味方を助けに',
+      breach: '壁を破っていた',
+      regroup: '集合していた'
+    },
+    actions: {
+      goToPoint: '拠点へ移動',
+      stage: '味方を待機',
+      capture: '拠点に陣取る',
+      guardPoint: '拠点を警備',
+      holdPost: '持ち場を守る',
+      approach: '接近中',
+      attackFront: '正面から突撃',
+      flank: '側面へ回り込む',
+      attackRear: '背後へ回り込む',
+      moveToSupport: '救援に急ぐ',
+      suppress: '制圧射撃',
+      takeCover: '遮蔽物に隠れる',
+      retreat: '後退中',
+      repair: '修理中',
+      regroup: '態勢を立て直す',
+      pickUpKit: 'キットを取りに',
+      goToPerch: '狙撃位置へ',
+      overwatch: '待ち伏せ',
+      openWay: '道を切り開く'
+    }
+  },
+  revenge: {
+    mark: '復讐',
+    done: '復讐！'
   },
   highlights: {
     title: 'ベストシーン',

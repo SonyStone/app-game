@@ -3,11 +3,12 @@ import { ClassSilhouette } from './classes/ClassMenu';
 import { TANK_CLASSES } from './classes/classes';
 import { FULL_CHARGE } from './classes/weapon';
 import { LONG_SHOT, type Highlight } from './highlights';
+import { en } from './i18n/en';
 import { useKothI18n } from './i18n/i18n';
+import type { KillCamView } from './killCam';
 import type { KothMatch, MemberHud, SeatHud } from './match';
 import './poster.css';
 import type { TeamId } from './rules';
-import type { TankClassId } from './tanks';
 import type { SaveState } from './saveRecording';
 
 /** What the heads-up display shows, from `KothMatch['hud']`. */
@@ -408,24 +409,125 @@ export function seatName(t: ReturnType<typeof useKothI18n>['t'], seat: SeatHud) 
   return t(`seat.${seat.team}`, seat.seat + 1);
 }
 
-/** Who destroyed the player's tank, for the kill-cam's banner; no killer for a tank lost to its own side or nobody. */
-export type KillCamView = { killer: SeatHud | undefined; tankClass: TankClassId | undefined };
-
-/** The kill-cam's banner at the top of the screen while it shows how the player's tank went: by whom, and that any key skips it. */
-export function KillCamBanner(props: { view: KillCamView | undefined }) {
+/**
+ * What the kill-cam shows over its film (see `createKillCam`): black bars that come in and go,
+ * the picture greyed, scan lines and «◀◀ REW» while the tape runs back, the killer's card with
+ * what it had in mind, the «BAM!» where the shot struck, and the shot's range and the armor the
+ * killer had left, and the player's respawn countdown, as the match's display is hidden meanwhile;
+ * any key skips it.
+ */
+export function KillCamOverlay(props: { view: KillCamView | undefined; respawn: HudState['player'] | undefined }) {
   const { t } = useKothI18n();
 
   return (
     <Show when={props.view}>
       {(view) => (
-        <div class="tk-killcam pointer-events-none absolute top-[118px] left-1/2 -translate-x-1/2">
-          <b>{t('killCam.title')}</b>
-          <span>
-            {view().killer ? t('killCam.by', seatName(t, view().killer!), view().tankClass ? t(`tankClass.${view().tankClass!}`) : '') : t('killCam.lost')}
-          </span>
-          <span class="tk-note">{t('killCam.skip')}</span>
+        <div class="pointer-events-none absolute inset-0 overflow-hidden">
+          <div class="tk-killcam-grey" style={{ 'backdrop-filter': `grayscale(${view().grey}) contrast(${1 + view().grey * 0.15})` }} />
+          <Show when={view().rewind}>
+            <div class="tk-killcam-rewind">
+              <b>{t('killCam.rewind')}</b>
+            </div>
+          </Show>
+          <Show when={view().bam}>
+            {(bam) => (
+              <div class="tk-killcam-bam" style={{ left: `${bam().x}px`, top: `${bam().y}px`, opacity: bam().opacity, transform: `translate(-50%, -50%) scale(${bam().scale}) rotate(-8deg)` }}>
+                <svg viewBox="-60 -60 120 120" aria-hidden="true">
+                  <polygon points={BURST} />
+                </svg>
+                <b>{t('killCam.bam')}</b>
+              </div>
+            )}
+          </Show>
+          <div class="tk-killcam-bar tk-top" style={{ transform: `translateY(${(view().bars - 1) * 100}%)` }}>
+            <b>{t('killCam.title')}</b>
+          </div>
+          <div class="tk-killcam-bar tk-bottom" style={{ transform: `translateY(${(1 - view().bars) * 100}%)` }}>
+            <Show when={view().stats}>
+              {(stats) => (
+                <span style={{ opacity: stats().opacity }}>
+                  {t('killCam.range', stats().range)}
+                  {stats().armor === undefined ? '' : ` · ${t('killCam.armor', Math.round(stats().armor! * 100))}`}
+                </span>
+              )}
+            </Show>
+            <Show when={props.respawn && !props.respawn.alive && props.respawn}>
+              {(player) => <span>{t('hud.respawn', Math.ceil(player().respawnIn), t(`tankClass.${player().nextClass ?? player().tankClass}`))}</span>}
+            </Show>
+            <span class="tk-note">{t('killCam.skip')}</span>
+          </div>
+          <Show when={view().card}>
+            {(card) => (
+              <div
+                class="tk-killcam-card"
+                style={{ opacity: card().opacity, transform: `translateX(${(card().opacity - 1) * 40}px)`, '--team': card().killer ? TEAM_CSS[card().killer!.team] : 'var(--ink)' }}
+              >
+                <Show when={card().killer} fallback={<b>{t('killCam.lost')}</b>}>
+                  {(killer) => (
+                    <>
+                      <span class="tk-note">{t('killCam.killedBy')}</span>
+                      <b>{seatName(t, killer())}</b>
+                      <span>{card().tankClass ? t(`tankClass.${card().tankClass!}`) : ''}</span>
+                      <Show when={card().streak > 1}>
+                        <i>{t('killCam.streak', card().streak)}</i>
+                      </Show>
+                      <Show when={thoughtOf(card())}>{(thought) => <p>«{thought()}»</p>}</Show>
+                    </>
+                  )}
+                </Show>
+              </div>
+            )}
+          </Show>
         </div>
       )}
+    </Show>
+  );
+
+  /** The killer's thought in words: its goal and action, and that it was after the player. */
+  function thoughtOf(card: NonNullable<KillCamView['card']>) {
+    const goal = card.goal && card.goal in en.killCam.goals ? t(`killCam.goals.${card.goal as keyof typeof en.killCam.goals}`) : undefined;
+    const action = card.action && card.action in en.killCam.actions ? t(`killCam.actions.${card.action as keyof typeof en.killCam.actions}`) : undefined;
+    return [card.onYou ? t('killCam.onYou') : goal, action].filter(Boolean).join(' · ');
+  }
+}
+
+/** A comic burst's outline, 14 points out and in. */
+const BURST = Array.from({ length: 28 }, (_, index) => {
+  const angle = (index / 28) * Math.PI * 2;
+  const radius = index % 2 === 0 ? 58 : 36 + (index % 4) * 3;
+  return `${(Math.cos(angle) * radius).toFixed(1)},${(Math.sin(angle) * radius).toFixed(1)}`;
+}).join(' ');
+
+/**
+ * The mark over the tank that last destroyed the player's, until the player destroys it: on the
+ * tank, or held at the screen's edge with an arrow toward it.
+ */
+export function RevengeMark(props: { mark: { x: number; y: number; edge: number | undefined } | undefined }) {
+  const { t } = useKothI18n();
+
+  return (
+    <Show when={props.mark}>
+      {(mark) => (
+        <div class="tk-revenge-mark pointer-events-none absolute" style={{ left: `${mark().x}px`, top: `${mark().y}px` }}>
+          <Show when={mark().edge !== undefined}>
+            <i style={{ transform: `rotate(${mark().edge}rad)` }}>➤</i>
+          </Show>
+          <b>☠ {t('revenge.mark')}</b>
+        </div>
+      )}
+    </Show>
+  );
+}
+
+/** «REVENGE!» across the screen when the player destroys the tank that destroyed theirs; `at` is when, and plays it anew. */
+export function RevengeBanner(props: { at: number | undefined }) {
+  const { t } = useKothI18n();
+
+  return (
+    <Show when={props.at} keyed>
+      <div class="tk-revenge pointer-events-none absolute top-[30%] left-1/2">
+        <b>{t('revenge.done')}</b>
+      </div>
     </Show>
   );
 }

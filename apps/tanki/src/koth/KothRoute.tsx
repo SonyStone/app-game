@@ -10,7 +10,8 @@ import {
   screenToWorld,
   screenToWorldDirection,
   worldToScreen,
-  zoomCamera
+  zoomCamera,
+  type Camera
 } from '../arena/camera';
 import { makeArenaInput, type Aim } from '../arena/input';
 import { createLookAhead } from '../arena/lookahead';
@@ -20,7 +21,7 @@ import { AIM_LOOK_IDS, aimLookFromAddress, aimOnScreen, AimOverlay, type AimView
 import { ClassMenu } from './classes/ClassMenu';
 import type { ClassTuning } from './classes/knobs';
 import { createScope } from './classes/scope';
-import { BotThoughts, KillCamBanner, KothHud, MatchResult, type HudState, type KillCamView, type ThoughtView } from './Hud';
+import { BotThoughts, KillCamOverlay, KothHud, MatchResult, RevengeBanner, RevengeMark, type HudState, type ThoughtView } from './Hud';
 import { createKothI18n, KothI18nProvider } from './i18n/i18n';
 import type { KothKill, KothMatch, SeatHud } from './match';
 import type { Pace } from './pace';
@@ -29,7 +30,8 @@ import { PauseMenu, type MenuPage } from './PauseMenu';
 import { RadioOverlay, type CalloutView } from './RadioOverlay';
 import { loadRecording, readRecordingFile, type OpenResult } from './openRecording';
 import { createRecordedMatch, matchPaceOf, newSeed, STEP, type Recording } from './recording';
-import { createTapePlayer, createTapeRecorder, type Tape } from './tape';
+import { createKillCam, type KillCamKill, type KillCamView } from './killCam';
+import { createTapeRecorder, type Tape } from './tape';
 import { ReplayView } from './ReplayView';
 import { bestKills, type Highlight } from './highlights';
 import { saveRecording, type SaveState } from './saveRecording';
@@ -110,6 +112,7 @@ export default function KothRoute() {
   const [notice, setNotice] = createSignal<string>();
   const [killCam, setKillCam] = createSignal(readKillCam());
   const [killCamView, setKillCamView] = createSignal<KillCamView>();
+  const [revenge, setRevenge] = createSignal<{ mark: { x: number; y: number; edge: number | undefined } | undefined; at: number | undefined }>();
   let takeRecording: (() => { recording: Recording; tape: Tape }) | undefined;
   // The match's best kills, once it is won; found once, not with every frame's state.
   const winner = createMemo(() => state()?.capture.winner);
@@ -210,14 +213,17 @@ export default function KothRoute() {
                     setCallouts(frame.callouts);
                     setAim(frame.aim);
                     setKillCamView(frame.killCam);
+                    setRevenge(frame.revenge);
                   }}
                 />
               </Rapier2D>
             </GpuCanvas>
             <BotThoughts thoughts={thoughts()} />
             <RadioOverlay callouts={callouts()} />
-            <KothHud state={state()} watching={watching()} />
-            <KillCamBanner view={killCamView()} />
+            <KothHud state={killCamView() ? undefined : state()} watching={watching()} />
+            <RevengeMark mark={killCamView() ? undefined : revenge()?.mark} />
+            <RevengeBanner at={revenge()?.at} />
+            <KillCamOverlay view={killCamView()} respawn={state()?.player} />
             <AimOverlay
               canvas={canvas()}
               view={aim()}
@@ -411,10 +417,10 @@ const FONT_LINK_ID = 'tanki-poster-font';
  *   changes, the view's lead and slack, and what the match itself works by.
  * @param classes - The classes' tuning, handed to the match whenever it changes (see `ClassTuning`).
  * @param paused - Holds the match, its effects and the view still; the frame is drawn again as it stands.
- * @param killCam - Whether the player's tank going shows a kill-cam: `KILL_CAM_DELAY` s later, the
- *   last moments before it from the match's tape, on the killer and the player's tank, slowed about
- *   the shot, while the match goes on unseen; any key or click ends it. `onFrame` tells who the
- *   killer was while it shows.
+ * @param killCam - Whether the player's tank going shows a kill-cam: a short film of how it went,
+ *   from the match's tape (see `createKillCam`), while the match goes on unseen; any key or click
+ *   ends it. `onFrame` tells what to show over it. Whatever this says, the tank that destroyed the
+ *   player's is marked for revenge until the player destroys it, which `onFrame` tells as well.
  * @param onRecorder - Receives, for every new match, the function that takes its recording and tape so far.
  * @param onFrame - Receives the display state after each frame, with the player's aim on screen.
  */
@@ -436,6 +442,8 @@ function KothScene(props: {
     callouts: CalloutView[];
     aim: AimView | undefined;
     killCam: KillCamView | undefined;
+    /** The revenge mark on screen while the player has a tank, and when the player last took revenge, by `performance.now()`. */
+    revenge: { mark: { x: number; y: number; edge: number | undefined } | undefined; at: number | undefined };
   }) => void;
 }) {
   const canvas = untrack(() => props.canvas);
@@ -444,6 +452,10 @@ function KothScene(props: {
   const first = untrack(() => props.playerClass);
   let recorder = createTapeRecorder(renderer);
   let killCam: KillCam | undefined;
+  /** The member who last destroyed the player's tank, until the player destroys it. */
+  let nemesis: KothMatch['members'][number] | undefined;
+  /** When the player last destroyed its nemesis, by `performance.now()`. */
+  let revengeAt: number | undefined;
   let recorded = startMatch(TANK_CLASS_IDS.find((id) => id === first) ?? 'soldier', seedFromAddress() ?? newSeed());
   let match = recorded.match;
   const input = makeArenaInput(canvas);
@@ -467,12 +479,12 @@ function KothScene(props: {
   camera.zoom = zoom;
 
   // Any key or click skips the kill-cam.
-  makeEventListener(window, 'pointerdown', () => killCam?.player && endKillCam());
+  makeEventListener(window, 'pointerdown', () => killCam?.film && endKillCam());
 
   makeEventListener(window, 'keydown', (event) => {
     const digit = /^Digit([0-8])$/.exec(event.code);
 
-    if (killCam?.player && event.code !== 'Escape') {
+    if (killCam?.film && event.code !== 'Escape') {
       endKillCam();
     }
 
@@ -521,31 +533,43 @@ function KothScene(props: {
   }
 
   /**
-   * Readies the kill-cam when the player's own tank is destroyed, if it is on: it begins
-   * `KILL_CAM_DELAY` s later.
+   * Readies the kill-cam when the player's own tank is destroyed, if it is on, for the next frame,
+   * once the tape has the moment; marks the killer for revenge, and takes it when the player
+   * destroys that member.
    */
   function noticeKill(kill: KothKill) {
     const seat = match.seat;
 
-    if (!props.killCam || kill.victim !== seat || !seat.human) {
+    if (nemesis && kill.victim === nemesis && kill.killer === seat) {
+      nemesis = undefined;
+      revengeAt = performance.now();
+    }
+
+    if (kill.victim !== seat || !seat.human) {
+      return;
+    }
+
+    nemesis = kill.killer && kill.killer.team !== seat.team ? kill.killer : nemesis;
+
+    if (!props.killCam) {
       return;
     }
 
     killCam = {
-      death: recorded.steps,
-      killer: kill.killer ? match.members.indexOf(kill.killer) : undefined,
-      view: { killer: kill.killer && seatOf(kill.killer), tankClass: kill.killerClass },
-      beginAt: performance.now() + KILL_CAM_DELAY * 1000,
-      player: undefined,
-      time: 0,
-      // The player's tank is already gone from the world here; the kill-cam starts from the view as it is.
-      camera: { ...camera }
+      kill: {
+        death: recorded.steps,
+        killer: kill.killer ? match.members.indexOf(kill.killer) : undefined,
+        victim: match.members.indexOf(seat),
+        at: { x: kill.at.x, y: kill.at.y }
+      },
+      who: { killer: kill.killer && seatOf(kill.killer), tankClass: kill.killerClass },
+      film: undefined
     };
   }
 
   /** Ends the kill-cam: the match is drawn live again, with its fields as they are now. */
   function endKillCam() {
-    if (killCam?.player) {
+    if (killCam?.film) {
       recorder.resume();
     }
 
@@ -553,44 +577,26 @@ function KothScene(props: {
     lookAhead.reset();
   }
 
+  /** Where the revenge mark goes on screen, held inside its edge with the way to the tank when off it; none while the player has no tank. */
+  function revengeMark(view: Camera, screen: { width: number; height: number }) {
+    const at = nemesis?.tank?.hull.translation();
+
+    if (!at || !match.seat.tank || props.watching) {
+      return undefined;
+    }
+
+    const point = worldToScreen(view, at, screen);
+    const held = {
+      x: Math.min(Math.max(point.x, REVENGE_INSET), screen.width - REVENGE_INSET),
+      y: Math.min(Math.max(point.y - REVENGE_ABOVE * view.zoom, REVENGE_INSET), screen.height - REVENGE_INSET)
+    };
+    const off = held.x !== point.x || point.y < REVENGE_INSET || point.y > screen.height - REVENGE_INSET;
+    return { ...held, edge: off ? Math.atan2(point.y - screen.height / 2, point.x - screen.width / 2) : undefined };
+  }
+
   /** The seat of `member`, as the display names it. */
   function seatOf(member: KothMatch['members'][number]): SeatHud {
     return { name: member.name, team: member.team, seat: member.index, player: member === match.seat, human: member.human };
-  }
-
-  /**
-   * Shows the kill-cam's frame on the renderer from the match's tape: the last `KILL_CAM_BEFORE` s
-   * before the player's tank went, slowing to `KILL_CAM_SLOW` about the shot, and `KILL_CAM_AFTER`
-   * s after, the view on the killer and the player's tank. Ends it once shown.
-   */
-  function showKillCam(cam: KillCam, dt: number, screen: { width: number; height: number }) {
-    const near = Math.abs(cam.time - cam.death) < KILL_CAM_SLOW_SPAN * 60;
-    cam.time += dt * 60 * (near ? KILL_CAM_SLOW : 1);
-
-    if (cam.time >= cam.death + KILL_CAM_AFTER * 60) {
-      endKillCam();
-      return false;
-    }
-
-    const shown = cam.player!.show(cam.time);
-    const victim = shown?.members[match.members.indexOf(match.seat)];
-    const killer = cam.killer === undefined ? undefined : shown?.members[cam.killer];
-    const points = [killer, victim].filter((point) => point !== undefined);
-
-    if (points.length > 0) {
-      const minX = Math.min(...points.map((point) => point.x));
-      const maxX = Math.max(...points.map((point) => point.x));
-      const minY = Math.min(...points.map((point) => point.y));
-      const maxY = Math.max(...points.map((point) => point.y));
-      const fit = Math.min(Math.max(Math.min(screen.width / (maxX - minX + 360), screen.height / (maxY - minY + 300)), 0.5), 1.4);
-      const ease = Math.min(dt * 4, 1);
-      cam.camera.x += ((minX + maxX) / 2 - cam.camera.x) * ease;
-      cam.camera.y += ((minY + maxY) / 2 - cam.camera.y) * ease;
-      cam.camera.zoom += (fit - cam.camera.zoom) * ease;
-    }
-
-    renderer.render(cam.camera, screen, BACKGROUND, shown?.age ?? 0);
-    return true;
   }
 
   /**
@@ -602,6 +608,7 @@ function KothScene(props: {
     recorded.dispose();
     renderer.releaseAllFields();
     killCam = undefined;
+    nemesis = undefined;
     recorder = createTapeRecorder(renderer);
     recorded = startMatch(playerClass, newSeed());
     match = recorded.match;
@@ -618,8 +625,8 @@ function KothScene(props: {
   /** Reads input, steps the match, places the camera, draws and reports one frame. */
   function frame(time: number) {
     const pace = props.pace;
-    const dt =
-      lastTime === undefined ? 0 : (Math.min((time - lastTime) / 1000, MAX_FRAME_TIME) * pace.speed) / SLOW_MOTION;
+    const wall = lastTime === undefined ? 0 : Math.min((time - lastTime) / 1000, MAX_FRAME_TIME);
+    const dt = (wall * pace.speed) / SLOW_MOTION;
     lastTime = time;
 
     if (props.restarts !== seenRestarts) {
@@ -647,22 +654,26 @@ function KothScene(props: {
     if (props.paused) {
       match.draw(camera);
       recorder.endFrame(recorded.steps, match);
-      renderer.render(killCam?.player ? killCam.camera : camera, screen, BACKGROUND, 0);
+      const film = killCam?.film?.frame(0, screen, BACKGROUND);
+
+      if (!film) {
+        renderer.render(camera, screen, BACKGROUND, 0);
+      }
+
       props.onFrame({
         state: match.hud(),
-        thoughts: props.thoughts && !match.capture.winner && !killCam?.player ? thoughtsOnScreen(match, camera, screen) : [],
-        callouts: match.capture.winner || killCam?.player ? [] : calloutsOnScreen(match, camera, screen, props.watching),
+        thoughts: props.thoughts && !match.capture.winner && !film ? thoughtsOnScreen(match, camera, screen) : [],
+        callouts: match.capture.winner || film ? [] : calloutsOnScreen(match, camera, screen, props.watching),
         aim: undefined,
-        killCam: killCam?.player ? killCam.view : undefined
+        killCam: film,
+        revenge: { mark: revengeMark(camera, screen), at: revengeAt }
       });
       return;
     }
 
-    // The kill-cam begins: the match goes on, taped, while the tape shows the moments before.
-    if (killCam && !killCam.player && performance.now() >= killCam.beginAt) {
-      killCam.player = createTapePlayer(renderer, recorder.tape);
-      killCam.time = Math.max(killCam.death - KILL_CAM_BEFORE * 60, recorder.tape.start ?? 0);
-      killCam.camera = { ...camera };
+    // The kill-cam begins, the tape having the moment the tank went: the match goes on, taped, while the film shows how.
+    if (killCam && !killCam.film) {
+      killCam.film = createKillCam(renderer, recorder.tape, recorded.chronicle, killCam.kill, killCam.who, camera);
       recorder.mute();
     }
 
@@ -700,9 +711,15 @@ function KothScene(props: {
     match.draw(camera);
     recorder.endFrame(recorded.steps, match);
 
-    if (killCam?.player && showKillCam(killCam, dt, screen)) {
-      props.onFrame({ state: match.hud(), thoughts: [], callouts: [], aim: undefined, killCam: killCam.view });
+    const film = killCam?.film?.frame(wall, screen, BACKGROUND);
+
+    if (film) {
+      props.onFrame({ state: match.hud(), thoughts: [], callouts: [], aim: undefined, killCam: film, revenge: { mark: undefined, at: revengeAt } });
       return;
+    }
+
+    if (killCam?.film) {
+      endKillCam();
     }
 
     const shake = match.shake;
@@ -717,7 +734,8 @@ function KothScene(props: {
       thoughts: props.thoughts && !match.capture.winner ? thoughtsOnScreen(match, camera, screen) : [],
       callouts: match.capture.winner ? [] : calloutsOnScreen(match, camera, screen, props.watching),
       aim: props.watching ? undefined : aimOnScreen(match, { angle: aim, reach }, view, screen),
-      killCam: undefined
+      killCam: undefined,
+      revenge: { mark: revengeMark(view, screen), at: revengeAt }
     });
   }
 
@@ -786,28 +804,16 @@ function KothScene(props: {
 /** Zoom when watching one tank. */
 const FOLLOW_ZOOM = 1.6;
 
-/**
- * The kill-cam under way: the step the player's tank went, the killer's place among the
- * members, what the banner says, when it begins, the tape player once it has begun, the step it
- * shows and its own view.
- */
+/** The kill-cam: the kill and who made it, and its film once the tape has the moment (see `createKillCam`). */
 type KillCam = {
-  death: number;
-  killer: number | undefined;
-  view: KillCamView;
-  beginAt: number;
-  player: ReturnType<typeof createTapePlayer> | undefined;
-  time: number;
-  camera: ReturnType<typeof createCamera>;
+  kill: KillCamKill;
+  who: Parameters<typeof createKillCam>[4];
+  film: ReturnType<typeof createKillCam> | undefined;
 };
 
-/** Seconds after the player's tank went that the kill-cam begins, and the seconds it shows before it and after. */
-const KILL_CAM_DELAY = 0.6;
-const KILL_CAM_BEFORE = 3;
-const KILL_CAM_AFTER = 0.8;
-/** How much the kill-cam slows down, within how many seconds of the kill. */
-const KILL_CAM_SLOW = 0.3;
-const KILL_CAM_SLOW_SPAN = 0.5;
+/** How far inside the screen's edges the revenge mark is held, and how far over its tank it floats, in screen and world px. */
+const REVENGE_INSET = 40;
+const REVENGE_ABOVE = 34;
 const MAX_FRAME_TIME = 0.1;
 const VIEW_TURN_SPEED = 1.5;
 const KEY_ZOOM_SPEED = 1.5;

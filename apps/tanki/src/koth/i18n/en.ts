@@ -305,9 +305,51 @@ export const en = {
   },
   killCam: {
     title: 'Kill-cam',
-    by: (name: string, tankClass: string) => `destroyed by ${name}${tankClass ? ` (${tankClass})` : ''}`,
+    killedBy: 'you were destroyed by',
     lost: 'your tank was lost',
-    skip: 'any key skips'
+    skip: 'any key skips',
+    rewind: '◀◀ REW',
+    bam: 'BAM!',
+    onYou: 'hunting you',
+    streak: (count: number) => (count === 2 ? 'second kill in a row' : `${count} kills in a row`),
+    range: (range: number) => `${range} px shot`,
+    armor: (percent: number) => `${percent}% armor left`,
+    goals: {
+      survive: 'saving its skin',
+      patch: 'patching its core',
+      repair: 'heading to repair',
+      defend: 'holding the line',
+      capture: 'taking the point',
+      kill: 'on the hunt',
+      support: 'helping a friend',
+      breach: 'breaking a wall',
+      regroup: 'regrouping'
+    },
+    actions: {
+      goToPoint: 'driving to the point',
+      stage: 'waiting for friends',
+      capture: 'sitting on the point',
+      guardPoint: 'guarding the point',
+      holdPost: 'holding a post',
+      approach: 'closing in',
+      attackFront: 'charging head on',
+      flank: 'flanking',
+      attackRear: 'coming from behind',
+      moveToSupport: 'rushing to help',
+      suppress: 'pinning with fire',
+      takeCover: 'hiding behind cover',
+      retreat: 'pulling back',
+      repair: 'repairing',
+      regroup: 'gathering',
+      pickUpKit: 'going for a kit',
+      goToPerch: 'climbing to a perch',
+      overwatch: 'lying in wait',
+      openWay: 'blasting a way through'
+    }
+  },
+  revenge: {
+    mark: 'revenge',
+    done: 'REVENGE!'
   },
   highlights: {
     title: 'Best moments',

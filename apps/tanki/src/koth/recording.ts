@@ -138,6 +138,9 @@ export function createRecordedMatch(
     /** The `checks` so far, for comparing a replay with its recording as it plays. */
     checks,
 
+    /** What happened so far, as the recording will tell it (see `Chronicle`); it grows as the match goes on. */
+    chronicle: chronicler.chronicle,
+
     /**
      * Plays a step with the player's `input`, which goes into the match as the recording keeps
      * it: directions and angles to a ten-thousandth, the reach to a tenth of a pixel.

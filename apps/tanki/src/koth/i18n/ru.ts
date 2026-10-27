@@ -303,9 +303,51 @@ export const ru: Dictionary = {
   },
   killCam: {
     title: 'Kill-cam',
-    by: (name, tankClass) => `уничтожил ${name}${tankClass ? ` (${tankClass})` : ''}`,
+    killedBy: 'тебя уничтожил',
     lost: 'твой танк потерян',
-    skip: 'любая клавиша — пропустить'
+    skip: 'любая клавиша — пропустить',
+    rewind: '◀◀ REW',
+    bam: 'БАМ!',
+    onYou: 'охотился на тебя',
+    streak: (count) => (count === 2 ? 'второе убийство подряд' : `${count} убийства подряд`),
+    range: (range) => `выстрел с ${range} px`,
+    armor: (percent) => `у него ${percent}% брони`,
+    goals: {
+      survive: 'спасал свою шкуру',
+      patch: 'латал ядро',
+      repair: 'ехал чиниться',
+      defend: 'держал оборону',
+      capture: 'брал точку',
+      kill: 'вышел на охоту',
+      support: 'выручал своих',
+      breach: 'пробивал стену',
+      regroup: 'собирал своих'
+    },
+    actions: {
+      goToPoint: 'ехал к точке',
+      stage: 'ждал своих',
+      capture: 'стоял на точке',
+      guardPoint: 'сторожил точку',
+      holdPost: 'держал пост',
+      approach: 'сближался',
+      attackFront: 'шёл в лоб',
+      flank: 'обходил с фланга',
+      attackRear: 'заходил в тыл',
+      moveToSupport: 'спешил на помощь',
+      suppress: 'прижимал огнём',
+      takeCover: 'прятался за укрытием',
+      retreat: 'отступал',
+      repair: 'чинился',
+      regroup: 'собирался с силами',
+      pickUpKit: 'ехал за аптечкой',
+      goToPerch: 'забирался на позицию',
+      overwatch: 'сидел в засаде',
+      openWay: 'пробивал проход'
+    }
+  },
+  revenge: {
+    mark: 'месть',
+    done: 'МЕСТЬ!'
   },
   highlights: {
     title: 'Лучшие моменты',

@@ -303,9 +303,51 @@ export const sr: Dictionary = {
   },
   killCam: {
     title: 'Kill-cam',
-    by: (name, tankClass) => `уништио те ${name}${tankClass ? ` (${tankClass})` : ''}`,
+    killedBy: 'уништио те је',
     lost: 'твој тенк је изгубљен',
-    skip: 'било који тастер прескаче'
+    skip: 'било који тастер прескаче',
+    rewind: '◀◀ REW',
+    bam: 'БУМ!',
+    onYou: 'ловио је тебе',
+    streak: (count) => (count === 2 ? 'друго убиство заредом' : `${count} убиства заредом`),
+    range: (range) => `хитац са ${range} px`,
+    armor: (percent) => `остало му је ${percent}% оклопа`,
+    goals: {
+      survive: 'спасавао је живу главу',
+      patch: 'крпио је језгро',
+      repair: 'ишао је на поправку',
+      defend: 'држао је одбрану',
+      capture: 'заузимао је тачку',
+      kill: 'кренуо је у лов',
+      support: 'помагао је својима',
+      breach: 'пробијао је зид',
+      regroup: 'окупљао је своје'
+    },
+    actions: {
+      goToPoint: 'ишао је ка тачки',
+      stage: 'чекао је своје',
+      capture: 'стајао је на тачки',
+      guardPoint: 'чувао је тачку',
+      holdPost: 'држао је положај',
+      approach: 'приближавао се',
+      attackFront: 'ишао је право',
+      flank: 'обилазио је с бока',
+      attackRear: 'заобилазио је с леђа',
+      moveToSupport: 'журио је у помоћ',
+      suppress: 'притискао је ватром',
+      takeCover: 'крио се иза заклона',
+      retreat: 'повлачио се',
+      repair: 'поправљао се',
+      regroup: 'прибирао се',
+      pickUpKit: 'ишао је по комплет',
+      goToPerch: 'пењао се на положај',
+      overwatch: 'чекао је у заседи',
+      openWay: 'пробијао је пролаз'
+    }
+  },
+  revenge: {
+    mark: 'освета',
+    done: 'ОСВЕТА!'
   },
   highlights: {
     title: 'Најбољи тренуци',
