@@ -1,5 +1,6 @@
 import type { Tank } from '../arena/bodies';
 import { SIGHT_OVER_RUBBLE, type Combat } from '../damage/combat';
+import { atan2, cos, hypot, sin } from '../physics/math';
 import type { Role } from './brain';
 import type { Trigger, Weapon } from './classes/weapon';
 import type { KothMap } from './map';
@@ -333,7 +334,7 @@ export function createTeamBoard(
       }
 
       if (member.role === 'lead') {
-        return { x: map.point.x + Math.cos(side + spread * 0.3) * POINT_SPOT * 0.4, y: map.point.y + Math.sin(side + spread * 0.3) * POINT_SPOT * 0.4 };
+        return { x: map.point.x + cos(side + spread * 0.3) * POINT_SPOT * 0.4, y: map.point.y + sin(side + spread * 0.3) * POINT_SPOT * 0.4 };
       }
 
       if (member.role === 'support') {
@@ -342,7 +343,7 @@ export function createTeamBoard(
         angle = (push.lane === 'north' ? -Math.PI / 2 : Math.PI / 2) + (team === 'red' ? -spread * 0.4 : spread * 0.4);
       }
 
-      return { x: map.point.x + Math.cos(angle) * POINT_SPOT, y: map.point.y + Math.sin(angle) * POINT_SPOT };
+      return { x: map.point.x + cos(angle) * POINT_SPOT, y: map.point.y + sin(angle) * POINT_SPOT };
     },
 
     /**
@@ -720,8 +721,8 @@ export function createTeamBoard(
     return [...sightings.values()].some((sighting) => {
       const range = distanceTo(sighting.position, perch);
       const sniper = context.rivals.find((rival) => rival.tank === sighting.tank)?.tankClass.id === 'sniper';
-      const bearing = Math.atan2(perch.y - sighting.position.y, perch.x - sighting.position.x);
-      const aimed = Math.abs(Math.atan2(Math.sin(sighting.turret - bearing), Math.cos(sighting.turret - bearing))) < SNIPER_AIMED;
+      const bearing = atan2(perch.y - sighting.position.y, perch.x - sighting.position.x);
+      const aimed = Math.abs(atan2(sin(sighting.turret - bearing), cos(sighting.turret - bearing))) < SNIPER_AIMED;
       return range < PERCH_THREAT || (sniper && aimed && range < SNIPER_SIGHT && traceClear(grid, sight, sighting.position, perch, rubbleSight));
     });
   }
@@ -770,8 +771,8 @@ export function createTeamBoard(
     crateCost.fill(0);
 
     for (const crate of combat.crates) {
-      const cos = Math.cos(crate.rotation);
-      const sin = Math.sin(crate.rotation);
+      const cosine = cos(crate.rotation);
+      const sine = sin(crate.rotation);
       const reach = CRATE_HALF.y + grid.clearance + grid.cell;
       const minCol = Math.max(Math.floor((crate.x - reach - grid.originX) / grid.cell), 0);
       const maxCol = Math.min(Math.ceil((crate.x + reach - grid.originX) / grid.cell), grid.cols - 1);
@@ -784,9 +785,9 @@ export function createTeamBoard(
           const center = cellCenter(grid, cell);
           const dx = center.x - crate.x;
           const dy = center.y - crate.y;
-          const qx = Math.abs(dx * cos + dy * sin) - CRATE_HALF.x;
-          const qy = Math.abs(-dx * sin + dy * cos) - CRATE_HALF.y;
-          const distance = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
+          const qx = Math.abs(dx * cosine + dy * sine) - CRATE_HALF.x;
+          const qy = Math.abs(-dx * sine + dy * cosine) - CRATE_HALF.y;
+          const distance = hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
           sight[cell] = Math.min(sight[cell], distance);
 
           if (distance < grid.clearance) {
@@ -808,8 +809,8 @@ export function createTeamBoard(
   /** Adds a heap of rubble to the sight field: tanks drive over it, but it stops shells and sight. */
   function addRubble(tile: (typeof combat.walls.tiles)[number]) {
     const angle = tile.wall.rotation ?? 0;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
+    const cosine = cos(angle);
+    const sine = sin(angle);
     const minCol = Math.max(Math.floor((tile.bounds.minX - grid.originX) / grid.cell) - 1, 0);
     const maxCol = Math.min(Math.ceil((tile.bounds.maxX - grid.originX) / grid.cell) + 1, grid.cols - 1);
     const minRow = Math.max(Math.floor((tile.bounds.minY - grid.originY) / grid.cell) - 1, 0);
@@ -821,8 +822,8 @@ export function createTeamBoard(
         const center = cellCenter(grid, cell);
         const dx = center.x - tile.wall.x;
         const dy = center.y - tile.wall.y;
-        const x = dx * cos + dy * sin;
-        const y = -dx * sin + dy * cos;
+        const x = dx * cosine + dy * sine;
+        const y = -dx * sine + dy * cosine;
 
         for (const box of tile.boxes) {
           sight[cell] = Math.min(sight[cell], boxDistance(x - box.x, y - box.y, box.halfWidth, box.halfHeight));
@@ -857,20 +858,20 @@ export function createTeamBoard(
 
           const dx = grid.originX + col * grid.cell - threat.position.x;
           const dy = grid.originY + row * grid.cell - threat.position.y;
-          const distance = Math.hypot(dx, dy);
+          const distance = hypot(dx, dy);
 
           if (distance > range) {
             continue;
           }
 
-          const bin = ((Math.atan2(dy, dx) / (Math.PI * 2)) * SIGHT_RAYS + SIGHT_RAYS) % SIGHT_RAYS;
+          const bin = ((atan2(dy, dx) / (Math.PI * 2)) * SIGHT_RAYS + SIGHT_RAYS) % SIGHT_RAYS;
           const free = Math.min(reach[Math.floor(bin) % SIGHT_RAYS], reach[Math.ceil(bin) % SIGHT_RAYS]);
 
           if (distance > free) {
             continue;
           }
 
-          const facing = distance > 1 ? (dx * Math.cos(threat.turret) + dy * Math.sin(threat.turret)) / distance : 1;
+          const facing = distance > 1 ? (dx * cos(threat.turret) + dy * sin(threat.turret)) / distance : 1;
           danger[cell] += 0.5 + 0.5 * Math.max(facing, 0);
         }
       }
@@ -1427,8 +1428,8 @@ const CRATE_COST = 3;
 function inReach(reach: Float32Array, from: Point, to: Point) {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
-  const bin = ((Math.atan2(dy, dx) / (Math.PI * 2)) * SIGHT_RAYS + SIGHT_RAYS) % SIGHT_RAYS;
-  return Math.hypot(dx, dy) <= Math.min(reach[Math.floor(bin) % SIGHT_RAYS], reach[Math.ceil(bin) % SIGHT_RAYS]);
+  const bin = ((atan2(dy, dx) / (Math.PI * 2)) * SIGHT_RAYS + SIGHT_RAYS) % SIGHT_RAYS;
+  return hypot(dx, dy) <= Math.min(reach[Math.floor(bin) % SIGHT_RAYS], reach[Math.ceil(bin) % SIGHT_RAYS]);
 }
 
 /** The middle of `points`. */
@@ -1440,9 +1441,9 @@ function centroidOf(points: readonly Point[]): Point {
 function boxDistance(x: number, y: number, halfX: number, halfY: number) {
   const qx = Math.abs(x) - halfX;
   const qy = Math.abs(y) - halfY;
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
+  return hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
 }
 
 function distanceTo(a: Point, b: Point) {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return hypot(a.x - b.x, a.y - b.y);
 }

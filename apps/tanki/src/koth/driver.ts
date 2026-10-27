@@ -1,3 +1,4 @@
+import { cos, hypot, sin } from '../physics/math';
 import { canDrive, findBreachPath, findPath, obstacleDistance, sampleDistance, type NavGrid } from './navigation';
 
 type Point = { x: number; y: number };
@@ -130,7 +131,7 @@ export function createDriver(grid: NavGrid) {
      */
     backOut(now: number, position: Point, heading: number) {
       stalls++;
-      const direction = wayOut(grid, position, { x: Math.cos(heading), y: Math.sin(heading) }, tried);
+      const direction = wayOut(grid, position, { x: cos(heading), y: sin(heading) }, tried);
       unstick = { until: now + UNSTICK_TIME, direction };
       tried.push(direction);
       plannedAt = -Infinity;
@@ -158,7 +159,7 @@ export function createDriver(grid: NavGrid) {
 
   /** Throttle for driving along `toward`: eased off when the hull's nose, heading that way, is about to meet an obstacle. */
   function easeBeforeWall(position: Point, heading: number, reach: number, toward: Point) {
-    const ahead = { x: Math.cos(heading), y: Math.sin(heading) };
+    const ahead = { x: cos(heading), y: sin(heading) };
 
     if (ahead.x * toward.x + ahead.y * toward.y < 0.5) {
       return 1;
@@ -264,7 +265,7 @@ function avoid(position: Point, toward: Point, obstacles: readonly Obstacle[]) {
   for (const obstacle of obstacles) {
     const dx = position.x - obstacle.x;
     const dy = position.y - obstacle.y;
-    const length = Math.hypot(dx, dy) || 1;
+    const length = hypot(dx, dy) || 1;
     const gap = length - obstacle.radius - HULL_RADIUS;
 
     if (gap >= AVOID_GAP) {
@@ -295,7 +296,7 @@ function wayOut(grid: NavGrid, point: Point, blocked: Point, tried: readonly Poi
 
   for (let index = 0; index < WAY_OUT_DIRECTIONS; index++) {
     const angle = (index / WAY_OUT_DIRECTIONS) * Math.PI * 2;
-    const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+    const direction = { x: cos(angle), y: sin(angle) };
     const near = (other: Point) => direction.x * other.x + direction.y * other.y > Math.SQRT1_2;
     let room = Infinity;
 
@@ -316,11 +317,11 @@ function wayOut(grid: NavGrid, point: Point, blocked: Point, tried: readonly Poi
 }
 
 function distance(a: Point, b: Point) {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return hypot(a.x - b.x, a.y - b.y);
 }
 
 function normalize(vector: Point) {
-  const length = Math.hypot(vector.x, vector.y);
+  const length = hypot(vector.x, vector.y);
   return length > 1e-9 ? { x: vector.x / length, y: vector.y / length } : { x: 0, y: 0 };
 }
 

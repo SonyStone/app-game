@@ -1,5 +1,6 @@
 import type { Collider, Rapier } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
+import { cos, hypot, sin } from '../physics/math';
 import type { CombatLayout, WallMaterial, WallPlacement } from './combat';
 import { carve, CHANNELS, createField, detachLoosePieces, FAR, sampleField, shatter, solidBoxes, type DamageField, type Fragment } from './field';
 import { cutSlit } from './rail';
@@ -114,7 +115,7 @@ export function createWalls(
       const step = 1;
       const x = solidDistance({ x: point.x + step, y: point.y }) - solidDistance({ x: point.x - step, y: point.y });
       const y = solidDistance({ x: point.x, y: point.y + step }) - solidDistance({ x: point.x, y: point.y - step });
-      const length = Math.hypot(x, y);
+      const length = hypot(x, y);
 
       return length > 1e-6 && length < FAR ? { x: x / length, y: y / length } : undefined;
     },
@@ -139,7 +140,7 @@ export function createWalls(
         for (const box of tile.boxes) {
           const x = Math.min(Math.max(local.x, box.x - box.halfWidth), box.x + box.halfWidth);
           const y = Math.min(Math.max(local.y, box.y - box.halfHeight), box.y + box.halfHeight);
-          const distance = Math.hypot(x - local.x, y - local.y);
+          const distance = hypot(x - local.x, y - local.y);
 
           if (distance <= radius && distance < (nearest.get(key)?.distance ?? Infinity)) {
             nearest.set(key, { tile, point: toWorld(tile.wall, { x, y }), distance });
@@ -166,7 +167,7 @@ export function createWalls(
       const at = (along: number) => ({ x: entry.x + direction.x * along, y: entry.y + direction.y * along });
       // The colliders' blocks reach a little past the fields, so the round may meet them just before the material.
       const surface = surfaceAlong(entry, direction);
-      const start = Math.hypot(surface.x - entry.x, surface.y - entry.y);
+      const start = hypot(surface.x - entry.x, surface.y - entry.y);
       let depth = start;
 
       for (let tile = solidTileAt(at(depth)); tile; tile = solidTileAt(at(depth))) {
@@ -279,7 +280,7 @@ export function createWalls(
         return tile.material;
       }
 
-      const reach = Math.hypot(rammer.field.cols, rammer.field.rows) * rammer.field.cell * 0.5;
+      const reach = hypot(rammer.field.cols, rammer.field.rows) * rammer.field.cell * 0.5;
       const ends = [rammer, { x: rammer.x + direction.x * depth, y: rammer.y + direction.y * depth }];
       const bounds = {
         minX: Math.min(...ends.map((end) => end.x)) - reach,
@@ -356,7 +357,7 @@ export function createWalls(
       }
 
       for (const campfire of layout.campfires ?? []) {
-        nearest = Math.min(nearest, Math.hypot(point.x - campfire.x, point.y - campfire.y) - CAMPFIRE_RADIUS);
+        nearest = Math.min(nearest, hypot(point.x - campfire.x, point.y - campfire.y) - CAMPFIRE_RADIUS);
       }
 
       for (const tile of tilesNear({ minX: point.x - cap, minY: point.y - cap, maxX: point.x + cap, maxY: point.y + cap })) {
@@ -988,7 +989,7 @@ function createRubbleField(tile: Tile, random: () => number) {
     const x = rect.minX + 4 + ((random() + random()) / 2) * (width - 8);
     const y = rect.minY + 4 + ((random() + random()) / 2) * (height - 8);
     const angle = random() * Math.PI;
-    return { x, y, cos: Math.cos(angle), sin: Math.sin(angle), halfX: 2.5 + random() * 4.5, halfY: 2 + random() * 3.5 };
+    return { x, y, cos: cos(angle), sin: sin(angle), halfX: 2.5 + random() * 4.5, halfY: 2 + random() * 3.5 };
   });
   const bounds = { minX: rect.minX - MARGIN, minY: rect.minY - MARGIN, maxX: rect.maxX + MARGIN, maxY: rect.maxY + MARGIN };
 
@@ -1016,11 +1017,11 @@ function createRubbleField(tile: Tile, random: () => number) {
  * so the bite looks broken rather than cut.
  */
 function createBite(rammer: { field: DamageField; x: number; y: number; angle: number }, direction: Point, depth: number, random: () => number) {
-  const cos = Math.cos(rammer.angle);
-  const sin = Math.sin(rammer.angle);
-  const along = { x: direction.x * cos + direction.y * sin, y: -direction.x * sin + direction.y * cos };
+  const cosine = cos(rammer.angle);
+  const sine = sin(rammer.angle);
+  const along = { x: direction.x * cosine + direction.y * sine, y: -direction.x * sine + direction.y * cosine };
   const steps = Math.max(Math.ceil(depth / BITE_STEP), 1);
-  const reach = Math.hypot(rammer.field.cols, rammer.field.rows) * rammer.field.cell * 0.5 + BITE_ROUGHNESS + BITE_MARGIN + BITE_FLARE + 1;
+  const reach = hypot(rammer.field.cols, rammer.field.rows) * rammer.field.cell * 0.5 + BITE_ROUGHNESS + BITE_MARGIN + BITE_FLARE + 1;
   const phases = [random(), random(), random()].map((value) => value * Math.PI * 2);
   const sample = new Float32Array(CHANNELS);
   // A scratch leaves no pocket to wedge in, so only a deep bite gets the full margin.
@@ -1029,12 +1030,12 @@ function createBite(rammer: { field: DamageField; x: number; y: number; angle: n
   return (x: number, y: number) => {
     const dx = x - rammer.x;
     const dy = y - rammer.y;
-    const localX = dx * cos + dy * sin;
-    const localY = -dx * sin + dy * cos;
+    const localX = dx * cosine + dy * sine;
+    const localY = -dx * sine + dy * cosine;
     // Points beyond the rammer's reach of its path are far from the bite; most cells are.
     const t = Math.min(Math.max(localX * along.x + localY * along.y, 0), depth);
 
-    if (Math.hypot(localX - along.x * t, localY - along.y * t) > reach) {
+    if (hypot(localX - along.x * t, localY - along.y * t) > reach) {
       return FAR;
     }
 
@@ -1046,7 +1047,7 @@ function createBite(rammer: { field: DamageField; x: number; y: number; angle: n
       nearest = Math.min(nearest, sampleField(rammer.field, localX - along.x * shift, localY - along.y * shift, sample)[0] - margin);
     }
 
-    const wobble = Math.sin(x * 0.45 + phases[0]) * Math.cos(y * 0.38 + phases[1]) + 0.5 * Math.sin(x * 1.1 + y * 0.9 + phases[2]);
+    const wobble = sin(x * 0.45 + phases[0]) * cos(y * 0.38 + phases[1]) + 0.5 * sin(x * 1.1 + y * 0.9 + phases[2]);
     return nearest + (wobble / 1.5) * BITE_ROUGHNESS;
   };
 }
@@ -1177,7 +1178,7 @@ function union(a: Bounds, b: Bounds): Bounds {
 
 /** Distance from a point to a box, 0 inside it. */
 function boundsDistance(bounds: Bounds, point: Point) {
-  return Math.hypot(Math.max(bounds.minX - point.x, 0, point.x - bounds.maxX), Math.max(bounds.minY - point.y, 0, point.y - bounds.maxY));
+  return hypot(Math.max(bounds.minX - point.x, 0, point.x - bounds.maxX), Math.max(bounds.minY - point.y, 0, point.y - bounds.maxY));
 }
 
 function inside(rect: Bounds, x: number, y: number) {
@@ -1199,7 +1200,7 @@ function wallDistance(wall: WallPlacement, point: Point, halfWidth: number, half
 function boxDistance(x: number, y: number, halfX: number, halfY: number) {
   const qx = Math.abs(x) - halfX;
   const qy = Math.abs(y) - halfY;
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
+  return hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
 }
 
 function toLocal(wall: WallPlacement, point: Point) {
@@ -1214,20 +1215,20 @@ function toWorld(wall: WallPlacement, local: Point) {
 /** Rotates a world vector into a wall's local axes. */
 function rotateInto(wall: WallPlacement, vector: Point) {
   const angle = wall.rotation ?? 0;
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  return { x: vector.x * cos + vector.y * sin, y: -vector.x * sin + vector.y * cos };
+  const cosine = cos(angle);
+  const sine = sin(angle);
+  return { x: vector.x * cosine + vector.y * sine, y: -vector.x * sine + vector.y * cosine };
 }
 
 /** Rotates a local vector of a wall into world axes. */
 function rotateOut(wall: WallPlacement, vector: Point) {
   const angle = wall.rotation ?? 0;
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  return { x: vector.x * cos - vector.y * sin, y: vector.x * sin + vector.y * cos };
+  const cosine = cos(angle);
+  const sine = sin(angle);
+  return { x: vector.x * cosine - vector.y * sine, y: vector.x * sine + vector.y * cosine };
 }
 
 function normalize(vector: Point) {
-  const length = Math.hypot(vector.x, vector.y) || 1;
+  const length = hypot(vector.x, vector.y) || 1;
   return { x: vector.x / length, y: vector.y / length };
 }

@@ -1,5 +1,6 @@
 import type { Collider, Rapier, RigidBody } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
+import { cos, exp, hypot, sin } from '../physics/math';
 import { carve, CHANNELS, crack, dent, detachLoosePieces, FAR, raycastField, shatter, solidBoxes, surfaceNormal, type DamageField, type Fragment } from './field';
 import { cutRail, traceRail } from './rail';
 import { KIND_FIELD, PARTICLE_DUST, PARTICLE_SMOKE, type createRangeRenderer } from './renderer';
@@ -170,7 +171,7 @@ export function createWrecks(
 
       for (const wreck of wrecks) {
         const center = wreck.body.translation();
-        const length = Math.hypot(center.x - at.x, center.y - at.y);
+        const length = hypot(center.x - at.x, center.y - at.y);
 
         if (length - wreck.reach > radius) {
           continue;
@@ -332,7 +333,7 @@ export function createWrecks(
       for (const wreck of wrecks) {
         const center = wreck.body.translation();
 
-        if (Math.hypot(point.x - center.x, point.y - center.y) - wreck.reach >= nearest) {
+        if (hypot(point.x - center.x, point.y - center.y) - wreck.reach >= nearest) {
           continue;
         }
 
@@ -370,7 +371,7 @@ export function createWrecks(
       for (const wreck of [...wrecks]) {
         const center = wreck.body.translation();
 
-        if (Math.hypot(point.x - center.x, point.y - center.y) < radius) {
+        if (hypot(point.x - center.x, point.y - center.y) < radius) {
           crumble(wreck);
         }
       }
@@ -455,7 +456,7 @@ export function createWrecks(
     const next = { x: center.x + motion.vx * dt, y: center.y + motion.vy * dt };
     const angle = wreck.body.rotation() + motion.spin * dt;
     const blocked = cornersOf(wreck, next, angle).some((corner) => options.wallDistance(corner, 8) < 1);
-    const drag = Math.exp(-SLIDE_DRAG * dt);
+    const drag = exp(-SLIDE_DRAG * dt);
     motion.vx *= drag;
     motion.vy *= drag;
     motion.spin *= drag;
@@ -465,7 +466,7 @@ export function createWrecks(
       wreck.body.setNextKinematicRotation(angle);
     }
 
-    if (blocked || Math.hypot(motion.vx, motion.vy) < SLIDE_STOP) {
+    if (blocked || hypot(motion.vx, motion.vy) < SLIDE_STOP) {
       wreck.slide = undefined;
       options.onChange(union(motion.from, boundsOf(wreck, blocked ? center : next)));
     }
@@ -486,12 +487,12 @@ export function createWrecks(
     for (let index = 0; index < 14; index++) {
       const angle = options.random() * Math.PI * 2;
       const speed = 20 + options.random() * 60;
-      renderer.spawn(PARTICLE_DUST, center.x, center.y, Math.cos(angle) * speed, Math.sin(angle) * speed, 0.5 + options.random() * 0.5, 1.2, DUST_COLOR);
+      renderer.spawn(PARTICLE_DUST, center.x, center.y, cos(angle) * speed, sin(angle) * speed, 0.5 + options.random() * 0.5, 1.2, DUST_COLOR);
     }
 
     for (let index = 0; index < 5; index++) {
       const angle = options.random() * Math.PI * 2;
-      renderer.spawn(PARTICLE_SMOKE, center.x, center.y, Math.cos(angle) * 18, Math.sin(angle) * 18, 0.7 + options.random() * 0.4, 3 + options.random() * 2, NO_COLOR);
+      renderer.spawn(PARTICLE_SMOKE, center.x, center.y, cos(angle) * 18, sin(angle) * 18, 0.7 + options.random() * 0.4, 3 + options.random() * 2, NO_COLOR);
     }
 
     remove(wreck);
@@ -621,7 +622,7 @@ function blast(field: DamageField, core: Point, random: () => number) {
     const width = 0.6 + random() * 0.5;
 
     for (const side of [angle, angle + width]) {
-      crack(field, core, { x: core.x + Math.cos(side) * BLAST_REACH, y: core.y + Math.sin(side) * BLAST_REACH }, CRACK_WIDTH);
+      crack(field, core, { x: core.x + cos(side) * BLAST_REACH, y: core.y + sin(side) * BLAST_REACH }, CRACK_WIDTH);
     }
 
     angle += width + 0.8 + random() * 1.5;
@@ -637,7 +638,7 @@ function char(field: DamageField, random: () => number) {
       const index = (row * field.cols + col) * CHANNELS;
       const x = field.originX + col * field.cell;
       const y = field.originY + row * field.cell;
-      const patch = 0.5 + 0.5 * Math.sin(x * 0.31 + phase) * Math.cos(y * 0.27 + phase * 1.7);
+      const patch = 0.5 + 0.5 * sin(x * 0.31 + phase) * cos(y * 0.27 + phase * 1.7);
       field.data[index + 2] = FAR;
       field.data[index + 3] = Math.max(field.data[index + 3], CHAR + 0.3 * patch);
     }
@@ -653,7 +654,7 @@ function boundsOf(wreck: Wreck, at = wreck.body.translation()): Bounds {
 function reachOf(field: DamageField) {
   const x = Math.max(Math.abs(field.originX), Math.abs(field.originX + field.cols * field.cell));
   const y = Math.max(Math.abs(field.originY), Math.abs(field.originY + field.rows * field.cell));
-  return Math.hypot(x, y);
+  return hypot(x, y);
 }
 
 /**
@@ -665,8 +666,8 @@ function cornersOf(wreck: Wreck, at: Point, angle: number) {
     return [at];
   }
 
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
+  const cosine = cos(angle);
+  const sine = sin(angle);
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -684,7 +685,7 @@ function cornersOf(wreck: Wreck, at: Point, angle: number) {
     { x: maxX, y: minY },
     { x: minX, y: maxY },
     { x: maxX, y: maxY }
-  ].map((corner) => ({ x: at.x + corner.x * cos - corner.y * sin, y: at.y + corner.x * sin + corner.y * cos }));
+  ].map((corner) => ({ x: at.x + corner.x * cosine - corner.y * sine, y: at.y + corner.x * sine + corner.y * cosine }));
 }
 
 function union(a: Bounds, b: Bounds): Bounds {
@@ -695,7 +696,7 @@ function union(a: Bounds, b: Bounds): Bounds {
 function boxDistance(x: number, y: number, halfX: number, halfY: number) {
   const qx = Math.abs(x) - halfX;
   const qy = Math.abs(y) - halfY;
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
+  return hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
 }
 
 function toLocal(body: RigidBody, point: Point) {
@@ -711,19 +712,19 @@ function toWorld(body: RigidBody, local: Point) {
 
 function rotateOut(body: RigidBody, vector: Point) {
   const angle = body.rotation();
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  return { x: vector.x * cos - vector.y * sin, y: vector.x * sin + vector.y * cos };
+  const cosine = cos(angle);
+  const sine = sin(angle);
+  return { x: vector.x * cosine - vector.y * sine, y: vector.x * sine + vector.y * cosine };
 }
 
 function rotateInto(body: RigidBody, vector: Point) {
   const angle = body.rotation();
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  return { x: vector.x * cos + vector.y * sin, y: -vector.x * sin + vector.y * cos };
+  const cosine = cos(angle);
+  const sine = sin(angle);
+  return { x: vector.x * cosine + vector.y * sine, y: -vector.x * sine + vector.y * cosine };
 }
 
 function normalize(vector: Point) {
-  const length = Math.hypot(vector.x, vector.y) || 1;
+  const length = hypot(vector.x, vector.y) || 1;
   return { x: vector.x / length, y: vector.y / length };
 }

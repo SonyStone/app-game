@@ -1,3 +1,4 @@
+import { hypot } from '../physics/math';
 import { carve, CHANNELS, clipToGrid, crack, sampleField, surfaceNormal, type DamageField } from './field';
 
 type Point = { x: number; y: number };
@@ -109,7 +110,7 @@ export function cutRail(field: DamageField, origin: Point, direction: Point, tra
  * body leaves it in one piece.
  */
 export function cutSlit(field: DamageField, from: Point, to: Point, width: number) {
-  const length = Math.hypot(to.x - from.x, to.y - from.y);
+  const length = hypot(to.x - from.x, to.y - from.y);
   const direction = length > 0 ? { x: (to.x - from.x) / length, y: (to.y - from.y) / length } : { x: 1, y: 0 };
   const at = (along: number) => ({ x: from.x + direction.x * along, y: from.y + direction.y * along });
 

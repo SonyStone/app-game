@@ -1,4 +1,5 @@
 import type { CombatLayout } from '../damage/combat';
+import { cos, hypot, sin } from '../physics/math';
 
 type Point = { x: number; y: number };
 
@@ -71,7 +72,7 @@ export function createNavGrid(layout: CombatLayout, options: { cell?: number; cl
       }
 
       for (const campfire of layout.campfires ?? []) {
-        unbreakable = Math.min(unbreakable, Math.hypot(x - campfire.x, y - campfire.y) - CAMPFIRE_RADIUS);
+        unbreakable = Math.min(unbreakable, hypot(x - campfire.x, y - campfire.y) - CAMPFIRE_RADIUS);
       }
 
       distance[row * cols + col] = Math.min(unbreakable, breakable);
@@ -128,7 +129,7 @@ export function updateNavGrid(
 
       if (col < minCol || col > maxCol || row < minRow || row > maxRow) {
         const center = cellCenter(grid, cell);
-        const gap = Math.hypot(Math.max(changed.minX - center.x, 0, center.x - changed.maxX), Math.max(changed.minY - center.y, 0, center.y - changed.maxY));
+        const gap = hypot(Math.max(changed.minX - center.x, 0, center.x - changed.maxX), Math.max(changed.minY - center.y, 0, center.y - changed.maxY));
         grid.distance[cell] = Math.min(grid.distance[cell], gap);
       }
     }
@@ -297,7 +298,7 @@ export function sightClear(grid: NavGrid, a: Point, b: Point) {
  *   obstacles, such as rubble, that a viewer right behind them sees over.
  */
 export function traceClear(grid: NavGrid, field: Float32Array, a: Point, b: Point, near?: { field: Float32Array; reach: number }) {
-  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  const length = hypot(b.x - a.x, b.y - a.y);
 
   if (length < 1e-6) {
     return true;
@@ -338,8 +339,8 @@ export function sightReach(grid: NavGrid, field: Float32Array, from: Point, rang
 
   for (let index = 0; index < rays; index++) {
     const angle = (index / rays) * Math.PI * 2;
-    const dx = Math.cos(angle);
-    const dy = Math.sin(angle);
+    const dx = cos(angle);
+    const dy = sin(angle);
     let travelled = VIEWER_RADIUS;
 
     while (travelled < range) {
@@ -473,7 +474,7 @@ export function nearestOpen(grid: NavGrid, point: Point, radius: number) {
 
         const cell = y * grid.cols + x;
         const center = cellCenter(grid, cell);
-        const distance = Math.hypot(center.x - point.x, center.y - point.y);
+        const distance = hypot(center.x - point.x, center.y - point.y);
 
         if (isOpenCell(grid, cell) && distance < bestDistance) {
           best = cell;
@@ -546,7 +547,7 @@ export function pathLength(path: readonly Point[]) {
   let length = 0;
 
   for (let index = 1; index < path.length; index++) {
-    length += Math.hypot(path[index].x - path[index - 1].x, path[index].y - path[index - 1].y);
+    length += hypot(path[index].x - path[index - 1].x, path[index].y - path[index - 1].y);
   }
 
   return length;
@@ -661,7 +662,7 @@ function forNeighbors(grid: NavGrid, cell: number, visit: (neighbor: number, len
 
 /** Cost of driving a segment: its length weighted by one plus the extra cost of the cells it crosses, sampled every half cell. */
 function costAlong(grid: NavGrid, a: Point, b: Point, cost: (cell: number) => number) {
-  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  const length = hypot(b.x - a.x, b.y - a.y);
   const steps = Math.max(Math.ceil(length / (grid.cell / 2)), 1);
   let total = 0;
 
@@ -675,7 +676,7 @@ function costAlong(grid: NavGrid, a: Point, b: Point, cost: (cell: number) => nu
 
 /** Whether every point of the segment keeps at least `margin` pixels from obstacles, sampled every quarter cell. */
 function segmentKeeps(grid: NavGrid, a: Point, b: Point, margin: number) {
-  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  const length = hypot(b.x - a.x, b.y - a.y);
   const steps = Math.max(Math.ceil(length / (grid.cell / 4)), 1);
 
   for (let step = 0; step <= steps; step++) {
@@ -692,14 +693,14 @@ function segmentKeeps(grid: NavGrid, a: Point, b: Point, margin: number) {
 /** Signed distance from `point` to a turned box. */
 function boxDistance(point: Point, wall: NonNullable<CombatLayout['walls']>[number]) {
   const angle = wall.rotation ?? 0;
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
+  const cosine = cos(angle);
+  const sine = sin(angle);
   const dx = point.x - wall.x;
   const dy = point.y - wall.y;
-  const qx = Math.abs(dx * cos + dy * sin) - wall.halfWidth;
-  const qy = Math.abs(-dx * sin + dy * cos) - wall.halfHeight;
+  const qx = Math.abs(dx * cosine + dy * sine) - wall.halfWidth;
+  const qy = Math.abs(-dx * sine + dy * cosine) - wall.halfHeight;
 
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
+  return hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
 }
 
 /** A binary min-heap of cells keyed by priority. */

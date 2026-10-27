@@ -1,3 +1,5 @@
+import { hypot } from '../../physics/math';
+
 type Point = { x: number; y: number };
 
 /**
@@ -50,7 +52,7 @@ export function drillDepth(marks: readonly DrillMark[], point: Point, shooter: u
   let near = 0;
 
   for (const mark of marks) {
-    if (mark.shooter === shooter && now - mark.at < spec.memory && Math.hypot(mark.x - point.x, mark.y - point.y) < spec.radius) {
+    if (mark.shooter === shooter && now - mark.at < spec.memory && hypot(mark.x - point.x, mark.y - point.y) < spec.radius) {
       near++;
     }
   }

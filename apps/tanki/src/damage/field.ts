@@ -1,3 +1,5 @@
+import { atan2, hypot, sin } from '../physics/math';
+
 /**
  * Destructible shapes as sampled distance fields.
  *
@@ -204,7 +206,7 @@ export function surfaceNormal(field: DamageField, point: { x: number; y: number 
   const up = sampleField(field, point.x, point.y - step, sample)[0];
   const x = right - left;
   const y = down - up;
-  const length = Math.hypot(x, y);
+  const length = hypot(x, y);
 
   return length > 1e-6 ? { x: x / length, y: y / length } : undefined;
 }
@@ -264,15 +266,15 @@ export function isCoreExposed(field: DamageField) {
  * @param seed - Varies the outline of the hole.
  */
 export function carve(field: DamageField, center: { x: number; y: number }, radius: number, roughness: number, seed: number) {
-  const phases = [seed * 12.9898, seed * 78.233, seed * 37.719].map((value) => fract(Math.sin(value) * 43758.5453) * 6.283);
+  const phases = [seed * 12.9898, seed * 78.233, seed * 37.719].map((value) => fract(sin(value) * 43758.5453) * 6.283);
   const reach = radius * (1 + roughness) + SCORCH_REACH + field.cell;
 
   forCellsNear(field, center, reach, (index, x, y) => {
     const dx = x - center.x;
     const dy = y - center.y;
-    const angle = Math.atan2(dy, dx);
-    const wobble = (Math.sin(angle * 3 + phases[0]) + Math.sin(angle * 5 + phases[1]) * 0.6 + Math.sin(angle * 9 + phases[2]) * 0.3) / 1.9;
-    const hole = Math.hypot(dx, dy) - radius * (1 + roughness * wobble);
+    const angle = atan2(dy, dx);
+    const wobble = (sin(angle * 3 + phases[0]) + sin(angle * 5 + phases[1]) * 0.6 + sin(angle * 9 + phases[2]) * 0.3) / 1.9;
+    const hole = hypot(dx, dy) - radius * (1 + roughness * wobble);
     const data = field.data;
     data[index] = Math.max(data[index], -hole);
     data[index + 3] = Math.max(data[index + 3], Math.min(Math.max(1 - hole / SCORCH_REACH, 0), 1));
@@ -284,12 +286,12 @@ export function carve(field: DamageField, center: { x: number; y: number }, radi
  * meet a hole and the edge cut off the wedge between them, which `detachLoosePieces` then frees.
  */
 export function crack(field: DamageField, from: { x: number; y: number }, to: { x: number; y: number }, width: number) {
-  const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+  const length = hypot(to.x - from.x, to.y - from.y) || 1;
   const center = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
 
   forCellsNear(field, center, length / 2 + width + SCORCH_REACH + field.cell, (index, x, y) => {
     const t = Math.min(Math.max(((x - from.x) * (to.x - from.x) + (y - from.y) * (to.y - from.y)) / (length * length), 0), 1);
-    const gap = Math.hypot(x - from.x - (to.x - from.x) * t, y - from.y - (to.y - from.y) * t) - width / 2;
+    const gap = hypot(x - from.x - (to.x - from.x) * t, y - from.y - (to.y - from.y) * t) - width / 2;
     const data = field.data;
     data[index] = Math.max(data[index], -gap);
     data[index + 3] = Math.max(data[index + 3], Math.min(Math.max(1 - gap / SCORCH_REACH, 0), 1));
@@ -299,7 +301,7 @@ export function crack(field: DamageField, from: { x: number; y: number }, to: { 
 /** Soots the armor around `center` without removing any, as a glancing hit does. */
 export function scorch(field: DamageField, center: { x: number; y: number }, radius: number) {
   forCellsNear(field, center, radius, (index, x, y) => {
-    const amount = 1 - Math.hypot(x - center.x, y - center.y) / radius;
+    const amount = 1 - hypot(x - center.x, y - center.y) / radius;
     field.data[index + 3] = Math.max(field.data[index + 3], Math.min(Math.max(amount, 0), 1) * 0.8);
   });
 }
@@ -325,7 +327,9 @@ export function dent(
   const sample = new Float32Array(CHANNELS);
 
   forCellsNear(field, center, radius, (index, x, y) => {
-    const falloff = Math.max(1 - ((x - center.x) ** 2 + (y - center.y) ** 2) / (radius * radius), 0) ** 2;
+    // Squares are products, not `**`: engines compute powers differently, and the battle must replay alike in each.
+    const near = Math.max(1 - (square(x - center.x) + square(y - center.y)) / (radius * radius), 0);
+    const falloff = near * near;
 
     if (falloff === 0) {
       return;
@@ -359,7 +363,7 @@ export function mend(field: DamageField, pristine: Float32Array, amount: number,
     for (let cell = 0; cell < cells; cell++) {
       const x = field.originX + (cell % field.cols) * field.cell;
       const y = field.originY + Math.floor(cell / field.cols) * field.cell;
-      const length = Math.hypot(x, y);
+      const length = hypot(x, y);
       weights[cell] = Math.max(1 + (length > 1e-6 ? (bias * (x * toward.x + y * toward.y)) / length : 0), MIN_MEND_WEIGHT);
       damage[cell] = Math.abs(pristine[cell * CHANNELS] - field.data[cell * CHANNELS]);
       total += damage[cell];
@@ -470,7 +474,7 @@ export function shatter(field: DamageField, pieces: number, minCells: number, ra
       let nearest = 0;
 
       seeds.forEach((seed, index) => {
-        if ((seed.x - x) ** 2 + (seed.y - y) ** 2 < (seeds[nearest].x - x) ** 2 + (seeds[nearest].y - y) ** 2) {
+        if (square(seed.x - x) + square(seed.y - y) < square(seeds[nearest].x - x) + square(seeds[nearest].y - y)) {
           nearest = index;
         }
       });
@@ -731,4 +735,8 @@ function clampIndex(index: number, count: number) {
 
 function fract(value: number) {
   return value - Math.floor(value);
+}
+
+function square(value: number) {
+  return value * value;
 }

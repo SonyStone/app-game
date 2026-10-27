@@ -3,6 +3,7 @@ import type { Combat } from '../damage/combat';
 import { createField, FAR, type DamageField } from '../damage/field';
 import { KIND_FIELD, type createRangeRenderer } from '../damage/renderer';
 import type { HullSpec } from '../damage/shapes';
+import { cos, hypot, sin } from '../physics/math';
 import type { KitPlacement } from './map';
 
 type Renderer = ReturnType<typeof createRangeRenderer>;
@@ -142,8 +143,8 @@ function touches(tank: Tank, hull: HullSpec | undefined, kit: KitPlacement) {
   const angle = tank.hull.rotation();
   const dx = kit.x - center.x;
   const dy = kit.y - center.y;
-  const along = dx * Math.cos(angle) + dy * Math.sin(angle);
-  const across = -dx * Math.sin(angle) + dy * Math.cos(angle);
+  const along = dx * cos(angle) + dy * sin(angle);
+  const across = -dx * sin(angle) + dy * cos(angle);
   return roundedBox(along, across, hull.halfLength, hull.halfWidth, 0) < PICKUP_REACH;
 }
 
@@ -161,7 +162,7 @@ function createCrossField(size: number) {
 }
 
 function createDiscField(radius: number) {
-  return createField(bounds(radius + 2), 1, (x, y) => [Math.hypot(x, y) - radius, FAR, FAR, 0]);
+  return createField(bounds(radius + 2), 1, (x, y) => [hypot(x, y) - radius, FAR, FAR, 0]);
 }
 
 const CELL = 0.5;
@@ -174,7 +175,7 @@ function bounds(reach: number) {
 function roundedBox(x: number, y: number, halfX: number, halfY: number, radius: number) {
   const qx = Math.abs(x) - halfX + radius;
   const qy = Math.abs(y) - halfY + radius;
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
+  return hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
 }
 
 function fieldDraw(field: DamageField, slot: number) {

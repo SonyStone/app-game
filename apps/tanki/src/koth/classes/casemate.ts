@@ -1,4 +1,5 @@
 import type { Tank } from '../../arena/bodies';
+import { cos, hypot, sin } from '../../physics/math';
 
 type Point = { x: number; y: number };
 
@@ -33,10 +34,10 @@ export function turnInPlace(tank: Tank, pivot: Point, heading: number, traverse:
   const spin = Math.min(Math.max(angleBetween(current, heading) * TURN_GAIN, -traverse), traverse);
   const sideways = spin * ANCHOR * SPIN_BOOST;
   const velocity = {
-    x: -Math.sin(current) * sideways + (pivot.x - center.x) * RECENTER,
-    y: Math.cos(current) * sideways + (pivot.y - center.y) * RECENTER
+    x: -sin(current) * sideways + (pivot.x - center.x) * RECENTER,
+    y: cos(current) * sideways + (pivot.y - center.y) * RECENTER
   };
-  const share = Math.hypot(velocity.x, velocity.y) / pullSpeed;
+  const share = hypot(velocity.x, velocity.y) / pullSpeed;
 
   return share > 1 ? { x: velocity.x / pullSpeed / share, y: velocity.y / pullSpeed / share } : { x: velocity.x / pullSpeed, y: velocity.y / pullSpeed };
 }

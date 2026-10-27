@@ -130,8 +130,8 @@ export function cleanClassTuning(value: unknown): { tuning: ClassTuning; dropped
  */
 export function formatKnob(knob: ClassKnob, id: TankClassId, value: number) {
   const scale = knob.scale ?? 1;
-  const digits = Math.min(Math.max(Math.ceil(-Math.log10(knobRange(id, knob).step * scale) - 1e-9), 0), 2);
-  return (value * scale).toFixed(digits);
+  const step = knobRange(id, knob).step * scale;
+  return (value * scale).toFixed(step >= 1 ? 0 : step >= 0.1 ? 1 : 2);
 }
 
 /**

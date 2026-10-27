@@ -1,5 +1,6 @@
 import type { Collider, Rapier } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
+import { cos, sin } from '../physics/math';
 import { ARENA, type Placement } from './level';
 
 /**
@@ -92,8 +93,8 @@ export function muzzleOf(tank: Tank) {
   const center = tank.hull.translation();
 
   return {
-    x: center.x + Math.cos(tank.turretAngle) * MUZZLE_OFFSET,
-    y: center.y + Math.sin(tank.turretAngle) * MUZZLE_OFFSET
+    x: center.x + cos(tank.turretAngle) * MUZZLE_OFFSET,
+    y: center.y + sin(tank.turretAngle) * MUZZLE_OFFSET
   };
 }
 
@@ -133,7 +134,7 @@ export type ShotFilter = (collider: Collider) => boolean;
  */
 export function castShot(rapier: Rapier, world: World, tank: Tank, canHit: ShotFilter) {
   const start = muzzleOf(tank);
-  const direction = { x: Math.cos(tank.turretAngle), y: Math.sin(tank.turretAngle) };
+  const direction = { x: cos(tank.turretAngle), y: sin(tank.turretAngle) };
   const hit = world.castRay(
     new rapier.Ray(start, direction),
     SHOT_RANGE,
@@ -169,11 +170,11 @@ const MUZZLE_OFFSET = 30;
 const SHOT_RANGE = 1000;
 
 function toWorld(placement: Placement, local: { x: number; y: number }) {
-  const cos = Math.cos(placement.rotation);
-  const sin = Math.sin(placement.rotation);
+  const cosine = cos(placement.rotation);
+  const sine = sin(placement.rotation);
 
   return {
-    x: placement.x + local.x * cos - local.y * sin,
-    y: placement.y + local.x * sin + local.y * cos
+    x: placement.x + local.x * cosine - local.y * sine,
+    y: placement.y + local.x * sine + local.y * cosine
   };
 }

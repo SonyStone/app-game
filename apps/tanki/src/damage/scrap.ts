@@ -1,3 +1,4 @@
+import { cos, exp, hypot, sin } from '../physics/math';
 import type { WallMaterial } from './combat';
 import { CHANNELS, createField, FAR, sampleField, type DamageField } from './field';
 import { KIND_FIELD, KIND_SCRAP, KIND_TURRET, packColor, TURRET_MEDIUM, TURRET_QUADS, type createRangeRenderer } from './renderer';
@@ -96,8 +97,8 @@ export function createScrap(
       }
 
       return [...found]
-        .filter((piece) => Math.hypot(piece.x - point.x, piece.y - point.y) <= radius)
-        .sort((a, b) => Math.hypot(a.x - point.x, a.y - point.y) - Math.hypot(b.x - point.x, b.y - point.y)) as ScrapPiece[];
+        .filter((piece) => hypot(piece.x - point.x, piece.y - point.y) <= radius)
+        .sort((a, b) => hypot(a.x - point.x, a.y - point.y) - hypot(b.x - point.x, b.y - point.y)) as ScrapPiece[];
     },
 
     /**
@@ -123,15 +124,15 @@ export function createScrap(
         const piece = flying[index];
         piece.age += dt;
         const inAir = piece.age < piece.air;
-        const drag = Math.exp(-(inAir ? AIR_DRAG : GROUND_DRAG) * dt);
+        const drag = exp(-(inAir ? AIR_DRAG : GROUND_DRAG) * dt);
         piece.x = clamp(piece.x + piece.vx * dt, options.bounds.halfWidth - EDGE);
         piece.y = clamp(piece.y + piece.vy * dt, options.bounds.halfHeight - EDGE);
         piece.angle += piece.spin * dt;
         piece.vx *= drag;
         piece.vy *= drag;
-        piece.spin *= inAir ? drag : Math.exp(-GROUND_SPIN_DRAG * dt);
+        piece.spin *= inAir ? drag : exp(-GROUND_SPIN_DRAG * dt);
 
-        if ((!inAir && Math.hypot(piece.vx, piece.vy) < REST_SPEED) || piece.age > MAX_FLIGHT) {
+        if ((!inAir && hypot(piece.vx, piece.vy) < REST_SPEED) || piece.age > MAX_FLIGHT) {
           flying.splice(index, 1);
           settle(piece);
         }
@@ -270,7 +271,7 @@ export function createScrap(
       angle: piece.angle,
       material: piece.material,
       area,
-      radius: Math.hypot(Math.max(Math.abs(field.originX), Math.abs(field.originX + field.cols * field.cell)), Math.max(Math.abs(field.originY), Math.abs(field.originY + field.rows * field.cell))),
+      radius: hypot(Math.max(Math.abs(field.originX), Math.abs(field.originX + field.cols * field.cell)), Math.max(Math.abs(field.originY), Math.abs(field.originY + field.rows * field.cell))),
       field: { ...field, data },
       chunks: []
     };
@@ -484,8 +485,8 @@ function clearChunk(field: DamageField) {
  */
 function bake(target: DamageField, piece: Piece) {
   const bounds = boundsOf(piece);
-  const cos = Math.cos(piece.angle);
-  const sin = Math.sin(piece.angle);
+  const cosine = cos(piece.angle);
+  const sine = sin(piece.angle);
   const minCol = Math.max(Math.floor(bounds.minX - target.originX), 0);
   const maxCol = Math.min(Math.ceil(bounds.maxX - target.originX), target.cols - 1);
   const minRow = Math.max(Math.floor(bounds.minY - target.originY), 0);
@@ -495,7 +496,7 @@ function bake(target: DamageField, piece: Piece) {
     for (let col = minCol; col <= maxCol; col++) {
       const dx = target.originX + col * target.cell - piece.x;
       const dy = target.originY + row * target.cell - piece.y;
-      const sample = sampleNear(piece.field, dx * cos + dy * sin, -dx * sin + dy * cos);
+      const sample = sampleNear(piece.field, dx * cosine + dy * sine, -dx * sine + dy * cosine);
       const index = (row * target.cols + col) * CHANNELS;
 
       if (sample[0] < target.data[index]) {
@@ -519,7 +520,7 @@ function sampleNear(field: DamageField, x: number, y: number) {
   const inX = Math.min(Math.max(x, minX), maxX);
   const inY = Math.min(Math.max(y, minY), maxY);
   sampleField(field, inX, inY, scratch);
-  scratch[0] += Math.hypot(x - inX, y - inY);
+  scratch[0] += hypot(x - inX, y - inY);
   return scratch;
 }
 

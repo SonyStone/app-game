@@ -3,6 +3,7 @@ import { createCombat } from '../damage/combat';
 import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import type { World } from '../physics/World';
+import { exp, hypot } from '../physics/math';
 import { createBot, type Bot } from './bot';
 import { angleBetween, clampGun, turnInPlace } from './classes/casemate';
 import { TANK_CLASSES } from './classes/classes';
@@ -491,7 +492,7 @@ export function createKothMatch(
   function steerPlayer(player: Member, input: PlayerInput) {
     const tank = player.tank!;
     const mount = player.tankClass.mount;
-    const idle = Math.hypot(input.drive.x, input.drive.y) < IDLE_DRIVE;
+    const idle = hypot(input.drive.x, input.drive.y) < IDLE_DRIVE;
     const off = input.aim === undefined ? 0 : Math.abs(angleBetween(tank.hull.rotation(), input.aim));
     const turning = input.turn || (idle && (off > (mount.kind === 'casemate' ? mount.arc : Infinity) || (player.pivot !== undefined && off > SETTLED)));
 
@@ -629,7 +630,7 @@ export function createKothMatch(
       const tank = member.tank;
 
       if (tank && combat.armorLeft(tank) < 0.999 && inBase(map.bases[member.team], tank.hull.translation())) {
-        combat.repair(tank, 1 - Math.exp(-REPAIR_RATE * REPAIR_INTERVAL));
+        combat.repair(tank, 1 - exp(-REPAIR_RATE * REPAIR_INTERVAL));
       }
     }
   }
@@ -837,7 +838,7 @@ function nextWave(time: number) {
 }
 
 function distance(a: Point, b: Point) {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return hypot(a.x - b.x, a.y - b.y);
 }
 
 /** Converts a 0xRRGGBB color to components 0-1. */

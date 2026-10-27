@@ -1,5 +1,6 @@
 import type { Tank } from '../arena/bodies';
 import type { Combat } from '../damage/combat';
+import { atan2, cos, hypot, sin } from '../physics/math';
 import { canDrive, cellAt, cellCenter, findBreachPath, findPath, isOpenAt, pathLength, type NavGrid } from './navigation';
 import { classRevision } from './classes/knobs';
 import type { Trigger, Weapon } from './classes/weapon';
@@ -235,7 +236,7 @@ export function createBreacher(member: Member, context: BreachContext) {
     if (blocker.material !== 'wreck') {
       // Square through the wall, across its thin side.
       const angle = blocker.wall.rotation ?? 0;
-      const axis = blocker.wall.halfWidth < blocker.wall.halfHeight ? { x: Math.cos(angle), y: Math.sin(angle) } : { x: -Math.sin(angle), y: Math.cos(angle) };
+      const axis = blocker.wall.halfWidth < blocker.wall.halfHeight ? { x: cos(angle), y: sin(angle) } : { x: -sin(angle), y: cos(angle) };
       const sign = axis.x * dir.x + axis.y * dir.y >= 0 ? 1 : -1;
       dir = { x: axis.x * sign, y: axis.y * sign };
     }
@@ -362,9 +363,9 @@ export function createBreacher(member: Member, context: BreachContext) {
       return { move: STOP };
     }
 
-    const aim = Math.atan2(target.y - position.y, target.x - position.x);
+    const aim = atan2(target.y - position.y, target.x - position.x);
     const range = distance(position, target);
-    const aligned = Math.abs(angleBetween(tank.turretAngle, aim)) < Math.max(Math.atan2(AIM_TOLERANCE, range), 0.01);
+    const aligned = Math.abs(angleBetween(tank.turretAngle, aim)) < Math.max(atan2(AIM_TOLERANCE, range), 0.01);
     context.trigger(member, triggerFor(weapon, aligned, range));
     return { move: STOP, aim };
   }
@@ -685,11 +686,11 @@ const PASSED = 25;
 const WRECK_THICKNESS = 25;
 
 function distance(a: Point, b: Point) {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return hypot(a.x - b.x, a.y - b.y);
 }
 
 function normalize(vector: Point) {
-  const length = Math.hypot(vector.x, vector.y) || 1;
+  const length = hypot(vector.x, vector.y) || 1;
   return { x: vector.x / length, y: vector.y / length };
 }
 

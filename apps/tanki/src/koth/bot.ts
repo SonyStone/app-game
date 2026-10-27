@@ -1,6 +1,7 @@
 import type { Tank } from '../arena/bodies';
 import type { Combat } from '../damage/combat';
 import { reachFor } from '../damage/weapons/lob';
+import { atan2, cos, exp, hypot, log, sin } from '../physics/math';
 import { createBreacher } from './breach';
 import { planBot, type BotAction, type BotFact, type BotGoal, type Situation } from './brain';
 import { findBankShot } from './classes/bank';
@@ -293,7 +294,7 @@ export function createBot(member: Member, context: BotContext) {
       }
 
       const from = rival.tank.hull.translation();
-      const beam = { x: Math.cos(rival.tank.turretAngle), y: Math.sin(rival.tank.turretAngle) };
+      const beam = { x: cos(rival.tank.turretAngle), y: sin(rival.tank.turretAngle) };
       const offset = { x: position.x - from.x, y: position.y - from.y };
       const across = offset.x * beam.y - offset.y * beam.x;
 
@@ -377,7 +378,7 @@ export function createBot(member: Member, context: BotContext) {
 
       const at = enemy.hull.translation();
       const range = distance(position, at);
-      const inScope = scoped && range < SCOPE_RANGE && Math.abs(angleBetween(tank.turretAngle, Math.atan2(at.y - position.y, at.x - position.x))) < SCOPE_ARC;
+      const inScope = scoped && range < SCOPE_RANGE && Math.abs(angleBetween(tank.turretAngle, atan2(at.y - position.y, at.x - position.x))) < SCOPE_ARC;
 
       if ((range < context.pace().botSight || inScope) && combat.lineOfSight(position, at)) {
         visible.add(enemy);
@@ -712,7 +713,7 @@ export function createBot(member: Member, context: BotContext) {
     const range = distance(position, at);
     const accuracy = Math.min(Math.max(1.1 - range / (tactics.reach * 1.15), 0.2), 0.9);
     const heading = target.hull.rotation();
-    const facing = range > 1 ? ((position.x - at.x) * Math.cos(heading) + (position.y - at.y) * Math.sin(heading)) / range : 0;
+    const facing = range > 1 ? ((position.x - at.x) * cos(heading) + (position.y - at.y) * sin(heading)) / range : 0;
     const toughness = TOUGHNESS[classOf(target)];
     let hits = (fromRear ? tactics.hits.rear : facing > 0.5 ? tactics.hits.front : facing > -0.4 ? tactics.hits.side : tactics.hits.rear) * toughness;
     let exposure = fromRear ? 0.5 : facing > 0.3 ? 2.5 : 1;
@@ -1114,7 +1115,7 @@ export function createBot(member: Member, context: BotContext) {
     if (!task.wander || now >= task.wander.until) {
       const angle = context.random() * Math.PI * 2;
       const radius = context.random() * WANDER;
-      const spot = { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius };
+      const spot = { x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius };
       task.wander = { spot: isOpenAt(grid, spot) ? spot : center, until: now + 2.5 + context.random() * 2 };
     }
 
@@ -1134,14 +1135,14 @@ export function createBot(member: Member, context: BotContext) {
     const offset = { x: position.x - at.x, y: position.y - at.y };
     const duel = TACTICS[member.tankClass.id].duel;
     const lead = member.role === 'lead';
-    const current = Math.hypot(offset.x, offset.y);
+    const current = hypot(offset.x, offset.y);
     // The lead presses in, nose and front plates to the target, rather than circling.
     const range = Math.min(Math.max(lead ? current * LEAD_PRESS : current, duel.min), duel.max);
     const step = lead ? LEAD_ORBIT_STEP : ORBIT_STEP;
     const usable = (spot: Point) => isOpenAt(grid, spot) && board.canSee(spot, at);
     const spotAt = (side: number, distance: number) => {
-      const angle = Math.atan2(offset.y, offset.x) + side * step;
-      return { x: at.x + Math.cos(angle) * distance, y: at.y + Math.sin(angle) * distance };
+      const angle = atan2(offset.y, offset.x) + side * step;
+      return { x: at.x + cos(angle) * distance, y: at.y + sin(angle) * distance };
     };
     // Blocked one way, the bot circles the other way, then closer in; it stops only when boxed in, as a still tank is easy to hit.
     const side = task.side ?? 1;
@@ -1165,7 +1166,7 @@ export function createBot(member: Member, context: BotContext) {
 
     for (const [angle, radius] of FLANK_OFFSETS) {
       const direction = heading + Math.PI + side * angle;
-      const spot = { x: at.x + Math.cos(direction) * radius, y: at.y + Math.sin(direction) * radius };
+      const spot = { x: at.x + cos(direction) * radius, y: at.y + sin(direction) * radius };
 
       if (isOpenAt(grid, spot) && board.canSee(spot, at)) {
         return spot;
@@ -1179,7 +1180,7 @@ export function createBot(member: Member, context: BotContext) {
   function sideToward(target: Tank, position: Point) {
     const at = whereIs(target);
     const heading = target.hull.rotation();
-    const cross = Math.cos(heading) * (position.y - at.y) - Math.sin(heading) * (position.x - at.x);
+    const cross = cos(heading) * (position.y - at.y) - sin(heading) * (position.x - at.x);
     return cross >= 0 ? 1 : -1;
   }
 
@@ -1231,7 +1232,7 @@ export function createBot(member: Member, context: BotContext) {
     const at = whereIs(target);
     const range = distance(position, at);
     const heading = target.hull.rotation();
-    return range > 1 && ((position.x - at.x) * Math.cos(heading) + (position.y - at.y) * Math.sin(heading)) / range < -REAR_ARC;
+    return range > 1 && ((position.x - at.x) * cos(heading) + (position.y - at.y) * sin(heading)) / range < -REAR_ARC;
   }
 
   /** Whether `target` has been out of sight for longer than `patience` seconds. */
@@ -1267,7 +1268,7 @@ export function createBot(member: Member, context: BotContext) {
     for (const crate of combat.crates) {
       if (distance(position, crate) < NEARBY + 50) {
         for (const along of [-30, 0, 30]) {
-          near.push({ x: crate.x - Math.sin(crate.rotation) * along, y: crate.y + Math.cos(crate.rotation) * along, radius: 22 });
+          near.push({ x: crate.x - sin(crate.rotation) * along, y: crate.y + cos(crate.rotation) * along, radius: 22 });
         }
       }
     }
@@ -1327,8 +1328,8 @@ export function createBot(member: Member, context: BotContext) {
     const range = distance(position, course.point);
     const own = tank.hull.linvel();
     const rail = tankClass.shell.rail !== undefined;
-    const settling = rail ? 1 + UNSETTLED * Math.exp(-(now - gun.settledFrom) / (SETTLE_TIME * context.pace().botReaction)) : 1;
-    const error = aimError(range, Math.hypot(velocity.x, velocity.y) * course.time, Math.hypot(own.x, own.y) / tankClass.speed) * tactics.steadiness * settling;
+    const settling = rail ? 1 + UNSETTLED * exp(-(now - gun.settledFrom) / (SETTLE_TIME * context.pace().botReaction)) : 1;
+    const error = aimError(range, hypot(velocity.x, velocity.y) * course.time, hypot(own.x, own.y) / tankClass.speed) * tactics.steadiness * settling;
     // A rail's misjudgement is drawn in units of the error, which shrinks as the bot settles.
     gun.offset ??= rail ? { x: gaussian(context.random), y: gaussian(context.random) } : { x: gaussian(context.random) * error, y: gaussian(context.random) * error };
     const spot = lobbing
@@ -1338,9 +1339,9 @@ export function createBot(member: Member, context: BotContext) {
         : { x: course.point.x + gun.offset.x, y: course.point.y + gun.offset.y };
     // From where the gun turns, so its line passes through the spot.
     const pivot = combat.gunPivotOf(tank);
-    const goal = Math.atan2(spot.y - pivot.y, spot.x - pivot.x);
+    const goal = atan2(spot.y - pivot.y, spot.x - pivot.x);
     turnTurret(tank, goal, dt, tankClass.turretSpeed);
-    const aligned = Math.abs(angleBetween(tank.turretAngle, goal)) < Math.max(Math.atan2(AIM_TOLERANCE * tactics.aimError, range), 0.01);
+    const aligned = Math.abs(angleBetween(tank.turretAngle, goal)) < Math.max(atan2(AIM_TOLERANCE * tactics.aimError, range), 0.01);
     const worth = error < MAX_AIM_ERROR * tactics.aimError;
     const reacted = now - gun.since >= gun.reaction;
     const clear = combat.lineOfSight(position, spot) && combat.lineOfSight(position, target.hull.translation());
@@ -1385,15 +1386,15 @@ export function createBot(member: Member, context: BotContext) {
 
     // At its post or perch, the gun watches the way the enemy comes by, so a Sniper's scope sees them come out.
     if (threat) {
-      goal = Math.atan2(threat.position.y - position.y, threat.position.x - position.x);
+      goal = atan2(threat.position.y - position.y, threat.position.x - position.x);
     } else if (post && distance(position, post.at) < POSTED * 2) {
-      goal = Math.atan2(post.watch.y - position.y, post.watch.x - position.x);
+      goal = atan2(post.watch.y - position.y, post.watch.x - position.x);
     } else if (perch && distance(position, perch) < PERCHED * 2) {
-      goal = Math.atan2(perch.watch.y - position.y, perch.watch.x - position.x);
-    } else if (Math.hypot(move.x, move.y) > 0.2) {
-      goal = Math.atan2(move.y, move.x);
+      goal = atan2(perch.watch.y - position.y, perch.watch.x - position.x);
+    } else if (hypot(move.x, move.y) > 0.2) {
+      goal = atan2(move.y, move.x);
     } else {
-      goal = Math.atan2(map.point.y - position.y, map.point.x - position.x);
+      goal = atan2(map.point.y - position.y, map.point.x - position.x);
     }
 
     turnTurret(tank, goal, dt * IDLE_TURN, member.tankClass.turretSpeed);
@@ -1405,7 +1406,7 @@ export function createBot(member: Member, context: BotContext) {
     const mount = member.tankClass.mount;
 
     // A casemate gun on watch turns its hull toward what it watches, once it looks well away; on the move its hull leads the way.
-    if (mount.kind === 'casemate' && Math.hypot(move.x, move.y) < 0.2 && !inArc(tank, goal, mount.arc + (member.pivot ? 0 : WATCH_SLACK))) {
+    if (mount.kind === 'casemate' && hypot(move.x, move.y) < 0.2 && !inArc(tank, goal, mount.arc + (member.pivot ? 0 : WATCH_SLACK))) {
       return { turnTo: goal };
     }
 
@@ -1432,7 +1433,7 @@ export function createBot(member: Member, context: BotContext) {
     const standing = (point: Point) => combat.obstacleDistance(point, BANK_FACE) < BANK_FACE;
     const bank = sightClear(grid, position, spot) ? undefined : findBankShot(grid, map.walls ?? [], position, spot, shell.range, shell.lob!.rebound, standing);
     const throwable = bank !== undefined || sightClear(grid, position, spot);
-    const goal = bank?.angle ?? Math.atan2(spot.y - position.y, spot.x - position.x);
+    const goal = bank?.angle ?? atan2(spot.y - position.y, spot.x - position.x);
     turnTurret(tank, goal, dt, member.tankClass.turretSpeed);
     const aligned = Math.abs(angleBetween(tank.turretAngle, goal)) < 0.03;
     const reach = bank?.reach ?? reachFor(shell.lob!, shell.speed, distance(position, spot), shell.range);
@@ -1785,14 +1786,14 @@ const SETTLE_TIME = 0.8;
 
 /** A standard normal sample by the Box-Muller transform. */
 function gaussian(random: () => number) {
-  return Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(Math.PI * 2 * random());
+  return Math.sqrt(-2 * log(1 - random())) * cos(Math.PI * 2 * random());
 }
 
 function distance(a: Point, b: Point) {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return hypot(a.x - b.x, a.y - b.y);
 }
 
 function normalize(vector: Point) {
-  const length = Math.hypot(vector.x, vector.y) || 1;
+  const length = hypot(vector.x, vector.y) || 1;
   return { x: vector.x / length, y: vector.y / length };
 }

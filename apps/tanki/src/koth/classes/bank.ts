@@ -1,4 +1,5 @@
 import type { WallPlacement } from '../../damage/combat';
+import { atan2, cos, hypot, sin } from '../../physics/math';
 import { sightClear, type NavGrid } from '../navigation';
 
 type Point = { x: number; y: number };
@@ -27,7 +28,7 @@ export function findBankShot(
   let best: { angle: number; reach: number; at: Point } | undefined;
 
   for (const wall of walls) {
-    if (Math.hypot(wall.x - from.x, wall.y - from.y) - Math.max(wall.halfWidth, wall.halfHeight) > maxReach) {
+    if (hypot(wall.x - from.x, wall.y - from.y) - Math.max(wall.halfWidth, wall.halfHeight) > maxReach) {
       continue;
     }
 
@@ -51,8 +52,8 @@ export function findBankShot(
       }
 
       const off = { x: at.x + face.normal.x * CLEARANCE, y: at.y + face.normal.y * CLEARANCE };
-      const first = Math.hypot(at.x - from.x, at.y - from.y);
-      const second = Math.hypot(to.x - at.x, to.y - at.y);
+      const first = hypot(at.x - from.x, at.y - from.y);
+      const second = hypot(to.x - at.x, to.y - at.y);
       const reach = first + second / rebound;
 
       if (reach > maxReach || (best && reach >= best.reach) || !sightClear(grid, from, off) || !sightClear(grid, off, to)) {
@@ -66,7 +67,7 @@ export function findBankShot(
         continue;
       }
 
-      best = { angle: Math.atan2(at.y - from.y, at.x - from.x), reach, at };
+      best = { angle: atan2(at.y - from.y, at.x - from.x), reach, at };
     }
   }
 
@@ -76,14 +77,14 @@ export function findBankShot(
 /** The four faces of a wall box, each from `a` along `tangent` for `length` pixels, with its outward normal. */
 function facesOf(wall: WallPlacement) {
   const angle = wall.rotation ?? 0;
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  const toWorld = (x: number, y: number) => ({ x: wall.x + x * cos - y * sin, y: wall.y + x * sin + y * cos });
+  const cosine = cos(angle);
+  const sine = sin(angle);
+  const toWorld = (x: number, y: number) => ({ x: wall.x + x * cosine - y * sine, y: wall.y + x * sine + y * cosine });
   const corners = [toWorld(-wall.halfWidth, -wall.halfHeight), toWorld(wall.halfWidth, -wall.halfHeight), toWorld(wall.halfWidth, wall.halfHeight), toWorld(-wall.halfWidth, wall.halfHeight)];
 
   return corners.map((a, index) => {
     const b = corners[(index + 1) % 4];
-    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    const length = hypot(b.x - a.x, b.y - a.y);
     const tangent = { x: (b.x - a.x) / length, y: (b.y - a.y) / length };
     // Corners run clockwise on screen, y down, so the outward normal is the tangent turned back a quarter.
     return { a, length, tangent, normal: { x: tangent.y, y: -tangent.x } };

@@ -1,4 +1,5 @@
 import type { WallPlacement } from '../../damage/combat';
+import { cos, hypot, sin } from '../../physics/math';
 import type { Shortcut } from '../front';
 import type { KothMap } from '../map';
 import { cellCenter, createNavGrid, findPath, isOpenAt, isOpenCell, sightClear, type NavGrid } from '../navigation';
@@ -36,7 +37,7 @@ export function findPerches(grid: NavGrid, map: KothMap, team: TeamId, distance:
     map.point,
     ...Array.from({ length: 6 }, (_, index) => {
       const angle = (index / 6) * Math.PI * 2;
-      return { x: map.point.x + Math.cos(angle) * map.point.radius * 0.8, y: map.point.y + Math.sin(angle) * map.point.radius * 0.8 };
+      return { x: map.point.x + cos(angle) * map.point.radius * 0.8, y: map.point.y + sin(angle) * map.point.radius * 0.8 };
     })
   ];
   const thin = (map.walls ?? []).filter(isThinWall);
@@ -46,13 +47,13 @@ export function findPerches(grid: NavGrid, map: KothMap, team: TeamId, distance:
 
   for (let cell = 0; cell < grid.cols * grid.rows; cell++) {
     const at = cellCenter(grid, cell);
-    const range = Math.hypot(at.x - map.point.x, at.y - map.point.y);
+    const range = hypot(at.x - map.point.x, at.y - map.point.y);
 
     if (!isOpenCell(grid, cell) || Math.sign(at.x - map.point.x) !== side || range < band.min || range > band.max) {
       continue;
     }
 
-    const visible = (sample: Point) => Math.hypot(sample.x - at.x, sample.y - at.y) < SIGHT && (sightClear(grid, at, sample) || sightClear(open, at, sample));
+    const visible = (sample: Point) => hypot(sample.x - at.x, sample.y - at.y) < SIGHT && (sightClear(grid, at, sample) || sightClear(open, at, sample));
     const seenPoint = point.filter(visible).length;
 
     if (seenPoint < MIN_SEEN) {
@@ -71,7 +72,7 @@ export function findPerches(grid: NavGrid, map: KothMap, team: TeamId, distance:
   const perches: Perch[] = [];
 
   for (const spot of spots.sort((a, b) => b.score - a.score)) {
-    if (perches.length < MAX_PERCHES && perches.every((perch) => Math.hypot(perch.x - spot.x, perch.y - spot.y) > PERCH_SPACING)) {
+    if (perches.length < MAX_PERCHES && perches.every((perch) => hypot(perch.x - spot.x, perch.y - spot.y) > PERCH_SPACING)) {
       perches.push(spot);
     }
   }
@@ -94,7 +95,7 @@ function enemyWays(grid: NavGrid, map: KothMap, team: TeamId) {
     for (let index = 1; path && index < path.length; index++) {
       const from = path[index - 1];
       const to = path[index];
-      const steps = Math.floor(Math.hypot(to.x - from.x, to.y - from.y) / SAMPLE);
+      const steps = Math.floor(hypot(to.x - from.x, to.y - from.y) / SAMPLE);
 
       for (let step = 0; step < steps; step++) {
         samples.push({ x: from.x + ((to.x - from.x) * step) / steps, y: from.y + ((to.y - from.y) * step) / steps });
@@ -120,7 +121,7 @@ export function isThinWall(wall: WallPlacement) {
  * where the line runs. `undefined` when no thin wall crosses the line.
  */
 function openingOn(grid: NavGrid, thin: readonly WallPlacement[], from: Point, to: Point): Shortcut | undefined {
-  const length = Math.hypot(to.x - from.x, to.y - from.y);
+  const length = hypot(to.x - from.x, to.y - from.y);
   const direction = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
   const crossings = thin
     .map((wall) => crossing(from, direction, length, wall))

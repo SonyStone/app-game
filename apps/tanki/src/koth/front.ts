@@ -1,3 +1,4 @@
+import { hypot } from '../physics/math';
 import type { KothMap } from './map';
 import { cellCenter, findBreachPath, findPath, isOpenCell, pathLength, searchNearest, sightClear, type NavGrid } from './navigation';
 import type { Lane } from './radio';
@@ -91,7 +92,7 @@ export function isOpened(grid: NavGrid, shortcut: Shortcut) {
 
   const [one, other] = shortcut.sides;
   const way = findPath(grid, one, other);
-  const opened = way !== undefined && pathLength(way) < Math.hypot(other.x - one.x, other.y - one.y) * OPENED_DETOUR + OPENED_SLACK;
+  const opened = way !== undefined && pathLength(way) < hypot(other.x - one.x, other.y - one.y) * OPENED_DETOUR + OPENED_SLACK;
   openedCache.set(shortcut, { revision: grid.revision, opened });
   return opened;
 }
@@ -108,7 +109,7 @@ function pointAlong(path: readonly Point[], distance: number): Point {
   for (let index = 1; index < path.length; index++) {
     const from = path[index - 1];
     const to = path[index];
-    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    const length = hypot(to.x - from.x, to.y - from.y);
 
     if (length >= left) {
       const share = left / length;

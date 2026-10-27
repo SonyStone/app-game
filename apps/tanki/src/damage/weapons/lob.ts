@@ -1,3 +1,5 @@
+import { exp } from '../../physics/math';
+
 /**
  * The flight of a lobbed shell, such as a grenade, in height: it leaves the muzzle at its fixed
  * ground speed with just the upward speed that brings it down where it was thrown, so a long throw
@@ -87,7 +89,7 @@ export function lobCarry(spec: LobSpec, speed: number, reach: number, range: num
     }
 
     if (isRolling(state)) {
-      ground *= Math.exp(-spec.roll * STEP);
+      ground *= exp(-spec.roll * STEP);
     }
 
     travelled += ground * STEP;

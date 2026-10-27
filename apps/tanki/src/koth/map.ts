@@ -1,4 +1,5 @@
 import type { CombatLayout, Placement, WallMaterial, WallPlacement } from '../damage/combat';
+import { hypot } from '../physics/math';
 import type { TeamId } from './rules';
 
 type Point = { x: number; y: number };
@@ -142,7 +143,7 @@ export function inBase(base: KothBase, point: Point) {
 
 /** Whether `point` lies on the control point. */
 export function onPoint(map: KothMap, point: Point) {
-  return Math.hypot(point.x - map.point.x, point.y - map.point.y) <= map.point.radius;
+  return hypot(point.x - map.point.x, point.y - map.point.y) <= map.point.radius;
 }
 
 /** A wall or building of `material` filling the axis-aligned box between two corners. */

@@ -1,3 +1,4 @@
+import { hypot } from '../physics/math';
 import { CHANNELS, createField, FAR, type DamageField } from './field';
 import { TURRET_CASEMATE, TURRET_GATLING, TURRET_LONG_GUN, TURRET_MEDIUM, TURRET_MORTAR, TURRET_QUADS, TURRET_TWIN } from './renderer';
 
@@ -57,7 +58,7 @@ export function createHullField(spec: HullSpec = MEDIUM_HULL) {
   return createField(bounds, spec.cell, (x, y) => {
     const armor = roundedBox(x, y, halfLength, halfWidth, spec.corner);
     const pattern = hullPattern(spec, x, y) - LINE_HALF_WIDTH;
-    const coreDistance = Math.hypot(x - core.x, y - core.y) - core.radius;
+    const coreDistance = hypot(x - core.x, y - core.y) - core.radius;
 
     return [armor, pattern, coreDistance, 0];
   });
@@ -117,7 +118,7 @@ export function createShellField() {
 
 /** A grenade in flight: a ball 9 px across with a band painted around it. */
 export function createGrenadeField() {
-  return createField({ minX: -6.5, minY: -6.5, maxX: 6.5, maxY: 6.5 }, 0.5, (x, y) => [Math.hypot(x, y) - 4.5, Math.abs(x) - 0.5, FAR, 0]);
+  return createField({ minX: -6.5, minY: -6.5, maxX: 6.5, maxY: 6.5 }, 0.5, (x, y) => [hypot(x, y) - 4.5, Math.abs(x) - 0.5, FAR, 0]);
 }
 
 /**
@@ -140,7 +141,7 @@ export function createTurretField(style: number, soot: number) {
 function turretShape(style: number, x: number, y: number) {
   switch (style) {
     case TURRET_TWIN: {
-      const cupola = Math.hypot(x, y) - 7.2;
+      const cupola = hypot(x, y) - 7.2;
       return { outline: Math.min(roundedBox(x - 14, y + 2.9, 8, 1.7, 0.8), roundedBox(x - 14, y - 2.9, 8, 1.7, 0.8), cupola), seam: cupola };
     }
 
@@ -151,7 +152,7 @@ function turretShape(style: number, x: number, y: number) {
     }
 
     case TURRET_MORTAR: {
-      const cupola = Math.hypot(x, y) - 9.2;
+      const cupola = hypot(x, y) - 9.2;
       return { outline: Math.min(roundedBox(x - 12, y, 6.5, 6.2, 2.5), roundedBox(x - 18.8, y, 2, 7.6, 1.2), cupola), seam: cupola };
     }
 
@@ -159,7 +160,7 @@ function turretShape(style: number, x: number, y: number) {
       // The edges of its plates, as lines: the roof, the slopes from its corners and the hatch.
       const roof = Math.abs(roundedBox(x + 1, y, 4, 6, 1));
       const slopes = Math.min(segment(x, Math.abs(y), 3, 6, 15.2, 8.2), segment(x, Math.abs(y), -5, 6, -6, 9));
-      const hatch = Math.abs(Math.hypot(x + 2.4, y + 2.6) - 1.9) + 0.05;
+      const hatch = Math.abs(hypot(x + 2.4, y + 2.6) - 1.9) + 0.05;
       return { outline: roundedBox(x - 5, y, 11.5, 9.5, 3), seam: Math.min(roof, slopes, hatch) };
     }
 
@@ -169,7 +170,7 @@ function turretShape(style: number, x: number, y: number) {
     }
 
     default: {
-      const cupola = Math.hypot(x, y) - 9.6;
+      const cupola = hypot(x, y) - 9.6;
       return { outline: Math.min(roundedBox(x - 18.55, y, 11.25, 3.75, 1), cupola), seam: cupola };
     }
   }
@@ -199,7 +200,7 @@ function roundedBox(x: number, y: number, halfX: number, halfY: number, radius: 
   const qx = Math.abs(x) - halfX + radius;
   const qy = Math.abs(y) - halfY + radius;
 
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
+  return hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
 }
 
 /** Distance to the segment from (ax, ay) to (bx, by). */
@@ -208,5 +209,5 @@ function segment(x: number, y: number, ax: number, ay: number, bx: number, by: n
   const aby = by - ay;
   const t = Math.min(Math.max(((x - ax) * abx + (y - ay) * aby) / (abx * abx + aby * aby), 0), 1);
 
-  return Math.hypot(x - ax - abx * t, y - ay - aby * t);
+  return hypot(x - ax - abx * t, y - ay - aby * t);
 }
