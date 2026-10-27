@@ -22,12 +22,13 @@ import type { ClassTuning } from './classes/knobs';
 import { createScope } from './classes/scope';
 import { BotThoughts, KothHud, MatchResult, type HudState, type ThoughtView } from './Hud';
 import { createKothI18n, KothI18nProvider } from './i18n/i18n';
-import type { KothMatch } from './match';
 import type { Pace } from './pace';
+import { calloutsOnScreen, fitCanvas, thoughtsOnScreen } from './onScreen';
 import { PauseMenu, type MenuPage } from './PauseMenu';
-import { BUBBLE_TIME } from './radio';
 import { RadioOverlay, type CalloutView } from './RadioOverlay';
+import { loadRecording, readRecordingFile, type OpenResult } from './openRecording';
 import { createRecordedMatch, matchPaceOf, newSeed, STEP, type Recording } from './recording';
+import { ReplayView } from './ReplayView';
 import { saveRecording, type SaveState } from './saveRecording';
 import { CAPTURE_RULES } from './rules';
 import { TANK_CLASS_IDS, type TankClassId } from './tanks';
@@ -70,6 +71,12 @@ import { createTuning } from './tuning';
  * `?tune` starts paused in the menu, `?tune=classes` on its class editor, `?tuning=` sets a shared
  * tuning, and `?slow=4` runs the game four times slower, to look at effects frame by frame.
  *
+ * Every match is recorded as it is played (see `createRecordedMatch`) and saved from the result
+ * screen or the menu. The result screen also plays the match again to watch, and the menu's
+ * recordings page opens it or another recording, of the dev server's folder or from a file, as
+ * does a file dropped onto the game (see `ReplayView`). `?replay=<file>` opens one of the dev
+ * server's recordings, and `&t=95` from its 95th second.
+ *
  * The interface is drawn as constructivist posters (see `poster.css`) and speaks English, Russian,
  * Japanese or Serbian, picked in the menu and kept for the next visit; `?lang=ja` picks one for a
  * visit, and the address always names the language shown, so a copied link keeps it (see
@@ -85,7 +92,7 @@ export default function KothRoute() {
   const [thoughts, setThoughts] = createSignal<ThoughtView[]>([]);
   const [callouts, setCallouts] = createSignal<CalloutView[]>([]);
   const [aim, setAim] = createSignal<AimView>();
-  const [menu, setMenu] = createSignal(!address.has('watch') && !address.has('class'));
+  const [menu, setMenu] = createSignal(!address.has('watch') && !address.has('class') && !address.has('replay'));
   const [choice, setChoice] = createSignal<{ id: TankClassId; count: number }>();
   const tuning = createTuning();
   const [paused, setPaused] = createSignal(address.has('tune'));
@@ -93,16 +100,35 @@ export default function KothRoute() {
   const [look, setLook] = createSignal(aimLookFromAddress());
   const i18n = createKothI18n();
   const [saved, setSaved] = createSignal<SaveState>();
+  const [replay, setReplay] = createSignal<{ recording: Recording; start: number }>();
+  const [notice, setNotice] = createSignal<string>();
   let takeRecording: (() => Recording) | undefined;
   const { t } = i18n;
 
   loadPosterFont();
+  openFromAddress();
+
+  // A recording dropped anywhere on the game opens to watch.
+  makeEventListener(window, 'dragover', (event) => {
+    if (event.dataTransfer?.types.includes('Files')) {
+      event.preventDefault();
+    }
+  });
+
+  makeEventListener(window, 'drop', async (event) => {
+    const file = event.dataTransfer?.files[0];
+
+    if (file) {
+      event.preventDefault();
+      openReplay(await readRecordingFile(file), false);
+    }
+  });
 
   makeEventListener(window, 'keydown', (event) => {
     const digit = /^Digit([1-5])$/.exec(event.code);
 
-    // Keys typed into a text box, as a tuning pasted into the class editor, are text; Esc still closes the menu.
-    if (event.repeat || (event.target instanceof HTMLTextAreaElement && event.code !== 'Escape')) {
+    // Keys typed into a text box, as a tuning pasted into the class editor, are text; Esc still closes the menu. The replay has keys of its own.
+    if (replay() || event.repeat || (event.target instanceof HTMLTextAreaElement && event.code !== 'Escape')) {
       return;
     }
 
@@ -132,81 +158,100 @@ export default function KothRoute() {
   return (
     <KothI18nProvider value={i18n}>
       <div class="tk-ui fixed inset-0 overflow-hidden select-none" lang={i18n.language()}>
-        <canvas ref={setCanvas} class="block h-full w-full touch-none" />
-        <GpuCanvas
-          canvas={canvas()}
-          requiredBufferBytes={64 * 1024 * 1024}
-          error={(error) => <p class="absolute inset-0 m-0 grid place-items-center text-white">{error.message}</p>}
+        <Show
+          when={replay()}
+          keyed
+          fallback={
+            <>
+            <canvas ref={setCanvas} class="block h-full w-full touch-none" />
+            <GpuCanvas
+              canvas={canvas()}
+              requiredBufferBytes={64 * 1024 * 1024}
+              error={(error) => <p class="absolute inset-0 m-0 grid place-items-center text-white">{error.message}</p>}
+            >
+              <Rapier2D>
+                <KothScene
+                  canvas={canvas()!}
+                  restarts={restarts()}
+                  watching={watching()}
+                  thoughts={showThoughts() || watching()}
+                  choice={choice()}
+                  playerClass={address.get('class')}
+                  pace={tuning.pace()}
+                  classes={tuning.classes()}
+                  onRecorder={(take) => (takeRecording = take)}
+                  paused={paused()}
+                  onFrame={(frame) => {
+                    setState(frame.state);
+                    setThoughts(frame.thoughts);
+                    setCallouts(frame.callouts);
+                    setAim(frame.aim);
+                  }}
+                />
+              </Rapier2D>
+            </GpuCanvas>
+            <BotThoughts thoughts={thoughts()} />
+            <RadioOverlay callouts={callouts()} />
+            <KothHud state={state()} watching={watching()} />
+            <AimOverlay
+              canvas={canvas()}
+              view={aim()}
+              player={state()?.player}
+              look={look()}
+              active={!menu() && !paused() && !watching() && !state()?.capture.winner}
+            />
+            <MatchResult state={state()} saved={saved()} onSave={save} onRestart={restart} onWatch={watchThis} />
+            <Show when={menu() && !paused() && !watching() && state()}>
+              {(shown) => (
+                <ClassMenu
+                  current={shown().player.tankClass}
+                  next={shown().player.nextClass}
+                  color="#f0773a"
+                  onChoose={(id) => choose(id)}
+                  onClose={() => setMenu(false)}
+                />
+              )}
+            </Show>
+            <Show when={!paused()}>
+              <button class="tk-plaque absolute bottom-3 left-3" onClick={() => setPaused(true)}>
+                {t('menu.open')}
+              </button>
+            </Show>
+            <Show when={paused()}>
+              <PauseMenu
+                tuning={tuning}
+                page={menuPage()}
+                onPage={setMenuPage}
+                playerClass={state()?.player.tankClass}
+                look={look()}
+                onLook={setLook}
+                thoughts={showThoughts()}
+                onThoughts={setShowThoughts}
+                watching={watching()}
+                onResume={() => setPaused(false)}
+                onRestart={restart}
+                onClass={() => {
+                  setPaused(false);
+                  setMenu(true);
+                }}
+                onWatch={toggleWatching}
+                saved={saved()}
+                onSave={save}
+                onOpenRecording={(opened, fromFolder) => openReplay(opened, fromFolder)}
+                onWatchReplay={watchThis}
+              />
+            </Show>
+            </>
+          }
         >
-          <Rapier2D>
-            <KothScene
-              canvas={canvas()!}
-              restarts={restarts()}
-              watching={watching()}
-              thoughts={showThoughts() || watching()}
-              choice={choice()}
-              playerClass={address.get('class')}
-              pace={tuning.pace()}
-              classes={tuning.classes()}
-              onRecorder={(take) => (takeRecording = take)}
-              paused={paused()}
-              onFrame={(frame) => {
-                setState(frame.state);
-                setThoughts(frame.thoughts);
-                setCallouts(frame.callouts);
-                setAim(frame.aim);
-              }}
-            />
-          </Rapier2D>
-        </GpuCanvas>
-        <BotThoughts thoughts={thoughts()} />
-        <RadioOverlay callouts={callouts()} />
-        <KothHud state={state()} watching={watching()} />
-        <AimOverlay
-          canvas={canvas()}
-          view={aim()}
-          player={state()?.player}
-          look={look()}
-          active={!menu() && !paused() && !watching() && !state()?.capture.winner}
-        />
-        <MatchResult state={state()} saved={saved()} onSave={save} onRestart={restart} />
-        <Show when={menu() && !paused() && !watching() && state()}>
-          {(shown) => (
-            <ClassMenu
-              current={shown().player.tankClass}
-              next={shown().player.nextClass}
-              color="#f0773a"
-              onChoose={(id) => choose(id)}
-              onClose={() => setMenu(false)}
-            />
+          {(opened) => <ReplayView recording={opened.recording} start={opened.start} onExit={exitReplay} />}
+        </Show>
+        <Show when={notice()}>
+          {(text) => (
+            <button class="tk-tag absolute top-3 left-1/2 -translate-x-1/2" onClick={() => setNotice(undefined)}>
+              {text()}
+            </button>
           )}
-        </Show>
-        <Show when={!paused()}>
-          <button class="tk-plaque absolute bottom-3 left-3" onClick={() => setPaused(true)}>
-            {t('menu.open')}
-          </button>
-        </Show>
-        <Show when={paused()}>
-          <PauseMenu
-            tuning={tuning}
-            page={menuPage()}
-            onPage={setMenuPage}
-            playerClass={state()?.player.tankClass}
-            look={look()}
-            onLook={setLook}
-            thoughts={showThoughts()}
-            onThoughts={setShowThoughts}
-            watching={watching()}
-            onResume={() => setPaused(false)}
-            onRestart={restart}
-            onClass={() => {
-              setPaused(false);
-              setMenu(true);
-            }}
-            onWatch={toggleWatching}
-            saved={saved()}
-            onSave={save}
-          />
         </Show>
       </div>
     </KothI18nProvider>
@@ -227,6 +272,46 @@ export default function KothRoute() {
 
     setSaved({ kind: 'saving' });
     setSaved(await saveRecording(takeRecording()));
+  }
+
+  /**
+   * Watches `opened` from its start, or from the second in `?t=`, leaving the match played; a
+   * recording of the dev server's folder is named in the address as `?replay=`, so a reload or a
+   * link opens it again. One that did not open is told of.
+   */
+  function openReplay(opened: OpenResult, fromFolder: boolean, start = 0) {
+    if (opened.kind === 'failed') {
+      setNotice(t('replay.failed', opened.reason));
+      return;
+    }
+
+    setNotice(undefined);
+    setPaused(false);
+    setMenu(false);
+    setReplay({ recording: opened.recording, start });
+    setAddress({ replay: fromFolder ? opened.name : undefined, t: undefined });
+  }
+
+  /** Watches the match being played from its start. */
+  function watchThis() {
+    if (takeRecording) {
+      openReplay({ kind: 'opened', recording: takeRecording(), name: '' }, false);
+    }
+  }
+
+  /** Leaves the replay for a new match. */
+  function exitReplay() {
+    setReplay(undefined);
+    setAddress({ replay: undefined, t: undefined });
+  }
+
+  /** Opens the recording `?replay=` names in the dev server's folder, from the second `?t=` gives. */
+  async function openFromAddress() {
+    const name = address.get('replay');
+
+    if (name) {
+      openReplay(await loadRecording(name), true, Math.max(Number(address.get('t')) || 0, 0) * 60);
+    }
   }
 
   /** Hands the player's tank to a bot to watch the match, or takes it back, and plays on. */
@@ -542,6 +627,21 @@ function distanceTo(a: { x: number; y: number }, b: { x: number; y: number }) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+/** Sets or, for `undefined`, removes the address's parameters in `changes`, without a new history entry. */
+function setAddress(changes: Record<string, string | undefined>) {
+  const url = new URL(window.location.href);
+
+  for (const [key, value] of Object.entries(changes)) {
+    if (value === undefined) {
+      url.searchParams.delete(key);
+    } else {
+      url.searchParams.set(key, value);
+    }
+  }
+
+  history.replaceState(history.state, '', url);
+}
+
 /** How many times slower than real time the game runs, from `?slow=` in the address. */
 const SLOW_MOTION = Math.max(Number(new URLSearchParams(window.location.search).get('slow')) || 1, 1);
 
@@ -557,147 +657,3 @@ function rulesFromAddress() {
   return hold > 0 ? { ...CAPTURE_RULES, holdTime: hold } : CAPTURE_RULES;
 }
 
-/** What each bot thinks, with its label, path and target placed on screen. */
-function thoughtsOnScreen(
-  match: KothMatch,
-  camera: ReturnType<typeof createCamera>,
-  screen: { width: number; height: number }
-): ThoughtView[] {
-  const toScreen = (point: { x: number; y: number }) => worldToScreen(camera, point, screen);
-
-  return match.thoughts().map((thought) => {
-    const label = toScreen(thought.position);
-    const target =
-      thought.target && match.combat.armorOf(thought.target) ? toScreen(thought.target.hull.translation()) : undefined;
-
-    return {
-      id: thought.member.id,
-      team: thought.member.team,
-      name: thought.member.name,
-      role: thought.member.role,
-      goal: thought.goal ?? '',
-      action: thought.breach
-        ? `${thought.action ?? ''} · breach: ${thought.breach.method} ${thought.breach.phase}`
-        : (thought.action ?? ''),
-      steps: thought.steps.join(' → '),
-      covering: thought.covering?.name,
-      x: label.x,
-      y: label.y,
-      path: [thought.position, ...thought.path.slice(1)]
-        .map(toScreen)
-        .map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`)
-        .join(' '),
-      target
-    };
-  });
-}
-
-/**
- * What the bots say on the radio, placed on screen: the player's team's lines, or both teams'
- * while watching. A bubble fades over its last `BUBBLE_FADE` s and a marker over its last
- * `MARKER_FADE` s; a marker off the screen is held `EDGE_INSET` px inside its edge. The shot flies
- * from `SHOT_START` px off the speaker's tank to `SHOT_END` px short of the marker at `SHOT_SPEED`
- * px/s, by the match's clock, and is left out when that leaves less than `SHOT_SHORTEST` px.
- */
-function calloutsOnScreen(
-  match: KothMatch,
-  camera: ReturnType<typeof createCamera>,
-  screen: { width: number; height: number },
-  watching: boolean
-): CalloutView[] {
-  const now = match.time;
-  const team = match.seat.team;
-
-  return match
-    .callouts()
-    .filter((callout) => watching || callout.team === team)
-    .map((callout) => {
-      const said = now - callout.at;
-      const speaker = callout.speaker && said < BUBBLE_TIME ? worldToScreen(camera, callout.speaker, screen) : undefined;
-      const marker = callout.marker && worldToScreen(camera, callout.marker, screen);
-      const held = marker && {
-        x: Math.min(Math.max(marker.x, EDGE_INSET), screen.width - EDGE_INSET),
-        y: Math.min(Math.max(marker.y, EDGE_INSET), screen.height - EDGE_INSET)
-      };
-      const off = marker && held && (held.x !== marker.x || held.y !== marker.y);
-      const bubbleOpacity = Math.min((BUBBLE_TIME - said) / BUBBLE_FADE, 1);
-
-      return {
-        id: callout.id,
-        team: callout.team,
-        line: callout.line,
-        tankClass: callout.tankClass,
-        ally: callout.ally,
-        lane: callout.lane,
-        seconds: callout.seconds,
-        bubble: speaker && { x: speaker.x, y: speaker.y, opacity: bubbleOpacity },
-        shot: speaker && held ? shotBetween(speaker, held, said, bubbleOpacity) : undefined,
-        marker:
-          callout.marker && held
-            ? {
-                ...held,
-                kind: callout.marker.kind,
-                opacity: Math.min((callout.until - now) / MARKER_FADE, 1),
-                edge: off ? Math.atan2(marker.y - screen.height / 2, marker.x - screen.width / 2) : undefined
-              }
-            : undefined
-      };
-    });
-}
-
-const BUBBLE_FADE = 0.4;
-const MARKER_FADE = 0.8;
-const EDGE_INSET = 34;
-
-/**
- * The radio shot from the speaker at `from` to the marker at `to`, on screen, cut short at both
- * ends, `said` s after it was fired; none if too short. The bolt, `BOLT_LENGTH` px or less on a
- * short way, comes out of the speaker and flies with its head reaching the target in `flight` s,
- * then is gone.
- */
-function shotBetween(from: { x: number; y: number }, to: { x: number; y: number }, said: number, opacity: number) {
-  const length = Math.hypot(to.x - from.x, to.y - from.y);
-  const shown = length - SHOT_START - SHOT_END;
-
-  if (shown < SHOT_SHORTEST) {
-    return undefined;
-  }
-
-  const along = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
-  const at = (distance: number) => ({ x: from.x + along.x * (SHOT_START + distance), y: from.y + along.y * (SHOT_START + distance) });
-  const flight = Math.min(Math.max(shown / SHOT_SPEED, SHOT_QUICKEST), SHOT_SLOWEST);
-  const head = (said / flight) * shown;
-  const tail = Math.max(head - Math.min(BOLT_LENGTH, shown * 0.6), 0);
-
-  return {
-    bolt: head < shown ? { tail: at(tail), head: at(head) } : undefined,
-    to: at(shown),
-    flight,
-    opacity
-  };
-}
-
-const SHOT_START = 22;
-const SHOT_END = 12;
-const SHOT_SHORTEST = 24;
-const SHOT_SPEED = 1200;
-/** Seconds a shot flies at least and at most, so a near one is still seen and a far one does not keep the marker waiting. */
-const SHOT_QUICKEST = 0.15;
-const SHOT_SLOWEST = 0.4;
-const BOLT_LENGTH = 110;
-
-/** Sizes the canvas's drawing buffer to its CSS size times the device pixel ratio; returns the CSS size. */
-function fitCanvas(canvas: HTMLCanvasElement) {
-  const width = canvas.clientWidth;
-  const height = canvas.clientHeight;
-  const ratio = window.devicePixelRatio;
-  const pixelWidth = Math.max(Math.round(width * ratio), 1);
-  const pixelHeight = Math.max(Math.round(height * ratio), 1);
-
-  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-    canvas.width = pixelWidth;
-    canvas.height = pixelHeight;
-  }
-
-  return { width, height };
-}

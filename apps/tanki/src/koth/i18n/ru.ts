@@ -26,7 +26,7 @@ export const ru: Dictionary = {
     reset: 'Сброс',
     derived: (drive: number, shell: number, from: string, to: string) =>
       `Средний танк ${drive} px/с · его снаряд ${shell} px/с · боты реагируют за ${from}–${to} с`,
-    pages: { menu: 'Меню', classes: 'Классы' },
+    pages: { menu: 'Меню', classes: 'Классы', recordings: 'Записи' },
     keys: 'Клавиши'
   },
   knob: {
@@ -217,6 +217,46 @@ export const ru: Dictionary = {
     failed: 'Не удалось сохранить запись',
     savedShort: 'сохранено в recordings',
     downloadedShort: 'скачано'
+  },
+  replay: {
+    watch: 'Смотреть запись',
+    watchHint: 'этот матч, с начала',
+    open: 'Открыть запись',
+    openHint: 'сохранённый матч, для просмотра',
+    recordings: 'Записи',
+    fromFile: 'Открыть файл…',
+    dropHint: 'или перетащи файл .tanki-replay.json на игру',
+    none: 'Сохранённых записей пока нет',
+    opening: 'Открываю…',
+    failed: (reason) => `Не удалось открыть: ${reason}`,
+    arena: 'Арена',
+    timeline: 'Таймлайн',
+    play: 'Играть',
+    pause: 'Пауза',
+    back: 'Назад на 5 с',
+    forward: 'Вперёд на 5 с',
+    exit: 'Вернуться в игру',
+    seeking: (time) => `Перематываю на ${time}…`,
+    diverged: (time) => `С ${time} этот код играет матч иначе: арена показывает уже не записанный матч, таймлайн — по-прежнему он.`,
+    point: 'Точка',
+    kinds: {
+      move: 'едет',
+      point: 'на точке',
+      attack: 'атакует',
+      cover: 'укрывается',
+      repair: 'чинится',
+      breach: 'ломает стену',
+      idle: 'без плана',
+      player: 'игрок'
+    },
+    marker: {
+      kill: (victim, tankClass) => `убил ${victim} (${tankClass})`,
+      death: (killer, tankClass) => `убит: ${killer} (${tankClass})`,
+      lost: 'уничтожен',
+      target: (name) => `цель: ${name}`,
+      class: (was, tankClass) => `класс: ${was} → ${tankClass}`
+    },
+    keys: 'Пробел — пуск и пауза · ← → 5 с · , . шаг · 1-8 следить за танком · 0 вся карта · F следить · B мысли всех ботов · колесо — масштаб · перетаскивание двигает вид'
   }
 };
 

@@ -26,7 +26,7 @@ export const sr: Dictionary = {
     reset: 'Врати',
     derived: (drive: number, shell: number, from: string, to: string) =>
       `Средњи тенк ${drive} px/s · његова граната ${shell} px/s · ботови реагују за ${from}–${to} s`,
-    pages: { menu: 'Мени', classes: 'Класе' },
+    pages: { menu: 'Мени', classes: 'Класе', recordings: 'Снимци' },
     keys: 'Тастери'
   },
   knob: {
@@ -217,6 +217,46 @@ export const sr: Dictionary = {
     failed: 'Снимак није сачуван',
     savedShort: 'сачувано у recordings',
     downloadedShort: 'преузето'
+  },
+  replay: {
+    watch: 'Гледај снимак',
+    watchHint: 'овај меч, од почетка',
+    open: 'Отвори снимак',
+    openHint: 'сачуван меч, за гледање',
+    recordings: 'Снимци',
+    fromFile: 'Отвори датотеку…',
+    dropHint: 'или превуци датотеку .tanki-replay.json на игру',
+    none: 'Још нема сачуваних снимака',
+    opening: 'Отварам…',
+    failed: (reason) => `Није успело отварање: ${reason}`,
+    arena: 'Арена',
+    timeline: 'Временска линија',
+    play: 'Пусти',
+    pause: 'Пауза',
+    back: 'Назад 5 с',
+    forward: 'Напред 5 с',
+    exit: 'Назад у игру',
+    seeking: (time) => `Премотавам на ${time}…`,
+    diverged: (time) => `Од ${time} овај код игра меч другачије: арена више не приказује снимљени меч, временска линија и даље да.`,
+    point: 'Тачка',
+    kinds: {
+      move: 'вози',
+      point: 'на тачки',
+      attack: 'напада',
+      cover: 'у заклону',
+      repair: 'поправља се',
+      breach: 'руши зид',
+      idle: 'без плана',
+      player: 'играч'
+    },
+    marker: {
+      kill: (victim, tankClass) => `уништио ${victim} (${tankClass})`,
+      death: (killer, tankClass) => `уништио га ${killer} (${tankClass})`,
+      lost: 'уништен',
+      target: (name) => `мета: ${name}`,
+      class: (was, tankClass) => `класа: ${was} → ${tankClass}`
+    },
+    keys: 'Размак пусти или пауза · ← → 5 с · , . корак · 1-8 прати тенк · 0 цела мапа · F прати · B мисли свих ботова · точкић зум · превлачење помера поглед'
   }
 };
 

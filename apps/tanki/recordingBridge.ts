@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -9,7 +9,8 @@ import { formatRecording, RECORDING_EXTENSION } from './src/koth/recordingFile';
 const run = promisify(execFile);
 
 /**
- * Saves Tanki's match recordings during `vite dev` (see `src/koth/saveRecording.ts`). Both dev
+ * Saves Tanki's match recordings during `vite dev` and hands them out again (see
+ * `src/koth/saveRecording.ts` and `src/koth/openRecording.ts`). Both dev
  * servers that serve the game register it: this app's own and the web playground's (the
  * repository's `vite.config.ts`). Recordings always go to this app's `recordings/` folder, which
  * `pnpm worktree:setup` links to the main checkout's, so every worktree sees them.
@@ -20,6 +21,10 @@ const run = promisify(execFile);
  * differs from it, the file next to it that holds the difference, `<name>.diff`, as `git diff`
  * prints it, new files included: the dev server's code is often not committed, and a replay
  * needs the very code that played the match. Names are limited to letters, digits, `.`, `_` and `-`.
+ *
+ * `GET /__tanki/recordings/` lists the recordings saved, newest first, as JSON
+ * `[{ name, size, savedAt }]`, and `GET /__tanki/recordings/<name>.tanki-replay.json` hands one
+ * out, for the game's replay to open.
  */
 export function recordingBridge(): Plugin {
   const root = fileURLToPath(new URL('./recordings/', import.meta.url));
@@ -31,11 +36,30 @@ export function recordingBridge(): Plugin {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use('/__tanki/recordings', async (request, response) => {
-        const [, name] = /^\/([\w.-]+)$/.exec(request.url ?? '') ?? [];
+        const url = (request.url ?? '').split('?')[0];
+        const [, name] = /^\/([\w.-]+)$/.exec(url) ?? [];
 
-        if (request.method !== 'PUT' || !name || name.startsWith('.') || !name.endsWith(RECORDING_EXTENSION)) {
+        if (request.method === 'GET' && url === '/') {
+          response.setHeader('content-type', 'application/json');
+          response.end(JSON.stringify(await listRecordings(root)));
+          return;
+        }
+
+        if (!name || name.startsWith('.') || !name.endsWith(RECORDING_EXTENSION) || (request.method !== 'PUT' && request.method !== 'GET')) {
           response.statusCode = 400;
-          response.end(`Expected PUT /__tanki/recordings/<name>${RECORDING_EXTENSION}.`);
+          response.end(`Expected GET /__tanki/recordings/, or GET or PUT /__tanki/recordings/<name>${RECORDING_EXTENSION}.`);
+          return;
+        }
+
+        if (request.method === 'GET') {
+          try {
+            response.setHeader('content-type', 'application/json');
+            response.end(await readFile(`${root}${name}`));
+          } catch {
+            response.statusCode = 404;
+            response.end(`No recording ${name}.`);
+          }
+
           return;
         }
 
@@ -68,6 +92,20 @@ export function recordingBridge(): Plugin {
       });
     }
   };
+}
+
+/** The recordings in folder `root`, newest first; none while the folder is missing. */
+async function listRecordings(root: string) {
+  const names = await readdir(root).catch(() => [] as string[]);
+  const recordings = await Promise.all(
+    names
+      .filter((name) => name.endsWith(RECORDING_EXTENSION))
+      .map(async (name) => {
+        const file = await stat(`${root}${name}`);
+        return { name, size: file.size, savedAt: file.mtime.toISOString() };
+      })
+  );
+  return recordings.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 }
 
 /**

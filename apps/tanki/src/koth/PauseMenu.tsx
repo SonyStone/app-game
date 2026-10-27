@@ -7,6 +7,7 @@ import { LANGUAGES, useKothI18n } from './i18n/i18n';
 import { PACE_DEFAULTS, PACE_KNOBS, type Pace } from './pace';
 import './poster.css';
 import { KnobSlider, Section } from './PosterParts';
+import { RecordingsPage } from './RecordingsPage';
 import type { SaveState } from './saveRecording';
 import type { TankClassId } from './tanks';
 import type { TuningControls } from './tuning';
@@ -25,7 +26,8 @@ import type { TuningControls } from './tuning';
  *   tank, its shell and the bots, and a reset that puts every knob back.
  * - What every key does.
  *
- * The classes page is the class editor (see `ClassEditor`), where the tuning is also shared.
+ * The classes page is the class editor (see `ClassEditor`), where the tuning is also shared. The
+ * recordings page opens a match to watch again (see `RecordingsPage`).
  *
  * A click outside the menu resumes. Each action names its key, which does the same in play.
  *
@@ -35,6 +37,8 @@ import type { TuningControls } from './tuning';
  * @param thoughts - Whether the bots' thoughts are shown in play; watching shows them regardless, and the switch is off limits then.
  * @param watching - Whether the player is watching the bots, which turns the watch button into taking the tank back.
  * @param saved - The save of the match's recording under way or done, if any; `onSave` asks for one.
+ * @param onOpenRecording - Receives a recording opened on the recordings page, to watch.
+ * @param onWatchReplay - Called to watch the match being played again from its start.
  */
 export function PauseMenu(props: {
   tuning: TuningControls;
@@ -52,6 +56,8 @@ export function PauseMenu(props: {
   onWatch: () => void;
   saved: SaveState | undefined;
   onSave: () => void;
+  onOpenRecording: Parameters<typeof RecordingsPage>[0]['onOpen'];
+  onWatchReplay: () => void;
 }) {
   const { t, language, choose } = useKothI18n();
   const thoughtsOn = () => props.thoughts || props.watching;
@@ -102,6 +108,9 @@ export function PauseMenu(props: {
           </div>
         </header>
         <Switch>
+          <Match when={props.page === 'recordings'}>
+            <RecordingsPage onOpen={props.onOpenRecording} onWatchThis={() => props.onWatchReplay()} />
+          </Match>
           <Match when={props.page === 'classes'}>
             <ClassEditor tuning={props.tuning} initial={props.playerClass ?? 'soldier'} />
           </Match>
@@ -214,7 +223,7 @@ export function PauseMenu(props: {
 }
 
 /** The pages of the pause menu, in the order of its header. */
-export const MENU_PAGES = ['menu', 'classes'] as const;
+export const MENU_PAGES = ['menu', 'classes', 'recordings'] as const;
 
 /** One of `MENU_PAGES`. */
 export type MenuPage = (typeof MENU_PAGES)[number];

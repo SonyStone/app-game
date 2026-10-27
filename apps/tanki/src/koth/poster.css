@@ -792,3 +792,204 @@
     scale: 1.18;
   }
 }
+
+/* Replay: the dock and its timeline */
+
+.tk-dock-window {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+}
+.tk-dock-tabs {
+  display: flex;
+  flex: none;
+  height: 22px;
+  background: var(--ink);
+}
+.tk-dock-tab {
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 22px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--paper);
+  cursor: grab;
+}
+.tk-dock-tab.tk-on {
+  color: var(--ink);
+  background: var(--paper);
+}
+.tk-dock-sash:hover,
+.tk-dock-sash.tk-on {
+  background: var(--yellow);
+}
+.tk-timeline {
+  color: var(--ink);
+  background: var(--paper);
+}
+.tk-timeline-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 2px solid var(--ink);
+}
+.tk-timeline-speeds {
+  flex: none;
+  border-width: 2px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+.tk-timeline-speeds > .tk-segment {
+  flex: none;
+  min-width: 34px;
+  line-height: 16px;
+}
+.tk-timeline-clock {
+  min-width: 96px;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.tk-timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  min-width: 0;
+  font-size: 11px;
+  cursor: help;
+}
+.tk-timeline-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.tk-timeline-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--ink);
+}
+.tk-timeline-warning {
+  flex: none;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--paper-light);
+  background: var(--red);
+}
+.tk-timeline-labels {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--paper);
+  border-right: 2px solid var(--ink);
+}
+.tk-timeline-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 6px 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  border-left: 5px solid var(--team, transparent);
+}
+.tk-timeline-label.tk-on {
+  background: var(--yellow);
+}
+.tk-timeline-ruler {
+  fill: var(--paper-light);
+}
+.tk-timeline-tick {
+  stroke: var(--ink);
+  stroke-opacity: 0.18;
+}
+.tk-timeline-time {
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+.tk-timeline-diverged {
+  fill: var(--red);
+  fill-opacity: 0.12;
+}
+.tk-timeline-selected {
+  fill: var(--yellow);
+  fill-opacity: 0.45;
+}
+.tk-timeline-playhead {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.tk-timeline-playhead-head {
+  fill: var(--ink);
+}
+.tk-timeline-sought {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+.tk-timeline-marker {
+  cursor: pointer;
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+.tk-timeline-hit {
+  fill: transparent;
+  stroke: none;
+}
+.tk-timeline-kill > circle:last-child {
+  stroke: var(--paper-light);
+  stroke-width: 1.5;
+}
+.tk-timeline-death > path {
+  fill: none;
+  stroke-width: 2;
+}
+.tk-timeline-radio > path {
+  fill: var(--yellow);
+  stroke-width: 1;
+}
+.tk-timeline-target > line {
+  stroke-width: 1.5;
+}
+.tk-timeline-class > path {
+  fill: var(--paper-light);
+  stroke-width: 1.5;
+}
+.tk-timeline-marker:hover {
+  filter: drop-shadow(0 0 2px var(--yellow));
+}
+.tk-recordings {
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 2px solid var(--ink);
+  background: var(--paper-light);
+}
+.tk-recording {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--ink);
+  border-bottom: 1px solid rgb(20 20 20 / 0.15);
+}
+.tk-recording:hover {
+  background: var(--yellow);
+}

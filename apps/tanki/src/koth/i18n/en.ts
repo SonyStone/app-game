@@ -28,7 +28,7 @@ export const en = {
     reset: 'Reset',
     derived: (drive: number, shell: number, from: string, to: string) =>
       `Medium tank ${drive} px/s · its shell ${shell} px/s · bots react in ${from}–${to} s`,
-    pages: { menu: 'Menu', classes: 'Classes' },
+    pages: { menu: 'Menu', classes: 'Classes', recordings: 'Recordings' },
     keys: 'Keys'
   },
   knob: {
@@ -219,6 +219,46 @@ export const en = {
     failed: 'Could not save the recording',
     savedShort: 'saved to recordings',
     downloadedShort: 'downloaded'
+  },
+  replay: {
+    watch: 'Watch the replay',
+    watchHint: 'this match, from the start',
+    open: 'Open a recording',
+    openHint: 'a saved match, to watch',
+    recordings: 'Recordings',
+    fromFile: 'Open a file…',
+    dropHint: 'or drop a .tanki-replay.json file onto the game',
+    none: 'No recordings saved yet',
+    opening: 'Opening…',
+    failed: (reason: string) => `Could not open it: ${reason}`,
+    arena: 'Arena',
+    timeline: 'Timeline',
+    play: 'Play',
+    pause: 'Pause',
+    back: 'Back 5 s',
+    forward: 'On 5 s',
+    exit: 'Back to the game',
+    seeking: (time: string) => `Rewinding to ${time}…`,
+    diverged: (time: string) => `From ${time} on this game code plays the match differently: the arena no longer shows the recorded match, the timeline still does.`,
+    point: 'Point',
+    kinds: {
+      move: 'moving',
+      point: 'at the point',
+      attack: 'attacking',
+      cover: 'taking cover',
+      repair: 'repairing',
+      breach: 'breaking a wall',
+      idle: 'no plan',
+      player: 'the player'
+    },
+    marker: {
+      kill: (victim: string, tankClass: string) => `killed ${victim} (${tankClass})`,
+      death: (killer: string, tankClass: string) => `killed by ${killer} (${tankClass})`,
+      lost: 'destroyed',
+      target: (name: string) => `targets ${name}`,
+      class: (was: string, tankClass: string) => `class: ${was} → ${tankClass}`
+    },
+    keys: 'Space play or pause · ← → 5 s · , . a step · 1-8 follow a tank · 0 the whole map · F follow · B every bot\'s thoughts · wheel zooms · drag moves the view'
   }
 };
 

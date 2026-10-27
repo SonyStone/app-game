@@ -26,7 +26,7 @@ export const ja: Dictionary = {
     reset: 'リセット',
     derived: (drive: number, shell: number, from: string, to: string) =>
       `中戦車 ${drive} px/s · 砲弾 ${shell} px/s · ボットの反応 ${from}–${to} 秒`,
-    pages: { menu: 'メニュー', classes: 'クラス' },
+    pages: { menu: 'メニュー', classes: 'クラス', recordings: '記録' },
     keys: '操作'
   },
   knob: {
@@ -217,5 +217,45 @@ export const ja: Dictionary = {
     failed: '記録を保存できませんでした',
     savedShort: 'recordings に保存済み',
     downloadedShort: 'ダウンロード済み'
+  },
+  replay: {
+    watch: 'リプレイを見る',
+    watchHint: 'この試合を最初から',
+    open: '記録を開く',
+    openHint: '保存した試合を見る',
+    recordings: '記録',
+    fromFile: 'ファイルを開く…',
+    dropHint: 'または .tanki-replay.json をゲームにドロップ',
+    none: '保存された記録はまだない',
+    opening: '開いています…',
+    failed: (reason) => `開けなかった: ${reason}`,
+    arena: 'アリーナ',
+    timeline: 'タイムライン',
+    play: '再生',
+    pause: '一時停止',
+    back: '5秒戻る',
+    forward: '5秒進む',
+    exit: 'ゲームに戻る',
+    seeking: (time) => `${time} へ移動中…`,
+    diverged: (time) => `${time} 以降、このコードは試合を違うように進める。アリーナは記録された試合ではないが、タイムラインは記録のまま。`,
+    point: '拠点',
+    kinds: {
+      move: '移動',
+      point: '拠点で',
+      attack: '攻撃',
+      cover: '隠れる',
+      repair: '修理',
+      breach: '壁を壊す',
+      idle: '計画なし',
+      player: 'プレイヤー'
+    },
+    marker: {
+      kill: (victim, tankClass) => `${victim}（${tankClass}）を撃破`,
+      death: (killer, tankClass) => `${killer}（${tankClass}）に撃破された`,
+      lost: '撃破された',
+      target: (name) => `標的: ${name}`,
+      class: (was, tankClass) => `クラス: ${was} → ${tankClass}`
+    },
+    keys: 'スペース 再生・停止 · ← → 5秒 · , . 1ステップ · 1-8 戦車を追う · 0 マップ全体 · F 追う · B 全ボットの考え · ホイール ズーム · ドラッグ 視点移動'
   }
 };

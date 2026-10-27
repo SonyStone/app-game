@@ -267,14 +267,21 @@ function Gauge(props: { label: string; value: number; color: string }) {
 
 /**
  * The end of a match on a poster sheet with a wedge in the winner's color: the winner, every member's kills and
- * deaths with the player's line in yellow, a button to play again and one to save the match's recording, with
- * where the recording went once saved.
+ * deaths with the player's line in yellow, a button to play again, one to watch the match again and one to save
+ * its recording, with where the recording went once saved.
  *
  * @param saved - The save under way or done for this match, if any.
  * @param onSave - Called when the player asks to save the recording.
  * @param onRestart - Called when the player asks for another match.
+ * @param onWatch - Called when the player asks to watch the match again.
  */
-export function MatchResult(props: { state: HudState | undefined; saved: SaveState | undefined; onSave: () => void; onRestart: () => void }) {
+export function MatchResult(props: {
+  state: HudState | undefined;
+  saved: SaveState | undefined;
+  onSave: () => void;
+  onRestart: () => void;
+  onWatch: () => void;
+}) {
   const { t } = useKothI18n();
 
   return (
@@ -317,11 +324,14 @@ export function MatchResult(props: { state: HudState | undefined; saved: SaveSta
               </For>
             </div>
             <div class="flex justify-center gap-3 px-[18px] pt-2">
-              <button class="tk-action tk-primary w-72" onClick={() => props.onRestart()}>
+              <button class="tk-action tk-primary w-56" onClick={() => props.onRestart()}>
                 <span class="tk-action-label">{t('result.again')}</span>
                 <kbd class="tk-key">R</kbd>
               </button>
-              <button class="tk-action w-72" disabled={props.saved?.kind === 'saving'} onClick={() => props.onSave()}>
+              <button class="tk-action w-56" onClick={() => props.onWatch()}>
+                <span class="tk-action-label">{t('replay.watch')}</span>
+              </button>
+              <button class="tk-action w-56" disabled={props.saved?.kind === 'saving'} onClick={() => props.onSave()}>
                 <span class="tk-action-label">{t('recording.save')}</span>
               </button>
             </div>

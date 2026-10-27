@@ -26,6 +26,7 @@
     "@solidjs/router": "catalog:",
     "@solidjs/web": "catalog:",
     "pixi.js": "8.18.1",
+    "solid-dock": "workspace:*",
     "solid-js": "catalog:",
     "typegpu": "^0.11.4"
   },

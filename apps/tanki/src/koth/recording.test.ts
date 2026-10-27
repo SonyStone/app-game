@@ -5,6 +5,7 @@ import { applyClassTuning } from './classes/knobs';
 import type { PlayerInput } from './match';
 import { PACE_DEFAULTS } from './pace';
 import { createRecordedMatch, replayRecording, seededRandom, type MatchSetup, type Recording } from './recording';
+import { createReplayPlayer, type ReplayPlayer } from './replayPlayer';
 import { CAPTURE_RULES } from './rules';
 
 let rapier: Rapier;
@@ -41,6 +42,28 @@ describe('a recorded match', { timeout: 60_000 }, () => {
     replay.advance(Infinity);
 
     expect(replay.diverged).toBe(7);
+  });
+
+  it('is watched from any moment: a seek back plays the match again from its start to the same state', () => {
+    const recording = record(20);
+    const player = createReplayPlayer(rapier, fakeRenderer(), recording, 15 * 60);
+
+    seekThrough(player);
+    expect(player.step).toBe(15 * 60);
+    expect(posesOf(player)).toEqual(recording.chronicle.samples[(15 * 60) / 15]);
+
+    player.seek(5 * 60);
+    seekThrough(player);
+    expect(player.step).toBe(5 * 60);
+    expect(posesOf(player)).toEqual(recording.chronicle.samples[(5 * 60) / 15]);
+
+    // Half a second at twice the speed plays a second of the match.
+    player.frame(0.5, 2);
+    expect(player.step).toBe(6 * 60);
+    expect(posesOf(player)).toEqual(recording.chronicle.samples[(6 * 60) / 15]);
+    expect(player.diverged).toBeUndefined();
+    player.dispose();
+    applyClassTuning({});
   });
 
   it('chronicles where the tanks were, what the bots thought and the kills', () => {
@@ -106,12 +129,31 @@ function record(seconds: number) {
   return recording;
 }
 
+/** Plays the frames `player` needs to finish its seek. */
+function seekThrough(player: ReplayPlayer) {
+  while (player.sought !== undefined) {
+    player.frame(0, 0);
+  }
+}
+
+/** The tanks' poses in the match `player` plays, as the chronicle samples them. */
+function posesOf(player: ReplayPlayer) {
+  const round = (value: number, digits: number) => Math.round(value * 10 ** digits) / 10 ** digits;
+
+  return player.match.members.map((member) => {
+    const tank = member.tank;
+    const at = tank?.hull.translation();
+    return tank && at ? [round(at.x, 1), round(at.y, 1), round(tank.hull.rotation(), 3), round(tank.turretAngle, 3), round(player.match.combat.armorLeft(tank), 2)] : null;
+  });
+}
+
 /** A renderer that only hands out field slots. */
 function fakeRenderer() {
-  const slots = Array.from({ length: 512 }, (_, index) => 511 - index);
+  let slots = Array.from({ length: 512 }, (_, index) => 511 - index);
   const renderer = {
     allocateField: () => slots.pop(),
     releaseField: (slot: number) => slots.push(slot),
+    releaseAllFields: () => (slots = Array.from({ length: 512 }, (_, index) => 511 - index)),
     uploadField() {},
     beginBodies() {},
     addBody() {},
