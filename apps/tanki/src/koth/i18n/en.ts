@@ -309,7 +309,6 @@ export const en = {
     lost: 'your tank was lost',
     skip: 'any key skips',
     rewind: '◀◀ REW',
-    bam: 'BAM!',
     onYou: 'hunting you',
     streak: (count: number) => (count === 2 ? 'second kill in a row' : `${count} kills in a row`),
     range: (range: number) => `${range} px shot`,

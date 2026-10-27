@@ -412,7 +412,7 @@ export function seatName(t: ReturnType<typeof useKothI18n>['t'], seat: SeatHud) 
 /**
  * What the kill-cam shows over its film (see `createKillCam`): black bars that come in and go,
  * the picture greyed, scan lines and «◀◀ REW» while the tape runs back, the killer's card with
- * what it had in mind, the «BAM!» where the shot struck, and the shot's range and the armor the
+ * what it had in mind, and the shot's range and the armor the
  * killer had left, and the player's respawn countdown, as the match's display is hidden meanwhile;
  * any key skips it.
  */
@@ -428,16 +428,6 @@ export function KillCamOverlay(props: { view: KillCamView | undefined; respawn: 
             <div class="tk-killcam-rewind">
               <b>{t('killCam.rewind')}</b>
             </div>
-          </Show>
-          <Show when={view().bam}>
-            {(bam) => (
-              <div class="tk-killcam-bam" style={{ left: `${bam().x}px`, top: `${bam().y}px`, opacity: bam().opacity, transform: `translate(-50%, -50%) scale(${bam().scale}) rotate(-8deg)` }}>
-                <svg viewBox="-60 -60 120 120" aria-hidden="true">
-                  <polygon points={BURST} />
-                </svg>
-                <b>{t('killCam.bam')}</b>
-              </div>
-            )}
           </Show>
           <div class="tk-killcam-bar tk-top" style={{ transform: `translateY(${(view().bars - 1) * 100}%)` }}>
             <b>{t('killCam.title')}</b>
@@ -490,13 +480,6 @@ export function KillCamOverlay(props: { view: KillCamView | undefined; respawn: 
     return [card.onYou ? t('killCam.onYou') : goal, action].filter(Boolean).join(' · ');
   }
 }
-
-/** A comic burst's outline, 14 points out and in. */
-const BURST = Array.from({ length: 28 }, (_, index) => {
-  const angle = (index / 28) * Math.PI * 2;
-  const radius = index % 2 === 0 ? 58 : 36 + (index % 4) * 3;
-  return `${(Math.cos(angle) * radius).toFixed(1)},${(Math.sin(angle) * radius).toFixed(1)}`;
-}).join(' ');
 
 /**
  * The mark over the tank that last destroyed the player's, until the player destroys it: on the

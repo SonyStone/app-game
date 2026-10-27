@@ -417,8 +417,9 @@ const FONT_LINK_ID = 'tanki-poster-font';
  *   changes, the view's lead and slack, and what the match itself works by.
  * @param classes - The classes' tuning, handed to the match whenever it changes (see `ClassTuning`).
  * @param paused - Holds the match, its effects and the view still; the frame is drawn again as it stands.
- * @param killCam - Whether the player's tank going shows a kill-cam: a short film of how it went,
- *   from the match's tape (see `createKillCam`), while the match goes on unseen; any key or click
+ * @param killCam - Whether the player's tank going shows a kill-cam: `KILL_CAM_DELAY` s of the
+ *   match later, a short film of how it went, from the match's tape (see `createKillCam`), while
+ *   the match goes on unseen; the tank coming back, any key or click
  *   ends it. `onFrame` tells what to show over it. Whatever this says, the tank that destroyed the
  *   player's is marked for revenge until the player destroys it, which `onFrame` tells as well.
  * @param onRecorder - Receives, for every new match, the function that takes its recording and tape so far.
@@ -533,9 +534,9 @@ function KothScene(props: {
   }
 
   /**
-   * Readies the kill-cam when the player's own tank is destroyed, if it is on, for the next frame,
-   * once the tape has the moment; marks the killer for revenge, and takes it when the player
-   * destroys that member.
+   * Readies the kill-cam when the player's own tank is destroyed, if it is on, to begin
+   * `KILL_CAM_DELAY` s of the match later; marks the killer for revenge, and takes it when the
+   * player destroys that member.
    */
   function noticeKill(kill: KothKill) {
     const seat = match.seat;
@@ -560,7 +561,8 @@ function KothScene(props: {
         death: recorded.steps,
         killer: kill.killer ? match.members.indexOf(kill.killer) : undefined,
         victim: match.members.indexOf(seat),
-        at: { x: kill.at.x, y: kill.at.y }
+        at: { x: kill.at.x, y: kill.at.y },
+        begin: recorded.steps + KILL_CAM_DELAY * 60
       },
       who: { killer: kill.killer && seatOf(kill.killer), tankClass: kill.killerClass },
       film: undefined
@@ -671,8 +673,14 @@ function KothScene(props: {
       return;
     }
 
-    // The kill-cam begins, the tape having the moment the tank went: the match goes on, taped, while the film shows how.
-    if (killCam && !killCam.film) {
+    // The player's tank is back: whatever is left of the kill-cam gives way to the match.
+    if (killCam && match.seat.tank) {
+      endKillCam();
+    }
+
+    // The kill-cam begins, a moment after the tank went: the match goes on, taped, while the film shows how.
+    if (killCam && !killCam.film && recorded.steps >= killCam.kill.begin) {
+      killCam.kill.begin = recorded.steps;
       killCam.film = createKillCam(renderer, recorder.tape, recorded.chronicle, killCam.kill, killCam.who, camera);
       recorder.mute();
     }
@@ -804,13 +812,15 @@ function KothScene(props: {
 /** Zoom when watching one tank. */
 const FOLLOW_ZOOM = 1.6;
 
-/** The kill-cam: the kill and who made it, and its film once the tape has the moment (see `createKillCam`). */
+/** The kill-cam: the kill and who made it, the step it begins at, and its film once it has (see `createKillCam`). */
 type KillCam = {
   kill: KillCamKill;
   who: Parameters<typeof createKillCam>[4];
   film: ReturnType<typeof createKillCam> | undefined;
 };
 
+/** Seconds of the match after the player's tank went that the kill-cam begins. */
+const KILL_CAM_DELAY = 1.5;
 /** How far inside the screen's edges the revenge mark is held, and how far over its tank it floats, in screen and world px. */
 const REVENGE_INSET = 40;
 const REVENGE_ABOVE = 34;

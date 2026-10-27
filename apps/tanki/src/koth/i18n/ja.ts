@@ -307,7 +307,6 @@ export const ja: Dictionary = {
     lost: '戦車を失った',
     skip: '任意のキーでスキップ',
     rewind: '◀◀ REW',
-    bam: 'ドーン！',
     onYou: 'あなたを狙っていた',
     streak: (count) => `${count}連続撃破`,
     range: (range) => `${range} px の射撃`,

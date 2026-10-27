@@ -307,7 +307,6 @@ export const ru: Dictionary = {
     lost: 'твой танк потерян',
     skip: 'любая клавиша — пропустить',
     rewind: '◀◀ REW',
-    bam: 'БАМ!',
     onYou: 'охотился на тебя',
     streak: (count) => (count === 2 ? 'второе убийство подряд' : `${count} убийства подряд`),
     range: (range) => `выстрел с ${range} px`,

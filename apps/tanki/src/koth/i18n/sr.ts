@@ -307,7 +307,6 @@ export const sr: Dictionary = {
     lost: 'твој тенк је изгубљен',
     skip: 'било који тастер прескаче',
     rewind: '◀◀ REW',
-    bam: 'БУМ!',
     onYou: 'ловио је тебе',
     streak: (count) => (count === 2 ? 'друго убиство заредом' : `${count} убиства заредом`),
     range: (range) => `хитац са ${range} px`,

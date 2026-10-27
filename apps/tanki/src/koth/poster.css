@@ -1218,33 +1218,6 @@
   font-size: 16px;
   font-style: italic;
 }
-/* «BAM!» in a comic burst where the shot struck. */
-.tk-killcam-bam {
-  position: absolute;
-  display: grid;
-  place-items: center;
-  width: 230px;
-  height: 230px;
-}
-.tk-killcam-bam svg {
-  position: absolute;
-  inset: 0;
-  overflow: visible;
-}
-.tk-killcam-bam polygon {
-  fill: var(--yellow);
-  stroke: var(--ink);
-  stroke-width: 4;
-  stroke-linejoin: round;
-}
-.tk-killcam-bam b {
-  position: relative;
-  font-size: 46px;
-  color: var(--red);
-  -webkit-text-stroke: 2px var(--ink);
-  text-shadow: 4px 4px 0 var(--ink);
-}
-
 /* Revenge */
 
 .tk-revenge-mark {

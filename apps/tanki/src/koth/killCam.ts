@@ -1,4 +1,4 @@
-import { worldToScreen, type Camera } from '../arena/camera';
+import type { Camera } from '../arena/camera';
 import { PARTICLE_TRAIL, type createRangeRenderer } from '../damage/renderer';
 import type { Chronicle } from './chronicle';
 import type { SeatHud } from './match';
@@ -9,9 +9,9 @@ type Point = { x: number; y: number };
 
 /**
  * The kill-cam: how a tank was destroyed, told from the match's tape as a short film on `renderer`
- * (see `directKillCam` for its shots). The film starts from `camera`, the view as the tank went,
- * zooms in from its zoom and draws over the match, which goes on meanwhile; the caller keeps the
- * match's own drawing off `renderer` while it shows.
+ * (see `directKillCam` for its shots). The film starts from `camera`, the view as it begins,
+ * zooms in from its zoom, keeps its turn and draws over the match, which goes on meanwhile; the
+ * caller keeps the match's own drawing off `renderer` while it shows.
  *
  * @param kill - The kill, with the members as the match and the tape number them.
  * @param who - The killer's seat and class, as the display names them; none for a tank lost to its own side or nobody.
@@ -58,7 +58,6 @@ export function createKillCam(
       view.x += (shot.focus.x - view.x) * ease;
       view.y += (shot.focus.y - view.y) * ease;
       view.zoom += (zoom - view.zoom) * ease;
-      view.rotation += Math.atan2(Math.sin(shot.rotation - view.rotation), Math.cos(shot.rotation - view.rotation)) * ease;
       const shaken = {
         ...view,
         x: view.x + (Math.random() * 2 - 1) * shot.shake * SHAKE,
@@ -71,7 +70,6 @@ export function createKillCam(
         grey: shot.grey,
         rewind: shot.kind === 'rewind',
         card: shot.card > 0 ? { ...who, ...film.story, opacity: shot.card } : undefined,
-        bam: shot.bam && { ...worldToScreen(shaken, film.hit, screen), ...shot.bam },
         stats: shot.stats > 0 ? { range: film.range, armor: film.story.armor, opacity: shot.stats } : undefined
       };
     }
@@ -83,20 +81,20 @@ export type KillCamView = NonNullable<ReturnType<ReturnType<typeof createKillCam
 
 /**
  * A kill as the kill-cam tells it: the step the tank went, the members by their place in the
- * match's list (which the tape and the chronicle keep), the killer's if any, and where the tank was.
+ * match's list (which the tape and the chronicle keep), the killer's if any, where the tank was,
+ * and the step the film begins at, the tape's last, a moment after the kill.
  */
-export type KillCamKill = { death: number; killer: number | undefined; victim: number; at: Point };
+export type KillCamKill = { death: number; killer: number | undefined; victim: number; at: Point; begin: number };
 
 /**
  * Plans the kill-cam's film of `kill` from the tape and the chronicle: shots, each so long in
  * seconds, that show the tape from one step to another.
  *
- * - `freeze`: the moment the tank went, near stopped, as the picture greys and black bars come in.
+ * - `freeze`: the moment the film begins, near stopped, as the picture greys and black bars come in.
  * - `rewind`: the tape run back to a moment before the fatal shot, on to the killer.
  * - `killer`: the killer up to the shot, with a card of who it was and what it had in mind.
  * - `fire`: the shot, slowed.
- * - `flight`: the camera rides the shell to its target, turned so the shell flies up the screen.
- * - `impact`: held a step short of the hit, with a «BAM!».
+ * - `flight`: the camera rides the shell to its target.
  * - `blast`: the tank going, the view shaking and pulling back to show both tanks, with the shot's range.
  * - `out`: the bars and the grey go.
  *
@@ -109,11 +107,12 @@ export function directKillCam(tape: Tape, chronicle: Chronicle, kill: KillCamKil
   const hit = shot?.hit ?? death;
   const from = Math.max(fired - KILLER_TIME * 60, death - MOST_BEFORE * 60, tape.start ?? 0);
   const aim = Math.max(fired - FIRE_LEAD, from);
-  // Held a step short of the hit, though not before the shot, as a rail's strikes the step it is fired.
+  // The ride ends a step short of the hit, though not before the shot, as a rail's strikes the step it is fired.
   const held = Math.max(hit - 1, fired + 1);
+  const begin = Math.max(kill.begin, death);
   const shots: Shot[] = [
-    { kind: 'freeze', length: 0.5, from: death, to: death + 4 },
-    { kind: 'rewind', length: 0.75, from: death + 4, to: from }
+    { kind: 'freeze', length: 0.5, from: begin, to: begin + 4 },
+    { kind: 'rewind', length: 0.75, from: begin + 4, to: from }
   ];
 
   if (kill.killer === undefined) {
@@ -127,7 +126,6 @@ export function directKillCam(tape: Tape, chronicle: Chronicle, kill: KillCamKil
   }
 
   shots.push(
-    { kind: 'impact', length: 0.45, from: held, to: held },
     { kind: 'blast', length: 1, from: held, to: held + 50 },
     { kind: 'out', length: 0.35, from: held + 50, to: held + 70 }
   );
@@ -135,7 +133,6 @@ export function directKillCam(tape: Tape, chronicle: Chronicle, kill: KillCamKil
   const path = shot?.path ?? [];
   const hitPoint = path.at(-1) ?? kill.at;
   const killerAt = (time: number) => (kill.killer === undefined ? undefined : memberAt(tape, kill.killer, time));
-  const flight = path.length > 1 ? { x: hitPoint.x - path[0].x, y: hitPoint.y - path[0].y } : undefined;
 
   return {
     shots,
@@ -148,8 +145,6 @@ export function directKillCam(tape: Tape, chronicle: Chronicle, kill: KillCamKil
     killerAt,
     /** Where the destroyed tank was at `time`, as the tape draws it, and where it went once gone. */
     victimAt: (time: number) => memberAt(tape, kill.victim, time) ?? kill.at,
-    /** The camera's turn that has the shell fly straight up the screen. */
-    upward: flight ? normalAngle(-Math.PI / 2 - Math.atan2(flight.y, flight.x)) : 0,
     /** Pixels from the killer's tank as it fired to where the shot struck, or to the tank without a shot. */
     range: Math.round(killerAt(fired) ? Math.hypot(killerAt(fired)!.x - hitPoint.x, killerAt(fired)!.y - hitPoint.y) : 0),
     story: storyOf(chronicle, kill)
@@ -157,16 +152,16 @@ export function directKillCam(tape: Tape, chronicle: Chronicle, kill: KillCamKil
 }
 
 /** A shot of the kill-cam's film (see `directKillCam`): its kind, its seconds, and the steps of the tape it runs from and to. */
-type Shot = { kind: 'freeze' | 'rewind' | 'killer' | 'fire' | 'flight' | 'approach' | 'impact' | 'blast' | 'out'; length: number; from: number; to: number };
+type Shot = { kind: 'freeze' | 'rewind' | 'killer' | 'fire' | 'flight' | 'approach' | 'blast' | 'out'; length: number; from: number; to: number };
 
 /** A film of `directKillCam`. */
 export type KillCamFilm = ReturnType<typeof directKillCam>;
 
 /**
  * What the film shows `elapsed` s in, or `undefined` past its end: its shot and the step of the
- * tape, where the camera looks and how it is turned, its zoom as a share of the view's at the
- * start and how far it has gone over to the zoom that shows both tanks (`fit`, 0-1), and the
- * shake, the black bars, the grey, the card, the «BAM!» and the stats, 0-1 each.
+ * tape, where the camera looks, its zoom as a share of the view's at the start and how far it
+ * has gone over to the zoom that shows both tanks (`fit`, 0-1), and the shake, the black bars,
+ * the grey, the card and the stats, 0-1 each.
  */
 export function filmAt(film: KillCamFilm, elapsed: number) {
   let start = 0;
@@ -188,7 +183,7 @@ export function filmAt(film: KillCamFilm, elapsed: number) {
   const eased = smooth(share);
   const time = shot.from + (shot.to - shot.from) * (shot.kind === 'rewind' ? eased : share);
   const killer = film.killerAt(time) ?? film.victimAt(time);
-  const look = { kind: shot.kind, time, focus: killer, zoom: 1, fit: 0, rotation: 0, shake: 0, bars: 1, grey: CINEMA_GREY, card: 1, stats: 0, bam: undefined as { scale: number; opacity: number } | undefined };
+  const look = { kind: shot.kind, time, focus: killer, zoom: 1, fit: 0, shake: 0, bars: 1, grey: CINEMA_GREY, card: 1, stats: 0 };
 
   switch (shot.kind) {
     case 'freeze':
@@ -208,27 +203,16 @@ export function filmAt(film: KillCamFilm, elapsed: number) {
       return {
         ...look,
         focus: film.shot ? pointAlong(film.shot.path, share) : lerpPoint(killer, film.hit, share),
-        zoom: 2.1,
-        rotation: film.upward * smooth(Math.min(share / 0.4, 1))
-      };
-    case 'impact':
-      return {
-        ...look,
-        focus: film.hit,
-        zoom: 2.1 + 0.3 * share,
-        rotation: film.upward,
-        bam: { scale: share < 0.3 ? 0.5 + (share / 0.3) * 0.7 : 1.2 - Math.min((share - 0.3) / 0.2, 1) * 0.2, opacity: 1 }
+        zoom: 2.1
       };
     case 'blast':
       return {
         ...look,
         focus: lerpPoint(film.hit, lerpPoint(killer, film.hit, 0.5), eased),
-        zoom: 2.4,
+        zoom: 2.1,
         fit: eased,
-        rotation: film.upward * (1 - eased),
         shake: (1 - share) ** 2,
-        stats: Math.min(share * 3, 1),
-        bam: share < 0.3 ? { scale: 1, opacity: 1 - share / 0.3 } : undefined
+        stats: Math.min(share * 3, 1)
       };
     case 'out':
       return { ...look, focus: lerpPoint(killer, film.hit, 0.5), fit: 1, bars: 1 - eased, grey: CINEMA_GREY * (1 - eased), card: 1 - eased, stats: 1 - eased };
@@ -393,10 +377,6 @@ function lerpPoint(from: Point, to: Point, share: number) {
 /** Eases 0-1 in and out. */
 function smooth(share: number) {
   return share * share * (3 - 2 * share);
-}
-
-function normalAngle(angle: number) {
-  return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
 
 /** Seconds of the killer shown before its shot at most, and of the tape before the kill at most. */
