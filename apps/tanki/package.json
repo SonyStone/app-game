@@ -9,7 +9,8 @@
     "preview": "vite preview --port 4190",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "sim": "node scripts/sim.mjs"
+    "sim": "node scripts/sim.mjs",
+    "replay": "node scripts/replay.mjs"
   },
   "dependencies": {
     "@app-game/app-router": "workspace:*",

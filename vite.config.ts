@@ -11,6 +11,7 @@ import wasm from 'vite-plugin-wasm';
 import { choicesBridge } from './apps/paint/choicesBridge';
 import { layoutsBridge } from './apps/paint/layoutsBridge';
 import { recordingBridge } from './apps/paint/recordingBridge';
+import { recordingBridge as tankiRecordingBridge } from './apps/tanki/recordingBridge';
 import { linkPreviews } from './apps/web/linkPreviews';
 import { workspaceUpdates } from './apps/web/workspaceUpdates';
 import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
@@ -63,6 +64,8 @@ export default defineConfig({
     typegpuPlugin({}),
     // Paint Studio at /paint/studio saves its input recordings through this dev server too.
     recordingBridge(),
+    // Tanki at /tanki saves its match recordings through it.
+    tankiRecordingBridge(),
     // The component canvas at /paint/components saves its stars and comments through it, and its built pages.
     choicesBridge(),
     layoutsBridge(),

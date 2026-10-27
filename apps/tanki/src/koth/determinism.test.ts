@@ -3,6 +3,7 @@ import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
 import { createKothMatch, type KothMatch, type PlayerInput } from './match';
 import { PACE_DEFAULTS } from './pace';
+import { checksumOf } from './recording';
 import { CAPTURE_RULES } from './rules';
 
 let rapier: Rapier;
@@ -96,33 +97,10 @@ function play(seed: number, frames: () => number[]) {
   return hashes;
 }
 
-/** FNV-1a over the bits of every body's pose and motion, the seats, the shells, the capture and what the bots are doing. */
+/** The match's `checksumOf`, with what the bots are doing. */
 function hashOf(match: KothMatch, world: InstanceType<Rapier['World']>) {
-  const numbers: number[] = [match.time];
-
-  world.forEachRigidBody((body) => {
-    const at = body.translation();
-    const velocity = body.linvel();
-    numbers.push(body.handle, at.x, at.y, body.rotation(), velocity.x, velocity.y, body.angvel());
-  });
-
-  for (const member of match.members) {
-    numbers.push(member.kills, member.deaths, member.respawnAt ?? -1, member.tank?.turretAngle ?? -1, member.tank ? match.combat.armorLeft(member.tank) : -1);
-  }
-
-  for (const shell of match.combat.shells) {
-    numbers.push(shell.x, shell.y);
-  }
-
-  numbers.push(match.capture.held.red, match.capture.held.blue, match.capture.progress);
-  let hash = 0x811c9dc5;
-
-  for (const byte of new Uint8Array(new Float64Array(numbers).buffer)) {
-    hash = Math.imul(hash ^ byte, 0x01000193) >>> 0;
-  }
-
   const thoughts = match.thoughts().map((thought) => `${thought.goal}/${thought.action}`);
-  return `${hash.toString(16)} ${thoughts.join(' ')}`;
+  return `${checksumOf(match, world)} ${thoughts.join(' ')}`;
 }
 
 /**

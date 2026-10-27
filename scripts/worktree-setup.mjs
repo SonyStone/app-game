@@ -138,7 +138,7 @@ function isPresent(path) {
 }
 
 /** Gitignored data directories shared by all worktrees. Their ignore patterns must not end in `/`, or git lists the symlinks. */
-const SHARED_DATA = ['apps/paint/recordings'];
+const SHARED_DATA = ['apps/paint/recordings', 'apps/tanki/recordings'];
 
 /** Gitignored build outputs that workspace packages export and that a fresh worktree lacks. */
 const BUILD_OUTPUTS = ['packages/card-stack/dist', 'packages/solid-view-cube/dist'];

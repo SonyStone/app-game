@@ -64,7 +64,7 @@ export function createKothMatch(
     roster?: Partial<Record<TeamId, readonly TankClassId[]>>;
     playerClass?: TankClassId;
     onHit?: NonNullable<Parameters<typeof createCombat>[4]>['onHit'];
-    onKill?: (kill: { victim: Member; victimTank: Tank; victimClass: TankClassId; killer: Member | undefined; killerClass: TankClassId | undefined }) => void;
+    onKill?: (kill: KothKill) => void;
     pace?: () => MatchPace;
   } = {}
 ) {
@@ -417,6 +417,14 @@ export function createKothMatch(
       }
     },
 
+    /**
+     * Frees what the match holds outside JavaScript's memory but its world and renderer, which
+     * their owner frees; the match is not to be used after.
+     */
+    dispose() {
+      combat.dispose();
+    },
+
     /** Clears the field and starts a new match. */
     restart() {
       combat.reset();
@@ -656,7 +664,7 @@ export function createKothMatch(
     const turret = credited ? undefined : turrets.guarding(at);
     feed.push({ id: feedId++, at: time, killer: credited, turret: turret !== member.team ? turret : undefined, victim: member });
     const enemy = credited && credited.team !== member.team ? credited : undefined;
-    options.onKill?.({ victim: member, victimTank: victim, victimClass: member.tankClass.id, killer: enemy, killerClass: enemy?.tankClass.id });
+    options.onKill?.({ victim: member, victimTank: victim, victimClass: member.tankClass.id, killer: enemy, killerClass: enemy?.tankClass.id, at });
     reconsiderClass(member, credited && credited.team !== member.team ? credited.tankClass.id : undefined);
   }
 
@@ -721,6 +729,13 @@ export function createKothMatch(
 
 /** A king of the hill match as returned by `createKothMatch`. */
 export type KothMatch = ReturnType<typeof createKothMatch>;
+
+/**
+ * A tank destroyed, as `options.onKill` reports it: the victim, its tank, already out of the
+ * physics world, and where it was, and the classes the victim and the enemy credited with it had
+ * at that moment; no killer when its own team or nothing destroyed it.
+ */
+export type KothKill = { victim: Member; victimTank: Tank; victimClass: TankClassId; killer: Member | undefined; killerClass: TankClassId | undefined; at: Point };
 
 /** The knobs of `Pace` a match works by; the rest are the view's and the game clock's. */
 export type MatchPace = Pick<Pace, 'tankSpeed' | 'shellSpeed' | 'damage' | 'botReaction' | 'botSight'>;

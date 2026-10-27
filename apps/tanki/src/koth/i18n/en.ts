@@ -209,6 +209,16 @@ export const en = {
     kills: 'K',
     deaths: 'D',
     again: 'Play again'
+  },
+  recording: {
+    save: 'Save recording',
+    saveHint: 'this match, to replay',
+    saving: 'Saving…',
+    saved: (path: string) => `Saved: ${path}`,
+    downloaded: (name: string) => `Downloaded ${name}`,
+    failed: 'Could not save the recording',
+    savedShort: 'saved to recordings',
+    downloadedShort: 'downloaded'
   }
 };
 

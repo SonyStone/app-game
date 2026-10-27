@@ -6,6 +6,7 @@ import { useKothI18n } from './i18n/i18n';
 import type { KothMatch, MemberHud, SeatHud } from './match';
 import './poster.css';
 import type { TeamId } from './rules';
+import type { SaveState } from './saveRecording';
 
 /** What the heads-up display shows, from `KothMatch['hud']`. */
 export type HudState = ReturnType<KothMatch['hud']>;
@@ -266,11 +267,14 @@ function Gauge(props: { label: string; value: number; color: string }) {
 
 /**
  * The end of a match on a poster sheet with a wedge in the winner's color: the winner, every member's kills and
- * deaths with the player's line in yellow, and a button to play again.
+ * deaths with the player's line in yellow, a button to play again and one to save the match's recording, with
+ * where the recording went once saved.
  *
+ * @param saved - The save under way or done for this match, if any.
+ * @param onSave - Called when the player asks to save the recording.
  * @param onRestart - Called when the player asks for another match.
  */
-export function MatchResult(props: { state: HudState | undefined; onRestart: () => void }) {
+export function MatchResult(props: { state: HudState | undefined; saved: SaveState | undefined; onSave: () => void; onRestart: () => void }) {
   const { t } = useKothI18n();
 
   return (
@@ -312,17 +316,38 @@ export function MatchResult(props: { state: HudState | undefined; onRestart: () 
                 )}
               </For>
             </div>
-            <div class="flex justify-center px-[18px] pt-2 pb-4">
+            <div class="flex justify-center gap-3 px-[18px] pt-2">
               <button class="tk-action tk-primary w-72" onClick={() => props.onRestart()}>
                 <span class="tk-action-label">{t('result.again')}</span>
                 <kbd class="tk-key">R</kbd>
               </button>
+              <button class="tk-action w-72" disabled={props.saved?.kind === 'saving'} onClick={() => props.onSave()}>
+                <span class="tk-action-label">{t('recording.save')}</span>
+              </button>
             </div>
+            <div class="px-[18px] pt-1.5 pb-4 text-center text-[12px] break-all">{props.saved ? saveText(t, props.saved) : t('recording.saveHint')}</div>
           </div>
         </div>
       )}
     </Show>
   );
+}
+
+/**
+ * Where a saved recording went, or that it is being saved, in the display's language; `short`
+ * leaves out the file's path and name, for a narrow line.
+ */
+export function saveText(t: ReturnType<typeof useKothI18n>['t'], saved: SaveState, short = false) {
+  switch (saved.kind) {
+    case 'saving':
+      return t('recording.saving');
+    case 'saved':
+      return short ? t('recording.savedShort') : t('recording.saved', saved.path);
+    case 'downloaded':
+      return short ? t('recording.downloadedShort') : t('recording.downloaded', saved.name);
+    default:
+      return t('recording.failed');
+  }
 }
 
 /** The name of whoever sits in `seat`, in the display's language: the player, or a team's seat counted from 1. */

@@ -207,6 +207,16 @@ export const ru: Dictionary = {
     kills: 'У',
     deaths: 'С',
     again: 'Ещё раз'
+  },
+  recording: {
+    save: 'Сохранить запись',
+    saveHint: 'этот матч, для повтора',
+    saving: 'Сохраняю…',
+    saved: (path) => `Сохранено: ${path}`,
+    downloaded: (name) => `Скачан файл ${name}`,
+    failed: 'Не удалось сохранить запись',
+    savedShort: 'сохранено в recordings',
+    downloadedShort: 'скачано'
   }
 };
 

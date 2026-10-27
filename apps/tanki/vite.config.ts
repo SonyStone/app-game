@@ -4,6 +4,7 @@ import typegpuPlugin from 'unplugin-typegpu/vite';
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 import wasm from 'vite-plugin-wasm';
+import { recordingBridge } from './recordingBridge';
 
 export default defineConfig({
   plugins: [
@@ -14,7 +15,9 @@ export default defineConfig({
     typegpuPlugin({}),
     UnoCSS({
       configFile: fileURLToPath(new URL('../../uno.config.ts', import.meta.url))
-    })
+    }),
+    // Saves match recordings to recordings/.
+    recordingBridge()
   ],
   server: {
     host: '0.0.0.0'

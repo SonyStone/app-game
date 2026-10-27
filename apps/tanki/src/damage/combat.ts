@@ -906,6 +906,11 @@ export function createCombat(
       shells.length = 0;
       rails.length = 0;
       layout.crates?.forEach((placement) => spawnCrate(placement));
+    },
+
+    /** Frees the queue of Rapier's collision events; the battle is not to be used after. The world's owner frees the world. */
+    dispose() {
+      events.free();
     }
   };
 

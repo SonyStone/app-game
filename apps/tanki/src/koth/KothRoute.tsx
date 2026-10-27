@@ -16,17 +16,19 @@ import { makeArenaInput, type Aim } from '../arena/input';
 import { createLookAhead } from '../arena/lookahead';
 import { createRangeRenderer } from '../damage/renderer';
 import { Rapier2D, useRapier2D } from '../physics/Rapier2D';
-import { createWorld } from '../physics/World';
 import { AIM_LOOK_IDS, aimLookFromAddress, aimOnScreen, AimOverlay, type AimView } from './AimOverlay';
 import { ClassMenu } from './classes/ClassMenu';
+import type { ClassTuning } from './classes/knobs';
 import { createScope } from './classes/scope';
 import { BotThoughts, KothHud, MatchResult, type HudState, type ThoughtView } from './Hud';
 import { createKothI18n, KothI18nProvider } from './i18n/i18n';
-import { createKothMatch, type KothMatch } from './match';
+import type { KothMatch } from './match';
 import type { Pace } from './pace';
 import { PauseMenu, type MenuPage } from './PauseMenu';
 import { BUBBLE_TIME } from './radio';
 import { RadioOverlay, type CalloutView } from './RadioOverlay';
+import { createRecordedMatch, matchPaceOf, newSeed, STEP, type Recording } from './recording';
+import { saveRecording, type SaveState } from './saveRecording';
 import { CAPTURE_RULES } from './rules';
 import { TANK_CLASS_IDS, type TankClassId } from './tanks';
 import { createTuning } from './tuning';
@@ -90,6 +92,8 @@ export default function KothRoute() {
   const [menuPage, setMenuPage] = createSignal<MenuPage>(address.get('tune') === 'classes' ? 'classes' : 'menu');
   const [look, setLook] = createSignal(aimLookFromAddress());
   const i18n = createKothI18n();
+  const [saved, setSaved] = createSignal<SaveState>();
+  let takeRecording: (() => Recording) | undefined;
   const { t } = i18n;
 
   loadPosterFont();
@@ -143,6 +147,8 @@ export default function KothRoute() {
               choice={choice()}
               playerClass={address.get('class')}
               pace={tuning.pace()}
+              classes={tuning.classes()}
+              onRecorder={(take) => (takeRecording = take)}
               paused={paused()}
               onFrame={(frame) => {
                 setState(frame.state);
@@ -163,7 +169,7 @@ export default function KothRoute() {
           look={look()}
           active={!menu() && !paused() && !watching() && !state()?.capture.winner}
         />
-        <MatchResult state={state()} onRestart={restart} />
+        <MatchResult state={state()} saved={saved()} onSave={save} onRestart={restart} />
         <Show when={menu() && !paused() && !watching() && state()}>
           {(shown) => (
             <ClassMenu
@@ -198,6 +204,8 @@ export default function KothRoute() {
               setMenu(true);
             }}
             onWatch={toggleWatching}
+            saved={saved()}
+            onSave={save}
           />
         </Show>
       </div>
@@ -206,8 +214,19 @@ export default function KothRoute() {
 
   /** Starts a new match and plays it. */
   function restart() {
+    setSaved(undefined);
     setRestarts((count) => count + 1);
     setPaused(false);
+  }
+
+  /** Saves the match's recording so far (see `saveRecording`), once a save is not under way. */
+  async function save() {
+    if (!takeRecording || saved()?.kind === 'saving') {
+      return;
+    }
+
+    setSaved({ kind: 'saving' });
+    setSaved(await saveRecording(takeRecording()));
   }
 
   /** Hands the player's tank to a bot to watch the match, or takes it back, and plays on. */
@@ -243,13 +262,12 @@ function loadPosterFont() {
 
 const FONT_LINK_ID = 'tanki-poster-font';
 
-/** Rapier tolerances assume meters; Godot's Rapier plugin likewise treats 100 px as a meter. */
-const PIXELS_PER_METER = 100;
-
 /**
  * Runs the match on the canvas's GPU: input, fixed 60 Hz physics steps, the camera and drawing,
- * and reports the display state every frame. The scene owns its physics world, so remounting it
- * starts from an empty world.
+ * and reports the display state every frame. The match is recorded as it is played (see
+ * `createRecordedMatch`); every match, the first and each restart, gets a physics world of its
+ * own and a new seed, so its recording plays it again from nothing. `?seed=` in the address
+ * gives the first match that seed, to play a recorded match's beginning again.
  *
  * @param restarts - Starts a new match whenever it changes after mount.
  * @param watching - The player's seat is driven by a bot and the camera shows the whole map, or follows a chosen tank.
@@ -258,7 +276,9 @@ const PIXELS_PER_METER = 100;
  * @param playerClass - The player's first class, read once; anything but a class id means the Soldier.
  * @param pace - The match's pace, read every frame: the game's speed, the zoom it sets when it
  *   changes, the view's lead and slack, and what the match itself works by.
+ * @param classes - The classes' tuning, handed to the match whenever it changes (see `ClassTuning`).
  * @param paused - Holds the match, its effects and the view still; the frame is drawn again as it stands.
+ * @param onRecorder - Receives, for every new match, the function that takes its recording so far.
  * @param onFrame - Receives the display state after each frame, with the player's aim on screen.
  */
 function KothScene(props: {
@@ -269,20 +289,17 @@ function KothScene(props: {
   choice: { id: TankClassId; count: number } | undefined;
   playerClass: string | null;
   pace: Pace;
+  classes: ClassTuning;
   paused: boolean;
+  onRecorder: (take: () => Recording) => void;
   onFrame: (frame: { state: HudState; thoughts: ThoughtView[]; callouts: CalloutView[]; aim: AimView | undefined }) => void;
 }) {
   const canvas = untrack(() => props.canvas);
   const rapier = useRapier2D();
-  const world = createWorld(rapier, { gravity: { x: 0, y: 0 }, lengthUnit: PIXELS_PER_METER });
   const renderer = createRangeRenderer(useGpuCanvas());
   const first = untrack(() => props.playerClass);
-  const playerClass = TANK_CLASS_IDS.find((id) => id === first);
-  const match = createKothMatch(rapier, world, renderer, {
-    rules: rulesFromAddress(),
-    playerClass,
-    pace: () => props.pace
-  });
+  let recorded = startMatch(TANK_CLASS_IDS.find((id) => id === first) ?? 'soldier', seedFromAddress() ?? newSeed());
+  let match = recorded.match;
   const input = makeArenaInput(canvas);
   const camera = createCamera(match.seat.tank?.hull.translation() ?? { x: 0, y: 0 });
   const lookAhead = createLookAhead();
@@ -324,8 +341,45 @@ function KothScene(props: {
 
   onSettled(() => untrack(start));
   onCleanup(stop);
+  onCleanup(() => recorded.dispose());
 
   return null;
+
+  /** Starts a recorded match of `playerClass` for the player, on seed `seed`, at the pace and with the classes' tuning set now. */
+  function startMatch(playerClass: TankClassId, seed: number) {
+    const started = untrack(() =>
+      createRecordedMatch(rapier, renderer, {
+        seed,
+        human: true,
+        playerClass,
+        rules: rulesFromAddress(),
+        pace: matchPaceOf(props.pace),
+        classes: props.classes
+      })
+    );
+    props.onRecorder(() => started.recording());
+    return started;
+  }
+
+  /**
+   * Drops the match, with its world and the renderer's fields, and starts a new one on a new
+   * seed, the player keeping the class it has or asked for.
+   */
+  function restart() {
+    const playerClass = match.seat.nextClass ?? match.seat.tankClass.id;
+    recorded.dispose();
+    renderer.releaseAllFields();
+    recorded = startMatch(playerClass, newSeed());
+    match = recorded.match;
+    const spawn = match.seat.tank?.hull.translation();
+
+    if (spawn) {
+      camera.x = spawn.x;
+      camera.y = spawn.y;
+    }
+
+    lookAhead.reset();
+  }
 
   /** Reads input, steps the match, places the camera, draws and reports one frame. */
   function frame(time: number) {
@@ -336,18 +390,20 @@ function KothScene(props: {
 
     if (props.restarts !== seenRestarts) {
       seenRestarts = props.restarts;
-      match.restart();
+      restart();
     }
 
     if (props.choice !== seenChoice) {
       seenChoice = props.choice;
 
       if (seenChoice) {
-        match.chooseClass(seenChoice.id);
+        recorded.chooseClass(seenChoice.id);
       }
     }
 
-    match.spectate(props.watching);
+    recorded.watch(props.watching);
+    recorded.setPace(props.pace);
+    recorded.setClasses(props.classes);
 
     const screen = fitCanvas(canvas);
     const controls = input.read();
@@ -390,9 +446,9 @@ function KothScene(props: {
     const alt = controls.alt && !props.watching;
     pendingStep += dt;
 
-    while (pendingStep >= PHYSICS_STEP) {
-      pendingStep -= PHYSICS_STEP;
-      match.step(PHYSICS_STEP, { drive, aim, fire: controls.fire && !props.watching, turn: alt, reach });
+    while (pendingStep >= STEP) {
+      pendingStep -= STEP;
+      recorded.step({ drive, aim, fire: controls.fire && !props.watching, turn: alt, reach });
     }
 
     match.update(dt);
@@ -477,7 +533,6 @@ function KothScene(props: {
 
 /** Zoom when watching one tank. */
 const FOLLOW_ZOOM = 1.6;
-const PHYSICS_STEP = 1 / 60;
 const MAX_FRAME_TIME = 0.1;
 const VIEW_TURN_SPEED = 1.5;
 const KEY_ZOOM_SPEED = 1.5;
@@ -489,6 +544,12 @@ function distanceTo(a: { x: number; y: number }, b: { x: number; y: number }) {
 
 /** How many times slower than real time the game runs, from `?slow=` in the address. */
 const SLOW_MOTION = Math.max(Number(new URLSearchParams(window.location.search).get('slow')) || 1, 1);
+
+/** The seed from `?seed=` in the address, a whole number from 1 to 2147483646, if any. */
+function seedFromAddress() {
+  const seed = Number(new URLSearchParams(window.location.search).get('seed'));
+  return Number.isInteger(seed) && seed >= 1 && seed < 2147483647 ? seed : undefined;
+}
 
 /** Capture rules with the hold time from `?hold=` in the address, in seconds, for short matches. */
 function rulesFromAddress() {

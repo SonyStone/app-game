@@ -207,5 +207,15 @@ export const ja: Dictionary = {
     kills: 'K',
     deaths: 'D',
     again: 'もう一度'
+  },
+  recording: {
+    save: '記録を保存',
+    saveHint: 'この試合を再生用に',
+    saving: '保存中…',
+    saved: (path) => `保存しました: ${path}`,
+    downloaded: (name) => `${name} をダウンロードしました`,
+    failed: '記録を保存できませんでした',
+    savedShort: 'recordings に保存済み',
+    downloadedShort: 'ダウンロード済み'
   }
 };

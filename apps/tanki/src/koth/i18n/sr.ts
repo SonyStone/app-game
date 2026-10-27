@@ -207,6 +207,16 @@ export const sr: Dictionary = {
     kills: 'У',
     deaths: 'С',
     again: 'Играј поново'
+  },
+  recording: {
+    save: 'Сачувај снимак',
+    saveHint: 'овај меч, за поновно гледање',
+    saving: 'Чувам…',
+    saved: (path) => `Сачувано: ${path}`,
+    downloaded: (name) => `Преузет фајл ${name}`,
+    failed: 'Снимак није сачуван',
+    savedShort: 'сачувано у recordings',
+    downloadedShort: 'преузето'
   }
 };
 

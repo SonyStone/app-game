@@ -1,11 +1,13 @@
-import { For, Match, Switch } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 import { AIM_LOOK_IDS, type AimLookId } from './AimOverlay';
 import { ClassEditor } from './classes/ClassEditor';
 import { CLASS_KNOBS, knobValue } from './classes/knobs';
+import { saveText } from './Hud';
 import { LANGUAGES, useKothI18n } from './i18n/i18n';
 import { PACE_DEFAULTS, PACE_KNOBS, type Pace } from './pace';
 import './poster.css';
 import { KnobSlider, Section } from './PosterParts';
+import type { SaveState } from './saveRecording';
 import type { TankClassId } from './tanks';
 import type { TuningControls } from './tuning';
 
@@ -15,7 +17,8 @@ import type { TuningControls } from './tuning';
  * be set up without remembering them:
  *
  * - The language, in the header.
- * - The match: resume, restart, the class menu, and watching the bots or taking the tank back.
+ * - The match: resume, restart, the class menu, watching the bots or taking the tank back, and
+ *   saving the match's recording, which then tells where it went.
  * - The view: the aim's look and the bots' thoughts.
  * - The pace knobs (see `Pace`), which take effect at once: a slider for each with a notch at its
  *   default, a value that turns yellow while it differs from it, what the knobs make of the medium
@@ -31,6 +34,7 @@ import type { TuningControls } from './tuning';
  * @param playerClass - The player's class, on the class button and picked first in the class editor.
  * @param thoughts - Whether the bots' thoughts are shown in play; watching shows them regardless, and the switch is off limits then.
  * @param watching - Whether the player is watching the bots, which turns the watch button into taking the tank back.
+ * @param saved - The save of the match's recording under way or done, if any; `onSave` asks for one.
  */
 export function PauseMenu(props: {
   tuning: TuningControls;
@@ -46,6 +50,8 @@ export function PauseMenu(props: {
   onRestart: () => void;
   onClass: () => void;
   onWatch: () => void;
+  saved: SaveState | undefined;
+  onSave: () => void;
 }) {
   const { t, language, choose } = useKothI18n();
   const thoughtsOn = () => props.thoughts || props.watching;
@@ -129,6 +135,12 @@ export function PauseMenu(props: {
                   keyName="V"
                   onClick={() => props.onWatch()}
                 />
+                <Action
+                  label={t('recording.save')}
+                  hint={props.saved ? saveText(t, props.saved, true) : t('recording.saveHint')}
+                  disabled={props.saved?.kind === 'saving'}
+                  onClick={() => props.onSave()}
+                />
                 <Section number="02" title={t('menu.view')} />
                 <div class="tk-row">
                   <span class="tk-label">{t('menu.aim')}</span>
@@ -211,7 +223,7 @@ export type MenuPage = (typeof MENU_PAGES)[number];
 function Action(props: {
   label: string;
   hint: string;
-  keyName: string;
+  keyName?: string;
   primary?: boolean;
   disabled?: boolean;
   onClick: () => void;
@@ -226,7 +238,9 @@ function Action(props: {
         <span class="tk-action-label">{props.label}</span>
         <span class="tk-action-hint">{props.hint}</span>
       </span>
-      <kbd class="tk-key">{props.keyName}</kbd>
+      <Show when={props.keyName}>
+        <kbd class="tk-key">{props.keyName}</kbd>
+      </Show>
     </button>
   );
 }

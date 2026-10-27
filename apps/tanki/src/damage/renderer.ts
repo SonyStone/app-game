@@ -1469,6 +1469,11 @@ export function createRangeRenderer(gpu: GpuContext) {
       freeSlots.push(slot);
     },
 
+    /** Frees every field slot, for a new battle on the renderer after the old one is dropped whole. */
+    releaseAllFields() {
+      freeSlots.splice(0, freeSlots.length, ...Array.from({ length: FIELD_SLOTS }, (_, slot) => FIELD_SLOTS - 1 - slot));
+    },
+
     /** Uploads `field` into `slot`; call after every change. */
     uploadField(slot: number, field: DamageField) {
       if (field.cols * field.rows > SLOT_CELLS) {
