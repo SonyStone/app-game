@@ -179,6 +179,9 @@ export function createKothMatch(
     /** The repair kits on the map. */
     kits,
 
+    /** The navigation grid the bots drive and judge danger by, for tools; read only. */
+    grid,
+
     /**
      * Advances the match by one fixed physics step: the player's input, every bot, the weapons,
      * physics, respawns, repairs and the capture. After a win tanks stop and only the wreckage moves.

@@ -259,6 +259,45 @@ export const en = {
       class: (was: string, tankClass: string) => `class: ${was} → ${tankClass}`
     },
     keys: 'Space play or pause · ← → 5 s · , . a step · 1-8 follow a tank · 0 the whole map · F follow · B every bot\'s thoughts · wheel zooms · drag moves the view'
+  },
+  debug: {
+    title: 'Bot',
+    pick: 'Click a tank or press 1-8 to see what it has in mind.',
+    player: 'The player drives this tank.',
+    dead: 'waiting to respawn',
+    armor: (percent: number) => `armor ${percent}%`,
+    coreOpen: 'core open',
+    layers: {
+      sight: 'Sight and aim',
+      memory: 'Team memory',
+      danger: 'Danger',
+      perches: 'Perches',
+      posts: 'Posts',
+      kits: 'Kits',
+      breach: 'Breaches',
+      path: 'Path'
+    },
+    thought: 'Thought',
+    sees: 'Sees',
+    gun: 'Gun',
+    shot: { reacted: 'reacted', aligned: 'on target', worth: 'sure', clear: 'clear', inReach: 'in reach' },
+    facts: 'Facts',
+    why: 'Why this plan',
+    planned: (seconds: string) => `planned ${seconds} s ago`,
+    goals: 'Goals by priority',
+    actions: 'Actions, seconds',
+    estimates: 'Estimates, seconds',
+    noPlan: 'no plan',
+    holds: 'holds',
+    team: 'Team',
+    intent: 'intent',
+    focus: 'focus',
+    help: 'helps',
+    job: 'job',
+    kit: 'kit',
+    perch: 'perch',
+    lookout: 'lookout',
+    unsafe: 'unsafe'
   }
 };
 

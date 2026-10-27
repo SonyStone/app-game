@@ -443,6 +443,40 @@ export function createTeamBoard(
       return job === 'point' ? undefined : job;
     },
 
+    /**
+     * What the board holds, for a debug view: every sighting with when it was made, how exposed
+     * each grid cell is (see `danger`), the Sniper perches found and whose each is, the lookouts
+     * and the perches given up as unsafe, the posts and who holds which, the repair kits claimed,
+     * the shortcuts with the one being opened and those opened, where members fell lately, the
+     * staging spots, the focus, the help asked for and the covers. Unlike the methods that answer
+     * a bot, which settle what they are asked on the way, reading it changes nothing; treat what
+     * it returns as read only.
+     */
+    inspect() {
+      return {
+        sightings: [...sightings.values()],
+        danger: danger as Readonly<Float32Array>,
+        perches,
+        perchOf,
+        lookoutOf,
+        fallenBack,
+        posts,
+        jobs,
+        claims,
+        shortcuts,
+        breach,
+        opened,
+        losses,
+        staging: safeStaging,
+        focus,
+        help,
+        covers,
+        coverer,
+        intent,
+        phase: push.phase
+      };
+    },
+
     /** Where the team regroups. */
     rally() {
       return map.lanes[team].center;

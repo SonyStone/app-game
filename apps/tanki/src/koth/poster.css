@@ -993,3 +993,108 @@
 .tk-recording:hover {
   background: var(--yellow);
 }
+
+/* Replay: the bot panel */
+
+.tk-bot-panel {
+  height: 100%;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink);
+  background: var(--paper);
+}
+.tk-bot-layers {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--paper);
+  border-bottom: 2px solid var(--ink);
+}
+.tk-bot-layer {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  border: 2px solid var(--ink);
+  cursor: pointer;
+}
+.tk-bot-layer > input {
+  display: none;
+}
+.tk-bot-layer.tk-on {
+  color: var(--paper-light);
+  background: var(--ink);
+}
+.tk-bot-who {
+  padding-left: 6px;
+  font-size: 13px;
+  border-left: 5px solid var(--team);
+}
+.tk-bot-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.tk-bot-heading > i {
+  flex: 1;
+  height: 2px;
+  background: var(--ink);
+}
+.tk-bot-line {
+  overflow-wrap: anywhere;
+}
+.tk-bot-current {
+  font-weight: 700;
+  background: var(--yellow);
+}
+.tk-bot-chip {
+  display: inline-block;
+  margin: 0 3px 2px 0;
+  padding: 0 5px;
+  font-size: 11px;
+  border: 1px solid var(--ink);
+  background: var(--paper-light);
+}
+.tk-bot-chip.tk-off {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+.tk-bot-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tk-bot-table td {
+  padding: 2px 4px;
+  vertical-align: top;
+  border-bottom: 1px solid rgb(20 20 20 / 0.15);
+}
+.tk-bot-table .tk-note {
+  font-size: 10.5px;
+}
+.tk-bot-table tr.tk-off {
+  opacity: 0.45;
+}
+.tk-bot-table tr.tk-bot-chosen {
+  background: var(--yellow);
+}
+.tk-bot-pairs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px 10px;
+}
+.tk-bot-pairs > .tk-off {
+  opacity: 0.4;
+}

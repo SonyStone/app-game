@@ -6,6 +6,8 @@ import { createMemo, createSignal, createStore, For, onCleanup, onSettled, Show,
 import { createCamera, screenToWorld, worldToScreen, zoomCamera } from '../arena/camera';
 import { createRangeRenderer } from '../damage/renderer';
 import { Rapier2D, useRapier2D } from '../physics/Rapier2D';
+import { DEFAULT_LAYERS, drawDebug, reportMember, type DebugLayer, type MemberReport } from './botDebug';
+import { BotPanel } from './BotPanel';
 import { BotThoughts, KothHud, type HudState, type ThoughtView } from './Hud';
 import { useKothI18n } from './i18n/i18n';
 import { calloutsOnScreen, fitCanvas, thoughtsOnScreen } from './onScreen';
@@ -18,9 +20,11 @@ import { clock, TimelinePanel } from './TimelinePanel';
 import { timelineOf } from './timeline';
 
 /**
- * Watching a recorded match: a dock of two panels, the arena, where the match is played again
- * (see `createReplayPlayer`), and its timeline below (see `TimelinePanel`), which take tabs that
- * drag to another side and a sash between them that resizes them.
+ * Watching a recorded match: a dock of three panels, the arena, where the match is played again
+ * (see `createReplayPlayer`), its timeline below (see `TimelinePanel`) and the bot panel beside
+ * them (see `BotPanel`), with tabs that drag to another side and sashes between them that resize
+ * them. Over the arena, the debug view draws what the picked member and its team have in mind,
+ * layer by layer as the bot panel switches them (see `drawDebug`).
  *
  * The view starts on the whole map. Clicking a tank picks it and follows it, as 1-8 do for the
  * members in the timeline's order; dragging moves the view freely and the wheel zooms about the
@@ -35,9 +39,11 @@ import { timelineOf } from './timeline';
  */
 export function ReplayView(props: { recording: Recording; start: number; onExit: () => void }) {
   const { t } = useKothI18n();
-  const [layout, setLayout] = createStore(createDockState({ column: [{ group: ['arena'] }, { group: ['timeline'] }], sizes: [68, 32] }));
+  const [layout, setLayout] = createStore(createDockState({ row: [{ column: [{ group: ['arena'] }, { group: ['timeline'] }], sizes: [68, 32] }, { group: ['bot'] }], sizes: [74, 26] }));
   const timeline = createMemo(() => timelineOf(props.recording.chronicle, props.recording.steps));
   const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
+  const [overlay, setOverlay] = createSignal<HTMLCanvasElement>();
+  const [layers, setLayers] = createSignal<ReadonlySet<DebugLayer>>(new Set(DEFAULT_LAYERS));
   const [playing, setPlaying] = createSignal(true);
   const [speed, setSpeed] = createSignal(1);
   const [frame, setFrame] = createSignal<ReplayFrame>();
@@ -92,6 +98,7 @@ export function ReplayView(props: { recording: Recording; start: number; onExit:
           <Dock.Panel id="arena" title={t('replay.arena')}>
             <div class="relative h-full w-full overflow-hidden bg-[#4d4d4d]">
               <canvas ref={setCanvas} class="block h-full w-full touch-none" />
+              <canvas ref={setOverlay} class="pointer-events-none absolute inset-0 h-full w-full" />
               <GpuCanvas
                 canvas={canvas()}
                 requiredBufferBytes={64 * 1024 * 1024}
@@ -100,6 +107,8 @@ export function ReplayView(props: { recording: Recording; start: number; onExit:
                 <Rapier2D>
                   <ReplayScene
                     canvas={canvas()!}
+                    overlay={overlay()}
+                    layers={layers()}
                     recording={props.recording}
                     start={props.start}
                     playing={playing()}
@@ -134,6 +143,9 @@ export function ReplayView(props: { recording: Recording; start: number; onExit:
                 {(sought) => <div class="tk-tag pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2">{t('replay.seeking', clock(sought() / 60))}</div>}
               </Show>
             </div>
+          </Dock.Panel>
+          <Dock.Panel id="bot" title={t('debug.title')}>
+            <BotPanel report={frame()?.report} layers={layers()} onLayers={setLayers} />
           </Dock.Panel>
           <Dock.Panel id="timeline" title={t('replay.timeline')}>
             <TimelinePanel
@@ -235,6 +247,8 @@ type ReplayFrame = {
   callouts: CalloutView[];
   /** The ring about the picked tank, on screen, while it lives. */
   selection: { x: number; y: number; radius: number; team: TeamId } | undefined;
+  /** What the picked member has in mind (see `reportMember`). */
+  report: MemberReport | undefined;
 };
 
 /**
@@ -242,6 +256,7 @@ type ReplayFrame = {
  * draws, and reports what the frame shows. Dragging on the canvas moves the view, the wheel
  * zooms it about the pointer, a click picks the tank under it or none.
  *
+ * @param overlay - A 2D canvas over the arena's, where the debug view's `layers` are drawn for the picked member (see `drawDebug`).
  * @param recording - Read once.
  * @param start - The step to start from, read once.
  * @param playing - Whether the match plays on; held, it is drawn as it stands.
@@ -254,6 +269,8 @@ type ReplayFrame = {
  */
 function ReplayScene(props: {
   canvas: HTMLCanvasElement;
+  overlay: HTMLCanvasElement | undefined;
+  layers: ReadonlySet<DebugLayer>;
   recording: Recording;
   start: number;
   playing: boolean;
@@ -356,6 +373,7 @@ function ReplayScene(props: {
     placeCamera(dt);
     match.draw(camera);
     renderer.render(camera, screen, BACKGROUND, dt * speed);
+    drawOverlay();
 
     const picked = match.members.find((member) => member.id === props.selected);
     const tank = picked?.tank;
@@ -369,8 +387,26 @@ function ReplayScene(props: {
       state: match.hud(),
       thoughts: thoughtsOnScreen(match, camera, screen).filter((thought) => props.allThoughts || thought.id === props.selected),
       callouts: calloutsOnScreen(match, camera, screen, true),
-      selection: ring && picked && { ...ring, radius: RING_RADIUS * camera.zoom, team: picked.team }
+      selection: ring && picked && { ...ring, radius: RING_RADIUS * camera.zoom, team: picked.team },
+      report: props.selected === undefined ? undefined : reportMember(match, props.selected)
     });
+  }
+
+  /** Draws the debug view's layers over the arena, on a canvas of the arena's size. */
+  function drawOverlay() {
+    const overlay = props.overlay;
+    const context = overlay?.getContext('2d');
+
+    if (!overlay || !context) {
+      return;
+    }
+
+    if (overlay.width !== canvas.width || overlay.height !== canvas.height) {
+      overlay.width = canvas.width;
+      overlay.height = canvas.height;
+    }
+
+    drawDebug(context, camera, screen, player.match, props.selected, props.layers);
   }
 
   /** Frames the whole map, follows the picked tank, or leaves the view where the player put it. */

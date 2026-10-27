@@ -257,5 +257,44 @@ export const ja: Dictionary = {
       class: (was, tankClass) => `クラス: ${was} → ${tankClass}`
     },
     keys: 'スペース 再生・停止 · ← → 5秒 · , . 1ステップ · 1-8 戦車を追う · 0 マップ全体 · F 追う · B 全ボットの考え · ホイール ズーム · ドラッグ 視点移動'
+  },
+  debug: {
+    title: 'ボット',
+    pick: '戦車をクリックするか 1-8 を押すと、その考えが見える。',
+    player: 'この戦車はプレイヤーが操縦している。',
+    dead: '復活待ち',
+    armor: (percent) => `装甲 ${percent}%`,
+    coreOpen: 'コア露出',
+    layers: {
+      sight: '視界と照準',
+      memory: 'チームの記憶',
+      danger: '危険',
+      perches: '狙撃位置',
+      posts: '持ち場',
+      kits: '修理キット',
+      breach: '突破口',
+      path: '経路'
+    },
+    thought: '考え',
+    sees: '見えている',
+    gun: '砲',
+    shot: { reacted: '反応済み', aligned: '照準済み', worth: '確実', clear: '射線あり', inReach: '射程内' },
+    facts: '事実',
+    why: 'この計画の理由',
+    planned: (seconds) => `${seconds} 秒前に計画`,
+    goals: '優先度順の目標',
+    actions: '行動（秒）',
+    estimates: '見積もり（秒）',
+    noPlan: '計画なし',
+    holds: '達成済み',
+    team: 'チーム',
+    intent: '方針',
+    focus: '集中目標',
+    help: '支援',
+    job: '役目',
+    kit: 'キット',
+    perch: '狙撃位置',
+    lookout: '見張り',
+    unsafe: '危険'
   }
 };

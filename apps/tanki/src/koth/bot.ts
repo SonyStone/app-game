@@ -78,6 +78,8 @@ export function createBot(member: Member, context: BotContext) {
   const visible = new Set<Tank>();
   let facts: Partial<Record<BotFact, boolean>> = {};
   let plan: { goal: BotGoal; steps: BotAction[]; index: number } | undefined;
+  /** The last plan made: when, from what situation, and what came of it, for `inspect`. */
+  let decision: { at: number; situation: Situation; goal: BotGoal | undefined; steps: BotAction[]; cost: number } | undefined;
   let task: Task | undefined;
   let nextPerceive = context.random() * PERCEIVE_INTERVAL;
   let nextReplan = 0;
@@ -129,6 +131,26 @@ export function createBot(member: Member, context: BotContext) {
     },
 
     /**
+     * What the bot has in mind besides its thought, for a debug view: the enemies it sees, its
+     * facts now, its last plan with the situation it was made from, its task, where its gun aims
+     * and whether it would fire, its cover and repair kit, and how far it sees. Reading it changes
+     * nothing, so a match inspected step by step plays as one that is not; treat what it returns
+     * as read only.
+     */
+    inspect() {
+      return {
+        visible: [...visible],
+        facts,
+        decision,
+        task: task && { action: task.action, destination: task.destination, hold: task.hold, target: task.target, ally: task.ally, startedAt: task.startedAt },
+        aim: { target: gun.target, spot: gun.spot, shot: gun.shot },
+        cover,
+        kit,
+        sight: { range: context.pace().botSight, scope: member.tankClass.id === 'sniper' ? { range: SCOPE_RANGE, arc: SCOPE_ARC } : undefined }
+      };
+    },
+
+    /**
      * Forgets the old tank's plan and every timer, for a respawned tank or a new match. A restart
      * turns the match clock back to 0, so no timer may keep a time from the match before.
      */
@@ -137,6 +159,7 @@ export function createBot(member: Member, context: BotContext) {
       breacher.reset();
       visible.clear();
       plan = undefined;
+      decision = undefined;
       task = undefined;
       facts = {};
       nextPerceive = 0;
@@ -508,6 +531,7 @@ export function createBot(member: Member, context: BotContext) {
     nextReplan = now + REPLAN_INTERVAL + context.random() * REPLAN_JITTER;
     const situation = describe(tank);
     const choice = planBot(situation);
+    decision = { at: now, situation, goal: choice?.goal.name, steps: choice?.steps.map((step) => step.name) ?? [], cost: choice?.cost ?? 0 };
 
     if (!choice || choice.steps.length === 0) {
       plan = undefined;
@@ -1318,6 +1342,8 @@ export function createBot(member: Member, context: BotContext) {
     }
 
     if (!target) {
+      gun.spot = undefined;
+      gun.shot = undefined;
       return lobbing ? lobUnseen(tank, dt) : idle(tank, dt, move);
     }
 
@@ -1348,6 +1374,8 @@ export function createBot(member: Member, context: BotContext) {
     const inReach = range < tactics.reach;
     const ready = weapon?.ready ?? false;
     const weaponSpec = tankClass.weapon;
+    gun.spot = spot;
+    gun.shot = { reacted, aligned, worth, clear, inReach };
 
     switch (weaponSpec.kind) {
       case 'lob': {
@@ -1548,6 +1576,9 @@ type Aim = {
   settledFrom: number;
   /** Seconds a rail's aim trails a moving target this shot; drawn when first needed. */
   lag: number | undefined;
+  /** Where the gun aims at its target, misjudgement included, and what of a shot's conditions hold; for `inspect` only. */
+  spot?: Point;
+  shot?: { reacted: boolean; aligned: boolean; worth: boolean; clear: boolean; inReach: boolean };
 };
 
 /** The running behavior of a plan action and its memory. */

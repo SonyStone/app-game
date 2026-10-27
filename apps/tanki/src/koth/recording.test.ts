@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { createRangeRenderer } from '../damage/renderer';
 import type { Rapier } from '../physics/Rapier2D';
+import { createCamera } from '../arena/camera';
+import { DEBUG_LAYERS, drawDebug, explainDecision, reportMember } from './botDebug';
 import { applyClassTuning } from './classes/knobs';
 import type { PlayerInput } from './match';
 import { PACE_DEFAULTS } from './pace';
@@ -63,6 +65,32 @@ describe('a recorded match', { timeout: 60_000 }, () => {
     expect(posesOf(player)).toEqual(recording.chronicle.samples[(6 * 60) / 15]);
     expect(player.diverged).toBeUndefined();
     player.dispose();
+    applyClassTuning({});
+  });
+
+  it('plays the same while the debug view reads every bot and board at every step', () => {
+    const recording = record(20);
+    const replay = replayRecording(rapier, fakeRenderer(), recording);
+    const canvas = fakeCanvas();
+    const camera = createCamera({ x: 0, y: 0 });
+
+    while (!replay.done) {
+      replay.advance(1);
+
+      for (const member of replay.replay.match.members) {
+        const report = reportMember(replay.replay.match, member.id);
+
+        if (report?.decision) {
+          explainDecision(report.decision.situation);
+        }
+
+        drawDebug(canvas, camera, { width: 800, height: 600 }, replay.replay.match, member.id, new Set(DEBUG_LAYERS));
+      }
+    }
+
+    expect(replay.diverged).toBeUndefined();
+    expect(replay.replay.checks).toEqual(recording.checks);
+    replay.replay.dispose();
     applyClassTuning({});
   });
 
@@ -145,6 +173,14 @@ function posesOf(player: ReplayPlayer) {
     const at = tank?.hull.translation();
     return tank && at ? [round(at.x, 1), round(at.y, 1), round(tank.hull.rotation(), 3), round(tank.turretAngle, 3), round(player.match.combat.armorLeft(tank), 2)] : null;
   });
+}
+
+/** A 2D canvas context that draws nothing. */
+function fakeCanvas() {
+  const target = { canvas: { width: 800, height: 600 } } as Record<string | symbol, unknown>;
+  return new Proxy(target, {
+    get: (object, key) => (key in object ? object[key] : () => ({ width: 10 }))
+  }) as unknown as CanvasRenderingContext2D;
 }
 
 /** A renderer that only hands out field slots. */

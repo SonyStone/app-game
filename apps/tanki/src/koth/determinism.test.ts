@@ -40,7 +40,8 @@ describe('a deterministic match', () => {
     expect(ragged).toEqual(steady);
     // A different seed is a different match, so the hashes do tell matches apart.
     expect(play(19, () => [1 / 60]).at(-1)).not.toBe(steady.at(-1));
-  });
+    // Three matches of 20 s: a busy machine takes longer than the default 5 s.
+  }, 30_000);
 
   it('simulates with deterministic math only', () => {
     const offenders: string[] = [];
