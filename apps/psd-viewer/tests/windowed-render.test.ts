@@ -903,3 +903,43 @@ it('budgets pinned composite coverage after reserving operands, preparation and 
   expect(renderer.cacheBytes()).toBeLessThanOrEqual(18 * 1024 * 1024);
   renderer.clear();
 });
+
+it('restores ordinary CPU tile coverage after GPU operand preparation is refused', async () => {
+  const { client } = synthetic();
+  const gpuLayers = vi.fn(async () => ({
+    ok: false as const,
+    error: { kind: 'unsupported' as const, message: 'Strict CPU operands required.' }
+  }));
+  const renderer = makeWindowRenderer({
+    gpuLayers,
+    async renderWindow(...args: Parameters<PsdClient['renderWindow']>) {
+      const result = await client.renderWindow(...args);
+      if (!result.ok) {
+        return result;
+      }
+      return {
+        ok: true as const,
+        value: {
+          ...result.value,
+          images: result.value.images.map((image) => ({ ...image, mips: regionMips(image, 16) }))
+        }
+      };
+    }
+  });
+  const snapshot = { ...fakeSnapshot(8192, 8192), gpuComposite: true };
+  const render = () =>
+    renderer.render(
+      snapshot,
+      { scale: 1, x: 0, y: 0 },
+      { width: 1500, height: 1500 },
+      new AbortController().signal,
+      vi.fn()
+    );
+  try {
+    expect(value(await render()).quality?.step).toBeGreaterThan(1);
+    expect(value(await render()).quality?.step).toBe(1);
+    expect(gpuLayers).toHaveBeenCalledOnce();
+  } finally {
+    renderer.clear();
+  }
+});
