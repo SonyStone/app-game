@@ -96,6 +96,23 @@ export function sourceSaveOperands(
   };
 }
 
+/**
+ * Formats an instant as local wall-clock ISO time with its numeric offset, e.g. `2026-10-27T21:58:20+01:00`.
+ * File Info derives its offset-less EXIF DateTime from the first 19 characters, so UTC components would shift it.
+ * The offset is the one in effect at that instant, so replaying a retained instant yields the same string.
+ */
+export function localIsoTime(instant: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const offset = -instant.getTimezoneOffset();
+  const sign = offset < 0 ? '-' : '+';
+  const minutes = Math.abs(offset);
+  return (
+    `${instant.getFullYear()}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}` +
+    `T${pad(instant.getHours())}:${pad(instant.getMinutes())}:${pad(instant.getSeconds())}` +
+    `${sign}${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`
+  );
+}
+
 /** Concise explanations retain the backend's named dependency separately for diagnosis. */
 export function readableRefusal(error: EditingFailure): string {
   const path = 'propertyPath' in error ? error.propertyPath : '';

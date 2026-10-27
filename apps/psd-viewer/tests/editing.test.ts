@@ -3,6 +3,7 @@ import { openPsdEditor } from '@app-game/psd/editor';
 import { readFile } from 'node:fs/promises';
 import { expect, it, vi } from 'vitest';
 import {
+  localIsoTime,
   preferredContract,
   readableRefusal,
   sourceSaveOperands,
@@ -229,6 +230,29 @@ it('creates browser operands from genuine clocks and UUIDs, with honest identity
     expect(Object.keys(context).sort()).toEqual(['contract', 'editTime', 'save']);
   } finally {
     vi.useRealTimers();
+  }
+});
+
+it.each([
+  ['Europe/Berlin', '2026-10-27T21:58:20+01:00'],
+  ['America/New_York', '2026-10-27T16:58:20-04:00'],
+  ['Asia/Kolkata', '2026-10-28T02:28:20+05:30'],
+  ['UTC', '2026-10-27T20:58:20+00:00']
+])('gives File Info the action instant as local time with its offset in %s', (zone, expected) => {
+  const previous = process.env.TZ;
+  process.env.TZ = zone;
+  try {
+    const instant = new Date('2026-10-27T20:58:20Z');
+    expect(localIsoTime(instant)).toBe(expected);
+    expect(new Date(expected).valueOf()).toBe(instant.valueOf());
+    // Replaying the retained instant reproduces the same operand.
+    expect(localIsoTime(new Date(instant.valueOf()))).toBe(expected);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = previous;
+    }
   }
 });
 

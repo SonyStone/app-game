@@ -1,6 +1,7 @@
 import { openPsdEditor, type PsdEditorSession, type PsdPreparedSave } from '@app-game/psd/editor';
 import {
   historyLimit,
+  localIsoTime,
   sourceSaveOperands,
   wireResult,
   type EditingCommand,
@@ -311,7 +312,8 @@ function apply(
       ? {
           ...command.edit,
           saveContext: {
-            modifiedAt: context.save.saveTime,
+            // The retained action instant, in local time: File Info's EXIF clock takes its wall-clock digits.
+            modifiedAt: localIsoTime(new Date(Math.floor(operands.editTime) * 1000)),
             instanceId: context.save.instanceId,
             documentId: context.save.documentId,
             softwareAgent: context.save.softwareAgent
