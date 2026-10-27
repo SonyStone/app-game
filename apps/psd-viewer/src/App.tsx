@@ -53,7 +53,7 @@ export function App() {
     parallelAllowed: () => devicePixelRatio <= 1
   });
   const [gpuComposite, setGpuComposite] = createSignal(
-    (new URLSearchParams(location.search).get('gpuComposite') ?? import.meta.env.VITE_PSD_GPU_COMPOSITE ?? '0') !== '0' &&
+    (new URLSearchParams(location.search).get('gpuComposite') ?? import.meta.env.VITE_PSD_GPU_COMPOSITE) !== '0' &&
       new URLSearchParams(location.search).get('backend') !== 'canvas2d'
   );
   const [displayBusy, setDisplayBusy] = createSignal(false);
