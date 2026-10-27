@@ -374,7 +374,8 @@ it('writes File Info publicDomain with explicit native lifecycle values and refu
     const saveContext = {
       modifiedAt: '2026-10-23T13:02:35+02:00',
       instanceId: 'xmp.iid:291b8039-d1cf-4ef2-ab5f-1029db97e2d2',
-      documentId: 'adobe:docid:photoshop:c5c3a156-3dc2-8943-aef8-379a84cb0b04'
+      documentId: 'adobe:docid:photoshop:c5c3a156-3dc2-8943-aef8-379a84cb0b04',
+      softwareAgent: 'Adobe Photoshop 26.0 (Macintosh)'
     };
     value(session.editStateMetadata([{ kind: 'fileInfoCopyright', status: 'publicDomain', saveContext }]));
     const bytes = collect(value(session.prepareSave()));
@@ -400,7 +401,7 @@ function fixture(name: string) {
 }
 
 /** Explicit research save operands; no host clock, random identities or inferred gamma. */
-function context(basename: string, layerId?: number, time = 1): PsdReopenSaveContext {
+function context(basename: string, layerId?: number, time = 1): Extract<PsdReopenSaveContext, { contract: 'photoshop26.reopen-equivalent/v1' }> {
   return {
     contract: 'photoshop26.reopen-equivalent/v1',
     save: {

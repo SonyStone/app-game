@@ -1,4 +1,4 @@
-import type { PsdEditorSession as EditorHandle } from '../wasm/photoshop_psd_wasm.js';
+import type { PsdEditorSession as EditorHandle, PsdReopenSaveOperands } from '../wasm/photoshop_psd_wasm.js';
 import { loadPsd } from './index';
 
 /**
@@ -87,8 +87,10 @@ export interface PsdEditorSession {
    * unsupported histories/profiles, mixed-target/structural batches and active OCIO return named atomic refusals.
    * Missing context refuses nonempty batches; an empty batch certifies no save. Source-specific writer guards
    * remain authoritative; callers must handle Dependency rather than infer admission from inspection.
-   * The bundled validator currently requires a softwareAgent beginning with "Adobe Photoshop ". A non-Adobe
-   * host must refuse this path rather than claim that identity. New-document creation has a separate honest-agent contract.
+   * v4-honest-agent accepts an honest application name with explicit real current-host writers.
+   * v5-source-host accepts one command on pristine source bytes, real clocks/crypto.randomUUID identities,
+   * the honest agent and user choices only. Host facts come from the source; missing source witnesses refuse.
+   * Each accepted v5 product may be opened as a new source, not treated as a pending multi-command batch.
    * This contract excludes Adobe JPEG entropy and container byte equivalence. No timestamps or save identities are generated.
    */
   editRasterTreeExact(
@@ -97,8 +99,8 @@ export interface PsdEditorSession {
   ): PsdEditorResult<PsdEditOutcome>;
   /**
    * Applies nonvisual metadata writes atomically. File Info publicDomain requires explicit lifecycle values and
-   * canonical PS26 XMP/IIM/MD5/EXIF companions. Its bundled copyright writer hardcodes Photoshop attribution;
-   * non-Adobe hosts must refuse copyright writes until a truthful agent operand is supported.
+   * canonical PS26 XMP/IIM/MD5/EXIF companions, including the caller's honest softwareAgent.
+   * This bounded source-preserving metadata contract does not certify a complete v4/v5 tree save.
    * Other copyright transitions, titles and scalar XMP writes refuse.
    */
   editStateMetadata(batch: readonly PsdStateMetadataEdit[]): PsdEditorResult<PsdEditOutcome>;
@@ -121,7 +123,7 @@ export interface PsdEditorSession {
    */
   prepareReopenCandidate(
     context: PsdPhotoshop26SaveContext,
-    layerTimes: PsdReopenSaveContext['layerTimes']
+    layerTimes: PsdReopenSaveOperands['layerTimes']
   ): PsdEditorResult<PsdPreparedSave>;
   /**
    * Prepares researched resource products with actual host operands and returns unresolved dependencies.
@@ -157,20 +159,37 @@ export interface PsdEditorSession {
 /** Raster/tree and native process-plane commands; unsupported variants return atomic dependency refusals. */
 export type PsdExactRasterTreeEdit = Parameters<EditorHandle['editRasterTreeExact']>[0][number];
 
-/** Explicit host save operands, per-layer edit times and optional original sRGB preview profile. No defaults are invented. */
+/** Generated v1-v5 save contexts. Legacy host operands and browser source-host operands remain distinct. */
 export type PsdReopenSaveContext = NonNullable<Parameters<EditorHandle['editRasterTreeExact']>[1]>;
 
-/** v1 native save, v2 carried type or v3 carried untouched layers; callers opt in explicitly. */
+/** v1 native, v2 carried type, v3 carried untouched, v4 honest agent or v5 source host. No implicit fallback. */
 export type PsdReopenSaveContract = PsdReopenSaveContext['contract'];
 
 /**
- * Current-save basename, ISO/EXIF timestamps, instance/document UUIDs, Photoshop agent and host gamma-1
+ * Current-save basename, real ISO/local EXIF timestamps, crypto.randomUUID identities, honest agent and gamma-1
  * preference. The host supplies every value; the facade never reads a clock or generates save identities.
  */
 export type PsdPhotoshop26SaveContext = PsdReopenSaveContext['save'];
 
 /** Explicit resource, compositor, ICC, credential, localized proof and initial-history writer operands. */
-export type PsdReopenSaveWriters = NonNullable<PsdReopenSaveContext['writers']>;
+export type PsdReopenSaveWriters = NonNullable<PsdReopenSaveOperands['writers']>;
+
+/**
+ * Browser v5 context, forwarded from WASM. Supply pristine source bytes, real action/save clocks,
+ * fresh crypto.randomUUID identities, the honest saving agent and the user's RGB blending choice only.
+ * The library derives layer times and source host facts. No profiles, fonts or current-host writers are accepted.
+ * Supply initialEvent only after a named missing-preparation-event refusal on initialized source history.
+ */
+export type PsdSourceHostSaveContext = Extract<
+  PsdReopenSaveContext,
+  { contract: 'photoshop26.reopen-equivalent/v5-source-host' }
+>;
+
+/** Honest v4 attribution with real explicit host writers, optional carried type facts and localized Background name. */
+export type PsdHonestAgentSaveContext = Extract<
+  PsdReopenSaveContext,
+  { contract: 'photoshop26.reopen-equivalent/v4-honest-agent' }
+>;
 
 /** Actual text gamma and complete active PostScript inventory; this neither discovers nor activates fonts. */
 export type PsdCarriedTypeRendering = Extract<
@@ -190,7 +209,7 @@ export type PsdResourceSaveCandidate = ReturnType<EditorHandle['preparePhotoshop
 /** Nonvisual metadata commands, including bounded File Info copyright and resolution without resampling. */
 export type PsdStateMetadataEdit = Parameters<EditorHandle['editStateMetadata']>[0][number];
 
-/** Explicit File Info modification timestamp, instance ID and document ID supplied by the save host. */
+/** Real File Info modification timestamp, fresh instance/document UUIDs and honest softwareAgent supplied by the host. */
 export type PsdMetadataSaveContext = NonNullable<
   Extract<PsdStateMetadataEdit, { kind: 'fileInfoCopyright' }>['saveContext']
 >;
