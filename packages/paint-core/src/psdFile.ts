@@ -16,7 +16,7 @@ import { packTile, unpackTile, type TileData } from './tilePixels';
  * PSB allows. `context` selects complete first-save creation; its caller-owned IDs and layer clocks must follow
  * `layers` order, including hidden and empty layers. Omission retains the codec's identity-only compatibility mode.
  * Invalid complete-mode operands throw PsdWriteError; supplied context is never replaced with legacy defaults.
- * Composites in 1024² regions with bounded render scratch. The host still needs one full straight-RGBA buffer.
+ * Composites in 512² regions with bounded render scratch. The host still needs one full straight-RGBA buffer.
  * Throws PsdExportCompositeError when that buffer cannot fit the WASM32 writer or the layers cannot render exactly.
  */
 export async function writePsdFile(
@@ -65,7 +65,7 @@ export async function writePsdFile(
     composite.byteLength +
     psdLayers.reduce((bytes, layer) => bytes + layer.pixels.byteLength, 0) +
     loaded.reduce((bytes, { tiles }) => bytes + [...tiles.values()].reduce((sum, tile) => sum + tile.byteLength, 0), 0);
-  const budget = compositeBudget(file.byteLength, retainedBytes, canvas.width, psdLayers.length);
+  const budget = compositeBudget(file.byteLength, retainedBytes, canvas.width);
   const opened = await openPsd(file, budget);
   if (!opened.ok) {
     throw new PsdExportCompositeError('OpenFailed', opened.error.message, { cause: opened.error });
@@ -183,12 +183,15 @@ function allocateComposite(canvas: DocumentRect): Uint8Array {
 /**
  * Admits compressed source storage plus caller-owned canvas/layers and bounded tile scratch. Opening counts both
  * input copies; four file lengths also cover the parsed channels and render-time host input. Scratch follows the
- * viewer's conservative per-layer float-buffer and full-width channel-row accounting for a 1024² tile.
+ * viewer's conservative accounting for a flat RGB8 stack: eight work canvases at 128 bytes per pixel,
+ * 16 bytes per output pixel and a full-width channel row at 64 bytes per pixel. Export writes raster layers
+ * without groups, masks or effects, so no full-support dependencies or group canvases are needed.
+ * 512² tiles keep even this estimate below the previous 1024² scratch allowance, without raising limits.
  * Admission stays within WASM32's 4 GiB address space. Larger source documents still fail with the viewer's typed
  * budget/allocation cause rather than disabling limits.
  */
-function compositeBudget(sourceBytes: number, retainedBytes: number, width: number, layers: number): PsdBudgetOptions {
-  const scratchBytes = compositeTileSize ** 2 * (32 * (layers + 8) + 8) + width * 64 * layers + 196_608;
+function compositeBudget(sourceBytes: number, retainedBytes: number, width: number): PsdBudgetOptions {
+  const scratchBytes = compositeTileSize ** 2 * (128 * 8 + 16) + width * 64 + 196_608;
   return {
     allocationBytes: Math.max(128 * 1024 * 1024, sourceBytes),
     liveBytes: Math.min(0xffffffff, retainedBytes + sourceBytes * 4 + scratchBytes),
@@ -239,8 +242,8 @@ function copyCompositeTile(
   }
 }
 
-/** Bounds float/channel scratch independently of the canvas area. */
-const compositeTileSize = 1024;
+/** Bounds render scratch independently of the canvas area. */
+const compositeTileSize = 512;
 
 /** Photoshop blend modes Paint has; the others open as Normal. */
 const importedBlends: Partial<Record<PsdBlend, BlendMode>> = {

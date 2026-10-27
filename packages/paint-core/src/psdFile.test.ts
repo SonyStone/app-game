@@ -1,4 +1,5 @@
 import { readPsd } from '@app-game/psd';
+import { openPsd } from '@app-game/psd/viewer';
 import { expect, it } from 'vitest';
 import type { Layer } from './document';
 import { imageTiles } from './imageTiles';
@@ -52,6 +53,41 @@ it('exports a region and refuses an empty drawing', async () => {
 
   expect(psd.layers[0]).toMatchObject({ left: 0, top: 0, width: 10, height: 10 });
   await expect(writePsdFile([{ ...paper, tiles: new Map() }], read)).rejects.toThrow('nothing to export');
+});
+
+it.each([false, true])('preserves the whole strict composite across 512-pixel edges with linear blending %s', async (linearBlending) => {
+  // An opaque base keeps the saved composite's white-matte round trip lossless.
+  const layers = [
+    solidLayer('Base', [37, 89, 173, 255], -3, 7, 513, 514),
+    { ...solidLayer('Multiply', [197, 71, 43, 191], 490, 500, 40, 40), blend: 'multiply' as const, opacity: 0.33333 },
+    { ...solidLayer('Clipped', [71, 163, 211, 127], -1, 508, 530, 20), blend: 'screen' as const, clipping: true },
+    { ...solidLayer('Hidden', [255, 0, 0, 255], -3, 7, 513, 514), visible: false }
+  ];
+  const file = await writePsdFile(layers, read, { left: -3, top: 7, width: 513, height: 514 }, linearBlending);
+  const opened = await openPsd(await file.arrayBuffer());
+  if (!opened.ok) {
+    throw new Error(opened.error.message);
+  }
+
+  const document = opened.value;
+  try {
+    const whole = document.render({
+      linearBlending, approximate: false, textGamma: 1.45, vectorPaths: false, typeLayers: false, smartObjects: null
+    });
+    const saved = document.merged();
+    if (!whole.ok || !saved.ok) {
+      throw new Error('The exported stack and its saved composite must both render.');
+    }
+
+    try {
+      expect(whole.value.approximations).toEqual([]);
+      expect(saved.value.pixels).toEqual(whole.value.pixels);
+    } finally {
+      whole.value.dispose();
+    }
+  } finally {
+    document.close();
+  }
 });
 
 it('opens an exported PSD as a drawing with its layers and settings', async () => {
