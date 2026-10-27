@@ -163,6 +163,12 @@ export const catalog: ProjectGroup[] = [
         art: gpuTextPreview
       },
       {
+        href: '/csp-clip-viewer',
+        name: 'CSP Document Viewer',
+        sources: ['apps/csp-clip-viewer', 'packages/csp-clip'],
+        icon: stackIcon
+      },
+      {
         href: '/csp-sut-viewer',
         name: 'CSP Sub Tool Viewer',
         sources: ['apps/csp-sut-viewer', 'packages/csp-sut'],

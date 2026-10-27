@@ -8,6 +8,7 @@ import { fitView, panView, zoomView, type View } from './view';
  * the user zooms or pans; `reset` is read as the reset key and returns to the fitted view, for example for a new
  * document. Attach `setElement` as the viewport's ref and spread `surface` on it: the wheel zooms about the pointer,
  * dragging pans. `transform` is the CSS transform for the image layer, its origin at the top left.
+ * `size` exposes the measured viewport bounds for renderers requesting visible image regions.
  */
 export function createViewport(
   imageSize: Accessor<{ width: number; height: number } | undefined>,
@@ -92,7 +93,7 @@ export function createViewport(
     return `translate(${x}px, ${y}px) scale(${scale})`;
   };
 
-  return { setElement, surface, transform, view, percent, isFitted, zoomIn, zoomOut, fit, actualSize };
+  return { setElement, size, surface, transform, view, percent, isFitted, zoomIn, zoomOut, fit, actualSize };
 }
 
 /** The factor of one zoom button press. */

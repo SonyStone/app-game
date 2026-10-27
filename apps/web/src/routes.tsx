@@ -1,6 +1,7 @@
 import { abrViewerRoutes } from '@app-game/abr-viewer/routes';
 import { Thumbnail, type Routes } from '@app-game/app-router';
 import { browserAtlasRoutes } from '@app-game/browser-atlas/routes';
+import { cspClipViewerRoutes } from '@app-game/csp-clip-viewer/routes';
 import { cspSutViewerRoutes } from '@app-game/csp-sut-viewer/routes';
 import { escyRoutes } from '@app-game/ecsy-pages/routes';
 import { filmAnnotationPlayerRoutes } from '@app-game/film-annotation-player/routes';
@@ -69,6 +70,7 @@ export const routes: Routes[] = [
   notebookRoute,
   abrViewerRoutes,
   cspSutViewerRoutes,
+  cspClipViewerRoutes,
   psdViewerRoutes,
   nightDefenseRoutes,
   {

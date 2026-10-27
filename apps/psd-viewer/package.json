@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./routes": "./src/routes.tsx"
+    "./routes": "./src/routes.tsx",
+    "./viewport": "./src/features/viewport/index.ts",
+    "./file-drop": "./src/features/open-file/createFileDrop.ts"
   },
   "scripts": {
     "dev": "vite --port 3070",
