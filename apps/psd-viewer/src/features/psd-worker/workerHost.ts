@@ -614,6 +614,15 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       }
 
       case 'gpuLayers': {
+        const hasText = (nodes: readonly PsdLayerNode[]): boolean =>
+          nodes.some((node) => node.kind === 'text' || hasText(node.children ?? []));
+        if (fonts && hasText(viewer.layers)) {
+          post(
+            failed(request, { kind: 'unsupported', message: 'Supplied-font text mixing requires the strict worker.' }),
+            []
+          );
+          return;
+        }
         const { prepareGpuLayers } = await import('@app-game/psd/gpu');
         const result = prepareGpuLayers(viewer, request.rect, request.settings, document.inputBytes);
         post(

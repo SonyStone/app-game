@@ -14,7 +14,7 @@ import { makeUploadStaging } from './makeUploadStaging';
  * Second-frame visible arrivals finish their bounded tile before optional coverage.
  * The 8 MiB staging pool bounds each frame independently. Reusable mapped 64 KiB staging buffers pack only source rows, then
  * one encoder copies strips and draws. GPU residency, including the 8 MiB staging pool, has a
- * separate 128 MiB LRU. Geometry and texture bindings are retained; camera gestures never process resident pixels.
+ * 128 MiB LRU, reduced to 64 MiB when the integer compositor reserves its share. Geometry and texture bindings are retained; camera gestures never process resident pixels.
  */
 export function makeGpuDisplay(
   gpu: Pick<GpuContext, 'root' | 'device' | 'format'>,
@@ -40,7 +40,7 @@ export function makeGpuDisplay(
     primitive: { topology: 'triangle-strip' }
   });
   const resident = new Map<symbol, ReturnType<typeof allocate>>();
-  const identities = new WeakMap<DisplayTile, symbol>();
+  const identities = new WeakMap<object, symbol>();
   let tiles: readonly DisplayTile[] = [];
   let levels: ReturnType<typeof displayTileLevels> = [];
   let bytes = 0;
@@ -82,7 +82,7 @@ export function makeGpuDisplay(
       }
       const active = new Set(next.map(identity));
       for (const [key, entry] of resident) {
-        if (!entry.ready && !active.has(key)) {
+        if ((!entry.ready || entry.preview) && !active.has(key)) {
           entry.destroy();
           resident.delete(key);
           bytes -= entry.bytes;
@@ -166,7 +166,10 @@ export function makeGpuDisplay(
           const required = upload.width * upload.height * 4 + 32;
           const active = new Set(tiles.map(identity));
           for (const [old, resource] of resident) {
-            if (bytes + required + staging.bytes + 32 + timer.bytes <= gpuBudgetBytes) {
+            if (
+              bytes + required + staging.bytes + 32 + timer.bytes <=
+              gpuBudgetBytes - (compositorFactory ? 64 * 1024 * 1024 : 0)
+            ) {
               break;
             }
 
@@ -177,7 +180,10 @@ export function makeGpuDisplay(
             }
           }
 
-          if (bytes + required + staging.bytes + 32 + timer.bytes > gpuBudgetBytes) {
+          if (
+            bytes + required + staging.bytes + 32 + timer.bytes >
+            gpuBudgetBytes - (compositorFactory ? 64 * 1024 * 1024 : 0)
+          ) {
             break;
           }
 
@@ -209,7 +215,7 @@ export function makeGpuDisplay(
       viewerPerformance.record('upload.prepare', start);
       const active = new Set(tiles.map(identity));
       for (const [tile, entry] of resident) {
-        if (bytes + staging.bytes <= gpuBudgetBytes) {
+        if (bytes + staging.bytes <= gpuBudgetBytes - (compositorFactory ? 64 * 1024 * 1024 : 0)) {
           break;
         }
 
@@ -319,10 +325,10 @@ export function makeGpuDisplay(
 
   /** Weak identities let GPU residency outlive CPU eviction without retaining transferred pixel buffers. */
   function identity(tile: DisplayTile) {
-    let key = identities.get(tile);
+    let key = identities.get(tile.textureIdentity ?? tile);
     if (!key) {
       key = Symbol();
-      identities.set(tile, key);
+      identities.set(tile.textureIdentity ?? tile, key);
     }
 
     return key;
@@ -349,7 +355,7 @@ export function makeGpuDisplay(
       // an uncapped first-draw allocation after the strip budget has already been exhausted.
       root.unwrap(group);
       const bytesPerRow = upload.bytesPerRow;
-      let source: Uint8Array<ArrayBuffer> | undefined = upload.source;
+      let source: Uint8Array | undefined = upload.source;
       let sourceWords =
         source.byteOffset % 4 === 0
           ? new Uint32Array(source.buffer, source.byteOffset, source.byteLength / 4)
@@ -358,6 +364,7 @@ export function makeGpuDisplay(
       let presented = false;
       return {
         group,
+        preview: gpuCandidate,
         present(frame: number, firstFrame: number | undefined, arrival: boolean) {
           if (!presented) {
             if (gpuCandidate) {
@@ -607,9 +614,9 @@ function makeTimer(device: GPUDevice) {
 
 /** GPU candidates have no host composite pixels; their full bordered output is written by compute. */
 function textureUpload(tile: DisplayTile) {
-  if (tile.gpu) {
+  if (tile.gpu || tile.textureIdentity) {
     return {
-      source: new Uint8Array(0),
+      source: tile.gpu ? new Uint8Array(0) : tile.image.pixels,
       bytesPerRow: tile.image.width * 4,
       width: tile.image.width,
       height: tile.image.height,

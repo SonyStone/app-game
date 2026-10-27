@@ -2,6 +2,7 @@ import type { PsdGpuLayers } from '@app-game/psd/gpu';
 import { viewerPerformance } from '../telemetry/performance';
 import shader from './composite.wgsl?raw';
 import tables from './integerTables.json';
+import textTables from './textTables.json';
 
 /** One immutable tile/settings/revision/visibility identity. Readback is background verification, never display input. */
 export type GpuTileWork = {
@@ -20,8 +21,8 @@ export type GpuTileWork = {
 };
 
 /**
- * Integer compute with a separate 64 MiB source LRU, including tables and in-flight verification buffers.
- * Composite textures remain in the display's independent budget. Each source entry is a bounded layer region;
+ * Integer compute with a 64 MiB LRU, including tables, isolated-group canvases and in-flight verification buffers.
+ * The display reserves the other 64 MiB of the shared 128 MiB GPU allowance. Each source entry is a bounded layer region;
  * visibility changes rewrite only small uniforms. Navigation over resident output dispatches no compute/readback.
  */
 export function makeGpuCompositor(device: GPUDevice, budgetBytes = 64 * 1024 * 1024) {
@@ -29,10 +30,10 @@ export function makeGpuCompositor(device: GPUDevice, budgetBytes = 64 * 1024 * 1
   const module = device.createShaderModule({ code: shader, label: 'PSD exact RGB8 integer compositor' });
   const pipeline = device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'main' } });
   const tableBuffer = device.createBuffer({
-    size: tables.values.length * 4,
+    size: (tables.values.length + textTables.values.length) * 4,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
   });
-  device.queue.writeBuffer(tableBuffer, 0, new Int32Array(tables.values));
+  device.queue.writeBuffer(tableBuffer, 0, new Int32Array([...tables.values, ...textTables.values]));
   const sources = new Map<string, { buffer: GPUBuffer; bytes: number }>();
   const protectedSources = new Set<string>();
   let sourceBytes = tableBuffer.size;
@@ -67,8 +68,36 @@ export function makeGpuCompositor(device: GPUDevice, budgetBytes = 64 * 1024 * 1
           (shown.get(layer.index) ?? layer.visible) &&
           layer.ancestors.every((index) => shown.get(index) ?? work.groupVisibility.get(index) ?? true)
       );
-      const uniformBytes = Math.max(256, layers.length * 256);
-      const required = size * 2 + uniformBytes + 32;
+      const isolated = layers.filter((layer) => layer.isolated);
+      const groupIds = new Set(isolated.map((layer) => layer.index));
+      const parent = (layer: (typeof layers)[number]) => layer.ancestors.findLast((index) => groupIds.has(index));
+      const operations: { layer: (typeof layers)[number]; operation: number; target?: number; input?: number }[] = [];
+      function append(nodes: typeof layers, target?: number) {
+        for (const layer of nodes) {
+          if (layer.clipBase !== undefined) {
+            continue;
+          }
+          if (layer.isolated) {
+            append(
+              layers.filter((child) => parent(child) === layer.index),
+              layer.index
+            );
+            operations.push({ layer, operation: 4, target, input: layer.index });
+            continue;
+          }
+          const clips = nodes.filter((clip) => clip.clipBase === layer.index);
+          operations.push({ layer, operation: layer.adjustment ? 5 : clips.length ? 1 : 0, target });
+          operations.push(...clips.map((layer) => ({ layer, operation: 2, target })));
+          if (clips.length) {
+            operations.push({ layer, operation: 3, target });
+          }
+        }
+      }
+      append(layers.filter((layer) => parent(layer) === undefined));
+      const clipping = operations.some((op) => op.operation === 1);
+      const scratchBytes = clipping ? size * 2 : 8;
+      const uniformBytes = Math.max(256, operations.length * 256);
+      const required = size * (2 + isolated.length) + scratchBytes + uniformBytes + 36;
       const keys = layers.map((layer) => `${work.sourceKey}:${layer.index}`);
       const newBytes = layers.reduce((sum, layer, i) => sum + (sources.has(keys[i]) ? 0 : layer.samples.byteLength), 0);
       const needed = new Set(keys);
@@ -90,6 +119,20 @@ export function makeGpuCompositor(device: GPUDevice, budgetBytes = 64 * 1024 * 1
       const output = device.createBuffer({
         size,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
+      });
+      const groupBuffers = new Map(
+        isolated.map((layer) => [
+          layer.index,
+          device.createBuffer({
+            size,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+          })
+        ])
+      );
+      const emptyGroup = device.createBuffer({ size: 4, usage: GPUBufferUsage.STORAGE });
+      const scratch = device.createBuffer({
+        size: scratchBytes,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
       });
       const read = device.createBuffer({ size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
       const params = device.createBuffer({
@@ -113,6 +156,11 @@ export function makeGpuCompositor(device: GPUDevice, budgetBytes = 64 * 1024 * 1
         }
         released = true;
         output.destroy();
+        scratch.destroy();
+        emptyGroup.destroy();
+        for (const buffer of groupBuffers.values()) {
+          buffer.destroy();
+        }
         read.destroy();
         params.destroy();
         query?.destroy();
@@ -124,13 +172,13 @@ export function makeGpuCompositor(device: GPUDevice, budgetBytes = 64 * 1024 * 1
       };
       live.add(release);
       const uniforms = new Int32Array(uniformBytes / 4);
-      for (const [i, layer] of layers.entries()) {
+      for (const [i, { layer, operation }] of operations.entries()) {
         uniforms.set(
           [
             rect.width,
             rect.height,
             stride,
-            work.linearBlending ? 1 : 0,
+            layer.textGamma ? 2 : work.linearBlending ? 1 : 0,
             layer.bounds.left - rect.left,
             layer.bounds.top - rect.top,
             layer.bounds.width,
@@ -138,10 +186,16 @@ export function makeGpuCompositor(device: GPUDevice, budgetBytes = 64 * 1024 * 1
             layer.mode,
             layer.opacity,
             layer.fill,
-            layer.density
+            layer.density,
+            operation,
+            layer.staged ? 1 : 0,
+            layer.adjustment ?? 0,
+            layer.threshold ?? 0
           ],
           i * 64
         );
+      }
+      for (const [i, layer] of layers.entries()) {
         let source = sources.get(keys[i]);
         if (!source) {
           const buffer = device.createBuffer({
@@ -160,20 +214,26 @@ export function makeGpuCompositor(device: GPUDevice, budgetBytes = 64 * 1024 * 1
       }
       device.queue.writeBuffer(params, 0, uniforms);
       encoder.clearBuffer(output);
+      encoder.clearBuffer(scratch);
+      for (const buffer of groupBuffers.values()) {
+        encoder.clearBuffer(buffer);
+      }
       const pass = encoder.beginComputePass(
         query ? { timestampWrites: { querySet: query, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 } } : {}
       );
       pass.setPipeline(pipeline);
-      for (const [i, layer] of layers.entries()) {
+      for (const [i, { layer, target: targetGroup, input }] of operations.entries()) {
         pass.setBindGroup(
           0,
           device.createBindGroup({
             layout: pipeline.getBindGroupLayout(0),
             entries: [
-              { binding: 0, resource: { buffer: sources.get(keys[i])!.buffer } },
-              { binding: 1, resource: { buffer: output } },
-              { binding: 2, resource: { buffer: params, offset: i * 256, size: 48 } },
-              { binding: 3, resource: { buffer: tableBuffer } }
+              { binding: 0, resource: { buffer: sources.get(`${work.sourceKey}:${layer.index}`)!.buffer } },
+              { binding: 1, resource: { buffer: targetGroup === undefined ? output : groupBuffers.get(targetGroup)! } },
+              { binding: 2, resource: { buffer: params, offset: i * 256, size: 64 } },
+              { binding: 3, resource: { buffer: tableBuffer } },
+              { binding: 4, resource: { buffer: scratch } },
+              { binding: 5, resource: { buffer: input === undefined ? emptyGroup : groupBuffers.get(input)! } }
             ]
           })
         );

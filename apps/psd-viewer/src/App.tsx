@@ -9,6 +9,7 @@ import { createOpeningPreview } from './features/document/createOpeningPreview';
 import { ExamplesMenu } from './features/examples';
 import { ExportPanel } from './features/export/ExportPanel';
 import { createFonts, FontsPanel, TextSupportSection } from './features/fonts';
+import { CompositeMismatch } from './features/gpu-composite/CompositeMismatch';
 import { GpuViewport } from './features/gpu-viewport/GpuViewport';
 import type { DisplayImage } from './features/gpu-viewport/displayTiles';
 import { InspectionPanel } from './features/inspection/InspectionPanel';
@@ -132,7 +133,8 @@ export function App() {
     renderSettings,
     pairs,
     viewport,
-    gpuComposite
+    gpuComposite,
+    fonts.revision
   );
   const render = () => (windowed() ? windows.render() : wholeRender());
   const renderWindow = () => valueOf(render())?.window;
@@ -747,13 +749,10 @@ export function App() {
                     </p>
                     <p>
                       Layer regions: {(diagnostics().preparedBytes / 1024 / 1024).toFixed(2)} MiB CPU; preparation{' '}
-                      {diagnostics().preparationMs.toFixed(1)} ms. GPU source budget 64 MiB; display textures budgeted
-                      separately.
+                      {diagnostics().preparationMs.toFixed(1)} ms. GPU sources and display each have a 64 MiB budget.
                     </p>
-                    <Show when={diagnostics().mismatches.length}>
-                      <pre style={{ 'max-height': '220px', overflow: 'auto', 'white-space': 'pre-wrap' }}>
-                        {JSON.stringify(diagnostics().mismatches, null, 2)}
-                      </pre>
+                    <Show when={diagnostics().mismatches.at(-1)}>
+                      {(mismatch) => <CompositeMismatch mismatch={mismatch()} details={diagnostics()} />}
                     </Show>
                   </details>
                 )}

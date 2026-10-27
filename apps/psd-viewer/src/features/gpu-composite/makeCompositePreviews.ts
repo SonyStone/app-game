@@ -14,11 +14,18 @@ export type CompositeDiagnostics = {
   preparationMs: number;
   verifiedTiles: number;
   differingSamples: number;
-  mismatches: { identity: string; differing: number; first: number; gpu: number; strict: number }[];
+  mismatches: {
+    tile: PsdRegionRect;
+    identity: string;
+    differing: number;
+    first: number;
+    gpu: number;
+    strict: number;
+  }[];
 };
 
 /**
- * Owns reusable raw regions separately from composite tiles. At most 24 MiB stays cached; a 32 MiB preparation
+ * Owns reusable raw regions separately from composite tiles. At most 16 MiB stays cached; a 24 MiB preparation
  * and two 2 MiB readback/transfer reserves fit within the additional 64 MiB CPU allowance. In-flight jobs are
  * serialized by the tile renderer. Verdicts compare every RGBA byte, including RGB beneath zero alpha.
  */
@@ -36,6 +43,16 @@ export function makeCompositePreviews(client: WindowClient, changed: (state: Com
   };
 
   return {
+    /** Known refusals restore ordinary CPU worker admission for subsequent navigation. */
+    unavailable(snapshot: WindowSnapshot) {
+      return (
+        documentLayers === snapshot.opened.layers &&
+        (disabled ||
+          rejectedSettings.has(
+            JSON.stringify([generation, snapshot.opened.document, snapshot.revision ?? 0, snapshot.settings])
+          ))
+      );
+    },
     /** Returns no candidate on any policy or budget refusal. The ordinary strict request always follows. */
     async prepare(
       snapshot: WindowSnapshot,
@@ -47,6 +64,7 @@ export function makeCompositePreviews(client: WindowClient, changed: (state: Com
           tile: DisplayTile;
           submitted: Promise<void>;
           strict: (image: PsdRegionPixels) => void;
+          matches: () => boolean;
         }
       | undefined
     > {
@@ -59,7 +77,12 @@ export function makeCompositePreviews(client: WindowClient, changed: (state: Com
         rejectedSettings = new Set();
         diagnostics = emptyDiagnostics();
       }
-      const settingsKey = JSON.stringify([generation, snapshot.opened.document, 0, snapshot.settings]);
+      const settingsKey = JSON.stringify([
+        generation,
+        snapshot.opened.document,
+        snapshot.revision ?? 0,
+        snapshot.settings
+      ]);
       if (disabled || rejectedSettings.has(settingsKey) || snapshot.opened.sourceBacked || !client.gpuLayers) {
         return undefined;
       }
@@ -82,7 +105,7 @@ export function makeCompositePreviews(client: WindowClient, changed: (state: Com
         source = prepared.value;
         const required = source.layers.reduce((sum, layer) => sum + layer.samples.byteLength, 0);
         for (const [key, cached] of sources) {
-          if (bytes + required <= 24 * 1024 * 1024) {
+          if (bytes + required <= 16 * 1024 * 1024) {
             break;
           }
           bytes -= cached.layers.reduce((sum, layer) => sum + layer.samples.byteLength, 0);
@@ -106,6 +129,7 @@ export function makeCompositePreviews(client: WindowClient, changed: (state: Com
       let candidate: Uint8Array | undefined;
       let strict: PsdRegionPixels | undefined;
       let compared = false;
+      let matched = false;
       const verify = () => {
         if (!candidate || !strict || compared || ownGeneration !== generation || disabled) {
           return;
@@ -135,12 +159,13 @@ export function makeCompositePreviews(client: WindowClient, changed: (state: Com
             differingSamples: diagnostics.differingSamples + differing,
             mismatches: [
               ...diagnostics.mismatches,
-              { identity, differing, first, gpu: candidate[first], strict: strict.pixels[first] }
+              { tile: rect, identity, differing, first, gpu: candidate[first], strict: strict.pixels[first] }
             ].slice(-16)
           });
           viewerPerformance.record('composite.mismatch.samples', performance.now(), differing);
           onMismatch();
         } else {
+          matched = true;
           notify({ state: 'verified', verifiedTiles: diagnostics.verifiedTiles + 1 });
           viewerPerformance.record('composite.verified.samples', performance.now(), strict.pixels.length);
         }
@@ -173,8 +198,10 @@ export function makeCompositePreviews(client: WindowClient, changed: (state: Com
       notify({ state: 'preview', reason: undefined });
       return {
         submitted: submission,
+        matches: () => matched,
         tile: {
           image,
+          textureIdentity: {},
           left: rect.left,
           top: rect.top,
           step: 1,

@@ -75,7 +75,12 @@ export function createFonts(
             result.ok
               ? result.value.flatMap((face) =>
                   face.validationError
-                    ? [{ file: `${files[index].name} (${face.name})`, reason: `Imported text: ${face.validationError}` }]
+                    ? [
+                        {
+                          file: `${files[index].name} (${face.name})`,
+                          reason: `Imported text: ${face.validationError}`
+                        }
+                      ]
                     : []
                 )
               : [{ file: files[index].name, reason: result.error.message }]
@@ -133,6 +138,8 @@ export function createFonts(
   }
 
   return {
+    /** Invalidates cached text operands whenever the supplied font context changes. */
+    revision,
     report,
     library,
     missing,

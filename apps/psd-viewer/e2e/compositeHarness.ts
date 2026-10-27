@@ -3,6 +3,7 @@ import { gpuBlendModes, prepareGpuLayers, type PsdGpuLayers } from '@app-game/ps
 import { openPsd, photoshopDefaultSettings } from '@app-game/psd/viewer';
 import { makeGpuCompositor, type GpuTileWork } from '../src/features/gpu-composite/makeGpuCompositor';
 import { cpuCompositeReference } from '../tests/cpuCompositeReference';
+import { operandControls } from '../tests/operandControls';
 import { withModernTop, withTopBlendKey } from '../tests/patchedPsd';
 
 /** Deliberately includes byte ties, hidden transparent RGB, partial Fill/opacity, and reversed stack ordering. */
@@ -22,17 +23,17 @@ export async function runGpuArithmetic() {
   const rect = { left: 0, top: 0, width, height };
   const results: { mode: string; gamma: boolean; variant: number; differing: number; samples: number }[] = [];
   try {
-    for (const variant of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
+    for (const variant of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) {
       const source: PsdGpuLayers = {
-        capability: 'rgb8-integer-v1',
+        capability: 'rgb8-integer-v2',
         rect,
         layers: [0, 1].map((index) => ({
           index,
           bounds: rect,
           visible: true,
           ancestors: [],
-          opacity: index === 1 ? [255, 77, 255, 255, 0, 1, 127, 254, 255][variant] : 255,
-          fill: index === 1 ? [255, 255, 128, 255, 255, 1, 77, 200, 254][variant] : 255,
+          opacity: index === 1 ? ([255, 77, 255, 255, 0, 1, 127, 254, 255][variant] ?? 255) : 255,
+          fill: index === 1 ? ([255, 255, 128, 255, 255, 1, 77, 200, 254][variant] ?? 255) : 255,
           mode: 0,
           density: variant === 3 ? 173 : 255,
           samples: new Uint32Array(width * height * 2)
@@ -52,8 +53,31 @@ export async function runGpuArithmetic() {
       if (variant === 3) {
         source.layers.reverse();
       }
+      if (variant === 9) {
+        source.layers[1].clipBase = 0;
+      }
+      if (variant === 10) {
+        source.layers[1].ancestors = [2];
+        const samples = new Uint32Array(width * height * 2);
+        for (let i = 0; i < samples.length; i += 2) {
+          samples[i] = 0xff000000;
+          samples[i + 1] = 255;
+        }
+        source.layers.splice(1, 0, {
+          ...source.layers[0],
+          index: 2,
+          opacity: 173,
+          isolated: true,
+          staged: true,
+          samples
+        });
+      }
+      if (variant === 11) {
+        source.layers[1].staged = true;
+        source.layers[1].textGamma = true;
+      }
       for (const [mode, name] of gpuBlendModes.entries()) {
-        source.layers[1].mode = mode;
+        source.layers[variant === 10 ? 2 : 1].mode = mode;
         for (const gamma of [false, true]) {
           const expected = cpuCompositeReference(source, gamma);
           const actual = await composite(device, compositor, {
@@ -109,7 +133,9 @@ export async function runGpuFixture(bytes: number[]) {
     for (const gamma of [false, true]) {
       for (const rect of rects) {
         const settings = { ...photoshopDefaultSettings, linearBlending: gamma };
+        const preparing = performance.now();
         const source = prepareGpuLayers(opened.value, rect, settings);
+        const preparationMs = performance.now() - preparing;
         if (!source.ok) {
           results.push({ gamma, refused: source.error.message });
           continue;
@@ -148,7 +174,15 @@ export async function runGpuFixture(bytes: number[]) {
           for (let i = 0; i < actual.length; i++) {
             differing += actual[i] !== strict.value.pixels[i] ? 1 : 0;
           }
-          results.push({ gamma, rect, visibility, differing, samples: actual.length });
+          results.push({
+            gamma,
+            rect,
+            visibility,
+            differing,
+            samples: actual.length,
+            preparationMs,
+            operandBytes: source.value.layers.reduce((sum, layer) => sum + layer.samples.byteLength, 0)
+          });
         }
       }
     }
@@ -222,4 +256,13 @@ async function composite(
   } finally {
     texture.destroy();
   }
+}
+
+/** Strict PSD controls exercise clipping and per-pixel adjustments on the actual integer GPU pipeline. */
+export async function runGpuOperandControls() {
+  const results = [];
+  for (const control of await operandControls()) {
+    results.push({ name: control.name, scenarios: await runGpuFixture([...control.bytes]) });
+  }
+  return results;
 }

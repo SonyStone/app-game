@@ -669,6 +669,36 @@ it('retains unaffected tile identities after a local visibility edit, including 
   renderer.clear();
 });
 
+it('invalidates all windows after a font-context revision or generated vector change', async () => {
+  for (const change of ['revision', 'vector'] as const) {
+    const { client, calls } = synthetic();
+    const renderer = makeWindowRenderer(client);
+    const snapshot = fakeSnapshot(300000, 300000);
+    snapshot.opened.layers = [
+      {
+        index: 1,
+        kind: 'shape',
+        vectorMask: { disabled: false },
+        bounds: { left: 510, top: 0, right: 511, bottom: 50 }
+      }
+    ] as WindowSnapshot['opened']['layers'];
+    const args = [
+      { scale: 1, x: 0, y: 0 },
+      { width: 1300, height: 100 },
+      new AbortController().signal,
+      vi.fn()
+    ] as const;
+    await renderer.render(snapshot, ...args);
+    const count = calls.length;
+    await renderer.render(
+      change === 'revision' ? { ...snapshot, revision: 1 } : { ...snapshot, visibility: [[1, false]] },
+      ...args
+    );
+    expect(calls.length - count).toBe(3);
+    renderer.clear();
+  }
+});
+
 it('serializes unrelated camera demands outside the worker and skips obsolete waiters', async () => {
   const { client } = synthetic();
   const jobs: (() => void)[] = [];

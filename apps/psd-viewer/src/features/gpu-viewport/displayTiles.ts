@@ -7,6 +7,8 @@ export type DisplayTile = {
   image: PsdImage;
   /** Candidate GPU output is a preview until its exact identity passes strict comparison. */
   gpu?: GpuTileWork;
+  /** Shared only after byte verification; the strict tile can reuse the compute-written full-region texture. */
+  textureIdentity?: object;
   /** One bounded worker region and its mips; whole-render/point-preview chunks have a separate latency cohort. */
   contentTile?: boolean;
   /** Shared by all levels returned by one native region call, independent of later cached LOD switches. */

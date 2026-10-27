@@ -176,7 +176,7 @@ function createDisplayFrames(
   let state: { view: View; size: { width: number; height: number }; dpr: number };
   let inputAt: number | undefined;
   let image: DisplayImage | undefined;
-  const [, start, stop] = createRAF(() => {
+  const drawFrame = () => {
     stop();
     const canvas = typeof element === 'function' ? element() : element;
     if (!state || !canvas) {
@@ -213,7 +213,9 @@ function createDisplayFrames(
         throw error;
       }
     }
-  });
+  };
+  const [, start, stop] = createRAF(drawFrame);
+
   createEffect(
     () => ({ view: props.view, size: props.size, dpr: dpr() }),
     (next) => {
@@ -236,7 +238,13 @@ function createDisplayFrames(
     /** Keeps RAF callbacks on the same resolved image as the textures, even while a comparison is pending. */
     presentImage(next: DisplayImage) {
       image = next;
-      start();
+      if (state && next.tiles?.some((tile) => tile.gpu)) {
+        // Visibility previews already have bounded resident operands. Submit them immediately so the
+        // display does not add an extra RAF before the two-frame presentation measure starts.
+        drawFrame();
+      } else {
+        start();
+      }
     },
     stop
   };

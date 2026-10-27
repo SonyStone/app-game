@@ -4,11 +4,16 @@ struct Params {
   width: u32, height: u32, stride: u32, gamma: u32,
   left: i32, top: i32, sourceWidth: u32, sourceHeight: u32,
   mode: u32, opacity: i32, fill: i32, density: i32,
+  operation: u32, staged: u32, adjustment: u32, threshold: i32,
 }
 @group(0) @binding(0) var<storage, read> samples: array<vec2u>;
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
 @group(0) @binding(2) var<uniform> p: Params;
 @group(0) @binding(3) var<storage, read> tables: array<i32>;
+
+@group(0) @binding(4) var<storage, read_write> scratch: array<vec2u>;
+
+@group(0) @binding(5) var<storage, read> groupInput: array<u32>;
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3u) {
@@ -21,15 +26,56 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     return;
   }
   let sample = samples[id.y * p.sourceWidth + id.x];
-  let s = unpack(sample.x);
-  let shape = mul(s.a, 255 - mul(255 - i32(sample.y), p.density));
+  var s = unpack(sample.x);
+  var shape = mul(s.a, 255 - mul(255 - i32(sample.y), p.density));
   let at = u32(y) * p.stride + u32(x);
-  let b = unpack(output[at]);
-  if p.gamma == 0u && !special(p.mode) {
-    output[at] = pack(paint(b, s.rgb, mul(shape, mul(p.fill, p.opacity)), p.mode));
+  if p.operation == 1u {
+    scratch[at] = vec2u(pack(vec4i(s.rgb, 255)), u32(shape));
+    return;
+  }
+  var b = unpack(output[at]);
+  if p.operation == 2u {
+    b = unpack(scratch[at].x);
+  }
+  if p.operation == 3u {
+    s = unpack(scratch[at].x);
+    shape = i32(scratch[at].y);
+  }
+  if p.operation == 4u {
+    s = unpack(groupInput[at]);
+    shape = mul(s.a, 255 - mul(255 - i32(sample.y), p.density));
+  }
+  if p.operation == 5u {
+    let coverage = mul(255 - mul(255 - i32(sample.y), p.density), p.opacity);
+    if b.a == 0 || coverage == 0 {
+      return;
+    }
+    var adjusted = vec3i(0);
+    if p.adjustment == 2u {
+      let luminance = (4915 * b.r + 9667 * b.g + 1802 * b.b + 8192) >> 14;
+      adjusted = vec3i(select(0, 255, luminance >= p.threshold));
+    } else {
+      let offset = p.sourceWidth * p.sourceHeight;
+      adjusted = vec3i(i32(samples[offset + u32(b.r)].x), i32(samples[offset + 256u + u32(b.g)].x), i32(samples[offset + 512u + u32(b.b)].x));
+    }
+    let blended = vec3i(fill_blend(b.r, adjusted.r, p.fill, p.mode), fill_blend(b.g, adjusted.g, p.fill, p.mode), fill_blend(b.b, adjusted.b, p.fill, p.mode));
+    output[at] = pack(vec4i(mix_byte(b.r, blended.r, coverage), mix_byte(b.g, blended.g, coverage), mix_byte(b.b, blended.b, coverage), b.a));
+    return;
+  }
+  var result = b;
+  if p.gamma == 0u && p.staged == 0u && p.operation != 3u && !special(p.mode) {
+    result = paint(b, s.rgb, mul(shape, mul(p.fill, p.opacity)), p.mode);
+  }
+  else if p.operation == 4u && p.gamma == 0u {
+    result = interpolate(b, interpolate(b, paint(b, s.rgb, p.fill, p.mode), shape), p.opacity);
   }
   else if shape != 0 && p.opacity != 0 {
-    output[at] = pack(interpolate(b, paint(b, s.rgb, p.fill, p.mode), mul(shape, p.opacity)));
+    result = interpolate(b, paint(b, s.rgb, p.fill, p.mode), mul(shape, p.opacity));
+  }
+  if p.operation == 2u {
+    scratch[at].x = pack(result);
+  } else {
+    output[at] = pack(result);
   }
 }
 
@@ -59,12 +105,13 @@ fn mix_byte(b: i32, s: i32, w: i32) -> i32 {
   if p.gamma == 0u || w == 0 || w == 255 {
     return lerp(b, s, w);
   }
-  let decoded = tables[b];
-  let delta = tables[s] - decoded;
+  let offset = select(0, 4609, p.gamma == 2u);
+  let decoded = tables[offset + b];
+  let delta = tables[offset + s] - decoded;
   let v = decoded + sign(delta) * ((abs(delta) * w + 127) / 255);
   let index = v >> 3;
-  let lo = tables[256 + index];
-  let hi = tables[256 + min(index + 1, 4096)];
+  let lo = tables[offset + 256 + index];
+  let hi = tables[offset + 256 + min(index + 1, 4096)];
   let encoded = lo + floor_div((hi - lo) * (v & 7) + 4, 8);
   return (encoded * 255 + 16384) >> 15;
 }
