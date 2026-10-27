@@ -21,6 +21,7 @@ export const en = {
     view: 'View',
     aim: 'Aim',
     thoughts: 'Bot thoughts',
+    killCam: 'Kill-cam',
     off: 'Off',
     on: 'On',
     language: 'Language',
@@ -238,7 +239,10 @@ export const en = {
     back: 'Back 5 s',
     forward: 'On 5 s',
     exit: 'Back to the game',
-    seeking: (time: string) => `Rewinding to ${time}…`,
+    building: (percent: number) => `Taping the match… ${percent}%`,
+    syncing: 'The bots catch up…',
+    slowKills: 'Slow kills',
+    slowKillsHint: 'Slow the match down about every kill of the tank picked, or of anyone with none picked',
     diverged: (time: string) => `From ${time} on this game code plays the match differently: the arena no longer shows the recorded match, the timeline still does.`,
     point: 'Point',
     kinds: {
@@ -298,6 +302,19 @@ export const en = {
     perch: 'perch',
     lookout: 'lookout',
     unsafe: 'unsafe'
+  },
+  killCam: {
+    title: 'Kill-cam',
+    by: (name: string, tankClass: string) => `destroyed by ${name}${tankClass ? ` (${tankClass})` : ''}`,
+    lost: 'your tank was lost',
+    skip: 'any key skips'
+  },
+  highlights: {
+    title: 'Best moments',
+    long: (range: number) => `${range} px`,
+    streak: (count: number) => (count === 2 ? 'double kill' : `${count} in a row`),
+    hurt: 'barely alive',
+    point: 'on the point'
   }
 };
 

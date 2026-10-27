@@ -191,7 +191,7 @@ export function exp(x: number) {
   }
 
   const magnitude = Math.abs(x);
-  let hi = 0;
+  let hi: number;
   let lo = 0;
   let k = 0;
   let t = x;

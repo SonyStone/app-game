@@ -19,6 +19,7 @@ export const ru: Dictionary = {
     view: 'Вид',
     aim: 'Прицел',
     thoughts: 'Мысли ботов',
+    killCam: 'Kill-cam',
     off: 'Выкл',
     on: 'Вкл',
     language: 'Язык',
@@ -236,7 +237,10 @@ export const ru: Dictionary = {
     back: 'Назад на 5 с',
     forward: 'Вперёд на 5 с',
     exit: 'Вернуться в игру',
-    seeking: (time) => `Перематываю на ${time}…`,
+    building: (percent) => `Записываю ленту матча… ${percent}%`,
+    syncing: 'Боты догоняют…',
+    slowKills: 'Замедлять убийства',
+    slowKillsHint: 'Замедлять матч у каждого убийства выбранного танка, а без выбора — у любого',
     diverged: (time) => `С ${time} этот код играет матч иначе: арена показывает уже не записанный матч, таймлайн — по-прежнему он.`,
     point: 'Точка',
     kinds: {
@@ -296,6 +300,19 @@ export const ru: Dictionary = {
     perch: 'позиция',
     lookout: 'наблюдательный пункт',
     unsafe: 'небезопасно'
+  },
+  killCam: {
+    title: 'Kill-cam',
+    by: (name, tankClass) => `уничтожил ${name}${tankClass ? ` (${tankClass})` : ''}`,
+    lost: 'твой танк потерян',
+    skip: 'любая клавиша — пропустить'
+  },
+  highlights: {
+    title: 'Лучшие моменты',
+    long: (range) => `${range} px`,
+    streak: (count) => (count === 2 ? 'двойное убийство' : `${count} подряд`),
+    hurt: 'на последнем издыхании',
+    point: 'на точке'
   }
 };
 

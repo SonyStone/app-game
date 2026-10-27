@@ -19,6 +19,7 @@ export const sr: Dictionary = {
     view: 'Приказ',
     aim: 'Нишан',
     thoughts: 'Мисли ботова',
+    killCam: 'Kill-cam',
     off: 'Искљ',
     on: 'Укљ',
     language: 'Језик',
@@ -236,7 +237,10 @@ export const sr: Dictionary = {
     back: 'Назад 5 с',
     forward: 'Напред 5 с',
     exit: 'Назад у игру',
-    seeking: (time) => `Премотавам на ${time}…`,
+    building: (percent) => `Снимам траку меча… ${percent}%`,
+    syncing: 'Ботови стижу…',
+    slowKills: 'Успори уништења',
+    slowKillsHint: 'Успори меч код сваког уништења изабраног тенка, а без избора код сваког',
     diverged: (time) => `Од ${time} овај код игра меч другачије: арена више не приказује снимљени меч, временска линија и даље да.`,
     point: 'Тачка',
     kinds: {
@@ -296,6 +300,19 @@ export const sr: Dictionary = {
     perch: 'снајперско место',
     lookout: 'осматрачница',
     unsafe: 'небезбедно'
+  },
+  killCam: {
+    title: 'Kill-cam',
+    by: (name, tankClass) => `уништио те ${name}${tankClass ? ` (${tankClass})` : ''}`,
+    lost: 'твој тенк је изгубљен',
+    skip: 'било који тастер прескаче'
+  },
+  highlights: {
+    title: 'Најбољи тренуци',
+    long: (range) => `${range} px`,
+    streak: (count) => (count === 2 ? 'двоструко уништење' : `${count} заредом`),
+    hurt: 'на издисају',
+    point: 'на тачки'
   }
 };
 

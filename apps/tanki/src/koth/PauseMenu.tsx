@@ -20,7 +20,7 @@ import type { TuningControls } from './tuning';
  * - The language, in the header.
  * - The match: resume, restart, the class menu, watching the bots or taking the tank back, and
  *   saving the match's recording, which then tells where it went.
- * - The view: the aim's look and the bots' thoughts.
+ * - The view: the aim's look, the bots' thoughts and the kill-cam.
  * - The pace knobs (see `Pace`), which take effect at once: a slider for each with a notch at its
  *   default, a value that turns yellow while it differs from it, what the knobs make of the medium
  *   tank, its shell and the bots, and a reset that puts every knob back.
@@ -39,6 +39,7 @@ import type { TuningControls } from './tuning';
  * @param saved - The save of the match's recording under way or done, if any; `onSave` asks for one.
  * @param onOpenRecording - Receives a recording opened on the recordings page, to watch.
  * @param onWatchReplay - Called to watch the match being played again from its start.
+ * @param killCam - Whether the kill-cam shows how the player's tank went (see `KothScene`); `onKillCam` switches it.
  */
 export function PauseMenu(props: {
   tuning: TuningControls;
@@ -58,6 +59,8 @@ export function PauseMenu(props: {
   onSave: () => void;
   onOpenRecording: Parameters<typeof RecordingsPage>[0]['onOpen'];
   onWatchReplay: () => void;
+  killCam: boolean;
+  onKillCam: (on: boolean) => void;
 }) {
   const { t, language, choose } = useKothI18n();
   const thoughtsOn = () => props.thoughts || props.watching;
@@ -175,6 +178,13 @@ export function PauseMenu(props: {
                     <span class={{ 'tk-on': thoughtsOn() }}>{t('menu.on')}</span>
                   </button>
                   <kbd class="tk-key">B</kbd>
+                </div>
+                <div class="tk-row">
+                  <span class="tk-label">{t('menu.killCam')}</span>
+                  <button class={['tk-segments tk-switch', { 'tk-on': props.killCam }]} onClick={() => props.onKillCam(!props.killCam)}>
+                    <span class={{ 'tk-on': !props.killCam }}>{t('menu.off')}</span>
+                    <span class={{ 'tk-on': props.killCam }}>{t('menu.on')}</span>
+                  </button>
                 </div>
               </div>
               <div class="flex min-w-0 flex-col gap-[7px]">

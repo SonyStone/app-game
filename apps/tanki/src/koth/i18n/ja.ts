@@ -19,6 +19,7 @@ export const ja: Dictionary = {
     view: '表示',
     aim: '照準',
     thoughts: 'ボットの思考',
+    killCam: 'キルカム',
     off: 'オフ',
     on: 'オン',
     language: '言語',
@@ -236,7 +237,10 @@ export const ja: Dictionary = {
     back: '5秒戻る',
     forward: '5秒進む',
     exit: 'ゲームに戻る',
-    seeking: (time) => `${time} へ移動中…`,
+    building: (percent) => `試合をテープに記録中… ${percent}%`,
+    syncing: 'ボットが追いついている…',
+    slowKills: '撃破をスロー',
+    slowKillsHint: '選んだ戦車の撃破ごとに、選んでいなければすべての撃破で試合を遅くする',
     diverged: (time) => `${time} 以降、このコードは試合を違うように進める。アリーナは記録された試合ではないが、タイムラインは記録のまま。`,
     point: '拠点',
     kinds: {
@@ -296,5 +300,18 @@ export const ja: Dictionary = {
     perch: '狙撃位置',
     lookout: '見張り',
     unsafe: '危険'
+  },
+  killCam: {
+    title: 'キルカム',
+    by: (name, tankClass) => `${name}${tankClass ? `（${tankClass}）` : ''}に撃破された`,
+    lost: '戦車を失った',
+    skip: '任意のキーでスキップ'
+  },
+  highlights: {
+    title: 'ベストシーン',
+    long: (range) => `${range} px`,
+    streak: (count) => (count === 2 ? 'ダブルキル' : `${count}連続`),
+    hurt: '瀕死で',
+    point: '拠点で'
   }
 };

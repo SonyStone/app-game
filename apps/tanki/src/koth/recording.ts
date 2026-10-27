@@ -193,6 +193,15 @@ export function createRecordedMatch(
       }
     },
 
+    /**
+     * Applies the classes' tuning this match has now to `TANK_CLASSES`, which all matches share:
+     * call it before stepping a match that runs beside another, as a replay's tape is built
+     * beside the replay, either of which may have come to a change of tuning the other has not.
+     */
+    useTuning() {
+      applyClassTuning(classes);
+    },
+
     /** The recording of the match so far, of build `build`. */
     recording(build: Build = { commit: BUILD_COMMIT }): Recording {
       return {

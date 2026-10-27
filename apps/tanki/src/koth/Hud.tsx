@@ -2,10 +2,12 @@ import { For, Show } from 'solid-js';
 import { ClassSilhouette } from './classes/ClassMenu';
 import { TANK_CLASSES } from './classes/classes';
 import { FULL_CHARGE } from './classes/weapon';
+import { LONG_SHOT, type Highlight } from './highlights';
 import { useKothI18n } from './i18n/i18n';
 import type { KothMatch, MemberHud, SeatHud } from './match';
 import './poster.css';
 import type { TeamId } from './rules';
+import type { TankClassId } from './tanks';
 import type { SaveState } from './saveRecording';
 
 /** What the heads-up display shows, from `KothMatch['hud']`. */
@@ -274,6 +276,7 @@ function Gauge(props: { label: string; value: number; color: string }) {
  * @param onSave - Called when the player asks to save the recording.
  * @param onRestart - Called when the player asks for another match.
  * @param onWatch - Called when the player asks to watch the match again.
+ * @param highlights - The match's best kills (see `bestKills`), with their killers' and victims' seats; `onHighlight` watches one.
  */
 export function MatchResult(props: {
   state: HudState | undefined;
@@ -281,6 +284,8 @@ export function MatchResult(props: {
   onSave: () => void;
   onRestart: () => void;
   onWatch: () => void;
+  highlights: readonly { kill: Highlight; killer: SeatHud; victim: SeatHud }[];
+  onHighlight: (kill: Highlight) => void;
 }) {
   const { t } = useKothI18n();
 
@@ -323,6 +328,28 @@ export function MatchResult(props: {
                 )}
               </For>
             </div>
+            <Show when={props.highlights.length > 0}>
+              <div class="flex flex-col gap-1 px-[18px] pt-1 pb-2">
+                <div class="tk-bot-heading">
+                  <span>{t('highlights.title')}</span>
+                  <i />
+                </div>
+                <For each={props.highlights}>
+                  {(entry) => (
+                    <button class="tk-highlight" onClick={() => props.onHighlight(entry.kill)}>
+                      <span class="tk-highlight-play">▶</span>
+                      <span class="tk-highlight-time">{clock(Math.floor(entry.kill.step / 60))}</span>
+                      <span>
+                        <b style={{ color: TEAM_CSS[entry.killer.team] }}>{seatName(t, entry.killer)}</b>
+                        {entry.kill.killerClass ? ` (${t(`tankClass.${entry.kill.killerClass}`)})` : ''} →{' '}
+                        <b style={{ color: TEAM_CSS[entry.victim.team] }}>{seatName(t, entry.victim)}</b> ({t(`tankClass.${entry.kill.victimClass}`)})
+                      </span>
+                      <span class="tk-note">{highlightTags(t, entry.kill)}</span>
+                    </button>
+                  )}
+                </For>
+              </div>
+            </Show>
             <div class="flex justify-center gap-3 px-[18px] pt-2">
               <button class="tk-action tk-primary w-56" onClick={() => props.onRestart()}>
                 <span class="tk-action-label">{t('result.again')}</span>
@@ -341,6 +368,18 @@ export function MatchResult(props: {
       )}
     </Show>
   );
+}
+
+/** What made a best kill: its range if long, the streak, a hurt killer, the point. */
+function highlightTags(t: ReturnType<typeof useKothI18n>['t'], kill: Highlight) {
+  return [
+    kill.range >= LONG_SHOT ? t('highlights.long', kill.range) : undefined,
+    kill.streak > 1 ? t('highlights.streak', kill.streak) : undefined,
+    kill.hurt ? t('highlights.hurt') : undefined,
+    kill.point ? t('highlights.point') : undefined
+  ]
+    .filter((tag) => tag !== undefined)
+    .join(' · ');
 }
 
 /**
@@ -367,6 +406,28 @@ export function seatName(t: ReturnType<typeof useKothI18n>['t'], seat: SeatHud) 
   }
 
   return t(`seat.${seat.team}`, seat.seat + 1);
+}
+
+/** Who destroyed the player's tank, for the kill-cam's banner; no killer for a tank lost to its own side or nobody. */
+export type KillCamView = { killer: SeatHud | undefined; tankClass: TankClassId | undefined };
+
+/** The kill-cam's banner at the top of the screen while it shows how the player's tank went: by whom, and that any key skips it. */
+export function KillCamBanner(props: { view: KillCamView | undefined }) {
+  const { t } = useKothI18n();
+
+  return (
+    <Show when={props.view}>
+      {(view) => (
+        <div class="tk-killcam pointer-events-none absolute top-[118px] left-1/2 -translate-x-1/2">
+          <b>{t('killCam.title')}</b>
+          <span>
+            {view().killer ? t('killCam.by', seatName(t, view().killer!), view().tankClass ? t(`tankClass.${view().tankClass!}`) : '') : t('killCam.lost')}
+          </span>
+          <span class="tk-note">{t('killCam.skip')}</span>
+        </div>
+      )}
+    </Show>
+  );
 }
 
 /**

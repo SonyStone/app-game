@@ -935,10 +935,14 @@
 .tk-timeline-playhead-head {
   fill: var(--ink);
 }
-.tk-timeline-sought {
-  stroke: var(--ink);
-  stroke-width: 1.5;
-  stroke-dasharray: 3 3;
+.tk-timeline-unbuilt {
+  fill: var(--paper);
+  fill-opacity: 0.7;
+}
+.tk-timeline-switch {
+  flex: none;
+  border-width: 2px;
+  box-shadow: 2px 2px 0 var(--ink);
 }
 .tk-timeline-marker {
   cursor: pointer;
@@ -1097,4 +1101,46 @@
 }
 .tk-bot-pairs > .tk-off {
   opacity: 0.4;
+}
+
+/* Kill-cam */
+
+.tk-killcam {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px;
+  font-size: 13px;
+  color: var(--paper-light);
+  background: var(--red);
+  border: 3px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.tk-killcam .tk-note {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.tk-highlight {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 8px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 2px solid var(--ink);
+}
+.tk-highlight:hover {
+  background: var(--yellow);
+}
+.tk-highlight-play {
+  font-size: 11px;
+}
+.tk-highlight-time {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }

@@ -16,25 +16,28 @@ import { ACTION_KINDS, type ActionKind, type Timeline, type TimelineMarker, type
  * own driving is orange), and its markers: kills it made (a black dot), its death (a cross), radio
  * lines it said (a yellow flag), a new target (a tick below) and a new class (a diamond). Pointing
  * at any of them tells what it is; clicking a marker jumps to `MARKER_LEAD` s before it and picks
- * its member, clicking a member's name picks it. Clicking or dragging along the tracks seeks the
- * moment under the pointer, on release, as the match is played again to get there (see
- * `createReplayPlayer`). The wheel zooms the time about the pointer, Shift and the wheel or a
- * sideways swipe scroll it; while playing, the view keeps the playhead in sight.
+ * its member, clicking a member's name picks it. Clicking or dragging along the tracks shows the
+ * moment under the pointer at once, from the match's tape. The wheel zooms the time about the
+ * pointer, Shift and the wheel or a sideways swipe scroll it; while playing, the view keeps the
+ * playhead in sight. A switch slows the match down about kills.
  *
- * @param step - The step the match stands at; `sought` the step it is being taken to, if any.
+ * @param step - The step the match stands at.
+ * @param available - The last step on the tape; the rest, still being built, is shaded.
  * @param diverged - The second from which this game code plays the match differently, shaded on the ruler.
  * @param selected - The member picked, whose track is lit.
  */
 export function TimelinePanel(props: {
   timeline: Timeline;
   step: number;
-  sought: number | undefined;
+  available: number;
   diverged: number | undefined;
   playing: boolean;
   speed: number;
+  slowKills: boolean;
   selected: number | undefined;
   onPlaying: (playing: boolean) => void;
   onSpeed: (speed: number) => void;
+  onSlowKills: (on: boolean) => void;
   onSeek: (step: number) => void;
   onSelect: (member: number) => void;
   onExit: () => void;
@@ -61,7 +64,7 @@ export function TimelinePanel(props: {
 
   // While playing, the view scrolls on to keep the playhead in sight.
   createEffect(
-    () => ({ at: x(props.sought ?? props.step), element: scroller(), scrubbing: scrub() !== undefined }),
+    () => ({ at: x(props.step), element: scroller(), scrubbing: scrub() !== undefined }),
     ({ at, element, scrubbing }) => {
       if (!element || scrubbing) {
         return;
@@ -98,8 +101,14 @@ export function TimelinePanel(props: {
         </div>
         <span class="tk-timeline-clock">
           {clock(props.step / 60)} / {clock(end() / 60)}
-          <Show when={props.sought !== undefined}> → {clock(props.sought! / 60)}</Show>
         </span>
+        <button
+          class={['tk-segments tk-switch tk-timeline-switch', { 'tk-on': props.slowKills }]}
+          title={t('replay.slowKillsHint')}
+          onClick={() => props.onSlowKills(!props.slowKills)}
+        >
+          <span class={{ 'tk-on': props.slowKills }}>{t('replay.slowKills')}</span>
+        </button>
         <div class="tk-timeline-legend" title={t('replay.keys')}>
           <For each={Object.keys(ACTION_KINDS) as ActionKind[]}>
             {(kind) => (
@@ -110,7 +119,7 @@ export function TimelinePanel(props: {
             )}
           </For>
         </div>
-        <button class="tk-small-button ml-auto" onClick={() => props.onExit()}>
+        <button class="tk-small-button ml-auto whitespace-nowrap" onClick={() => props.onExit()}>
           {t('replay.exit')}
         </button>
       </div>
@@ -157,22 +166,19 @@ export function TimelinePanel(props: {
             width={width() + PAD * 2}
             height={height()}
             onPointerDown={(event) => {
+              const step = stepAtPointer(event);
               event.currentTarget.setPointerCapture(event.pointerId);
-              setScrub(stepAtPointer(event));
+              setScrub(step);
+              props.onSeek(step);
             }}
             onPointerMove={(event) => {
               if (scrub() !== undefined) {
-                setScrub(stepAtPointer(event));
-              }
-            }}
-            onPointerUp={() => {
-              const step = scrub();
-              setScrub(undefined);
-
-              if (step !== undefined) {
+                const step = stepAtPointer(event);
+                setScrub(step);
                 props.onSeek(step);
               }
             }}
+            onPointerUp={() => setScrub(undefined)}
             onPointerCancel={() => setScrub(undefined)}
           >
             <rect class="tk-timeline-ruler" x="0" y="0" width={width() + PAD * 2} height={RULER} />
@@ -246,8 +252,8 @@ export function TimelinePanel(props: {
                 );
               }}
             </For>
-            <Show when={scrub() ?? props.sought}>
-              {(step) => <line class="tk-timeline-sought" x1={x(step())} x2={x(step())} y1="0" y2={height()} />}
+            <Show when={props.available < end()}>
+              <rect class="tk-timeline-unbuilt" x={x(props.available)} y="0" width={Math.max(x(end()) - x(props.available), 0)} height={height()} />
             </Show>
             <line class="tk-timeline-playhead" x1={x(props.step)} x2={x(props.step)} y1="0" y2={height()} />
             <path class="tk-timeline-playhead-head" d={`M ${x(props.step) - 5} 0 h 10 l -5 7 z`} />

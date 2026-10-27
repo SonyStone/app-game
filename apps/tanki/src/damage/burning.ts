@@ -17,12 +17,34 @@ type Point = { x: number; y: number };
  *
  * All smoke goes to the renderer as balls placed where they are in the air (`addSmokeBall`); the
  * renderer shows them as the camera sees them, in its current style, with their shadows.
+ *
+ * The smoke is a function of time: a fire or a puff of soot is a record of how and when it began
+ * on the burning's own clock (`time`), never changed after, and every parcel of a fire comes from
+ * the fire's seed and its number. So `fires` and `soot` with `time` say what the smoke looks
+ * like, and `createPlumes` draws it again at any moment, as a match's tape does (see
+ * `../koth/tape`). Only flames, embers and the flicker of the light are random as they burn.
  */
 export function createBurning(renderer: Renderer) {
-  const fires: Fire[] = [];
-  const soot: Soot[] = [];
+  const fires: FireRecord[] = [];
+  const soot: SootRecord[] = [];
+  /** Flames and embers each fire still owes, accumulated between frames. */
+  const owed = new Map<FireRecord, { flames: number; embers: number }>();
+  const plumes = createPlumes();
+  let time = 0;
+  let nextId = 0;
 
   return {
+    /** Seconds of `update` so far: the clock the records' `start` count in. */
+    get time() {
+      return time;
+    },
+
+    /** The fires burning or still smoking, oldest first; read only. */
+    fires: fires as readonly FireRecord[],
+
+    /** The puffs of soot in the air, oldest first; read only. */
+    soot: soot as readonly SootRecord[],
+
     /**
      * Sets something on fire.
      *
@@ -32,20 +54,9 @@ export function createBurning(renderer: Renderer) {
      * @param brightness - Intensity of its light, 0-1.
      */
     ignite(at: Point, spread: number, life: number, light: number, brightness: number) {
-      fires.push({
-        x: at.x,
-        y: at.y,
-        spread,
-        life,
-        light,
-        brightness,
-        age: 0,
-        flames: 0,
-        embers: 0,
-        smoke: 0,
-        parcels: [],
-        seed: Math.random() * 100
-      });
+      const fire = { id: nextId++, x: at.x, y: at.y, spread, life, light, brightness, seed: Math.random() * 100, start: time };
+      fires.push(fire);
+      owed.set(fire, { flames: 0, embers: 0 });
     },
 
     /**
@@ -55,117 +66,166 @@ export function createBurning(renderer: Renderer) {
      * and more glow at first with the fireball they came from.
      */
     puff(x: number, y: number, vx: number, vy: number, life: number, size: number) {
-      soot.push({
-        x,
-        y,
-        vx,
-        vy,
-        age: 0,
-        life,
-        size,
-        tone: random(0.9, 1.1),
-        turn: Math.random() * Math.PI * 2
-      });
+      soot.push({ id: nextId++, x, y, vx, vy, life, size, tone: random(0.9, 1.1), turn: Math.random() * Math.PI * 2, start: time });
     },
 
     /**
-     * Feeds every fire's flames, embers and smoke and moves soot over a frame of `dt` seconds;
-     * removes fires whose last smoke is gone and soot that has faded away.
+     * Moves the clock on by a frame of `dt` seconds and feeds every fire's flames and embers;
+     * forgets fires whose last smoke is gone and soot that has faded away.
      */
     update(dt: number) {
-      const drag = Math.exp(-SOOT_DRAG * dt);
+      time += dt;
 
       for (let index = soot.length - 1; index >= 0; index--) {
-        const puff = soot[index];
-        puff.age += dt;
-        puff.x += puff.vx * dt;
-        puff.y += puff.vy * dt;
-        puff.vx *= drag;
-        puff.vy *= drag;
-
-        if (puff.age >= puff.life) {
+        if (time - soot[index].start >= soot[index].life) {
           soot.splice(index, 1);
         }
       }
 
       for (let index = fires.length - 1; index >= 0; index--) {
         const fire = fires[index];
-        fire.age += dt;
+        const age = time - fire.start;
 
-        while (fire.parcels.length > 0 && fire.age - fire.parcels[0].born >= smokeLife(fire)) {
-          fire.parcels.shift();
-        }
-
-        if (fire.age >= fire.life) {
-          if (fire.parcels.length === 0) {
-            fires.splice(index, 1);
-          }
-
+        if (age >= fire.life + smokeLife(fire)) {
+          fires.splice(index, 1);
+          owed.delete(fire);
           continue;
         }
 
-        const strength = vigor(fire);
-        fire.flames += dt * (FLAME_RATE + fire.spread * FLAME_RATE_PER_SPREAD) * strength;
-        fire.embers += dt * EMBER_RATE * strength;
-        fire.smoke += dt * (SMOKE_RATE + fire.spread * SMOKE_RATE_PER_SPREAD);
+        if (age >= fire.life) {
+          continue;
+        }
 
-        for (; fire.flames >= 1; fire.flames--) {
+        const strength = vigor(fire, age);
+        const debt = owed.get(fire)!;
+        debt.flames += dt * (FLAME_RATE + fire.spread * FLAME_RATE_PER_SPREAD) * strength;
+        debt.embers += dt * EMBER_RATE * strength;
+
+        for (; debt.flames >= 1; debt.flames--) {
           const at = scatter(fire);
           renderer.spawn(PARTICLE_FIRE, at.x, at.y, WIND.x * 0.2 + random(-5, 5), WIND.y * 0.2 + random(-5, 5), random(0.35, 0.7), random(1.6, 3) * strength + 0.6, NO_COLOR);
         }
 
-        for (; fire.embers >= 1; fire.embers--) {
+        for (; debt.embers >= 1; debt.embers--) {
           const angle = Math.random() * Math.PI * 2;
           const speed = random(20, 60);
           renderer.spawn(PARTICLE_SPARK, fire.x, fire.y, Math.cos(angle) * speed + WIND.x, Math.sin(angle) * speed + WIND.y, random(0.4, 0.9), 1.2, EMBER_COLOR);
-        }
-
-        // Parcels leave at an even pace whatever the frame rate: each is born when its share of smoke was due.
-        for (; fire.smoke >= 1; fire.smoke--) {
-          const born = fire.age - fire.smoke / (SMOKE_RATE + fire.spread * SMOKE_RATE_PER_SPREAD);
-          fire.parcels.push(releaseParcel(fire, born, strength));
         }
       }
     },
 
     /** Adds every fire's smoke and flickering light, and all soot, to this frame. */
     draw() {
-      soot.forEach((puff) => drawSoot(renderer, puff));
+      plumes.draw(renderer, fires, soot, time);
 
       for (const fire of fires) {
-        for (const parcel of fire.parcels) {
-          drawParcel(renderer, fire, parcel);
-        }
+        const age = time - fire.start;
 
-        if (fire.age < fire.life) {
-          const time = fire.age + fire.seed;
-          const flicker = 0.8 + 0.1 * Math.sin(time * 13) + 0.07 * Math.sin(time * 23.7 + 1) + 0.05 * Math.random();
-          renderer.addLight(fire.x, fire.y, fire.light + 6 * Math.sin(time * 7), flicker * fire.brightness * vigor(fire), FIRE_LIGHT, LIGHT_HEIGHT);
+        if (age < fire.life) {
+          const phase = age + fire.seed;
+          const flicker = 0.8 + 0.1 * Math.sin(phase * 13) + 0.07 * Math.sin(phase * 23.7 + 1) + 0.05 * Math.random();
+          renderer.addLight(fire.x, fire.y, fire.light + 6 * Math.sin(phase * 7), flicker * fire.brightness * vigor(fire, age), FIRE_LIGHT, LIGHT_HEIGHT);
         }
       }
     }
   };
 }
 
-type Fire = {
-  x: number;
-  y: number;
-  spread: number;
-  life: number;
-  light: number;
-  brightness: number;
-  age: number;
-  /** Flames, embers and smoke parcels owed, accumulated between frames. */
-  flames: number;
-  embers: number;
-  smoke: number;
-  /** Smoke in the air, oldest first. */
-  parcels: Parcel[];
-  /** Varies flicker and gusts so fires do not move in step. */
-  seed: number;
+/** The burning of `createBurning`. */
+export type Burning = ReturnType<typeof createBurning>;
+
+/**
+ * Draws smoke as it is at a moment: the balls of every fire's parcels and of every puff of soot
+ * of `fires` and `soot` alive at `time`, on the burning's clock. Parcels are made once, as they
+ * are first drawn, from the fire's seed and their number, and forgotten once gone; so any moment
+ * may be drawn, in any order, and looks the same.
+ */
+export function createPlumes() {
+  const made = new WeakMap<FireRecord, Map<number, Parcel>>();
+
+  return {
+    draw(renderer: Renderer, fires: Iterable<FireRecord>, soot: Iterable<SootRecord>, time: number) {
+      for (const puff of soot) {
+        const age = time - puff.start;
+
+        if (age >= 0 && age < puff.life) {
+          drawSoot(renderer, puff, age);
+        }
+      }
+
+      for (const fire of fires) {
+        const age = time - fire.start;
+
+        if (age < 0) {
+          continue;
+        }
+
+        const rate = smokeRate(fire);
+        const life = smokeLife(fire);
+        // Parcel n leaves the fire at (n + 1) / rate s, while the fire burns, and is gone `life` s after.
+        const first = Math.max(Math.floor((age - life) * rate), 0);
+        const last = Math.floor(Math.min(age, fire.life) * rate) - 1;
+        let parcels = made.get(fire);
+
+        if (!parcels) {
+          parcels = new Map();
+          made.set(fire, parcels);
+        }
+
+        for (const index of parcels.keys()) {
+          if (index < first || index > last) {
+            parcels.delete(index);
+          }
+        }
+
+        for (let index = first; index <= last; index++) {
+          let parcel = parcels.get(index);
+
+          if (!parcel) {
+            parcel = releaseParcel(fire, index);
+            parcels.set(index, parcel);
+          }
+
+          if (age - parcel.born < life) {
+            drawParcel(renderer, fire, parcel, age);
+          }
+        }
+      }
+    }
+  };
+}
+
+/**
+ * A fire as it began, at `start` on the burning's clock; `seed` makes its parcels and varies its
+ * flicker and gusts, so fires do not move in step. `id`s count up across fires and soot.
+ */
+export type FireRecord = {
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  readonly spread: number;
+  readonly life: number;
+  readonly light: number;
+  readonly brightness: number;
+  readonly seed: number;
+  readonly start: number;
 };
 
-/** A parcel of smoke: where and when it left the fire, and what makes it unlike its neighbours. */
+/** A puff of soot as it began, at `start` on the burning's clock; `tone` and `turn` as in `SmokeBall`. */
+export type SootRecord = {
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  readonly vx: number;
+  readonly vy: number;
+  readonly life: number;
+  readonly size: number;
+  readonly tone: number;
+  readonly turn: number;
+  readonly start: number;
+};
+
+/** A parcel of smoke: when it left the fire and what makes it unlike its neighbours. */
 type Parcel = {
   /** Age of the fire when the parcel left it. */
   born: number;
@@ -194,17 +254,6 @@ type Parcel = {
  * the parcel's billows.
  */
 type Billow = { level: 1 | 2; parent: number; angle: number; offset: number; radius: number; lift: number; tone: number };
-
-/** A puff of soot; `tone` and `turn` as in `SmokeBall`. */
-type Soot = Point & {
-  vx: number;
-  vy: number;
-  age: number;
-  life: number;
-  size: number;
-  tone: number;
-  turn: number;
-};
 
 /** Wind, in world pixels per second: carries smoke and embers to the upper right. */
 export const WIND = { x: 22, y: -16 };
@@ -274,41 +323,62 @@ const MAX_BILLOWS = 5;
 /** Share of billows that carry two smaller billows instead of one. */
 const SECOND_BILLOW = 0.3;
 
-/** Strength of a fire, 1 while it burns and falling to 0 over its last seconds. */
-function vigor(fire: Fire) {
-  return Number.isFinite(fire.life) ? Math.max(Math.min((fire.life - fire.age) / DYING, 1), 0) : 1;
+/** Strength of a fire `age` s after it began, 1 while it burns and falling to 0 over its last seconds. */
+function vigor(fire: FireRecord, age: number) {
+  return Number.isFinite(fire.life) ? Math.max(Math.min((fire.life - age) / DYING, 1), 0) : 1;
+}
+
+/** Parcels of smoke a fire gives off a second. */
+function smokeRate(fire: FireRecord) {
+  return SMOKE_RATE + fire.spread * SMOKE_RATE_PER_SPREAD;
 }
 
 /** Seconds a parcel of this fire's smoke lives. */
-function smokeLife(fire: Fire) {
+function smokeLife(fire: FireRecord) {
   return SMOKE_LIFE + fire.spread * SMOKE_LIFE_PER_SPREAD;
 }
 
 /**
- * A new parcel. Gusts are smooth functions of the time it leaves, so parcels leaving together
- * travel together and the plume bends in waves that run downwind.
+ * Parcel `index` of `fire`, the same every time it is made: its randomness comes from the fire's
+ * seed and its number. Gusts are smooth functions of the time it leaves, so parcels leaving
+ * together travel together and the plume bends in waves that run downwind.
  */
-function releaseParcel(fire: Fire, born: number, strength: number): Parcel {
+function releaseParcel(fire: FireRecord, index: number): Parcel {
+  const random = parcelRandom(fire.seed, index);
+  const born = (index + 1) / smokeRate(fire);
   const time = born + fire.seed;
   const across = (Math.sin(time * 0.7) * 0.6 + Math.sin(time * 1.9 + 2) * 0.4) * GUST_ACROSS;
   const along = Math.sin(time * 1.1 + 4) * GUST_ALONG;
-  const angle = Math.random() * Math.PI * 2;
-  const reach = Math.sqrt(Math.random()) * fire.spread * 0.6;
-  const wanderAngle = Math.random() * Math.PI * 2;
-  const wander = Math.random() * WANDER;
+  const angle = random(0, Math.PI * 2);
+  const reach = Math.sqrt(random(0, 1)) * fire.spread * 0.6;
+  const wanderAngle = random(0, Math.PI * 2);
+  const wander = random(0, WANDER);
 
   return {
     born,
-    strength,
+    strength: vigor(fire, born),
     start: { x: Math.cos(angle) * reach, y: Math.sin(angle) * reach },
     gust: { x: CROSSWIND.x * across + DOWNWIND.x * along, y: CROSSWIND.y * across + DOWNWIND.y * along },
     wander: { x: Math.cos(wanderAngle) * wander, y: Math.sin(wanderAngle) * wander },
     size: random(0.65, 1.35),
     climb: random(0.85, 1.15),
     tone: random(0.85, 1.15),
-    phase: Math.random() * Math.PI * 2,
+    phase: random(0, Math.PI * 2),
     roll: random(-0.5, 0.5),
-    billows: heapBillows()
+    billows: heapBillows(random)
+  };
+}
+
+/** Numbers in [min, max) for parcel `index` of a fire of `seed`, always the same ones (mulberry32). */
+function parcelRandom(seed: number, index: number) {
+  let state = (Math.floor(seed * 1e6) ^ Math.imul(index + 1, 0x9e3779b1)) >>> 0;
+
+  return (min: number, max: number) => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return min + (((t ^ (t >>> 14)) >>> 0) / 4294967296) * (max - min);
   };
 }
 
@@ -316,9 +386,9 @@ function releaseParcel(fire: Fire, born: number, strength: number): Parcel {
  * Billows for a parcel: a ring of them on its body, spread around it so they cover its top, and
  * one smaller one on each of those, sometimes two, which makes the cauliflower of thick smoke.
  */
-function heapBillows() {
+function heapBillows(random: (min: number, max: number) => number) {
   const count = Math.floor(random(MIN_BILLOWS, MAX_BILLOWS + 1));
-  const start = Math.random() * Math.PI * 2;
+  const start = random(0, Math.PI * 2);
   const billows: Billow[] = [];
 
   for (let index = 0; index < count; index++) {
@@ -334,11 +404,11 @@ function heapBillows() {
   }
 
   for (let parent = 0; parent < count; parent++) {
-    for (let index = Math.random() < SECOND_BILLOW ? 2 : 1; index > 0; index--) {
+    for (let index = random(0, 1) < SECOND_BILLOW ? 2 : 1; index > 0; index--) {
       billows.push({
         level: 2,
         parent,
-        angle: Math.random() * Math.PI * 2,
+        angle: random(0, Math.PI * 2),
         offset: random(0.45, 0.7),
         radius: random(0.45, 0.6),
         lift: random(0.2, 0.35),
@@ -350,9 +420,9 @@ function heapBillows() {
   return billows;
 }
 
-/** Adds a parcel's balls to the frame: its body, billows heaped on its top and smaller billows on those. */
-function drawParcel(renderer: Renderer, fire: Fire, parcel: Parcel) {
-  const age = fire.age - parcel.born;
+/** Adds a parcel's balls to the frame, `fireAge` s after its fire began: its body, billows heaped on its top and smaller billows on those. */
+function drawParcel(renderer: Renderer, fire: FireRecord, parcel: Parcel, fireAge: number) {
+  const age = fireAge - parcel.born;
   const life = smokeLife(fire);
   const strength = parcel.strength;
   const risen = 1 - Math.exp(-age / RISE_TIME);
@@ -391,20 +461,24 @@ function drawParcel(renderer: Renderer, fire: Fire, parcel: Parcel) {
   }
 }
 
-/** Adds a puff of soot to the frame as one ball of smoke. */
-function drawSoot(renderer: Renderer, puff: Soot) {
-  const t = puff.age / puff.life;
+/**
+ * Adds a puff of soot to the frame as one ball of smoke, `age` s after it was given off: where its
+ * drift, slowing at `SOOT_DRAG` a second, has taken it.
+ */
+function drawSoot(renderer: Renderer, puff: SootRecord, age: number) {
+  const t = age / puff.life;
   const height = SOOT_RISE * puff.size * t;
+  const drift = (1 - Math.exp(-SOOT_DRAG * age)) / SOOT_DRAG;
   renderer.addSmokeBall({
-    x: puff.x,
-    y: puff.y,
+    x: puff.x + puff.vx * drift,
+    y: puff.y + puff.vy * drift,
     height,
     bodyHeight: height,
     radius: puff.size * (0.8 + SOOT_SWELL * t),
     opacity: smoothstep(0, 0.12, t) * (1 - smoothstep(0.45, 1, t)),
-    heat: Math.exp(-puff.age / SOOT_HEAT_TIME) * Math.min(Math.max((puff.size - SOOT_GLOWING) / 3, 0), 1),
+    heat: Math.exp(-age / SOOT_HEAT_TIME) * Math.min(Math.max((puff.size - SOOT_GLOWING) / 3, 0), 1),
     tone: puff.tone,
-    turn: puff.turn + puff.age * 0.3
+    turn: puff.turn + age * 0.3
   });
 }
 
@@ -416,7 +490,7 @@ function thinning(share: number) {
   return 1 - smoothstep(THINNING + (1 - THINNING) * FADE_FROM, 1, share);
 }
 
-function scatter(fire: Fire) {
+function scatter(fire: FireRecord) {
   const angle = Math.random() * Math.PI * 2;
   const distance = Math.sqrt(Math.random()) * fire.spread;
   return { x: fire.x + Math.cos(angle) * distance, y: fire.y + Math.sin(angle) * distance };

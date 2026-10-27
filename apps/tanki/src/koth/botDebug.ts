@@ -171,7 +171,9 @@ export function drawDebug(
   const team = match.boards[member.team].inspect();
   const mind = match.bots.get(member)?.inspect();
   const thought = match.bots.get(member)?.thought();
-  const tank = member.tank;
+  // A tank destroyed this step stays in a bot's lists until its next step, its body already gone from the world.
+  const alive = (other: Tank | undefined): other is Tank => other !== undefined && match.combat.armorOf(other) !== undefined;
+  const tank = alive(member.tank) ? member.tank : undefined;
   const at = tank?.hull.translation();
   const now = match.time;
   const grid = match.grid;
@@ -236,7 +238,7 @@ export function drawDebug(
     }
 
     for (const [kit, claim] of team.claims) {
-      const by = claim.member.tank?.hull.translation();
+      const by = alive(claim.member.tank) ? claim.member.tank.hull.translation() : undefined;
 
       if (by && claim.until > now) {
         line(by, kit, GREEN, 1.5, [4, 4]);
@@ -255,7 +257,7 @@ export function drawDebug(
     for (const sighting of team.sightings) {
       const rival = match.members.find((candidate) => candidate.tank === sighting.tank);
 
-      if (!rival || !rival.tank) {
+      if (!rival || !alive(rival.tank)) {
         continue;
       }
 
@@ -272,7 +274,7 @@ export function drawDebug(
       context.strokeRect(-hull.halfLength, -hull.halfWidth, hull.halfLength * 2, hull.halfWidth * 2);
       context.restore();
       context.setLineDash([]);
-      line(sighting.position, rival.tank.hull.translation(), PAPER, 1, [1, 4]);
+      line(sighting.position, rival.tank!.hull.translation(), PAPER, 1, [1, 4]);
       label(sighting.position, `${rival.name} · ${age.toFixed(1)} s`, PAPER, 0, hull.halfWidth + 14);
       context.globalAlpha = 1;
     }
@@ -325,7 +327,7 @@ export function drawDebug(
       context.stroke();
     }
 
-    for (const seen of mind.visible) {
+    for (const seen of mind.visible.filter(alive)) {
       line(at, seen.hull.translation(), GREEN, 1.5);
     }
 
@@ -333,7 +335,7 @@ export function drawDebug(
     const reach = TACTICS[member.tankClass.id].reach;
     line(pivot, { x: pivot.x + Math.cos(tank.turretAngle) * reach, y: pivot.y + Math.sin(tank.turretAngle) * reach }, YELLOW, 1.5, [10, 6]);
 
-    if (mind.aim.target) {
+    if (alive(mind.aim.target)) {
       ring(mind.aim.target.hull.translation(), 26, YELLOW, 2.5);
     }
 

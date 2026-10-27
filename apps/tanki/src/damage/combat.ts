@@ -908,6 +908,9 @@ export function createCombat(
       layout.crates?.forEach((placement) => spawnCrate(placement));
     },
 
+    /** The fires and the soot in the air, with the clock they keep, for a match's tape (see `createBurning`); read only. */
+    burning: burning as Pick<typeof burning, 'time' | 'fires' | 'soot'>,
+
     /** Frees the queue of Rapier's collision events; the battle is not to be used after. The world's owner frees the world. */
     dispose() {
       events.free();

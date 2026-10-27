@@ -1,7 +1,7 @@
 import { GpuCanvas, useGpuCanvas } from '@app-game/solid-gpu/gpu';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
-import { createSignal, onCleanup, onSettled, Show, untrack } from 'solid-js';
+import { createMemo, createSignal, onCleanup, onSettled, Show, untrack } from 'solid-js';
 import { aimAngle } from '../arena/aim';
 import {
   createCamera,
@@ -20,15 +20,18 @@ import { AIM_LOOK_IDS, aimLookFromAddress, aimOnScreen, AimOverlay, type AimView
 import { ClassMenu } from './classes/ClassMenu';
 import type { ClassTuning } from './classes/knobs';
 import { createScope } from './classes/scope';
-import { BotThoughts, KothHud, MatchResult, type HudState, type ThoughtView } from './Hud';
+import { BotThoughts, KillCamBanner, KothHud, MatchResult, type HudState, type KillCamView, type ThoughtView } from './Hud';
 import { createKothI18n, KothI18nProvider } from './i18n/i18n';
+import type { KothKill, KothMatch, SeatHud } from './match';
 import type { Pace } from './pace';
 import { calloutsOnScreen, fitCanvas, thoughtsOnScreen } from './onScreen';
 import { PauseMenu, type MenuPage } from './PauseMenu';
 import { RadioOverlay, type CalloutView } from './RadioOverlay';
 import { loadRecording, readRecordingFile, type OpenResult } from './openRecording';
 import { createRecordedMatch, matchPaceOf, newSeed, STEP, type Recording } from './recording';
+import { createTapePlayer, createTapeRecorder, type Tape } from './tape';
 import { ReplayView } from './ReplayView';
+import { bestKills, type Highlight } from './highlights';
 import { saveRecording, type SaveState } from './saveRecording';
 import { CAPTURE_RULES } from './rules';
 import { TANK_CLASS_IDS, type TankClassId } from './tanks';
@@ -72,7 +75,10 @@ import { createTuning } from './tuning';
  * tuning, and `?slow=4` runs the game four times slower, to look at effects frame by frame.
  *
  * Every match is recorded as it is played (see `createRecordedMatch`) and saved from the result
- * screen or the menu. The result screen also plays the match again to watch, and the menu's
+ * screen or the menu, and taped as it is drawn (see `createTapeRecorder`). When the player's tank
+ * is destroyed, a kill-cam shows from the tape how it went, unless switched off in the menu. The
+ * result screen lists the match's best kills to watch (see `bestKills`) and plays the whole match
+ * again, both from its tape, and the menu's
  * recordings page opens it or another recording, of the dev server's folder or from a file, as
  * does a file dropped onto the game (see `ReplayView`). `?replay=<file>` opens one of the dev
  * server's recordings, and `&t=95` from its 95th second.
@@ -100,9 +106,25 @@ export default function KothRoute() {
   const [look, setLook] = createSignal(aimLookFromAddress());
   const i18n = createKothI18n();
   const [saved, setSaved] = createSignal<SaveState>();
-  const [replay, setReplay] = createSignal<{ recording: Recording; start: number }>();
+  const [replay, setReplay] = createSignal<{ recording: Recording; tape?: Tape; start: number; follow?: number }>();
   const [notice, setNotice] = createSignal<string>();
-  let takeRecording: (() => Recording) | undefined;
+  const [killCam, setKillCam] = createSignal(readKillCam());
+  const [killCamView, setKillCamView] = createSignal<KillCamView>();
+  let takeRecording: (() => { recording: Recording; tape: Tape }) | undefined;
+  // The match's best kills, once it is won; found once, not with every frame's state.
+  const winner = createMemo(() => state()?.capture.winner);
+  const highlights = createMemo(() => {
+    if (!winner() || !takeRecording) {
+      return [];
+    }
+
+    const { chronicle } = untrack(() => takeRecording!().recording);
+    const seatOf = (id: number) => {
+      const member = chronicle.members.find((entry) => entry.id === id)!;
+      return { name: member.name, team: member.team, seat: member.seat, player: member.human, human: member.human };
+    };
+    return bestKills(chronicle).map((kill) => ({ kill, killer: seatOf(kill.killer), victim: seatOf(kill.victim) }));
+  });
   const { t } = i18n;
 
   loadPosterFont();
@@ -181,11 +203,13 @@ export default function KothRoute() {
                   classes={tuning.classes()}
                   onRecorder={(take) => (takeRecording = take)}
                   paused={paused()}
+                  killCam={killCam()}
                   onFrame={(frame) => {
                     setState(frame.state);
                     setThoughts(frame.thoughts);
                     setCallouts(frame.callouts);
                     setAim(frame.aim);
+                    setKillCamView(frame.killCam);
                   }}
                 />
               </Rapier2D>
@@ -193,14 +217,23 @@ export default function KothRoute() {
             <BotThoughts thoughts={thoughts()} />
             <RadioOverlay callouts={callouts()} />
             <KothHud state={state()} watching={watching()} />
+            <KillCamBanner view={killCamView()} />
             <AimOverlay
               canvas={canvas()}
               view={aim()}
               player={state()?.player}
               look={look()}
-              active={!menu() && !paused() && !watching() && !state()?.capture.winner}
+              active={!menu() && !paused() && !watching() && !state()?.capture.winner && !killCamView()}
             />
-            <MatchResult state={state()} saved={saved()} onSave={save} onRestart={restart} onWatch={watchThis} />
+            <MatchResult
+              state={state()}
+              saved={saved()}
+              onSave={save}
+              onRestart={restart}
+              onWatch={watchThis}
+              highlights={highlights()}
+              onHighlight={watchHighlight}
+            />
             <Show when={menu() && !paused() && !watching() && state()}>
               {(shown) => (
                 <ClassMenu
@@ -239,12 +272,17 @@ export default function KothRoute() {
                 onSave={save}
                 onOpenRecording={(opened, fromFolder) => openReplay(opened, fromFolder)}
                 onWatchReplay={watchThis}
+                killCam={killCam()}
+                onKillCam={(on) => {
+                  setKillCam(on);
+                  keepKillCam(on);
+                }}
               />
             </Show>
             </>
           }
         >
-          {(opened) => <ReplayView recording={opened.recording} start={opened.start} onExit={exitReplay} />}
+          {(opened) => <ReplayView recording={opened.recording} tape={opened.tape} start={opened.start} follow={opened.follow} onExit={exitReplay} />}
         </Show>
         <Show when={notice()}>
           {(text) => (
@@ -271,7 +309,7 @@ export default function KothRoute() {
     }
 
     setSaved({ kind: 'saving' });
-    setSaved(await saveRecording(takeRecording()));
+    setSaved(await saveRecording(takeRecording().recording));
   }
 
   /**
@@ -279,7 +317,7 @@ export default function KothRoute() {
    * recording of the dev server's folder is named in the address as `?replay=`, so a reload or a
    * link opens it again. One that did not open is told of.
    */
-  function openReplay(opened: OpenResult, fromFolder: boolean, start = 0) {
+  function openReplay(opened: OpenResult, fromFolder: boolean, start = 0, extra: { tape?: Tape; follow?: number } = {}) {
     if (opened.kind === 'failed') {
       setNotice(t('replay.failed', opened.reason));
       return;
@@ -288,14 +326,23 @@ export default function KothRoute() {
     setNotice(undefined);
     setPaused(false);
     setMenu(false);
-    setReplay({ recording: opened.recording, start });
+    setReplay({ recording: opened.recording, start, ...extra });
     setAddress({ replay: fromFolder ? opened.name : undefined, t: undefined });
   }
 
-  /** Watches the match being played from its start. */
+  /** Watches the match being played from its start, from the tape it was played on. */
   function watchThis() {
     if (takeRecording) {
-      openReplay({ kind: 'opened', recording: takeRecording(), name: '' }, false);
+      const { recording, tape } = takeRecording();
+      openReplay({ kind: 'opened', recording, name: '' }, false, 0, { tape });
+    }
+  }
+
+  /** Watches one of the match's best kills from a few seconds before, following its killer. */
+  function watchHighlight(kill: Highlight) {
+    if (takeRecording) {
+      const { recording, tape } = takeRecording();
+      openReplay({ kind: 'opened', recording, name: '' }, false, Math.max(kill.step - HIGHLIGHT_LEAD * 60, 0), { tape, follow: kill.killer });
     }
   }
 
@@ -350,9 +397,10 @@ const FONT_LINK_ID = 'tanki-poster-font';
 /**
  * Runs the match on the canvas's GPU: input, fixed 60 Hz physics steps, the camera and drawing,
  * and reports the display state every frame. The match is recorded as it is played (see
- * `createRecordedMatch`); every match, the first and each restart, gets a physics world of its
- * own and a new seed, so its recording plays it again from nothing. `?seed=` in the address
- * gives the first match that seed, to play a recorded match's beginning again.
+ * `createRecordedMatch`) and taped as it is drawn (see `createTapeRecorder`); every match, the
+ * first and each restart, gets a physics world and a tape of its own and a new seed, so its
+ * recording plays it again from nothing. `?seed=` in the address gives the first match that seed,
+ * to play a recorded match's beginning again.
  *
  * @param restarts - Starts a new match whenever it changes after mount.
  * @param watching - The player's seat is driven by a bot and the camera shows the whole map, or follows a chosen tank.
@@ -363,7 +411,11 @@ const FONT_LINK_ID = 'tanki-poster-font';
  *   changes, the view's lead and slack, and what the match itself works by.
  * @param classes - The classes' tuning, handed to the match whenever it changes (see `ClassTuning`).
  * @param paused - Holds the match, its effects and the view still; the frame is drawn again as it stands.
- * @param onRecorder - Receives, for every new match, the function that takes its recording so far.
+ * @param killCam - Whether the player's tank going shows a kill-cam: `KILL_CAM_DELAY` s later, the
+ *   last moments before it from the match's tape, on the killer and the player's tank, slowed about
+ *   the shot, while the match goes on unseen; any key or click ends it. `onFrame` tells who the
+ *   killer was while it shows.
+ * @param onRecorder - Receives, for every new match, the function that takes its recording and tape so far.
  * @param onFrame - Receives the display state after each frame, with the player's aim on screen.
  */
 function KothScene(props: {
@@ -376,13 +428,22 @@ function KothScene(props: {
   pace: Pace;
   classes: ClassTuning;
   paused: boolean;
-  onRecorder: (take: () => Recording) => void;
-  onFrame: (frame: { state: HudState; thoughts: ThoughtView[]; callouts: CalloutView[]; aim: AimView | undefined }) => void;
+  killCam: boolean;
+  onRecorder: (take: () => { recording: Recording; tape: Tape }) => void;
+  onFrame: (frame: {
+    state: HudState;
+    thoughts: ThoughtView[];
+    callouts: CalloutView[];
+    aim: AimView | undefined;
+    killCam: KillCamView | undefined;
+  }) => void;
 }) {
   const canvas = untrack(() => props.canvas);
   const rapier = useRapier2D();
   const renderer = createRangeRenderer(useGpuCanvas());
   const first = untrack(() => props.playerClass);
+  let recorder = createTapeRecorder(renderer);
+  let killCam: KillCam | undefined;
   let recorded = startMatch(TANK_CLASS_IDS.find((id) => id === first) ?? 'soldier', seedFromAddress() ?? newSeed());
   let match = recorded.match;
   const input = makeArenaInput(canvas);
@@ -405,8 +466,15 @@ function KothScene(props: {
 
   camera.zoom = zoom;
 
+  // Any key or click skips the kill-cam.
+  makeEventListener(window, 'pointerdown', () => killCam?.player && endKillCam());
+
   makeEventListener(window, 'keydown', (event) => {
     const digit = /^Digit([0-8])$/.exec(event.code);
+
+    if (killCam?.player && event.code !== 'Escape') {
+      endKillCam();
+    }
 
     if (digit && props.watching && !props.paused) {
       watched = digit[1] === '0' ? undefined : Number(digit[1]) - 1;
@@ -432,18 +500,97 @@ function KothScene(props: {
 
   /** Starts a recorded match of `playerClass` for the player, on seed `seed`, at the pace and with the classes' tuning set now. */
   function startMatch(playerClass: TankClassId, seed: number) {
+    const tape = recorder.tape;
     const started = untrack(() =>
-      createRecordedMatch(rapier, renderer, {
-        seed,
-        human: true,
-        playerClass,
-        rules: rulesFromAddress(),
-        pace: matchPaceOf(props.pace),
-        classes: props.classes
-      })
+      createRecordedMatch(
+        rapier,
+        recorder.renderer,
+        {
+          seed,
+          human: true,
+          playerClass,
+          rules: rulesFromAddress(),
+          pace: matchPaceOf(props.pace),
+          classes: props.classes
+        },
+        { onKill: noticeKill }
+      )
     );
-    props.onRecorder(() => started.recording());
+    props.onRecorder(() => ({ recording: started.recording(), tape }));
     return started;
+  }
+
+  /**
+   * Readies the kill-cam when the player's own tank is destroyed, if it is on: it begins
+   * `KILL_CAM_DELAY` s later.
+   */
+  function noticeKill(kill: KothKill) {
+    const seat = match.seat;
+
+    if (!props.killCam || kill.victim !== seat || !seat.human) {
+      return;
+    }
+
+    killCam = {
+      death: recorded.steps,
+      killer: kill.killer ? match.members.indexOf(kill.killer) : undefined,
+      view: { killer: kill.killer && seatOf(kill.killer), tankClass: kill.killerClass },
+      beginAt: performance.now() + KILL_CAM_DELAY * 1000,
+      player: undefined,
+      time: 0,
+      // The player's tank is already gone from the world here; the kill-cam starts from the view as it is.
+      camera: { ...camera }
+    };
+  }
+
+  /** Ends the kill-cam: the match is drawn live again, with its fields as they are now. */
+  function endKillCam() {
+    if (killCam?.player) {
+      recorder.resume();
+    }
+
+    killCam = undefined;
+    lookAhead.reset();
+  }
+
+  /** The seat of `member`, as the display names it. */
+  function seatOf(member: KothMatch['members'][number]): SeatHud {
+    return { name: member.name, team: member.team, seat: member.index, player: member === match.seat, human: member.human };
+  }
+
+  /**
+   * Shows the kill-cam's frame on the renderer from the match's tape: the last `KILL_CAM_BEFORE` s
+   * before the player's tank went, slowing to `KILL_CAM_SLOW` about the shot, and `KILL_CAM_AFTER`
+   * s after, the view on the killer and the player's tank. Ends it once shown.
+   */
+  function showKillCam(cam: KillCam, dt: number, screen: { width: number; height: number }) {
+    const near = Math.abs(cam.time - cam.death) < KILL_CAM_SLOW_SPAN * 60;
+    cam.time += dt * 60 * (near ? KILL_CAM_SLOW : 1);
+
+    if (cam.time >= cam.death + KILL_CAM_AFTER * 60) {
+      endKillCam();
+      return false;
+    }
+
+    const shown = cam.player!.show(cam.time);
+    const victim = shown?.members[match.members.indexOf(match.seat)];
+    const killer = cam.killer === undefined ? undefined : shown?.members[cam.killer];
+    const points = [killer, victim].filter((point) => point !== undefined);
+
+    if (points.length > 0) {
+      const minX = Math.min(...points.map((point) => point.x));
+      const maxX = Math.max(...points.map((point) => point.x));
+      const minY = Math.min(...points.map((point) => point.y));
+      const maxY = Math.max(...points.map((point) => point.y));
+      const fit = Math.min(Math.max(Math.min(screen.width / (maxX - minX + 360), screen.height / (maxY - minY + 300)), 0.5), 1.4);
+      const ease = Math.min(dt * 4, 1);
+      cam.camera.x += ((minX + maxX) / 2 - cam.camera.x) * ease;
+      cam.camera.y += ((minY + maxY) / 2 - cam.camera.y) * ease;
+      cam.camera.zoom += (fit - cam.camera.zoom) * ease;
+    }
+
+    renderer.render(cam.camera, screen, BACKGROUND, dt * (near ? KILL_CAM_SLOW : 1));
+    return true;
   }
 
   /**
@@ -454,6 +601,8 @@ function KothScene(props: {
     const playerClass = match.seat.nextClass ?? match.seat.tankClass.id;
     recorded.dispose();
     renderer.releaseAllFields();
+    killCam = undefined;
+    recorder = createTapeRecorder(renderer);
     recorded = startMatch(playerClass, newSeed());
     match = recorded.match;
     const spawn = match.seat.tank?.hull.translation();
@@ -497,14 +646,24 @@ function KothScene(props: {
     // Paused, the wheel and keys read meanwhile are dropped, and the frame is drawn and reported as it stands, without shake.
     if (props.paused) {
       match.draw(camera);
-      renderer.render(camera, screen, BACKGROUND, 0);
+      recorder.endFrame(recorded.steps, match);
+      renderer.render(killCam?.player ? killCam.camera : camera, screen, BACKGROUND, 0);
       props.onFrame({
         state: match.hud(),
-        thoughts: props.thoughts && !match.capture.winner ? thoughtsOnScreen(match, camera, screen) : [],
-        callouts: match.capture.winner ? [] : calloutsOnScreen(match, camera, screen, props.watching),
-        aim: undefined
+        thoughts: props.thoughts && !match.capture.winner && !killCam?.player ? thoughtsOnScreen(match, camera, screen) : [],
+        callouts: match.capture.winner || killCam?.player ? [] : calloutsOnScreen(match, camera, screen, props.watching),
+        aim: undefined,
+        killCam: killCam?.player ? killCam.view : undefined
       });
       return;
+    }
+
+    // The kill-cam begins: the match goes on, taped, while the tape shows the moments before.
+    if (killCam && !killCam.player && performance.now() >= killCam.beginAt) {
+      killCam.player = createTapePlayer(renderer, recorder.tape);
+      killCam.time = Math.max(killCam.death - KILL_CAM_BEFORE * 60, recorder.tape.start ?? 0);
+      killCam.camera = { ...camera };
+      recorder.mute();
     }
 
     // A new zoom on the pace panel takes over the view; the wheel and +/- zoom on from it.
@@ -539,6 +698,13 @@ function KothScene(props: {
     match.update(dt);
     placeCamera(screen, dt, controls.aim);
     match.draw(camera);
+    recorder.endFrame(recorded.steps, match);
+
+    if (killCam?.player && showKillCam(killCam, dt, screen)) {
+      props.onFrame({ state: match.hud(), thoughts: [], callouts: [], aim: undefined, killCam: killCam.view });
+      return;
+    }
+
     const shake = match.shake;
     const view = {
       ...camera,
@@ -550,7 +716,8 @@ function KothScene(props: {
       state: match.hud(),
       thoughts: props.thoughts && !match.capture.winner ? thoughtsOnScreen(match, camera, screen) : [],
       callouts: match.capture.winner ? [] : calloutsOnScreen(match, camera, screen, props.watching),
-      aim: props.watching ? undefined : aimOnScreen(match, { angle: aim, reach }, view, screen)
+      aim: props.watching ? undefined : aimOnScreen(match, { angle: aim, reach }, view, screen),
+      killCam: undefined
     });
   }
 
@@ -618,6 +785,29 @@ function KothScene(props: {
 
 /** Zoom when watching one tank. */
 const FOLLOW_ZOOM = 1.6;
+
+/**
+ * The kill-cam under way: the step the player's tank went, the killer's place among the
+ * members, what the banner says, when it begins, the tape player once it has begun, the step it
+ * shows and its own view.
+ */
+type KillCam = {
+  death: number;
+  killer: number | undefined;
+  view: KillCamView;
+  beginAt: number;
+  player: ReturnType<typeof createTapePlayer> | undefined;
+  time: number;
+  camera: ReturnType<typeof createCamera>;
+};
+
+/** Seconds after the player's tank went that the kill-cam begins, and the seconds it shows before it and after. */
+const KILL_CAM_DELAY = 0.6;
+const KILL_CAM_BEFORE = 3;
+const KILL_CAM_AFTER = 0.8;
+/** How much the kill-cam slows down, within how many seconds of the kill. */
+const KILL_CAM_SLOW = 0.3;
+const KILL_CAM_SLOW_SPAN = 0.5;
 const MAX_FRAME_TIME = 0.1;
 const VIEW_TURN_SPEED = 1.5;
 const KEY_ZOOM_SPEED = 1.5;
@@ -626,6 +816,29 @@ const BACKGROUND = [0.302, 0.302, 0.302];
 function distanceTo(a: { x: number; y: number }, b: { x: number; y: number }) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
+
+/** Seconds of a best kill shown before it. */
+const HIGHLIGHT_LEAD = 3;
+
+/** Whether the kill-cam is on, as last kept; on at first. */
+function readKillCam() {
+  try {
+    return localStorage.getItem(KILL_CAM_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+/** Keeps whether the kill-cam is on for the next visit; a blocked storage only forgets it. */
+function keepKillCam(on: boolean) {
+  try {
+    localStorage.setItem(KILL_CAM_KEY, on ? 'on' : 'off');
+  } catch {
+    // Kept for this visit only.
+  }
+}
+
+const KILL_CAM_KEY = 'tanki.killCam';
 
 /** Sets or, for `undefined`, removes the address's parameters in `changes`, without a new history entry. */
 function setAddress(changes: Record<string, string | undefined>) {
