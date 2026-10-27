@@ -49,12 +49,13 @@ export function rebalance(team: readonly TankClassId[], current: TankClassId, si
  * The class a bot switches to at its next respawn when its class is not working out, as a Team
  * Fortress 2 player does, or `undefined` to keep it. In order:
  *
- * - An enemy Sniper keeps picking the team off (`COUNTER_DEATHS` of the team's recent deaths, the
- *   bot's own last one among them) and the team has no Scout: a Scout, which hunts Snipers.
- * - An enemy Heavy keeps grinding the team down the same way and the team has no Sniper: a
- *   Sniper, whose rail goes through the Heavy's plates from afar.
- * - The bot destroyed nothing in its last `STRUGGLE_LIVES` lives: the class the team lacks most,
- *   a Heavy to lead its pushes, then a Demoman, then a Soldier.
+ * - One enemy class keeps destroying the bot, its last two tanks, or the team, `COUNTER_DEATHS`
+ *   of its recent deaths with the bot's last among them: the class that counters it (see
+ *   `COUNTERS`), a Scout to hunt a Sniper and a Sniper to break a Heavy from afar, even when a
+ *   teammate already has it.
+ * - The bot destroyed at most one tank in its last `STRUGGLE_LIVES` lives: the class the team
+ *   lacks most, a Heavy to lead its pushes, then a Demoman, then a Soldier, else the counter to
+ *   what destroyed it most, else any other class the team has room for.
  *
  * The switch keeps within `rosterLimits`, and a bot switches at most once in `SWITCH_COOLDOWN` s,
  * so it gives a new class a fair try.
@@ -77,29 +78,61 @@ export function adaptClass(
   const { team, lives, teamDeaths } = situation;
   const limit = rosterLimits(situation.size);
   const fits = (id: TankClassId) => id !== current && team.filter((other) => other === id).length < limit[id];
-  const lastKiller = lives[lives.length - 1]?.killer;
-  const pickedOff = (by: TankClassId) => lastKiller === by && teamDeaths.filter((killer) => killer === by).length >= COUNTER_DEATHS;
+  const killers = lives.map((life) => life.killer);
+  const lastKiller = killers[killers.length - 1];
 
   if (situation.switchedAgo < SWITCH_COOLDOWN) {
     return undefined;
   }
 
-  if (pickedOff('sniper') && !team.includes('scout') && fits('scout')) {
-    return 'scout';
+  const hunted = lastKiller !== undefined && (killers.slice(-2).filter((killer) => killer === lastKiller).length === 2 || teamDeaths.filter((killer) => killer === lastKiller).length >= COUNTER_DEATHS);
+  const counter = lastKiller && COUNTERS[lastKiller];
+
+  if (hunted && counter && fits(counter)) {
+    return counter;
   }
 
-  if (pickedOff('heavy') && !team.includes('sniper') && fits('sniper')) {
-    return 'sniper';
+  const recent = lives.slice(-STRUGGLE_LIVES);
+  const struggling = recent.length >= STRUGGLE_LIVES && recent.reduce((sum, life) => sum + life.kills, 0) <= 1;
+
+  if (!struggling) {
+    return undefined;
   }
 
-  const struggling = lives.length >= STRUGGLE_LIVES && lives.slice(-STRUGGLE_LIVES).every((life) => life.kills === 0);
-  return struggling ? (['heavy', 'demoman', 'soldier'] as const).find((id) => !team.includes(id) && fits(id)) : undefined;
+  const lacking = (['heavy', 'demoman', 'soldier'] as const).find((id) => !team.includes(id) && fits(id));
+  const worst = mostCommon(killers.filter((killer): killer is TankClassId => killer !== undefined));
+  const answer = worst && COUNTERS[worst];
+  return lacking ?? (answer && fits(answer) ? answer : TANK_CLASS_IDS.find((id) => fits(id) && !team.includes(id)));
+}
+
+/**
+ * The class that answers an enemy class that keeps destroying a team: a Scout gets round to a
+ * Sniper and kills it up close, a Sniper's rail goes through a Heavy's plates from beyond its
+ * reach. Other classes have no clear answer.
+ */
+const COUNTERS: Partial<Record<TankClassId, TankClassId>> = { sniper: 'scout', heavy: 'sniper' };
+
+/** The value `values` has most often, the latest among equals; `undefined` for none. */
+function mostCommon<T>(values: readonly T[]) {
+  let best: T | undefined;
+  let most = 0;
+
+  for (const value of values) {
+    const count = values.filter((other) => other === value).length;
+
+    if (count >= most) {
+      best = value;
+      most = count;
+    }
+  }
+
+  return best;
 }
 
 /** Recent deaths of a team to one enemy class that make a bot it destroyed switch to counter it. */
 const COUNTER_DEATHS = 3;
-/** Lives in a row without destroying anything after which a bot tries a class its team lacks. */
-const STRUGGLE_LIVES = 2;
+/** Lives in which a bot destroying at most one tank tries another class. */
+const STRUGGLE_LIVES = 3;
 /** Seconds a bot keeps a class it switched to before it may switch again. */
 export const SWITCH_COOLDOWN = 60;
 
