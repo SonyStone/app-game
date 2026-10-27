@@ -47,7 +47,7 @@ it('prepares native source channels only inside the requested region', async () 
       { left: 0, top: 0, width: 1024, height: 1024 },
       photoshopDefaultSettings
     );
-    expect(refused).toMatchObject({ ok: false, error: { kind: 'budget', requested: 40_894_464n, limit: 33_554_432n } });
+    expect(refused).toMatchObject({ ok: false, error: { kind: 'budget', requested: 40_894_464n, limit: 25_165_824n } });
     expect(reads).toBe(0);
     const details = new Map();
     for (const layer of document.layers) {
