@@ -66,6 +66,35 @@ describe('a match on tape', { timeout: 120_000 }, () => {
       expect(compared.length).toBeGreaterThan(expected.fields.size * 0.9);
     }
 
+    // Particles where scrubbing lands, back and forth, held or jumped to, are those of playing on.
+    const played = captureRenderer();
+    const playing = createTapePlayer(played.renderer, recorder.tape);
+    const scrubbed = captureRenderer();
+    const scrubbing = createTapePlayer(scrubbed.renderer, recorder.tape);
+    let checked = 0;
+
+    for (let step = 20 * 60; step <= 40 * 60; step++) {
+      played.render(playing.show(step)!.age);
+
+      if (step % 97 === 0) {
+        for (const at of [step - 200, step - 3, step - 2, step - 3, step - 2, step - 2, step - 1, step]) {
+          scrubbed.render(scrubbing.show(at)!.age);
+        }
+
+        expect(scrubbed.particles()).toEqual(played.particles());
+
+        // Held, or dragged about within a step, they hold still.
+        for (const at of [step + 0.5, step + 0.25, step]) {
+          scrubbed.render(scrubbing.show(at)!.age);
+          scrubbed.render(scrubbing.show(at)!.age);
+        }
+
+        expect(scrubbed.particles()).toEqual(played.particles());
+        checked += played.particles().length;
+      }
+    }
+
+    expect(checked).toBeGreaterThan(100);
     expect(seen.size).toBeGreaterThan(30);
     expect(seen.get(steps.at(-1)!)!.balls.length).toBeGreaterThan(0);
     // 45 s of a match, its map's fields included, in a few megabytes.
@@ -75,7 +104,8 @@ describe('a match on tape', { timeout: 120_000 }, () => {
 
 /**
  * A renderer that keeps what it is given: each frame's bodies, lights and smoke balls as drawn,
- * and every field slot's content as last uploaded, `rounded` as the tape keeps fields.
+ * every field slot's content as last uploaded, `rounded` as the tape keeps fields, and the
+ * particles, aged as the real one ages them.
  */
 function captureRenderer(rounded = false) {
   let slots = Array.from({ length: 512 }, (_, index) => 511 - index);
@@ -83,6 +113,14 @@ function captureRenderer(rounded = false) {
   let lights: number[][] = [];
   let balls: SmokeBall[] = [];
   const fields = new Map<number, Float32Array>();
+  let spawned: number[][] = [];
+  let particles: { spawn: number[]; age: number }[] = [];
+  const advance = (dt: number) => {
+    particles.push(...spawned.map((spawn) => ({ spawn, age: 0 })));
+    spawned = [];
+    particles = particles.filter((particle) => particle.age < particle.spawn[5]);
+    particles.forEach((particle) => (particle.age += dt));
+  };
   const renderer = {
     allocateField: () => slots.pop(),
     releaseField: (slot: number) => slots.push(slot),
@@ -96,8 +134,12 @@ function captureRenderer(rounded = false) {
     addBody: (body: BodyDraw) => bodies.push(normal(body)),
     addSmokeBall: (ball: SmokeBall) => balls.push({ ...ball }),
     addLight: (...light: [number, number, number, number, readonly number[], number]) => lights.push([light[0], light[1], light[2], light[3], ...light[4].slice(0, 3), light[5]].map(Math.fround)),
-    spawn() {},
-    render() {}
+    spawn: (...spawn: [number, number, number, number, number, number, number, readonly number[]]) => rounded || spawned.push([...spawn.slice(0, 7), ...spawn[7]] as number[]),
+    clearParticles() {
+      spawned = [];
+      particles = [];
+    },
+    advanceParticles: advance
   };
 
   return {
@@ -106,6 +148,17 @@ function captureRenderer(rounded = false) {
     /** What the frame drawn last held, with the fields as they are. */
     frame() {
       return { bodies, lights, balls, fields: new Map([...fields].map(([slot, data]) => [slot, digest(rounded ? roundField(data) : data)])) };
+    },
+
+    /** Draws a frame, as `render` does: particles advance by `dt` s. */
+    render: advance,
+
+    /** The particles alive, as spawned with their age to a millionth of a second, in a stable order. */
+    particles() {
+      return particles
+        .filter((particle) => particle.age < particle.spawn[5] - 1e-6)
+        .map((particle) => JSON.stringify([...particle.spawn, Math.round(particle.age * 1e6) / 1e6]))
+        .sort();
     }
   };
 }

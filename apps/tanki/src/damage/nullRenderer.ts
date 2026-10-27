@@ -14,6 +14,8 @@ export function createNullRenderer() {
     beginBodies() {},
     addBody() {},
     spawn() {},
+    clearParticles() {},
+    advanceParticles() {},
     addSmokeBall() {},
     addLight() {},
     render() {}

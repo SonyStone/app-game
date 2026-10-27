@@ -1401,6 +1401,8 @@ export function createRangeRenderer(gpu: GpuContext) {
   let time = 0;
   let nextParticle = 0;
   let spawnCount = 0;
+  /** Zeros as long as the particle ring, made the first time it is cleared. */
+  let noParticles: Float32Array | undefined;
 
   /**
    * Draws smoke into the plume textures: the top surface of all balls in the current style, kept
@@ -1592,6 +1594,27 @@ export function createRangeRenderer(gpu: GpuContext) {
 
       spawnData.set([x, y, vx, vy, 0, life, size, kind, color[0], color[1], color[2], color[3]], spawnCount * PARTICLE_FLOATS);
       spawnCount++;
+    },
+
+    /** Removes every particle, those spawned for the next frame too, as when showing another moment. */
+    clearParticles() {
+      noParticles ??= new Float32Array(MAX_PARTICLES * PARTICLE_FLOATS);
+      device.queue.writeBuffer(root.unwrap(particles.buffer), 0, noParticles);
+      nextParticle = 0;
+      spawnCount = 0;
+    },
+
+    /**
+     * Advances particles by `dt` seconds, those spawned since the last frame first, without
+     * drawing: as `render` does, for bringing them to a moment shown next.
+     */
+    advanceParticles(dt: number) {
+      time += dt;
+      simulation.write({ dt, time });
+      flushSpawns();
+      const encoder = device.createCommandEncoder();
+      advanceParticles.with(encoder).dispatchThreads(MAX_PARTICLES);
+      device.queue.submit([encoder.finish()]);
     },
 
     /**

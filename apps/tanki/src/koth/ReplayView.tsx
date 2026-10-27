@@ -422,7 +422,7 @@ function ReplayScene(props: {
     const shown = shower.show(time);
     members = shown?.members ?? [];
     placeCamera(dt);
-    renderer.render(camera, screen, BACKGROUND, dt * pace);
+    renderer.render(camera, screen, BACKGROUND, shown?.age ?? 0);
     const step = Math.floor(time);
     const synced = follow(step);
     const match = thinker.match;

@@ -589,7 +589,7 @@ function KothScene(props: {
       cam.camera.zoom += (fit - cam.camera.zoom) * ease;
     }
 
-    renderer.render(cam.camera, screen, BACKGROUND, dt * (near ? KILL_CAM_SLOW : 1));
+    renderer.render(cam.camera, screen, BACKGROUND, shown?.age ?? 0);
     return true;
   }
 

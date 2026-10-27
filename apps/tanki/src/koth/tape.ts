@@ -175,8 +175,10 @@ export type Tape = ReturnType<typeof createTape>;
  * Shows a tape's moments on `target`: `show` queues everything drawn at a step, in fractions of a
  * step too, for slow motion, by moving bodies and members between the frames around it. Damage
  * fields are put back as they were at that step, by applying the hits since the step shown last,
- * or rebuilding the fields they hit when going back. Particles are spawned only while the steps
- * shown follow on from one another, as when playing; a jump leaves them out.
+ * or rebuilding the fields they hit when going back. Particles are spawned as the frames shown
+ * follow on from one another, as when playing, and age by the time the playhead moved, so they
+ * hold still while it does; a jump, back or far ahead, puts back those of the
+ * `PARTICLE_HISTORY` s before it, spawned and aged on `target` as when played.
  */
 export function createTapePlayer(target: Renderer, tape: Tape) {
   const plumes = createPlumes();
@@ -184,13 +186,15 @@ export function createTapePlayer(target: Renderer, tape: Tape) {
   const dirty = new Set<number>();
   let applied = 0;
   let shownIndex: number | undefined;
+  let shownTime = 0;
 
   return {
     /**
      * Queues the frame at `time`, in steps, on `target` after its `beginBodies`, and uploads the
      * fields as they were then; the caller renders. Returns where each member was, in the match's
-     * order, `undefined` while it waited to respawn, and the heads-up display, or `undefined` when
-     * the tape has no frame at or before `time`.
+     * order, `undefined` while it waited to respawn, the heads-up display and `age`, the seconds
+     * the caller's `render` advances particles by, or `undefined` when the tape has no frame at or
+     * before `time`.
      */
     show(time: number) {
       const index = tape.indexAt(time);
@@ -220,26 +224,54 @@ export function createTapePlayer(target: Renderer, tape: Tape) {
       const smokeTime = frame.smokeTime + (next && share > 0 ? (next.smokeTime - frame.smokeTime) * share : 0);
       plumes.draw(target, tape.firesAt(smokeTime), tape.sootAt(smokeTime), smokeTime);
 
-      // Particles of the frames passed since the last one shown, when playing on.
-      if (shownIndex !== undefined && index > shownIndex && index - shownIndex <= MAX_SPAWN_RUN) {
-        for (let passed = shownIndex + 1; passed <= index; passed++) {
-          const spawns = tape.frames[passed].spawns;
+      // Particles of the frames passed since the last one shown, when playing on; after a jump,
+      // those on screen belong to another moment, and that moment's own are put back.
+      const followsOn = shownIndex !== undefined && index >= shownIndex && index - shownIndex <= MAX_SPAWN_RUN && time >= shownTime;
+      let age = (time - shownTime) / 60;
 
-          for (let offset = 0; offset < spawns.length; offset += 11) {
-            target.spawn(spawns[offset], spawns[offset + 1], spawns[offset + 2], spawns[offset + 3], spawns[offset + 4], spawns[offset + 5], spawns[offset + 6], [spawns[offset + 7], spawns[offset + 8], spawns[offset + 9], spawns[offset + 10]]);
-          }
+      if (followsOn) {
+        for (let passed = shownIndex! + 1; passed <= index; passed++) {
+          spawnOf(passed);
         }
+      } else {
+        target.clearParticles();
+        const first = tape.indexAt(frame.step - PARTICLE_HISTORY * 60) ?? 0;
+
+        // As when played, a frame's particles age from the frame before it on.
+        for (let passed = first; passed < index; passed++) {
+          spawnOf(passed);
+          target.advanceParticles((tape.frames[passed].step - stepBefore(passed)) / 60);
+        }
+
+        spawnOf(index);
+        age = (time - stepBefore(index)) / 60;
       }
 
       shownIndex = index;
+      shownTime = time;
 
       return {
         step: frame.step,
         members: tape.members.map((_, member) => positionOf(frame, next, share, member)),
-        hud: tape.hudAt(index)
+        hud: tape.hudAt(index),
+        age
       };
     }
   };
+
+  /** The step of the frame before frame `index`, or the step before its own for the first. */
+  function stepBefore(index: number) {
+    return tape.frames[index - 1]?.step ?? tape.frames[index].step - 1;
+  }
+
+  /** Spawns on `target` the particles frame `index` spawned. */
+  function spawnOf(index: number) {
+    const spawns = tape.frames[index].spawns;
+
+    for (let offset = 0; offset < spawns.length; offset += 11) {
+      target.spawn(spawns[offset], spawns[offset + 1], spawns[offset + 2], spawns[offset + 3], spawns[offset + 4], spawns[offset + 5], spawns[offset + 6], [spawns[offset + 7], spawns[offset + 8], spawns[offset + 9], spawns[offset + 10]]);
+    }
+  }
 
   /** Brings the fields to the uploads before `count` and uploads the slots that changed. */
   function fieldsTo(count: number) {
@@ -316,6 +348,8 @@ export function createTapePlayer(target: Renderer, tape: Tape) {
 const MAX_GAP = 6;
 /** Frames passed at once whose particles are still spawned, as when playing fast. */
 const MAX_SPAWN_RUN = 30;
+/** Seconds before a moment jumped to whose particles are put back: the longest any lives, a shot's trail. */
+const PARTICLE_HISTORY = 2;
 
 /** The tape's data and the means to write and read it; see `createTapeRecorder`. */
 function createTape() {
