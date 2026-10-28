@@ -216,6 +216,8 @@ it('creates browser operands from genuine clocks and UUIDs, with honest identity
     const context = sourceSaveOperands('opened.PSB', { mode: 'source', linearBlending: true });
     expect(context).toMatchObject({
       contract: preferredContract,
+      typeRendering: { textGamma: 1.45 },
+      colorPolicy: { workingRGB: 'sRGB IEC61966-2.1', rgb: 'preserve', missingProfile: 'leaveUntagged' },
       editTime: now.valueOf() / 1000,
       save: {
         basename: 'opened',
@@ -227,7 +229,7 @@ it('creates browser operands from genuine clocks and UUIDs, with honest identity
     expect(context.save.instanceId).toMatch(/^xmp.iid:[0-9a-f-]{36}$/);
     expect(context.save.documentId).toMatch(/^adobe:docid:photoshop:[0-9a-f-]{36}$/);
     expect(context.save.exifTime).toContain(String(now.getHours()).padStart(2, '0') + ':02:35');
-    expect(Object.keys(context).sort()).toEqual(['contract', 'editTime', 'save']);
+    expect(Object.keys(context).sort()).toEqual(['colorPolicy', 'contract', 'editTime', 'save', 'typeRendering']);
   } finally {
     vi.useRealTimers();
   }
@@ -261,6 +263,7 @@ it('saves each v5 action against the preceding pristine product and replays exac
     await readFile(new URL('../../../packages/psd/test/editor/source-host-rgb8.psd', import.meta.url))
   );
   const displayed: Uint8Array[] = [];
+  const choices: (number | null | undefined)[] = [];
   const host = value(
     await makeEditingSession(
       original,
@@ -268,7 +271,19 @@ it('saves each v5 action against the preceding pristine product and replays exac
         displayed.push(bytes.slice());
         return { ok: true, value: undefined };
       },
-      openPsdEditor,
+      async (bytes) => {
+        const result = await openPsdEditor(bytes);
+        if (result.ok) {
+          const apply = result.value.editRasterTreeExact;
+          result.value.editRasterTreeExact = (batch, context) => {
+            if (context?.contract === preferredContract) {
+              choices.push(context.typeRendering?.textGamma);
+            }
+            return apply(batch, context);
+          };
+        }
+        return result;
+      },
       'source-host-rgb8.psd'
     )
   );
@@ -282,6 +297,7 @@ it('saves each v5 action against the preceding pristine product and replays exac
     await call({
       kind: 'edit',
       revision: 1,
+      options: { mode: 'source', linearBlending: false, textGamma: null },
       command: { kind: 'tree', edit: { kind: 'opacity', layerId: 3, opacity: 173 } }
     });
     expect(displayed[0]).not.toEqual(original);
@@ -290,6 +306,7 @@ it('saves each v5 action against the preceding pristine product and replays exac
     expect(displayed[2]).toEqual(displayed[0]);
     await call({ kind: 'redo', revision: 3 });
     expect(displayed[3]).toEqual(displayed[1]);
+    expect(choices).toEqual([1.45, 1.45, null, 1.45, 1.45, null]);
     await call({ kind: 'undo', revision: 4 });
     await call({ kind: 'undo', revision: 5 });
     expect(displayed[5]).toEqual(original);
@@ -305,6 +322,11 @@ it('saves each v5 action against the preceding pristine product and replays exac
 });
 
 it.each([
+  ['save.sourceHost.colorPolicy.missingProfile', 'Leave untagged'],
+  ['save.sourceHost.colorPolicy.rgb', 'Preserve Embedded Profiles'],
+  ['save.sourceHost.colorPolicy.workingRGB', 'sRGB IEC61966-2.1'],
+  ['save.sourceHost.type.coverage', 'text coverage'],
+  ['save.sourceHost.type.fontAvailabilityAndTextGamma', 'font and layout eligibility'],
   ['save.sourceHost.typeRendering', 'text layers whose fonts'],
   ['save.sourceHost.missingGrid', 'grid or guide'],
   ['save.sourceHost.icc', 'color profile'],
@@ -542,5 +564,70 @@ it('publishes a multi-layer gesture once and undoes it as one revision; a later 
     });
   } finally {
     host.dispose();
+  }
+});
+
+it('copies selected color choices and retains disabled text gamma without rounding precision', () => {
+  const options = {
+    mode: 'source' as const,
+    linearBlending: false,
+    textGamma: null,
+    colorPolicy: {
+      workingRGB: 'sRGB IEC61966-2.1' as const,
+      rgb: 'preserve' as const,
+      missingProfile: 'leaveUntagged' as const
+    }
+  };
+  const operands = sourceSaveOperands('test.psd', options);
+  expect(operands.typeRendering).toEqual({ textGamma: null });
+  expect(operands.colorPolicy).not.toBe(options.colorPolicy);
+  expect(sourceSaveOperands('test.psd', { ...options, textGamma: 1.451 }).typeRendering).toEqual({ textGamma: 1.451 });
+});
+
+it.each([
+  [{ missingProfile: 'assignWorking' as const }, 'save.sourceHost.colorPolicy.missingProfile'],
+  [{ rgb: 'off' as const }, 'save.sourceHost.colorPolicy.rgb'],
+  [{ rgb: 'convert' as const }, 'save.sourceHost.colorPolicy.rgb'],
+  [{ workingRGB: 'Adobe RGB (1998)' as const }, 'save.sourceHost.colorPolicy.workingRGB']
+])('refuses unsupported color choices atomically and permits a same-session retry', async (choice, propertyPath) => {
+  const original = new Uint8Array(
+    await readFile(new URL('../../../packages/psd/test/editor/source-host-rgb8.psd', import.meta.url))
+  );
+  const session = value(await openPsdEditor(original));
+  const operands = sourceSaveOperands('source-host-rgb8.psd', {
+    mode: 'source',
+    linearBlending: false,
+    colorPolicy: { workingRGB: 'sRGB IEC61966-2.1', rgb: 'preserve', ...choice }
+  });
+  const edit = { kind: 'rename' as const, layerId: 3, name: 'Choice retry' };
+  try {
+    expect(session.editRasterTreeExact([edit], { ...operands, sourceBytes: original })).toMatchObject({
+      ok: false,
+      error: { code: 'Dependency', propertyPath }
+    });
+    expect(value(session.sourceSnapshot()).revision).toBe(0n);
+    const valid = sourceSaveOperands('source-host-rgb8.psd', { mode: 'source', linearBlending: false });
+    expect(session.editRasterTreeExact([edit], { ...valid, sourceBytes: original }).ok).toBe(true);
+  } finally {
+    session.dispose();
+  }
+});
+
+it.each([0.99, 3.01, 1.451])('rejects unsupported text gamma %s without committing', async (textGamma) => {
+  const original = new Uint8Array(
+    await readFile(new URL('../../../packages/psd/test/editor/source-host-rgb8.psd', import.meta.url))
+  );
+  const session = value(await openPsdEditor(original));
+  try {
+    const operands = sourceSaveOperands('source-host-rgb8.psd', { mode: 'source', linearBlending: false, textGamma });
+    expect(
+      session.editRasterTreeExact([{ kind: 'rename', layerId: 3, name: 'Invalid gamma' }], {
+        ...operands,
+        sourceBytes: original
+      })
+    ).toMatchObject({ ok: false, error: { code: 'Invalid' } });
+    expect(value(session.sourceSnapshot()).revision).toBe(0n);
+  } finally {
+    session.dispose();
   }
 });
