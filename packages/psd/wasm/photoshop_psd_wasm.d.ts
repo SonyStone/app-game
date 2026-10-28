@@ -1,6 +1,24 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Converts modern horizontal cache origins through the native visual-origin addition before
+ * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
+ * import/layout dependencies still require comparison; no editor admission changes.
+ */
+export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
+ * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
+ * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
+ */
+export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
+/**
+ * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
+ * arrays, including a supplied uniform shadow scale for strike descent. This imports source
+ * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
+ */
+export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
  * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
  * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
  * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
@@ -8,22 +26,6 @@
  * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
  */
 export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
- * Converts modern horizontal cache origins through the native visual-origin addition before
- * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
- * import/layout dependencies still require comparison; no editor admission changes.
- */
-export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
- * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
- */
-export function formatTypeEngineReal26(value: number): Uint8Array;
-/**
- * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
- * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
- * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
- */
-export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
 /**
  * Converts measured modern major-axis caches and segment indices into schema 7.
  * Vertical caches require zero major origins and retain source layout and glyph IDs. Metric-box
@@ -33,19 +35,9 @@ export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
  */
 export function projectTypeEngineLayoutCache26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
 /**
- * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
- * arrays, including a supplied uniform shadow scale for strike descent. This imports source
- * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
+ * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
  */
-export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
- * Accumulates nominal hmtx advances with explicit shaped design adjustments and point spacing.
- * Supply glyph IDs, signed design-unit adjustments and point spacing with equal lengths, plus a
- * size in 0.5..=32767 points. Returns one binary32 point pen per glyph and a terminal pen, starting
- * at zero. Base and spacing sums accumulate separately. Invalid operands or font programs throw.
- * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
- */
-export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: number, glyphs: Uint16Array, size: number, adjustments: Int32Array, spacing: Float32Array): Float32Array;
+export function formatTypeEngineReal26(value: number): Uint8Array;
 /**
  * Computes ordinary TrueType box/point baselines from supplied bytes and explicit manual leading.
  * The caller establishes line breaks; `count` is at most 1,000,000 and `leading` is finite/positive.
@@ -56,22 +48,30 @@ export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: numbe
  */
 export function computeTypeManualBaselines26(bytes: Uint8Array, face_index: number, size: number, leading: number, count: number, boxed: boolean): Float32Array;
 /**
+ * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
+ * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
+ * source-dependent; a returned packet is not an editor admission certificate.
+ */
+export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
+/**
  * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
  * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
  */
 export function readTypeFontMetrics26(bytes: Uint8Array, face_index: number): any;
+/**
+ * Accumulates nominal hmtx advances with explicit shaped design adjustments and point spacing.
+ * Supply glyph IDs, signed design-unit adjustments and point spacing with equal lengths, plus a
+ * size in 0.5..=32767 points. Returns one binary32 point pen per glyph and a terminal pen, starting
+ * at zero. Base and spacing sums accumulate separately. Invalid operands or font programs throw.
+ * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
+ */
+export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: number, glyphs: Uint16Array, size: number, adjustments: Int32Array, spacing: Float32Array): Float32Array;
 /**
  * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
  * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
  * unsupported outline programs throw. Does not shape text or authorize a document save.
  */
 export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], tx: number, ty: number): Float32Array;
-/**
- * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
- * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
- * source-dependent; a returned packet is not an editor admission certificate.
- */
-export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
 /**
  * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
  */
@@ -85,6 +85,12 @@ export function readPsd(bytes: Uint8Array): any;
  * Returns coverage and document-space bounds only. This does not admit CFF2 to addTextFont or SetText.
  */
 export function rasterizeCff2Strong(font_bytes: Uint8Array, design_coordinates: readonly number[], character: string, size: number, origin_x: number, origin_y: number): PsdCff2Coverage;
+/**
+ * Generate an independent baseline JPEG in Photoshop 26's resource-1036 envelope.
+ * Complete sRGB8 RGBA canvas pixels and explicit resolution are required. Resizing
+ * refuses. This proves thumbnail generation only, never editor-save equivalence.
+ */
+export function generatePhotoshop26Thumbnail(width: number, height: number, resolution: number, rgba: Uint8Array): Uint8Array;
 /**
  * Write one saved-history event using explicit retained metadata state.
  * If retained_instance_id matches the final event's instanceID, updates only action,
@@ -102,12 +108,6 @@ export function writeSavedHistory(xmp: Uint8Array, context: PsdPhotoshop26SaveCo
  * Throws on unsupported metadata layouts. A false result grants no save certificate.
  */
 export function checkPhotoshop26Save(left: Uint8Array, right: Uint8Array): any;
-/**
- * Generate an independent baseline JPEG in Photoshop 26's resource-1036 envelope.
- * Complete sRGB8 RGBA canvas pixels and explicit resolution are required. Resizing
- * refuses. This proves thumbnail generation only, never editor-save equivalence.
- */
-export function generatePhotoshop26Thumbnail(width: number, height: number, resolution: number, rgba: Uint8Array): Uint8Array;
 /**
  * Reads persisted styles, vectors, locks, labels, metadata and XMP without renderer admission.
  * Vector frame queries are separate from stored values and report malformed-name/rectangle refusals.
@@ -752,6 +752,9 @@ export interface PsdEditorSession {
   /**
    * Apply a bounded Photoshop 26 reopen-equivalent transaction with explicit host operands.
    * v5-source-host accepts original bytes, clocks, random IDs, an honest agent and user choices.
+   * All v1-v5 contracts refuse Fill opacity on a hidden RGB8 target at
+   * save.carriedUntouched.hiddenFillOpacity. Selected native setters fail, while unselected
+   * DOM setters reveal the target. Neither hidden-target transition is qualified here.
    * It carries source cinf, witnessed display units and inactive ICC display/view. Missing
    * required witnesses and all type-bearing graphs refuse by named dependency. No host profile
    * is accepted. Every failure leaves bytes, selection, allocation and revision unchanged.
