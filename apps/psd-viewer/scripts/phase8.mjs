@@ -25,6 +25,7 @@ const viewer = await import(`${repo}/packages/psd/wasm-viewer/photoshop_psd_view
 await viewer.default({
   module_or_path: await fs.readFile(`${repo}/packages/psd/wasm-viewer/photoshop_psd_viewer_bg.wasm`)
 });
+const textGamma = process.env.PSD_EDIT_TEXT_GAMMA === 'off' ? null : 1.45;
 const contract = 'photoshop26.reopen-equivalent/v5-source-host';
 const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const json = (value) => JSON.stringify(value, (_, value) => (typeof value === 'bigint' ? value.toString() : value), 2);
@@ -66,6 +67,8 @@ function context(file, bytes) {
   return {
     contract,
     sourceBytes: bytes,
+    typeRendering: { textGamma },
+    colorPolicy: { workingRGB: 'sRGB IEC61966-2.1', rgb: 'preserve', missingProfile: 'leaveUntagged' },
     editTime: now.valueOf() / 1000,
     save: {
       basename: path.parse(file).name,
@@ -252,6 +255,8 @@ async function persist() {
   await fs.writeFile(
     reportFile,
     json({
+      textGamma,
+      batch19Metric: 'evidence/2026-10-23-psd-batch-19/METRIC.md',
       generatedAt: new Date().toISOString(),
       editedSaves: saves.length,
       distinctSavedSources: new Set(saves.map((row) => row.sourceHash)).size,
@@ -345,7 +350,10 @@ for (const family of families) {
   );
   // Spread positives over source-profile directories and tune/held-out inputs, not just the easiest prefix.
   const strata = Object.values(
-    Object.groupBy(eligible, (row) => `${row.file.split('/psd/')[1].split('/').slice(0, 2).join('/')}|${row.split}`)
+    Object.groupBy(
+      eligible,
+      (row) => `${path.relative(research, row.file).split(path.sep).slice(0, 4).join('/')}|${row.split}`
+    )
   );
   for (let index = 0; selected.filter((row) => row.op === family).length < 11; index++) {
     for (const group of strata) {
@@ -548,6 +556,7 @@ try {
     );
     await page.getByText('Advanced', { exact: true }).click();
     await page.getByText('File Info and resolution', { exact: true }).first().click();
+    await page.getByLabel('Blend text colors using gamma', { exact: true }).setChecked(textGamma !== null);
     const original = await fs.readFile(row.file);
     if (row.op === 'visibility' || row.op === 'group-visibility') {
       const flattened = (nodes) => nodes.flatMap((node) => [node, ...flattened(node.children)]);

@@ -1,7 +1,7 @@
 import { readPsd } from '@app-game/psd';
 import { openPsdEditor } from '@app-game/psd/editor';
 import { expect, test, type Page } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createEditingSource } from '../tests/editingSource';
 
@@ -79,6 +79,12 @@ test('v5 rename and opacity refresh pixels and layers; undo/redo restore the exa
   await expect(page.getByLabel('How to save').locator('option')).toHaveText(["Keep the source's settings"]);
   await expect(page.getByLabel('Blend RGB colors using gamma 1', { exact: true })).not.toBeChecked();
   await expect(page.getByLabel('Edit layer', { exact: true }).locator('option:checked')).toContainText('Honest rename');
+  await expect(page.getByLabel('Blend text colors using gamma', { exact: true })).toBeChecked();
+  await expect(page.getByLabel('Text gamma value')).toHaveValue('1.45');
+  await expect(page.getByLabel('Color settings')).toContainText('Leave untagged');
+  await mkdir('/tmp/psd-viewer-save-choices-screens', { recursive: true });
+  await page.getByLabel('Edit toolbar').screenshot({ path: '/tmp/psd-viewer-save-choices-screens/how-to-save.png' });
+  await page.getByLabel('Blend text colors using gamma', { exact: true }).uncheck();
   await page.getByLabel('Edit opacity', { exact: true }).fill('173');
   await page.getByRole('button', { name: 'Apply opacity', exact: true }).click();
   await expect(canvas).toHaveAttribute('data-editor-revision', '2');
@@ -237,4 +243,67 @@ test('a frozen save survives later edits; explicit cancel releases it', async ({
   await page.getByRole('button', { name: 'Cancel save' }).click();
   await page.evaluate(() => Reflect.get(window, '__saveTest').resume());
   await expect(page.getByLabel('Save status')).toContainText('Save canceled');
+});
+
+for (const textGamma of [1.45, null]) {
+  test(`untagged source saves and reopens with text gamma ${textGamma}`, async ({ page }) => {
+    const root = process.env.PSD_TEXT_MIXER_RESEARCH_ROOT;
+    test.skip(!root, 'Requires the read-only research corpus.');
+    await picker(page);
+    await open(page, 'source-host-rgb8');
+    await page
+      .locator('input[accept=".psd,.psb"]')
+      .setInputFiles(`${root}/private/psd-libraries/photocraft-corpus/photoshop/effects/satin-linear-screen.psd`);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(page.getByLabel('Editor status')).toContainText('Revision 0.');
+    await page.getByText('Advanced', { exact: true }).click();
+    await page.getByLabel('Blend text colors using gamma', { exact: true }).setChecked(textGamma !== null);
+    await page.getByLabel('Edit layer', { exact: true }).selectOption('1');
+    await page.getByLabel('Layer name', { exact: true }).fill('Untagged save');
+    await page.getByRole('button', { name: 'Rename layer', exact: true }).click();
+    await expect(page.getByLabel('Editor status')).toContainText('Revision 1.');
+    await page.getByRole('button', { name: 'Save as…' }).click();
+    await expect(page.getByLabel('Save status')).toContainText('Saved revision 1');
+    const bytes = Uint8Array.from(await page.evaluate(() => Reflect.get(window, '__saveTest').bytes.flat()));
+    const opened = await openPsdEditor(bytes);
+    expect(opened.ok).toBe(true);
+    if (opened.ok) {
+      opened.value.dispose();
+    }
+    expect((await readPsd(bytes)).layers.some((layer) => layer.name === 'Untagged save')).toBe(true);
+    const document = await import('@app-game/psd/viewer').then((module) => module.openPsd(bytes));
+    expect(document.ok).toBe(true);
+    if (document.ok) {
+      try {
+        const planes = document.value.savedProcessChannels();
+        expect(planes.ok).toBe(true);
+        if (planes.ok) {
+          expect(planes.value.resources.some((resource) => resource.id === 1039)).toBe(false);
+        }
+      } finally {
+        document.value.close();
+      }
+    }
+  });
+}
+
+test('enabled text gamma refusal explains font and layout eligibility', async ({ page }) => {
+  const root = process.env.PSD_TEXT_MIXER_RESEARCH_ROOT;
+  test.skip(!root, 'Requires the read-only research corpus.');
+  await open(page, 'source-host-rgb8');
+  await page
+    .locator('input[accept=".psd,.psb"]')
+    .setInputFiles(`${root}/fixtures/psd/E-own-1/photoshop/native-19-d16-v1.psd`);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByLabel('Editor status')).toContainText('Revision 0.');
+  await page.getByText('Advanced', { exact: true }).click();
+  await page.getByLabel('Edit layer', { exact: true }).selectOption('2');
+  await page.getByLabel('Layer name', { exact: true }).fill('Refused text');
+  await page.getByRole('button', { name: 'Rename layer', exact: true }).click();
+  await expect(page.locator('[data-refusal-code]')).toContainText('font and layout eligibility');
+  await mkdir('/tmp/psd-viewer-save-choices-screens', { recursive: true });
+  await page
+    .locator('[data-refusal-code]')
+    .screenshot({ path: '/tmp/psd-viewer-save-choices-screens/text-refusal.png' });
+  await expect(page.getByLabel('Editor status')).toContainText('Revision 0.');
 });
