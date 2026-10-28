@@ -19,6 +19,8 @@ async function open(page: Page, fixture?: string) {
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByLabel('Editor status')).toContainText('Revision 0.');
   await expect(page.getByRole('button', { name: 'Save as…' })).toBeEnabled();
+  await page.getByText('Advanced', { exact: true }).click();
+  await page.getByText('File Info and resolution', { exact: true }).first().click();
   return bytes;
 }
 
@@ -140,6 +142,7 @@ test('groups selected raster layers and ungroups saved groups, with undo restori
   await expect(page.getByLabel('Editor status')).toHaveCount(0);
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save as…' })).toBeEnabled();
+  await page.getByText('Advanced', { exact: true }).click();
   await page.getByLabel('Edit layer', { exact: true }).selectOption('4');
   await page.getByRole('button', { name: 'Ungroup layer', exact: true }).click();
   await expect(page.getByLabel('Editor status')).toContainText('Revision 1.');

@@ -1,5 +1,5 @@
 import type { PsdExactRasterTreeEdit } from '@app-game/psd/editor';
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, flush, For, onCleanup, Show } from 'solid-js';
 import type { OpenedPsd, PsdClient } from '../psd-worker';
 import {
   historyLimit,
@@ -14,6 +14,18 @@ import {
 import styles from './editing.module.css';
 import { browserDestination, streamSave } from './save';
 
+/** Shared commands keep tree gestures and the advanced form on the same revision and save contract. */
+export type LayerEditing = {
+  enabled: () => boolean;
+  busy: () => boolean;
+  state: () => EditingState | undefined;
+  layers: () => ReturnType<typeof flatten>;
+  /** One atomic history entry; false means refused, closed, or busy. */
+  apply: (edits: PsdExactRasterTreeEdit[]) => Promise<boolean>;
+  undo: () => void;
+  redo: () => void;
+};
+
 /**
  * Independent guarded-edit feature. Mount keyed by the original source, so document replacement aborts saving
  * and discards late responses. Preview visibility/state controls elsewhere remain read-only overrides.
@@ -22,6 +34,10 @@ export function Editing(props: {
   client: Pick<PsdClient, 'editor'>;
   document: OpenedPsd;
   name: string;
+  /** Publishes stable tree commands in the effect phase, scoped to the original source. */
+  controls: (api: LayerEditing) => void;
+  /** Clears viewing overrides before saved-layer controls become active. */
+  onEnter: () => void;
   /** Public monotonic editor revision, independent of replay's native revision. */
   onRevision: (revision: number, display?: EditingState['display']) => void;
 }) {
@@ -60,7 +76,7 @@ export function Editing(props: {
     }
     const source = state()?.source;
     const ids = new Map(source?.ok ? source.value.layers.map((layer) => [layer.recordIndex, layer.layerId]) : []);
-    return sourceLayers(props.document.layers, ids);
+    return sourceLayers(state()?.display?.layers ?? props.document.layers, ids);
   });
   const selected = () => layers().find((layer) => layer.id === target());
   const contract = () => preferredContract;
@@ -78,26 +94,31 @@ export function Editing(props: {
 
   async function request(action: EditingRequest) {
     if (busy()) {
-      return;
+      return false;
     }
     setBusy(true);
     setFailure(undefined);
     try {
       const result = await rpc(action);
       if (!active) {
-        return;
+        return false;
       }
       if (!result.ok) {
         setFailure(result.error);
+        return false;
       } else if (result.value.kind === 'state') {
         const next = result.value.state;
         setState(next);
         props.onRevision(next.revision, next.display);
+        flush();
+        return true;
       }
+      return false;
     } catch (error) {
       if (active) {
         setFailure({ code: 'Unknown', message: String(error) });
       }
+      return false;
     } finally {
       if (active) {
         setBusy(false);
@@ -122,6 +143,29 @@ export function Editing(props: {
       options: { mode: 'source', linearBlending: linearBlending() }
     });
   }
+
+  createEffect(
+    () => true,
+    () => {
+      props.controls({
+        enabled,
+        busy: () => busy() || !state(),
+        state,
+        layers,
+        apply: (edits) => edit(edits.length === 1 ? { kind: 'tree', edit: edits[0]! } : { kind: 'treeBatch', edits }),
+        undo: () => {
+          if (state()?.position) {
+            void request({ kind: 'undo', revision: state()!.revision });
+          }
+        },
+        redo: () => {
+          if (state() && state()!.position < state()!.historyLength) {
+            void request({ kind: 'redo', revision: state()!.revision });
+          }
+        }
+      });
+    }
+  );
 
   /** A bounded opaque RGB8 fill uses complete same-rectangle samples; native-plane conversion is not guessed. */
   function replacePixels(layerId: number) {
@@ -210,61 +254,67 @@ export function Editing(props: {
         onClick={() => {
           const next = !enabled();
           setEnabled(next);
-          if (next && !state()) {
-            void request({ kind: 'open', basename: props.name });
+          if (next) {
+            props.onEnter();
+            if (!state()) {
+              void request({ kind: 'open', basename: props.name });
+            }
           }
         }}
       >
         Edit
       </button>
       <Show when={enabled()}>
-        <p>Guarded editing. Original source bytes are retained. Viewing overrides do not edit the file.</p>
-        <p role="note">Each accepted action saves a revision. The next action edits that saved revision.</p>
-        <label>
-          How to save
-          <select aria-label="How to save" value="source">
-            <option value="source">Keep the source's settings</option>
-          </select>
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            aria-label="Blend RGB colors using gamma 1"
-            checked={linearBlending()}
-            onChange={(event) => setLinearBlending(event.currentTarget.checked)}
-          />
-          Blend RGB colors using gamma 1
-        </label>
-        <div class={styles.actions}>
-          <button
-            type="button"
-            disabled={busy() || !state()?.position}
-            onClick={() => void request({ kind: 'undo', revision: state()!.revision })}
-          >
-            Undo
-          </button>
-          <button
-            type="button"
-            disabled={busy() || !state() || state()!.position >= state()!.historyLength}
-            onClick={() => void request({ kind: 'redo', revision: state()!.revision })}
-          >
-            Redo
-          </button>
-          <button type="button" disabled={busy() || saving() || !state()} onClick={() => void save()}>
-            Save as…
-          </button>
-          <Show when={saving()}>
-            <button type="button" onClick={() => saveController?.abort()}>
-              Cancel save
+        <div aria-label="Edit toolbar" class={styles.toolbar}>
+          <p role="note">Edit mode · eye changes are saved. Each accepted action creates one revision.</p>
+          <label>
+            How to save
+            <select aria-label="How to save" value="source">
+              <option value="source">Keep the source's settings</option>
+            </select>
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              aria-label="Blend RGB colors using gamma 1"
+              checked={linearBlending()}
+              onChange={(event) => setLinearBlending(event.currentTarget.checked)}
+            />
+            Blend RGB colors using gamma 1
+          </label>
+          <div class={styles.actions}>
+            <button
+              type="button"
+              disabled={busy() || !state()?.position}
+              onClick={() => void request({ kind: 'undo', revision: state()!.revision })}
+            >
+              Undo
             </button>
-          </Show>
+            <button
+              type="button"
+              disabled={busy() || !state() || state()!.position >= state()!.historyLength}
+              onClick={() => void request({ kind: 'redo', revision: state()!.revision })}
+            >
+              Redo
+            </button>
+            <button type="button" disabled={busy() || saving() || !state()} onClick={() => void save()}>
+              Save as…
+            </button>
+            <Show when={saving()}>
+              <button type="button" onClick={() => saveController?.abort()}>
+                Cancel save
+              </button>
+            </Show>
+          </div>
+          <p role="status" aria-label="Editor status">
+            {busy()
+              ? 'Working…'
+              : `Revision ${state()?.revision ?? 0}. ${state()?.position ?? 0}/${historyLimit} edits.`}
+          </p>
+          <p role="status" aria-label="Save status">
+            {saveStatus()}
+          </p>
         </div>
-        <p role="status" aria-label="Editor status">
-          {busy() ? 'Working…' : `Revision ${state()?.revision ?? 0}. ${state()?.position ?? 0}/${historyLimit} edits.`}
-        </p>
-        <p role="status" aria-label="Save status">
-          {saveStatus()}
-        </p>
         <Show when={state()}>
           <details>
             <summary>Capabilities and host operands</summary>
@@ -293,264 +343,277 @@ export function Editing(props: {
               eager source. Metadata retains resident pixel tiles.
             </p>
           </details>
-          <fieldset disabled={busy()}>
-            <legend>Layer editing</legend>
-            <label>
-              Layer{' '}
-              <select
-                aria-label="Edit layer"
-                value={target() ?? ''}
-                onChange={(event) => setTarget(Number(event.currentTarget.value))}
-              >
-                <option value="" disabled>
-                  Select a layer
-                </option>
-                <For each={layers()}>
-                  {(layer) => (
-                    <option value={layer.id}>
-                      {'· '.repeat(layer.depth)}
-                      {layer.name} · #{layer.id}
-                    </option>
-                  )}
-                </For>
-              </select>
-            </label>
-            <Show when={selected()}>
-              {(layer) => (
-                <>
-                  <label>
-                    Name{' '}
-                    <input
-                      aria-label="Layer name"
-                      value={name()}
-                      onInput={(event) => setName(event.currentTarget.value)}
-                    />
-                  </label>
-                  <button type="button" onClick={() => tree({ kind: 'rename', layerId: layer().id, name: name() })}>
-                    Rename layer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => tree({ kind: 'visible', layerId: layer().id, visible: !layer().visible })}
-                  >
-                    {layer().visible ? 'Hide layer' : 'Show layer'}
-                  </button>
-                  <label>
-                    Opacity byte{' '}
-                    <input
-                      aria-label="Edit opacity"
-                      type="number"
-                      min="0"
-                      max="255"
-                      value={opacity()}
-                      onInput={(event) => setOpacity(event.currentTarget.valueAsNumber)}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => tree({ kind: 'opacity', layerId: layer().id, opacity: opacity() })}
-                  >
-                    Apply opacity
-                  </button>
-                  <label>
-                    Fill byte{' '}
-                    <input
-                      aria-label="Edit Fill"
-                      type="number"
-                      min="0"
-                      max="255"
-                      value={fill()}
-                      onInput={(event) => setFill(event.currentTarget.valueAsNumber)}
-                    />
-                  </label>
-                  <button type="button" onClick={() => tree({ kind: 'fill', layerId: layer().id, fill: fill() })}>
-                    Apply Fill
-                  </button>
-                  <label>
-                    Blend{' '}
-                    <select
-                      aria-label="Edit blend mode"
-                      value={blend()}
-                      onChange={(event) => setBlend(event.currentTarget.value)}
-                    >
-                      <For
-                        each={[
-                          'normal',
-                          'multiply',
-                          'screen',
-                          'overlay',
-                          'darken',
-                          'lighten',
-                          'difference',
-                          'passThrough'
-                        ]}
-                      >
-                        {(mode) => <option value={mode}>{mode}</option>}
-                      </For>
-                    </select>
-                  </label>
-                  <button type="button" onClick={() => tree({ kind: 'blend', layerId: layer().id, blend: blend() })}>
-                    Apply blend mode
-                  </button>
-                  <details>
-                    <summary>Replace layer pixels</summary>
-                    <p>Fill the existing RGB 8-bit layer rectangle with an opaque color.</p>
+          <details>
+            <summary>Advanced</summary>
+            <fieldset disabled={busy()}>
+              <legend>Layer editing</legend>
+              <label>
+                Layer{' '}
+                <select
+                  aria-label="Edit layer"
+                  value={target() ?? ''}
+                  onChange={(event) => setTarget(Number(event.currentTarget.value))}
+                >
+                  <option value="" disabled>
+                    Select a layer
+                  </option>
+                  <For each={layers().map((layer) => layer.id)}>
+                    {(id) => {
+                      const layer = () => layers().find((layer) => layer.id === id);
+                      return (
+                        <option value={id}>
+                          {'· '.repeat(layer()?.depth ?? 0)}
+                          {layer()?.name} · #{id}
+                        </option>
+                      );
+                    }}
+                  </For>
+                </select>
+              </label>
+              <Show when={selected()}>
+                {(layer) => (
+                  <>
                     <label>
-                      Replacement color
+                      Name{' '}
                       <input
-                        type="color"
-                        aria-label="Replacement color"
-                        value={pixelColor()}
-                        onInput={(event) => setPixelColor(event.currentTarget.value)}
+                        aria-label="Layer name"
+                        value={name()}
+                        onInput={(event) => setName(event.currentTarget.value)}
                       />
                     </label>
-                    <button type="button" onClick={() => replacePixels(layer().id)}>
-                      Fill layer pixels
+                    <button type="button" onClick={() => tree({ kind: 'rename', layerId: layer().id, name: name() })}>
+                      Rename layer
                     </button>
-                  </details>
-                  <button type="button" onClick={() => tree({ kind: 'delete', layerId: layer().id })}>
-                    Delete layer
-                  </button>
-                  <button type="button" onClick={() => tree({ kind: 'ungroupLayer', layerId: layer().id })}>
-                    Ungroup layer
-                  </button>
-                </>
-              )}
-            </Show>
-            <details>
-              <summary>Reorder by drag and group selection</summary>
-              <p>Bottom to top. Drop onto a sibling to move before it. Ctrl/Cmd selection is not inferred.</p>
-              <ul class={styles.stack}>
-                <For each={layers()}>
-                  {(layer) => (
-                    <li
-                      draggable="true"
-                      data-edit-layer-id={layer.id}
-                      onDragStart={(event) => {
-                        dragged = layer;
-                        event.dataTransfer?.setData('text/plain', String(layer.id));
-                      }}
-                      onDragEnd={() => {
-                        dragged = undefined;
-                      }}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        if (dragged) {
-                          const index =
-                            layer.index - (dragged.parent === layer.parent && dragged.index < layer.index ? 1 : 0);
-                          tree({ kind: 'move', layerId: dragged.id, parent: layer.parent, index });
-                          dragged = undefined;
-                        }
-                      }}
+                    <button
+                      type="button"
+                      onClick={() => tree({ kind: 'visible', layerId: layer().id, visible: !layer().visible })}
                     >
+                      {layer().visible ? 'Hide layer' : 'Show layer'}
+                    </button>
+                    <label>
+                      Opacity byte{' '}
+                      <input
+                        aria-label="Edit opacity"
+                        type="number"
+                        min="0"
+                        max="255"
+                        value={opacity()}
+                        onInput={(event) => setOpacity(event.currentTarget.valueAsNumber)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => tree({ kind: 'opacity', layerId: layer().id, opacity: opacity() })}
+                    >
+                      Apply opacity
+                    </button>
+                    <label>
+                      Fill byte{' '}
+                      <input
+                        aria-label="Edit Fill"
+                        type="number"
+                        min="0"
+                        max="255"
+                        value={fill()}
+                        onInput={(event) => setFill(event.currentTarget.valueAsNumber)}
+                      />
+                    </label>
+                    <button type="button" onClick={() => tree({ kind: 'fill', layerId: layer().id, fill: fill() })}>
+                      Apply Fill
+                    </button>
+                    <label>
+                      Blend{' '}
+                      <select
+                        aria-label="Edit blend mode"
+                        value={blend()}
+                        onChange={(event) => setBlend(event.currentTarget.value)}
+                      >
+                        <For
+                          each={[
+                            'normal',
+                            'multiply',
+                            'screen',
+                            'overlay',
+                            'darken',
+                            'lighten',
+                            'difference',
+                            'passThrough'
+                          ]}
+                        >
+                          {(mode) => <option value={mode}>{mode}</option>}
+                        </For>
+                      </select>
+                    </label>
+                    <button type="button" onClick={() => tree({ kind: 'blend', layerId: layer().id, blend: blend() })}>
+                      Apply blend mode
+                    </button>
+                    <details>
+                      <summary>Replace layer pixels</summary>
+                      <p>Fill the existing RGB 8-bit layer rectangle with an opaque color.</p>
                       <label>
+                        Replacement color
                         <input
-                          type="checkbox"
-                          aria-label={`Group selection: ${layer.name}`}
-                          checked={groupIds().includes(layer.id)}
-                          onChange={(event) => {
-                            const checked = event.currentTarget.checked;
-                            setGroupIds((ids) => (checked ? [...ids, layer.id] : ids.filter((id) => id !== layer.id)));
-                          }}
+                          type="color"
+                          aria-label="Replacement color"
+                          value={pixelColor()}
+                          onInput={(event) => setPixelColor(event.currentTarget.value)}
                         />
-                        {layer.name} · #{layer.id}
                       </label>
-                    </li>
-                  )}
-                </For>
-              </ul>
+                      <button type="button" onClick={() => replacePixels(layer().id)}>
+                        Fill layer pixels
+                      </button>
+                    </details>
+                    <button type="button" onClick={() => tree({ kind: 'delete', layerId: layer().id })}>
+                      Delete layer
+                    </button>
+                    <button type="button" onClick={() => tree({ kind: 'ungroupLayer', layerId: layer().id })}>
+                      Ungroup layer
+                    </button>
+                  </>
+                )}
+              </Show>
+              <details>
+                <summary>Reorder by drag and group selection</summary>
+                <p>Bottom to top. Drop onto a sibling to move before it. Ctrl/Cmd selection is not inferred.</p>
+                <ul class={styles.stack}>
+                  <For each={layers()}>
+                    {(layer) => (
+                      <li
+                        draggable="true"
+                        data-edit-layer-id={layer.id}
+                        onDragStart={(event) => {
+                          dragged = layer;
+                          event.dataTransfer?.setData('text/plain', String(layer.id));
+                        }}
+                        onDragEnd={() => {
+                          dragged = undefined;
+                        }}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          if (dragged) {
+                            const index =
+                              layer.index - (dragged.parent === layer.parent && dragged.index < layer.index ? 1 : 0);
+                            tree({ kind: 'move', layerId: dragged.id, parent: layer.parent, index });
+                            dragged = undefined;
+                          }
+                        }}
+                      >
+                        <label>
+                          <input
+                            type="checkbox"
+                            aria-label={`Group selection: ${layer.name}`}
+                            checked={groupIds().includes(layer.id)}
+                            onChange={(event) => {
+                              const checked = event.currentTarget.checked;
+                              setGroupIds((ids) =>
+                                checked ? [...ids, layer.id] : ids.filter((id) => id !== layer.id)
+                              );
+                            }}
+                          />
+                          {layer.name} · #{layer.id}
+                        </label>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+                <label>
+                  Group name{' '}
+                  <input
+                    aria-label="Group name"
+                    value={groupName()}
+                    onInput={(event) => setGroupName(event.currentTarget.value)}
+                  />
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={expanded()}
+                    onChange={(event) => setExpanded(event.currentTarget.checked)}
+                  />
+                  New group expanded
+                </label>
+                <button
+                  type="button"
+                  disabled={!groupIds().length}
+                  onClick={() =>
+                    tree({
+                      kind: 'groupSelectedLayers',
+                      layerIds: layers()
+                        .filter((layer) => groupIds().includes(layer.id))
+                        .map((layer) => layer.id),
+                      name: groupName(),
+                      expanded: expanded()
+                    })
+                  }
+                >
+                  Group selected layers
+                </button>
+              </details>
+            </fieldset>
+          </details>
+          <details>
+            <summary>File Info and resolution</summary>
+            <fieldset disabled={busy()}>
+              <legend>File Info and resolution</legend>
               <label>
-                Group name{' '}
+                Resolution without resampling{' '}
                 <input
-                  aria-label="Group name"
-                  value={groupName()}
-                  onInput={(event) => setGroupName(event.currentTarget.value)}
+                  aria-label="Resolution ppi"
+                  type="number"
+                  min="0.0000152587890625"
+                  step="any"
+                  value={ppi()}
+                  onInput={(event) => setPpi(event.currentTarget.valueAsNumber)}
                 />
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={expanded()}
-                  onChange={(event) => setExpanded(event.currentTarget.checked)}
-                />
-                New group expanded
               </label>
               <button
                 type="button"
-                disabled={!groupIds().length}
+                onClick={() => void edit({ kind: 'metadata', edit: { kind: 'resolutionNoResample', ppi: ppi() } })}
+              >
+                Apply resolution
+              </button>
+              <label>
+                Title{' '}
+                <input
+                  aria-label="File Info title"
+                  value={title()}
+                  onInput={(event) => setTitle(event.currentTarget.value)}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => void edit({ kind: 'metadata', edit: { kind: 'fileInfoTitle', title: title() } })}
+              >
+                Apply title
+              </button>
+              <label>
+                Copyright{' '}
+                <select
+                  aria-label="File Info copyright"
+                  value={copyright()}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    if (value === 'publicDomain' || value === 'copyrightedWork' || value === 'unmarked') {
+                      setCopyright(value);
+                    }
+                  }}
+                >
+                  <option value="publicDomain">Public domain</option>
+                  <option value="copyrightedWork">Copyrighted work</option>
+                  <option value="unmarked">Unmarked</option>
+                </select>
+              </label>
+              <button
+                type="button"
                 onClick={() =>
-                  tree({
-                    kind: 'groupSelectedLayers',
-                    layerIds: layers()
-                      .filter((layer) => groupIds().includes(layer.id))
-                      .map((layer) => layer.id),
-                    name: groupName(),
-                    expanded: expanded()
-                  })
+                  void edit({ kind: 'metadata', edit: { kind: 'fileInfoCopyright', status: copyright() } })
                 }
               >
-                Group selected layers
+                Apply copyright
               </button>
-            </details>
-          </fieldset>
-          <fieldset disabled={busy()}>
-            <legend>File Info and resolution</legend>
-            <label>
-              Resolution without resampling{' '}
-              <input
-                aria-label="Resolution ppi"
-                type="number"
-                min="0.0000152587890625"
-                step="any"
-                value={ppi()}
-                onInput={(event) => setPpi(event.currentTarget.valueAsNumber)}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void edit({ kind: 'metadata', edit: { kind: 'resolutionNoResample', ppi: ppi() } })}
-            >
-              Apply resolution
-            </button>
-            <label>
-              Title{' '}
-              <input
-                aria-label="File Info title"
-                value={title()}
-                onInput={(event) => setTitle(event.currentTarget.value)}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void edit({ kind: 'metadata', edit: { kind: 'fileInfoTitle', title: title() } })}
-            >
-              Apply title
-            </button>
-            <label>
-              Copyright{' '}
-              <select
-                aria-label="File Info copyright"
-                value={copyright()}
-                onChange={(event) => {
-                  const value = event.currentTarget.value;
-                  if (value === 'publicDomain' || value === 'copyrightedWork' || value === 'unmarked') {
-                    setCopyright(value);
-                  }
-                }}
-              >
-                <option value="publicDomain">Public domain</option>
-                <option value="copyrightedWork">Copyrighted work</option>
-                <option value="unmarked">Unmarked</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={() => void edit({ kind: 'metadata', edit: { kind: 'fileInfoCopyright', status: copyright() } })}
-            >
-              Apply copyright
-            </button>
-          </fieldset>
+            </fieldset>
+          </details>
         </Show>
         <Show when={failure()}>
           {(error) => (
@@ -580,10 +643,11 @@ function flatten(
     parent: number | null;
     depth: number;
     index: number;
+    group: boolean;
   }
 > {
   return nodes.flatMap((node, index) => [
-    { ...node, parent, depth, index },
+    { ...node, parent, depth, index, group: node.endId !== null },
     ...flatten(node.children, node.id, depth + 1)
   ]);
 }
@@ -608,6 +672,7 @@ function sourceLayers(
       {
         id,
         endId: null,
+        group: Boolean(node.children),
         name: node.name,
         visible: node.visible,
         opacity: node.opacity,

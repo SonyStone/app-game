@@ -6,7 +6,7 @@ import { ComparisonTools } from './features/comparison/ComparisonTools';
 import { presentationSource } from './features/comparison/presentation';
 import { createPsdDocument, createPsdRender, type PsdSource } from './features/document';
 import { createOpeningPreview } from './features/document/createOpeningPreview';
-import { Editing } from './features/editing/Editing';
+import { Editing, type LayerEditing } from './features/editing/Editing';
 import { ExamplesMenu } from './features/examples';
 import { ExportPanel } from './features/export/ExportPanel';
 import { createFonts, FontsPanel, TextSupportSection } from './features/fonts';
@@ -79,6 +79,10 @@ export function App() {
   const [editorRevision, setEditorRevision] = createSignal(() => {
     source();
     return 0;
+  });
+  const [layerEditing, setLayerEditing] = createSignal<LayerEditing | undefined>(() => {
+    source();
+    return undefined;
   });
   const viewport = createViewport(() => document()?.info, source);
   const windowed = () =>
@@ -462,6 +466,11 @@ export function App() {
                 <Show when={document()}>
                   {(current) => (
                     <Editing
+                      controls={setLayerEditing}
+                      onEnter={() => {
+                        restoreSaved();
+                        chooseState(null);
+                      }}
                       client={client}
                       document={current()}
                       name={original.name}
@@ -482,6 +491,7 @@ export function App() {
             <Show when={document()} fallback={<p class={styles.empty}>Open a document to see its layers.</p>}>
               {(current) => (
                 <LayersPanel
+                  editing={layerEditing()}
                   layers={current().layers}
                   visibleOf={(node) => latest(overrides).get(node.index) ?? node.visible}
                   onVisible={setVisible}

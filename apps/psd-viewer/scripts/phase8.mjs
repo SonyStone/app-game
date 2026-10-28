@@ -546,6 +546,8 @@ try {
     await page.waitForFunction(() =>
       document.querySelector('[aria-label="Editor status"]')?.textContent.includes('Revision 0.')
     );
+    await page.getByText('Advanced', { exact: true }).click();
+    await page.getByText('File Info and resolution', { exact: true }).first().click();
     const original = await fs.readFile(row.file);
     if (row.op === 'visibility' || row.op === 'group-visibility') {
       const flattened = (nodes) => nodes.flatMap((node) => [node, ...flattened(node.children)]);
