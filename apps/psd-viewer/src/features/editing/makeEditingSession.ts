@@ -36,7 +36,12 @@ export async function makeEditingSession(
   let session = opened.value;
   // Store commands and runtime operands, not a copy of every potentially 64 MiB revision.
   // Reactive undo helpers cannot provide private WASM replay and fallible strict publication.
-  type SavedAction = { command: EditingCommand; operands: ReturnType<typeof sourceSaveOperands>; payloadBytes: number };
+  type StepCommand = Exclude<EditingCommand, { kind: 'treeBatch' }>;
+  type SavedAction = {
+    steps: { command: StepCommand; operands: ReturnType<typeof sourceSaveOperands> }[];
+    visual: boolean;
+    payloadBytes: number;
+  };
   let history: SavedAction[] = [];
   let position = 0;
   let revision = 0;
@@ -68,35 +73,37 @@ export async function makeEditingSession(
     let bytes = source;
     try {
       for (const action of commands.slice(0, nextPosition)) {
-        const applied = apply(staged, action.command, action.operands, bytes);
-        if (!applied.ok) {
-          return applied;
-        }
+        for (const step of action.steps) {
+          const applied = apply(staged, step.command, step.operands, bytes);
+          if (!applied.ok) {
+            return applied;
+          }
 
-        const frozen = wireResult(staged.prepareSave());
-        if (!frozen.ok) {
-          return frozen;
+          const frozen = wireResult(staged.prepareSave());
+          if (!frozen.ok) {
+            return frozen;
+          }
+          bytes = collectForDisplay(frozen.value);
+          if (bytes.byteLength > 64 * 1024 ** 2) {
+            return {
+              ok: false as const,
+              error: {
+                code: 'ResourceBudget' as const,
+                message: 'The saved revision exceeds the 64 MiB editing source limit.',
+                resource: 'editor.sourceBytes',
+                requested: BigInt(bytes.byteLength),
+                limit: 64n * 1024n ** 2n
+              }
+            };
+          }
+          // A completed transaction becomes the pristine source for the next independent action.
+          const reopened = wireResult(await open(bytes));
+          if (!reopened.ok) {
+            return reopened;
+          }
+          staged.dispose();
+          staged = reopened.value;
         }
-        bytes = collectForDisplay(frozen.value);
-        if (bytes.byteLength > 64 * 1024 ** 2) {
-          return {
-            ok: false as const,
-            error: {
-              code: 'ResourceBudget' as const,
-              message: 'The saved revision exceeds the 64 MiB editing source limit.',
-              resource: 'editor.sourceBytes',
-              requested: BigInt(bytes.byteLength),
-              limit: 64n * 1024n ** 2n
-            }
-          };
-        }
-        // A completed transaction becomes the pristine source for the next independent action.
-        const reopened = wireResult(await open(bytes));
-        if (!reopened.ok) {
-          return reopened;
-        }
-        staged.dispose();
-        staged = reopened.value;
       }
 
       const displayed = await publish(bytes, visual);
@@ -177,9 +184,19 @@ export async function makeEditingSession(
                 error: { code: 'Invalid', message: 'Choose source settings and an RGB blending mode.' }
               };
             }
-            let operands: ReturnType<typeof sourceSaveOperands>;
+            let steps: SavedAction['steps'];
             try {
-              operands = sourceSaveOperands(basename, options);
+              const commands: StepCommand[] =
+                request.command.kind === 'treeBatch'
+                  ? request.command.edits.map((edit) => ({ kind: 'tree', edit }))
+                  : [request.command];
+              if (!commands.length) {
+                return { ok: false, error: { code: 'Invalid', message: 'An edit needs at least one command.' } };
+              }
+              steps = commands.map((command) => ({
+                command: structuredClone(command),
+                operands: sourceSaveOperands(basename, options)
+              }));
             } catch {
               return {
                 ok: false,
@@ -191,9 +208,9 @@ export async function makeEditingSession(
               };
             }
             return commit(
-              [...history.slice(0, position), { command: structuredClone(request.command), operands, payloadBytes }],
+              [...history.slice(0, position), { steps, visual: request.command.kind !== 'metadata', payloadBytes }],
               position + 1,
-              request.command.kind === 'tree'
+              request.command.kind !== 'metadata'
             );
           }
           case 'undo':
@@ -203,7 +220,7 @@ export async function makeEditingSession(
               return { ok: false, error: { code: 'Invalid', message: `Nothing to ${request.kind}.` } };
             }
 
-            return commit(history, next, history[Math.min(position, next)]!.command.kind === 'tree');
+            return commit(history, next, history[Math.min(position, next)]!.visual);
           }
           case 'freeze': {
             // A single bounded frozen save avoids accumulating unbounded WASM byte buffers.
@@ -275,7 +292,7 @@ export async function makeEditingSession(
 /** V5 gets only browser operands; bounded metadata keeps its separate source-preserving contract. */
 function apply(
   session: PsdEditorSession,
-  command: EditingCommand,
+  command: Exclude<EditingCommand, { kind: 'treeBatch' }>,
   operands: ReturnType<typeof sourceSaveOperands>,
   sourceBytes: Uint8Array
 ) {
@@ -327,7 +344,7 @@ function apply(
 function collectForDisplay(save: PsdPreparedSave) {
   try {
     const chunks: Uint8Array<ArrayBuffer>[] = [];
-    for (let chunk; (chunk = save.nextChunk(1024 * 1024)); ) {
+    for (let chunk; (chunk = save.nextChunk(1024 * 1024));) {
       chunks.push(new Uint8Array(chunk));
     }
 

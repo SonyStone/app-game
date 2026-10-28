@@ -24,6 +24,7 @@ export type EditingResult<T> = { ok: true; value: T } | { ok: false; error: Edit
 /** The backend's native metadata contract is distinct from raster/tree reopen equivalence. */
 export type EditingCommand =
   | { kind: 'tree'; edit: PsdExactRasterTreeEdit }
+  | { kind: 'treeBatch'; edits: PsdExactRasterTreeEdit[] }
   | { kind: 'metadata'; edit: PsdStateMetadataEdit };
 
 /** Inspection describes stored records only; it grants no edit admission. */

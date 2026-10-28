@@ -489,3 +489,58 @@ it('keeps metadata publication nonvisual after a committed v5 tree edit and when
     host.dispose();
   }
 });
+
+it('publishes a multi-layer gesture once and undoes it as one revision; a later refusal rolls back every step', async () => {
+  const original = new Uint8Array(
+    await readFile(new URL('../../../packages/psd/test/editor/source-host-rgb8.psd', import.meta.url))
+  );
+  const published: Uint8Array[] = [];
+  const host = value(
+    await makeEditingSession(original, async (bytes) => {
+      published.push(bytes);
+      return { ok: true, value: undefined };
+    })
+  );
+  try {
+    const accepted = value(
+      await host.receive({
+        kind: 'edit',
+        revision: 0,
+        command: {
+          kind: 'treeBatch',
+          edits: [
+            { kind: 'rename', layerId: 3, name: 'First' },
+            { kind: 'rename', layerId: 2, name: 'Second' }
+          ]
+        }
+      })
+    );
+    expect(accepted).toMatchObject({ kind: 'state', state: { revision: 1, position: 1, historyLength: 1 } });
+    expect(published).toHaveLength(1);
+    const names = (await readPsd(published[0]!)).layers.map((layer) => layer.name);
+    expect(names).toEqual(expect.arrayContaining(['First', 'Second']));
+    value(await host.receive({ kind: 'undo', revision: 1 }));
+    expect(published[1]).toEqual(original);
+    value(await host.receive({ kind: 'redo', revision: 2 }));
+    expect(published[2]).toEqual(published[0]);
+    const refused = await host.receive({
+      kind: 'edit',
+      revision: 3,
+      command: {
+        kind: 'treeBatch',
+        edits: [
+          { kind: 'rename', layerId: 3, name: 'Must roll back' },
+          { kind: 'rename', layerId: 999999, name: 'Missing' }
+        ]
+      }
+    });
+    expect(refused.ok).toBe(false);
+    expect(published).toHaveLength(3);
+    expect(value(await host.receive({ kind: 'open' }))).toMatchObject({
+      kind: 'state',
+      state: { revision: 3, position: 1 }
+    });
+  } finally {
+    host.dispose();
+  }
+});
