@@ -19,7 +19,7 @@ export default defineConfig({
     conditions: ['development', 'browser']
   },
   test: {
-    server: { deps: { inline: ['@solid-primitives/raf'] } },
+    server: { deps: { inline: [/solid-js/, /@solidjs/, /@solid-primitives/] } },
     include: ['tests/**/*.test.{ts,tsx}'],
     environment: 'node'
   }

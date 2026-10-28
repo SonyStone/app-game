@@ -67,3 +67,24 @@
   border-bottom: 1px solid #555;
   cursor: grab;
 }
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.toolbar > p {
+  width: 100%;
+  margin: 2px 0;
+  color: #c5d7e4;
+  font-size: 10px;
+}
+.toolbar label {
+  font-size: 10px;
+}
+.toolbar select {
+  padding: 2px;
+}
+.toolbar [aria-label='Save status']:empty {
+  display: none;
+}

@@ -124,3 +124,119 @@
     color: #aaa;
   }
 }
+
+.editControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: #29343d;
+  border-bottom: 1px solid #66849a;
+  font-size: 11px;
+}
+.editControls select,
+.percentField input,
+.rename {
+  min-width: 0;
+  background: #202429;
+  color: #eee;
+  border: 1px solid #728292;
+  border-radius: 2px;
+  padding: 3px;
+}
+.editControls select {
+  width: 100%;
+}
+.editControls > span {
+  color: #bbc9d4;
+  font-size: 10px;
+}
+.percentField {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.percentField > span {
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+.percentField input {
+  width: 45px;
+}
+.percentField[data-scrubbing='true'] {
+  color: #b2dbff;
+  outline: 1px solid #85bfff;
+}
+.rename {
+  width: 100%;
+  box-sizing: border-box;
+}
+.row {
+  position: relative;
+  user-select: none;
+  touch-action: none;
+}
+.row[data-drop-zone='before']::before,
+.row[data-drop-zone='after']::after {
+  content: '';
+  position: absolute;
+  left: calc(20px + var(--depth) * 14px);
+  right: 4px;
+  height: 3px;
+  background: #80caff;
+  z-index: 2;
+}
+.row[data-drop-zone='before']::before {
+  top: -1px;
+}
+.row[data-drop-zone='after']::after {
+  bottom: -1px;
+}
+.row[data-drop-zone='inside'] {
+  outline: 2px solid #80caff;
+  outline-offset: -2px;
+  background: #36576f;
+}
+.menu {
+  position: fixed;
+  z-index: 100;
+  display: grid;
+  padding: 4px;
+  background: #292d33;
+  border: 1px solid #7a8a98;
+  box-shadow: 0 3px 12px #0008;
+}
+.menu button {
+  text-align: left;
+  padding: 7px;
+}
+.menu kbd {
+  margin-left: 10px;
+  font-size: 10px;
+  color: #bdc7d0;
+}
+.eye {
+  appearance: none;
+  width: 16px;
+  height: 18px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.eye:checked {
+  background: center / 16px no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M1 8s2.5-4 7-4 7 4 7 4-2.5 4-7 4-7-4-7-4Z' fill='none' stroke='%23ddd'/%3E%3Ccircle cx='8' cy='8' r='2.3' fill='%23ddd'/%3E%3C/svg%3E");
+}
+.eye[data-editing='true'] {
+  border-color: #69899d;
+}
+.eye:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.eye:focus-visible {
+  outline: 2px solid #a0d5ff;
+}
