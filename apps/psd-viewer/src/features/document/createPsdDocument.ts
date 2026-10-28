@@ -81,7 +81,12 @@ export function createPsdDocument(client: Pick<PsdClient, 'open' | 'restart'>) {
     }
   }
 
-  return { source, opened, opening, canceled, open, cancel, retry };
+  /** Replaces renderer metadata after a committed visual revision without reopening the original or losing edit history. */
+  function updateEdited(display: Pick<OpenedPsd, 'info' | 'layers' | 'states'>) {
+    setOpened((current) => (current?.ok ? { ok: true, value: { ...current.value, ...display } } : current));
+  }
+
+  return { source, opened, opening, canceled, open, cancel, retry, updateEdited };
 }
 
 /**

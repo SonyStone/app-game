@@ -422,3 +422,20 @@ it('moves the remaining jobs of a contended batch to the primary without retirin
   expect(await prepare(pool)).toBe(2);
   pool.dispose();
 });
+
+it('retires the original-byte spare on an edit request and keeps later windows on the edited primary', async () => {
+  const { pool, ports, spawn } = setup();
+  await pool.open(new ArrayBuffer(100));
+  await tile(pool);
+  expect(await prepare(pool)).toBe(2);
+  await pool.editor(1, {
+    kind: 'edit',
+    revision: 0,
+    command: { kind: 'tree', edit: { kind: 'rename', layerId: 3, name: 'edited' } }
+  });
+  expect(ports[0].terminate).toHaveBeenCalledOnce();
+  await tile(pool);
+  expect(await prepare(pool)).toBe(1);
+  expect(spawn).toHaveBeenCalledOnce();
+  pool.dispose();
+});

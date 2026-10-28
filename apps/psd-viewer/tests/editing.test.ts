@@ -1,9 +1,12 @@
+import { readPsd } from '@app-game/psd';
 import { openPsdEditor } from '@app-game/psd/editor';
 import { readFile } from 'node:fs/promises';
 import { expect, it, vi } from 'vitest';
 import {
-  hostRefusal,
+  localIsoTime,
   preferredContract,
+  readableRefusal,
+  sourceSaveOperands,
   type EditingRequest,
   type EditingResponse,
   type EditingResult
@@ -92,7 +95,7 @@ it('keeps refusal and failed strict publication atomic, preserving frozen bytes 
         revision: 0,
         command: { kind: 'tree', edit: { kind: 'rename', layerId: 2, name: 'new' } }
       })
-    ).toMatchObject({ ok: false, error: { code: 'HostAttributionRequired', propertyPath: 'save.softwareAgent' } });
+    ).toMatchObject({ ok: false, error: { code: 'Dependency' } });
     expect(
       await host.receive({
         kind: 'edit',
@@ -205,36 +208,111 @@ it.each(['success', 'picker-cancel', 'write-failure', 'close-failure', 'abort', 
   }
 );
 
-it('records the honest-host contract boundary against real WASM, with no byte or revision change', async () => {
-  const bytes = await readFile(new URL('../../../packages/psd/test/editor/flat-rgb8.psd', import.meta.url));
-  const session = value(await openPsdEditor(bytes));
-  const before = value(session.sourceSnapshot());
+it('creates browser operands from genuine clocks and UUIDs, with honest identity and local EXIF time', () => {
+  const now = new Date('2026-10-27T13:02:35Z');
+  vi.useFakeTimers();
+  vi.setSystemTime(now);
   try {
-    const refused = session.editRasterTreeExact([{ kind: 'rename', layerId: 4, name: 'honest' }], {
-      contract: 'photoshop26.reopen-equivalent/v1',
+    const context = sourceSaveOperands('opened.PSB', { mode: 'source', linearBlending: true });
+    expect(context).toMatchObject({
+      contract: preferredContract,
+      editTime: now.valueOf() / 1000,
       save: {
-        basename: 'flat-rgb8',
-        saveTime: new Date().toISOString().slice(0, 19) + '+00:00',
-        exifTime: '2026:10:27 12:00:00',
-        instanceId: `xmp.iid:${crypto.randomUUID()}`,
-        documentId: `adobe:docid:photoshop:${crypto.randomUUID()}`,
+        basename: 'opened',
         softwareAgent: 'PSD Viewer',
-        linearBlending: false
-      },
-      layerTimes: [{ layerId: 4, time: Date.now() / 1000 }]
+        linearBlending: true,
+        saveTime: '2026-10-27T13:02:35+00:00'
+      }
     });
-    expect(refused).toMatchObject({
-      ok: false,
-      error: { code: 'Invalid', message: expect.stringContaining('explicit Photoshop-format save context required') }
-    });
-    expect(value(session.sourceSnapshot())).toEqual(before);
-    expect(preferredContract).toContain('/v3-');
-    expect(
-      hostRefusal({ kind: 'metadata', edit: { kind: 'fileInfoCopyright', status: 'publicDomain' } })
-    ).toMatchObject({ code: 'HostAttributionRequired' });
+    expect(context.save.instanceId).toMatch(/^xmp.iid:[0-9a-f-]{36}$/);
+    expect(context.save.documentId).toMatch(/^adobe:docid:photoshop:[0-9a-f-]{36}$/);
+    expect(context.save.exifTime).toContain(String(now.getHours()).padStart(2, '0') + ':02:35');
+    expect(Object.keys(context).sort()).toEqual(['contract', 'editTime', 'save']);
   } finally {
-    session.dispose();
+    vi.useRealTimers();
   }
+});
+
+it.each([
+  ['Europe/Berlin', '2026-10-27T21:58:20+01:00'],
+  ['America/New_York', '2026-10-27T16:58:20-04:00'],
+  ['Asia/Kolkata', '2026-10-28T02:28:20+05:30'],
+  ['UTC', '2026-10-27T20:58:20+00:00']
+])('gives File Info the action instant as local time with its offset in %s', (zone, expected) => {
+  const previous = process.env.TZ;
+  process.env.TZ = zone;
+  try {
+    const instant = new Date('2026-10-27T20:58:20Z');
+    expect(localIsoTime(instant)).toBe(expected);
+    expect(new Date(expected).valueOf()).toBe(instant.valueOf());
+    // Replaying the retained instant reproduces the same operand.
+    expect(localIsoTime(new Date(instant.valueOf()))).toBe(expected);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = previous;
+    }
+  }
+});
+
+it('saves each v5 action against the preceding pristine product and replays exact bytes on undo/redo', async () => {
+  const original = new Uint8Array(
+    await readFile(new URL('../../../packages/psd/test/editor/source-host-rgb8.psd', import.meta.url))
+  );
+  const displayed: Uint8Array[] = [];
+  const host = value(
+    await makeEditingSession(
+      original,
+      async (bytes) => {
+        displayed.push(bytes.slice());
+        return { ok: true, value: undefined };
+      },
+      openPsdEditor,
+      'source-host-rgb8.psd'
+    )
+  );
+  const call = async (request: EditingRequest) => value(await host.receive(request));
+  try {
+    await call({
+      kind: 'edit',
+      revision: 0,
+      command: { kind: 'tree', edit: { kind: 'rename', layerId: 3, name: 'Browser name' } }
+    });
+    await call({
+      kind: 'edit',
+      revision: 1,
+      command: { kind: 'tree', edit: { kind: 'opacity', layerId: 3, opacity: 173 } }
+    });
+    expect(displayed[0]).not.toEqual(original);
+    expect(displayed[1]).not.toEqual(displayed[0]);
+    await call({ kind: 'undo', revision: 2 });
+    expect(displayed[2]).toEqual(displayed[0]);
+    await call({ kind: 'redo', revision: 3 });
+    expect(displayed[3]).toEqual(displayed[1]);
+    await call({ kind: 'undo', revision: 4 });
+    await call({ kind: 'undo', revision: 5 });
+    expect(displayed[5]).toEqual(original);
+    const reopened = value(await openPsdEditor(displayed[1]!));
+    try {
+      expect((await readPsd(displayed[1]!)).layers.some((layer) => layer.name === 'Browser name')).toBe(true);
+    } finally {
+      reopened.dispose();
+    }
+  } finally {
+    host.dispose();
+  }
+});
+
+it.each([
+  ['save.sourceHost.typeRendering', 'text layers whose fonts'],
+  ['save.sourceHost.missingGrid', 'grid or guide'],
+  ['save.sourceHost.icc', 'color profile'],
+  ['save.sourceHost.proofLabel', 'localized labels']
+])('explains %s while retaining its named dependency', (propertyPath, text) => {
+  expect(
+    readableRefusal({ code: 'Dependency', propertyPath, capability: 'witness', message: 'technical reason' })
+  ).toContain(text);
 });
 
 it('releases a canceled frozen save before a pending picker settles and aborts its late destination', async () => {
@@ -338,6 +416,76 @@ it('refuses unavailable secure save identities before allocating a frozen save a
     });
   } finally {
     random.mockRestore();
+    host.dispose();
+  }
+});
+
+it('bounds pixel history inputs before cloning or mutating a session and permits a corrected retry', async () => {
+  const bytes = await source();
+  const publish = vi.fn(async () => ({ ok: true as const, value: undefined }));
+  const host = value(await makeEditingSession(bytes, publish));
+  try {
+    const before = value(await host.receive({ kind: 'open' }));
+    expect(
+      await host.receive({
+        kind: 'edit',
+        revision: 0,
+        command: {
+          kind: 'tree',
+          edit: {
+            kind: 'replacePixels',
+            layerId: 2,
+            pixels: { left: 0, top: 0, width: 1, height: 1, rgba: new Uint8Array(64 * 1024 ** 2 + 1) }
+          }
+        }
+      })
+    ).toMatchObject({ ok: false, error: { code: 'ResourceBudget', resource: 'editor.historyBytes' } });
+    expect(publish).not.toHaveBeenCalled();
+    expect(value(await host.receive({ kind: 'open' }))).toEqual(before);
+    expect(
+      await host.receive({
+        kind: 'edit',
+        revision: 0,
+        command: { kind: 'metadata', edit: { kind: 'resolutionNoResample', ppi: 144 } }
+      })
+    ).toMatchObject({ ok: true });
+  } finally {
+    host.dispose();
+  }
+});
+
+it('keeps metadata publication nonvisual after a committed v5 tree edit and when undoing that metadata', async () => {
+  const source = new Uint8Array(
+    await readFile(new URL('../../../packages/psd/test/editor/source-host-rgb8.psd', import.meta.url))
+  );
+  const publications: { bytes: Uint8Array; visual: boolean }[] = [];
+  const host = value(
+    await makeEditingSession(source, async (bytes, visual) => {
+      publications.push({ bytes: bytes.slice(), visual });
+      return { ok: true, value: undefined };
+    })
+  );
+  try {
+    value(
+      await host.receive({
+        kind: 'edit',
+        revision: 0,
+        command: { kind: 'tree', edit: { kind: 'rename', layerId: 3, name: 'changed' } }
+      })
+    );
+    value(
+      await host.receive({
+        kind: 'edit',
+        revision: 1,
+        command: { kind: 'metadata', edit: { kind: 'printCaption', enabled: true } }
+      })
+    );
+    expect(publications.map((entry) => entry.visual)).toEqual([true, false]);
+    expect(publications[1]!.bytes).not.toEqual(publications[0]!.bytes);
+    expect(await readPsd(publications[1]!.bytes)).toEqual(await readPsd(publications[0]!.bytes));
+    value(await host.receive({ kind: 'undo', revision: 2 }));
+    expect(publications[2]).toEqual({ bytes: publications[0]!.bytes, visual: false });
+  } finally {
     host.dispose();
   }
 });

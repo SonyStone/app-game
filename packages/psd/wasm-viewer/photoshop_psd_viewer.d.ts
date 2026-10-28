@@ -1,18 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Converts modern horizontal cache origins through the native visual-origin addition before
- * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
- * import/layout dependencies still require comparison; no editor admission changes.
- */
-export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
- * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
- * arrays, including a supplied uniform shadow scale for strike descent. This imports source
- * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
- */
-export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
  * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
  * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
  * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
@@ -25,12 +13,6 @@ export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFont
  */
 export function formatTypeEngineReal26(value: number): Uint8Array;
 /**
- * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
- * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
- * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
- */
-export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
-/**
  * Converts measured modern major-axis caches and segment indices into schema 7.
  * Vertical caches require zero major origins and retain source layout and glyph IDs. Metric-box
  * rotation uses binary32 arithmetic. Malformed packets, unsupported layouts or font contexts throw.
@@ -38,6 +20,38 @@ export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
  * it does not shape text, compute vertical font geometry or authorize edited saves.
  */
 export function projectTypeEngineLayoutCache26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
+ * arrays, including a supplied uniform shadow scale for strike descent. This imports source
+ * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
+ */
+export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Converts modern horizontal cache origins through the native visual-origin addition before
+ * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
+ * import/layout dependencies still require comparison; no editor admission changes.
+ */
+export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
+ * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
+ * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
+ */
+export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
+/**
+ * Accumulates nominal hmtx advances with explicit shaped design adjustments and point spacing.
+ * Supply glyph IDs, signed design-unit adjustments and point spacing with equal lengths, plus a
+ * size in 0.5..=32767 points. Returns one binary32 point pen per glyph and a terminal pen, starting
+ * at zero. Base and spacing sums accumulate separately. Invalid operands or font programs throw.
+ * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
+ */
+export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: number, glyphs: Uint16Array, size: number, adjustments: Int32Array, spacing: Float32Array): Float32Array;
+/**
+ * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
+ * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
+ * source-dependent; a returned packet is not an editor admission certificate.
+ */
+export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
 /**
  * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
  * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
@@ -58,20 +72,6 @@ export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePosi
  * Does not choose automatic leading, shape text, query host fonts or authorize edited saves.
  */
 export function computeTypeManualBaselines26(bytes: Uint8Array, face_index: number, size: number, leading: number, count: number, boxed: boolean): Float32Array;
-/**
- * Accumulates nominal hmtx advances with explicit shaped design adjustments and point spacing.
- * Supply glyph IDs, signed design-unit adjustments and point spacing with equal lengths, plus a
- * size in 0.5..=32767 points. Returns one binary32 point pen per glyph and a terminal pen, starting
- * at zero. Base and spacing sums accumulate separately. Invalid operands or font programs throw.
- * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
- */
-export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: number, glyphs: Uint16Array, size: number, adjustments: Int32Array, spacing: Float32Array): Float32Array;
-/**
- * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
- * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
- * source-dependent; a returned packet is not an editor admission certificate.
- */
-export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
 /**
  * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
  */
@@ -99,33 +99,6 @@ export function readPsdSource(bytes: Uint8Array): PsdSourceSnapshot;
  * reconcile copyright or normalize a document for saving.
  */
 export function readPsdMetadataQueries(bytes: Uint8Array): PsdMetadataQueries;
-
-/** Document-space rectangle. Input windows must be nonempty; clipped channel results may be empty. */
-export interface PsdNativeRect { left: number; top: number; width: number; height: number }
-/** Original native samples, without unmatting, color conversion or mask application. */
-export interface PsdNativeRegion {
-  depth: 1 | 8 | 16 | 32;
-  mode: number;
-  encoding: 'big-endian-wire';
-  source: 'savedComposite' | 'layerChannels';
-  /** IDs are saved plane indices, or layer channel IDs including -2/-3 masks. */
-  planes: Array<PsdNativeRect & { id: number; bytes: Uint8Array }>;
-}
-/** Original path identity with a validated geometry projection or a per-path refusal. */
-export type PsdSavedPath = {
-  resourceId: number | null; namedIndex: number | null;
-  legacyName: Uint8Array; unicodeName: Uint16Array | null;
-  companionStream: boolean; tail: Uint8Array;
-} & ({ outcome: 'refused'; error: Error } | {
-  outcome: 'geometry'; components: Array<{
-    operation: number; fillRule: number;
-    subpaths: Array<{ recordIndex: number; closed: boolean; originationIndex: number;
-      knots: Array<{ selector: number; q24YX: number[][];
-        before: number[]; anchor: number[]; after: number[] }> }>;
-  }>;
-});
-
-
 
 /** Native region settings, sharing the existing viewer render semantics. */
 export interface PsdNativeRenderOptions {
@@ -158,6 +131,33 @@ export type PsdNativeRender = PsdNativeRect & {
  { encoding: 'rgba16-internal'; depth: 16; samples: Uint16Array } |
  { encoding: 'rgba-f32-bits'; depth: 32; samples: Uint32Array } |
  { encoding: 'process-internal'; depth: 8 | 16; samples: Uint16Array });
+
+
+
+/** Document-space rectangle. Input windows must be nonempty; clipped channel results may be empty. */
+export interface PsdNativeRect { left: number; top: number; width: number; height: number }
+/** Original native samples, without unmatting, color conversion or mask application. */
+export interface PsdNativeRegion {
+  depth: 1 | 8 | 16 | 32;
+  mode: number;
+  encoding: 'big-endian-wire';
+  source: 'savedComposite' | 'layerChannels';
+  /** IDs are saved plane indices, or layer channel IDs including -2/-3 masks. */
+  planes: Array<PsdNativeRect & { id: number; bytes: Uint8Array }>;
+}
+/** Original path identity with a validated geometry projection or a per-path refusal. */
+export type PsdSavedPath = {
+  resourceId: number | null; namedIndex: number | null;
+  legacyName: Uint8Array; unicodeName: Uint16Array | null;
+  companionStream: boolean; tail: Uint8Array;
+} & ({ outcome: 'refused'; error: Error } | {
+  outcome: 'geometry'; components: Array<{
+    operation: number; fillRule: number;
+    subpaths: Array<{ recordIndex: number; closed: boolean; originationIndex: number;
+      knots: Array<{ selector: number; q24YX: number[][];
+        before: number[]; anchor: number[]; after: number[] }> }>;
+  }>;
+});
 
 
 
@@ -957,7 +957,7 @@ export class PsdDocumentHandle {
   /**
    * Full rendering with explicit per-call host admission. Defaults are 64 MiB per
    * allocation and 512 MiB live; retainedBytes includes caller fonts and caches.
-   * This can conservatively refuse a dependency graph before legacy render() enters it.
+   * Preflights the selected state, visibility, generated sources and referenced patterns before rendering.
    */
   renderWithBudget(options: any, fonts: PsdFontLibrary, budget_options: any): RenderedImage;
   /**

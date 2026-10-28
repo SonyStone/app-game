@@ -1,7 +1,8 @@
 import { openPsdEditor, type PsdEditorSession, type PsdPreparedSave } from '@app-game/psd/editor';
 import {
   historyLimit,
-  hostRefusal,
+  localIsoTime,
+  sourceSaveOperands,
   wireResult,
   type EditingCommand,
   type EditingRequest,
@@ -11,14 +12,16 @@ import {
 } from './contracts';
 
 /**
- * Owns a source-preserving editor beside the renderer. Metadata commits reopen strictly before publication.
+ * Owns independently saved source-relative revisions beside the renderer, strictly reopened before publication.
  * Replay keeps exact operands, admits no weaker contract and bounds history to 64 operations. Prepared saves
- * own independent bytes until release/disposal. The caller serializes requests and disposes on document close.
+ * own independent bytes until release/disposal. publish receives whether the changed action affects the tree,
+ * so metadata after a tree edit still retains resident pixels. The caller serializes requests and disposes on close.
  */
 export async function makeEditingSession(
   source: Uint8Array,
-  publish: (bytes: Uint8Array) => Promise<EditingResult<void>>,
-  open: typeof openPsdEditor = openPsdEditor
+  publish: (bytes: Uint8Array, visual: boolean) => Promise<EditingResult<void>>,
+  open: typeof openPsdEditor = openPsdEditor,
+  basename = 'document'
 ): Promise<
   EditingResult<{
     receive(request: EditingRequest): Promise<EditingResult<EditingResponse>>;
@@ -31,7 +34,10 @@ export async function makeEditingSession(
   }
 
   let session = opened.value;
-  let history: EditingCommand[] = [];
+  // Store commands and runtime operands, not a copy of every potentially 64 MiB revision.
+  // Reactive undo helpers cannot provide private WASM replay and fallible strict publication.
+  type SavedAction = { command: EditingCommand; operands: ReturnType<typeof sourceSaveOperands>; payloadBytes: number };
+  let history: SavedAction[] = [];
   let position = 0;
   let revision = 0;
   let disposed = false;
@@ -50,7 +56,7 @@ export async function makeEditingSession(
   const current = (): EditingResult<EditingResponse> => ({ ok: true, value: { kind: 'state', state: state() } });
 
   /** Stages replay privately so writer, strict-open and allocation failures cannot half-commit. */
-  async function commit(commands: EditingCommand[], nextPosition: number) {
+  async function commit(commands: SavedAction[], nextPosition: number, visual: boolean) {
     const started = performance.now();
     const candidate = wireResult(await open(source));
     if (!candidate.ok) {
@@ -58,27 +64,48 @@ export async function makeEditingSession(
     }
 
     let accepted = false;
+    let staged = candidate.value;
+    let bytes = source;
     try {
-      for (const command of commands.slice(0, nextPosition)) {
-        const applied = apply(candidate.value, command);
+      for (const action of commands.slice(0, nextPosition)) {
+        const applied = apply(staged, action.command, action.operands, bytes);
         if (!applied.ok) {
           return applied;
         }
+
+        const frozen = wireResult(staged.prepareSave());
+        if (!frozen.ok) {
+          return frozen;
+        }
+        bytes = collectForDisplay(frozen.value);
+        if (bytes.byteLength > 64 * 1024 ** 2) {
+          return {
+            ok: false as const,
+            error: {
+              code: 'ResourceBudget' as const,
+              message: 'The saved revision exceeds the 64 MiB editing source limit.',
+              resource: 'editor.sourceBytes',
+              requested: BigInt(bytes.byteLength),
+              limit: 64n * 1024n ** 2n
+            }
+          };
+        }
+        // A completed transaction becomes the pristine source for the next independent action.
+        const reopened = wireResult(await open(bytes));
+        if (!reopened.ok) {
+          return reopened;
+        }
+        staged.dispose();
+        staged = reopened.value;
       }
 
-      const frozen = wireResult(candidate.value.prepareSave());
-      if (!frozen.ok) {
-        return frozen;
-      }
-
-      const bytes = collectForDisplay(frozen.value);
-      const displayed = await publish(bytes);
+      const displayed = await publish(bytes, visual);
       if (!displayed.ok) {
         return displayed;
       }
 
       session.dispose();
-      session = candidate.value;
+      session = staged;
       history = commands;
       position = nextPosition;
       revision++;
@@ -87,7 +114,7 @@ export async function makeEditingSession(
       return current();
     } finally {
       if (!accepted) {
-        candidate.value.dispose();
+        staged.dispose();
       }
     }
   }
@@ -115,11 +142,6 @@ export async function makeEditingSession(
           case 'open':
             return current();
           case 'edit': {
-            const refused = hostRefusal(request.command);
-            if (refused) {
-              return { ok: false, error: refused };
-            }
-
             if (position >= historyLimit) {
               return {
                 ok: false,
@@ -131,7 +153,48 @@ export async function makeEditingSession(
               };
             }
 
-            return commit([...history.slice(0, position), structuredClone(request.command)], position + 1);
+            const payloadBytes = commandPayloadBytes(request.command);
+            const retained = history
+              .slice(0, position)
+              .reduce((bytes, action) => bytes + action.payloadBytes, payloadBytes);
+            if (retained > 64 * 1024 ** 2) {
+              return {
+                ok: false,
+                error: {
+                  code: 'ResourceBudget',
+                  message: 'Undo history is limited to 64 MiB of pixel inputs. Save and reopen to continue.',
+                  resource: 'editor.historyBytes',
+                  requested: BigInt(retained),
+                  limit: 64n * 1024n ** 2n
+                }
+              };
+            }
+
+            const options = request.options ?? { mode: 'source', linearBlending: false };
+            if (options.mode !== 'source' || typeof options.linearBlending !== 'boolean') {
+              return {
+                ok: false,
+                error: { code: 'Invalid', message: 'Choose source settings and an RGB blending mode.' }
+              };
+            }
+            let operands: ReturnType<typeof sourceSaveOperands>;
+            try {
+              operands = sourceSaveOperands(basename, options);
+            } catch {
+              return {
+                ok: false,
+                error: {
+                  code: 'HostOperandRequired',
+                  propertyPath: 'save.identity',
+                  message: 'Saving edits requires a secure browser with crypto.randomUUID.'
+                }
+              };
+            }
+            return commit(
+              [...history.slice(0, position), { command: structuredClone(request.command), operands, payloadBytes }],
+              position + 1,
+              request.command.kind === 'tree'
+            );
           }
           case 'undo':
           case 'redo': {
@@ -140,7 +203,7 @@ export async function makeEditingSession(
               return { ok: false, error: { code: 'Invalid', message: `Nothing to ${request.kind}.` } };
             }
 
-            return commit(history, next);
+            return commit(history, next, history[Math.min(position, next)]!.command.kind === 'tree');
           }
           case 'freeze': {
             // A single bounded frozen save avoids accumulating unbounded WASM byte buffers.
@@ -209,18 +272,55 @@ export async function makeEditingSession(
   };
 }
 
-function apply(session: PsdEditorSession, command: EditingCommand) {
-  const refused = hostRefusal(command);
-  if (refused) {
-    return { ok: false as const, error: refused };
-  }
-
+/** V5 gets only browser operands; bounded metadata keeps its separate source-preserving contract. */
+function apply(
+  session: PsdEditorSession,
+  command: EditingCommand,
+  operands: ReturnType<typeof sourceSaveOperands>,
+  sourceBytes: Uint8Array
+) {
+  const context = { ...operands, sourceBytes };
   if (command.kind === 'tree') {
-    // Tree requests currently always hit the honest-host guard. Never use context-free mutation here.
-    throw new Error('A truthful exact-tree contract must be implemented before enabling tree transactions.');
+    let edit = command.edit;
+    const process = session.inspectProcess();
+    if (process.ok && (process.value.mode !== 3 || process.value.depth !== 8)) {
+      if (edit.kind === 'rename') {
+        edit = { ...edit, kind: 'renameProcessLayer' };
+      } else if (edit.kind === 'opacity') {
+        edit = { ...edit, kind: 'setProcessOpacity' };
+      }
+    }
+    const result = wireResult(session.editRasterTreeExact([edit], context));
+    if (
+      !result.ok &&
+      result.error.code === 'Dependency' &&
+      result.error.propertyPath.includes('save.xmp.initial-event')
+    ) {
+      // Only the named missing-event route permits a genuine preparation event, never a host-fact retry.
+      const initialEvent = operands.initialEvent ?? {
+        instanceId: `xmp.iid:${crypto.randomUUID()}`,
+        when: new Date().toISOString().slice(0, 19) + '+00:00'
+      };
+      Object.assign(operands, { initialEvent });
+      return wireResult(session.editRasterTreeExact([edit], { ...context, initialEvent }));
+    }
+    return result;
   }
 
-  return wireResult(session.editStateMetadata([command.edit]));
+  const edit =
+    command.edit.kind === 'fileInfoCopyright'
+      ? {
+          ...command.edit,
+          saveContext: {
+            // The retained action instant, in local time: File Info's EXIF clock takes its wall-clock digits.
+            modifiedAt: localIsoTime(new Date(Math.floor(operands.editTime) * 1000)),
+            instanceId: context.save.instanceId,
+            documentId: context.save.documentId,
+            softwareAgent: context.save.softwareAgent
+          }
+        }
+      : command.edit;
+  return wireResult(session.editStateMetadata([edit]));
 }
 
 /** Only renderer reopening needs contiguous input. Saving uses owned chunks directly. Always releases on error. */
@@ -241,4 +341,16 @@ function collectForDisplay(save: PsdPreparedSave) {
   } finally {
     save.dispose();
   }
+}
+
+/** Counts retained typed-array inputs once per shared view, before cloning pixel payloads into undo history. */
+function commandPayloadBytes(value: unknown, visited = new Set<object>()): number {
+  if (typeof value !== 'object' || value === null || visited.has(value)) {
+    return 0;
+  }
+  visited.add(value);
+  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
+    return value.byteLength;
+  }
+  return Object.values(value).reduce<number>((bytes, item) => bytes + commandPayloadBytes(item, visited), 0);
 }

@@ -374,7 +374,8 @@ it('writes File Info publicDomain with explicit native lifecycle values and refu
     const saveContext = {
       modifiedAt: '2026-10-23T13:02:35+02:00',
       instanceId: 'xmp.iid:291b8039-d1cf-4ef2-ab5f-1029db97e2d2',
-      documentId: 'adobe:docid:photoshop:c5c3a156-3dc2-8943-aef8-379a84cb0b04'
+      documentId: 'adobe:docid:photoshop:c5c3a156-3dc2-8943-aef8-379a84cb0b04',
+      softwareAgent: 'Adobe Photoshop 26.0 (Macintosh)'
     };
     value(session.editStateMetadata([{ kind: 'fileInfoCopyright', status: 'publicDomain', saveContext }]));
     const bytes = collect(value(session.prepareSave()));
@@ -394,13 +395,114 @@ it('writes File Info publicDomain with explicit native lifecycle values and refu
   }
 });
 
-/** Owned Photoshop 26 controls from E-structure/E-metadata at b05b8f3345 and E-structure-3/E-type-carry at 3ad38efe09. */
+it('forwards v5 source-host edits, honest agent and atomic retry with untouched-save identity', async () => {
+  const bytes = new Uint8Array(await fixture('source-host-rgb8'));
+  const session = value(await openPsdEditor(bytes));
+  const now = new Date();
+  const save = {
+    basename: 'source-host-rgb8',
+    saveTime: now.toISOString().slice(0, 19) + '+00:00',
+    exifTime: '2026:10:27 12:00:00',
+    instanceId: `xmp.iid:${crypto.randomUUID()}`,
+    documentId: `adobe:docid:photoshop:${crypto.randomUUID()}`,
+    softwareAgent: 'PSD Viewer',
+    linearBlending: false
+  };
+  const context = {
+    contract: 'photoshop26.reopen-equivalent/v5-source-host',
+    sourceBytes: bytes,
+    save,
+    editTime: now.valueOf() / 1000
+  } satisfies import('./editor').PsdSourceHostSaveContext;
+  try {
+    expect(collect(value(session.prepareSave()))).toEqual(bytes);
+    const before = value(session.sourceSnapshot());
+    const edit = { kind: 'rename', layerId: 3, name: 'Honest browser edit' } as const;
+    expect(session.editRasterTreeExact([edit], { ...context, editTime: NaN })).toMatchObject({ ok: false });
+    expect(session.editRasterTreeExact([edit], { ...context, sourceBytes: bytes.subarray(1) })).toMatchObject({
+      ok: false
+    });
+    for (const field of ['writers', 'preview', 'typeRendering', 'backgroundLayerName']) {
+      const injected = Object.assign({ ...context }, { [field]: {} });
+      expect(session.editRasterTreeExact([edit], injected)).toMatchObject({ ok: false });
+      expect(value(session.sourceSnapshot())).toEqual(before);
+    }
+    expect(value(session.sourceSnapshot())).toEqual(before);
+    value(session.editRasterTreeExact([edit], context));
+    const saved = collect(value(session.prepareSave()));
+    expect(new TextDecoder().decode(saved)).toContain('PSD Viewer');
+    const reopened = value(await openPsdEditor(saved));
+    try {
+      expect((await readPsd(saved)).layers.some((layer) => layer.name === edit.name)).toBe(true);
+      expect(collect(value(reopened.prepareSave()))).toEqual(saved);
+    } finally {
+      reopened.dispose();
+    }
+  } finally {
+    session.dispose();
+  }
+});
+
+it('v4 honest attribution still requires real host writers and refuses atomically without them', async () => {
+  const session = value(await openPsdEditor(await fixture('source-host-rgb8')));
+  const native = context('source-host-rgb8', 3);
+  const honest = {
+    ...native,
+    contract: 'photoshop26.reopen-equivalent/v4-honest-agent',
+    save: { ...native.save, softwareAgent: 'PSD Viewer' },
+    writers: { ...writers(), resources: { ...writers().resources, writerName: 'PSD Viewer', readerName: 'PSD Viewer' } }
+  } satisfies import('./editor').PsdHonestAgentSaveContext;
+  // Exercise the binding's runtime contract for untyped callers, preserving the exact missing-field refusal.
+  Reflect.deleteProperty(honest, 'writers');
+  try {
+    const before = value(session.sourceSnapshot());
+    expect(session.editRasterTreeExact([{ kind: 'rename', layerId: 3, name: 'refused' }], honest)).toMatchObject({
+      ok: false
+    });
+    expect(value(session.sourceSnapshot())).toEqual(before);
+  } finally {
+    session.dispose();
+  }
+});
+
+it('File Info publicDomain writes a truthful application identity and preserves earlier history', async () => {
+  const session = value(await openPsdEditor(await fixture('metadata')));
+  try {
+    value(
+      session.editStateMetadata([
+        {
+          kind: 'fileInfoCopyright',
+          status: 'publicDomain',
+          saveContext: {
+            modifiedAt: new Date().toISOString().slice(0, 19) + '+00:00',
+            instanceId: `xmp.iid:${crypto.randomUUID()}`,
+            documentId: `adobe:docid:photoshop:${crypto.randomUUID()}`,
+            softwareAgent: 'PSD Viewer'
+          }
+        }
+      ])
+    );
+    const saved = collect(value(session.prepareSave()));
+    expect(new TextDecoder().decode(saved)).toContain('PSD Viewer');
+    const reopened = value(await openPsdEditor(saved));
+    reopened.dispose();
+  } finally {
+    session.dispose();
+  }
+});
+
+/** Owned Photoshop 26 controls from E-structure/E-metadata and E-structure-3/E-type-carry.
+ * Source-host controls are E-own-1/photoshop/native-00-d8-v1 and native-07-d8-v1 at batch 15. */
 function fixture(name: string) {
   return readFile(new URL(`../test/editor/${name}.psd`, import.meta.url));
 }
 
 /** Explicit research save operands; no host clock, random identities or inferred gamma. */
-function context(basename: string, layerId?: number, time = 1): PsdReopenSaveContext {
+function context(
+  basename: string,
+  layerId?: number,
+  time = 1
+): Extract<PsdReopenSaveContext, { contract: 'photoshop26.reopen-equivalent/v1' }> {
   return {
     contract: 'photoshop26.reopen-equivalent/v1',
     save: {
