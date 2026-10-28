@@ -255,7 +255,7 @@ export function LayersPanel(props: {
             }}
           >
             <option value="" disabled>
-              Mixed
+              {edit.selectedIds().length ? 'Mixed' : 'No layer selected'}
             </option>
             <For
               each={[
